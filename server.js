@@ -1040,6 +1040,106 @@ if (!cunaHardKilled()) {
 } else {
   console.log("[cuna] CUNA_ENGINE_OFF=1 — engine hard-killed, loop not started.");
 }
+// ── DNC liquidity engine (owner, 2026-08-26) ───────────────────────────────────
+// A PRIVATE partner project: we run the pools, we do not link or name their channels
+// anywhere, and no DNC surface exists on the app. Alerts go to the owner's DM only —
+// telegramChatId is bound explicitly below because a null chat FALLS BACK to the main
+// community room, which would publish a private partner's engine activity.
+//
+// SCOPE: tokenMint DNC + quoteMints [USDC, wSOL] only. Every instruction the vault builds
+// derives from those three mints, so the CLKN brand bag and CUNA dust sharing this wallet
+// are structurally untouchable by this project.
+//
+// ⚠ SHARED-FLOAT WARNING: the operator wallet is the SAME one CUNA uses. USDC and SOL are
+// therefore shared between the two engines. CUNA is disarmed and fully pulled as of
+// 2026-08-26, so there is no contention today — but arming BOTH at once lets each deploy
+// float the other already counted, and they will fight over the same coins. Arm one at a
+// time, or give DNC its own wallet before running them together.
+//
+// Precedence, strongest first (mirrors CUNA):
+//   1. DNC_ENGINE_OFF=1 — hard kill in Railway, beats everything.
+//   2. runtime flag     — /api/dnc-engine?key=…&on=1 | &off=1
+//   3. default          — OFF. Never trades until somebody says so.
+const DNC_ARM_KEY = "dncEngineArmed";
+function dncHardKilled() { return process.env.DNC_ENGINE_OFF === "1"; }
+function dncArmed() {
+  if (dncHardKilled()) return false;
+  const v = kv.get(DNC_ARM_KEY, null);
+  if (v === null || v === undefined) return process.env.DNC_ENGINE_ON === "1";
+  return v === true;
+}
+function dncSetArmed(on) { kv.set(DNC_ARM_KEY, !!on); return dncArmed(); }
+const DNC_MINT = "42HsffEQoHqWoeiffksYayC75fQDxaoUdMBzmeXdpump";
+const DNC_QUOTES = [
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
+  "So11111111111111111111111111111111111111112",   // wSOL
+];
+// Owner's opening shape (2026-08-26): DNC/USDC + DNC/SOL on 0.05% Orca pools at ±2%,
+// tight for organic volume the way POKEAHOE runs. Asserted on EVERY boot so a deploy can
+// never silently revert the widths — the same ratchet CUNA needed after deploys kept
+// resetting it mid-campaign.
+function dncConfigRatchet() {
+  const want = {
+    pair: "DNC/USDC", baseEnabled: true, feeTierPct: 0.05, widthPct: 2,
+    solFeeTierPct: 0.05, solWidthPct: 2, solEnabled: true,
+    jupEnabled: false, swapEnabled: false, buybackEnabled: false,
+    // Caps sized to the opening deployment (~$210/side); raise deliberately, never by drift.
+    maxUsd: 260, solMaxSol: 2.4,
+    // Shared wallet: keep real gas back so a roll can always pay rent + fees.
+    solGasReserve: 0.35,
+  };
+  try {
+    const cur = whirlpoolMM.vault.getConfig("dnc") || {};
+    const patch = {};
+    for (const k of Object.keys(want)) if (cur[k] !== want[k]) patch[k] = want[k];
+    if (Object.keys(patch).length) {
+      whirlpoolMM.vault.setConfig(patch, "dnc");
+      console.log("[dnc] config ratchet applied:", JSON.stringify(patch));
+    }
+  } catch (e) { console.warn("[dnc] config ratchet:", e.message); }
+}
+function dncEnsureProject() {
+  const proj = whirlpoolMM.vault.getProject("dnc");
+  const tre = whirlpoolMM.vault.getProject("treasury");
+  const room = (tre && tre.telegramChatId) || null;
+  // registerProject is register-AND-update and resets operatorEnv to the id-derived default
+  // when omitted — pass it explicitly or an unrelated update silently re-points the engine
+  // at an unset key.
+  whirlpoolMM.vault.registerProject({
+    id: "dnc", label: proj ? proj.label : "DNC", symbol: "DNC",
+    tokenMint: DNC_MINT, decimals: 6,          // 6 — pump.fun mint, NOT the 9-decimal SPL norm
+    quoteMints: DNC_QUOTES, venue: "orca",
+    operatorEnv: (proj && proj.operatorEnv) || "MM_OPERATOR_SECRET_DNC",
+    // Private partner: owner's ops DM, never a community room.
+    telegramChatId: (proj && proj.telegramChatId) || (room ? String(room) : null),
+    active: proj ? proj.active !== false : false,
+  });
+  dncConfigRatchet();
+}
+let dncTickBusy = false;
+async function dncTick() {
+  if (!dncArmed()) return;   // read every tick, so &off=1 stops it inside one cycle
+  if (dncTickBusy) return;   // a slow RPC cycle must not stack a second run
+  dncTickBusy = true;
+  try {
+    // Rebalance first so free USDC/SOL moves toward the underweight pool BEFORE the deploy
+    // ticks absorb it — run last, it would never see a free coin to convert.
+    try { await whirlpoolMM.vault.rebalancePools({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] rebalance:", e.message); }
+    try { await whirlpoolMM.vault.tick({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] base tick:", e.message); }
+    try { await whirlpoolMM.vault.tickSol({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] sol tick:", e.message); }
+  } finally { dncTickBusy = false; }
+}
+try { dncEnsureProject(); } catch (e) { console.warn("[dnc] register:", e.message); }
+// The interval always runs; dncTick() no-ops while disarmed. That is what lets the runtime
+// flag work without a redeploy. 90s rather than CUNA's 120s: ±2% is a tight band and an
+// out-of-range position earns nothing until it re-centers.
+if (!dncHardKilled()) {
+  console.log(`[dnc] engine loop up — currently ${dncArmed() ? "ARMED" : "DISARMED"} (toggle: /api/dnc-engine?key=…&on=1|&off=1)`);
+  setInterval(() => dncTick().catch((e) => console.warn("[dnc] tick:", e.message)), 90000);
+  setTimeout(() => dncTick().catch((e) => console.warn("[dnc] first tick:", e.message)), 30000);
+} else {
+  console.log("[dnc] DNC_ENGINE_OFF=1 — engine hard-killed, loop not started.");
+}
 // 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
 // (8am CT), then amplified by lessonBumpTick (self-replies at later slots tagging
 // different ecosystem groups) instead of posting more new lessons. Odd hour so it
@@ -8217,6 +8317,31 @@ app.get("/api/cuna-giveaway", (req, res) => {
 // Arming REFUSES when no operator key is loaded. Without a signer the engine cannot trade
 // anyway, so an "armed" that silently does nothing is worse than an error — it reads as running
 // when it is not, and that is exactly the state you would stop watching.
+// DNC engine on/off — the runtime lever for the private partner project, no Railway edit
+// and no redeploy. Arming REFUSES without a loaded operator key: an "armed" that cannot sign
+// reads as running when it is not, which is exactly the state you stop watching.
+//   ?on=1   arm    ?off=1  disarm    (no arg = report state)
+app.get("/api/dnc-engine", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    const operator = whirlpoolMM.vault.operatorPubkey("dnc");
+    if (req.query.on === "1") {
+      if (dncHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "DNC_ENGINE_OFF=1 is set in Railway — clear it first." });
+      if (!operator) return res.json({ ok: false, error: "no_operator", detail: "MM_OPERATOR_SECRET_DNC is not loaded — nothing can sign." });
+      dncSetArmed(true);
+    } else if (req.query.off === "1") {
+      dncSetArmed(false);
+    }
+    const cfg = whirlpoolMM.vault.getConfig("dnc") || {};
+    res.json({
+      ok: true, armed: dncArmed(), hardKilled: dncHardKilled(), operator: operator || null,
+      pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct,
+      feeTierPct: cfg.feeTierPct, maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol,
+      note: "armed state is persisted in the KV store; DNC_ENGINE_OFF=1 overrides it",
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 app.get("/api/cuna-engine", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
