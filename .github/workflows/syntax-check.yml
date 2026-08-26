@@ -125,11 +125,32 @@ jobs:
       - run: npm ci
       # Always, even when the render is skipped: a backend change that stops the server
       # BOOTING takes the whole site down, and node --check cannot see that.
+      # A boot failure must FAIL this step, not stall it. The first version was
+      #   node -e "require('./server.js'); setTimeout(..., 12000)"
+      # and it hung for 50 minutes on a real boot throw: require() threw before the
+      # timer was ever scheduled, and server.js's own process.on("uncaughtException")
+      # handler swallowed it, so nothing exited and nothing failed. Three things now:
+      # catch the synchronous throw explicitly, prove the server is actually SERVING
+      # (an async failure like EADDRINUSE gets swallowed by that same handler, so
+      # "still running after 12s" is not proof of anything), and cap the whole thing
+      # with timeout so no future variant can stall the job again.
       - name: server boots
         env:
           PREMIUM_ACCESS_KEY: ci-boot-check
         run: |
-          node -e "require('./server.js'); setTimeout(() => { console.log('server booted'); process.exit(0); }, 12000)"
+          timeout 90 node -e "
+            try { require('./server.js'); }
+            catch (e) { console.error('BOOT FAILED (require threw):', (e && e.stack) || e); process.exit(1); }
+            setTimeout(async () => {
+              const url = 'http://127.0.0.1:' + (process.env.PORT || 3000) + '/healthz';
+              try {
+                const r = await fetch(url);
+                if (!r.ok) throw new Error('healthz returned ' + r.status);
+                console.log('server booted and serving');
+                process.exit(0);
+              } catch (e) { console.error('BOOT FAILED (not serving):', e.message); process.exit(1); }
+            }, 12000);
+          "
 
       # Playwright is installed here rather than in package.json on purpose: Railway installs
       # devDependencies to run the Vite build, and playwright's postinstall drags browser

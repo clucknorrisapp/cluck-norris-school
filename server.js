@@ -16555,4 +16555,3 @@ app.listen(PORT, () => {
   liqInterval(() => { whirlpoolMM.vault.tickTreasury({ projectId: "treasury" }).catch(() => {}); }, 300 * 1000);
 });
 
-throw new Error("simulated boot failure");
