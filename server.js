@@ -1080,13 +1080,20 @@ const DNC_QUOTES = [
 // resetting it mid-campaign.
 function dncConfigRatchet() {
   const want = {
-    // 0.01% / ±1% — the POKEAHOE volume posture (owner, 2026-08-26). The first attempt
-    // opened 0.05%/±2% pools; those were closed and abandoned the same hour. Fee income is
-    // noise at DNC's volume (~$0.28/day at 5bp vs $0.06 at 1bp), while 1bp wins routing
-    // against PumpSwap's ~25-30bp and pulls in the micro-arbs — and the trades ARE the
-    // product here. 0.01% also gives tickSpacing 1 instead of 8, so ±1% places precisely.
-    pair: "DNC/USDC", baseEnabled: true, feeTierPct: 0.01, widthPct: 1,
-    solFeeTierPct: 0.01, solWidthPct: 1, solEnabled: true,
+    // 0.01% fee tier — the POKEAHOE volume posture (owner, 2026-08-26). Fee income is noise
+    // at DNC's volume (~$0.28/day at 5bp vs $0.06 at 1bp), while 1bp wins routing against
+    // PumpSwap's ~25-30bp and pulls in the micro-arbs — and the trades ARE the product here.
+    // 0.01% also gives tickSpacing 1 instead of 8, so a tight band places precisely.
+    //
+    // WIDTH ±2% (owner, 2026-08-26, same day as the ±1% call above — this supersedes it).
+    // ±1% was too tight for DNC's thinness: a ~1% move parked a pool fully on one side, and
+    // with swapEnabled false the base sleeve has no way to re-pair itself, so it could not
+    // recover without a manual DNC buy. That happened twice in one session. ±2% holds a mix
+    // through the moves DNC actually makes. Note a width change does NOT re-center an open
+    // position — the roll trigger needs the range ratio to differ by >20% and 1%→2% is ~2% —
+    // so applying a new width to live positions means closing and reopening them by hand.
+    pair: "DNC/USDC", baseEnabled: true, feeTierPct: 0.01, widthPct: 2,
+    solFeeTierPct: 0.01, solWidthPct: 2, solEnabled: true,
     jupEnabled: false, swapEnabled: false, buybackEnabled: false,
     // Caps sized to the live deployment (~$420/side, balanced); raise deliberately, never by drift.
     maxUsd: 210, solMaxSol: 2.2,
