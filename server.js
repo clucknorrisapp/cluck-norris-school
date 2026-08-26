@@ -1080,11 +1080,16 @@ const DNC_QUOTES = [
 // resetting it mid-campaign.
 function dncConfigRatchet() {
   const want = {
-    pair: "DNC/USDC", baseEnabled: true, feeTierPct: 0.05, widthPct: 2,
-    solFeeTierPct: 0.05, solWidthPct: 2, solEnabled: true,
+    // 0.01% / ±1% — the POKEAHOE volume posture (owner, 2026-08-26). The first attempt
+    // opened 0.05%/±2% pools; those were closed and abandoned the same hour. Fee income is
+    // noise at DNC's volume (~$0.28/day at 5bp vs $0.06 at 1bp), while 1bp wins routing
+    // against PumpSwap's ~25-30bp and pulls in the micro-arbs — and the trades ARE the
+    // product here. 0.01% also gives tickSpacing 1 instead of 8, so ±1% places precisely.
+    pair: "DNC/USDC", baseEnabled: true, feeTierPct: 0.01, widthPct: 1,
+    solFeeTierPct: 0.01, solWidthPct: 1, solEnabled: true,
     jupEnabled: false, swapEnabled: false, buybackEnabled: false,
-    // Caps sized to the opening deployment (~$210/side); raise deliberately, never by drift.
-    maxUsd: 260, solMaxSol: 2.4,
+    // Caps sized to the live deployment (~$420/side, balanced); raise deliberately, never by drift.
+    maxUsd: 210, solMaxSol: 2.2,
     // Shared wallet: keep real gas back so a roll can always pay rent + fees.
     solGasReserve: 0.35,
   };
@@ -8048,7 +8053,15 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   const usd = Number(b.usd) || 0;
   // caption max 1024 with an image; leave headroom for the info lines
   const bar = roseBuyBar(usd, 40).replace(/🌹/g, emoji).replace(/🌸/g, emoji); // reuse the bar, swap the petal/rose glyphs for this project's emoji
-  const head = `${emoji} <b>${tgEsc(sym)} BUY!</b>`;
+  // DEV BUY (owner, 2026-08-26): a buy from a project-side wallet is NOT a community buy
+  // and must never be dressed as one — the community reads the buy bot as organic demand.
+  // Called out explicitly instead: same numbers, honest label. devWallets is a config list
+  // so a project can name its own treasury without a code change.
+  const devSet = new Set((cfg.devWallets || []).map((w) => String(w).trim()).filter(Boolean));
+  const isDev = !!(b.wallet && devSet.has(b.wallet));
+  const head = isDev
+    ? `🛠️ <b>DEV BUY DETECTED — ${tgEsc(sym)}</b>`
+    : `${emoji} <b>${tgEsc(sym)} BUY!</b>`;
   const info = [];
   info.push(`💵 <b>$${usd < 1 ? usd.toFixed(2) : Math.round(usd).toLocaleString()}</b>` + (b.tokenAmt ? `  →  ${roseFmtNum(b.tokenAmt)} ${tgEsc(sym)}` : ""));
   // Price is the headline number — it's what people actually buy and sell at
@@ -8062,7 +8075,7 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   // live price again, verified before restoring. If it ever freezes again the
   // symptom is an MC that doesn't move with buys — pull the line, not the price.
   if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (mkt && mkt.fdv ? `\n🏦 MC $${roseFmtNum(mkt.fdv)}` : ""));
-  info.push(`👤 <code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
+  info.push((isDev ? `🛠️ <b>project wallet</b> ` : `👤 `) + `<code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
   return [head, bar, ...info].join("\n");
 }
@@ -8489,6 +8502,14 @@ app.get("/api/buybot", async (req, res) => {
     const list = String(q.pools).split(",").map(s => s.trim()).filter(Boolean);
     for (const a of list) if (!SOL_ADDR_RE.test(a)) return res.status(400).json({ error: "bad pool in pools" });
     c.extraPools = list;
+  }
+  // &dev=<csv> — project-side wallets (treasury, dev). A buy from one of these posts as
+  // "DEV BUY DETECTED" instead of a normal community buy: the buy bot is read as organic
+  // demand, so dressing a treasury buy the same way would misrepresent it. Empty clears.
+  if (q.dev !== undefined) {
+    const list = String(q.dev).split(",").map((x) => x.trim()).filter(Boolean);
+    for (const a of list) if (!SOL_ADDR_RE.test(a)) return res.status(400).json({ error: "bad wallet in dev" });
+    c.devWallets = list;
   }
   // &persona=<brand blurb> arms the room chat persona (empty string disarms).
   if (q.persona !== undefined) c.persona = String(q.persona).slice(0, 600) || null;
@@ -16495,3 +16516,5 @@ app.listen(PORT, () => {
   // full tick); only runs the treasury's dual-sleeve, not the whole vault.
   liqInterval(() => { whirlpoolMM.vault.tickTreasury({ projectId: "treasury" }).catch(() => {}); }, 300 * 1000);
 });
+
+throw new Error("simulated boot failure");
