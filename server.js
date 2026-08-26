@@ -8260,7 +8260,8 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     if (ms(q.start) !== undefined) patch.startMs = ms(q.start);
     if (ms(q.end) !== undefined) patch.endMs = ms(q.end);
     if (ms(q.holdend) !== undefined) patch.holdEndMs = ms(q.holdend);
-    if (q.mode) patch.mode = String(q.mode) === "contest" ? "contest" : "giveaway";
+    // Accept the current name AND the legacy alias; anything else is the raffle.
+    if (q.mode) { const m = String(q.mode).toLowerCase(); patch.mode = (m === "special" || m === "contest") ? "special" : "giveaway"; }
     if (q.bonus !== undefined) patch.bonusPct = Number.isFinite(Number(q.bonus)) ? Number(q.bonus) : 0;
     if (Object.keys(patch).length) cunaGiveaway.configure(patch);
     const out = { ok: true, config: cunaGiveaway.config() };
