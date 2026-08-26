@@ -6344,6 +6344,25 @@ app.get("/api/tg-test", async (req, res) => {
   // Telegram (10MB) instead of handing Telegram the URL (5MB fetch cap, and some CDNs refuse
   // Telegram's fetcher). Lets the meme routine post Higgsfield CDN images directly — no
   // repo commit/deploy just to host an image. Admin-key-gated like the rest of this route.
+  // &editCaption=<messageId> — rewrite an ALREADY-SENT photo caption in place. A pinned
+  // announcement that needs a wording fix must not be reposted: reposting moves the pin and
+  // leaves the community scrolling past a stale copy. editMessageCaption keeps both the pin
+  // and the message's position in the thread. Text-only messages use &editText= instead.
+  if (req.query.editCaption || req.query.editText) {
+    const isCap = !!req.query.editCaption;
+    const mid = Number(req.query.editCaption || req.query.editText);
+    if (!Number.isFinite(mid) || mid <= 0) return res.status(400).json({ success: false, error: "bad message id" });
+    try {
+      const body = isCap
+        ? { chat_id: chatId, message_id: mid, caption: text.slice(0, 1024), parse_mode: "HTML" }
+        : { chat_id: chatId, message_id: mid, text: text.slice(0, 3500), parse_mode: "HTML", disable_web_page_preview: true };
+      const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${isCap ? "editMessageCaption" : "editMessageText"}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => ({}));
+      return res.json({ success: !!data.ok, edited: mid, telegram: data.ok ? undefined : data });
+    } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+  }
   if (photo && req.query.upload === "1") {
     try {
       if (!/^https:\/\//.test(photo)) return res.status(400).json({ success: false, error: "https URLs only" });
@@ -8234,11 +8253,15 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     if (q.pool) patch.pool = String(q.pool);
     if (q.symbol) patch.symbol = String(q.symbol).slice(0, 12);
     if (q.chat) patch.chatId = String(q.chat);
-    if (q.min !== undefined) patch.minUsd = Number(q.min) || 5;          // what SCORES
+    // Number(0)||5 would silently turn a deliberate "no minimum" into $5, so test finiteness.
+    if (q.min !== undefined) patch.minUsd = Number.isFinite(Number(q.min)) ? Number(q.min) : 5;   // what SCORES
     if (q.display !== undefined) patch.displayUsd = Number(q.display) || 5;   // what the copy SAYS
     if (q.exclude !== undefined) patch.exclude = String(q.exclude);           // project wallets — never eligible
     if (ms(q.start) !== undefined) patch.startMs = ms(q.start);
     if (ms(q.end) !== undefined) patch.endMs = ms(q.end);
+    if (ms(q.holdend) !== undefined) patch.holdEndMs = ms(q.holdend);
+    if (q.mode) patch.mode = String(q.mode) === "contest" ? "contest" : "giveaway";
+    if (q.bonus !== undefined) patch.bonusPct = Number.isFinite(Number(q.bonus)) ? Number(q.bonus) : 0;
     if (Object.keys(patch).length) cunaGiveaway.configure(patch);
     const out = { ok: true, config: cunaGiveaway.config() };
     // Manual DQ for a wallet that dumped AFTER the window closed but BEFORE the wheel spins —
