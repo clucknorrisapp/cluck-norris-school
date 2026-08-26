@@ -343,6 +343,21 @@ router.get("/vault/swap", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "swap failed" }); }
 });
 
+// GET /api/whirlpool/vault/sell-clip?key=…&project=cuna&usd=75[&run=1]
+// Owner carve-out (2026-08-26): small code-capped project-token→USDC clip to rebuild
+// quote-side depth in a downdraft. Allowlisted projects only; per-clip/per-day/cooldown/
+// impact ceilings live in lib/whirlpool-vault.js and cannot be raised by request.
+router.get("/vault/sell-clip", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.sellClip({
+      usd: Number(req.query.usd),
+      dryRun: req.query.run !== "1",
+      projectId: proj(req),
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "sell-clip failed" }); }
+});
+
 // GET /api/whirlpool/vault/positions?key=&project=<id> — per-position depth (the same
 // sanitized shape the /liquidity command uses: pair, role, $depth, amounts, in-range).
 router.get("/vault/positions", async (req, res) => {
