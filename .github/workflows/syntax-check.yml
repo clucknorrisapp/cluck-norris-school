@@ -149,8 +149,19 @@ jobs:
           BASE="${{ github.event.pull_request.base.sha }}"
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(normie-quest/|server\.js$|package(-lock)?\.json$|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(normie-quest/|package(-lock)?\.json$|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: game-relevant change — full run"
+          elif echo "$CHANGED" | grep -qE '^server\.js$'; then
+            # server.js is ~11k lines covering the WHOLE app, so "server.js changed" fired the
+            # 13-minute render gate for Telegram routes, liquidity endpoints and admin params
+            # that cannot reach the game. Look at the DIFF instead of the filename: only hunks
+            # that mention the game (its routes, assets, env or build output) can break the
+            # render, and those still run the gate in full.
+            if git diff "$BASE"...HEAD -- server.js | grep -qiE 'normie|nq[-_]|/play|game_logic'; then
+              echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches the game — full run"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff has no game references — skipping render"
+            fi
           else
             echo "run=false" >> "$GITHUB_OUTPUT"; echo "gate: no game-relevant paths — skipping render"
           fi
