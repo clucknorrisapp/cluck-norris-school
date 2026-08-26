@@ -7895,14 +7895,14 @@ function detectBuyGeneric(tx, mint, tokUsd, solUsd, poolHint, knownPools, jupUsd
   let buyer = null, gain = 0;
   for (const o of owners) { if (poolSet.has(o)) continue; const d = delta[o]; if (d > gain) { gain = d; buyer = o; } }
   const totalPoolOut = -owners.filter(o => poolSet.has(o)).reduce((s, o) => s + Math.min(0, delta[o] || 0), 0);
-  if (!buyer || gain <= 0) {
-    // Every gainer was one of our pools (pure inter-pool arb) → not a community buy.
-    if (totalPoolOut <= 0) return null;
-    const keys = tx.transaction && tx.transaction.message && tx.transaction.message.accountKeys;
-    const signer = Array.isArray(keys) && keys.length ? String(keys[0].pubkey || keys[0]) : null;
-    if (!signer || poolSet.has(signer)) return null;
-    buyer = signer; gain = totalPoolOut;
-  }
+  // ARB FILTER (owner call 2026-08-26, superseding the 08-25 attribute-to-signer fix):
+  // arbs must not post at all. A real buy only TAKES tokens from pools; an inter-pool
+  // arb moves tokens BETWEEN them — some watched pool GAINS while another loses, in the
+  // same tx. Skip those entirely (1% -of-flow epsilon so vault-side dust can't trip it).
+  const poolInflow = owners.filter(o => poolSet.has(o)).reduce((s, o) => s + Math.max(0, delta[o] || 0), 0);
+  if (poolInflow > totalPoolOut * 0.01) return null;
+  // Every gainer was one of our pools and nothing left the pool set → nothing to post.
+  if (!buyer || gain <= 0) return null;
   let wsol = 0, stable = 0, jup = 0;
   const addQ = (b, sign) => {
     if (b.owner !== pool) return;
