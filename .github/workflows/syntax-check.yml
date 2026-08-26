@@ -95,19 +95,52 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Rendering 40 school screens for a liquidity-engine or Telegram change is pure waiting.
+      # The RENDER only matters when the diff can reach what renders: the React app, static
+      # pages, deps, the harness itself — or a server.js hunk that actually touches page
+      # serving. A server.js change that cannot reach a page still gets its boot proven by
+      # the "server boots" step below, which is the failure this job really guards against.
+      - name: decide whether the render applies
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: non-PR event — full run"; exit 0
+          fi
+          BASE="${{ github.event.pull_request.base.sha }}"
+          CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|normie-quest/|\.github/workflows/)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
+          elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "gate: no render-relevant paths — boot check only"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
       - run: npm ci
+      # Always, even when the render is skipped: a backend change that stops the server
+      # BOOTING takes the whole site down, and node --check cannot see that.
+      - name: server boots
+        env:
+          PREMIUM_ACCESS_KEY: ci-boot-check
+        run: |
+          node -e "require('./server.js'); setTimeout(() => { console.log('server booted'); process.exit(0); }, 12000)"
+
       # Playwright is installed here rather than in package.json on purpose: Railway installs
       # devDependencies to run the Vite build, and playwright's postinstall drags browser
       # binaries into the production image.
       - name: install playwright + chromium
+        if: steps.gate.outputs.run == 'true'
         run: |
           npm i --no-save playwright
           npx playwright install --with-deps chromium
       - name: render every screen and lesson
+        if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
       # Full leaderboard suite including the telemetry-router cases that node-check (no deps)
       # skips — here express is installed, so a skip means something is wrong and must fail.
