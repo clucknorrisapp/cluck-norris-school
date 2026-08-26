@@ -2279,7 +2279,9 @@ async function priceReply(chatId, replyTo) {
 const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","projectburn","burn","lprescue","rescue","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
-const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","chatid"];
+const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","buyspecial","chatid"];
+// /buyspecial is an on-demand board drop; this keeps a room from being spammed with them.
+const TG_BUYSPECIAL_COOLDOWN_MS = 90 * 1000;
 const lbCooldown = new Map();      // chatId -> last LIVE pull ts (quota guard)
 const lbReplyCooldown = new Map(); // chatId -> last reply ts (chat anti-spam)
 
@@ -2875,6 +2877,36 @@ function handleTelegramUpdate(update) {
       if (!c) { tgSend(msg.chat.id, "🌹 No active buy competition in this group right now.", msg.message_id); return; }
       buyLeadersReply(c, msg.chat.id, msg.message_id);
       return;
+    }
+    // /buyspecial → drop a fresh Buy Special board on demand in the room that owns the ledger.
+    // The timer already drops one on its own cadence; this is the "post it NOW" lever for when a
+    // buy just landed and someone wants the standings without waiting. It goes through the same
+    // postBoard() as the timer, so it replaces + re-pins exactly like a scheduled drop rather than
+    // stacking a second board in the room. In the CLKN room there is no ledger for the chat, so it
+    // falls through to the ordinary Buy Special TOOL link below — same command, two meanings, and
+    // the chat decides which. Cooldown so a room can't be spammed into a wall of boards.
+    if (cmd === "buyspecial") {
+      let gc = null;
+      try { gc = cunaGiveaway.config(); } catch (_) { gc = null; }
+      if (gc && gc.chatId && String(gc.chatId) === String(msg.chat.id)) {
+        const since = Date.now() - (Number(gc.lastBoardAt) || 0);
+        if (since < TG_BUYSPECIAL_COOLDOWN_MS) {
+          const wait = Math.ceil((TG_BUYSPECIAL_COOLDOWN_MS - since) / 1000);
+          tgSend(msg.chat.id, `⏳ Board was just posted — try again in ${wait}s.`, msg.message_id);
+          return;
+        }
+        // Stamp lastBoardAt BEFORE the await: the post takes seconds, and without this a second
+        // /buyspecial arriving in that gap passes the cooldown check and posts a duplicate.
+        cunaGiveaway.configure({ lastBoardAt: Date.now() });
+        cunaGiveaway.postBoard({}).then((b) => {
+          if (!b || !b.ok) {
+            console.warn("[cuna-giveaway] /buyspecial board:", b && b.error, (b && b.detail) || "");
+            tgSend(msg.chat.id, "⚠️ Couldn't post the board right now — try again in a minute.", msg.message_id);
+          }
+        }).catch((e) => console.warn("[cuna-giveaway] /buyspecial:", e.message));
+        return;
+      }
+      // no ledger for this chat → fall through to tgCommandReply's tool link
     }
     // /liquidity → live, sanitized snapshot of the Liquidity Engine's positions.
     if (cmd === "liquidity") {
@@ -16437,6 +16469,7 @@ app.listen(PORT, () => {
           { command: "price", description: "Live price, market cap & volume" },
           { command: "liquidity", description: "Live AMM depth & positions" },
           { command: "buyleaders", description: "Live buy-competition standings" },
+          { command: "buyspecial", description: "Post the Buy Special board right now" },
         ];
         const mainRoom = String(process.env.TELEGRAM_CHAT_ID || "");
         const projectRoomChatIds = new Set();
@@ -16449,6 +16482,11 @@ app.listen(PORT, () => {
           }
         } catch (_) { /* vault not ready — ROSE fallback below still covers the known room */ }
         try { const rc = roseResolveChatId(); if (rc && String(rc) !== mainRoom) projectRoomChatIds.add(String(rc)); } catch (_) {}
+        // CUNA's room is NOT discoverable from the vault — its telegramChatId points at the
+        // owner's DM (alerts moved there 2026-08-24), so the loop above never sees it and the
+        // room was getting the full CLKN default menu even though the handler only serves it
+        // PROJECT_ROOM_CMDS. Add it explicitly so the "/" menu matches what actually works.
+        if (CUNA_PUBLIC_ROOM && String(CUNA_PUBLIC_ROOM) !== mainRoom) projectRoomChatIds.add(String(CUNA_PUBLIC_ROOM));
         for (const cid of projectRoomChatIds) {
           try {
             await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
@@ -16517,4 +16555,3 @@ app.listen(PORT, () => {
   liqInterval(() => { whirlpoolMM.vault.tickTreasury({ projectId: "treasury" }).catch(() => {}); }, 300 * 1000);
 });
 
-throw new Error("simulated boot failure");
