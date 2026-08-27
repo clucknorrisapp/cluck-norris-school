@@ -1159,7 +1159,12 @@ async function dncTick() {
   if (dncTickBusy) return;   // a slow RPC cycle must not stack a second run
   dncTickBusy = true;
   try {
-    // Rebalance first so free USDC/SOL moves toward the underweight pool BEFORE the deploy
+    // Buyback FIRST (USDC→DNC, its own caps/interval guards) so the deploy ticks in this same
+    // cycle can pair the fresh DNC instead of holding "$X staged USDC unpaired". This call was
+    // MISSING from the DNC loop — poke and cuna tick it, so buybackEnabled:true was silently
+    // inert here (found 2026-08-27 when the enabled buyback never fired).
+    try { await whirlpoolMM.vault.buyback({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] buyback:", e.message); }
+    // Rebalance next so free USDC/SOL moves toward the underweight pool BEFORE the deploy
     // ticks absorb it — run last, it would never see a free coin to convert.
     try { await whirlpoolMM.vault.rebalancePools({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] rebalance:", e.message); }
     try { await whirlpoolMM.vault.tick({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] base tick:", e.message); }
