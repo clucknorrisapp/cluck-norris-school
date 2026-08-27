@@ -1073,6 +1073,7 @@ const DNC_MINT = "42HsffEQoHqWoeiffksYayC75fQDxaoUdMBzmeXdpump";
 const DNC_QUOTES = [
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
   "So11111111111111111111111111111111111111112",   // wSOL
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",   // JUP (owner, 2026-08-27)
 ];
 // Owner's opening shape (2026-08-26): DNC/USDC + DNC/SOL on 0.05% Orca pools at ±2%,
 // tight for organic volume the way POKEAHOE runs. Asserted on EVERY boot so a deploy can
@@ -1094,7 +1095,13 @@ function dncConfigRatchet() {
     // so applying a new width to live positions means closing and reopening them by hand.
     pair: "DNC/USDC", baseEnabled: true, feeTierPct: 0.01, widthPct: 2,
     solFeeTierPct: 0.01, solWidthPct: 2, solEnabled: true,
-    jupEnabled: false, swapEnabled: false, buybackEnabled: false,
+    // DNC/JUP pool (owner, 2026-08-27: "organic score not coming up" — CUNA runs the same
+    // JUP sleeve and sits at organic ~40 on a near-identical volume/trader profile, while
+    // DNC reads 0; correlation not proven mechanism, but it is our own precedent and cheap).
+    // Same ±2% / 0.01% shape as the other two sleeves; caps wide so the sleeve deploys whole.
+    jupEnabled: true, jupFeeTierPct: 0.01, jupWidthPct: 2,
+    jupMaxJup: 99999, jupDeployThreshold: 1,
+    swapEnabled: false, buybackEnabled: false,
     // Caps sized to the live deployment (~$420/side, balanced); raise deliberately, never by drift.
     maxUsd: 210, solMaxSol: 2.2,
     // Shared wallet: keep real gas back so a roll can always pay rent + fees.
@@ -1139,6 +1146,7 @@ async function dncTick() {
     try { await whirlpoolMM.vault.rebalancePools({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] rebalance:", e.message); }
     try { await whirlpoolMM.vault.tick({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] base tick:", e.message); }
     try { await whirlpoolMM.vault.tickSol({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] sol tick:", e.message); }
+    try { await whirlpoolMM.vault.tickJup({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] jup tick:", e.message); }
   } finally { dncTickBusy = false; }
 }
 try { dncEnsureProject(); } catch (e) { console.warn("[dnc] register:", e.message); }
