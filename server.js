@@ -1100,12 +1100,22 @@ function dncConfigRatchet() {
     // DNC reads 0; correlation not proven mechanism, but it is our own precedent and cheap).
     // Same ±2% / 0.01% shape as the other two sleeves; caps wide so the sleeve deploys whole.
     jupEnabled: true, jupFeeTierPct: 0.01, jupWidthPct: 2,
-    jupMaxJup: 99999, jupDeployThreshold: 1,
+    // Threshold 25, not 1: the grow path CLOSES AND REOPENS the position whenever spare JUP
+    // exceeds this, and the 0.95 deploy fraction leaves ~5% of the sleeve idle on each roll —
+    // so a dust threshold turns leftover JUP into a decay loop (roll, leave 5%, spare still
+    // over threshold, roll again). 25 JUP (~$5) only triggers on a deposit worth deploying.
+    jupMaxJup: 99999, jupDeployThreshold: 25,
     swapEnabled: false, buybackEnabled: false,
     // Caps sized to the live deployment (~$420/side, balanced); raise deliberately, never by drift.
     maxUsd: 210, solMaxSol: 2.2,
     // Shared wallet: keep real gas back so a roll can always pay rent + fees.
     solGasReserve: 0.35,
+    // 0.4, not the 2-SOL default: swapSolFloor is the SOL the sol-sleeve sizing refuses to
+    // touch, and with DNC's auto-swap layer off it guards nothing but gas. At 2 the sleeve
+    // read "free SOL" as negative whenever the wallet held under ~2 SOL and silently refused
+    // to deploy — that alone kept DNC/SOL at $56 on 2026-08-26 until diagnosed. $40 of gas
+    // covers thousands of rolls.
+    swapSolFloor: 0.4,
   };
   try {
     const cur = whirlpoolMM.vault.getConfig("dnc") || {};
