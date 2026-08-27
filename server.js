@@ -1105,16 +1105,24 @@ function dncConfigRatchet() {
     // so a dust threshold turns leftover JUP into a decay loop (roll, leave 5%, spare still
     // over threshold, roll again). 25 JUP (~$5) only triggers on a deposit worth deploying.
     jupMaxJup: 99999, jupDeployThreshold: 25,
-    swapEnabled: false, buybackEnabled: false,
-    // Caps sized to the live deployment (~$420/side, balanced); raise deliberately, never by drift.
-    maxUsd: 210, solMaxSol: 2.2,
+    // REBUY ON (owner, 2026-08-27: "enable the rebuy with the 100 caps"). The lean-experiment
+    // arbs net-BOUGHT DNC all day, drained the USDC pool to $5 and left the wallet quote-heavy
+    // with ~0 DNC — and with the swap layer off the engine can only redeploy what it holds, so
+    // the pools could never restock. buyback = USDC→DNC only (never sells the token), bounded
+    // by its own defaults: $25/cycle, 4/day, ≥1h apart, above usdcFloor. swapEnabled lets the
+    // base sleeve re-pair itself from free USDC (the ±2% note above: without it a one-sided
+    // pool cannot recover unaided — it happened twice on 2026-08-26).
+    swapEnabled: true, buybackEnabled: true,
+    // Caps at the owner's LEAN-experiment size (2026-08-27): ~$100 per pool — the experiment
+    // tests whether arb flow (not depth) drives the organic score. Raise deliberately, never
+    // by drift; a deploy re-asserts these.
+    maxUsd: 100, solMaxSol: 0.93,
     // Shared wallet: keep real gas back so a roll can always pay rent + fees.
     solGasReserve: 0.35,
-    // 0.4, not the 2-SOL default: swapSolFloor is the SOL the sol-sleeve sizing refuses to
-    // touch, and with DNC's auto-swap layer off it guards nothing but gas. At 2 the sleeve
-    // read "free SOL" as negative whenever the wallet held under ~2 SOL and silently refused
-    // to deploy — that alone kept DNC/SOL at $56 on 2026-08-26 until diagnosed. $40 of gas
-    // covers thousands of rolls.
+    // 0.4, not the 2-SOL default: swapSolFloor is the SOL the swap/sol-sleeve sizing refuses
+    // to touch — the gas guard. At 2 the sleeve read "free SOL" as negative whenever the
+    // wallet held under ~2 SOL and silently refused to deploy — that alone kept DNC/SOL at
+    // $56 on 2026-08-26 until diagnosed. $40 of gas covers thousands of rolls.
     swapSolFloor: 0.4,
   };
   try {
