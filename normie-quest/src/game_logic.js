@@ -56,6 +56,84 @@ function SCREEN_RECT(cam){ var z=(cam&&cam.zoom)||1, w=cam.width/z, h=cam.height
 // set to false to make it a paid-tier-only perk later.
 var PREMIUM_CHECKPOINTS = true;
 
+// ---- CROSS-SESSION SAVE (2026-08-27) ----
+// The checkpoints above are IN-MEMORY (Phaser registry): they survive a death, not a closed tab.
+// A player who reached world 4 and came back the next day landed on 1-1 — reported from the live
+// link. This mirrors the same four registry keys into localStorage so the title can offer CONTINUE.
+//   • Same keys, same meaning. The tier gate stays on the READ (title + gameOver), never on the
+//     write — exactly like nqLvlCp, so a player who upgrades mid-run isn't left with nothing banked.
+//   • NOT written from the owner's lab bench (lab warps) and not read or written in the TEST build:
+//     a tester warping to world 12 must not leave a world-12 save on that device.
+//   • MONOTONIC — furthest-reached wins, per checkpoint PAIR (index + its score travel
+//     together). NEW GAME starts a fresh run at 1-1 but never deletes the bank: world progress is
+//     a permanent unlock (the in-game continue is furthest-reached by design too), and it means a
+//     stale device can never rewind the save another device advanced.
+//   • CLOUD: with a VERIFIED wallet the same four numbers sync through /api/nq/save (see
+//     nq-save.js + the __NQ_CLOUDPUSH/__NQ_APPLYSAVE pair) so progress follows the player across
+//     devices AND origins. localStorage stays the wallet-less fallback — it is PER-ORIGIN and a
+//     private window keeps none; that is a browser rule only the wallet save fixes.
+var NQ_SAVE_KEY='nqRun', NQ_SAVE_TTL_MS=90*24*3600*1000;   // 90 days idle, then it's a fresh start
+function nqRunRaw(){ try{ var o=JSON.parse(localStorage.getItem(NQ_SAVE_KEY)||'null'); return (o&&o.v===1)?o:null; }catch(e){ return null; } }
+// Merge a candidate bank into the stored save (pair-max) and hand the result to the cloud hook.
+// Never lowers anything — calling it with a fresh run's early checkpoints is a no-op.
+function nqRunMerge(cand){
+  try{
+    if(TEST_MODE||!cand) return;
+    var cur=nqRunRaw()||{cp:0,cpScore:0,lvlCp:0,lvlCpScore:0};
+    var out={ v:1, at:Date.now(), cp:cur.cp||0, cpScore:cur.cpScore||0, lvlCp:cur.lvlCp||0, lvlCpScore:cur.lvlCpScore||0 };
+    if((cand.cp||0)>out.cp){ out.cp=cand.cp; out.cpScore=cand.cpScore||0; }
+    if((cand.lvlCp||0)>out.lvlCp){ out.lvlCp=cand.lvlCp; out.lvlCpScore=cand.lvlCpScore||0; }
+    if(!(out.cp>0||out.lvlCp>0)) return;
+    localStorage.setItem(NQ_SAVE_KEY, JSON.stringify(out));
+    try{ if(window.__NQ_CLOUDPUSH) window.__NQ_CLOUDPUSH({cp:out.cp,cpScore:out.cpScore,lvlCp:out.lvlCp,lvlCpScore:out.lvlCpScore}); }catch(e){}
+  }catch(e){}
+}
+function nqRunSave(reg,lab){
+  try{
+    if(lab||TEST_MODE||!reg) return;
+    nqRunMerge({ cp:reg.get('nqCp')||0, cpScore:reg.get('nqCpScore')||0,
+                 lvlCp:reg.get('nqLvlCp')||0, lvlCpScore:reg.get('nqLvlCpScore')||0 });
+  }catch(e){}
+}
+function nqRunClear(){ try{ localStorage.removeItem(NQ_SAVE_KEY); }catch(e){} }
+function nqRunLoad(){
+  try{
+    if(TEST_MODE) return null;
+    var raw=localStorage.getItem(NQ_SAVE_KEY); if(!raw) return null;
+    var s=JSON.parse(raw); if(!s||s.v!==1) return null;
+    if(!(s.at>0) || Date.now()-s.at>NQ_SAVE_TTL_MS){ nqRunClear(); return null; }
+    // Clamp every index into the CURRENT level list — worlds get added and reordered, and a stale
+    // index from an older build must degrade to "no save", never to scene.start on a hole.
+    var n=LEVELS.length, cp=Math.floor(s.cp)||0, lv=Math.floor(s.lvlCp)||0;
+    if(!(cp>0&&cp<n)) cp=0;
+    if(!(lv>0&&lv<n)) lv=0;
+    if(!cp&&!lv) return null;
+    return { cp:cp, cpScore:Math.max(0,Math.floor(s.cpScore)||0),
+             lvlCp:lv, lvlCpScore:Math.max(0,Math.floor(s.lvlCpScore)||0) };
+  }catch(e){ return null; }
+}
+// Where a saved run would resume — the SAME precedence gameOver uses, so CONTINUE on the title and
+// continue-after-death can never disagree: the world checkpoint by default, the per-level one only
+// when that perk is unlocked AND it is further along. Returns null when there is nothing to resume
+// or the target world is out of reach right now (the launch cap moved, or the holdings that
+// unlocked it are gone) — a clean fresh start beats bouncing off a locked level.
+function nqResumePoint(){
+  if(!PREMIUM_CHECKPOINTS) return null;
+  var s=nqRunLoad(); if(!s) return null;
+  var lvl=s.cp, kind='world';
+  var unlocked=false; try{ unlocked=nqLevelResumeUnlocked(); }catch(e){}
+  if(unlocked && s.lvlCp>lvl){ lvl=s.lvlCp; kind='level'; }
+  if(!(lvl>0&&lvl<LEVELS.length)) return null;
+  var def=LEVELS[lvl]; if(!def||def.hidden||def.private) return null;   // never resume inside a one-time speakeasy or a URL-only room
+  try{ if(!nqWorldAllowed(def)) return null; }catch(e){}
+  // ⚠ score:0 ON PURPOSE — a cross-session resume restores PROGRESS, never score. The leaderboard
+  // budgets a run by the levels reached IN THAT RUN (nq-leaderboard v2 tokens); a carried score
+  // from a previous session has no token to prove it (the 2h run-continue exchange is same-session
+  // only) and would flag every subsequent submit as suspect. The banked scores stay in the save
+  // for the in-session death-continue and any future server-verified restore.
+  return { level:lvl, score:0, kind:kind, name:def.name||'' };
+}
+
 // PREMIUM version flag — the paid/premium build (or a ?premium=1 link, remembered) grants LONGER
 // Whale Mode + Cold Wallet durations. The free version keeps the shorter times; nothing else changes.
 var PREMIUM = (function(){ try{ var q=((location.search||'')+(location.hash||'')); if(/[?&#](premium|prem)=1/i.test(q)){ try{ localStorage.setItem('nqPremium','1'); }catch(e){} return true; } return (typeof localStorage!=='undefined' && localStorage.getItem('nqPremium')==='1'); }catch(e){ return false; } })();
@@ -143,7 +221,7 @@ function nqLoadSkin(tm, prefix){
     try{ if(CHAR_ART[k] && !tm.exists(k)) tm.addBase64(k, CHAR_ART[k]); }catch(e){}
   });
 }
-// Expose the roster to the DOM picker (a separate <script> block that can't see this scope). Each
+// Expose the roster to the DOM picker (a separate script block that can't see this scope). Each
 // icon is that character's idle frame as a data URI (post-build), so the picker shows real sprites.
 try{ if(typeof window!=='undefined'){ window.__NQ_CHARS = {
   list: [ { id:'normie', name:'Normie', icon:SPRITES.normie },
@@ -1911,11 +1989,33 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     // Free to play, always: tap straight into the game. Nothing is ever charged to START a run
     // (the only burn in the game is the optional Item Reserve shop in the panel overlay).
     var self=this;
-    var go=function(){ if(this.started) return; this.started=true; this.scene.start('Controls',{next:0,score:0}); };
-    // Tap anywhere = play from 1-1 (both modes). In TEST BUILD, the reliable DOM "≡ Levels"
-    // button (bottom-left, works from here too) is how you reach the level picker.
-    this.input.once('pointerdown',go,this); this.input.keyboard.once('keydown',go,this);
-    padAdvance(this, function(){ go.call(self); });   // controller button also starts
+    // CROSS-SESSION CONTINUE. A returning player with a banked world resumes there instead of
+    // being dumped back on 1-1. Tap-anywhere keeps doing the friendly thing (CONTINUE when there
+    // is a save, a fresh run when there isn't) and a small NEW GAME chip is the explicit way to
+    // throw the save away. Both paths start through Controls exactly as before, so HOW TO PLAY
+    // and the destination world's Briefing still fire.
+    var _res=null; try{ _res=nqResumePoint(); }catch(e){}
+    var _newBtn=null;
+    if(_res){
+      p.setText('CONTINUE \u00B7 WORLD '+_res.name);
+      _newBtn=this.add.text(W/2,262,'NEW GAME',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#8f96b8',resolution:UIRES}).setOrigin(.5);
+    }
+    var start=function(lvl,score){ if(self.started) return; self.started=true;
+      // NEW GAME starts at 1-1 but does NOT delete the bank — progress is a permanent unlock, and
+      // deleting it here would also delete it for every other device synced to the same wallet.
+      self.scene.start('Controls',{next:lvl||0,score:score||0}); };
+    var go=function(pointer){
+      // one tap surface, two outcomes — NEW GAME wins if the tap landed on its chip. The hit box is
+      // inflated because the chip is 11px tall in game units and this is played on phones.
+      var onNew=false;
+      try{ if(_newBtn&&pointer&&pointer.worldX!=null){ var _b=_newBtn.getBounds(); Phaser.Geom.Rectangle.Inflate(_b,14,10); onNew=_b.contains(pointer.worldX,pointer.worldY); } }catch(e){}
+      if(_res&&!onNew) start(_res.level,_res.score); else start(0,0);
+    };
+    // Tap anywhere = play (from the save if there is one, else 1-1). In TEST BUILD, the reliable
+    // DOM "≡ Levels" button (bottom-left, works from here too) is how you reach the level picker.
+    this.input.once('pointerdown',go,this);
+    this.input.keyboard.once('keydown',function(ev){ if(_res&&ev&&(ev.key==='n'||ev.key==='N')) start(0,0); else go(); },this);
+    padAdvance(this, function(){ go(); });   // controller button also starts
     if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
   }
 });
@@ -2135,12 +2235,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Journey funnel: a level STARTED is the denominator for every drop-off number. Without it
     // we can count deaths but never "how many people even got here".
     this._lvQuitSent=false;
-    try{ nqTele('start',{world:this.def&&this.def.name}); }catch(e){}
+    // ⚠ this.def is not assigned until further down create() and the scene INSTANCE is reused
+    // across scene.start — so `this.def` HERE is the PREVIOUS level (or undefined on the first).
+    // The start beacon and abandon beacon were mis-attributing every level to the one before it
+    // (and dropping the first level of every session as ''). Read the level data directly.
+    var _lvDef=LEVELS[this.levelIdx]||null;
+    try{ nqTele('start',{world:_lvDef&&_lvDef.name}); }catch(e){}
     // Arm the abandon beacon for THIS attempt. Closures rather than a snapshot so the beacon
     // reports where the player actually was when they left, not where they spawned.
     try{
       var _sc=this;
-      window.__NQ_LIVE={ world:(this.def&&this.def.name)||'', at:Date.now(),
+      window.__NQ_LIVE={ world:(_lvDef&&_lvDef.name)||'', at:Date.now(),
         x:function(){ return _sc.player?_sc.player.x:0; },
         paused:function(){ return _sc._pausedMs||0; },
         score:function(){ return _sc.score||0; } };
@@ -2382,7 +2487,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // (3-5)=+15% enemy speed, World 3 (6-8)=+30%. Per-level override via def.diff.
     this.diffMul = def.diff || [1,1,1,1.15,1.15,1.15,1.3,1.3,1.3,1.45,1.45,1.55,1.6,1.6,1.7,1.75,1.75,1.85,1.9,1.9,2.0,2.1,2.1,2.25][this.levelIdx] || 1;
     this.timeLeft=def.time; this.over=false; this.hasKey=false; this._doorHint=false;
-    if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqCp',0); this.registry.set('nqCpScore',0); this.registry.set('nqLvlCp',0); this.registry.set('nqLvlCpScore',0); this.registry.set('nqUsedWarps',{}); }   // fresh run → zero the casino tally + clear all world AND level checkpoints + reset one-time speakeasies
+    if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqCp',0); this.registry.set('nqCpScore',0); this.registry.set('nqLvlCp',0); this.registry.set('nqLvlCpScore',0); this.registry.set('nqUsedWarps',{}); }   // fresh run → zero the casino tally (the localStorage BANK deliberately survives — world progress is a permanent unlock) + clear all world AND level checkpoints + reset one-time speakeasies
     this.spawn={x:(this._spawnX!=null?this._spawnX:60),y:H-60};
     // Never spawn OVER A PIT: warp returns are computed as door-x+70 with no terrain awareness, and
     // 21-2's speakeasy return landed exactly inside its own gap — a VIP player fell into the pit on
@@ -4840,7 +4945,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   // Bank a checkpoint at the START of the NEXT world whenever a (non-final) world boss falls.
   // gameOver then continues from the FURTHEST world reached — not always World 2.
   bankCheckpoint:function(){ if(!PREMIUM_CHECKPOINTS) return; var nx=(this.def&&this.def.next!=null)?this.def.next:this.levelIdx+1;
-    if(nx<LEVELS.length){ this.registry.set('nqCp',nx); this.registry.set('nqCpScore',this.score); } },
+    if(nx<LEVELS.length){ this.registry.set('nqCp',nx); this.registry.set('nqCpScore',this.score); nqRunSave(this.registry,this._labWarp); } },
   bossDefeat:function(){
     if(this.over) return; this.over=true; var k=this.rugking, self=this;
     // difficulty telemetry: boss arenas end HERE, never via key+door levelClear — without this
@@ -4991,7 +5096,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Deliberately not banked for hidden bonus rooms — resuming inside a one-time speakeasy you
     // already consumed would strand the run in a room with no way back.
     if(next<LEVELS.length && !(this.def&&this.def.hidden)){
-      this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score);
+      this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score); nqRunSave(this.registry,this._labWarp);
     }
     if(next>=LEVELS.length){ this.scene.start('Win',this.winData()); return; }
     // SETUP-LANE tier gate: cleared the last world your holdings unlock → level select + the
@@ -5699,7 +5804,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // the tier-2/VIP "resume on the level you died on" perk never advanced past the free world
     // checkpoint (nqLvlCp stayed == nqCp) and the perk was silently inert. Same unconditional write as
     // advanceLevel (the gate is on the READ in gameOver); skip hidden bonus rooms.
-    if(next<LEVELS.length && !(this.def&&this.def.hidden)){ this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score); }
+    if(next<LEVELS.length && !(this.def&&this.def.hidden)){ this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score); nqRunSave(this.registry,this._labWarp); }
     this.time.delayedCall(1500,function(){
       // The designed "MORE WORLDS AWAIT" VIP tease fires after clearing 2-1 (idx 3) — but its old
       // home was advanceLevel(), which only boss defeats reach, so it was dead code (audit #25).
@@ -7242,6 +7347,38 @@ var NQGAME=new Phaser.Game({
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
   scene:[Boot,Title,LevelSelect,Controls,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]
 });
+// CROSS-SESSION SAVE — rehydrate the checkpoint registry BEFORE any scene runs, so a resumed run
+// keeps its checkpoints for every later death too (not just the first jump in). Starting a fresh
+// run zeroes these again in Game.create at levelIdx 0, so this can never leak into a NEW GAME.
+// Scores are NOT hydrated (left 0): same reason nqResumePoint resumes at score 0 — a score from a
+// previous session has no run token behind it, and feeding it into a death-continue would make the
+// leaderboard flag the run. Progress crosses sessions; score is per-session.
+try{ var _nqSave=nqRunLoad();
+  if(_nqSave){ NQGAME.registry.set('nqCp',_nqSave.cp);
+               NQGAME.registry.set('nqLvlCp',_nqSave.lvlCp); }
+}catch(e){}
+// CLOUD SAVE bridge — the wallet client lives in a separate script block (the NQLB IIFE), so the
+// sync crosses over on window:
+//   __NQ_GETSAVE()      → the local bank (clamped/validated), for the wallet block to push up.
+//   __NQ_APPLYSAVE(s)   → merge a server save DOWN into localStorage + the live registry (pair-max,
+//                         so a stale cloud read can never rewind local progress), then refresh the
+//                         Title if it is showing so CONTINUE appears without a reload.
+try{ if(typeof window!=='undefined'){
+  window.__NQ_GETSAVE=function(){ try{ return nqRunLoad(); }catch(e){ return null; } };
+  window.__NQ_APPLYSAVE=function(sv){ try{
+    if(TEST_MODE||!sv) return;
+    nqRunMerge({ cp:Math.floor(sv.cp)||0, cpScore:Math.floor(sv.cpScore)||0,
+                 lvlCp:Math.floor(sv.lvlCp)||0, lvlCpScore:Math.floor(sv.lvlCpScore)||0 });
+    var m=nqRunLoad(); if(!m) return;
+    var r=NQGAME.registry;   // live registry too, so continue-after-death sees it mid-session.
+    // Indexes only — a score from another device belongs to that device's run token, and pairing
+    // it with THIS session's death-continue would trip the leaderboard budget check (see nqResumePoint).
+    if(m.cp>(r.get('nqCp')||0)){ r.set('nqCp',m.cp); }
+    if(m.lvlCp>(r.get('nqLvlCp')||0)){ r.set('nqLvlCp',m.lvlCp); }
+    var t=NQGAME.scene.getScene('Title');
+    if(t && t.scene.isActive() && !t.started) t.scene.restart();
+  }catch(e){} };
+} }catch(e){}
 // FIX (2026-08-13): typing in ANY HTML text field — the leaderboard handle (#nqp-handle), the
 // promo/redeem code, wallet fields — dropped the game-control keys (W A S D F X Q E and 1/2/3, the
 // set addKeys()'d below), so "half the keyboard didn't work". Phaser's KeyboardManager attaches a
@@ -8227,6 +8364,30 @@ if(typeof document!=='undefined'){ (function(){
       .catch(function () {});
   }
   function worldOf(name) { var m = String(name || '').match(/^(\d+)/); return m ? parseInt(m[1], 10) : 0; }
+  // ---- CLOUD SAVE sync (2026-08-27) — progress follows the WALLET across devices ----------
+  // One endpoint, one shape: POST {pubkey, token, save?} → the server merges (furthest-reached
+  // wins, per pair — see nq-save.js) and answers with the merged save, which is handed back to
+  // the game via __NQ_APPLYSAVE. So a single round trip both pushes local progress up AND pulls
+  // any further progress from another device down. Fire-and-forget: a save must never block play.
+  var _cloudLastBody = '';
+  function cloudSync(push) {
+    if (!walletState.pubkey || !walletState.token) return;
+    var body = { pubkey: walletState.pubkey, token: walletState.token };
+    if (push && (push.cp > 0 || push.lvlCp > 0)) body.save = { cp: push.cp || 0, cpScore: push.cpScore || 0, lvlCp: push.lvlCp || 0, lvlCpScore: push.lvlCpScore || 0 };
+    var enc = JSON.stringify(body);
+    if (body.save && enc === _cloudLastBody) return;   // identical re-push (e.g. a clear that banked nothing new) — skip the round trip
+    _cloudLastBody = body.save ? enc : _cloudLastBody;
+    fetch('/api/nq/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: enc })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { try { if (j && j.ok && j.save && window.__NQ_APPLYSAVE) window.__NQ_APPLYSAVE(j.save); } catch (e) {} })
+      .catch(function () {});
+  }
+  // The game's bank hook (nqRunMerge) pushes through here on every checkpoint; wallet-less players
+  // no-op and keep the localStorage save only.
+  try { window.__NQ_CLOUDPUSH = function (s) { cloudSync(s); }; } catch (e) {}
+  // A wallet becoming ready (fresh connect OR remembered-session restore) is the pull moment:
+  // send whatever is banked locally, get the merged truth back.
+  function cloudReady() { try { cloudSync(window.__NQ_GETSAVE ? window.__NQ_GETSAVE() : null); } catch (e) {} }
   // Credit reached levels ONE AT A TIME: each checkpoint returns an updated token the next one
   // needs, so they must chain. Serialising here also means a slow run-start never loses a level's
   // budget — the levels just queue and flush once the token lands.
@@ -8404,6 +8565,7 @@ if(typeof document!=='undefined'){ (function(){
     walletState = { pubkey: pk, token: vr.token, tier: vr.tier, worlds: vr.worlds, balances: vr.balances, vip: !!vr.vip };
     activeProvider = p;   // the shop needs something that can sign; re-detected on a reload
     saveWallet();
+    cloudReady();   // wallet proven → sync the cross-device save (push local, pull further)
     if (!handle) window.NQLB.setHandle(pk.slice(0, 4) + '…' + pk.slice(-4));
     return walletState;
   }
@@ -8431,7 +8593,7 @@ if(typeof document!=='undefined'){ (function(){
       body: JSON.stringify({ pubkey: saved.pubkey, token: saved.token, fresh: !!fresh }) }).then(function (r) { return r.json(); })
       .then(function (v) {
         if (v && v.ok) { walletState.tier = v.tier; walletState.worlds = v.worlds; walletState.balances = v.balances; walletState.vip = !!v.vip;
-          if (!handle) window.NQLB.setHandle(saved.pubkey.slice(0, 4) + '…' + saved.pubkey.slice(-4)); if (cb) cb(true); return; }
+          if (!handle) window.NQLB.setHandle(saved.pubkey.slice(0, 4) + '…' + saved.pubkey.slice(-4)); cloudReady(); if (cb) cb(true); return; }
         // Only a REJECTED PROOF means forget the wallet. This used to disconnect on ANY non-ok
         // reply, and /refresh answers 'rpc_error' whenever the Helius read fails — so one flaky RPC
         // call silently signed the player out, dropped the ✓ on their score, and stopped their
