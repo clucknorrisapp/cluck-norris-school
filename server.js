@@ -2483,6 +2483,16 @@ function threadFor(messageId) {
 // Remember which graduate wallets a school-activity DM was about, keyed by that
 // message's id, so an operator reply ("yes 25000" / "no") to it pays or skips them.
 // kv-backed (survives restarts — the DM may fire overnight and be answered later).
+// ⛔ KILLED (owner, 2026-08-27): the reply-to-pay graduate airdrop is OFF. On-chain
+// reconciliation of every graduate wallet found sybil farming — one operator claiming
+// from multiple wallets (one claimer wallet directly funded another; four brand-new
+// wallets claimed in a single day whose first-ever on-chain activity was our diploma
+// mint; rewards were sold into the pools same-day and the token accounts closed).
+// The prompt is no longer offered and replies refuse, even if AIRDROP_SECRET is set
+// for something else. A replacement claim flow (with sybil checks) is planned; don't
+// re-arm this one without the owner asking. Manual sends via /api/school-airdrop
+// (admin-keyed, per-wallet) still work — those are owner-initiated, not prompted.
+const SCHOOL_AIRDROP_PROMPT_KILLED = true;
 const AIRDROP_PROMPT_RING = 60;
 function registerAirdropPrompt(messageId, ctx) {
   if (!messageId) return;
@@ -2522,6 +2532,8 @@ async function schoolAirdropReply(msg, ctx) {
   const chatId = msg.chat.id;
   if (String(chatId) !== String(ctx.chatId)) return; // only in the chat the prompt was sent to
   const replyId = msg.message_id;
+  // Kill switch outranks everything — even a stale pre-kill prompt answered after a deploy.
+  if (SCHOOL_AIRDROP_PROMPT_KILLED) { tgSend(chatId, "⛔ Reply-to-pay airdrops are retired (sybil farming — owner, 2026-08-27). Use /api/school-airdrop for a deliberate per-wallet send.", replyId); return; }
   // Optional operator allowlist (defense-in-depth on top of the now-private-only chat): if
   // TELEGRAM_OPERATOR_IDS is set (comma-separated Telegram user ids), only those users can
   // approve. Unset = rely on the chat being the private operator DM (fail-closed in schoolGradTick).
@@ -15628,7 +15640,7 @@ async function schoolGradTick({ dryRun = false } = {}) {
     // append the prompt + remember these wallets against this message so a "yes <amount>"
     // reply in the operator chat pays them (schoolAirdropReply).
     const airdropWallets = newDip.slice(0, 25);
-    if (airdropWallets.length && schoolAirdrop.isEnabled()) {
+    if (airdropWallets.length && !SCHOOL_AIRDROP_PROMPT_KILLED && schoolAirdrop.isEnabled()) {
       lines.push(`\n💸 Reply <b>yes &lt;amount&gt;</b> to airdrop CLKN to ${airdropWallets.length === 1 ? "this graduate" : `these ${airdropWallets.length} graduates`} (e.g. <code>yes 25000</code>). Reply <b>no</b> to skip.`);
     }
     const text = "🏫 <b>SCHOOL — new activity</b>\n" + lines.join("\n");
@@ -15643,7 +15655,7 @@ async function schoolGradTick({ dryRun = false } = {}) {
     if (chat) sentId = await tgSend(chat, text, null, { silent: true });
     else console.warn("[school-grad] no private operator chat configured — DM skipped (won't post wallets/airdrop prompt publicly)");
     // Register the pending airdrop so an operator reply to THIS message can fund it.
-    if (sentId && airdropWallets.length && schoolAirdrop.isEnabled()) {
+    if (sentId && airdropWallets.length && !SCHOOL_AIRDROP_PROMPT_KILLED && schoolAirdrop.isEnabled()) {
       registerAirdropPrompt(sentId, { chatId: chat, wallets: airdropWallets, at: Date.now() });
     }
     kv.set("schoolGradSeen", { creds: all.map(c => c.wallet), diplomas: mintedWallets, baselinedAt: seen.baselinedAt });
