@@ -1110,6 +1110,12 @@ function dncConfigRatchet() {
     maxUsd: 210, solMaxSol: 2.2,
     // Shared wallet: keep real gas back so a roll can always pay rent + fees.
     solGasReserve: 0.35,
+    // 0.4, not the 2-SOL default: swapSolFloor is the SOL the sol-sleeve sizing refuses to
+    // touch, and with DNC's auto-swap layer off it guards nothing but gas. At 2 the sleeve
+    // read "free SOL" as negative whenever the wallet held under ~2 SOL and silently refused
+    // to deploy — that alone kept DNC/SOL at $56 on 2026-08-26 until diagnosed. $40 of gas
+    // covers thousands of rolls.
+    swapSolFloor: 0.4,
   };
   try {
     const cur = whirlpoolMM.vault.getConfig("dnc") || {};
