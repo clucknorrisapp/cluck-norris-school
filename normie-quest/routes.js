@@ -26,6 +26,7 @@ const rewards = require('./nq-rewards'); // wallet-bound game-boost reward queue
 const ledger = require('./nq-ledger');   // off-chain per-wallet points ledger (Normie Cash economy)
 const pair = require('./nq-pair');       // TV pairing — carry a proven wallet session to a wallet-less screen
 const claims = require('./nq-claims');   // weekly physical-prize claims (sign-to-claim, encrypted addresses)
+const cloudsave = require('./nq-save');  // cross-device cloud save, keyed by verified wallet (2026-08-27)
 
 // Admin key for reading feedback / the comments dashboard (low-sensitivity playtest comments,
 // no funds/PII). Env keys ONLY — a dedicated NQ_FEEDBACK_KEY, else the site's PREMIUM_ACCESS_KEY.
@@ -414,6 +415,20 @@ router.post('/api/nq/wallet/refresh', async (req, res) => {
   try {
     const b = req.body || {};
     res.json(await wallet.refresh(String(b.pubkey || ''), String(b.token || ''), { force: b.fresh === true }));
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// CLOUD SAVE — cross-device game progress, keyed by VERIFIED wallet (nq-save.js). One POST does
+// both directions: body {pubkey, token, save?} — a save merges up (furthest-reached wins), and the
+// merged result comes back for the client to apply down. Session-token-gated both ways so nobody
+// can read or poison another player's save; values are a resume bookmark, never a prize input.
+router.post('/api/nq/save', (req, res) => {
+  if (throttled(req, 'cloudsave', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try {
+    const b = req.body || {};
+    const pk = String(b.pubkey || '');
+    if (!wallet.checkSession(pk, String(b.token || ''))) return res.status(401).json({ ok: false, error: 'bad_session' });
+    const save = b.save ? cloudsave.put(pk, b.save) : cloudsave.get(pk);
+    res.json({ ok: true, save: save || null });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.get('/api/nq/leaderboard', async (req, res) => {

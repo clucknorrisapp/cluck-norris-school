@@ -1460,11 +1460,17 @@ function Landing({onStart,onIncubator,onStartHere,completed}){
         )}
       </div>
 
-      {/* GRADUATE REWARD — CLKN airdrop + graduation NFT */}
+      {/* GRADUATE PERKS — the CLKN airdrop reward was retired 2026-08-27 (owner): on-chain
+          reconciliation caught sybil farming (one operator claiming from multiple fresh wallets),
+          and paying fake wallets dilutes real holders. State it plainly rather than deleting
+          silently — honesty is the brand. Don't re-add a token reward without the owner asking. */}
       <div style={{background:"rgba(255,182,39,0.12)",border:"1px solid rgba(255,182,39,0.45)",borderRadius:12,padding:"16px 18px",marginBottom:14,textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE REWARD</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE NFT + TRANSCRIPT</div>
         <p style={{fontFamily:"system-ui,sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
-          Every graduate is <b style={{color:"#FFB627"}}>entered to receive CLKN airdrops</b>. Finish all {LESSONS.length} classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b> — then drop your Solana address to claim it and get entered for CLKN airdrops.
+          Finish all {LESSONS.length} classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b> and a permanent, shareable transcript — free, minted to any Solana address you drop.
+        </p>
+        <p style={{fontFamily:"system-ui,sans-serif",fontSize:13,color:"#9CA3AF",lineHeight:1.6,margin:0}}>
+          The CLKN airdrop reward was taken down due to farming efforts — fake wallets were claiming it, and paying them would dilute real holders. The education stays free for everyone.
         </p>
       </div>
 
@@ -1703,7 +1709,7 @@ function Complete({onRestart}){
           <div style={{fontSize:28,marginBottom:6}}>🏆</div>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FFB627",letterSpacing:2,marginBottom:4}}>YOU EARNED YOUR SPOT IN THE FLOCK</div>
           <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",margin:0,lineHeight:1.6}}>
-            Completing all {LESSONS.length} lessons is no small feat. Submit your Solana wallet to mint your on-chain graduation NFT and get entered for CLKN airdrops.
+            Completing all {LESSONS.length} lessons is no small feat. Submit your Solana wallet to mint your on-chain graduation NFT and permanent transcript.
           </p>
         </div>
         {!claimed ? (
@@ -1832,7 +1838,7 @@ function StartHere({ onGo }){
         <Act label="🛠 All tools" onClick={goIn("/tools")}/>
       </>)},
     { key:"about", icon:"🐔", title:"About Cluck Norris & CLKN", tag:"The story + where to buy", body:()=>(<>
-        <p style={txt}>Cluck Norris is the free School of Crypto Hard Knocks + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility. CLKN unlocks premium tools via a small on-chain payment (no wallet-connect needed), and holding it earns airdrop eligibility. The school itself is always free.</p>
+        <p style={txt}>Cluck Norris is the free School of Crypto Hard Knocks + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility. CLKN unlocks premium tools — hold it and they're free. The school itself is always free.</p>
         <Act label="💸 Buy CLKN on Jupiter" onClick={goExt(JUPITER_TRADE_LINK)} color="#34D399" bg="rgba(16,185,129,0.14)" bd="rgba(16,185,129,0.5)"/>
         <Act label="📊 Token data & chart" onClick={()=>onGo("clkn")}/>
         <Act label="📜 The story & grant" onClick={goIn("/investors")}/>

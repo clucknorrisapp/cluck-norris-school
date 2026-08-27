@@ -2483,6 +2483,16 @@ function threadFor(messageId) {
 // Remember which graduate wallets a school-activity DM was about, keyed by that
 // message's id, so an operator reply ("yes 25000" / "no") to it pays or skips them.
 // kv-backed (survives restarts — the DM may fire overnight and be answered later).
+// ⛔ KILLED (owner, 2026-08-27): the reply-to-pay graduate airdrop is OFF. On-chain
+// reconciliation of every graduate wallet found sybil farming — one operator claiming
+// from multiple wallets (one claimer wallet directly funded another; four brand-new
+// wallets claimed in a single day whose first-ever on-chain activity was our diploma
+// mint; rewards were sold into the pools same-day and the token accounts closed).
+// The prompt is no longer offered and replies refuse, even if AIRDROP_SECRET is set
+// for something else. A replacement claim flow (with sybil checks) is planned; don't
+// re-arm this one without the owner asking. Manual sends via /api/school-airdrop
+// (admin-keyed, per-wallet) still work — those are owner-initiated, not prompted.
+const SCHOOL_AIRDROP_PROMPT_KILLED = true;
 const AIRDROP_PROMPT_RING = 60;
 function registerAirdropPrompt(messageId, ctx) {
   if (!messageId) return;
@@ -2522,6 +2532,8 @@ async function schoolAirdropReply(msg, ctx) {
   const chatId = msg.chat.id;
   if (String(chatId) !== String(ctx.chatId)) return; // only in the chat the prompt was sent to
   const replyId = msg.message_id;
+  // Kill switch outranks everything — even a stale pre-kill prompt answered after a deploy.
+  if (SCHOOL_AIRDROP_PROMPT_KILLED) { tgSend(chatId, "⛔ Reply-to-pay airdrops are retired (sybil farming — owner, 2026-08-27). Use /api/school-airdrop for a deliberate per-wallet send.", replyId); return; }
   // Optional operator allowlist (defense-in-depth on top of the now-private-only chat): if
   // TELEGRAM_OPERATOR_IDS is set (comma-separated Telegram user ids), only those users can
   // approve. Unset = rely on the chat being the private operator DM (fail-closed in schoolGradTick).
@@ -5280,10 +5292,14 @@ app.get("/api/x-post-test", async (req, res) => {
   if (!xConfigured()) return res.status(200).json({ configured: false, message: "Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in Railway." });
   if (req.query.post === "1") {
     const text = req.query.text ? String(req.query.text) : "🐔 Cluck Norris is online. Crypto lessons incoming. clucknorris.app";
-    const r = await postToX(text);
+    // &force=1 posts through the master X pause. This endpoint is admin-keyed, so a force here
+    // is a deliberate owner-initiated post (owner ask 2026-08-27: announce the graduate-reward
+    // takedown while autoposting stays paused) — the same "manual gated endpoints keep working
+    // under the master kill" pattern as /api/whirlpool/*. Nothing automated sets force.
+    const r = await postToX(text, { force: req.query.force === "1" });
     return res.status(200).json({ configured: true, posted: r.ok, result: r });
   }
-  return res.status(200).json({ configured: true, posted: false, hint: "add &post=1 to send a test tweet" });
+  return res.status(200).json({ configured: true, posted: false, hint: "add &post=1 to send a test tweet (&force=1 to post through the master pause — deliberate owner sends only)" });
 });
 
 // X hackathon blitz control — ?start=1 begins it (and posts the first immediately),
@@ -7531,7 +7547,7 @@ app.get("/api/verify-sol-payment", async (req, res) => {
   const min = Math.max(askedMin, SOL_UNLOCK_MIN_LAMPORTS);
   try {
     const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
-    const r = await rpcCall("verify-sol", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const r = await rpcCall("verify-sol", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     const tx = r && r.result;
     if (!tx || (tx.meta && tx.meta.err)) return res.status(200).json({ success: false, error: "tx not found or failed" });
     const keys = ((tx.transaction && tx.transaction.message && tx.transaction.message.accountKeys) || []).map(k => (typeof k === "string" ? k : k.pubkey));
@@ -7952,7 +7968,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   // Backfill lever: post a specific past buy by signature (e.g. one the old detector missed),
   // even though it's behind the cursor. Marks it seen so the forward poller never doubles it.
   if (backfill) {
-    const tx = await roseHeliusRpc(key, "getTransaction", [backfill, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const tx = await roseHeliusRpc(key, "getTransaction", [backfill, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     if (!tx) return { ok: false, backfill, reason: "tx not found / not indexed" };
     const buy = roseDetectBuyFromRaw(tx, roseUsd, solUsd);
     if (!buy) return { ok: false, backfill, reason: "not a buy (sell / LP / non-buy)" };
@@ -7996,7 +8012,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   let posted = 0, scanned = 0, buysSeen = 0, advanceTo = lastSig;
   for (const sig of fresh) {
     if (seen.has(sig)) { advanceTo = sig; continue; }
-    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     if (!tx) {
       // Not indexed yet — hold the pointer and retry next cycle, BUT cap the retries so one
       // permanently-unfetchable sig can't wedge the whole feed forever (the CLKN poller does the
@@ -8180,7 +8196,7 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
     let advanceTo = lastSig;
     for (const sig of fresh) {
       if (seen.has(sig)) { advanceTo = sig; continue; }
-      const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+      const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
       if (!tx) {
         const n = (buyBotParseAttempts.get(sig) || 0) + 1;
         if (n < BUYBOT_MAX_PARSE_ATTEMPTS) { buyBotParseAttempts.set(sig, n); break; }
@@ -8302,7 +8318,7 @@ async function projectBurnPollOnce(cfg, { testPost = false } = {}) {
   let h = burnWatchHourly.get(cfg.id); if (!h || h.hour !== hr) { h = { hour: hr, count: 0 }; burnWatchHourly.set(cfg.id, h); }
   let posted = 0, foundAny = false, sendFails = 0;
   for (const sig of fresh) {
-    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]).catch(() => null);
+    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]).catch(() => null);
     if (!tx) continue;
     for (const b of txBurnsOfMint(tx, cfg.mint, dec)) {
       foundAny = true;
@@ -8745,7 +8761,7 @@ async function vcVerifyBuyTx(campaign, sig) {
   if (!/^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(String(sig || ""))) return { ok: false, error: "That doesn't look like a Solana transaction signature." };
   const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
   let j;
-  try { j = await rpcCall("vc-tx", "getTransaction", [String(sig), { maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }]); }
+  try { j = await rpcCall("vc-tx", "getTransaction", [String(sig), { maxSupportedTransactionVersion: 1, encoding: "jsonParsed" }]); }
   catch (e) { return { ok: false, error: "Couldn't read that transaction — try again in a moment." }; }
   const tx = j && j.result;
   if (!tx || !tx.meta) return { ok: false, error: "Transaction not found on-chain. Paste the signature of your BUY transaction." };
@@ -9292,7 +9308,7 @@ async function attributeLockPlatform(escrow, rpcCall) {
     const sigs = sigRes?.result || [];
     if (!sigs.length) return label; // no history yet — don't cache, retry next scan
     const oldest = sigs[sigs.length - 1].signature; // oldest = creation/funding tx
-    const txRes = await rpcCall("lock-attr-tx", "getTransaction", [oldest, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]);
+    const txRes = await rpcCall("lock-attr-tx", "getTransaction", [oldest, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1 }]);
     const msg = txRes?.result?.transaction?.message;
     if (!msg) return label; // trace failed — don't cache, retry next scan
     const progs = new Set();
@@ -13029,7 +13045,7 @@ app.post("/api/burn-receipt", rateLimit("track", { windowMs: 60000, max: 20 }), 
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
   try {
-    const tx = await rpcCall("burn-verify", "getTransaction", [String(sig), { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const tx = await rpcCall("burn-verify", "getTransaction", [String(sig), { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     const t = tx && tx.result;
     if (!t || (t.meta && t.meta.err)) return res.status(400).json({ success: false, error: "That transaction isn't a confirmed success on-chain." });
     // Confirm the wallet signed it (fee payer / first signer).
@@ -15285,7 +15301,7 @@ async function fetchRawTradeTx(sig, HELIUS_KEY) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jsonrpc: "2.0", id: 1, method: "getTransaction",
-        params: [sig, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed", commitment: "confirmed" }],
+        params: [sig, { maxSupportedTransactionVersion: 1, encoding: "jsonParsed", commitment: "confirmed" }],
       }),
     });
     const d = await r.json();
@@ -15628,7 +15644,7 @@ async function schoolGradTick({ dryRun = false } = {}) {
     // append the prompt + remember these wallets against this message so a "yes <amount>"
     // reply in the operator chat pays them (schoolAirdropReply).
     const airdropWallets = newDip.slice(0, 25);
-    if (airdropWallets.length && schoolAirdrop.isEnabled()) {
+    if (airdropWallets.length && !SCHOOL_AIRDROP_PROMPT_KILLED && schoolAirdrop.isEnabled()) {
       lines.push(`\n💸 Reply <b>yes &lt;amount&gt;</b> to airdrop CLKN to ${airdropWallets.length === 1 ? "this graduate" : `these ${airdropWallets.length} graduates`} (e.g. <code>yes 25000</code>). Reply <b>no</b> to skip.`);
     }
     const text = "🏫 <b>SCHOOL — new activity</b>\n" + lines.join("\n");
@@ -15643,7 +15659,7 @@ async function schoolGradTick({ dryRun = false } = {}) {
     if (chat) sentId = await tgSend(chat, text, null, { silent: true });
     else console.warn("[school-grad] no private operator chat configured — DM skipped (won't post wallets/airdrop prompt publicly)");
     // Register the pending airdrop so an operator reply to THIS message can fund it.
-    if (sentId && airdropWallets.length && schoolAirdrop.isEnabled()) {
+    if (sentId && airdropWallets.length && !SCHOOL_AIRDROP_PROMPT_KILLED && schoolAirdrop.isEnabled()) {
       registerAirdropPrompt(sentId, { chatId: chat, wallets: airdropWallets, at: Date.now() });
     }
     kv.set("schoolGradSeen", { creds: all.map(c => c.wallet), diplomas: mintedWallets, baselinedAt: seen.baselinedAt });
