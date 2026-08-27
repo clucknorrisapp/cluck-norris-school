@@ -28,7 +28,7 @@ Three tracks, all free, in **seven languages** (English · Español · हिन
 
 Plus **📚 the Library** (glossary + deep dives across Survival / Research / Concepts) and **🤖 Ask Cluck**, a Claude-powered tutor embedded in every lesson, live in the Telegram group, and standalone at [`/ask-cluck`](https://clucknorris.app/ask-cluck).
 
-Finish the full curriculum, drop a Solana address, and you get a permanent, shareable **[`/transcript`](https://clucknorris.app)** page plus an on-chain graduation NFT. Learning itself stays walletless — the address is only for the transcript and the airdrop list.
+Finish the full curriculum, drop a Solana address, and you get a permanent, shareable **[`/transcript`](https://clucknorris.app)** page plus an on-chain graduation NFT. Learning itself stays walletless — the address is only for the transcript and the NFT. (A CLKN graduate airdrop existed briefly; it was taken down after wallet-farming abuse.)
 
 A **"where do I start?"** concierge meets newcomers on the landing page and in the Telegram group, so a feature-rich app doesn't overwhelm a first-timer.
 
