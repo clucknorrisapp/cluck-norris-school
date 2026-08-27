@@ -1100,7 +1100,11 @@ function dncConfigRatchet() {
     // DNC reads 0; correlation not proven mechanism, but it is our own precedent and cheap).
     // Same ±2% / 0.01% shape as the other two sleeves; caps wide so the sleeve deploys whole.
     jupEnabled: true, jupFeeTierPct: 0.01, jupWidthPct: 2,
-    jupMaxJup: 99999, jupDeployThreshold: 1,
+    // Threshold 25, not 1: the grow path CLOSES AND REOPENS the position whenever spare JUP
+    // exceeds this, and the 0.95 deploy fraction leaves ~5% of the sleeve idle on each roll —
+    // so a dust threshold turns leftover JUP into a decay loop (roll, leave 5%, spare still
+    // over threshold, roll again). 25 JUP (~$5) only triggers on a deposit worth deploying.
+    jupMaxJup: 99999, jupDeployThreshold: 25,
     swapEnabled: false, buybackEnabled: false,
     // Caps sized to the live deployment (~$420/side, balanced); raise deliberately, never by drift.
     maxUsd: 210, solMaxSol: 2.2,
