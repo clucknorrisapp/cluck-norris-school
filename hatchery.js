@@ -647,7 +647,7 @@ router.post("/minted", async (req, res) => {
 
     // Confirm the transaction is real and succeeded before announcing.
     const conn = new Connection(rpcUrl("mainnet-beta"), "confirmed");
-    const tx = await conn.getTransaction(signature, { maxSupportedTransactionVersion: 0 });
+    const tx = await conn.getTransaction(signature, { maxSupportedTransactionVersion: 1 });
     if (!tx || (tx.meta && tx.meta.err)) return res.json({ ok: false });
 
     announcedMints.add(mintAddress);

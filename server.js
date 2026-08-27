@@ -7547,7 +7547,7 @@ app.get("/api/verify-sol-payment", async (req, res) => {
   const min = Math.max(askedMin, SOL_UNLOCK_MIN_LAMPORTS);
   try {
     const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
-    const r = await rpcCall("verify-sol", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const r = await rpcCall("verify-sol", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     const tx = r && r.result;
     if (!tx || (tx.meta && tx.meta.err)) return res.status(200).json({ success: false, error: "tx not found or failed" });
     const keys = ((tx.transaction && tx.transaction.message && tx.transaction.message.accountKeys) || []).map(k => (typeof k === "string" ? k : k.pubkey));
@@ -7968,7 +7968,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   // Backfill lever: post a specific past buy by signature (e.g. one the old detector missed),
   // even though it's behind the cursor. Marks it seen so the forward poller never doubles it.
   if (backfill) {
-    const tx = await roseHeliusRpc(key, "getTransaction", [backfill, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const tx = await roseHeliusRpc(key, "getTransaction", [backfill, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     if (!tx) return { ok: false, backfill, reason: "tx not found / not indexed" };
     const buy = roseDetectBuyFromRaw(tx, roseUsd, solUsd);
     if (!buy) return { ok: false, backfill, reason: "not a buy (sell / LP / non-buy)" };
@@ -8012,7 +8012,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   let posted = 0, scanned = 0, buysSeen = 0, advanceTo = lastSig;
   for (const sig of fresh) {
     if (seen.has(sig)) { advanceTo = sig; continue; }
-    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     if (!tx) {
       // Not indexed yet — hold the pointer and retry next cycle, BUT cap the retries so one
       // permanently-unfetchable sig can't wedge the whole feed forever (the CLKN poller does the
@@ -8196,7 +8196,7 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
     let advanceTo = lastSig;
     for (const sig of fresh) {
       if (seen.has(sig)) { advanceTo = sig; continue; }
-      const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+      const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
       if (!tx) {
         const n = (buyBotParseAttempts.get(sig) || 0) + 1;
         if (n < BUYBOT_MAX_PARSE_ATTEMPTS) { buyBotParseAttempts.set(sig, n); break; }
@@ -8318,7 +8318,7 @@ async function projectBurnPollOnce(cfg, { testPost = false } = {}) {
   let h = burnWatchHourly.get(cfg.id); if (!h || h.hour !== hr) { h = { hour: hr, count: 0 }; burnWatchHourly.set(cfg.id, h); }
   let posted = 0, foundAny = false, sendFails = 0;
   for (const sig of fresh) {
-    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]).catch(() => null);
+    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]).catch(() => null);
     if (!tx) continue;
     for (const b of txBurnsOfMint(tx, cfg.mint, dec)) {
       foundAny = true;
@@ -8761,7 +8761,7 @@ async function vcVerifyBuyTx(campaign, sig) {
   if (!/^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(String(sig || ""))) return { ok: false, error: "That doesn't look like a Solana transaction signature." };
   const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
   let j;
-  try { j = await rpcCall("vc-tx", "getTransaction", [String(sig), { maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }]); }
+  try { j = await rpcCall("vc-tx", "getTransaction", [String(sig), { maxSupportedTransactionVersion: 1, encoding: "jsonParsed" }]); }
   catch (e) { return { ok: false, error: "Couldn't read that transaction — try again in a moment." }; }
   const tx = j && j.result;
   if (!tx || !tx.meta) return { ok: false, error: "Transaction not found on-chain. Paste the signature of your BUY transaction." };
@@ -9308,7 +9308,7 @@ async function attributeLockPlatform(escrow, rpcCall) {
     const sigs = sigRes?.result || [];
     if (!sigs.length) return label; // no history yet — don't cache, retry next scan
     const oldest = sigs[sigs.length - 1].signature; // oldest = creation/funding tx
-    const txRes = await rpcCall("lock-attr-tx", "getTransaction", [oldest, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]);
+    const txRes = await rpcCall("lock-attr-tx", "getTransaction", [oldest, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1 }]);
     const msg = txRes?.result?.transaction?.message;
     if (!msg) return label; // trace failed — don't cache, retry next scan
     const progs = new Set();
@@ -13045,7 +13045,7 @@ app.post("/api/burn-receipt", rateLimit("track", { windowMs: 60000, max: 20 }), 
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
   try {
-    const tx = await rpcCall("burn-verify", "getTransaction", [String(sig), { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const tx = await rpcCall("burn-verify", "getTransaction", [String(sig), { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     const t = tx && tx.result;
     if (!t || (t.meta && t.meta.err)) return res.status(400).json({ success: false, error: "That transaction isn't a confirmed success on-chain." });
     // Confirm the wallet signed it (fee payer / first signer).
@@ -15301,7 +15301,7 @@ async function fetchRawTradeTx(sig, HELIUS_KEY) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jsonrpc: "2.0", id: 1, method: "getTransaction",
-        params: [sig, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed", commitment: "confirmed" }],
+        params: [sig, { maxSupportedTransactionVersion: 1, encoding: "jsonParsed", commitment: "confirmed" }],
       }),
     });
     const d = await r.json();

@@ -391,7 +391,7 @@ async function verifyBurn(sessionId) {
 
   for (const si of sigs) {
     if (si.err) continue;
-    const tx = await conn().getParsedTransaction(si.signature, { commitment: 'finalized', maxSupportedTransactionVersion: 0 });
+    const tx = await conn().getParsedTransaction(si.signature, { commitment: 'finalized', maxSupportedTransactionVersion: 1 });
     if (!tx || !tx.meta) continue;
     // Rail-matched: a NORMIE session verifies NORMIE landing at the shop wallet, a SOL session
     // verifies lamports. (A true burn also still counts on the NORMIE rail — the only tx carrying
