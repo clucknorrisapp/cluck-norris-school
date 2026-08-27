@@ -5292,10 +5292,14 @@ app.get("/api/x-post-test", async (req, res) => {
   if (!xConfigured()) return res.status(200).json({ configured: false, message: "Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in Railway." });
   if (req.query.post === "1") {
     const text = req.query.text ? String(req.query.text) : "🐔 Cluck Norris is online. Crypto lessons incoming. clucknorris.app";
-    const r = await postToX(text);
+    // &force=1 posts through the master X pause. This endpoint is admin-keyed, so a force here
+    // is a deliberate owner-initiated post (owner ask 2026-08-27: announce the graduate-reward
+    // takedown while autoposting stays paused) — the same "manual gated endpoints keep working
+    // under the master kill" pattern as /api/whirlpool/*. Nothing automated sets force.
+    const r = await postToX(text, { force: req.query.force === "1" });
     return res.status(200).json({ configured: true, posted: r.ok, result: r });
   }
-  return res.status(200).json({ configured: true, posted: false, hint: "add &post=1 to send a test tweet" });
+  return res.status(200).json({ configured: true, posted: false, hint: "add &post=1 to send a test tweet (&force=1 to post through the master pause — deliberate owner sends only)" });
 });
 
 // X hackathon blitz control — ?start=1 begins it (and posts the first immediately),
