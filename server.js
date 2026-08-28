@@ -11133,6 +11133,51 @@ app.get("/api/supply", async (req, res) => {
   }
 });
 
+// -- CUNA circulating supply (aggregator feed — built for the Jupiter verification re-review;
+// the metadata-update form showed the supply "in green" but Jupiter said it wasn't there, so
+// this gives them a URL that always answers, computed live). circulating = on-chain supply
+// (burns already excluded by the chain) minus everything held in lock escrows, via the same
+// authoritative getLockedSupply() engine the lock watcher and /api/locks use — it reproduces
+// the owner's filed figure exactly (2,503,357,221 on 2026-08-28). A partial scan is an
+// UNDER-count of locks (= an OVER-count of circulating), so a partial or failed read serves
+// the last full result from kv instead — an aggregator must never see an inflated number.
+// ?plain=1 returns the bare circulating number as text/plain (what listing forms usually
+// want); ?plain=total returns bare total supply.
+app.get("/api/cuna/supply", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const CUNA = "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc";
+  const CACHE_KEY = "cunaSupplyCacheV1", TTL_MS = 10 * 60 * 1000;
+  const answer = (d) => {
+    if (req.query.plain === "1") { res.type("text/plain"); return res.status(200).send(String(Math.round(d.circulatingSupply))); }
+    if (req.query.plain === "total") { res.type("text/plain"); return res.status(200).send(String(Math.round(d.totalSupply))); }
+    return res.status(200).json(d);
+  };
+  const cached = kv.get(CACHE_KEY, null);
+  if (cached && Date.now() - cached.at < TTL_MS) return answer(cached);
+  try {
+    const HELIUS_KEY = process.env.HELIUS_API_KEY;
+    if (!HELIUS_KEY) throw new Error("no HELIUS_API_KEY");
+    const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+    const d = await getLockedSupply(CUNA, rpcCall);
+    if (!d.success || d.partial || !(d.supply > 0)) throw new Error("partial lock scan");
+    const fresh = {
+      circulatingSupply: d.supply - d.totalLocked,
+      totalSupply: d.supply,
+      lockedSupply: d.totalLocked,
+      lockCount: d.lockCount,
+      mint: CUNA, method: "on-chain supply minus lock-escrow balances (Jupiter Lock / Streamflow / self-owned)",
+      at: Date.now(),
+    };
+    kv.set(CACHE_KEY, fresh);
+    return answer(fresh);
+  } catch (err) {
+    console.warn("[cuna-supply]", err.message);
+    if (cached) return answer(cached); // stale full read beats a fresh under-count
+    return res.status(503).json({ success: false, error: "supply read unavailable" });
+  }
+});
+
 // -- GeckoTerminal liquidity/price fallback (shared by /api/token-overview) --
 // DexScreener stops indexing a pair ~24h after its last trade, which makes a
 // quiet-but-real token look like it has zero liquidity. GeckoTerminal indexes
