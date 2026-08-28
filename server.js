@@ -1113,10 +1113,11 @@ function dncConfigRatchet() {
     // base sleeve re-pair itself from free USDC (the ±2% note above: without it a one-sided
     // pool cannot recover unaided — it happened twice on 2026-08-26).
     swapEnabled: true, buybackEnabled: true,
-    // Caps at the owner's LEAN-experiment size (2026-08-27): ~$100 per pool — the experiment
-    // tests whether arb flow (not depth) drives the organic score. Raise deliberately, never
+    // Caps raised on the owner's ALL-IN call (2026-08-28: "go all in on the pools — increase
+    // them where we can", after the lean experiment proved the score holds on small size and
+    // the second Jup review window closed with ~$1,050 deployed). Raise deliberately, never
     // by drift; a deploy re-asserts these.
-    maxUsd: 100, solMaxSol: 0.93,
+    maxUsd: 200, solMaxSol: 2.0,
     // Shared wallet: keep real gas back so a roll can always pay rent + fees.
     solGasReserve: 0.35,
     // 0.4, not the 2-SOL default: swapSolFloor is the SOL the swap/sol-sleeve sizing refuses
