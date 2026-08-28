@@ -822,6 +822,7 @@ async function pokeTick() {
     // Last on purpose: the pools absorb free USDC first; buyback only converts what
     // they genuinely couldn't pair (POKE-poor inventory after a pump).
     try { await whirlpoolMM.vault.buyback({ projectId: "poke" }); } catch (e) { console.warn("[poke] buyback:", e.message); }
+    try { await whirlpoolMM.vault.flushNotifyDigest({ projectId: "poke" }); } catch (e) { console.warn("[poke] digest:", e.message); }
   } finally { pokeTickBusy = false; }
 }
 if (POKE_ENGINE_ON) {
@@ -1028,6 +1029,7 @@ async function cunaTick() {
     // Last on purpose: the pools absorb free USDC first; buyback only converts what they
     // genuinely could not pair.
     try { await whirlpoolMM.vault.buyback({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] buyback:", e.message); }
+    try { await whirlpoolMM.vault.flushNotifyDigest({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] digest:", e.message); }
   } finally { cunaTickBusy = false; }
 }
 try { cunaEnsureProject(); cunaBindOpsRoom(); } catch (e) { console.warn("[cuna] register:", e.message); }
@@ -1127,9 +1129,18 @@ function dncConfigRatchet() {
     swapSolFloor: 0.4,
   };
   try {
+    // DURABLE OVERRIDES outrank code defaults (owner retro, 2026-08-28): a config write made
+    // with &durable=1 on /api/whirlpool/vault/config lands in kv ratchetOverrides:dnc and is
+    // merged over `want` here — so a deliberate live tuning decision survives every deploy,
+    // while plain (non-durable) writes still revert on the next boot exactly as before. One
+    // write path, one source of truth; clear an override by writing the key as null with
+    // &durable=1. Overrides are logged so drift is always visible in the boot log.
+    const overrides = kv.get("ratchetOverrides:dnc", {}) || {};
+    if (Object.keys(overrides).length) console.log("[dnc] ratchet overrides active:", JSON.stringify(overrides));
+    const target = { ...want, ...overrides };
     const cur = whirlpoolMM.vault.getConfig("dnc") || {};
     const patch = {};
-    for (const k of Object.keys(want)) if (cur[k] !== want[k]) patch[k] = want[k];
+    for (const k of Object.keys(target)) if (cur[k] !== target[k]) patch[k] = target[k];
     if (Object.keys(patch).length) {
       whirlpoolMM.vault.setConfig(patch, "dnc");
       console.log("[dnc] config ratchet applied:", JSON.stringify(patch));
@@ -1171,6 +1182,7 @@ async function dncTick() {
     try { await whirlpoolMM.vault.tick({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] base tick:", e.message); }
     try { await whirlpoolMM.vault.tickSol({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] sol tick:", e.message); }
     try { await whirlpoolMM.vault.tickJup({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] jup tick:", e.message); }
+    try { await whirlpoolMM.vault.flushNotifyDigest({ projectId: "dnc" }); } catch (e) { console.warn("[dnc] digest:", e.message); }
   } finally { dncTickBusy = false; }
 }
 try { dncEnsureProject(); } catch (e) { console.warn("[dnc] register:", e.message); }
@@ -6264,6 +6276,11 @@ app.get("/api/clkn-organic-log", async (req, res) => {
       } else { kv.set("organicReminderAt", 0); }
     }
     if (req.query.snap === "1") await recordOrganicSnapshot();
+    // &mint=<mint> serves the per-mint ring the multi-mint logger writes (DNC/CUNA experiments).
+    if (req.query.mint && SOL_ADDR_RE.test(String(req.query.mint))) {
+      const l = kv.get(`organicLog:${String(req.query.mint)}`, []) || [];
+      return res.status(200).json({ success: true, mint: String(req.query.mint), count: l.length, log: l.slice(-Number(req.query.limit || 200)) });
+    }
     const log = kv.get("clknOrganicLog", []) || [];
     const scored = log.filter((e) => e.score != null);
     // "Blitz window" = snapshot taken during a Blitz or within 6h after one started.
@@ -13207,7 +13224,7 @@ app.post("/api/airdrop-collect", async (req, res) => {
     if (Object.keys(store).length >= 100000) return res.status(200).json({ success: false, error: "This airdrop list is full." });
     store[address] = { handle, at: Date.now() };
     kv.set(airdropKey(campaign), store);
-    return res.status(200).json({ success: true, count: Object.keys(store).length, message: "You're in! Your wallet is on the airdrop list. 🐔🔥" });
+    return res.status(200).json({ success: true, count: Object.keys(store).length, message: "You're on the list — if a community drop happens, your wallet is on file. No schedule, no promises. 🐔" });
   } catch (e) {
     return res.status(500).json({ success: false, error: publicErrMsg(e) });
   }
@@ -14805,6 +14822,19 @@ async function recordOrganicSnapshot() {
     const log = kv.get("clknOrganicLog", []) || [];
     log.push(entry);
     kv.set("clknOrganicLog", log.slice(-800));
+    // Multi-mint (audit: the logger only tracked CLKN, so the DNC/CUNA score experiments had
+    // no hourly record and every comparison leaned on memory + ad-hoc reads). Same cadence,
+    // score+price only, per-mint ring. Read back via /api/clkn-organic-log?mint=<mint>.
+    for (const [sym, mint] of [["DNC", DNC_MINT], ["CUNA", CUNA_MINT]]) {
+      try {
+        const o = await getClknOrganicScore(mint).catch(() => null);
+        if (!o) continue;
+        const k = `organicLog:${mint}`;
+        const l = kv.get(k, []) || [];
+        l.push({ ts: now, sym, score: Number.isFinite(o.score) ? Number(o.score.toFixed(2)) : null, label: o.label || null });
+        kv.set(k, l.slice(-800));
+      } catch (_) { /* per-mint best effort */ }
+    }
     try { await maybeFireOrganicReminder(entry); } catch (_) {}
   } catch (e) { console.warn("[organic-log] failed:", e.message); }
 }

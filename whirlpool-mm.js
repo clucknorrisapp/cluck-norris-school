@@ -617,7 +617,30 @@ router.delete("/vault/projects/:id", (req, res) => {
 // POST /api/whirlpool/vault/config?key=… — patch config (body = partial config).
 router.post("/vault/config", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json({ config: vault.setConfig(req.body || {}, proj(req)) }); }
+  try {
+    const projectId = proj(req);
+    const body = { ...(req.body || {}) };
+    const durable = req.query.durable === "1" || body._durable === true;
+    delete body._durable;
+    const config = vault.setConfig(body, projectId);
+    // DURABLE overrides (owner retro, 2026-08-28): a plain config write is live-until-next-deploy —
+    // the boot ratchet re-asserts its table and silently reverts it, which cost us twice (the lean
+    // caps, the rebuy thresholds). &durable=1 stores the CLAMPED values the patch actually produced
+    // into the ratchet's kv override table; the ratchet merges overrides over its code defaults, so
+    // the change survives every deploy until explicitly cleared (write null to drop a key).
+    let overrides;
+    if (durable) {
+      const kvs = require("./lib/kvstore");
+      const key = `ratchetOverrides:${projectId}`;
+      overrides = kvs.get(key, {}) || {};
+      for (const k of Object.keys(body)) {
+        if (body[k] === null) delete overrides[k];
+        else overrides[k] = config[k];   // store what setConfig actually kept, post-clamp
+      }
+      kvs.set(key, overrides);
+    }
+    res.json({ config, ...(durable ? { durable: true, ratchetOverrides: overrides } : {}) });
+  }
   catch (e) { res.status(400).json({ error: e.message || "config failed" }); }
 });
 

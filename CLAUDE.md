@@ -93,6 +93,13 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
 ## Working agreement
 
+- **Shipping cadence (retro, 2026-08-28): open the PR on the FIRST commit of a batch** — a
+  push made before its PR opens never fires CI (GitHub quirk) and stalls the cycle. Batch
+  related changes into one PR; ship solo only for live incidents. **Backend/engine changes go
+  direct to `main` after CI + the engine simulator; anything visual or product-facing goes
+  through staging for the owner's eyeball first** — the visual gate catches regressions, not
+  taste. Squash-merges make the long-lived session branch conflict with `main` on the next
+  PR: resolve by merging `origin/main` and keeping the branch side (it is the superset).
 - **Branching: `develop` → staging, `main` → production (owner, 2026-08-15).** Do day-to-day work
   on **`develop`** (or a feature branch merged into it); Railway's staging service auto-deploys it.
   Railway also auto-deploys **`main`**, so **a push to `main` IS a production release.** As the app
@@ -264,6 +271,13 @@ missing file now fails loudly instead of being served the React shell at 200.
   screen-pinned object; never hardcode the anchor. Fixed 2026-08-16 — and note it survived a whole
   session of being argued away as "no regression found", so trust the screenshot over the reasoning:
   compare the level against `normie-quest/public/worlds/<plate>.webp`.
+- **The engine boot ratchets re-assert per-project config on EVERY deploy** — a live config
+  write silently reverts on the next push to `main` unless it was made with `&durable=1`
+  (stored in kv `ratchetOverrides:<project>`, merged over the code defaults at boot, cleared
+  by writing the key as null). This trap cost live tuning twice on 2026-08-28 before the
+  override mechanism existed. Engine GATE logic is pure in `lib/engine-decisions.js` —
+  changing a gate means updating `scripts/engine-sim-test.cjs` (CI runs it; each scenario is
+  a real incident) and replaying it locally BEFORE shipping, not debugging in production.
 - **Escape anything from an API, URL or chain metadata before `innerHTML`** — token names and
   symbols are attacker-controlled. Use `CluckUtil.esc`; five hand-rolled copies were missing the
   single-quote escape.
