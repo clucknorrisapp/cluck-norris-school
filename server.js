@@ -3206,7 +3206,11 @@ if (CF_ORIGIN_SECRET) {
 app.use((req, res, next) => {
   if (!isGameHost(req)) return next();
   if (req.path === "/" || req.path === "") {
-    res.set("Cache-Control", "no-cache, must-revalidate");   // same revalidate posture as /normie-quest-x7
+    // Same cache posture as /normie-quest-x7 (see gameCacheHeaders in normie-quest/routes.js):
+    // browsers revalidate every load; a Cloudflare edge (if this host is behind one) may hold
+    // the 11MB document 5 minutes so it doesn't stream through Node per player.
+    res.set("Cache-Control", "public, max-age=0, must-revalidate");
+    res.set("CDN-Cache-Control", "max-age=300");
     return res.sendFile(join(__dirname, "normie-quest", "public", "normie-quest-platformer.html"));
   }
   if (NQ_GAME_PATH.test(req.path) || req.path === "/healthz") return next();

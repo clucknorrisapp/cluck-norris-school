@@ -37,6 +37,15 @@ function adminOK(req) {
   const want = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
   return !!want && k === want;
 }
+// Coarse device class from the request UA — 'mobile' or 'desktop', nothing finer. The journey
+// store keeps only this word, never the raw user-agent, so "were those players on phones?" is
+// answerable without collecting PII. Known blind spot: iPadOS in desktop mode reports itself
+// as Macintosh and reads as desktop.
+function uaDevice(ua) {
+  ua = String(ua || '');
+  if (!ua) return '';
+  return /Android|iPhone|iPad|iPod|Mobile|Silk|Opera Mini/i.test(ua) ? 'mobile' : 'desktop';
+}
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -46,19 +55,31 @@ function esc(s) {
 // Serves the side-scrolling platformer (real Normie character + JEET enemy).
 // The original coin-grabber prototype (normie-quest.html) is kept in the repo
 // but no longer served. Still hidden: unguessable URL, noindex, linked nowhere.
-router.get('/normie-quest-x7', (req, res) => {
+// Cache posture for the game DOCUMENT (an ~11MB single-file build), split by audience:
+//   browsers  — `max-age=0, must-revalidate`: revalidate on every load, exactly the behavior
+//               the old `no-cache` gave us (mobile Safari's stale cache once made shipped fixes
+//               look unlanded — that guarantee stays).
+//   Cloudflare — `CDN-Cache-Control: max-age=300`: the edge may hold a copy for 5 minutes, so a
+//               wave of new players streams the 11MB from Cloudflare instead of through Node.
+//               CF consumes/strips this header; browsers never see it. Deploys are visible
+//               within 5 minutes (or instantly with a CF cache purge).
+// ⚠️ Cloudflare does NOT cache HTML by default regardless of headers (cf-cache-status stays
+// DYNAMIC) — these headers only take effect once a scoped Cache Rule marks these two paths
+// "eligible for cache" with Origin Cache Control ON (one-time dashboard step, owner).
+function gameCacheHeaders(res) {
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  // no-cache so mobile Safari always revalidates and picks up new builds (stale cache was
-  // making shipped fixes look like they hadn't landed).
-  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.set('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.set('CDN-Cache-Control', 'max-age=300');
+}
+router.get('/normie-quest-x7', (req, res) => {
+  gameCacheHeaders(res);
   res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
 });
 
 // Launch-day front door (owner ask, 2026-08-22): a memorable alias for the same game. The x7
 // URL stays live — this adds a name you can say out loud. Same headers, same file.
 router.get('/normiequest-go-live', (req, res) => {
-  res.set('X-Robots-Tag', 'noindex, nofollow');
-  res.set('Cache-Control', 'no-cache, must-revalidate');
+  gameCacheHeaders(res);
   res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
 });
 
@@ -796,7 +817,7 @@ router.post('/api/nq/telemetry', (req, res) => {
     // surface is unchanged from what starts/quits already present.
     let j = null;
     if (b.sid) {
-      try { j = journey.track({ ev: b.ev, sid: b.sid, world: b.world, x: b.x, t: b.t, cause: b.cause, item: b.item, score: b.score }); }
+      try { j = journey.track({ ev: b.ev, sid: b.sid, world: b.world, x: b.x, t: b.t, cause: b.cause, item: b.item, score: b.score, dev: uaDevice(req.get('user-agent')) }); }
       catch (e) { j = null; }
     }
     // Anything that isn't death/clear is journey-only — the difficulty store doesn't model it,
