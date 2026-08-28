@@ -114,6 +114,13 @@ const DAY = "2026-08-28";
   // Day cap is absolute.
   const capped = buybackDecision({ cfg: CFG, st: { lastPrice: 0.00035, lastBuybackTs: 0, buybacksToday: 12, buybackDayStamp: DAY }, float: { usdc: 600, sol: 2, jup: 2000, clkn: 0 }, prices: PRICES, nowMs: 99_999_999, todayStamp: DAY });
   check("daily buyback cap is absolute", capped.action === "capped", capped.action);
+
+  // THE BUYBACK DRAIN LOOP (live incident, 2026-08-28 evening): with floors near zero the
+  // buyback converted every idle quote dollar to the project token each interval, so each
+  // sleeve roll's freed quote was eaten before the reopen — the JUP pool bled $325→$183 in
+  // 40 minutes while ~$280 of token sat staged unpaired. Ample idle token must skip the buy.
+  const ample = buybackDecision({ cfg: CFG, st: { lastPrice: 0.00035, lastBuybackTs: 0, buybacksToday: 0, buybackDayStamp: DAY }, float: { usdc: 600, sol: 2, jup: 2000, clkn: 800_000 }, prices: PRICES, nowMs: 99_999_999, todayStamp: DAY });
+  check("drain loop: ample idle token skips the buyback", ample.action === "none" && /ample/.test(ample.reason || ""), ample.action);
 }
 
 // ── Scenario 5: fuzz — 5,000 random ticks, global invariants ────────────────────
