@@ -105,10 +105,20 @@ jobs:
       - name: decide whether the render applies
         id: gate
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: non-PR event — full run"; exit 0
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            # A dispatch run validates a pending PR branch (the push-before-PR-open quirk means
+            # the pull_request run often never fires), so gate it exactly like that PR would be:
+            # diff against the merge-base with main. Owner ask 2026-08-28: stop running the
+            # Normie Quest render gates for changes that cannot touch Normie Quest.
+            git fetch origin main --quiet 2>/dev/null || true
+            BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
+            if [ -z "$BASE" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: dispatch with no resolvable base — full run"; exit 0; fi
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: push to main/develop — full run (production tripwire)"; exit 0
           fi
-          BASE="${{ github.event.pull_request.base.sha }}"
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
           if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|normie-quest/|\.github/workflows/)'; then
@@ -197,10 +207,20 @@ jobs:
       - name: decide whether the game gate applies
         id: gate
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: non-PR event — full run"; exit 0
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            # A dispatch run validates a pending PR branch (the push-before-PR-open quirk means
+            # the pull_request run often never fires), so gate it exactly like that PR would be:
+            # diff against the merge-base with main. Owner ask 2026-08-28: stop running the
+            # Normie Quest render gates for changes that cannot touch Normie Quest.
+            git fetch origin main --quiet 2>/dev/null || true
+            BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
+            if [ -z "$BASE" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: dispatch with no resolvable base — full run"; exit 0; fi
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: push to main/develop — full run (production tripwire)"; exit 0
           fi
-          BASE="${{ github.event.pull_request.base.sha }}"
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
           if echo "$CHANGED" | grep -qE '^(normie-quest/|package(-lock)?\.json$|\.github/workflows/)'; then
