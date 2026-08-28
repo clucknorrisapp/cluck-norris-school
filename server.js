@@ -1127,9 +1127,18 @@ function dncConfigRatchet() {
     swapSolFloor: 0.4,
   };
   try {
+    // DURABLE OVERRIDES outrank code defaults (owner retro, 2026-08-28): a config write made
+    // with &durable=1 on /api/whirlpool/vault/config lands in kv ratchetOverrides:dnc and is
+    // merged over `want` here — so a deliberate live tuning decision survives every deploy,
+    // while plain (non-durable) writes still revert on the next boot exactly as before. One
+    // write path, one source of truth; clear an override by writing the key as null with
+    // &durable=1. Overrides are logged so drift is always visible in the boot log.
+    const overrides = kv.get("ratchetOverrides:dnc", {}) || {};
+    if (Object.keys(overrides).length) console.log("[dnc] ratchet overrides active:", JSON.stringify(overrides));
+    const target = { ...want, ...overrides };
     const cur = whirlpoolMM.vault.getConfig("dnc") || {};
     const patch = {};
-    for (const k of Object.keys(want)) if (cur[k] !== want[k]) patch[k] = want[k];
+    for (const k of Object.keys(target)) if (cur[k] !== target[k]) patch[k] = target[k];
     if (Object.keys(patch).length) {
       whirlpoolMM.vault.setConfig(patch, "dnc");
       console.log("[dnc] config ratchet applied:", JSON.stringify(patch));

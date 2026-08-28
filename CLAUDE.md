@@ -264,6 +264,13 @@ missing file now fails loudly instead of being served the React shell at 200.
   screen-pinned object; never hardcode the anchor. Fixed 2026-08-16 — and note it survived a whole
   session of being argued away as "no regression found", so trust the screenshot over the reasoning:
   compare the level against `normie-quest/public/worlds/<plate>.webp`.
+- **The engine boot ratchets re-assert per-project config on EVERY deploy** — a live config
+  write silently reverts on the next push to `main` unless it was made with `&durable=1`
+  (stored in kv `ratchetOverrides:<project>`, merged over the code defaults at boot, cleared
+  by writing the key as null). This trap cost live tuning twice on 2026-08-28 before the
+  override mechanism existed. Engine GATE logic is pure in `lib/engine-decisions.js` —
+  changing a gate means updating `scripts/engine-sim-test.cjs` (CI runs it; each scenario is
+  a real incident) and replaying it locally BEFORE shipping, not debugging in production.
 - **Escape anything from an API, URL or chain metadata before `innerHTML`** — token names and
   symbols are attacker-controlled. Use `CluckUtil.esc`; five hand-rolled copies were missing the
   single-quote escape.
