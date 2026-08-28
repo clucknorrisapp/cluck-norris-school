@@ -127,6 +127,11 @@ function track(o) {
   } else if (now - (s.last || 0) > IDLE_GAP_MS) {
     s.visits = (s.visits || 1) + 1;   // came back later — same browser, new sitting
   }
+  // Coarse device class ('mobile'|'desktop'), derived server-side from the UA by the route —
+  // one word per SESSION, never the raw user-agent (the no-PII posture above holds). Last
+  // write wins; a sid is per-browser so it can't genuinely flip anyway.
+  const dev = clip(o.dev, 8).trim();
+  if (dev === 'mobile' || dev === 'desktop') s.dev = dev;
   s.last = now;
   s.events.push(e);
   if (s.events.length > EVENTS_PER_SESSION) s.events = s.events.slice(-EVENTS_PER_SESSION);
@@ -234,7 +239,7 @@ function sessions(n, sinceMs) {
     const cleared = new Set(evs.filter((e) => e.ev === 'clear').map((e) => e.world));
     const last = evs.length ? evs[evs.length - 1] : null;
     out.push({
-      sid, first: s.first, last: s.last, visits: s.visits || 1,
+      sid, first: s.first, last: s.last, visits: s.visits || 1, dev: s.dev || '',
       events: evs.length,
       levelsSeen: worlds.size, levelsCleared: cleared.size,
       deaths: evs.filter((e) => e.ev === 'death').length,
@@ -254,7 +259,7 @@ function sessionDetail(sid) {
   const d = load();
   const s = d.sessions[clip(sid, 32)];
   if (!s) return null;
-  return { sid, first: s.first, last: s.last, visits: s.visits || 1, events: s.events || [] };
+  return { sid, first: s.first, last: s.last, visits: s.visits || 1, dev: s.dev || '', events: s.events || [] };
 }
 
 // Headline counts. `sinceMs` scopes the session-derived numbers to the rolling window only —
@@ -265,12 +270,14 @@ function overview(sinceMs) {
   const since = Number(sinceMs) || 0;
   const ids = Object.keys(d.sessions);
   let active = 0, totalEvents = 0, returning = 0;
+  const devices = { mobile: 0, desktop: 0, unknown: 0 };   // unknown = sessions from before tagging shipped (or blank UA)
   const spans = [];   // minutes played per session IN WINDOW — the "how long are they playing" answer
   for (const id of ids) {
     const s = d.sessions[id];
     const evs = since ? (s.events || []).filter((e) => (e.at || 0) > since) : (s.events || []);
     if (since && !evs.length) continue;
     active++;
+    devices[s.dev === 'mobile' || s.dev === 'desktop' ? s.dev : 'unknown']++;
     if ((s.visits || 1) > 1) returning++;
     totalEvents += evs.length;
     const a = evs.length ? evs[0].at : s.first, b = evs.length ? evs[evs.length - 1].at : s.last;
@@ -291,6 +298,7 @@ function overview(sinceMs) {
   return {
     sinceMs: since,
     uniquePlayers: active,              // distinct browsers with activity in the window
+    devices,                            // coarse split of those browsers: mobile / desktop / unknown
     sessionsTracked: ids.length, sessionsActive: active, returningSessions: returning,
     sessionEvents: totalEvents, windowCap: SESSION_MAX, eventsPerSessionCap: EVENTS_PER_SESSION,
     avgMinutes: r1(mean), medianMinutes: r1(median), totalMinutes: r1(spans.reduce((t, v) => t + v, 0)),
