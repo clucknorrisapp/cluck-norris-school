@@ -93,6 +93,13 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
 ## Working agreement
 
+- **Shipping cadence (retro, 2026-08-28): open the PR on the FIRST commit of a batch** — a
+  push made before its PR opens never fires CI (GitHub quirk) and stalls the cycle. Batch
+  related changes into one PR; ship solo only for live incidents. **Backend/engine changes go
+  direct to `main` after CI + the engine simulator; anything visual or product-facing goes
+  through staging for the owner's eyeball first** — the visual gate catches regressions, not
+  taste. Squash-merges make the long-lived session branch conflict with `main` on the next
+  PR: resolve by merging `origin/main` and keeping the branch side (it is the superset).
 - **Branching: `develop` → staging, `main` → production (owner, 2026-08-15).** Do day-to-day work
   on **`develop`** (or a feature branch merged into it); Railway's staging service auto-deploys it.
   Railway also auto-deploys **`main`**, so **a push to `main` IS a production release.** As the app
