@@ -8182,7 +8182,12 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   // frozen on 08-25 (unverified-token quirk) so the line was pulled; it now tracks
   // live price again, verified before restoring. If it ever freezes again the
   // symptom is an MC that doesn't move with buys — pull the line, not the price.
-  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (mkt && mkt.fdv ? `\n🏦 MC $${roseFmtNum(mkt.fdv)}` : ""));
+  // BUG FIX (2026-08-29): this read mkt.fdv (price × TOTAL supply) while labeling it
+  // "MC" — for a project with a large locked supply (CUNA: 73% locked) that overstates
+  // market cap by multiples. mkt.mc (price × CIRCULATING supply, from Jupiter's live
+  // supply feed) is the correct field — matches what roseBuyCaption and the main CLKN
+  // alert already use. Never swap this back to fdv without relabeling it FDV.
+  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (mkt && mkt.mc ? `\n🏦 MC $${roseFmtNum(mkt.mc)}` : ""));
   info.push((isDev ? `🛠️ <b>project wallet</b> ` : `👤 `) + `<code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
   return [head, bar, ...info].join("\n");
