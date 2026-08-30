@@ -18,6 +18,17 @@ it can do.*
 - Client uses `/liquidity` from their own wallet, signs every tx. We hold nothing.
 - ✅ Zero custody risk for us. ❌ Not autonomous — client must sign each re-center; the
   "engine" doesn't actually *run* for them. Fine as an entry/free tier, not the product.
+- 🔄 **REVISED 2026-08-27 — this verdict is wrong for PASSIVE products.** It assumed the product
+  is continuous re-centering. A single-sided **ask ladder** (token-only positions above spot) is
+  passive: consumed only by buying, needs attention when a tier fills, otherwise inert. It needs
+  no hot key at all, and it is exactly what answers Jupiter's price-impact test. It also cannot be
+  drained by a dump (it sits above spot; sellers push price away from it), which is the failure
+  that emptied the two-sided pools on 2026-08-26. So Model A **is** a real product for impact
+  protection — just not for organic score. See `BUILD_ROADMAP.md` §3 "Depth Desk".
+- Owner constraint (2026-08-27), governing everything below: **we never hold a client's wallet
+  keys**, and **CLKN Productions capital never enters a client pool**. Autonomous service requires
+  the client to *provide tokens* to a dedicated per-client operator wallet — never shared between
+  clients.
 
 ### Model B — Managed (we hold a scoped hot key) — the sell-now path
 The pragmatic model for first paying customers. Sub-decisions:

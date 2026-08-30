@@ -1,0 +1,49 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
+<style>
+  html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
+  body{background:linear-gradient(180deg,#0b0620 0%,#1c0b3a 55%,#33104f 100%)}
+  .star{position:absolute;border-radius:50%;background:#fff;will-change:transform,opacity}
+  #moon{position:absolute;right:6%;top:8%;width:24vw;height:24vw;border-radius:50%;
+        background:radial-gradient(circle at 35% 35%, #fff7e0 0%, #ffe9b8 55%, #e8c98a 100%);
+        box-shadow:0 0 5vw rgba(255,240,200,.5)}
+  #stick{position:absolute;left:50%;top:47%;will-change:transform;filter:drop-shadow(0 1.5vw 2vw rgba(0,0,0,.5))}
+  .ltr{position:absolute;bottom:5%;font:900 15vw/1 var(--cuna-font);color:var(--cuna-cream);will-change:transform;
+       text-shadow:0 0 2.5vw rgba(255,220,150,.55)}
+</style>
+<div id="stars"></div><div id="moon"></div><img id="stick"><div id="letters"></div>
+<script>
+const TAU=Math.PI*2;
+// deterministic star field — mulberry32 so every render is identical
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let z=Math.imul(seed^seed>>>15,1|seed);z=z+Math.imul(z^z>>>7,61|z)^z;return((z^z>>>14)>>>0)/4294967296}}
+const R=rng(20260824),stars=[];
+window.setup=(src,text)=>{
+  const holder=document.getElementById('stars');
+  for(let i=0;i<52;i++){
+    const el=document.createElement('div');el.className='star';
+    const layer=i%3, sz=(0.25+layer*0.18+R()*0.2);
+    el.style.width=el.style.height=sz+'vw';
+    const s={el,x:R()*100,y:R()*100,layer,ph:R()*TAU};
+    stars.push(s);holder.appendChild(el);
+  }
+  const st=document.getElementById('stick');
+  const box=document.getElementById('letters');
+  [...text].forEach((ch,i)=>{const sp=document.createElement('span');sp.className='ltr';sp.textContent=ch;
+    sp.style.left=(50-(text.length*10.4)/2+i*10.4+1.1)+'vw';box.appendChild(sp);});
+  st.onload=()=>{st.style.width='44vw';window.__ready=true};
+  st.onerror=()=>{window.__ready=true};
+  st.src=src;
+};
+window.setT=(t)=>{
+  stars.forEach(s=>{
+    const speed=(s.layer+1)*8;                       // vw per loop, integer loops => seamless
+    const x=(s.x - t*speed % 100 + 100) % 100;
+    s.el.style.transform=`translate(${x}vw,${s.y}vh)`;
+    s.el.style.opacity=String(0.35+0.55*(0.5+0.5*Math.sin(TAU*t*2+s.ph)));
+  });
+  const st=document.getElementById('stick');
+  st.style.transform=`translate(-50%,-50%) translateY(${3.2*Math.sin(TAU*t)}vh) rotate(${5*Math.sin(TAU*t+0.9)}deg)`;
+  document.querySelectorAll('.ltr').forEach((el,i)=>{
+    el.style.transform=`translateY(${1.1*Math.sin(TAU*t+i*0.8)}vh)`;
+  });
+};
+</script>

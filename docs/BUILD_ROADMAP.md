@@ -53,8 +53,62 @@ audience into the content roadmap and creates a visible "we listen and ship" fly
 
 ---
 
+## 3. Depth Desk — non-custodial impact-protection dashboard  🔵 QUEUED · **CLKN Productions service offering**
+
+**Origin (owner, 2026-08-27):** working through Jupiter verification for CUNA and DNC surfaced a
+product. Engine work on an outside token is *business* under CLKN Productions LLC — CLKN is our
+token, CUNA is a side project. Two hard constraints came out of that conversation and they define
+the whole design:
+
+1. **We never hold a client's wallet keys.** Owner: *"I don't want to do that ever."*
+2. **CLKN Productions capital never enters a client pool.** We do not absorb someone else's dump.
+
+**The insight that makes it work: the ask ladder is PASSIVE.** The autonomous arb engine needs a
+hot key because it re-centers every ~90s. A ladder of single-sided *token* positions sitting ABOVE
+spot does not — it is consumed only by buying, needs attention when a tier fills, and is otherwise
+inert. So it can be driven entirely by the client signing in their own browser, with the position
+NFTs staying in **their** wallet. They can close any tier themselves, without us, at any time.
+
+This **supersedes the "Model A is not the product" conclusion** in `MULTI_TENANT_KEY_HANDLING.md`.
+That verdict was correct when the only product was continuous re-centering. It is wrong for a
+passive product.
+
+**Second structural property: an ask ladder cannot be drained by a dump.** It sits entirely above
+spot; a seller pushes price *down*, away from it. That is exactly the failure that emptied the
+narrow two-sided pools on 2026-08-26 — bid-side quote got converted to token by one large sell.
+Dump risk lives on the BID side and only there, because bid depth requires quote.
+
+**What it does (all non-custodial):**
+- **Six-criteria diagnosis** — read the token against Jupiter's actual verification criteria and
+  name which one is blocking. CUNA and DNC were blocked on *different* ones (liquidity vs social),
+  same operator, same week — so triage first, never a one-size playbook.
+- **Compute the ladder** — tier bands + sizes for a target price impact at a target trade size.
+- **One-click deploy** — client connects their wallet, we build the tx unsigned, they sign.
+- **Monitor + alert** — tier filled, position out of range, impact drifted, score moved.
+- **Verification support** — metadata/circulating-supply correction, application, reassessment.
+
+**Build notes:**
+- `openWall()` already takes explicit `lower`/`upper` + USD size, requires the band be above spot,
+  and pins each position in `st.anchorMints`. A ladder is N calls — **no new engine code**.
+- Reference impl for browser signing is `/locker-room`: build unsigned server-side →
+  `provider.signTransaction(tx)` → submit raw. Connected wallet signs FIRST or Phantom flags it.
+- ⚠️ Never `SystemProgram.transfer()` in the page (no `Buffer` global) — see CLAUDE.md.
+- ⚠️ **Blocker to fix first:** `anchorMints` is honoured in only ONE of three adoption paths
+  (the ask-wall stray adopter). `tickTreasury()` and `concentrate()` adopt orphans **by width** and
+  would swallow a ladder tier. Harmless today (`dualSleeveEnabled: false` everywhere) but it must
+  land before a ladder is standard practice. Two lines, two places.
+
+**The honest limit, to be priced and stated plainly:** without a key we cannot offer autonomous
+re-centering, so a non-custodial client gets impact protection + diagnosis but NOT the organic-score
+engine. Autonomous service requires the client to **provide tokens** to a dedicated per-client
+operator wallet (owner, 2026-08-27) — float only, never a treasury or mint authority, one wallet per
+client, never shared. (DNC and CUNA currently share one; that is fine in-house and would be
+commingling for a client.)
+
+---
+
 ## Notes
-- Both are **discovery/top-of-funnel** plays — the real organic-score + volume lever remains a buy
+- Both #1 and #2 are **discovery/top-of-funnel** plays — the real organic-score + volume lever remains a buy
   competition (see engine notes), but these widen reach and give the brand reasons to post that
   aren't price/liquidity.
 - No secrets, additive, auto-deploys from `main`.

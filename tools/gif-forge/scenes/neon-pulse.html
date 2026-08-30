@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
+<style>
+  html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
+  body{background:radial-gradient(circle at 50% 45%, #2a1044 0%, #180826 60%, #0d0414 100%)}
+  #glow{position:absolute;left:50%;top:46%;width:70vw;height:70vw;border-radius:50%;will-change:transform,opacity;
+        background:radial-gradient(circle, rgba(255,47,160,.55) 0%, rgba(255,47,160,.18) 45%, transparent 70%)}
+  #ring{position:absolute;left:50%;top:46%;width:58vw;height:58vw;border-radius:50%;will-change:transform,opacity;
+        border:0.9vw solid rgba(255,110,190,.8);box-shadow:0 0 4vw rgba(255,47,160,.9),inset 0 0 4vw rgba(255,47,160,.6)}
+  #stick{position:absolute;left:50%;top:46%;will-change:transform;filter:drop-shadow(0 0 3vw rgba(255,47,160,.55))}
+  .ltr{position:absolute;bottom:5%;font:900 15vw/1 var(--cuna-font);color:var(--cuna-cream);will-change:opacity,transform}
+</style>
+<div id="glow"></div><div id="ring"></div><img id="stick"><div id="letters"></div>
+<script>
+const TAU=Math.PI*2;
+window.setup=(src,text)=>{
+  const st=document.getElementById('stick');
+  const box=document.getElementById('letters');
+  [...text].forEach((ch,i)=>{const s=document.createElement('span');s.className='ltr';s.textContent=ch;
+    s.style.left=(50-(text.length*10.4)/2+i*10.4+1.1)+'vw';box.appendChild(s);});
+  st.onload=()=>{st.style.width='46vw';window.__ready=true};
+  st.onerror=()=>{window.__ready=true};
+  st.src=src;
+};
+window.setT=(t)=>{
+  const p=0.5+0.5*Math.sin(TAU*t);                  // master pulse 0..1
+  const g=document.getElementById('glow');
+  g.style.transform=`translate(-50%,-50%) scale(${0.85+0.3*p})`;
+  g.style.opacity=String(0.5+0.5*p);
+  const r=document.getElementById('ring');
+  r.style.transform=`translate(-50%,-50%) scale(${0.9+0.22*p})`;
+  r.style.opacity=String(0.35+0.6*p);
+  const st=document.getElementById('stick');
+  st.style.transform=`translate(-50%,-50%) scale(${1+0.05*Math.sin(TAU*t)}) rotate(${3*Math.sin(TAU*t+1.2)}deg)`;
+  document.querySelectorAll('.ltr').forEach((el,i)=>{
+    const f=0.55+0.45*Math.sin(TAU*t*2+i*1.7);      // per-letter neon flicker
+    el.style.opacity=String(0.55+0.45*f);
+    el.style.textShadow=`0 0 ${1.2+2.2*f}vw #ff2fa0, 0 0 ${3+4*f}vw rgba(255,47,160,.8)`;
+    el.style.transform=`translateY(${0.7*Math.sin(TAU*t+i)}vh)`;
+  });
+};
+</script>

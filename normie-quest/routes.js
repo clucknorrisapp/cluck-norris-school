@@ -19,12 +19,15 @@ const router = express.Router();
 const burn = require('./normie-burn');   // burn-to-buy backend for the Item Reserve shop (dormant until NQ_SHOP is armed)
 const feedback = require('./nq-feedback');   // playtester comment store (test dashboard)
 const telemetry = require('./nq-telemetry'); // difficulty telemetry (deaths + clears)
+const journey = require('./nq-journey');     // per-player session journey: funnel + drop-off
 const leaderboard = require('./nq-leaderboard');   // Phase 2 leaderboards (per-world + weekly)
 const wallet = require('./nq-wallet');   // Phase 2 wallet ownership + tier gate (sign-message, read-only)
 const rewards = require('./nq-rewards'); // wallet-bound game-boost reward queue + daily VIP wheel
 const ledger = require('./nq-ledger');   // off-chain per-wallet points ledger (Normie Cash economy)
 const pair = require('./nq-pair');       // TV pairing — carry a proven wallet session to a wallet-less screen
 const claims = require('./nq-claims');   // weekly physical-prize claims (sign-to-claim, encrypted addresses)
+const cloudsave = require('./nq-save');  // cross-device cloud save, keyed by verified wallet (2026-08-27)
+const promo = require('./nq-promo');     // weekly prize card + between-level promo feed (2026-08-30)
 
 // Admin key for reading feedback / the comments dashboard (low-sensitivity playtest comments,
 // no funds/PII). Env keys ONLY — a dedicated NQ_FEEDBACK_KEY, else the site's PREMIUM_ACCESS_KEY.
@@ -35,6 +38,25 @@ function adminOK(req) {
   const want = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
   return !!want && k === want;
 }
+// MASTER KEY ONLY (security review 2026-08-30): adminOK's own header says the feedback key is
+// "no funds/PII" trust — but adminOK was gating the prizes console (DECRYPTED shipping
+// addresses), the board wipe, and the paywall gate. Latent today (feedback key unset collapses
+// to the master key) but a set NQ_FEEDBACK_KEY would hand playtest-tier trust all three. Use
+// this for anything touching PII, the live contest, or money-adjacent switches.
+function masterOK(req) {
+  const k = String((req.query && req.query.key) || req.get('x-nq-key') || '');
+  const want = process.env.PREMIUM_ACCESS_KEY || '';
+  return !!want && k === want;
+}
+// Coarse device class from the request UA — 'mobile' or 'desktop', nothing finer. The journey
+// store keeps only this word, never the raw user-agent, so "were those players on phones?" is
+// answerable without collecting PII. Known blind spot: iPadOS in desktop mode reports itself
+// as Macintosh and reads as desktop.
+function uaDevice(ua) {
+  ua = String(ua || '');
+  if (!ua) return '';
+  return /Android|iPhone|iPad|iPod|Mobile|Silk|Opera Mini/i.test(ua) ? 'mobile' : 'desktop';
+}
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -44,11 +66,31 @@ function esc(s) {
 // Serves the side-scrolling platformer (real Normie character + JEET enemy).
 // The original coin-grabber prototype (normie-quest.html) is kept in the repo
 // but no longer served. Still hidden: unguessable URL, noindex, linked nowhere.
-router.get('/normie-quest-x7', (req, res) => {
+// Cache posture for the game DOCUMENT (an ~11MB single-file build), split by audience:
+//   browsers  — `max-age=0, must-revalidate`: revalidate on every load, exactly the behavior
+//               the old `no-cache` gave us (mobile Safari's stale cache once made shipped fixes
+//               look unlanded — that guarantee stays).
+//   Cloudflare — `CDN-Cache-Control: max-age=300`: the edge may hold a copy for 5 minutes, so a
+//               wave of new players streams the 11MB from Cloudflare instead of through Node.
+//               CF consumes/strips this header; browsers never see it. Deploys are visible
+//               within 5 minutes (or instantly with a CF cache purge).
+// ⚠️ Cloudflare does NOT cache HTML by default regardless of headers (cf-cache-status stays
+// DYNAMIC) — these headers only take effect once a scoped Cache Rule marks these two paths
+// "eligible for cache" with Origin Cache Control ON (one-time dashboard step, owner).
+function gameCacheHeaders(res) {
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  // no-cache so mobile Safari always revalidates and picks up new builds (stale cache was
-  // making shipped fixes look like they hadn't landed).
-  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.set('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.set('CDN-Cache-Control', 'max-age=300');
+}
+router.get('/normie-quest-x7', (req, res) => {
+  gameCacheHeaders(res);
+  res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
+});
+
+// Launch-day front door (owner ask, 2026-08-22): a memorable alias for the same game. The x7
+// URL stays live — this adds a name you can say out loud. Same headers, same file.
+router.get('/normiequest-go-live', (req, res) => {
+  gameCacheHeaders(res);
   res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
 });
 
@@ -415,6 +457,37 @@ router.post('/api/nq/wallet/refresh', async (req, res) => {
     res.json(await wallet.refresh(String(b.pubkey || ''), String(b.token || ''), { force: b.fresh === true }));
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
+// CLOUD SAVE — cross-device game progress, keyed by VERIFIED wallet (nq-save.js). One POST does
+// both directions: body {pubkey, token, save?} — a save merges up (furthest-reached wins), and the
+// merged result comes back for the client to apply down. Session-token-gated both ways so nobody
+// can read or poison another player's save; values are a resume bookmark, never a prize input.
+router.post('/api/nq/save', (req, res) => {
+  if (throttled(req, 'cloudsave', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try {
+    const b = req.body || {};
+    const pk = String(b.pubkey || '');
+    if (!wallet.checkSession(pk, String(b.token || ''))) return res.status(401).json({ ok: false, error: 'bad_session' });
+    const save = b.save ? cloudsave.put(pk, b.save) : cloudsave.get(pk);
+    res.json({ ok: true, save: save || null });
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// ---- /api/nq/promo : weekly prize card + between-level promo feed (nq-promo.js) -----------
+// Public read = what the interstitials render (card of the week, or nothing). Owner write is
+// master-keyed and is how the card changes each week WITHOUT a deploy: host the card photo
+// (e.g. /host-image → arweave), then POST { card: { img, name, copy } }; { card: null } clears.
+router.get('/api/nq/promo', (req, res) => {
+  if (throttled(req, 'promo', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try { res.json({ ok: true, ...promo.publicView() }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+router.post('/api/nq/promo', (req, res) => {
+  const pk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
+  const pw = process.env.PREMIUM_ACCESS_KEY || '';   // master key ONLY — this sets public prize copy
+  if (!pw || pk !== pw) return res.status(404).json({ ok: false, error: 'not_found' });
+  try { res.json(promo.set(req.body || {})); }
+  catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
 router.get('/api/nq/leaderboard', async (req, res) => {
   if (throttled(req, 'leaderboard', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
@@ -480,7 +553,7 @@ router.post('/api/nq/claim', async (req, res) => {
 // the archive-first reset button plus every archive the resets have written.
 router.get('/normie-quest-x7/prizes', async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  if (!adminOK(req)) return res.status(404).send('Not found');
+  if (!masterOK(req)) return res.status(404).send('Not found');
   const key = esc(String((req.query && req.query.key) || ''));
   const ago = (t) => {
     if (!t) return '—';
@@ -606,7 +679,7 @@ router.get('/normie-quest-x7/prizes', async (req, res) => {
 // without the admin key and refuses without confirm=RESET, so a crawler or prefetch can't wipe it.
 router.get('/api/nq/leaderboard/reset', async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   if (String((req.query && req.query.confirm) || '') !== 'RESET') {
     return res.status(400).json({ ok: false, error: 'add &confirm=RESET to archive the current board and wipe it' });
   }
@@ -630,7 +703,7 @@ router.get('/api/nq/leaderboard/reset', async (req, res) => {
 router.get('/api/nq/gate', (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   res.set('Cache-Control', 'no-store');
-  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   const q = req.query || {};
   try {
     if (String(q.reset || '') === '1') return res.json({ ok: true, changed: true, gate: wallet.gate.clearOverride() });
@@ -770,11 +843,29 @@ router.post('/api/nq/telemetry', (req, res) => {
   try {
     if (throttled(req, 'tele', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
+    // JOURNEY FIRST, deliberately ahead of the clear-token gate below. That gate protects the
+    // DIFFICULTY store, where a fabricated clear would skew the clear-rate and avg-clear-time
+    // numbers the owner tunes levels from. The funnel is a different animal: 'start', 'quit' and
+    // 'powerup' carry no token and never could (they are fire-and-forget beacons, and a start has
+    // no run to prove yet), so gating only 'clear' would count every start and drop the matching
+    // clear — manufacturing phantom drop-off in the exact metric the funnel exists to report.
+    // Consistency wins: the journey store takes all event types on the same terms, and its abuse
+    // surface is unchanged from what starts/quits already present.
+    let j = null;
+    if (b.sid) {
+      try { j = journey.track({ ev: b.ev, sid: b.sid, world: b.world, x: b.x, t: b.t, cause: b.cause, item: b.item, score: b.score, dev: uaDevice(req.get('user-agent')) }); }
+      catch (e) { j = null; }
+    }
+    // Anything that isn't death/clear is journey-only — the difficulty store doesn't model it,
+    // and must not report it as a bad event just because it rejected an unknown type.
+    if (b.ev !== 'death' && b.ev !== 'clear') {
+      return res.status(j && j.ok ? 200 : 400).json(j || { ok: false, status: 'no_sid' });
+    }
     // a 'clear' shifts the difficulty stats the owner tunes from (clear rates, avg clear time),
     // so it must prove a real run: same HMAC token family /api/nq/score verifies, but WITHOUT
     // burning the run nonce (that stays single-use at score submit).
     if (b.ev === 'clear' && !leaderboard.verifyRun(b.token || null).ok) {
-      return res.status(400).json({ ok: false, status: 'bad_token' });
+      return res.status(400).json({ ok: false, status: 'bad_token', journey: !!(j && j.ok) });
     }
     const r = telemetry.add({ ev: b.ev, world: b.world, x: b.x, cause: b.cause, t: b.t, deaths: b.deaths, score: b.score, who: b.who });
     res.status(r.ok ? 200 : 400).json(r);
@@ -786,6 +877,31 @@ router.get('/api/nq/telemetry', (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   try { res.json({ ok: true, total: telemetry.count(), ...telemetry.summary(Number(req.query.since) || 0) }); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
+// ---- /api/nq/journey : per-player session data (all gated) ----------------
+// funnel = per-level starts/clears/deaths/quits from permanent aggregates;
+// drop = levels ranked by where players actually give up;
+// sessions = the rolling detail window; ?sid= = one player's full ordered path.
+router.get('/api/nq/journey', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  try {
+    const sid = String((req.query && req.query.sid) || '').trim();
+    if (sid) {
+      const d = journey.sessionDetail(sid);
+      return d ? res.json({ ok: true, session: d }) : res.status(404).json({ ok: false, error: 'no_such_session' });
+    }
+    // ?hours=N is the friendly form of ?since=<ms>; both scope every view to a time window.
+    const hrs = Math.max(0, Math.min(720, parseInt(req.query.hours, 10) || 0));
+    const since = hrs ? Date.now() - hrs * 3600000 : (Number(req.query.since) || 0);
+    const view = String((req.query && req.query.view) || 'overview');
+    if (view === 'funnel') return res.json({ ok: true, hours: hrs || null, funnel: journey.funnel(since) });
+    if (view === 'drop') return res.json({ ok: true, hours: hrs || null, drop: journey.dropOff(Number(req.query.n) || 15, since) });
+    if (view === 'hardest') return res.json({ ok: true, hours: hrs || null, hardest: journey.hardest(Number(req.query.n) || 15, since) });
+    if (view === 'sessions') return res.json({ ok: true, hours: hrs || null, sessions: journey.sessions(Number(req.query.n) || 50, since) });
+    res.json({ ok: true, hours: hrs || null, ...journey.overview(since) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 
 // ONE world's full death-bucket detail — feeds the lab build's in-level heatmap overlay.
@@ -832,7 +948,7 @@ router.get('/normie-quest-x7/feedback', (req, res) => {
     + 'body{margin:0;background:#0e0a1e;color:#eee;font-family:system-ui,Segoe UI,Roboto,sans-serif;padding:16px}'
     + 'h1{color:#ffd23f;font-size:20px;margin:0 0 4px}.sub{color:#8f89b0;font-size:13px;margin-bottom:14px}'
     + '.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}'
-    + '.chip{background:#1a1630;border:1px solid #33305a;color:#cbc6e6;border-radius:14px;padding:4px 11px;font-size:12px;cursor:pointer}'
+    + '.winbar{margin:14px 0 6px;font:600 11px/1.9 ui-monospace,monospace;letter-spacing:.08em;opacity:.9}.winbar .chip{margin-right:6px;text-decoration:none;display:inline-block}.chip{background:#1a1630;border:1px solid #33305a;color:#cbc6e6;border-radius:14px;padding:4px 11px;font-size:12px;cursor:pointer}'
     + '.chip.on{background:#ffd23f;color:#20142e;border-color:#ffd23f;font-weight:600}'
     + '.c{background:#161228;border:1px solid #2a2450;border-radius:10px;padding:10px 12px;margin-bottom:9px}'
     + '.meta{font-size:12px;color:#9a95bd;margin-bottom:5px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
@@ -865,9 +981,17 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
   // Default view starts at the cutoff so TOP CAUSE reflects what actually kills testers now;
   // ?window=all shows the full history (early levels revert to their legacy-FUD backlog).
   const CAUSES_SHIPPED_AT = 1784561949000;
-  const showAll = String((req.query && req.query.window) || '') === 'all';
+  // ?window= drives BOTH panels so the whole page always describes one time slice. 'all' is
+  // all-time; a bare number is hours. Anything else falls back to the causes cutoff, which is
+  // the historical default (deaths before 2026-07-20 carry only the generic legacy label).
+  const rawWin = String((req.query && req.query.window) || '').trim();
+  const winHours = /^\d+$/.test(rawWin) ? Math.max(1, Math.min(720, parseInt(rawWin, 10))) : 0;
+  const showAll = rawWin === 'all';
+  const winSince = winHours ? Date.now() - winHours * 3600000 : 0;
+  const diffSince = winHours ? winSince : (showAll ? 0 : CAUSES_SHIPPED_AT);
+  const winLabel = winHours ? ('LAST ' + winHours + 'H') : (showAll ? 'ALL TIME' : 'SINCE 2026-07-20');
   let d = { events: 0, deaths: 0, clears: 0, firstAt: 0, lastAt: 0, worlds: [] };
-  try { d = telemetry.detailAll(showAll ? 0 : CAUSES_SHIPPED_AT); } catch (e) { /* render empty */ }
+  try { d = telemetry.detailAll(diffSince); } catch (e) { /* render empty */ }
   let comments = [];
   try { comments = (feedback.list() || []).slice().reverse(); } catch (e) { comments = []; }
   let lb = null;
@@ -1061,6 +1185,78 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
 
   res.set('Content-Type', 'text/html; charset=utf-8');
   res.set('Cache-Control', 'no-store');
+  // 🧭 PLAYER JOURNEY — the funnel. Scored runs only count players who FINISH and submit; this
+  // counts everyone who pressed start, which is the number that answers "did launch day work".
+  // `starts` is the denominator, `quits` is the abandon beacon, and drop-off ranks where we
+  // actually lose people. Aggregates are permanent; the session list is a rolling window.
+  let jov = null, jdrop = [], jsess = [], jhard = [];
+  try { jov = journey.overview(winSince); } catch (e) { jov = null; }
+  try { jdrop = journey.dropOff(12, winSince) || []; } catch (e) { jdrop = []; }
+  try { jsess = journey.sessions(25, winSince) || []; } catch (e) { jsess = []; }
+  try { jhard = journey.hardest(12, winSince) || []; } catch (e) { jhard = []; }
+  const pct = function (v) { return v === null || v === undefined ? '<span class="dim">—</span>' : v + '%'; };
+  const winChip = function (v, label) {
+    const on = (v === 'all' ? showAll : (v === '' ? (!winHours && !showAll) : String(winHours) === v));
+    return '<a class="chip' + (on ? ' on' : '') + '" href="?window=' + v + '&key=' + key + '">' + label + '</a>';
+  };
+  const windowBar = '<div class="winbar">WINDOW: '
+    + winChip('4', '4H') + winChip('8', '8H') + winChip('12', '12H') + winChip('24', '24H')
+    + winChip('', 'SINCE 07-20') + winChip('all', 'ALL TIME')
+    + '<span class="dim"> — applies to the journey panel AND the difficulty table below</span></div>';
+  const journeySection = jov
+    ? windowBar
+      + '<h2>🧭 PLAYER JOURNEY <span class="dim" style="font-weight:400">(' + winLabel
+      + ' · anonymous per-browser sessions — counts everyone who played, not just who scored)</span></h2>'
+      + (jov.partial ? '<div class="attn"><div class="h">⚠ WINDOWED VIEW IS A SAMPLE</div><div class="dim" style="padding:6px 10px">'
+          + 'Session retention is full (' + jov.windowCap + ' sessions × ' + jov.eventsPerSessionCap
+          + ' events). Time-sliced numbers read only what is still retained, so they can undercount. '
+          + 'The ALL TIME view uses permanent counters and is complete.</div></div>' : '')
+      + '<div class="cards">'
+      + '<div class="card"><b>' + jov.uniquePlayers + '</b><span>UNIQUE PLAYERS</span></div>'
+      + '<div class="card"><b>' + jov.medianMinutes + 'm</b><span>MEDIAN SESSION</span></div>'
+      + '<div class="card"><b>' + jov.avgMinutes + 'm</b><span>AVG SESSION</span></div>'
+      + '<div class="card"><b>' + jov.longestMinutes + 'm</b><span>LONGEST</span></div>'
+      + '<div class="card"><b>' + jov.totalMinutes + 'm</b><span>TOTAL PLAYTIME</span></div>'
+      + '<div class="card"><b>' + jov.returningSessions + '</b><span>CAME BACK</span></div>'
+      + '<div class="card"><b>' + jov.starts + '</b><span>LEVEL STARTS</span></div>'
+      + '<div class="card"><b>' + jov.quits + '</b><span>ABANDONED ⤴</span></div>'
+      + '<div class="card"><b>' + jov.deaths + '</b><span>DEATHS ☠</span></div>'
+      + '<div class="card"><b>' + jov.powerups + '</b><span>POWERUPS</span></div>'
+      + '<div class="card"><b>' + jov.levelsTouched + '</b><span>LEVELS TOUCHED</span></div>'
+      + '<div class="card"><b>' + (jov.overallClearRate === null ? '—' : jov.overallClearRate + '%') + '</b><span>CLEAR RATE</span></div>'
+      + '</div>'
+      + (jhard.length
+        ? '<h2>🔥 HARDEST IN WINDOW <span class="dim" style="font-weight:400">(deaths per clear · ∞ = nobody cleared it)</span></h2>'
+          + '<div style="overflow-x:auto"><table><tr><th>LEVEL</th><th>☠/✓</th><th>☠</th><th>✓</th><th>STARTED</th><th>FAIL RATE</th><th>QUIT</th></tr>'
+          + jhard.map(function (r) {
+            return '<tr><td><b>' + esc(r.world) + '</b></td><td class="bad">'
+              + (r.deathsPerClear === null ? '∞' : r.deathsPerClear) + '</td><td>' + r.deaths + '</td><td>' + r.clears
+              + '</td><td>' + r.starts + '</td><td>' + pct(r.failRate) + '</td><td>' + r.quits + '</td></tr>';
+          }).join('') + '</table></div>'
+        : '')
+      + (jdrop.length
+        ? '<h2>🚪 WHERE PLAYERS QUIT <span class="dim" style="font-weight:400">(' + winLabel + ' · abandoned mid-level — closed the tab or switched away)</span></h2>'
+          + '<div style="overflow-x:auto"><table><tr><th>LEVEL</th><th>QUIT</th><th>OF STARTS</th><th>STARTED</th><th>CLEARED</th><th>CLEAR RATE</th></tr>'
+          + jdrop.map(function (r) {
+            return '<tr><td><b>' + esc(r.world) + '</b></td><td class="bad">' + r.quits + '</td><td>' + pct(r.quitRate)
+              + '</td><td>' + r.starts + '</td><td>' + r.clears + '</td><td>' + pct(r.clearRate) + '</td></tr>';
+          }).join('') + '</table></div>'
+        : '<p class="dim">No abandons recorded yet — this fills in as players close the tab mid-level.</p>')
+      + (jsess.length
+        ? '<h2>👣 RECENT PLAYERS <span class="dim" style="font-weight:400">(' + winLabel + ' · newest first · sid is a random per-browser tag, not a wallet or a name)</span></h2>'
+          + '<div style="overflow-x:auto"><table><tr><th>SID</th><th>LEVELS</th><th>CLEARED</th><th>DEATHS</th><th>POWERUPS</th><th>MINS</th><th>VISITS</th><th>LAST SEEN</th></tr>'
+          + jsess.map(function (r) {
+            return '<tr><td class="mono">' + esc(r.sid) + '</td><td>' + r.levelsSeen + '</td><td>' + r.levelsCleared
+              + '</td><td>' + r.deaths + '</td><td>' + r.powerups + '</td><td>' + r.minutes + '</td><td>' + r.visits
+              + '</td><td class="dim">' + esc(r.lastEv) + ' @ ' + esc(r.lastWorld) + ' · ' + ago(r.last) + '</td></tr>';
+          }).join('') + '</table></div>'
+        : '')
+      + '<p class="dim">Full funnel JSON: <a href="/api/nq/journey?view=funnel&hours=' + (winHours || '') + '&key=' + key + '">funnel</a> · '
+      + '<a href="/api/nq/journey?view=drop&hours=' + (winHours || '') + '&key=' + key + '">drop-off</a> · '
+      + '<a href="/api/nq/journey?view=sessions&hours=' + (winHours || '') + '&key=' + key + '">sessions</a> · '
+      + 'one player\'s full path: <code>/api/nq/journey?sid=&lt;sid&gt;&amp;key=…</code></p>'
+    : '';
+
   res.send('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<meta name="robots" content="noindex,nofollow"><title>Normie Quest — Operator Dashboard</title><style>'
     + 'body{margin:0;background:radial-gradient(120% 80% at 50% -10%,#181033,#0c0818 60%);color:#eee;font-family:system-ui,Segoe UI,Roboto,sans-serif;padding:0 0 48px;-webkit-font-smoothing:antialiased}'
@@ -1146,6 +1342,7 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '</div>'
     + (flagged.length ? '<div class="attn"><div class="h">⚠ NEEDS ATTENTION — ' + flagged.length + ' hard level' + (flagged.length === 1 ? '' : 's') + ' (worst deaths-per-clear first)</div><div class="chips">' + attentionChips + '</div></div>' : '')
     + engagementSection
+    + journeySection
     + '<div class="cols"><div>'
     + '<h2>🏆 LEADERBOARD — ALL TIME</h2><table><tr><th>#</th><th>NAME</th><th>WORLD</th><th>SCORE</th></tr>' + boardRows(lb && lb.allTime) + '</table>'
     + '</div><div>'

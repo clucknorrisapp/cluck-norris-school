@@ -343,6 +343,21 @@ router.get("/vault/swap", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "swap failed" }); }
 });
 
+// GET /api/whirlpool/vault/sell-clip?key=…&project=cuna&usd=75[&run=1]
+// Owner carve-out (2026-08-26): small code-capped project-token→USDC clip to rebuild
+// quote-side depth in a downdraft. Allowlisted projects only; per-clip/per-day/cooldown/
+// impact ceilings live in lib/whirlpool-vault.js and cannot be raised by request.
+router.get("/vault/sell-clip", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.sellClip({
+      usd: Number(req.query.usd),
+      dryRun: req.query.run !== "1",
+      projectId: proj(req),
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "sell-clip failed" }); }
+});
+
 // GET /api/whirlpool/vault/positions?key=&project=<id> — per-position depth (the same
 // sanitized shape the /liquidity command uses: pair, role, $depth, amounts, in-range).
 router.get("/vault/positions", async (req, res) => {
@@ -421,6 +436,10 @@ router.get("/vault/create-pool", async (req, res) => {
       projectId: proj(req),
       quoteSym: String(req.query.quote || "SOL").toUpperCase(),
       feeTierPct: Number(req.query.feeTier ?? req.query.fee ?? 0.05),
+      // &price=<token USD> overrides the Jupiter price for the initial tick — Jupiter
+      // serves a frozen price for tokens it hasn't verified (CUNA sat 31% stale after
+      // a pump), and a pool created off-market is free money for arbs once LP'd.
+      priceUsd: req.query.price != null ? Number(req.query.price) : undefined,
       dryRun: req.query.run !== "1",
     }));
   } catch (e) { res.status(500).json({ error: e.message || "create-pool failed" }); }
@@ -437,7 +456,7 @@ router.get("/vault/close-position", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "close failed" }); }
 });
 
-// GET /api/whirlpool/vault/open-anchor?key=&project=&quote=USDC|SOL|JUP&usd=10&down=85&up=400[&run=1]
+// GET /api/whirlpool/vault/open-anchor?key=&project=&quote=USDC|SOL|JUP|CLKN&usd=10&down=85&up=400[&run=1]
 // Open a tiny, ultra-wide, NEVER-auto-closed "anchor" position that keeps the pool
 // continuously quotable so pulling the tight positions doesn't leave it empty/stale —
 // on redeploy the price is already live + in-range (no settle/recenter front-end work).
@@ -598,7 +617,30 @@ router.delete("/vault/projects/:id", (req, res) => {
 // POST /api/whirlpool/vault/config?key=… — patch config (body = partial config).
 router.post("/vault/config", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json({ config: vault.setConfig(req.body || {}, proj(req)) }); }
+  try {
+    const projectId = proj(req);
+    const body = { ...(req.body || {}) };
+    const durable = req.query.durable === "1" || body._durable === true;
+    delete body._durable;
+    const config = vault.setConfig(body, projectId);
+    // DURABLE overrides (owner retro, 2026-08-28): a plain config write is live-until-next-deploy —
+    // the boot ratchet re-asserts its table and silently reverts it, which cost us twice (the lean
+    // caps, the rebuy thresholds). &durable=1 stores the CLAMPED values the patch actually produced
+    // into the ratchet's kv override table; the ratchet merges overrides over its code defaults, so
+    // the change survives every deploy until explicitly cleared (write null to drop a key).
+    let overrides;
+    if (durable) {
+      const kvs = require("./lib/kvstore");
+      const key = `ratchetOverrides:${projectId}`;
+      overrides = kvs.get(key, {}) || {};
+      for (const k of Object.keys(body)) {
+        if (body[k] === null) delete overrides[k];
+        else overrides[k] = config[k];   // store what setConfig actually kept, post-clamp
+      }
+      kvs.set(key, overrides);
+    }
+    res.json({ config, ...(durable ? { durable: true, ratchetOverrides: overrides } : {}) });
+  }
   catch (e) { res.status(400).json({ error: e.message || "config failed" }); }
 });
 

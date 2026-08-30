@@ -205,6 +205,84 @@ function SCREEN_RECT(cam){ var z=(cam&&cam.zoom)||1, w=cam.width/z, h=cam.height
 // set to false to make it a paid-tier-only perk later.
 var PREMIUM_CHECKPOINTS = true;
 
+// ---- CROSS-SESSION SAVE (2026-08-27) ----
+// The checkpoints above are IN-MEMORY (Phaser registry): they survive a death, not a closed tab.
+// A player who reached world 4 and came back the next day landed on 1-1 — reported from the live
+// link. This mirrors the same four registry keys into localStorage so the title can offer CONTINUE.
+//   • Same keys, same meaning. The tier gate stays on the READ (title + gameOver), never on the
+//     write — exactly like nqLvlCp, so a player who upgrades mid-run isn't left with nothing banked.
+//   • NOT written from the owner's lab bench (lab warps) and not read or written in the TEST build:
+//     a tester warping to world 12 must not leave a world-12 save on that device.
+//   • MONOTONIC — furthest-reached wins, per checkpoint PAIR (index + its score travel
+//     together). NEW GAME starts a fresh run at 1-1 but never deletes the bank: world progress is
+//     a permanent unlock (the in-game continue is furthest-reached by design too), and it means a
+//     stale device can never rewind the save another device advanced.
+//   • CLOUD: with a VERIFIED wallet the same four numbers sync through /api/nq/save (see
+//     nq-save.js + the __NQ_CLOUDPUSH/__NQ_APPLYSAVE pair) so progress follows the player across
+//     devices AND origins. localStorage stays the wallet-less fallback — it is PER-ORIGIN and a
+//     private window keeps none; that is a browser rule only the wallet save fixes.
+var NQ_SAVE_KEY='nqRun', NQ_SAVE_TTL_MS=90*24*3600*1000;   // 90 days idle, then it's a fresh start
+function nqRunRaw(){ try{ var o=JSON.parse(localStorage.getItem(NQ_SAVE_KEY)||'null'); return (o&&o.v===1)?o:null; }catch(e){ return null; } }
+// Merge a candidate bank into the stored save (pair-max) and hand the result to the cloud hook.
+// Never lowers anything — calling it with a fresh run's early checkpoints is a no-op.
+function nqRunMerge(cand){
+  try{
+    if(TEST_MODE||!cand) return;
+    var cur=nqRunRaw()||{cp:0,cpScore:0,lvlCp:0,lvlCpScore:0};
+    var out={ v:1, at:Date.now(), cp:cur.cp||0, cpScore:cur.cpScore||0, lvlCp:cur.lvlCp||0, lvlCpScore:cur.lvlCpScore||0 };
+    if((cand.cp||0)>out.cp){ out.cp=cand.cp; out.cpScore=cand.cpScore||0; }
+    if((cand.lvlCp||0)>out.lvlCp){ out.lvlCp=cand.lvlCp; out.lvlCpScore=cand.lvlCpScore||0; }
+    if(!(out.cp>0||out.lvlCp>0)) return;
+    localStorage.setItem(NQ_SAVE_KEY, JSON.stringify(out));
+    try{ if(window.__NQ_CLOUDPUSH) window.__NQ_CLOUDPUSH({cp:out.cp,cpScore:out.cpScore,lvlCp:out.lvlCp,lvlCpScore:out.lvlCpScore}); }catch(e){}
+  }catch(e){}
+}
+function nqRunSave(reg,lab){
+  try{
+    if(lab||TEST_MODE||!reg) return;
+    nqRunMerge({ cp:reg.get('nqCp')||0, cpScore:reg.get('nqCpScore')||0,
+                 lvlCp:reg.get('nqLvlCp')||0, lvlCpScore:reg.get('nqLvlCpScore')||0 });
+  }catch(e){}
+}
+function nqRunClear(){ try{ localStorage.removeItem(NQ_SAVE_KEY); }catch(e){} }
+function nqRunLoad(){
+  try{
+    if(TEST_MODE) return null;
+    var raw=localStorage.getItem(NQ_SAVE_KEY); if(!raw) return null;
+    var s=JSON.parse(raw); if(!s||s.v!==1) return null;
+    if(!(s.at>0) || Date.now()-s.at>NQ_SAVE_TTL_MS){ nqRunClear(); return null; }
+    // Clamp every index into the CURRENT level list — worlds get added and reordered, and a stale
+    // index from an older build must degrade to "no save", never to scene.start on a hole.
+    var n=LEVELS.length, cp=Math.floor(s.cp)||0, lv=Math.floor(s.lvlCp)||0;
+    if(!(cp>0&&cp<n)) cp=0;
+    if(!(lv>0&&lv<n)) lv=0;
+    if(!cp&&!lv) return null;
+    return { cp:cp, cpScore:Math.max(0,Math.floor(s.cpScore)||0),
+             lvlCp:lv, lvlCpScore:Math.max(0,Math.floor(s.lvlCpScore)||0) };
+  }catch(e){ return null; }
+}
+// Where a saved run would resume — the SAME precedence gameOver uses, so CONTINUE on the title and
+// continue-after-death can never disagree: the world checkpoint by default, the per-level one only
+// when that perk is unlocked AND it is further along. Returns null when there is nothing to resume
+// or the target world is out of reach right now (the launch cap moved, or the holdings that
+// unlocked it are gone) — a clean fresh start beats bouncing off a locked level.
+function nqResumePoint(){
+  if(!PREMIUM_CHECKPOINTS) return null;
+  var s=nqRunLoad(); if(!s) return null;
+  var lvl=s.cp, kind='world';
+  var unlocked=false; try{ unlocked=nqLevelResumeUnlocked(); }catch(e){}
+  if(unlocked && s.lvlCp>lvl){ lvl=s.lvlCp; kind='level'; }
+  if(!(lvl>0&&lvl<LEVELS.length)) return null;
+  var def=LEVELS[lvl]; if(!def||def.hidden||def.private) return null;   // never resume inside a one-time speakeasy or a URL-only room
+  try{ if(!nqWorldAllowed(def)) return null; }catch(e){}
+  // ⚠ score:0 ON PURPOSE — a cross-session resume restores PROGRESS, never score. The leaderboard
+  // budgets a run by the levels reached IN THAT RUN (nq-leaderboard v2 tokens); a carried score
+  // from a previous session has no token to prove it (the 2h run-continue exchange is same-session
+  // only) and would flag every subsequent submit as suspect. The banked scores stay in the save
+  // for the in-session death-continue and any future server-verified restore.
+  return { level:lvl, score:0, kind:kind, name:def.name||'' };
+}
+
 // PREMIUM version flag — the paid/premium build (or a ?premium=1 link, remembered) grants LONGER
 // Whale Mode + Cold Wallet durations. The free version keeps the shorter times; nothing else changes.
 var PREMIUM = (function(){ try{ var q=((location.search||'')+(location.hash||'')); if(/[?&#](premium|prem)=1/i.test(q)){ try{ localStorage.setItem('nqPremium','1'); }catch(e){} return true; } return (typeof localStorage!=='undefined' && localStorage.getItem('nqPremium')==='1'); }catch(e){ return false; } })();
@@ -292,7 +370,7 @@ function nqLoadSkin(tm, prefix){
     try{ if(CHAR_ART[k] && !tm.exists(k)) tm.addBase64(k, CHAR_ART[k]); }catch(e){}
   });
 }
-// Expose the roster to the DOM picker (a separate <script> block that can't see this scope). Each
+// Expose the roster to the DOM picker (a separate script block that can't see this scope). Each
 // icon is that character's idle frame as a data URI (post-build), so the picker shows real sprites.
 try{ if(typeof window!=='undefined'){ window.__NQ_CHARS = {
   list: [ { id:'normie', name:'Normie', icon:SPRITES.normie },
@@ -725,7 +803,28 @@ var MUSIC=(function(){
 })();
 try{ if(typeof window!=='undefined') window.__NQ_MUSIC=MUSIC; }catch(e){}
 // Pause music when the tab is hidden / browser minimized; resume on return (HTMLAudio doesn't stop on its own).
-try{ if(typeof document!=='undefined') document.addEventListener('visibilitychange',function(){ try{ if(document.hidden) MUSIC.suspend(); else if(!window.__NQ_PAUSED) MUSIC.resume(); }catch(e){} }); }catch(e){}   // paused game keeps its silence — resumeGame() owns the restart (audit #20)
+try{ if(typeof document!=='undefined') document.addEventListener('visibilitychange',function(){ try{ if(document.hidden) MUSIC.suspend(); else if(!window.__NQ_PAUSED) MUSIC.resume(); }catch(e){} }); }catch(e){}
+// ABANDON BEACON — the single most useful funnel signal and the one nothing else captures. A
+// player who dies is a 'death'; one who finishes is a 'clear'; one who simply CLOSES THE TAB
+// mid-level is currently invisible, and that is exactly the person we most want to know about.
+// window.__NQ_LIVE is set by the Game scene while a level is genuinely in progress and cleared
+// the moment it ends, so this can never fire for a menu, a finished level, or twice for one
+// attempt. pagehide is the reliable mobile signal (iOS often never fires beforeunload); the
+// hidden-branch of visibilitychange covers app-switching, which on a phone IS quitting.
+try{
+  if(typeof window!=='undefined'){
+    var nqSendQuit=function(){
+      try{
+        var L=window.__NQ_LIVE;
+        if(!L||!L.world) return;
+        window.__NQ_LIVE=null;   // one beacon per attempt, whichever event wins the race
+        nqTele('quit',{world:L.world,x:Math.round(L.x()||0),t:Math.round(((Date.now()-(L.at||Date.now()))-(L.paused()||0))/1000),score:L.score()||0});
+      }catch(e){}
+    };
+    window.addEventListener('pagehide',nqSendQuit);
+    document.addEventListener('visibilitychange',function(){ if(document.hidden) nqSendQuit(); });
+  }
+}catch(e){}   // paused game keeps its silence — resumeGame() owns the restart (audit #20)
 
 var C={ ink:0x0d0b1e, coin:0xffd23f, coinDk:0xb8860b, danger:0xff3860, phos:0x3dff6e, white:0xffffff,
         dirt:0x8a5a2b, dirtDk:0x5e3c1a, grass:0x3dff6e, grassDk:0x1da84a,
@@ -2039,11 +2138,33 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     // Free to play, always: tap straight into the game. Nothing is ever charged to START a run
     // (the only burn in the game is the optional Item Reserve shop in the panel overlay).
     var self=this;
-    var go=function(){ if(this.started) return; this.started=true; this.scene.start('Controls',{next:0,score:0}); };
-    // Tap anywhere = play from 1-1 (both modes). In TEST BUILD, the reliable DOM "≡ Levels"
-    // button (bottom-left, works from here too) is how you reach the level picker.
-    this.input.once('pointerdown',go,this); this.input.keyboard.once('keydown',go,this);
-    padAdvance(this, function(){ go.call(self); });   // controller button also starts
+    // CROSS-SESSION CONTINUE. A returning player with a banked world resumes there instead of
+    // being dumped back on 1-1. Tap-anywhere keeps doing the friendly thing (CONTINUE when there
+    // is a save, a fresh run when there isn't) and a small NEW GAME chip is the explicit way to
+    // throw the save away. Both paths start through Controls exactly as before, so HOW TO PLAY
+    // and the destination world's Briefing still fire.
+    var _res=null; try{ _res=nqResumePoint(); }catch(e){}
+    var _newBtn=null;
+    if(_res){
+      p.setText('CONTINUE \u00B7 WORLD '+_res.name);
+      _newBtn=this.add.text(W/2,262,'NEW GAME',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#8f96b8',resolution:UIRES}).setOrigin(.5);
+    }
+    var start=function(lvl,score){ if(self.started) return; self.started=true;
+      // NEW GAME starts at 1-1 but does NOT delete the bank — progress is a permanent unlock, and
+      // deleting it here would also delete it for every other device synced to the same wallet.
+      self.scene.start('Controls',{next:lvl||0,score:score||0}); };
+    var go=function(pointer){
+      // one tap surface, two outcomes — NEW GAME wins if the tap landed on its chip. The hit box is
+      // inflated because the chip is 11px tall in game units and this is played on phones.
+      var onNew=false;
+      try{ if(_newBtn&&pointer&&pointer.worldX!=null){ var _b=_newBtn.getBounds(); Phaser.Geom.Rectangle.Inflate(_b,14,10); onNew=_b.contains(pointer.worldX,pointer.worldY); } }catch(e){}
+      if(_res&&!onNew) start(_res.level,_res.score); else start(0,0);
+    };
+    // Tap anywhere = play (from the save if there is one, else 1-1). In TEST BUILD, the reliable
+    // DOM "≡ Levels" button (bottom-left, works from here too) is how you reach the level picker.
+    this.input.once('pointerdown',go,this);
+    this.input.keyboard.once('keydown',function(ev){ if(_res&&ev&&(ev.key==='n'||ev.key==='N')) start(0,0); else go(); },this);
+    padAdvance(this, function(){ go(); });   // controller button also starts
     if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
   }
 });
@@ -2090,7 +2211,17 @@ function nqWorldAllowed(def){
     // bailout below before this check ever ran (audit polish: silent bypass for any future link).
     if(window.__NQ_FORCE_VIP&&(function(){try{return localStorage.getItem('nqLabTune')==='1';}catch(e){return false;}})()) return true;   // QA lever — designer lab only, not the tester lane
     var vipOK=false; try{ vipOK=!!(typeof window.__NQ_VIP==='function'&&window.__NQ_VIP()); }catch(e){}
-    if(!vipOK) return false;
+    if(!vipOK){
+      // LIVE TERMS FIX (multi-agent review, 2026-08-30 — CRITICAL): "$50 → everything (13-21)"
+      // is the public promise, but every 13-21 level carries vip:true from the pre-launch "VIP
+      // LEAGUES" model, and this branch used to demand the manual VIP GRANT — so exactly the
+      // wallets that paid the most bounced off the wing they were promised. Tier-2 ('all'
+      // access) now clears the NUMBERED vip worlds; the hidden non-numeric VIP rooms stay
+      // grant-only (they are allowlist perks, not part of the 13-21 promise).
+      var mvn=/^(\d+)-/.exec((def&&def.name)||'');
+      var acc2=null; try{ acc2=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
+      if(!(mvn && acc2==='all')) return false;
+    }
     // the launch cap outranks the VIP grant too — "nobody past world N" has to mean nobody
     if(cap){ var mv=/^(\d+)-/.exec((def&&def.name)||''); if(mv && +mv[1]>cap) return false; }
     return true;
@@ -2126,11 +2257,31 @@ function nqMegaWhaleUnlocked(){
   var a=null; try{ a=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
   return a==='all';
 }
+// ANONYMOUS SESSION ID — a random per-browser tag so two events can be known to be the same
+// person. NOT a wallet, name, IP, or anything derived from one; it is generated locally, never
+// leaves localStorage except on our own beacons, and identifies nobody. It exists purely so the
+// funnel can answer "how many PEOPLE played" and "where did this one give up", which raw
+// death counts cannot. Distinct from nq_tester (the ?tester= panel tag), which still rides along.
+function nqSid(){
+  try{
+    var v=localStorage.getItem('nq_sid');
+    if(!v||!/^[A-Za-z0-9_-]{6,32}$/.test(v)){
+      v='';
+      try{
+        var a=new Uint8Array(9); crypto.getRandomValues(a);
+        for(var i=0;i<a.length;i++) v+='0123456789abcdefghijklmnopqrstuvwxyz'[a[i]%36];
+      }catch(e){ v=Math.random().toString(36).slice(2,11)+Math.random().toString(36).slice(2,5); }
+      v=('s'+v).slice(0,16);
+      localStorage.setItem('nq_sid',v);
+    }
+    return v;
+  }catch(e){ return ''; }   // private mode / storage blocked → no sid, difficulty telemetry still flows
+}
 function nqTele(ev,d){
   try{
     var who=''; try{ who=localStorage.getItem('nq_tester')||''; }catch(e){}
     var tok; if(ev==='clear'){ try{ tok=(window.NQLB&&window.NQLB.getToken)?window.NQLB.getToken():undefined; }catch(e){} }   // server rejects tokenless clears since the telemetry hardening (audit #29)
-    var b=JSON.stringify(Object.assign({ev:ev,who:who||undefined,token:tok||undefined},d||{}));
+    var b=JSON.stringify(Object.assign({ev:ev,who:who||undefined,sid:nqSid()||undefined,token:tok||undefined},d||{}));
     if(navigator.sendBeacon){ navigator.sendBeacon('/api/nq/telemetry', new Blob([b],{type:'application/json'})); }
     else { fetch('/api/nq/telemetry',{method:'POST',headers:{'content-type':'application/json'},body:b,keepalive:true}).catch(function(){}); }
   }catch(e){}
@@ -2240,6 +2391,24 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ window.__NQ_PAUSED=false; }catch(e){}   // fresh level = not paused (the flag gates no-gesture music restarts)
     this._lastSafe=null;   // ⚠ the scene INSTANCE is reused across scene.start — without this, falling before first landing respawns at the PREVIOUS level's banked spot (audit #8, reproduced live)
     this._lvStartAt=Date.now(); this._lvDeaths=0; this._pausedMs=0; this._pausedAtWall=null; this._pausedAtClock=null;   // difficulty telemetry: time-in-level (minus paused spans) + lives lost this level
+    // Journey funnel: a level STARTED is the denominator for every drop-off number. Without it
+    // we can count deaths but never "how many people even got here".
+    this._lvQuitSent=false;
+    // ⚠ this.def is not assigned until further down create() and the scene INSTANCE is reused
+    // across scene.start — so `this.def` HERE is the PREVIOUS level (or undefined on the first).
+    // The start beacon and abandon beacon were mis-attributing every level to the one before it
+    // (and dropping the first level of every session as ''). Read the level data directly.
+    var _lvDef=LEVELS[this.levelIdx]||null;
+    try{ nqTele('start',{world:_lvDef&&_lvDef.name}); }catch(e){}
+    // Arm the abandon beacon for THIS attempt. Closures rather than a snapshot so the beacon
+    // reports where the player actually was when they left, not where they spawned.
+    try{
+      var _sc=this;
+      window.__NQ_LIVE={ world:(_lvDef&&_lvDef.name)||'', at:Date.now(),
+        x:function(){ return _sc.player?_sc.player.x:0; },
+        paused:function(){ return _sc._pausedMs||0; },
+        score:function(){ return _sc.score||0; } };
+    }catch(e){}
     // Drain gamepad edge-latches left over from menu navigation: the START press that launched
     // this level also set pauseEdge (and anyBtnEdge/jumpEdge), so the first update() would
     // instantly pause the fresh run / fire a phantom buffered jump at spawn.
@@ -2477,7 +2646,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // (3-5)=+15% enemy speed, World 3 (6-8)=+30%. Per-level override via def.diff.
     this.diffMul = def.diff || [1,1,1,1.15,1.15,1.15,1.3,1.3,1.3,1.45,1.45,1.55,1.6,1.6,1.7,1.75,1.75,1.85,1.9,1.9,2.0,2.1,2.1,2.25][this.levelIdx] || 1;
     this.timeLeft=def.time; this.over=false; this.hasKey=false; this._doorHint=false;
-    if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqCp',0); this.registry.set('nqCpScore',0); this.registry.set('nqLvlCp',0); this.registry.set('nqLvlCpScore',0); this.registry.set('nqUsedWarps',{}); }   // fresh run → zero the casino tally + clear all world AND level checkpoints + reset one-time speakeasies
+    if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqCp',0); this.registry.set('nqCpScore',0); this.registry.set('nqLvlCp',0); this.registry.set('nqLvlCpScore',0); this.registry.set('nqUsedWarps',{}); }   // fresh run → zero the casino tally (the localStorage BANK deliberately survives — world progress is a permanent unlock) + clear all world AND level checkpoints + reset one-time speakeasies
     this.spawn={x:(this._spawnX!=null?this._spawnX:60),y:H-60};
     // Never spawn OVER A PIT: warp returns are computed as door-x+70 with no terrain awareness, and
     // 21-2's speakeasy return landed exactly inside its own gap — a VIP player fell into the pit on
@@ -3285,6 +3454,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       else { var lnow=this.time.now; if(!this._puLockFlashAt||lnow-this._puLockFlashAt>1500){ this._puLockFlashAt=lnow; this.flash('🔒 MEGA WHALE — TOP-TIER HOLDER PERK (terms in testing)','#9fb0d0'); } return; }
     }
     var type=pu.ptype, px=pu.x, py=pu.y; this.tweens.killTweensOf(pu); if(pu.puLockIcon) pu.puLockIcon.destroy(); pu.destroy(); this.burst(px,py,0xffffff,20);
+    try{ nqTele('powerup',{world:this.def&&this.def.name,item:type,x:Math.round(px)}); }catch(e){}
     var now=this.time.now;
     if(type==='diamond'){ this.shieldUntil=now+9000; this.powerBanner('DIAMOND HANDS','UNSHAKEABLE — no damage 9s','#66ddff'); }
     else if(type==='bull'){ this.bullUntil=now+11000; this.powerBanner('BULL MARKET','MEGA JUMP — 11s','#3dff6e'); }
@@ -4934,12 +5104,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   // Bank a checkpoint at the START of the NEXT world whenever a (non-final) world boss falls.
   // gameOver then continues from the FURTHEST world reached — not always World 2.
   bankCheckpoint:function(){ if(!PREMIUM_CHECKPOINTS) return; var nx=(this.def&&this.def.next!=null)?this.def.next:this.levelIdx+1;
-    if(nx<LEVELS.length){ this.registry.set('nqCp',nx); this.registry.set('nqCpScore',this.score); } },
+    if(nx<LEVELS.length){ this.registry.set('nqCp',nx); this.registry.set('nqCpScore',this.score); nqRunSave(this.registry,this._labWarp); } },
   bossDefeat:function(){
     if(this.over) return; this.over=true; var k=this.rugking, self=this;
     // difficulty telemetry: boss arenas end HERE, never via key+door levelClear — without this
     // every boss level showed deaths but permanently 0 clears (garbage deathsPerClear).
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),deaths:this._lvDeaths||0,score:this.score});
+    try{ window.__NQ_LIVE=null; }catch(e){}   // level ended legitimately — the abandon beacon must not also fire
     k.invuln=true; k.setVelocity(0,0); k.body.setAllowGravity(false);
     // Sound + shake go here, at the TOP of bossDefeat, so every ending gets them: the generic VIP
     // path, each per-boss branch and both finales all return from below this line.
@@ -5084,7 +5255,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Deliberately not banked for hidden bonus rooms — resuming inside a one-time speakeasy you
     // already consumed would strand the run in a room with no way back.
     if(next<LEVELS.length && !(this.def&&this.def.hidden)){
-      this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score);
+      this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score); nqRunSave(this.registry,this._labWarp);
     }
     if(next>=LEVELS.length){ this.scene.start('Win',this.winData()); return; }
     // SETUP-LANE tier gate: cleared the last world your holdings unlock → level select + the
@@ -5154,6 +5325,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   wormDefeat:function(){
     if(this.over) return; this.over=true; var wm=this.worm; if(this.mound) this.mound.setVisible(false);
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),deaths:this._lvDeaths||0,score:this.score});   // boss levels never reach levelClear
+    try{ window.__NQ_LIVE=null; }catch(e){}   // level ended legitimately — the abandon beacon must not also fire
     // The WORMHOLE (2-3) does NOT route through bossDefeat — it is its own ending, so it needs its
     // own call or the first boss most players ever beat would still go down in silence.
     try{ SFX.bossDown(); }catch(e){}
@@ -5782,6 +5954,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   levelClear:function(){
     if(this.over) return; this.over=true; this.addScore(this.timeLeft*10); this.physics.pause(); SFX.clear();
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),deaths:this._lvDeaths||0,score:this.score});
+    try{ window.__NQ_LIVE=null; }catch(e){}   // level ended legitimately — the abandon beacon must not also fire
     var big=this.hb(this.add.text(W/2,120,'WORLD '+this.def.name+' CLEAR!',{fontFamily:'"Press Start 2P"',fontSize:'16px',color:'#3dff6e'}).setOrigin(.5));
     this.tweens.add({targets:big,scale:1.15,duration:400,yoyo:true,repeat:1});
     var next=(this.def&&this.def.next!=null)?this.def.next:this.levelIdx+1;   // same expression advanceLevel uses — private chains were only working by array-position luck (audit polish)
@@ -5790,15 +5963,21 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // the tier-2/VIP "resume on the level you died on" perk never advanced past the free world
     // checkpoint (nqLvlCp stayed == nqCp) and the perk was silently inert. Same unconditional write as
     // advanceLevel (the gate is on the READ in gameOver); skip hidden bonus rooms.
-    if(next<LEVELS.length && !(this.def&&this.def.hidden)){ this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score); }
+    if(next<LEVELS.length && !(this.def&&this.def.hidden)){ this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score); nqRunSave(this.registry,this._labWarp); }
     this.time.delayedCall(1500,function(){
       // The designed "MORE WORLDS AWAIT" VIP tease fires after clearing 2-1 (idx 3) — but its old
       // home was advanceLevel(), which only boss defeats reach, so it was dead code (audit #25).
       // Non-boss levels complete HERE; same guards as the boss path (never in the lab, never for VIP).
       try{ if(!this._labWarp && nqShouldPitch(this.levelIdx) && !nqIsVipOrAll()){ nqMarkPitch(this.levelIdx); this.scene.start('VipPitch',{next:next,score:this.score}); return; } }catch(e){}
-      if(next<LEVELS.length) this.scene.start('Game',{level:next,score:this.score,lives:3,lab:(this._labWarp?1:undefined)}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
+      // BETWEEN-LEVEL BEAT (multi-agent review 2026-08-30, HIGH): ordinary clears used to jump
+      // Game→Game, so the LevelClear rotation (nation/fact/board/giveaway — the owner's "fun
+      // screens between levels") only ever ran on the boss path, where WorldClear/Briefing eat
+      // it until deep VIP. Route through LevelClear like the boss else-branch does; it is
+      // skippable and auto-advances, so pacing cost is 3-4.6s and a tap skips it instantly.
+      if(next<LEVELS.length) this.scene.start('LevelClear',{next:next,score:this.score,lab:(this._labWarp?1:undefined),cleared:(this.def&&this.def.name)||''}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
   },
   gameOver:function(reason){ if(this.over) return; this.over=true; this.physics.pause();
+    try{ window.__NQ_LIVE=null; }catch(e){}   // run is over — closing the tab from the game-over card is not an abandon
     // TIME UP is the one run-ender that doesn't pass through loseLife — record it here (never both)
     if(reason==='TIME UP') nqTele('death',{world:this.def&&this.def.name,x:Math.round(this.player?this.player.x:0),cause:'TIME UP',t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),score:this.score});
     // TEST BUILD: no run-ending — bounce back to the level picker so a tester can retry/switch instantly.
@@ -6679,7 +6858,13 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     // So the panel now OWNS the empty band: dead centre, full width, framed, with a Normie emblem
     // and a slow gold pulse on the border so the eye lands there before the TAP prompt.
     var _nn=nqNationNext();
-    var _wp=null; try{ var _wt=parseInt(sessionStorage.getItem('nqWcTurn')||'0',10)||0; sessionStorage.setItem('nqWcTurn',String(_wt+1)); if(_wt%2===1) _wp=nqPreviewPick(); }catch(e){}
+    // THE WEEKLY GIVEAWAY OWNS THIS BAND when a card is configured (owner ask 2026-08-30:
+    // "showcase the card between each world — the actual image of what will be given away and
+    // how to win"). This supersedes the 07-26 "Nation owns the band" call ONLY while a card is
+    // set; clear the card (POST {card:null}) and the page is byte-identical to before.
+    var _card=nqPromoCard();
+    var _wp=null; try{ var _wt=parseInt(sessionStorage.getItem('nqWcTurn')||'0',10)||0; sessionStorage.setItem('nqWcTurn',String(_wt+1)); if(!_card && _wt%2===1) _wp=nqPreviewPick(); }catch(e){}
+    if(_card){ _nn={ head:'THIS WEEK\'S GIVEAWAY — '+_card.name, short:_card.copy }; }
     // A feature tease used to print "VIP PERK" regardless of band, which now misstates the t2
     // perks — the resume perk unlocks a tier BELOW VIP, and telling a player it is VIP-only would
     // be selling them the wrong thing.
@@ -6695,9 +6880,14 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.p2.add(this.add.rectangle(cx,_py,_pw-8,_ph-8,0x000000,0).setStrokeStyle(1,0x6a5aa8,0.7));
     this.tweens.add({targets:_pnl, alpha:{from:0.94,to:1}, duration:900, yoyo:true, repeat:-1, ease:'Sine.inOut'});
     if(this.renderer.type===Phaser.WEBGL){ try{ _pnl.postFX.addGlow(0xffd23f,0.9,0,false,0.1,10); }catch(e){} }
-    // emblem — a Normie standing in the panel, so the community beat has a FACE on it
-    var _em=this.add.image(cx-152,_py+6,'normie'); _em.setScale(60/_em.height); this.p2.add(_em);
-    this.tweens.add({targets:_em,y:_py+2,duration:820,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    // emblem — the ACTUAL prize card when a giveaway is set (lazy-loaded, reparented into the
+    // travel-page container so it can't leak onto the celebration phase); else the Normie face.
+    if(_card){
+      nqCardImage(this,cx-152,_py,76,function(im){ if(self.p2) self.p2.add(im); });
+    } else {
+      var _em=this.add.image(cx-152,_py+6,'normie'); _em.setScale(60/_em.height); this.p2.add(_em);
+      this.tweens.add({targets:_em,y:_py+2,duration:820,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    }
     this.p2.add(this.add.text(cx,_py-30,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffd23f',align:'center',wordWrap:{width:_pw-24}}).setOrigin(.5));
     this.p2.add(this.add.text(cx+42,_py-12,(_nn.short||_nn.body),{fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#eee8ff',align:'center',lineSpacing:3,wordWrap:{width:250}}).setOrigin(.5,0));
     // The nostalgia gag moved to the CELEBRATION page (see p1). It is a "you beat the boss, but…"
@@ -6705,7 +6895,13 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.drawHills();
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setDepth(40);
     var adv=function(){ if(self.done) return; if(self.phase===0){ self.t0=self.time.now-3300; } else { self.goNext(); } };
-    this.input.on('pointerdown',adv); this.input.keyboard.on('keydown',adv); this.adv=adv;
+    // keyboard was the one unlatched input (review 2026-08-30, MED): OS auto-repeat from a key
+    // still held at the boss kill fired adv twice in consecutive frames and blew through the
+    // celebration AND the travel page (with the giveaway card on it) unseen. Match the pad
+    // path: drop repeats, and require 500ms on-screen before a key counts.
+    this.input.on('pointerdown',adv);
+    this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; adv(); });
+    this.adv=adv;
   },
   goNext:function(){ if(this.done) return; this.done=true;
     if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[this.nextLevel]) this.scene.start('Briefing',{next:this.nextLevel,score:this.score,lab:this.lab});
@@ -7019,7 +7215,8 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
       {fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#ff9500',align:'center',wordWrap:{width:W-24}}).setOrigin(.5);
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
     this.input.on('pointerdown',function(){ self.go(); });
-    this.input.keyboard.on('keydown',function(){ self.go(); });
+    // drop key auto-repeat + 500ms grace (review 2026-08-30): a held key must not skip the briefing
+    this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; self.go(); });
     padAdvance(this, function(){ self.go(); });   // controller button also starts
   },
   go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
@@ -7051,6 +7248,56 @@ function nqNationNext(){
   try{ i=parseInt(sessionStorage.getItem('nqNationI')||'0',10)||0; sessionStorage.setItem('nqNationI',String((i+1)%NORMIE_NATION.length)); }
   catch(e){ i=(Math.floor(Date.now()/1000))%NORMIE_NATION.length; }
   return NORMIE_NATION[i%NORMIE_NATION.length];
+}
+
+/* ---------- PROMO FEED: the weekly prize card + fun between-level screens (owner ask,
+   2026-08-30). Data arrives from two public endpoints fetched ONCE at parse — /api/nq/promo
+   (the card of the week, owner-set, may be null) and /api/nq/leaderboard?n=3 (the live weekly
+   top three for the "board tease" beat). Both are fire-and-forget: a failed fetch just means
+   those beats never enter the rotation, and every renderer degrades to the layouts that shipped
+   before this existed. Same copy discipline as NORMIE_NATION — the card promo describes the
+   owner's own weekly physical prize (the live sign-to-claim contest), never a $NORMIE term. */
+var NQ_FUNFACTS = [
+  { head:'DID YOU KNOW?', body:'Every world\'s backdrop is a hand-painted plate — the traveling page shows you the real art of where you\'re headed.' },
+  { head:'DID YOU KNOW?', body:'Honeypots only drain the coins from THIS level — your total is safe. Greed tax, not a rug.' },
+  { head:'SECRET ROOMS', body:'Speakeasies hide behind some walls. One visit each — spend it well.' },
+  { head:'THE ROAD ENDS ON THE MOON', body:'The final level of the game is on the moon. It answers back.' },
+  { head:'YOUR RUN IS SAVED', body:'Progress banks at every checkpoint — close the tab, come back, hit CONTINUE. Connect a wallet and it follows you to any device.' },
+  { head:'FRESH BOARD EVERY WEEK', body:'The weekly leaderboard resets — one great run can take the crown at any time.' },
+];
+function nqFactNext(){
+  var i=0;
+  try{ i=parseInt(sessionStorage.getItem('nqFactI')||'0',10)||0; sessionStorage.setItem('nqFactI',String((i+1)%NQ_FUNFACTS.length)); }
+  catch(e){ i=(Math.floor(Date.now()/1000))%NQ_FUNFACTS.length; }
+  return NQ_FUNFACTS[i%NQ_FUNFACTS.length];
+}
+(function(){ if(typeof window==='undefined'||typeof fetch!=='function') return;
+  try{ fetch('/api/nq/promo').then(function(r){ return r.json(); }).then(function(d){
+    if(d&&d.ok&&d.card&&d.card.img) window.__NQ_PROMO_CARD=d.card; }).catch(function(){}); }catch(e){}
+  try{ fetch('/api/nq/leaderboard?n=3').then(function(r){ return r.json(); }).then(function(d){
+    var wk=d&&d.ok&&d.weekly; if(wk&&wk.length) window.__NQ_LB_TEASE=wk.slice(0,3); }).catch(function(){}); }catch(e){}
+})();
+function nqPromoCard(){ try{ return window.__NQ_PROMO_CARD||null; }catch(e){ return null; } }
+function nqLbTease(){ try{ return window.__NQ_LB_TEASE||null; }catch(e){ return null; } }
+// Lazy-load the card art into the texture manager and hand back an image — the exact pattern
+// WorldClear already uses for the destination plates (late arrival into a dead scene is a no-op,
+// a failed/blocked URL simply never calls back, and the caller keeps its text-only fallback).
+function nqCardImage(scene,x,y,maxH,place){
+  var K='nqPromoCardTex', card=nqPromoCard(); if(!card) return;
+  var put=function(async){
+    if(!scene.sys) return;
+    if(async && !scene.sys.isActive()) return;
+    if(!scene.textures.exists(K)) return;
+    var im=scene.add.image(x,y,K);
+    // clamp BOTH axes (review 2026-08-30): height-only scaling let a landscape/banner image
+    // overflow sideways into the panel copy; budget the width at 3/4 of the height slot (a
+    // portrait trading card is ~0.71 w/h, so real cards are untouched).
+    if(im.height&&im.width) im.setScale(Math.min(maxH/im.height,(maxH*0.75)/im.width));
+    im.setDepth(6);
+    if(place) place(im);
+  };
+  if(scene.textures.exists(K)) put(false);
+  else { try{ scene.load.image(K,card.img); scene.load.once('complete',function(){ put(true); }); scene.load.start(); }catch(e){} }
 }
 // Shared buy path — the in-game Jupiter widget when it exists, else a direct swap link.
 // Duplicated intentionally as a free function so the scenes below do not depend on VipPitch.
@@ -7142,11 +7389,24 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0;
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
-    // Alternate: even clears carry the Nation line, odd clears show a locked-content preview.
-    // If the player owns everything, nqPreviewPick returns null and it is always the Nation line.
+    // ROTATION (owner ask 2026-08-30: "fun screens randomly between levels — normie quest, the
+    // leaderboards and pending giveaways"). Cycle over every beat that has CONTENT right now:
+    // the Nation line always; a locked preview on the setup lanes; a fun fact; the live weekly
+    // top-3; the weekly prize card. Missing data just drops a beat from the cycle — the public
+    // build before any card is configured rotates nation/fact exactly like it shipped.
     var _turn=0; try{ _turn=parseInt(sessionStorage.getItem('nqLcTurn')||'0',10)||0; sessionStorage.setItem('nqLcTurn',String(_turn+1)); }catch(e){}
-    var prev=(_turn%2===1)?nqPreviewPick():null;
+    var _beats=['nation','fact'];
+    try{ if(window.__NQ_SETUP) _beats.push('preview'); }catch(e){}
+    if(nqLbTease()) _beats.push('board');
+    if(nqPromoCard()) _beats.push('card');
+    // shuffle the order per session so the sequence FEELS random, while the modulo walk still
+    // guarantees every beat appears before any repeats (a pure Math.random pick can starve one)
+    var _ord=_turn; try{ _ord=_turn+(parseInt(sessionStorage.getItem('nqLcSeed')||'0',10)||(function(){ var s=1+Math.floor(Math.random()*997); sessionStorage.setItem('nqLcSeed',String(s)); return s; })()); }catch(e){}
+    var beat=_beats[_ord%_beats.length];
+    var prev=(beat==='preview')?nqPreviewPick():null;
+    if(beat==='preview'&&!prev) beat='fact';   // preview pool empty for this player -> fact
     var n=nqNationNext();
+    this._hold=(beat==='board'||beat==='card'||beat==='fact')?4600:3000;   // info beats get read time
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x151030,1); g.fillRect(0,0,W,26); g.fillRect(0,H-20,W,20);
     this.add.text(cx,13,'LEVEL CLEAR',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
@@ -7158,6 +7418,34 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
       nqDrawPreview(this,prev,146,null);
       // No hold amount, ever -- NQ's terms are unagreed. Same hedge VipPitch already uses.
       this.add.text(cx,196,'unlocks with $NORMIE · terms still in testing',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
+    } else if(beat==='fact'){
+      // FUN-FACT BEAT — same framed strip as the Nation line, cyan accent so it reads as a
+      // different voice (the game talking about itself, not the community push).
+      var f=nqFactNext();
+      this.add.rectangle(cx,158,W-40,64,0x0f1530,0.92).setStrokeStyle(2,0x66ddff);
+      this.add.text(cx,136,'✦ '+f.head+' ✦',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#66ddff',align:'center',wordWrap:{width:W-56}}).setOrigin(.5);
+      this.add.text(cx,150,f.body,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#e6f4ff',align:'center',lineSpacing:2,wordWrap:{width:W-60}}).setOrigin(.5,0);
+    } else if(beat==='board'){
+      // LEADERBOARD BEAT — the LIVE weekly top three, so the contest feels inhabitable. Names
+      // come from the public board (display name / short wallet, already sanitized server-side).
+      var lb=nqLbTease()||[];
+      this.add.rectangle(cx,156,W-40,78,0x101a2e,0.92).setStrokeStyle(2,0xffd23f);
+      this.add.text(cx,126,'🏆 THIS WEEK\'S TOP NORMIES 🏆',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center'}).setOrigin(.5);
+      var medals=['🥇','🥈','🥉'];
+      for(var li=0;li<Math.min(3,lb.length);li++){ var r=lb[li];
+        this.add.text(cx,142+li*14,medals[li]+'  '+String(r.name||'').slice(0,14)+'   '+(r.score||0),
+          {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:li===0?'#ffffff':'#c9c2ea',align:'center'}).setOrigin(.5);
+      }
+      this.add.text(cx,190,'the board resets weekly — one run can take the crown',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
+    } else if(beat==='card'){
+      // GIVEAWAY BEAT — the ACTUAL card being given away this week (owner-set via /api/nq/promo),
+      // lazy-loaded like the world plates; until/unless the image lands this is a clean text card.
+      var cd=nqPromoCard();
+      this.add.rectangle(cx,156,W-40,80,0x1a1030,0.94).setStrokeStyle(2,0xff8adf);
+      this.add.text(cx,122,'🎁 THIS WEEK\'S GIVEAWAY 🎁',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ff8adf',align:'center'}).setOrigin(.5);
+      this.add.text(cx+34,142,cd.name,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffffff',align:'center',wordWrap:{width:230}}).setOrigin(.5);
+      this.add.text(cx+34,156,cd.copy,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#f2e6ff',align:'center',lineSpacing:1,wordWrap:{width:224}}).setOrigin(.5,0);
+      nqCardImage(this,cx-136,156,68,null);   // the real card art, left of the copy
     } else {
       // a small marching Normie so the beat feels alive rather than a static card
       this.runner=this.add.image(cx,96,'nrun1'); this.runner.setScale(44/this.runner.height);
@@ -7172,13 +7460,16 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(cx,216,_lounge?'🏛  SEE THE LOUNGE':'🪙  GRAB $NORMIE',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:_lounge?'#ffffff':'#0a0813'}).setOrigin(.5).setDepth(1);
     buy.on('pointerover',function(){ buy.setScale(1.05); }); buy.on('pointerout',function(){ buy.setScale(1); });
     buy.on('pointerup',function(){ self._buyOpen=true;   // opening a panel must not also advance the beat
+      self.t0=self.time.now;   // and the auto-advance clock restarts — the level must not start under the buy widget (review 2026-08-30)
       if(_lounge){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} } else nqBuyNormie(); });
     this.cont=this.add.text(cx,H-10,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff6e'}).setOrigin(.5);
     var adv=function(){ if(self.done||self._buyOpen){ self._buyOpen=false; return; } self.go(); };
     this._padPrev=true;   // start latched: a direction HELD as the level ended must not insta-skip
     this._adv=adv;
     this.input.on('pointerdown',function(p){ if(buy.getBounds().contains(p.worldX,p.worldY)) return; adv(); });
-    this.input.keyboard.on('keydown',adv);
+    // drop key auto-repeat + 500ms grace (review 2026-08-30): now that this beat runs after EVERY
+    // level, a key held through the door must not skip the card before it renders a single frame
+    this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; adv(); });
     padAdvance(this, adv);
   },
   go:function(){ if(this.done) return; this.done=true; SFX.power();
@@ -7197,7 +7488,7 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     var _pd=!!(_p&&(_p.left||_p.right||_p.jump||_p.down||_p.throw));
     if(_pd && !this._padPrev && (this.time.now-this.t0)>500 && this._adv){ this._padPrev=_pd; this._adv(); return; }
     this._padPrev=_pd;
-    if(this.time.now-this.t0>3000) this.go();   // auto-advance: a between-level beat, not a toll gate
+    if(this.time.now-this.t0>(this._hold||3000)) this.go();   // auto-advance: a between-level beat, not a toll gate (info beats hold ~4.6s)
   }
 });
 
@@ -7332,6 +7623,38 @@ var NQGAME=new Phaser.Game({
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
   scene:[Boot,Title,LevelSelect,Controls,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]
 });
+// CROSS-SESSION SAVE — rehydrate the checkpoint registry BEFORE any scene runs, so a resumed run
+// keeps its checkpoints for every later death too (not just the first jump in). Starting a fresh
+// run zeroes these again in Game.create at levelIdx 0, so this can never leak into a NEW GAME.
+// Scores are NOT hydrated (left 0): same reason nqResumePoint resumes at score 0 — a score from a
+// previous session has no run token behind it, and feeding it into a death-continue would make the
+// leaderboard flag the run. Progress crosses sessions; score is per-session.
+try{ var _nqSave=nqRunLoad();
+  if(_nqSave){ NQGAME.registry.set('nqCp',_nqSave.cp);
+               NQGAME.registry.set('nqLvlCp',_nqSave.lvlCp); }
+}catch(e){}
+// CLOUD SAVE bridge — the wallet client lives in a separate script block (the NQLB IIFE), so the
+// sync crosses over on window:
+//   __NQ_GETSAVE()      → the local bank (clamped/validated), for the wallet block to push up.
+//   __NQ_APPLYSAVE(s)   → merge a server save DOWN into localStorage + the live registry (pair-max,
+//                         so a stale cloud read can never rewind local progress), then refresh the
+//                         Title if it is showing so CONTINUE appears without a reload.
+try{ if(typeof window!=='undefined'){
+  window.__NQ_GETSAVE=function(){ try{ return nqRunLoad(); }catch(e){ return null; } };
+  window.__NQ_APPLYSAVE=function(sv){ try{
+    if(TEST_MODE||!sv) return;
+    nqRunMerge({ cp:Math.floor(sv.cp)||0, cpScore:Math.floor(sv.cpScore)||0,
+                 lvlCp:Math.floor(sv.lvlCp)||0, lvlCpScore:Math.floor(sv.lvlCpScore)||0 });
+    var m=nqRunLoad(); if(!m) return;
+    var r=NQGAME.registry;   // live registry too, so continue-after-death sees it mid-session.
+    // Indexes only — a score from another device belongs to that device's run token, and pairing
+    // it with THIS session's death-continue would trip the leaderboard budget check (see nqResumePoint).
+    if(m.cp>(r.get('nqCp')||0)){ r.set('nqCp',m.cp); }
+    if(m.lvlCp>(r.get('nqLvlCp')||0)){ r.set('nqLvlCp',m.lvlCp); }
+    var t=NQGAME.scene.getScene('Title');
+    if(t && t.scene.isActive() && !t.started) t.scene.restart();
+  }catch(e){} };
+} }catch(e){}
 // FIX (2026-08-13): typing in ANY HTML text field — the leaderboard handle (#nqp-handle), the
 // promo/redeem code, wallet fields — dropped the game-control keys (W A S D F X Q E and 1/2/3, the
 // set addKeys()'d below), so "half the keyboard didn't work". Phaser's KeyboardManager attaches a
@@ -8317,6 +8640,30 @@ if(typeof document!=='undefined'){ (function(){
       .catch(function () {});
   }
   function worldOf(name) { var m = String(name || '').match(/^(\d+)/); return m ? parseInt(m[1], 10) : 0; }
+  // ---- CLOUD SAVE sync (2026-08-27) — progress follows the WALLET across devices ----------
+  // One endpoint, one shape: POST {pubkey, token, save?} → the server merges (furthest-reached
+  // wins, per pair — see nq-save.js) and answers with the merged save, which is handed back to
+  // the game via __NQ_APPLYSAVE. So a single round trip both pushes local progress up AND pulls
+  // any further progress from another device down. Fire-and-forget: a save must never block play.
+  var _cloudLastBody = '';
+  function cloudSync(push) {
+    if (!walletState.pubkey || !walletState.token) return;
+    var body = { pubkey: walletState.pubkey, token: walletState.token };
+    if (push && (push.cp > 0 || push.lvlCp > 0)) body.save = { cp: push.cp || 0, cpScore: push.cpScore || 0, lvlCp: push.lvlCp || 0, lvlCpScore: push.lvlCpScore || 0 };
+    var enc = JSON.stringify(body);
+    if (body.save && enc === _cloudLastBody) return;   // identical re-push (e.g. a clear that banked nothing new) — skip the round trip
+    _cloudLastBody = body.save ? enc : _cloudLastBody;
+    fetch('/api/nq/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: enc })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { try { if (j && j.ok && j.save && window.__NQ_APPLYSAVE) window.__NQ_APPLYSAVE(j.save); } catch (e) {} })
+      .catch(function () {});
+  }
+  // The game's bank hook (nqRunMerge) pushes through here on every checkpoint; wallet-less players
+  // no-op and keep the localStorage save only.
+  try { window.__NQ_CLOUDPUSH = function (s) { cloudSync(s); }; } catch (e) {}
+  // A wallet becoming ready (fresh connect OR remembered-session restore) is the pull moment:
+  // send whatever is banked locally, get the merged truth back.
+  function cloudReady() { try { cloudSync(window.__NQ_GETSAVE ? window.__NQ_GETSAVE() : null); } catch (e) {} }
   // Credit reached levels ONE AT A TIME: each checkpoint returns an updated token the next one
   // needs, so they must chain. Serialising here also means a slow run-start never loses a level's
   // budget — the levels just queue and flush once the token lands.
@@ -8494,6 +8841,7 @@ if(typeof document!=='undefined'){ (function(){
     walletState = { pubkey: pk, token: vr.token, tier: vr.tier, worlds: vr.worlds, balances: vr.balances, vip: !!vr.vip };
     activeProvider = p;   // the shop needs something that can sign; re-detected on a reload
     saveWallet();
+    cloudReady();   // wallet proven → sync the cross-device save (push local, pull further)
     if (!handle) window.NQLB.setHandle(pk.slice(0, 4) + '…' + pk.slice(-4));
     return walletState;
   }
@@ -8521,7 +8869,7 @@ if(typeof document!=='undefined'){ (function(){
       body: JSON.stringify({ pubkey: saved.pubkey, token: saved.token, fresh: !!fresh }) }).then(function (r) { return r.json(); })
       .then(function (v) {
         if (v && v.ok) { walletState.tier = v.tier; walletState.worlds = v.worlds; walletState.balances = v.balances; walletState.vip = !!v.vip;
-          if (!handle) window.NQLB.setHandle(saved.pubkey.slice(0, 4) + '…' + saved.pubkey.slice(-4)); if (cb) cb(true); return; }
+          if (!handle) window.NQLB.setHandle(saved.pubkey.slice(0, 4) + '…' + saved.pubkey.slice(-4)); cloudReady(); if (cb) cb(true); return; }
         // Only a REJECTED PROOF means forget the wallet. This used to disconnect on ANY non-ok
         // reply, and /refresh answers 'rpc_error' whenever the Helius read fails — so one flaky RPC
         // call silently signed the player out, dropped the ✓ on their score, and stopped their

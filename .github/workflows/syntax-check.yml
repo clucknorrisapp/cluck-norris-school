@@ -3,9 +3,13 @@
 # Telegram, every tool). This gate catches that class of failure on every push.
 # It is NOT a test suite — just "does Node parse every backend file".
 name: syntax-check
+# claude/** removed from push triggers (2026-08-25): every PR branch commit was
+# running the ENTIRE suite twice — once for the push, once for the pull_request —
+# doubling wait on every change for zero extra coverage. PRs cover feature
+# branches; push keeps main/develop covered for direct pushes.
 on:
   push:
-    branches: ["main", "develop", "claude/**"]
+    branches: ["main", "develop"]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -13,6 +17,12 @@ on:
         description: "Regenerate Normie Quest visual baselines in CI and upload them as an artifact (download + commit to adopt them)"
         type: boolean
         default: false
+
+# A follow-up commit to the same PR supersedes the previous run — cancel it
+# instead of finishing checks on code that no longer exists.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   node-check:
@@ -46,6 +56,11 @@ jobs:
       # curriculum held 70 and 7. Hand-typed public counts rot silently; this catches the mirror.
       - name: curriculum count-drift guard
         run: node scripts/check-counts.js
+      # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
+      # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
+      # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
+      - name: liquidity-engine decision simulator
+        run: node scripts/engine-sim-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —
@@ -85,19 +100,83 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Rendering 40 school screens for a liquidity-engine or Telegram change is pure waiting.
+      # The RENDER only matters when the diff can reach what renders: the React app, static
+      # pages, deps, the harness itself — or a server.js hunk that actually touches page
+      # serving. A server.js change that cannot reach a page still gets its boot proven by
+      # the "server boots" step below, which is the failure this job really guards against.
+      - name: decide whether the render applies
+        id: gate
+        run: |
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            # A dispatch run validates a pending PR branch (the push-before-PR-open quirk means
+            # the pull_request run often never fires), so gate it exactly like that PR would be:
+            # diff against the merge-base with main. Owner ask 2026-08-28: stop running the
+            # Normie Quest render gates for changes that cannot touch Normie Quest.
+            git fetch origin main --quiet 2>/dev/null || true
+            BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
+            if [ -z "$BASE" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: dispatch with no resolvable base — full run"; exit 0; fi
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: push to main/develop — full run (production tripwire)"; exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|normie-quest/|\.github/workflows/)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
+          elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "gate: no render-relevant paths — boot check only"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
       - run: npm ci
+      # Always, even when the render is skipped: a backend change that stops the server
+      # BOOTING takes the whole site down, and node --check cannot see that.
+      # A boot failure must FAIL this step, not stall it. The first version was
+      #   node -e "require('./server.js'); setTimeout(..., 12000)"
+      # and it hung for 50 minutes on a real boot throw: require() threw before the
+      # timer was ever scheduled, and server.js's own process.on("uncaughtException")
+      # handler swallowed it, so nothing exited and nothing failed. Three things now:
+      # catch the synchronous throw explicitly, prove the server is actually SERVING
+      # (an async failure like EADDRINUSE gets swallowed by that same handler, so
+      # "still running after 12s" is not proof of anything), and cap the whole thing
+      # with timeout so no future variant can stall the job again.
+      - name: server boots
+        env:
+          PREMIUM_ACCESS_KEY: ci-boot-check
+        run: |
+          timeout 90 node -e "
+            try { require('./server.js'); }
+            catch (e) { console.error('BOOT FAILED (require threw):', (e && e.stack) || e); process.exit(1); }
+            setTimeout(async () => {
+              const url = 'http://127.0.0.1:' + (process.env.PORT || 3000) + '/healthz';
+              try {
+                const r = await fetch(url);
+                if (!r.ok) throw new Error('healthz returned ' + r.status);
+                console.log('server booted and serving');
+                process.exit(0);
+              } catch (e) { console.error('BOOT FAILED (not serving):', e.message); process.exit(1); }
+            }, 12000);
+          "
+
       # Playwright is installed here rather than in package.json on purpose: Railway installs
       # devDependencies to run the Vite build, and playwright's postinstall drags browser
       # binaries into the production image.
       - name: install playwright + chromium
+        if: steps.gate.outputs.run == 'true'
         run: |
           npm i --no-save playwright
           npx playwright install --with-deps chromium
       - name: render every screen and lesson
+        if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
       # Full leaderboard suite including the telemetry-router cases that node-check (no deps)
       # skips — here express is installed, so a skip means something is wrong and must fail.
@@ -121,19 +200,67 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The 13-minute game render gate only earns its time when the change could
+      # plausibly touch the game's render path. A PR that only edits docs, tool
+      # pages, backend libs, or scripts cannot break the Normie Quest canvas —
+      # skip the boot+render for those and pass fast. Anything matching the game
+      # itself, server.js (it serves the game), deps, or this workflow still runs
+      # the full gate. Non-PR events (push to main/develop, manual dispatch)
+      # ALWAYS run in full — main is production.
+      - name: decide whether the game gate applies
+        id: gate
+        run: |
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            # A dispatch run validates a pending PR branch (the push-before-PR-open quirk means
+            # the pull_request run often never fires), so gate it exactly like that PR would be:
+            # diff against the merge-base with main. Owner ask 2026-08-28: stop running the
+            # Normie Quest render gates for changes that cannot touch Normie Quest.
+            git fetch origin main --quiet 2>/dev/null || true
+            BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
+            if [ -z "$BASE" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: dispatch with no resolvable base — full run"; exit 0; fi
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: push to main/develop — full run (production tripwire)"; exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^(normie-quest/|package(-lock)?\.json$|\.github/workflows/)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: game-relevant change — full run"
+          elif echo "$CHANGED" | grep -qE '^server\.js$'; then
+            # server.js is ~11k lines covering the WHOLE app, so "server.js changed" fired the
+            # 13-minute render gate for Telegram routes, liquidity endpoints and admin params
+            # that cannot reach the game. Look at the DIFF instead of the filename: only hunks
+            # that mention the game (its routes, assets, env or build output) can break the
+            # render, and those still run the gate in full.
+            if git diff "$BASE"...HEAD -- server.js | grep -qiE 'normie|nq[-_]|/play|game_logic'; then
+              echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches the game — full run"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff has no game references — skipping render"
+            fi
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "gate: no game-relevant paths — skipping render"
+          fi
       - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
         with:
           node-version: "20"
           cache: "npm"
       - run: npm ci
+        if: steps.gate.outputs.run == 'true'
       # No `npm run build` here (unlike smoke-test): server.js serves the game through an EXPLICIT
       # route and the built normie-quest HTML is committed; only the React catch-all reads dist/,
       # which this job never hits. Booting without a build keeps it lean.
       - name: install playwright chromium
+        if: steps.gate.outputs.run == 'true'
         run: |
           npm i --no-save playwright
           npx playwright install --with-deps chromium
       - name: boot server + run visual regression
+        if: steps.gate.outputs.run == 'true'
         env:
           PORT: "3111"
           # Booted with NO secrets on purpose: the scheduler/bot block only starts when a Telegram

@@ -1,0 +1,99 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
+<style>
+  html,body{margin:0;width:100vw;height:100vh;overflow:hidden;background:#e81088}
+  #cam{position:absolute;inset:-14vw;will-change:transform}
+  #rays{position:absolute;left:50%;top:50%;width:300vw;height:300vw;will-change:transform;
+        background:repeating-conic-gradient(from 0deg, rgba(255,255,255,.20) 0deg 11deg, transparent 11deg 30deg)}
+  #burst{position:absolute;left:50%;top:50%;width:300vw;height:300vw;will-change:transform,opacity;
+        background:repeating-conic-gradient(from 5deg, rgba(255,255,255,.55) 0deg 2.5deg, transparent 2.5deg 15deg)}
+  #flash{position:absolute;inset:0;will-change:opacity,background}
+  .rain{position:absolute;will-change:transform;filter:drop-shadow(0 .5vw .8vw rgba(80,0,40,.4))}
+  .spark{position:absolute;will-change:transform,opacity;color:#fff;font:900 4vw/1 var(--cuna-font)}
+  .copy{position:absolute;bottom:8%;will-change:transform,filter;transform-origin:50% 100%;
+        filter:drop-shadow(0 1vw 1.6vw rgba(80,0,40,.55))}
+  #stickL{left:3%}#stickC{left:50%}#stickR{right:3%}
+  #word,#echo{position:absolute;left:50%;top:26%;white-space:nowrap;will-change:transform,opacity,filter;
+        font:900 18vw/1 var(--cuna-font)}
+  #word{color:var(--cuna-cream);-webkit-text-stroke:1vw var(--cuna-outline);paint-order:stroke fill;
+        filter:drop-shadow(0 .9vw 0 rgba(90,0,50,.6))}
+  #echo{color:transparent;-webkit-text-stroke:0.6vw rgba(253,243,216,.9);pointer-events:none}
+  #vig{position:absolute;inset:0;pointer-events:none;
+       background:radial-gradient(circle at 50% 46%, transparent 55%, rgba(60,0,40,.42) 100%)}
+</style>
+<div id="cam">
+  <div id="rays"></div><div id="burst"></div><div id="flash"></div>
+  <div id="rainbox"></div>
+  <img class="copy" id="stickL"><img class="copy" id="stickR"><img class="copy" id="stickC">
+  <div id="echo"></div><div id="word"></div>
+  <div id="sparks"></div>
+</div>
+<div id="vig"></div>
+<script>
+const TAU=Math.PI*2;
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let z=Math.imul(seed^seed>>>15,1|seed);z=z+Math.imul(z^z>>>7,61|z)^z;return((z^z>>>14)>>>0)/4294967296}}
+const R=rng(777),sparks=[],rain=[];
+const HUES=["#e81088","#7a2bd6","#ff5f1f","#e81088"];
+window.setup=(src,text)=>{
+  document.getElementById('word').textContent=text;
+  document.getElementById('echo').textContent=text;
+  const sp=document.getElementById('sparks');
+  for(let i=0;i<24;i++){const el=document.createElement('div');el.className='spark';el.textContent=i%3?'✦':'★';
+    sparks.push({el,ang:R()*TAU,rad:27+R()*25,ph:R()*TAU,spin:R()<.5?1:-1});sp.appendChild(el);}
+  const rb=document.getElementById('rainbox');
+  for(let i=0;i<14;i++){const el=document.createElement('img');el.className='rain';el.src=src;
+    const w=6+R()*5;el.style.width=w+'vw';
+    rain.push({el,x:3+i*7+(R()-.5)*4,y0:R()*130,fall:130*(R()<.6?1:2),rph:R()*TAU,rsp:(R()<.5?1:-1)*(1+Math.round(R()))});
+    rb.appendChild(el);}
+  let n=0;const done=()=>{if(++n===3)window.__ready=true};
+  for(const id of ['stickL','stickC','stickR']){const el=document.getElementById(id);
+    el.onload=done;el.onerror=done;el.src=src;}
+  document.getElementById('stickC').style.width='44vw';
+  document.getElementById('stickL').style.width='24vw';
+  document.getElementById('stickR').style.width='24vw';
+};
+window.setT=(t)=>{
+  const BEATS=4, bt=(t*BEATS)%1, beat=Math.floor(t*BEATS);
+  const punch=Math.pow(1-bt,3);
+  // camera punch + decaying shake
+  const sh=3.0*punch, r1=rng(beat*911+7), sx=(r1()-.5)*sh, sy=(r1()-.5)*sh;
+  document.getElementById('cam').style.transform=
+    `scale(${1.05+0.08*punch}) translate(${sx}vw,${sy}vw) rotate(${(r1()-.5)*2*punch}deg)`;
+  // rotating rays + counter-rotating speed-line burst that fires on the beat
+  document.getElementById('rays').style.transform=`translate(-50%,-50%) rotate(${t*360}deg)`;
+  const b=document.getElementById('burst');
+  b.style.transform=`translate(-50%,-50%) rotate(${-t*360}deg) scale(${1+0.25*punch})`;
+  b.style.opacity=String(0.85*punch);
+  // color flash
+  const f=document.getElementById('flash');
+  f.style.background=HUES[beat%HUES.length];
+  f.style.opacity=String(0.5*punch);
+  // raining mini tacos (mod-wrapped fall, integer cycles => seamless)
+  rain.forEach(d=>{
+    const y=((d.y0 + t*d.fall) % 130) - 15;
+    d.el.style.transform=`translate(${d.x}vw,${y}vh) rotate(${(t*d.rsp*360)+d.rph*57}deg)`;
+  });
+  // chromatic aberration on the punch (red/cyan split)
+  const ab=1.1*punch;
+  const chroma=ab>0.05?`drop-shadow(${ab}vw 0 rgba(255,0,90,.55)) drop-shadow(${-ab}vw 0 rgba(0,220,255,.55)) `:``;
+  // mascots
+  const c=document.getElementById('stickC');
+  c.style.transform=`translateX(-50%) scale(${1+0.2*punch}) rotate(${8*Math.sin(TAU*t*2)}deg)`;
+  c.style.filter=chroma+`drop-shadow(0 1vw 1.6vw rgba(80,0,40,.55))`;
+  const wob=Math.sin(TAU*t*BEATS/2);
+  document.getElementById('stickL').style.transform=`rotate(${-14*wob}deg) translateY(${-4*Math.abs(wob)}vh) scaleX(-1)`;
+  document.getElementById('stickR').style.transform=`rotate(${14*wob}deg) translateY(${-4*Math.abs(Math.cos(TAU*t*BEATS/2))}vh)`;
+  // word slam + echo ring
+  const w=document.getElementById('word');
+  w.style.transform=`translate(-50%,-50%) scale(${1+0.33*punch}) rotate(${(beat%2?-1:1)*2.5*punch}deg)`;
+  w.style.filter=chroma+`drop-shadow(0 .9vw 0 rgba(90,0,50,.6))`;
+  const e=document.getElementById('echo');
+  e.style.transform=`translate(-50%,-50%) scale(${1+0.8*bt})`;
+  e.style.opacity=String(0.8*(1-bt));
+  // orbiting sparks
+  sparks.forEach(s=>{
+    const a=s.ang+s.spin*TAU*t;
+    s.el.style.transform=`translate(${50+s.rad*Math.cos(a)}vw,${50+s.rad*0.9*Math.sin(a)}vh) rotate(${t*720}deg)`;
+    s.el.style.opacity=String(0.25+0.75*(0.5+0.5*Math.sin(TAU*t*BEATS+s.ph)));
+  });
+};
+</script>
