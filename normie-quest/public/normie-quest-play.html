@@ -6839,7 +6839,13 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     // So the panel now OWNS the empty band: dead centre, full width, framed, with a Normie emblem
     // and a slow gold pulse on the border so the eye lands there before the TAP prompt.
     var _nn=nqNationNext();
-    var _wp=null; try{ var _wt=parseInt(sessionStorage.getItem('nqWcTurn')||'0',10)||0; sessionStorage.setItem('nqWcTurn',String(_wt+1)); if(_wt%2===1) _wp=nqPreviewPick(); }catch(e){}
+    // THE WEEKLY GIVEAWAY OWNS THIS BAND when a card is configured (owner ask 2026-08-30:
+    // "showcase the card between each world — the actual image of what will be given away and
+    // how to win"). This supersedes the 07-26 "Nation owns the band" call ONLY while a card is
+    // set; clear the card (POST {card:null}) and the page is byte-identical to before.
+    var _card=nqPromoCard();
+    var _wp=null; try{ var _wt=parseInt(sessionStorage.getItem('nqWcTurn')||'0',10)||0; sessionStorage.setItem('nqWcTurn',String(_wt+1)); if(!_card && _wt%2===1) _wp=nqPreviewPick(); }catch(e){}
+    if(_card){ _nn={ head:'THIS WEEK\'S GIVEAWAY — '+_card.name, short:_card.copy }; }
     // A feature tease used to print "VIP PERK" regardless of band, which now misstates the t2
     // perks — the resume perk unlocks a tier BELOW VIP, and telling a player it is VIP-only would
     // be selling them the wrong thing.
@@ -6855,9 +6861,14 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.p2.add(this.add.rectangle(cx,_py,_pw-8,_ph-8,0x000000,0).setStrokeStyle(1,0x6a5aa8,0.7));
     this.tweens.add({targets:_pnl, alpha:{from:0.94,to:1}, duration:900, yoyo:true, repeat:-1, ease:'Sine.inOut'});
     if(this.renderer.type===Phaser.WEBGL){ try{ _pnl.postFX.addGlow(0xffd23f,0.9,0,false,0.1,10); }catch(e){} }
-    // emblem — a Normie standing in the panel, so the community beat has a FACE on it
-    var _em=this.add.image(cx-152,_py+6,'normie'); _em.setScale(60/_em.height); this.p2.add(_em);
-    this.tweens.add({targets:_em,y:_py+2,duration:820,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    // emblem — the ACTUAL prize card when a giveaway is set (lazy-loaded, reparented into the
+    // travel-page container so it can't leak onto the celebration phase); else the Normie face.
+    if(_card){
+      nqCardImage(this,cx-152,_py,76,function(im){ if(self.p2) self.p2.add(im); });
+    } else {
+      var _em=this.add.image(cx-152,_py+6,'normie'); _em.setScale(60/_em.height); this.p2.add(_em);
+      this.tweens.add({targets:_em,y:_py+2,duration:820,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    }
     this.p2.add(this.add.text(cx,_py-30,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffd23f',align:'center',wordWrap:{width:_pw-24}}).setOrigin(.5));
     this.p2.add(this.add.text(cx+42,_py-12,(_nn.short||_nn.body),{fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#eee8ff',align:'center',lineSpacing:3,wordWrap:{width:250}}).setOrigin(.5,0));
     // The nostalgia gag moved to the CELEBRATION page (see p1). It is a "you beat the boss, but…"
@@ -7212,6 +7223,52 @@ function nqNationNext(){
   catch(e){ i=(Math.floor(Date.now()/1000))%NORMIE_NATION.length; }
   return NORMIE_NATION[i%NORMIE_NATION.length];
 }
+
+/* ---------- PROMO FEED: the weekly prize card + fun between-level screens (owner ask,
+   2026-08-30). Data arrives from two public endpoints fetched ONCE at parse — /api/nq/promo
+   (the card of the week, owner-set, may be null) and /api/nq/leaderboard?n=3 (the live weekly
+   top three for the "board tease" beat). Both are fire-and-forget: a failed fetch just means
+   those beats never enter the rotation, and every renderer degrades to the layouts that shipped
+   before this existed. Same copy discipline as NORMIE_NATION — the card promo describes the
+   owner's own weekly physical prize (the live sign-to-claim contest), never a $NORMIE term. */
+var NQ_FUNFACTS = [
+  { head:'DID YOU KNOW?', body:'Every world\'s backdrop is a hand-painted plate — the traveling page shows you the real art of where you\'re headed.' },
+  { head:'DID YOU KNOW?', body:'Honeypots only drain the coins from THIS level — your total is safe. Greed tax, not a rug.' },
+  { head:'SECRET ROOMS', body:'Speakeasies hide behind some walls. One visit each — spend it well.' },
+  { head:'THE ROAD ENDS ON THE MOON', body:'The final level of the game is on the moon. It answers back.' },
+  { head:'YOUR RUN IS SAVED', body:'Progress banks at every checkpoint — close the tab, come back, hit CONTINUE. Connect a wallet and it follows you to any device.' },
+  { head:'FRESH BOARD EVERY WEEK', body:'The weekly leaderboard resets — one great run can take the crown at any time.' },
+];
+function nqFactNext(){
+  var i=0;
+  try{ i=parseInt(sessionStorage.getItem('nqFactI')||'0',10)||0; sessionStorage.setItem('nqFactI',String((i+1)%NQ_FUNFACTS.length)); }
+  catch(e){ i=(Math.floor(Date.now()/1000))%NQ_FUNFACTS.length; }
+  return NQ_FUNFACTS[i%NQ_FUNFACTS.length];
+}
+(function(){ if(typeof window==='undefined'||typeof fetch!=='function') return;
+  try{ fetch('/api/nq/promo').then(function(r){ return r.json(); }).then(function(d){
+    if(d&&d.ok&&d.card&&d.card.img) window.__NQ_PROMO_CARD=d.card; }).catch(function(){}); }catch(e){}
+  try{ fetch('/api/nq/leaderboard?n=3').then(function(r){ return r.json(); }).then(function(d){
+    var wk=d&&d.ok&&d.weekly; if(wk&&wk.length) window.__NQ_LB_TEASE=wk.slice(0,3); }).catch(function(){}); }catch(e){}
+})();
+function nqPromoCard(){ try{ return window.__NQ_PROMO_CARD||null; }catch(e){ return null; } }
+function nqLbTease(){ try{ return window.__NQ_LB_TEASE||null; }catch(e){ return null; } }
+// Lazy-load the card art into the texture manager and hand back an image — the exact pattern
+// WorldClear already uses for the destination plates (late arrival into a dead scene is a no-op,
+// a failed/blocked URL simply never calls back, and the caller keeps its text-only fallback).
+function nqCardImage(scene,x,y,maxH,place){
+  var K='nqPromoCardTex', card=nqPromoCard(); if(!card) return;
+  var put=function(async){
+    if(!scene.sys) return;
+    if(async && !scene.sys.isActive()) return;
+    if(!scene.textures.exists(K)) return;
+    var im=scene.add.image(x,y,K); if(im.height) im.setScale(maxH/im.height);
+    im.setDepth(6);
+    if(place) place(im);
+  };
+  if(scene.textures.exists(K)) put(false);
+  else { try{ scene.load.image(K,card.img); scene.load.once('complete',function(){ put(true); }); scene.load.start(); }catch(e){} }
+}
 // Shared buy path — the in-game Jupiter widget when it exists, else a direct swap link.
 // Duplicated intentionally as a free function so the scenes below do not depend on VipPitch.
 function nqBuyNormie(){
@@ -7302,11 +7359,24 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0;
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
-    // Alternate: even clears carry the Nation line, odd clears show a locked-content preview.
-    // If the player owns everything, nqPreviewPick returns null and it is always the Nation line.
+    // ROTATION (owner ask 2026-08-30: "fun screens randomly between levels — normie quest, the
+    // leaderboards and pending giveaways"). Cycle over every beat that has CONTENT right now:
+    // the Nation line always; a locked preview on the setup lanes; a fun fact; the live weekly
+    // top-3; the weekly prize card. Missing data just drops a beat from the cycle — the public
+    // build before any card is configured rotates nation/fact exactly like it shipped.
     var _turn=0; try{ _turn=parseInt(sessionStorage.getItem('nqLcTurn')||'0',10)||0; sessionStorage.setItem('nqLcTurn',String(_turn+1)); }catch(e){}
-    var prev=(_turn%2===1)?nqPreviewPick():null;
+    var _beats=['nation','fact'];
+    try{ if(window.__NQ_SETUP) _beats.push('preview'); }catch(e){}
+    if(nqLbTease()) _beats.push('board');
+    if(nqPromoCard()) _beats.push('card');
+    // shuffle the order per session so the sequence FEELS random, while the modulo walk still
+    // guarantees every beat appears before any repeats (a pure Math.random pick can starve one)
+    var _ord=_turn; try{ _ord=_turn+(parseInt(sessionStorage.getItem('nqLcSeed')||'0',10)||(function(){ var s=1+Math.floor(Math.random()*997); sessionStorage.setItem('nqLcSeed',String(s)); return s; })()); }catch(e){}
+    var beat=_beats[_ord%_beats.length];
+    var prev=(beat==='preview')?nqPreviewPick():null;
+    if(beat==='preview'&&!prev) beat='fact';   // preview pool empty for this player -> fact
     var n=nqNationNext();
+    this._hold=(beat==='board'||beat==='card'||beat==='fact')?4600:3000;   // info beats get read time
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x151030,1); g.fillRect(0,0,W,26); g.fillRect(0,H-20,W,20);
     this.add.text(cx,13,'LEVEL CLEAR',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
@@ -7318,6 +7388,34 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
       nqDrawPreview(this,prev,146,null);
       // No hold amount, ever -- NQ's terms are unagreed. Same hedge VipPitch already uses.
       this.add.text(cx,196,'unlocks with $NORMIE · terms still in testing',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
+    } else if(beat==='fact'){
+      // FUN-FACT BEAT — same framed strip as the Nation line, cyan accent so it reads as a
+      // different voice (the game talking about itself, not the community push).
+      var f=nqFactNext();
+      this.add.rectangle(cx,158,W-40,64,0x0f1530,0.92).setStrokeStyle(2,0x66ddff);
+      this.add.text(cx,136,'✦ '+f.head+' ✦',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#66ddff',align:'center',wordWrap:{width:W-56}}).setOrigin(.5);
+      this.add.text(cx,150,f.body,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#e6f4ff',align:'center',lineSpacing:2,wordWrap:{width:W-60}}).setOrigin(.5,0);
+    } else if(beat==='board'){
+      // LEADERBOARD BEAT — the LIVE weekly top three, so the contest feels inhabitable. Names
+      // come from the public board (display name / short wallet, already sanitized server-side).
+      var lb=nqLbTease()||[];
+      this.add.rectangle(cx,156,W-40,78,0x101a2e,0.92).setStrokeStyle(2,0xffd23f);
+      this.add.text(cx,126,'🏆 THIS WEEK\'S TOP NORMIES 🏆',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center'}).setOrigin(.5);
+      var medals=['🥇','🥈','🥉'];
+      for(var li=0;li<Math.min(3,lb.length);li++){ var r=lb[li];
+        this.add.text(cx,142+li*14,medals[li]+'  '+String(r.name||'').slice(0,14)+'   '+(r.score||0),
+          {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:li===0?'#ffffff':'#c9c2ea',align:'center'}).setOrigin(.5);
+      }
+      this.add.text(cx,190,'the board resets weekly — one run can take the crown',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
+    } else if(beat==='card'){
+      // GIVEAWAY BEAT — the ACTUAL card being given away this week (owner-set via /api/nq/promo),
+      // lazy-loaded like the world plates; until/unless the image lands this is a clean text card.
+      var cd=nqPromoCard();
+      this.add.rectangle(cx,156,W-40,80,0x1a1030,0.94).setStrokeStyle(2,0xff8adf);
+      this.add.text(cx,122,'🎁 THIS WEEK\'S GIVEAWAY 🎁',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ff8adf',align:'center'}).setOrigin(.5);
+      this.add.text(cx+34,142,cd.name,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffffff',align:'center',wordWrap:{width:230}}).setOrigin(.5);
+      this.add.text(cx+34,156,cd.copy,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#f2e6ff',align:'center',lineSpacing:1,wordWrap:{width:224}}).setOrigin(.5,0);
+      nqCardImage(this,cx-136,156,68,null);   // the real card art, left of the copy
     } else {
       // a small marching Normie so the beat feels alive rather than a static card
       this.runner=this.add.image(cx,96,'nrun1'); this.runner.setScale(44/this.runner.height);
@@ -7357,7 +7455,7 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     var _pd=!!(_p&&(_p.left||_p.right||_p.jump||_p.down||_p.throw));
     if(_pd && !this._padPrev && (this.time.now-this.t0)>500 && this._adv){ this._padPrev=_pd; this._adv(); return; }
     this._padPrev=_pd;
-    if(this.time.now-this.t0>3000) this.go();   // auto-advance: a between-level beat, not a toll gate
+    if(this.time.now-this.t0>(this._hold||3000)) this.go();   // auto-advance: a between-level beat, not a toll gate (info beats hold ~4.6s)
   }
 });
 

@@ -27,6 +27,7 @@ const ledger = require('./nq-ledger');   // off-chain per-wallet points ledger (
 const pair = require('./nq-pair');       // TV pairing — carry a proven wallet session to a wallet-less screen
 const claims = require('./nq-claims');   // weekly physical-prize claims (sign-to-claim, encrypted addresses)
 const cloudsave = require('./nq-save');  // cross-device cloud save, keyed by verified wallet (2026-08-27)
+const promo = require('./nq-promo');     // weekly prize card + between-level promo feed (2026-08-30)
 
 // Admin key for reading feedback / the comments dashboard (low-sensitivity playtest comments,
 // no funds/PII). Env keys ONLY — a dedicated NQ_FEEDBACK_KEY, else the site's PREMIUM_ACCESS_KEY.
@@ -452,6 +453,23 @@ router.post('/api/nq/save', (req, res) => {
     res.json({ ok: true, save: save || null });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
+// ---- /api/nq/promo : weekly prize card + between-level promo feed (nq-promo.js) -----------
+// Public read = what the interstitials render (card of the week, or nothing). Owner write is
+// master-keyed and is how the card changes each week WITHOUT a deploy: host the card photo
+// (e.g. /host-image → arweave), then POST { card: { img, name, copy } }; { card: null } clears.
+router.get('/api/nq/promo', (req, res) => {
+  if (throttled(req, 'promo', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try { res.json({ ok: true, ...promo.publicView() }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+router.post('/api/nq/promo', (req, res) => {
+  const pk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
+  const pw = process.env.PREMIUM_ACCESS_KEY || '';   // master key ONLY — this sets public prize copy
+  if (!pw || pk !== pw) return res.status(404).json({ ok: false, error: 'not_found' });
+  try { res.json(promo.set(req.body || {})); }
+  catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
 router.get('/api/nq/leaderboard', async (req, res) => {
   if (throttled(req, 'leaderboard', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
