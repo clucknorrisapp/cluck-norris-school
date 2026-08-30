@@ -14687,10 +14687,21 @@ function fmtUsdShort(n) {
 // the DEEPEST pool (real price discovery), 24h volume summed across pools, and the
 // price-change deltas. Same endpoint getClkn24hVolume() uses. Returns null on failure.
 async function getTokenMarket(mint = CLKN_MINT_ADDR) {
+  // DexScreener and Jupiter are independent sources — a DexScreener outage must not erase
+  // Jupiter's data too. BUG FOUND LIVE (2026-08-30): DexScreener hung/timed out repeatedly
+  // while Jupiter answered fine; the old code had ONE try/catch around both, so the
+  // DexScreener failure threw before Jupiter was ever queried, returning null — which
+  // silently dropped the buy bot's whole MC line (Jupiter is the DESIGNATED mc/fdv source
+  // for project tokens, see below, so it must survive a DexScreener failure on its own).
+  let data = [];
   try {
     const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`, { signal: AbortSignal.timeout(8000) });
-    const data = await res.json();
-    if (!Array.isArray(data) || !data.length) return null;
+    const j = await res.json();
+    if (Array.isArray(j)) data = j;
+  } catch (e) { console.warn("[TELEGRAM] DexScreener market fetch failed (falling back to Jupiter):", e.message); }
+
+  let out;
+  if (data.length) {
     let vol24h = 0;
     for (const p of data) {
       const h = Number(p?.volume?.h24); if (!Number.isFinite(h)) continue;
@@ -14712,7 +14723,7 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
       ? pool.filter(p => { const pr = Number(p.priceUsd); return pr > 0 && pr <= median * 5 && pr >= median / 5; })
       : pool;
     const deepest = (sane.length ? sane : pool).slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-    const out = {
+    out = {
       priceUsd: Number(deepest.priceUsd) || null,
       mc: Number(deepest.marketCap || deepest.fdv) || null,
       fdv: Number(deepest.fdv || deepest.marketCap) || null,
@@ -14720,41 +14731,47 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
       vol24h,
       change: deepest.priceChange || {},
     };
-    // CLKN: prefer Jupiter's authoritative price/mc/liq/change (artifact-free), same
-    // as we do for volume. PROJECT TOKENS (CUNA etc.): price/liquidity/change stay
-    // DexScreener, but MC/FDV come from JUPITER — owner ask 2026-08-21 (evening),
-    // superseding the same-day "mirror DexScreener verbatim" call: the community is
-    // burning supply daily and DexScreener's supply snapshot lags the chain, while
-    // Jupiter tracks live supply so burns show up immediately. Don't flip this back
-    // without an owner ask.
-    if (mint === CLKN_MINT_ADDR) {
-      try {
-        const jd = await jupTokensSearch(mint);
-        const t = Array.isArray(jd) ? (jd.find(x => x.id === mint) || jd[0]) : null;
-        if (t && Number(t.usdPrice) > 0) {
-          out.priceUsd = Number(t.usdPrice);
-          if (Number(t.mcap || t.fdv) > 0) out.mc = Number(t.mcap || t.fdv);
-          if (Number(t.fdv || t.mcap) > 0) out.fdv = Number(t.fdv || t.mcap);
-          if (Number.isFinite(Number(t.liquidity))) out.liqUsd = Math.round(Number(t.liquidity));
-          out.change = {
-            h1: t.stats1h?.priceChange != null ? Number(t.stats1h.priceChange) : out.change.h1,
-            h6: t.stats6h?.priceChange != null ? Number(t.stats6h.priceChange) : out.change.h6,
-            h24: t.stats24h?.priceChange != null ? Number(t.stats24h.priceChange) : out.change.h24,
-          };
-        }
-      } catch (_) {}
-    } else {
-      try {
-        const jd = await jupTokensSearch(mint);
-        const t = Array.isArray(jd) ? (jd.find(x => x.id === mint) || jd[0]) : null;
-        if (t) {
-          if (Number(t.mcap || t.fdv) > 0) out.mc = Number(t.mcap || t.fdv);
-          if (Number(t.fdv || t.mcap) > 0) out.fdv = Number(t.fdv || t.mcap);
-        }
-      } catch (_) {}
-    }
-    return out;
-  } catch (e) { console.warn("[TELEGRAM] market fetch failed:", e.message); return null; }
+  } else {
+    // DexScreener unavailable/empty — blank shell so the Jupiter branch below can still
+    // populate price (CLKN) or mc/fdv (project tokens), rather than the whole read being lost.
+    out = { priceUsd: null, mc: null, fdv: null, liqUsd: 0, vol24h: 0, change: {} };
+  }
+  // CLKN: prefer Jupiter's authoritative price/mc/liq/change (artifact-free), same
+  // as we do for volume. PROJECT TOKENS (CUNA etc.): price/liquidity/change stay
+  // DexScreener, but MC/FDV come from JUPITER — owner ask 2026-08-21 (evening),
+  // superseding the same-day "mirror DexScreener verbatim" call: the community is
+  // burning supply daily and DexScreener's supply snapshot lags the chain, while
+  // Jupiter tracks live supply so burns show up immediately. Don't flip this back
+  // without an owner ask.
+  if (mint === CLKN_MINT_ADDR) {
+    try {
+      const jd = await jupTokensSearch(mint);
+      const t = Array.isArray(jd) ? (jd.find(x => x.id === mint) || jd[0]) : null;
+      if (t && Number(t.usdPrice) > 0) {
+        out.priceUsd = Number(t.usdPrice);
+        if (Number(t.mcap || t.fdv) > 0) out.mc = Number(t.mcap || t.fdv);
+        if (Number(t.fdv || t.mcap) > 0) out.fdv = Number(t.fdv || t.mcap);
+        if (Number.isFinite(Number(t.liquidity))) out.liqUsd = Math.round(Number(t.liquidity));
+        out.change = {
+          h1: t.stats1h?.priceChange != null ? Number(t.stats1h.priceChange) : out.change.h1,
+          h6: t.stats6h?.priceChange != null ? Number(t.stats6h.priceChange) : out.change.h6,
+          h24: t.stats24h?.priceChange != null ? Number(t.stats24h.priceChange) : out.change.h24,
+        };
+      }
+    } catch (e) { console.warn("[TELEGRAM] Jupiter market fetch failed:", e.message); }
+  } else {
+    try {
+      const jd = await jupTokensSearch(mint);
+      const t = Array.isArray(jd) ? (jd.find(x => x.id === mint) || jd[0]) : null;
+      if (t) {
+        if (Number(t.mcap || t.fdv) > 0) out.mc = Number(t.mcap || t.fdv);
+        if (Number(t.fdv || t.mcap) > 0) out.fdv = Number(t.fdv || t.mcap);
+      }
+    } catch (e) { console.warn("[TELEGRAM] Jupiter market fetch failed:", e.message); }
+  }
+  // Total failure only when NEITHER source produced anything usable.
+  if (!data.length && !(out.priceUsd > 0) && !(out.mc > 0)) return null;
+  return out;
 }
 
 // Jupiter's organic score for CLKN (0–100 + a high/medium/low label). It's
