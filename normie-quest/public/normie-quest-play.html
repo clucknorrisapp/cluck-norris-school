@@ -2207,7 +2207,17 @@ function nqWorldAllowed(def){
     // bailout below before this check ever ran (audit polish: silent bypass for any future link).
     if(window.__NQ_FORCE_VIP&&(function(){try{return localStorage.getItem('nqLabTune')==='1';}catch(e){return false;}})()) return true;   // QA lever — designer lab only, not the tester lane
     var vipOK=false; try{ vipOK=!!(typeof window.__NQ_VIP==='function'&&window.__NQ_VIP()); }catch(e){}
-    if(!vipOK) return false;
+    if(!vipOK){
+      // LIVE TERMS FIX (multi-agent review, 2026-08-30 — CRITICAL): "$50 → everything (13-21)"
+      // is the public promise, but every 13-21 level carries vip:true from the pre-launch "VIP
+      // LEAGUES" model, and this branch used to demand the manual VIP GRANT — so exactly the
+      // wallets that paid the most bounced off the wing they were promised. Tier-2 ('all'
+      // access) now clears the NUMBERED vip worlds; the hidden non-numeric VIP rooms stay
+      // grant-only (they are allowlist perks, not part of the 13-21 promise).
+      var mvn=/^(\d+)-/.exec((def&&def.name)||'');
+      var acc2=null; try{ acc2=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
+      if(!(mvn && acc2==='all')) return false;
+    }
     // the launch cap outranks the VIP grant too — "nobody past world N" has to mean nobody
     if(cap){ var mv=/^(\d+)-/.exec((def&&def.name)||''); if(mv && +mv[1]>cap) return false; }
     return true;
@@ -5955,7 +5965,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // home was advanceLevel(), which only boss defeats reach, so it was dead code (audit #25).
       // Non-boss levels complete HERE; same guards as the boss path (never in the lab, never for VIP).
       try{ if(!this._labWarp && nqShouldPitch(this.levelIdx) && !nqIsVipOrAll()){ nqMarkPitch(this.levelIdx); this.scene.start('VipPitch',{next:next,score:this.score}); return; } }catch(e){}
-      if(next<LEVELS.length) this.scene.start('Game',{level:next,score:this.score,lives:3,lab:(this._labWarp?1:undefined)}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
+      // BETWEEN-LEVEL BEAT (multi-agent review 2026-08-30, HIGH): ordinary clears used to jump
+      // Game→Game, so the LevelClear rotation (nation/fact/board/giveaway — the owner's "fun
+      // screens between levels") only ever ran on the boss path, where WorldClear/Briefing eat
+      // it until deep VIP. Route through LevelClear like the boss else-branch does; it is
+      // skippable and auto-advances, so pacing cost is 3-4.6s and a tap skips it instantly.
+      if(next<LEVELS.length) this.scene.start('LevelClear',{next:next,score:this.score,lab:(this._labWarp?1:undefined),cleared:(this.def&&this.def.name)||''}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
   },
   gameOver:function(reason){ if(this.over) return; this.over=true; this.physics.pause();
     try{ window.__NQ_LIVE=null; }catch(e){}   // run is over — closing the tab from the game-over card is not an abandon
@@ -6876,7 +6891,13 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.drawHills();
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setDepth(40);
     var adv=function(){ if(self.done) return; if(self.phase===0){ self.t0=self.time.now-3300; } else { self.goNext(); } };
-    this.input.on('pointerdown',adv); this.input.keyboard.on('keydown',adv); this.adv=adv;
+    // keyboard was the one unlatched input (review 2026-08-30, MED): OS auto-repeat from a key
+    // still held at the boss kill fired adv twice in consecutive frames and blew through the
+    // celebration AND the travel page (with the giveaway card on it) unseen. Match the pad
+    // path: drop repeats, and require 500ms on-screen before a key counts.
+    this.input.on('pointerdown',adv);
+    this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; adv(); });
+    this.adv=adv;
   },
   goNext:function(){ if(this.done) return; this.done=true;
     if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[this.nextLevel]) this.scene.start('Briefing',{next:this.nextLevel,score:this.score,lab:this.lab});
@@ -7190,7 +7211,8 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
       {fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#ff9500',align:'center',wordWrap:{width:W-24}}).setOrigin(.5);
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
     this.input.on('pointerdown',function(){ self.go(); });
-    this.input.keyboard.on('keydown',function(){ self.go(); });
+    // drop key auto-repeat + 500ms grace (review 2026-08-30): a held key must not skip the briefing
+    this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; self.go(); });
     padAdvance(this, function(){ self.go(); });   // controller button also starts
   },
   go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
@@ -7262,7 +7284,11 @@ function nqCardImage(scene,x,y,maxH,place){
     if(!scene.sys) return;
     if(async && !scene.sys.isActive()) return;
     if(!scene.textures.exists(K)) return;
-    var im=scene.add.image(x,y,K); if(im.height) im.setScale(maxH/im.height);
+    var im=scene.add.image(x,y,K);
+    // clamp BOTH axes (review 2026-08-30): height-only scaling let a landscape/banner image
+    // overflow sideways into the panel copy; budget the width at 3/4 of the height slot (a
+    // portrait trading card is ~0.71 w/h, so real cards are untouched).
+    if(im.height&&im.width) im.setScale(Math.min(maxH/im.height,(maxH*0.75)/im.width));
     im.setDepth(6);
     if(place) place(im);
   };
@@ -7430,13 +7456,16 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(cx,216,_lounge?'🏛  SEE THE LOUNGE':'🪙  GRAB $NORMIE',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:_lounge?'#ffffff':'#0a0813'}).setOrigin(.5).setDepth(1);
     buy.on('pointerover',function(){ buy.setScale(1.05); }); buy.on('pointerout',function(){ buy.setScale(1); });
     buy.on('pointerup',function(){ self._buyOpen=true;   // opening a panel must not also advance the beat
+      self.t0=self.time.now;   // and the auto-advance clock restarts — the level must not start under the buy widget (review 2026-08-30)
       if(_lounge){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} } else nqBuyNormie(); });
     this.cont=this.add.text(cx,H-10,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff6e'}).setOrigin(.5);
     var adv=function(){ if(self.done||self._buyOpen){ self._buyOpen=false; return; } self.go(); };
     this._padPrev=true;   // start latched: a direction HELD as the level ended must not insta-skip
     this._adv=adv;
     this.input.on('pointerdown',function(p){ if(buy.getBounds().contains(p.worldX,p.worldY)) return; adv(); });
-    this.input.keyboard.on('keydown',adv);
+    // drop key auto-repeat + 500ms grace (review 2026-08-30): now that this beat runs after EVERY
+    // level, a key held through the door must not skip the card before it renders a single frame
+    this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; adv(); });
     padAdvance(this, adv);
   },
   go:function(){ if(this.done) return; this.done=true; SFX.power();

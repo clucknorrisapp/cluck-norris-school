@@ -38,6 +38,16 @@ function adminOK(req) {
   const want = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
   return !!want && k === want;
 }
+// MASTER KEY ONLY (security review 2026-08-30): adminOK's own header says the feedback key is
+// "no funds/PII" trust — but adminOK was gating the prizes console (DECRYPTED shipping
+// addresses), the board wipe, and the paywall gate. Latent today (feedback key unset collapses
+// to the master key) but a set NQ_FEEDBACK_KEY would hand playtest-tier trust all three. Use
+// this for anything touching PII, the live contest, or money-adjacent switches.
+function masterOK(req) {
+  const k = String((req.query && req.query.key) || req.get('x-nq-key') || '');
+  const want = process.env.PREMIUM_ACCESS_KEY || '';
+  return !!want && k === want;
+}
 // Coarse device class from the request UA — 'mobile' or 'desktop', nothing finer. The journey
 // store keeps only this word, never the raw user-agent, so "were those players on phones?" is
 // answerable without collecting PII. Known blind spot: iPadOS in desktop mode reports itself
@@ -535,7 +545,7 @@ router.post('/api/nq/claim', async (req, res) => {
 // the archive-first reset button plus every archive the resets have written.
 router.get('/normie-quest-x7/prizes', async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  if (!adminOK(req)) return res.status(404).send('Not found');
+  if (!masterOK(req)) return res.status(404).send('Not found');
   const key = esc(String((req.query && req.query.key) || ''));
   const ago = (t) => {
     if (!t) return '—';
@@ -661,7 +671,7 @@ router.get('/normie-quest-x7/prizes', async (req, res) => {
 // without the admin key and refuses without confirm=RESET, so a crawler or prefetch can't wipe it.
 router.get('/api/nq/leaderboard/reset', async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   if (String((req.query && req.query.confirm) || '') !== 'RESET') {
     return res.status(400).json({ ok: false, error: 'add &confirm=RESET to archive the current board and wipe it' });
   }
@@ -685,7 +695,7 @@ router.get('/api/nq/leaderboard/reset', async (req, res) => {
 router.get('/api/nq/gate', (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   res.set('Cache-Control', 'no-store');
-  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   const q = req.query || {};
   try {
     if (String(q.reset || '') === '1') return res.json({ ok: true, changed: true, gate: wallet.gate.clearOverride() });
