@@ -26,9 +26,18 @@ process.env.NQ_PRIZE_RANKS = '2';
 process.env.DATA_DIR = path.join(os.tmpdir(), 'nqclaimtest-' + crypto.randomBytes(4).toString('hex'));
 
 // Virtual clock (same pattern as nq-leaderboard-test): all modules read Date.now() live.
+// ANCHORED TO MID-WEEK (flake found 2026-08-30, Sunday ~23:54 UTC): this suite seeds "last
+// week's" board at clockOffset=-WEEK_MS and asserts against lastCompletedWeek(). Run within
+// minutes of the real Monday-00:00-UTC rollover, the boundary moved MID-RUN and four
+// assertions chased a different week than the seeds landed in — the same code had passed
+// 15/15 half an hour earlier. BASE pins the whole run to Thursday 12:00 UTC of the current
+// leaderboard week (weeks run Mon 00:00 UTC; same formula as nq-leaderboard weekStartMs), so
+// the suite is deterministic at any wall time. clockOffset stays the test's relative dial.
 const realNow = Date.now;
+const _d0 = new Date(realNow());
+const BASE = Date.UTC(_d0.getUTCFullYear(), _d0.getUTCMonth(), _d0.getUTCDate() - ((_d0.getUTCDay() + 6) % 7), 0, 0, 0, 0) + 3.5 * 24 * 60 * 60 * 1000;
 let clockOffset = 0;
-Date.now = function () { return realNow() + clockOffset; };
+Date.now = function () { return BASE + clockOffset; };
 function playFor(ms) { clockOffset += ms; }
 
 const lb = require('../nq-leaderboard.js');
