@@ -14760,6 +14760,11 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
       }
     } catch (e) { console.warn("[TELEGRAM] Jupiter market fetch failed:", e.message); }
   } else {
+    // MC is JUPITER-ONLY for project tokens (owner ask, 2026-08-30): DexScreener reports
+    // mc == fdv for CUNA (no locked-supply awareness — confirmed live, ~4x inflated), so a
+    // DexScreener-seeded out.mc must never leak through on a Jupiter miss or failure. Clear
+    // it up front; only a successful Jupiter read is allowed to set it again.
+    out.mc = null;
     try {
       const jd = await jupTokensSearch(mint);
       const t = Array.isArray(jd) ? (jd.find(x => x.id === mint) || jd[0]) : null;
