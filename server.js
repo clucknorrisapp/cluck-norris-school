@@ -1290,6 +1290,9 @@ function roseEngineConfigRatchet() {
     // side, USDC is. Buyback here would convert the quote-side dry powder into MORE ROSE.
     // Flip it on (small caps are pre-seeded below) only if ROSE inventory actually runs dry.
     buybackEnabled: false,
+    // Scale-up trickle (owner, 2026-08-31): while balanced, convert idle ROSE → USDC in
+    // small impact-guarded clips so the balance-driven sizing scales all three pools up.
+    scaleUpUsdPerCycle: 25, scaleUpDailyCapUsd: 150,
   };
   const patch = {};
   for (const k of Object.keys(want)) if (c[k] !== want[k]) patch[k] = want[k];
