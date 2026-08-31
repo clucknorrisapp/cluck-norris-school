@@ -173,8 +173,15 @@ The owner manages all liquidity positions **manually**. Read freely; touch nothi
   **ON BY DEFAULT** (owner's explicit go, same day) with buyback enabled (excess USDC → POKE);
   the pools' ask side is the sell direction — the swap layer never market-dumps the token.
   Instant stop: `/api/whirlpool/vault/pause?project=poke`; durable stop: `POKE_ENGINE_OFF=1`.
-- ⛔ **The brand bag is NEVER sold.** And **never buy CLKN with operator funds** without asking in
-  that moment (owner rule, after unwanted inventory buys).
+- ⛔ **The brand bag is protected — with ONE owner-defined carve-out (2026-08-31).** The original
+  bag is never sold. But the owner revised the blanket rule: a tight-quoting engine that ABSORBS
+  someone's sell may sell that absorbed inventory back to recoup its quote funds ("those sells
+  would show up on the chart anyway — it's only fair we recoup as our base funds for volume").
+  Mechanism: `/api/whirlpool/vault/recoup-baseline?project=…&arm=1` snapshots current holdings as
+  a protected baseline; `manualSwap` then allows selling ONLY the amount above it. Disarmed +
+  baseline-less = the historic never-sell behavior, and that is the default everywhere. Also:
+  **never buy CLKN with operator funds** without asking in that moment (owner rule, after
+  unwanted inventory buys).
 - ⛔ **The autonomous rebalancer is hard-killed in code** (`JUP_AUTO_REBALANCE_KILLED = true`).
   Re-enabling is a deliberate two-step opt-in. Don't, without an explicit ask.
 - **Read balances ON-CHAIN, never with the product tools.** `/api/wallet-xray` and autopsy are
