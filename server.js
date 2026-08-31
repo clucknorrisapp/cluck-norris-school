@@ -1202,13 +1202,15 @@ if (!dncHardKilled()) {
 // ROSE/SOL 4RcVUN5i… — both created 2026-08-19, tickSpacing 1, verified on-chain) that
 // recenter early and often so 1bp routing wins aggregator flow and the arbs do the volume.
 //
-// OPERATOR: the EXISTING `rose` project + MM_OPERATOR_SECRET_ROSE (7W3tY…doJ5) — its own
-// wallet, deliberately NOT the treasury. The CUNA block above records why: POKEAHOE runs
-// live on the treasury key at 2-min cadence with usdcFloor 0 / maxUsd 99999, so any
-// USDC/SOL parked there for ROSE is absorbed into the POKE pools before this engine could
-// pair it. Float for THIS engine funds 7W3tY…doJ5 directly.
-// ⚠ SHARED-FLOAT: `rose-ray` (Raydium) uses the SAME wallet. It is unscheduled/inert —
-// keep it that way, or give it its own wallet before ever arming both.
+// OPERATOR: the CUNA engine wallet (owner, 2026-08-31: "It's in the Cuna engine wallet" —
+// verified on-chain holding 2.74M ROSE + USDC + SOL at build time). NOT the treasury: the
+// CUNA block above records why — POKEAHOE runs live on the treasury key at 2-min cadence
+// with usdcFloor 0 / maxUsd 99999 and would absorb any quote float parked there.
+// ⚠ SHARED-FLOAT (the DNC block's discipline applies here verbatim): CUNA and DNC sign
+// with this SAME wallet. Both are disarmed (CUNA pulled 2026-08-26; DNC engine-off +
+// tick-flag disarmed 2026-08-31). Arm ONE engine on this wallet at a time — two armed
+// engines each deploy float the other already counted and fight over the same coins.
+// `rose-ray` (Raydium) also exists on MM_OPERATOR_SECRET_ROSE; it stays unscheduled.
 // ⚠ ALERTS: the rose project's telegramChatId is the PUBLIC OnlyRose room (the buy bot
 // posts there). Roll/ops alerts must never land in a community room (2026-08-20 lesson),
 // so notifyRolls stays OFF here; do not flip it on without rebinding to a private chat.
@@ -1231,17 +1233,23 @@ function roseEngineSetArmed(on) { kv.set(ROSE_ARM_KEY, !!on); return roseEngineA
 // /api/whirlpool/vault/config?project=rose&durable=1 sticks on every field not named here —
 // and when the owner retunes a named field, update this block in the same breath.
 function roseEngineConfigRatchet() {
-  // The `rose` project predates this engine (registered 2026-08; operator + quotes correct).
-  // If a fresh KV ever loses it, re-register the full record — explicitly passing operatorEnv,
-  // because registerProject resets it to the id-derived default when omitted.
-  if (!whirlpoolMM.vault.getProject("rose")) {
+  // The engine signs with the CUNA WALLET's key (owner call above), so the `rose` project —
+  // which predates this engine bound to MM_OPERATOR_SECRET_ROSE — is re-registered onto the
+  // CUNA operator env whenever it drifts. operatorEnv passed EXPLICITLY every time:
+  // registerProject resets it to the id-derived default when omitted (the trap the poke
+  // ratchet documents). telegramChatId is preserved by register's own prev-fallback.
+  const wantEnv = process.env.CUNA_OPERATOR_ENV || "MM_OPERATOR_SECRET_CUNA";
+  const proj = whirlpoolMM.vault.getProject("rose");
+  if (!proj || proj.operatorEnv !== wantEnv) {
     whirlpoolMM.vault.registerProject({
-      id: "rose", label: "OnlyRose", symbol: "ROSE",
+      id: "rose", label: (proj && proj.label) || "OnlyRose", symbol: (proj && proj.symbol) || "ROSE",
       tokenMint: "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF", decimals: 9,
       quoteMints: ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "So11111111111111111111111111111111111111112"],
-      venue: "orca", operatorEnv: "MM_OPERATOR_SECRET_ROSE",
-      telegramChatId: "-1002625127458",
+      venue: "orca", operatorEnv: wantEnv,
+      telegramChatId: (proj && proj.telegramChatId) || "-1002625127458",
+      ownerWallet: (proj && proj.ownerWallet) || null,
     });
+    console.log(`[rose-engine] project bound to operator env ${wantEnv}`);
   }
   const c = whirlpoolMM.vault.getConfig("rose");
   const want = {
