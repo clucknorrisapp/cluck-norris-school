@@ -1264,7 +1264,11 @@ function roseEngineConfigRatchet() {
       // brand bag, so the engine may sell it (manualSwap) as well as buy; the SOL↔USDC swap
       // layer covers the quote side. The CLKN brand-bag rule is untouched by this.
       tokenSellOk: true,
-      telegramChatId: (proj && proj.telegramChatId) || "-1002625127458",
+      // Vault notifications MUTED for rose (owner, 2026-08-31: "stop posting liquidity vault
+      // things in main rose room"). "off" = per-project mute in the vault's chatFor(); the buy
+      // bot posts to the OnlyRose room through its OWN path (roseTgSend/ROSE_TG_CHAT_ID), so
+      // buys are unaffected. Default "off" here so a fresh container can't repopulate the room.
+      telegramChatId: (proj && proj.telegramChatId) || "off",
       ownerWallet: (proj && proj.ownerWallet) || null,
     });
     console.log(`[rose-engine] project bound to operator env ${wantEnv} (tokenSellOk on)`);
