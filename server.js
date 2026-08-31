@@ -8721,7 +8721,12 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     if (q.boardpreview === "1") out.boardPreview = cunaGiveaway.boardText();
     if (q.boardoff === "1") { cunaGiveaway.configure({ boardOn: false }); out.config = cunaGiveaway.config(); }
     if (q.boardon === "1") { cunaGiveaway.configure({ boardOn: true }); out.config = cunaGiveaway.config(); }
-    if (q.draw === "1") out.draw = await cunaGiveaway.runDraw({ rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined }, { force: q.force === "1" });
+    if (q.draw === "1") {
+      // &prizes=4000000,3000000,2000000,1000000 — ranked prize amounts, one winner drawn per
+      // entry (owner, 2026-08-31: 4 winners at 4M/3M/2M/1M). Omitted = the lib's default.
+      const prizes = q.prizes ? String(q.prizes).split(",").map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0) : undefined;
+      out.draw = await cunaGiveaway.runDraw({ rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined }, { force: q.force === "1", prizes });
+    }
     out.standings = cunaGiveaway.standings(10);
     res.json(out);
   } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
