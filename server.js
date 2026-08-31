@@ -1196,6 +1196,127 @@ if (!dncHardKilled()) {
 } else {
   console.log("[dnc] DNC_ENGINE_OFF=1 — engine hard-killed, loop not started.");
 }
+// ── ROSE volume engine (owner, 2026-08-30: "narrow range, high volume, .01 fee pools
+// for rose, going for her jup verification") ──────────────────────────────────────────
+// Same play as POKEAHOE/CUNA: two tight 0.01% Orca pools (ROSE/USDC 4f1cZgRA…,
+// ROSE/SOL 4RcVUN5i… — both created 2026-08-19, tickSpacing 1, verified on-chain) that
+// recenter early and often so 1bp routing wins aggregator flow and the arbs do the volume.
+//
+// OPERATOR: the CUNA engine wallet (owner, 2026-08-31: "It's in the Cuna engine wallet" —
+// verified on-chain holding 2.74M ROSE + USDC + SOL at build time). NOT the treasury: the
+// CUNA block above records why — POKEAHOE runs live on the treasury key at 2-min cadence
+// with usdcFloor 0 / maxUsd 99999 and would absorb any quote float parked there.
+// ⚠ SHARED-FLOAT (the DNC block's discipline applies here verbatim): CUNA and DNC sign
+// with this SAME wallet. Both are disarmed (CUNA pulled 2026-08-26; DNC engine-off +
+// tick-flag disarmed 2026-08-31). Arm ONE engine on this wallet at a time — two armed
+// engines each deploy float the other already counted and fight over the same coins.
+// `rose-ray` (Raydium) also exists on MM_OPERATOR_SECRET_ROSE; it stays unscheduled.
+// ⚠ ALERTS: the rose project's telegramChatId is the PUBLIC OnlyRose room (the buy bot
+// posts there). Roll/ops alerts must never land in a community room (2026-08-20 lesson),
+// so notifyRolls stays OFF here; do not flip it on without rebinding to a private chat.
+//
+// Precedence, strongest first (mirrors CUNA/DNC):
+//   1. ROSE_ENGINE_OFF=1 — hard kill in Railway, beats everything.
+//   2. runtime flag      — /api/rose-engine?key=…&on=1 | &off=1
+//   3. default           — OFF. Never trades until somebody says so.
+const ROSE_ARM_KEY = "roseEngineArmed";
+function roseEngineHardKilled() { return process.env.ROSE_ENGINE_OFF === "1"; }
+function roseEngineArmed() {
+  if (roseEngineHardKilled()) return false;
+  const v = kv.get(ROSE_ARM_KEY, null);
+  if (v === null || v === undefined) return process.env.ROSE_ENGINE_ON === "1";
+  return v === true;
+}
+function roseEngineSetArmed(on) { kv.set(ROSE_ARM_KEY, !!on); return roseEngineArmed(); }
+// Volume shape asserted on EVERY boot (the ratchet CUNA needed after deploys silently
+// reverted its widths). Only stamps the keys that are wrong, so live tuning through
+// /api/whirlpool/vault/config?project=rose&durable=1 sticks on every field not named here —
+// and when the owner retunes a named field, update this block in the same breath.
+function roseEngineConfigRatchet() {
+  // The engine signs with the CUNA WALLET's key (owner call above), so the `rose` project —
+  // which predates this engine bound to MM_OPERATOR_SECRET_ROSE — is re-registered onto the
+  // CUNA operator env whenever it drifts. operatorEnv passed EXPLICITLY every time:
+  // registerProject resets it to the id-derived default when omitted (the trap the poke
+  // ratchet documents). telegramChatId is preserved by register's own prev-fallback.
+  const wantEnv = process.env.CUNA_OPERATOR_ENV || "MM_OPERATOR_SECRET_CUNA";
+  const proj = whirlpoolMM.vault.getProject("rose");
+  if (!proj || proj.operatorEnv !== wantEnv || proj.tokenSellOk !== true) {
+    whirlpoolMM.vault.registerProject({
+      id: "rose", label: (proj && proj.label) || "OnlyRose", symbol: (proj && proj.symbol) || "ROSE",
+      tokenMint: "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF", decimals: 9,
+      quoteMints: ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "So11111111111111111111111111111111111111112"],
+      venue: "orca", operatorEnv: wantEnv,
+      // Owner grant 2026-08-31: "move tokens any direction buy sell as needed for rose, can go
+      // between other underlying assets freely" — ROSE is pool-balancing inventory here, not a
+      // brand bag, so the engine may sell it (manualSwap) as well as buy; the SOL↔USDC swap
+      // layer covers the quote side. The CLKN brand-bag rule is untouched by this.
+      tokenSellOk: true,
+      telegramChatId: (proj && proj.telegramChatId) || "-1002625127458",
+      ownerWallet: (proj && proj.ownerWallet) || null,
+    });
+    console.log(`[rose-engine] project bound to operator env ${wantEnv} (tokenSellOk on)`);
+  }
+  const c = whirlpoolMM.vault.getConfig("rose");
+  const want = {
+    pair: "ROSE/USDC", baseEnabled: true,
+    // ±1% on the 0.01% tier — the POKEAHOE volume posture the owner named. tickSpacing 1
+    // places the tight band precisely; 1bp routing undercuts the 25bp Raydium pool so the
+    // aggregators route real third-party flow through us. That flow IS the verification play.
+    feeTierPct: 0.01, widthPct: 1, solFeeTierPct: 0.01, solWidthPct: 1,
+    solEnabled: true, jupEnabled: false,
+    // Thin book: CUNA's numbers, not POKE's — 150bps failed fills on books this size.
+    slippageBps: 250, priceGapGuardPct: 10,
+    // Buyback ON: the operator wallet holds ~no ROSE, so inventory is SOURCED by converting
+    // free USDC (above floor) — without it nothing ever deploys. It only ever BUYS ROSE;
+    // the only selling is the pools' ask side quoting a market.
+    buybackEnabled: true,
+  };
+  const patch = {};
+  for (const k of Object.keys(want)) if (c[k] !== want[k]) patch[k] = want[k];
+  // Caps/tuning seeded only while the vault defaults still hold, so later owner raises stick.
+  if (c.feeTierPct === 0.3 || c.widthPct === 15 || c.widthPct === 10) {
+    Object.assign(patch, {
+      edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 500, minRebalanceIntervalSec: 300,
+      maxActionsPerDay: 96, baseDeployThresholdUsd: 20,
+      solMaxSol: 5, solGasReserve: 0.25, solDeployThreshold: 0.2,
+      swapEnabled: true, poolBalanceTolPct: 10, maxSwapUsdPerCycle: 75, minSwapUsd: 10,
+      usdcFloor: 5, swapSolFloor: 0.3, maxSwapSolPerCycle: 1, swapSlippageBps: 150, maxSwapsPerDay: 24,
+      buybackReserveUsd: 0, maxBuybackUsdPerCycle: 100, minBuybackUsd: 10, maxBuybacksPerDay: 24,
+      buybackMinIntervalSec: 900, buybackSlippageBps: 300,
+      askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
+      notifyRolls: false,   // public room bound — see the ALERTS warning above
+    });
+  }
+  if (Object.keys(patch).length) {
+    whirlpoolMM.vault.setConfig(patch, "rose");
+    console.log("[rose-engine] config ratchet corrected:", Object.keys(patch).join(", "));
+  }
+}
+let roseEngineTickBusy = false;
+async function roseEngineTick() {
+  if (!roseEngineArmed()) return;   // checked EVERY tick — &off=1 stops it inside one cycle
+  if (roseEngineTickBusy) return;   // a slow RPC cycle must not stack a second run
+  roseEngineTickBusy = true;
+  try {
+    roseEngineConfigRatchet();
+    // Rebalance FIRST so free SOL/USDC moves toward the underweight pool before the deploy
+    // ticks absorb it; buyback LAST so it only converts what the pools couldn't pair.
+    try { await whirlpoolMM.vault.rebalancePools({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] rebalance:", e.message); }
+    try { await whirlpoolMM.vault.tick({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] base tick:", e.message); }
+    try { await whirlpoolMM.vault.tickSol({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] sol tick:", e.message); }
+    try { await whirlpoolMM.vault.buyback({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] buyback:", e.message); }
+    try { await whirlpoolMM.vault.flushNotifyDigest({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] digest:", e.message); }
+  } finally { roseEngineTickBusy = false; }
+}
+// The interval always runs; roseEngineTick() is a no-op while disarmed — that is what lets
+// &on=1/&off=1 work without a redeploy. 90s like DNC: ±1% is tight, OOR earns nothing.
+if (!roseEngineHardKilled()) {
+  console.log(`[rose-engine] loop up — currently ${roseEngineArmed() ? "ARMED" : "DISARMED"} (toggle: /api/rose-engine?key=…&on=1|&off=1)`);
+  setInterval(() => roseEngineTick().catch((e) => console.warn("[rose-engine] tick:", e.message)), 90000);
+  setTimeout(() => roseEngineTick().catch((e) => console.warn("[rose-engine] first tick:", e.message)), 35000);
+} else {
+  console.log("[rose-engine] ROSE_ENGINE_OFF=1 — engine hard-killed, loop not started.");
+}
 // 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
 // (8am CT), then amplified by lessonBumpTick (self-replies at later slots tagging
 // different ecosystem groups) instead of posting more new lessons. Odd hour so it
@@ -8465,6 +8586,29 @@ app.get("/api/dnc-engine", (req, res) => {
       pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct,
       feeTierPct: cfg.feeTierPct, maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol,
       note: "armed state is persisted in the KV store; DNC_ENGINE_OFF=1 overrides it",
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get("/api/rose-engine", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    const operator = whirlpoolMM.vault.operatorPubkey("rose");
+    if (req.query.on === "1") {
+      if (roseEngineHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "ROSE_ENGINE_OFF=1 is set in Railway — clear it first." });
+      if (!operator) return res.json({ ok: false, error: "no_operator", detail: "MM_OPERATOR_SECRET_ROSE is not loaded — nothing can sign." });
+      roseEngineConfigRatchet();   // shape asserted BEFORE the first armed tick can deploy
+      roseEngineSetArmed(true);
+    } else if (req.query.off === "1") {
+      roseEngineSetArmed(false);
+    }
+    const cfg = whirlpoolMM.vault.getConfig("rose") || {};
+    res.json({
+      ok: true, armed: roseEngineArmed(), hardKilled: roseEngineHardKilled(), operator: operator || null,
+      pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct,
+      feeTierPct: cfg.feeTierPct, maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol,
+      buybackEnabled: cfg.buybackEnabled,
+      note: "armed state is persisted in the KV store; ROSE_ENGINE_OFF=1 overrides it",
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
