@@ -1322,9 +1322,10 @@ async function roseEngineTick() {
   roseEngineTickBusy = true;
   try {
     roseEngineConfigRatchet();
-    // Rebalance FIRST so free SOL/USDC moves toward the underweight pool before the deploy
-    // ticks absorb it; buyback LAST so it only converts what the pools couldn't pair.
-    try { await whirlpoolMM.vault.rebalancePools({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] rebalance:", e.message); }
+    // Evenness FIRST (owner: "3 even pools — keep them even"): the three-way pass
+    // trims the fattest pool and feeds the leanest EVERY cycle, before the deploy
+    // ticks absorb the float; buyback LAST so it only converts what wasn't paired.
+    try { await whirlpoolMM.vault.evenPools({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] even:", e.message); }
     try { await whirlpoolMM.vault.tick({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] base tick:", e.message); }
     try { await whirlpoolMM.vault.tickSol({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] sol tick:", e.message); }
     // CUNA lesson: jupEnabled in config alone manages nothing — without this call the
