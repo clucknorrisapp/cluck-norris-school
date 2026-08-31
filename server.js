@@ -1199,16 +1199,20 @@ if (!dncHardKilled()) {
 // ── ROSE volume engine (owner, 2026-08-30: "narrow range, high volume" pools for ROSE,
 // going for her Jupiter verification) ─────────────────────────────────────────────────
 // Same play as POKEAHOE/CUNA: tight Orca pools that recenter early and often so cheap-tier
-// routing wins aggregator flow and the arbs do the volume. THREE pools (owner, 2026-08-31):
-// ROSE/USDC + ROSE/SOL + ROSE/JUP, all on FRESH 0.02% (tickSpacing 2) pools created at the
-// live market tick at go-live, starting with very small amounts — the owner's call, to dodge
-// stale-price arbitrage. The two OLD 0.01% pools (ROSE/USDC 4f1cZgRA…, ROSE/SOL 4RcVUN5i…,
-// created 2026-08-19) sit EMPTY with ticks 35%/24% below market; priceGapGuardPct would skip
-// them every cycle anyway. They are abandoned in place — pointing feeTierPct at 0.02 makes
-// resolvePoolAddress manage the fresh pools and never touch them. Go-live runbook:
-// /api/whirlpool/vault/create-pool?project=rose&quote=USDC|SOL|JUP&feeTier=0.02&price=<ROSE
-// usd> (dry first, &run=1 to pay ~0.03 SOL rent each) — ALWAYS pass &price=: Jupiter serves
-// a frozen price for unverified tokens, and ROSE is unverified (that's the whole point).
+// routing wins aggregator flow and the arbs do the volume. THREE pools (owner, 2026-08-31:
+// "mix and match of .01/.02"), starting with very small amounts:
+//   ROSE/USDC — the EXISTING 0.01% pool 4f1cZgRA…, stale-empty 35% below market; its tick
+//               is walked to market ONCE at go-live via /vault/reprice-pool (dust swaps
+//               through zero liquidity — nothing fills; the 0.02% USDC PDA is also occupied
+//               by a stale empty pool, so no fresh-pool escape exists on these tiers).
+//   ROSE/SOL + ROSE/JUP — FRESH 0.02% pools created at the market tick via
+//               /vault/create-pool (the old 0.01% ROSE/SOL pool sits stale-empty 24% low
+//               and is abandoned in place; the 0.02% PDAs were verified free).
+// Go-live runbook (dry first, &run=1 to execute; create costs ~0.03 SOL rent each):
+//   /api/whirlpool/vault/reprice-pool?project=rose&quote=USDC&feeTier=0.01&price=<ROSE usd>
+//   /api/whirlpool/vault/create-pool?project=rose&quote=SOL|JUP&feeTier=0.02&price=<ROSE usd>
+// ALWAYS pass &price= from the live Raydium market: Jupiter serves a frozen price for
+// unverified tokens, and ROSE is unverified (that's the whole point of this engine).
 //
 // OPERATOR: the CUNA engine wallet (owner, 2026-08-31: "It's in the Cuna engine wallet" —
 // verified on-chain holding 2.74M ROSE + USDC + SOL at build time). NOT the treasury: the
@@ -1268,13 +1272,14 @@ function roseEngineConfigRatchet() {
   const c = whirlpoolMM.vault.getConfig("rose");
   const want = {
     pair: "ROSE/USDC", baseEnabled: true,
-    // ±1% on FRESH tiers (owner, 2026-08-31 — see the header note on why not the stale
-    // 0.01% pools). USDC leg runs 0.05%: the 0.02% ROSE/USDC pool ALSO turned out to
-    // already exist on-chain (7QY4CbWq…), empty at a tick 91% below market — same trap,
-    // one tier up — and 0.04% isn't in the vault's tier map. 5bp still undercuts the
-    // 25bp Raydium pool 5×, so aggregators route real third-party flow through us.
-    // That flow IS the verification play. SOL/JUP legs stay 0.02% (those PDAs were free).
-    feeTierPct: 0.05, widthPct: 1, solFeeTierPct: 0.02, solWidthPct: 1,
+    // ±1% mix-and-match of 0.01/0.02 tiers (owner, 2026-08-31). USDC leg: the EXISTING
+    // 0.01% pool (4f1cZgRA…) — its stale empty tick gets walked to market once at
+    // go-live via /api/whirlpool/vault/reprice-pool (the 0.02% ROSE/USDC PDA is ALSO
+    // occupied by a stale empty pool 91% below market, so there is no fresh-USDC-pool
+    // option on these tiers). SOL/JUP legs: FRESH 0.02% pools at the market tick (those
+    // PDAs were free). 1-2bp routing undercuts the 25bp Raydium pool, so aggregators
+    // route real third-party flow through us — that flow IS the verification play.
+    feeTierPct: 0.01, widthPct: 1, solFeeTierPct: 0.02, solWidthPct: 1,
     solEnabled: true,
     // ROSE/JUP: both legs float against USD, so ±1% between them OORs constantly — ±3% is
     // the tightest band that survives a normal day. jupMaxDevPct (default 8%) guards deploys.
