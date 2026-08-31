@@ -445,6 +445,22 @@ router.get("/vault/create-pool", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "create-pool failed" }); }
 });
 
+// GET /api/whirlpool/vault/recoup-baseline?key=&project=…[&arm=1|&disarm=1][&set=<ui amount>]
+// Recoup carve-out (owner, 2026-08-31): arm lets the engine sell project-token
+// inventory it ABSORBED above the recorded baseline (default: current balance at arm
+// time). The bag below the baseline stays unsellable. GET with no flags inspects.
+router.get("/vault/recoup-baseline", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.recoupBaseline({
+      projectId: proj(req),
+      arm: req.query.arm === "1",
+      disarm: req.query.disarm === "1",
+      set: req.query.set != null ? Number(req.query.set) : undefined,
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "recoup-baseline failed" }); }
+});
+
 // GET /api/whirlpool/vault/reprice-pool?key=&project=rose&quote=USDC&feeTier=0.01&price=<usd>[&run=1]
 // Stale-pool recovery: walk an EMPTY pool's tick to the live market with price-limited
 // dust swaps (zero liquidity = nothing fills; each step costs a tx fee). Refuses pools
