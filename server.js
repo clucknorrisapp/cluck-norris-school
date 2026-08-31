@@ -1282,7 +1282,9 @@ function roseEngineConfigRatchet() {
     // 90s tick, rolls cost ~$0.002).
     feeTierPct: 0.01, widthPct: 1, solFeeTierPct: 0.02, solWidthPct: 1,
     solEnabled: true,
-    jupEnabled: true, jupFeeTierPct: 0.02, jupWidthPct: 1,
+    // JUP pool PULLED (owner, 2026-08-31: "pull the Jup pool and pile those funds into
+    // the other two") — its JUP was converted to USDC/SOL; evenPools runs two-pool mode.
+    jupEnabled: false, jupFeeTierPct: 0.02, jupWidthPct: 1,
     // Thin book: CUNA's numbers, not POKE's — 150bps failed fills on books this size.
     slippageBps: 250, priceGapGuardPct: 10,
     // Buyback OFF: the wallet arrived stocked with 2.74M ROSE — inventory is not the scarce
