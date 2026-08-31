@@ -1270,20 +1270,19 @@ function roseEngineConfigRatchet() {
     console.log(`[rose-engine] project bound to operator env ${wantEnv} (tokenSellOk on)`);
   }
   const c = whirlpoolMM.vault.getConfig("rose");
-  const want = {
+  const want = {   // durable overrides (kv ratchetOverrides:rose) are merged over this below
     pair: "ROSE/USDC", baseEnabled: true,
-    // ±1% mix-and-match of 0.01/0.02 tiers (owner, 2026-08-31). USDC leg: the EXISTING
-    // 0.01% pool (4f1cZgRA…) — its stale empty tick gets walked to market once at
-    // go-live via /api/whirlpool/vault/reprice-pool (the 0.02% ROSE/USDC PDA is ALSO
-    // occupied by a stale empty pool 91% below market, so there is no fresh-USDC-pool
-    // option on these tiers). SOL/JUP legs: FRESH 0.02% pools at the market tick (those
-    // PDAs were free). 1-2bp routing undercuts the 25bp Raydium pool, so aggregators
-    // route real third-party flow through us — that flow IS the verification play.
+    // Mix-and-match 0.01/0.02 tiers (owner, 2026-08-31): USDC leg on the fresh canonical
+    // 0.01% pool, SOL/JUP legs on fresh 0.02% pools — all created at the market tick at
+    // go-live. 1-2bp routing undercuts the 25bp Raydium pool, so aggregators route real
+    // third-party flow through us — that flow IS the verification play.
+    // UNIFORM ±1% bands on ALL pools (owner, 2026-08-31: "should be same across all
+    // pools… leave at 1 percent plus minus" — the ±3% JUP band was too wide to produce;
+    // every 1% move triggers a recenter and hands arbs a fresh trade, OOR lasts one
+    // 90s tick, rolls cost ~$0.002).
     feeTierPct: 0.01, widthPct: 1, solFeeTierPct: 0.02, solWidthPct: 1,
     solEnabled: true,
-    // ROSE/JUP: both legs float against USD, so ±1% between them OORs constantly — ±3% is
-    // the tightest band that survives a normal day. jupMaxDevPct (default 8%) guards deploys.
-    jupEnabled: true, jupFeeTierPct: 0.02, jupWidthPct: 3,
+    jupEnabled: true, jupFeeTierPct: 0.02, jupWidthPct: 1,
     // Thin book: CUNA's numbers, not POKE's — 150bps failed fills on books this size.
     slippageBps: 250, priceGapGuardPct: 10,
     // Buyback OFF: the wallet arrived stocked with 2.74M ROSE — inventory is not the scarce
@@ -1294,6 +1293,11 @@ function roseEngineConfigRatchet() {
     // small impact-guarded clips so the balance-driven sizing scales all three pools up.
     scaleUpUsdPerCycle: 25, scaleUpDailyCapUsd: 150,
   };
+  // Live tuning via /api/whirlpool/vault/config?project=rose&durable=1 lands in the
+  // ratchetOverrides:rose kv table — merge it OVER the code defaults so a durable owner
+  // tune is never silently stamped back by this ratchet (the exact config-revert trap
+  // CLAUDE.md warns about; it re-bit on the band widths, 2026-08-31).
+  Object.assign(want, kv.get("ratchetOverrides:rose", {}) || {});
   const patch = {};
   for (const k of Object.keys(want)) if (c[k] !== want[k]) patch[k] = want[k];
   // Caps/tuning seeded only while the vault defaults still hold, so later owner raises stick.
