@@ -1268,10 +1268,13 @@ function roseEngineConfigRatchet() {
   const c = whirlpoolMM.vault.getConfig("rose");
   const want = {
     pair: "ROSE/USDC", baseEnabled: true,
-    // ±1% on the FRESH 0.02% tier (owner, 2026-08-31 — see the header note on why not the
-    // stale 0.01% pools). 2bp still massively undercuts the 25bp Raydium pool, so the
-    // aggregators route real third-party flow through us. That flow IS the verification play.
-    feeTierPct: 0.02, widthPct: 1, solFeeTierPct: 0.02, solWidthPct: 1,
+    // ±1% on FRESH tiers (owner, 2026-08-31 — see the header note on why not the stale
+    // 0.01% pools). USDC leg runs 0.05%: the 0.02% ROSE/USDC pool ALSO turned out to
+    // already exist on-chain (7QY4CbWq…), empty at a tick 91% below market — same trap,
+    // one tier up — and 0.04% isn't in the vault's tier map. 5bp still undercuts the
+    // 25bp Raydium pool 5×, so aggregators route real third-party flow through us.
+    // That flow IS the verification play. SOL/JUP legs stay 0.02% (those PDAs were free).
+    feeTierPct: 0.05, widthPct: 1, solFeeTierPct: 0.02, solWidthPct: 1,
     solEnabled: true,
     // ROSE/JUP: both legs float against USD, so ±1% between them OORs constantly — ±3% is
     // the tightest band that survives a normal day. jupMaxDevPct (default 8%) guards deploys.
