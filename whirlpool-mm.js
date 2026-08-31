@@ -445,6 +445,24 @@ router.get("/vault/create-pool", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "create-pool failed" }); }
 });
 
+// GET /api/whirlpool/vault/reprice-pool?key=&project=rose&quote=USDC&feeTier=0.01&price=<usd>[&run=1]
+// Stale-pool recovery: walk an EMPTY pool's tick to the live market with price-limited
+// dust swaps (zero liquidity = nothing fills; each step costs a tx fee). Refuses pools
+// holding any active liquidity. &price= is REQUIRED (Jupiter freezes unverified tokens).
+// DRY RUN unless run=1.
+router.get("/vault/reprice-pool", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.repricePool({
+      projectId: proj(req),
+      quoteSym: String(req.query.quote || "USDC").toUpperCase(),
+      feeTierPct: Number(req.query.feeTier ?? req.query.fee ?? 0.01),
+      priceUsd: req.query.price != null ? Number(req.query.price) : undefined,
+      dryRun: req.query.run !== "1",
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "reprice failed" }); }
+});
+
 // GET /api/whirlpool/vault/close-position?key=&project=&mint=…[&run=1]
 // Close a specific position (orphan cleanup / wind-down). DRY unless run=1.
 router.get("/vault/close-position", async (req, res) => {
