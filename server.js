@@ -1240,16 +1240,21 @@ function roseEngineConfigRatchet() {
   // ratchet documents). telegramChatId is preserved by register's own prev-fallback.
   const wantEnv = process.env.CUNA_OPERATOR_ENV || "MM_OPERATOR_SECRET_CUNA";
   const proj = whirlpoolMM.vault.getProject("rose");
-  if (!proj || proj.operatorEnv !== wantEnv) {
+  if (!proj || proj.operatorEnv !== wantEnv || proj.tokenSellOk !== true) {
     whirlpoolMM.vault.registerProject({
       id: "rose", label: (proj && proj.label) || "OnlyRose", symbol: (proj && proj.symbol) || "ROSE",
       tokenMint: "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF", decimals: 9,
       quoteMints: ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "So11111111111111111111111111111111111111112"],
       venue: "orca", operatorEnv: wantEnv,
+      // Owner grant 2026-08-31: "move tokens any direction buy sell as needed for rose, can go
+      // between other underlying assets freely" — ROSE is pool-balancing inventory here, not a
+      // brand bag, so the engine may sell it (manualSwap) as well as buy; the SOL↔USDC swap
+      // layer covers the quote side. The CLKN brand-bag rule is untouched by this.
+      tokenSellOk: true,
       telegramChatId: (proj && proj.telegramChatId) || "-1002625127458",
       ownerWallet: (proj && proj.ownerWallet) || null,
     });
-    console.log(`[rose-engine] project bound to operator env ${wantEnv}`);
+    console.log(`[rose-engine] project bound to operator env ${wantEnv} (tokenSellOk on)`);
   }
   const c = whirlpoolMM.vault.getConfig("rose");
   const want = {
