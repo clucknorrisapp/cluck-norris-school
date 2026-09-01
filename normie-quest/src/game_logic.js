@@ -7256,6 +7256,7 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     try{ if(window.__NQ_SETUP) _beats.push('preview'); }catch(e){}
     if(nqLbTease()) _beats.push('board');
     if(nqPromoCard()) _beats.push('card');
+    if(nqTerms()) _beats.push('perks');   // holder-perks beat only once LIVE terms have landed — amounts are never hardcoded
     // shuffle the order per session so the sequence FEELS random, while the modulo walk still
     // guarantees every beat appears before any repeats (a pure Math.random pick can starve one)
     var _ord=_turn; try{ _ord=_turn+(parseInt(sessionStorage.getItem('nqLcSeed')||'0',10)||(function(){ var s=1+Math.floor(Math.random()*997); sessionStorage.setItem('nqLcSeed',String(s)); return s; })()); }catch(e){}
@@ -7263,7 +7264,7 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     var prev=(beat==='preview')?nqPreviewPick():null;
     if(beat==='preview'&&!prev) beat='fact';   // preview pool empty for this player -> fact
     var n=nqNationNext();
-    this._hold=(beat==='board'||beat==='card'||beat==='fact')?4600:3000;   // info beats get read time
+    this._hold=(beat==='board'||beat==='card'||beat==='fact'||beat==='perks')?4600:3000;   // info beats get read time
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x151030,1); g.fillRect(0,0,W,26); g.fillRect(0,H-20,W,20);
     this.add.text(cx,13,'LEVEL CLEAR',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
@@ -7303,6 +7304,23 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
       this.add.text(cx+34,142,cd.name,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffffff',align:'center',wordWrap:{width:230}}).setOrigin(.5);
       this.add.text(cx+34,156,cd.copy,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#f2e6ff',align:'center',lineSpacing:1,wordWrap:{width:224}}).setOrigin(.5,0);
       nqCardImage(this,cx-136,156,68,null);   // the real card art, left of the copy
+    } else if(beat==='perks'){
+      // HOLDER-PERKS BEAT (owner ask 2026-09-01: hype the benefits of holding). AGREED access
+      // facts ONLY — tier amounts render LIVE from /api/nq/wallet/config (never hardcoded), and
+      // the copy discipline holds: no reward/prize terms (still unagreed with the NORMIE team).
+      // The VIP Lounge is a live shipped feature for the top tier, so naming it is a fact.
+      var T=nqTerms();
+      var _fmtAmt=function(n){ n=Number(n)||0; return n>=1e6?(Math.round(n/1e5)/10)+'M':n>=1e3?Math.round(n/1e3)+'K':String(Math.round(n)); };
+      var _t1=T.usdPriced?('$'+T.tier1Usd+' $NORMIE'):(_fmtAmt(T.tier1Normie)+' $NORMIE');
+      var _t2=T.usdPriced?('$'+T.tier2Usd+' $NORMIE'):(_fmtAmt(T.tier2Normie)+' $NORMIE');
+      this.add.rectangle(cx,156,W-40,80,0x102a18,0.94).setStrokeStyle(2,0x3dff9e);
+      this.add.text(cx,122,'💎 HOLDER PERKS 💎',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff9e',align:'center'}).setOrigin(.5);
+      var _rows=[['FREE','worlds 1-3','#c9ffe0'],[_t1,'worlds 4-12','#ffd23f'],[_t2,'EVERY world + VIP Lounge','#7fdcff']];
+      for(var pi=0;pi<3;pi++){
+        this.add.text(cx-118,140+pi*15,_rows[pi][0],{fontFamily:'"Press Start 2P"',fontSize:'7px',color:_rows[pi][2]}).setOrigin(0,.5);
+        this.add.text(cx+124,140+pi*15,_rows[pi][1],{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#ffffff'}).setOrigin(1,.5);
+      }
+      this.add.text(cx,190,'just hold — connect any wallet and the doors open',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
     } else {
       // a small marching Normie so the beat feels alive rather than a static card
       this.runner=this.add.image(cx,96,'nrun1'); this.runner.setScale(44/this.runner.height);
