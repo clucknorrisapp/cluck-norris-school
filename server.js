@@ -11373,6 +11373,7 @@ app.get("/api/supply", async (req, res) => {
 const SUPPLY_FEEDS = {
   cuna: { symbol: "CUNA", mint: "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc", cacheKey: "cunaSupplyCacheV1" },
   rose: { symbol: "ROSE", mint: "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF", cacheKey: "roseSupplyCacheV1" },
+  clkn: { symbol: "CLKN", mint: "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", cacheKey: "clknSupplyCacheV1" },   // owner ask 2026-09-01: Jupiter metadata update
 };
 for (const [id, feed] of Object.entries(SUPPLY_FEEDS)) {
   app.get(`/api/${id}/supply`, async (req, res) => {
