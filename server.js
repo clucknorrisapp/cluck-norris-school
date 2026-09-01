@@ -16878,9 +16878,22 @@ app.listen(PORT, () => {
   // key loaded (CLKN via MM_OPERATOR_SECRET; others via their own env var). Sequential
   // per project = naturally staggered for RPC limits. A project with no key is skipped,
   // so registering one is safe until its wallet/key is funded & set.
+  // ONE SCHEDULER PER PROJECT (audit F1, 2026-09-01): rose/cuna/dnc/poke have their own
+  // dedicated loops. When a dedicated loop is the active authority (armed / not env-killed),
+  // this generic 10-min loop must NOT also tick that project — two unlocked schedulers
+  // rolling the same position race setState and manufacture orphaned positions (the $355
+  // incident). A DISARMED dedicated engine falls back to generic management as before.
+  const dedicatedActive = {
+    rose: () => process.env.ROSE_ENGINE_OFF !== "1" && !!kv.get("roseEngineArmed", false),
+    cuna: () => process.env.CUNA_ENGINE_OFF !== "1" && !!kv.get("cunaEngineArmed", false),
+    dnc: () => process.env.DNC_ENGINE_OFF !== "1" && !!kv.get("dncEngineArmed", false),
+    poke: () => process.env.POKE_ENGINE_OFF !== "1", // poke's loop is ON by default (owner)
+  };
   const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {
     const p = whirlpoolMM.vault.getProject(id);
-    return p && p.active !== false && whirlpoolMM.vault.isEnabled(id);
+    if (!(p && p.active !== false && whirlpoolMM.vault.isEnabled(id))) return false;
+    try { if (dedicatedActive[id] && dedicatedActive[id]()) return false; } catch { /* fall through to generic */ }
+    return true;
   });
   const startIds = vaultEnabledIds();
   if (startIds.length) console.log(`[VAULT] enabled — autonomous management every 10m · projects: ${startIds.join(", ")}`);
