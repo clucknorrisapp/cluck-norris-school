@@ -18,6 +18,13 @@ does not tell you how to write software; use your judgement for that.
 > `docs/HANDOFF_2026-08-01.md` is still current for the security follow-ups and the unplayed boss
 > fixes.
 
+> 💼 **Running the Jup-verification service on a client token? Read
+> `docs/CLKN_JUP_VERIFICATION_PROTOCOL.md` first** — the **CLKN Productions Jup Verification
+> Protocol** ("JVP", owner-named 2026-09-01) is the codified engine playbook proven on
+> POKE/CUNA/DNC/ROSE: intake → pools → engine profile → score/holders → ops, plus a traps
+> appendix where every entry cost real money once. Don't improvise a go-live; the sequencing
+> traps in there (arm-first, two-flags, stale PDAs, orphaned positions) all bit within one week.
+
 > 🎮 **Working on Normie Quest? Read `docs/HANDOFF_2026-07-27.md` first.** It carries the branch
 > state, the open decisions, and how to verify a change: `node normie-quest/test/nq-verify.cjs
 > <baseUrl>` reads the diff and picks the right checks. Don't run the full 82-level state test by
