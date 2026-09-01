@@ -7880,13 +7880,28 @@ if(typeof document!=='undefined'){ (function(){
     +'#nqjoyB{width:132px;height:132px;margin:-66px 0 0 -66px;border:3px solid rgba(120,180,255,.42);background:rgba(24,30,54,.32)}'
     +'#nqjoyT{width:60px;height:60px;margin:-30px 0 0 -30px;border:2px solid rgba(61,255,158,.85);background:rgba(61,255,158,.42);box-shadow:0 3px 12px rgba(0,0,0,.4)}'
     +'#nqjoyF{position:fixed;z-index:45;right:18px;bottom:104px;width:70px;height:70px;border-radius:50%;'
-    +'border:2px solid rgba(255,210,63,.6);background:rgba(60,48,10,.5);color:#ffd23f;font:700 24px system-ui;'
-    +'display:none;align-items:center;justify-content:center;touch-action:none;-webkit-user-select:none;user-select:none}';
+    +'border:2px solid rgba(255,210,63,.6);background:rgba(60,48,10,.5);color:#ffd23f;font:700 22px system-ui;'
+    +'display:none;flex-direction:column;align-items:center;justify-content:center;line-height:1;gap:2px;'
+    +'touch-action:none;-webkit-user-select:none;user-select:none}'
+    +'#nqjoyF small{font:700 9px system-ui;letter-spacing:.8px;color:#ffd23f}'
+    // DISCOVERY (owner, 2026-09-01: watched mobile players finish levels never touching the
+    // disc). Until THIS BROWSER has thrown 3 times (persisted), the button pulses and a
+    // callout points at it; after that it never nags again. Animation is CSS-only — no
+    // per-frame JS, nothing on the game loop.
+    +'@keyframes nqjoyPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(255,210,63,.55)}50%{transform:scale(1.12);box-shadow:0 0 0 14px rgba(255,210,63,0)}}'
+    +'#nqjoyF.nq-hint{border-color:#ffd23f;background:rgba(90,70,12,.72);animation:nqjoyPulse 1.6s ease-in-out infinite}'
+    +'@keyframes nqjoyNudge{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}'
+    +'#nqjoyH{position:fixed;z-index:45;right:12px;bottom:186px;pointer-events:none;display:none;'
+    +'font:700 10px "Press Start 2P",monospace;color:#ffd23f;background:rgba(0,0,0,.68);border:1px solid rgba(255,210,63,.5);'
+    +'border-radius:8px;padding:7px 9px;animation:nqjoyNudge 1.2s ease-in-out infinite;text-align:center;line-height:1.5}';
   document.head.appendChild(css);
   var B=document.createElement('div'); B.id='nqjoyB';
   var T=document.createElement('div'); T.id='nqjoyT';
-  var F=document.createElement('button'); F.id='nqjoyF'; F.textContent='◎'; F.setAttribute('aria-hidden','true');
-  document.body.appendChild(B); document.body.appendChild(T); document.body.appendChild(F);
+  var F=document.createElement('button'); F.id='nqjoyF'; F.innerHTML='◎<small>THROW</small>'; F.setAttribute('aria-hidden','true');
+  var H=document.createElement('div'); H.id='nqjoyH'; H.innerHTML='THROW DISC!<br>▼'; H.setAttribute('aria-hidden','true');
+  var thrown=0; try{ thrown=parseInt(localStorage.getItem('nqThrowSeen'),10)||0; }catch(e){}
+  if(thrown<3) F.classList.add('nq-hint');
+  document.body.appendChild(B); document.body.appendChild(T); document.body.appendChild(F); document.body.appendChild(H);
   // Opt-in live debug readout (?joydebug=1) — proves the module loaded + shows touch/flag/pad state.
   var D=null; if(dbg){ D=document.createElement('div'); D.id='nqjoyD';
     D.style.cssText='position:fixed;left:6px;top:2px;z-index:60;font:700 10px/1.35 monospace;color:#3dff9e;background:rgba(0,0,0,.62);padding:3px 6px;border-radius:5px;pointer-events:none;white-space:pre;max-width:70vw';
@@ -7935,12 +7950,16 @@ if(typeof document!=='undefined'){ (function(){
   }
   document.addEventListener('touchend',end,{passive:true});
   document.addEventListener('touchcancel',end,{passive:true});
-  function setF(v){ return function(ev){ ev.preventDefault(); PAD.throw=v; F.style.background=v?'rgba(255,210,63,.55)':'rgba(60,48,10,.5)'; }; }
+  function setF(v){ return function(ev){ ev.preventDefault(); PAD.throw=v; F.style.background=v?'rgba(255,210,63,.55)':'';
+    if(v && thrown<3){ thrown++; try{ localStorage.setItem('nqThrowSeen',String(thrown)); }catch(e){}
+      if(thrown>=3){ F.classList.remove('nq-hint'); H.style.display='none'; } }
+  }; }
   F.addEventListener('touchstart',setF(true),{passive:false});
   F.addEventListener('touchend',setF(false),{passive:false});
   F.addEventListener('touchcancel',setF(false),{passive:false});
   setInterval(function(){ var inGame=gameActive();
     F.style.display=inGame?'flex':'none';
+    H.style.display=(inGame&&thrown<3)?'block':'none';
     if(!inGame){ if(joyId!==null) hideJoy(); jumpIds={}; PAD.jump=PAD.throw=false; }
     if(D) D.textContent='JOY ✓ ev:'+evc+' last:'+lastT+'\n'+(PAD.left?'◄':'·')+(PAD.right?'►':'·')+(PAD.jump?'▲':'·')+(PAD.down?'▼':'·')+(PAD.throw?'◎':'·')+'  pad:'+(window.__NQ_PAD_ACTIVE?1:0)+' game:'+(inGame?1:0)+' w:'+window.innerWidth;
   },160);
