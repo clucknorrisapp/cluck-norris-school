@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>🗂️ JVP Admin — CLKN Productions</title>
+<style>
+  /* Palette + fonts from /theme.css. EVERY client-supplied string on this page goes
+     through CluckUtil.esc — a malicious "project" filling the intake form IS the
+     attacker model, and this admin session is the target. */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); min-height:100vh; font-size:15px; line-height:1.6; }
+  .wrap { max-width:1000px; margin:0 auto; padding:24px 16px 80px; }
+  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:var(--disp); font-size:11px; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:12px; }
+  .header { margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid var(--border); }
+  .header h1 { font-family:var(--disp); font-size:24px; letter-spacing:2px; color:var(--gold); }
+  .header p { font-family:var(--disp); font-size:11px; color:var(--subtext); letter-spacing:3px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px; margin-bottom:16px; }
+  .card-title { font-family:var(--disp); font-size:12px; color:var(--accent); letter-spacing:2px; margin-bottom:12px; font-weight:700; text-transform:uppercase; }
+  .keybar { display:flex; gap:8px; flex-wrap:wrap; }
+  .keybar input { flex:1; min-width:200px; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:var(--mono); font-size:14px; }
+  .btn { border:none; border-radius:9px; padding:11px 16px; font-family:var(--disp); font-size:12px; font-weight:900; letter-spacing:1.5px; cursor:pointer; }
+  .btn-primary { background:var(--gold); color:#1a1205; }
+  .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--subtext); }
+  .btn:hover { opacity:.9; }
+  .btn:disabled { background:rgba(255,255,255,.05); color:var(--muted); border-color:var(--border); cursor:not-allowed; }
+  .error-box { display:none; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); border-radius:9px; padding:12px 14px; font-family:var(--mono); font-size:12px; color:#FCA5A5; margin-bottom:14px; }
+  .error-box.show { display:block; }
+
+  table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px; }
+  th { text-align:left; color:var(--subtext); font-size:10.5px; letter-spacing:1px; padding:8px 8px; border-bottom:1px solid var(--border); }
+  td { padding:9px 8px; border-bottom:1px solid var(--border-soft); color:var(--sub); }
+  tr.row { cursor:pointer; } tr.row:hover td { background:rgba(255,255,255,.02); }
+  .chip { font-family:var(--disp); font-size:9px; letter-spacing:1.2px; padding:3px 8px; border-radius:6px; white-space:nowrap; }
+  .c-submitted { color:#FCD34D; border:1px solid rgba(252,211,77,.45); }
+  .c-needs_info { color:#FCA5A5; border:1px solid rgba(239,68,68,.4); }
+  .c-in_review { color:#93C5FD; border:1px solid rgba(96,165,250,.4); }
+  .c-engine_live { color:#6EE7B7; border:1px solid rgba(16,185,129,.45); }
+  .c-submitted_to_jupiter { color:#C4B5FD; border:1px solid rgba(167,139,250,.45); }
+  .c-verified { color:#6EE7B7; border:1px solid rgba(16,185,129,.7); background:rgba(16,185,129,.1); }
+  .c-rejected, .c-archived { color:var(--muted); border:1px solid var(--border); }
+
+  .drawer { display:none; }
+  .drawer.show { display:block; }
+  .kv { display:grid; grid-template-columns:150px 1fr; gap:5px 12px; font-family:var(--mono); font-size:12.5px; word-break:break-word; }
+  .kv .k { color:var(--subtext); }
+  .kv .v { color:var(--sub); } .kv .v b { color:var(--accent); }
+  .badge-ok { color:#6EE7B7; } .badge-warn { color:#FCD34D; } .badge-bad { color:#FCA5A5; }
+  .gates { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:8px; }
+  .gate { border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-family:var(--mono); font-size:12px; }
+  .gate .g-name { color:var(--subtext); font-size:10px; letter-spacing:1px; }
+  .gate .g-val { font-size:16px; margin-top:2px; }
+  .gate.pass { border-color:rgba(16,185,129,.5); } .gate.pass .g-val { color:#6EE7B7; }
+  .gate.fail { border-color:rgba(252,211,77,.5); } .gate.fail .g-val { color:#FCD34D; }
+  textarea { width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:10px; color:var(--text); font-family:var(--body); font-size:13.5px; min-height:64px; margin-top:6px; }
+  .statusbtns { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .links a { color:#93C5FD; font-family:var(--mono); font-size:12.5px; margin-right:14px; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-home" href="/">← CLUCKNORRIS.APP</a>
+  <div class="header">
+    <h1>JUP VERIFICATION — SUBMISSION QUEUE</h1>
+    <p>CLKN PRODUCTIONS JUP VERIFICATION PROTOCOL · OWNER CONSOLE</p>
+  </div>
+
+  <div class="card" id="keyCard">
+    <div class="card-title">Operator key</div>
+    <div class="keybar">
+      <input type="password" id="keyInput" placeholder="PREMIUM_ACCESS_KEY" autocomplete="off"/>
+      <button class="btn btn-primary" id="loadBtn">LOAD QUEUE</button>
+    </div>
+  </div>
+
+  <div class="error-box" id="errBox"></div>
+
+  <div class="card hidden" id="queueCard">
+    <div class="card-title">Submissions <span id="qCount" style="color:var(--subtext)"></span></div>
+    <table>
+      <thead><tr><th>SYMBOL</th><th>NAME</th><th>MINT</th><th>STATUS</th><th>UPDATED</th></tr></thead>
+      <tbody id="qBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card drawer" id="drawer">
+    <div class="card-title">Detail — <span id="dTitle"></span></div>
+    <div class="kv" id="dFields"></div>
+
+    <div class="card-title" style="margin-top:18px">Readiness scorecard <button class="btn btn-ghost" id="scoreBtn" style="float:right">REFRESH</button></div>
+    <div id="scoreBox" style="font-family:var(--mono); font-size:12.5px; color:var(--subtext)">Loads live from Jupiter.</div>
+
+    <div class="card-title" style="margin-top:18px">Actions</div>
+    <div class="links" id="dLinks"></div>
+    <button class="btn btn-ghost" id="copyBtn" style="margin-top:10px">📋 COPY FIELD SET FOR JUPITER</button>
+    <div class="statusbtns" id="statusBtns"></div>
+    <label style="font-family:var(--mono); font-size:11px; color:var(--subtext); display:block; margin-top:14px">Owner notes (private — never shown to the client)</label>
+    <textarea id="ownerNotes"></textarea>
+    <label style="font-family:var(--mono); font-size:11px; color:var(--subtext); display:block; margin-top:10px">Message to client (shows on their status page)</label>
+    <textarea id="clientMessage"></textarea>
+    <button class="btn btn-primary" id="saveBtn" style="margin-top:10px">SAVE NOTES</button>
+    <span id="saveInfo" style="font-family:var(--mono); font-size:12px; color:var(--accent); margin-left:10px"></span>
+  </div>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function(){
+  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
+  var KEY_STORE = 'clkn_jvp_admin_key';
+  var key = '', current = null;
+  var STATUSES = ['submitted','in_review','needs_info','engine_live','submitted_to_jupiter','verified','rejected','archived'];
+
+  function $(id){ return document.getElementById(id); }
+  function showError(m){ var b=$('errBox'); b.textContent=m; b.classList.add('show'); }
+  function clearError(){ $('errBox').classList.remove('show'); }
+  function hdrs(){ return { 'x-premium-key': key }; }
+  function ago(t){ if(!t) return '—'; var m=Math.round((Date.now()-t)/60000); return m<60? m+'m' : m<1440? Math.round(m/60)+'h' : Math.round(m/1440)+'d'; }
+
+  async function loadQueue(){
+    clearError();
+    try{
+      var r = await fetch('/api/jupverify/admin/list', { headers: hdrs() });
+      if(r.status===404) return showError('Key not accepted.');
+      var d = await r.json();
+      if(!d.success) return showError(d.error||'load failed');
+      try{ sessionStorage.setItem(KEY_STORE, key); }catch(_){}
+      $('keyCard').classList.add('hidden');
+      $('queueCard').classList.remove('hidden');
+      $('qCount').textContent = '('+d.submissions.length+')';
+      var tb = $('qBody'); tb.innerHTML='';
+      if(!d.submissions.length){ tb.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">No submissions yet — the intake page is /jupverify.</td></tr>'; }
+      d.submissions.forEach(function(s){
+        var tr = document.createElement('tr'); tr.className='row';
+        tr.innerHTML = '<td><b style="color:var(--accent)">'+esc(s.symbol)+'</b></td>'+
+          '<td>'+esc(s.name)+'</td><td>'+esc(shortAddr(s.mint))+'</td>'+
+          '<td><span class="chip c-'+esc(s.status)+'">'+esc(s.status.replace(/_/g,' ').toUpperCase())+'</span></td>'+
+          '<td>'+ago(s.updatedAt)+'</td>';
+        tr.addEventListener('click', function(){ openDetail(s.id); });
+        tb.appendChild(tr);
+      });
+    }catch(e){ showError('Load failed: '+(e&&e.message||e)); }
+  }
+
+  async function openDetail(id){
+    clearError();
+    try{
+      var r = await fetch('/api/jupverify/admin/entry?id='+encodeURIComponent(id), { headers: hdrs() });
+      var d = await r.json();
+      if(!d.success) return showError(d.error||'entry failed');
+      current = d.submission;
+      renderDetail();
+      $('drawer').classList.add('show');
+      $('drawer').scrollIntoView({behavior:'smooth'});
+      loadScorecard();
+    }catch(e){ showError('Entry failed: '+(e&&e.message||e)); }
+  }
+
+  function renderDetail(){
+    var s = current;
+    $('dTitle').textContent = s.symbol+' · '+s.status.replace(/_/g,' ');
+    var ch = s.chain || {};
+    var authBadge = ch.readAt
+      ? (ch.signerIsUpdateAuth ? '<span class="badge-ok">signer IS the update authority ✓</span>' : '<span class="badge-warn">signer is NOT the update authority — community submission</span>')
+      : '<span class="badge-warn">chain facts unavailable at submit time</span>';
+    // Icon/website rendered as TEXT LINKS only — never auto-load an attacker URL in this session.
+    var rows = [
+      ['Project', '<b>'+esc(s.name)+'</b> ('+esc(s.symbol)+')'],
+      ['Mint', esc(s.mint)],
+      ['Submitter wallet', esc(s.wallet)+' — '+authBadge],
+      ['Description', esc(s.description)],
+      ['Website', '<a href="'+esc(s.website)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(s.website)+'</a>'],
+      ['Icon URL', '<a href="'+esc(s.iconUrl)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(s.iconUrl)+'</a>'+(s.iconPermanent?' <span class="badge-ok">(claimed permanent)</span>':' <span class="badge-warn">(needs Arweave)</span>')],
+      ['X', '@'+esc(s.xHandle)],
+      ['Telegram', s.telegramUrl?'<a href="'+esc(s.telegramUrl)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(s.telegramUrl)+'</a>':'—'],
+      ['Discord', s.discordUrl?esc(s.discordUrl):'—'],
+      ['Other', s.otherUrl?esc(s.otherUrl):'—'],
+      ['Team %', esc(String(s.teamPct==null?'—':s.teamPct))],
+      ['Locks', esc(s.lockInfo||'—')],
+      ['Supply notes', esc(s.supplyNotes||'—')],
+      ['Chain facts', ch.readAt ? ('decimals '+esc(String(ch.decimals))+' · supply '+esc(ch.supplyUi!=null?Number(ch.supplyUi).toLocaleString():'?')+' · mint auth '+(ch.mintAuthNull?'<span class="badge-ok">revoked</span>':'<span class="badge-bad">LIVE</span>')+' · freeze '+(ch.freezeAuthNull?'<span class="badge-ok">revoked</span>':'<span class="badge-bad">LIVE</span>')) : '—'],
+      ['Funding plan', esc(String(s.floatTokens))+' tokens + '+esc(String(s.quoteAmount))+' '+esc(s.quoteAsset)+(s.fundingWallet?' from '+esc(shortAddr(s.fundingWallet)):'')],
+      ['Known pools', esc(s.existingPools||'—')],
+      ['Contact', '@'+esc(s.tgContact)+(s.email?' · '+esc(s.email):'')],
+      ['Notes', esc(s.notes||'—')],
+      ['Timeline', (s.history||[]).map(function(h){ return esc((h.to||'?'))+' '+new Date(h.at).toISOString().slice(0,16).replace('T',' '); }).join(' → ')],
+    ];
+    $('dFields').innerHTML = rows.map(function(r){ return '<div class="k">'+r[0]+'</div><div class="v">'+r[1]+'</div>'; }).join('');
+    $('ownerNotes').value = s.ownerNotes||'';
+    $('clientMessage').value = s.clientMessage||'';
+    $('dLinks').innerHTML =
+      '<a href="https://jup.ag/tokens/'+esc(s.mint)+'" target="_blank" rel="noopener noreferrer">jup.ag</a>'+
+      '<a href="https://dexscreener.com/solana/'+esc(s.mint)+'" target="_blank" rel="noopener noreferrer">dexscreener</a>'+
+      '<a href="https://solscan.io/token/'+esc(s.mint)+'" target="_blank" rel="noopener noreferrer">solscan</a>'+
+      '<a href="/engine-dashboard" target="_blank" rel="noopener noreferrer">engine dashboard</a>';
+    $('statusBtns').innerHTML='';
+    STATUSES.forEach(function(st){
+      if(st===s.status) return;
+      var b = document.createElement('button');
+      b.className='btn btn-ghost'; b.textContent='→ '+st.replace(/_/g,' ').toUpperCase();
+      b.addEventListener('click', function(){ saveEntry({ status: st }); });
+      $('statusBtns').appendChild(b);
+    });
+  }
+
+  async function loadScorecard(){
+    var s = current; if(!s) return;
+    $('scoreBox').textContent = 'Loading live numbers…';
+    try{
+      var r = await fetch('/api/jupverify/admin/scorecard?mint='+encodeURIComponent(s.mint), { headers: hdrs() });
+      var d = await r.json();
+      if(!d.success) { $('scoreBox').textContent = d.error||'scorecard failed'; return; }
+      if(!d.jupiter){ $('scoreBox').textContent = 'Jupiter has no record of this mint yet (not indexed, or too new).'; return; }
+      var g = d.gates||{}, j = d.jupiter;
+      function gate(name, obj, fmt){
+        var pass = obj && obj.pass;
+        return '<div class="gate '+(pass?'pass':'fail')+'"><div class="g-name">'+name+'</div><div class="g-val">'+fmt+'</div></div>';
+      }
+      var html = '<div class="gates">'+
+        gate('HOLDERS ≥250', g.holders, esc(String(g.holders&&g.holders.value!=null?g.holders.value:'—')))+
+        gate('LIQUIDITY ≥$25K', g.liquidity, '$'+esc(String(g.liquidity&&g.liquidity.value!=null?Math.round(g.liquidity.value).toLocaleString():'—')))+
+        gate('SCORE ≥30', g.score, esc(String(g.score&&g.score.value!=null?Math.round(g.score.value*10)/10:'—'))+(g.score&&g.score.label?' ('+esc(g.score.label)+')':''))+
+        '<div class="gate '+(j.isVerified?'pass':'fail')+'"><div class="g-name">VERIFIED</div><div class="g-val">'+(j.isVerified?'YES ✓':'not yet')+'</div></div>'+
+      '</div>';
+      var extra = [];
+      if(j.mcap!=null) extra.push('mcap $'+Math.round(j.mcap).toLocaleString());
+      if(j.audit) extra.push('mint auth disabled: '+(j.audit.mintAuthorityDisabled?'✓':'✗')+' · freeze disabled: '+(j.audit.freezeAuthorityDisabled?'✓':'✗')+' · top holders '+(j.audit.topHoldersPercentage!=null?Math.round(j.audit.topHoldersPercentage)+'%':'—'));
+      if(j.stats24h){ var o=(j.stats24h.buyOrganicVolume||0)+(j.stats24h.sellOrganicVolume||0), t=(j.stats24h.buyVolume||0)+(j.stats24h.sellVolume||0);
+        extra.push('24h vol $'+Math.round(t).toLocaleString()+' — organic $'+Math.round(o).toLocaleString()+' (shown grey vs green honestly, always)'); }
+      if(d.engine) extra.push('ENGINE: project "'+esc(d.engine.projectId)+'" registered'+(d.engine.operatorLoaded?' (operator loaded)':''));
+      $('scoreBox').innerHTML = html + '<div style="margin-top:10px; color:var(--subtext)">'+extra.map(esc0).join('<br>')+'</div>';
+      function esc0(x){ return x; } // pieces above are built from numbers + esc'd ids only
+    }catch(e){ $('scoreBox').textContent = 'scorecard failed: '+(e&&e.message||e); }
+  }
+
+  async function saveEntry(extra){
+    var body = Object.assign({ ownerNotes: $('ownerNotes').value, clientMessage: $('clientMessage').value }, extra||{});
+    try{
+      $('saveInfo').textContent='saving…';
+      var r = await fetch('/api/jupverify/admin/entry?id='+encodeURIComponent(current.id), {
+        method:'POST', headers: Object.assign({'Content-Type':'application/json'}, hdrs()), body: JSON.stringify(body)
+      });
+      var d = await r.json();
+      if(!d.success){ $('saveInfo').textContent=''; return showError(d.error||'save failed'); }
+      current = d.submission; renderDetail(); loadQueue();
+      $('saveInfo').textContent='saved ✓'; setTimeout(function(){ $('saveInfo').textContent=''; }, 2500);
+    }catch(e){ $('saveInfo').textContent=''; showError('save failed: '+(e&&e.message||e)); }
+  }
+
+  // Copy-for-Jupiter: plain text (no HTML context — no escaping needed on copy).
+  $('copyBtn').addEventListener('click', function(){
+    var s = current; if(!s) return;
+    var lines = [
+      'Token mint: '+s.mint, 'Name: '+s.name, 'Symbol: '+s.symbol,
+      'Description: '+s.description, 'Website: '+s.website, 'Icon: '+s.iconUrl,
+      'X: https://x.com/'+s.xHandle,
+      s.telegramUrl?'Telegram: '+s.telegramUrl:'', s.discordUrl?'Discord: '+s.discordUrl:'', s.otherUrl?'Other: '+s.otherUrl:'',
+      'Supply API: https://clucknorris.app/api/<id>/supply  (set up at onboarding)',
+    ].filter(Boolean);
+    CluckUtil.copyText(lines.join('\n'));
+    $('saveInfo').textContent='copied ✓'; setTimeout(function(){ $('saveInfo').textContent=''; }, 2000);
+  });
+
+  $('loadBtn').addEventListener('click', function(){ key = $('keyInput').value.trim(); if(key) loadQueue(); });
+  $('keyInput').addEventListener('keydown', function(e){ if(e.key==='Enter') $('loadBtn').click(); });
+  $('scoreBtn').addEventListener('click', loadScorecard);
+  $('saveBtn').addEventListener('click', function(){ saveEntry(); });
+
+  try{ var saved = sessionStorage.getItem(KEY_STORE); if(saved){ key=saved; $('keyInput').value=saved; loadQueue(); } }catch(_){}
+})();
+</script>
+</body>
+</html>
