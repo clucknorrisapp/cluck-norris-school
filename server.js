@@ -3447,6 +3447,9 @@ app.use("/api/token-card", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 // class. Both were covered only by the global 150/min cap — 10x looser than their siblings. (sec M3)
 app.use("/api/burn-scan", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/wallet-checkup", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+// Owners Snapshot: /start queues an hours-long paced crawl, so it gets its own tight cap; the
+// status/result/history reads are cheap file reads and only need the global /api cap.
+app.use("/api/owners-snapshot/start", rateLimit("ownersstart", { windowMs: 3600000, max: 6 }));
 // Classroom: generous enough for a real multi-turn lesson/exam, tight enough to stop a bot
 // hammering the reward loop. Claim is rare (one per graduation) so it's capped hard.
 app.use("/api/classroom-exam", rateLimit("exam", { windowMs: 60000, max: 25 }));
@@ -14050,6 +14053,78 @@ app.get(["/ask-cluck", "/crypto-school"], (req, res) => {
 });
 
 // -- Trace — wallet × token forensic history (private tool, not linked) --
+// ── Owners Snapshot & History — who's in, who's out, who's draining (FREE, job-based) ──────
+// A token owner submits a mint; the engine (lib/owners-snapshot.js) walks every holder worth
+// more than ~$5, reads each wallet's history for that token, classifies IN / OUT / DRAINING,
+// links wallets (shared first funder, direct transfers, shared cash-out address) and keeps a
+// snapshot history per mint so the owner can diff runs over time.
+//
+// This is the repo's FIRST long-running job pattern. Owner's brief (2026-09-02): "this can
+// take hours if needed to keep price down and free" — so it is one job at a time, every upstream
+// call paced (OWNERS_SNAPSHOT_RPS, default 4/s), progress persisted under DATA_DIR so a redeploy
+// mid-crawl resumes, and the endpoints below are polling endpoints, never request-scoped scans.
+// Free = no tools pass. Abuse control instead: a per-mint 6h cooldown (owner key bypasses), a
+// 12-deep queue, and a tight per-IP cap on /start.
+const ownersSnapshot = require("./lib/owners-snapshot").createEngine({
+  dataDir: process.env.DATA_DIR || "/data",
+  heliusKey: () => process.env.HELIUS_API_KEY,
+  rpcCall: (id, method, params) => heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)(id, method, params),
+  enhancedBatched: (sigs, label, txCache) => heliusEnhancedBatched(sigs, process.env.HELIUS_API_KEY, label, txCache),
+  // Wallet-scoped enhanced history (one page) — used only to follow where a dumper's proceeds went.
+  enhancedAddress: async (wallet, { limit = 100, type = null } = {}) => {
+    const u = new URL(`https://api.helius.xyz/v0/addresses/${wallet}/transactions`);
+    u.searchParams.set("api-key", process.env.HELIUS_API_KEY); u.searchParams.set("limit", String(limit));
+    if (type) u.searchParams.set("type", type);
+    const r = await fetch(u, { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(`helius addresses ${r.status}`);
+    const a = await r.json(); return Array.isArray(a) ? a : [];
+  },
+  jupPriceV3, getSolUsd, classifyAddressTypes, isOnCurve, KNOWN_CEX_WALLETS, KNOWN_SERVICE_WALLETS,
+  log: (m) => console.log("[OWNERS-SNAPSHOT]", m),
+});
+app.get(["/owners-snapshot", "/owners"], (req, res) => {
+  res.sendFile(join(__dirname, "public", "owners-snapshot.html"));
+});
+app.post("/api/owners-snapshot/start", express.json({ limit: "4kb" }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String((req.body && req.body.mint) || req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  const admin = adminAuthOK(req);
+  const out = ownersSnapshot.start({ mint, requestedBy: admin ? "owner" : clientIp(req), force: admin && req.query.force === "1" });
+  if (!out.ok && out.error === "cooldown") return res.status(429).json({ ok: false, error: "cooldown", retryAfterMs: out.retryAfterMs, job: out.job, detail: "This token was snapshotted recently — open the latest result, or re-run after the cooldown." });
+  if (!out.ok && out.error === "queue_full") return res.status(503).json({ ok: false, error: "queue_full", detail: "The crawler queue is full right now — try again in a while." });
+  try { analytics.trackTool("owners-snapshot"); } catch {}
+  res.json(out);
+});
+app.get("/api/owners-snapshot/status", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const jobId = String(req.query.jobId || ""), mint = String(req.query.mint || "");
+  if (mint && !SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  const job = ownersSnapshot.status({ jobId: /^os_[a-z0-9_]+$/i.test(jobId) ? jobId : null, mint: mint || null });
+  res.json({ ok: true, job, running: ownersSnapshot.running, queueLength: ownersSnapshot.queueLength });
+});
+app.get("/api/owners-snapshot/result", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String(req.query.mint || "");
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  const r = ownersSnapshot.result({ mint, ts: req.query.ts ? Number(req.query.ts) : null });
+  if (!r) return res.status(404).json({ ok: false, error: "no_result", detail: "No finished snapshot for this token yet." });
+  res.json({ ok: true, result: r });
+});
+app.get("/api/owners-snapshot/history", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String(req.query.mint || "");
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  res.json({ ok: true, ...ownersSnapshot.history({ mint }) });
+});
+// Owner-only: queue view + cancel.
+app.get("/api/owners-snapshot/admin", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (req.query.cancel) return res.json({ ok: true, cancelled: ownersSnapshot.cancel(String(req.query.cancel)) });
+  res.json({ ok: true, running: ownersSnapshot.running, queueLength: ownersSnapshot.queueLength, recent: ownersSnapshot.listRecent(30) });
+});
+
 app.get("/trace", (req, res) => {
   res.sendFile(join(__dirname, "public", "trace.html"));
 });
@@ -14257,7 +14332,7 @@ const SITEMAP_PAGES = [
   // /autopsy + /order-book left the sitemap 2026-07-29 when they went operator-only,
   // and /grant + /token-vitals were removed outright.
   "/", "/school", "/education", "/tools", "/wallet-xray", "/trace",
-  "/snapshot", "/holders", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
+  "/snapshot", "/holders", "/owners-snapshot", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
   "/wallet-checkup", "/locker-room", "/clkn", "/alpha", "/lp-lab",
   "/classroom", "/bags", "/investors", "/privacy", "/terms",
   // /liquidity + /liquidity-engine dropped 2026-07-19 (audit): both serve a locked
