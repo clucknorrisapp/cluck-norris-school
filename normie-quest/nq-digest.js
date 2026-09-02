@@ -79,7 +79,7 @@ async function run({ send = false, reset = false, notify = null } = {}) {
   const tele = teleBlock(teleSum);
   const maxAt = fresh.reduce((m, c) => Math.max(m, Number(c.at || 0)), since);
   const body = `🎮 <b>Normie Quest — playtest digest</b>\n${fresh.length} new comment${fresh.length === 1 ? "" : "s"} · `
-    + `<a href="https://clucknorris.app/normie-quest-x7/dashboard?key=normiequesttest">full dashboard</a>\n\n${digest}`
+    + `<a href="https://clucknorris.app/normie-quest-x7/dashboard">full dashboard</a>\n\n${digest}`
     + (tele ? `\n\n${tele}` : "");
   result.digest = digest;
   if (send && typeof notify === "function") {

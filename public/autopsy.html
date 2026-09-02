@@ -915,9 +915,10 @@ function render(data) {
   }
 
   // Pool link
-  if (f.topPair && f.topPair.url) {
+  const poolUrl = f.topPair && f.topPair.url ? safeUrl(f.topPair.url) : "#";   // API-supplied link: http(s) only
+  if (poolUrl !== "#") {
     const lnk = $("poolLink");
-    lnk.href = f.topPair.url;
+    lnk.href = poolUrl;
     lnk.style.display = "inline-block";
   } else {
     $("poolLink").style.display = "none";
@@ -946,7 +947,7 @@ function render(data) {
         const adminBadge = c.isAdmin ? ` <span class="badge badge-creator" style="font-size:9px;padding:2px 6px;">👑 ADMIN</span>` : "";
         const royalty = c.royaltyBps ? ` · ${(c.royaltyBps / 100).toFixed(2)}% royalty` : "";
         const walletShort = c.wallet ? c.wallet.slice(0,8) + "…" + c.wallet.slice(-6) : "—";
-        const walletLink = c.wallet ? `<a href="https://solscan.io/account/${c.wallet}" target="_blank" rel="noreferrer">${walletShort}</a>` : walletShort;
+        const walletLink = c.wallet ? `<a href="https://solscan.io/account/${encodeURIComponent(c.wallet)}" target="_blank" rel="noreferrer">${esc(walletShort)}</a>` : walletShort;
         bh += `<div class="bags-creator">${social}${adminBadge}<div class="bags-creator-meta">${walletLink}${royalty}</div></div>`;
       }
     }
@@ -1068,7 +1069,7 @@ function render(data) {
         // source agreeing with our Bags/Pump check raises confidence.
         if (stx.identity && stx.identity.developer) {
           const via = (stx.identity.developer.via || []).join(', ') || 'on-chain';
-          bh += `<div style="margin-top: 6px; font-size: 11px; color: var(--subtext);">🔬 Solana Tracker confirms this wallet as the token's <strong style="color: var(--text);">${via}</strong>.</div>`;
+          bh += `<div style="margin-top: 6px; font-size: 11px; color: var(--subtext);">🔬 Solana Tracker confirms this wallet as the token's <strong style="color: var(--text);">${esc(via)}</strong>.</div>`;
         }
         const stNote = kind === "st-sees-more"
           ? "Solana Tracker's indexer captured more buys than our on-chain trace — both agree on zero sells, so this is just our trace being conservative (we walk a capped signature window). Their fuller count is the better number here."
@@ -1110,7 +1111,7 @@ function render(data) {
         for (const sub of tn.subWallets) {
           const subShort = sub.wallet.slice(0, 6) + "…" + sub.wallet.slice(-4);
           bh += `<div style="padding: 8px 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; font-family: var(--mono); font-size: 11px;">
-            <a href="https://solscan.io/account/${sub.wallet}" target="_blank" rel="noreferrer" style="color: var(--blue); text-decoration: none;">${subShort}</a>
+            <a href="https://solscan.io/account/${encodeURIComponent(sub.wallet)}" target="_blank" rel="noreferrer" style="color: var(--blue); text-decoration: none;">${esc(subShort)}</a>
             <span style="color: var(--subtext);"> · ${sub.buyCount} buys${sub.lockCount > 0 ? ` · ${sub.lockCount} locks (${Math.round(sub.lockedTokens).toLocaleString()} CLKN)` : ''}${sub.boughtSol > 0 ? ` · ${sub.boughtSol.toFixed(2)} SOL spent` : ''}</span>
           </div>`;
         }
@@ -1133,7 +1134,7 @@ function render(data) {
         } else {
           const f = cwp.fundingSource;
           const funderStr = f
-            ? ` It was funded by ${f.label ? `<strong style="color: var(--text);">${f.label}</strong>` : `<a href="https://solscan.io/account/${f.wallet}" target="_blank" rel="noreferrer" style="color: var(--blue); text-decoration: none;">${f.wallet.slice(0,6)}…${f.wallet.slice(-4)}</a>`}${f.solAmount ? ` (${f.solAmount.toFixed(2)} SOL)` : ''}.`
+            ? ` It was funded by ${f.label ? `<strong style="color: var(--text);">${esc(f.label)}</strong>` : `<a href="https://solscan.io/account/${encodeURIComponent(f.wallet)}" target="_blank" rel="noreferrer" style="color: var(--blue); text-decoration: none;">${esc(f.wallet.slice(0,6))}…${esc(f.wallet.slice(-4))}</a>`}${f.solAmount ? ` (${f.solAmount.toFixed(2)} SOL)` : ''}.`
             : '';
           bh += `<div style="margin-top: 8px; font-size: 11px; color: var(--subtext);">🧭 Creator wallet is <strong style="color: var(--text);">fresh / low-activity</strong> (${cwp.txCountAtLeast} txs).${funderStr}</div>`;
         }
@@ -1181,7 +1182,7 @@ function render(data) {
           <div style="flex:1;min-width:0;">
             <div>${handleStr}${adminTag}</div>
             <div class="bags-creator-meta">
-              <a href="https://solscan.io/account/${c.wallet}" target="_blank" rel="noreferrer">${wShort} ↗</a>
+              <a href="https://solscan.io/account/${encodeURIComponent(c.wallet)}" target="_blank" rel="noreferrer">${esc(wShort)} ↗</a>
               ${stats ? ` · ${stats}` : ''}
             </div>
           </div>
@@ -1294,7 +1295,7 @@ function render(data) {
     const plats = Object.entries(la.platformTotals || {});
     if (plats.length > 0) {
       lh += `<div style="margin-top:8px;font-size:11px;color:var(--subtext);">Platforms: ` +
-        plats.map(([p, s]) => `<strong style="color:var(--text);">${p}</strong> (${pct(s)})`).join(" · ") + `</div>`;
+        plats.map(([p, s]) => `<strong style="color:var(--text);">${esc(p)}</strong> (${pct(s)})`).join(" · ") + `</div>`;
     }
     // Per-lock rows
     lh += `<div style="font-family:var(--disp);font-size:10px;letter-spacing:1.5px;color:var(--subtext);margin:14px 0 6px;">EACH LOCK — TRACED TO ITS FUNDING TRANSACTION</div>`;
@@ -1303,11 +1304,11 @@ function render(data) {
       const teamBadge = lk.isTeam
         ? `<span class="pnl-badge cashout" style="margin-left:6px;">✓ VERIFIED TEAM</span>`
         : `<span class="pnl-badge neutral" style="margin-left:6px;">UNLABELED</span>`;
-      const platBadge = `<span class="pnl-badge profit" style="margin-left:6px;">🔒 ${lk.platform}</span>`;
+      const platBadge = `<span class="pnl-badge profit" style="margin-left:6px;">🔒 ${esc(lk.platform)}</span>`;
       lh += `<div style="padding:8px 10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-family:var(--mono);font-size:11px;">
         <span class="good" style="font-weight:700;">${pct(lk.share)}</span> ·
-        locked by <a href="https://solscan.io/account/${lk.lockerWallet || ''}" target="_blank" rel="noreferrer" style="color:var(--blue);text-decoration:none;">${wShort}</a>${teamBadge}${platBadge}
-        ${lk.fundingSig ? `<a href="https://solscan.io/tx/${lk.fundingSig}" target="_blank" rel="noreferrer" style="color:var(--subtext);text-decoration:none;margin-left:6px;">↗ lock tx</a>` : ''}
+        locked by <a href="https://solscan.io/account/${encodeURIComponent(lk.lockerWallet || '')}" target="_blank" rel="noreferrer" style="color:var(--blue);text-decoration:none;">${esc(wShort)}</a>${teamBadge}${platBadge}
+        ${lk.fundingSig ? `<a href="https://solscan.io/tx/${encodeURIComponent(lk.fundingSig)}" target="_blank" rel="noreferrer" style="color:var(--subtext);text-decoration:none;margin-left:6px;">↗ lock tx</a>` : ''}
       </div>`;
     }
     lh += `<div style="margin-top:6px;font-size:13px;color:var(--subtext);font-style:italic;">Locked supply is removed from circulation — a commitment signal. "Unlabeled" means we couldn't verify the locker as the team; it could be the team or a conviction community holder. We trace each lock to its on-chain funding transaction and refuse to guess who's who.</div>`;
@@ -1389,7 +1390,7 @@ function render(data) {
           const overrideNote = h.behaviorOverride
             ? ` <span style="font-size:8px;color:var(--subtext);font-weight:400;">(was ${h.behaviorOverride.from}, corrected via lock data)</span>`
             : "";
-          badges.push(`<span class="badge badge-${h.behavior}" title="${h.behaviorOverride ? h.behaviorOverride.reason.replace(/"/g, '\'') : ''}">${behaviorLabel[h.behavior]}${overrideNote}</span>`);
+          badges.push(`<span class="badge badge-${h.behavior}" title="${h.behaviorOverride ? esc(h.behaviorOverride.reason) : ''}">${behaviorLabel[h.behavior]}${overrideNote}</span>`);
         }
         if (h.acquisitionType) {
           const acqLabel = {
@@ -1709,7 +1710,7 @@ function render(data) {
       <div class="event-row event-${e.type}">
         <div class="event-time">${fmtTime(e.timestamp)}</div>
         <div class="event-type-label event-${e.type}">${typeLabel[e.type] || e.type}</div>
-        <div class="event-desc">${(e.description || "").replace(/</g, "&lt;")}</div>
+        <div class="event-desc">${esc(e.description || "")}</div>
         <a class="event-link" href="https://solscan.io/tx/${e.signature}" target="_blank" rel="noreferrer">↗ ${e.signature ? e.signature.slice(0, 12) + "…" + e.signature.slice(-6) : "view"}</a>
       </div>
     `).join("");

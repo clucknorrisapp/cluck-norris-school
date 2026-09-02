@@ -40,10 +40,13 @@ jobs:
       # NOT normie-quest/src/*.js: game_logic.js contains <script> blocks and is not plain JS,
       # so node --check fails on it by design. normie-quest/test/nq-verify.cjs checks that one
       # by splitting on the script tags and compiling each block.
+      # swap.js and lib/lp-rescue/*.js are required unguarded at server.js top level too
+      # (`require("./swap")`, `require("./lib/lp-rescue")`); `lib/*.js` does not recurse, so
+      # they sat outside the loop until 2026-09-02.
       - name: node --check every backend entrypoint and lib
         run: |
           set -e
-          for f in server.js hatchery.js securitycoop.js whirlpool-mm.js lib/*.js normie-quest/*.js; do
+          for f in server.js hatchery.js securitycoop.js whirlpool-mm.js swap.js lib/*.js lib/lp-rescue/*.js normie-quest/*.js; do
             echo "checking $f"
             node --check "$f"
           done
@@ -167,13 +170,30 @@ jobs:
             }, 12000);
           "
 
+      # The swap desk's safety property — verifyAndSign() signs only what it built — is the tamper
+      # suite in scripts/test-swap-desk.js (48 local cases), and the airdrop engine's hand-built
+      # instruction bytes (CLAUDE.md: diff them against the library before shipping) are checked by
+      # scripts/verify-burn-close.cjs. Both are zero-network and deterministic; neither was in CI
+      # until 2026-09-02, so a regression in either shipped green. The RPC is pinned to a closed
+      # local port so the honest-path send can never reach a real node.
+      - name: swap-desk tamper rejection + airdrop-engine byte diff
+        env:
+          FALLBACK_RPC_URL: "http://127.0.0.1:9"
+          HELIUS_API_KEY: ""
+          DATA_DIR: ${{ runner.temp }}/swapdesk
+        run: |
+          node scripts/test-swap-desk.js
+          node scripts/verify-burn-close.cjs
+
       # Playwright is installed here rather than in package.json on purpose: Railway installs
       # devDependencies to run the Vite build, and playwright's postinstall drags browser
-      # binaries into the production image.
+      # binaries into the production image. PINNED: the visual gate below diffs against committed
+      # baselines, so an unpinned install would let a Chromium bump move the baseline with no repo
+      # change. Bump the version deliberately, together with a `--update` baseline refresh.
       - name: install playwright + chromium
         if: steps.gate.outputs.run == 'true'
         run: |
-          npm i --no-save playwright
+          npm i --no-save playwright@1.62.1
           npx playwright install --with-deps chromium
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
@@ -257,7 +277,7 @@ jobs:
       - name: install playwright chromium
         if: steps.gate.outputs.run == 'true'
         run: |
-          npm i --no-save playwright
+          npm i --no-save playwright@1.62.1   # pinned — see the smoke-test job
           npx playwright install --with-deps chromium
       - name: boot server + run visual regression
         if: steps.gate.outputs.run == 'true'

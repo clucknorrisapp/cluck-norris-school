@@ -17,16 +17,25 @@ else
   STATUS="⚠️ ALERT: lock-celebration launchd job is NOT loaded"
 fi
 
-# Last celebration-runner activity (tail of its log), for a quick health line.
-LAST=$(tail -n 1 "$HOME/Library/Logs/clkn-lock-celebration.log" 2>/dev/null || echo "no runner log yet")
+# Last celebration-runner activity (tail of its log), for a quick health line. HTML-escaped:
+# /api/tg-test sends parse_mode=HTML, and that line is raw `claude -p` output — one `<` or `&`
+# in it makes Telegram reject the whole message ("can't parse entities").
+LAST=$( (tail -n 1 "$HOME/Library/Logs/clkn-lock-celebration.log" 2>/dev/null || echo "no runner log yet") \
+  | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
 MSG="🖥️ <b>Mac mini heartbeat</b> — ${STATUS}
 last runner tick: ${LAST}
 $(date -u +%FT%TZ)"
 
-curl -sS --max-time 20 -G "https://clucknorris.app/api/tg-test" \
+# Keep the response: a rotated key, a Cloudflare 403 or a Telegram parse error used to be
+# swallowed and logged as "heartbeat sent", so the log could never explain a silent day.
+RESP=$(curl -sS --max-time 20 -G "https://clucknorris.app/api/tg-test" \
   -H "x-premium-key: $PREMIUM_ACCESS_KEY" \
   --data-urlencode "project=treasury" \
-  --data-urlencode "text=$MSG" >/dev/null 2>&1 || true
+  --data-urlencode "text=$MSG" 2>&1) || true
 
-echo "$(date -u +%FT%TZ) heartbeat sent — ${STATUS}" >> "$LOG"
+if printf '%s' "$RESP" | grep -q '"success":true'; then
+  echo "$(date -u +%FT%TZ) heartbeat sent — ${STATUS}" >> "$LOG"
+else
+  echo "$(date -u +%FT%TZ) heartbeat FAILED — ${RESP:-no response} — ${STATUS}" >> "$LOG"
+fi

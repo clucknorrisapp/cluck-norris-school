@@ -289,7 +289,9 @@ function legacyV2(names, ageMs) {
     // ---- owner season-reset route: keyed, confirm-guarded ------------------
     {
       const get = (q) => fetch(base + '/api/nq/leaderboard/reset' + q);
-      // 19. No admin key configured / wrong key → indistinguishable 404.
+      // 19. Wrong key → indistinguishable 404. The master key is CONFIGURED first: with the env
+      // empty, masterOK() 404s on its own and the probe would prove nothing about the route.
+      process.env.PREMIUM_ACCESS_KEY = 'test-admin-key';
       const r404 = await get('?confirm=RESET&key=wrong');
       ok('season reset without the admin key is a 404', r404.status === 404);
       // MASTER-KEY-ONLY (security review 2026-08-30): reset + prizes moved off the low-trust
@@ -297,7 +299,6 @@ function legacyV2(names, ageMs) {
       process.env.NQ_FEEDBACK_KEY = 'low-trust-key';
       const rFb = await get('?key=low-trust-key&confirm=RESET');
       ok('season reset REFUSES the low-trust feedback key', rFb.status === 404);
-      process.env.PREMIUM_ACCESS_KEY = 'test-admin-key';
       // 20. Keyed but unconfirmed → refused, board intact.
       const rNo = await get('?key=test-admin-key');
       ok('keyed reset without confirm=RESET refuses', rNo.status === 400);

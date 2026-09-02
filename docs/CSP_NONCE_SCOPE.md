@@ -67,7 +67,7 @@ naively for one page in particular:
 ### Phase 0 — drop `'unsafe-eval'` from the main site *(cheap, do this first)*
 
 Verified: **nothing in `public/` or `src/` calls `eval()` or `new Function()`.** The only consumer
-is vendor `normie-quest/src/phaser.min.js`.
+is vendor Phaser (`public/vendor/phaser-3.60.0.min.js`, also inlined into the standalone build).
 
 So `'unsafe-eval'` — currently granted to every page on the site — is needed by exactly one route.
 Giving the game route its own looser policy and removing `'unsafe-eval'` from the global one is a

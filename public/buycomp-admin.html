@@ -179,8 +179,9 @@ body{background:transparent;font-family:var(--body);}
 
   function key(){ return $("key").value.trim(); }
   async function api(path, params, method){
-    const qs = new URLSearchParams(Object.assign({key:key()}, params||{})).toString();
-    const r = await fetch(path+"?"+qs, { method: method||"POST" });
+    // Key goes in the header, not the query string — ?key= lands in CDN/access logs and browser history.
+    const qs = new URLSearchParams(params||{}).toString();
+    const r = await fetch(path+(qs?"?"+qs:""), { method: method||"POST", headers: { "x-premium-key": key() } });
     return r.json().catch(()=>({error:"bad response ("+r.status+")"}));
   }
   function toMs(v){ if(!v) return ""; const t=new Date(v).getTime(); return isNaN(t)?"":t; }

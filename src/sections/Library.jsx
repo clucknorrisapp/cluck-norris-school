@@ -1,6 +1,6 @@
 // The Library (deep dives, liquidity, glossary, resources) — lazy-loaded section.
 import { useState } from "react";
-import { LOGO_B64, COL, COLW, READ, AskCluck, MintAddress } from "../shared.jsx";
+import { LOGO_B64, COL, AskCluck } from "../shared.jsx";
 
 // ── THE LIBRARY — DEEP DIVES ──
 const LIBRARY_TOPICS = [
@@ -1329,9 +1329,5 @@ function Library() {
   );
 }
 
-
-
-// ── CHALLENGE WRAPPER ──
-// ── BAGS PAGE ──
 
 export default Library;

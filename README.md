@@ -68,10 +68,15 @@ subscriptions, no accounts.
 
 | Tool | Cost |
 |---|---|
-| 💰 **[Batch airdrop sender](https://clucknorris.app/airdrop)** | **Free** holding 50,000 CLKN (35 days) · else **0.05 SOL** (7 days) |
-| 🎯 **[Buy Special](https://clucknorris.app/buyspecial)** — buy-competition engine | **Free** holding 2,000,000 CLKN (35 days) · else **0.05 SOL** (7 days) |
+| 💰 **[Batch airdrop sender](https://clucknorris.app/airdrop)** | **Free** holding ~$50 of CLKN (live-priced) · else **0.05 SOL** = a 7-day pass to every heavy tool |
+| 🎯 **[Buy Special](https://clucknorris.app/buyspecial)** — buy-competition engine | Same unified pass: **free** at ~$50 of CLKN · else **0.05 SOL** (7 days, all tools) |
 | 🔬 **[Premium Forensics](https://clucknorris.app/premium)** | Holder-gated on a live 2,000,000 CLKN balance |
 | 🥚 **[The Hatchery](https://clucknorris.app/hatchery)** — guided token creator | **0.1 SOL**, or the CLKN equivalent at a **~30% discount** · free for 2M+ holders |
+
+The heavy tools — Wallet X-Ray, Holders, Trace, the airdropper and Buy Special — share **one**
+pass: hold about $50 worth of CLKN (computed from the live price, never a fixed token count —
+`/api/tool-gate/config` is the source of truth) and all of them are free; otherwise 0.05 SOL buys
+a 7-day pass to all of them. Every page previews free; the gate fires on RUN/SEND.
 
 The Hatchery is the one place you can still *pay* in CLKN, and it's deliberately ~30%
 cheaper than the SOL price. The token amount is computed live from the CLKN price so it
@@ -100,9 +105,9 @@ Two places you *do* connect — not to hand anything over, but to **sign your ow
 
 ## 🔐 How access works
 
-Connect a wallet and the gate resolves itself: if you hold the threshold, the tool
-unlocks free for 35 days. If you don't, one click sends the SOL price and unlocks it
-for 7. Where the gate is *ownership* rather than payment — Premium Forensics, and
+Connect a wallet and the gate resolves itself: hold about $50 of CLKN (checked against
+the live price — no fixed window) and the heavy tools are free. If you don't, one click
+sends 0.05 SOL and unlocks all of them for 7 days. Where the gate is *ownership* rather than payment — Premium Forensics, and
 proving a transcript is yours — you sign a one-line message instead. That's a
 signature, not a transaction: no tokens move, no spending approval is granted, and
 nothing lingers afterward.
@@ -120,9 +125,10 @@ turned out to be *more* friction than the popup it avoided, not less. So we reti
 
 We're saying that plainly rather than quietly deleting it, because the reasoning is the
 point: we don't yet know whether the manual send was the limiting step or whether the
-tools simply need more exposure. Simplifying is how we find out. **The code still
-exists and the endpoint is still live** — if the simpler version doesn't move the
-needle, turning it back on is a small change, not a rebuild. Being early to an idea and
+tools simply need more exposure. Simplifying is how we find out. **The implementation
+lives in git history, not in the running app** — the endpoint was deleted once nothing
+depended on it — so if the simpler version doesn't move the needle, bringing it back is
+a revert, not a rebuild. Being early to an idea and
 being wrong about it look identical from the inside; we'd rather test it than defend
 it.
 
@@ -176,17 +182,19 @@ The product reaches into Telegram and X, not just the website.
 
 Admin, operator and holder-gated routes return **404 rather than 401**, so probing them tells you nothing.
 
-**Public API:** `/api/wallet-xray` · `/api/snapshot` (the holder engine) · `/api/trace` · `/api/wallet-checkup` · `/api/token-overview` · `/api/ask-cluck` · `/api/verify-clkn-payment` · `/api/hatchery/*` · `/api/security-coop/*` · `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply` · `/api/bags-*` · `/api/helius-rpc`, `/api/helius-tx` (keys hidden server-side) · `/api/credential/:slug`, `/api/school-stats`
+**Public API:** `/api/wallet-xray` · `/api/snapshot` (the holder engine) · `/api/trace` · `/api/wallet-checkup` · `/api/token-overview` · `/api/ask-cluck` · `/api/verify-sol-payment` · `/api/premium-verify-sig` · `/api/hatchery/*` · `/api/security-coop/*` · `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply` · `/api/bags-*` · `/api/helius-rpc`, `/api/helius-tx` (keys hidden server-side) · `/api/credential/:slug`, `/api/school-stats`
 
 ### CI
 
-There is no staging environment — `main` deploys straight to production — so the gate is a set of cheap tripwires, each of which exists because something got past the previous ones:
+`develop` auto-deploys to a Railway staging service and `main` to production — promoted only on the owner's explicit go — but nothing sits between `main` and live, so the gate is a set of cheap tripwires, each of which exists because something got past the previous ones:
 
 - `node --check` on every backend entrypoint and lib
 - **undefined-JSX-component guard** — an undefined component compiles fine and only throws at runtime; one shipped and left the LP Lab blank in production for a day
 - **curriculum count guard** — the landing page advertised "72 exams · 6 beginner lessons" when the truth was 70 and 7
 - **render smoke test** — opens every screen and all 33 lessons in headless Chromium, failing on an uncaught error or a blank page
 - **level-geometry guard** for the game — jumpability, no floating fixtures
+- **liquidity-engine decision simulator** — replays thousands of ticks against the real gate logic; every scenario is a past live incident
+- **visual-regression gate** for the game — boots the server and pixel-diffs the title, HUD, characters and a creature against committed baselines, the render-broke-but-built-clean class nothing above can see
 
 ---
 

@@ -406,8 +406,8 @@
   // esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
   // esc() had drifted and four pages weren't escaping the single quote.
   const esc = CluckUtil.esc;
-  function fmt(n){ n=Number(n)||0; if(n>=1e9)return (n/1e9).toFixed(2)+'B'; if(n>=1e6)return (n/1e6).toFixed(2)+'M'; if(n>=1e3)return (n/1e3).toFixed(1)+'K'; return Math.round(n).toLocaleString(); }
-  function shortAddr(a){ a=String(a||''); return a.length>10?a.slice(0,4)+'…'+a.slice(-4):a; }
+  function fmt(n){ return CluckUtil.fmt(n); }
+  function shortAddr(a){ return CluckUtil.shortAddr(a); }
 
   // ---- recently-locked strip (cross-token feed) ----
   function relTime(ts){ var s=Math.max(0,(Date.now()-ts)/1000); if(s<60)return Math.max(1,Math.floor(s))+'s ago'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
@@ -808,9 +808,7 @@
   });
 
   // ---- Verify-your-lock panel: copy the tx, open it on Jupiter Lock's own UI ----
-  function copyText(str, btn){ var done=function(){ if(btn){ var t=btn.textContent; btn.textContent='Copied'; setTimeout(function(){btn.textContent=t;},1200); } };
-    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(str).then(done,done); }
-    else { var ta=document.createElement('textarea'); ta.value=str; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove(); done(); } }
+  function copyText(str, btn){ CluckUtil.copyText(str).then(function(ok){ if(btn){ var t=btn.textContent; btn.textContent=ok?'Copied':'Copy failed'; setTimeout(function(){btn.textContent=t;},1200); } }); }
   function showVerify(res, mint, sig){
     // Named escrow, NOT esc: a local `esc` here shadowed the shared HTML escaper for
     // this whole function body, so adding any esc(...) call inside would have thrown
@@ -865,7 +863,7 @@
   $('#clConnect').addEventListener('click',function(){
     if(connected && activeProvider){ claimConnected(); return; }
     var w=detectWallets();
-    if(!w.length){ $('#clMsg').className='msg err'; $('#clMsg').textContent='No Solana wallet found. Install Phantom or Solflare.'; return; }
+    if(!w.length){ $('#clMsg').className='msg err'; $('#clMsg').textContent='No Solana wallet found. Install one (or open this page in your wallet\u2019s own browser).'; return; }
     if(w.length===1){ connectWith(w[0].p,w[0].name,claimConnected); return; }
     clPicker.innerHTML='<div class="muted" style="font-size:12px;text-align:center">Choose a wallet to connect</div>';
     w.forEach(function(x){ var b=document.createElement('button'); b.type='button'; b.className='btn alt'; b.style.marginTop='0'; b.textContent='Connect '+x.name; b.addEventListener('click',function(){ clPicker.style.display='none'; connectWith(x.p,x.name,claimConnected); }); clPicker.appendChild(b); });
@@ -925,7 +923,7 @@
     var msg=$('#clm'+i); msg.className='msg'; msg.textContent='Building your claim…'; btn.disabled=true;
     if(!window.solanaWeb3){ msg.className='msg err'; msg.textContent='Solana library still loading — try again.'; btn.disabled=false; return; }
     var p=activeProvider;
-    if(!p||!p.signTransaction){ msg.className='msg err'; msg.textContent='This wallet can’t sign here — use Phantom or Solflare.'; btn.disabled=false; return; }
+    if(!p||!p.signTransaction){ msg.className='msg err'; msg.textContent='This wallet can’t sign here — try another wallet.'; btn.disabled=false; return; }
     fetch('/api/lock/claim-tx',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({recipient:connected,escrow:escrow})})
       .then(function(r){return r.json();}).then(function(res){
         if(!res.ok){ msg.className='msg err'; msg.textContent=res.error||'Could not build the claim.'; btn.disabled=false; return; }

@@ -178,12 +178,14 @@ const ADDRESS = { name: 'Norm Ie', line1: '123 Chain St', line2: '', city: 'Solv
     }
     // 11. Owner prizes panel: 404 without key; decrypted address renders with it.
     {
+      // The master key must be CONFIGURED before the keyless probe, or masterOK() 404s on the
+      // empty env alone and the assertion proves nothing about the route's own check.
+      process.env.PREMIUM_ACCESS_KEY = 'test-admin-key';
       const noKey = await fetch(base + '/normie-quest-x7/prizes');
       // MASTER-KEY-ONLY (security review 2026-08-30): the prizes console decrypts shipping PII,
       // so it takes PREMIUM_ACCESS_KEY only; the low-trust feedback key must be refused.
       process.env.NQ_FEEDBACK_KEY = 'low-trust-key';
       const fbKey = await fetch(base + '/normie-quest-x7/prizes?key=low-trust-key');
-      process.env.PREMIUM_ACCESS_KEY = 'test-admin-key';
       const html = await (await fetch(base + '/normie-quest-x7/prizes?key=test-admin-key')).text();
       delete process.env.NQ_FEEDBACK_KEY; delete process.env.PREMIUM_ACCESS_KEY;
       ok('prizes panel: 404 without key, decrypted address + dup flag with it',

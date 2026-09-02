@@ -129,7 +129,8 @@
 const $ = s => document.querySelector(s);
 const esc = CluckUtil.esc;   // shared escaper — see /cluck-util.js
 const KEY_LS="ob_key", MINT_LS="ob_mint";
-$("#key").value = localStorage.getItem(KEY_LS) || "";
+// The operator key is session-scoped (as engine-dashboard does) — it must not outlive the browser on a shared machine.
+$("#key").value = sessionStorage.getItem(KEY_LS) || "";
 $("#mint").value = localStorage.getItem(MINT_LS) || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
 $("#wallets").value = localStorage.getItem("ob_wallets") || "";
 function myWallets(){ return ($("#wallets").value||"").split(",").map(s=>s.trim()).filter(Boolean); }
@@ -159,7 +160,7 @@ function srcLine(s){
 async function scan(){
   const mint=$("#mint").value.trim(), key=$("#key").value.trim();
   if(!mint){ $("#status").textContent="Enter a token mint."; return; }
-  localStorage.setItem(KEY_LS,key); localStorage.setItem(MINT_LS,mint); localStorage.setItem("ob_wallets",$("#wallets").value||"");
+  sessionStorage.setItem(KEY_LS,key); localStorage.setItem(MINT_LS,mint); localStorage.setItem("ob_wallets",$("#wallets").value||"");
   $("#scan").disabled=true; $("#status").textContent="🔎 Scanning Jupiter limit orders, cross‑pool depth, and Orca walls…";
   $("#out").innerHTML='<div class="card"><div class="muted">Reading the chain… (a few seconds)</div></div>';
   try{
@@ -287,17 +288,17 @@ function render(d){
   // cross-pool dislocation — the live arb spread between this token's pools
   if(ow&&ow.poolPrices&&ow.poolPrices.filter(p=>p.priceUsd>0).length>=1){
     const pp=ow.poolPrices.filter(p=>p.priceUsd>0), dis=ow.dislocation;
-    const rows=pp.map(p=>`<tr><td><span>CLKN/${esc(p.quote||'?')}</span></td><td><span>${fmtPrice(p.priceUsd)}</span></td><td><span class="muted">${fmtUsd(p.valueUsd)}</span></td></tr>`).join("");
+    const rows=pp.map(p=>`<tr><td><span>${tsym||'TOKEN'}/${esc(p.quote||'?')}</span></td><td><span>${fmtPrice(p.priceUsd)}</span></td><td><span class="muted">${fmtUsd(p.valueUsd)}</span></td></tr>`).join("");
     html+=`<div class="card"><h2>↔ Cross‑pool dislocation${dis?` — <span class="${dis.spreadPct>1?'ask-c':'muted'}">${dis.spreadPct.toFixed(2)}% spread</span>`:''}</h2>
-      <p class="explain">CLKN's price on each pool <b>right now</b> (pools under $5 liquidity excluded). When a quote (SOL/JUP) moves, the pools drift apart — that spread is the live <b>arbitrage pull</b> that draws real, third-party two-way volume. Bigger spread = a bigger arb waiting to be taken.</p>
-      <table><thead><tr><th>Pool</th><th>CLKN price</th><th>Liquidity</th></tr></thead><tbody>${rows}</tbody></table>
-      ${dis?`<div class="muted" style="margin-top:8px">Cheapest on <b>CLKN/${esc(dis.low.quote)}</b> (${fmtPrice(dis.low.priceUsd)}), richest on <b>CLKN/${esc(dis.high.quote)}</b> (${fmtPrice(dis.high.priceUsd)}) — arbers buy the cheap pool & sell the rich one until they converge.</div>`:''}
+      <p class="explain">${tsym||'TOKEN'}'s price on each pool <b>right now</b> (pools under $5 liquidity excluded). When a quote (SOL/JUP) moves, the pools drift apart — that spread is the live <b>arbitrage pull</b> that draws real, third-party two-way volume. Bigger spread = a bigger arb waiting to be taken.</p>
+      <table><thead><tr><th>Pool</th><th>${tsym||'TOKEN'} price</th><th>Liquidity</th></tr></thead><tbody>${rows}</tbody></table>
+      ${dis?`<div class="muted" style="margin-top:8px">Cheapest on <b>${tsym||'TOKEN'}/${esc(dis.low.quote)}</b> (${fmtPrice(dis.low.priceUsd)}), richest on <b>${tsym||'TOKEN'}/${esc(dis.high.quote)}</b> (${fmtPrice(dis.high.priceUsd)}) — arbers buy the cheap pool & sell the rich one until they converge.</div>`:''}
     </div>`;
   }
 
   // in-range two-sided LP — the full liquidity picture (yours + everyone's)
   if(ow&&ow.lp&&ow.lp.length){
-    const lpRows=ow.lp.map(o=>`<tr><td><span>CLKN/${esc(o.quoteSymbol||'?')}</span></td><td><span>${fmtPrice(o.priceLowUsd)} – ${fmtPrice(o.priceHighUsd)}</span></td><td><span>${fmtUsd(o.sizeUsd)}</span></td><td>${ownerTag(o.owner)}</td></tr>`).join("");
+    const lpRows=ow.lp.map(o=>`<tr><td><span>${tsym||'TOKEN'}/${esc(o.quoteSymbol||'?')}</span></td><td><span>${fmtPrice(o.priceLowUsd)} – ${fmtPrice(o.priceHighUsd)}</span></td><td><span>${fmtUsd(o.sizeUsd)}</span></td><td>${ownerTag(o.owner)}</td></tr>`).join("");
     html+=`<div class="card"><h2>In‑range LP — the full liquidity picture</h2><p class="explain">Two‑sided positions providing active liquidity <b>right now</b> — the depth that actually fills trades at spot. Shown so the whole book is visible: <span style="color:var(--green)">yours</span> and everyone else's. (Not "walls" — walls are one‑sided and sit above/below; these straddle the price.)</p>
       <table><thead><tr><th>Pair</th><th>Price range</th><th>Value</th><th>Owner</th></tr></thead><tbody>${lpRows}</tbody></table></div>`;
   }
@@ -342,7 +343,6 @@ async function loadFlow(mint, key){
 }
 
 if($("#key").value) scan();
-window.addEventListener("resize", ()=>{ const cv=document.getElementById("depthCanvas"); /* redraw skipped — rescan to refresh */ });
 </script>
 <script defer src="/cluck-nav.js"></script>
 </body>
