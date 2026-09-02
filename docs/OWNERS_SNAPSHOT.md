@@ -24,9 +24,18 @@ take hours if needed to keep price down and free."*
    wallet. Dumpers and the biggest holders first, cap `OWNERS_SNAPSHOT_FUNDER_CAP` (400).
 7. **Proceeds** — for dumpers only, one page of the wallet's TRANSFER history: SOL ≥ 0.05 / stables ≥ $5 leaving
    the wallet after its first sell, grouped by destination, exchange-labelled where known.
+7b. **Counterparty pass** — every off-curve send/receive counterparty is classified once (`classifyAddressTypes`,
+   100 per call) and rows are relabelled: send→lock escrow = `lock`, send→pool/contract = `add_lp`, receive from
+   an escrow = `unlock`. A wallet whose position sits in a lock or a pool reads HOLDING with the reason. **Learned
+   on the first real crawl (ROSE):** without this every community lock read as "transferred 100% out — OUT", and
+   the engine operator's Orca `OPEN_POSITION` adds counted as 627 plain sends.
 8. **Links / clusters** — edges: direct token transfers between wallets, shared non-exchange first funder, shared
    non-exchange proceeds destination. Union-find → clusters with combined supply %, and *flags* worded as
-   patterns (never "team"/"insider"/"ring").
+   patterns (never "team"/"insider"/"ring"). Each flag states the share held by the wallets it is about.
+   **Distributors** (a wallet that handed the token, or first SOL, to ≥ 8 holders) are reported in their own
+   section and do NOT join the union-find — on ROSE the deployer's seeding otherwise folded 119 wallets and 49%
+   of supply into one meaningless "cluster". A distributor's recipients + combined share is exactly what
+   Jupiter's "cluster supply" figure counts, which makes that section the owner's VRFD mirror.
 9. **Snapshot history** — every run stores a compact `{wallet: {bal, usd, status}}` map; the next run diffs it:
    entered / left / status changed / biggest moves. Full reports are pruned to the last 5, summaries kept for 30.
 
