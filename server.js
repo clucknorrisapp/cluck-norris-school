@@ -894,6 +894,10 @@ const CUNA_QUOTES = [
 // poke ops overview briefly posted to a community chat and had to be deleted. Named so the
 // binding below can refuse it outright rather than relying on us remembering.
 const CUNA_PUBLIC_ROOM = "-1003938497778";
+// The public OnlyRose community room. Its project alert routing is "off" (owner, 2026-08-31),
+// so it no longer resolves to "rose" by telegramChatId — and the CLKN welcome leaked in
+// (owner, 2026-09-02: "that is not allowed"). Room identity is pinned by id, like CUNA.
+const ROSE_PUBLIC_ROOM = process.env.ROSE_TG_CHAT_ID || "-1002625127458";
 function cunaEnsureProject() {
   if (whirlpoolMM.vault.getProject("cuna")) { cunaConfigRatchet(); return; }
   whirlpoolMM.vault.registerProject({
@@ -2425,6 +2429,7 @@ function vaultProjectForChat(chatId) {
   // resolver's answer for the room into the "clkn" default and let CLKN welcomes and the
   // full CLKN command set leak in. Room identity must not follow alert routing.
   if (String(chatId) === CUNA_PUBLIC_ROOM) return "cuna";
+  if (String(chatId) === ROSE_PUBLIC_ROOM) return "rose";
   try {
     const projs = whirlpoolMM.vault.listProjects();
     for (const id of Object.keys(projs)) {
@@ -2589,6 +2594,7 @@ async function welcomeNewMembers(msg) {
   // "cuna" and CLKN welcomes leaked in. Community rooms are excluded by id, not by where a
   // project's alerts happen to point.
   if (String(chatId) === CUNA_PUBLIC_ROOM) return;         // owner: no welcome messages in the CUNA room
+  if (String(chatId) === ROSE_PUBLIC_ROOM) return;         // owner: no welcome messages in the OnlyRose room
   if (vaultProjectForChat(chatId) !== "clkn") return;
   const now = Date.now(), last = welcomeCooldown.get(chatId) || 0;
   if (now - last < WELCOME_COOLDOWN_MS) return;            // anti-spam on join waves
@@ -8057,7 +8063,7 @@ function roseResolveChatId() {
     const projs = whirlpoolMM.vault.listProjects() || {};
     for (const id of Object.keys(projs)) {
       const p = projs[id];
-      if (p && String(p.tokenMint || "") === ROSE_BOT_MINT && p.telegramChatId) return String(p.telegramChatId);
+      if (p && String(p.tokenMint || "") === ROSE_BOT_MINT && p.telegramChatId && String(p.telegramChatId) !== "off") return String(p.telegramChatId);
     }
   } catch (_) {}
   try {
