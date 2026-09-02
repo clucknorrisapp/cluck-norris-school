@@ -292,6 +292,17 @@ function render(R) {
         <div style="font-size:12.5px;margin-top:4px">${c.wallets.map((w) => `${link(w.wallet)} ${pill(w.status)} <span class="num">${esc(usd(w.usd))}</span>`).join(" &nbsp;·&nbsp; ")}</div>
       </div>`).join("") : `<div class="muted" style="font-size:12.5px">No links found among the analysed wallets.</div>`) + `</div>`;
 
+  // Distributions — one wallet that seeded many holders (airdrop / presale / team wallet)
+  if (R.distributions && R.distributions.length) {
+    h += `<div class="card"><div class="card-title">DISTRIBUTIONS <small>${fmt(R.distributions.length)} source${R.distributions.length > 1 ? "s" : ""} · ${esc(pct(R.summary.distributedSupplyPct || 0))} of supply was handed out</small></div>
+      <p class="lead sub" style="font-size:12.5px;line-height:1.55;margin-bottom:10px">One address that handed this token (or the SOL to buy it) to many holders. That is what an airdrop, a presale, a team distribution, or an exchange hot wallet looks like — and it is exactly what Jupiter's "cluster supply" figure counts. The recipients are listed here instead of being chained into one giant linked group.</p>` +
+      R.distributions.slice(0, 10).map((d) => `<div class="cluster">
+        <div class="ch"><b>${link(d.from)}${d.label ? ` (${esc(d.label)})` : ""}${d.isHolder ? ` · also a holder ${pill(d.holderStatus)}` : ""}</b><span class="sub" style="font-size:12px">${d.kind === "transfer" ? "sent this token to" : "first-funded"} <b>${d.recipients}</b> wallets · they hold ${esc(usd(d.usd))} · ${esc(pct(d.supplyPct))} of supply${d.soldUsd7d ? ` · sold ${esc(usd(d.soldUsd7d))} in 7d` : ""}</span></div>
+        <div class="sub" style="font-size:12px;margin:6px 0">${STATUSES.filter((s) => d.statuses[s]).map((s) => `<span class="st-${s}">${d.statuses[s]} ${s}</span>`).join(" · ")}</div>
+        <div style="font-size:12.5px">${d.wallets.slice(0, 20).map((w) => `${link(w.wallet)} ${pill(w.status)} <span class="num">${esc(usd(w.usd))}</span>`).join(" &nbsp;·&nbsp; ")}${d.wallets.length > 20 ? ` <span class="muted">… +${d.wallets.length - 20} more in the table</span>` : ""}</div>
+      </div>`).join("") + `</div>`;
+  }
+
   // Full table
   h += `<div class="card"><div class="card-title">EVERY WALLET <small>${fmt(R.wallets.length)} analysed · click a row for its full history</small></div>
     <div class="chips" id="chips"><button type="button" class="btn2 ${!filterStatus ? "on" : ""}" data-f="">ALL</button>${STATUSES.map((s) => `<button type="button" class="btn2" data-f="${s}">${s} (${fmt(S.counts[s] || 0)})</button>`).join("")}<input id="search" class="token-input" style="width:auto;flex:1;min-width:180px;padding:7px 12px;font-size:13px" placeholder="filter by wallet…"/></div>
