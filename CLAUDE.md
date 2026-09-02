@@ -18,6 +18,13 @@ does not tell you how to write software; use your judgement for that.
 > `docs/HANDOFF_2026-08-01.md` is still current for the security follow-ups and the unplayed boss
 > fixes.
 
+> 💼 **Running the Jup-verification service on a client token? Read
+> `docs/CLKN_JUP_VERIFICATION_PROTOCOL.md` first** — the **CLKN Productions Jup Verification
+> Protocol** ("JVP", owner-named 2026-09-01) is the codified engine playbook proven on
+> POKE/CUNA/DNC/ROSE: intake → pools → engine profile → score/holders → ops, plus a traps
+> appendix where every entry cost real money once. Don't improvise a go-live; the sequencing
+> traps in there (arm-first, two-flags, stale PDAs, orphaned positions) all bit within one week.
+
 > 🎮 **Working on Normie Quest? Read `docs/HANDOFF_2026-07-27.md` first.** It carries the branch
 > state, the open decisions, and how to verify a change: `node normie-quest/test/nq-verify.cjs
 > <baseUrl>` reads the diff and picks the right checks. Don't run the full 82-level state test by
@@ -173,8 +180,15 @@ The owner manages all liquidity positions **manually**. Read freely; touch nothi
   **ON BY DEFAULT** (owner's explicit go, same day) with buyback enabled (excess USDC → POKE);
   the pools' ask side is the sell direction — the swap layer never market-dumps the token.
   Instant stop: `/api/whirlpool/vault/pause?project=poke`; durable stop: `POKE_ENGINE_OFF=1`.
-- ⛔ **The brand bag is NEVER sold.** And **never buy CLKN with operator funds** without asking in
-  that moment (owner rule, after unwanted inventory buys).
+- ⛔ **The brand bag is protected — with ONE owner-defined carve-out (2026-08-31).** The original
+  bag is never sold. But the owner revised the blanket rule: a tight-quoting engine that ABSORBS
+  someone's sell may sell that absorbed inventory back to recoup its quote funds ("those sells
+  would show up on the chart anyway — it's only fair we recoup as our base funds for volume").
+  Mechanism: `/api/whirlpool/vault/recoup-baseline?project=…&arm=1` snapshots current holdings as
+  a protected baseline; `manualSwap` then allows selling ONLY the amount above it. Disarmed +
+  baseline-less = the historic never-sell behavior, and that is the default everywhere. Also:
+  **never buy CLKN with operator funds** without asking in that moment (owner rule, after
+  unwanted inventory buys).
 - ⛔ **The autonomous rebalancer is hard-killed in code** (`JUP_AUTO_REBALANCE_KILLED = true`).
   Re-enabling is a deliberate two-step opt-in. Don't, without an explicit ask.
 - **Read balances ON-CHAIN, never with the product tools.** `/api/wallet-xray` and autopsy are

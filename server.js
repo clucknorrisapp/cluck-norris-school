@@ -1196,11 +1196,23 @@ if (!dncHardKilled()) {
 } else {
   console.log("[dnc] DNC_ENGINE_OFF=1 — engine hard-killed, loop not started.");
 }
-// ── ROSE volume engine (owner, 2026-08-30: "narrow range, high volume, .01 fee pools
-// for rose, going for her jup verification") ──────────────────────────────────────────
-// Same play as POKEAHOE/CUNA: two tight 0.01% Orca pools (ROSE/USDC 4f1cZgRA…,
-// ROSE/SOL 4RcVUN5i… — both created 2026-08-19, tickSpacing 1, verified on-chain) that
-// recenter early and often so 1bp routing wins aggregator flow and the arbs do the volume.
+// ── ROSE volume engine (owner, 2026-08-30: "narrow range, high volume" pools for ROSE,
+// going for her Jupiter verification) ─────────────────────────────────────────────────
+// Same play as POKEAHOE/CUNA: tight Orca pools that recenter early and often so cheap-tier
+// routing wins aggregator flow and the arbs do the volume. THREE pools (owner, 2026-08-31:
+// "mix and match of .01/.02"), starting with very small amounts:
+//   ROSE/USDC — the EXISTING 0.01% pool 4f1cZgRA…, stale-empty 35% below market; its tick
+//               is walked to market ONCE at go-live via /vault/reprice-pool (dust swaps
+//               through zero liquidity — nothing fills; the 0.02% USDC PDA is also occupied
+//               by a stale empty pool, so no fresh-pool escape exists on these tiers).
+//   ROSE/SOL + ROSE/JUP — FRESH 0.02% pools created at the market tick via
+//               /vault/create-pool (the old 0.01% ROSE/SOL pool sits stale-empty 24% low
+//               and is abandoned in place; the 0.02% PDAs were verified free).
+// Go-live runbook (dry first, &run=1 to execute; create costs ~0.03 SOL rent each):
+//   /api/whirlpool/vault/reprice-pool?project=rose&quote=USDC&feeTier=0.01&price=<ROSE usd>
+//   /api/whirlpool/vault/create-pool?project=rose&quote=SOL|JUP&feeTier=0.02&price=<ROSE usd>
+// ALWAYS pass &price= from the live Raydium market: Jupiter serves a frozen price for
+// unverified tokens, and ROSE is unverified (that's the whole point of this engine).
 //
 // OPERATOR: the CUNA engine wallet (owner, 2026-08-31: "It's in the Cuna engine wallet" —
 // verified on-chain holding 2.74M ROSE + USDC + SOL at build time). NOT the treasury: the
@@ -1240,48 +1252,72 @@ function roseEngineConfigRatchet() {
   // ratchet documents). telegramChatId is preserved by register's own prev-fallback.
   const wantEnv = process.env.CUNA_OPERATOR_ENV || "MM_OPERATOR_SECRET_CUNA";
   const proj = whirlpoolMM.vault.getProject("rose");
-  if (!proj || proj.operatorEnv !== wantEnv || proj.tokenSellOk !== true) {
+  if (!proj || proj.operatorEnv !== wantEnv || proj.tokenSellOk !== true
+      || !(proj.quoteMints || []).includes("JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN")) {
     whirlpoolMM.vault.registerProject({
       id: "rose", label: (proj && proj.label) || "OnlyRose", symbol: (proj && proj.symbol) || "ROSE",
       tokenMint: "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF", decimals: 9,
-      quoteMints: ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "So11111111111111111111111111111111111111112"],
+      quoteMints: ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "So11111111111111111111111111111111111111112", "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"],
       venue: "orca", operatorEnv: wantEnv,
       // Owner grant 2026-08-31: "move tokens any direction buy sell as needed for rose, can go
       // between other underlying assets freely" — ROSE is pool-balancing inventory here, not a
       // brand bag, so the engine may sell it (manualSwap) as well as buy; the SOL↔USDC swap
       // layer covers the quote side. The CLKN brand-bag rule is untouched by this.
       tokenSellOk: true,
-      telegramChatId: (proj && proj.telegramChatId) || "-1002625127458",
+      // Vault notifications MUTED for rose (owner, 2026-08-31: "stop posting liquidity vault
+      // things in main rose room"). "off" = per-project mute in the vault's chatFor(); the buy
+      // bot posts to the OnlyRose room through its OWN path (roseTgSend/ROSE_TG_CHAT_ID), so
+      // buys are unaffected. Default "off" here so a fresh container can't repopulate the room.
+      telegramChatId: (proj && proj.telegramChatId) || "off",
       ownerWallet: (proj && proj.ownerWallet) || null,
     });
     console.log(`[rose-engine] project bound to operator env ${wantEnv} (tokenSellOk on)`);
   }
   const c = whirlpoolMM.vault.getConfig("rose");
-  const want = {
+  const want = {   // durable overrides (kv ratchetOverrides:rose) are merged over this below
     pair: "ROSE/USDC", baseEnabled: true,
-    // ±1% on the 0.01% tier — the POKEAHOE volume posture the owner named. tickSpacing 1
-    // places the tight band precisely; 1bp routing undercuts the 25bp Raydium pool so the
-    // aggregators route real third-party flow through us. That flow IS the verification play.
-    feeTierPct: 0.01, widthPct: 1, solFeeTierPct: 0.01, solWidthPct: 1,
-    solEnabled: true, jupEnabled: false,
+    // Mix-and-match 0.01/0.02 tiers (owner, 2026-08-31): USDC leg on the fresh canonical
+    // 0.01% pool, SOL/JUP legs on fresh 0.02% pools — all created at the market tick at
+    // go-live. 1-2bp routing undercuts the 25bp Raydium pool, so aggregators route real
+    // third-party flow through us — that flow IS the verification play.
+    // UNIFORM ±1% bands on ALL pools (owner, 2026-08-31: "should be same across all
+    // pools… leave at 1 percent plus minus" — the ±3% JUP band was too wide to produce;
+    // every 1% move triggers a recenter and hands arbs a fresh trade, OOR lasts one
+    // 90s tick, rolls cost ~$0.002).
+    feeTierPct: 0.01, widthPct: 1, solFeeTierPct: 0.02, solWidthPct: 1,
+    solEnabled: true,
+    // JUP pool PULLED (owner, 2026-08-31: "pull the Jup pool and pile those funds into
+    // the other two") — its JUP was converted to USDC/SOL; evenPools runs two-pool mode.
+    jupEnabled: false, jupFeeTierPct: 0.02, jupWidthPct: 1,
     // Thin book: CUNA's numbers, not POKE's — 150bps failed fills on books this size.
     slippageBps: 250, priceGapGuardPct: 10,
-    // Buyback ON: the operator wallet holds ~no ROSE, so inventory is SOURCED by converting
-    // free USDC (above floor) — without it nothing ever deploys. It only ever BUYS ROSE;
-    // the only selling is the pools' ask side quoting a market.
-    buybackEnabled: true,
+    // Buyback OFF: the wallet arrived stocked with 2.74M ROSE — inventory is not the scarce
+    // side, USDC is. Buyback here would convert the quote-side dry powder into MORE ROSE.
+    // Flip it on (small caps are pre-seeded below) only if ROSE inventory actually runs dry.
+    buybackEnabled: false,
+    // Scale-up trickle (owner, 2026-08-31): while balanced, convert idle ROSE → USDC in
+    // small impact-guarded clips so the balance-driven sizing scales all three pools up.
+    scaleUpUsdPerCycle: 25, scaleUpDailyCapUsd: 150,
   };
+  // Live tuning via /api/whirlpool/vault/config?project=rose&durable=1 lands in the
+  // ratchetOverrides:rose kv table — merge it OVER the code defaults so a durable owner
+  // tune is never silently stamped back by this ratchet (the exact config-revert trap
+  // CLAUDE.md warns about; it re-bit on the band widths, 2026-08-31).
+  Object.assign(want, kv.get("ratchetOverrides:rose", {}) || {});
   const patch = {};
   for (const k of Object.keys(want)) if (c[k] !== want[k]) patch[k] = want[k];
   // Caps/tuning seeded only while the vault defaults still hold, so later owner raises stick.
+  // SMALL-START posture (owner, 2026-08-31: "start with very small amounts"): ~$60 a pool
+  // while the fresh pools prove the price holds, then raise live with &durable=1.
   if (c.feeTierPct === 0.3 || c.widthPct === 15 || c.widthPct === 10) {
     Object.assign(patch, {
-      edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 500, minRebalanceIntervalSec: 300,
-      maxActionsPerDay: 96, baseDeployThresholdUsd: 20,
-      solMaxSol: 5, solGasReserve: 0.25, solDeployThreshold: 0.2,
-      swapEnabled: true, poolBalanceTolPct: 10, maxSwapUsdPerCycle: 75, minSwapUsd: 10,
-      usdcFloor: 5, swapSolFloor: 0.3, maxSwapSolPerCycle: 1, swapSlippageBps: 150, maxSwapsPerDay: 24,
-      buybackReserveUsd: 0, maxBuybackUsdPerCycle: 100, minBuybackUsd: 10, maxBuybacksPerDay: 24,
+      edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 60, minRebalanceIntervalSec: 300,
+      maxActionsPerDay: 96, baseDeployThresholdUsd: 10,
+      solMaxSol: 0.3, solGasReserve: 0.25, solDeployThreshold: 0.05,
+      jupMaxJup: 150, jupDeployThreshold: 25,
+      swapEnabled: true, poolBalanceTolPct: 10, maxSwapUsdPerCycle: 40, minSwapUsd: 5,
+      usdcFloor: 5, swapSolFloor: 0.3, maxSwapSolPerCycle: 0.5, swapSlippageBps: 150, maxSwapsPerDay: 24,
+      buybackReserveUsd: 0, maxBuybackUsdPerCycle: 25, minBuybackUsd: 10, maxBuybacksPerDay: 24,
       buybackMinIntervalSec: 900, buybackSlippageBps: 300,
       askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
       notifyRolls: false,   // public room bound — see the ALERTS warning above
@@ -1299,11 +1335,15 @@ async function roseEngineTick() {
   roseEngineTickBusy = true;
   try {
     roseEngineConfigRatchet();
-    // Rebalance FIRST so free SOL/USDC moves toward the underweight pool before the deploy
-    // ticks absorb it; buyback LAST so it only converts what the pools couldn't pair.
-    try { await whirlpoolMM.vault.rebalancePools({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] rebalance:", e.message); }
+    // Evenness FIRST (owner: "3 even pools — keep them even"): the three-way pass
+    // trims the fattest pool and feeds the leanest EVERY cycle, before the deploy
+    // ticks absorb the float; buyback LAST so it only converts what wasn't paired.
+    try { await whirlpoolMM.vault.evenPools({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] even:", e.message); }
     try { await whirlpoolMM.vault.tick({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] base tick:", e.message); }
     try { await whirlpoolMM.vault.tickSol({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] sol tick:", e.message); }
+    // CUNA lesson: jupEnabled in config alone manages nothing — without this call the
+    // ROSE/JUP position would sit unrecentered forever.
+    try { await whirlpoolMM.vault.tickJup({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] jup tick:", e.message); }
     try { await whirlpoolMM.vault.buyback({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] buyback:", e.message); }
     try { await whirlpoolMM.vault.flushNotifyDigest({ projectId: "rose" }); } catch (e) { console.warn("[rose-engine] digest:", e.message); }
   } finally { roseEngineTickBusy = false; }
@@ -8596,20 +8636,23 @@ app.get("/api/rose-engine", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
-    const operator = whirlpoolMM.vault.operatorPubkey("rose");
     if (req.query.on === "1") {
       if (roseEngineHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "ROSE_ENGINE_OFF=1 is set in Railway — clear it first." });
-      if (!operator) return res.json({ ok: false, error: "no_operator", detail: "MM_OPERATOR_SECRET_ROSE is not loaded — nothing can sign." });
+      // Ratchet FIRST: it rebinds the project onto the CUNA operator env, so checking the
+      // key before it would validate whatever stale env the project was last bound to.
       roseEngineConfigRatchet();   // shape asserted BEFORE the first armed tick can deploy
+      if (!whirlpoolMM.vault.operatorPubkey("rose")) return res.json({ ok: false, error: "no_operator", detail: "the CUNA engine wallet key (MM_OPERATOR_SECRET_CUNA) is not loaded — nothing can sign." });
       roseEngineSetArmed(true);
     } else if (req.query.off === "1") {
       roseEngineSetArmed(false);
     }
+    const operator = whirlpoolMM.vault.operatorPubkey("rose");
     const cfg = whirlpoolMM.vault.getConfig("rose") || {};
     res.json({
       ok: true, armed: roseEngineArmed(), hardKilled: roseEngineHardKilled(), operator: operator || null,
-      pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct,
-      feeTierPct: cfg.feeTierPct, maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol,
+      pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct, jupWidthPct: cfg.jupWidthPct,
+      feeTierPct: cfg.feeTierPct, jupEnabled: cfg.jupEnabled,
+      maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol, jupMaxJup: cfg.jupMaxJup,
       buybackEnabled: cfg.buybackEnabled,
       note: "armed state is persisted in the KV store; ROSE_ENGINE_OFF=1 overrides it",
     });
@@ -8685,7 +8728,12 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     if (q.boardpreview === "1") out.boardPreview = cunaGiveaway.boardText();
     if (q.boardoff === "1") { cunaGiveaway.configure({ boardOn: false }); out.config = cunaGiveaway.config(); }
     if (q.boardon === "1") { cunaGiveaway.configure({ boardOn: true }); out.config = cunaGiveaway.config(); }
-    if (q.draw === "1") out.draw = await cunaGiveaway.runDraw({ rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined }, { force: q.force === "1" });
+    if (q.draw === "1") {
+      // &prizes=4000000,3000000,2000000,1000000 — ranked prize amounts, one winner drawn per
+      // entry (owner, 2026-08-31: 4 winners at 4M/3M/2M/1M). Omitted = the lib's default.
+      const prizes = q.prizes ? String(q.prizes).split(",").map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0) : undefined;
+      out.draw = await cunaGiveaway.runDraw({ rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined }, { force: q.force === "1", prizes });
+    }
     out.standings = cunaGiveaway.standings(10);
     res.json(out);
   } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
@@ -11328,6 +11376,7 @@ app.get("/api/supply", async (req, res) => {
 const SUPPLY_FEEDS = {
   cuna: { symbol: "CUNA", mint: "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc", cacheKey: "cunaSupplyCacheV1" },
   rose: { symbol: "ROSE", mint: "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF", cacheKey: "roseSupplyCacheV1" },
+  clkn: { symbol: "CLKN", mint: "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", cacheKey: "clknSupplyCacheV1" },   // owner ask 2026-09-01: Jupiter metadata update
 };
 for (const [id, feed] of Object.entries(SUPPLY_FEEDS)) {
   app.get(`/api/${id}/supply`, async (req, res) => {
@@ -17097,9 +17146,22 @@ app.listen(PORT, () => {
   // key loaded (CLKN via MM_OPERATOR_SECRET; others via their own env var). Sequential
   // per project = naturally staggered for RPC limits. A project with no key is skipped,
   // so registering one is safe until its wallet/key is funded & set.
+  // ONE SCHEDULER PER PROJECT (audit F1, 2026-09-01): rose/cuna/dnc/poke have their own
+  // dedicated loops. When a dedicated loop is the active authority (armed / not env-killed),
+  // this generic 10-min loop must NOT also tick that project — two unlocked schedulers
+  // rolling the same position race setState and manufacture orphaned positions (the $355
+  // incident). A DISARMED dedicated engine falls back to generic management as before.
+  const dedicatedActive = {
+    rose: () => process.env.ROSE_ENGINE_OFF !== "1" && !!kv.get("roseEngineArmed", false),
+    cuna: () => process.env.CUNA_ENGINE_OFF !== "1" && !!kv.get("cunaEngineArmed", false),
+    dnc: () => process.env.DNC_ENGINE_OFF !== "1" && !!kv.get("dncEngineArmed", false),
+    poke: () => process.env.POKE_ENGINE_OFF !== "1", // poke's loop is ON by default (owner)
+  };
   const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {
     const p = whirlpoolMM.vault.getProject(id);
-    return p && p.active !== false && whirlpoolMM.vault.isEnabled(id);
+    if (!(p && p.active !== false && whirlpoolMM.vault.isEnabled(id))) return false;
+    try { if (dedicatedActive[id] && dedicatedActive[id]()) return false; } catch { /* fall through to generic */ }
+    return true;
   });
   const startIds = vaultEnabledIds();
   if (startIds.length) console.log(`[VAULT] enabled — autonomous management every 10m · projects: ${startIds.join(", ")}`);
