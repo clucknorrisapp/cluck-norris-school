@@ -59,7 +59,10 @@ jobs:
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
-      - name: liquidity-engine decision simulator
+      # Scenario 7 (the behavioural money-path checks) needs node_modules and SKIPS here; the
+      # smoke-test job re-runs this file after npm ci with ENGINE_SIM_REQUIRE_VAULT=1, which
+      # turns that skip into a failure. A skip in THIS job is expected, not coverage.
+      - name: liquidity-engine decision simulator (dependency-free scenarios)
         run: node scripts/engine-sim-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
@@ -178,6 +181,17 @@ jobs:
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
+      # The engine simulator's BEHAVIOURAL money-path scenarios (Scenario 7) require
+      # node_modules — openVerified / assertCloseLanded across landed / not-landed / unreadable,
+      # confirm-timeout tagging, setConfig null-safety, transfer decimals, the durable-config
+      # route. In the dependency-free node-check job they print "skip" and it still exits 0, so
+      # the only behavioural coverage of the money paths was silently absent from CI. Re-run the
+      # file here with ENGINE_SIM_REQUIRE_VAULT=1, which turns that skip into a failure — the
+      # same pattern as NQ_LB_REQUIRE_ROUTER below.
+      - name: liquidity-engine simulator (full, incl. behavioural money-path scenarios)
+        env:
+          ENGINE_SIM_REQUIRE_VAULT: "1"
+        run: node scripts/engine-sim-test.cjs
       # Full leaderboard suite including the telemetry-router cases that node-check (no deps)
       # skips — here express is installed, so a skip means something is wrong and must fail.
       - name: Normie Quest leaderboard anti-forgery test (full, incl. telemetry router)

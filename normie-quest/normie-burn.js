@@ -394,14 +394,17 @@ async function verifyBurn(sessionId) {
     const tx = await conn().getParsedTransaction(si.signature, { commitment: 'finalized', maxSupportedTransactionVersion: 1 });
     if (!tx || !tx.meta) continue;
     // Rail-matched: a NORMIE session verifies NORMIE landing at the shop wallet, a SOL session
-    // verifies lamports. (A true burn also still counts on the NORMIE rail — the only tx carrying
-    // this reference is the one WE built, but if someone hand-crafts a burn that overpays the
-    // session, they paid more dearly than asked; refusing the item would punish generosity.)
+    // verifies lamports. This is a PAYMENT shop (2026-08-02, see file header) — only tokens that
+    // actually arrived at the shop wallet count. burnedAmount() used to also credit ANY balance
+    // decrease on the mint (originally to still honor a hand-crafted burn), but the reference key
+    // is handed to the client by design (Solana-Pay convention), so a self-transfer tagged with
+    // the session reference summed to a "burn" with nothing paid — a free item. Require the real
+    // transfer instead.
     let got = 0;
     if (s.pay === 'sol') {
       got = solToDest(tx, s.dest);
     } else {
-      got = Math.max(burnedAmount(tx, s.mint), transferredToDest(tx, s.mint, s.dest));
+      got = transferredToDest(tx, s.mint, s.dest);
     }
     if (got + 1e-9 < want) continue;                  // not enough for this session
     // Namespaced like server.js's "sol:" prefix (and for the same recorded incident): without
@@ -474,4 +477,6 @@ function transferredToDest(tx, mintStr, destStr) {
 }
 
 module.exports = { cfg, publicConfig, priceFor, newSession, buildBurnTx, sendSigned, verifyBurn,
-  claimOnce, unclaim, CATALOGUE, NORMIE_MINT_DEFAULT };
+  claimOnce, unclaim, CATALOGUE, NORMIE_MINT_DEFAULT,
+  // exported for tests only:
+  transferredToDest, burnedAmount };

@@ -52,6 +52,14 @@ function keypair() {
   return { pub: bs58.encode(Buffer.from(kp.publicKey)), sec: kp.secretKey };
 }
 function signMsg(message, sec) { return bs58.encode(Buffer.from(nacl.sign.detached(new TextEncoder().encode(message), sec))); }
+// A live wallet session token, minted the same way nq-wallet.js's checkSession() verifies one
+// (HMAC over pubkey + issuedAt, keyed by NQ_LB_SECRET). /api/nq/claim/prepare now requires one
+// (audit Batch B: it used to accept any pubkey with no ownership proof at all).
+function sessionTokenFor(pk) {
+  const issuedAt = Date.now();
+  const mac = crypto.createHmac('sha256', process.env.NQ_LB_SECRET).update(pk + '.' + issuedAt).digest('hex').slice(0, 32);
+  return mac + '.' + issuedAt;
+}
 
 function reach(levels, dwellMs) {
   if (dwellMs == null) dwellMs = 45000;
@@ -171,7 +179,7 @@ const ADDRESS = { name: 'Norm Ie', line1: '123 Chain St', line2: '', city: 'Solv
       playFor(WEEK_MS);   // that week is now the last completed one
       const wk2 = claims.lastCompletedWeek();
       const prep = await (await fetch(base + '/api/nq/claim/prepare', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ pubkey: fresh.pub, week: wk2, address: ADDRESS }) })).json();
+        body: JSON.stringify({ pubkey: fresh.pub, week: wk2, address: ADDRESS, token: sessionTokenFor(fresh.pub) }) })).json();
       const sub = await (await fetch(base + '/api/nq/claim', { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ pubkey: fresh.pub, week: wk2, signature: signMsg(prep.message, fresh.sec) }) })).json();
       ok('prepare + submit work over the wire', prep.ok === true && sub.ok === true && sub.claimed === true);

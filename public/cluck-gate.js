@@ -218,7 +218,7 @@
       say('Confirming payment on-chain…');
       var ok = false;
       for (var i = 0; i < 24; i++) {
-        try { var v = await fetch('/api/verify-sol-payment?sig=' + encodeURIComponent(sig) + '&min=' + c.lamports).then(function (r) { return r.json(); }); if (v.success) { ok = true; break; } } catch (e) {}
+        try { var v = await fetch('/api/verify-sol-payment?sig=' + encodeURIComponent(sig) + '&min=' + c.lamports + '&wallet=' + encodeURIComponent(state.pubkey)).then(function (r) { return r.json(); }); if (v.success) { ok = true; break; } } catch (e) {}
         await new Promise(function (r2) { setTimeout(r2, 2500); });
       }
       if (ok) { grant(c.days, 'paid'); say('✓ Paid — every heavy tool is unlocked for ' + c.days + ' days.', true); return finish(); }
