@@ -64,9 +64,27 @@ function chromePath() {
   return undefined;
 }
 
+// The lab page is an ~11MB single file (Phaser + 58 inlined base64 assets) and this harness
+// navigates it once per boss in ONE long-lived page. On a loaded box the renderer eventually
+// takes >30s to hand back domcontentloaded — 13-3 timed out on the 12th navigation while the
+// 13th passed, so it is contention, not a broken boss. An ERROR row counts as a failure, so
+// that flake reads as "the VIP boss is unmeasurable" and reds the build for nothing. Retry the
+// navigation once with a fresh, longer budget before believing it.
+async function gotoLab(page) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await page.goto(BASE + '/normie-quest-x7-lab', { waitUntil: 'domcontentloaded', timeout: attempt === 1 ? 30000 : 90000 });
+      await page.waitForFunction('!!window.__NQ_STARTLEVEL', { timeout: attempt === 1 ? 30000 : 90000 });
+      return;
+    } catch (e) {
+      if (attempt === 2) throw e;
+      await sleep(2000);
+    }
+  }
+}
+
 async function measure(page, b) {
-  await page.goto(BASE + '/normie-quest-x7-lab', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction('!!window.__NQ_STARTLEVEL', { timeout: 30000 });
+  await gotoLab(page);
   await sleep(900);
   await page.evaluate(i => window.__NQ_STARTLEVEL(i, 0), b.idx);
   await sleep(1400);
