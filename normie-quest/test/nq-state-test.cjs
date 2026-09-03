@@ -83,6 +83,33 @@ function ensurePhaser() {
   // …and the build genuinely IS slower with less CPU per browser, so the timeout has to scale
   // with contention rather than staying at the single-worker figure.
   const BOOT_MS = Math.round(25000 * (1 + (WORKERS - 1) * 0.6));
+  // browser.close() is not enough here: it can leave the headless GPU process alive, spinning at
+  // ~120% CPU. Because this harness relaunches every RESTART_EVERY levels, those orphans
+  // ACCUMULATE — by mid-run a 4-core box is largely occupied by browsers that are supposed to be
+  // dead, and the live ones crawl until the per-level boot timeout starts tripping on good levels.
+  //
+  // Measured, not inferred (2026-09-03, mid 90-level run, WORKERS=2 on 4 cores): three GPU
+  // processes were live — two aged ~20s, which are the two workers having just relaunched and are
+  // correct, plus ONE aged 15 minutes that had been running since the very first launch and had no
+  // business existing. Worth being careful here, because with N workers N concurrent browsers is
+  // normal and looks identical at a glance; the tell is a browser older than the current cycle.
+  // This is the likeliest reason the full run blew a 40-minute budget.
+  //
+  // So: capture the pid we launched, close politely, then confirm it actually died and insist.
+  async function closeSession(sess) {
+    if (!sess) return;
+    let pid = null;
+    try { const proc = sess.browser.process(); pid = proc && proc.pid; } catch (_) {}
+    try { await sess.browser.close(); } catch (_) {}
+    if (!pid) return;
+    await new Promise(r => setTimeout(r, 500));            // let close() do it properly first
+    for (const sig of ['SIGTERM', 'SIGKILL']) {
+      try { process.kill(pid, 0); } catch (_) { return; }   // already gone — nothing to do
+      try { process.kill(-pid, sig); } catch (_) { try { process.kill(pid, sig); } catch (_) {} }
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }
+
   async function openSession() {
     const errs = [];
     const browser = await chromium.launch({ headless: true, executablePath: findChrome(), args: ['--no-sandbox', '--disable-dev-shm-usage'] });
@@ -127,7 +154,7 @@ function ensurePhaser() {
     let sess = await openSession();
     let sinceRestart = 0;
     for (const lv of shardLevels) {
-      if (sinceRestart >= RESTART_EVERY) { try { await sess.browser.close(); } catch (_) {} sess = await openSession(); sinceRestart = 0; }
+      if (sinceRestart >= RESTART_EVERY) { await closeSession(sess); sess = await openSession(); sinceRestart = 0; }
       sinceRestart++;
       const page = sess.page;
       sess.errs.length = 0;
@@ -151,7 +178,7 @@ function ensurePhaser() {
         // on 2026-07-27 while passing serially on the identical build -- that is the case this
         // exists for.)
         if (!row.booted) {
-          try { await sess.browser.close(); } catch (_) {}
+          await closeSession(sess);
           sess = await openSession(); sinceRestart = 1;
           const p2 = sess.page;
           try {
@@ -183,7 +210,7 @@ function ensurePhaser() {
       const tag = (!row.booted ? 'NO-LOAD' : row.boss ? (row.stompable ? 'BOSS\u2713' : 'BOSS\u2717') : 'ok') + (row.retried ? ' (retried)' : '');
       process.stdout.write(`  [${String(row.i).padStart(2)}] ${row.name.padEnd(10)} ${tag}${row.errs.length ? '  ERR:' + row.errs.join('|') : ''}\n`);
     }
-    try { await sess.browser.close(); } catch (_) {}
+    await closeSession(sess);
     return out;
   }
 
