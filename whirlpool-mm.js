@@ -648,6 +648,14 @@ router.delete("/vault/projects/:id", (req, res) => {
   catch (e) { res.status(400).json({ error: e.message || "remove failed" }); }
 });
 
+// Projects whose BOOT RATCHET actually merges the kv ratchetOverrides:<project> table over
+// its code defaults (server.js: dncConfigRatchet, roseEngineConfigRatchet). Only for these
+// does a &durable=1 write survive a deploy — pokeConfigRatchet/cunaConfigRatchet re-stamp
+// their want-shape every boot with no override lookup, so a durable write there was accepted,
+// reported durable:true, and silently reverted on the next push. Keep this set in lockstep
+// with the ratchets: adding the merge to a ratchet means adding it here.
+const RATCHET_MERGES_OVERRIDES = new Set(["dnc", "rose"]);
+
 // POST /api/whirlpool/vault/config?key=… — patch config (body = partial config).
 router.post("/vault/config", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
@@ -656,26 +664,46 @@ router.post("/vault/config", (req, res) => {
     const body = { ...(req.body || {}) };
     const durable = req.query.durable === "1" || body._durable === true;
     delete body._durable;
+    // Refuse only the DURABILITY CLAIM, never the tuning. Rejecting the whole request turned
+    // the documented command into a total no-op on poke/cuna/clkn/treasury — an operator
+    // mid-incident on the ON-BY-DEFAULT poke engine got zero effect and had to reissue. The
+    // live patch always applies; when this project's ratchet would revert it on the next
+    // deploy we say so LOUDLY in the response instead of lying with `durable: true`.
+    const durableOk = RATCHET_MERGES_OVERRIDES.has(projectId);
+    const durableWarning = (durable && !durableOk)
+      ? `applied LIVE ONLY: project "${projectId}" is not durable-capable — its boot ratchet does not merge ratchetOverrides:${projectId}, so the next deploy WILL revert this. Re-apply after each deploy, or teach that ratchet in server.js to merge kv ratchetOverrides:<project> over its code defaults (dncConfigRatchet / roseEngineConfigRatchet are the reference).`
+      : null;
+    // A null VALUE means "drop this durable override" — it is NEVER a config value. Writing
+    // it through setConfig coerced it to 0 / false / the string "null" (zeroing usdcFloor or
+    // maxUsd, blanking pair) while dropping the override. Keep those keys out of the patch.
+    const dropKeys = Object.keys(body).filter((k) => body[k] === null);
+    for (const k of dropKeys) delete body[k];
     const config = vault.setConfig(body, projectId);
     // DURABLE overrides (owner retro, 2026-08-28): a plain config write is live-until-next-deploy —
     // the boot ratchet re-asserts its table and silently reverts it, which cost us twice (the lean
     // caps, the rebuy thresholds). &durable=1 stores the CLAMPED values the patch actually produced
     // into the ratchet's kv override table; the ratchet merges overrides over its code defaults, so
-    // the change survives every deploy until explicitly cleared (write null to drop a key).
+    // the change survives every deploy until explicitly cleared (write a key as null to DROP
+    // that override — the live value is left exactly as it is, not zeroed).
     let overrides;
-    if (durable) {
+    if (durable && durableOk) {
       const kvs = require("./lib/kvstore");
       const key = `ratchetOverrides:${projectId}`;
       overrides = kvs.get(key, {}) || {};
-      for (const k of Object.keys(body)) {
-        if (body[k] === null) delete overrides[k];
-        else overrides[k] = config[k];   // store what setConfig actually kept, post-clamp
-      }
+      for (const k of Object.keys(body)) overrides[k] = config[k];   // store what setConfig actually kept, post-clamp
+      for (const k of dropKeys) delete overrides[k];                  // null = drop the override, live value untouched
       kvs.set(key, overrides);
     }
-    res.json({ config, ...(durable ? { durable: true, ratchetOverrides: overrides } : {}) });
+    if (durableWarning) console.warn(`[vault-config] ${durableWarning}`);
+    res.json({
+      config,
+      ...(durable ? { durable: durableOk, ...(durableOk ? { ratchetOverrides: overrides } : { warning: durableWarning, durableProjects: [...RATCHET_MERGES_OVERRIDES] }) } : {}),
+    });
   }
   catch (e) { res.status(400).json({ error: e.message || "config failed" }); }
 });
 
-module.exports = { router, vault };
+// Exported for the engine simulator: RATCHET_MERGES_OVERRIDES is a hand-maintained mirror of
+// which ratchets in server.js actually merge kv ratchetOverrides:<project>, and the simulator
+// asserts the two agree — a copy with nothing tying it to the original is how it goes stale.
+module.exports = { router, vault, RATCHET_MERGES_OVERRIDES };
