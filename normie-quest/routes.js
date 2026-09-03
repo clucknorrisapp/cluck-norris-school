@@ -37,7 +37,7 @@ const promo = require('./nq-promo');     // weekly prize card + between-level pr
 function adminOK(req) {
   const k = String((req.query && req.query.key) || req.get('x-nq-key') || '');
   const want = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
-  return !!want && k === want;
+  return !!want && secretEqual(k, want);
 }
 // MASTER KEY ONLY (security review 2026-08-30): adminOK's own header says the feedback key is
 // "no funds/PII" trust — but adminOK was gating the prizes console (DECRYPTED shipping
@@ -275,6 +275,11 @@ router.post('/api/nq/score', async (req, res) => {
 // challenge -> the player signs it in their wallet (no tx) -> verify checks the ed25519 signature
 // and reads NORMIE/CLKN balances to grant an access tier + a session token. Reads only; no funds.
 router.get('/api/nq/wallet/config', (req, res) => {
+  // Throttle: this is a cheap local read, but it's polled on every game launch — cap it high
+  // enough that a legit player relaunching/reconnecting repeatedly never trips it (this gates
+  // access to the game itself, so a false throttle would lock out a paying holder). 300/min/IP
+  // is generous headroom over any real launch cadence.
+  if (throttled(req, 'walletconfig', 300)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try { res.json({ ok: true, ...wallet.publicConfig() }); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
@@ -300,6 +305,13 @@ router.post('/api/nq/wallet/verify', async (req, res) => {
         let m = {}; try { m = JSON.parse(fs.readFileSync(f, 'utf8')) || {}; } catch (e) {}
         const k = String(b.walletName).replace(/[^\w .-]/g, '').slice(0, 24) || 'unknown';
         m[k] = (m[k] || 0) + 1;
+        // Bound the map the same way nq-ledger bounds its idempotency maps: attacker-chosen
+        // walletName keys (throwaway sign-challenge keypairs) could otherwise grow this file
+        // without limit. Drop the OLDEST keys beyond the cap (insertion-ordered, non-integer
+        // string keys so JS preserves insertion order).
+        const WALLET_USAGE_MAX = 500;
+        const wkeys = Object.keys(m);
+        if (wkeys.length > WALLET_USAGE_MAX) { for (const wk of wkeys.slice(0, wkeys.length - WALLET_USAGE_MAX)) delete m[wk]; }
         require("../lib/atomic-write").atomicWriteFileSync(f, JSON.stringify(m));
       } catch (e) { /* counting is best-effort */ }
     }
@@ -966,6 +978,7 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   if (!adminOK(req)) return res.status(404).send('Not found');
   const key = esc(String((req.query && req.query.key) || ''));
+  try {
   // Granular death causes shipped in commit 3e2db4c (deploy 2026-07-20 15:39 UTC). Every event
   // BEFORE that carries the legacy generic "WRECKED BY FUD" label; everything after is specific.
   // Default view starts at the cutoff so TOP CAUSE reflects what actually kills testers now;
@@ -1364,6 +1377,7 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '(function(){var k=new URLSearchParams(location.search).get("key")||"";if(!k)return;document.querySelectorAll("a.klink").forEach(function(a){try{var u=new URL(a.getAttribute("href"),location.origin);u.searchParams.set("key",k);a.setAttribute("href",u.pathname+u.search);}catch(e){}});})();'
     + '</script>'
     + '</body></html>');
+  } catch (e) { res.status(500).send('server error'); }
 });
 
 // ---- produced music files (optional) -------------------------------------
