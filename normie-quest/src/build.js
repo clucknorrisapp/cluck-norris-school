@@ -86,7 +86,8 @@ fs.writeFileSync(HTML, out);
 console.log('wrote', path.relative(ROOT, HTML), '('+out.length+' bytes)');
 
 // --- inlined-Phaser build (CSP-free standalone) ---
-const phaser = fs.readFileSync(path.join(SRC, 'phaser.min.js'), 'utf8');
+// ONE vendored Phaser: the same bytes the served build loads via the SRI-pinned /vendor tag.
+const phaser = fs.readFileSync(path.join(ROOT, 'public', 'vendor', 'phaser-3.60.0.min.js'), 'utf8');
 const inlineHead = headBody.replace(cdnTag, '<script>\n'+phaser+'\n</script>');
 const play = inlineHead + '\n<script>\n' + logic.trim() + '\n</script>\n</body>\n</html>\n';
 const playPath = path.join(PUBLIC, 'normie-quest-play.html');

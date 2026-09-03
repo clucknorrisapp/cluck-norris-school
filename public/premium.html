@@ -6,7 +6,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="robots" content="noindex,nofollow"/>
 <title>Premium Forensics · Cluck Norris</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
 <style>
   /* palette comes from theme.css — the private :root that used to shadow it was removed 2026-07-29 */
 *{box-sizing:border-box}
@@ -120,7 +119,7 @@ let PROOF_WALLET = localStorage.getItem('clkn_premium_proof_wallet') || '';
 $('mint').value = new URLSearchParams(location.search).get('mint') || '';
 $('key').value = localStorage.getItem('clkn_premium_key') || '';
 
-function shortA(a){ return a ? a.slice(0,4)+'…'+a.slice(-4) : '—'; }
+function shortA(a){ return a ? CluckUtil.shortAddr(a) : '—'; }
 function setVMsg(html, err){ $('verifyStatus').innerHTML = err ? '<span style="color:#fca5a5">'+html+'</span>' : html; }
 
 // Same 11 injected wallets as the airdropper / hatchery.
@@ -131,20 +130,18 @@ function setVMsg(html, err){ $('verifyStatus').innerHTML = err ? '<span style="c
 const WALLETS = CluckWallet.WALLETS;
 // Show ONLY the wallets actually installed in this browser — not the whole registry. Rendering
 // every entry made a long jumbled row that grew each time we added a wallet; a normal user has
-// one (their wallet), a power user two. Re-runs on a short delay because some wallets inject a
-// beat after load. connectAndSign(id) still detects on click, so nothing else changes.
+// one (their wallet), a power user two. Re-rendered from CluckWallet.watch() below because some
+// wallets inject a beat after load. connectAndSign(id) still detects on click, so nothing else changes.
 function renderPremiumPicker(){
   var el = $('walletPicker'); if(!el) return;
   var list = CluckWallet.available();
   if(!list.length){
-    var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent||'') || (navigator.maxTouchPoints>1 && /Macintosh/.test(navigator.userAgent||''));
-    el.innerHTML = isMobile ? '' : '<div style="font-size:13px;color:var(--sub);line-height:1.6">No Solana wallet detected. Install a wallet extension (Phantom, Solflare, Backpack, SafePal…) and refresh.</div>';
+    el.innerHTML = CluckWallet.isMobile() ? '' : '<div style="font-size:13px;color:var(--sub);line-height:1.6">No Solana wallet detected. Install a wallet extension (Phantom, Solflare, Backpack, SafePal…) and refresh.</div>';
     return;   // mobile-with-no-wallet is handled by initPremiumDeepLinks() below
   }
   el.innerHTML = list.map(function(w){ return '<button class="wbtn" onclick="connectAndSign(\''+w.id+'\')">'+w.icon+' '+w.name+'</button>'; }).join('');
 }
 renderPremiumPicker();
-setTimeout(renderPremiumPicker, 600); setTimeout(renderPremiumPicker, 1600);
 
 // Mobile/iPad on-ramp: phone & iPad browsers can't see a wallet APP (only the
 // desktop extension or the wallet's in-app browser injects window.solana). When
@@ -168,7 +165,7 @@ function initPremiumDeepLinks(){
 }
 initPremiumDeepLinks();
 // Wallet providers can inject after we parse — re-run until one shows up (or 8s).
-try { CluckWallet.watch(function(){ if(CluckWallet.available().length){ const e=$('mobileConnect'); if(e) e.style.display='none'; } else initPremiumDeepLinks(); }); } catch(_){}
+try { CluckWallet.watch(function(){ renderPremiumPicker(); if(CluckWallet.available().length){ const e=$('mobileConnect'); if(e) e.style.display='none'; } else initPremiumDeepLinks(); }); } catch(_){}
 
 function markVerified(wallet, balance, proof){
   PROOF = proof; PROOF_WALLET = wallet;
@@ -258,8 +255,8 @@ async function run(){
   try{
     let qs = 'mint='+encodeURIComponent(mint);
     if(PROOF) qs += '&proof='+encodeURIComponent(PROOF);
-    if(key) qs += '&key='+encodeURIComponent(key);
-    const res = await fetch('/api/autopsy-premium?'+qs);
+    // Admin key rides in the x-premium-key header (the server reads it) — never in the URL, which lands in logs/history.
+    const res = await fetch('/api/autopsy-premium?'+qs, { headers: key ? { 'x-premium-key': key } : {} });
     clearInterval(tick);
     if(res.status===404){ $('status').innerHTML='<div class="err">Premium endpoint is disabled on the server.</div>'; $('runBtn').disabled=false; return; }
     if(res.status===403){

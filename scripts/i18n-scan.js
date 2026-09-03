@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* i18n scan — find user-facing strings in the app that are NOT in the curated dicts
- * (es/zh/it union), i.e. strings that fall back to the live MT layer for every language.
+ * (union of every dict in public/i18n), i.e. strings that fall back to the live MT layer for every language.
  *   node scripts/i18n-scan.js
  * Heuristic (no DOM): extracts JSX/HTML text runs + visible attributes and mirrors the
  * runtime's norm()/translatable() rules. "Uncurated" ≠ broken — those still translate via
@@ -29,7 +29,7 @@ const decode = (s) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&g
   .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ").replace(/&mdash;/g, "—").replace(/&hellip;/g, "…");
 
 const union = new Set();
-for (const f of ["es.json", "es.school.json", "zh.json", "zh.school.json", "it.json", "it.school.json"]) {
+for (const f of fs.readdirSync(DICTDIR).filter((n) => n.endsWith(".json"))) {
   try { const d = JSON.parse(fs.readFileSync(path.join(DICTDIR, f), "utf8")); Object.keys(d).forEach((k) => union.add(norm(k))); } catch (_) {}
 }
 
@@ -65,7 +65,7 @@ for (const f of walkFiles(path.join(ROOT, "src"), [".jsx", ".js"], [])) {
 }
 
 const uncovered = [...candidates.keys()].filter((k) => !union.has(k));
-console.log(`Dict union (es+zh+it): ${union.size} keys`);
+console.log(`Dict union (public/i18n/*.json): ${union.size} keys`);
 console.log(`Candidate user-facing strings: ${candidates.size}`);
 console.log(`Covered by a curated dict:    ${candidates.size - uncovered.length}`);
 console.log(`NOT curated (live-MT only):   ${uncovered.length}`);

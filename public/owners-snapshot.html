@@ -360,7 +360,7 @@ async function loadHistory(mint) {
     const d = await (await fetch("/api/owners-snapshot/history?mint=" + mint)).json();
     if (!d.ok || !d.snapshots || d.snapshots.length < 1) return;
     $("#histCard").style.display = "block";
-    $("#hist").innerHTML = d.snapshots.slice().reverse().map((s) => `<div class="h ${s.ts === current.summary.generatedAt || (current && current.previousTs === null && s === d.snapshots[d.snapshots.length - 1]) ? "" : ""}" data-ts="${s.ts}">
+    $("#hist").innerHTML = d.snapshots.slice().reverse().map((s) => `<div class="h ${s.ts === current.summary.generatedAt ? "on" : ""}" data-ts="${s.ts}">
       <div><b>${esc(dt(s.ts))}</b></div>
       <div class="sub">${STATUSES.map((k) => `<span class="st-${k}">${(s.summary.counts || {})[k] || 0}</span>`).join(" / ")} · ${fmt(s.summary.holdersAnalysed)} read · sold 7d ${esc(usd(s.summary.draining7dUsd))}</div>
       ${s.diff ? `<div class="sub">+${s.diff.entered} in · −${s.diff.exited} out · ${s.diff.statusChanged} changed</div>` : ""}
