@@ -117,6 +117,27 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   **`main` is gated.** This supersedes the older "push freely to `main`" grant for the public era,
   which is now. Still **ask first for anything destructive** — force-push, `reset --hard`, branch
   delete. That was never granted. Full flow + the visual gate: `docs/STAGING_WORKFLOW.md`.
+- 💸 **Model tiering — match the model to the task (owner, 2026-09-03: "Fable should be about
+  hard task ideas and conceptual ideas and lower models using for most things").** The default
+  is that a subagent inherits the session model, and that default is the single biggest source
+  of waste in this repo. Pass `model:` explicitly on **every** `Agent` call and every `agent()`
+  in a Workflow script:
+  - **Haiku** — mechanical, verifiable work with a right answer: greps and inventories, "is this
+    file referenced anywhere", dead-code confirmation, running a test and reporting output,
+    reading an endpoint and reformatting the JSON, docs/link drift, single-file find-and-replace.
+    Pair with `effort: 'low'`.
+  - **Sonnet** — the workhorse: reading a subsystem and reporting how it works, applying a
+    described fix, writing a page or a test, drafting copy, most find-and-fix passes.
+  - **Opus / Fable** — reserve for judgement that costs money if wrong: synthesis across many
+    agents' findings, adversarial verification on money/auth paths, architecture and product
+    decisions, anything touching the engine, payments or the brand bag. A verifier on a
+    money-path finding is worth the tier; a verifier on a stale comment is not.
+  Same rule for **scheduled routines**: a poller that usually does nothing does not need a
+  frontier model. Fresh-session routines (`create_new_session_on_fire`) accept a `model` — set
+  it. Self-bound routines inherit this session's model and cannot be tiered, so for those cut
+  **frequency** instead, and prefer a fresh-session routine when the job needs no conversation
+  context. Applied 2026-09-03: lock-celebration watcher → `claude-sonnet-5`; CUNA meme queue
+  hourly → every 3h.
 - ⛔ **PLAN ≠ EXECUTE for money.** For anything that moves funds, opens or closes positions, or
   resumes an engine: state the exact plan and STOP. Execute only on an explicit go. An owner
   message describing intent ("thinking we should Y") opens a discussion, not authorisation —
