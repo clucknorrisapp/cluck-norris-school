@@ -83,19 +83,26 @@ function ensurePhaser() {
   // …and the build genuinely IS slower with less CPU per browser, so the timeout has to scale
   // with contention rather than staying at the single-worker figure.
   const BOOT_MS = Math.round(25000 * (1 + (WORKERS - 1) * 0.6));
-  // browser.close() is not enough here: it can leave the headless GPU process alive, spinning at
-  // ~120% CPU. Because this harness relaunches every RESTART_EVERY levels, those orphans
-  // ACCUMULATE — by mid-run a 4-core box is largely occupied by browsers that are supposed to be
-  // dead, and the live ones crawl until the per-level boot timeout starts tripping on good levels.
+  // Belt-and-braces teardown: capture the pid, close politely, then confirm the process really
+  // went and escalate if not.
   //
-  // Measured, not inferred (2026-09-03, mid 90-level run, WORKERS=2 on 4 cores): three GPU
-  // processes were live — two aged ~20s, which are the two workers having just relaunched and are
-  // correct, plus ONE aged 15 minutes that had been running since the very first launch and had no
-  // business existing. Worth being careful here, because with N workers N concurrent browsers is
-  // normal and looks identical at a glance; the tell is a browser older than the current cycle.
-  // This is the likeliest reason the full run blew a 40-minute budget.
+  // ⚠️ CORRECTION (2026-09-03) — read this before "improving" it. I first wrote this believing
+  // browser.close() leaks the headless GPU process and that those orphans accumulate. That was
+  // WRONG, and the way I convinced myself is worth recording: mid-run I saw three GPU processes
+  // where WORKERS=2, one of them 15 minutes old, and called it an orphan WITHOUT checking its
+  // parent. Every one of them turned out to have a live chromium parent, and every browser was
+  // held by the live node process — nothing was orphaned by close() at all. The genuine extra
+  // browser was the bootstrap session below (opened only to read __NQ_LEVELS_LIST, never closed),
+  // which is one idle browser for the whole run, not an accumulating leak.
   //
-  // So: capture the pid we launched, close politely, then confirm it actually died and insist.
+  // What actually starved the first 90-level run was ME: SIGKILLing earlier nq-verify and
+  // boss-ground node processes DOES orphan their chromium children (killing a parent reparents
+  // its children to init — a different mechanism from close() failing), and those orphans then
+  // competed with the run for a 4-core box. If a run is mysteriously slow, check for chromium
+  // whose PPID is 1 — that is the real signature, and `ps -o ppid=` is how you tell.
+  //
+  // This function is kept because verifying a close actually completed is cheap and honest, not
+  // because a leak was ever demonstrated here.
   async function closeSession(sess) {
     if (!sess) return;
     let pid = null;
@@ -129,8 +136,12 @@ function ensurePhaser() {
     return { browser, page, errs };
   }
 
-  let sess = await openSession();
-  let levels = await sess.page.evaluate(() => window.__NQ_LEVELS_LIST);
+  // One browser purely to read the level list. runShard() opens its OWN session per worker, so
+  // this one must be closed here or it idles for the entire run — which is exactly what it was
+  // doing (found 2026-09-03: a 37-minute-old browser alive beside the two worker browsers).
+  const bootSess = await openSession();
+  let levels = await bootSess.page.evaluate(() => window.__NQ_LEVELS_LIST);
+  await closeSession(bootSess);
   // Optional slice filter so a single world can be verified fast (avoids a 60+ level full run).
   //   NQ_ONLY="20-,21-"  → only levels whose name starts with one of these prefixes
   //   NQ_ONLY="55-66"    → only level indices in [55,66]
