@@ -1490,9 +1490,10 @@ initUnlockGate();
 </script>
 
 <!-- Solana Web3.js + SPL Token -->
-<!-- Vendored from @solana/web3.js@1.87.6 — served same-origin so Edge / Brave tracking
-     prevention can't block it the way it does cdnjs in some configurations. -->
-<script src="/vendor/solana-web3.iife.min.js"></script>
+<!-- Vendored @solana/web3.js@1.95.8 — served same-origin so Edge / Brave tracking
+     prevention can't block it the way it does cdnjs in some configurations. Pinned +
+     SRI-hashed like wallet-checkup.html: this page builds and signs real transfers. -->
+<script src="/vendor/solana-web3-1.95.8.iife.min.js" integrity="sha384-ujeTtvHxhu2g5lnu14Roii2ajvVKJ74KQ6eo6GGfAi0IrKZ1YkF8N68Iw5VmIJO0" crossorigin="anonymous"></script>
 
 <!-- SPL shim + batching/tx engine, shared with the Buy Special tool so prize
      sending and the standalone airdropper run the exact same code path. -->
@@ -1725,7 +1726,7 @@ async function adPaySol() {
     adWalletMsg('Confirming on-chain…');
     let ok = false;
     for (let i = 0; i < 24; i++) {
-      try { const v = await fetch('/api/verify-sol-payment?sig=' + sig + '&min=' + SOL_LAMPORTS).then(r => r.json());
+      try { const v = await fetch('/api/verify-sol-payment?sig=' + sig + '&min=' + SOL_LAMPORTS + '&wallet=' + encodeURIComponent(wPubkey)).then(r => r.json());
             if (v.success) { ok = true; break; } } catch (e) {}
       await new Promise(r => setTimeout(r, 2500));
     }

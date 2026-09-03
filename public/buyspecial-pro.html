@@ -96,7 +96,7 @@
     <div class="sub">UNLOCK TO RUN COMPETITIONS</div>
 
     <button class="btn ghost" id="gConnect" style="width:100%">🔗 Connect wallet</button>
-    <div class="gblurb" style="margin:10px 0 0">Hold <b style="color:var(--gold)">$50 worth of CLKN</b> and every heavy tool is free while you hold. If you don't, one click pays <b style="color:var(--gold)">0.05 SOL</b> for 7 days of <b>all of them</b> — Buy Special, Airdrop, X-Ray, Holders, Trace.</div>
+    <div class="gblurb" id="gBlurb" style="margin:10px 0 0">Hold <b style="color:var(--gold)">$50 worth of CLKN</b> and every heavy tool is free while you hold. If you don't, one click pays <b style="color:var(--gold)">0.05 SOL</b> for 7 days of <b>all of them</b> — Buy Special, Airdrop, X-Ray, Holders, Trace.</div>
     <div class="wchip hidden" id="gWallet"><span class="dot"></span><span class="addr" id="gWalletAddr">—</span><span class="bal" id="gWalletBal"></span><button class="dc" id="gDisconnect" type="button">Disconnect</button></div>
     <div class="gstatus hidden" id="gWalletStatus" style="margin-top:10px"></div>
     <button class="btn a hidden" id="gPaySol" style="width:100%;margin-top:10px">◎ Pay 0.05 SOL — unlock 7 days</button>
@@ -229,7 +229,7 @@
   </div>
 </div>
 
-<script src="/vendor/solana-web3.iife.min.js"></script>
+<script src="/vendor/solana-web3-1.95.8.iife.min.js" integrity="sha384-ujeTtvHxhu2g5lnu14Roii2ajvVKJ74KQ6eo6GGfAi0IrKZ1YkF8N68Iw5VmIJO0" crossorigin="anonymous"></script>
 <script src="/cluck-wallet.js?v=2"></script>
 <script src="/airdrop-engine.js"></script>
 <script src="/cluck-util.js"></script>
@@ -586,7 +586,24 @@ function isUnlocked(){ if(localStorage.getItem(OP_FLAG)==='1') return true; retu
 function showTool(){ $('gate').classList.add('hidden'); $('tool').classList.remove('hidden'); }
 function showGate(){ $('gate').classList.remove('hidden'); $('gate').scrollIntoView({behavior:'smooth',block:'center'}); }
 let GATE_CFG=null;   // live numbers from /api/tool-gate/config (fallbacks below if it's down)
-const SOL_LAMPORTS=50000000;
+const SOL_LAMPORTS=50000000;   // fallback only — used when /api/tool-gate/config can't be reached
+// The amount is live-priced, never hardcoded (CLAUDE.md) — quote and charge exactly what
+// /api/tool-gate/config publishes, same as cluck-gate.js. Do not add a second local floor
+// constant here: a page-local copy of the server's SOL_UNLOCK_MIN_LAMPORTS would drift the
+// moment either number changes without the other (see server.js's own comment on that floor).
+function curLamports(){ return (GATE_CFG&&GATE_CFG.lamports)||SOL_LAMPORTS; }
+function curDays(){ return (GATE_CFG&&GATE_CFG.days)||7; }
+function curUsd(){ return (GATE_CFG&&GATE_CFG.holdUsd)||50; }
+// Refresh the static gate copy + button label with the live numbers so a raised
+// TOOLGATE_LAMPORTS/DAYS/USD doesn't leave this page quoting the old price (CLAUDE.md:
+// never hardcode the gated amount — read it from /api/tool-gate/config like cluck-gate.js).
+function refreshGateCopy(){
+  const sol=(curLamports()/1e9), days=curDays(), usd=curUsd();
+  const solStr=(Math.round(sol*1000)/1000)+'';
+  const b=$('gBlurb'); if(b) b.innerHTML='Hold <b style="color:var(--gold)">$'+usd+' worth of CLKN</b> and every heavy tool is free while you hold. If you don\'t, one click pays <b style="color:var(--gold)">'+solStr+' SOL</b> for '+days+' days of <b>all of them</b> — Buy Special, Airdrop, X-Ray, Holders, Trace.';
+  const p=$('gPaySol'); if(p) p.textContent='◎ Pay '+solStr+' SOL — unlock '+days+' days';
+}
+async function ensureGateCfg(){ if(!GATE_CFG){ try{ GATE_CFG=await CluckGate.config(); }catch(_){} } refreshGateCopy(); }
 let wProvider=null, wPubkey=null;
 const rpcCall = CluckUtil.rpc;   // shared helper — see /cluck-util.js
 // Wallet detection lives in /cluck-wallet.js — this page used to look for Phantom
@@ -635,12 +652,12 @@ async function gCheckHolder(){
     if(comped){ gWalletMsg('✓ Comped wallet — unlocked free.',true); unlockNow(3650,'comp'); }
     else {
       // $-denominated holder tier: threshold comes from the live config, never hardcoded.
-      if(!GATE_CFG){ try{ GATE_CFG=await CluckGate.config(); }catch(_){} }
-      const need=(GATE_CFG&&GATE_CFG.clknNeeded)||null, days=(GATE_CFG&&GATE_CFG.days)||7, usd=(GATE_CFG&&GATE_CFG.holdUsd)||50;
+      await ensureGateCfg();
+      const need=(GATE_CFG&&GATE_CFG.clknNeeded)||null, days=curDays(), usd=curUsd(), solStr=(Math.round(curLamports()/1e9*1000)/1000)+'';
       if(GATE_CFG&&GATE_CFG.enabled===false){ gWalletMsg('✓ Unlocked.',true); unlockNow(days,'gate-off'); }
       else if(need&&bal>=need){ gWalletMsg('✓ Holder — every heavy tool unlocked free.',true); unlockNow(days,'holder'); }
       else if(!need){ gWalletMsg('✓ Unlocked (price check unavailable right now).',true); unlockNow(1,'grace'); }
-      else { gWalletMsg('The free tier needs ≈'+fmt(need)+' CLKN ($'+usd+' worth) — this wallet holds '+fmt(bal)+'. Pay 0.05 SOL for '+days+' days of ALL tools instead:'); $('gPaySol').classList.remove('hidden'); }
+      else { gWalletMsg('The free tier needs ≈'+fmt(need)+' CLKN ($'+usd+' worth) — this wallet holds '+fmt(bal)+'. Pay '+solStr+' SOL for '+days+' days of ALL tools instead:'); $('gPaySol').classList.remove('hidden'); }
     }
   }catch(e){ gWalletMsg('Balance check failed: '+e.message); }
 }
@@ -654,13 +671,15 @@ async function gPaySolFn(){
     const {Transaction,PublicKey}=solanaWeb3;
     // Hand-built System transfer via the shared engine — SystemProgram.transfer()
     // throws "Buffer is not defined" in the browser (see airdrop-engine.js).
-    const tx=new Transaction(); tx.add(splToken.createSolTransferInstruction(new PublicKey(wPubkey),new PublicKey(RECV),SOL_LAMPORTS));
+    await ensureGateCfg();
+    const lamports=curLamports();
+    const tx=new Transaction(); tx.add(splToken.createSolTransferInstruction(new PublicKey(wPubkey),new PublicKey(RECV),lamports));
     tx.feePayer=new PublicKey(wPubkey); tx.recentBlockhash=bh.value.blockhash;
-    gWalletMsg('Approve the 0.05 SOL payment in your wallet…');
+    gWalletMsg('Approve the '+(Math.round(lamports/1e9*1000)/1000)+' SOL payment in your wallet…');
     const res=await wProvider.signAndSendTransaction(tx); const sig=res.signature||res;
     gWalletMsg('Confirming payment on-chain…');
-    let ok=false; for(let i=0;i<24;i++){ try{ const v=await fetch('/api/verify-sol-payment?sig='+sig+'&min='+SOL_LAMPORTS).then(r=>r.json()); if(v.success){ok=true;break;} }catch(e){} await new Promise(r=>setTimeout(r,2500)); }
-    if(ok){ const d=(GATE_CFG&&GATE_CFG.days)||7; gWalletMsg('✓ Paid — every heavy tool unlocked for '+d+' days.',true); unlockNow(d,'paid'); }
+    let ok=false; for(let i=0;i<24;i++){ try{ const v=await fetch('/api/verify-sol-payment?sig='+sig+'&min='+lamports+'&wallet='+encodeURIComponent(wPubkey)).then(r=>r.json()); if(v.success){ok=true;break;} }catch(e){} await new Promise(r=>setTimeout(r,2500)); }
+    if(ok){ const d=curDays(); gWalletMsg('✓ Paid — every heavy tool unlocked for '+d+' days.',true); unlockNow(d,'paid'); }
     else { gWalletMsg('Payment sent but not confirmed yet — tap “Pay” again in a moment to re-check.'); $('gPaySol').disabled=false; }
   }catch(e){ gWalletMsg('Payment failed: '+(e.message||e)); $('gPaySol').disabled=false; }
 }
@@ -702,7 +721,7 @@ async function loadCompPresets(){
   const q=new URLSearchParams(location.search), key=q.get('key');
   if(localStorage.getItem(OP_FLAG)==='1'){ $('opBanner').classList.remove('hidden'); showTool(); }
   if(key){ try{ const r=await fetch('/api/admin-check?key='+encodeURIComponent(key)); if(r.ok){ localStorage.setItem(OP_FLAG,'1'); $('opBanner').classList.remove('hidden'); showTool(); } }catch(e){} }
-  if(isUnlocked()){ showTool(); } else if(localStorage.getItem(OP_FLAG)!=='1'){ showGate(); }
+  if(isUnlocked()){ showTool(); } else if(localStorage.getItem(OP_FLAG)!=='1'){ showGate(); ensureGateCfg(); }
   await loadCompPresets();
   // /rose keeps working as a direct link even after the ROSE chip has aged out.
   const wantRose=/rose/i.test(location.pathname);

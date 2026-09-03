@@ -33,19 +33,12 @@
 
   /* Wallet */
   .wallet-picker { display: flex; gap: 8px; flex-wrap: wrap; }
-  .wallet-btn { flex: 1; min-width: 130px; display: flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
+  /* One neutral style for every wallet button — the registry (cluck-wallet.js) is the single
+     source of truth for which wallets exist and their icon/name, so this no longer hardcodes
+     a per-brand color per entry (that per-wallet CSS list was itself part of the drift: it only
+     ever covered the 11 wallets someone had hand-typed, never the full registry). */
+  .wallet-btn { flex: 1; min-width: 130px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: 1px; cursor: pointer; background: rgba(255,255,255,0.06); transition: transform 0.15s, opacity 0.15s; }
   .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; }
-  .wallet-btn.phantom { background: #9945FF; }
-  .wallet-btn.solflare { background: #FC822B; }
-  .wallet-btn.backpack { background: #E33E3F; }
-  .wallet-btn.okx { background: #2B2B2B; }
-  .wallet-btn.coinbase { background: #1652F0; }
-  .wallet-btn.trust { background: #3375BB; }
-  .wallet-btn.glow { background: #00D18C; }
-  .wallet-btn.exodus { background: #6E55C9; }
-  .wallet-btn.bitget { background: #00F0FF; color: #06283D; }
-  .wallet-btn.brave { background: #FB542B; }
-  .wallet-btn.jupiter { background: #4D8FF7; }
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .wallet-info.show { display: flex; }
   .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
@@ -209,19 +202,10 @@ body{background:transparent;font-family:var(--body);}
   <!-- Wallet -->
   <div class="card">
     <div class="card-title">1 · CONNECT WALLET</div>
-    <div class="wallet-picker" id="walletPicker">
-      <button class="wallet-btn phantom" onclick="connectWallet('phantom')">🔮 Phantom</button>
-      <button class="wallet-btn solflare" onclick="connectWallet('solflare')">☀️ Solflare</button>
-      <button class="wallet-btn backpack" onclick="connectWallet('backpack')">🎒 Backpack</button>
-      <button class="wallet-btn okx" onclick="connectWallet('okx')">⭕ OKX</button>
-      <button class="wallet-btn coinbase" onclick="connectWallet('coinbase')">🔵 Coinbase</button>
-      <button class="wallet-btn trust" onclick="connectWallet('trust')">🛡 Trust</button>
-      <button class="wallet-btn glow" onclick="connectWallet('glow')">🌐 Glow</button>
-      <button class="wallet-btn exodus" onclick="connectWallet('exodus')">🪐 Exodus</button>
-      <button class="wallet-btn bitget" onclick="connectWallet('bitget')">🌊 Bitget</button>
-      <button class="wallet-btn brave" onclick="connectWallet('brave')">🦁 Brave</button>
-      <button class="wallet-btn jupiter" onclick="connectWallet('jupiter')">🪐 Jupiter</button>
-    </div>
+    <!-- Populated from the shared registry (CluckWallet.WALLETS) by renderWalletPicker() below —
+         a hand-typed subset here drifted from the registry and left several wallets with no
+         button even though CluckWallet.watch() detected them. -->
+    <div class="wallet-picker" id="walletPicker"></div>
     <div id="mobileConnect" style="display:none;margin-top:12px;flex-direction:column;gap:8px"></div>
     <div class="wallet-info" id="walletInfo">
       <span class="wallet-info-addr" id="walletInfoAddr"></span>
@@ -423,7 +407,7 @@ body{background:transparent;font-family:var(--body);}
 
 </div>
 
-<script src="/vendor/solana-web3.iife.min.js"></script>
+<script src="/vendor/solana-web3-1.95.8.iife.min.js" integrity="sha384-ujeTtvHxhu2g5lnu14Roii2ajvVKJ74KQ6eo6GGfAi0IrKZ1YkF8N68Iw5VmIJO0" crossorigin="anonymous"></script>
 <script src="/cluck-wallet.js?v=2"></script>
 <script src="/cluck-util.js"></script>
 <script>
@@ -500,6 +484,25 @@ function calcStartPrice() {
 // detecting two, the Locker Room three). Aliased rather than rewritten so every
 // WALLETS[id].name / .detect() / .download call site below is unchanged.
 const WALLETS = CluckWallet.WALLETS;
+// Render one button per registry entry (not just the ones detected) so every supported
+// wallet stays visible as an option even when it isn't installed yet — connectWallet(id)
+// below already handles the "not detected" case with an install prompt. This replaces the
+// old hand-typed 11-button list, which had drifted to miss SafePal, Nightly, Magic Eden,
+// Coin98, Bybit, TokenPocket and MathWallet as the registry grew.
+function renderWalletPicker() {
+  const el = document.getElementById('walletPicker');
+  if (!el) return;
+  el.innerHTML = '';
+  Object.keys(WALLETS).forEach(function (id) {
+    const w = WALLETS[id];
+    const b = document.createElement('button');
+    b.className = 'wallet-btn';
+    b.textContent = w.icon + ' ' + w.name;
+    b.addEventListener('click', function () { connectWallet(id); });
+    el.appendChild(b);
+  });
+}
+renderWalletPicker();
 // Mobile on-ramp: on mobile with NO wallet injected, offer one-tap deep links
 // that OPEN this page inside the wallet's browser (pure navigation — nothing is
 // signed/shared by the link; the injected connect+sign flow runs once inside).
@@ -510,7 +513,7 @@ function initMobileDeepLinks() {
   if (CluckWallet.available().length) return;
   const el = document.getElementById('mobileConnect'), picker = document.getElementById('walletPicker');
   if (!el) return;
-  el.innerHTML = CluckWallet.mobileLinksHTML({ btnClass: 'wallet-btn phantom', hintStyle: 'font-family:var(--body);font-size:13px;color:var(--sub);line-height:1.6;' });
+  el.innerHTML = CluckWallet.mobileLinksHTML({ btnClass: 'wallet-btn', hintStyle: 'font-family:var(--body);font-size:13px;color:var(--sub);line-height:1.6;' });
   el.style.display = 'flex';
   if (picker) picker.style.display = 'none';
 }

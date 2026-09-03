@@ -347,9 +347,16 @@
   function detect() {
     var found = [];
     function add(name, p) { if (p && !found.some(function (f) { return f.name === name; })) found.push({ name: name, provider: p }); }
+    // SafePal MUST be checked before the generic window.solana.isPhantom fallback below: its
+    // in-app browser injects one window.solana that ALSO sets isPhantom (and isGlow), so without
+    // this check first a SafePal user here was mislabeled "Phantom" — the same drift already
+    // fixed in public/cluck-wallet.js and normie-quest/src/game_logic.js's WALLET_DEFS.
+    try { if ((window.safepal && window.safepal.solana) || (window.safepalProvider && window.safepalProvider.solana)) add('SafePal', (window.safepal && window.safepal.solana) || window.safepalProvider.solana); } catch (e) {}
+    try { if (window.solana && window.solana.isSafePal) add('SafePal', window.solana); } catch (e) {}
     try { if (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom) add('Phantom', window.phantom.solana); } catch (e) {}
     try { if (window.solflare && window.solflare.isSolflare) add('Solflare', window.solflare); } catch (e) {}
     try { if (window.backpack && window.backpack.isBackpack) add('Backpack', window.backpack); } catch (e) {}
+    try { if ((window.coin98 && window.coin98.sol) || (window.solana && window.solana.isCoin98)) add('Coin98', (window.coin98 && window.coin98.sol) || window.solana); } catch (e) {}
     try { if (window.solana && window.solana.isPhantom && !found.length) add('Phantom', window.solana); } catch (e) {}
     try { window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: stdApi })); } catch (e) {}   // re-announce for late registrations
     stdWallets.forEach(function (w) { add(w.name, stdAdapter(w)); });

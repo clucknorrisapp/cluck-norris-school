@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("path");
 const { join } = path;
 const fs = require("fs");
+const dns = require("dns");
 const { createCanvas, GlobalFonts, loadImage } = require("@napi-rs/canvas");
 const { createSign, createHash, createHmac, randomBytes, createPublicKey, verify: ed25519Verify, timingSafeEqual } = require("crypto");
 // Constant-time secret compare. A plain === leaks the length of the matching
@@ -3283,7 +3284,7 @@ if (CF_ORIGIN_SECRET) {
   app.use((req, res, next) => {
     if (req.path === "/healthz") return next();
     const got = req.get("x-cluck-edge-auth") || "";
-    if (createHash("sha256").update(got).digest("hex") === cfExpectedHash) return next();
+    if (createHash("sha256").update(got).digest("hex") === cfExpectedHash) { req.cfVerified = true; return next(); }
     // The game domain may be wired straight to Railway (no Cloudflare zone yet) — let it through,
     // but ONLY for game paths, so a spoofed Host header can never reach the rest of the app around
     // the WAF. If/when the owner moves the domain behind Cloudflare with the same Transform Rule,
@@ -3347,18 +3348,22 @@ const RL_BUCKETS = new Map(); // "bucket:ip" -> number[] request timestamps (ms)
 // evicts timestamps a slow-window limiter still needs — which silently collapsed /api/claim's
 // 1-hour cap (windowMs 3.6M) to ~60s because the sweep hardcoded 60000ms. Track the max here.
 let RL_MAX_WINDOW_MS = 60000;
-// Real client IP, Cloudflare-aware. Behind Cloudflare (origin lockdown 403s any non-Cloudflare
-// ingress, so this can't be bypassed) CF-Connecting-IP is the true visitor and CANNOT be forged —
-// Cloudflare overwrites any client-supplied value. Prefer it. Fall back to the LAST x-forwarded-for
-// hop (the one an edge appends, which a client can't forge) and finally req.ip.
+// Real client IP, Cloudflare-aware. CF-Connecting-IP is only trustworthy on a request the origin
+// lockdown above actually verified (req.cfVerified — the X-Cluck-Edge-Auth hash matched): the
+// lockdown EXEMPTS game-host paths (NQ_GAME_PATH) via a client-controlled Host header, and
+// CF_ORIGIN_SECRET can be unset entirely (staging), so on those requests cf-connecting-ip is just
+// another attacker-supplied header. Trust it only when req.cfVerified is true. Otherwise fall back
+// to the LAST x-forwarded-for hop (the one an edge appends, which a client can't forge by prepending
+// entries) and finally req.ip.
 // ⚠️ History: the limiters used to key on the last XFF hop. That was correct pre-Cloudflare, but once
 // Cloudflare went in front (2026-08-04) the last hop became Cloudflare's SHARED edge IP — so every
 // per-IP cap (the 150/min /api cap, the 20/min payment check, the 15/min forensic caps that exist to
 // stop anonymous callers draining paid Helius/ST/Bags quota) silently collapsed into one global
-// bucket. CF-Connecting-IP restores true per-visitor bucketing.
+// bucket. CF-Connecting-IP restores true per-visitor bucketing — but only when it's verified.
 function clientIp(req) {
   const xff = String(req.headers["x-forwarded-for"] || "").split(",").map(s => s.trim()).filter(Boolean);
-  return String(req.headers["cf-connecting-ip"] || (xff.length ? xff[xff.length - 1] : (req.ip || "")) || "unknown");
+  if (req.cfVerified && req.headers["cf-connecting-ip"]) return String(req.headers["cf-connecting-ip"]);
+  return String((xff.length ? xff[xff.length - 1] : (req.ip || "")) || "unknown");
 }
 function rateLimit(bucket, { windowMs, max }) {
   if (windowMs > RL_MAX_WINDOW_MS) RL_MAX_WINDOW_MS = windowMs;   // keep the sweep's retention >= every window
@@ -3457,6 +3462,36 @@ app.use(express.urlencoded({ extended: true }));
 const I18N_MT_LANGNAMES = { zh: "Simplified Chinese (简体中文)", es: "neutral Latin-American Spanish", it: "Italian", pt: "Brazilian Portuguese", vi: "Vietnamese", hi: "Hindi (हिन्दी, Devanagari script)" };
 const I18N_MT_DIR = process.env.DATA_DIR || "/data";
 const I18N_MT_DAILY_NEW_CAP = 20000;
+// Per-language ceiling on the STORE itself, independent of the daily new-string cap above — the
+// daily cap limits the RATE of growth but nothing ever stopped the total from growing forever
+// (every unique string ever submitted is kept). This bounds each lang's file/memory footprint.
+// ⚠️ It is enforced by EVICTING the oldest entries, never by refusing new ones. /api/i18n/translate
+// is public and unauthenticated, so a hard refusal would let one abuser fill a language's store
+// once and freeze it FOREVER — every later lesson/UI string in that language falling back to
+// English with no purge route. Eviction keeps the failure daily-resettable (an evicted string
+// costs one re-translation, which the daily cap already bounds) instead of permanent.
+const I18N_MT_MAX_ENTRIES_PER_LANG = 20000;
+const i18nMtFullLogged = {};
+// Make room for `incoming` new entries by dropping the oldest-inserted ones (JS preserves
+// insertion order for string keys). Strings in the current request are never evicted, so a
+// batch can't evict what it is about to write.
+function i18nMtMakeRoom(lang, store, incoming) {
+  const keys = Object.keys(store);
+  const over = keys.length + incoming.length - I18N_MT_MAX_ENTRIES_PER_LANG;
+  if (over <= 0) return;
+  if (!i18nMtFullLogged[lang]) {
+    i18nMtFullLogged[lang] = true;
+    console.warn(`[i18n-mt] ${lang} store hit ${I18N_MT_MAX_ENTRIES_PER_LANG} entries — evicting oldest to make room`);
+  }
+  const keep = new Set(incoming);
+  let n = 0;
+  for (const k of keys) {
+    if (n >= over) break;
+    if (keep.has(k)) continue;
+    delete store[k]; n++;
+  }
+  if (n) i18nMtDirty[lang] = true;
+}
 const i18nMt = {};            // lang -> { text: translation } (in-memory, lazy-loaded)
 const i18nMtDirty = {};
 let i18nMtNewToday = 0, i18nMtNewDay = "";
@@ -3507,7 +3542,10 @@ async function i18nMtBatch(lang, texts) {
         raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
         let arr = null; try { arr = JSON.parse(raw); } catch (_) {}
         if (Array.isArray(arr) && arr.length === chunk.length) {
-          for (let j = 0; j < chunk.length; j++) if (typeof arr[j] === "string" && arr[j]) { store[chunk[j]] = arr[j]; i18nMtNewToday++; }
+          i18nMtMakeRoom(lang, store, chunk);   // bound the store by eviction, not by refusal
+          for (let j = 0; j < chunk.length; j++) {
+            if (typeof arr[j] === "string" && arr[j]) { store[chunk[j]] = arr[j]; i18nMtNewToday++; }
+          }
           i18nMtDirty[lang] = true;
         }
       } catch (_) {}
@@ -3887,11 +3925,7 @@ app.get("/api/autopsy-premium", async (req, res) => {
 
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-  const rpcCall = (id, method, params) => fetch(rpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
-  }).then(r => r.json());
+  const rpcCall = heliusRpcCall(rpcUrl);   // routed through rpc.rpcFetch — failover on 429/5xx, like the 14 other call sites already using it
   const heliusTxCache = new Map();
   const scanQuality = { phases: {}, degraded: false };
   const t0 = Date.now();
@@ -7076,6 +7110,16 @@ app.get("/api/buycomp/list", (req, res) => {
 const AIRDROP_HANDOFF_TTL_MS = 6 * 60 * 60 * 1000;
 const AIRDROP_HANDOFF_MAX_CHARS = 400_000;
 const AIRDROP_HANDOFF_MAX_LINES = 5000;
+// Hard ceiling on LIVE (unexpired) handoffs, independent of the per-IP rate limit — the limit
+// alone still lets one IP plant thousands of ~100KB entries into the single kv blob that every
+// engine tick rewrites whole (lib/kvstore.js persist() serialises the ENTIRE state on every
+// kv.set). This is a bridge for a one-time tool→/airdrop hop, not a store — real usage never
+// keeps hundreds of these alive at once.
+const AIRDROP_HANDOFF_MAX_LIVE = 500;
+// Each line must look like a wallet, optionally followed by an amount — the only two shapes any
+// caller ever sends (cluckHandOff producers: "wallet, amount", "wallet amount", or bare "wallet"
+// for equal-split mode). Anything else is rejected rather than stashed verbatim.
+const AIRDROP_HANDOFF_LINE_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}([,\s]+[0-9]+(\.[0-9]+)?)?$/;
 function airdropHandoffPrune(all) {
   const now = Date.now();
   for (const [id, h] of Object.entries(all)) {
@@ -7142,8 +7186,18 @@ app.post("/api/airdrop-handoff", (req, res) => {
   const list = str(b.recipients, AIRDROP_HANDOFF_MAX_CHARS);
   const wallets = str(b.wallets, AIRDROP_HANDOFF_MAX_CHARS);
   if (!list && !wallets) return res.status(400).json({ ok: false, error: "nothing to hand off" });
-  const lines = (list || wallets).split("\n").filter((l) => l.trim()).length;
-  if (lines > AIRDROP_HANDOFF_MAX_LINES) return res.status(400).json({ ok: false, error: "too many recipients" });
+  // Validate EVERY field that gets persisted, not just the first non-empty one: the payload
+  // below stores BOTH `recipients` and `wallets`, so checking only `(list || wallets)` let a
+  // caller send one valid line in `recipients` and 400KB of arbitrary text in `wallets` — which
+  // then lands verbatim in the single kv blob that every kv.set re-serialises whole.
+  for (const field of [list, wallets]) {
+    if (!field) continue;
+    const rawLines = field.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (rawLines.length > AIRDROP_HANDOFF_MAX_LINES) return res.status(400).json({ ok: false, error: "too many recipients" });
+    if (!rawLines.every((l) => AIRDROP_HANDOFF_LINE_RE.test(l))) {
+      return res.status(400).json({ ok: false, error: "each recipient line must be a wallet address, optionally followed by an amount" });
+    }
+  }
   const dec = parseInt(b.decimals, 10);
   const payload = {
     mint: SOL_ADDR_RE.test(String(b.mint || "")) ? String(b.mint) : "",
@@ -7156,9 +7210,20 @@ app.post("/api/airdrop-handoff", (req, res) => {
     recipients: list, wallets,
   };
   if (!payload.mint && !payload.native) return res.status(400).json({ ok: false, error: "bad mint" });
+  const all = airdropHandoffPrune(kv.get("airdropHandoffs", {}));
+  // Make room by EVICTING the oldest live handoffs rather than refusing the new one. Refusing
+  // turns a growth cap into a cheap outage: at 30 req/min one IP fills every slot in ~17 minutes
+  // and then every legitimate hand-off from Cluck Holders / Buy Comp / the Prize Wheel fails for
+  // the full 6-hour TTL, silently dropping operators onto the localStorage path that doesn't
+  // work inside wallet webviews. These are single-use, minutes-long bridges — dropping the
+  // oldest costs at most one stale tab.
+  const liveIds = Object.keys(all);
+  if (liveIds.length >= AIRDROP_HANDOFF_MAX_LIVE) {
+    liveIds.sort((a, b) => ((all[a] && all[a].createdAt) || 0) - ((all[b] && all[b].createdAt) || 0));
+    for (const old of liveIds.slice(0, liveIds.length - AIRDROP_HANDOFF_MAX_LIVE + 1)) delete all[old];
+  }
   const id = "ah_" + randomBytes(5).toString("hex");
   const t = randomBytes(12).toString("hex");
-  const all = airdropHandoffPrune(kv.get("airdropHandoffs", {}));
   all[id] = { t, createdAt: Date.now(), payload };
   kv.set("airdropHandoffs", all);
   return res.status(200).json({ ok: true, id, t });
@@ -7527,8 +7592,18 @@ app.get("/api/admin-check", (req, res) => {
 // tx landed and the wallet's SOL balance rose by >= min lamports (post-pre delta). Alternative to
 // the CLKN micropayment for users who don't want to send CLKN. Read-only.
 const SOL_UNLOCK_WALLET = "7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H";
+// ⚠️ OPEN (owner's call, 2026-09-03 audit): this address is byte-identical to hatchery.js's
+// HATCHERY_TREASURY, so one Hatchery mint fee also satisfies this verifier — a fresh mint-fee
+// signature can be redeemed here as a 7-day tools pass. The wallet binding and the 15-minute
+// age gate below don't separate the two products; only a DISTINCT unlock address or a
+// per-purpose reference would, and both are gate/config values the owner picks. Not changed.
 // Server-side floor so a tampered client can't ask us to bless a dust payment.
 // 0.05 SOL — the Buy Special unlock price (owner's call 2026-07-24).
+// ⚠️ OPEN (same audit): this floor is INDEPENDENT of TOOLGATE.lamports, so lowering
+// TOOLGATE_LAMPORTS by env does not lower what this endpoint accepts. Deriving the floor from
+// TOOLGATE instead is a one-line change, but public/airdrop.html hardcodes 50_000_000 and never
+// reads /api/tool-gate/config — so a RAISED TOOLGATE_LAMPORTS would then take that page's
+// payers' SOL and reject every poll. Fix the page first, or price only via TOOLGATE ≥ this floor.
 const SOL_UNLOCK_MIN_LAMPORTS = 50_000_000;
 
 // ── Unified tools pass config (owner, 2026-08-18) ──────────────────────────
@@ -7663,22 +7738,66 @@ document.getElementById('go').onclick=async()=>{
 </script></body></html>`);
 });
 
+// A payment must be recent to be redeemable — without this, ANY historical transfer to
+// SOL_UNLOCK_WALLET that ever met the minimum (a public address, hardcoded in a public repo,
+// and the SAME receiver as every Hatchery SOL mint fee) is a free pass forever for whoever finds
+// it on an explorer, no matter who actually sent it. The client polls within seconds of signing,
+// so a 15-minute window is generous for the honest path and closes the historical-replay gap.
+const SOL_UNLOCK_MAX_AGE_SECS = 15 * 60;
 app.get("/api/verify-sol-payment", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const sig = (req.query.sig || "").trim();
   const askedMin = parseInt(req.query.min, 10) || 0;
+  // `wallet` is REQUIRED — it binds the redemption to the wallet that actually PAID. An
+  // optional binding is no binding: an attacker who wants it not to run just omits the param.
+  // SOL_UNLOCK_WALLET is also the Hatchery mint-fee treasury, so anyone watching that public
+  // address on an explorer could otherwise redeem a stranger's fresh payment (and consume the
+  // signature, so the real payer's own poll then reports "already redeemed"). Every caller has
+  // the pubkey at hand — it is the tx fee payer they just built. No fallback to an unbound path.
+  const wallet = String(req.query.wallet || "").trim();
   if (!sig || sig.length < 80 || sig.length > 100 || !askedMin) return res.status(400).json({ success: false, error: "need sig + min (lamports)" });
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "need the paying wallet (wallet=)" });
   const min = Math.max(askedMin, SOL_UNLOCK_MIN_LAMPORTS);
+  const walletKey = "solwallet:" + sig + ":" + wallet;
   try {
+    // NOTE: there is deliberately NO short-circuit on walletKey before this point. The
+    // idempotent re-success below is answered only AFTER the tx has been fetched and
+    // `delta >= min` re-checked — a pre-check short-circuit answers "yes" to a min it never
+    // compared, so a wallet that redeemed at 0.05 SOL could re-ask with any larger min and
+    // still be told success.
     const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
     const r = await rpcCall("verify-sol", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     const tx = r && r.result;
     if (!tx || (tx.meta && tx.meta.err)) return res.status(200).json({ success: false, error: "tx not found or failed" });
-    const keys = ((tx.transaction && tx.transaction.message && tx.transaction.message.accountKeys) || []).map(k => (typeof k === "string" ? k : k.pubkey));
+    const msg = tx.transaction && tx.transaction.message;
+    const accountEntries = (msg && msg.accountKeys) || [];
+    const keys = accountEntries.map(k => (typeof k === "string" ? k : k.pubkey));
+    // Bind to the PAYING wallet: it must be the tx's fee payer (first account key), not merely
+    // some account mentioned in the tx — otherwise anyone who spots the payment on an explorer
+    // could redeem it for a different wallet than the one that actually paid.
+    const firstSigner = keys[0];
+    if (!firstSigner || firstSigner !== wallet) {
+      return res.status(200).json({ success: false, error: "This payment wasn't sent from that wallet." });
+    }
     const idx = keys.indexOf(SOL_UNLOCK_WALLET);
     if (idx < 0) return res.status(200).json({ success: false, error: "payment not addressed to the unlock wallet" });
     const delta = ((tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0));
     if (delta < min) return res.status(200).json({ success: false, error: "amount too low", lamports: delta });
+    // Idempotent re-success for the SAME wallet+sig — this wallet already redeemed this exact
+    // payment and the first response was lost (tab closed, webview killed, phone backgrounded).
+    // It sits AFTER the amount check above, so it can never bless a min the payment didn't
+    // cover, and BEFORE the age gate below on purpose: the age gate exists to stop a STRANGER
+    // replaying an old on-chain transfer, not to strand the payer who already paid. A lost
+    // response is often not retried until well past 15 minutes, and the signature is already
+    // consumed by then — so refusing here would leave paying a second time as the only way out,
+    // which is the exact failure this branch was added to prevent.
+    if (sigStore.has(walletKey)) return res.status(200).json({ success: true, already: true, lamports: delta });
+    // Age gate — a payment must be RECENT to buy a NEW pass. Without it, ANY historical
+    // transfer to SOL_UNLOCK_WALLET that ever met the minimum is a free pass forever for
+    // whoever finds it on an explorer. The honest first-time path polls within seconds.
+    if (!tx.blockTime || (Date.now() / 1000 - tx.blockTime) > SOL_UNLOCK_MAX_AGE_SECS) {
+      return res.status(200).json({ success: false, error: "That payment is too old to redeem — send a new one." });
+    }
     // 🔒 REPLAY GUARD — this endpoint had NONE (found in the 2026-07-27 wallet sweep).
     // The retired CLKN send path consumed each signature via sigStore the same way;
     // the SOL path verified the transfer and returned success WITHOUT marking it spent. Because
@@ -7689,8 +7808,10 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     // add() is the same atomic test-and-set the CLKN path uses, so a concurrent double-submit
     // loses too. Namespaced 'sol:' so a signature can never be spent once here and once there.
     if (!sigStore.add("sol:" + sig)) {
+      // Consumed by a DIFFERENT wallet (the same-wallet case returned above).
       return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
     }
+    sigStore.add(walletKey);
     return res.status(200).json({ success: true, lamports: delta });
   } catch (err) {
     console.error("[verify-sol-payment] error:", err.message);
@@ -8965,7 +9086,15 @@ app.post("/api/buyspecial/optin", async (req, res) => {
   const v = await vcVerifyBuyTx(c, sig);
   if (!v.ok) return res.status(400).json({ ok: false, error: v.error });
   c.optins = c.optins || {};
-  c.optins[v.wallet] = { wallet: v.wallet, txSig: sig, buyUi: v.buyUi, ackAt: Date.now(), source: "self", addedAt: Date.now() };
+  // Opt-in requires no proof of wallet control (any public buy signature works, so a third
+  // party can submit on a wallet's behalf) — that's accepted as consent-only. But a REPLACEMENT
+  // opt-in must never LOWER the recorded buy: since a stranger can resubmit any of a wallet's
+  // public signatures, keep the larger buyUi (and the earlier addedAt) rather than overwriting,
+  // so a griefer can only raise a bonus by submitting a bigger real buy, never shrink one.
+  const existing = c.optins[v.wallet];
+  const buyUi = existing && Number(existing.buyUi) > Number(v.buyUi) ? existing.buyUi : v.buyUi;
+  const addedAt = existing ? existing.addedAt : Date.now();
+  c.optins[v.wallet] = { wallet: v.wallet, txSig: sig, buyUi, ackAt: Date.now(), source: "self", addedAt };
   vcSave(c);
   return res.status(200).json({
     ok: true, wallet: v.wallet, buyDetected: v.buyUi,
@@ -9794,9 +9923,113 @@ app.get("/api/lock/claimable", async (req, res) => {
 // bytes on the /data volume, serve from us forever. Exists because the raw metadata URLs are
 // mostly ipfs.io gateway links that rate-limit/time out in real browsers — the Locker Room
 // strip was rendering letter fallbacks despite having icon URLs. 404 = client keeps its
-// letter avatar. SSRF-guarded: https only, no IP-literal/localhost hosts, image/* only, 512KB cap.
+// letter avatar. SSRF-guarded: https only, no IP-literal/localhost hosts, and the socket is
+// PINNED to a DNS answer we validated (tokenIconLookup) on the start url AND on every redirect
+// hop — so neither a 302 to a private address nor a 0-TTL DNS-rebinding host can reach one.
+// Raster image/* only (no svg+xml — an attacker-controlled SVG can carry an inline <script> that
+// would execute under our own origin when opened directly), 512KB cap.
 const TOKEN_ICON_DIR = path.join(process.env.DATA_DIR || "/data", "token-icons");
+const TOKEN_ICON_MAX_BYTES = 524288;   // above this we 302 to the source instead of caching
 const _tokenIconMiss = new Map();   // mint -> ts of last failed fetch (10-min negative cache)
+// Raster types only — svg+xml is deliberately excluded (see comment above). Keep in sync with
+// the fallback letter-avatar contract: an SVG-icon token just gets the fallback, same as a 404.
+const TOKEN_ICON_ALLOWED_CT = /^image\/(png|jpe?g|webp|gif|avif|x-icon|vnd\.microsoft\.icon)$/i;
+function tokenIconIpDisallowed(addr, family) {
+  let a = String(addr || "").toLowerCase();
+  if (family === 6 || a.includes(":")) {
+    // Fold IPv4-mapped/compatible forms (::ffff:10.0.0.1) into the IPv4 rules below instead of
+    // enumerating prefixes — the enumerated version missed ::ffff:172.16-31.x entirely.
+    const m = a.match(/^::(?:ffff:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+    if (!m) return a === "::1" || a === "::" || a.startsWith("fe80:") || a.startsWith("fc") || a.startsWith("fd");
+    a = m[1];
+  }
+  const p = a.split(".").map(Number);
+  if (p.length !== 4 || p.some((n) => !Number.isFinite(n) || n < 0 || n > 255)) return true;
+  const [x, y, z] = p;
+  if (x === 127 || x === 10 || x === 0 || x >= 224) return true;    // loopback/RFC1918/this-net/multicast+reserved
+  if (x === 172 && y >= 16 && y <= 31) return true;                 // RFC1918
+  if (x === 192 && y === 168) return true;                          // RFC1918
+  if (x === 169 && y === 254) return true;                          // link-local, incl. cloud metadata 169.254.169.254
+  if (x === 100 && y >= 64 && y <= 127) return true;                // CGNAT 100.64.0.0/10
+  if (x === 198 && (y === 18 || y === 19)) return true;             // benchmarking 198.18.0.0/15
+  if (x === 192 && y === 0 && z === 0) return true;                 // IETF protocol assignments 192.0.0.0/24
+  return false;
+}
+// Connect-time address enforcement, handed to the socket as its resolver. This is the ONLY place
+// an address is judged, and it is the SAME address the connection is made to. The shape it
+// replaces — resolve, decide, then let fetch resolve again independently — was a TOCTOU that a
+// 0-TTL DNS-rebinding host walks straight through: it answers a public IP for the check and
+// 169.254.169.254 for the connection.
+function tokenIconLookup(hostname, options, cb) {
+  dns.lookup(hostname, Object.assign({}, options, { all: true, verbatim: true }), (err, addrs) => {
+    if (err) return cb(err);
+    const ok = (Array.isArray(addrs) ? addrs : [addrs]).filter((a) => a && !tokenIconIpDisallowed(a.address, a.family));
+    if (!ok.length) return cb(new Error("blocked address for " + hostname));
+    if (options && options.all) return cb(null, ok);
+    return cb(null, ok[0].address, ok[0].family);
+  });
+}
+// One hop, pinned to a validated address. Node's own https client is used rather than fetch()
+// because only it takes a custom `lookup` — undici/fetch gives no hook to pin the socket, which
+// is what makes the guard above binding rather than advisory. Returns a minimal fetch-shaped
+// object so the caller reads it unchanged; redirects are NOT followed here.
+function tokenIconGet(url) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    const shape = (r, body) => ({
+      ok: (r.statusCode || 0) >= 200 && (r.statusCode || 0) < 300,
+      status: r.statusCode || 0,
+      headers: { get: (n) => { const v = r.headers[String(n).toLowerCase()]; return v == null ? null : (Array.isArray(v) ? v[0] : v); } },
+      arrayBuffer: async () => body,
+    });
+    let req;
+    try {
+      // A dedicated agent, used by nothing else: Node's agent pool keys sockets by host:port and
+      // NOT by `lookup`, so sharing the global agent could hand this request a socket some other
+      // caller opened without the check. keepAlive:false so nothing is pooled across requests.
+      const httpsMod = require("https");
+      if (!tokenIconGet._agent) tokenIconGet._agent = new httpsMod.Agent({ keepAlive: false, maxSockets: 8 });
+      req = httpsMod.get(url, { lookup: tokenIconLookup, agent: tokenIconGet._agent, headers: { accept: "image/*,*/*;q=0.8" } }, (r) => {
+        const chunks = []; let len = 0;
+        r.on("data", (c) => {
+          chunks.push(c); len += c.length;
+          // One byte past the cache cap is all we need to decide (the caller 302s to the source
+          // above it) — stop reading rather than buffering an unbounded body.
+          if (len > TOKEN_ICON_MAX_BYTES) r.destroy();
+        });
+        r.on("end", () => finish(shape(r, Buffer.concat(chunks))));
+        r.on("close", () => finish(shape(r, Buffer.concat(chunks))));
+        r.on("error", () => finish(null));
+      });
+    } catch (_) { return finish(null); }
+    req.setTimeout(9000, () => { req.destroy(); finish(null); });
+    req.on("error", () => finish(null));
+  });
+}
+// Fetches iconUrl, re-checking the host and re-pinning the connection on the start URL and on
+// EVERY redirect hop — following redirects inside the client never re-checks a hop, so a public
+// host that 302s to an internal address would otherwise sail through the initial check.
+async function tokenIconSafeFetch(startUrl) {
+  let url = startUrl;
+  for (let hop = 0; hop < 4; hop++) {
+    let host;
+    try { const u = new URL(url); if (u.protocol !== "https:") return null; host = u.hostname; } catch (_) { return null; }
+    // Literal IPv4/IPv6/localhost hostnames are rejected outright — the shortest SSRF payload.
+    // Everything else is judged at connect time by tokenIconLookup.
+    if (!host || /^(\d+\.\d+\.\d+\.\d+|\[|localhost)$/i.test(host)) return null;
+    const r = await tokenIconGet(url);
+    if (!r) return null;
+    if (r.status >= 300 && r.status < 400) {
+      const loc = r.headers.get("location");
+      if (!loc) return null;
+      try { url = new URL(loc, url).toString(); } catch (_) { return null; }
+      continue;
+    }
+    return r;
+  }
+  return null;   // too many redirects
+}
 app.get("/api/token-icon", async (req, res) => {
   try {
     const mint = String((req.query && req.query.mint) || "").trim();
@@ -9804,6 +10037,12 @@ app.get("/api/token-icon", async (req, res) => {
     fs.mkdirSync(TOKEN_ICON_DIR, { recursive: true });
     const metaPath = path.join(TOKEN_ICON_DIR, mint + ".json");
     const binPath = path.join(TOKEN_ICON_DIR, mint + ".img");
+    // Belt-and-braces headers on every response from this route: even a raster reply never gets
+    // treated as HTML/script, and a direct navigation to it can't act as this origin.
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Disposition", "inline; filename=\"icon\"");
+    res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     if (fs.existsSync(metaPath)) {
       const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
       if (meta.redirect) {   // icon too big to cache — send the client to the source
@@ -9811,7 +10050,11 @@ app.get("/api/token-icon", async (req, res) => {
         return res.redirect(302, meta.redirect);
       }
       if (fs.existsSync(binPath)) {
-        res.setHeader("Content-Type", meta.type || "image/png");
+        const ct = meta.type || "image/png";
+        // A cache entry written before this allow-list existed may hold an svg+xml icon —
+        // refuse to serve it (same outcome as a fresh miss) rather than trusting old metadata.
+        if (!TOKEN_ICON_ALLOWED_CT.test(ct)) return res.status(404).end();
+        res.setHeader("Content-Type", ct);
         res.setHeader("Cache-Control", "public, max-age=604800, immutable");
         return res.status(200).send(fs.readFileSync(binPath));
       }
@@ -9825,15 +10068,14 @@ app.get("/api/token-icon", async (req, res) => {
       const t = Array.isArray(tm) ? (tm.find((x) => x && x.id === mint) || tm[0]) : null;
       if (t && typeof t.icon === "string" && /^https:\/\//.test(t.icon)) iconUrl = t.icon;
     } catch (_) {}
-    let hostOk = false;
-    try { const h = new URL(iconUrl || "").hostname; hostOk = !!h && !/^(\d+\.\d+\.\d+\.\d+|\[|localhost$)/i.test(h); } catch (_) {}
-    if (!iconUrl || !hostOk) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
-    const r = await fetch(iconUrl, { signal: AbortSignal.timeout(9000), redirect: "follow" });
-    const type = String(r.headers.get("content-type") || "");
-    if (!r.ok || !/^image\//.test(type)) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
+    if (!iconUrl) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
+    const r = await tokenIconSafeFetch(iconUrl);
+    if (!r) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
+    const type = String(r.headers.get("content-type") || "").split(";")[0].trim();
+    if (!r.ok || !TOKEN_ICON_ALLOWED_CT.test(type)) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
     const buf = Buffer.from(await r.arrayBuffer());
     if (!buf.length) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
-    if (buf.length > 524288) {   // real image, too big for the disk cache (e.g. CLKN's 1.7MB ipfs
+    if (buf.length > TOKEN_ICON_MAX_BYTES) {   // real image, too big for the disk cache (e.g. CLKN's 1.7MB ipfs
       // PNG) — durable 302 to the source instead of a 404, so big-icon tokens still get a logo.
       try { fs.writeFileSync(metaPath, JSON.stringify({ redirect: iconUrl, at: Date.now() })); } catch (_) {}
       res.setHeader("Cache-Control", "public, max-age=604800, immutable");
@@ -10209,6 +10451,10 @@ function gradGateMode() {
   return Date.now() >= GRAD_GATE_AUTO_ENFORCE ? "enforce" : "monitor";
 }
 
+// One-shot-per-boot guard for the degraded-credentials-store alert below: a corrupt or
+// read-only store affects EVERY claim, and one Telegram message per graduation would bury the
+// operator chat.
+let credStoreAlerted = false;
 app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { wallet, coursework } = req.body;
@@ -10294,6 +10540,28 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     // counts must not be inflatable by a bare curl. A later passing claim adds it.
     const kind = gateBlocked ? null : "graduation";   // the "challenge" kind died with the Ultimate Challenge (2026-07-29)
     const rec = credentials.record(wallet, { kind, score: effScore, total: effTotal, pct: effPct, verified, isHolder, balance, coursework });
+    // Is that transcript actually going to survive the next deploy? The mint below spends
+    // treasury SOL and this handler hands back a "permanent" /transcript/<slug> URL — when the
+    // store is degraded (corrupt file quarantined at boot, or the volume went read-only/full)
+    // that link dies at the next redeploy and the SOL is spent for nothing. Read AFTER
+    // record() so it reflects THIS transcript's own write, not just the state at boot.
+    const credHealth = credentials.health();
+    if (!credHealth.ok) {
+      console.error(`[claim] credentials store degraded (${credHealth.reason})${credHealth.detail ? ": " + credHealth.detail : ""} — holding the diploma mint for ${wallet.slice(0, 6)}…`);
+      // Alert the operator chat once per boot. Same best-effort shape as the sheet-write alert
+      // above — it must never be able to take the claim down. "no-volume" is the benign
+      // local-dev case and is logged only.
+      if (!credStoreAlerted && credHealth.reason !== "no-volume") {
+        credStoreAlerted = true;
+        try {
+          const _proj = (whirlpoolMM.vault.getProject && whirlpoolMM.vault.getProject("treasury")) || null;
+          const _chat = (_proj && _proj.telegramChatId) || process.env.TELEGRAM_CHAT_ID;
+          if (_chat && process.env.TELEGRAM_BOT_TOKEN) {
+            tgSend(_chat, `⚠️ <b>credentials store ${tgEsc(String(credHealth.reason).toUpperCase())}</b> — transcript persistence is DISABLED and diploma mints are being HELD.\n${tgEsc(credHealth.detail || "")}\nRestore the transcript file on /data from the quarantined .corrupt copy, then redeploy.`, null, { silent: true }).catch(() => {});
+          }
+        } catch (_) {}
+      }
+    }
     // Graduating the FULL curriculum earns the on-chain diploma NFT (not the Ultimate
     // Challenge). Best-effort: a mint hiccup never fails the claim — the record is saved.
     // The graduation door is self-reported (no exam pass token), and each mint spends
@@ -10307,7 +10575,12 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     if (gateBlocked) {
       nft = { ok: false, reason: "Diploma mint pending — we couldn't verify your course progress from this browser yet. Your transcript is saved. Give it a few more minutes (or revisit a lesson) and try again." };
     }
-    if (kind === "graduation") {
+    if (kind === "graduation" && !credHealth.ok) {
+      // Degraded store — hold the mint instead of paying for a diploma whose transcript link
+      // won't outlive the next deploy. The record is still in memory and the learner can claim
+      // again; nothing here spends treasury SOL.
+      nft = { ok: false, reason: "Your transcript couldn't be saved permanently right now, so we're holding the diploma mint. Nothing is lost — claim again in a few minutes." };
+    } else if (kind === "graduation") {
       const already = (kv.get(diplomaNft.MINTED_KV, {}) || {})[wallet];
       if (already) {
         try { nft = await diplomaNft.mintDiploma(wallet, rec.slug); } // idempotent — returns the existing mint, spends nothing
@@ -10467,10 +10740,8 @@ app.get("/api/wallet-checkup", async (req, res) => {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-  const rpc = async (method, params) => {
-    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }), signal: AbortSignal.timeout(15000) });
-    return r.json();
-  };
+  const rpcCore = heliusRpcCall(rpcUrl);   // routed through rpc.rpcFetch for 429/5xx failover
+  const rpc = async (method, params) => rpcCore(method, method, params);
   const TOKEN_PROG = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
   const TOKEN_2022_PROG = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
   const SYS = "11111111111111111111111111111111";
@@ -10569,10 +10840,8 @@ app.get("/api/burn-scan", async (req, res) => {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-  const rpc = async (method, params) => {
-    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }), signal: AbortSignal.timeout(15000) });
-    return r.json();
-  };
+  const rpcCore = heliusRpcCall(rpcUrl);   // routed through rpc.rpcFetch for 429/5xx failover
+  const rpc = async (method, params) => rpcCore(method, method, params);
   const TOKEN_PROG = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
   const TOKEN_2022_PROG = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
   try {
@@ -10810,10 +11079,8 @@ async function whaleRefresh({ topN = 20 } = {}) {
   const HK = process.env.HELIUS_API_KEY;
   if (!HK) return { error: "no key" };
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HK}`;
-  const call = async (method, params) => {
-    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "whale", method, params }) });
-    return (await r.json()).result;
-  };
+  const rpcCore = heliusRpcCall(rpcUrl);   // routed through rpc.rpcFetch for 429/5xx failover
+  const call = async (method, params) => (await rpcCore("whale", method, params)).result;
   const supply = Number((await call("getTokenSupply", [CLKN_MINT_ADDR]))?.value?.uiAmount || 0);
   // Full holder walk (same Helius getTokenAccounts pagination as token-vitals): the
   // RPC's getTokenLargestAccounts caps at 20 token ACCOUNTS, and most of those are
@@ -11448,13 +11715,7 @@ app.get("/api/snapshot", async (req, res) => {
     return res.status(500).json({ success: false, error: "Server not configured" });
   }
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-  function rpcCall(id, method, params) {
-    return fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id, method, params })
-    }).then(r => r.json());
-  }
+  const rpcCall = heliusRpcCall(rpcUrl);   // routed through rpc.rpcFetch for 429/5xx failover
 
   try {
     // Supply + decimals first — we need decimals to convert raw amounts.
@@ -11648,13 +11909,7 @@ app.get("/api/trace", async (req, res) => {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-  function rpcCall(id, method, params) {
-    return fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id, method, params })
-    }).then(r => r.json());
-  }
+  const rpcCall = heliusRpcCall(rpcUrl);   // routed through rpc.rpcFetch for 429/5xx failover
 
   try {
     // 1. Resolve the wallet's token account(s) for this mint. getTokenAccountsByOwner
@@ -12040,17 +12295,13 @@ function wxDur(sec) {
 // reachedGenesis reports honestly whether we hit the very first tx. totalSigs is the
 // wallet's lifetime transaction count when genesis is reached.
 async function wxFindOrigin(wallet, rpcUrl, HELIUS_KEY, labelWallet, { maxPages, deadline }) {
+  const rpcCall = heliusRpcCall(rpcUrl);   // routed through rpc.rpcFetch for 429/5xx failover
   let before = null, oldestSig = null, totalSigs = 0, reachedGenesis = false, pages = 0, lastPage = [];
   for (; pages < maxPages; pages++) {
     if (Date.now() > deadline) break;
     let arr = [];
     try {
-      const r = await fetch(rpcUrl, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: "wo", method: "getSignaturesForAddress", params: [wallet, { limit: 1000, ...(before ? { before } : {}) }] }),
-        signal: AbortSignal.timeout(15000),
-      });
-      arr = (await r.json()).result || [];
+      arr = (await rpcCall("wo", "getSignaturesForAddress", [wallet, { limit: 1000, ...(before ? { before } : {}) }])).result || [];
     } catch { break; }
     if (!arr.length) { reachedGenesis = true; break; }
     totalSigs += arr.length;
@@ -12124,10 +12375,8 @@ app.get("/api/wallet-xray", async (req, res) => {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-  const rpc = async (method, params) => {
-    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }), signal: AbortSignal.timeout(15000) });
-    return r.json();
-  };
+  const rpcCore = heliusRpcCall(rpcUrl);   // routed through rpc.rpcFetch for 429/5xx failover
+  const rpc = async (method, params) => rpcCore(method, method, params);
   const labelWallet = (a) => KNOWN_CEX_WALLETS[a] || KNOWN_SERVICE_WALLETS[a] || null;
   // DD.xyz (Webacy) wallet risk + address-poisoning cross-check — fired in
   // parallel, no-op without WEBACY_API_KEY, and never throws into the request.
@@ -13248,10 +13497,49 @@ app.get("/api/burn-token-info", async (req, res) => {
   }
 });
 
+// Sum EVERY jsonParsed spl-token(-2022) burn/burnChecked instruction (outer AND inner — a burn
+// routed through a program like a router/aggregator shows up in innerInstructions) for `mint`
+// whose authority is `wallet`. Returns { raw, decimals, count } (raw = 0n when there is none).
+// This is the actual proof-of-burn: a plain balance drop (transfer out, DEX sell, LP deposit)
+// never produces one of these, no matter how the wallet's own pre/post token balance moved.
+// ⚠️ It must SUM, not stop at the first match: one tx routinely carries several burns (two token
+// accounts of the same mint closed out together, or a large burn split across burnChecked ixs),
+// and this figure is the public receipt AND the auto-posted X/Telegram celebration — reporting
+// only the first leg understates a real burn in the brand channels with no way to correct it.
+function sumBurnInstructions(t, mint, wallet) {
+  const outer = (t.transaction && t.transaction.message && t.transaction.message.instructions) || [];
+  const inner = ((t.meta && t.meta.innerInstructions) || []).flatMap((ii) => ii.instructions || []);
+  let raw = 0n, decimals = null, count = 0;
+  for (const ix of outer.concat(inner)) {
+    if (!ix || !ix.parsed) continue;
+    // Helius jsonParsed labels BOTH the classic token program and Token-2022 as "spl-token" —
+    // match on parsed shape (type), not the program name.
+    if (ix.program !== "spl-token" && ix.program !== "spl-token-2022") continue;
+    const type = ix.parsed.type;
+    if (type !== "burn" && type !== "burnChecked") continue;
+    const info = ix.parsed.info || {};
+    if (info.mint !== mint) continue;
+    const authority = info.authority || info.multisigAuthority;
+    if (authority !== wallet) continue;
+    let amt = null;
+    if (info.tokenAmount && info.tokenAmount.amount != null) {   // burnChecked
+      amt = info.tokenAmount.amount;
+      if (decimals === null && Number.isFinite(Number(info.tokenAmount.decimals))) decimals = Number(info.tokenAmount.decimals);
+    } else if (info.amount != null) {   // burn
+      amt = info.amount;
+    }
+    if (amt == null) continue;
+    let v; try { v = BigInt(amt); } catch (_) { continue; }
+    if (v <= 0n) continue;
+    raw += v; count++;
+  }
+  return { raw, decimals, count };
+}
 // Record a burn receipt — but ONLY after verifying the transaction on-chain, so a receipt
 // page can never be faked. We read the tx, confirm it carries a Burn/BurnChecked of THIS
-// mint signed by THIS wallet, and store the TRUE burned amount from the balance delta —
-// never the client's claim. Keyed by signature (idempotent).
+// mint signed by THIS wallet, and store the TRUE burned amount read from that instruction —
+// never the client's claim, and never inferred from a balance drop that a transfer/sell/LP
+// deposit could produce just as easily. Keyed by signature (idempotent).
 app.post("/api/burn-receipt", rateLimit("burnreceipt", { windowMs: 60000, max: 20 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { sig, mint, wallet } = req.body || {};
@@ -13270,14 +13558,27 @@ app.post("/api/burn-receipt", rateLimit("burnreceipt", { windowMs: 60000, max: 2
     const keys = (t.transaction?.message?.accountKeys || []).map(k => (typeof k === "string" ? k : k.pubkey));
     const signers = (t.transaction?.message?.accountKeys || []).filter(k => k && typeof k === "object" && k.signer).map(k => k.pubkey);
     if (!signers.includes(wallet)) return res.status(400).json({ success: false, error: "That transaction wasn't signed by this wallet." });
-    // Find a burn of this mint and read the TRUE amount from pre/post token balances.
-    const pre = (t.meta?.preTokenBalances || []).filter(b => b.mint === mint && keys[b.accountIndex] && (b.owner === wallet));
-    const post = (t.meta?.postTokenBalances || []).filter(b => b.mint === mint && (b.owner === wallet));
-    const preSum = pre.reduce((s, b) => s + BigInt(b.uiTokenAmount.amount), 0n);
-    const postSum = post.reduce((s, b) => s + BigInt(b.uiTokenAmount.amount), 0n);
-    const burnedRaw = preSum - postSum;
-    if (burnedRaw <= 0n) return res.status(400).json({ success: false, error: "No burn of that token by this wallet was found in that transaction." });
-    const decimals = pre[0]?.uiTokenAmount?.decimals ?? post[0]?.uiTokenAmount?.decimals ?? 0;
+    // Require an ACTUAL Burn/BurnChecked instruction of this mint, authorized by this wallet —
+    // a plain SPL transfer, DEX sell, or LP deposit all lower the wallet's own balance of the
+    // mint just as a burn would, and none of them are a burn.
+    const burnIx = sumBurnInstructions(t, mint, wallet);
+    if (!burnIx.count) return res.status(400).json({ success: false, error: "No burn of that token by this wallet was found in that transaction." });
+    const burnedRaw = burnIx.raw;
+    const ixDecimals = burnIx.decimals;
+    if (burnedRaw <= 0n) return res.status(400).json({ success: false, error: "Could not read a burned amount from that transaction." });
+    // Cross-check against the mint's TOTAL supply movement (every owner, not just this wallet):
+    // a burn is the only instruction that actually removes tokens from circulation, so total
+    // pre/post balances for the mint must have fallen by at least the burned amount. A transfer
+    // elsewhere in the same tx can't fake this — it only moves balance between accounts that are
+    // both still counted here, so the total is unchanged by anything but a real burn.
+    const preAll = (t.meta?.preTokenBalances || []).filter(b => b.mint === mint);
+    const postAll = (t.meta?.postTokenBalances || []).filter(b => b.mint === mint);
+    const preAllSum = preAll.reduce((s, b) => s + BigInt(b.uiTokenAmount.amount), 0n);
+    const postAllSum = postAll.reduce((s, b) => s + BigInt(b.uiTokenAmount.amount), 0n);
+    if (preAllSum - postAllSum < burnedRaw) {
+      return res.status(400).json({ success: false, error: "Could not verify an on-chain supply reduction for that burn." });
+    }
+    const decimals = Number.isFinite(ixDecimals) ? ixDecimals : (preAll[0]?.uiTokenAmount?.decimals ?? postAll[0]?.uiTokenAmount?.decimals ?? 0);
     const burned = Number(burnedRaw) / 10 ** decimals;
     // Enrich with symbol/supply/price for the receipt (best-effort).
     let symbol = "TOKEN", name = "", supplyUi = null, priceUsd = null;
@@ -13320,6 +13621,20 @@ app.post("/api/burn-receipt", rateLimit("burnreceipt", { windowMs: 60000, max: 2
 app.use("/api/airdrop-collect", rateLimit("airdropcollect", { windowMs: 60000, max: 20 }));
 const AIRDROP_CAMPAIGN_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 function airdropKey(campaign) { return `airdropSignups:${campaign}`; }
+// Global ceiling on the NUMBER of distinct campaigns — the per-campaign 100k-signup cap (below)
+// bounds one campaign, but nothing bounded how many DIFFERENT campaign ids an anonymous caller
+// could mint, each one a fresh kv key in the single blob every kv.set rewrites whole. A small
+// registry key tracks known campaign ids so an unseen one can be refused once the ceiling is hit,
+// while every campaign already in use keeps working.
+// ⚠️ The ceiling must never be able to permanently lock the owner out: the id comes from a public
+// request body, so an anonymous caller CAN mint 200 junk ids. Two escape hatches keep that a
+// nuisance rather than a dead promo — an operator-keyed caller is never refused, and
+// /api/airdrop-campaigns (keyed) lists the registry and frees slots. A campaign whose kv key
+// already has signups is treated as pre-existing and registered without charging the ceiling,
+// which is how keys written before this registry existed get counted (kvstore exposes no key
+// enumeration, so they cannot be seeded up front).
+const AIRDROP_CAMPAIGN_MAX = 200;
+function airdropCampaignRegistry() { const a = kv.get("airdropCampaigns", []); return Array.isArray(a) ? a : []; }
 app.get("/airdrop-signup", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
 // Prize wheel — the on-screen draw ceremony for contest prizes and giveaways. noindex, and it
 // is inert without an operator key: the page loads nothing and spins nothing until the admin
@@ -13362,10 +13677,25 @@ app.post("/api/airdrop-collect", async (req, res) => {
   const handle = String(b.handle || "").replace(/^@+/, "").replace(/[^A-Za-z0-9_]/g, "").slice(0, 15) || null;
   try {
     const store = kv.get(airdropKey(campaign), {}) || {};
+    // Registry bookkeeping — see AIRDROP_CAMPAIGN_MAX. A campaign whose key already holds
+    // signups is pre-existing, not new, so it is registered without being charged; a genuinely
+    // new id is charged unless the caller holds the operator key.
+    const known = airdropCampaignRegistry().indexOf(campaign) !== -1;
+    const preExisting = !known && Object.keys(store).length > 0;
+    if (!known && !preExisting && airdropCampaignRegistry().length >= AIRDROP_CAMPAIGN_MAX && !adminAuthOK(req)) {
+      return res.status(400).json({ success: false, error: "Too many open campaigns — ask the operator to free one up." });
+    }
     if (store[address]) return res.status(200).json({ success: true, already: true, count: Object.keys(store).length, message: "You're already on the list — one entry per wallet. 🐔" });
     if (Object.keys(store).length >= 100000) return res.status(200).json({ success: false, error: "This airdrop list is full." });
     store[address] = { handle, at: Date.now() };
     kv.set(airdropKey(campaign), store);
+    if (!known) {
+      // Re-read immediately before the write: rejectNonWallet() above awaits an RPC call, so a
+      // concurrent signup for a different new campaign can have registered in the meantime and a
+      // stale copy of the array would silently drop it (under-counting the keys this bounds).
+      const cur = airdropCampaignRegistry();
+      if (cur.indexOf(campaign) === -1) kv.set("airdropCampaigns", cur.concat([campaign]));
+    }
     return res.status(200).json({ success: true, count: Object.keys(store).length, message: "You're on the list — if a community drop happens, your wallet is on file. No schedule, no promises. 🐔" });
   } catch (e) {
     return res.status(500).json({ success: false, error: publicErrMsg(e) });
@@ -13387,6 +13717,23 @@ app.get("/api/airdrop-collect", (req, res) => {
     return res.status(200).send("address,handle,submitted_at\n" + rows.map(([a, v]) => `${a},${v.handle || ""},${new Date(v.at || 0).toISOString()}`).join("\n") + "\n");
   }
   return res.status(200).json({ success: true, campaign, count, addresses: rows.map(([a, v]) => ({ address: a, handle: v.handle, at: v.at })) });
+});
+// GET /api/airdrop-campaigns?key=[&drop=<id>[,<id>…]] — the operator lever behind
+// AIRDROP_CAMPAIGN_MAX. Lists every registered campaign with its signup count (junk ids stand
+// out at 1), and &drop= frees slots. Dropping only DEREGISTERS an id — the signup data is left
+// untouched, and the campaign re-registers itself on its next signup. Without this a registry
+// filled by an anonymous caller could only be cleared by hand-editing kv.
+app.get("/api/airdrop-campaigns", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  let list = airdropCampaignRegistry();
+  const asked = String(req.query.drop || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const dropped = asked.filter((id) => list.indexOf(id) !== -1);
+  if (dropped.length) { list = list.filter((id) => dropped.indexOf(id) === -1); kv.set("airdropCampaigns", list); }
+  const campaigns = list
+    .map((id) => ({ id, signups: Object.keys(kv.get(airdropKey(id), {}) || {}).length }))
+    .sort((a, b) => b.signups - a.signups);
+  return res.status(200).json({ success: true, max: AIRDROP_CAMPAIGN_MAX, count: list.length, dropped, campaigns });
 });
 
 // ── CLKN Productions Jup Verification Protocol (JVP) — intake dashboard ───────
@@ -15003,10 +15350,7 @@ function clknTier(amount) {
 // and detect a tier change on buy and sell alerts.
 async function getWalletStats(wallet, HELIUS_KEY) {
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-  const call = (id, method, params) => fetch(rpcUrl, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id, method, params })
-  }).then(r => r.json());
+  const call = heliusRpcCall(rpcUrl);   // routed through rpc.rpcFetch for 429/5xx failover
   let solBalance = null, clknBalance = null;
   try {
     const [bal, tok] = await Promise.all([
@@ -15816,15 +16160,9 @@ const MAX_PARSE_ATTEMPTS = 40; // ~20 min at the 30s poll cadence
 async function fetchRawTradeTx(sig, HELIUS_KEY) {
   let raw;
   try {
-    const r = await fetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 1, method: "getTransaction",
-        params: [sig, { maxSupportedTransactionVersion: 1, encoding: "jsonParsed", commitment: "confirmed" }],
-      }),
-    });
-    const d = await r.json();
+    const d = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`)(
+      1, "getTransaction", [sig, { maxSupportedTransactionVersion: 1, encoding: "jsonParsed", commitment: "confirmed" }]
+    );
     raw = d?.result || null;
   } catch (_) { return null; }
   if (!raw) return null; // not indexed yet on the RPC node either
@@ -15880,16 +16218,7 @@ async function pollSinglePool(pool, HELIUS_KEY) {
   const poolAddress = pool.address;
   try {
     const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-    const sigsRes = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: "buy-poll",
-        method: "getSignaturesForAddress",
-        params: [poolAddress, { limit: 100 }],
-      }),
-    });
-    const sigsData = await sigsRes.json();
+    const sigsData = await heliusRpcCall(rpcUrl)("buy-poll", "getSignaturesForAddress", [poolAddress, { limit: 100 }]);
     const sigs = sigsData?.result || [];
     if (!sigs.length) return;
 
@@ -16079,9 +16408,7 @@ async function reconcileMissedTrades({ dry = false } = {}) {
     for (const pool of pools) {
       let sigs = [];
       try {
-        const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jsonrpc: "2.0", id: "reconcile", method: "getSignaturesForAddress", params: [pool.address, { limit: 100 }] }) });
-        sigs = (await r.json())?.result || [];
+        sigs = (await heliusRpcCall(rpcUrl)("reconcile", "getSignaturesForAddress", [pool.address, { limit: 100 }]))?.result || [];
       } catch (_) { continue; }
       for (const s of sigs) {
         if (s.err) continue;

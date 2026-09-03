@@ -571,6 +571,21 @@ function builtIxsPreserved(builtTx, clientTx) {
   return true;
 }
 
+// True only when the client's tx has the SAME fee payer the tx was built for. The waiver decision
+// at /build is keyed entirely off the caller-supplied `creator` address (treasury/operator
+// wallets and CLKN holders mint free) — without this check, a caller could pass
+// creator=<treasury or any whale> to get a fee-free built tx with no treasury-touching
+// instruction, then submit an entirely different, self-built, self-signed transaction (their own
+// wallet as fee payer) for the same pending mint address. Because a waived built tx carries
+// nothing for builtIxsPreserved to protect, the fee payer is the only remaining binding between
+// "who the waiver was granted to" and "who is actually signing" — so this is checked on every
+// submission, waived or not.
+function feePayerMatches(builtTx, clientTx) {
+  try {
+    return !!builtTx.feePayer && !!clientTx.feePayer && clientTx.feePayer.equals(builtTx.feePayer);
+  } catch { return false; }
+}
+
 // POST /api/hatchery/submit — the browser returns the WALLET-signed (but not
 // mint-signed) transaction. We verify its core instructions match the fee-inclusive tx we
 // built at /build (allowing wallet-added ComputeBudget priority-fee ixs), then co-sign with the
@@ -593,6 +608,14 @@ router.post("/submit", async (req, res) => {
     // instruction that touches the Hatchery treasury; a WAIVED mint (treasury/holder) has none,
     // so there's nothing to strip and nothing to protect — co-sign whatever the wallet signed.
     const builtTx = Transaction.from(Buffer.from(pending.builtTxB64, "base64"));
+
+    // The fee payer must be the SAME wallet the tx was built for — otherwise this could be an
+    // unrelated, self-built transaction submitted against someone else's (possibly forged,
+    // fee-waived) pending mint. See feePayerMatches() above.
+    if (!feePayerMatches(builtTx, clientTx)) {
+      return res.status(400).json({ error: "The signed transaction doesn't match this mint request — build it again and mint with the same wallet." });
+    }
+
     const builtCore = coreInstructions(builtTx), clientCore = coreInstructions(clientTx);
     const feeAtRisk = builtCore.some((ix) => (ix.keys || []).some((k) => {
       try { return k.pubkey.equals(HATCHERY_TREASURY); } catch { return false; }
@@ -681,4 +704,8 @@ async function uploadPublicFile(buffer, contentType) {
   return { url, txid: url.split("/").pop() };
 }
 
-module.exports = { router, uploadMetadata, buildMintTransaction, uploadPublicFile };
+module.exports = {
+  router, uploadMetadata, buildMintTransaction, uploadPublicFile,
+  // exported for tests only:
+  feePayerMatches, builtIxsPreserved,
+};

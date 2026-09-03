@@ -93,20 +93,88 @@ function decryptAddress(enc) {
 
 // ---- weekly winners ------------------------------------------------------
 // A week is CLAIMABLE once it has ENDED. Winners = best run per verified wallet inside the week,
-// non-suspect only, ranked by score (ties: earliest). Computed from the live store — a season
-// reset therefore also resets pending winners, which is the point of a reset.
+// non-suspect only, ranked by score (ties: earliest).
+//
+// The leaderboard store is CAPPED (newest 6000 rows on the JSON backend, newest 5000 on Postgres —
+// see nq-leaderboard.js), so recomputing a past week live on every call can silently lose it: once
+// enough runs land in later weeks, a completed week's rows age out of the capped store while its
+// 14-day claim window is still open, and a real winner starts reading back as "not a winner." Once
+// a week has ENDED, its winner set can never legitimately change (no more runs can land inside it),
+// so the first time a completed week is evaluated, the result is snapshotted to disk and every
+// later call for that week reads the snapshot instead of recomputing from the (by-then-pruned)
+// live store. The in-progress current week is never snapshotted — it's still live/changing — and a
+// season reset (resetBoard) also wipes this file via clearWinnersSnapshot(), preserving "a reset
+// resets pending winners."
+const WINNERS_FILE = path.join(process.env.DATA_DIR || '/data', 'nq-claim-winners.json');
+// Fail-closed on corruption (same pattern as lib/sigstore.js / lib/credentials.js): these
+// snapshots are the ONLY surviving record of a completed week's winners once its leaderboard rows
+// age out of the capped store, so a torn/unreadable file must never be silently treated as "no
+// snapshots yet" — that would let saveWinnersSnapshot() below overwrite it with just the current
+// week, permanently erasing every other week's winners. Once set, blocks further writes until an
+// operator restores the file (or the owner resets the season) and the process restarts.
+let winnersQuarantined = false;
+function loadWinnersSnapshot() {
+  if (!fs.existsSync(WINNERS_FILE)) return {};
+  try {
+    const o = JSON.parse(fs.readFileSync(WINNERS_FILE, 'utf8'));
+    if (o && typeof o === 'object' && !Array.isArray(o)) return o;
+    throw new Error('not a JSON object');
+  } catch (e) {
+    winnersQuarantined = true;
+    try { fs.copyFileSync(WINNERS_FILE, `${WINNERS_FILE}.corrupt-${Date.now()}`); } catch (_) {}
+    console.error(`[nq-claims] WINNERS SNAPSHOT FILE CORRUPT (${e.message}) — snapshotting disabled (fail-closed) until ${WINNERS_FILE} is restored (or the season reset) and the process restarted.`);
+    return {};
+  }
+}
+function saveWinnersSnapshot(store) {
+  if (winnersQuarantined) throw new Error('winners snapshot quarantined after a corrupt read — refusing to write until restored/restarted');
+  fs.mkdirSync(path.dirname(WINNERS_FILE), { recursive: true });
+  require('../lib/atomic-write').atomicWriteFileSync(WINNERS_FILE, JSON.stringify(store));
+}
+// Owner season reset also clears the persisted winner snapshots, so a reset still resets pending
+// winners exactly as before this cache existed. Also lifts a quarantine — deleting the file is
+// itself the operator remediation the quarantine was waiting for.
+function clearWinnersSnapshot() { try { fs.unlinkSync(WINNERS_FILE); } catch (e) {} winnersQuarantined = false; }
+
 function isWeekStart(ms) { return Number.isFinite(ms) && leaderboard.weekStartMs(ms) === ms; }
 function lastCompletedWeek(now) { return leaderboard.weekStartMs((now == null ? Date.now() : now) - WEEK_MS); }
 async function winnersForWeek(weekStart, n) {
-  const rows = (await leaderboard.list()).filter((r) =>
+  const ended = Number.isFinite(weekStart) && weekStart + WEEK_MS <= Date.now();
+  if (ended) {
+    const snap = loadWinnersSnapshot()[String(weekStart)];
+    if (Array.isArray(snap) && snap.length) return snap.slice(0, n || prizeRanks());
+  }
+  const allRows = await leaderboard.list();
+  const rows = allRows.filter((r) =>
     r.at >= weekStart && r.at < weekStart + WEEK_MS && r.walletVerified && r.wallet && !r.suspect);
   const best = new Map();
   for (const r of rows) {
     const cur = best.get(r.wallet);
     if (!cur || r.score > cur.score || (r.score === cur.score && r.at < cur.at)) best.set(r.wallet, r);
   }
-  return [...best.values()].sort((a, b) => b.score - a.score || a.at - b.at).slice(0, n || prizeRanks())
+  // Rank up to the max possible prizeRanks() (10) once, so the snapshot serves any n <= 10 without
+  // recomputing; callers still get exactly n (or the current prizeRanks()) back below.
+  const winners = [...best.values()].sort((a, b) => b.score - a.score || a.at - b.at).slice(0, 10)
     .map((r, i) => ({ rank: i + 1, wallet: r.wallet, name: r.name, world: r.world, score: r.score, at: r.at }));
+  // Both backends CAP list() to the newest N rows overall (JSON: MAX=6000 total; Postgres: LIMIT
+  // 5000), pruning oldest-first. A snapshot taken while the store has already pruned past
+  // weekStart could freeze a partial winner set forever (no more runs will ever "complete" it).
+  // Coverage is provable two ways, neither needing to know which backend is live:
+  //   - the store hasn't even reached the SMALLER of the two caps yet, so nothing has ever been
+  //     pruned from it (a fresh board, or simply not enough runs yet); or
+  //   - pruning always removes the globally oldest rows first, so if the oldest row STILL in the
+  //     store is at/before weekStart, nothing from weekStart onward could have been pruned —
+  //     the week's rows are all still present.
+  // Refuse to snapshot (recompute live every call, same as an un-ended week) until either holds.
+  const LEADERBOARD_MIN_CAP = 5000;   // Postgres LIMIT — the smaller of the two backend caps
+  const oldestAt = allRows.length ? Math.min(...allRows.map((r) => r.at)) : -Infinity;
+  const coverageProven = allRows.length < LEADERBOARD_MIN_CAP || oldestAt <= weekStart;
+  if (ended && winners.length && coverageProven) {
+    const store = loadWinnersSnapshot();
+    store[String(weekStart)] = winners;
+    try { saveWinnersSnapshot(store); } catch (e) { console.error('[nq-claims] winners snapshot write failed:', e && e.message); }
+  }
+  return winners.slice(0, n || prizeRanks());
 }
 function windowEndsAt(weekStart) { return weekStart + WEEK_MS + claimDays() * 24 * 60 * 60 * 1000; }
 
@@ -193,4 +261,5 @@ function markShipped(week, wallet) {
 
 module.exports = { enabled, prizeRanks, claimDays, lastCompletedWeek, winnersForWeek, windowEndsAt,
                    eligibility, prepare, submit, listClaims, claimFor, decryptAddress, markShipped,
+                   clearWinnersSnapshot,
                    _addrHash: addrHash, _cleanAddress: cleanAddress };

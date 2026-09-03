@@ -239,14 +239,52 @@ body{background:transparent;font-family:var(--body);}
 <script src="/cluck-util.js"></script>
 <script>
   // Operator-only since 2026-07-04: every /api/lp-* endpoint is key-gated. The page reads
-  // ?key= once, remembers it locally, and appends it to every API call.
-  var LPKEY = new URLSearchParams(location.search).get('key') || localStorage.getItem('lpKey') || '';
-  if (new URLSearchParams(location.search).get('key')) localStorage.setItem('lpKey', LPKEY);
-  function withKey(u){ return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'key=' + encodeURIComponent(LPKEY); }
+  // ?key= once, remembers it for this tab only (sessionStorage, not localStorage — matching
+  // engine-dashboard.html / jupverify-admin.html), sends it as the x-premium-key HEADER on
+  // every call (the server's preferred form — query-string secrets persist in access
+  // logs/proxies/browser history), and scrubs ?key= out of the address bar immediately so a
+  // shared/bookmarked link never carries the master admin key. Because sessionStorage is
+  // per-tab, a fresh tab/window has no key and there is nothing left in the URL to reopen —
+  // so, like the other admin pages above, there is always a visible key-entry box the
+  // operator can paste into instead of being pushed toward saving ?key= links or the raw
+  // PREMIUM_ACCESS_KEY in a notes app.
+  var LPKEY = new URLSearchParams(location.search).get('key') || '';
+  try { LPKEY = LPKEY || sessionStorage.getItem('lpKey') || ''; } catch (e) {}
+  (function(){
+    var p = new URLSearchParams(location.search);
+    if (!p.get('key')) return;
+    try { sessionStorage.setItem('lpKey', LPKEY); } catch (e) {}
+    p.delete('key');
+    var clean = location.pathname + (p.toString() ? '?' + p.toString() : '') + location.hash;
+    try { history.replaceState(null, '', clean); } catch (e) {}
+  })();
+  function apiFetch(u, opts){
+    opts = opts || {};
+    var headers = {}; for (var k in (opts.headers || {})) headers[k] = opts.headers[k];
+    headers['x-premium-key'] = LPKEY;
+    var o = {}; for (var k2 in opts) o[k2] = opts[k2]; o.headers = headers;
+    return fetch(u, o);
+  }
+  function lpSaveKeyAndReload(){
+    var v = (document.getElementById('lpKeyInput') || {}).value || '';
+    v = v.trim();
+    if (!v) return;
+    try { sessionStorage.setItem('lpKey', v); } catch (e) {}
+    location.reload();
+  }
   if (!LPKEY) document.addEventListener('DOMContentLoaded', function(){
     var b = document.createElement('div');
-    b.style.cssText = 'background:#7f1d1d;color:#fecaca;padding:10px 14px;font:12px monospace;text-align:center';
-    b.textContent = 'Operator tool — open with ?key=YOUR_PREMIUM_ACCESS_KEY (it is remembered on this device).';
+    b.style.cssText = 'background:#7f1d1d;color:#fecaca;padding:10px 14px;font:12px monospace;text-align:center;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap';
+    var span = document.createElement('span');
+    span.textContent = 'Operator tool — enter the PREMIUM_ACCESS_KEY (or open with ?key=…) to unlock this tab:';
+    var input = document.createElement('input');
+    input.id = 'lpKeyInput'; input.type = 'password'; input.placeholder = 'PREMIUM_ACCESS_KEY';
+    input.style.cssText = 'font:12px monospace;padding:4px 6px';
+    input.addEventListener('keydown', function(e){ if (e.key === 'Enter') lpSaveKeyAndReload(); });
+    var btn = document.createElement('button');
+    btn.textContent = 'Unlock'; btn.style.cssText = 'font:12px monospace;padding:4px 10px;cursor:pointer';
+    btn.addEventListener('click', lpSaveKeyAndReload);
+    b.appendChild(span); b.appendChild(input); b.appendChild(btn);
     document.body.prepend(b);
   });
 </script>
@@ -276,13 +314,13 @@ body{background:transparent;font-family:var(--body);}
     try{
       if(!b){
         // SINGLE-TOKEN MODE — every pair this token trades in, across all DEXs
-        var r=await fetch(withKey('/api/lp-token?token='+encodeURIComponent(a)+(amt?('&amount='+encodeURIComponent(amt)):'')));
+        var r=await apiFetch('/api/lp-token?token='+encodeURIComponent(a)+(amt?('&amount='+encodeURIComponent(amt)):''));
         var d=await r.json();
         if(!d.success){ showErr(d.error||'Scan failed'); return; }
         lastMode='token'; lastScan=d; renderTokenScan(d);
       } else {
-        var url=withKey('/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):''));
-        var r2=await fetch(url); var d2=await r2.json();
+        var url='/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):'');
+        var r2=await apiFetch(url); var d2=await r2.json();
         if(!d2.success){ showErr(d2.error||'Scan failed'); return; }
         lastMode='pair'; lastScan=d2; renderScan(d2);
       }
@@ -454,7 +492,7 @@ body{background:transparent;font-family:var(--body);}
   }
   async function loadTopPools(){
     try{
-      var r=await fetch(withKey('/api/lp-top?kind='+encodeURIComponent(topKind))); var d=await r.json();
+      var r=await apiFetch('/api/lp-top?kind='+encodeURIComponent(topKind)); var d=await r.json();
       var strip=document.getElementById('topStrip');
       if(!d.success || !(d.pools||[]).length){ strip.innerHTML='<span class="muted" style="padding:8px;">No pools right now — try the other tab.</span>'; return; }
       topLoaded[topKind]=1;
@@ -494,8 +532,8 @@ body{background:transparent;font-family:var(--body);}
     dd.scrollIntoView({behavior:'smooth', block:'start'});
     var amt=document.getElementById('amount').value.trim();
     try{
-      var url=withKey('/api/lp-pool?pool='+encodeURIComponent(pool)+(amt?('&amount='+encodeURIComponent(amt)):'')+(width?('&width='+encodeURIComponent(width)):''));
-      var r=await fetch(url); var d=await r.json();
+      var url='/api/lp-pool?pool='+encodeURIComponent(pool)+(amt?('&amount='+encodeURIComponent(amt)):'')+(width?('&width='+encodeURIComponent(width)):'');
+      var r=await apiFetch(url); var d=await r.json();
       if(!d.success){ dd.innerHTML='<button class="closex" onclick="closeDD()">✕</button><div class="sim-sub" style="color:#FCA5A5;">'+esc(d.error||'Could not load this pool.')+'</div>'; return; }
       renderDeepDive(d);
     }catch(e){ dd.innerHTML='<button class="closex" onclick="closeDD()">✕</button><div class="sim-sub" style="color:#FCA5A5;">Network error — try again.</div>'; }
@@ -556,8 +594,14 @@ body{background:transparent;font-family:var(--body);}
   function shareCard(){
     if(!lastScan){ showErr('Scan a pair first.'); return; }
     var a=lastScan.mintA, b=lastScan.mintB, amt=lastScan.amountUsd||0;
-    var url=withKey(location.origin+'/api/lp-card?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+amt):''));
-    window.open(url,'_blank');
+    var url=location.origin+'/api/lp-card?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+amt):'');
+    // Open the tab synchronously (on the click gesture, before popup blockers can object),
+    // then point it at a same-origin blob URL once the PNG is fetched — the operator key
+    // never has to appear in this (or any) tab's address bar.
+    var win=window.open('', '_blank');
+    apiFetch(url).then(function(r){ if(!r.ok) throw new Error('card fetch failed'); return r.blob(); })
+      .then(function(blob){ var b2=URL.createObjectURL(blob); if(win) win.location=b2; else window.open(b2,'_blank'); })
+      .catch(function(){ if(win) win.close(); showErr('Card render failed.'); });
     var best=(lastScan.pools||[]).filter(function(p){return p.feeTier!=null;})[0];
     var yld=best?(best.feeYield7dPctDay!=null?best.feeYield7dPctDay:best.feeYieldPctDay):null;
     var tweet='LP Scanner: '+lastScan.pair+(best?(' — best fee yield '+yld+'%/day on '+String(best.dex).toUpperCase()):'')+' 🔬\n\nScan every pool on every Solana DEX → '+location.origin+'/lp-scanner';
@@ -602,7 +646,7 @@ body{background:transparent;font-family:var(--body);}
       if(q.length<1 || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q)){ drop.classList.remove('show'); return; } // pasted a mint? skip search
       t=setTimeout(async function(){
         try{
-          var r=await fetch(withKey('/api/lp-token-search?q='+encodeURIComponent(q))); var d=await r.json();
+          var r=await apiFetch('/api/lp-token-search?q='+encodeURIComponent(q)); var d=await r.json();
           var toks=d.tokens||[];
           if(!toks.length){ drop.classList.remove('show'); return; }
           drop.innerHTML=toks.map(function(tk){

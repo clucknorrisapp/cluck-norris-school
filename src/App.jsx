@@ -1036,9 +1036,20 @@ function Landing({onStart,onIncubator,onStartHere,completed}){
           silently — honesty is the brand. Don't re-add a token reward without the owner asking. */}
       <div style={{background:"rgba(255,182,39,0.12)",border:"1px solid rgba(255,182,39,0.45)",borderRadius:12,padding:"16px 18px",marginBottom:14,textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE NFT + TRANSCRIPT</div>
-        <p style={{fontFamily:"system-ui,sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
-          Finish all {LESSONS.length} classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b> and a permanent, shareable transcript — free, minted to any Solana address you drop.
-        </p>
+        {allDone ? (
+          <>
+            <p style={{fontFamily:"system-ui,sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
+              You finished all {LESSONS.length} classes. Claim your <b style={{color:"#FFB627"}}>on-chain graduation NFT</b> and permanent transcript — free, minted to any Solana address you drop.
+            </p>
+            <button onClick={onClaim} style={{width:"100%",boxSizing:"border-box",background:"#FFB627",border:"none",borderRadius:8,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:14.5,fontWeight:700,color:"#1a0f08",letterSpacing:1.5,cursor:"pointer",marginBottom:11}}>
+              🏆 CLAIM YOUR DIPLOMA
+            </button>
+          </>
+        ) : (
+          <p style={{fontFamily:"system-ui,sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
+            Finish all {LESSONS.length} classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b> and a permanent, shareable transcript — free, minted to any Solana address you drop.
+          </p>
+        )}
         <p style={{fontFamily:"system-ui,sans-serif",fontSize:13,color:"#9CA3AF",lineHeight:1.6,margin:0}}>
           The CLKN airdrop reward was taken down due to farming efforts — fake wallets were claiming it, and paying them would dilute real holders. The education stays free for everyone.
         </p>
@@ -1465,6 +1476,18 @@ export default function App(){
       const path=(window.location.pathname||"").replace(/\/+$/,"").toLowerCase();
       if(PATHS[path]) return PATHS[path];
       const h=(window.location.hash||"").replace(/^#/,"");
+      // "complete" (the graduation claim screen) is restorable only when the learner has
+      // actually finished every lesson — read localStorage directly since the `completed`
+      // state hasn't been created yet at this point. Without this a reload, a nav tap, or
+      // the language toggle's location.reload() permanently strands a graduate on Landing
+      // with no way back to claim their diploma.
+      if(h==="complete"){
+        try{
+          const raw=JSON.parse(localStorage.getItem("clkn_completed")||"[]");
+          if(Array.isArray(raw)&&raw.length>=LESSONS.length) return "complete";
+        }catch(_){}
+        return "landing";
+      }
       return SCREENS.includes(h)?h:"landing";
     }
     catch(e){ return "landing"; }
@@ -1497,12 +1520,19 @@ export default function App(){
     }catch(_){}
   },[]);
 
+  // Writes the hash too, so a reload (or the language toggle's location.reload()) restores
+  // the claim screen instead of stranding the graduate on Landing — see the initializer above.
+  function goComplete(){
+    try{ window.location.hash="complete"; }catch(_){}
+    setScreen("complete");
+  }
+
   function finish(id,passed){
     if(passed&&!completed.includes(id)){
       trackId("lesson_complete",id);
       const next=[...completed,id];
       setCompleted(next);
-      if(next.length===LESSONS.length){track("graduation");setScreen("complete");return;}
+      if(next.length===LESSONS.length){track("graduation");goComplete();return;}
     }
     setScreen("select");
   }
@@ -1531,7 +1561,7 @@ export default function App(){
       </div>
       )}
       <div style={{paddingTop:screen==="clkn"?"calc(64px + env(safe-area-inset-top, 0px))":28}}>
-        {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} completed={completed}/>}
+        {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} onClaim={goComplete} completed={completed}/>}
         {screen==="start"&&<StartHere onGo={(s)=>setScreen(s)}/>}
         {screen==="incubator"&&<Incubator onComplete={()=>{track("incubator_complete");setScreen("select");}} onBack={()=>setScreen("landing")}/>}
         {screen==="clkn"&&<CLKNWidget/>}
@@ -1539,7 +1569,7 @@ export default function App(){
         {screen==="library"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><Library/></Suspense>}
         {screen==="select"&&<Select onSelect={id=>{trackId("lesson_start",id);setLessonId(id);setScreen("lesson");}} completed={completed}/>}
         {screen==="lesson"&&lesson&&<Lesson lesson={lesson} onComplete={finish} onBack={()=>setScreen("select")}/>}
-        {screen==="complete"&&<Complete onRestart={()=>{setCompleted([]);setScreen("landing");}}/>}
+        {screen==="complete"&&<Complete onRestart={()=>{setCompleted([]);try{window.location.hash="";}catch(_){}setScreen("landing");}}/>}
       </div>
       {/* Footer — third-party security verification. Badge + score live in shared.jsx (ROOTCRAK),
           so this can't drift. Links to the live verify page. The caption will point at /rootcrak

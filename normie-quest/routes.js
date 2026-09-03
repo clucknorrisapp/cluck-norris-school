@@ -520,6 +520,14 @@ router.post('/api/nq/claim/prepare', async (req, res) => {
   if (throttled(req, 'claimprep', 10)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
     const b = req.body || {};
+    // Unlike /api/nq/claim (which needs a fresh signature only the real wallet owner can produce),
+    // prepare() just mints a consent message keyed by pubkey. With no ownership check here, anyone
+    // could name a winner's public wallet and overwrite their in-flight pending claim, making the
+    // winner's own later signature fail as bad_signature. Winners are wallet-verified by
+    // definition (that's how they got on the board), so they always hold a live wallet session.
+    if (!wallet.checkSession(String(b.pubkey || ''), String(b.token || ''))) {
+      return res.status(401).json({ ok: false, error: 'bad_session' });
+    }
     const r = await claims.prepare(b.pubkey, b.week, b.address);
     res.status(r.ok ? 200 : 400).json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
@@ -673,7 +681,14 @@ router.get('/api/nq/leaderboard/reset', async (req, res) => {
   if (String((req.query && req.query.confirm) || '') !== 'RESET') {
     return res.status(400).json({ ok: false, error: 'add &confirm=RESET to archive the current board and wipe it' });
   }
-  try { res.json({ ok: true, ...(await leaderboard.resetBoard()) }); }
+  try {
+    const out = await leaderboard.resetBoard();
+    // Also clear any persisted weekly-winner snapshots (nq-claims.js) — a season reset is meant
+    // to reset pending winners too, and without this a reset would leave an old winner claimable
+    // against a leaderboard that no longer has their run.
+    claims.clearWinnersSnapshot();
+    res.json({ ok: true, ...out });
+  }
   catch (e) { res.status(500).json({ ok: false, error: 'reset_failed_board_untouched' }); }
 });
 
@@ -712,16 +727,19 @@ router.get('/api/nq/gate', (req, res) => {
 });
 
 // ---- shared per-IP throttle for the PUBLIC endpoints -----------------------
-// IP = CF-Connecting-IP (the real visitor, set by Cloudflare and unforgeable now that the CLKN
-// origin lockdown 403s any non-Cloudflare ingress). ⚠️ This used to take the LAST x-forwarded-for
-// hop; that was correct pre-Cloudflare but once Cloudflare went in front (2026-08-04) the last hop
-// became Cloudflare's SHARED edge IP — so every per-IP cap here collapsed into ONE global bucket
-// (all players sharing a single 60/min counter). CF-Connecting-IP restores true per-visitor caps.
-// Falls back to the last XFF hop, then req.ip, when the header is absent.
+// IP = CF-Connecting-IP, but ONLY when server.js's origin-lockdown middleware actually verified
+// this request came through Cloudflare (req.cfVerified — the X-Cluck-Edge-Auth hash matched).
+// ⚠️ Every /api/nq/* route (this whole router) falls inside NQ_GAME_PATH, which the origin lockdown
+// EXEMPTS for the game-host domain WITHOUT setting req.cfVerified (server.js ~3359) — so on
+// normiequest.app cf-connecting-ip is just another attacker-supplied header, forgeable to a fresh
+// value on every request to reset any throttled() bucket. Trust it only when req.cfVerified is
+// true, mirroring server.js's own clientIp(); otherwise fall back to the LAST x-forwarded-for hop
+// (the one an edge appends, which a client can't forge by prepending entries), then req.ip.
 const pubRate = new Map();   // key -> {n, resetAt}
 function clientIp(req) {
   const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
-  return String(req.headers['cf-connecting-ip'] || (xff.length ? xff[xff.length - 1] : (req.ip || '?')));
+  if (req.cfVerified && req.headers['cf-connecting-ip']) return String(req.headers['cf-connecting-ip']);
+  return String((xff.length ? xff[xff.length - 1] : (req.ip || '')) || '?');
 }
 function throttled(req, bucket, max) {
   const key = bucket + ':' + clientIp(req);

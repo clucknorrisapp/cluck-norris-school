@@ -113,7 +113,7 @@
      root (served with Service-Worker-Allowed: /) so it can control /normie-quest-x7. */
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('/nq-sw.js', { scope: '/normie-quest-x7' }).catch(function () {});
+      navigator.serviceWorker.register('/nq-sw.js', { scope: '/' }).catch(function () {});
     });
   }
 </script>
@@ -6012,7 +6012,18 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ if(this.def && this.def.private && this.registry.get('nqRetLvl')==null){ cont=this.levelIdx; contScore=0; contKind='room'; } }catch(e){}
     this._cont=cont; this._contScore=contScore; this._contKind=contKind;   // (exposed for tests)
     var contName = (cont>0 && LEVELS[cont]) ? (LEVELS[cont].name||'') : '';
-    this.time.delayedCall(600,function(){ this.scene.start('Over',{score:this.score,reason:reason,level:this.def.name,cont:cont,contScore:contScore,contKind:contKind,contName:contName,contTease:contTease}); },[],this); },
+    // LEADERBOARD: which level (if any) this run should be credited to. A private room must
+    // NEVER touch the board — mirrors Win.create's `!this.private` guard, same room family, same
+    // rule; without it a private-room game over reached the public weekly/all-time board. A
+    // non-private hidden bonus/speakeasy room reports the FURTHEST NUMBERED campaign world
+    // reached (effIdx, already computed above for the checkpoint logic) instead of its own
+    // non-numeric name — submitting the room name used to resolve to world 0 and silently drop a
+    // legitimate main-run death off every per-world board.
+    var boardLevel = null;
+    if(!(this.def && this.def.private)){
+      boardLevel = (this.def && this.def.hidden) ? ((LEVELS[effIdx] && LEVELS[effIdx].name) || null) : (this.def && this.def.name);
+    }
+    this.time.delayedCall(600,function(){ this.scene.start('Over',{score:this.score,reason:reason,level:this.def.name,boardLevel:boardLevel,cont:cont,contScore:contScore,contKind:contKind,contName:contName,contTease:contTease}); },[],this); },
 
   // ---- PAUSE (manual ⏸ / P / Esc, or 10s idle auto-pause). Self-contained in-scene freeze:
   //      physics + the scene clock (level countdown + boss delayedCalls) + tweens, plus a HUD
@@ -6563,10 +6574,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 /* ---------- Over ---------- */
 var Over=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Over'}); },
-  init:function(d){ this.finalScore=d.score||0; this.reason=d.reason||''; this.level=d.level||''; this.cont=d.cont||0; this.contScore=d.contScore||0; this.contKind=d.contKind||''; this.contName=d.contName||''; this.contTease=!!d.contTease; },
+  init:function(d){ this.finalScore=d.score||0; this.reason=d.reason||''; this.level=d.level||''; this.boardLevel=(d.boardLevel!==undefined)?d.boardLevel:d.level; this.cont=d.cont||0; this.contScore=d.contScore||0; this.contKind=d.contKind||''; this.contName=d.contName||''; this.contTease=!!d.contTease; },
   create:function(){
-    // SETUP LANE: run ended (game over) — submit the final score to the leaderboard.
-    if(window.NQLB){ try{ window.NQLB.submitRun(window.NQLB.worldOf(this.level), this.finalScore); }catch(e){} }
+    // SETUP LANE: run ended (game over) — submit the final score to the leaderboard, UNLESS
+    // boardLevel is null (a private room — see gameOver()'s boardLevel comment; must never touch
+    // the board, same rule Win.create applies via its `!this.private` guard).
+    if(window.NQLB && this.boardLevel){ try{ window.NQLB.submitRun(window.NQLB.worldOf(this.boardLevel), this.finalScore); }catch(e){} }
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
     this.add.text(W/2,48,this.reason,{fontFamily:'"Press Start 2P"',fontSize:'15px',color:'#ff3860'}).setOrigin(.5);
     this.add.text(W/2,80,'reached world '+this.level,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
@@ -8800,9 +8813,16 @@ if(typeof document!=='undefined'){ (function(){
   // every injected Solana wallet we know how to find, incl. the Jupiter wallet. Returns
   // ALL detected wallets so the UI can offer a choice instead of silently grabbing one.
   var WALLET_DEFS = [
+    // SafePal MUST be listed first (same fix as public/cluck-wallet.js): its in-app browser
+    // injects one window.solana that also sets other wallets' compat flags (isPhantom, isGlow) so
+    // Phantom-only dapps work — which without this entry ahead of them made one SafePal show up
+    // as BOTH "Phantom" and "Glow" below. isSafePal / window.safepal is its true identity and no
+    // other wallet sets it. A real Phantom (no isSafePal) skips this and matches phantom below.
+    { id: 'safepal',  name: 'SafePal',  icon: '🔐', detect: function () { return (window.safepal && window.safepal.solana) || (window.safepalProvider && window.safepalProvider.solana) || (window.solana && window.solana.isSafePal ? window.solana : null); } },
     { id: 'phantom',  name: 'Phantom',  icon: '🔮', detect: function () { return (window.phantom && window.phantom.solana) || (window.solana && window.solana.isPhantom ? window.solana : null); } },
     { id: 'solflare', name: 'Solflare', icon: '☀️', detect: function () { return window.solflare || (window.solana && window.solana.isSolflare ? window.solana : null); } },
     { id: 'jupiter',  name: 'Jupiter',  icon: '🪐', detect: function () { return window.jupiterWallet || window.jupiter || (window.solana && window.solana.isJupiter ? window.solana : null); } },
+    { id: 'coin98',   name: 'Coin98',   icon: '🐋', detect: function () { return (window.coin98 && window.coin98.sol) || (window.solana && window.solana.isCoin98 ? window.solana : null); } },
     { id: 'backpack', name: 'Backpack', icon: '🎒', detect: function () { return (window.backpack && window.backpack.isBackpack ? window.backpack : null) || (window.solana && window.solana.isBackpack ? window.solana : null) || window.backpack || null; } },
     { id: 'okx',      name: 'OKX',      icon: '⭕', detect: function () { return (window.okxwallet && window.okxwallet.solana) || window.okxwallet || null; } },
     { id: 'brave',    name: 'Brave',    icon: '🦁', detect: function () { return window.braveSolana || (window.solana && window.solana.isBraveWallet ? window.solana : null); } },
@@ -9507,7 +9527,7 @@ if(typeof document!=='undefined'){ (function(){
         var pk = walletState.pubkey, week = prizeState.week;
         msg('Preparing claim…');
         fetch('/api/nq/claim/prepare', { method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ pubkey: pk, week: week, address: addr }) }).then(function (r) { return r.json(); })
+          body: JSON.stringify({ pubkey: pk, week: week, address: addr, token: walletState.token }) }).then(function (r) { return r.json(); })
           .then(function (prep) {
             if (!prep || !prep.ok) { msg('Could not prepare: ' + ((prep && prep.status) || 'error'), true); return null; }
             msg('Check your wallet — sign the claim message…');
