@@ -82,7 +82,22 @@ function ensurePhaser() {
   const WORKERS = Math.max(1, Math.min(6, parseInt(process.env.NQ_WORKERS, 10) || Math.max(1, Math.floor(CPUS / 2))));
   // …and the build genuinely IS slower with less CPU per browser, so the timeout has to scale
   // with contention rather than staying at the single-worker figure.
-  const BOOT_MS = Math.round(25000 * (1 + (WORKERS - 1) * 0.6));
+  const BOOT_BASE_MS = Math.round(25000 * (1 + (WORKERS - 1) * 0.6));
+  // ...and it has to scale with the LEVEL, not just with contention. The 25s figure was tuned on
+  // ~5200px levels; worlds 13+ run to 8400px with far more placed objects, and they legitimately
+  // take longer to build in headless Canvas. On a fully IDLE box, single worker, 14-2 still blew
+  // 25s and only passed on the 90s retry — so this was never purely contention.
+  //
+  // The file's own note above rightly warns that guessing a bigger timeout "just moves the line on
+  // whatever machine you happen to be on". This is not a guess: the budget is made PROPORTIONAL to
+  // the work, against the same 5200px baseline the 25s was calibrated on, so it travels across
+  // machines the way a flat bump would not. Contention scaling still multiplies on top.
+  //
+  // This also costs real time when it is wrong: every under-budgeted level burns its full timeout
+  // AND a browser relaunch before the retry, which is a large part of why a 90-level run took
+  // 7018s and still reported 14 levels as NO-LOAD.
+  const BOOT_BASELINE_WIDTH = 5200;
+  const bootMsFor = (lv) => Math.round(BOOT_BASE_MS * Math.max(1, (lv.width || 5000) / BOOT_BASELINE_WIDTH));
   // Belt-and-braces teardown: capture the pid, close politely, then confirm the process really
   // went and escalate if not.
   //
@@ -158,7 +173,11 @@ function ensurePhaser() {
   const shards = Array.from({ length: WORKERS }, () => []);
   levels.forEach((lv, n) => shards[n % WORKERS].push(lv));
   const activeShards = shards.filter(sh => sh.length);
-  console.log(`[nq-state-test] ${levels.length} levels across ${activeShards.length} worker(s), ${CPUS} cores, boot timeout ${BOOT_MS}ms`);
+  {
+    const budgets = levels.map(bootMsFor);
+    console.log(`[nq-state-test] ${levels.length} levels across ${activeShards.length} worker(s), ${CPUS} cores, `
+      + `boot timeout ${Math.min(...budgets)}-${Math.max(...budgets)}ms (scaled by level width)`);
+  }
 
   async function runShard(shardLevels) {
     const out = [];
@@ -175,7 +194,7 @@ function ensurePhaser() {
         try {
           await page.waitForFunction(
             (name) => { try { return typeof window.__NQ_FORCEBOSS === 'function' && window.__NQ_DBG().level === name; } catch (e) { return false; } },
-            lv.name, { timeout: BOOT_MS }); // wide VIP levels + drone glows are heavy to build in headless Canvas; scales with worker contention
+            lv.name, { timeout: bootMsFor(lv) }); // wide VIP levels + drone glows are heavy to build in headless Canvas; scales with BOTH level width and worker contention
           row.booted = true;
         } catch (e) { row.booted = false; }
 
