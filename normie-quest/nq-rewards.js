@@ -45,7 +45,6 @@ const WHEEL_FREE = [
   { item: 'vial', weight: 22 },
   { item: 'shield', weight: 8 },
 ];
-const WHEEL = WHEEL_VIP;   // kept so any existing reference still resolves to the VIP table
 function wheelFor(vip) { return vip ? WHEEL_VIP : WHEEL_FREE; }
 
 // ---- 🎟️ PREVIEW PASSES — the VIP wheel's hidden-world unlock -----------------------------
@@ -192,7 +191,6 @@ function nextBonusAt(nowMs) {                        // start of the next bonus 
   return base + 3600000;
 }
 // Either kind of spin is available right now (daily OR an open bonus window this wallet hasn't used).
-function canSpinNow(wallet, nowMs) { return canSpin(wallet, nowMs) || bonusAvailable(wallet, nowMs); }
 function pickPrize(vip) {
   const table = wheelFor(vip);
   const total = table.reduce((n, p) => n + p.weight, 0);
@@ -249,6 +247,6 @@ function odds(vip) {
 }
 
 module.exports = { grant, pendingCount, claimOne, canSpin, nextSpinAt, spin, odds, ITEMS, wheelFor,
-  bonusAvailable, nextBonusAt, canSpinNow, bonusWindowKey, BONUS_SPIN_HOURS,
+  bonusAvailable, nextBonusAt, BONUS_SPIN_HOURS,
   previewRoom, grantPass, activePass, PREVIEW_ROOMS,
   addRaffleEntry, raffleEntries, grantHeartBuff, activeHeartBuff };

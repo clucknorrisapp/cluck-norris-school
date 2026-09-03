@@ -20,8 +20,10 @@
 // Live override (no redeploy):  GET /api/nq/gate?key=<PREMIUM_ACCESS_KEY>&cap=0
 //
 // ⚠️ TERMS: this module decides HOW FAR, never WHAT YOU MUST HOLD. Thresholds stay in nq-wallet
-// (env-tunable) and are deliberately not published anywhere public — NQ's holder terms are still
-// unagreed with the NORMIE team (CLAUDE.md), so no surface here may promise an unlock price.
+// (env-tunable). The ACCESS-TIER amounts are public since the 2026-08-22 launch (owner's terms,
+// served live-priced by /api/nq/wallet/config — never hardcode them here); what stays unpublished
+// is the VIP-wing terms and any reward/prize terms, which are still unagreed with the NORMIE team
+// (CLAUDE.md), so no surface here may promise those.
 
 const fs = require('fs');
 const path = require('path');

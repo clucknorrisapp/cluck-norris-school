@@ -4,8 +4,9 @@
 //   pool     ECqUX31VhAgkKuVYwNsAUtqXhFqyDQco3sSEeRkPXbED  (Meteora DLMM, hidden on app.meteora.ag)
 //   owner    D9MizWDURC2AhMUPfAbYtpqRgb521RC6CQRxBEzzQUK   (community member's public wallet)
 //   position 49tX35oS1oBXBxksoLErb9UfxR1EayTUyuVZGpjxgeTa  (candidate — must be verified, not assumed)
-// Usage: node scripts/test-meteora-rescue.cjs [rpcUrl]
-//   rpcUrl defaults to the app's public RPC proxy so no key is needed.
+// Usage: node scripts/test-meteora-rescue.cjs <rpcUrl>
+//   rpcUrl is REQUIRED (no default on purpose: it used to fall back to the production
+//   /api/helius-rpc proxy, so a stray run spent the live Helius quota).
 
 const { Connection, PublicKey } = require("@solana/web3.js");
 // The SDK's CJS interop shim makes require() return the DLMM class itself
@@ -15,7 +16,8 @@ const DLMM = require("@meteora-ag/dlmm");
 const POOL = "ECqUX31VhAgkKuVYwNsAUtqXhFqyDQco3sSEeRkPXbED";
 const OWNER = "D9MizWDURC2AhMUPfAbYtpqRgb521RC6CQRxBEzzQUK";
 const CANDIDATE = "49tX35oS1oBXBxksoLErb9UfxR1EayTUyuVZGpjxgeTa";
-const RPC = process.argv[2] || "https://clucknorris.app/api/helius-rpc";
+const RPC = process.argv[2];
+if (!RPC) { console.error("usage: node scripts/test-meteora-rescue.cjs <rpcUrl>"); process.exit(2); }
 
 const short = (a) => a.slice(0, 7) + "…" + a.slice(-4);
 

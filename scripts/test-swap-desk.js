@@ -9,6 +9,12 @@
  */
 process.env.SWAP_QUOTE_SECRET = "test-quote-secret-not-a-real-one";
 process.env.DATA_DIR = process.env.DATA_DIR || "/tmp";
+// Never touch mainnet from a test: the honest-path case below reaches sendRawTransaction, so the
+// primary RPC is pinned to a closed local port and the paid Helius keys are dropped. CI sets the
+// same (syntax-check.yml) — a local run cannot spend RPC quota or reach a real node.
+process.env.FALLBACK_RPC_URL = process.env.FALLBACK_RPC_URL || "http://127.0.0.1:9";
+delete process.env.HELIUS_API_KEY;
+delete process.env.HELIUS_API_KEY_2;
 
 const assert = require("assert");
 const { Keypair, PublicKey, Transaction, SystemProgram } = require("@solana/web3.js");

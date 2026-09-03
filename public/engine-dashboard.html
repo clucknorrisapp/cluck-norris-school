@@ -8,18 +8,19 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
-  :root{color-scheme:dark;--bg:#0b0c0e;--bg-grad:#0b0c0e;--card:#14151a;--card2:#101116;--surface:#14151a;--panel:#14151a;--border:rgba(255,255,255,0.09);--border-soft:rgba(255,255,255,0.05);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  /* palette + type scale come from theme.css — the page-local :root that shadowed it was removed 2026-09-02 */
+  :root{color-scheme:dark;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg);  color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  body { background: var(--bg);  color: var(--text); font-family: var(--body); min-height: 100vh; }
   .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 80px; }
-  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Anton,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
+  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
   .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
 
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
-  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .header .brand-mini { font-family: var(--disp); font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: var(--disp); font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: var(--disp); font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
   .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
@@ -31,7 +32,7 @@
   .keybar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   .keybar input { flex:1; min-width:200px; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:var(--mono); font-size:14px; }
   .keybar .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-  .btn { border:none; border-radius:10px; padding:12px 18px; font-family:'Anton',sans-serif; font-size:13px; font-weight:900; letter-spacing:1.5px; cursor:pointer; transition:opacity 0.15s; }
+  .btn { border:none; border-radius:10px; padding:12px 18px; font-family:var(--disp); font-size:13px; font-weight:900; letter-spacing:1.5px; cursor:pointer; transition:opacity 0.15s; }
   .btn-primary { background:#FCD34D; color:#1a1205; }
   .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--subtext); }
   .btn:hover { opacity:0.9; } .btn:disabled { opacity:0.4; cursor:not-allowed; }
@@ -48,10 +49,10 @@
 
   .proj { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; }
   .proj .p-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px; }
-  .proj .p-sym { font-family:'Anton',sans-serif; font-weight:900; font-size:22px; letter-spacing:1px; color:var(--accent); }
+  .proj .p-sym { font-family:var(--disp); font-weight:900; font-size:22px; letter-spacing:1px; color:var(--accent); }
   .proj .p-label { font-family:var(--mono); font-size:11px; color:var(--subtext); margin-top:2px; }
   .badges { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-  .badge { font-family:'Anton',sans-serif; font-size:9px; font-weight:700; letter-spacing:1.5px; padding:4px 9px; border-radius:6px; white-space:nowrap; }
+  .badge { font-family:var(--disp); font-size:9px; font-weight:700; letter-spacing:1.5px; padding:4px 9px; border-radius:6px; white-space:nowrap; }
   .b-live { color:#6EE7B7; border:1px solid rgba(16,185,129,0.45); background:rgba(16,185,129,0.08); }
   .b-paused { color:#FCD34D; border:1px solid rgba(252,211,77,0.45); background:rgba(252,211,77,0.08); }
   .b-off { color:#9CA3AF; border:1px solid rgba(156,163,175,0.4); background:rgba(156,163,175,0.06); }
@@ -60,23 +61,23 @@
   .depth-head { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:14px 0; }
   .depth-head .cell { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:9px; padding:10px 12px; text-align:center; }
   .depth-head .k { font-family:var(--mono); font-size:9px; color:var(--subtext); letter-spacing:1px; }
-  .depth-head .v { font-family:'Anton',sans-serif; font-size:18px; font-weight:700; margin-top:4px; }
+  .depth-head .v { font-family:var(--disp); font-size:18px; font-weight:700; margin-top:4px; }
   .v.pos { color:var(--green); } .v.neg { color:var(--red); }
 
   .sec-title { font-family:var(--mono); font-size:10px; color:var(--subtext); letter-spacing:1.5px; margin:16px 0 8px; }
 
   .pos { margin-top:8px; padding:11px 13px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:9px; }
   .pos .ph { display:flex; justify-content:space-between; align-items:center; gap:8px; }
-  .pos .pair { font-family:'Anton',sans-serif; font-weight:700; letter-spacing:1px; font-size:14px; }
+  .pos .pair { font-family:var(--disp); font-weight:700; letter-spacing:1px; font-size:14px; }
   .pos .role { font-family:var(--mono); font-size:10px; color:#93C5FD; }
   .pos .meta { font-family:var(--mono); font-size:11px; color:var(--subtext); line-height:1.7; margin-top:6px; }
   .pos .meta b { color:var(--text); }
-  .pos .depth { font-family:'Anton',sans-serif; font-weight:700; color:var(--accent); }
+  .pos .depth { font-family:var(--disp); font-weight:700; color:var(--accent); }
 
   .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px; }
   .mini { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:9px; padding:10px 12px; }
   .mini .k { font-family:var(--mono); font-size:9px; color:var(--subtext); letter-spacing:1px; }
-  .mini .v { font-family:'Anton',sans-serif; font-size:15px; font-weight:700; margin-top:3px; }
+  .mini .v { font-family:var(--disp); font-size:15px; font-weight:700; margin-top:3px; }
   .mini .sub { font-family:var(--mono); font-size:10px; color:var(--subtext); margin-top:2px; }
 
   .note { font-family:var(--mono); font-size:11px; color:var(--subtext); margin-top:8px; line-height:1.6; }
@@ -89,7 +90,7 @@
   details.adv .adv-body b { color:var(--text); }
   details.adv .adv-body .lbl { color:var(--subtext); }
 
-  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: var(--disp); font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: var(--orange); text-decoration: none; }
   .muted { color: var(--subtext); }
 
@@ -177,7 +178,10 @@ function sol(n){ n=Number(n); if(!isFinite(n)) return '—'; return n.toLocaleSt
 function ts(t){ if(!t) return '—'; const d=new Date(t); if(isNaN(d)) return esc(String(t)); return d.toLocaleString(); }
 
 async function jget(url){
-  const r = await fetch(url, { headers:{ 'Accept':'application/json' } });
+  // Admin key rides in the x-premium-key header (adminOK accepts it) — never in the URL.
+  const headers = { 'Accept':'application/json' };
+  if(adminKey) headers['x-premium-key'] = adminKey;
+  const r = await fetch(url, { headers });
   let d=null; try { d = await r.json(); } catch(_){}
   return { ok:r.ok, status:r.status, data:d };
 }
@@ -234,7 +238,7 @@ async function loadAll(){
   const loadBtn=document.getElementById('loadBtn'), refBtn=document.getElementById('refreshBtn');
   loadBtn.disabled=true; refBtn.disabled=true;
   try {
-    const res = await jget('/api/whirlpool/vault/projects?key='+encodeURIComponent(adminKey));
+    const res = await jget('/api/whirlpool/vault/projects');
     if(res.status===404){ showError('Bad or missing admin key — enter a valid admin key.'); grid.innerHTML=''; return; }
     if(!res.ok || !res.data || !res.data.projects){ showError('Could not load projects'+(res.data&&res.data.error?': '+res.data.error:'')); return; }
     const projects = res.data.projects; // { id: {id,label,symbol,tokenMint,active,operatorEnv,operatorLoaded,operator,telegramChatId,...} }
@@ -266,17 +270,17 @@ function applyFilter(){
 async function loadProject(id, meta){
   const el = document.getElementById('proj-'+id);
   if(!el) return;
-  const k = encodeURIComponent(adminKey), pid = encodeURIComponent(id);
+  const pid = encodeURIComponent(id);
   try {
-    const sres = await jget('/api/whirlpool/vault/status?key='+k+'&project='+pid);
+    const sres = await jget('/api/whirlpool/vault/status?project='+pid);
     if(sres.status===404){ el.innerHTML = card404(meta); el.dataset.live='0'; el.dataset.loaded='1'; applyFilter(); return; }
     if(!sres.ok || !sres.data){ el.innerHTML = cardError(meta, (sres.data&&sres.data.error)||'status failed'); el.dataset.live='0'; el.dataset.loaded='1'; applyFilter(); return; }
     let status = sres.data;
     // status folds in costs/earnings only when enabled; otherwise fetch them
     // separately (best-effort, never blocks the card).
     let costs = status.costs, earnings = status.earnings;
-    if(!costs || costs.error){ const c=await jget('/api/whirlpool/vault/costs?key='+k+'&project='+pid); if(c.ok&&c.data&&!c.data.error) costs=c.data; }
-    if(!earnings || earnings.error){ const e=await jget('/api/whirlpool/vault/earnings?key='+k+'&project='+pid); if(e.ok&&e.data&&!e.data.error) earnings=e.data; }
+    if(!costs || costs.error){ const c=await jget('/api/whirlpool/vault/costs?project='+pid); if(c.ok&&c.data&&!c.data.error) costs=c.data; }
+    if(!earnings || earnings.error){ const e=await jget('/api/whirlpool/vault/earnings?project='+pid); if(e.ok&&e.data&&!e.data.error) earnings=e.data; }
     // $ depth per pool now comes folded into status (status.poolValues) — one reliable
     // fetch, no separate on-chain call that could stall the card.
     el.innerHTML = renderProject(id, meta, status, costs, earnings);

@@ -3,7 +3,7 @@
  * NQ VERIFY — pick the RIGHT checks for the change you actually made, and run only those.
  * ---------------------------------------------------------------------------------------
  * WHY THIS EXISTS
- * The full state test boots all 82 levels in a headless browser. It is the right gate for a
+ * The full state test boots EVERY level in a headless browser. It is the right gate for a
  * change to shared game code, and it is completely wasted on a copy tweak or a new sprite —
  * a text layout change cannot break level 40. On 2026-07-27 a whole day went into running the
  * full suite for targeted edits: an icon swap, an item removal, a banner layout. Hours, for
@@ -19,9 +19,10 @@
  *   LEVELS data only ................. syntax + build + geometry + state test on the CHANGED LEVELS
  *   game code (non-LEVELS) ........... syntax + build + geometry + FULL state test
  *   server/lib only .................. node --check on the touched files (no browser at all)
+ *   normie-quest/*.js server modules . node --check + the two unit suites (no browser at all)
  *
  * The precise bit is "the CHANGED LEVELS": it parses the LEVELS array from git HEAD and from the
- * working tree and diffs them per level, so editing 3-3's pits tests 3-3 — not 82 levels.
+ * working tree and diffs them per level, so editing 3-3's pits tests 3-3 — not every level.
  *
  * Usage:  node normie-quest/test/nq-verify.cjs [baseUrl] [--against <ref>] [--dry]
  *   --against <ref>  compare to this git ref instead of HEAD (e.g. origin/main for a whole branch)
@@ -54,7 +55,7 @@ if (!changed.length) { say('[nq-verify] no changes vs ' + REF + ' — nothing to
 
 // ---- split game_logic.js into LEVELS data vs everything else -----------------------------------
 // A change confined to the LEVELS literal can only affect the levels it touched. A change ANYWHERE
-// else in the file is shared machinery (physics, boss code, HUD, scenes) and can affect all 82.
+// else in the file is shared machinery (physics, boss code, HUD, scenes) and can affect every level.
 function splitGameLogic(src) {
   const st = src.indexOf('var LEVELS=');
   if (st < 0) return null;
@@ -70,6 +71,10 @@ function splitGameLogic(src) {
   try { levels = new Function('H', 'TILE', 'W', 'GY', 'return ' + src.slice(op, en + 1) + ';')(H, TILE, W, GY); } catch (e) { /* unparseable */ }
   return { rest: src.slice(0, st) + src.slice(en + 1), levels };
 }
+
+// The level count is DERIVED from the working tree (it was hand-typed as 82 while the graph had 90).
+const LEVEL_COUNT = (() => { try { const p = splitGameLogic(fs.readFileSync(path.join(ROOT, GL), 'utf8')); return p && p.levels ? p.levels.length : null; } catch (e) { return null; } })();
+const NLEV = LEVEL_COUNT ? `${LEVEL_COUNT} levels` : 'all levels';
 
 let plan = { syntax: true, build: false, geometry: false, state: null, reason: [] };
 const touched = f => changed.includes(f);
@@ -103,9 +108,12 @@ if (touched(GL)) {
 }
 
 // Test harnesses and docs cannot affect the shipped game, so they must not drag in a full run --
-// otherwise the tool that exists to stop over-testing becomes a reason to over-test.
+// otherwise the tool that exists to stop over-testing becomes a reason to over-test. The same goes
+// for the top-level server modules (routes.js, nq-*.js): they are backend, checked below, and a
+// browser run of every level cannot see a change in them.
+const isNqServer = f => /^normie-quest\/[^/]+\.js$/.test(f);
 const otherNq = changed.filter(f => f.startsWith('normie-quest/') && f !== GL
-  && !f.startsWith('normie-quest/test/') && !/\.md$/.test(f));
+  && !f.startsWith('normie-quest/test/') && !/\.md$/.test(f) && !isNqServer(f));
 if (otherNq.length) {
   plan.build = true;
   const assetsOnly = otherNq.every(f => /\/src\/assets\/|\/public\/worlds\/|\/public\/sfx\//.test(f));
@@ -118,7 +126,8 @@ if (otherNq.length) {
   }
 }
 
-const backend = changed.filter(f => /^(server\.js|lib\/|.*\/routes\.js|.*\.js)$/.test(f) && !f.startsWith('normie-quest/'));
+const backend = changed.filter(f => /^(server\.js|lib\/|.*\/routes\.js|.*\.js)$/.test(f) && (!f.startsWith('normie-quest/') || isNqServer(f)));
+const nqServer = changed.filter(isNqServer);
 
 // ---- report -----------------------------------------------------------------------------------
 say('[nq-verify] vs ' + REF + ' — ' + changed.length + ' changed file(s)');
@@ -126,10 +135,11 @@ changed.slice(0, 12).forEach(f => say('    ' + f));
 if (changed.length > 12) say('    … and ' + (changed.length - 12) + ' more');
 say('');
 plan.reason.forEach(r => say('  · ' + r));
-if (!plan.reason.length) say('  · no game changes — backend/docs only');
+if (nqServer.length) say('  · normie-quest server module(s) changed — node --check + unit suites, no browser run');
+if (!plan.reason.length && !nqServer.length) say('  · no game changes — backend/docs only');
 say('');
 say('  PLAN: syntax' + (plan.build ? ' + build' : '') + (plan.geometry ? ' + geometry' : '') +
-    (plan.state === 'ALL' ? ' + FULL state test (82 levels)'
+    (plan.state === 'ALL' ? ' + FULL state test (' + NLEV + ')'
       : Array.isArray(plan.state) && plan.state.length ? ` + state test on: ${plan.state.join(', ')}`
       : ''));
 say('');
@@ -153,11 +163,15 @@ step('syntax (all script blocks)', () => {
 });
 backend.forEach(f => step('node --check ' + f, () => { sh(`node --check ${JSON.stringify(f)}`); return ''; }));
 if (plan.build) step('build', () => sh('node normie-quest/src/build.js').trim());
-if (plan.geometry) step('geometry (82 levels)', () => sh('node normie-quest/test/nq-geometry-check.cjs').trim().split('\n').slice(-3).join('\n'));
+if (nqServer.length) {
+  step('nq-leaderboard-test', () => sh('node normie-quest/test/nq-leaderboard-test.cjs').trim().split('\n').slice(-2).join('\n'));
+  step('nq-claims-test', () => sh('node normie-quest/test/nq-claims-test.cjs').trim().split('\n').slice(-2).join('\n'));
+}
+if (plan.geometry) step('geometry (' + NLEV + ')', () => sh('node normie-quest/test/nq-geometry-check.cjs').trim().split('\n').slice(-3).join('\n'));
 
 if (plan.state === 'ALL' || (Array.isArray(plan.state) && plan.state.length)) {
   const only = plan.state === 'ALL' ? '' : plan.state.join(',');
-  const label = plan.state === 'ALL' ? 'state test — ALL 82 levels' : `state test — ${plan.state.length} level(s)`;
+  const label = plan.state === 'ALL' ? 'state test — ALL ' + NLEV : `state test — ${plan.state.length} level(s)`;
   step(label, () => sh(`node normie-quest/test/nq-state-test.cjs ${JSON.stringify(BASE)}`, {
     env: { ...process.env, NQ_ONLY: only, NODE_PATH: path.join(ROOT, 'node_modules') },
     maxBuffer: 1 << 26,

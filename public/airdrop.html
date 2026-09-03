@@ -431,7 +431,7 @@
       </div>
     </div>
     <div style="margin-top:10px;padding:8px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:8px;font-family:var(--body);font-size:13px;color:#F59E0B;line-height:1.5">
-      ⚠ <strong>11 wallets supported.</strong> Pick whichever wallet actually holds the sending tokens — same flow for all of them. On mobile with no wallet detected, tap "Open in Phantom / Solflare" to load this page inside your wallet's browser.
+      ⚠ <strong>Every major Solana wallet supported.</strong> Pick whichever wallet actually holds the sending tokens — same flow for all of them. On mobile with no wallet detected, tap "Open in Phantom / Solflare" to load this page inside your wallet's browser.
     </div>
   </div>
 
@@ -551,7 +551,7 @@
       <div style="font-size:13px;color:#6B7280;margin-top:6px">If those numbers don't match what you see in the popup, hit reject.</div>
     </div>
     <div style="padding:12px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-family:var(--body);font-size:13.5px;color:#F59E0B;line-height:1.6;margin-bottom:10px">
-      ⚠ <strong>11 wallets supported.</strong> This batch signs through the wallet you connected.<br>
+      ⚠ <strong>Every major Solana wallet supported.</strong> This batch signs through the wallet you connected.<br>
       ⚠ <strong>Tokens leave your wallet immediately</strong> when you confirm. Double-check the recipient list, amounts, and your remaining SOL for rent before continuing.
     </div>
     <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
@@ -638,7 +638,7 @@ function toBaseUnits(amount, decimals) {
 }
 
 function shortAddr(a) {
-  return a ? a.slice(0,6) + '...' + a.slice(-4) : '';
+  return a ? CluckUtil.shortAddr(a, 6, 4) : '';
 }
 
 // JSON-RPC helper lives in /cluck-util.js. Six pages had their own copy and one
@@ -1065,7 +1065,7 @@ function removeRecipient(idx) {
 
 // ── Send Airdrop ─────────────────────────────────────────────────────────────
 async function sendAirdrop() {
-  if (!walletPubkey) { showError('Please connect your Phantom wallet first.'); return; }
+  if (!walletPubkey) { showError('Connect a wallet first.'); return; }
   if (!currentMint) { showError('Please select a token.'); return; }
 
   const active = recipients.filter(r => !r.skip);
@@ -1302,7 +1302,7 @@ function exportAirdropRecord() {
       'padding:10px;font-family:var(--body);font-size:13px;color:var(--body-text);resize:vertical"></textarea>' +
     '<button id="recordCopyBtn" onclick="copyRecordText()" style="width:100%;margin-top:6px;padding:10px;' +
       'background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:8px;' +
-      'font-family:\'Anton\',sans-serif;font-size:13.5px;font-weight:700;color:#6EE7B7;' +
+      'font-family:var(--disp);font-size:13.5px;font-weight:700;color:#6EE7B7;' +
       'letter-spacing:2px;cursor:pointer">📋 COPY RECORD</button>';
   document.getElementById('recordText').value = txt;
 }
@@ -1468,7 +1468,7 @@ function initUnlockGate() {
     if (banner) {
       banner.innerHTML = '<div class="unlock-banner-left">' +
         '<span style="font-size:22px">🎁</span>' +
-        '<div><div style="font-family:\'Anton\',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#10B981">FREE AIRDROP</div>' +
+        '<div><div style="font-family:var(--disp);font-size:13px;font-weight:700;letter-spacing:1px;color:#10B981">FREE AIRDROP</div>' +
         '<div style="font-size:13px;color:var(--sub)">Unlocked free — you came from the Buy Special tool</div></div></div>';
       banner.style.display = 'flex';
     }

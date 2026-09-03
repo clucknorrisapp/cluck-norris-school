@@ -83,7 +83,6 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const MINT = "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF";
 const $ = (id) => document.getElementById(id);
 const nfmt = (x) => Math.round(x).toLocaleString("en-US");
 const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1400); };

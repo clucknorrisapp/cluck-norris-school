@@ -159,7 +159,7 @@ export function AskCluck({ context, compact }) {
       const res = await fetch("/api/ask-cluck", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, context, lang: (function(){ try { var s = localStorage.getItem("clkn_lang"); if (s) return s; } catch(e){} var _l=(navigator.language||"").toLowerCase().slice(0,2); return _l==="zh"?"zh":_l==="es"?"es":"en"; })() })
+        body: JSON.stringify({ question, context, lang: (function(){ try { if (window.CLKN_I18N && window.CLKN_I18N.lang) return window.CLKN_I18N.lang; var s = localStorage.getItem("clkn_lang"); if (s) return s; } catch(e){} var _l=(navigator.language||"").toLowerCase().slice(0,2); return ["zh","es","hi","it","pt","vi"].indexOf(_l)!==-1?_l:"en"; })() })
       });
       const data = await res.json();
       if (data.success) {
@@ -200,7 +200,7 @@ export function AskCluck({ context, compact }) {
             {questionsLeft > 0 ? `${questionsLeft} questions remaining today` : "Daily limit reached — come back tomorrow"}
           </div>
         </div>
-        {compact && <button onClick={()=>setExpanded(false)} style={{marginLeft:"auto",background:"none",border:"none",color:"#6B7280",cursor:"pointer",fontSize:16}}>✕</button>}
+        {compact && <button onClick={()=>setExpanded(false)} aria-label="Close" style={{marginLeft:"auto",background:"none",border:"none",color:"#6B7280",cursor:"pointer",fontSize:16}}>✕</button>}
       </div>
 
       {questionsLeft > 0 ? (

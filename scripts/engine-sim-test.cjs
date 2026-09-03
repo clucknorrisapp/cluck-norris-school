@@ -77,6 +77,17 @@ const DAY = "2026-08-28";
   check("meaningful refill (≥2×) bypasses pacing", g.action === "roll" && g.urgent === true, g.action);
 }
 
+// ── Scenario 1b: WIDTH RECONFIG — an owner width change is urgent, bounded only by the 2× ceiling ──
+{
+  const base = { cfg: CFG, nowMs: 1_000_000, frac: 0.5, oorSince: null, sinceLastRollSec: 60, deployStagedUsd: 0, idlePairUsd: 0 };
+  const g = rollGate({ ...base, dayActions: CFG.maxActionsPerDay, widthOffPct: 0.3 });
+  check("width reconfig rolls urgently past anti-thrash and the 1× day cap", g.action === "roll" && g.urgent === true && g.reason === "width reconfig", `${g.action} / ${g.reason}`);
+  const capped = rollGate({ ...base, dayActions: 2 * CFG.maxActionsPerDay, widthOffPct: 0.3 });
+  check("width reconfig still stops at the 2× emergency ceiling", capped.action === "capped" && capped.urgent === true, capped.action);
+  const drift = rollGate({ ...base, dayActions: 0, widthOffPct: 0.1 });
+  check("width drift ≤20% is not a reconfig", drift.action === "hold", drift.action);
+}
+
 // ── Scenario 2: OOR DWELL — "out of range, wait 5 mins, fix it" ─────────────────
 {
   // A wick that recrosses inside the dwell never rolls.

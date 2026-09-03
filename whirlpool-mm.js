@@ -1,8 +1,14 @@
 // ── Liquidity Engine router ──────────────────────────────────────────────────
-// HTTP surface for the Orca Whirlpools market-maker tool (lib/orca-whirlpools.js).
-// Mounted by server.js at /api/whirlpool. Non-custodial throughout: the only
-// mutating endpoints (/open, /close) return UNSIGNED transactions for the
-// operator's wallet to sign in the browser — no keys live here.
+// HTTP surface for the Orca Whirlpools market-maker tool (lib/orca-whirlpools.js)
+// and the autonomous vault (lib/whirlpool-vault.js). Mounted by server.js at
+// /api/whirlpool. Two very different halves:
+//   • Public build endpoints (/pools, /quote, /open, /close, /positions) are
+//     non-custodial — they return UNSIGNED transactions for the user's wallet to
+//     sign in the browser — and are currently LOCKED (ENGINE_PUBLIC_LOCKED below).
+//   • /vault/* is admin-key-gated (PREMIUM_ACCESS_KEY via adminOK) and CUSTODIAL:
+//     tick/swap/transfer/sell-clip/add- and remove-liquidity/close-position/
+//     create-pool/reprice-pool… sign server-side with the per-project operator
+//     keypair loaded from env by the vault. Treat the key as the blast radius.
 //
 // Honest-by-design: this provides real two-sided depth that fills real traders.
 // It is not a self-trading volume bot. See lib/orca-whirlpools.js for the why.
