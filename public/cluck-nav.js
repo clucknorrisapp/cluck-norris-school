@@ -68,7 +68,7 @@
   // Every route each tool answers on, aliases included — /snapshot, /bags, /launches, /clkn and
   // /alpha were missing, so those pages were nav dead-ends (2026-08-18 sweep). This list gates
   // only the "ALL TOOLS" back-chip on the page itself; it does NOT publicise a page anywhere.
-  var TOOL_PAGES = ["/wallet-xray","/trace","/holders","/snapshot",
+  var TOOL_PAGES = ["/wallet-xray","/trace","/holders","/snapshot","/owners-snapshot","/owners",
     "/wallet-checkup","/security-coop","/hatchery","/airdrop","/firepit","/lp-scanner",
     "/bags","/launches","/bags-launches","/clkn","/alpha",
     "/buyspecial","/locker-room","/rose","/liquidity","/liquidity-engine","/premium","/pool-monitor"];

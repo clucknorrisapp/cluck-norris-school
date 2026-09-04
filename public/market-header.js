@@ -13,15 +13,15 @@
 
   function pill(label, value, color) {
     return '<div style="background:#0d0d0d;border:1px solid rgba(255,255,255,0.08);border-radius:9px;padding:7px 11px;">'
-      + '<div style="font-family:\'Courier New\',monospace;font-size:8.5px;color:#6B7280;letter-spacing:0.5px;">' + esc(label) + '</div>'
-      + '<div style="font-family:\'Oswald\',sans-serif;font-weight:700;font-size:14px;color:' + (color || '#F9FAFB') + ';margin-top:2px;">' + value + '</div></div>';
+      + '<div style="font-family:var(--mono,\'Courier New\',monospace);font-size:8.5px;color:#6B7280;letter-spacing:0.5px;">' + esc(label) + '</div>'
+      + '<div style="font-family:var(--disp,\'Oswald\',sans-serif);font-weight:700;font-size:14px;color:' + (color || '#F9FAFB') + ';margin-top:2px;">' + value + '</div></div>';
   }
 
   window.renderMarketHeader = async function (mint, container) {
     var el = typeof container === "string" ? document.getElementById(container) : container;
     if (!el || !mint) return;
     el.style.margin = el.style.margin || "0 0 14px";
-    el.innerHTML = '<div style="font-family:\'Courier New\',monospace;font-size:11px;color:#6B7280;padding:8px;">loading market data…</div>';
+    el.innerHTML = '<div style="font-family:var(--mono,\'Courier New\',monospace);font-size:11px;color:#6B7280;padding:8px;">loading market data…</div>';
     try {
       var r = await fetch('/api/token-overview?mint=' + encodeURIComponent(mint));
       var d = await r.json();
@@ -32,8 +32,8 @@
       var up = d.change24hPct != null && d.change24hPct >= 0;
       var chg = d.change24hPct != null ? '<span style="color:' + (up ? '#6EE7B7' : '#FCA5A5') + ';font-size:12px;font-weight:700;"> ' + (up ? '▲' : '▼') + ' ' + Math.abs(d.change24hPct).toFixed(1) + '%</span>' : '';
       var img = d.image ? '<img src="' + esc(d.image) + '" onerror="this.style.display=\'none\'" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;"/>' : '';
-      var rankBadge = d.marketCapRank ? '<span style="background:rgba(217,119,6,0.15);border:1px solid rgba(217,119,6,0.4);color:#FCD34D;font-family:\'Oswald\',sans-serif;font-size:10px;font-weight:700;padding:2px 7px;border-radius:12px;letter-spacing:0.5px;">RANK #' + d.marketCapRank + '</span>' : '';
-      var listedTag = '<span style="font-family:\'Courier New\',monospace;font-size:8.5px;color:#6B7280;">● live on-chain data</span>';
+      var rankBadge = d.marketCapRank ? '<span style="background:rgba(217,119,6,0.15);border:1px solid rgba(217,119,6,0.4);color:#FCD34D;font-family:var(--disp,\'Oswald\',sans-serif);font-size:10px;font-weight:700;padding:2px 7px;border-radius:12px;letter-spacing:0.5px;">RANK #' + d.marketCapRank + '</span>' : '';
+      var listedTag = '<span style="font-family:var(--mono,\'Courier New\',monospace);font-size:8.5px;color:#6B7280;">● live on-chain data</span>';
 
       var pills = '';
       pills += pill('PRICE', fmtPrice(d.priceUsd) + chg);
@@ -48,8 +48,8 @@
         '<div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;">'
           + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">'
             + img
-            + '<div style="font-family:\'Oswald\',sans-serif;font-weight:900;font-size:18px;color:#F9FAFB;letter-spacing:0.5px;">' + esc(d.symbol || '?') + '</div>'
-            + (d.name ? '<div style="font-family:\'Oswald\',sans-serif;font-size:11px;color:#6B7280;letter-spacing:1px;">' + esc(d.name) + '</div>' : '')
+            + '<div style="font-family:var(--disp,\'Oswald\',sans-serif);font-weight:900;font-size:18px;color:#F9FAFB;letter-spacing:0.5px;">' + esc(d.symbol || '?') + '</div>'
+            + (d.name ? '<div style="font-family:var(--disp,\'Oswald\',sans-serif);font-size:11px;color:#6B7280;letter-spacing:1px;">' + esc(d.name) + '</div>' : '')
             + rankBadge
             + '<div style="margin-left:auto;">' + listedTag + '</div>'
           + '</div>'

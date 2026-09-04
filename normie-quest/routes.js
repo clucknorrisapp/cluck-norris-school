@@ -14,6 +14,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const burn = require('./normie-burn');   // burn-to-buy backend for the Item Reserve shop (dormant until NQ_SHOP is armed)
@@ -27,6 +28,7 @@ const ledger = require('./nq-ledger');   // off-chain per-wallet points ledger (
 const pair = require('./nq-pair');       // TV pairing — carry a proven wallet session to a wallet-less screen
 const claims = require('./nq-claims');   // weekly physical-prize claims (sign-to-claim, encrypted addresses)
 const cloudsave = require('./nq-save');  // cross-device cloud save, keyed by verified wallet (2026-08-27)
+const promo = require('./nq-promo');     // weekly prize card + between-level promo feed (2026-08-30)
 
 // Admin key for reading feedback / the comments dashboard (low-sensitivity playtest comments,
 // no funds/PII). Env keys ONLY — a dedicated NQ_FEEDBACK_KEY, else the site's PREMIUM_ACCESS_KEY.
@@ -36,6 +38,22 @@ function adminOK(req) {
   const k = String((req.query && req.query.key) || req.get('x-nq-key') || '');
   const want = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
   return !!want && k === want;
+}
+// MASTER KEY ONLY (security review 2026-08-30): adminOK's own header says the feedback key is
+// "no funds/PII" trust — but adminOK was gating the prizes console (DECRYPTED shipping
+// addresses), the board wipe, and the paywall gate. Latent today (feedback key unset collapses
+// to the master key) but a set NQ_FEEDBACK_KEY would hand playtest-tier trust all three. Use
+// this for anything touching PII, the live contest, or money-adjacent switches.
+// Constant-time compare (same shape as server.js secretEqual): hash both sides to 32 bytes first
+// so timingSafeEqual never sees a length mismatch (it throws on one, which itself leaks length).
+function secretEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false;
+  return crypto.timingSafeEqual(crypto.createHash('sha256').update(a).digest(), crypto.createHash('sha256').update(b).digest());
+}
+function masterOK(req) {
+  const k = String((req.query && req.query.key) || req.get('x-nq-key') || '');
+  const want = process.env.PREMIUM_ACCESS_KEY || '';
+  return secretEqual(k, want);
 }
 // Coarse device class from the request UA — 'mobile' or 'desktop', nothing finer. The journey
 // store keeps only this word, never the raw user-agent, so "were those players on phones?" is
@@ -53,8 +71,8 @@ function esc(s) {
 }
 
 // Serves the side-scrolling platformer (real Normie character + JEET enemy).
-// The original coin-grabber prototype (normie-quest.html) is kept in the repo
-// but no longer served. Still hidden: unguessable URL, noindex, linked nowhere.
+// The original coin-grabber prototype (normie-quest.html) was removed 2026-09-02 — it was
+// served by nothing; git history keeps it. Still hidden: unguessable URL, noindex, linked nowhere.
 // Cache posture for the game DOCUMENT (an ~11MB single-file build), split by audience:
 //   browsers  — `max-age=0, must-revalidate`: revalidate on every load, exactly the behavior
 //               the old `no-cache` gave us (mobile Safari's stale cache once made shipped fixes
@@ -294,9 +312,8 @@ router.post('/api/nq/wallet/verify', async (req, res) => {
 router.get('/normie-quest-x7/vip', (req, res) => {
   // STRICT admin: env keys ONLY — adminOK also accepts the tester-known dashboard password,
   // which must NOT be able to grant ULTRA VIP (owner call 2026-07-21: VIP is owner-only).
-  const vk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
-  const vw = process.env.PREMIUM_ACCESS_KEY || '';   // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
-  if (!vw || vk !== vw) return res.status(404).json({ ok: false, error: 'not_found' });
+  // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
+  if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   try {
     let list = wallet.vipList();
     const add = String(req.query.add || '').trim(), rem = String(req.query.remove || '').trim();
@@ -317,8 +334,7 @@ function loungePosts() { try { const a = JSON.parse(fs.readFileSync(loungePath()
 router.get('/api/nq/lounge', (req, res) => {
   try {
     const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
-    const sess = wallet.checkSession(pk, token);
-    if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
+    if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
     if (!wallet.isVip(pk, null)) return res.status(403).json({ ok: false, error: 'not_vip' });
     res.json({ ok: true, posts: loungePosts() });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
@@ -326,9 +342,8 @@ router.get('/api/nq/lounge', (req, res) => {
 // Owner posting (STRICT env key only, same as the VIP allowlist): &title=&body=[&tag=giveaway|alpha|perk]
 // to add; &remove=<id> to delete; bare call lists everything.
 router.get('/normie-quest-x7/lounge-admin', (req, res) => {
-  const vk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
-  const vw = process.env.PREMIUM_ACCESS_KEY || '';   // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
-  if (!vw || vk !== vw) return res.status(404).json({ ok: false, error: 'not_found' });
+  // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
+  if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   try {
     let posts = loungePosts();
     const title = String(req.query.title || '').slice(0, 140), body = String(req.query.body || '').slice(0, 4000);
@@ -344,9 +359,8 @@ router.get('/normie-quest-x7/lounge-admin', (req, res) => {
 // Winnings are IN-GAME items (disc/vial/shield), never tokens — no funds move, nothing to sign.
 // Owner/wheel grants queue per wallet; the game claims them into the Item Reserve on next login.
 function strictAdmin(req) {
-  const vk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
-  const vw = process.env.PREMIUM_ACCESS_KEY || '';   // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
-  return !!vw && vk === vw;
+  // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
+  return masterOK(req);
 }
 // Owner grant (STRICT key): &wallet=PUBKEY&item=disc|vial|shield ; bare call shows a wallet's queue.
 router.get('/normie-quest-x7/reward', (req, res) => {
@@ -365,8 +379,7 @@ router.post('/api/nq/wheel/spin', (req, res) => {
     if (throttled(req, 'wheelspin', 20)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
     const pk = String(b.wallet || ''), token = String(b.token || '');
-    const sess = wallet.checkSession(pk, token);
-    if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
+    if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
     // Open to any VERIFIED wallet — the daily spin is the free player's reason to come back.
     // VIP is no longer a gate here, it selects the better prize table and the bonus windows.
     const result = rewards.spin(pk, null, { vip: wallet.isVip(pk, null) });
@@ -391,16 +404,14 @@ router.get('/api/nq/ledger', (req, res) => {
   if (throttled(req, 'ledger', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
     const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
-    const sess = wallet.checkSession(pk, token);
-    if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
+    if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
     res.json({ ok: true, ...ledger.balance(pk), history: ledger.history(pk, 25) });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.get('/api/nq/wheel/status', (req, res) => {
   try {
     const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
-    const sess = wallet.checkSession(pk, token);
-    if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
+    if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
     const vip = wallet.isVip(pk, null);
     const dailyReady = rewards.canSpin(pk), bonusReady = vip && rewards.bonusAvailable(pk);
     // 🎟️ Preview Pass surface: `preview` = the hidden world featured on the wheel this rotation (shown
@@ -423,8 +434,7 @@ router.post('/api/nq/rewards/claim', (req, res) => {
     if (throttled(req, 'rewardclaim', 40)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
     const pk = String(b.wallet || ''), token = String(b.token || '');
-    const sess = wallet.checkSession(pk, token);
-    if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
+    if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
     res.json(rewards.claimOne(pk));
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
@@ -452,6 +462,22 @@ router.post('/api/nq/save', (req, res) => {
     res.json({ ok: true, save: save || null });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
+// ---- /api/nq/promo : weekly prize card + between-level promo feed (nq-promo.js) -----------
+// Public read = what the interstitials render (card of the week, or nothing). Owner write is
+// master-keyed and is how the card changes each week WITHOUT a deploy: host the card photo
+// (e.g. /host-image → arweave), then POST { card: { img, name, copy } }; { card: null } clears.
+router.get('/api/nq/promo', (req, res) => {
+  if (throttled(req, 'promo', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try { res.json({ ok: true, ...promo.publicView() }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+router.post('/api/nq/promo', (req, res) => {
+  // master key ONLY — this sets public prize copy
+  if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  try { res.json(promo.set(req.body || {})); }
+  catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
 router.get('/api/nq/leaderboard', async (req, res) => {
   if (throttled(req, 'leaderboard', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
@@ -517,7 +543,7 @@ router.post('/api/nq/claim', async (req, res) => {
 // the archive-first reset button plus every archive the resets have written.
 router.get('/normie-quest-x7/prizes', async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  if (!adminOK(req)) return res.status(404).send('Not found');
+  if (!masterOK(req)) return res.status(404).send('Not found');
   const key = esc(String((req.query && req.query.key) || ''));
   const ago = (t) => {
     if (!t) return '—';
@@ -643,7 +669,7 @@ router.get('/normie-quest-x7/prizes', async (req, res) => {
 // without the admin key and refuses without confirm=RESET, so a crawler or prefetch can't wipe it.
 router.get('/api/nq/leaderboard/reset', async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   if (String((req.query && req.query.confirm) || '') !== 'RESET') {
     return res.status(400).json({ ok: false, error: 'add &confirm=RESET to archive the current board and wipe it' });
   }
@@ -667,7 +693,7 @@ router.get('/api/nq/leaderboard/reset', async (req, res) => {
 router.get('/api/nq/gate', (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   res.set('Cache-Control', 'no-store');
-  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   const q = req.query || {};
   try {
     if (String(q.reset || '') === '1') return res.json({ ok: true, changed: true, gate: wallet.gate.clearOverride() });

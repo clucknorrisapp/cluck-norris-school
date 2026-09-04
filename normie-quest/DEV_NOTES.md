@@ -22,7 +22,7 @@ The game is authored as ONE readable source file and assembled into a self-conta
 ```
 normie-quest/src/game_logic.js   ← THE source (~3.1k lines). Edit this, never the built HTML.
 normie-quest/src/assets/*.b64    ← 58 cut-out sprite/audio assets (raw base64), inlined at build.
-normie-quest/src/phaser.min.js   ← Phaser 3.60, inlined for the CSP-free standalone build.
+public/vendor/phaser-3.60.0.min.js ← Phaser 3.60 (the ONE vendored copy), inlined for the CSP-free standalone build.
 normie-quest/src/build.js        ← assembler.  Run:  node normie-quest/src/build.js
 ```
 

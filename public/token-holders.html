@@ -5,7 +5,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🐔 Cluck Holders — Solana Holder Breakdown + Airdrop CSV</title>
-<meta name="description" content="See who really holds any Solana token — true human holders separated from LP pools, lock escrows and program accounts, with real supply concentration and an airdrop-ready CSV. Free, no wallet connect."/>
+<meta name="description" content="See who really holds any Solana token — true human holders separated from LP pools, lock escrows and program accounts, with real supply concentration and an airdrop-ready CSV. Preview free — hold CLKN or a small SOL pass to run."/>
 <link rel="canonical" href="https://clucknorris.app/holders"/>
 <meta property="og:title" content="🐔 Cluck Holders — Who Really Holds Any Solana Token"/>
 <meta property="og:description" content="Paste any Solana mint — see true human holders versus LP, locks and program accounts, real supply concentration, and export an airdrop-ready CSV. One tool, filterable."/>
@@ -684,13 +684,16 @@ function copyAllAddresses() {
 // Hand the list to the airdropper. Guarded: sending to pools or lock escrows
 // burns real tokens into contracts that will never distribute them.
 function sendToAirdrop(ev) {
+  // cluckHandOff() navigates itself (async stash POST, then location.href) — stop the
+  // anchor's own /airdrop navigation first or the two race and the list can be lost.
+  if (ev) ev.preventDefault();
   const rows = currentRows();
-  if (!rows.length) { if (ev) ev.preventDefault(); return; }
+  if (!rows.length) return;
   if (currentView !== 'human') {
     const ok = confirm(
       `You are about to airdrop to ${rows.length.toLocaleString()} ${VIEWS[currentView].label.replace(/^\S+\s/, '').toLowerCase()}.\n\n` +
       `These are contracts, not people — pools, locks and programs cannot claim or trade what you send them.\n\nContinue anyway?`);
-    if (!ok) { if (ev) ev.preventDefault(); return; }
+    if (!ok) return;
   }
   try {
     cluckHandOff({

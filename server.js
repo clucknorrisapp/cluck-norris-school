@@ -23,7 +23,7 @@ const lpScanner = require("./lib/lp-scanner"); // LP Pair Scanner (Liquidity Lab
 const diplomaNft = require("./lib/diploma-nft"); // Graduation diploma cNFT minter (Bubblegum, treasury payer)
 const schoolProgress = require("./lib/school-progress"); // Server-side lesson ledger — gates the graduation mint
 const orderbook = require("./lib/orderbook-scanner"); // Cluck Order Book — multi-venue resting-order/wall scanner
-const { fetchBagsContext, classifyTeamActivity } = require("./lib/bags-context");
+const { fetchBagsContext } = require("./lib/bags-context");
 const analytics = require("./lib/analytics");
 const heliusUsage = require("./lib/helius-usage"); // Helius call attribution (which subsystem/IP burns credits)
 const solscan = require("./lib/solscan");
@@ -1698,26 +1698,6 @@ async function broadcastBurnCelebration(receipt) {
   }
 }
 
-// Tweet-length (≤280) version of a lesson on the given topic, for X.
-async function generateEduTweet(topic) {
-  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_KEY) return null;
-  const system = "You are Cluck Norris, a crypto-education project on Solana (clucknorris.app). Write ONE tweet teaching a single crisp insight about the given topic. HARD LIMIT: 270 characters MAX. Plain text, accurate, beginner-friendly, no links, no markdown, no hashtags, at most one emoji, no financial advice. Output ONLY the tweet text.";
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 160, system, messages: [{ role: "user", content: "Topic: " + topic }] }),
-    });
-    const data = await res.json();
-    if (data && data.content && data.content[0]) {
-      let t = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
-      if (t.length > 270) t = t.slice(0, 269).trim() + "…";
-      return t;  // clean, link-free; any links go in a self-reply at post time
-    }
-  } catch (e) { console.warn("[X] tweet generation failed:", e.message); }
-  return null;
-}
 // Shuffled-deck topic rotation: deal through a shuffled copy of the whole topic
 // list (every topic airs once before any repeat), then reshuffle on exhaustion —
 // so the order changes each pass and it never reads like the same loop. Reshuffles
@@ -2286,19 +2266,6 @@ async function tgAnswerCallback(id, text) {
   } catch (_) {}
 }
 
-// Edit an existing message in place (for self-refreshing boards). Returns ok bool.
-async function tgEdit(chatId, messageId, text) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId || !messageId) return false;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, message_id: messageId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-    });
-    const data = await res.json().catch(() => null);
-    return !!(data && data.ok);
-  } catch (_) { return false; }
-}
 // Delete a message (for self-cleaning reposts).
 async function tgDelete(chatId, messageId) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -3189,40 +3156,6 @@ async function notifyTelegramPhoto(photoUrl, caption) {
   }
 }
 
-// Format and post a "tool unlocked" notification — fired after every successful
-// CLKN micropayment verification so the community sees real product usage.
-function notifyToolUnlock(tool, paidAmount, senderWallet, isHolderBonus, signature) {
-  const senderShort = senderWallet ? `${senderWallet.slice(0, 4)}…${senderWallet.slice(-4)}` : "verified on-chain";
-  const sigLink = signature ? `\n<a href="https://solscan.io/tx/${signature}">↗ View on Solscan</a>` : "";
-  let caption;
-  if (tool === "premium") {
-    // The send is an OWNERSHIP PROOF, not a purchase — full access still depends
-    // on the 2M+ CLKN holder check, so say that rather than "unlocked / paid".
-    caption =
-      `🔬 <b>PREMIUM UNLOCKED</b>\n` +
-      `Verifying holder status for full access…\n` +
-      `Proof: <b>${paidAmount}</b> CLKN · Sender: <code>${senderShort}</code>` +
-      sigLink;
-  } else {
-    const map = {
-      ai:         { emoji: "🤖", name: "AI TUTOR EXTENDED",        detail: "+20 questions" },
-      airdrop:    { emoji: "💰", name: "AIRDROP TOOL UNLOCKED",    detail: "1 batch session" },
-      buyspecial: { emoji: "📈", name: "BUY-COMP UNLOCKED",        detail: "7 days unlimited" },
-      rose:       { emoji: "🌹", name: "ROSE COMP UNLOCKED",       detail: "7 days unlimited" },
-    };
-    const m = map[tool] || { emoji: "⚡", name: `${tool.toUpperCase()} UNLOCKED`, detail: "" };
-    const bonusBadge = isHolderBonus ? " · 5× HOLDER BONUS 🏆" : "";
-    caption =
-      `${m.emoji} <b>${m.name}</b>${bonusBadge}\n` +
-      `<b>${paidAmount}</b> CLKN paid · ${m.detail}\n` +
-      `Sender: <code>${senderShort}</code>` +
-      sigLink;
-  }
-  // Use the same Cluck graphic as the buy alerts so every CLKN-spending action
-  // feels like a moment in the group. Fire-and-forget so the API response isn't blocked.
-  notifyTelegramPhoto(BUY_GRAPHIC_URL, caption).catch(() => {});
-}
-
 const app = express();
 // Don't advertise the stack. Express sends `X-Powered-By: Express` by default,
 // which hands a scanner a free fingerprint (RootCrak even mis-read it as Flask).
@@ -3493,6 +3426,9 @@ app.use("/api/token-card", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 // class. Both were covered only by the global 150/min cap — 10x looser than their siblings. (sec M3)
 app.use("/api/burn-scan", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/wallet-checkup", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+// Owners Snapshot: /start queues an hours-long paced crawl, so it gets its own tight cap; the
+// status/result/history reads are cheap file reads and only need the global /api cap.
+app.use("/api/owners-snapshot/start", rateLimit("ownersstart", { windowMs: 3600000, max: 6 }));
 // Classroom: generous enough for a real multi-turn lesson/exam, tight enough to stop a bot
 // hammering the reward loop. Claim is rare (one per graduation) so it's capped hard.
 app.use("/api/classroom-exam", rateLimit("exam", { windowMs: 60000, max: 25 }));
@@ -3702,8 +3638,6 @@ app.get("/api/tts-stats", (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-const JUPITER_LOCK_PROGRAM = "LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn";
-
 // -- Bags API Proxy --
 app.get("/api/bags-proxy", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -3722,7 +3656,7 @@ app.get("/api/bags-proxy", async (req, res) => {
     const queryString = new URLSearchParams(params).toString();
     const url = `${BAGS_BASE}${endpoint}${queryString ? `?${queryString}` : ""}`;
     console.log("-> Bags:", url);
-    const response = await fetch(url, { headers: { "x-api-key": API_KEY } });
+    const response = await fetch(url, { headers: { "x-api-key": API_KEY }, signal: AbortSignal.timeout(10000) });
     const text = await response.text();
     console.log("<- Bags:", response.status, text.slice(0, 150));
     try { return res.status(200).json(JSON.parse(text)); }
@@ -3760,19 +3694,20 @@ app.get("/api/solscan-debug", async (req, res) => {
     looksLikeJwt: KEY.split(".").length === 3,
   };
   // Probe target — DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS (CLKN mint, a known address)
-  const ADDR = req.query.address || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+  const ADDR = String(req.query.address || CLKN_MINT);
+  if (!SOL_ADDR_RE.test(ADDR)) return res.status(400).json({ error: "bad address" });
   const probes = [
     // Suspected free-tier endpoints
     { name: "v2 chain info",                        url: `https://pro-api.solscan.io/v2.0/chaininfo`,                       headers: { token: KEY } },
     { name: "v2 chain info /chain/info",            url: `https://pro-api.solscan.io/v2.0/chain/info`,                      headers: { token: KEY } },
-    { name: "v2 token holders",                     url: `https://pro-api.solscan.io/v2.0/token/holders?address=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS&page=1&page_size=10`, headers: { token: KEY } },
-    { name: "v2 token transfer",                    url: `https://pro-api.solscan.io/v2.0/token/transfer?address=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS&page=1&page_size=5`, headers: { token: KEY } },
-    { name: "v2 token markets",                     url: `https://pro-api.solscan.io/v2.0/token/markets?address=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS&page=1&page_size=5`,  headers: { token: KEY } },
-    { name: "v2 token price",                       url: `https://pro-api.solscan.io/v2.0/token/price?address=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`,                       headers: { token: KEY } },
+    { name: "v2 token holders",                     url: `https://pro-api.solscan.io/v2.0/token/holders?address=${CLKN_MINT}&page=1&page_size=10`, headers: { token: KEY } },
+    { name: "v2 token transfer",                    url: `https://pro-api.solscan.io/v2.0/token/transfer?address=${CLKN_MINT}&page=1&page_size=5`, headers: { token: KEY } },
+    { name: "v2 token markets",                     url: `https://pro-api.solscan.io/v2.0/token/markets?address=${CLKN_MINT}&page=1&page_size=5`,  headers: { token: KEY } },
+    { name: "v2 token price",                       url: `https://pro-api.solscan.io/v2.0/token/price?address=${CLKN_MINT}`,                       headers: { token: KEY } },
     { name: "v2 token list (no params)",            url: `https://pro-api.solscan.io/v2.0/token/list?page=1&page_size=5`,                                                          headers: { token: KEY } },
     // Paid tier (known 401 — for reference)
     { name: "v2 account detail (paid tier)",        url: `https://pro-api.solscan.io/v2.0/account/detail?address=${ADDR}`,  headers: { token: KEY } },
-    { name: "v2 token meta (paid tier)",            url: `https://pro-api.solscan.io/v2.0/token/meta?address=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`,                         headers: { token: KEY } },
+    { name: "v2 token meta (paid tier)",            url: `https://pro-api.solscan.io/v2.0/token/meta?address=${CLKN_MINT}`,                         headers: { token: KEY } },
   ];
   const results = [];
   for (const p of probes) {
@@ -3826,8 +3761,9 @@ app.get("/api/solana-tracker-debug", async (req, res) => {
   }
   // Probe targets — CLKN mint + the CLKN dev/creator fee wallet so we get
   // real data, not just an empty 200. Override with ?mint=...&wallet=... .
-  const MINT   = req.query.mint   || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
-  const WALLET = req.query.wallet || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS"; // user can pass actual dev wallet
+  const MINT   = String(req.query.mint   || CLKN_MINT);
+  const WALLET = String(req.query.wallet || CLKN_MINT); // user can pass actual dev wallet
+  if (!SOL_ADDR_RE.test(MINT) || !SOL_ADDR_RE.test(WALLET)) return res.status(400).json({ error: "bad mint or wallet" });
   const probes = [
     // The headline endpoint — single wallet's position on a single token.
     // This is the one we plan to wire into Phase 2G first.
@@ -3906,7 +3842,7 @@ function verifyPremiumProof(token) {
   const [body, sig] = String(token).split(".");
   if (!body || !sig) return null;
   const expect = createHmac("sha256", secret).update(body).digest("base64url");
-  if (sig !== expect) return null;            // forged / tampered
+  if (!secretEqual(sig, expect)) return null;  // forged / tampered
   let p; try { p = JSON.parse(Buffer.from(body, "base64url").toString("utf8")); } catch (_) { return null; }
   if (!p || !p.w || !p.exp || Date.now() > p.exp) return null; // missing/expired
   return p.w;                                  // the proven wallet
@@ -3934,7 +3870,7 @@ app.get("/api/autopsy-premium", async (req, res) => {
   const provided = req.query.key || req.headers["x-premium-key"];
   const proof = req.query.proof || req.headers["x-premium-proof"];
   let accessVia = null, holderBalance = null, gateWallet = null;
-  if (provided && provided === GATE) {
+  if (provided && secretEqual(String(provided), GATE)) {
     accessVia = "admin-key";
   } else if (proof) {
     gateWallet = verifyPremiumProof(proof);           // proven wallet, or null if forged/expired
@@ -4268,7 +4204,7 @@ async function getBagsTokenSnapshot(mint) {
 app.get("/api/bags-feed-prices", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  const mints = String(req.query.mints || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 20);
+  const mints = String(req.query.mints || "").split(",").map(s => s.trim()).filter((m) => SOL_ADDR_RE.test(m)).slice(0, 20);
   if (mints.length === 0) return res.status(200).json({ success: true, prices: {} });
   const out = {};
   await Promise.all(mints.map(async (mint) => { const d = await getBagsTokenSnapshot(mint); if (d) out[mint] = d; }));
@@ -4401,12 +4337,12 @@ app.get("/api/cg-agg-test", async (req, res) => {
   try { out.price = await lpScanner.cgPro("/simple/price?ids=solana,bitcoin&vs_currencies=usd&include_24hr_change=true&include_market_cap=true"); } catch (e) { out.priceErr = e.message; }
   try { out.trending = ((await lpScanner.cgPro("/search/trending")).coins || []).slice(0, 5).map((c) => c.item && c.item.symbol); } catch (e) { out.trendingErr = e.message; }
   try { out.gainers = ((await lpScanner.cgPro("/coins/top_gainers_losers?vs_currency=usd&duration=24h")).top_gainers || []).slice(0, 5).map((c) => c.symbol); } catch (e) { out.gainersErr = e.message; }
-  try { out.clknCoinId = await lpScanner.coingeckoIdForMint("DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS"); } catch (e) { out.bridgeErr = e.message; }
+  try { out.clknCoinId = await lpScanner.coingeckoIdForMint(CLKN_MINT); } catch (e) { out.bridgeErr = e.message; }
   return res.status(200).json({ success: true, ...out });
 });
 
-// LP Scanner TOP POOLS — busiest Solana pools across all DEXs, refreshed hourly (warmed by
-// a background timer below; this returns the cached set, computing it on the first cold call).
+// LP Scanner TOP POOLS — busiest Solana pools across all DEXs, hourly TTL cache (computed on
+// the first cold call — the boot warmer was removed 2026-07-04, see below).
 app.get("/api/lp-top", async (req, res) => {
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -4415,19 +4351,8 @@ app.get("/api/lp-top", async (req, res) => {
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
-// Warm the Top Pools cache shortly after boot, then refresh it every hour, so /api/lp-top is
-// always instant. Runs regardless of the Telegram scheduler block (this is a public read).
-function warmTopPools() {
-  for (const kind of ["trending", "bluechip"]) {
-    lpScanner.topPools({ kind, force: true })
-      .then(t => console.log(`[lp-top] warmed ${kind}: ${t.count} pools`))
-      .catch(e => console.warn(`[lp-top] warm ${kind} failed:`, e.message));
-  }
-}
 // Warmer timers REMOVED (2026-07-04): the scanner is operator-only now — no reason to poll
 // GeckoTerminal hourly for an idle tool. Internal callers compute on demand (hourly TTL cache).
-// warmTopPools stays defined for a manual warm if ever needed.
-void warmTopPools;
 
 // Token market overview — a compact, tool-agnostic market snapshot for any mint. Fuses the
 // AGGREGATED CoinGecko data (authoritative rank/ATH/24h-change/mcap) for LISTED coins with the
@@ -4473,7 +4398,7 @@ app.get("/api/token-overview", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=120");
   const mint = String(req.query.mint || "").trim();
-  if (!mint || mint.length < 32) return res.status(400).json({ success: false, error: "pass ?mint=<mint>" });
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "pass ?mint=<mint>" });
   try {
     const d = await tokenOverviewData(mint);
     if (!d) return res.status(200).json({ success: false, error: "no market data for this token yet" });
@@ -4680,7 +4605,7 @@ app.get("/api/alpha", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=600");
   try { return res.status(200).json({ success: true, ...(await buildDailyAlpha({ force: req.query.refresh === "1" })) }); }
-  catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+  catch (e) { return res.status(200).json({ success: false, error: publicErrMsg(e) }); }
 });
 
 // Admin — force-build the brief; &post=1 fires it to Telegram (silent) + X; &xonly=1 X only;
@@ -5024,6 +4949,7 @@ RULES: No financial advice. Encouraging but honest. No markdown headers/asterisk
       if (passed) { // issue a single-use, server-verified graduation token so a claim can't be faked
         gradToken = randomBytes(18).toString("hex");
         const toks = kv.get("classroomGradTokens", {}) || {};
+        for (const [k, t] of Object.entries(toks)) if (Date.now() - ((t && t.ts) || 0) > GRAD_TOKEN_TTL) delete toks[k]; // expired tokens never claim; don't keep them forever
         toks[gradToken] = { courseId, ts: Date.now() };
         kv.set("classroomGradTokens", toks);
       }
@@ -5070,7 +4996,7 @@ app.get("/api/bags-near-grad", async (req, res) => {
     return res.status(200).json({ success: true, cached: r.cached, scanned: r.scanned, sourceDown: !!r.sourceDown, tokens: r.tokens });
   } catch (e) {
     if (NEAR_GRAD_CACHE.list) return res.status(200).json({ success: true, cached: true, stale: true, tokens: NEAR_GRAD_CACHE.list });
-    return res.status(200).json({ success: false, tokens: [], error: e.message });
+    return res.status(200).json({ success: false, tokens: [], error: publicErrMsg(e) });
   }
 });
 
@@ -5116,6 +5042,9 @@ async function getBagsGraduated() {
 // "&" would otherwise make Telegram reject the whole message (can't parse
 // entities). Escaping & < > is enough for HTML text context.
 function tgEsc(s) { return String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+// Escape for server-rendered HTML pages/attributes (OG tags, /lock, /burn, the LP Lab shell).
+// ONE copy — five private ones drifted before, and one of them was missing the quote escape.
+function escHtml(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
 // The Recently-Graduated BOARD = our own tracked 48h record (reliable for Bags,
 // unaffected by pump.fun flooding ST's global feed) merged with any Bags-suffix
@@ -5184,7 +5113,7 @@ app.get("/api/bags-graduated", async (req, res) => {
     return res.status(200).json({ success: true, cached: r.cached, tokens: r.tokens });
   } catch (e) {
     if (GRAD_BOARD_CACHE.list) return res.status(200).json({ success: true, cached: true, stale: true, tokens: GRAD_BOARD_CACHE.list });
-    return res.status(200).json({ success: false, tokens: [], error: e.message });
+    return res.status(200).json({ success: false, tokens: [], error: publicErrMsg(e) });
   }
 });
 
@@ -5453,16 +5382,15 @@ async function postChainSpotlight() {
   try { out.x = await postToX(text, { force: true }); } catch (e) { out.xErr = e.message; }
   // Telegram companion (community chat, SILENT per standing rule) — same copy + X link.
   try {
-    const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const xLine = out.x && out.x.ok && out.x.id ? `\n\n🐦 On X — like &amp; repost: https://x.com/FireChicken007/status/${out.x.id}` : "";
-    out.tgMsgId = await tgSend(process.env.TELEGRAM_CHAT_ID, esc(text) + xLine, null, { silent: true });
+    out.tgMsgId = await tgSend(process.env.TELEGRAM_CHAT_ID, tgEsc(text) + xLine, null, { silent: true });
   } catch (e) { out.tgErr = e.message; }
   // Durable observability: last result readable via /api/chain-spotlight-test; an X failure
   // DMs the operator chat so a dead post can never be silent again (this bit us 2026-07-08:
   // both slots "fired" into the master pause and nobody knew).
   const rec = { ts: Date.now(), index: n, slug: a.slug, xOk: !!(out.x && out.x.ok), xId: (out.x && out.x.id) || null, xErr: out.xErr || (out.x && !out.x.ok ? JSON.stringify(out.x).slice(0, 160) : null), tgMsgId: out.tgMsgId || null };
   kv.set("chainSpotLast", rec);
-  if (!rec.xOk) { try { await tgSend(operatorChatId() || "1846034838", `⚠️ <b>Chain Spotlight failed to post</b> (${a.name}): <code>${rec.xErr || "unknown"}</code>`, null, { silent: true }); } catch (_) {} }
+  if (!rec.xOk) { try { await tgSend(operatorChatId() || OPERATOR_DM_FALLBACK, `⚠️ <b>Chain Spotlight failed to post</b> (${a.name}): <code>${rec.xErr || "unknown"}</code>`, null, { silent: true }); } catch (_) {} }
   return out;
 }
 app.get("/api/chain-spotlight-test", async (req, res) => {
@@ -7050,9 +6978,9 @@ app.post("/api/buycomp/start", (req, res) => {
   // not fixed token amounts; q.prize overrides the board's prize line with free text.
   const pctPrize = q.pct === "1" || q.pct === 1;
   const usdPrize = q.usd === "1" || q.usd === 1;   // render places as "$amount in TICKER" (dollar-value prizes)
-  const prizeSummary = q.prize ? "🏆 " + String(q.prize).slice(0, 140)
+  const prizeSummary = q.prize ? "🏆 " + tgEsc(String(q.prize).slice(0, 140))
     : pctPrize ? `🏆 Top ${places.length}: ${places.map(p => p.amount + "%").join(" / ")} of your cumulative buys`
-    : `🏆 ${places.map(p => p.amount.toLocaleString()).join(" / ")} ${ticker}`;
+    : `🏆 ${places.map(p => p.amount.toLocaleString()).join(" / ")} ${tgEsc(ticker)}`;
   const exclude = String(q.exclude || "").split(",").map((s) => s.trim()).filter((w) => SOL_ADDR_RE.test(w));
   const minVolSol = Math.max(0, Number(q.minVolSol) || 0);
   // Auto-remove buy-and-dump bots (wallets that sold within the window) from the live
@@ -7126,11 +7054,11 @@ app.post("/api/buycomp/edit", async (req, res) => {
   if (q.end != null && q.end !== "") { const e = (isNaN(+q.end) ? Date.parse(q.end) : (+q.end < 1e12 ? +q.end * 1000 : +q.end)); if (e && e > c.startTs) c.endTs = e; }
   // Prize line: an explicit free-text `prize` wins; otherwise recompute the default only if the
   // amounts/mode actually changed, so an edit that doesn't touch prizes keeps the existing line.
-  if (q.prize != null) c.prizeSummary = "🏆 " + String(q.prize).slice(0, 140);
+  if (q.prize != null) c.prizeSummary = "🏆 " + tgEsc(String(q.prize).slice(0, 140));
   else if (q.places != null || q.pct != null) {
     c.prizeSummary = c.pctPrize
       ? `🏆 Top ${c.places.length}: ${c.places.map((p) => p.amount + "%").join(" / ")} of your cumulative buys`
-      : `🏆 ${c.places.map((p) => p.amount.toLocaleString()).join(" / ")} ${c.ticker}`;
+      : `🏆 ${c.places.map((p) => p.amount.toLocaleString()).join(" / ")} ${tgEsc(c.ticker)}`;
   }
   buyCompSave(c);
   try { await buyCompUpdate(c); } catch (_) {}   // re-render the board in place (self-cleaning)
@@ -7625,6 +7553,160 @@ const TOOLGATE = {
 // inside the refresh branch, so every request racing a cold-start refresh read usd=0 and the
 // paywall failed open for the whole first-fetch window after each deploy.
 let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: null };
+// Same RPC selection the rest of the file uses: the failover primary when configured, else the
+// Helius key directly. Named locally so this block does not depend on load order.
+function tokenMetaRpcUrl() {
+  return (rpc.primaryRpcUrl && rpc.primaryRpcUrl())
+    || `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
+}
+// ── Token metadata: make it immutable (owner tool) ───────────────────────────
+// A token with mutable metadata gets a red Rugcheck banner on CoinGecko warning that the creator
+// can disable sells, change fees and mint freely. For a token that already revoked mint AND freeze
+// authority that is mostly false — but it is unrebuttable and sits at the top of the page.
+// is_mutable = false is the only thing that clears it.
+//
+// ⚠️ IRREVERSIBLE, and the URI goes with it. Tokens minted against https://ipfs.io/ipfs/… are
+// everywhere and that gateway is being retired (it 429s today), so locking without repointing
+// freezes a dying URL permanently. Both happen in ONE instruction — see lib/token-metadata.js.
+//
+// Key-gated because it is an operator tool, though the transaction is inert without the update
+// authority's own signature: the server builds it UNSIGNED and never holds a key.
+app.get("/api/token-metadata/read", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    const mint = String((req.query && req.query.mint) || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    const tm = require("./lib/token-metadata");
+    const { Connection, PublicKey } = require("@solana/web3.js");
+    const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
+    const [metaInfo, mintInfo] = await Promise.all([
+      conn.getAccountInfo(tm.metadataPda(mint)),
+      conn.getParsedAccountInfo(new PublicKey(mint)),
+    ]);
+    if (!metaInfo) return res.json({ ok: false, error: "no_metadata_account", mint });
+    const meta = tm.decodeMetadata(metaInfo.data);
+    const parsed = mintInfo && mintInfo.value && mintInfo.value.data && mintInfo.value.data.parsed;
+    const mi = (parsed && parsed.info) || {};
+    // Report the OTHER authorities too. "Mutable metadata" is the last flag on a token that has
+    // already revoked mint and freeze; showing all three is what makes the banner's claims
+    // checkable instead of taken on faith.
+    res.json({ ok: true, mint, metadataPda: tm.metadataPda(mint).toBase58(), metadata: meta,
+      authorities: { mintAuthority: mi.mintAuthority || null, freezeAuthority: mi.freezeAuthority || null,
+                     decimals: mi.decimals, tokenProgram: (mintInfo.value && mintInfo.value.owner) || null } });
+  } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "read failed") }); }
+});
+
+// Rebuild a token's off-chain metadata JSON with a DURABLE image link, and put the new JSON on
+// Arweave. This is step 0 of the lock flow: the JSON is content-addressed, so the image URL inside
+// it cannot be edited later — whatever it says when you lock is what it says forever.
+//
+// Owner's choice, 2026-09-04, for ROSE: try C, fall back to A.
+//   C  mirror the ORIGINAL image bytes to Arweave — exact and permanent. Over the 100 KiB Turbo
+//      free ceiling it needs a funded account, so it can fail on payment, hence the fallback.
+//   A  rewrite the image as ipfs://<CID> — the gateway-AGNOSTIC form. Preserves the original file
+//      byte-for-byte and stops depending on the dying ipfs.io gateway, because consumers resolve
+//      ipfs:// through their own. Permanent only as long as the CID stays pinned.
+// Never silently downscales: an earlier idea to reuse Jupiter's Arweave copy would have frozen a
+// 512x512 logo in place of the real 1080x1080 one.
+app.post("/api/token-metadata/rebuild-json", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // Declared out here so a failure ANYWHERE still reports what had already happened — an error
+  // with no trail is what makes "it didn't work" unactionable.
+  const steps = [];
+  try {
+    const b = req.body || {};
+    const mint = String(b.mint || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    const tm = require("./lib/token-metadata");
+    const { Connection } = require("@solana/web3.js");
+    const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
+    const info = await conn.getAccountInfo(tm.metadataPda(mint));
+    if (!info) return res.status(400).json({ ok: false, error: "no_metadata_account" });
+    const current = tm.decodeMetadata(info.data);
+
+    // Read the CURRENT off-chain JSON so every field survives — description, extensions, creator.
+    // Rewriting it from scratch is how a description quietly disappears on the last edit ever made.
+    const srcUrl = String(b.sourceUrl || current.uri || "");
+    if (!/^https:\/\//i.test(srcUrl)) return res.status(400).json({ ok: false, error: "unreadable_source_uri", uri: srcUrl });
+    const jr = await fetch(srcUrl, { signal: AbortSignal.timeout(25000) });
+    if (!jr.ok) return res.status(502).json({ ok: false, error: `source_json_http_${jr.status}`,
+      detail: "the current metadata JSON could not be read — pass sourceUrl with a working gateway" });
+    const meta = await jr.json();
+    if (!meta || typeof meta !== "object") return res.status(502).json({ ok: false, error: "source_json_invalid" });
+
+    const imgUrl = String(meta.image || "");
+    // C then A, decided by lib/token-metadata.chooseDurableImage — pure and unit-tested, because
+    // the branch that matters is what happens when the Arweave mirror FAILS, and that cannot be
+    // staged against a live Turbo account.
+    const { uploadBytesToArweave, uploadJsonToArweave } = require("./hatchery");
+    const pick = await tm.chooseDurableImage({
+      imageUrl: imgUrl,
+      // ?imageOverride=ipfs://… — point at a CID you pinned yourself. See the note in the lib:
+      // a re-upload gets a different CID for the same pixels, and that new one is the whole point.
+      override: b.imageOverride || null,
+      mirror: b.preferArweaveMirror === false ? null : async (url) => {
+        const ir = await fetch(url, { signal: AbortSignal.timeout(40000) });
+        if (!ir.ok) throw new Error(`image fetch HTTP ${ir.status}`);
+        const bytes = Buffer.from(await ir.arrayBuffer());
+        const ctype = String(ir.headers.get("content-type") || "image/jpeg").split(";")[0];
+        if (!/^image\//.test(ctype)) throw new Error(`not an image (${ctype})`);
+        steps.push(`fetched original image: ${bytes.length} bytes, ${ctype}`);
+        return uploadBytesToArweave(bytes, ctype);
+      },
+    });
+    steps.push(...pick.steps);
+    const newImage = pick.image, method = pick.method;
+    if (!newImage) return res.status(400).json({ ok: false, error: "no_durable_image_option", imageUrl: imgUrl, steps });
+
+    const next = { ...meta, image: newImage };
+    const newUri = await uploadJsonToArweave(next);
+    steps.push(`uploaded new metadata JSON to Arweave: ${newUri}`);
+    res.json({ ok: true, mint, method, newUri, newImage, previousImage: imgUrl,
+               json: next, preservedKeys: Object.keys(meta), steps });
+  } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "rebuild failed"), steps }); }
+});
+
+// Build an UNSIGNED transaction. TWO STEPS, deliberately separate:
+//   makeImmutable:false  → repoint the URI while still mutable, then go LOOK at it rendering
+//   makeImmutable:true   → lock, only after you have seen it
+// Optionally uploads a fresh metadata JSON to Arweave first, so what eventually gets frozen is a
+// URI that will still resolve in ten years.
+app.post("/api/token-metadata/prepare", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // Declared out here so a failure ANYWHERE still reports what had already happened — an error
+  // with no trail is what makes "it didn't work" unactionable.
+  const steps = [];
+  try {
+    const b = req.body || {};
+    const mint = String(b.mint || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    const tm = require("./lib/token-metadata");
+    const { Connection } = require("@solana/web3.js");
+    const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
+    const info = await conn.getAccountInfo(tm.metadataPda(mint));
+    if (!info) return res.status(400).json({ ok: false, error: "no_metadata_account" });
+    const current = tm.decodeMetadata(info.data);
+    if (!current) return res.status(400).json({ ok: false, error: "not_metadata_v1" });
+
+    let newUri = b.newUri ? String(b.newUri).trim() : null;
+    let uploaded = null;
+    // uploadJson: take the CURRENT off-chain JSON, swap in a permanent image URL, re-upload to
+    // Arweave. Done server-side because the Turbo signer key lives here — but the result is only
+    // ever a URI handed back for the user to approve; nothing is signed on their behalf.
+    if (b.uploadJson && typeof b.uploadJson === "object") {
+      const { uploadJsonToArweave } = require("./hatchery");
+      uploaded = await uploadJsonToArweave(b.uploadJson);
+      newUri = uploaded;
+    }
+    const built = await tm.buildUpdateTx({ connection: conn, current, newUri,
+      makeImmutable: b.makeImmutable === true });
+    res.json({ ok: true, mint, current, uploadedUri: uploaded, ...built });
+  } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "prepare failed") }); }
+});
+
 app.get("/api/tool-gate/config", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return res.json({ success: true, enabled: false });
@@ -9667,7 +9749,7 @@ app.get("/api/locks", async (req, res) => {
   res.setHeader("Pragma", "no-cache");
   const { mint } = req.query;
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
-  if (!mint) return res.status(400).json({ success: false, error: "Missing mint" });
+  if (!SOL_ADDR_RE.test(String(mint || ""))) return res.status(400).json({ success: false, error: "Missing or invalid mint" });
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Missing HELIUS_API_KEY" });
   try {
     const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
@@ -9786,7 +9868,7 @@ app.get("/api/lock-card", async (req, res) => {
 app.get("/lock/:mint", async (req, res) => {
   const mint = String(req.params.mint || "").trim();
   if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(404).send("Not found");
-  const escH = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const escH = escHtml;
   let title = "Token Lock Report", sub = "";
   try {   // best-effort identity for the OG text — never block the page on it
     const cached = _lockCardCache.get(mint);
@@ -10062,7 +10144,6 @@ app.post("/api/lock/claim-tx", async (req, res) => {
 });
 
 // -- Fee Share / Analytics endpoints --
-const CLKN_MINT_CONST = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
 
 app.get("/api/fees", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -10070,7 +10151,7 @@ app.get("/api/fees", async (req, res) => {
   const API_KEY = process.env.BAGS_API_KEY;
   if (!API_KEY) return res.status(500).json({ success: false, error: "Missing BAGS_API_KEY" });
   try {
-    const { status, text } = await bagsFetch(`token-launch/lifetime-fees?tokenMint=${CLKN_MINT_CONST}`, API_KEY);
+    const { status, text } = await bagsFetch(`token-launch/lifetime-fees?tokenMint=${CLKN_MINT}`, API_KEY);
     try {
       const data = JSON.parse(text);
       return res.status(200).json(data);
@@ -10115,7 +10196,7 @@ app.get("/api/reinvestment", async (req, res) => {
     let events = [];
     for (let page = 0; page < 20; page++) {
       const { text } = await bagsFetch(
-        `fee-share/token/claim-events?tokenMint=${CLKN_MINT_CONST}&mode=offset&limit=100&offset=${page * 100}`, API_KEY);
+        `fee-share/token/claim-events?tokenMint=${CLKN_MINT}&mode=offset&limit=100&offset=${page * 100}`, API_KEY);
       let batch = [];
       try {
         const d = JSON.parse(text);
@@ -10219,7 +10300,6 @@ async function checkCLKNHolder(wallet) {
   try { if (isToolComped(wallet)) return { isHolder: true, balance: PREMIUM_HOLDER_THRESHOLD, comped: true }; } catch (_) {}
   try {
     const HELIUS_KEY = process.env.HELIUS_API_KEY;
-    const CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
     const url = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
     const response = await fetch(url, {
       method: "POST",
@@ -10388,7 +10468,7 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
       exists = rows.some(row => row[0] === wallet);
       if (!exists && !gateBlocked) {
         const date = new Date().toISOString();
-        await appendToSheet([wallet, effScore, effTotal, effPct, date, holderStatus, balance, source || "CHALLENGE"]);
+        await appendToSheet([wallet, effScore, effTotal, effPct, date, holderStatus, balance, source]);
         console.log(`[WIN] New claim: ${wallet} -- CLKN Holder: ${holderStatus} (${balance})`);
       }
     } catch (e) {
@@ -10412,7 +10492,7 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     // A gate-blocked claim records coursework + holder status but NOT the graduation
     // badge (kind null sets neither badge in credentials.record) — public graduate
     // counts must not be inflatable by a bare curl. A later passing claim adds it.
-    const kind = gateBlocked ? null : (source === "GRADUATION" ? "graduation" : "challenge");
+    const kind = gateBlocked ? null : "graduation";   // the "challenge" kind died with the Ultimate Challenge (2026-07-29)
     const rec = credentials.record(wallet, { kind, score: effScore, total: effTotal, pct: effPct, verified, isHolder, balance, coursework });
     // Graduating the FULL curriculum earns the on-chain diploma NFT (not the Ultimate
     // Challenge). Best-effort: a mint hiccup never fails the claim — the record is saved.
@@ -10588,7 +10668,7 @@ app.get("/api/wallet-checkup", async (req, res) => {
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
   const rpc = async (method, params) => {
-    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }) });
+    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }), signal: AbortSignal.timeout(15000) });
     return r.json();
   };
   const TOKEN_PROG = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
@@ -10690,7 +10770,7 @@ app.get("/api/burn-scan", async (req, res) => {
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
   const rpc = async (method, params) => {
-    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }) });
+    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }), signal: AbortSignal.timeout(15000) });
     return r.json();
   };
   const TOKEN_PROG = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
@@ -10791,7 +10871,7 @@ app.get("/api/claims", async (req, res) => {
 // chain showed no transfer to that wallet for 5.5 days — so nothing could be
 // stranded. Every gate now resolves through the connected wallet; see
 // /api/premium-verify-sig and /api/verify-sol-payment. Git has the implementation.
-const CLKN_MINT_ADDR = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+const CLKN_MINT_ADDR = CLKN_MINT; // alias of the single top-level constant (kept so the ~45 call sites below stay put)
 
 // Project deployer wallet — buys from here are the team reinvesting earned
 // fees back into CLKN, flagged with a distinct alert instead of a plain buy.
@@ -11017,7 +11097,7 @@ async function wwClknBalance(addr) {
   } catch (_) { return null; }
 }
 function wwOperatorDM(text, { loud = false } = {}) {
-  const chat = operatorChatId() || "1846034838";
+  const chat = operatorChatId() || OPERATOR_DM_FALLBACK;
   return tgSend(chat, text, null, { silent: !loud });
 }
 // ⛔ HARD-KILL (owner's call 2026-07-14): the scheduled Wallet Watch poller was the
@@ -11194,11 +11274,11 @@ app.post("/api/premium-verify-sig", rateLimit("pay", { windowMs: 60000, max: 30 
     return res.status(401).json({ success: false, error: "Signature did not verify" });
   }
   // Ownership proven. The proof token only proves OWNERSHIP — every consumer
-  // re-checks its OWN live balance gate downstream (premium re-checks 2M at run;
-  // the slot re-checks its 500k floor on every spin). So a caller may request a
-  // lower issuance floor (e.g. the Coop Spinner needs 500k, not 2M) WITHOUT
-  // weakening premium: a sub-2M wallet that gets a proof here still can't run
-  // premium forensics. Floor is clamped to ≤ 2M so this can never raise the bar.
+  // re-checks its OWN live balance gate downstream (premium re-checks 2M at run).
+  // So a caller may request a lower issuance floor WITHOUT weakening premium: a
+  // sub-2M wallet that gets a proof here still can't run premium forensics. (The
+  // Coop Spinner, the original sub-2M consumer, was removed.) Floor is clamped
+  // to ≤ 2M so this can never raise the bar.
   // minHold === 0 is an EXPLICIT "ownership only, no holder gate" request — used
   // by transcript Tier-2, where the point is proving the wallet on the transcript
   // belongs to you and a graduate may hold no CLKN at all. It cannot weaken
@@ -11229,8 +11309,6 @@ app.get("/api/clkn-balance", async (req, res) => {
     return res.status(200).json({ success: true, wallet, balance: h.balance, threshold: PREMIUM_HOLDER_THRESHOLD, holder: h.balance >= PREMIUM_HOLDER_THRESHOLD });
   } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
-
-// ── THE COOP SPINNER — private-beta backend ────────────────────────────────
 
 // -- Ask Cluck Norris (Claude AI) --
 app.post("/api/ask-cluck", async (req, res) => {
@@ -11304,9 +11382,11 @@ CLKN TOKEN UTILITY:
 - 10 free AI questions per day with Ask Cluck Norris. That daily allowance is the whole
   offer -- there is NO paid top-up any more (the old send-CLKN-to-unlock flow was retired
   2026-07-30). If someone is out of questions, tell them it resets at midnight UTC.
-- HOLD CLKN to unlock the operator tools free: 50,000 for the airdropper, 100,000 for
-  Buy Special, 2,000,000 for premium forensics. Not holding? Each has a small one-click SOL price.
-  You connect a wallet and the gate resolves itself -- nothing is sent by hand.
+- HOLD CLKN to unlock the heavy tools free: hold about $50 worth of CLKN (priced live -- the
+  exact CLKN figure shows on the tool page, so never quote a fixed token amount) and X-Ray,
+  Holders, Trace, the airdropper and Buy Special are all free. Not holding? A small one-click
+  SOL price buys a 7-day pass to all of them. Premium forensics is separate: 2,000,000 CLKN,
+  re-checked live. You connect a wallet and the gate resolves itself -- nothing is sent by hand.
 - Hold CLKN to be eligible for airdrops and exclusive rewards
 - Graduate all 12 lessons and submit your wallet for a transcript and an on-chain graduation NFT
 
@@ -11368,7 +11448,7 @@ app.get("/api/supply", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300"); // cache 5 mins
   try {
-    const MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+    const MINT = CLKN_MINT;
     const HELIUS_KEY = process.env.HELIUS_API_KEY;
     const url = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
     const response = await fetch(url, {
@@ -11419,7 +11499,7 @@ app.get("/api/supply", async (req, res) => {
 const SUPPLY_FEEDS = {
   cuna: { symbol: "CUNA", mint: "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc", cacheKey: "cunaSupplyCacheV1" },
   rose: { symbol: "ROSE", mint: "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF", cacheKey: "roseSupplyCacheV1" },
-  clkn: { symbol: "CLKN", mint: "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", cacheKey: "clknSupplyCacheV1" },   // owner ask 2026-09-01: Jupiter metadata update
+  clkn: { symbol: "CLKN", mint: CLKN_MINT, cacheKey: "clknSupplyCacheV1" },   // owner ask 2026-09-01: Jupiter metadata update
 };
 for (const [id, feed] of Object.entries(SUPPLY_FEEDS)) {
   app.get(`/api/${id}/supply`, async (req, res) => {
@@ -12168,6 +12248,7 @@ async function wxFindOrigin(wallet, rpcUrl, HELIUS_KEY, labelWallet, { maxPages,
       const r = await fetch(rpcUrl, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: "wo", method: "getSignaturesForAddress", params: [wallet, { limit: 1000, ...(before ? { before } : {}) }] }),
+        signal: AbortSignal.timeout(15000),
       });
       arr = (await r.json()).result || [];
     } catch { break; }
@@ -12230,11 +12311,6 @@ async function wxFindOrigin(wallet, rpcUrl, HELIUS_KEY, labelWallet, { maxPages,
   };
 }
 
-// Token Vitals — FACTS-ONLY token snapshot. This intentionally returns NO score, NO grade,
-// NO verdict: the removed Cluck Score gave reassuring grades to tokens that then rugged, so the
-// roll-up itself was the problem. Here we surface the same on-chain readings the score was built
-// from (authorities, liquidity, holders/concentration, Token-2022 mechanics, market, Bags/Jupiter
-// context) and let the reader judge. Forensic rule: state WHAT's on-chain, never assert intent.
 // /api/token-vitals was removed with the Token Vitals page (2026-07-29, owner: cut the
 // clutter). NOT to be confused with /api/token-overview, which stays — the airdropper,
 // the investors page and market-header.js all read prices from it.
@@ -12249,7 +12325,7 @@ app.get("/api/wallet-xray", async (req, res) => {
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
   const rpc = async (method, params) => {
-    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }) });
+    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }), signal: AbortSignal.timeout(15000) });
     return r.json();
   };
   const labelWallet = (a) => KNOWN_CEX_WALLETS[a] || KNOWN_SERVICE_WALLETS[a] || null;
@@ -12569,7 +12645,6 @@ app.get("/api/wallet-xray", async (req, res) => {
     const holder = buyCount >= 3 && sellCount <= Math.max(1, buyCount * 0.25) && (portfolioUsd > 0 || heldByMint.size > 0);
     const whale = solBalance >= 200 || portfolioUsd >= 50000;
     const cashingOut = netCexOut >= 2;
-    const cexFunded = cex.some((c) => c.in > 0) && (firstFunding && firstFunding.label);
     const lpProvider = (lpAdd + lpRemove) >= 3;
     const trader = distinctTokens >= 8 && swapCount >= 10 && !veryHighFreq;
 
@@ -12917,7 +12992,7 @@ async function renderCredentialCard(rec) {
     y += 96;
   }
   if (diploma) row("ULTIMATE CHALLENGE", diploma.pct + "%", "#D4AF37", verified ? "VERIFIED ON-CHAIN" : "SELF-REPORTED", verified ? "#10B981" : "#6B7280");
-  if (grad) row("FULL CURRICULUM", "12 / 12", "#10B981", "ALL LESSONS COMPLETE", "#6B7280");
+  if (grad) { const n = curriculumLessonCount(); row("FULL CURRICULUM", `${n} / ${n}`, "#10B981", "ALL LESSONS COMPLETE", "#6B7280"); }
   if (rec.holder && rec.holder.isHolder) row("STATUS", "CLKN HOLDER", "#D97706", null); // status only — never the balance (privacy)
 
   ctx.fillStyle = "#D97706"; ctx.font = "900 18px Oswald, sans-serif";
@@ -12927,6 +13002,10 @@ async function renderCredentialCard(rec) {
 
   return canvas.toBuffer("image/png");
 }
+
+// Lesson count for the card + diploma metadata — read from the real curriculum arrays (hand-typed
+// counts rot; see the /education route). Falls back to the historical 12 if the module is unavailable.
+function curriculumLessonCount() { try { return Number(curriculumPage.counts().lessons) || 12; } catch (_) { return 12; } }
 
 // Diploma NFT metadata (Metaplex JSON standard) — served as each diploma cNFT's URI.
 // Art = the personalized credential card; only graduates get minted, so it's graduation-framed.
@@ -12940,7 +13019,7 @@ app.get("/api/diploma-metadata/:slug", (req, res) => {
   const dip = rec.diploma && rec.diploma.passed ? rec.diploma : null;
   const attrs = [
     { trait_type: "Credential", value: "School Graduate" },
-    { trait_type: "Curriculum", value: "12 / 12 lessons" },
+    { trait_type: "Curriculum", value: `${curriculumLessonCount()} / ${curriculumLessonCount()} lessons` },
   ];
   if (dip) attrs.push({ trait_type: "Ultimate Challenge", value: (dip.pct || 0) + "%" });
   if (rec.holder) attrs.push({ trait_type: "CLKN Holder", value: rec.holder.isHolder ? "Yes" : "No" });
@@ -13012,7 +13091,7 @@ app.get("/api/diploma-mint", async (req, res) => {
       }
       return res.status(200).json({ success: true, eligible: eligible.length, skipped, minted: results.filter(r => r.ok && !r.already).length, results });
     }
-    return res.status(400).json({ success: false, error: "unknown action (status|create-tree|test|backfill)" });
+    return res.status(400).json({ success: false, error: "unknown action (status|create-tree|create-collection|test|backfill)" });
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
@@ -13169,6 +13248,13 @@ app.get("/api/token-card", async (req, res) => {
 // reachable only by direct URL while in private testing.
 app.get("/hatchery", (req, res) => {
   res.sendFile(join(__dirname, "public", "hatchery.html"));
+});
+// Make-metadata-immutable, an OPERATOR tool (noindex, absent from the sitemap). Explicit route
+// because public/ is only served through the vite build's copy in dist/ — without this it 404s on
+// a no-build boot. The page itself is inert without the update authority's signature; the ?key=
+// only unlocks the two API calls behind it.
+app.get("/token-lock", (req, res) => {
+  res.sendFile(join(__dirname, "public", "token-lock.html"));
 });
 // Firepit — safe token burner / rent reclaimer (public/firepit.html). public/ isn't
 // statically mounted, so the page needs an explicit route; its /vendor assets and the
@@ -13373,7 +13459,7 @@ app.get("/api/burn-token-info", async (req, res) => {
 // page can never be faked. We read the tx, confirm it carries a Burn/BurnChecked of THIS
 // mint signed by THIS wallet, and store the TRUE burned amount from the balance delta —
 // never the client's claim. Keyed by signature (idempotent).
-app.post("/api/burn-receipt", rateLimit("track", { windowMs: 60000, max: 20 }), async (req, res) => {
+app.post("/api/burn-receipt", rateLimit("burnreceipt", { windowMs: 60000, max: 20 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { sig, mint, wallet } = req.body || {};
   if (!/^[1-9A-HJ-NP-Za-km-z]{80,90}$/.test(String(sig || ""))) return res.status(400).json({ success: false, error: "Invalid signature." });
@@ -13438,7 +13524,7 @@ app.post("/api/burn-receipt", rateLimit("track", { windowMs: 60000, max: 20 }), 
 // validates it on-chain (the SAME rejectNonWallet used by graduation claims — rejects
 // mints, token accounts, programs, exchange/service addresses, malformed), dedupes, and
 // stores it under a campaign id. The owner exports a clean CSV, airdropper-ready.
-app.use("/api/airdrop-collect", rateLimit("track", { windowMs: 60000, max: 20 }));
+app.use("/api/airdrop-collect", rateLimit("airdropcollect", { windowMs: 60000, max: 20 }));
 const AIRDROP_CAMPAIGN_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 function airdropKey(campaign) { return `airdropSignups:${campaign}`; }
 app.get("/airdrop-signup", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
@@ -13510,12 +13596,205 @@ app.get("/api/airdrop-collect", (req, res) => {
   return res.status(200).json({ success: true, campaign, count, addresses: rows.map(([a, v]) => ({ address: a, handle: v.handle, at: v.at })) });
 });
 
+// ── CLKN Productions Jup Verification Protocol (JVP) — intake dashboard ───────
+// Clients enter everything a Jupiter VRFD submission needs at /jupverify (wallet-signed);
+// the owner reviews at /jupverify-admin and performs the actual submission himself.
+// Store + sanitization: lib/jupverify-intake.js (single choke point — every client string
+// is attacker-controlled and renders in the OWNER's browser). Protocol doc:
+// docs/CLKN_JUP_VERIFICATION_PROTOCOL.md. Both pages noindex; intake is unlisted for now.
+const jvpIntake = require("./lib/jupverify-intake");
+app.get("/jupverify", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.sendFile(join(__dirname, "public", "jupverify.html"));
+});
+app.get("/jupverify-admin", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.sendFile(join(__dirname, "public", "jupverify-admin.html"));
+});
+
+// Client session token — HMAC like issuePremiumProof but with an audience claim + the
+// submission id, so a premium proof can never be replayed here and vice versa.
+function issueJvpToken(wallet, id, ttlMs = 30 * 86400000) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  if (!secret || !wallet) return null;
+  const body = Buffer.from(JSON.stringify({ w: wallet, id, aud: "jvp", exp: Date.now() + ttlMs })).toString("base64url");
+  return body + "." + createHmac("sha256", secret).update(body).digest("base64url");
+}
+function verifyJvpToken(token) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  if (!secret || !token) return null;
+  const [body, sig] = String(token).split(".");
+  if (!body || !sig) return null;
+  if (!secretEqual(createHmac("sha256", secret).update(body).digest("base64url"), sig)) return null;
+  let p; try { p = JSON.parse(Buffer.from(body, "base64url").toString("utf8")); } catch (_) { return null; }
+  if (!p || p.aud !== "jvp" || !p.w || !p.id || Date.now() > (p.exp || 0)) return null;
+  return { wallet: p.w, id: p.id };
+}
+const jvpSignMessage = (wallet, ts) =>
+  `CLKN Productions Jup Verification\nSubmit your project for review. This signature costs nothing and sends no transaction.\n\nWallet: ${wallet}\nTime: ${ts}`;
+
+// Server-issued message (server clock, not the device's — the client-portal lesson).
+app.get("/api/jupverify/message", rateLimit("jvp-msg", { windowMs: 60000, max: 10 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "bad wallet" });
+  const ts = Date.now();
+  res.json({ success: true, ts, message: jvpSignMessage(wallet, ts) });
+});
+
+// Chain precheck — what the chain says about a mint, so the client CONFIRMS instead of
+// typing facts we'd have to distrust. Fans out to Helius, so tightly rate-limited.
+app.get("/api/jupverify/precheck", rateLimit("jvp-pre", { windowMs: 60000, max: 10 }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String(req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "Enter a valid mint address." });
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
+  try {
+    const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+    const asset = await rpcCall("jvp-asset", "getAsset", [mint]).catch(() => null);
+    const a = asset && asset.result;
+    if (!a) return res.status(404).json({ success: false, error: "That mint wasn't found on-chain." });
+    const ti = a.token_info || {};
+    const decimals = Number(ti.decimals);
+    if (!Number.isFinite(decimals)) return res.status(400).json({ success: false, error: "That address isn't a fungible token." });
+    const meta = (a.content && a.content.metadata) || {};
+    const updateAuth = ((a.authorities || []).find((x) => (x.scopes || []).includes("full") || (x.scopes || []).includes("metadata")) || {}).address || null;
+    res.json({
+      success: true, mint, decimals,
+      name: String(meta.name || "").slice(0, 64), symbol: String(ti.symbol || meta.symbol || "").slice(0, 12),
+      supplyUi: ti.supply != null ? Number(ti.supply) / 10 ** decimals : null,
+      mintAuthority: ti.mint_authority || null, freezeAuthority: ti.freeze_authority || null,
+      updateAuthority: updateAuth,
+      tokenProgram: (a.ownership && a.ownership.token_program) || null,
+    });
+  } catch (e) { res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
+// Submit — wallet-signed. Honeypot field discards bots with a silent 200.
+app.post("/api/jupverify/submit", rateLimit("jvp-sub", { windowMs: 60000, max: 5 }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const b = req.body || {};
+  if (b.company) return res.status(200).json({ success: true, id: "ok" });   // honeypot
+  const wallet = String(b.wallet || "").trim();
+  const ts = Number(b.ts);
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "bad wallet" });
+  if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > 5 * 60 * 1000) return res.status(400).json({ success: false, error: "Signature expired — try again." });
+  if (!verifySolanaSignature(jvpSignMessage(wallet, ts), String(b.signature || ""), wallet)) {
+    return res.status(401).json({ success: false, error: "Signature did not verify." });
+  }
+  const problem = await rejectNonWallet(wallet).catch(() => null);
+  if (problem) return res.status(400).json({ success: false, error: problem });
+  const v = jvpIntake.sanitizeForm(b.form);
+  if (!v.ok) return res.status(400).json({ success: false, error: v.error });
+  // Server-computed chain facts (never client-asserted): decimals/supply/authorities +
+  // whether the SIGNING wallet controls the mint. A badge for the owner, not a gate —
+  // plenty of good tokens have revoked authorities or community submitters.
+  let chain = null;
+  try {
+    const HELIUS_KEY = process.env.HELIUS_API_KEY;
+    if (HELIUS_KEY) {
+      const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+      const asset = await rpcCall("jvp-sub-asset", "getAsset", [v.fields.mint]).catch(() => null);
+      const a = asset && asset.result;
+      if (!a) return res.status(400).json({ success: false, error: "That mint wasn't found on-chain." });
+      const ti = a.token_info || {};
+      if (!Number.isFinite(Number(ti.decimals))) return res.status(400).json({ success: false, error: "That address isn't a fungible token." });
+      const updateAuth = ((a.authorities || []).find((x) => (x.scopes || []).includes("full") || (x.scopes || []).includes("metadata")) || {}).address || null;
+      chain = {
+        decimals: Number(ti.decimals),
+        supplyUi: ti.supply != null ? Number(ti.supply) / 10 ** Number(ti.decimals) : null,
+        chainName: String(((a.content || {}).metadata || {}).name || "").slice(0, 64),
+        chainSymbol: String(ti.symbol || ((a.content || {}).metadata || {}).symbol || "").slice(0, 12),
+        mintAuthNull: !ti.mint_authority, freezeAuthNull: !ti.freeze_authority,
+        updateAuthority: updateAuth, signerIsUpdateAuth: !!updateAuth && updateAuth === wallet,
+        tokenProgram: (a.ownership && a.ownership.token_program) || null,
+        readAt: Date.now(),
+      };
+    }
+  } catch (_) { /* chain read best-effort — record still stores, badge shows unknown */ }
+  const r = jvpIntake.submit({ wallet, fields: v.fields, chain, ip: clientIp(req) });
+  if (!r.ok) return res.status(400).json({ success: false, error: r.error });
+  res.json({ success: true, id: r.id, resubmission: r.resubmission, status: "submitted", token: issueJvpToken(wallet, r.id) });
+});
+
+// Client status — bearer token from submit. Never leaks ownerNotes/ip.
+app.get("/api/jupverify/status", rateLimit("jvp-st", { windowMs: 60000, max: 30 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const tok = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  const p = verifyJvpToken(tok);
+  if (!p) return res.status(401).json({ success: false, error: "sign in again" });
+  const rec = jvpIntake.get(p.id);
+  if (!rec || rec.wallet !== p.wallet) return res.status(404).json({ success: false, error: "not found" });
+  res.json({ success: true, submission: jvpIntake.clientView(rec) });
+});
+
+// ── Admin (owner) ── all 404 on bad key, header preferred over ?key=.
+app.get("/api/jupverify/admin/list", (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ success: true, submissions: jvpIntake.list() });
+});
+app.get("/api/jupverify/admin/entry", (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+  res.setHeader("Cache-Control", "no-store");
+  const rec = jvpIntake.get(String(req.query.id || ""));
+  if (!rec) return res.status(404).json({ success: false, error: "not found" });
+  res.json({ success: true, submission: rec });
+});
+app.post("/api/jupverify/admin/entry", (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+  res.setHeader("Cache-Control", "no-store");
+  const b = req.body || {};
+  const r = jvpIntake.adminUpdate(String(req.query.id || b.id || ""), { status: b.status, ownerNotes: b.ownerNotes, clientMessage: b.clientMessage });
+  if (!r.ok) return res.status(400).json({ success: false, error: r.error });
+  res.json({ success: true, submission: r.record });
+});
+// Live verification-readiness scorecard: Jupiter's own numbers vs the JVP profile
+// (holders ≥~250, registered liquidity ≥~$25k — the DNC verified profile), plus
+// whether one of our engines is already running this mint. Separate from /entry
+// because it fans out to external APIs.
+app.get("/api/jupverify/admin/scorecard", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String(req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "bad mint" });
+  const out = { success: true, mint, jupiter: null, engine: null, gates: {} };
+  try {
+    const found = await jupTokensSearch(mint);
+    const t = Array.isArray(found) ? found.find((x) => x && (x.id === mint || x.address === mint)) : null;
+    if (t) {
+      out.jupiter = {
+        isVerified: !!t.isVerified, organicScore: t.organicScore ?? null, organicScoreLabel: t.organicScoreLabel || null,
+        holderCount: t.holderCount ?? null, liquidity: t.liquidity ?? null, mcap: t.mcap ?? t.marketCap ?? null,
+        circSupply: t.circSupply ?? null,
+        audit: t.audit ? { mintAuthorityDisabled: t.audit.mintAuthorityDisabled, freezeAuthorityDisabled: t.audit.freezeAuthorityDisabled, topHoldersPercentage: t.audit.topHoldersPercentage } : null,
+        stats24h: t.stats24h ? { buyVolume: t.stats24h.buyVolume, sellVolume: t.stats24h.sellVolume, buyOrganicVolume: t.stats24h.buyOrganicVolume, sellOrganicVolume: t.stats24h.sellOrganicVolume, holderChange: t.stats24h.holderChange } : null,
+      };
+      out.gates = {
+        holders: { value: t.holderCount ?? null, target: 250, pass: (t.holderCount ?? 0) >= 250 },
+        liquidity: { value: t.liquidity ?? null, target: 25000, pass: (t.liquidity ?? 0) >= 25000 },
+        score: { value: t.organicScore ?? null, label: t.organicScoreLabel || null, pass: (t.organicScore ?? 0) >= 30 },
+        verified: { value: !!t.isVerified },
+      };
+    }
+  } catch (_) { /* Jupiter read best-effort */ }
+  try {
+    const projects = whirlpoolMM.vault.listProjects();
+    for (const [pid, p] of Object.entries(projects)) {
+      if (p && p.tokenMint === mint) { out.engine = { projectId: pid, operatorLoaded: whirlpoolMM.vault.isEnabled(pid) }; break; }
+    }
+  } catch (_) { /* vault optional */ }
+  res.json(out);
+});
+
 // Public burn receipt — server-rendered so it carries OG tags for a rich social share.
 app.get("/burn/:sig", (req, res) => {
   const sig = String(req.params.sig || "");
   const store = kv.get("burnReceipts", {}) || {};
-  const r = store[sig];
-  const escH = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // Same shape check as /api/burn-receipt; own-property so "constructor"/"__proto__" can't 500.
+  const r = /^[1-9A-HJ-NP-Za-km-z]{80,90}$/.test(sig) && Object.prototype.hasOwnProperty.call(store, sig) ? store[sig] : null;
+  const escH = escHtml;
   const fmtNum = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: Number(n) < 1 ? 6 : 2 });
   const fmtUsd = (n) => n == null ? null : (n < 0.01 ? "<$0.01" : "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   if (!r) {
@@ -13730,8 +14009,6 @@ app.get("/clkn", (req, res) => {
   res.sendFile(join(__dirname, "public", "clkn.html"));
 });
 
-// Token Vitals — facts-only token snapshot (authorities, liquidity, holders, Token-2022 safety,
-// market). Deliberately NO score/grade/verdict (see the API note) — just the on-chain readings.
 // Tools & Utilities hub — the front door to the toolkit, linked from the landing.
 app.get("/tools", (req, res) => {
   res.sendFile(join(__dirname, "public", "tools.html"));
@@ -13953,6 +14230,78 @@ app.get(["/ask-cluck", "/crypto-school"], (req, res) => {
 });
 
 // -- Trace — wallet × token forensic history (private tool, not linked) --
+// ── Owners Snapshot & History — who's in, who's out, who's draining (FREE, job-based) ──────
+// A token owner submits a mint; the engine (lib/owners-snapshot.js) walks every holder worth
+// more than ~$5, reads each wallet's history for that token, classifies IN / OUT / DRAINING,
+// links wallets (shared first funder, direct transfers, shared cash-out address) and keeps a
+// snapshot history per mint so the owner can diff runs over time.
+//
+// This is the repo's FIRST long-running job pattern. Owner's brief (2026-09-02): "this can
+// take hours if needed to keep price down and free" — so it is one job at a time, every upstream
+// call paced (OWNERS_SNAPSHOT_RPS, default 4/s), progress persisted under DATA_DIR so a redeploy
+// mid-crawl resumes, and the endpoints below are polling endpoints, never request-scoped scans.
+// Free = no tools pass. Abuse control instead: a per-mint 6h cooldown (owner key bypasses), a
+// 12-deep queue, and a tight per-IP cap on /start.
+const ownersSnapshot = require("./lib/owners-snapshot").createEngine({
+  dataDir: process.env.DATA_DIR || "/data",
+  heliusKey: () => process.env.HELIUS_API_KEY,
+  rpcCall: (id, method, params) => heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)(id, method, params),
+  enhancedBatched: (sigs, label, txCache) => heliusEnhancedBatched(sigs, process.env.HELIUS_API_KEY, label, txCache),
+  // Wallet-scoped enhanced history (one page) — used only to follow where a dumper's proceeds went.
+  enhancedAddress: async (wallet, { limit = 100, type = null } = {}) => {
+    const u = new URL(`https://api.helius.xyz/v0/addresses/${wallet}/transactions`);
+    u.searchParams.set("api-key", process.env.HELIUS_API_KEY); u.searchParams.set("limit", String(limit));
+    if (type) u.searchParams.set("type", type);
+    const r = await fetch(u, { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(`helius addresses ${r.status}`);
+    const a = await r.json(); return Array.isArray(a) ? a : [];
+  },
+  jupPriceV3, getSolUsd, classifyAddressTypes, isOnCurve, KNOWN_CEX_WALLETS, KNOWN_SERVICE_WALLETS,
+  log: (m) => console.log("[OWNERS-SNAPSHOT]", m),
+});
+app.get(["/owners-snapshot", "/owners"], (req, res) => {
+  res.sendFile(join(__dirname, "public", "owners-snapshot.html"));
+});
+app.post("/api/owners-snapshot/start", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String((req.body && req.body.mint) || req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  const admin = adminAuthOK(req);
+  const out = ownersSnapshot.start({ mint, requestedBy: admin ? "owner" : clientIp(req), force: admin && req.query.force === "1" });
+  if (!out.ok && out.error === "cooldown") return res.status(429).json({ ok: false, error: "cooldown", retryAfterMs: out.retryAfterMs, job: out.job, detail: "This token was snapshotted recently — open the latest result, or re-run after the cooldown." });
+  if (!out.ok && out.error === "queue_full") return res.status(503).json({ ok: false, error: "queue_full", detail: "The crawler queue is full right now — try again in a while." });
+  try { analytics.trackTool("owners-snapshot"); } catch {}
+  res.json(out);
+});
+app.get("/api/owners-snapshot/status", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const jobId = String(req.query.jobId || ""), mint = String(req.query.mint || "");
+  if (mint && !SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  const job = ownersSnapshot.status({ jobId: /^os_[a-z0-9_]+$/i.test(jobId) ? jobId : null, mint: mint || null });
+  res.json({ ok: true, job, running: ownersSnapshot.running, queueLength: ownersSnapshot.queueLength });
+});
+app.get("/api/owners-snapshot/result", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String(req.query.mint || "");
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  const r = ownersSnapshot.result({ mint, ts: req.query.ts ? Number(req.query.ts) : null });
+  if (!r) return res.status(404).json({ ok: false, error: "no_result", detail: "No finished snapshot for this token yet." });
+  res.json({ ok: true, result: r });
+});
+app.get("/api/owners-snapshot/history", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String(req.query.mint || "");
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  res.json({ ok: true, ...ownersSnapshot.history({ mint }) });
+});
+// Owner-only: queue view + cancel.
+app.get("/api/owners-snapshot/admin", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (req.query.cancel) return res.json({ ok: true, cancelled: ownersSnapshot.cancel(String(req.query.cancel)) });
+  res.json({ ok: true, running: ownersSnapshot.running, queueLength: ownersSnapshot.queueLength, recent: ownersSnapshot.listRecent(30) });
+});
+
 app.get("/trace", (req, res) => {
   res.sendFile(join(__dirname, "public", "trace.html"));
 });
@@ -14052,9 +14401,10 @@ app.get("/api/bubblemaps", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300"); // cache 5 min
   const { token, chain } = req.query;
   if (!token) return res.status(400).json({ error: "Missing token" });
+  if (!/^[A-Za-z0-9]{1,64}$/.test(String(token)) || (chain && !/^[a-z0-9-]{1,16}$/.test(String(chain)))) return res.status(400).json({ error: "Invalid token or chain" });
   try {
     const url = `https://api-legacy.bubblemaps.io/map-data?token=${encodeURIComponent(token)}&chain=${encodeURIComponent(chain || "sol")}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
     const text = await response.text();
     res.status(response.status);
     try { return res.json(JSON.parse(text)); }
@@ -14160,7 +14510,7 @@ const SITEMAP_PAGES = [
   // /autopsy + /order-book left the sitemap 2026-07-29 when they went operator-only,
   // and /grant + /token-vitals were removed outright.
   "/", "/school", "/education", "/tools", "/wallet-xray", "/trace",
-  "/snapshot", "/holders", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
+  "/snapshot", "/holders", "/owners-snapshot", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
   "/wallet-checkup", "/locker-room", "/clkn", "/alpha", "/lp-lab",
   "/classroom", "/bags", "/investors", "/privacy", "/terms",
   // /liquidity + /liquidity-engine dropped 2026-07-19 (audit): both serve a locked
@@ -14265,7 +14615,7 @@ let _lpLabHtml = null;   // built once from the shipped shell, then reused
 function lpLabShell() {
   if (_lpLabHtml) return _lpLabHtml;
   let html = fs.readFileSync(join(__dirname, "dist", "index.html"), "utf8");
-  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const esc = escHtml;
   html = html
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${esc(LP_LAB_META.title)}</title>`)
     .replace(/<meta property="og:title"[^>]*>/i, `<meta property="og:title" content="${esc(LP_LAB_META.title)}" />`)
@@ -14592,7 +14942,7 @@ function prettyDex(pool) {
   const id = (pool.dexId || "").toLowerCase();
   const name = DEX_LABELS[id] || (id ? id.charAt(0).toUpperCase() + id.slice(1) : "Unknown DEX");
   const lbl = (pool.labels || []).filter(Boolean).join(" ");
-  return lbl ? `${name} ${lbl}` : name;
+  return tgEsc(lbl ? `${name} ${lbl}` : name);   // dexId/labels are third-party data rendered inside Telegram HTML
 }
 function prettySource(source) {
   if (!source) return "";
@@ -14892,9 +15242,9 @@ const vol24hByMint = new Map(); // mint -> { v, at } for other projects
 const JUP_API_KEY = process.env.JUPITER_API_KEY || "";
 async function jupTokensSearch(query) {
   const tries = JUP_API_KEY
-    ? [{ u: "https://api.jup.ag/tokens/v2/search?query=" + query, h: { "x-api-key": JUP_API_KEY } },
-       { u: "https://lite-api.jup.ag/tokens/v2/search?query=" + query, h: {} }]
-    : [{ u: "https://lite-api.jup.ag/tokens/v2/search?query=" + query, h: {} }];
+    ? [{ u: "https://api.jup.ag/tokens/v2/search?query=" + encodeURIComponent(query), h: { "x-api-key": JUP_API_KEY } },
+       { u: "https://lite-api.jup.ag/tokens/v2/search?query=" + encodeURIComponent(query), h: {} }]
+    : [{ u: "https://lite-api.jup.ag/tokens/v2/search?query=" + encodeURIComponent(query), h: {} }];
   for (const t of tries) {
     try { const r = await fetch(t.u, { headers: t.h, signal: AbortSignal.timeout(8000) }); if (r.ok) return await r.json(); } catch (_) {}
   }
@@ -15234,13 +15584,16 @@ async function opsReportTick() {
 // Leave OFF unless the engine is repurposed to non-token-featuring content.
 const CONTENT_ENGINE_ENABLED = false;  // master kill-switch (also kv contentEngineEnabled)
 function contentEngineOn() { return CONTENT_ENGINE_ENABLED && kv.get("contentEngineEnabled", true) !== false; }
+// Operator DM fallback when the treasury project has no telegramChatId configured. ONE copy —
+// it used to be pasted at nine call sites.
+const OPERATOR_DM_FALLBACK = "1846034838";
 function operatorChatId() { try { const p = whirlpoolMM.vault.getProject("treasury"); return (p && p.telegramChatId) || null; } catch (_) { return null; } }
 
 // ---- Normie Quest playtest feedback → AI-triaged digest (twice-daily to the operator chat) ----
 // Logic lives in normie-quest/nq-digest.js (self-contained + unit-testable); server.js only injects
 // a `notify(text)` that sends the SILENT operator DM (owner rule: never ping unless asked).
 const nqDigest = require("./normie-quest/nq-digest");
-const nqNotify = (text) => tgSend(operatorChatId() || "1846034838", text, null, { silent: true });
+const nqNotify = (text) => tgSend(operatorChatId() || OPERATOR_DM_FALLBACK, text, null, { silent: true });
 
 // Dedupe ledger: mint -> { at, status }. Never re-queue a mint seen within 14d;
 // lets a token re-feature later once it ages out. Pruned on every write.
@@ -15426,7 +15779,7 @@ async function contentEngineTick() {
 async function maybeFireOrganicReminder(entry) {
   const at = kv.get("organicReminderAt", 0);
   if (!at || Date.now() < at) return;
-  const chat = kv.get("organicReminderChat", "") || "1846034838"; // operator/treasury DM
+  const chat = kv.get("organicReminderChat", "") || OPERATOR_DM_FALLBACK; // operator/treasury DM
   kv.set("organicReminderAt", 0); // disarm first so it can't double-fire
   const tok = process.env.TELEGRAM_BOT_TOKEN;
   if (!tok) return;
@@ -16230,8 +16583,8 @@ app.listen(PORT, () => {
         }
       } catch (e) { console.warn("[outreach] tick failed:", e.message); }
     }
-    setInterval(outreachTick, 10 * 60 * 1000); // check every 10 min; two slots/day
-    setTimeout(outreachTick, 110000);
+    if (OUTREACH_ENABLED) setInterval(outreachTick, 10 * 60 * 1000); // check every 10 min; two slots/day
+    if (OUTREACH_ENABLED) setTimeout(outreachTick, 110000);
     // Daily Tool Spotlight — feature one of our tools on X + (silent) Telegram once/day,
     // rotating the deck. Stamps the date BEFORE posting so a crash/retry can't double-post
     // publicly. Hour via kv toolSpotHour (default 17 UTC ≈ midday ET).
@@ -16246,8 +16599,8 @@ app.listen(PORT, () => {
         console.log("[tool-spotlight] posted", today, r.name, { x: !!(r.x && r.x.ok), tg: !!r.telegram });
       } catch (e) { console.warn("[tool-spotlight] tick failed:", e.message); }
     }
-    setInterval(toolSpotlightTick, 10 * 60 * 1000); // check every 10 min; fires once/day past the hour
-    setTimeout(toolSpotlightTick, 125000);
+    if (TOOL_SPOTLIGHT_ENABLED) setInterval(toolSpotlightTick, 10 * 60 * 1000); // check every 10 min; fires once/day past the hour
+    if (TOOL_SPOTLIGHT_ENABLED) setTimeout(toolSpotlightTick, 125000);
     // Chain Spotlight — TWICE-daily /learn asset feature on X (owner ask 2026-07-08).
     // Slots kv chainSpotHours (default "14,21" UTC — US morning + US afternoon/EU evening,
     // clear of toolSpotHour 17). Stamps the slot BEFORE posting; kv chainSpotEnabled=0 kills it.
@@ -16307,13 +16660,13 @@ app.listen(PORT, () => {
     setInterval(() => { sourceHealthTick().catch(e => console.warn("[health] tick:", e.message)); }, 10 * 60 * 1000);
     setTimeout(() => { sourceHealthTick().catch(() => {}); }, 75000);
     // Toolkit reminder — checked each minute, fires at fixed 4-hour marks.
-    setInterval(toolsReminderTick, 60 * 1000);
+    if (TOOLS_REMINDER_ENABLED) setInterval(toolsReminderTick, 60 * 1000);
     // Bags Launch Radar — checked each minute, fires at fixed 2-hour marks.
-    setInterval(bagsLaunchesTick, 60 * 1000);
+    if (BAGS_RADAR_ENABLED) setInterval(bagsLaunchesTick, 60 * 1000);
     // Market Check — checked each minute, fires every 2h near :00 UTC.
     setInterval(marketCheckTick, 60 * 1000);
     // Daily Flow Recap — checked each minute, fires once per day at 00:00 UTC.
-    setInterval(recapTick, 60 * 1000);
+    if (RECAP_ENABLED) setInterval(recapTick, 60 * 1000);
     setInterval(lockReportTick, 60 * 1000);
     // Lock-change watcher — every 30 min (Helius plan upgraded 2026-07-01; was 2h),
     // auto-post when the locked total increases. First check 90s after boot — with the
@@ -16326,9 +16679,9 @@ app.listen(PORT, () => {
     setTimeout(() => { schoolGradTick().catch(() => {}); }, 120000); // baseline / first check ~2 min after boot
     // Bags graduation watcher — every 3 min: alert near-bonding (85%) + capture
     // graduations into our own 48h record (independent of pump.fun flooding ST).
-    setTimeout(gradWatcherTick, 12000);
-    setInterval(gradWatcherTick, 300 * 1000);   // 5 min — broad discovery: find tokens entering "close to bonding" + fire near-grad alerts
-    setInterval(gradHotTick, 60 * 1000);        // 1 min — fast-watch ONLY the alerted ("close to bonding") tokens so graduations post within ~1 min (cost scales with the tiny hot set)
+    if (GRAD_WATCH_ENABLED) setTimeout(gradWatcherTick, 12000);
+    if (GRAD_WATCH_ENABLED) setInterval(gradWatcherTick, 300 * 1000);   // 5 min — broad discovery: find tokens entering "close to bonding" + fire near-grad alerts
+    if (GRAD_WATCH_ENABLED) setInterval(gradHotTick, 60 * 1000);        // 1 min — fast-watch ONLY the alerted ("close to bonding") tokens so graduations post within ~1 min (cost scales with the tiny hot set)
     // Cluck's Lesson — ONE full lesson/day (13 UTC), then quote-tweet "bumps" at later
     // slots (17 + 00 UTC) tagging different ecosystem groups to re-surface it.
     setInterval(eduPostTick, 60 * 1000);
@@ -16469,8 +16822,8 @@ app.listen(PORT, () => {
     setInterval(recordOrganicSnapshot, 60 * 60 * 1000);
     setInterval(opsReportTick, 60 * 60 * 1000);   // 12h operator ops report (private chat) — checks hourly, fires once/12h
     setTimeout(opsReportTick, 110000);            // first check ~110s after boot
-    setInterval(contentEngineTick, 10 * 60 * 1000); // Content Engine — polls every 10 min, queues a draft once per (kv) contentEngineHours, default 12h
-    setTimeout(contentEngineTick, 160000);          // first check ~160s after boot
+    if (CONTENT_ENGINE_ENABLED) setInterval(contentEngineTick, 10 * 60 * 1000); // Content Engine — polls every 10 min, queues a draft once per (kv) contentEngineHours, default 12h
+    if (CONTENT_ENGINE_ENABLED) setTimeout(contentEngineTick, 160000);          // first check ~160s after boot
     setTimeout(recordOrganicSnapshot, 25000);
     liqInterval(meteoraOorTick, 5 * 60 * 1000);
     liqTimeout(meteoraOorTick, 45000);
@@ -16514,8 +16867,8 @@ app.listen(PORT, () => {
     liqTimeout(wpTightOorTick, 55000);
     // Wallet Watch (PRIVATE) — tracked-wallet CLKN-sell alerts + daily digest to the
     // operator chat. Functions live top-level next to /api/wallet-watch (gated).
-    setInterval(() => walletWatchTick().catch((e) => console.warn("[wallet-watch] tick:", e.message)), 2 * 60 * 1000);
-    setTimeout(() => walletWatchTick().catch(() => {}), 80000);
+    if (!WALLET_WATCH_KILLED) setInterval(() => walletWatchTick().catch((e) => console.warn("[wallet-watch] tick:", e.message)), 2 * 60 * 1000);
+    if (!WALLET_WATCH_KILLED) setTimeout(() => walletWatchTick().catch(() => {}), 80000);
     // Whale discovery — refresh the top-holder roster + balance snapshot daily (and at boot
     // so a fresh deploy has a roster before the first tick merges it into the watcher).
     setInterval(() => whaleRefresh().catch((e) => console.warn("[whale] refresh:", e.message)), 24 * 3600 * 1000);
@@ -16665,7 +17018,7 @@ app.listen(PORT, () => {
           if (diff.appeared.length) msg += `\n\n🆕 <b>${diff.appeared.length} limit order(s) APPEARED:</b>\n` + diff.appeared.slice(0, 8).map(line).join("\n");
           if (diff.disappeared.length) msg += `\n\n✅ <b>${diff.disappeared.length} filled/cancelled:</b>\n` + diff.disappeared.slice(0, 8).map(line).join("\n");
           msg += `\n\n🔍 ${TG_PUBLIC_BASE}/order-book`;
-          const chat = kv.get("obWatchChat", "") || "1846034838"; // operator/treasury DM (silent)
+          const chat = kv.get("obWatchChat", "") || OPERATOR_DM_FALLBACK; // operator/treasury DM (silent)
           try { await tgSend(chat, msg); } catch (_) {}
         }
       } catch (e) { console.warn("[order-book-monitor] failed:", e.message); }
@@ -16785,7 +17138,7 @@ app.listen(PORT, () => {
           kv.set("treasuryEnginePauseAt", 0);
           try { whirlpoolMM.vault.pause("treasury"); } catch (_) {}
           console.log("[treasury-engine] 48h window elapsed — paused to watch-only");
-          try { tgSend("1846034838", "🛑 <b>Treasury Liquidity Engine — 48h test complete.</b>\n\nThe engine is now paused (watch-only). Your ±3% positions are <b>left in place</b> — nothing closed, nothing moved. Let's review the volume + Jupiter organic score and decide whether to keep it running."); } catch (_) {}
+          try { tgSend(OPERATOR_DM_FALLBACK, "🛑 <b>Treasury Liquidity Engine — 48h test complete.</b>\n\nThe engine is now paused (watch-only). Your ±3% positions are <b>left in place</b> — nothing closed, nothing moved. Let's review the volume + Jupiter organic score and decide whether to keep it running."); } catch (_) {}
         }
       } catch (_) {}
     }, 5 * 60 * 1000);
@@ -16808,7 +17161,7 @@ app.listen(PORT, () => {
         if (sinceHrs >= quietHrs && !st.alerted) {
           st.alerted = true;
           const v = Math.round(Number(a.volume_usd && a.volume_usd.h24) || 0);
-          tgSend("1846034838", `⚠️ <b>Meteora canonical pool quiet</b>\n\nThe community CLKN Meteora pool (64WXkH…, the canonical chart) has had no trades in ~${Math.round(sinceHrs)}h (24h vol $${v}). Volume's on the Orca engine pools; the keepalive will fire a small buy if it stays quiet.`);
+          tgSend(OPERATOR_DM_FALLBACK, `⚠️ <b>Meteora canonical pool quiet</b>\n\nThe community CLKN Meteora pool (64WXkH…, the canonical chart) has had no trades in ~${Math.round(sinceHrs)}h (24h vol $${v}). Volume's on the Orca engine pools; the keepalive will fire a small buy if it stays quiet.`);
         }
         // Auto-keepalive: 1×/24h max, only when quiet ≥ kaHrs — one ~$10 SOL→CLKN buy FORCED
         // through 64WXkH (route-verified, BUY-ONLY) so the pool stays on watchlists. kv flags:
@@ -16823,9 +17176,9 @@ app.listen(PORT, () => {
           if (ka && ka.ok) {
             st.lastTradeAt = now; st.alerted = false; // our buy is a trade — reset the quiet clock
             if (ka.sig) rememberSig(ka.sig); // self-buy: never announce it as a community buy (treasury buys otherwise DO announce)
-            tgSend("1846034838", `🔁 <b>Meteora keepalive fired</b>\n\n~${Math.round(sinceHrs)}h quiet → sent a $${kaUsd} SOL→CLKN buy (~${ka.solIn} SOL) through 64WXkH to keep it on watchlists. Buy-only. tx <code>${ka.sig ? ka.sig.slice(0, 12) : "?"}</code>`);
+            tgSend(OPERATOR_DM_FALLBACK, `🔁 <b>Meteora keepalive fired</b>\n\n~${Math.round(sinceHrs)}h quiet → sent a $${kaUsd} SOL→CLKN buy (~${ka.solIn} SOL) through 64WXkH to keep it on watchlists. Buy-only. tx <code>${ka.sig ? ka.sig.slice(0, 12) : "?"}</code>`);
           } else {
-            tgSend("1846034838", `⚠️ <b>Meteora keepalive skipped</b>\n\n~${Math.round(sinceHrs)}h quiet but the buy didn't fire: ${ka && ka.reason ? ka.reason : "unknown"}. Pool may need a manual nudge.`);
+            tgSend(OPERATOR_DM_FALLBACK, `⚠️ <b>Meteora keepalive skipped</b>\n\n~${Math.round(sinceHrs)}h quiet but the buy didn't fire: ${ka && ka.reason ? ka.reason : "unknown"}. Pool may need a manual nudge.`);
           }
         }
         kv.set("meteoraCanonState", st);
@@ -16943,7 +17296,8 @@ app.listen(PORT, () => {
     return true;
   });
   const startIds = vaultEnabledIds();
-  if (startIds.length) console.log(`[VAULT] enabled — autonomous management every 10m · projects: ${startIds.join(", ")}`);
+  if (LIQ_ENGINE_KILLED) console.log(`[VAULT] generic scheduler KILLED (LIQ_ENGINE_KILLED) — liqInterval/liqTimeout register nothing; only the scoped engines tick${startIds.length ? ` · keyed projects it would otherwise manage: ${startIds.join(", ")}` : ""}`);
+  else if (startIds.length) console.log(`[VAULT] enabled — autonomous management every 10m · projects: ${startIds.join(", ")}`);
   else console.log("[VAULT] no project operator key set — idle (will service projects once a key is present)");
 
   const runProject = async (id) => {

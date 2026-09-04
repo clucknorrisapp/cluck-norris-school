@@ -16,7 +16,13 @@ var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
 // Cost: 2.25x the fill rate vs 2x. If a low-end phone ever struggles, this is the one number to drop;
 // nothing else depends on it. There is deliberately NO ?res= URL override (a stale cached URL must
 // not be able to pin a device to a different resolution).
-var RES=3;
+// TOUCH DEVICES GET 2x (2026-08-17): the 3x buffer's extra GPU memory pushed the owner's iPad over
+// iOS's background-eviction threshold — every trip away from the browser came back with WebGL
+// degraded (laggy) and the audio context killed or zombified. None of that happened at 2x, and the
+// timeline matches exactly (both symptoms appeared with the 3x ship). Detection is maxTouchPoints:
+// modern iPadOS masquerades as desktop Mac in the UA, but Macs report 0 touch points. Desktops keep
+// the full 3x sharpness.
+var RES=3; try{ if(typeof navigator!=='undefined' && navigator.maxTouchPoints>1) RES=2; }catch(e){}
 // Clean, highly-legible UI font for menus / interstitials (the pixel fonts read as blocky
 // once scaled 2x by the scene cameras). UIRES renders text at higher DPI so it stays crisp
 // despite pixelArt:true. Big arcade titles keep 'Press Start 2P'; body text uses this.
@@ -2062,7 +2068,17 @@ function nqWorldAllowed(def){
     // bailout below before this check ever ran (audit polish: silent bypass for any future link).
     if(window.__NQ_FORCE_VIP&&(function(){try{return localStorage.getItem('nqLabTune')==='1';}catch(e){return false;}})()) return true;   // QA lever — designer lab only, not the tester lane
     var vipOK=false; try{ vipOK=!!(typeof window.__NQ_VIP==='function'&&window.__NQ_VIP()); }catch(e){}
-    if(!vipOK) return false;
+    if(!vipOK){
+      // LIVE TERMS FIX (multi-agent review, 2026-08-30 — CRITICAL): "$50 → everything (13-21)"
+      // is the public promise, but every 13-21 level carries vip:true from the pre-launch "VIP
+      // LEAGUES" model, and this branch used to demand the manual VIP GRANT — so exactly the
+      // wallets that paid the most bounced off the wing they were promised. Tier-2 ('all'
+      // access) now clears the NUMBERED vip worlds; the hidden non-numeric VIP rooms stay
+      // grant-only (they are allowlist perks, not part of the 13-21 promise).
+      var mvn=/^(\d+)-/.exec((def&&def.name)||'');
+      var acc2=null; try{ acc2=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
+      if(!(mvn && acc2==='all')) return false;
+    }
     // the launch cap outranks the VIP grant too — "nobody past world N" has to mean nobody
     if(cap){ var mv=/^(\d+)-/.exec((def&&def.name)||''); if(mv && +mv[1]>cap) return false; }
     return true;
@@ -2077,8 +2093,8 @@ function nqWorldAllowed(def){
   if(cap) hi=Math.min(hi,cap);
   return w>=lo && w<=hi;
 }
-// MEGA WHALE is a TOP-TIER holder perk (owner's call 2026-07-19): only the 'all'-worlds tier
-// (500k NORMIE / 2M CLKN verified) gets to ride. Same semantics as nqWorldAllowed — outside the
+// MEGA WHALE is a TOP-TIER holder perk (owner's call 2026-07-19): only the tier-2 ('all'-worlds)
+// band as published by /api/nq/wallet/config gets to ride — amounts are live-priced, never hardcoded. Same semantics as nqWorldAllowed — outside the
 // setup lane (no wallet tiers there) it stays open, and the owner's lab-warp bench bypasses it.
 // 🔖 LEVEL RESUME — TIER 2 / VIP perk (owner's ask 2026-07-27: "if you die on the 3rd level of a
 // world you go back to the 1st level — can we make it a tier 2 and vip perk that you restart on
@@ -5810,7 +5826,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // home was advanceLevel(), which only boss defeats reach, so it was dead code (audit #25).
       // Non-boss levels complete HERE; same guards as the boss path (never in the lab, never for VIP).
       try{ if(!this._labWarp && nqShouldPitch(this.levelIdx) && !nqIsVipOrAll()){ nqMarkPitch(this.levelIdx); this.scene.start('VipPitch',{next:next,score:this.score}); return; } }catch(e){}
-      if(next<LEVELS.length) this.scene.start('Game',{level:next,score:this.score,lives:3,lab:(this._labWarp?1:undefined)}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
+      // BETWEEN-LEVEL BEAT (multi-agent review 2026-08-30, HIGH): ordinary clears used to jump
+      // Game→Game, so the LevelClear rotation (nation/fact/board/giveaway — the owner's "fun
+      // screens between levels") only ever ran on the boss path, where WorldClear/Briefing eat
+      // it until deep VIP. Route through LevelClear like the boss else-branch does; it is
+      // skippable and auto-advances, so pacing cost is 3-4.6s and a tap skips it instantly.
+      if(next<LEVELS.length) this.scene.start('LevelClear',{next:next,score:this.score,lab:(this._labWarp?1:undefined),cleared:(this.def&&this.def.name)||''}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
   },
   gameOver:function(reason){ if(this.over) return; this.over=true; this.physics.pause();
     try{ window.__NQ_LIVE=null; }catch(e){}   // run is over — closing the tab from the game-over card is not an abandon
@@ -6694,7 +6715,13 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     // So the panel now OWNS the empty band: dead centre, full width, framed, with a Normie emblem
     // and a slow gold pulse on the border so the eye lands there before the TAP prompt.
     var _nn=nqNationNext();
-    var _wp=null; try{ var _wt=parseInt(sessionStorage.getItem('nqWcTurn')||'0',10)||0; sessionStorage.setItem('nqWcTurn',String(_wt+1)); if(_wt%2===1) _wp=nqPreviewPick(); }catch(e){}
+    // THE WEEKLY GIVEAWAY OWNS THIS BAND when a card is configured (owner ask 2026-08-30:
+    // "showcase the card between each world — the actual image of what will be given away and
+    // how to win"). This supersedes the 07-26 "Nation owns the band" call ONLY while a card is
+    // set; clear the card (POST {card:null}) and the page is byte-identical to before.
+    var _card=nqPromoCard();
+    var _wp=null; try{ var _wt=parseInt(sessionStorage.getItem('nqWcTurn')||'0',10)||0; sessionStorage.setItem('nqWcTurn',String(_wt+1)); if(!_card && _wt%2===1) _wp=nqPreviewPick(); }catch(e){}
+    if(_card){ _nn={ head:'THIS WEEK\'S GIVEAWAY — '+_card.name, short:_card.copy }; }
     // A feature tease used to print "VIP PERK" regardless of band, which now misstates the t2
     // perks — the resume perk unlocks a tier BELOW VIP, and telling a player it is VIP-only would
     // be selling them the wrong thing.
@@ -6710,9 +6737,14 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.p2.add(this.add.rectangle(cx,_py,_pw-8,_ph-8,0x000000,0).setStrokeStyle(1,0x6a5aa8,0.7));
     this.tweens.add({targets:_pnl, alpha:{from:0.94,to:1}, duration:900, yoyo:true, repeat:-1, ease:'Sine.inOut'});
     if(this.renderer.type===Phaser.WEBGL){ try{ _pnl.postFX.addGlow(0xffd23f,0.9,0,false,0.1,10); }catch(e){} }
-    // emblem — a Normie standing in the panel, so the community beat has a FACE on it
-    var _em=this.add.image(cx-152,_py+6,'normie'); _em.setScale(60/_em.height); this.p2.add(_em);
-    this.tweens.add({targets:_em,y:_py+2,duration:820,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    // emblem — the ACTUAL prize card when a giveaway is set (lazy-loaded, reparented into the
+    // travel-page container so it can't leak onto the celebration phase); else the Normie face.
+    if(_card){
+      nqCardImage(this,cx-152,_py,76,function(im){ if(self.p2) self.p2.add(im); });
+    } else {
+      var _em=this.add.image(cx-152,_py+6,'normie'); _em.setScale(60/_em.height); this.p2.add(_em);
+      this.tweens.add({targets:_em,y:_py+2,duration:820,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    }
     this.p2.add(this.add.text(cx,_py-30,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffd23f',align:'center',wordWrap:{width:_pw-24}}).setOrigin(.5));
     this.p2.add(this.add.text(cx+42,_py-12,(_nn.short||_nn.body),{fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#eee8ff',align:'center',lineSpacing:3,wordWrap:{width:250}}).setOrigin(.5,0));
     // The nostalgia gag moved to the CELEBRATION page (see p1). It is a "you beat the boss, but…"
@@ -6720,7 +6752,13 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.drawHills();
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setDepth(40);
     var adv=function(){ if(self.done) return; if(self.phase===0){ self.t0=self.time.now-3300; } else { self.goNext(); } };
-    this.input.on('pointerdown',adv); this.input.keyboard.on('keydown',adv); this.adv=adv;
+    // keyboard was the one unlatched input (review 2026-08-30, MED): OS auto-repeat from a key
+    // still held at the boss kill fired adv twice in consecutive frames and blew through the
+    // celebration AND the travel page (with the giveaway card on it) unseen. Match the pad
+    // path: drop repeats, and require 500ms on-screen before a key counts.
+    this.input.on('pointerdown',adv);
+    this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; adv(); });
+    this.adv=adv;
   },
   goNext:function(){ if(this.done) return; this.done=true;
     if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[this.nextLevel]) this.scene.start('Briefing',{next:this.nextLevel,score:this.score,lab:this.lab});
@@ -7034,7 +7072,8 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
       {fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#ff9500',align:'center',wordWrap:{width:W-24}}).setOrigin(.5);
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
     this.input.on('pointerdown',function(){ self.go(); });
-    this.input.keyboard.on('keydown',function(){ self.go(); });
+    // drop key auto-repeat + 500ms grace (review 2026-08-30): a held key must not skip the briefing
+    this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; self.go(); });
     padAdvance(this, function(){ self.go(); });   // controller button also starts
   },
   go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
@@ -7066,6 +7105,56 @@ function nqNationNext(){
   try{ i=parseInt(sessionStorage.getItem('nqNationI')||'0',10)||0; sessionStorage.setItem('nqNationI',String((i+1)%NORMIE_NATION.length)); }
   catch(e){ i=(Math.floor(Date.now()/1000))%NORMIE_NATION.length; }
   return NORMIE_NATION[i%NORMIE_NATION.length];
+}
+
+/* ---------- PROMO FEED: the weekly prize card + fun between-level screens (owner ask,
+   2026-08-30). Data arrives from two public endpoints fetched ONCE at parse — /api/nq/promo
+   (the card of the week, owner-set, may be null) and /api/nq/leaderboard?n=3 (the live weekly
+   top three for the "board tease" beat). Both are fire-and-forget: a failed fetch just means
+   those beats never enter the rotation, and every renderer degrades to the layouts that shipped
+   before this existed. Same copy discipline as NORMIE_NATION — the card promo describes the
+   owner's own weekly physical prize (the live sign-to-claim contest), never a $NORMIE term. */
+var NQ_FUNFACTS = [
+  { head:'DID YOU KNOW?', body:'Every world\'s backdrop is a hand-painted plate — the traveling page shows you the real art of where you\'re headed.' },
+  { head:'DID YOU KNOW?', body:'Honeypots only drain the coins from THIS level — your total is safe. Greed tax, not a rug.' },
+  { head:'SECRET ROOMS', body:'Speakeasies hide behind some walls. One visit each — spend it well.' },
+  { head:'THE ROAD ENDS ON THE MOON', body:'The final level of the game is on the moon. It answers back.' },
+  { head:'YOUR RUN IS SAVED', body:'Progress banks at every checkpoint — close the tab, come back, hit CONTINUE. Connect a wallet and it follows you to any device.' },
+  { head:'FRESH BOARD EVERY WEEK', body:'The weekly leaderboard resets — one great run can take the crown at any time.' },
+];
+function nqFactNext(){
+  var i=0;
+  try{ i=parseInt(sessionStorage.getItem('nqFactI')||'0',10)||0; sessionStorage.setItem('nqFactI',String((i+1)%NQ_FUNFACTS.length)); }
+  catch(e){ i=(Math.floor(Date.now()/1000))%NQ_FUNFACTS.length; }
+  return NQ_FUNFACTS[i%NQ_FUNFACTS.length];
+}
+(function(){ if(typeof window==='undefined'||typeof fetch!=='function') return;
+  try{ fetch('/api/nq/promo').then(function(r){ return r.json(); }).then(function(d){
+    if(d&&d.ok&&d.card&&d.card.img) window.__NQ_PROMO_CARD=d.card; }).catch(function(){}); }catch(e){}
+  try{ fetch('/api/nq/leaderboard?n=3').then(function(r){ return r.json(); }).then(function(d){
+    var wk=d&&d.ok&&d.weekly; if(wk&&wk.length) window.__NQ_LB_TEASE=wk.slice(0,3); }).catch(function(){}); }catch(e){}
+})();
+function nqPromoCard(){ try{ return window.__NQ_PROMO_CARD||null; }catch(e){ return null; } }
+function nqLbTease(){ try{ return window.__NQ_LB_TEASE||null; }catch(e){ return null; } }
+// Lazy-load the card art into the texture manager and hand back an image — the exact pattern
+// WorldClear already uses for the destination plates (late arrival into a dead scene is a no-op,
+// a failed/blocked URL simply never calls back, and the caller keeps its text-only fallback).
+function nqCardImage(scene,x,y,maxH,place){
+  var K='nqPromoCardTex', card=nqPromoCard(); if(!card) return;
+  var put=function(async){
+    if(!scene.sys) return;
+    if(async && !scene.sys.isActive()) return;
+    if(!scene.textures.exists(K)) return;
+    var im=scene.add.image(x,y,K);
+    // clamp BOTH axes (review 2026-08-30): height-only scaling let a landscape/banner image
+    // overflow sideways into the panel copy; budget the width at 3/4 of the height slot (a
+    // portrait trading card is ~0.71 w/h, so real cards are untouched).
+    if(im.height&&im.width) im.setScale(Math.min(maxH/im.height,(maxH*0.75)/im.width));
+    im.setDepth(6);
+    if(place) place(im);
+  };
+  if(scene.textures.exists(K)) put(false);
+  else { try{ scene.load.image(K,card.img); scene.load.once('complete',function(){ put(true); }); scene.load.start(); }catch(e){} }
 }
 // Shared buy path — the in-game Jupiter widget when it exists, else a direct swap link.
 // Duplicated intentionally as a free function so the scenes below do not depend on VipPitch.
@@ -7157,11 +7246,25 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0;
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
-    // Alternate: even clears carry the Nation line, odd clears show a locked-content preview.
-    // If the player owns everything, nqPreviewPick returns null and it is always the Nation line.
+    // ROTATION (owner ask 2026-08-30: "fun screens randomly between levels — normie quest, the
+    // leaderboards and pending giveaways"). Cycle over every beat that has CONTENT right now:
+    // the Nation line always; a locked preview on the setup lanes; a fun fact; the live weekly
+    // top-3; the weekly prize card. Missing data just drops a beat from the cycle — the public
+    // build before any card is configured rotates nation/fact exactly like it shipped.
     var _turn=0; try{ _turn=parseInt(sessionStorage.getItem('nqLcTurn')||'0',10)||0; sessionStorage.setItem('nqLcTurn',String(_turn+1)); }catch(e){}
-    var prev=(_turn%2===1)?nqPreviewPick():null;
+    var _beats=['nation','fact'];
+    try{ if(window.__NQ_SETUP) _beats.push('preview'); }catch(e){}
+    if(nqLbTease()) _beats.push('board');
+    if(nqPromoCard()) _beats.push('card');
+    if(nqTerms()) _beats.push('perks');   // holder-perks beat only once LIVE terms have landed — amounts are never hardcoded
+    // shuffle the order per session so the sequence FEELS random, while the modulo walk still
+    // guarantees every beat appears before any repeats (a pure Math.random pick can starve one)
+    var _ord=_turn; try{ _ord=_turn+(parseInt(sessionStorage.getItem('nqLcSeed')||'0',10)||(function(){ var s=1+Math.floor(Math.random()*997); sessionStorage.setItem('nqLcSeed',String(s)); return s; })()); }catch(e){}
+    var beat=_beats[_ord%_beats.length];
+    var prev=(beat==='preview')?nqPreviewPick():null;
+    if(beat==='preview'&&!prev) beat='fact';   // preview pool empty for this player -> fact
     var n=nqNationNext();
+    this._hold=(beat==='board'||beat==='card'||beat==='fact'||beat==='perks')?4600:3000;   // info beats get read time
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x151030,1); g.fillRect(0,0,W,26); g.fillRect(0,H-20,W,20);
     this.add.text(cx,13,'LEVEL CLEAR',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
@@ -7173,6 +7276,51 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
       nqDrawPreview(this,prev,146,null);
       // No hold amount, ever -- NQ's terms are unagreed. Same hedge VipPitch already uses.
       this.add.text(cx,196,'unlocks with $NORMIE · terms still in testing',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
+    } else if(beat==='fact'){
+      // FUN-FACT BEAT — same framed strip as the Nation line, cyan accent so it reads as a
+      // different voice (the game talking about itself, not the community push).
+      var f=nqFactNext();
+      this.add.rectangle(cx,158,W-40,64,0x0f1530,0.92).setStrokeStyle(2,0x66ddff);
+      this.add.text(cx,136,'✦ '+f.head+' ✦',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#66ddff',align:'center',wordWrap:{width:W-56}}).setOrigin(.5);
+      this.add.text(cx,150,f.body,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#e6f4ff',align:'center',lineSpacing:2,wordWrap:{width:W-60}}).setOrigin(.5,0);
+    } else if(beat==='board'){
+      // LEADERBOARD BEAT — the LIVE weekly top three, so the contest feels inhabitable. Names
+      // come from the public board (display name / short wallet, already sanitized server-side).
+      var lb=nqLbTease()||[];
+      this.add.rectangle(cx,156,W-40,78,0x101a2e,0.92).setStrokeStyle(2,0xffd23f);
+      this.add.text(cx,126,'🏆 THIS WEEK\'S TOP NORMIES 🏆',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center'}).setOrigin(.5);
+      var medals=['🥇','🥈','🥉'];
+      for(var li=0;li<Math.min(3,lb.length);li++){ var r=lb[li];
+        this.add.text(cx,142+li*14,medals[li]+'  '+String(r.name||'').slice(0,14)+'   '+(r.score||0),
+          {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:li===0?'#ffffff':'#c9c2ea',align:'center'}).setOrigin(.5);
+      }
+      this.add.text(cx,190,'the board resets weekly — one run can take the crown',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
+    } else if(beat==='card'){
+      // GIVEAWAY BEAT — the ACTUAL card being given away this week (owner-set via /api/nq/promo),
+      // lazy-loaded like the world plates; until/unless the image lands this is a clean text card.
+      var cd=nqPromoCard();
+      this.add.rectangle(cx,156,W-40,80,0x1a1030,0.94).setStrokeStyle(2,0xff8adf);
+      this.add.text(cx,122,'🎁 THIS WEEK\'S GIVEAWAY 🎁',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ff8adf',align:'center'}).setOrigin(.5);
+      this.add.text(cx+34,142,cd.name,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffffff',align:'center',wordWrap:{width:230}}).setOrigin(.5);
+      this.add.text(cx+34,156,cd.copy,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#f2e6ff',align:'center',lineSpacing:1,wordWrap:{width:224}}).setOrigin(.5,0);
+      nqCardImage(this,cx-136,156,68,null);   // the real card art, left of the copy
+    } else if(beat==='perks'){
+      // HOLDER-PERKS BEAT (owner ask 2026-09-01: hype the benefits of holding). AGREED access
+      // facts ONLY — tier amounts render LIVE from /api/nq/wallet/config (never hardcoded), and
+      // the copy discipline holds: no reward/prize terms (still unagreed with the NORMIE team).
+      // The VIP Lounge is a live shipped feature for the top tier, so naming it is a fact.
+      var T=nqTerms();
+      var _fmtAmt=function(n){ n=Number(n)||0; return n>=1e6?(Math.round(n/1e5)/10)+'M':n>=1e3?Math.round(n/1e3)+'K':String(Math.round(n)); };
+      var _t1=T.usdPriced?('$'+T.tier1Usd+' $NORMIE'):(_fmtAmt(T.tier1Normie)+' $NORMIE');
+      var _t2=T.usdPriced?('$'+T.tier2Usd+' $NORMIE'):(_fmtAmt(T.tier2Normie)+' $NORMIE');
+      this.add.rectangle(cx,156,W-40,80,0x102a18,0.94).setStrokeStyle(2,0x3dff9e);
+      this.add.text(cx,122,'💎 HOLDER PERKS 💎',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff9e',align:'center'}).setOrigin(.5);
+      var _rows=[['FREE','worlds 1-3','#c9ffe0'],[_t1,'worlds 4-12','#ffd23f'],[_t2,'EVERY world + VIP Lounge','#7fdcff']];
+      for(var pi=0;pi<3;pi++){
+        this.add.text(cx-118,140+pi*15,_rows[pi][0],{fontFamily:'"Press Start 2P"',fontSize:'7px',color:_rows[pi][2]}).setOrigin(0,.5);
+        this.add.text(cx+124,140+pi*15,_rows[pi][1],{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#ffffff'}).setOrigin(1,.5);
+      }
+      this.add.text(cx,190,'just hold — connect any wallet and the doors open',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
     } else {
       // a small marching Normie so the beat feels alive rather than a static card
       this.runner=this.add.image(cx,96,'nrun1'); this.runner.setScale(44/this.runner.height);
@@ -7187,13 +7335,16 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(cx,216,_lounge?'🏛  SEE THE LOUNGE':'🪙  GRAB $NORMIE',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:_lounge?'#ffffff':'#0a0813'}).setOrigin(.5).setDepth(1);
     buy.on('pointerover',function(){ buy.setScale(1.05); }); buy.on('pointerout',function(){ buy.setScale(1); });
     buy.on('pointerup',function(){ self._buyOpen=true;   // opening a panel must not also advance the beat
+      self.t0=self.time.now;   // and the auto-advance clock restarts — the level must not start under the buy widget (review 2026-08-30)
       if(_lounge){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} } else nqBuyNormie(); });
     this.cont=this.add.text(cx,H-10,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff6e'}).setOrigin(.5);
     var adv=function(){ if(self.done||self._buyOpen){ self._buyOpen=false; return; } self.go(); };
     this._padPrev=true;   // start latched: a direction HELD as the level ended must not insta-skip
     this._adv=adv;
     this.input.on('pointerdown',function(p){ if(buy.getBounds().contains(p.worldX,p.worldY)) return; adv(); });
-    this.input.keyboard.on('keydown',adv);
+    // drop key auto-repeat + 500ms grace (review 2026-08-30): now that this beat runs after EVERY
+    // level, a key held through the door must not skip the card before it renders a single frame
+    this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; adv(); });
     padAdvance(this, adv);
   },
   go:function(){ if(this.done) return; this.done=true; SFX.power();
@@ -7212,7 +7363,7 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     var _pd=!!(_p&&(_p.left||_p.right||_p.jump||_p.down||_p.throw));
     if(_pd && !this._padPrev && (this.time.now-this.t0)>500 && this._adv){ this._padPrev=_pd; this._adv(); return; }
     this._padPrev=_pd;
-    if(this.time.now-this.t0>3000) this.go();   // auto-advance: a between-level beat, not a toll gate
+    if(this.time.now-this.t0>(this._hold||3000)) this.go();   // auto-advance: a between-level beat, not a toll gate (info beats hold ~4.6s)
   }
 });
 
@@ -7735,13 +7886,28 @@ if(typeof document!=='undefined'){ (function(){
     +'#nqjoyB{width:132px;height:132px;margin:-66px 0 0 -66px;border:3px solid rgba(120,180,255,.42);background:rgba(24,30,54,.32)}'
     +'#nqjoyT{width:60px;height:60px;margin:-30px 0 0 -30px;border:2px solid rgba(61,255,158,.85);background:rgba(61,255,158,.42);box-shadow:0 3px 12px rgba(0,0,0,.4)}'
     +'#nqjoyF{position:fixed;z-index:45;right:18px;bottom:104px;width:70px;height:70px;border-radius:50%;'
-    +'border:2px solid rgba(255,210,63,.6);background:rgba(60,48,10,.5);color:#ffd23f;font:700 24px system-ui;'
-    +'display:none;align-items:center;justify-content:center;touch-action:none;-webkit-user-select:none;user-select:none}';
+    +'border:2px solid rgba(255,210,63,.6);background:rgba(60,48,10,.5);color:#ffd23f;font:700 22px system-ui;'
+    +'display:none;flex-direction:column;align-items:center;justify-content:center;line-height:1;gap:2px;'
+    +'touch-action:none;-webkit-user-select:none;user-select:none}'
+    +'#nqjoyF small{font:700 9px system-ui;letter-spacing:.8px;color:#ffd23f}'
+    // DISCOVERY (owner, 2026-09-01: watched mobile players finish levels never touching the
+    // disc). Until THIS BROWSER has thrown 3 times (persisted), the button pulses and a
+    // callout points at it; after that it never nags again. Animation is CSS-only — no
+    // per-frame JS, nothing on the game loop.
+    +'@keyframes nqjoyPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(255,210,63,.55)}50%{transform:scale(1.12);box-shadow:0 0 0 14px rgba(255,210,63,0)}}'
+    +'#nqjoyF.nq-hint{border-color:#ffd23f;background:rgba(90,70,12,.72);animation:nqjoyPulse 1.6s ease-in-out infinite}'
+    +'@keyframes nqjoyNudge{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}'
+    +'#nqjoyH{position:fixed;z-index:45;right:12px;bottom:186px;pointer-events:none;display:none;'
+    +'font:700 10px "Press Start 2P",monospace;color:#ffd23f;background:rgba(0,0,0,.68);border:1px solid rgba(255,210,63,.5);'
+    +'border-radius:8px;padding:7px 9px;animation:nqjoyNudge 1.2s ease-in-out infinite;text-align:center;line-height:1.5}';
   document.head.appendChild(css);
   var B=document.createElement('div'); B.id='nqjoyB';
   var T=document.createElement('div'); T.id='nqjoyT';
-  var F=document.createElement('button'); F.id='nqjoyF'; F.textContent='◎'; F.setAttribute('aria-hidden','true');
-  document.body.appendChild(B); document.body.appendChild(T); document.body.appendChild(F);
+  var F=document.createElement('button'); F.id='nqjoyF'; F.innerHTML='◎<small>THROW</small>'; F.setAttribute('aria-hidden','true');
+  var H=document.createElement('div'); H.id='nqjoyH'; H.innerHTML='THROW DISC!<br>▼'; H.setAttribute('aria-hidden','true');
+  var thrown=0; try{ thrown=parseInt(localStorage.getItem('nqThrowSeen'),10)||0; }catch(e){}
+  if(thrown<3) F.classList.add('nq-hint');
+  document.body.appendChild(B); document.body.appendChild(T); document.body.appendChild(F); document.body.appendChild(H);
   // Opt-in live debug readout (?joydebug=1) — proves the module loaded + shows touch/flag/pad state.
   var D=null; if(dbg){ D=document.createElement('div'); D.id='nqjoyD';
     D.style.cssText='position:fixed;left:6px;top:2px;z-index:60;font:700 10px/1.35 monospace;color:#3dff9e;background:rgba(0,0,0,.62);padding:3px 6px;border-radius:5px;pointer-events:none;white-space:pre;max-width:70vw';
@@ -7790,12 +7956,16 @@ if(typeof document!=='undefined'){ (function(){
   }
   document.addEventListener('touchend',end,{passive:true});
   document.addEventListener('touchcancel',end,{passive:true});
-  function setF(v){ return function(ev){ ev.preventDefault(); PAD.throw=v; F.style.background=v?'rgba(255,210,63,.55)':'rgba(60,48,10,.5)'; }; }
+  function setF(v){ return function(ev){ ev.preventDefault(); PAD.throw=v; F.style.background=v?'rgba(255,210,63,.55)':'';
+    if(v && thrown<3){ thrown++; try{ localStorage.setItem('nqThrowSeen',String(thrown)); }catch(e){}
+      if(thrown>=3){ F.classList.remove('nq-hint'); H.style.display='none'; } }
+  }; }
   F.addEventListener('touchstart',setF(true),{passive:false});
   F.addEventListener('touchend',setF(false),{passive:false});
   F.addEventListener('touchcancel',setF(false),{passive:false});
   setInterval(function(){ var inGame=gameActive();
     F.style.display=inGame?'flex':'none';
+    H.style.display=(inGame&&thrown<3)?'block':'none';
     if(!inGame){ if(joyId!==null) hideJoy(); jumpIds={}; PAD.jump=PAD.throw=false; }
     if(D) D.textContent='JOY ✓ ev:'+evc+' last:'+lastT+'\n'+(PAD.left?'◄':'·')+(PAD.right?'►':'·')+(PAD.jump?'▲':'·')+(PAD.down?'▼':'·')+(PAD.throw?'◎':'·')+'  pad:'+(window.__NQ_PAD_ACTIVE?1:0)+' game:'+(inGame?1:0)+' w:'+window.innerWidth;
   },160);

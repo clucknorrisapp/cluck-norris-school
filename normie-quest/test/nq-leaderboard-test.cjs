@@ -289,10 +289,16 @@ function legacyV2(names, ageMs) {
     // ---- owner season-reset route: keyed, confirm-guarded ------------------
     {
       const get = (q) => fetch(base + '/api/nq/leaderboard/reset' + q);
-      // 19. No admin key configured / wrong key → indistinguishable 404.
+      // 19. Wrong key → indistinguishable 404. The master key is CONFIGURED first: with the env
+      // empty, masterOK() 404s on its own and the probe would prove nothing about the route.
+      process.env.PREMIUM_ACCESS_KEY = 'test-admin-key';
       const r404 = await get('?confirm=RESET&key=wrong');
       ok('season reset without the admin key is a 404', r404.status === 404);
-      process.env.NQ_FEEDBACK_KEY = 'test-admin-key';
+      // MASTER-KEY-ONLY (security review 2026-08-30): reset + prizes moved off the low-trust
+      // feedback key. The feedback key must now be REFUSED here — that refusal is the guard.
+      process.env.NQ_FEEDBACK_KEY = 'low-trust-key';
+      const rFb = await get('?key=low-trust-key&confirm=RESET');
+      ok('season reset REFUSES the low-trust feedback key', rFb.status === 404);
       // 20. Keyed but unconfirmed → refused, board intact.
       const rNo = await get('?key=test-admin-key');
       ok('keyed reset without confirm=RESET refuses', rNo.status === 400);
@@ -309,14 +315,16 @@ function legacyV2(names, ageMs) {
          && after === 0 && archived.length === before);
       // The giveaway console: keyed page renders every section; keyless is a 404.
       const pNo = await fetch(base + '/normie-quest-x7/prizes');
+      const pFb = await fetch(base + '/normie-quest-x7/prizes?key=low-trust-key');
       const pYes = await fetch(base + '/normie-quest-x7/prizes?key=test-admin-key');
       const html = await pYes.text();
       ok('giveaway console is a 404 without the admin key', pNo.status === 404);
+      ok('giveaway console REFUSES the low-trust feedback key (PII lives here)', pFb.status === 404);
       ok('giveaway console renders standings, suspects and season control',
          pYes.status === 200 && html.indexOf('LIVE STANDINGS') !== -1
          && html.indexOf('SUSPECT RUNS') !== -1 && html.indexOf('SEASON CONTROL') !== -1
          && html.indexOf('ARCHIVE + RESET SEASON') !== -1);
-      delete process.env.NQ_FEEDBACK_KEY;
+      delete process.env.NQ_FEEDBACK_KEY; delete process.env.PREMIUM_ACCESS_KEY;
     }
     srv.close();
   }

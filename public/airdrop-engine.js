@@ -19,10 +19,6 @@ const TOKEN_CLASSIC = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 const TOKEN_2022 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 
 const splToken = {
-  TOKEN_PROGRAM_ID: { toString: () => TOKEN_CLASSIC },
-  TOKEN_2022_PROGRAM_ID: { toString: () => TOKEN_2022 },
-  ASSOCIATED_TOKEN_PROGRAM_ID: { toString: () => 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL' },
-
   // The token program is a SEED of the ATA PDA, so a Token-2022 mint derives a
   // DIFFERENT ATA than a classic mint. tokenProgram defaults to classic, so every
   // existing (classic) call site is byte-for-byte unchanged.
@@ -37,46 +33,6 @@ const splToken = {
       new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
     );
     return address;
-  },
-
-  createTransferInstruction(source, dest, owner, amount, tokenProgram) {
-    const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
-    // Build the 9-byte instruction data with Uint8Array — the Node `Buffer`
-    // global does not exist in browsers (Safari/iOS throws "Can't find
-    // variable: Buffer"). Byte 0 = Transfer opcode (3), bytes 1-8 = amount u64 LE.
-    const data = new Uint8Array(9);
-    data[0] = 3;
-    new DataView(data.buffer).setBigUint64(1, BigInt(amount), true);
-    return new TransactionInstruction({
-      keys: [
-        { pubkey: source, isSigner: false, isWritable: true },
-        { pubkey: dest, isSigner: false, isWritable: true },
-        { pubkey: owner, isSigner: true, isWritable: false },
-      ],
-      programId: TOKEN_PROGRAM,
-      data,
-    });
-  },
-
-  createAssociatedTokenAccountInstruction(payer, ata, owner, mint, tokenProgram) {
-    const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const ATA_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
-    const SYSVAR_RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
-    return new TransactionInstruction({
-      keys: [
-        { pubkey: payer, isSigner: true, isWritable: true },
-        { pubkey: ata, isSigner: false, isWritable: true },
-        { pubkey: owner, isSigner: false, isWritable: false },
-        { pubkey: mint, isSigner: false, isWritable: false },
-        { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
-        { pubkey: SYSVAR_RENT, isSigner: false, isWritable: false },
-      ],
-      programId: ATA_PROGRAM,
-      data: new Uint8Array(0),
-    });
   },
 
   // CreateIdempotent (ATA program ix #1) — identical to Create but a NO-OP if the
@@ -249,18 +205,6 @@ var CluckAirdrop = {
   // pays rent for those). Marks r.ataAddress / r.needsAta / r.invalidAddress in place.
   // No-op for native SOL. On RPC failure it assumes the worst case so the cost
   // estimate never reads low.
-  // Resolve which token program owns a mint (classic SPL vs Token-2022). The mint
-  // ACCOUNT's owner IS the token program. Defaults to classic on any RPC failure so
-  // the common path never breaks on a transient error. Returns a program-id string.
-  resolveTokenProgram: async function (mint, rpc) {
-    try {
-      var res = await rpc("getAccountInfo", [mint, { encoding: "base64" }]);
-      var owner = res && res.value && res.value.owner;
-      if (owner === TOKEN_2022) return TOKEN_2022;
-    } catch (e) {}
-    return TOKEN_CLASSIC;
-  },
-
   checkRecipientAtas: async function (arr, mint, rpc, tokenProgram) {
     if (!arr.length || !mint) return;
     if (typeof solanaWeb3 === "undefined" || typeof splToken === "undefined") return;

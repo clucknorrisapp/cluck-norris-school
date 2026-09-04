@@ -1,15 +1,9 @@
-import { useState, useEffect, useMemo, useRef, Component, lazy, Suspense } from "react";
-import { MintAddress, JupiterSwapButton, AskCluck, LP_LESSONS_COUNT, RootCrakBadge, ROOTCRAK } from "./shared.jsx";
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
+import { CLKN_MINT, CLKN_TRADE_LINK, JUPITER_TRADE_LINK, LOGO_B64, COL, READ, MintAddress, JupiterSwapButton, AskCluck, LP_LESSONS_COUNT, RootCrakBadge, ROOTCRAK } from "./shared.jsx";
 const Library = lazy(() => import("./sections/Library.jsx"));
 const LPLab = lazy(() => import("./sections/LPLab.jsx"));
-const CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 const LAMPORTS_PER_SOL = 1_000_000_000;
-const CLKN_TRADE_LINK = "https://bags.fm/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS?ref=firechicken007";
-const JUPITER_TRADE_LINK = "https://jup.ag/tokens/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
-
-// ── JUPITER WIDGET ──
-const JUPITER_REFERRAL = "A4fSbCMAya9rLWY4incNYaVfhYA9mpCownbFEW3dUZAg";
 
 // Fire-and-forget learning-funnel event (no PII) — see /api/track + lib/analytics.
 // Lets us see where learners drop off (per-lesson start/complete, school/incubator/
@@ -35,42 +29,7 @@ function track(event,extra){
 }
 const trackId=(prefix,id)=>track(prefix+":"+String(id).toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,48));
 
-// ── ERROR BOUNDARY for interactive calculators ──
-class CalcErrorBoundary extends Component {
-  constructor(props) { super(props); this.state = { error: null }; }
-  static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(error, info) { console.error("Calc crashed:", error, info); }
-  reset = () => this.setState({ error: null });
-  render() {
-    if (this.state.error) {
-      return (
-        <div style={{background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"14px 16px",marginTop:8,marginBottom:8}}>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#EF4444",letterSpacing:2,marginBottom:6}}>⚠️ CALCULATOR ERROR</div>
-          <div style={{fontSize:13,color:"#9CA3AF",lineHeight:1.6,marginBottom:10}}>Something went sideways with this widget — usually an odd input. The rest of the lesson is unaffected.</div>
-          <button onClick={this.reset} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:6,padding:"6px 14px",fontFamily:"'Anton',sans-serif",fontSize:13,color:"#EF4444",letterSpacing:1,cursor:"pointer"}}>↻ RESET</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
-const TWITTER_LINK = "https://x.com/firechicken007";
-const TELEGRAM_LINK = "https://t.me/FireChicken007";
-const PARTNER_LINK = "https://bags.fm/?ref=firechicken007";
-const BAGS_SIGNUP = "https://bags.fm/?ref=firechicken007";
-const BAGS_DEV = "https://dev.bags.fm";
-const BAGS_APP_IOS = "https://apps.apple.com/app/bags-fm/id6743534707";
-const BAGS_APP_ANDROID = "https://play.google.com/store/apps/details?id=fm.bags.app";
-
-
-const LOGO_B64 = "/cluck-norris-logo.jpg";
-
-// Desktop widening: content columns widen on screens >=1024px; mobile unchanged.
-const _DESK = typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(min-width: 1024px)").matches;
-const COL  = _DESK ? 900 : 520;
-const COLW = _DESK ? 920 : 540;
-const READ = _DESK ? 640 : 520;
 
 const LESSONS = [
   // ── EXISTING (expanded questions) ──────────────────────────
@@ -356,7 +315,7 @@ function shuffleOptions(question) {
 
 const BELT_BG   = { "FRESHMAN":"#F0F0F0","SOPHOMORE":"#FFB627","JUNIOR":"#FF7A18","SENIOR":"#10B981","GRADUATE":"#06B6D4","POST-GRAD":"#92400E","TENURED":"#DC2626","HEADMASTER":"#1a0f08","PROFESSOR":"#14B8A6","DEAN":"#84CC16","CHANCELLOR":"#FF7A18","EMERITUS":"#A855F7" };
 const BELT_TEXT = { "FRESHMAN":"#1a0f08","SOPHOMORE":"#1a0f08","JUNIOR":"#fff","SENIOR":"#fff","GRADUATE":"#fff","POST-GRAD":"#fff","TENURED":"#fff","HEADMASTER":"#FFB627","PROFESSOR":"#fff","DEAN":"#1a0f08","CHANCELLOR":"#fff","EMERITUS":"#fff" };
-function Belt({belt,small}){return(<span data-read-skip="1" style={{display:"inline-block",background:BELT_BG[belt],color:BELT_TEXT[belt],fontFamily:"'Anton',sans-serif",fontSize:small?9:10,fontWeight:700,letterSpacing:1.5,padding:small?"2px 6px":"3px 10px",borderRadius:3,border:belt==="BLACK BELT"?"1px solid #FFB627":"none",textTransform:"uppercase"}}>{belt}</span>);}
+function Belt({belt,small}){return(<span data-read-skip="1" style={{display:"inline-block",background:BELT_BG[belt],color:BELT_TEXT[belt],fontFamily:"'Anton',sans-serif",fontSize:small?9:10,fontWeight:700,letterSpacing:1.5,padding:small?"2px 6px":"3px 10px",borderRadius:3,border:"none",textTransform:"uppercase"}}>{belt}</span>);}
 
 
 
@@ -520,7 +479,6 @@ function Incubator({ onComplete, onBack }) {
   const lesson = INCUBATOR_LESSONS[lessonIdx];
   const shuffledIncubatorQs = useMemo(() => lesson ? lesson.questions.map(shuffleOptions) : [], [lessonIdx]);
   const q = shuffledIncubatorQs[qi];
-  const allDone = completed.length === INCUBATOR_LESSONS.length;
 
   function pick(i) {
     if (sel !== null) return;
@@ -535,7 +493,7 @@ function Incubator({ onComplete, onBack }) {
       setShowExp(false);
     } else {
       // Lesson complete
-      const newCompleted = [...completed, lesson.id];
+      const newCompleted = completed.includes(lesson.id) ? completed : [...completed, lesson.id];
       setCompleted(newCompleted);
       try { localStorage.setItem("incubator_progress", JSON.stringify({ completed: newCompleted })); } catch(e) {}
       if (lessonIdx + 1 < INCUBATOR_LESSONS.length) {
@@ -669,337 +627,6 @@ function readCoursework() {
   };
 }
 
-function TokenIcon({ image, symbol }) {
-  const [errored, setErrored] = useState(false);
-  if (image && !errored) {
-    return <img src={image} alt={symbol} style={{width:52,height:52,borderRadius:"50%",objectFit:"cover",flexShrink:0,background:"rgba(255,122,24,0.06)"}} onError={() => setErrored(true)}/>;
-  }
-  return <div style={{width:52,height:52,borderRadius:"50%",background:"rgba(255,122,24,0.09)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Anton',sans-serif",fontSize:18,fontWeight:700,color:"#9CA3AF",letterSpacing:1}}>{(symbol || "?").slice(0,2).toUpperCase()}</div>;
-}
-
-function BagsPage() {
-  const [feed, setFeed] = useState(null);
-  const [feedPrices, setFeedPrices] = useState({});
-  const [feedAges, setFeedAges] = useState({});
-  const [feedLastUpdated, setFeedLastUpdated] = useState(null);
-  const [feedRefreshing, setFeedRefreshing] = useState(false);
-  const [feedLoading, setFeedLoading] = useState(true);
-  const [feedSort, setFeedSort] = useState("newest"); // "newest" | "mc"
-  const [pageError, setPageError] = useState(null);
-
-  async function fetchFeed() {
-    setFeedRefreshing(true);
-    try {
-      const res = await fetch("/api/bags-proxy?endpoint=token-launch/feed");
-      const data = await res.json();
-      if (data.success && data.response) {
-        const tokens = data.response.slice(0, 12);
-        const mints = tokens.map(t => t.tokenMint).filter(Boolean).join(",");
-        const pricesByMint = {};
-        const agesByMint = {};
-        if (mints) {
-          // Primary: Solana Tracker (reads the bonding-curve reserve directly,
-          // so MC/price/24h-change are accurate for fresh on-curve Bags tokens
-          // — DexScreener lags and picks stale pools for these).
-          try {
-            const stRes = await fetch(`/api/bags-feed-prices?mints=${mints}`);
-            const stData = await stRes.json();
-            if (stData.success && stData.prices) {
-              for (const [mint, p] of Object.entries(stData.prices)) {
-                pricesByMint[mint] = {
-                  priceUsd: p.priceUsd,
-                  marketCap: p.marketCap,
-                  change24h: p.change24h,
-                  volume24h: p.volume24h,
-                  image: p.image || null,
-                  onBondingCurve: p.onBondingCurve,
-                  curvePct: p.curvePct,
-                  twitter: p.twitter || null,
-                  _liq: p.liquidityUsd || 0,
-                  _src: "st",
-                };
-              }
-            }
-          } catch(e) {}
-          // Fallback: DexScreener for any mint ST didn't return (e.g. a
-          // graduated token ST hasn't indexed yet, or ST being rate-limited).
-          const missing = tokens.map(t => t.tokenMint).filter(m => m && !pricesByMint[m]);
-          if (missing.length) {
-            try {
-              const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${missing.join(",")}`);
-              const dexData = await dexRes.json();
-              const pairs = dexData?.pairs || [];
-              for (const pair of pairs) {
-                const mint = pair.baseToken?.address;
-                if (!mint) continue;
-                const liq = pair.liquidity?.usd || 0;
-                if (!pricesByMint[mint] || (pricesByMint[mint]._liq || 0) < liq) {
-                  pricesByMint[mint] = {
-                    priceUsd: pair.priceUsd,
-                    marketCap: pair.marketCap,
-                    change24h: pair.priceChange?.h24,
-                    volume24h: pair.volume?.h24,
-                    image: pair.info?.imageUrl || null,
-                    _liq: liq,
-                    _src: "dex",
-                  };
-                }
-              }
-            } catch(e) {}
-          }
-        }
-        const sigs = tokens.map(t => t.launchSignature).filter(Boolean);
-        if (sigs.length > 0) {
-          try {
-            const txRes = await fetch("/api/helius-tx", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ transactions: sigs, commitment: "confirmed" }),
-            });
-            if (txRes.ok) {
-              const txns = await txRes.json();
-              const bySig = {};
-              if (Array.isArray(txns)) {
-                for (const tx of txns) {
-                  if (tx?.signature && tx?.timestamp) bySig[tx.signature] = tx.timestamp;
-                }
-              }
-              for (const t of tokens) {
-                const ts = bySig[t.launchSignature];
-                if (ts) agesByMint[t.tokenMint] = ts;
-              }
-            }
-          } catch(e) {}
-        }
-        // Store in raw Bags order (≈ newest first). The user toggles between
-        // Newest and Top-MC at render time, so we don't pre-sort here.
-        setFeed(tokens);
-        setFeedPrices(pricesByMint);
-        setFeedAges(agesByMint);
-      }
-    } catch(e) {} finally { setFeedLoading(false); setFeedRefreshing(false); setFeedLastUpdated(new Date()); }
-  }
-
-  useEffect(() => {
-    fetchFeed();
-    const feedInterval = setInterval(fetchFeed, 60000);
-    return () => clearInterval(feedInterval);
-  }, []);
-
-  const fmtNum = (n, dec=2) => n ? parseFloat(n).toLocaleString(undefined,{maximumFractionDigits:dec}) : "—";
-  const fmtAbbrev = (n) => {
-    const v = parseFloat(n);
-    if (!isFinite(v) || v <= 0) return null;
-    if (v >= 1e9) return "$" + (v/1e9).toFixed(2) + "B";
-    if (v >= 1e6) return "$" + (v/1e6).toFixed(2) + "M";
-    if (v >= 1e3) return "$" + (v/1e3).toFixed(1) + "K";
-    return "$" + v.toFixed(0);
-  };
-  const launchAge = (unixSec) => {
-    if (!unixSec) return null;
-    const diff = Date.now() - unixSec * 1000;
-    if (diff < 0) return null;
-    const m = Math.floor(diff / 60000);
-    if (m < 1) return "just now";
-    if (m < 60) return m + "m ago";
-    const h = Math.floor(m / 60);
-    if (h < 24) return h + "h ago";
-    const d = Math.floor(h / 24);
-    return d + "d ago";
-  };
-
-  if (pageError) return (
-    <div style={{padding:40,textAlign:"center",color:"#EF4444",fontFamily:"'Anton',sans-serif"}}>
-      PAGE ERROR: {pageError}
-    </div>
-  );
-
-  return (
-    <div style={{padding:"0 16px 40px", maxWidth:COL, margin:"0 auto"}}>
-      {/* Hero */}
-      <div style={{textAlign:"center", marginBottom:24}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:4,color:"#FF7A18",marginBottom:4}}>POWERED BY</div>
-        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:32,fontWeight:900,color:"#F9FAFB",margin:"0 0 8px",letterSpacing:2}}>BAGS.FM</h2>
-        <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.7,margin:"0 0 16px"}}>
-          Bags.fm is Solana's premier token launch platform — built for creators, traders, and communities. Launch a token, earn fees forever, and graduate to Meteora liquidity automatically.
-        </p>
-      </div>
-
-      {/* What is Bags */}
-      <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:12,padding:16,marginBottom:16}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:3,color:"#FF7A18",marginBottom:12}}>🎒 WHAT IS BAGS.FM?</div>
-        {[
-          {icon:"🚀",title:"Launch Any Token",desc:"Create and launch a token in minutes. No code required. Just a name, symbol, and image."},
-          {icon:"💰",title:"Earn Fees Forever",desc:"Token creators earn 1% of all trading volume on their token — forever. Add collaborators to your fee split."},
-          {icon:"📈",title:"Dynamic Bonding Curve",desc:"Tokens launch on a bonding curve and automatically graduate to a Meteora DAMM V2 liquidity pool when they hit the graduation threshold."},
-          {icon:"🔑",title:"Developer API",desc:"Full REST API for pools, trading, analytics, and more. Build apps on top of Bags.fm with your own API key."},
-        ].map(f=>(
-          <div key={f.title} style={{display:"flex",gap:12,marginBottom:14,alignItems:"flex-start"}}>
-            <div style={{fontSize:20,flexShrink:0}}>{f.icon}</div>
-            <div>
-              <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#F9FAFB",marginBottom:2}}>{f.title}</div>
-              <div style={{fontSize:13.5,color:"#9CA3AF",lineHeight:1.6}}>{f.desc}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* CTA Buttons */}
-      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-        <a href={BAGS_SIGNUP} target="_blank" rel="noreferrer" style={{display:"block",background:"#FF7A18",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,textDecoration:"none",textAlign:"center",boxShadow:"0 0 28px rgba(255,122,24,0.4)"}}>
-          🎒 SIGN UP ON BAGS.FM
-        </a>
-        <div style={{display:"flex",gap:10}}>
-          <a href={BAGS_APP_IOS} target="_blank" rel="noreferrer" style={{flex:1,display:"block",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#F9FAFB",letterSpacing:2,textDecoration:"none",textAlign:"center"}}>
-            🍎 IOS APP
-          </a>
-          <a href={BAGS_APP_ANDROID} target="_blank" rel="noreferrer" style={{flex:1,display:"block",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#F9FAFB",letterSpacing:2,textDecoration:"none",textAlign:"center"}}>
-            🤖 ANDROID
-          </a>
-        </div>
-        <a href={BAGS_DEV} target="_blank" rel="noreferrer" style={{display:"block",background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#6B7280",letterSpacing:2,textDecoration:"none",textAlign:"center"}}>
-          🔑 GET API ACCESS → DEV.BAGS.FM
-        </a>
-      </div>
-
-      {/* Recent Launches Feed */}
-      <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:12,padding:16}}>
-        <div style={{marginBottom:14}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,letterSpacing:2,color:"#F9FAFB"}}>📡 RECENT BAGS.FM LAUNCHES</div>
-            <button onClick={fetchFeed} style={{background:"rgba(255,122,24,0.15)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:8,color:"#FF7A18",fontFamily:"'Anton',sans-serif",fontSize:18,cursor:"pointer",padding:"4px 12px",lineHeight:1}}>
-              {feedRefreshing ? "..." : "↻"}
-            </button>
-          </div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              {[{k:"newest",label:"🆕 NEWEST"},{k:"mc",label:"📈 TOP MC"}].map(opt=>(
-                <button key={opt.k} onClick={()=>setFeedSort(opt.k)} style={{
-                  background: feedSort===opt.k ? "rgba(255,122,24,0.2)" : "rgba(255,122,24,0.06)",
-                  border: feedSort===opt.k ? "1px solid rgba(255,122,24,0.5)" : "1px solid rgba(255,122,24,0.18)",
-                  borderRadius:7, color: feedSort===opt.k ? "#FFB627" : "#6B7280",
-                  fontFamily:"'Anton',sans-serif", fontSize:12.5, fontWeight:700, letterSpacing:1,
-                  padding:"4px 10px", cursor:"pointer"
-                }}>{opt.label}</button>
-              ))}
-            </div>
-            {feedLastUpdated && (
-              <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#4B5563",letterSpacing:1}}>
-                ⟳60s · {feedLastUpdated.toLocaleTimeString()}
-              </span>
-            )}
-          </div>
-        </div>
-        {feedLoading ? (
-          <div style={{height:80,background:"rgba(255,122,24,0.05)",borderRadius:8,animation:"pulse 1.5s infinite",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:2}}>LOADING FEED...</span>
-          </div>
-        ) : feed && feed.length > 0 ? (
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {[...feed].sort((a,b)=>{
-              if (feedSort === "mc") return (feedPrices[b.tokenMint]?.marketCap||0) - (feedPrices[a.tokenMint]?.marketCap||0);
-              return (feedAges[b.tokenMint]||0) - (feedAges[a.tokenMint]||0); // newest first
-            }).map((p,i)=>{
-              const ageTs = feedAges[p.tokenMint];
-              const isNew = ageTs && (Date.now()/1000 - ageTs) < 7200; // launched < 2h ago
-              const tw = feedPrices[p.tokenMint]?.twitter || p.twitter || null;
-              const handle = tw ? String(tw).replace(/^https?:\/\/(x\.com|twitter\.com)\//i,"").replace(/^@/,"").split(/[/?]/)[0] : null;
-              return (
-              <a key={p.tokenMint || i} href={`https://bags.fm/${p.tokenMint}?ref=firechicken007`} target="_blank" rel="noreferrer" style={{display:"flex",justifyContent:"space-between",alignItems:"center",background: isNew ? "rgba(16,185,129,0.06)" : "rgba(255,122,24,0.06)",borderRadius:10,padding:"14px 16px",textDecoration:"none",border: isNew ? "1px solid rgba(16,185,129,0.45)" : "1px solid rgba(255,122,24,0.16)",boxShadow: isNew ? "0 0 16px rgba(16,185,129,0.18)" : "none",width:"100%",boxSizing:"border-box"}}>
-                <div style={{display:"flex",alignItems:"center",gap:14,flex:1,minWidth:0}}>
-                  <TokenIcon image={feedPrices[p.tokenMint]?.image || p.image} symbol={p.symbol}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontFamily:"'Anton',sans-serif",fontSize:22,fontWeight:700,color:"#F9FAFB",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                      {isNew && <span style={{fontSize:13,fontWeight:700,letterSpacing:1,color:"#10B981",background:"rgba(16,185,129,0.15)",border:"1px solid rgba(16,185,129,0.4)",borderRadius:5,padding:"1px 6px",marginRight:7,verticalAlign:"middle"}}>🆕 NEW</span>}
-                      {p.name} <span style={{color:"#6B7280",fontSize:17}}>({p.symbol})</span>
-                    </div>
-                    <div style={{display:"flex",gap:11,alignItems:"center",marginTop:6,flexWrap:"wrap"}}>
-                      {(() => {
-                        const fp = feedPrices[p.tokenMint] || {};
-                        const mc = fp.marketCap || 0;
-                        const onCurve = fp.onBondingCurve;
-                        const cp = fp.curvePct;
-                        let label, color;
-                        // Graduation status — authoritative from Solana Tracker when present
-                        // (onBondingCurve / curve %), falling back to Bags status + MC bands.
-                        if (p.status==="MIGRATED" || onCurve === false) { label="🎓 GRADUATED"; color="#10B981"; }
-                        else if (p.status==="MIGRATING") { label="⏳ MIGRATING"; color="#FFB627"; }
-                        else if (onCurve === true && cp != null) {
-                          if (cp >= 80) { label=`⚡ ${cp.toFixed(0)}% TO GRAD`; color="#FF7A18"; }
-                          else { label=`🌱 ON CURVE · ${cp.toFixed(0)}%`; color="#FF7A18"; }
-                        }
-                        else if (mc >= 30000) { label="⚡ NEAR GRAD"; color="#FF7A18"; }
-                        else if (mc >= 5000) { label="🔥 GAINING"; color="#FF7A18"; }
-                        else { label="📈 EARLY"; color="#6B7280"; }
-                        return <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,letterSpacing:1,fontWeight:700,color}}>{label}</div>;
-                      })()}
-                      {feedPrices[p.tokenMint]?.priceUsd && (
-                        <div style={{fontFamily:"monospace",fontSize:15,color:"#FFB627"}}>
-                          ${parseFloat(feedPrices[p.tokenMint].priceUsd).toFixed(6)}
-                        </div>
-                      )}
-                      {feedPrices[p.tokenMint]?.marketCap && (
-                        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#8B5CF6"}}>
-                          MC ${parseInt(feedPrices[p.tokenMint].marketCap).toLocaleString()}
-                        </div>
-                      )}
-                      {feedPrices[p.tokenMint]?.change24h !== undefined && (
-                        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:feedPrices[p.tokenMint].change24h>0?"#10B981":"#EF4444"}}>
-                          {feedPrices[p.tokenMint].change24h>0?"+":""}{parseFloat(feedPrices[p.tokenMint].change24h).toFixed(1)}%
-                        </div>
-                      )}
-                      {(() => { const v = fmtAbbrev(feedPrices[p.tokenMint]?.volume24h); return v ? (
-                        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,color:"#94A3B8"}}>V {v}</div>
-                      ) : null; })()}
-                      {(() => { const age = launchAge(feedAges[p.tokenMint]); return age ? (
-                        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,color:"#6B7280"}}>🕒 {age}</div>
-                      ) : null; })()}
-                    </div>
-                    {/* Graduation progress bar — on-curve tokens only (ST curve %) */}
-                    {(() => { const fp = feedPrices[p.tokenMint]||{}; const cp = fp.curvePct; return (fp.onBondingCurve===true && cp!=null) ? (
-                      <div style={{marginTop:8,height:5,background:"rgba(255,122,24,0.18)",borderRadius:3,overflow:"hidden"}}>
-                        <div style={{width:`${Math.min(100,Math.max(2,cp))}%`,height:"100%",background:cp>=80?"#FF7A18":"#FF7A18",borderRadius:3}}/>
-                      </div>
-                    ) : null; })()}
-                    {handle && (
-                      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#5B8DD6",marginTop:6,letterSpacing:0.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>𝕏 @{handle}</div>
-                    )}
-                  </div>
-                </div>
-                <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,color:"#FF7A18",letterSpacing:1,flexShrink:0,marginLeft:10}}>TRADE →</div>
-              </a>
-              );
-            })}
-          </div>
-        ) : (
-          <div style={{textAlign:"center",padding:"20px 0",fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#4B5563",letterSpacing:2}}>NO FEED DATA</div>
-        )}
-        <div style={{marginTop:10,textAlign:"center"}}>
-          <a href="https://bags.fm?ref=firechicken007" target="_blank" rel="noreferrer" style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FF7A18",letterSpacing:2,textDecoration:"none"}}>VIEW ALL ON BAGS.FM →</a>
-        </div>
-      </div>
-      <MintAddress/>
-    </div>
-  );
-}
-
-// ── APP ICON SVG (School of Crypto Hard Knocks) ──
-
-function CLKNTicker() {
-
-  return (
-    <div style={{
-      display:"flex", alignItems:"center", gap:6,
-      background:"rgba(255,122,24,0.1)", border:"1px solid rgba(255,122,24,0.3)",
-      borderRadius:20, padding:"3px 10px", cursor:"pointer",
-    }}>
-      <div style={{width:5,height:5,borderRadius:"50%",background:"#10B981",animation:"pulse 2s infinite"}}/>
-      <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FF7A18",letterSpacing:1}}>CLKN</span>
-      <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FFB627",letterSpacing:1}}>LIVE</span>
-    </div>
-  );
-}
-
 // Live reinvestment tracker — itemized CLKN creator-fee claims from the Bags API.
 // Renders nothing until real claim data loads, so the page never shows an empty card.
 function ReinvestmentFeed() {
@@ -1042,7 +669,6 @@ function ReinvestmentFeed() {
 }
 
 function CLKNWidget() {
-  const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [solAmount, setSolAmount] = useState("1");
   const [quote, setQuote] = useState(null);
@@ -1087,12 +713,10 @@ function CLKNWidget() {
 
   async function fetchData() {
     try {
-      setLoading(true);
       fetchDex();
       fetchHelius();
       setLastUpdated(new Date());
     } catch (e) {}
-    finally { setLoading(false); }
   }
 
   async function fetchQuote(sol) {
@@ -1127,7 +751,6 @@ function CLKNWidget() {
     return () => clearInterval(i);
   }, [slippage]);
 
-  const fmtSol = (n) => n ? parseFloat(n).toLocaleString(undefined,{maximumFractionDigits:3}) + " SOL" : "—";
   const fmtNum = (n, dec=2) => n ? parseFloat(n).toLocaleString(undefined,{maximumFractionDigits:dec}) : "—";
   const shortKey = (k) => k ? `${k.slice(0,6)}...${k.slice(-4)}` : "Not active";
 
@@ -1351,59 +974,6 @@ function CLKNWidget() {
 }
 
 
-function AppIcon({size=64}){
-  return(
-    <svg width={size} height={size} viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="bg" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#1a0f08"/>
-          <stop offset="100%" stopColor="#0a0503"/>
-        </radialGradient>
-        <radialGradient id="fire" cx="50%" cy="60%" r="50%">
-          <stop offset="0%" stopColor="#FF7A18" stopOpacity="0.6"/>
-          <stop offset="100%" stopColor="#EF4444" stopOpacity="0"/>
-        </radialGradient>
-        <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#FFB627"/>
-          <stop offset="100%" stopColor="#FF7A18"/>
-        </linearGradient>
-        <linearGradient id="belt" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#1a0f08"/>
-          <stop offset="45%" stopColor="#FFB627"/>
-          <stop offset="55%" stopColor="#FFB627"/>
-          <stop offset="100%" stopColor="#1a0f08"/>
-        </linearGradient>
-      </defs>
-      {/* background circle */}
-      <circle cx="60" cy="60" r="58" fill="url(#bg)" stroke="#FF7A18" strokeWidth="2"/>
-      {/* fire glow */}
-      <circle cx="60" cy="60" r="50" fill="url(#fire)"/>
-      {/* mortarboard hat */}
-      <rect x="32" y="44" width="56" height="8" rx="2" fill="url(#gold)"/>
-      <polygon points="60,28 88,44 60,44 32,44" fill="#1a0f08" stroke="#FF7A18" strokeWidth="1.5"/>
-      <polygon points="60,28 88,44 60,44 32,44" fill="#2a2a2a"/>
-      <rect x="58" y="28" width="4" height="4" rx="1" fill="url(#gold)"/>
-      {/* tassel */}
-      <line x1="88" y1="44" x2="92" y2="52" stroke="#FFB627" strokeWidth="1.5"/>
-      <circle cx="92" cy="54" r="3" fill="#FFB627"/>
-      <line x1="92" y1="57" x2="90" y2="63" stroke="#FFB627" strokeWidth="1"/>
-      <line x1="92" y1="57" x2="92" y2="64" stroke="#FFB627" strokeWidth="1"/>
-      <line x1="92" y1="57" x2="94" y2="63" stroke="#FFB627" strokeWidth="1"/>
-      {/* black belt stripe */}
-      <rect x="20" y="70" width="80" height="9" rx="4" fill="url(#belt)"/>
-      {/* fist left */}
-      <ellipse cx="34" cy="75" rx="10" ry="8" fill="#FFB627" opacity="0.15"/>
-      <text x="28" y="79" fontSize="14" fill="#FF7A18">✊</text>
-      {/* fist right */}
-      <ellipse cx="86" cy="75" rx="10" ry="8" fill="#FFB627" opacity="0.15"/>
-      <text x="78" y="79" fontSize="14" fill="#FF7A18">✊</text>
-      {/* CLKN text */}
-      <text x="60" y="100" textAnchor="middle" fontFamily="'Anton',sans-serif" fontSize="11" fontWeight="900" fill="url(#gold)" letterSpacing="3">CLKN</text>
-      <text x="60" y="112" textAnchor="middle" fontFamily="'Anton',sans-serif" fontSize="6" fill="#6B7280" letterSpacing="2">SCHOOL</text>
-    </svg>
-  );
-}
-
 function Landing({onStart,onIncubator,onStartHere,completed}){
   const pct=Math.round((completed.length/LESSONS.length)*100);
   let consecutive=0;
@@ -1574,7 +1144,6 @@ function Lesson({lesson:l,onComplete,onBack}){
     </div>
   );
 
-  const shuffledQuestions2 = shuffledQuestions;
   if(phase==="quiz") return(
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
       <div style={{marginBottom:20}}>
@@ -1841,7 +1410,7 @@ function StartHere({ onGo }){
         <p style={txt}>Cluck Norris is the free School of Crypto Hard Knocks + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility. CLKN unlocks premium tools — hold it and they're free. The school itself is always free.</p>
         <Act label="💸 Buy CLKN on Jupiter" onClick={goExt(JUPITER_TRADE_LINK)} color="#34D399" bg="rgba(16,185,129,0.14)" bd="rgba(16,185,129,0.5)"/>
         <Act label="📊 Token data & chart" onClick={()=>onGo("clkn")}/>
-        <Act label="📜 The story & grant" onClick={goIn("/investors")}/>
+        <Act label="📜 The story & investors" onClick={goIn("/investors")}/>
       </>)},
     { key:"explore", icon:"🧭", title:"Just exploring", tag:"The lay of the land", body:()=>(<>
         <p style={txt}>Poke around — here's everything in one place.</p>
@@ -1939,9 +1508,8 @@ export default function App(){
   }
 
   return(
-    <div style={{minHeight:"100vh",background:"#0a0503",backgroundImage:"rgba(255,122,24,.08),rgba(239,68,68,.06)",color:"#F9FAFB"}}>
+    <div style={{minHeight:"100vh",background:"#0a0503",color:"#F9FAFB"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap');
         @keyframes pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
         *{box-sizing:border-box} button{transition:all .15s ease}
       `}</style>

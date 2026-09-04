@@ -142,12 +142,8 @@
 <script src="/cluck-util.js"></script>
 <script>
 (function(){
-  var esc = (window.CluckUtil && CluckUtil.esc) ? CluckUtil.esc : function(s){
-    return String(s==null?'':s).replace(/[&<>"']/g,function(c){
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
-  };
+  var esc = CluckUtil.esc;
   var q = new URLSearchParams(location.search);
-  var KEY = q.get('key') || '';
   var SRC = q.get('src') || 'cuna';
   var cv = document.getElementById('wheel'), cx = cv.getContext('2d');
   var S = { entrants: [], tickets: [], wonSet: {}, draw: null, revealed: 0, spinning: false, rot: 0, cfg: null };

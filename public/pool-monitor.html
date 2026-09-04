@@ -27,7 +27,7 @@
   .range-bar{position:relative;height:10px;border-radius:6px;background:rgba(239,68,68,0.3);border:1px solid var(--border);}
   .range-bar .mark{position:absolute;top:-3px;width:3px;height:16px;background:#fff;border-radius:2px;}
   .range-lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--sub);margin-top:4px;}
-  .banner{padding:10px 13px;border-radius:9px;font-family:system-ui;font-size:13px;font-weight:600;margin-bottom:14px;text-align:center;}
+  .banner{padding:10px 13px;border-radius:9px;font-family:var(--body);font-size:13px;font-weight:600;margin-bottom:14px;text-align:center;}
   .ok{background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.4);color:var(--green);}
   .warn{background:rgba(217,119,6,0.12);border:1px solid rgba(217,119,6,0.5);color:var(--accent);}
   .bad{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.5);color:var(--red);}
@@ -79,7 +79,7 @@ body{background:transparent;font-family:var(--body);}
     var key=getKey();
     if(!key){ document.getElementById('keyRow').style.display='flex'; document.getElementById('boot').textContent='Enter your operator key to watch the pool.'; return; }
     try{
-      var r=await fetch('/api/pool-monitor?key='+encodeURIComponent(key),{cache:'no-store'});
+      var r=await fetch('/api/pool-monitor',{cache:'no-store',headers:{'x-premium-key':key}});
       if(r.status===404){ document.getElementById('keyRow').style.display='flex'; document.getElementById('content').innerHTML='<div class="card bad" style="text-align:center">Key rejected — try again.</div>'; return; }
       var d=await r.json();
       if(!d.success){ document.getElementById('content').innerHTML='<div class="card muted" style="text-align:center">'+(d.error||'No data yet — the monitor warms up a couple minutes after deploy.')+'</div>'; return; }
@@ -93,7 +93,7 @@ body{background:transparent;font-family:var(--body);}
     var html='';
     // status banner
     if(p){
-      if(!p.inRange) html+='<div class="banner bad">⚠️ OUT OF RANGE — earning $0. Rebalancer should recenter shortly.</div>';
+      if(!p.inRange) html+='<div class="banner bad">⚠️ OUT OF RANGE — earning $0. Auto-rebalance is disabled; recenter manually.</div>';
       else if(p.edgePct!=null && p.edgePct<=12) html+='<div class="banner warn">⚠️ Near the edge ('+p.edgePct+'% from out-of-range) — watch for a recenter.</div>';
       else html+='<div class="banner ok">✅ In range &amp; earning · '+(p.edgePct!=null?p.edgePct+'% from the nearest edge':'')+'</div>';
     }

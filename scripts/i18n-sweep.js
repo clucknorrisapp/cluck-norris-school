@@ -18,8 +18,14 @@ const { execFileSync } = require("child_process");
 const DIR = path.join(__dirname, "..", "public", "i18n");
 const URL = process.env.I18N_URL || "https://clucknorris.app/api/i18n/translate";
 const REF = "es";
-const LANG = (process.argv[2] || "it").toLowerCase();
+const LANG = String(process.argv[2] || "").toLowerCase();
 const CHECK_ONLY = process.argv.includes("--check");
+// The language is REQUIRED: a bare run used to default to Italian and rewrite it.json via the live
+// MT endpoint, which is not a thing to do by accident.
+if (!/^[a-z]{2}$/.test(LANG) || LANG === REF) {
+  console.error("usage: node scripts/i18n-sweep.js <lang> [--check]   (two-letter code other than " + REF + ")");
+  process.exit(2);
+}
 
 function load(f) { try { return JSON.parse(fs.readFileSync(path.join(DIR, f), "utf8")); } catch (_) { return {}; } }
 function translate(texts) {
@@ -60,7 +66,8 @@ function sweepFile(refFile, outFile) {
 console.log(`i18n sweep: ${LANG} vs ${REF}${CHECK_ONLY ? " (check only)" : ""}`);
 const a = sweepFile(`${REF}.json`, `${LANG}.json`);
 const b = sweepFile(`${REF}.school.json`, `${LANG}.school.json`);
-const cov = a.covered + b.covered, all = a.total + b.total, gaps = a.missing + b.missing;
+const c = sweepFile(`${REF}.locker.json`, `${LANG}.locker.json`);   // /locker-room loads <lang>.locker.json too (i18n.js)
+const cov = a.covered + b.covered + c.covered, all = a.total + b.total + c.total, gaps = a.missing + b.missing + c.missing;
 console.log(`\nTOTAL ${LANG}: ${cov}/${all} (${Math.round((cov / all) * 100)}%), ${gaps} gap(s)`);
 if (gaps) { console.log("Gaps remain — re-run to retry, or residual are untranslatable brand terms."); process.exit(1); }
 console.log("FULL COVERAGE ✓");

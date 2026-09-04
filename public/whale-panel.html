@@ -45,7 +45,7 @@ function flowCell(n){if(n==null)return'<span class="zero">—</span>';if(Math.ab
 async function load(){
   const key=getKey();
   if(!key){$("#app").innerHTML=`<div class="keybox"><div class="sub">CLUCK NORRIS · PRIVATE</div><h1>WHALE PANEL</h1><p style="color:var(--muted);font-size:12px;margin-top:10px">Operator access only.</p><input id="k" type="password" placeholder="access key"><br><button onclick="localStorage.setItem('${KEY_LS}',document.getElementById('k').value);location.reload()">ENTER</button></div>`;return;}
-  const r=await fetch(`/api/whale-watch?key=${encodeURIComponent(key)}`);
+  const r=await fetch("/api/whale-watch",{headers:{"x-premium-key":key}});
   if(r.status===404){localStorage.removeItem(KEY_LS);location.reload();return;}
   const j=await r.json();
   const rows=(j.whales||[]).map(w=>{
@@ -77,7 +77,7 @@ async function load(){
     ${(j.exited&&j.exited.length)?`<div class="foot">👋 left top list: ${j.exited.map(a=>a.slice(0,4)+"…").join(", ")}</div>`:""}
     <div class="foot">updated ${j.updatedAt?new Date(j.updatedAt).toLocaleString():"—"} · CLKN $${j.clknUsd?j.clknUsd.toFixed(7):"—"} · <a style="color:var(--orange)" href="#" onclick="refresh();return false">refresh roster</a></div>`;
 }
-async function refresh(){const key=getKey();await fetch(`/api/whale-watch?key=${encodeURIComponent(key)}&refresh=1`);load();}
+async function refresh(){const key=getKey();await fetch("/api/whale-watch?refresh=1",{headers:{"x-premium-key":key}});load();}
 load();setInterval(load,60000);
 </script>
 <script defer src="/cluck-nav.js"></script>

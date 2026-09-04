@@ -118,7 +118,11 @@
   .btn{width:100%;padding:13px;border:none;border-radius:10px;background:#D97706;color:#1a1a1a;font-family:var(--disp);font-weight:900;letter-spacing:1px;font-size:15px;cursor:pointer;margin-top:14px;}
   .btn.alt{background:#1c1d24;color:#e9e9ee;border:1px solid var(--border,rgba(255,255,255,.14));}
   .btn:disabled{background:rgba(255,255,255,.05);color:var(--muted);box-shadow:none;transform:none;cursor:not-allowed;}
-  .qm{padding:6px 12px;border-radius:999px;background:#1c1d24;color:#e9e9ee;border:1px solid var(--border,rgba(255,255,255,.14));font-size:12.5px;font-weight:600;cursor:pointer;}
+  .qm{padding:6px 12px;border-radius:999px;background:#1c1d24;color:#e9e9ee;border:1px solid var(--border,rgba(255,255,255,.14));font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+  /* Project logo chips on the quick-mint buttons. Images are HARDCODED here (the tokens' own
+     on-chain metadata icons, CLKN on our permanent Arweave copy) — not user input. IPFS can be
+     slow or down, so a failed load just hides the img and the button still works as text. */
+  .qm img{width:18px;height:18px;border-radius:50%;object-fit:cover;background:#0d0d12;}
   .qm:hover{border-color:#D97706;color:#f5b301;}
 .qm:disabled{opacity:.4;cursor:not-allowed;border-color:rgba(255,255,255,.14);color:var(--muted);}
 .amtrow{display:flex;gap:7px;flex-wrap:wrap;margin:7px 0 0;}
@@ -288,9 +292,12 @@
       <label>Token mint</label>
       <input id="cMint" spellcheck="false" placeholder="Token mint address"/>
       <div class="quickmints" style="margin:7px 0 2px;display:flex;gap:8px;flex-wrap:wrap">
-        <button type="button" class="qm" data-mint="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS">🐔 Use CLKN</button>
-        <button type="button" class="qm" data-mint="FrSFwE2BxWADEyUWFXDMAeomzuB4r83ZvzdG9sevpump">Use NORMIE</button>
-        <button type="button" class="qm" data-mint="RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF">Use ROSE</button>
+        <button type="button" class="qm" data-mint="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS"><img src="https://arweave.net/B-E2FyV8RUxlrpm0aCJH5MUVeovffe3Z1yYbjIUiE7w" alt="" loading="lazy" onerror="this.style.display='none'"/>CLKN</button>
+        <button type="button" class="qm" data-mint="FrSFwE2BxWADEyUWFXDMAeomzuB4r83ZvzdG9sevpump"><img src="https://ipfs.io/ipfs/bafkreifn4g4wjqpov3vq7wsjiz4qcjahsfe2gub6twb3krfob7cyao4qg4" alt="" loading="lazy" onerror="this.style.display='none'"/>NORMIE</button>
+        <button type="button" class="qm" data-mint="RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF"><img src="https://ipfs.io/ipfs/QmYF2cicUj59Sy9zXPv9s1j6zrq9j6f9bb5xLFyHoy5kkh" alt="" loading="lazy" onerror="this.style.display='none'"/>ROSE</button>
+        <button type="button" class="qm" data-mint="4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc"><img src="https://arweave.net/pFKl2kLMwya7ULAUtgBTYExz-3yHM4c3gc5eGmvWkVY" alt="" loading="lazy" onerror="this.style.display='none'"/>CUNA</button>
+        <button type="button" class="qm" data-mint="HRvw81mktEraX9gZLTHKeYGaFygCSNKuAwNLVE6Tpump"><img src="https://ipfs.io/ipfs/bafkreifpo327id6lu7g267obth7kzj3fqu7zs625gydvf4atnak4pyh2iq" alt="" loading="lazy" onerror="this.style.display='none'"/>POKEAHOE</button>
+        <button type="button" class="qm" data-mint="42HsffEQoHqWoeiffksYayC75fQDxaoUdMBzmeXdpump"><img src="https://ipfs.io/ipfs/QmXCe83YzzLSzVi8JK82RTPyTjp671f2woBCs43K1c3nDT" alt="" loading="lazy" onerror="this.style.display='none'"/>DNC</button>
       </div>
       <!-- Token identity + your balance. Name/symbol come from an API and from chain metadata,
            so they are ATTACKER-CONTROLLED — every render below goes through esc(). -->
@@ -399,8 +406,8 @@
   // esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
   // esc() had drifted and four pages weren't escaping the single quote.
   const esc = CluckUtil.esc;
-  function fmt(n){ n=Number(n)||0; if(n>=1e9)return (n/1e9).toFixed(2)+'B'; if(n>=1e6)return (n/1e6).toFixed(2)+'M'; if(n>=1e3)return (n/1e3).toFixed(1)+'K'; return Math.round(n).toLocaleString(); }
-  function shortAddr(a){ a=String(a||''); return a.length>10?a.slice(0,4)+'…'+a.slice(-4):a; }
+  function fmt(n){ return CluckUtil.fmt(n); }
+  function shortAddr(a){ return CluckUtil.shortAddr(a); }
 
   // ---- recently-locked strip (cross-token feed) ----
   function relTime(ts){ var s=Math.max(0,(Date.now()-ts)/1000); if(s<60)return Math.max(1,Math.floor(s))+'s ago'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
@@ -801,9 +808,7 @@
   });
 
   // ---- Verify-your-lock panel: copy the tx, open it on Jupiter Lock's own UI ----
-  function copyText(str, btn){ var done=function(){ if(btn){ var t=btn.textContent; btn.textContent='Copied'; setTimeout(function(){btn.textContent=t;},1200); } };
-    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(str).then(done,done); }
-    else { var ta=document.createElement('textarea'); ta.value=str; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove(); done(); } }
+  function copyText(str, btn){ CluckUtil.copyText(str).then(function(ok){ if(btn){ var t=btn.textContent; btn.textContent=ok?'Copied':'Copy failed'; setTimeout(function(){btn.textContent=t;},1200); } }); }
   function showVerify(res, mint, sig){
     // Named escrow, NOT esc: a local `esc` here shadowed the shared HTML escaper for
     // this whole function body, so adding any esc(...) call inside would have thrown
@@ -858,7 +863,7 @@
   $('#clConnect').addEventListener('click',function(){
     if(connected && activeProvider){ claimConnected(); return; }
     var w=detectWallets();
-    if(!w.length){ $('#clMsg').className='msg err'; $('#clMsg').textContent='No Solana wallet found. Install Phantom or Solflare.'; return; }
+    if(!w.length){ $('#clMsg').className='msg err'; $('#clMsg').textContent='No Solana wallet found. Install one (or open this page in your wallet\u2019s own browser).'; return; }
     if(w.length===1){ connectWith(w[0].p,w[0].name,claimConnected); return; }
     clPicker.innerHTML='<div class="muted" style="font-size:12px;text-align:center">Choose a wallet to connect</div>';
     w.forEach(function(x){ var b=document.createElement('button'); b.type='button'; b.className='btn alt'; b.style.marginTop='0'; b.textContent='Connect '+x.name; b.addEventListener('click',function(){ clPicker.style.display='none'; connectWith(x.p,x.name,claimConnected); }); clPicker.appendChild(b); });
@@ -918,7 +923,7 @@
     var msg=$('#clm'+i); msg.className='msg'; msg.textContent='Building your claim…'; btn.disabled=true;
     if(!window.solanaWeb3){ msg.className='msg err'; msg.textContent='Solana library still loading — try again.'; btn.disabled=false; return; }
     var p=activeProvider;
-    if(!p||!p.signTransaction){ msg.className='msg err'; msg.textContent='This wallet can’t sign here — use Phantom or Solflare.'; btn.disabled=false; return; }
+    if(!p||!p.signTransaction){ msg.className='msg err'; msg.textContent='This wallet can’t sign here — try another wallet.'; btn.disabled=false; return; }
     fetch('/api/lock/claim-tx',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({recipient:connected,escrow:escrow})})
       .then(function(r){return r.json();}).then(function(res){
         if(!res.ok){ msg.className='msg err'; msg.textContent=res.error||'Could not build the claim.'; btn.disabled=false; return; }

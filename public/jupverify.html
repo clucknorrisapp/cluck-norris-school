@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="description" content="CLKN Productions Jup Verification Protocol — submit your Solana project for the liquidity engine + Jupiter verification service."/>
+<meta name="robots" content="noindex,nofollow"/>
+<meta name="theme-color" content="#0b0c0e"/>
+<title>🐔 Jup Verification Intake — CLKN Productions</title>
+<style>
+  /* Palette + fonts come from /theme.css — never a page-local :root. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; font-size: 15px; line-height: 1.6; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 80px; }
+  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
+
+  .header { display:flex; align-items:center; gap:14px; margin-bottom:24px; padding-bottom:20px; border-bottom:1px solid var(--border); }
+  .header-icon { font-size:40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family:var(--disp); font-size:10px; letter-spacing:4px; color:var(--orange); margin-bottom:4px; font-weight:700; }
+  .header h1 { font-family:var(--disp); font-size:26px; font-weight:900; letter-spacing:2px; color:var(--gold); line-height:1.15; }
+  .header p { font-family:var(--disp); font-size:11px; color:var(--subtext); letter-spacing:3px; margin-top:6px; }
+
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:16px; }
+  .card-title { font-family:var(--disp); font-size:13px; color:var(--accent); letter-spacing:2px; margin-bottom:14px; font-weight:700; text-transform:uppercase; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  .intro { font-size:14px; line-height:1.75; color:var(--sub); }
+  .intro b { color:var(--accent); }
+  .honesty { margin-top:12px; padding:12px 14px; background:rgba(255,182,39,0.06); border:1px solid rgba(255,182,39,0.25); border-radius:10px; font-size:13px; line-height:1.7; color:var(--sub); }
+  .honesty b { color:var(--amber); }
+
+  label { display:block; font-family:var(--mono); font-size:11px; letter-spacing:1px; color:var(--subtext); margin:14px 0 5px; }
+  label .req { color:var(--red); }
+  input[type=text], input[type=number], input[type=email], textarea, select {
+    width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:var(--mono); font-size:14px;
+  }
+  textarea { min-height:80px; resize:vertical; font-family:var(--body); }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:560px){ .row2 { grid-template-columns:1fr; } }
+  .hint { font-size:12.5px; color:var(--muted); margin-top:5px; line-height:1.6; }
+  .chk { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13.5px; color:var(--sub); cursor:pointer; }
+  .chk input { accent-color:var(--orange); width:16px; height:16px; }
+
+  .btn { border:none; border-radius:10px; padding:14px 18px; font-family:var(--disp); font-size:14px; font-weight:900; letter-spacing:1.5px; cursor:pointer; transition:opacity .15s; }
+  .btn-primary { background:var(--gold); color:#1a1205; }
+  .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--subtext); }
+  .btn:hover { opacity:.9; }
+  /* Disabled CTAs go neutral grey — a dimmed gradient on dark reads as broken. */
+  .btn:disabled { background:rgba(255,255,255,.05); color:var(--muted); border-color:var(--border); box-shadow:none; cursor:not-allowed; }
+  .btn-block { width:100%; }
+
+  .error-box { display:none; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:10px; padding:14px 16px; font-size:13px; color:#FCA5A5; margin:14px 0 0; line-height:1.7; }
+  .error-box.show { display:block; }
+  .info-line { font-size:13px; color:var(--accent); margin-top:10px; line-height:1.6; }
+
+  .wallet-picker { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+  .connected { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; font-family:var(--mono); font-size:13px; color:var(--sub); }
+  .connected b { color:var(--green); }
+
+  .precheck { display:none; margin-top:10px; padding:12px 14px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.25); border-radius:10px; font-family:var(--mono); font-size:12.5px; line-height:1.8; color:var(--sub); }
+  .precheck.show { display:block; }
+  .precheck b { color:#6EE7B7; }
+  .precheck .warn { color:var(--amber); }
+
+  .review-list { font-family:var(--mono); font-size:12.5px; line-height:1.9; color:var(--sub); word-break:break-word; }
+  .review-list b { color:var(--accent); }
+
+  /* Status stepper */
+  .stepper { display:flex; flex-direction:column; gap:0; margin-top:6px; }
+  .step { display:flex; gap:12px; align-items:flex-start; }
+  .step .dot { width:14px; height:14px; border-radius:50%; border:2px solid var(--border); margin-top:3px; flex:none; }
+  .step.done .dot { background:var(--green); border-color:var(--green); }
+  .step.now .dot { border-color:var(--gold); background:rgba(255,182,39,0.35); }
+  .step .lbl { font-family:var(--disp); font-size:12px; letter-spacing:1.5px; color:var(--muted); padding-bottom:16px; }
+  .step.done .lbl, .step.now .lbl { color:var(--text); }
+  .client-msg { margin-top:12px; padding:12px 14px; background:rgba(96,165,250,0.07); border:1px solid rgba(96,165,250,0.3); border-radius:10px; font-size:13.5px; color:var(--sub); line-height:1.7; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-home" href="/">← CLUCKNORRIS.APP</a>
+  <div class="header">
+    <div class="header-icon">🐔</div>
+    <div>
+      <div class="brand-mini">CLKN PRODUCTIONS LLC</div>
+      <h1>JUP VERIFICATION INTAKE</h1>
+      <p>LIQUIDITY ENGINE · ORGANIC SCORE · VERIFICATION SUBMISSION</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="intro">
+      We run <b>tight, balanced Orca pools</b> on your token so aggregator routing generates continuous, real,
+      on-chain volume — every fill a real counterparty, auditable by anyone. We grow holders with
+      <b>real-buyer campaigns</b>, host your circulating-supply API and permanent icon, and when your numbers
+      match the verification profile we prepare and file the <b>Jupiter VRFD submission</b>.
+      <span class="honesty"><b>What we don't sell:</b> Jupiter's decision (verification is theirs, not ours),
+      a score number (the organic score climbs with engine runtime and decays when it stops), or price performance.
+      The engine holds quote-weighted and sells into strength by design. If anyone promises you a guaranteed
+      checkmark, run.</span>
+    </div>
+  </div>
+
+  <div class="error-box" id="errBox"></div>
+
+  <!-- CONNECT -->
+  <div class="card" id="connectCard">
+    <div class="card-title">1 · Connect your wallet</div>
+    <div class="intro">Sign a message (no transaction, costs nothing) so the submission is tied to a wallet you control. If it's the token's update authority, even better — we verify that on-chain either way.</div>
+    <div id="connectArea">
+      <button class="btn btn-primary btn-block" id="connectBtn" style="margin-top:12px">CONNECT WALLET</button>
+      <div class="wallet-picker hidden" id="walletPicker"></div>
+      <div class="info-line" id="connInfo"></div>
+    </div>
+    <div class="connected hidden" id="connectedRow">
+      <span>Connected: <b id="connAddr"></b></span>
+      <button class="btn btn-ghost" id="disconnectBtn">DISCONNECT</button>
+    </div>
+  </div>
+
+  <!-- STATUS (shown instead of form when a submission token exists) -->
+  <div class="card hidden" id="statusCard">
+    <div class="card-title">Your submission</div>
+    <div class="intro" id="statusHead"></div>
+    <div class="stepper" id="stepper"></div>
+    <div class="client-msg hidden" id="clientMsg"></div>
+    <button class="btn btn-ghost" id="editBtn" style="margin-top:14px">EDIT &amp; RESUBMIT</button>
+  </div>
+
+  <!-- FORM -->
+  <div id="formArea">
+    <div class="card">
+      <div class="card-title">2 · Token identity</div>
+      <label>Mint address <span class="req">*</span></label>
+      <input type="text" id="f_mint" placeholder="Token mint (base58)" autocomplete="off"/>
+      <div class="precheck" id="precheckBox"></div>
+      <div class="row2">
+        <div><label>Token name <span class="req">*</span></label><input type="text" id="f_name" maxlength="64"/></div>
+        <div><label>Ticker symbol <span class="req">*</span></label><input type="text" id="f_symbol" maxlength="10" placeholder="letters + numbers only"/></div>
+      </div>
+      <div class="hint">A ticker another verified Solana token already uses is one of Jupiter's most common rejection reasons.</div>
+      <label>Project description <span class="req">*</span></label>
+      <textarea id="f_description" maxlength="1000" placeholder="What the project is, in plain words. This becomes the reason-for-verification text."></textarea>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3 · Metadata &amp; icon</div>
+      <label>Icon URL (square PNG) <span class="req">*</span></label>
+      <input type="text" id="f_iconUrl" placeholder="https://…"/>
+      <label class="chk"><input type="checkbox" id="f_iconPermanent"/> This icon is permanently hosted (Arweave/IPFS)</label>
+      <div class="hint">Not permanent? No problem — hosting it on Arweave is part of the service.</div>
+      <label>Website <span class="req">*</span></label>
+      <input type="text" id="f_website" placeholder="https://…"/>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4 · Socials</div>
+      <div class="row2">
+        <div><label>X handle <span class="req">*</span></label><input type="text" id="f_xHandle" placeholder="yourproject (no @)"/></div>
+        <div><label>Telegram group URL</label><input type="text" id="f_telegramUrl" placeholder="https://t.me/…"/></div>
+      </div>
+      <div class="row2">
+        <div><label>Discord invite URL</label><input type="text" id="f_discordUrl" placeholder="https://discord.gg/…"/></div>
+        <div><label>Other URL (docs, launchpad…)</label><input type="text" id="f_otherUrl" placeholder="https://…"/></div>
+      </div>
+      <div class="hint">Jupiter calls social support its <b>most important</b> criterion — a real, active X community matters more than anything we can build for you. Be straight with us about where yours stands.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">5 · Supply &amp; locks</div>
+      <div class="row2">
+        <div><label>Team allocation %</label><input type="number" id="f_teamPct" min="0" max="100" step="0.1" placeholder="0"/></div>
+        <div><label>Locks / vesting</label><input type="text" id="f_lockInfo" maxlength="500" placeholder="e.g. 20% Jupiter Lock 12mo"/></div>
+      </div>
+      <label>Circulating-supply notes</label>
+      <textarea id="f_supplyNotes" maxlength="500" placeholder="Anything that affects circulating supply — escrows, burns, treasury. We host a live supply API for you; it must be honest."></textarea>
+    </div>
+
+    <div class="card">
+      <div class="card-title">6 · Liquidity &amp; funding</div>
+      <div class="hint" style="margin-bottom:4px">The engine trades <b>your</b> capital in a dedicated operator wallet — that's custody, stated plainly. You get the wallet address at onboarding and every transaction is on-chain.</div>
+      <div class="row2">
+        <div><label>Token float you'll provide <span class="req">*</span></label><input type="number" id="f_floatTokens" min="0" placeholder="tokens"/></div>
+        <div>
+          <label>Quote-side funding <span class="req">*</span></label>
+          <div style="display:flex; gap:8px">
+            <input type="number" id="f_quoteAmount" min="0" step="0.01" placeholder="amount" style="flex:1"/>
+            <select id="f_quoteAsset" style="width:110px"><option>USDC</option><option>SOL</option></select>
+          </div>
+        </div>
+      </div>
+      <label>Wallet the float will come from</label>
+      <input type="text" id="f_fundingWallet" placeholder="optional — base58"/>
+      <label>Existing pools you know of</label>
+      <textarea id="f_existingPools" maxlength="1000" placeholder="Venues + pairs. We enumerate on-chain regardless."></textarea>
+    </div>
+
+    <div class="card">
+      <div class="card-title">7 · Contact</div>
+      <div class="row2">
+        <div><label>Telegram handle <span class="req">*</span></label><input type="text" id="f_tgContact" placeholder="yourhandle (no @)"/></div>
+        <div><label>Email</label><input type="email" id="f_email" placeholder="optional"/></div>
+      </div>
+      <label>Anything else</label>
+      <textarea id="f_notes" maxlength="2000"></textarea>
+      <input type="text" id="f_company" autocomplete="off" tabindex="-1" style="position:absolute;left:-9999px" aria-hidden="true"/>
+    </div>
+
+    <div class="card">
+      <div class="card-title">8 · Review &amp; sign</div>
+      <div class="review-list" id="reviewList">Fill the form, connect a wallet, and your entries appear here for a final read-back before signing.</div>
+      <button class="btn btn-primary btn-block" id="submitBtn" style="margin-top:14px" disabled>SIGN &amp; SUBMIT</button>
+      <div class="info-line" id="subInfo"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
+<script>
+(function(){
+  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
+  var DRAFT_KEY = 'clkn_jvp_draft', TOKEN_KEY = 'clkn_jvp_token';
+  var wallet = null, provider = null;
+
+  var FIELDS = ['mint','name','symbol','description','iconUrl','website','xHandle','telegramUrl','discordUrl','otherUrl','teamPct','lockInfo','supplyNotes','floatTokens','quoteAmount','quoteAsset','fundingWallet','existingPools','tgContact','email','notes'];
+  function $(id){ return document.getElementById(id); }
+  function showError(m){ var b=$('errBox'); b.textContent=m; b.classList.add('show'); window.scrollTo({top:0,behavior:'smooth'}); }
+  function clearError(){ $('errBox').classList.remove('show'); }
+
+  // ── Draft autosave (per-browser convenience only) ──
+  function readForm(){
+    var f = {};
+    FIELDS.forEach(function(k){ var el=$('f_'+k); if(el) f[k]=el.value; });
+    f.iconPermanent = $('f_iconPermanent').checked;
+    return f;
+  }
+  function saveDraft(){ try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(readForm())); }catch(_){} refreshReview(); }
+  function loadDraft(){
+    try{
+      var d = JSON.parse(localStorage.getItem(DRAFT_KEY)||'null'); if(!d) return;
+      FIELDS.forEach(function(k){ var el=$('f_'+k); if(el && d[k]!=null) el.value=d[k]; });
+      $('f_iconPermanent').checked = !!d.iconPermanent;
+    }catch(_){}
+  }
+  document.addEventListener('input', function(e){ if(e.target && /^f_/.test(e.target.id)) saveDraft(); });
+  document.addEventListener('change', function(e){ if(e.target && /^f_/.test(e.target.id)) saveDraft(); });
+
+  // ── Mint precheck: render what the chain says, so the client confirms ──
+  var precheckOk = false;
+  $('f_mint').addEventListener('blur', async function(){
+    var mint = $('f_mint').value.trim(); precheckOk=false;
+    var box = $('precheckBox'); box.classList.remove('show');
+    if(!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return;
+    box.innerHTML = 'Reading the chain…'; box.classList.add('show');
+    try{
+      var r = await fetch('/api/jupverify/precheck?mint='+encodeURIComponent(mint));
+      var d = await r.json();
+      if(!d.success){ box.innerHTML = '<span class="warn">'+esc(d.error||'Could not read that mint.')+'</span>'; return; }
+      precheckOk = true;
+      if(d.name && !$('f_name').value) $('f_name').value = d.name;
+      if(d.symbol && !$('f_symbol').value) $('f_symbol').value = d.symbol.replace(/[^A-Za-z0-9]/g,'');
+      box.innerHTML =
+        'On-chain: <b>'+esc(d.name||'?')+'</b> ('+esc(d.symbol||'?')+') · decimals '+esc(String(d.decimals))+
+        ' · supply '+esc(d.supplyUi!=null?Number(d.supplyUi).toLocaleString():'?')+'<br>'+
+        'Mint authority: '+(d.mintAuthority? '<span class="warn">LIVE — '+esc(shortAddr(d.mintAuthority))+'</span>' : '<b>revoked ✓</b>')+
+        ' · Freeze authority: '+(d.freezeAuthority? '<span class="warn">LIVE</span>' : '<b>revoked ✓</b>')+
+        (d.updateAuthority? '<br>Update authority: '+esc(shortAddr(d.updateAuthority))+' — sign with it if you can.' : '');
+      saveDraft();
+    }catch(_){ box.innerHTML = '<span class="warn">Chain read failed — you can still submit; we verify server-side.</span>'; }
+  });
+
+  // ── Wallet connect (shared registry; always show disconnect) ──
+  function renderConnected(){
+    $('connectArea').classList.toggle('hidden', !!wallet);
+    $('connectedRow').classList.toggle('hidden', !wallet);
+    if(wallet) $('connAddr').textContent = shortAddr(wallet);
+    refreshReview();
+  }
+  $('connectBtn').addEventListener('click', function(){
+    clearError();
+    var list = CluckWallet.available();
+    if(!list.length){
+      showError('No Solana wallet detected. Install one, or open this page inside your wallet’s browser.');
+      return;
+    }
+    if(list.length===1) return doConnect(list[0].id);
+    var box = $('walletPicker'); box.innerHTML='';
+    list.forEach(function(w){
+      var b = document.createElement('button');
+      b.className='btn btn-ghost'; b.textContent = w.name.toUpperCase();
+      b.addEventListener('click', function(){ box.classList.add('hidden'); doConnect(w.id); });
+      box.appendChild(b);
+    });
+    box.classList.remove('hidden');
+  });
+  async function doConnect(id){
+    try{
+      $('connInfo').textContent='Connecting…';
+      var c = await CluckWallet.connect(id);
+      wallet = c.pubkey; provider = c.provider;
+      $('connInfo').textContent='';
+      renderConnected();
+    }catch(e){ $('connInfo').textContent=''; showError(e && e.message || 'Could not connect.'); }
+  }
+  $('disconnectBtn').addEventListener('click', function(){ CluckWallet.disconnect(); wallet=null; provider=null; renderConnected(); });
+
+  // ── Review + submit ──
+  function requiredOk(f){
+    return f.mint && f.name && f.symbol && (f.description||'').length>=20 && f.iconUrl && f.website && f.xHandle && f.tgContact && f.floatTokens!=='' && f.quoteAmount!=='';
+  }
+  function refreshReview(){
+    var f = readForm();
+    var rows = [];
+    if(f.name||f.symbol) rows.push('<b>'+esc(f.name||'?')+'</b> ('+esc((f.symbol||'?').toUpperCase())+') — '+esc(f.mint||'no mint yet'));
+    if(f.website) rows.push('Web: '+esc(f.website)+' · X: @'+esc(f.xHandle||'?'));
+    if(f.floatTokens) rows.push('Float: '+esc(String(f.floatTokens))+' tokens + '+esc(String(f.quoteAmount||0))+' '+esc(f.quoteAsset||'USDC'));
+    rows.push(wallet ? 'Signing wallet: '+esc(shortAddr(wallet)) : '<span style="color:var(--muted)">Connect a wallet to sign.</span>');
+    $('reviewList').innerHTML = rows.join('<br>');
+    $('submitBtn').disabled = !(wallet && requiredOk(f));
+  }
+
+  $('submitBtn').addEventListener('click', async function(){
+    clearError();
+    var f = readForm();
+    if(!wallet || !provider) return showError('Connect a wallet first.');
+    var btn = $('submitBtn'); btn.disabled = true;
+    try{
+      $('subInfo').textContent='Fetching signing message…';
+      var mr = await fetch('/api/jupverify/message?wallet='+encodeURIComponent(wallet));
+      var md = await mr.json();
+      if(!md.success) throw new Error(md.error||'message failed');
+      $('subInfo').textContent='Approve the signature in your wallet (message only — no transaction)…';
+      var enc = new TextEncoder().encode(md.message);
+      var sigResp = await provider.signMessage(enc,'utf8');
+      var bytes = sigResp && (sigResp.signature || sigResp);
+      var sigB64 = btoa(String.fromCharCode.apply(null, bytes));
+      $('subInfo').textContent='Submitting…';
+      var r = await fetch('/api/jupverify/submit', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ wallet: wallet, signature: sigB64, ts: md.ts, form: f, company: $('f_company').value })
+      });
+      var d = await r.json();
+      if(!d.success) throw new Error(d.error||'Submission failed.');
+      try{ localStorage.setItem(TOKEN_KEY, d.token); localStorage.removeItem(DRAFT_KEY); }catch(_){}
+      $('subInfo').textContent='';
+      enterStatus();
+    }catch(e){
+      $('subInfo').textContent='';
+      if(/reject|denied|cancel/i.test((e&&e.message)||'')) showError('You declined the signature — nothing was submitted.');
+      else showError((e&&e.message)||'Submission failed.');
+      btn.disabled = false;
+    }
+  });
+
+  // ── Status view ──
+  var STEPS = [
+    ['submitted','SUBMITTED'], ['in_review','IN REVIEW'], ['engine_live','ENGINE LIVE'],
+    ['submitted_to_jupiter','SUBMITTED TO JUPITER'], ['verified','VERIFIED']
+  ];
+  async function enterStatus(){
+    var tok=null; try{ tok = localStorage.getItem(TOKEN_KEY); }catch(_){}
+    if(!tok) return;
+    try{
+      var r = await fetch('/api/jupverify/status', { headers:{ 'Authorization':'Bearer '+tok } });
+      if(r.status===401){ try{ localStorage.removeItem(TOKEN_KEY); }catch(_){} return; }
+      var d = await r.json();
+      if(!d.success || !d.submission) return;
+      var s = d.submission;
+      $('formArea').classList.add('hidden');
+      $('statusCard').classList.remove('hidden');
+      $('statusHead').innerHTML = '<b>'+esc(s.name)+'</b> ('+esc(s.symbol)+') · '+esc(shortAddr(s.mint))+
+        (s.status==='needs_info' ? ' — <span style="color:var(--amber)">we need more info from you (see note below)</span>' :
+         s.status==='rejected' ? ' — <span style="color:#FCA5A5">not accepted this time</span>' : '');
+      var idx = STEPS.findIndex(function(x){ return x[0]===s.status; });
+      $('stepper').innerHTML = STEPS.map(function(x,i){
+        var cls = idx>=0 && i<idx ? 'done' : (i===idx ? 'now' : '');
+        return '<div class="step '+cls+'"><div class="dot"></div><div class="lbl">'+x[1]+'</div></div>';
+      }).join('');
+      var cm=$('clientMsg');
+      if(s.clientMessage){ cm.textContent = s.clientMessage; cm.classList.remove('hidden'); } else cm.classList.add('hidden');
+    }catch(_){}
+  }
+  $('editBtn').addEventListener('click', function(){
+    $('statusCard').classList.add('hidden');
+    $('formArea').classList.remove('hidden');
+  });
+
+  loadDraft(); refreshReview(); enterStatus();
+})();
+</script>
+</body>
+</html>

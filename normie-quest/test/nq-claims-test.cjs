@@ -26,9 +26,18 @@ process.env.NQ_PRIZE_RANKS = '2';
 process.env.DATA_DIR = path.join(os.tmpdir(), 'nqclaimtest-' + crypto.randomBytes(4).toString('hex'));
 
 // Virtual clock (same pattern as nq-leaderboard-test): all modules read Date.now() live.
+// ANCHORED TO MID-WEEK (flake found 2026-08-30, Sunday ~23:54 UTC): this suite seeds "last
+// week's" board at clockOffset=-WEEK_MS and asserts against lastCompletedWeek(). Run within
+// minutes of the real Monday-00:00-UTC rollover, the boundary moved MID-RUN and four
+// assertions chased a different week than the seeds landed in — the same code had passed
+// 15/15 half an hour earlier. BASE pins the whole run to Thursday 12:00 UTC of the current
+// leaderboard week (weeks run Mon 00:00 UTC; same formula as nq-leaderboard weekStartMs), so
+// the suite is deterministic at any wall time. clockOffset stays the test's relative dial.
 const realNow = Date.now;
+const _d0 = new Date(realNow());
+const BASE = Date.UTC(_d0.getUTCFullYear(), _d0.getUTCMonth(), _d0.getUTCDate() - ((_d0.getUTCDay() + 6) % 7), 0, 0, 0, 0) + 3.5 * 24 * 60 * 60 * 1000;
 let clockOffset = 0;
-Date.now = function () { return realNow() + clockOffset; };
+Date.now = function () { return BASE + clockOffset; };
 function playFor(ms) { clockOffset += ms; }
 
 const lb = require('../nq-leaderboard.js');
@@ -169,12 +178,19 @@ const ADDRESS = { name: 'Norm Ie', line1: '123 Chain St', line2: '', city: 'Solv
     }
     // 11. Owner prizes panel: 404 without key; decrypted address renders with it.
     {
+      // The master key must be CONFIGURED before the keyless probe, or masterOK() 404s on the
+      // empty env alone and the assertion proves nothing about the route's own check.
+      process.env.PREMIUM_ACCESS_KEY = 'test-admin-key';
       const noKey = await fetch(base + '/normie-quest-x7/prizes');
-      process.env.NQ_FEEDBACK_KEY = 'test-admin-key';
+      // MASTER-KEY-ONLY (security review 2026-08-30): the prizes console decrypts shipping PII,
+      // so it takes PREMIUM_ACCESS_KEY only; the low-trust feedback key must be refused.
+      process.env.NQ_FEEDBACK_KEY = 'low-trust-key';
+      const fbKey = await fetch(base + '/normie-quest-x7/prizes?key=low-trust-key');
       const html = await (await fetch(base + '/normie-quest-x7/prizes?key=test-admin-key')).text();
-      delete process.env.NQ_FEEDBACK_KEY;
+      delete process.env.NQ_FEEDBACK_KEY; delete process.env.PREMIUM_ACCESS_KEY;
       ok('prizes panel: 404 without key, decrypted address + dup flag with it',
          noKey.status === 404 && html.indexOf('123 Chain St') !== -1 && html.indexOf('matches another winner') !== -1);
+      ok('prizes panel REFUSES the low-trust feedback key', fbKey.status === 404);
     }
     srv.close();
   }

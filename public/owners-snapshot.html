@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🧾 Owners Snapshot &amp; History — who is in, who is out, who is draining you</title>
+<meta name="description" content="For token owners: every holder over $5, their full history with your token, dumping patterns, handed-out bags, and wallets linked by a shared funder or cash-out address. Free, runs as a background crawl, keeps a snapshot history."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette comes from theme.css — never redefine a token in a page-local :root */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--body); min-height: 100vh; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 90px; }
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 38px; filter: drop-shadow(0 0 16px rgba(255,122,24,0.5)); }
+  .brand-mini { font-family: var(--disp); font-size: 11px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; }
+  .header h1 { font-family: var(--disp); font-size: 27px; letter-spacing: 2px; background: linear-gradient(135deg, var(--gold), var(--orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1.05; }
+  .header p { font-size: 12.5px; font-weight: 500; color: var(--sub); margin-top: 7px; }
+  .hero { background: rgba(255,122,24,0.06); border: 1px solid var(--border); border-radius: 14px; padding: 15px 17px; margin-bottom: 16px; }
+  .hero-tag { font-family: var(--disp); font-size: 11px; color: var(--gold); letter-spacing: 3px; margin-bottom: 7px; }
+  .hero-sub { font-size: 13.5px; font-weight: 500; color: var(--body-text); line-height: 1.65; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  .card-title { font-family: var(--disp); font-size: 19px; color: var(--gold); letter-spacing: 1.2px; margin-bottom: 12px; text-transform: uppercase; text-shadow: 0 0 18px rgba(255,182,39,0.4); }
+  .card-title small { font-family: var(--body); font-size: 12px; color: var(--muted); letter-spacing: 0; text-transform: none; text-shadow: none; margin-left: 8px; }
+  .field-label { font-family: var(--disp); font-size: 13px; color: var(--gold); letter-spacing: 1.5px; margin: 0 0 7px; }
+  .token-input { width: 100%; background: #180d07; border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; font-family: var(--mono); font-size: 15px; color: var(--gold); font-weight: 600; }
+  .token-input::placeholder { color: var(--muted); font-weight: 400; }
+  .token-input:focus { outline: none; border-color: var(--orange); }
+  .run-btn { width: 100%; margin-top: 14px; padding: 15px; background: linear-gradient(135deg, var(--orange), var(--red)); border: none; border-radius: 12px; font-family: var(--disp); font-size: 15px; color: #fff; letter-spacing: 2.5px; cursor: pointer; box-shadow: 0 6px 18px rgba(232,30,14,.4); }
+  .run-btn:disabled { background: rgba(255,255,255,.05); color: var(--muted); box-shadow: none; cursor: not-allowed; }
+  .btn2 { display: inline-block; padding: 8px 14px; border-radius: 999px; background: #1c1d24; color: #e9e9ee; border: 1px solid var(--border); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .btn2:hover { border-color: var(--orange); color: var(--gold); }
+  .btn2.on { border-color: var(--gold); color: var(--gold); }
+  .quickmints { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 0; }
+  .err { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 11px 14px; font-size: 13px; color: #FCA5A5; margin: 12px 0; display: none; }
+  .err.show { display: block; }
+  .progress { display: none; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .progress.show { display: block; }
+  .pstage { font-family: var(--disp); font-size: 15px; color: var(--gold); letter-spacing: 2px; margin-bottom: 8px; }
+  .pbar { height: 8px; background: rgba(255,255,255,.06); border-radius: 999px; overflow: hidden; margin: 8px 0; }
+  .pbar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--orange)); width: 0%; transition: width .4s; }
+  .pnote { font-size: 12.5px; color: var(--sub); line-height: 1.6; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 10px 0 4px; }
+  .tile { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+  .tile .k { font-family: var(--disp); font-size: 11px; letter-spacing: 2px; color: var(--muted); }
+  .tile .v { font-family: var(--mono); font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .tile .s { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .st-ACCUMULATING { color: #6EE7B7; } .st-HOLDING { color: #93C5FD; } .st-TRIMMING { color: var(--gold); } .st-DRAINING { color: #FB923C; } .st-OUT { color: #FCA5A5; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-family: var(--disp); font-size: 10.5px; letter-spacing: 1.5px; border: 1px solid currentColor; }
+  .flag { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 600; background: rgba(255,182,39,.1); color: var(--gold); margin-right: 4px; }
+  .flag.red { background: rgba(239,68,68,.12); color: #FCA5A5; }
+  .flag.grey { background: rgba(255,255,255,.06); color: var(--sub); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-family: var(--disp); font-size: 11px; letter-spacing: 1.5px; color: var(--muted); padding: 8px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; }
+  td { padding: 8px 6px; border-bottom: 1px solid var(--border-soft, rgba(255,255,255,.06)); vertical-align: top; }
+  td:nth-child(2) { min-width: 170px; }   /* status + its one-line reason — don't let it wrap word-by-word on phones */
+  tr.row { cursor: pointer; } tr.row:hover td { background: rgba(255,255,255,.025); }
+  .mono { font-family: var(--mono); }
+  .num { text-align: right; white-space: nowrap; font-family: var(--mono); }
+  .tscroll { overflow-x: auto; }
+  .detail { background: rgba(255,255,255,.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin: 4px 0 8px; font-size: 12.5px; line-height: 1.6; }
+  .detail h4 { font-family: var(--disp); font-size: 12px; letter-spacing: 2px; color: var(--gold); margin: 8px 0 4px; }
+  .detail .rowline { display: grid; grid-template-columns: 96px 70px 1fr; gap: 8px; font-family: var(--mono); font-size: 12px; }
+  a { color: var(--gold); text-decoration: none; } a:hover { text-decoration: underline; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
+  .muted { color: var(--muted); } .sub { color: var(--sub); }
+  .sec { margin-top: 18px; }
+  .sec h3 { font-family: var(--disp); font-size: 14px; letter-spacing: 2px; color: var(--gold); margin-bottom: 6px; }
+  .sec p.lead { font-size: 12.5px; color: var(--sub); margin-bottom: 8px; line-height: 1.5; }
+  .cluster { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,.02); }
+  .cluster .ch { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .cluster .ch b { font-family: var(--disp); letter-spacing: 1px; font-weight: 400; color: var(--text); }
+  ul.plain { list-style: none; } ul.plain li { padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,.06); font-size: 12.5px; }
+  .hist { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+  .hist .h { border: 1px solid var(--border); border-radius: 10px; padding: 10px; font-size: 12.5px; cursor: pointer; }
+  .hist .h.on { border-color: var(--gold); }
+  .notes li { font-size: 12.5px; color: var(--sub); line-height: 1.55; margin: 0 0 6px 16px; }
+  @media (max-width: 640px) { .detail .rowline { grid-template-columns: 80px 60px 1fr; } .header h1 { font-size: 22px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="header-icon">🧾</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS · FOR TOKEN OWNERS</div>
+      <h1>OWNERS SNAPSHOT &amp; HISTORY</h1>
+      <p>Who is in. Who is out. Who is draining you. Every holder over $5, read wallet by wallet — free.</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">HOW IT WORKS</div>
+    <div class="hero-sub">
+      Paste your token's mint. A background crawler walks <b>every holder worth more than $5</b>, reads each wallet's entire history with your token
+      (bought, sold, received, sent), and reads the pattern: <b>ACCUMULATING · HOLDING · TRIMMING · DRAINING · OUT</b>. It flags bags that were
+      <b>handed out rather than bought</b>, wallets <b>under two weeks old</b>, and it <b>links wallets</b> that share a first funder, pass tokens
+      between each other, or cash out to the same address. It's deliberately slow and cheap — on a big token a run can take hours — so come back,
+      the result is saved. Every run is a snapshot; re-run later and it shows who entered, who left, and who changed.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="field-label">TOKEN MINT</div>
+    <input id="mint" class="token-input" spellcheck="false" placeholder="Paste the token mint address"/>
+    <div class="quickmints">
+      <button type="button" class="btn2 qm" data-mint="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS">CLKN</button>
+      <button type="button" class="btn2 qm" data-mint="RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF">ROSE</button>
+      <button type="button" class="btn2 qm" data-mint="4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc">CUNA</button>
+      <button type="button" class="btn2 qm" data-mint="FrSFwE2BxWADEyUWFXDMAeomzuB4r83ZvzdG9sevpump">NORMIE</button>
+    </div>
+    <div class="err" id="err"></div>
+    <button id="runBtn" class="run-btn">SNAPSHOT MY HOLDERS</button>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button type="button" id="loadBtn" class="btn2">LOAD LATEST RESULT</button>
+      <span class="sub" style="font-size:12px">No wallet connect. Read-only. A token is re-crawled at most every 6 hours.</span>
+    </div>
+  </div>
+
+  <div class="progress" id="progress">
+    <div class="pstage" id="pstage">QUEUED</div>
+    <div class="pbar"><i id="pfill"></i></div>
+    <div class="pnote" id="pnote"></div>
+  </div>
+
+  <div id="out"></div>
+
+  <div class="card" id="notesCard" style="display:none">
+    <div class="card-title">READ THIS BEFORE YOU ACT ON IT</div>
+    <ul class="notes" id="notes"></ul>
+  </div>
+</div>
+
+<script src="/market-header.js"></script>
+<script src="/cluck-util.js"></script>
+<script>
+// esc/shortAddr/fmt live in /cluck-util.js — every wallet, symbol and name below goes through esc().
+const { esc, shortAddr, fmt } = CluckUtil;
+const $ = (s) => document.querySelector(s);
+const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const STATUSES = ["ACCUMULATING","HOLDING","TRIMMING","DRAINING","OUT"];
+let pollTimer = null, current = null, filterStatus = null, sortKey = "usd", sortDir = -1, search = "";
+
+function showErr(m) { const e = $("#err"); e.textContent = m; e.classList.add("show"); }
+function clearErr() { $("#err").classList.remove("show"); }
+function usd(n) { n = Number(n) || 0; return (n < 0 ? "-" : "") + "$" + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: n >= 100 ? 0 : 2 }); }
+function pct(n) { return (Number(n) || 0).toFixed(2) + "%"; }
+function ago(ts) { if (!ts) return "—"; const s = Math.floor(Date.now() / 1000) - ts; if (s < 3600) return Math.max(1, Math.floor(s / 60)) + "m ago"; if (s < 86400) return Math.floor(s / 3600) + "h ago"; return Math.floor(s / 86400) + "d ago"; }
+function dt(ms) { return new Date(ms).toLocaleString(); }
+function link(a) { return `<a href="https://solscan.io/account/${esc(a)}" target="_blank" rel="noopener" class="mono">${esc(shortAddr(a))}</a>`; }
+function pill(s) { return `<span class="pill st-${esc(s)}">${esc(s)}</span>`; }
+function flags(a) {
+  const f = a.flags || {}; let h = "";
+  if (f.freeBag) h += `<span class="flag">free bag</span>`;
+  if (f.fresh) h += `<span class="flag">fresh wallet</span>`;
+  if (f.botCadence) h += `<span class="flag red">bot cadence</span>`;
+  if (a.funderLabel) h += `<span class="flag grey">funded via ${esc(a.funderLabel)}</span>`;
+  if (a.historyTruncated) h += `<span class="flag grey">long history (newest read)</span>`;
+  return h;
+}
+
+document.querySelectorAll(".qm").forEach((b) => b.addEventListener("click", () => { $("#mint").value = b.dataset.mint; }));
+$("#runBtn").addEventListener("click", startJob);
+$("#loadBtn").addEventListener("click", () => { const m = mintVal(); if (m) { history.replaceState(null, "", "?mint=" + m); loadResult(m); } });
+function mintVal() { const m = $("#mint").value.trim(); if (!SOL_RE.test(m)) { showErr("That doesn't look like a Solana mint address."); return null; } clearErr(); return m; }
+
+async function startJob() {
+  const mint = mintVal(); if (!mint) return;
+  history.replaceState(null, "", "?mint=" + mint);
+  $("#runBtn").disabled = true;
+  try {
+    const r = await fetch("/api/owners-snapshot/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mint }) });
+    const d = await r.json();
+    if (!d.ok) {
+      if (d.error === "cooldown") { showErr(d.detail + " Loading the latest result."); await loadResult(mint); }
+      else showErr(d.detail || d.error || "Could not start.");
+      $("#runBtn").disabled = false; return;
+    }
+    poll(mint);
+  } catch (e) { showErr("Network error: " + e.message); $("#runBtn").disabled = false; }
+}
+
+function poll(mint) {
+  clearInterval(pollTimer);
+  const tick = async () => {
+    try {
+      const d = await (await fetch("/api/owners-snapshot/status?mint=" + mint)).json();
+      const j = d.job;
+      if (!j) return;
+      const p = $("#progress"); p.classList.add("show");
+      if (j.state === "queued") {
+        $("#pstage").textContent = "QUEUED" + (j.queuePosition > 1 ? ` · #${j.queuePosition} in line` : "");
+        $("#pfill").style.width = "2%";
+        $("#pnote").textContent = d.running ? `Another token is being crawled right now (${d.running.symbol || shortAddr(d.running.mint)} — ${d.running.stage}). Yours starts when it finishes. You can close this page and come back.` : "Starting shortly.";
+      } else if (j.state === "running") {
+        const pr = j.progress || {};
+        const frac = pr.total ? Math.min(0.98, pr.done / pr.total) : 0.05;
+        const stageBase = { "token facts": 0, "walking holders": 0.02, "classifying addresses": 0.08, "reading wallet histories": 0.10, "tracing first funders": 0.72, "following sell proceeds": 0.88, "linking wallets": 0.95, "saving": 0.98 }[j.stage] ?? 0.05;
+        const stageSpan = { "walking holders": 0.06, "reading wallet histories": 0.62, "tracing first funders": 0.16, "following sell proceeds": 0.07 }[j.stage] ?? 0.02;
+        $("#pfill").style.width = Math.round(100 * (stageBase + stageSpan * frac)) + "%";
+        $("#pstage").textContent = j.stage.toUpperCase() + (pr.total ? ` · ${pr.done}/${pr.total}` : "");
+        $("#pnote").textContent = `Running since ${dt(j.startedAt)}. Paced on purpose — a few requests a second so it stays free. Big holder bases take hours; the result is saved, come back any time with this link.`;
+      } else if (j.state === "done") {
+        clearInterval(pollTimer); $("#pfill").style.width = "100%"; $("#pstage").textContent = "DONE";
+        $("#pnote").textContent = "Loading the report…"; $("#runBtn").disabled = false;
+        await loadResult(mint); p.classList.remove("show");
+      } else {
+        clearInterval(pollTimer); p.classList.remove("show"); $("#runBtn").disabled = false;
+        showErr(j.state === "cancelled" ? "The run was cancelled." : "The run failed: " + (j.error || "unknown error") + ". Try again later.");
+      }
+    } catch {}
+  };
+  tick(); pollTimer = setInterval(tick, 6000);
+}
+
+async function loadResult(mint) {
+  try {
+    const r = await fetch("/api/owners-snapshot/result?mint=" + mint);
+    const d = await r.json();
+    if (!d.ok) {
+      // no result yet — maybe a job is in flight
+      const s = await (await fetch("/api/owners-snapshot/status?mint=" + mint)).json();
+      if (s.job && (s.job.state === "queued" || s.job.state === "running")) { $("#runBtn").disabled = true; poll(mint); return; }
+      showErr(d.detail || "No finished snapshot for this token yet — run one.");
+      return;
+    }
+    current = d.result; filterStatus = null; search = "";
+    render(current);
+    loadHistory(mint);
+  } catch (e) { showErr("Could not load the result: " + e.message); }
+}
+
+function render(R) {
+  const S = R.summary, W = R.watch;
+  const nm = [S.symbol ? "$" + S.symbol : null, S.name].filter(Boolean).map(esc).join(" · ") || esc(shortAddr(S.mint));
+  let h = `<div class="card">
+    <div class="card-title">${nm} <small>snapshot ${esc(dt(S.generatedAt))}${R.previousTs ? " · previous " + esc(dt(R.previousTs)) : ""}</small></div>
+    <div class="sub" style="font-size:12.5px;line-height:1.6">
+      Price ${S.priceKnown ? esc(usd(S.price)) : "<b>unknown — ranked by balance instead of $</b>"} · SOL ${esc(usd(S.solUsd))} ·
+      <b>${fmt(S.holdersTotal)}</b> wallets hold it (people only — ${fmt(S.nonWalletCount)} pools/lockers/programs hold ${esc(pct(S.nonWalletSupplyPct))} of supply) ·
+      <b>${fmt(S.holdersAnalysed)}</b> holders over ${esc(usd(S.minUsd))} read in full${S.exitedChecked ? ` · ${fmt(S.exitedChecked)} low-balance accounts checked for exits` : ""}
+      ${S.analysisTruncated ? ` · <span style="color:#FCA5A5">capped — the smallest holders over $${esc(S.minUsd)} were not read this run</span>` : ""}
+      ${S.holderPagesTruncated ? ` · <span style="color:#FCA5A5">holder list capped at 50,000 accounts</span>` : ""}
+    </div>
+    <div class="tiles">` +
+    STATUSES.map((s) => `<div class="tile"><div class="k">${esc(s)}</div><div class="v st-${esc(s)}">${fmt(S.counts[s] || 0)}</div><div class="s">${esc(pct(S.supplyPctByStatus[s] || 0))} of supply</div></div>`).join("") +
+    `<div class="tile"><div class="k">SOLD · 7D</div><div class="v st-OUT">${esc(usd(S.draining7dUsd))}</div><div class="s">by wallets in this set</div></div>
+     <div class="tile"><div class="k">BOUGHT · 7D</div><div class="v st-ACCUMULATING">${esc(usd(S.bought7dUsd))}</div><div class="s">by wallets in this set</div></div>
+     <div class="tile"><div class="k">LINKED GROUPS</div><div class="v">${fmt(S.clusterCount)}</div><div class="s">${fmt(S.flaggedClusters)} worth a look</div></div>
+     <div class="tile"><div class="k">FREE BAGS</div><div class="v">${fmt(S.freeBagWallets)}</div><div class="s">received, not bought</div></div>
+     <div class="tile"><div class="k">FRESH WALLETS</div><div class="v">${fmt(S.freshWallets)}</div><div class="s">under 14 days old</div></div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn2" id="csvBtn">EXPORT CSV</button><button type="button" class="btn2" id="jsonBtn">COPY JSON</button></div>
+  </div>`;
+
+  // Diff vs previous snapshot
+  if (R.diff) {
+    const D = R.diff;
+    h += `<div class="card"><div class="card-title">SINCE LAST SNAPSHOT <small>${esc(dt(R.previousTs))} → now</small></div>
+      <div class="tiles">
+        <div class="tile"><div class="k">ENTERED</div><div class="v st-ACCUMULATING">${fmt(D.summary.entered)}</div><div class="s">${esc(usd(D.summary.enteredUsd))} new holdings</div></div>
+        <div class="tile"><div class="k">LEFT</div><div class="v st-OUT">${fmt(D.summary.exited)}</div><div class="s">${esc(usd(D.summary.exitedUsd))} was held</div></div>
+        <div class="tile"><div class="k">CHANGED STATUS</div><div class="v">${fmt(D.summary.statusChanged)}</div><div class="s">wallets</div></div>
+      </div>
+      <div class="sec" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+        <div><h3>WHO CAME IN</h3><ul class="plain">${(D.entered.slice(0, 15).map((x) => `<li>${link(x.wallet)} ${pill(x.status)} <span class="num">${esc(usd(x.usd))}</span></li>`).join("")) || "<li class='muted'>nobody new over the minimum</li>"}</ul></div>
+        <div><h3>WHO LEFT</h3><ul class="plain">${(D.exited.slice(0, 15).map((x) => `<li>${link(x.wallet)} was ${pill(x.statusWas)} <span class="num">${esc(usd(x.usdWas))}</span></li>`).join("")) || "<li class='muted'>nobody left</li>"}</ul></div>
+        <div><h3>STATUS CHANGES</h3><ul class="plain">${(D.statusChanged.slice(0, 15).map((x) => `<li>${link(x.wallet)} ${pill(x.from)} → ${pill(x.to)}</li>`).join("")) || "<li class='muted'>no changes</li>"}</ul></div>
+        <div><h3>BIGGEST MOVES</h3><ul class="plain">${(D.topMovers.slice(0, 15).map((x) => `<li>${link(x.wallet)} <span class="num" style="color:${x.delta > 0 ? '#6EE7B7' : '#FCA5A5'}">${x.delta > 0 ? "+" : ""}${esc(fmt(x.delta))}</span> ${pill(x.status)}</li>`).join("")) || "<li class='muted'>no balance changes</li>"}</ul></div>
+      </div></div>`;
+  }
+
+  // Watchlists
+  const wl = (title, lead, arr, extra) => `<div class="sec"><h3>${title}</h3><p class="lead">${lead}</p>${arr.length ? `<div class="tscroll"><table><tr><th>WALLET</th><th>STATUS</th><th class="num">HOLDS</th><th class="num">OF SUPPLY</th>${extra.h}</tr>` + arr.map((a) => `<tr class="row" data-w="${esc(a.wallet)}"><td>${link(a.wallet)} ${flags(a)}</td><td>${pill(a.status)}<div class="sub" style="font-size:11.5px">${esc(a.why || "")}</div></td><td class="num">${esc(usd(a.usd))}</td><td class="num">${esc(pct(a.supplyPct))}</td>${extra.r(a)}</tr>`).join("") + "</table></div>" : `<div class="muted" style="font-size:12.5px">none</div>`}</div>`;
+  h += `<div class="card"><div class="card-title">WATCHLIST</div>` +
+    wl("DRAINING YOU RIGHT NOW", "Wallets selling into your market on a pattern — repeated sells, most of their peak already gone. Sorted by what they sold in the last 7 days.", W.drainingNow, { h: `<th class="num">SOLD 7D</th><th class="num">OF PEAK GONE</th><th class="num">SELLS</th>`, r: (a) => `<td class="num">${esc(usd(a.soldUsd7d))}</td><td class="num">${esc(pct(a.soldOfPeak * 100))}</td><td class="num">${a.sellCount}</td>` }) +
+    wl("WHO IS OUT", "Held a real position and no longer does. The biggest former positions first.", W.exits, { h: `<th class="num">PEAK WAS</th>`, r: (a) => `<td class="num">${esc(usd(a.peakUsd))}</td>` }) +
+    wl("NEW MONEY · 7 DAYS", "Wallets that bought in the last week, biggest buyers first — the ones actually funding your chart.", W.newMoney, { h: `<th class="num">BOUGHT 7D</th>`, r: (a) => `<td class="num">${esc(usd(a.boughtUsd7d))}</td>` }) +
+    wl("FREE BAGS", "Holdings that arrived by transfer, not purchase — an airdrop, a gift, an OTC deal, a distribution. The chain can't tell which. It matters because a wallet with no cost basis can sell at any price.", W.freeBags, { h: `<th>RECEIVED FROM</th>`, r: (a) => `<td>${(current.wallets.find((w) => w.wallet === a.wallet)?.recvFrom || []).slice(0, 2).map((x) => link(x.from)).join(", ") || "—"}</td>` }) +
+    wl("FRESH WALLETS", "Wallets whose first on-chain activity is under 14 days old and that already hold a position. New buyers look like this. So do wallets made for a purpose.", W.fresh, { h: `<th>FIRST SEEN</th><th>FUNDED BY</th>`, r: (a) => `<td>${esc(ago(a.firstSeenTs))}</td><td>${a.funder ? link(a.funder) + (a.funderLabel ? " <span class='sub'>(" + esc(a.funderLabel) + ")</span>" : "") : "<span class='muted'>—</span>"}</td>` }) +
+    `</div>`;
+
+  // Clusters
+  h += `<div class="card"><div class="card-title">LINKED WALLETS <small>${fmt(R.clusters.length)} groups · patterns, not verdicts</small></div>
+    <p class="lead sub" style="font-size:12.5px;line-height:1.55;margin-bottom:10px">Wallets are grouped when they share a <b>first funder</b>, <b>pass this token between each other</b>, or <b>send sell proceeds to the same address</b>. A shared funder is a presale, an airdrop, a team distribution, a CEX batch withdrawal — or a ring. On-chain data cannot tell those apart. Groups with something worth a look are listed first.</p>` +
+    (R.clusters.length ? R.clusters.slice(0, 30).map((c) => `<div class="cluster">
+        <div class="ch"><b>${c.size} WALLETS · ${esc(usd(c.usd))} · ${esc(pct(c.supplyPct))} OF SUPPLY</b><span class="sub" style="font-size:12px">linked by ${c.linkKinds.map(esc).join(" + ")}${c.draining ? ` · ${c.draining} draining/out` : ""}${c.soldUsd7d ? ` · sold ${esc(usd(c.soldUsd7d))} in 7d` : ""}</span></div>
+        ${c.flags.length ? `<div style="margin:6px 0">${c.flags.map((f) => `<div class="flag" style="display:block;margin:3px 0;white-space:normal">${esc(f)}</div>`).join("")}</div>` : ""}
+        ${c.hubs.length ? `<div class="sub" style="font-size:12px;margin:4px 0">Common address${c.hubs.length > 1 ? "es" : ""} (not a holder): ${c.hubs.map((x) => link(x.address) + (x.label ? " (" + esc(x.label) + ")" : "")).join(", ")}</div>` : ""}
+        <div style="font-size:12.5px;margin-top:4px">${c.wallets.map((w) => `${link(w.wallet)} ${pill(w.status)} <span class="num">${esc(usd(w.usd))}</span>`).join(" &nbsp;·&nbsp; ")}</div>
+      </div>`).join("") : `<div class="muted" style="font-size:12.5px">No links found among the analysed wallets.</div>`) + `</div>`;
+
+  // Distributions — one wallet that seeded many holders (airdrop / presale / team wallet)
+  if (R.distributions && R.distributions.length) {
+    h += `<div class="card"><div class="card-title">DISTRIBUTIONS <small>${fmt(R.distributions.length)} source${R.distributions.length > 1 ? "s" : ""} · ${esc(pct(R.summary.distributedSupplyPct || 0))} of supply was handed out</small></div>
+      <p class="lead sub" style="font-size:12.5px;line-height:1.55;margin-bottom:10px">One address that handed this token (or the SOL to buy it) to many holders. That is what an airdrop, a presale, a team distribution, or an exchange hot wallet looks like — and it is exactly what Jupiter's "cluster supply" figure counts. The recipients are listed here instead of being chained into one giant linked group.</p>` +
+      R.distributions.slice(0, 10).map((d) => `<div class="cluster">
+        <div class="ch"><b>${link(d.from)}${d.label ? ` (${esc(d.label)})` : ""}${d.isHolder ? ` · also a holder ${pill(d.holderStatus)}` : ""}</b><span class="sub" style="font-size:12px">${d.kind === "transfer" ? "sent this token to" : "first-funded"} <b>${d.recipients}</b> wallets · they hold ${esc(usd(d.usd))} · ${esc(pct(d.supplyPct))} of supply${d.soldUsd7d ? ` · sold ${esc(usd(d.soldUsd7d))} in 7d` : ""}</span></div>
+        <div class="sub" style="font-size:12px;margin:6px 0">${STATUSES.filter((s) => d.statuses[s]).map((s) => `<span class="st-${s}">${d.statuses[s]} ${s}</span>`).join(" · ")}</div>
+        <div style="font-size:12.5px">${d.wallets.slice(0, 20).map((w) => `${link(w.wallet)} ${pill(w.status)} <span class="num">${esc(usd(w.usd))}</span>`).join(" &nbsp;·&nbsp; ")}${d.wallets.length > 20 ? ` <span class="muted">… +${d.wallets.length - 20} more in the table</span>` : ""}</div>
+      </div>`).join("") + `</div>`;
+  }
+
+  // Full table
+  h += `<div class="card"><div class="card-title">EVERY WALLET <small>${fmt(R.wallets.length)} analysed · click a row for its full history</small></div>
+    <div class="chips" id="chips"><button type="button" class="btn2 ${!filterStatus ? "on" : ""}" data-f="">ALL</button>${STATUSES.map((s) => `<button type="button" class="btn2" data-f="${s}">${s} (${fmt(S.counts[s] || 0)})</button>`).join("")}<input id="search" class="token-input" style="width:auto;flex:1;min-width:180px;padding:7px 12px;font-size:13px" placeholder="filter by wallet…"/></div>
+    <div class="tscroll" id="tableWrap"></div></div>`;
+
+  // Non-wallet holders
+  if (R.nonWallets && R.nonWallets.length) {
+    h += `<div class="card"><div class="card-title">POOLS · LOCKS · PROGRAMS <small>not people — excluded from every count above</small></div><div class="tscroll"><table><tr><th>ADDRESS</th><th>WHAT</th><th class="num">HOLDS</th></tr>` +
+      R.nonWallets.slice(0, 40).map((n) => `<tr><td>${link(n.wallet)}</td><td>${esc(n.label || n.category)}</td><td class="num">${esc(fmt(Math.round(n.balance)))}</td></tr>`).join("") + `</table></div></div>`;
+  }
+  h += `<div class="card" id="histCard" style="display:none"><div class="card-title">SNAPSHOT HISTORY</div><div class="hist" id="hist"></div></div>`;
+  $("#out").innerHTML = h;
+  $("#notes").innerHTML = (R.notes && R.notes.honesty || []).map((n) => `<li>${esc(n)}</li>`).join("") + Object.entries(R.notes && R.notes.statuses || {}).map(([k, v]) => `<li><b class="st-${esc(k)}">${esc(k)}</b> — ${esc(v)}</li>`).join("");
+  $("#notesCard").style.display = "block";
+  $("#chips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; filterStatus = b.dataset.f || null; document.querySelectorAll("#chips button").forEach((x) => x.classList.toggle("on", x === b)); renderTable(); });
+  $("#search").addEventListener("input", (e) => { search = e.target.value.trim(); renderTable(); });
+  $("#csvBtn").addEventListener("click", exportCsv);
+  $("#jsonBtn").addEventListener("click", () => CluckUtil.copyText(JSON.stringify(current)));
+  $("#out").addEventListener("click", (e) => { const tr = e.target.closest("tr.row"); if (tr && !e.target.closest("a")) toggleDetail(tr); });
+  renderTable();
+}
+
+function renderTable() {
+  let rows = current.wallets.filter((a) => (!filterStatus || a.status === filterStatus) && (!search || a.wallet.toLowerCase().includes(search.toLowerCase())));
+  rows.sort((a, b) => ((a[sortKey] ?? 0) - (b[sortKey] ?? 0)) * sortDir);
+  const th = (k, label, cls) => `<th class="${cls || ""}" data-k="${k}">${label}${sortKey === k ? (sortDir < 0 ? " ▼" : " ▲") : ""}</th>`;
+  $("#tableWrap").innerHTML = `<table><tr>${th("wallet", "WALLET")}${th("status", "STATUS")}${th("usd", "HOLDS", "num")}${th("supplyPct", "SUPPLY", "num")}${th("soldOfPeak", "OF PEAK SOLD", "num")}${th("sellCount", "SELLS", "num")}${th("soldUsd7d", "SOLD 7D", "num")}${th("boughtUsd7d", "BOUGHT 7D", "num")}${th("lastActivityTs", "LAST MOVE", "num")}</tr>` +
+    rows.slice(0, 600).map((a) => `<tr class="row" data-w="${esc(a.wallet)}"><td>${link(a.wallet)}<div>${flags(a)}</div></td><td>${pill(a.status)}<div class="sub" style="font-size:11.5px">${esc(a.why || "")}</div></td><td class="num">${esc(usd(a.usd))}</td><td class="num">${esc(pct(a.supplyPct))}</td><td class="num">${esc(pct(a.soldOfPeak * 100))}</td><td class="num">${a.sellCount}</td><td class="num">${esc(usd(a.soldUsd7d))}</td><td class="num">${esc(usd(a.boughtUsd7d))}</td><td class="num">${esc(ago(a.lastActivityTs))}</td></tr>`).join("") +
+    (rows.length > 600 ? `<tr><td colspan="9" class="muted">showing 600 of ${fmt(rows.length)} — use the filter or export the CSV</td></tr>` : "") + `</table>`;
+  $("#tableWrap").querySelectorAll("th[data-k]").forEach((t) => t.addEventListener("click", () => { const k = t.dataset.k; if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = -1; } renderTable(); }));
+}
+
+function toggleDetail(tr) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains("detailrow")) { next.remove(); return; }
+  const a = current.wallets.find((w) => w.wallet === tr.dataset.w); if (!a) return;
+  const d = document.createElement("tr"); d.className = "detailrow";
+  const cols = tr.children.length;
+  d.innerHTML = `<td colspan="${cols}"><div class="detail">
+    <div><b>${esc(a.status)}</b> — ${esc(a.why || "")}. Peak ${esc(fmt(a.peak))} (${esc(usd(a.peakUsd))}) · now ${esc(fmt(Math.round(a.balance)))} (${esc(usd(a.usd))}) · bought ${esc(fmt(a.bought))} in ${a.buyCount} buys (${esc(usd(a.boughtUsd))}) · sold ${esc(fmt(a.sold))} in ${a.sellCount} sells (${esc(usd(a.soldUsd))})${a.received ? ` · received ${esc(fmt(a.received))}` : ""}${a.sent ? ` · sent out ${esc(fmt(a.sent))}` : ""}${a.lpIn ? ` · into LP ${esc(fmt(a.lpIn))}` : ""}${a.locked ? ` · <b class="st-HOLDING">locked ${esc(fmt(a.locked))}</b>` : ""}</div>
+    <div class="sub">First seen ${esc(ago(a.firstSeenTs))} · last move ${esc(ago(a.lastActivityTs))}${a.sellDays ? ` · sold on ${a.sellDays} distinct days` : ""}${a.medianSellGapHours != null ? ` · median gap between sells ${esc(String(a.medianSellGapHours))}h` : ""} · ${a.txCount} transactions with this token${a.historyTruncated ? " (long history — newest read, older peak may be missed)" : ""}</div>
+    ${a.funder ? `<h4>FIRST FUNDED BY</h4><div>${link(a.funder)}${a.funderLabel ? ` (${esc(a.funderLabel)})` : ""} — ${a.funderKind === "SOL" ? esc(String(a.funderSol)) + " SOL" : esc(a.funderKind || "")}${a.lifetimeTx ? ` · wallet has ~${esc(fmt(a.lifetimeTx))} lifetime transactions` : ""}${a.fundingTooDeep ? " · too active to reach genesis within the cap" : ""}</div>` : (a.fundingTooDeep ? `<h4>FIRST FUNDED BY</h4><div class="muted">too active to trace within the cap</div>` : "")}
+    ${a.recvFrom && a.recvFrom.length ? `<h4>RECEIVED THIS TOKEN FROM</h4><div>${a.recvFrom.map((x) => `${link(x.from)} · ${esc(fmt(x.amount))}`).join("<br>")}</div>` : ""}
+    ${a.sendDests && a.sendDests.length ? `<h4>SENT THIS TOKEN TO</h4><div>${a.sendDests.map((x) => `${link(x.to)} · ${esc(fmt(x.amount))}`).join("<br>")}</div>` : ""}
+    ${a.proceedsTo && a.proceedsTo.length ? `<h4>WHERE SELL PROCEEDS WENT (one hop)</h4><div>${a.proceedsTo.map((x) => `${link(x.to)}${x.label ? ` (${esc(x.label)})` : (x.onCurve ? "" : " (program/contract)")} · ${esc(usd(x.usd))} in ${x.n} transfer${x.n > 1 ? "s" : ""}`).join("<br>")}</div>` : ""}
+    <h4>RECENT ACTIVITY</h4>
+    ${(a.recent || []).map((r) => `<div class="rowline"><span class="muted">${esc(ago(r.ts))}</span><span class="${r.action === "sell" ? "st-OUT" : r.action === "buy" ? "st-ACCUMULATING" : r.action === "lock" ? "st-HOLDING" : "sub"}">${esc(r.action)}${r.cpLabel ? ` <span class="muted">(${esc(r.cpLabel)})</span>` : ""}</span><span>${r.tok > 0 ? "+" : ""}${esc(fmt(Math.round(r.tok)))}${r.qm ? ` for ${esc(String(Math.abs(r.qd)))} ${esc(r.qm)} (${esc(usd(Math.abs(r.usd)))})` : ""}${r.cp ? ` · ${link(r.cp)}` : ""} <a href="https://solscan.io/tx/${esc(r.sig)}" target="_blank" rel="noopener">↗</a></span></div>`).join("") || "<div class='muted'>no movements parsed</div>"}
+    <div style="margin-top:8px"><a href="/wallet-xray?wallet=${esc(a.wallet)}&mint=${esc(current.summary.mint)}">Open in Wallet X-Ray →</a> &nbsp; <a href="/trace?wallet=${esc(a.wallet)}&mint=${esc(current.summary.mint)}">Trace →</a></div>
+  </div></td>`;
+  tr.after(d);
+}
+
+async function loadHistory(mint) {
+  try {
+    const d = await (await fetch("/api/owners-snapshot/history?mint=" + mint)).json();
+    if (!d.ok || !d.snapshots || d.snapshots.length < 1) return;
+    $("#histCard").style.display = "block";
+    $("#hist").innerHTML = d.snapshots.slice().reverse().map((s) => `<div class="h ${s.ts === current.summary.generatedAt ? "on" : ""}" data-ts="${s.ts}">
+      <div><b>${esc(dt(s.ts))}</b></div>
+      <div class="sub">${STATUSES.map((k) => `<span class="st-${k}">${(s.summary.counts || {})[k] || 0}</span>`).join(" / ")} · ${fmt(s.summary.holdersAnalysed)} read · sold 7d ${esc(usd(s.summary.draining7dUsd))}</div>
+      ${s.diff ? `<div class="sub">+${s.diff.entered} in · −${s.diff.exited} out · ${s.diff.statusChanged} changed</div>` : ""}
+    </div>`).join("");
+    $("#hist").querySelectorAll(".h").forEach((el) => el.addEventListener("click", async () => {
+      const r = await (await fetch(`/api/owners-snapshot/result?mint=${mint}&ts=${el.dataset.ts}`)).json();
+      if (r.ok) { current = r.result; render(current); loadHistory(mint); window.scrollTo({ top: 0, behavior: "smooth" }); }
+      else showErr("That snapshot's full report was pruned — only its summary is kept.");
+    }));
+  } catch {}
+}
+
+function exportCsv() {
+  const cols = ["wallet","status","why","balance","usd","supplyPct","peak","peakUsd","soldOfPeak","sentOfPeak","bought","sold","received","sent","buyCount","sellCount","boughtUsd","soldUsd","soldUsd7d","boughtUsd7d","sellDays","firstSeenTs","lastActivityTs","funder","funderLabel"];
+  const q = (v) => { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+  const lines = [cols.join(",")].concat(current.wallets.map((a) => cols.map((c) => q(c === "why" ? a.why : a[c])).concat().join(",")));
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `owners-snapshot-${current.summary.symbol || current.summary.mint.slice(0, 6)}-${new Date(current.summary.generatedAt).toISOString().slice(0, 10)}.csv`; a.click();
+}
+
+// Deep link: ?mint=… loads the latest result (or attaches to a running job).
+(function init() {
+  const m = new URLSearchParams(location.search).get("mint");
+  if (m && SOL_RE.test(m)) { $("#mint").value = m; loadResult(m); }
+})();
+</script>
+<script defer src="/cluck-nav.js"></script>
+</body>
+</html>

@@ -122,8 +122,6 @@
     return out;
   }
 
-  function shortAddr(a) { return a ? a.slice(0, 4) + "…" + a.slice(-4) : "—"; }
-
   // ── mobile: is this a phone/tablet browser that can't have an extension? ──────────────────
   // iPadOS Safari reports a MACINTOSH user-agent by default (desktop-class browsing), so the
   // usual /iPad/ regex misses every modern iPad and the page tells an iPad user to "install a
@@ -232,7 +230,10 @@
   // had been updated since. Pass your page's own classes so it still looks like your page.
   function mobileLinksHTML(opts) {
     opts = opts || {};
+    // Shared escaper when /cluck-util.js is loaded (it usually is, just after this file);
+    // the inline body is only the fallback for a page that loads this module alone.
     var esc = function (t) {
+      if (global.CluckUtil && global.CluckUtil.esc) return global.CluckUtil.esc(t);
       return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
                       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     };
@@ -322,19 +323,14 @@
     state = { provider: null, pubkey: null, id: null };
   }
 
-  function current() { return { provider: state.provider, pubkey: state.pubkey, id: state.id }; }
-
+  // Export only what pages call (WALLETS, available, connect, disconnect, isMobile, mobileLinksHTML,
+  // watch). deeplinks stays for a QR/hand-off surface; shortAddr lives in /cluck-util.js.
   global.CluckWallet = {
     WALLETS: WALLETS,
-    order: ORDER,
     available: available,
     connect: connect,
     disconnect: disconnect,
-    current: current,
-    shortAddr: shortAddr,
     isMobile: isMobile,
-    isIOS: isIOS,
-    isAndroid: isAndroid,
     deeplinks: deeplinks,
     mobileLinksHTML: mobileLinksHTML,
     watch: watch,

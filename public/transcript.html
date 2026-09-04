@@ -190,9 +190,11 @@ body{background:transparent;font-family:var(--body);}
     card.innerHTML = parts.join("");
     const btn = document.getElementById("share");
     if (btn) btn.onclick = () => {
-      navigator.clipboard && navigator.clipboard.writeText(shareUrl);
-      btn.textContent = "✓ COPIED!";
-      setTimeout(() => { btn.textContent = "📋 COPY SHARE LINK"; }, 1800);
+      // CluckUtil.copyText carries the execCommand fallback and resolves false when the copy fails.
+      CluckUtil.copyText(shareUrl).then(ok => {
+        btn.textContent = ok ? "✓ COPIED!" : "COPY FAILED — long-press the URL";
+        setTimeout(() => { btn.textContent = "📋 COPY SHARE LINK"; }, 1800);
+      });
     };
 
     // Tier-2: prove you own the wallet on this transcript.

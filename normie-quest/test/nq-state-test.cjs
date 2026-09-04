@@ -69,7 +69,7 @@ function ensurePhaser() {
 
   const RESTART_EVERY = 12;  // relaunch the browser every N levels so 60+ level loads can't OOM one session
   // WORKERS: the levels are completely independent -- nothing about level 40 depends on level 39 --
-  // but this ran strictly sequentially, one browser, one level at a time, for ~11s a level. On 82
+  // but this ran strictly sequentially, one browser, one level at a time, for ~11s a level. On 90
   // levels that is ~15 minutes, and it gated every deploy. Sharding across a few browsers cuts it
   // to roughly wall-clock/N with identical coverage.
   // Default leaves a core for the dev server. Override with NQ_WORKERS=1 to get the old serial

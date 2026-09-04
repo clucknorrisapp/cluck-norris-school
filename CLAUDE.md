@@ -27,8 +27,8 @@ does not tell you how to write software; use your judgement for that.
 
 > 🎮 **Working on Normie Quest? Read `docs/HANDOFF_2026-07-27.md` first.** It carries the branch
 > state, the open decisions, and how to verify a change: `node normie-quest/test/nq-verify.cjs
-> <baseUrl>` reads the diff and picks the right checks. Don't run the full 82-level state test by
-> reflex — a day went to running it for icon swaps it could never have validated.
+> <baseUrl>` reads the diff and picks the right checks. Don't run the full state test (every level —
+> 90 today) by reflex — a day went to running it for icon swaps it could never have validated.
 
 > 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
 > `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts
@@ -117,6 +117,27 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   **`main` is gated.** This supersedes the older "push freely to `main`" grant for the public era,
   which is now. Still **ask first for anything destructive** — force-push, `reset --hard`, branch
   delete. That was never granted. Full flow + the visual gate: `docs/STAGING_WORKFLOW.md`.
+- 💸 **Model tiering — match the model to the task (owner, 2026-09-03: "Fable should be about
+  hard task ideas and conceptual ideas and lower models using for most things").** The default
+  is that a subagent inherits the session model, and that default is the single biggest source
+  of waste in this repo. Pass `model:` explicitly on **every** `Agent` call and every `agent()`
+  in a Workflow script:
+  - **Haiku** — mechanical, verifiable work with a right answer: greps and inventories, "is this
+    file referenced anywhere", dead-code confirmation, running a test and reporting output,
+    reading an endpoint and reformatting the JSON, docs/link drift, single-file find-and-replace.
+    Pair with `effort: 'low'`.
+  - **Sonnet** — the workhorse: reading a subsystem and reporting how it works, applying a
+    described fix, writing a page or a test, drafting copy, most find-and-fix passes.
+  - **Opus / Fable** — reserve for judgement that costs money if wrong: synthesis across many
+    agents' findings, adversarial verification on money/auth paths, architecture and product
+    decisions, anything touching the engine, payments or the brand bag. A verifier on a
+    money-path finding is worth the tier; a verifier on a stale comment is not.
+  Same rule for **scheduled routines**: a poller that usually does nothing does not need a
+  frontier model. Fresh-session routines (`create_new_session_on_fire`) accept a `model` — set
+  it. Self-bound routines inherit this session's model and cannot be tiered, so for those cut
+  **frequency** instead, and prefer a fresh-session routine when the job needs no conversation
+  context. Applied 2026-09-03: lock-celebration watcher → `claude-sonnet-5`; CUNA meme queue
+  hourly → every 3h.
 - ⛔ **PLAN ≠ EXECUTE for money.** For anything that moves funds, opens or closes positions, or
   resumes an engine: state the exact plan and STOP. Execute only on an explicit go. An owner
   message describing intent ("thinking we should Y") opens a discussion, not authorisation —
@@ -152,8 +173,9 @@ could *see* the render. The fix is a real staging step plus a visual gate.
    reproduces the exact HUD break on demand.
 3. Owner reviews staging + dashboard feedback → says go → **only then** promote `develop` → `main`.
 
-⚠️ Two tiers. Right now only the **gravemite** (a stationary sprite) is a **hard gate** (CI-stable
-~1.9%). **Advisory** (reported + imaged, never blocks CI): the **text** surfaces (title, HUD — arcade
+⚠️ Two tiers. Right now only the **gravemite** (a stationary sprite) is a **hard gate** (threshold
+5.0%, measured ~3.1% cross-machine at RES=3 — see the calibration note in `nq-visual.cjs`; ~1.9% was
+the 2× figure). **Advisory** (reported + imaged, never blocks CI): the **text** surfaces (title, HUD — arcade
 webfont, CI-measured 6.8% / 4.7% per-machine) and, pending a determinism fix, the **character**
 surfaces. The characters flaked — the same unchanged game swung a char surface 0 → 4.4% between CI
 runs because the player is still physics-settling when the shot is taken. The fix (tracked
@@ -179,7 +201,10 @@ The owner manages all liquidity positions **manually**. Read freely; touch nothi
   widen it to other projects or route other projects around the master kill without an owner ask.
   **ON BY DEFAULT** (owner's explicit go, same day) with buyback enabled (excess USDC → POKE);
   the pools' ask side is the sell direction — the swap layer never market-dumps the token.
-  Instant stop: `/api/whirlpool/vault/pause?project=poke`; durable stop: `POKE_ENGINE_OFF=1`.
+  Instant stop: `curl -X POST 'https://clucknorris.app/api/whirlpool/vault/pause?project=poke&key=…'`
+  — the route is **POST-only**, so a browser hit or a bare `curl` (GET) falls through to the
+  `/api/*` catch-all and returns `not_found`, which looks like "endpoint gone" in the middle of a
+  stop; durable stop: `POKE_ENGINE_OFF=1`.
 - ⛔ **The brand bag is protected — with ONE owner-defined carve-out (2026-08-31).** The original
   bag is never sold. But the owner revised the blanket rule: a tight-quoting engine that ABSORBS
   someone's sell may sell that absorbed inventory back to recoup its quote funds ("those sells
@@ -244,9 +269,15 @@ behind: `/holders` + `/snapshot` → `token-holders.html`; `/buyspecial` + `/ros
 + `/liquidity-engine` → `liquidity-locked.html`. **Grep server.js for the route before editing a
 page** — a session lost a whole polish pass to this.
 
-⚠️ **`public/` is NOT statically mounted.** New assets need an explicit `app.get` route. The
-catch-all returns real 404s for `/api/*` (JSON, any method) and for static-asset extensions, so a
-missing file now fails loudly instead of being served the React shell at 200.
+⚠️ **`public/` is NOT mounted directly — it is served only through the vite build's copy in
+`dist/`** (vite's default `publicDir` copies `public/` into `dist/`, which `express.static` mounts
+after the explicit routes, server.js ~14428). So a file with no `app.get` route works in production
+after `npm run build` but **404s on a no-build boot** (the CI visual gate, `node server.js` on a fresh
+clone) and gets default cache headers — add an explicit route when you need headers or a no-build
+boot. It also means every `public/*.html` is reachable raw at `/<name>.html` (the duplicate-URL path
+the deleted-pages comment in server.js describes). The catch-all returns real 404s for `/api/*`
+(JSON, any method) and for static-asset extensions, so a missing file fails loudly instead of being
+served the React shell at 200.
 
 ---
 

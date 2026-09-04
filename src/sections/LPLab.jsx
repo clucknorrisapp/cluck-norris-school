@@ -1,6 +1,6 @@
 // LP Lab — lessons + calculators (~2,800 lines) — lazy-loaded section.
-import { useState, useEffect, useMemo, Component } from "react";
-import { LOGO_B64, COL, COLW, READ, AskCluck, MintAddress } from "../shared.jsx";
+import { useState, useMemo, Component } from "react";
+import { LOGO_B64, COLW, READ, AskCluck } from "../shared.jsx";
 
 // Every calculator below is wrapped in this. It was referenced in twelve places before it was ever
 // written, which is a runtime-only ReferenceError — `npm run build` compiles a free variable
@@ -2175,8 +2175,6 @@ function DCACalculator() {
   const tokensAccumulated = inRange ? capital / avgPrice : 0;
   const singleBuyTokens = capital / currentPrice;
   const improvement = ((tokensAccumulated - singleBuyTokens) / singleBuyTokens * 100);
-  const rangeWidth = rangeTop - rangeBottom;
-  const pctBelowCurrent = ((currentPrice - rangeTop) / currentPrice * 100);
 
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
@@ -2339,7 +2337,6 @@ function BinVisualizer() {
         <div style={{display:"flex",gap:2,alignItems:"flex-end",height:60,justifyContent:"center"}}>
           {bins.map((bin,i)=>{
             const isActive = bin.isActive;
-            const inRange = true;
             const height = mode==="dlmm"
               ? isActive ? 60 : Math.max(10, 60 - bin.distFromActive * 8)
               : 45;
