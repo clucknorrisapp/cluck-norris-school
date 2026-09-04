@@ -133,19 +133,128 @@
     // given wallet connected, and a wallet change invalidates that.
   }
 
+  // ---- revoking mint / freeze authority ---------------------------------------------------------
+  // Deliberately separate from the metadata flow: different instructions, different consequences,
+  // and the mint one is the most destructive thing this page can do. Each gets its own
+  // confirmation, its own wallet check, and its own plain sentence about what is lost. There is
+  // no "fix everything" button and there should never be one.
+  var REVOKE = [
+    { type: 0, key: 'mintAuthority', title: 'MINT AUTHORITY',
+      what: 'Whoever holds this can create more of your token at any time, diluting every holder. ' +
+            'Scanners weigh this the most heavily of the three.',
+      cost: 'Supply is capped forever. You will never mint another unit — no future rewards pool, ' +
+            'no team allocation, no top-up. If any part of your plan needs more tokens later, mint ' +
+            'them BEFORE you do this.' },
+    { type: 1, key: 'freezeAuthority', title: 'FREEZE AUTHORITY',
+      what: 'Whoever holds this can freeze any holder\'s tokens in place so they cannot sell.',
+      cost: 'You will never be able to freeze an account again — including one you believe is stolen ' +
+            'or hostile. Most tokens should revoke this; a few regulated ones genuinely need it.' } ];
+
+  function revokeSection(a){
+    var out = '';
+    REVOKE.forEach(function(r){
+      var held = a[r.key];
+      if (!held) {
+        out += '<div class="card"><div class="k">' + r.title + ' <span class="ok">— already revoked</span></div>' +
+          '<p class="muted" style="margin:0;line-height:1.7">Nothing to do. No one can ' +
+          (r.type === 0 ? 'mint more of this token' : 'freeze a holder') + ', including you.</p></div>';
+        return;
+      }
+      // The one outright refusal: a Token-2022 mint that creates accounts frozen by default would
+      // trap every future holder with no thaw path once its freeze authority is gone.
+      var bricked = r.type === 1 && a.defaultAccountStateFrozen;
+      var match = wallet && wallet === held;
+      var body = '<p class="muted" style="margin:0 0 8px;line-height:1.7">' + r.what + '</p>' +
+        '<div class="danger">⚠️ <b>Irreversible.</b> ' + r.cost + '</div>';
+      if (bricked) {
+        body += '<p class="muted" style="margin:8px 0 0"><span class="bad">Blocked.</span> This mint sets new accounts ' +
+          'to <b>frozen</b> by default. Revoking its freeze authority would leave every new holder permanently frozen ' +
+          'with no way to thaw them — the token would stop working. Change the default account state first.</p>';
+      } else {
+        body += '<label style="display:block;margin:10px 0 0"><input type="checkbox" class="rvx" data-t="' + r.type + '"/> ' +
+          'I understand this cannot be undone by anyone, including me</label>' +
+          '<div style="margin-top:10px"><button id="rv' + r.type + '" disabled>REVOKE ' + r.title + '</button></div>' +
+          (wallet
+            ? (match ? '' : '<p class="muted" style="margin:8px 0 0"><span class="bad">Connected wallet is not this authority.</span> Only ' + esc2(held) + ' can sign.</p>')
+            : '<p class="muted" style="margin:8px 0 0">Connect ' + esc2(held) + ' to revoke this.</p>');
+      }
+      out += '<div class="card"><div class="k">' + r.title + ' <span class="bad">(live — irreversible to revoke)</span></div>' + body + '</div>';
+    });
+    return out;
+  }
+
+  function wireRevoke(a){
+    REVOKE.forEach(function(r){
+      var held = a[r.key];
+      if (!held || (r.type === 1 && a.defaultAccountStateFrozen)) return;
+      var btn = $('rv' + r.type), box = document.querySelector('.rvx[data-t="' + r.type + '"]');
+      if (!btn || !box) return;
+      var match = wallet && wallet === held;
+      var refresh = function(){ btn.disabled = !(match && box.checked); };
+      box.addEventListener('change', refresh); refresh();
+      btn.addEventListener('click', function(){ revoke(r.type, btn, r.title); });
+    });
+  }
+
+  function revoke(type, btn, title){
+    if (!provider) return;
+    btn.disabled = true; btn.textContent = 'BUILDING…';
+    api('/api/token-authority/prepare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mint: loaded.mint, authorityType: type }),
+    }).then(function(d){
+      if (!d.ok) throw new Error(d.error || 'could not build the revocation');
+      btn.textContent = 'SIGNING…';
+      var tx = solanaWeb3.Transaction.from(Uint8Array.from(atob(d.unsignedBase64), function(c){ return c.charCodeAt(0); }));
+      return provider.signTransaction(tx).then(function(signed){ return { d: d, signed: signed }; });
+    }).then(function(x){
+      btn.textContent = 'SENDING…';
+      return rpc('sendTransaction', [btoa(String.fromCharCode.apply(null, x.signed.serialize())),
+        { encoding: 'base64', preflightCommitment: 'confirmed' }]).then(function(j){ return { d: x.d, j: j }; });
+    }).then(function(x){
+      if (x.j.error) throw new Error(x.j.error.message || 'send failed');
+      var sig = x.j.result;
+      $('out').innerHTML = '<div class="card"><div class="k">SENT — WAITING FOR CONFIRMATION</div>' +
+        '<p><a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener noreferrer">' + esc(sig) + '</a></p>' +
+        '<p class="muted" id="confTick">Accepted by the RPC. That is not the same as landing — waiting for the cluster…</p></div>';
+      btn.textContent = 'CONFIRMING…';
+      // Same rule as the metadata flow: a signature back from sendTransaction is an acknowledgement,
+      // not a landing. Never say done until the cluster agrees.
+      return awaitConfirmation(sig, function(w){ var t = $('confTick'); if (t) t.textContent = 'Waiting for the cluster to confirm… ' + w + 's'; })
+        .then(function(){ return { sig: sig, d: x.d }; });
+    }).then(function(x){
+      $('out').innerHTML = '<div class="card"><div class="k">CONFIRMED ON-CHAIN</div>' +
+        '<p><a href="https://solscan.io/tx/' + encodeURIComponent(x.sig) + '" target="_blank" rel="noopener noreferrer">' + esc(x.sig) + '</a></p>' +
+        '<p class="muted">' + esc(x.d.label) + ' revoked. ' + esc(x.d.consequence) + ' Re-load the token above to see it. ' +
+        'Scanners cache, so their badge updates on their next scan, not instantly.</p></div>';
+      btn.textContent = 'REVOKED';
+    }).catch(function(e){
+      $('out').innerHTML = '<div class="card"><span class="bad">' + esc(e.message || 'failed') + '</span></div>';
+      btn.disabled = false; btn.textContent = 'REVOKE ' + title;
+    });
+  }
+
   function render(){
     if (!loaded) { $('state').innerHTML = ''; return; }
     var carried = snapshotFields();
+    // A token can have no Metaplex metadata account at all — Token-2022 mints commonly use the
+    // native metadata extension, and older tokens often have none. Those owners still have a mint
+    // or freeze authority to revoke, and that matters MORE than the metadata lock. So `m` may be
+    // null and every metadata row is conditional; only the authority rows are always present.
     var m = loaded.metadata, a = loaded.authorities;
-    var rows = [
-      ['Name', esc2(m.name)], ['Symbol', esc2(m.symbol)],
+    var rows = [];
+    if (m) rows.push(['Name', esc2(m.name)], ['Symbol', esc2(m.symbol)]);
+    rows.push(
       ['Mint authority', a.mintAuthority ? '<span class="bad">' + esc2(a.mintAuthority) + '</span>' : '<span class="ok">revoked</span>'],
       ['Freeze authority', a.freezeAuthority ? '<span class="bad">' + esc2(a.freezeAuthority) + '</span>' : '<span class="ok">revoked</span>'],
-      ['Metadata mutable', m.isMutable ? '<span class="warn">YES — this is the flag</span>' : '<span class="ok">already immutable</span>'],
+      ['Metadata mutable', !m ? '<span class="muted">no metadata account</span>'
+        : (m.isMutable ? '<span class="warn">YES — this is the flag</span>' : '<span class="ok">already immutable</span>')]
+    );
+    if (m) rows.push(
       ['Update authority', esc2(m.updateAuthority)],
       ['Creators', m.creators ? esc2(m.creators.map(function(c){ return c.address.slice(0,4)+'…'+(c.verified?' ✓':'')+' '+c.share+'%'; }).join(', ')) : '—'],
-      ['Current URI', '<a href="' + safeUrl(m.uri) + '" target="_blank" rel="noopener noreferrer">' + esc2(m.uri) + '</a>'],
-    ];
+      ['Current URI', '<a href="' + safeUrl(m.uri) + '" target="_blank" rel="noopener noreferrer">' + esc2(m.uri) + '</a>']
+    );
     var html = '<div class="card"><div class="k">ON-CHAIN NOW</div>' +
       rows.map(function(r){ return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
       '</div>';
@@ -160,22 +269,31 @@
     if (a.freezeAuthority) openFlags.push('<li><b>Freeze authority is live.</b> Whoever holds it can freeze any ' +
       'holder\'s tokens in place, so they cannot sell.</li>');
     if (openFlags.length) {
-      html += '<div class="card"><div class="k">⚠️ THIS TOOL WILL NOT CLEAR YOUR WARNING YET</div>' +
-        '<p class="muted" style="margin:0 0 8px;line-height:1.7">Scanners flag three separate things. This tool ' +
-        'currently fixes only <b>metadata</b>. Your token still has:</p>' +
+      html += '<div class="card"><div class="k">⚠️ TWO OTHER FLAGS ARE STILL OPEN</div>' +
+        '<p class="muted" style="margin:0 0 8px;line-height:1.7">Scanners flag three separate things, and ' +
+        (m && m.isMutable ? 'locking metadata on its own <b>will not clear the warning</b>. ' : '') +
+        'Your token still has:</p>' +
         '<ul class="muted" style="margin:0 0 8px;line-height:1.7;padding-left:20px">' + openFlags.join('') + '</ul>' +
-        '<p class="muted" style="margin:0;line-height:1.7">Locking metadata is still a real improvement and it is ' +
-        'permanent — but on its own it <b>will not remove the warning</b>. Revoking mint and freeze authority is done ' +
-        'with your token\'s CLI or the tool you launched with. We are adding it here; until then we would rather say ' +
-        'so than let you freeze your name expecting a result you will not get.</p></div>';
-    } else if (m.isMutable) {
+        '<p class="muted" style="margin:0;line-height:1.7">Both can be revoked below — permanently, with your own ' +
+        'wallet. Read what each one costs you first.</p></div>';
+    } else if (m && m.isMutable) {
       html += '<div class="card"><div class="k">GOOD NEWS</div><p class="muted" style="margin:0;line-height:1.7">' +
         'Mint and freeze authority are already revoked, so <b>metadata is the only flag left</b> on this token. ' +
         'Locking it clears the warning completely.</p></div>';
     }
 
-    if (!m.isMutable) { $('state').innerHTML = html + '<div class="card"><span class="ok">✅ This token\'s metadata is ' +
-      'already immutable. Nobody can change its name, symbol, URI or creators — including you. Nothing here can undo that.</span></div>'; return; }
+    // Metadata done (or absent) does NOT mean the page is done — the authorities may still be
+    // open. Render the metadata verdict, then fall through to the revocation section, which used
+    // to be unreachable for exactly the tokens that needed it.
+    if (m && !m.isMutable) {
+      html += '<div class="card"><span class="ok">✅ This token\'s metadata is already immutable. Nobody can change ' +
+        'its name, symbol, URI or creators — including you. Nothing here can undo that.</span></div>';
+    } else if (!m) {
+      html += '<div class="card"><p class="muted" style="margin:0;line-height:1.7">This mint has <b>no Metaplex ' +
+        'metadata account</b>, so there is nothing here to lock. Token-2022 mints often carry metadata as an ' +
+        'extension instead. The authorities below are still revocable.</p></div>';
+    }
+    if (!m || !m.isMutable) { $('state').innerHTML = html + revokeSection(a); wireRevoke(a); return; }
 
     var authMatch = wallet && wallet === m.updateAuthority;
     var gate = wallet
@@ -218,8 +336,10 @@
       '<div style="margin-top:10px"><button id="doLock" disabled>BUILD LOCK</button></div>' +
       '<p class="muted" style="margin:8px 0 0">After this, nobody can change the name, symbol, URI or creators of this token again — including you.</p></div>';
 
+    html += revokeSection(a);
     $('state').innerHTML = html;
     restoreFields(carried);
+    wireRevoke(a);
     var boxes = [].slice.call(document.querySelectorAll('.cx'));
     function refreshLock(){ $('doLock').disabled = !(authMatch && boxes.every(function(b){ return b.checked; })); }
     boxes.forEach(function(b){ b.addEventListener('change', refreshLock); });
