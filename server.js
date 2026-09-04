@@ -14563,6 +14563,8 @@ const SITEMAP_PAGES = [
   "/snapshot", "/holders", "/owners-snapshot", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
   "/wallet-checkup", "/locker-room", "/clkn", "/alpha", "/lp-lab",
   "/classroom", "/bags", "/investors", "/privacy", "/terms",
+  // /token-lock became public + indexable 2026-09-04 (was operator-only, noindex).
+  "/token-lock", "/firepit", "/project-burn",
   // /liquidity + /liquidity-engine dropped 2026-07-19 (audit): both serve a locked
   // "In Development" placeholder — re-add when the engine goes public.
 ];
