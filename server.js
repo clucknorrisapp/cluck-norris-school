@@ -7553,6 +7553,82 @@ const TOOLGATE = {
 // inside the refresh branch, so every request racing a cold-start refresh read usd=0 and the
 // paywall failed open for the whole first-fetch window after each deploy.
 let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: null };
+// Same RPC selection the rest of the file uses: the failover primary when configured, else the
+// Helius key directly. Named locally so this block does not depend on load order.
+function tokenMetaRpcUrl() {
+  return (rpc.primaryRpcUrl && rpc.primaryRpcUrl())
+    || `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
+}
+// ── Token metadata: make it immutable (owner tool) ───────────────────────────
+// A token with mutable metadata gets a red Rugcheck banner on CoinGecko warning that the creator
+// can disable sells, change fees and mint freely. For a token that already revoked mint AND freeze
+// authority that is mostly false — but it is unrebuttable and sits at the top of the page.
+// is_mutable = false is the only thing that clears it.
+//
+// ⚠️ IRREVERSIBLE, and the URI goes with it. Tokens minted against https://ipfs.io/ipfs/… are
+// everywhere and that gateway is being retired (it 429s today), so locking without repointing
+// freezes a dying URL permanently. Both happen in ONE instruction — see lib/token-metadata.js.
+//
+// Key-gated because it is an operator tool, though the transaction is inert without the update
+// authority's own signature: the server builds it UNSIGNED and never holds a key.
+app.get("/api/token-metadata/read", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    const mint = String((req.query && req.query.mint) || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    const tm = require("./lib/token-metadata");
+    const { Connection, PublicKey } = require("@solana/web3.js");
+    const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
+    const [metaInfo, mintInfo] = await Promise.all([
+      conn.getAccountInfo(tm.metadataPda(mint)),
+      conn.getParsedAccountInfo(new PublicKey(mint)),
+    ]);
+    if (!metaInfo) return res.json({ ok: false, error: "no_metadata_account", mint });
+    const meta = tm.decodeMetadata(metaInfo.data);
+    const parsed = mintInfo && mintInfo.value && mintInfo.value.data && mintInfo.value.data.parsed;
+    const mi = (parsed && parsed.info) || {};
+    // Report the OTHER authorities too. "Mutable metadata" is the last flag on a token that has
+    // already revoked mint and freeze; showing all three is what makes the banner's claims
+    // checkable instead of taken on faith.
+    res.json({ ok: true, mint, metadataPda: tm.metadataPda(mint).toBase58(), metadata: meta,
+      authorities: { mintAuthority: mi.mintAuthority || null, freezeAuthority: mi.freezeAuthority || null,
+                     decimals: mi.decimals, tokenProgram: (mintInfo.value && mintInfo.value.owner) || null } });
+  } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "read failed") }); }
+});
+
+// Build the UNSIGNED lock transaction. Optionally uploads a fresh metadata JSON to Arweave first
+// (permanent) so the URI being frozen is one that will still resolve in ten years.
+app.post("/api/token-metadata/prepare-lock", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    const b = req.body || {};
+    const mint = String(b.mint || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    const tm = require("./lib/token-metadata");
+    const { Connection } = require("@solana/web3.js");
+    const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
+    const info = await conn.getAccountInfo(tm.metadataPda(mint));
+    if (!info) return res.status(400).json({ ok: false, error: "no_metadata_account" });
+    const current = tm.decodeMetadata(info.data);
+    if (!current) return res.status(400).json({ ok: false, error: "not_metadata_v1" });
+
+    let newUri = b.newUri ? String(b.newUri).trim() : null;
+    let uploaded = null;
+    // uploadJson: take the CURRENT off-chain JSON, swap in a permanent image URL, re-upload to
+    // Arweave. Done server-side because the Turbo signer key lives here — but the result is only
+    // ever a URI handed back for the user to approve; nothing is signed on their behalf.
+    if (b.uploadJson && typeof b.uploadJson === "object") {
+      const { uploadJsonToArweave } = require("./hatchery");
+      uploaded = await uploadJsonToArweave(b.uploadJson);
+      newUri = uploaded;
+    }
+    const built = await tm.buildLockTx({ connection: conn, current, newUri });
+    res.json({ ok: true, mint, current, uploadedUri: uploaded, ...built });
+  } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "prepare failed") }); }
+});
+
 app.get("/api/tool-gate/config", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return res.json({ success: true, enabled: false });
@@ -13094,6 +13170,13 @@ app.get("/api/token-card", async (req, res) => {
 // reachable only by direct URL while in private testing.
 app.get("/hatchery", (req, res) => {
   res.sendFile(join(__dirname, "public", "hatchery.html"));
+});
+// Make-metadata-immutable, an OPERATOR tool (noindex, absent from the sitemap). Explicit route
+// because public/ is only served through the vite build's copy in dist/ — without this it 404s on
+// a no-build boot. The page itself is inert without the update authority's signature; the ?key=
+// only unlocks the two API calls behind it.
+app.get("/token-lock", (req, res) => {
+  res.sendFile(join(__dirname, "public", "token-lock.html"));
 });
 // Firepit — safe token burner / rent reclaimer (public/firepit.html). public/ isn't
 // statically mounted, so the page needs an explicit route; its /vendor assets and the

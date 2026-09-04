@@ -1,0 +1,202 @@
+<!DOCTYPE html><html lang="en"><head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>Make Token Metadata Immutable — Cluck Norris</title>
+<style>
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);}
+  .wrap{max-width:820px;margin:0 auto;padding:20px 16px 60px;}
+  h1{font-family:var(--disp);letter-spacing:1px;font-size:24px;margin:0 0 6px;}
+  .sub{color:var(--muted);font-size:var(--body-text);margin:0 0 18px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:0 0 14px;}
+  .k{font-family:var(--disp);font-size:12px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;}
+  .row{display:flex;gap:10px;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px;}
+  .row:last-child{border-bottom:none;}
+  .row b{font-family:var(--mono);font-weight:400;word-break:break-all;text-align:right;max-width:62%;}
+  .ok{color:#10B981;} .bad{color:#EF4444;} .warn{color:#FFB627;}
+  input{width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);
+        border-radius:8px;padding:10px;font-family:var(--mono);font-size:13px;}
+  button{font-family:var(--disp);letter-spacing:1.5px;border:none;border-radius:8px;padding:11px 18px;
+         cursor:pointer;font-size:14px;background:linear-gradient(90deg,#FF7A18,#FFB627);color:#1a1200;}
+  /* Disabled goes NEUTRAL GREY, never a faded gradient — a dimmed orange reads as broken. */
+  button:disabled{background:#3A3A3A;color:#8A8A8A;cursor:not-allowed;}
+  button.alt{background:transparent;color:var(--text);border:1px solid var(--border);}
+  .danger{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:12px;margin:12px 0;font-size:14px;line-height:1.6;}
+  .muted{color:var(--muted);font-size:13px;}
+  pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;font-size:12px;}
+</style></head><body>
+<div class="wrap">
+  <h1>MAKE METADATA IMMUTABLE</h1>
+  <p class="sub">Closes the "creator can change this token" warning. <b>This cannot be undone.</b></p>
+
+  <div class="card">
+    <div class="k">TOKEN</div>
+    <input id="mint" placeholder="mint address" autocomplete="off" spellcheck="false"/>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <button id="load">LOAD</button>
+      <button id="connect" class="alt">CONNECT WALLET</button>
+      <button id="disconnect" class="alt" hidden>DISCONNECT</button>
+    </div>
+    <p class="muted" id="walletLine" style="margin:10px 0 0"></p>
+  </div>
+
+  <div id="state"></div>
+  <div id="plan"></div>
+  <div id="out"></div>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js?v=2"></script>
+<script src="/vendor/solana-web3-1.95.8.iife.min.js" integrity="sha384-ujeTtvHxhu2g5lnu14Roii2ajvVKJ74KQ6eo6GGfAi0IrKZ1YkF8N68Iw5VmIJO0" crossorigin="anonymous"></script>
+<script>
+(function(){
+  var esc = CluckUtil.esc;
+  // The URI comes from ANY token's on-chain metadata, so it is attacker-controlled and goes into
+  // an href — esc() escapes HTML but not the scheme, and javascript: survives it. CluckUtil.safeUrl
+  // is the shared fix; this falls back to an identical local copy until that ships, because this
+  // page must not be the one that reintroduces the hole.
+  var safeUrl = CluckUtil.safeUrl || function (u) {
+    var t = String(u == null ? '' : u).trim();
+    return /^https?:\/\//i.test(t) ? esc(t) : '#';
+  };
+  var $ = function(id){ return document.getElementById(id); };
+  var KEYQ = new URLSearchParams(location.search).get('key') || '';
+  var provider = null, wallet = null, loaded = null, prepared = null;
+
+  function api(path, opts){
+    var sep = path.indexOf('?') === -1 ? '?' : '&';
+    return fetch(path + sep + 'key=' + encodeURIComponent(KEYQ), opts).then(function(r){ return r.json(); });
+  }
+  function esc2(v){ return esc(v == null ? '—' : String(v)); }
+
+  // ---- wallet ---------------------------------------------------------------------------------
+  $('connect').addEventListener('click', function(){
+    CluckWallet.connect().then(function(res){
+      provider = res.provider; wallet = res.pubkey;
+      $('walletLine').innerHTML = 'Connected: <b>' + esc(res.name || '') + '</b> — ' + esc(wallet);
+      $('connect').hidden = true; $('disconnect').hidden = false;
+      render();
+    }).catch(function(e){ $('walletLine').innerHTML = '<span class="bad">' + esc(e.message || 'connect failed') + '</span>'; });
+  });
+  // Anywhere a wallet can connect it must be able to disconnect — provider's own disconnect AND
+  // our local state, or the page lies about who is signing.
+  $('disconnect').addEventListener('click', function(){
+    CluckWallet.disconnect();
+    provider = null; wallet = null;
+    $('walletLine').textContent = '';
+    $('connect').hidden = false; $('disconnect').hidden = true;
+    render();
+  });
+
+  // ---- load current on-chain state -------------------------------------------------------------
+  $('load').addEventListener('click', function(){
+    var m = $('mint').value.trim();
+    $('state').innerHTML = '<div class="card"><span class="muted">Reading…</span></div>';
+    $('plan').innerHTML = ''; $('out').innerHTML = ''; prepared = null;
+    api('/api/token-metadata/read?mint=' + encodeURIComponent(m)).then(function(d){
+      if (!d.ok) { $('state').innerHTML = '<div class="card"><span class="bad">' + esc2(d.error) + '</span></div>'; return; }
+      loaded = d; render();
+    }).catch(function(e){ $('state').innerHTML = '<div class="card"><span class="bad">' + esc(e.message) + '</span></div>'; });
+  });
+
+  function render(){
+    if (!loaded) { $('state').innerHTML = ''; return; }
+    var m = loaded.metadata, a = loaded.authorities;
+    var rows = [
+      ['Name', esc2(m.name)], ['Symbol', esc2(m.symbol)],
+      ['Mint authority', a.mintAuthority ? '<span class="bad">' + esc2(a.mintAuthority) + '</span>' : '<span class="ok">revoked</span>'],
+      ['Freeze authority', a.freezeAuthority ? '<span class="bad">' + esc2(a.freezeAuthority) + '</span>' : '<span class="ok">revoked</span>'],
+      ['Metadata mutable', m.isMutable ? '<span class="warn">YES — this is the flag</span>' : '<span class="ok">already immutable</span>'],
+      ['Update authority', esc2(m.updateAuthority)],
+      ['Creators', m.creators ? esc2(m.creators.map(function(c){ return c.address.slice(0,4)+'…'+(c.verified?' ✓':'')+' '+c.share+'%'; }).join(', ')) : '—'],
+      ['Current URI', '<a href="' + safeUrl(m.uri) + '" target="_blank" rel="noopener noreferrer">' + esc2(m.uri) + '</a>'],
+    ];
+    var html = '<div class="card"><div class="k">ON-CHAIN NOW</div>' +
+      rows.map(function(r){ return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
+      '</div>';
+
+    if (!m.isMutable) { $('state').innerHTML = html + '<div class="card"><span class="ok">Nothing to do — already immutable.</span></div>'; return; }
+
+    var authMatch = wallet && wallet === m.updateAuthority;
+    html += '<div class="card"><div class="k">NEW URI (OPTIONAL BUT USUALLY THE POINT)</div>' +
+      '<input id="newUri" placeholder="https://arweave.net/… (blank = keep the current URI forever)" autocomplete="off" spellcheck="false"/>' +
+      '<p class="muted" style="margin:8px 0 0">If the current URI is an <b>ipfs.io</b> gateway link, change it here. ' +
+      'That gateway is being retired — locking without repointing freezes a dying URL permanently.</p>' +
+      '<div style="margin-top:10px"><button id="prep"' + (authMatch ? '' : ' disabled') + '>BUILD UNSIGNED TRANSACTION</button></div>' +
+      (wallet ? (authMatch ? '' : '<p class="muted" style="margin:8px 0 0"><span class="bad">Connected wallet is not the update authority.</span> Only ' + esc2(m.updateAuthority) + ' can sign this.</p>')
+              : '<p class="muted" style="margin:8px 0 0">Connect the update authority wallet to continue.</p>') +
+      '</div>';
+    $('state').innerHTML = html;
+    var pb = $('prep'); if (pb) pb.addEventListener('click', prepare);
+  }
+
+  // ---- build the unsigned tx --------------------------------------------------------------------
+  function prepare(){
+    var body = { mint: loaded.mint };
+    var nu = $('newUri') && $('newUri').value.trim();
+    if (nu) body.newUri = nu;
+    $('plan').innerHTML = '<div class="card"><span class="muted">Building…</span></div>';
+    api('/api/token-metadata/prepare-lock', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }).then(function(d){
+      if (!d.ok) { $('plan').innerHTML = '<div class="card"><span class="bad">' + esc2(d.error) + '</span></div>'; return; }
+      prepared = d;
+      var c = d.changes, p = d.preserved;
+      $('plan').innerHTML = '<div class="card"><div class="k">WHAT THIS TRANSACTION DOES</div>' +
+        '<div class="row"><span>isMutable</span><b>true → <span class="bad">false</span></b></div>' +
+        '<div class="row"><span>URI</span><b>' + (c.uri.changed
+            ? esc2(c.uri.from) + '<br>→ <span class="ok">' + esc2(c.uri.to) + '</span>'
+            : '<span class="warn">unchanged — frozen as-is</span>') + '</b></div>' +
+        '<div class="k" style="margin:14px 0 8px">PRESERVED EXACTLY</div>' +
+        '<div class="row"><span>Name / Symbol</span><b>' + esc2(p.name) + ' / ' + esc2(p.symbol) + '</b></div>' +
+        '<div class="row"><span>Creators</span><b>' + (p.creators ? esc2(JSON.stringify(p.creators)) : 'none') + '</b></div>' +
+        '<div class="row"><span>Seller fee</span><b>' + esc2(p.sellerFeeBasisPoints) + ' bps</b></div>' +
+        '<div class="row"><span>Update authority</span><b>' + esc2(p.updateAuthority) + ' <span class="muted">(not reassigned)</span></b></div>' +
+        '<div class="danger">⚠️ <b>Irreversible.</b> After this lands, the name, symbol, URI and creators of this token can never be changed again by anyone — including you.</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><button id="sign">SIGN IN WALLET &amp; SEND</button>' +
+        '<button id="showraw" class="alt">SHOW RAW TX</button></div></div>';
+      $('sign').addEventListener('click', signAndSend);
+      $('showraw').addEventListener('click', function(){
+        $('out').innerHTML = '<div class="card"><div class="k">UNSIGNED TRANSACTION (base64)</div><pre>' + esc(prepared.unsignedBase64) + '</pre></div>';
+      });
+    }).catch(function(e){ $('plan').innerHTML = '<div class="card"><span class="bad">' + esc(e.message) + '</span></div>'; });
+  }
+
+  // ---- sign + send ------------------------------------------------------------------------------
+  // The server built this UNSIGNED and holds no key. The connected wallet is the only signer, so
+  // signTransaction then submit raw — never signAndSendTransaction, matching the locker-room flow.
+  function signAndSend(){
+    if (!provider || !prepared) return;
+    var btn = $('sign'); btn.disabled = true; btn.textContent = 'SIGNING…';
+    try {
+      var tx = solanaWeb3.Transaction.from(Uint8Array.from(atob(prepared.unsignedBase64), function(c){ return c.charCodeAt(0); }));
+      provider.signTransaction(tx).then(function(signed){
+        btn.textContent = 'SENDING…';
+        return fetch('/api/helius-rpc', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sendTransaction',
+            params: [btoa(String.fromCharCode.apply(null, signed.serialize())), { encoding: 'base64' }] }),
+        }).then(function(r){ return r.json(); });
+      }).then(function(j){
+        if (j.error) throw new Error(j.error.message || 'send failed');
+        var sig = j.result;
+        $('out').innerHTML = '<div class="card"><div class="k">SENT</div>' +
+          '<p><a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener noreferrer">' + esc(sig) + '</a></p>' +
+          '<p class="muted">Re-load the token above to confirm <b>Metadata mutable</b> now reads <span class="ok">already immutable</span>. ' +
+          'Rugcheck and CoinGecko cache — the banner clears on their next scan, not instantly.</p></div>';
+        btn.textContent = 'SENT';
+      }).catch(function(e){
+        $('out').innerHTML = '<div class="card"><span class="bad">' + esc(e.message || 'failed') + '</span></div>';
+        btn.disabled = false; btn.textContent = 'SIGN IN WALLET & SEND';
+      });
+    } catch (e) {
+      $('out').innerHTML = '<div class="card"><span class="bad">' + esc(e.message) + '</span></div>';
+      btn.disabled = false; btn.textContent = 'SIGN IN WALLET & SEND';
+    }
+  }
+
+  var qm = new URLSearchParams(location.search).get('mint');
+  if (qm) { $('mint').value = qm; $('load').click(); }
+})();
+</script></body></html>
