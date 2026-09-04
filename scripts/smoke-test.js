@@ -44,6 +44,12 @@ const SCREENS = [
 // Lesson counts per curriculum. Kept as explicit numbers so that DELETING a lesson fails this
 // test loudly rather than silently shrinking coverage.
 //
+// ⚠️ That was only half a guard. An explicit count catches a lesson going away and says NOTHING
+// about one being ADDED — so when the curriculum went 12 → 14 (custody lessons, 2026-09-04) this
+// test rendered the first 12, printed "40 screens/lessons rendered", and passed while never
+// opening either new lesson. Green on the wrong thing, which is the exact failure this file was
+// written to prevent. assertCountsMatchSource() below now fails on BOTH directions.
+//
 // `nav` is how you REACH lesson N, and the two curricula differ:
 //   "tiles"  — a grid of lesson buttons; click the n-th one.
 //   "linear" — the incubator has NO tiles. It resumes at the first lesson missing from
@@ -51,7 +57,7 @@ const SCREENS = [
 //              lessons 1..N-1 as completed. Clicking blind here hits "← BACK" and navigates
 //              away, which is exactly the false failure the first version of this test produced.
 const CURRICULA = [
-  { hash: "select", label: "curriculum", count: 12, nav: "tiles", storageKey: "clkn_completed", idsFrom: "LESSONS" },
+  { hash: "select", label: "curriculum", count: 14, nav: "tiles", storageKey: "clkn_completed", idsFrom: "LESSONS" },
   { hash: "incubator", label: "incubator", count: 7, nav: "linear", storageKey: "incubator_progress", idsFrom: "INCUBATOR_LESSONS" },
   { hash: "lplab", label: "LP lab", count: 14, nav: "tiles" },
 ];
@@ -78,6 +84,26 @@ function lessonIds(arrayName) {
   const ids = [...body.matchAll(/\bid:\s*"([^"]+)"/g)].map((m) => m[1]);
   if (!ids.length) throw new Error(`no lesson ids parsed from ${arrayName}`);
   return ids;
+}
+
+// The count above must equal what is actually in the source. Deleting a lesson without updating
+// the number fails because a tile is missing; ADDING one used to pass silently. Check it directly.
+// (LP Lab has no idsFrom — its array lives in LPLab.jsx and is covered by scripts/check-counts.js.)
+function assertCountsMatchSource() {
+  const wrong = [];
+  for (const c of CURRICULA) {
+    if (!c.idsFrom) continue;
+    const actual = lessonIds(c.idsFrom).length;
+    if (actual !== c.count) {
+      wrong.push(`${c.label}: this test renders ${c.count} lessons but ${c.idsFrom} has ${actual}`);
+    }
+  }
+  if (wrong.length) {
+    log("\n✗ smoke test coverage is out of date:\n  " + wrong.join("\n  ") +
+        "\n\n  Update CURRICULA in scripts/smoke-test.js. A lesson this test never opens is a\n" +
+        "  lesson nothing checks renders — which is what this whole file exists to catch.");
+    process.exit(1);
+  }
 }
 
 function findChromium() {
@@ -107,6 +133,9 @@ function serveDist() {
 }
 
 (async () => {
+  // Cheapest check first, and before the build: a stale coverage list makes every result below
+  // it meaningless, so fail immediately rather than after four minutes of rendering.
+  assertCountsMatchSource();
   if (!process.argv.includes("--no-build") || !fs.existsSync(path.join(DIST, "index.html"))) {
     log("building…");
     execSync("npm run build", { cwd: ROOT, stdio: "inherit" });
