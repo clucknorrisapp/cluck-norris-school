@@ -359,6 +359,12 @@ async function add(entry, token) {
     suspect = score > 0 && (elapsedMs < MIN_RUN_MS || (score / secs) > MAX_PTS_PER_SEC || world > MAX_REAL_WORLD);
   }
 
+  // The caller can force suspect for a reason only IT can see. Today that is the route checking
+  // the wallet's live tier against the world being claimed — this module has no access to
+  // balances, and the run-token machinery deliberately never knew about wallets at all.
+  let forcedReason = null;
+  if (entry.forceSuspect) { suspect = true; forcedReason = String(entry.forceSuspect).slice(0, 40); }
+
   const e = {
     id: crypto.randomBytes(5).toString('hex'), at: Date.now(),
     name: cleanName(entry.name) || 'anon', world, level: clip(entry.level, 24).trim(), score,
@@ -369,7 +375,7 @@ async function add(entry, token) {
   };
   let ok; try { ok = await backend.insert(e); } catch (err) { return { ok: false, status: 'persist_failed' }; }
   if (ok === false) return { ok: false, status: 'persist_failed' };
-  return { ok: true, id: e.id, suspect, verified: tokenOK };
+  return { ok: true, id: e.id, suspect, verified: tokenOK, ...(forcedReason ? { suspectReason: forcedReason } : {}) };
 }
 
 async function topByWorld(world, n) { return backend.worldTop(intIn(world, 1, 99, 0), n || 10); }
