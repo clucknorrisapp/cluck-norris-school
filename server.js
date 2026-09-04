@@ -13510,6 +13510,198 @@ app.get("/api/airdrop-collect", (req, res) => {
   return res.status(200).json({ success: true, campaign, count, addresses: rows.map(([a, v]) => ({ address: a, handle: v.handle, at: v.at })) });
 });
 
+// ── CLKN Productions Jup Verification Protocol (JVP) — intake dashboard ───────
+// Clients enter everything a Jupiter VRFD submission needs at /jupverify (wallet-signed);
+// the owner reviews at /jupverify-admin and performs the actual submission himself.
+// Store + sanitization: lib/jupverify-intake.js (single choke point — every client string
+// is attacker-controlled and renders in the OWNER's browser). Protocol doc:
+// docs/CLKN_JUP_VERIFICATION_PROTOCOL.md. Both pages noindex; intake is unlisted for now.
+const jvpIntake = require("./lib/jupverify-intake");
+app.get("/jupverify", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.sendFile(join(__dirname, "public", "jupverify.html"));
+});
+app.get("/jupverify-admin", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.sendFile(join(__dirname, "public", "jupverify-admin.html"));
+});
+
+// Client session token — HMAC like issuePremiumProof but with an audience claim + the
+// submission id, so a premium proof can never be replayed here and vice versa.
+function issueJvpToken(wallet, id, ttlMs = 30 * 86400000) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  if (!secret || !wallet) return null;
+  const body = Buffer.from(JSON.stringify({ w: wallet, id, aud: "jvp", exp: Date.now() + ttlMs })).toString("base64url");
+  return body + "." + createHmac("sha256", secret).update(body).digest("base64url");
+}
+function verifyJvpToken(token) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  if (!secret || !token) return null;
+  const [body, sig] = String(token).split(".");
+  if (!body || !sig) return null;
+  if (createHmac("sha256", secret).update(body).digest("base64url") !== sig) return null;
+  let p; try { p = JSON.parse(Buffer.from(body, "base64url").toString("utf8")); } catch (_) { return null; }
+  if (!p || p.aud !== "jvp" || !p.w || !p.id || Date.now() > (p.exp || 0)) return null;
+  return { wallet: p.w, id: p.id };
+}
+const jvpSignMessage = (wallet, ts) =>
+  `CLKN Productions Jup Verification\nSubmit your project for review. This signature costs nothing and sends no transaction.\n\nWallet: ${wallet}\nTime: ${ts}`;
+
+// Server-issued message (server clock, not the device's — the client-portal lesson).
+app.get("/api/jupverify/message", rateLimit("jvp-msg", { windowMs: 60000, max: 10 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "bad wallet" });
+  const ts = Date.now();
+  res.json({ success: true, ts, message: jvpSignMessage(wallet, ts) });
+});
+
+// Chain precheck — what the chain says about a mint, so the client CONFIRMS instead of
+// typing facts we'd have to distrust. Fans out to Helius, so tightly rate-limited.
+app.get("/api/jupverify/precheck", rateLimit("jvp-pre", { windowMs: 60000, max: 10 }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String(req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "Enter a valid mint address." });
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
+  try {
+    const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+    const asset = await rpcCall("jvp-asset", "getAsset", [mint]).catch(() => null);
+    const a = asset && asset.result;
+    if (!a) return res.status(404).json({ success: false, error: "That mint wasn't found on-chain." });
+    const ti = a.token_info || {};
+    const decimals = Number(ti.decimals);
+    if (!Number.isFinite(decimals)) return res.status(400).json({ success: false, error: "That address isn't a fungible token." });
+    const meta = (a.content && a.content.metadata) || {};
+    const updateAuth = ((a.authorities || []).find((x) => (x.scopes || []).includes("full") || (x.scopes || []).includes("metadata")) || {}).address || null;
+    res.json({
+      success: true, mint, decimals,
+      name: String(meta.name || "").slice(0, 64), symbol: String(ti.symbol || meta.symbol || "").slice(0, 12),
+      supplyUi: ti.supply != null ? Number(ti.supply) / 10 ** decimals : null,
+      mintAuthority: ti.mint_authority || null, freezeAuthority: ti.freeze_authority || null,
+      updateAuthority: updateAuth,
+      tokenProgram: (a.ownership && a.ownership.token_program) || null,
+    });
+  } catch (e) { res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
+// Submit — wallet-signed. Honeypot field discards bots with a silent 200.
+app.post("/api/jupverify/submit", rateLimit("jvp-sub", { windowMs: 60000, max: 5 }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const b = req.body || {};
+  if (b.company) return res.status(200).json({ success: true, id: "ok" });   // honeypot
+  const wallet = String(b.wallet || "").trim();
+  const ts = Number(b.ts);
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "bad wallet" });
+  if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > 5 * 60 * 1000) return res.status(400).json({ success: false, error: "Signature expired — try again." });
+  if (!verifySolanaSignature(jvpSignMessage(wallet, ts), String(b.signature || ""), wallet)) {
+    return res.status(401).json({ success: false, error: "Signature did not verify." });
+  }
+  const problem = await rejectNonWallet(wallet).catch(() => null);
+  if (problem) return res.status(400).json({ success: false, error: problem });
+  const v = jvpIntake.sanitizeForm(b.form);
+  if (!v.ok) return res.status(400).json({ success: false, error: v.error });
+  // Server-computed chain facts (never client-asserted): decimals/supply/authorities +
+  // whether the SIGNING wallet controls the mint. A badge for the owner, not a gate —
+  // plenty of good tokens have revoked authorities or community submitters.
+  let chain = null;
+  try {
+    const HELIUS_KEY = process.env.HELIUS_API_KEY;
+    if (HELIUS_KEY) {
+      const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+      const asset = await rpcCall("jvp-sub-asset", "getAsset", [v.fields.mint]).catch(() => null);
+      const a = asset && asset.result;
+      if (!a) return res.status(400).json({ success: false, error: "That mint wasn't found on-chain." });
+      const ti = a.token_info || {};
+      if (!Number.isFinite(Number(ti.decimals))) return res.status(400).json({ success: false, error: "That address isn't a fungible token." });
+      const updateAuth = ((a.authorities || []).find((x) => (x.scopes || []).includes("full") || (x.scopes || []).includes("metadata")) || {}).address || null;
+      chain = {
+        decimals: Number(ti.decimals),
+        supplyUi: ti.supply != null ? Number(ti.supply) / 10 ** Number(ti.decimals) : null,
+        chainName: String(((a.content || {}).metadata || {}).name || "").slice(0, 64),
+        chainSymbol: String(ti.symbol || ((a.content || {}).metadata || {}).symbol || "").slice(0, 12),
+        mintAuthNull: !ti.mint_authority, freezeAuthNull: !ti.freeze_authority,
+        updateAuthority: updateAuth, signerIsUpdateAuth: !!updateAuth && updateAuth === wallet,
+        tokenProgram: (a.ownership && a.ownership.token_program) || null,
+        readAt: Date.now(),
+      };
+    }
+  } catch (_) { /* chain read best-effort — record still stores, badge shows unknown */ }
+  const r = jvpIntake.submit({ wallet, fields: v.fields, chain, ip: clientIp(req) });
+  if (!r.ok) return res.status(400).json({ success: false, error: r.error });
+  res.json({ success: true, id: r.id, resubmission: r.resubmission, status: "submitted", token: issueJvpToken(wallet, r.id) });
+});
+
+// Client status — bearer token from submit. Never leaks ownerNotes/ip.
+app.get("/api/jupverify/status", rateLimit("jvp-st", { windowMs: 60000, max: 30 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const tok = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "") || String(req.query.token || "");
+  const p = verifyJvpToken(tok);
+  if (!p) return res.status(401).json({ success: false, error: "sign in again" });
+  const rec = jvpIntake.get(p.id);
+  if (!rec || rec.wallet !== p.wallet) return res.status(404).json({ success: false, error: "not found" });
+  res.json({ success: true, submission: jvpIntake.clientView(rec) });
+});
+
+// ── Admin (owner) ── all 404 on bad key, header preferred over ?key=.
+app.get("/api/jupverify/admin/list", (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ success: true, submissions: jvpIntake.list() });
+});
+app.get("/api/jupverify/admin/entry", (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+  res.setHeader("Cache-Control", "no-store");
+  const rec = jvpIntake.get(String(req.query.id || ""));
+  if (!rec) return res.status(404).json({ success: false, error: "not found" });
+  res.json({ success: true, submission: rec });
+});
+app.post("/api/jupverify/admin/entry", (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+  res.setHeader("Cache-Control", "no-store");
+  const b = req.body || {};
+  const r = jvpIntake.adminUpdate(String(req.query.id || b.id || ""), { status: b.status, ownerNotes: b.ownerNotes, clientMessage: b.clientMessage });
+  if (!r.ok) return res.status(400).json({ success: false, error: r.error });
+  res.json({ success: true, submission: r.record });
+});
+// Live verification-readiness scorecard: Jupiter's own numbers vs the JVP profile
+// (holders ≥~250, registered liquidity ≥~$25k — the DNC verified profile), plus
+// whether one of our engines is already running this mint. Separate from /entry
+// because it fans out to external APIs.
+app.get("/api/jupverify/admin/scorecard", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String(req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "bad mint" });
+  const out = { success: true, mint, jupiter: null, engine: null, gates: {} };
+  try {
+    const found = await jupTokensSearch(encodeURIComponent(mint));
+    const t = Array.isArray(found) ? found.find((x) => x && (x.id === mint || x.address === mint)) : null;
+    if (t) {
+      out.jupiter = {
+        isVerified: !!t.isVerified, organicScore: t.organicScore ?? null, organicScoreLabel: t.organicScoreLabel || null,
+        holderCount: t.holderCount ?? null, liquidity: t.liquidity ?? null, mcap: t.mcap ?? t.marketCap ?? null,
+        circSupply: t.circSupply ?? null,
+        audit: t.audit ? { mintAuthorityDisabled: t.audit.mintAuthorityDisabled, freezeAuthorityDisabled: t.audit.freezeAuthorityDisabled, topHoldersPercentage: t.audit.topHoldersPercentage } : null,
+        stats24h: t.stats24h ? { buyVolume: t.stats24h.buyVolume, sellVolume: t.stats24h.sellVolume, buyOrganicVolume: t.stats24h.buyOrganicVolume, sellOrganicVolume: t.stats24h.sellOrganicVolume, holderChange: t.stats24h.holderChange } : null,
+      };
+      out.gates = {
+        holders: { value: t.holderCount ?? null, target: 250, pass: (t.holderCount ?? 0) >= 250 },
+        liquidity: { value: t.liquidity ?? null, target: 25000, pass: (t.liquidity ?? 0) >= 25000 },
+        score: { value: t.organicScore ?? null, label: t.organicScoreLabel || null, pass: (t.organicScore ?? 0) >= 30 },
+        verified: { value: !!t.isVerified },
+      };
+    }
+  } catch (_) { /* Jupiter read best-effort */ }
+  try {
+    const projects = whirlpoolMM.vault.listProjects();
+    for (const [pid, p] of Object.entries(projects)) {
+      if (p && p.tokenMint === mint) { out.engine = { projectId: pid, operatorLoaded: whirlpoolMM.vault.isEnabled(pid) }; break; }
+    }
+  } catch (_) { /* vault optional */ }
+  res.json(out);
+});
+
 // Public burn receipt — server-rendered so it carries OG tags for a rich social share.
 app.get("/burn/:sig", (req, res) => {
   const sig = String(req.params.sig || "");
