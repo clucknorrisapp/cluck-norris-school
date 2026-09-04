@@ -134,6 +134,11 @@
       '<input id="imgOverride" placeholder="optional: ipfs://… or https://… image to use instead" autocomplete="off" spellcheck="false" style="margin-top:8px"/>' +
       '<p class="muted" style="margin:8px 0 0">Leave the image box empty and the rebuild keeps the image the token already has. ' +
       'Fill it in only if you have pinned the logo somewhere you control — <b>paste the exact file</b>, not a resized copy.</p>' +
+      '<textarea id="descOverride" rows="4" placeholder="optional: replace the description (leave empty to keep the current one)" ' +
+      'style="margin-top:8px;width:100%;box-sizing:border-box;font:inherit;color:inherit;background:rgba(0,0,0,0.25);' +
+      'border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px"></textarea>' +
+      '<p class="muted" style="margin:8px 0 0">The description is the only prose a holder sees in a wallet. After Step 2 it is frozen ' +
+      '<b>twice over</b> — the URI cannot be repointed, and Arweave files cannot be edited. Fix any wording now or never.</p>' +
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
       '<button id="rebuild" class="alt">REBUILD JSON → ARWEAVE</button>' +
       '<button id="doUpdate"' + dis + '>BUILD UPDATE (KEEPS IT EDITABLE)</button></div>' +
@@ -166,7 +171,14 @@
     $('plan').innerHTML = '<div class="card"><span class="muted">Fetching the current JSON, mirroring the image…</span></div>';
     api('/api/token-metadata/rebuild-json', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mint: loaded.mint, imageOverride: ($('imgOverride').value || '').trim() || null }),
+      body: (function(){
+        var b = { mint: loaded.mint, imageOverride: ($('imgOverride').value || '').trim() || null };
+        // Only send the field when there is something to send — an empty string is REJECTED by the
+        // server rather than silently wiping the description, so it must not be sent by accident.
+        var d = ($('descOverride').value || '').trim();
+        if (d) b.description = d;
+        return JSON.stringify(b);
+      })(),
     }).then(function(d){
       btn.disabled = false; btn.textContent = 'REBUILD JSON → ARWEAVE';
       if (!d.ok) { $('plan').innerHTML = '<div class="card"><span class="bad">' + esc2(d.error) + '</span>' +
@@ -181,6 +193,9 @@
         '<div class="row"><span>New JSON</span><b><a href="' + safeUrl(d.newUri) + '" target="_blank" rel="noopener noreferrer">' + esc2(d.newUri) + '</a></b></div>' +
         '<div class="row"><span>Image now</span><b>' + esc2(d.newImage) + '</b></div>' +
         '<div class="row"><span>Image was</span><b>' + esc2(d.previousImage) + '</b></div>' +
+        '<div class="row"><span>Description</span><b>' + (d.descriptionChanged
+            ? '<span class="warn">REPLACED</span> — ' + esc2(String(d.json && d.json.description || '').length) + ' chars'
+            : '<span class="ok">unchanged</span>') + '</b></div>' +
         '<div class="row"><span>Fields kept</span><b>' + esc2((d.preservedKeys||[]).join(', ')) + '</b></div>' +
         '<pre>' + esc((d.steps||[]).join('\n')) + '</pre>' +
         '<p class="muted">Open the new JSON and its image above and check they load. Then use ' +
