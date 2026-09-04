@@ -10006,7 +10006,11 @@ app.get("/api/token-icon", async (req, res) => {
     const binPath = path.join(TOKEN_ICON_DIR, mint + ".img");
     if (fs.existsSync(metaPath)) {
       const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-      if (meta.redirect) {   // icon too big to cache — send the client to the source
+      // A stored "redirect" verdict is STICKY, so raising the size ceiling does nothing on its own —
+      // every big icon already judged uncacheable keeps 302ing forever. Redirect metas are
+      // therefore versioned: one written under the old 512KB rule has no `ceiling`, so it is
+      // ignored and re-fetched once against the current limit, then re-written with the marker.
+      if (meta.redirect && meta.ceiling >= 2097152) {
         res.setHeader("Cache-Control", "public, max-age=604800, immutable");
         return res.redirect(302, meta.redirect);
       }
@@ -10033,9 +10037,17 @@ app.get("/api/token-icon", async (req, res) => {
     if (!r.ok || !/^image\//.test(type)) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
     const buf = Buffer.from(await r.arrayBuffer());
     if (!buf.length) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
-    if (buf.length > 524288) {   // real image, too big for the disk cache (e.g. CLKN's 1.7MB ipfs
-      // PNG) — durable 302 to the source instead of a 404, so big-icon tokens still get a logo.
-      try { fs.writeFileSync(metaPath, JSON.stringify({ redirect: iconUrl, at: Date.now() })); } catch (_) {}
+    // Ceiling raised 512KB -> 2MB on 2026-09-03. The 302 path "works" but hands the browser a
+    // 1.78MB ipfs.io fetch to paint a 32px avatar, and ipfs gateways are slow and flaky — when one
+    // stalls, the page's onerror drops the <img> and the token silently loses its logo (the owner
+    // reported exactly that on the Locker Room claim cards). Caching it instead serves it from our
+    // origin behind Cloudflare with immutable headers, so it is fetched once, ever. CLKN's icon is
+    // 1.78MB, so 512KB missed it by a wide margin; 2MB covers the realistic worst case while still
+    // refusing genuinely absurd payloads. Cost is a few MB on the volume for the handful of tokens
+    // with oversized art.
+    if (buf.length > 2097152) {   // beyond even a generous icon — durable 302 to the source
+      // instead of a 404, so big-icon tokens still get a logo.
+      try { fs.writeFileSync(metaPath, JSON.stringify({ redirect: iconUrl, at: Date.now(), ceiling: 2097152 })); } catch (_) {}
       res.setHeader("Cache-Control", "public, max-age=604800, immutable");
       return res.redirect(302, iconUrl);
     }

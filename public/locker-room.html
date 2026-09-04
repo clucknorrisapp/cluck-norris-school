@@ -50,6 +50,11 @@
   .claimcard .clavatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
   .claimcard .cltsym{font-family:var(--disp);font-size:16px;color:#f5b301;line-height:1.15;}
   .claimcard .cltmint{font-family:var(--mono);font-size:12.5px;color:var(--sub,#9aa0aa);}
+  /* USD beside every token amount (owner ask 2026-09-03: "add usd values when unstaking").
+     Dimmer than the token amount — the token count is what is actually being claimed; the
+     dollar figure is orientation, and a live price makes it an estimate, never a promise. */
+  .claimcard .clusd{display:block;font-family:var(--mono);font-size:12.5px;color:var(--sub,#9aa0aa);margin-top:2px;}
+  .claimcard .clusd.big{font-size:13.5px;}
   .rlock .rsym{font-family:var(--disp);font-size:14px;color:#fff;line-height:1.05;white-space:nowrap;}
   .rlock .rvia{font-size:10px;margin-left:5px;vertical-align:middle;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
   .rlock .ramt{font-family:var(--mono,monospace);font-size:10.5px;color:#34d399;white-space:nowrap;margin-top:1px;}
@@ -875,7 +880,38 @@
     $('#clConnect').style.display='block'; $('#clWallet').style.display='none'; $('#clList').innerHTML='';
     $('#clMsg').className='msg'; $('#clMsg').textContent='Disconnected.';
   });
-  function fmtAmt(raw,dec){ var s=String(raw||'0'); dec=dec||0; if(dec<=0)return s.replace(/\B(?=(\d{3})+(?!\d))/g,','); while(s.length<=dec)s='0'+s; var i=s.slice(0,s.length-dec).replace(/\B(?=(\d{3})+(?!\d))/g,','), f=s.slice(s.length-dec).replace(/0+$/,''); return f?i+'.'+f.slice(0,4):i; }
+  // Truncating the fraction to 4 places made any small amount render as a flat "0.0000" — which,
+  // sitting next to an ENABLED Claim button, reads as "there is nothing here" on a lock that does
+  // hold tokens (a 9-decimal token with 1000 raw units showed exactly that). A non-zero amount
+  // must never display as zero, so fall back to "<0.0001" when the real value is smaller than the
+  // display can carry.
+  function fmtAmt(raw,dec){ var s=String(raw||'0'); dec=dec||0; if(dec<=0)return s.replace(/\B(?=(\d{3})+(?!\d))/g,','); while(s.length<=dec)s='0'+s; var i=s.slice(0,s.length-dec).replace(/\B(?=(\d{3})+(?!\d))/g,','), f=s.slice(s.length-dec).replace(/0+$/,''); if(!f) return i; var cut=f.slice(0,4); if(i==='0'&&!/[1-9]/.test(cut)) return '<0.0001'; return i+'.'+cut; }
+  // Price a raw on-chain amount for DISPLAY. Deliberately approximate and deliberately quiet:
+  //   - the token count stays the source of truth; this is orientation, so it is prefixed "≈";
+  //   - a token with no price (fresh mint, no pool) gets NO dollar line rather than "$0.00",
+  //     which would read as "your lock is worthless" on a token that simply is not listed yet;
+  //   - Number() loses precision past ~9e15 raw units. That is far beyond any plausible lock
+  //     value and only ever moves the last digits of a figure already shown as an estimate.
+  function usdText(raw, dec, price){
+    var p = Number(price);
+    if(!isFinite(p) || p <= 0) return '';
+    var amt = Number(String(raw||'0')) / Math.pow(10, Number(dec)||0);
+    if(!isFinite(amt) || amt <= 0) return '';
+    var v = amt * p;
+    // Sub-cent totals round to $0.00 and look broken, so say "<$0.01" instead.
+    if(v > 0 && v < 0.01) return '\u2248 <$0.01';
+    return '\u2248 $' + v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fillUsd(body, mint, price, sym){
+    body.querySelectorAll('[data-usd="'+CSS.escape(mint)+'"]').forEach(function(el){
+      var txt = usdText(el.getAttribute('data-raw'), el.getAttribute('data-dec'), price);
+      if(!txt) return;                     // unpriced token: leave the slot empty, no "$0.00"
+      // textContent: the amount is ours but `sym` is chain metadata, so it never touches innerHTML.
+      el.textContent = el.classList.contains('big') ? txt : ('total ' + txt);
+      el.title = sym ? (sym + ' priced live — an estimate, not a quote') : 'priced live — an estimate';
+    });
+  }
+
   function loadClaimable(){
     var body=$('#clList'); body.innerHTML='<div class="card"><p class="muted">Reading your locks on-chain…</p></div>';
     fetch('/api/lock/claimable?recipient='+encodeURIComponent(connected)).then(function(r){return r.json();}).then(function(d){
@@ -883,6 +919,10 @@
       if(!d.locks.length){ body.innerHTML='<div class="card"><p class="muted">No locks found paying out to this wallet. Tokens go to the <b>recipient</b> wallet chosen when the lock was created — connect that one.</p></div>'; return; }
       body.innerHTML=d.locks.map(function(l,i){
         var claimable=fmtAmt(l.claimableRaw,l.decimals), total=fmtAmt(l.totalRaw,l.decimals), claimed=fmtAmt(l.claimedRaw,l.decimals);
+        // USD slots, filled once the per-mint price lands below. They start EMPTY rather than as
+        // "$0.00" or a spinner: a wrong dollar figure next to a claim button is worse than none,
+        // and an unpriced token (brand-new mint, no pool) must simply show no dollar line at all.
+        var usdSlot=function(raw,cls){ return '<span class="clusd'+(cls||'')+'" data-usd="'+esc(l.mint)+'" data-raw="'+esc(String(raw||'0'))+'" data-dec="'+(l.decimals||0)+'"></span>'; };
         var can=l.claimableRaw && l.claimableRaw!=='0';
         var when=l.fullyVested?'fully vested':(l.startsClaimingAt*1000>Date.now()?('unlocks from '+new Date(l.startsClaimingAt*1000).toLocaleDateString()):'vesting');
         // Token identity first — ticker + logo, so several locks are told apart at a glance.
@@ -893,9 +933,9 @@
         return '<div class="card claimcard">'+
           '<div class="cltok">'+av+'<div><div class="cltsym" data-sym="'+esc(l.mint)+'">'+esc(shortAddr(l.mint))+'</div>'+
           '<div class="cltmint">'+esc(shortAddr(l.mint))+'</div></div></div>'+
-          '<div class="clrow"><div class="clamt"><span class="n '+(can?'live':'zero')+'">'+claimable+'</span><span class="u">claimable</span></div>'+
+          '<div class="clrow"><div class="clamt"><span class="n '+(can?'live':'zero')+'">'+claimable+'</span><span class="u">claimable</span>'+usdSlot(l.claimableRaw,' big')+'</div>'+
           '<button class="btn'+(can?'':' alt')+'" data-esc="'+esc(l.escrow)+'" data-i="'+i+'"'+(can?'':' disabled')+'>'+(can?'💰 Claim':'Nothing yet')+'</button></div>'+
-          '<div class="clmeta">total '+total+' · claimed '+claimed+' · '+when+'</div>'+
+          '<div class="clmeta">total '+total+' · claimed '+claimed+' · '+when+usdSlot(l.totalRaw)+'</div>'+
           '<div class="msg" id="clm'+i+'"></div></div>';
       }).join('');
       // One lookup per DISTINCT mint (a wallet often holds several locks of the same token), then
@@ -914,6 +954,7 @@
           body.querySelectorAll('[data-sym="'+CSS.escape(l.mint)+'"]').forEach(function(el){ el.textContent=sym; });
           var ini=String(sym).slice(0,1).toUpperCase();
           body.querySelectorAll('[data-av="'+CSS.escape(l.mint)+'"]').forEach(function(el){ el.childNodes[0].nodeValue=ini; });
+          fillUsd(body, l.mint, t.priceUsd, sym);
         }).catch(function(){});
       });
       body.querySelectorAll('button[data-esc]').forEach(function(btn){ btn.addEventListener('click',function(){ doClaim(btn.getAttribute('data-esc'), btn.getAttribute('data-i'), btn); }); });
