@@ -2,8 +2,8 @@
 <link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<meta name="robots" content="noindex,nofollow"/>
-<title>Make Token Metadata Immutable — Cluck Norris</title>
+<title>Make Your Token Metadata Immutable — free tool — Cluck Norris</title>
+<meta name="description" content="Clear the 'the creator can change this token' warning on your Solana token. Free: fix what your metadata shows, check it renders, then lock it permanently. No wallet gate, no signup."/>
 <style>
   body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);}
   .wrap{max-width:820px;margin:0 auto;padding:20px 16px 60px;}
@@ -27,8 +27,22 @@
   pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;font-size:12px;}
 </style></head><body>
 <div class="wrap">
-  <h1>TOKEN METADATA</h1>
-  <p class="sub">Fix what it shows, check it renders, then lock it forever. <b>Two steps, in that order.</b></p>
+  <h1>MAKE YOUR TOKEN METADATA IMMUTABLE</h1>
+  <p class="sub">Scanners warn that <b>&ldquo;the creator can change this token&rdquo;</b>. If that's not true of
+  yours any more, prove it on-chain. Free, no signup, no wallet needed to look.</p>
+
+  <div class="card">
+    <div class="k">READ THIS FIRST — IT IS PERMANENT</div>
+    <p class="muted" style="margin:0 0 10px;line-height:1.7">Locking metadata is <b>irreversible</b>. Afterwards
+    nobody can change your token's <b>name, symbol, logo, description or creators</b> — not a hacker, not a
+    future you. There is no undo, no support ticket, no recovery.</p>
+    <p class="muted" style="margin:0 0 10px;line-height:1.7"><b>Don't do this if</b> you might rebrand, you're
+    still settling on artwork, the project is early and the name could change, or someone else needs to be added
+    as a creator later. A mutable token is not a broken token — plenty of good projects stay mutable on purpose.</p>
+    <p class="muted" style="margin:0;line-height:1.7"><b>Do this if</b> your name, ticker and art are final and
+    you want holders to be able to verify that for themselves. That's the whole benefit: it turns
+    &ldquo;trust us&rdquo; into something checkable.</p>
+  </div>
 
   <div class="card">
     <div class="k">TOKEN</div>
@@ -63,6 +77,7 @@
   var $ = function(id){ return document.getElementById(id); };
   var KEYQ = new URLSearchParams(location.search).get('key') || '';
   var provider = null, wallet = null, loaded = null, prepared = null;
+  var preparedBody = null;   // the exact request that produced `prepared`, so it can be rebuilt
 
   function api(path, opts){
     var sep = path.indexOf('?') === -1 ? '?' : '&';
@@ -100,8 +115,27 @@
     }).catch(function(e){ $('state').innerHTML = '<div class="card"><span class="bad">' + esc(e.message) + '</span></div>'; });
   });
 
+  // Step 1 lives inside the block render() rebuilds, so connecting a wallet used to silently wipe
+  // everything typed into it — including the rebuilt URI, leaving BUILD UPDATE asking for a URI
+  // that had been there a second earlier. Carry the text fields across a re-render.
+  var CARRY = ['newUri', 'imgOverride', 'descOverride'];
+  function snapshotFields(){
+    var out = {};
+    CARRY.forEach(function(id){ var el = $(id); if (el) out[id] = el.value; });
+    var dc = $('dropCreator'); if (dc) out.dropCreator = dc.checked;
+    return out;
+  }
+  function restoreFields(v){
+    if (!v) return;
+    CARRY.forEach(function(id){ var el = $(id); if (el && v[id] != null) el.value = v[id]; });
+    var dc = $('dropCreator'); if (dc && v.dropCreator != null) dc.checked = v.dropCreator;
+    // The Step 2 confirmations are deliberately NOT carried — they attest to what you saw with a
+    // given wallet connected, and a wallet change invalidates that.
+  }
+
   function render(){
     if (!loaded) { $('state').innerHTML = ''; return; }
+    var carried = snapshotFields();
     var m = loaded.metadata, a = loaded.authorities;
     var rows = [
       ['Name', esc2(m.name)], ['Symbol', esc2(m.symbol)],
@@ -116,7 +150,32 @@
       rows.map(function(r){ return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
       '</div>';
 
-    if (!m.isMutable) { $('state').innerHTML = html + '<div class="card"><span class="ok">This token is already immutable. Nothing here can change it.</span></div>'; return; }
+    // A scanner's warning covers THREE authorities. This tool only closes the third, so a token
+    // with a live mint authority gains nothing from locking metadata — the banner stays. Saying so
+    // is the difference between a tool and a trap: someone locks their name forever, expecting the
+    // warning to clear, and it doesn't.
+    var openFlags = [];
+    if (a.mintAuthority) openFlags.push('<li><b>Mint authority is live.</b> Whoever holds it can create more of your ' +
+      'token at any time, diluting every holder. This is the one scanners weigh most heavily.</li>');
+    if (a.freezeAuthority) openFlags.push('<li><b>Freeze authority is live.</b> Whoever holds it can freeze any ' +
+      'holder\'s tokens in place, so they cannot sell.</li>');
+    if (openFlags.length) {
+      html += '<div class="card"><div class="k">⚠️ THIS TOOL WILL NOT CLEAR YOUR WARNING YET</div>' +
+        '<p class="muted" style="margin:0 0 8px;line-height:1.7">Scanners flag three separate things. This tool ' +
+        'currently fixes only <b>metadata</b>. Your token still has:</p>' +
+        '<ul class="muted" style="margin:0 0 8px;line-height:1.7;padding-left:20px">' + openFlags.join('') + '</ul>' +
+        '<p class="muted" style="margin:0;line-height:1.7">Locking metadata is still a real improvement and it is ' +
+        'permanent — but on its own it <b>will not remove the warning</b>. Revoking mint and freeze authority is done ' +
+        'with your token\'s CLI or the tool you launched with. We are adding it here; until then we would rather say ' +
+        'so than let you freeze your name expecting a result you will not get.</p></div>';
+    } else if (m.isMutable) {
+      html += '<div class="card"><div class="k">GOOD NEWS</div><p class="muted" style="margin:0;line-height:1.7">' +
+        'Mint and freeze authority are already revoked, so <b>metadata is the only flag left</b> on this token. ' +
+        'Locking it clears the warning completely.</p></div>';
+    }
+
+    if (!m.isMutable) { $('state').innerHTML = html + '<div class="card"><span class="ok">✅ This token\'s metadata is ' +
+      'already immutable. Nobody can change its name, symbol, URI or creators — including you. Nothing here can undo that.</span></div>'; return; }
 
     var authMatch = wallet && wallet === m.updateAuthority;
     var gate = wallet
@@ -133,6 +192,16 @@
       '<input id="imgOverride" placeholder="optional: ipfs://… or https://… image to use instead" autocomplete="off" spellcheck="false" style="margin-top:8px"/>' +
       '<p class="muted" style="margin:8px 0 0">Leave the image box empty and the rebuild keeps the image the token already has. ' +
       'Fill it in only if you have pinned the logo somewhere you control — <b>paste the exact file</b>, not a resized copy.</p>' +
+      '<textarea id="descOverride" rows="4" placeholder="optional: replace the description (leave empty to keep the current one)" ' +
+      'style="margin-top:8px;width:100%;box-sizing:border-box;font:inherit;color:inherit;background:rgba(0,0,0,0.25);' +
+      'border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px"></textarea>' +
+      '<p class="muted" style="margin:8px 0 0">The description is the only prose a holder sees in a wallet. After Step 2 it is frozen ' +
+      '<b>twice over</b> — the URI cannot be repointed, and Arweave files cannot be edited. Fix any wording now or never.</p>' +
+      '<label style="display:block;margin:10px 0 0"><input type="checkbox" id="dropCreator"/> ' +
+      'Drop the launchpad\'s <code>creator</code> credit from the JSON</label>' +
+      '<p class="muted" style="margin:6px 0 0">Some launchpads stamp a <code>creator: {name, site}</code> block into the metadata. ' +
+      'It is <b>not</b> the on-chain verified creator and nothing reads it for authority — but it is a third-party URL that gets ' +
+      'frozen with everything else, and stays pointing there even if that domain later changes hands.</p>' +
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
       '<button id="rebuild" class="alt">REBUILD JSON → ARWEAVE</button>' +
       '<button id="doUpdate"' + dis + '>BUILD UPDATE (KEEPS IT EDITABLE)</button></div>' +
@@ -150,6 +219,7 @@
       '<p class="muted" style="margin:8px 0 0">After this, nobody can change the name, symbol, URI or creators of this token again — including you.</p></div>';
 
     $('state').innerHTML = html;
+    restoreFields(carried);
     var boxes = [].slice.call(document.querySelectorAll('.cx'));
     function refreshLock(){ $('doLock').disabled = !(authMatch && boxes.every(function(b){ return b.checked; })); }
     boxes.forEach(function(b){ b.addEventListener('change', refreshLock); });
@@ -165,7 +235,15 @@
     $('plan').innerHTML = '<div class="card"><span class="muted">Fetching the current JSON, mirroring the image…</span></div>';
     api('/api/token-metadata/rebuild-json', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mint: loaded.mint, imageOverride: ($('imgOverride').value || '').trim() || null }),
+      body: (function(){
+        var b = { mint: loaded.mint, imageOverride: ($('imgOverride').value || '').trim() || null };
+        // Only send the field when there is something to send — an empty string is REJECTED by the
+        // server rather than silently wiping the description, so it must not be sent by accident.
+        var d = ($('descOverride').value || '').trim();
+        if (d) b.description = d;
+        if ($('dropCreator') && $('dropCreator').checked) b.omitKeys = ['creator'];
+        return JSON.stringify(b);
+      })(),
     }).then(function(d){
       btn.disabled = false; btn.textContent = 'REBUILD JSON → ARWEAVE';
       if (!d.ok) { $('plan').innerHTML = '<div class="card"><span class="bad">' + esc2(d.error) + '</span>' +
@@ -180,6 +258,11 @@
         '<div class="row"><span>New JSON</span><b><a href="' + safeUrl(d.newUri) + '" target="_blank" rel="noopener noreferrer">' + esc2(d.newUri) + '</a></b></div>' +
         '<div class="row"><span>Image now</span><b>' + esc2(d.newImage) + '</b></div>' +
         '<div class="row"><span>Image was</span><b>' + esc2(d.previousImage) + '</b></div>' +
+        ((d.omitted || []).length
+          ? '<div class="row"><span>Dropped</span><b><span class="warn">' + esc2(d.omitted.join(', ')) + '</span></b></div>' : '') +
+        '<div class="row"><span>Description</span><b>' + (d.descriptionChanged
+            ? '<span class="warn">REPLACED</span> — ' + esc2(String(d.json && d.json.description || '').length) + ' chars'
+            : '<span class="ok">unchanged</span>') + '</b></div>' +
         '<div class="row"><span>Fields kept</span><b>' + esc2((d.preservedKeys||[]).join(', ')) + '</b></div>' +
         '<pre>' + esc((d.steps||[]).join('\n')) + '</pre>' +
         '<p class="muted">Open the new JSON and its image above and check they load. Then use ' +
@@ -195,6 +278,7 @@
     var body = { mint: loaded.mint, makeImmutable: !!makeImmutable };
     var nu = $('newUri') && $('newUri').value.trim();
     if (nu) body.newUri = nu;
+    preparedBody = body;   // signAndSend rebuilds from this with a FRESH blockhash
     if (!nu && !makeImmutable) { $('plan').innerHTML = '<div class="card"><span class="bad">Enter a new URI first.</span></div>'; return; }
     $('plan').innerHTML = '<div class="card"><span class="muted">Building…</span></div>';
     api('/api/token-metadata/prepare', {
@@ -232,38 +316,93 @@
   // ---- sign + send ------------------------------------------------------------------------------
   // The server built this UNSIGNED and holds no key. The connected wallet is the only signer, so
   // signTransaction then submit raw — never signAndSendTransaction, matching the locker-room flow.
+  // The review panel is what the user approved. A rebuild must reproduce the SAME plan — if
+  // on-chain state moved in between, the signature would cover something nobody read.
+  function planFingerprint(d){
+    var c = d.changes || {}, p = d.preserved || {};
+    return JSON.stringify([!!d.irreversible, !!(c.uri && c.uri.changed), c.uri && c.uri.from,
+      c.uri && c.uri.to, p.name, p.symbol, p.sellerFeeBasisPoints, p.updateAuthority, p.creators || null]);
+  }
+
+  function rpc(method, params){
+    return fetch('/api/helius-rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: method, params: params }) })
+      .then(function(r){ return r.json(); });
+  }
+
+  // A signature back from sendTransaction means the RPC ACCEPTED the tx, not that it landed — an
+  // almost-expired blockhash is accepted and then dropped before any leader picks it up. That is
+  // exactly what happened on ROSE: the page said SENT and nothing had changed on-chain. So poll
+  // until the cluster confirms it, and say so plainly when it never does.
+  function awaitConfirmation(sig, onTick){
+    var started = Date.now();
+    return new Promise(function(resolve, reject){
+      (function poll(){
+        rpc('getSignatureStatuses', [[sig], { searchTransactionHistory: true }]).then(function(j){
+          var v = j && j.result && j.result.value && j.result.value[0];
+          if (v) {
+            if (v.err) return reject(new Error('the transaction landed but FAILED on-chain: ' + JSON.stringify(v.err)));
+            if (v.confirmationStatus === 'confirmed' || v.confirmationStatus === 'finalized') return resolve(v);
+          }
+          var waited = Math.round((Date.now() - started) / 1000);
+          if (waited >= 90) {
+            return reject(new Error('the network never confirmed this transaction (' + waited + 's). ' +
+              'It was dropped — nothing changed on-chain. Build it again and sign straight away.'));
+          }
+          if (onTick) onTick(waited);
+          setTimeout(poll, 3000);
+        }).catch(function(){ setTimeout(poll, 3000); });
+      })();
+    });
+  }
+
   function signAndSend(){
-    if (!provider || !prepared) return;
-    var btn = $('sign'); btn.disabled = true; btn.textContent = 'SIGNING…';
-    try {
+    if (!provider || !prepared || !preparedBody) return;
+    var btn = $('sign'); btn.disabled = true; btn.textContent = 'REFRESHING…';
+    var approved = planFingerprint(prepared);
+    // Rebuild before signing. A blockhash lives ~60-90s and the review this tool asks for routinely
+    // outlives it ("Blockhash not found"). Refreshing beats a longer-lived hash, which would only
+    // widen the replay window.
+    api('/api/token-metadata/prepare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(preparedBody),
+    }).then(function(fresh){
+      if (!fresh || !fresh.ok) throw new Error((fresh && fresh.error) || 'could not refresh the transaction');
+      if (planFingerprint(fresh) !== approved) {
+        throw new Error('the token changed on-chain since you reviewed this — NOTHING was signed. ' +
+                        'Re-load the token and build it again.');
+      }
+      prepared = fresh;
+      btn.textContent = 'SIGNING…';
       var tx = solanaWeb3.Transaction.from(Uint8Array.from(atob(prepared.unsignedBase64), function(c){ return c.charCodeAt(0); }));
-      provider.signTransaction(tx).then(function(signed){
+      return provider.signTransaction(tx);
+    }).then(function(signed){
         btn.textContent = 'SENDING…';
-        return fetch('/api/helius-rpc', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sendTransaction',
-            params: [btoa(String.fromCharCode.apply(null, signed.serialize())), { encoding: 'base64' }] }),
-        }).then(function(r){ return r.json(); });
+        return rpc('sendTransaction', [btoa(String.fromCharCode.apply(null, signed.serialize())),
+          { encoding: 'base64', preflightCommitment: 'confirmed' }]);
       }).then(function(j){
         if (j.error) throw new Error(j.error.message || 'send failed');
         var sig = j.result;
+        $('out').innerHTML = '<div class="card"><div class="k">SENT — WAITING FOR CONFIRMATION</div>' +
+          '<p><a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener noreferrer">' + esc(sig) + '</a></p>' +
+          '<p class="muted" id="confTick">Accepted by the RPC. That is not the same as landing — waiting for the cluster to confirm…</p></div>';
+        btn.textContent = 'CONFIRMING…';
+        return awaitConfirmation(sig, function(waited){
+          var t = $('confTick'); if (t) t.textContent = 'Accepted by the RPC. Waiting for the cluster to confirm… ' + waited + 's';
+        }).then(function(){ return sig; });
+      }).then(function(sig){
         var wasLock = prepared.irreversible;
-        $('out').innerHTML = '<div class="card"><div class="k">SENT</div>' +
+        $('out').innerHTML = '<div class="card"><div class="k">CONFIRMED ON-CHAIN</div>' +
           '<p><a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener noreferrer">' + esc(sig) + '</a></p>' +
           (wasLock
             ? '<p class="muted">Re-load the token above — <b>Metadata mutable</b> should now read <span class="ok">already immutable</span>. ' +
               'Rugcheck and CoinGecko cache, so the banner clears on their next scan, not instantly.</p>'
             : '<p class="muted">Re-load the token above to see the new URI. Now go and check it renders: open the URI, open the image ' +
               'inside it, and look at the token in a wallet. <b>Only then</b> come back for Step 2.</p>') + '</div>';
-        btn.textContent = 'SENT';
-      }).catch(function(e){
-        $('out').innerHTML = '<div class="card"><span class="bad">' + esc(e.message || 'failed') + '</span></div>';
-        btn.disabled = false; btn.textContent = 'SIGN IN WALLET & SEND';
-      });
-    } catch (e) {
-      $('out').innerHTML = '<div class="card"><span class="bad">' + esc(e.message) + '</span></div>';
+        btn.textContent = 'CONFIRMED';
+    }).catch(function(e){
+      $('out').innerHTML = '<div class="card"><span class="bad">' + esc(e.message || 'failed') + '</span></div>';
       btn.disabled = false; btn.textContent = 'SIGN IN WALLET & SEND';
-    }
+    });
   }
 
   var qm = new URLSearchParams(location.search).get('mint');

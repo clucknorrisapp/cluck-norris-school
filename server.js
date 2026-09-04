@@ -3415,6 +3415,14 @@ app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
 // Heavy forensic GETs fan out to many billed Helius/ST/Bags upstream calls each;
 // give them a tight SHARED per-IP budget on top of the global 150/min so an
 // anonymous caller can't drain paid quota. (sec M3)
+// The token tools are FREE and unauthenticated (owner, 2026-09-04) — a safety fix behind a
+// paywall helps nobody. That makes these the caps. `read` and `prepare` only cost an RPC call;
+// `rebuild` fetches a remote document and spends our Arweave upload allowance, so it gets a tight
+// per-minute cap AND an hourly one — a per-minute limit alone still allows 360 uploads an hour.
+app.use("/api/token-metadata/read", rateLimit("tokenmeta", { windowMs: 60000, max: 30 }));
+app.use("/api/token-metadata/prepare", rateLimit("tokenmeta", { windowMs: 60000, max: 20 }));
+app.use("/api/token-metadata/rebuild-json", rateLimit("tokenmetaUpload", { windowMs: 60000, max: 6 }));
+app.use("/api/token-metadata/rebuild-json", rateLimit("tokenmetaUploadHr", { windowMs: 3600000, max: 30 }));
 app.use("/api/autopsy", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/wallet-xray", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/trace", rateLimit("forensic", { windowMs: 60000, max: 15 }));
@@ -7573,7 +7581,6 @@ function tokenMetaRpcUrl() {
 // authority's own signature: the server builds it UNSIGNED and never holds a key.
 app.get("/api/token-metadata/read", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
     const mint = String((req.query && req.query.mint) || "").trim();
     if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
@@ -7611,7 +7618,6 @@ app.get("/api/token-metadata/read", async (req, res) => {
 // 512x512 logo in place of the real 1080x1080 one.
 app.post("/api/token-metadata/rebuild-json", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   // Declared out here so a failure ANYWHERE still reports what had already happened — an error
   // with no trail is what makes "it didn't work" unactionable.
   const steps = [];
@@ -7630,7 +7636,14 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
     // Rewriting it from scratch is how a description quietly disappears on the last edit ever made.
     const srcUrl = String(b.sourceUrl || current.uri || "");
     if (!/^https:\/\//i.test(srcUrl)) return res.status(400).json({ ok: false, error: "unreadable_source_uri", uri: srcUrl });
-    const jr = await fetch(srcUrl, { signal: AbortSignal.timeout(25000) });
+    // sourceUrl is caller-supplied (the on-chain gateway is often the throttled one), so this is a
+    // server fetching a stranger's URL. safeFetch resolves the host, refuses every private range,
+    // and re-checks each redirect hop — a 302 to 169.254.169.254 is the standard way past a check
+    // done only on the original URL. See scripts/safe-fetch-test.cjs.
+    const { safeFetch } = require("./lib/safe-fetch");
+    let jr;
+    try { jr = await safeFetch(srcUrl, { signal: AbortSignal.timeout(25000) }); }
+    catch (e) { return res.status(400).json({ ok: false, error: "refused_source_uri", detail: e.message, steps }); }
     if (!jr.ok) return res.status(502).json({ ok: false, error: `source_json_http_${jr.status}`,
       detail: "the current metadata JSON could not be read — pass sourceUrl with a working gateway" });
     const meta = await jr.json();
@@ -7646,24 +7659,60 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
       // ?imageOverride=ipfs://… — point at a CID you pinned yourself. See the note in the lib:
       // a re-upload gets a different CID for the same pixels, and that new one is the whole point.
       override: b.imageOverride || null,
-      mirror: b.preferArweaveMirror === false ? null : async (url) => {
-        const ir = await fetch(url, { signal: AbortSignal.timeout(40000) });
+      // Mirroring is OPT-IN now this route is public. It fetches a full image and spends our
+      // Arweave allowance per call; the ipfs:// rewrite and a caller-supplied CID both cost
+      // nothing and are what actually worked for ROSE. Opting in still goes through safeFetch.
+      mirror: b.preferArweaveMirror === true ? async (url) => {
+        const ir = await safeFetch(url, { signal: AbortSignal.timeout(40000) });
         if (!ir.ok) throw new Error(`image fetch HTTP ${ir.status}`);
         const bytes = Buffer.from(await ir.arrayBuffer());
         const ctype = String(ir.headers.get("content-type") || "image/jpeg").split(";")[0];
         if (!/^image\//.test(ctype)) throw new Error(`not an image (${ctype})`);
         steps.push(`fetched original image: ${bytes.length} bytes, ${ctype}`);
         return uploadBytesToArweave(bytes, ctype);
-      },
+      } : null,
     });
     steps.push(...pick.steps);
     const newImage = pick.image, method = pick.method;
     if (!newImage) return res.status(400).json({ ok: false, error: "no_durable_image_option", imageUrl: imgUrl, steps });
 
     const next = { ...meta, image: newImage };
+    // The description is the ONLY prose a holder ever sees, and after the lock it is frozen twice
+    // over — the URI can't be repointed and Arweave can't be edited. So it gets an explicit
+    // override here rather than a "just re-upload the JSON by hand" workaround.
+    if (typeof b.description === "string") {
+      const d = b.description.trim();
+      if (!d) return res.status(400).json({ ok: false, error: "empty_description",
+        detail: "omit the field to keep the current description; don't pass an empty one", steps });
+      if (d.length > 4000) return res.status(400).json({ ok: false, error: "description_too_long",
+        detail: `${d.length} chars; keep it under 4000`, steps });
+      if (d !== String(meta.description || "")) {
+        next.description = d;
+        steps.push(`description replaced (${String(meta.description || "").length} → ${d.length} chars)`);
+      }
+    }
+    // Drop launchpad cruft — e.g. the `creator: {name, site}` block CoinFactory stamps in, which
+    // is NOT the on-chain verified creator and carries a third-party URL that would be frozen
+    // alongside everything else. Explicit list only, and the fields a wallet actually renders are
+    // refused outright: silently losing a name or an image on the last edit ever made is
+    // unrecoverable, and no convenience is worth that.
+    const OMIT_PROTECTED = new Set(["name", "symbol", "image", "description"]);
+    if (Array.isArray(b.omitKeys) && b.omitKeys.length) {
+      const bad = b.omitKeys.filter((k) => OMIT_PROTECTED.has(String(k)));
+      if (bad.length) return res.status(400).json({ ok: false, error: "protected_key",
+        detail: `refusing to drop ${bad.join(", ")} — a wallet renders these`, steps });
+      for (const k of b.omitKeys) {
+        const key = String(k);
+        if (key in next) { delete next[key]; steps.push(`dropped field: ${key}`); }
+        else steps.push(`field not present, nothing to drop: ${key}`);
+      }
+    }
     const newUri = await uploadJsonToArweave(next);
     steps.push(`uploaded new metadata JSON to Arweave: ${newUri}`);
     res.json({ ok: true, mint, method, newUri, newImage, previousImage: imgUrl,
+               omitted: (b.omitKeys || []).filter((k) => k in meta),
+               descriptionChanged: next.description !== meta.description,
+               previousDescription: meta.description || null,
                json: next, preservedKeys: Object.keys(meta), steps });
   } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "rebuild failed"), steps }); }
 });
@@ -7675,7 +7724,6 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
 // URI that will still resolve in ten years.
 app.post("/api/token-metadata/prepare", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   // Declared out here so a failure ANYWHERE still reports what had already happened — an error
   // with no trail is what makes "it didn't work" unactionable.
   const steps = [];
@@ -13249,10 +13297,12 @@ app.get("/api/token-card", async (req, res) => {
 app.get("/hatchery", (req, res) => {
   res.sendFile(join(__dirname, "public", "hatchery.html"));
 });
-// Make-metadata-immutable, an OPERATOR tool (noindex, absent from the sitemap). Explicit route
-// because public/ is only served through the vite build's copy in dist/ — without this it 404s on
-// a no-build boot. The page itself is inert without the update authority's signature; the ?key=
-// only unlocks the two API calls behind it.
+// Make-metadata-immutable — PUBLIC and free (owner, 2026-09-04): a safety fix behind a paywall
+// helps nobody, and this is the only tool anywhere that helps a token owner clear the "the creator
+// can change this token" warning rather than just reporting it. Explicit route because public/ is
+// only served through the vite build's copy in dist/ — without this it 404s on a no-build boot.
+// The page is inert without the update authority's signature; the server holds no key and builds
+// UNSIGNED transactions only. Abuse is bounded by the rate limits on /api/token-metadata/*.
 app.get("/token-lock", (req, res) => {
   res.sendFile(join(__dirname, "public", "token-lock.html"));
 });
@@ -14513,6 +14563,8 @@ const SITEMAP_PAGES = [
   "/snapshot", "/holders", "/owners-snapshot", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
   "/wallet-checkup", "/locker-room", "/clkn", "/alpha", "/lp-lab",
   "/classroom", "/bags", "/investors", "/privacy", "/terms",
+  // /token-lock became public + indexable 2026-09-04 (was operator-only, noindex).
+  "/token-lock", "/firepit", "/project-burn",
   // /liquidity + /liquidity-engine dropped 2026-07-19 (audit): both serve a locked
   // "In Development" placeholder — re-add when the engine goes public.
 ];
