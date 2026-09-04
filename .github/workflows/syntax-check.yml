@@ -199,6 +199,15 @@ jobs:
         run: |
           npm i --no-save playwright@1.62.1
           npx playwright install --with-deps chromium
+      # The make-metadata-immutable instruction is hand-built (the Metaplex SDK is ESM-only and
+      # fights this CommonJS server) and its effect is IRREVERSIBLE — one wrong Option byte
+      # permanently erases a token's verified creator. This byte-diffs it against the real
+      # library's own serializer. Lives here, not node-check: it needs @solana/web3.js and the
+      # Metaplex package, and node-check installs nothing.
+      - name: token-metadata lock instruction (byte-diff vs Metaplex)
+        env:
+          METAPLEX_REQUIRE_BYTEDIFF: "1"
+        run: node scripts/token-metadata-lock-test.cjs
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
