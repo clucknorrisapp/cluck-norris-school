@@ -7661,9 +7661,25 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
     if (!newImage) return res.status(400).json({ ok: false, error: "no_durable_image_option", imageUrl: imgUrl, steps });
 
     const next = { ...meta, image: newImage };
+    // The description is the ONLY prose a holder ever sees, and after the lock it is frozen twice
+    // over — the URI can't be repointed and Arweave can't be edited. So it gets an explicit
+    // override here rather than a "just re-upload the JSON by hand" workaround.
+    if (typeof b.description === "string") {
+      const d = b.description.trim();
+      if (!d) return res.status(400).json({ ok: false, error: "empty_description",
+        detail: "omit the field to keep the current description; don't pass an empty one", steps });
+      if (d.length > 4000) return res.status(400).json({ ok: false, error: "description_too_long",
+        detail: `${d.length} chars; keep it under 4000`, steps });
+      if (d !== String(meta.description || "")) {
+        next.description = d;
+        steps.push(`description replaced (${String(meta.description || "").length} → ${d.length} chars)`);
+      }
+    }
     const newUri = await uploadJsonToArweave(next);
     steps.push(`uploaded new metadata JSON to Arweave: ${newUri}`);
     res.json({ ok: true, mint, method, newUri, newImage, previousImage: imgUrl,
+               descriptionChanged: next.description !== meta.description,
+               previousDescription: meta.description || null,
                json: next, preservedKeys: Object.keys(meta), steps });
   } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "rebuild failed"), steps }); }
 });
