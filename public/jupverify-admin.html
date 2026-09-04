@@ -109,7 +109,11 @@
 <script src="/cluck-util.js"></script>
 <script>
 (function(){
-  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
+  // safeUrl, NOT esc, for anything going into an href. These fields come from the PUBLIC,
+  // unauthenticated intake form (jupverify.html) — a submitter can put javascript:… in Website,
+  // and escaping does not stop it: the HTML parser decodes the entities back before the URL runs.
+  // This page keeps the JVP admin key in sessionStorage, so one click hands it over.
+  var esc = CluckUtil.esc, safeUrl = CluckUtil.safeUrl, shortAddr = CluckUtil.shortAddr;
   var KEY_STORE = 'clkn_jvp_admin_key';
   var key = '', current = null;
   var STATUSES = ['submitted','in_review','needs_info','engine_live','submitted_to_jupiter','verified','rejected','archived'];
@@ -172,10 +176,10 @@
       ['Mint', esc(s.mint)],
       ['Submitter wallet', esc(s.wallet)+' — '+authBadge],
       ['Description', esc(s.description)],
-      ['Website', '<a href="'+esc(s.website)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(s.website)+'</a>'],
-      ['Icon URL', '<a href="'+esc(s.iconUrl)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(s.iconUrl)+'</a>'+(s.iconPermanent?' <span class="badge-ok">(claimed permanent)</span>':' <span class="badge-warn">(needs Arweave)</span>')],
+      ['Website', '<a href="'+safeUrl(s.website)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(s.website)+'</a>'],
+      ['Icon URL', '<a href="'+safeUrl(s.iconUrl)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(s.iconUrl)+'</a>'+(s.iconPermanent?' <span class="badge-ok">(claimed permanent)</span>':' <span class="badge-warn">(needs Arweave)</span>')],
       ['X', '@'+esc(s.xHandle)],
-      ['Telegram', s.telegramUrl?'<a href="'+esc(s.telegramUrl)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(s.telegramUrl)+'</a>':'—'],
+      ['Telegram', s.telegramUrl?'<a href="'+safeUrl(s.telegramUrl)+'" target="_blank" rel="noopener noreferrer nofollow">'+esc(s.telegramUrl)+'</a>':'—'],
       ['Discord', s.discordUrl?esc(s.discordUrl):'—'],
       ['Other', s.otherUrl?esc(s.otherUrl):'—'],
       ['Team %', esc(String(s.teamPct==null?'—':s.teamPct))],
