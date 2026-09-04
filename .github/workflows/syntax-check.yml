@@ -61,6 +61,10 @@ jobs:
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
       - name: liquidity-engine decision simulator
         run: node scripts/engine-sim-test.cjs
+      # The check that gates whether a giveaway winner gets PAID. It false-positived on every
+      # winner on 2026-09-04 because it judged a hold in dollars and the price cache was cold.
+      - name: giveaway hold-check (token-based, survives a cold price feed)
+        run: node scripts/giveaway-holdcheck-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —
