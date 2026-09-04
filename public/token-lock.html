@@ -63,6 +63,7 @@
   var $ = function(id){ return document.getElementById(id); };
   var KEYQ = new URLSearchParams(location.search).get('key') || '';
   var provider = null, wallet = null, loaded = null, prepared = null;
+  var preparedBody = null;   // the exact request that produced `prepared`, so it can be rebuilt
 
   function api(path, opts){
     var sep = path.indexOf('?') === -1 ? '?' : '&';
@@ -195,6 +196,7 @@
     var body = { mint: loaded.mint, makeImmutable: !!makeImmutable };
     var nu = $('newUri') && $('newUri').value.trim();
     if (nu) body.newUri = nu;
+    preparedBody = body;   // signAndSend rebuilds from this with a FRESH blockhash
     if (!nu && !makeImmutable) { $('plan').innerHTML = '<div class="card"><span class="bad">Enter a new URI first.</span></div>'; return; }
     $('plan').innerHTML = '<div class="card"><span class="muted">Building…</span></div>';
     api('/api/token-metadata/prepare', {
@@ -232,38 +234,93 @@
   // ---- sign + send ------------------------------------------------------------------------------
   // The server built this UNSIGNED and holds no key. The connected wallet is the only signer, so
   // signTransaction then submit raw — never signAndSendTransaction, matching the locker-room flow.
+  // The review panel is what the user approved. A rebuild must reproduce the SAME plan — if
+  // on-chain state moved in between, the signature would cover something nobody read.
+  function planFingerprint(d){
+    var c = d.changes || {}, p = d.preserved || {};
+    return JSON.stringify([!!d.irreversible, !!(c.uri && c.uri.changed), c.uri && c.uri.from,
+      c.uri && c.uri.to, p.name, p.symbol, p.sellerFeeBasisPoints, p.updateAuthority, p.creators || null]);
+  }
+
+  function rpc(method, params){
+    return fetch('/api/helius-rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: method, params: params }) })
+      .then(function(r){ return r.json(); });
+  }
+
+  // A signature back from sendTransaction means the RPC ACCEPTED the tx, not that it landed — an
+  // almost-expired blockhash is accepted and then dropped before any leader picks it up. That is
+  // exactly what happened on ROSE: the page said SENT and nothing had changed on-chain. So poll
+  // until the cluster confirms it, and say so plainly when it never does.
+  function awaitConfirmation(sig, onTick){
+    var started = Date.now();
+    return new Promise(function(resolve, reject){
+      (function poll(){
+        rpc('getSignatureStatuses', [[sig], { searchTransactionHistory: true }]).then(function(j){
+          var v = j && j.result && j.result.value && j.result.value[0];
+          if (v) {
+            if (v.err) return reject(new Error('the transaction landed but FAILED on-chain: ' + JSON.stringify(v.err)));
+            if (v.confirmationStatus === 'confirmed' || v.confirmationStatus === 'finalized') return resolve(v);
+          }
+          var waited = Math.round((Date.now() - started) / 1000);
+          if (waited >= 90) {
+            return reject(new Error('the network never confirmed this transaction (' + waited + 's). ' +
+              'It was dropped — nothing changed on-chain. Build it again and sign straight away.'));
+          }
+          if (onTick) onTick(waited);
+          setTimeout(poll, 3000);
+        }).catch(function(){ setTimeout(poll, 3000); });
+      })();
+    });
+  }
+
   function signAndSend(){
-    if (!provider || !prepared) return;
-    var btn = $('sign'); btn.disabled = true; btn.textContent = 'SIGNING…';
-    try {
+    if (!provider || !prepared || !preparedBody) return;
+    var btn = $('sign'); btn.disabled = true; btn.textContent = 'REFRESHING…';
+    var approved = planFingerprint(prepared);
+    // Rebuild before signing. A blockhash lives ~60-90s and the review this tool asks for routinely
+    // outlives it ("Blockhash not found"). Refreshing beats a longer-lived hash, which would only
+    // widen the replay window.
+    api('/api/token-metadata/prepare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(preparedBody),
+    }).then(function(fresh){
+      if (!fresh || !fresh.ok) throw new Error((fresh && fresh.error) || 'could not refresh the transaction');
+      if (planFingerprint(fresh) !== approved) {
+        throw new Error('the token changed on-chain since you reviewed this — NOTHING was signed. ' +
+                        'Re-load the token and build it again.');
+      }
+      prepared = fresh;
+      btn.textContent = 'SIGNING…';
       var tx = solanaWeb3.Transaction.from(Uint8Array.from(atob(prepared.unsignedBase64), function(c){ return c.charCodeAt(0); }));
-      provider.signTransaction(tx).then(function(signed){
+      return provider.signTransaction(tx);
+    }).then(function(signed){
         btn.textContent = 'SENDING…';
-        return fetch('/api/helius-rpc', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sendTransaction',
-            params: [btoa(String.fromCharCode.apply(null, signed.serialize())), { encoding: 'base64' }] }),
-        }).then(function(r){ return r.json(); });
+        return rpc('sendTransaction', [btoa(String.fromCharCode.apply(null, signed.serialize())),
+          { encoding: 'base64', preflightCommitment: 'confirmed' }]);
       }).then(function(j){
         if (j.error) throw new Error(j.error.message || 'send failed');
         var sig = j.result;
+        $('out').innerHTML = '<div class="card"><div class="k">SENT — WAITING FOR CONFIRMATION</div>' +
+          '<p><a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener noreferrer">' + esc(sig) + '</a></p>' +
+          '<p class="muted" id="confTick">Accepted by the RPC. That is not the same as landing — waiting for the cluster to confirm…</p></div>';
+        btn.textContent = 'CONFIRMING…';
+        return awaitConfirmation(sig, function(waited){
+          var t = $('confTick'); if (t) t.textContent = 'Accepted by the RPC. Waiting for the cluster to confirm… ' + waited + 's';
+        }).then(function(){ return sig; });
+      }).then(function(sig){
         var wasLock = prepared.irreversible;
-        $('out').innerHTML = '<div class="card"><div class="k">SENT</div>' +
+        $('out').innerHTML = '<div class="card"><div class="k">CONFIRMED ON-CHAIN</div>' +
           '<p><a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener noreferrer">' + esc(sig) + '</a></p>' +
           (wasLock
             ? '<p class="muted">Re-load the token above — <b>Metadata mutable</b> should now read <span class="ok">already immutable</span>. ' +
               'Rugcheck and CoinGecko cache, so the banner clears on their next scan, not instantly.</p>'
             : '<p class="muted">Re-load the token above to see the new URI. Now go and check it renders: open the URI, open the image ' +
               'inside it, and look at the token in a wallet. <b>Only then</b> come back for Step 2.</p>') + '</div>';
-        btn.textContent = 'SENT';
-      }).catch(function(e){
-        $('out').innerHTML = '<div class="card"><span class="bad">' + esc(e.message || 'failed') + '</span></div>';
-        btn.disabled = false; btn.textContent = 'SIGN IN WALLET & SEND';
-      });
-    } catch (e) {
-      $('out').innerHTML = '<div class="card"><span class="bad">' + esc(e.message) + '</span></div>';
+        btn.textContent = 'CONFIRMED';
+    }).catch(function(e){
+      $('out').innerHTML = '<div class="card"><span class="bad">' + esc(e.message || 'failed') + '</span></div>';
       btn.disabled = false; btn.textContent = 'SIGN IN WALLET & SEND';
-    }
+    });
   }
 
   var qm = new URLSearchParams(location.search).get('mint');
