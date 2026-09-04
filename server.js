@@ -8737,6 +8737,42 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
       const prizes = q.prizes ? String(q.prizes).split(",").map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0) : undefined;
       out.draw = await cunaGiveaway.runDraw({ rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined }, { force: q.force === "1", prizes });
     }
+    // &payout=1 previews what is owed; &payout=1&run=1 actually sends it.
+    //
+    // Owner ask 2026-09-04 ("make it to where you can send it"). Scoped hard, on purpose:
+    //   - recipients come ONLY from the sealed draw, never from the query string, so this cannot
+    //     be used to send tokens to an arbitrary address;
+    //   - alternates and zero-prize rows are excluded;
+    //   - already-paid winners are subtracted first (payoutOwed), so a retry after a timeout
+    //     cannot pay anyone twice, and every landed signature is recorded immediately;
+    //   - caps are passed to the vault, which also REFUSES to sign with a wallet that is the
+    //     token's mint authority — that is what keeps the CLKN treasury (which is CUNA's mint
+    //     authority) out of this path. Fund the CUNA operator hot wallet and pay from there.
+    if (q.payout === "1") {
+      const owed = cunaGiveaway.payoutOwed();
+      if (!owed.ok) out.payout = owed;
+      else if (!owed.owed.length) out.payout = { ok: true, action: "none", reason: "every winner already paid", alreadyPaid: owed.alreadyPaid };
+      else {
+        const cfg = cunaGiveaway.config() || {};
+        // WHICH WALLET PAYS. Defaults to the CUNA operator hot wallet; &from=treasury uses the
+        // treasury, which is where the prize supply actually sits. Treasury is allowed here
+        // because CUNA's mint authority is null on-chain (revoked) — an earlier comment in this
+        // file calls the treasury CUNA's mint authority, which is STALE. The vault re-checks
+        // that itself on every call and refuses if it is ever true again.
+        const payer = q.from === "treasury" ? "treasury" : "cuna";
+        const r = await whirlpoolMM.vault.payoutSpl({
+          projectId: payer,
+          mintAddr: cfg.mint,
+          recipients: owed.owed,
+          perRecipientMaxUi: Number(process.env.GIVEAWAY_MAX_PRIZE) || 10000000,
+          totalMaxUi: Number(process.env.GIVEAWAY_MAX_PAYOUT) || 25000000,
+          dryRun: q.run !== "1",
+        });
+        if (r && r.action === "paid") r.recorded = cunaGiveaway.recordPayout(r.paid);
+        out.payout = { ...r, payer, owedBefore: owed.owed, alreadyPaid: owed.alreadyPaid };
+      }
+    }
+    if (q.payoutstate === "1") out.payoutState = cunaGiveaway.payoutState();
     out.standings = cunaGiveaway.standings(10);
     res.json(out);
   } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
