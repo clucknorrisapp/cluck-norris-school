@@ -59,6 +59,10 @@ jobs:
       # curriculum held 70 and 7. Hand-typed public counts rot silently; this catches the mirror.
       - name: curriculum count-drift guard
         run: node scripts/check-counts.js
+      # The creator-trace cache is fed by the PUBLIC autopsy endpoint and used to grow without
+      # limit — a slow OOM anyone could drive from outside a memory-capped container.
+      - name: autopsy caches stay bounded
+        run: node scripts/cache-bound-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
@@ -202,6 +206,16 @@ jobs:
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
+      # LP Lab progress used to be keyed by ARRAY INDEX, so inserting or reordering a lesson
+      # silently moved every learner's ticks onto different lessons. Nothing errors when that
+      # happens, which is exactly why it needs a test that looks at the rendered tiles.
+      - name: LP Lab progress survives a lesson insert
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          PORT=3111 node server.js & echo $! > /tmp/lp-srv.pid
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:3111/healthz >/dev/null && break; sleep 1; done
+          node scripts/lplab-progress-test.cjs http://127.0.0.1:3111
+          kill "$(cat /tmp/lp-srv.pid)" || true
       # Full leaderboard suite including the telemetry-router cases that node-check (no deps)
       # skips — here express is installed, so a skip means something is wrong and must fail.
       - name: Normie Quest leaderboard anti-forgery test (full, incl. telemetry router)

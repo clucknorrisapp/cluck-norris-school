@@ -3207,17 +3207,36 @@ function LPLessonView({ lesson, onBack, onComplete }) {
 
 const LP_LAB_KEY = "lplab_completed";
 
+// PROGRESS IS KEYED BY LESSON ID, NOT ARRAY POSITION.
+//
+// This stored the ARRAY INDEX of each finished lesson. Insert a lesson anywhere but the end,
+// reorder two, or drop one, and every learner's saved progress silently slides onto different
+// lessons — someone who finished "Impermanent Loss" comes back to find it unread and a lesson
+// they never opened ticked off. Nothing errors; the ticks are just wrong. The main school has
+// always keyed by id (`completed.includes(l.id)` in App.jsx); this was the odd one out.
+//
+// Migration: the old format was a BARE ARRAY, the new one is {v:2, ids:[...]}. That is what
+// tells them apart — the values themselves cannot, since indices run 0..13 and ids run 1..14.
+// A bare array is read as indices exactly once and rewritten as ids on the next save.
 function getLPCompleted() {
   try {
     const stored = localStorage.getItem(LP_LAB_KEY);
     if (!stored) return [];
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : [];
+    if (Array.isArray(parsed)) {
+      // Legacy: indices. Map through the CURRENT array — that is the mapping those indices were
+      // written against, and doing it now is the last moment it is still correct.
+      return parsed
+        .map((i) => (LP_LESSONS[i] ? LP_LESSONS[i].id : null))
+        .filter((id) => id != null);
+    }
+    if (parsed && Array.isArray(parsed.ids)) return parsed.ids;
+    return [];
   } catch(e) { return []; }
 }
 
-function saveLPCompleted(arr) {
-  try { localStorage.setItem(LP_LAB_KEY, JSON.stringify(arr)); } catch(e) {}
+function saveLPCompleted(ids) {
+  try { localStorage.setItem(LP_LAB_KEY, JSON.stringify({ v: 2, ids })); } catch(e) {}
 }
 
 function LPLab() {
@@ -3230,7 +3249,8 @@ function LPLab() {
         lesson={LP_LESSONS[selectedLesson]}
         onBack={()=>setSelectedLesson(null)}
         onComplete={()=>{
-          const updated = [...new Set([...completed, selectedLesson])];
+          const lesson = LP_LESSONS[selectedLesson];
+          const updated = [...new Set([...completed, lesson && lesson.id])].filter((x) => x != null);
           setCompleted(updated);
           saveLPCompleted(updated);
           setSelectedLesson(null);
@@ -3256,7 +3276,7 @@ function LPLab() {
       {/* Lessons list */}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {LP_LESSONS.map((lesson, i) => {
-          const done = completed.includes(i);
+          const done = completed.includes(lesson.id);
           return (
             <button key={i} onClick={()=>setSelectedLesson(i)} style={{background:done?"rgba(16,185,129,0.08)":"rgba(255,122,24,0.05)",border:`1px solid ${done?"rgba(16,185,129,0.4)":"rgba(255,122,24,0.18)"}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,cursor:"pointer",textAlign:"left"}}>
               <div style={{fontSize:28,flexShrink:0}}>{lesson.icon}</div>

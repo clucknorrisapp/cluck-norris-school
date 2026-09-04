@@ -70,6 +70,9 @@ for (const [re, what] of [
   [/(\d+)"?\s*,?\s*"?EXAMS/, "EXAMS"],
   [/(\d+)"?\s*,?\s*"?BEGINNER LESSONS/, "BEGINNER LESSONS"],
   [/Finish all (\d+) classes/, "Finish all N classes"],
+  // The CTA read "Start the 12-Class Course" three lines above a strapline already rendering
+  // LESSONS.length — so adding one lesson would have shown two different totals on one screen.
+  [/(\d+)-Class Course/, "N-Class Course"],
 ]) {
   const m = re.exec(appCode);
   if (m) {
@@ -78,6 +81,25 @@ for (const [re, what] of [
       `LESSONS.length / INCUBATOR_LESSONS.length / QUIZ_QUESTION_COUNT instead, so it cannot drift.`
     );
   }
+}
+
+// 3. server.js tells the AI tutor how many lessons the school has. It cannot import App.jsx
+//    (JSX, and the school is a separate bundle), so the number is typed by hand there — and
+//    nothing could see it drift. A tutor confidently telling learners to "complete all 12
+//    lessons" when there are 13 is exactly the quiet-rot failure this guard exists for.
+//    Comments are stripped first, for the same reason as the App.jsx scan above.
+const serverCode = read("server.js").replace(/^\s*\/\/.*$/gm, "");
+for (const m of serverCode.matchAll(/(?:all\s+)?(\d+)\s+lessons\b/gi)) {
+  const n = Number(m[1]);
+  // Only judge numbers that are plausibly THIS count — the file also talks about the Incubator
+  // and the LP Lab, and flagging every "N lessons" in a 15k-line file would make this noisy
+  // enough to be ignored, which is worse than not checking.
+  if (n === counts.LESSONS || n === counts.INCUBATOR_LESSONS || n === counts.LP_LESSONS) continue;
+  problems.push(
+    `server.js — "${m[0]}" does not match any curriculum: ${counts.LESSONS} classes, ` +
+    `${counts.INCUBATOR_LESSONS} beginner lessons, ${counts.LP_LESSONS} LP Lab lessons. ` +
+    `This copy goes to learners through the AI tutor.`
+  );
 }
 
 if (problems.length) {
