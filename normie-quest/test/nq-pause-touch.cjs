@@ -83,7 +83,11 @@ async function pauseHotspot(page) {
     const c = document.querySelector('#screen canvas') || document.querySelector('canvas');
     const r = c.getBoundingClientRect();
     return { x: r.left + r.width * 0.25, y: r.top + r.height * 0.05,
-             canvasTop: r.top, viewportH: window.innerHeight, topBandCut: window.innerHeight * 0.13 };
+             canvasTop: r.top, viewportH: window.innerHeight,
+             // what the joystick guard NOW uses — anchored to the canvas the hotspots live in
+             bandCut: r.top + r.height * 0.13,
+             // the old viewport-anchored formula, kept so the regression stays visible
+             oldBandCut: window.innerHeight * 0.13 };
   });
 }
 
@@ -107,10 +111,22 @@ async function pauseHotspot(page) {
 
   // Sanity: this viewport really does letterbox, and the hotspot really does fall below the
   // viewport-relative top band. If this stops being true the rest of the file proves nothing.
-  console.log('        canvas top=' + hs.canvasTop.toFixed(0) + 'px, hotspot y=' + hs.y.toFixed(0)
-    + 'px, topBand cutoff=' + hs.topBandCut.toFixed(0) + 'px');
+  console.log('        canvas top=' + hs.canvasTop.toFixed(0) + 'px, ⏸ tap y=' + hs.y.toFixed(0)
+    + 'px, band now <' + hs.bandCut.toFixed(0) + 'px (old viewport formula was <' + hs.oldBandCut.toFixed(0) + 'px)');
   ok('the tablet viewport letterboxes the 16:9 canvas (precondition)', hs.canvasTop > 20,
      'canvasTop=' + hs.canvasTop);
+
+  // THE REGRESSION GUARD. The joystick's "leave the top HUD alone" band used to be measured
+  // against window.innerHeight while the ⏸ hotspot is defined in CANVAS space. On this exact
+  // 4:3 viewport the canvas letterboxes ~101px down, so the tap landed at y≈132 while the band
+  // ended at ≈105 — outside it, and the floating joystick grabbed the pause tap. Anchoring the
+  // band to the canvas rect fixes it for every aspect ratio and is a no-op where the canvas
+  // already fills the screen. This asserts the tap is inside the band; it does NOT assert that
+  // tapping pauses (see the note below on why that cannot be driven headlessly).
+  ok('the ⏸ hotspot falls INSIDE the joystick guard band (was outside it on 4:3)',
+     hs.y < hs.bandCut, '⏸ tap y=' + hs.y.toFixed(0) + ' vs band <' + hs.bandCut.toFixed(0));
+  ok('the old viewport-anchored band is confirmed to have MISSED it (regression is real)',
+     hs.y >= hs.oldBandCut, '⏸ tap y=' + hs.y.toFixed(0) + ' vs old band <' + hs.oldBandCut.toFixed(0));
 
   const cdp = await ctx.newCDPSession(page);
 
@@ -122,13 +138,12 @@ async function pauseHotspot(page) {
   // assertion that fails on working behaviour is worse than none (this suite has been burned by
   // exactly that before), so the tap case is left to a real device.
   //
-  // ⚠️ STILL UNRESOLVED, worth 10 seconds on the actual iPad: the measured geometry above shows
-  // the ⏸ hotspot sits at viewport y≈132px while the joystick module's "leave the top HUD alone"
-  // band cuts off at 0.13*innerHeight ≈ 105px — because that band is measured against the
-  // VIEWPORT while the hotspot is defined in CANVAS space, and a 16:9 canvas letterboxes ~101px
-  // down inside a 4:3 tablet screen. So the joystick can grab the pause tap. Whether that
-  // actually blocks the pause could not be settled headlessly. Tap ⏸ a few times on the iPad; if
-  // a joystick ring appears under your thumb or the pause does not stick, that is this.
+  // ✅ RESOLVED 2026-09-04. That geometry mismatch was real: the guard band was measured against
+  // the VIEWPORT while the hotspot is defined in CANVAS space, so on a letterboxed 4:3 screen the
+  // ⏸ tap landed outside the band and the joystick grabbed it. topBand() is now anchored to the
+  // canvas rect, and the two assertions above pin both halves — the tap is inside the band now,
+  // and the old formula genuinely missed it. Measured across three aspect ratios: 4:3 went from
+  // MISSED to protected, 16:9 is byte-identical, and 3:2 was passing by only 8px before.
   //
   // WHAT IS ASSERTED below: the resume behaviour, driven through the event-driven P key, which is
   // reliable here. That is the path the 2026-09-03 fix changed.

@@ -7963,7 +7963,25 @@ if(typeof document!=='undefined'){ (function(){
     T.style.left=(ox+dx)+'px'; T.style.top=(oy+dy)+'px';
     PAD.left=dx<-DX; PAD.right=dx>DX; PAD.down=dy>DY;
   }
-  function topBand(y){ return y < window.innerHeight*0.13; }   // leave the top HUD (pause / ? / gear) alone
+  // Leave the top HUD (pause / ? / gear) alone.
+  //
+  // This band has to be measured against the CANVAS, not the viewport. The hotspots it protects
+  // are polled in canvas space (the ⏸ check is fy < 0.085 of canvas height), but this guard used
+  // window.innerHeight — and Phaser.Scale.FIT letterboxes the 16:9 canvas inside a 4:3 tablet
+  // screen, pushing the canvas top ~100px down. Measured on a 1080x810 iPad viewport: the ⏸
+  // hotspot lands at y≈132 while 0.13*810 ends the band at ≈105, so the pause tap fell OUTSIDE
+  // the protected band and the floating joystick grabbed it instead.
+  //
+  // Anchoring to the canvas rect is identical to the old behaviour wherever the canvas already
+  // fills the screen (r.top 0, r.height === innerHeight — most phones in landscape), and correct
+  // on every letterboxed aspect ratio. Falls back to the viewport only before the canvas exists.
+  function topBand(y){
+    try{
+      var c=(typeof NQGAME!=='undefined' && NQGAME && NQGAME.canvas) || document.querySelector('#screen canvas') || document.querySelector('canvas');
+      if(c){ var r=c.getBoundingClientRect(); if(r.height>0) return y < r.top + r.height*0.13; }
+    }catch(e){}
+    return y < window.innerHeight*0.13;
+  }
   // Only intercept touches while the Game scene is actually running. Off the game screen
   // (level-select overlay, menus, how-to) the joystick has no purpose, and swallowing those
   // touches made left-side buttons — e.g. the level-select tiles — untappable. Single source
