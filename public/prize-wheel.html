@@ -298,12 +298,22 @@
         + S.revealed + ' winner' + (S.revealed===1?'':'s') + ' removed. One prize per wallet.';
     }
   }
+  // Place badge. Medals only go to three, so a hardcoded 🥇/🥈/🥉 silently gave 3rd AND 4th the
+  // same bronze the moment the owner ran a FOUR-winner draw (owner, 2026-08-31: 4M/3M/2M/1M).
+  // Ranks past third get a numbered badge instead, and both the card list and the spoken callout
+  // read from this one function so they cannot drift apart mid-ceremony.
+  var PLACE = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49'];
+  function placeBadge(rank){            // rank is 1-based
+    if (rank <= PLACE.length) return PLACE[rank - 1];
+    return String(rank) + '\uFE0F\u20E3';   // 4️⃣, 5️⃣, … keyed digit
+  }
+
   function renderWinners(){
     var el = document.getElementById('winners');
     if(!S.draw || !S.draw.winners || !S.draw.winners.length){ el.innerHTML='<span class="dim">Spin to reveal.</span>'; return; }
     el.innerHTML = S.draw.winners.map(function(w,i){
       var shown = i < S.revealed;
-      var medal = w.alternate ? '🎗️' : (i===0?'🥇':i===1?'🥈':'🥉');
+      var medal = w.alternate ? '🎗️' : placeBadge(i + 1);
       return '<div class="win'+(shown?'':' pending')+(w.alternate?' alt':'')+'">'
         + '<div class="pl">'+medal+'</div>'
         + '<div class="w mono">'+(shown?esc(w.wallet):'\u2014 \u2014 \u2014 \u2014 \u2014')+'</div>'
@@ -380,7 +390,7 @@
       S.revealed++;
       draw(); renderWinners(); renderPool();
       document.getElementById('callout').innerHTML =
-        (S.revealed===1?'🥇':S.revealed===2?'🥈':'🥉') + ' ' + esc(w.wallet.slice(0,6)+'…'+w.wallet.slice(-6))
+        placeBadge(S.revealed) + ' ' + esc(w.wallet.slice(0,6)+'…'+w.wallet.slice(-6))
         + ' <span class="dim">— ' + Number(w.prize||0).toLocaleString() + '</span>';
       var prizeCount = S.draw.winners.filter(function(x){ return !x.alternate; }).length;
       // Reveal every alternate alongside the final prize — there is nothing to spin for, the
