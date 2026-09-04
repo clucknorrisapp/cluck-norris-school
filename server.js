@@ -8707,6 +8707,10 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     // Accept the current name AND the legacy alias; anything else is the raffle.
     if (q.mode) { const m = String(q.mode).toLowerCase(); patch.mode = (m === "special" || m === "contest") ? "special" : "giveaway"; }
     if (q.bonus !== undefined) patch.bonusPct = Number.isFinite(Number(q.bonus)) ? Number(q.bonus) : 0;
+    // &entrymode=per-dollar | per-buy. Changes how a qualifying buy is SCORED, so it is only safe
+    // between promos — flipping it mid-window rescores nothing already counted and leaves a ledger
+    // where early buys used one rule and later ones another. Default stays per-buy.
+    if (q.entrymode) patch.entryMode = String(q.entrymode).toLowerCase() === "per-dollar" ? "per-dollar" : "per-buy";
     if (Object.keys(patch).length) cunaGiveaway.configure(patch);
     const out = { ok: true, config: cunaGiveaway.config() };
     // Manual DQ for a wallet that dumped AFTER the window closed but BEFORE the wheel spins —

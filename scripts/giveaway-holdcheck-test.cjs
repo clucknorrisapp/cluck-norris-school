@@ -98,6 +98,38 @@ const gw = require(path.join(__dirname, '..', 'lib', 'cuna-giveaway.js'));
   const board = gw.boardText();
   ok('the board shows dollars beside entry counts', /\$\d/.test(board), board.split('\n').slice(0, 8).join(' | '));
 
+  // ---- entry mode -----------------------------------------------------------------------------
+  // per-buy stays the DEFAULT: a promo's counting rule is the owner's product decision and must
+  // never change just because this option exists.
+  console.log('\nentry mode\n');
+  ok('default entry mode is per-buy (unchanged behaviour)', gw.config().entryMode === 'per-buy', String(gw.config().entryMode));
+  ok('an unrecognised entry mode falls back to per-buy, it does not throw',
+     gw.configure({ entryMode: 'nonsense' }).entryMode === 'per-buy');
+  ok('per-dollar is selectable', gw.configure({ entryMode: 'per-dollar' }).entryMode === 'per-dollar');
+
+  // The rule line only renders while the window is OPEN — a closed board prints "Scoring is
+  // final" instead. Open it so the copy under test is actually reachable.
+  gw.configure({ endMs: Date.now() + 3600000 });
+  const perDollarBoard = gw.boardText();
+  ok('the board copy follows per-dollar when per-dollar is set',
+     /bought = 1 entry/.test(perDollarBoard), perDollarBoard.split('\n').pop());
+  gw.configure({ entryMode: 'per-buy' });
+  ok('the board copy follows per-buy when per-buy is set',
+     /\+ buy = 1 entry/.test(gw.boardText()));
+
+  // The counterfactual, using the REAL numbers from the 2026-09-04 draw. minUsd there was 2.8.
+  const entriesFor = (usd, mode, minUsd) => mode === 'per-dollar' ? Math.max(1, Math.floor(usd / minUsd)) : 1;
+  ok('per-buy gives the $198.45 buyer 2 entries across 2 buys',
+     entriesFor(99.2, 'per-buy', 2.8) * 2 === 2);
+  ok('per-dollar gives that same buyer 70 entries',
+     entriesFor(99.2, 'per-dollar', 2.8) * 2 === 70,
+     'got ' + entriesFor(99.2, 'per-dollar', 2.8) * 2);
+  ok('per-dollar makes splitting a buy pointless (1x$99 == 33x$3)',
+     entriesFor(99, 'per-dollar', 2.8) === 35 && 33 * entriesFor(3, 'per-dollar', 2.8) === 33,
+     'one-go=' + entriesFor(99, 'per-dollar', 2.8) + ' split=' + (33 * entriesFor(3, 'per-dollar', 2.8)));
+  ok('a qualifying buy always earns at least one entry',
+     entriesFor(2.9, 'per-dollar', 2.8) === 1);
+
   try { fs.rmSync(DIR, { recursive: true, force: true }); } catch (_) {}
   console.log('\n' + (failures ? failures + ' FAILED' : 'all passed') + '\n');
   process.exit(failures ? 1 : 0);
