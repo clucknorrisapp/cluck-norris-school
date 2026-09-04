@@ -59,10 +59,6 @@ jobs:
       # curriculum held 70 and 7. Hand-typed public counts rot silently; this catches the mirror.
       - name: curriculum count-drift guard
         run: node scripts/check-counts.js
-      # The creator-trace cache is fed by the PUBLIC autopsy endpoint and used to grow without
-      # limit — a slow OOM anyone could drive from outside a memory-capped container.
-      - name: autopsy caches stay bounded
-        run: node scripts/cache-bound-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
@@ -203,6 +199,12 @@ jobs:
         run: |
           npm i --no-save playwright@1.62.1
           npx playwright install --with-deps chromium
+      # The creator-trace cache is fed by the PUBLIC autopsy endpoint and used to grow without
+      # limit — a slow OOM anyone could drive from outside a memory-capped container. It lives in
+      # this job rather than node-check because lib/autopsy.js has dependencies, and node-check
+      # installs none.
+      - name: autopsy caches stay bounded
+        run: node scripts/cache-bound-test.cjs
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
