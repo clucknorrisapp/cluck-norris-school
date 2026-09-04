@@ -130,6 +130,87 @@ const gw = require(path.join(__dirname, '..', 'lib', 'cuna-giveaway.js'));
   ok('a qualifying buy always earns at least one entry',
      entriesFor(2.9, 'per-dollar', 2.8) === 1);
 
+  // ---- payout idempotency ----------------------------------------------------------------------
+  // The defect this pins, found by audit on 2026-09-04 in code shipped hours earlier: a transfer
+  // that was SENT but whose confirmation timed out was recorded as `failed` with no signature, so
+  // payoutOwed put the wallet straight back in `owed` and the documented retry paid them AGAIN.
+  console.log('\npayout idempotency\n');
+  {
+    const W1 = 'BtrxmsfE3XTwvJaJ9q4u4dpdrykMDaVavwbnRRAizdCE';
+    const W2 = '4f2gAxUftav2zLYFiouwGf7SwtHyazBDy72feEu3eAHz';
+    const st2 = JSON.parse(fs.readFileSync(file, 'utf8'));
+    st2.payouts = {};
+    st2.draw = { at: Date.now(), seedHash: 'ROUND_A', mint: MINT, winners: [
+      { place: 1, wallet: W1, prize: 4000000, entries: 3 },
+      { place: 2, wallet: W2, prize: 3000000, entries: 3 },
+    ] };
+    fs.writeFileSync(file, JSON.stringify(st2));
+
+    const o1 = gw.payoutOwed();
+    ok('both winners are owed before any payment', o1.owed.length === 2, JSON.stringify(o1.owed));
+
+    // W1 confirms; W2 is SENT but its confirm times out — the exact incident shape.
+    gw.recordPayout([{ wallet: W1, amountUi: 4000000, sig: 'SIG_CONFIRMED' }], 'ROUND_A');
+    gw.recordPayout([{ wallet: W2, amountUi: 3000000, sig: 'SIG_TIMED_OUT', pending: true }], 'ROUND_A');
+
+    const o2 = gw.payoutOwed();
+    ok('a SENT-but-unconfirmed transfer is NOT re-owed (the double-pay)',
+       o2.owed.length === 0, 'still owed: ' + JSON.stringify(o2.owed));
+    ok('the unconfirmed payment is recorded as pending, not lost',
+       (o2.alreadyPaid.find((p) => p.wallet === W2) || {}).pending === true,
+       JSON.stringify(o2.alreadyPaid));
+
+    // a later confirm resolves pending without creating a second record
+    gw.recordPayout([{ wallet: W2, amountUi: 3000000, sig: 'SIG_TIMED_OUT' }], 'ROUND_A');
+    const o3 = gw.payoutOwed();
+    ok('a later confirmation clears pending and still owes nothing',
+       o3.owed.length === 0 && (o3.alreadyPaid.find((p) => p.wallet === W2) || {}).pending === false);
+
+    // a winner DQ'd after the draw must not be paid
+    const st3 = JSON.parse(fs.readFileSync(file, 'utf8'));
+    st3.payouts = {}; st3.wallets[W1] = { entries: 3, usd: 30, tokens: 1000, dq: { reason: 'sold_before_payout' } };
+    fs.writeFileSync(file, JSON.stringify(st3));
+    const o4 = gw.payoutOwed();
+    ok('a winner disqualified AFTER the draw is not paid',
+       !o4.owed.some((r) => r.wallet === W1) && o4.disqualified.some((d) => d.wallet === W1),
+       'owed=' + JSON.stringify(o4.owed) + ' dq=' + JSON.stringify(o4.disqualified));
+
+    // payouts are scoped per round, so a repeat winner in a NEW promo is still owed
+    const st4 = JSON.parse(fs.readFileSync(file, 'utf8'));
+    st4.wallets[W1] = { entries: 3, usd: 30, tokens: 1000, dq: null };
+    st4.payouts = { ROUND_A: { [W1]: { amountUi: 4000000, sig: 'OLD', at: Date.now() } } };
+    st4.draw = { at: Date.now(), seedHash: 'ROUND_B', mint: MINT, winners: [{ place: 1, wallet: W1, prize: 1000000, entries: 3 }] };
+    fs.writeFileSync(file, JSON.stringify(st4));
+    const o5 = gw.payoutOwed();
+    ok('a repeat winner in a NEW round is still owed (payouts are round-scoped)',
+       o5.owed.length === 1 && o5.owed[0].amountUi === 1000000, JSON.stringify(o5.owed));
+
+    // THE MIGRATION. Records written by the first (wallet-keyed) shape must still count, or the
+    // round-scoped reader sees an empty round and re-pays everyone. This is the exact live state
+    // left by the 2026-09-04 payout.
+    const st5 = JSON.parse(fs.readFileSync(file, 'utf8'));
+    st5.wallets[W1] = { entries: 3, usd: 30, tokens: 1000, dq: null };
+    st5.payouts = { [W1]: { amountUi: 4000000, sig: 'LEGACY_FLAT', at: Date.now() } };   // OLD shape
+    st5.draw = { at: Date.now(), seedHash: 'ROUND_LIVE', mint: MINT, winners: [
+      { place: 1, wallet: W1, prize: 4000000, entries: 3 },
+    ] };
+    fs.writeFileSync(file, JSON.stringify(st5));
+    const o7 = gw.payoutOwed();
+    ok('a payout recorded in the OLD wallet-keyed shape is NOT re-owed',
+       o7.owed.length === 0, 'would have re-paid: ' + JSON.stringify(o7.owed));
+    const migrated = gw.payoutState();
+    ok('the legacy record is migrated under the current round, not duplicated',
+       migrated.ROUND_LIVE && migrated.ROUND_LIVE[W1] && migrated.ROUND_LIVE[W1].sig === 'LEGACY_FLAT'
+       && migrated[W1] === undefined, JSON.stringify(migrated));
+
+    // the draw pins its mint — a config pointed at the next promo must refuse
+    gw.configure({ mint: 'So11111111111111111111111111111111111111112' });
+    const o6 = gw.payoutOwed();
+    ok('a payout refuses when the config mint no longer matches the sealed draw',
+       o6.ok === false && o6.error === 'mint_changed', JSON.stringify(o6));
+    gw.configure({ mint: MINT });
+  }
+
   try { fs.rmSync(DIR, { recursive: true, force: true }); } catch (_) {}
   console.log('\n' + (failures ? failures + ' FAILED' : 'all passed') + '\n');
   process.exit(failures ? 1 : 0);

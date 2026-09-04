@@ -8512,6 +8512,8 @@ async function pollProjectBuyBots() {
 // Full rationale (including why this scans incrementally rather than once at the end) is in
 // lib/cuna-giveaway.js. Read-only against the chain — nothing here signs or moves funds.
 const cunaGiveaway = require("./lib/cuna-giveaway");
+// Guards the prize payout against a concurrent second run (see the payout branch below).
+let cunaPayoutInFlight = false;
 
 // PUBLIC: the live board. No key, no wallet — it is all on-chain anyway, and the whole point is
 // that anyone can check it. Cached-lite via no-store so the pinned Telegram board and the page
@@ -8684,6 +8686,15 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
       const owed = cunaGiveaway.payoutOwed();
       if (!owed.ok) out.payout = owed;
       else if (!owed.owed.length) out.payout = { ok: true, action: "none", reason: "every winner already paid", alreadyPaid: owed.alreadyPaid };
+      else if (cunaPayoutInFlight) {
+        // NO CONCURRENT PAYOUTS. Four transfers x up to 90s confirm each runs for minutes, and
+        // Cloudflare cuts the origin at 100s — so the operator sees a 524 while the run is still
+        // sending, and hitting the URL again is the natural response. Both invocations would read
+        // the same `owed` (nothing is written until a transfer confirms) and both would send the
+        // full set. Every winner paid twice.
+        out.payout = { ok: false, error: 'payout_in_flight',
+                       detail: 'a payout is already running — wait for it, then re-check &payoutstate=1 before retrying' };
+      }
       else {
         const cfg = cunaGiveaway.config() || {};
         // WHICH WALLET PAYS. Defaults to the CUNA operator hot wallet; &from=treasury uses the
@@ -8692,7 +8703,15 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
         // file calls the treasury CUNA's mint authority, which is STALE. The vault re-checks
         // that itself on every call and refuses if it is ever true again.
         const payer = q.from === "treasury" ? "treasury" : "cuna";
-        const r = await whirlpoolMM.vault.payoutSpl({
+        // Record EACH recipient the moment its transfer is submitted, not once at the end of the
+        // batch. A restart (Railway redeploy) or a crash mid-loop used to leave nothing written,
+        // so the next run re-paid everyone who had already received their prize.
+        const onPaid = (row) => { try { cunaGiveaway.recordPayout([row], owed.round); } catch (e) { console.warn("[giveaway-payout] record failed", e.message); } };
+        cunaPayoutInFlight = true;
+        let r;
+        try {
+        r = await whirlpoolMM.vault.payoutSpl({
+          onPaid,
           projectId: payer,
           mintAddr: cfg.mint,
           recipients: owed.owed,
@@ -8700,8 +8719,9 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
           totalMaxUi: Number(process.env.GIVEAWAY_MAX_PAYOUT) || 25000000,
           dryRun: q.run !== "1",
         });
-        if (r && r.action === "paid") r.recorded = cunaGiveaway.recordPayout(r.paid);
-        out.payout = { ...r, payer, owedBefore: owed.owed, alreadyPaid: owed.alreadyPaid };
+        } finally { cunaPayoutInFlight = false; }
+        out.payout = { ...r, payer, round: owed.round, owedBefore: owed.owed,
+                       disqualified: owed.disqualified, alreadyPaid: owed.alreadyPaid };
       }
     }
     if (q.payoutstate === "1") out.payoutState = cunaGiveaway.payoutState();
