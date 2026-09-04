@@ -226,6 +226,29 @@ function legacyV2(names, ageMs) {
     const expired = lb.continueRun(legacyV2(['1-1', '1-2'], 3 * 60 * 60 * 1000));
     ok('continue refuses a run token past its 2h TTL', expired.ok === false && expired.status === 'expired');
     ok('continue refuses a tampered token', lb.continueRun({ ...tok, max: tok.max + 99999 }).ok === false);
+
+    // CONTINUES ARE CAPPED PER RUN. continueRun is non-consuming by design (it must not burn the
+    // nonce, or the submit that follows a continue reads as a replay), which also meant one
+    // finished run could mint an unlimited number of fresh, once-usable nonces — each submitting
+    // as a VALID, non-suspect row. No rank inflation (the budget ceiling and best-per-wallet
+    // dedupe still hold), but an unbounded source of real rows, which is what feeds the MAX-cap
+    // eviction that can push a still-claimable winner out of the store.
+    {
+      const src = reach(['1-1', '1-2']);
+      let last = null, refused = null;
+      for (let i = 0; i < 40; i++) {
+        const c = lb.continueRun(src);
+        if (!c.ok) { refused = c; break; }
+        last = c;
+      }
+      ok('one run cannot be continued without limit',
+         refused !== null && refused.status === 'continue_limit',
+         refused ? refused.status : 'never refused after 40 continues');
+      ok('the continues BEFORE the cap still worked (a real player is not blocked)', last && last.ok === true);
+      // a DIFFERENT run must not inherit the exhausted lineage's counter
+      const other = lb.continueRun(reach(['1-1', '1-2', '1-3']));
+      ok('the cap is per-run, not global', other.ok === true, other.status);
+    }
   }
 
   // ---- audit #29: telemetry hardening (via the real router) ----------------------------------

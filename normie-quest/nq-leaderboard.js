@@ -232,10 +232,47 @@ function checkRun(tok) {
 // Non-consuming on purpose: it must work after the game-over submit (nonce already burned) and for
 // parked no-handle runs (nonce not yet burned). No escalation surface: the list — and therefore the
 // budget ceiling — is exactly what the original run proved, and boards dedupe best-per-player.
+// How many times ONE run may be continued. Generous — a real player dying repeatedly on a hard
+// world stays well under it — but finite, which is the whole point.
+const MAX_CONTINUES_PER_RUN = 25;
+const continueCounts = new Map();   // lineage key -> { n, exp }
+// A run's LINEAGE, stable across continues. continueRun preserves issuedAt and the proven level
+// list, so those two identify the original run even though the nonce is re-minted each time.
+function lineageKey(names, issuedAt) {
+  return crypto.createHash('sha256').update(names.join('|') + '@' + issuedAt).digest('hex').slice(0, 24);
+}
+
 function continueRun(token) {
   if (!token || token.v !== 2 || !Array.isArray(token.lv)) return { ok: false, status: 'bad_token' };
   const r = checkV2(token);
   if (!r.ok) return { ok: false, status: r.status };
+
+  // continueRun is deliberately NON-CONSUMING — it must not burn the nonce, or the legitimate
+  // submit that follows a continue would be rejected as a replay. But that also meant it never
+  // checked whether the run had ALREADY ENDED, so a client could keep handing back the same
+  // finished token and mint a fresh, once-usable nonce every time. Each of those carries the
+  // same honestly-proven level list and budget, so every one submits as a VALID, non-suspect
+  // row. It cannot inflate a rank (the budget ceiling and best-per-wallet dedupe both still
+  // apply), but it is an unbounded source of real leaderboard rows — which is exactly what
+  // feeds the MAX-cap eviction that can push a still-claimable winner out of the store.
+  //
+  // ⚠️ DO NOT "fix" this by refusing a token whose nonce is already burned. That was the obvious
+  // guard and it is WRONG: continuing AFTER a submit is the designed flow. Game over submits the
+  // score (burning the nonce), and the client then trades the ended token for a same-list reissue
+  // so the carried cumulative total keeps its proof — without that, the next submit looks like a
+  // forged score on a one-level token, which is the exact bug continueRun was added to fix. The
+  // leaderboard suite pins this ("game over burns the nonce" → continue → submit clean); a
+  // burned-nonce check fails four of its cases.
+  //
+  // So the bound is on VOLUME, not on the run being over: cap how many times one run lineage may
+  // be continued. The counter expires with the run's own 2h TTL.
+  const key = lineageKey(r.names, Number(token.issuedAt));
+  const now = Date.now();
+  for (const [k, v] of continueCounts) if (v.exp < now) continueCounts.delete(k);
+  const rec = continueCounts.get(key) || { n: 0, exp: now + RUN_TTL_MS };
+  if (rec.n >= MAX_CONTINUES_PER_RUN) return { ok: false, status: 'continue_limit' };
+  rec.n++; continueCounts.set(key, rec);
+
   const nonce = crypto.randomBytes(12).toString('hex');
   return { ok: true, token: mkV2(r.names, nonce, Number(token.issuedAt), Date.now()) };
 }
