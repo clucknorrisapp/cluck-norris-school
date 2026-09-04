@@ -329,7 +329,21 @@ const gw = require(path.join(__dirname, '..', 'lib', 'cuna-giveaway.js'));
   // The loop is now exported pure and driven here with stubs.
   console.log('\npayout loop — send / record / confirm ordering\n');
   {
-    const { runPayoutLoop } = require(path.join(__dirname, '..', 'lib', 'whirlpool-vault.js'));
+    // whirlpool-vault pulls in @solana/web3.js, which the dependency-free node-check job does not
+    // install — so these cases SKIP there and run strict in smoke-test (after npm ci) with
+    // GIVEAWAY_REQUIRE_VAULT=1, where a skip is a hard failure. Same arrangement as the Normie
+    // Quest leaderboard's telemetry-router cases. They still gate every push; they just gate it
+    // from the job that has the dependencies.
+    let runPayoutLoop = null;
+    try { ({ runPayoutLoop } = require(path.join(__dirname, '..', 'lib', 'whirlpool-vault.js'))); }
+    catch (e) {
+      if (process.env.GIVEAWAY_REQUIRE_VAULT) {
+        failures++; console.log('  ✗ whirlpool-vault missing but GIVEAWAY_REQUIRE_VAULT is set: ' + e.message);
+      } else {
+        console.log('  SKIP  payout-loop cases (@solana/web3.js not installed — dependency-free run)');
+      }
+    }
+    if (runPayoutLoop) {
     const R = [{ wallet: W.held, amountUi: 100 }, { wallet: W.exact, amountUi: 200 }];
 
     // THE INVARIANT: the signature is durably recorded BEFORE the confirm is awaited. A Railway
@@ -399,6 +413,7 @@ const gw = require(path.join(__dirname, '..', 'lib', 'cuna-giveaway.js'));
       ok('and it says so loudly, naming who was NOT paid',
          r.recordFailed === true && r.unsent.length === 1 && r.unsent[0].wallet === W.exact,
          JSON.stringify({ recordFailed: r.recordFailed, unsent: r.unsent }));
+    }
     }
   }
 
