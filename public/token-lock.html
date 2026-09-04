@@ -2,8 +2,8 @@
 <link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<meta name="robots" content="noindex,nofollow"/>
-<title>Make Token Metadata Immutable — Cluck Norris</title>
+<title>Make Your Token Metadata Immutable — free tool — Cluck Norris</title>
+<meta name="description" content="Clear the 'the creator can change this token' warning on your Solana token. Free: fix what your metadata shows, check it renders, then lock it permanently. No wallet gate, no signup."/>
 <style>
   body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);}
   .wrap{max-width:820px;margin:0 auto;padding:20px 16px 60px;}
@@ -27,8 +27,22 @@
   pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;font-size:12px;}
 </style></head><body>
 <div class="wrap">
-  <h1>TOKEN METADATA</h1>
-  <p class="sub">Fix what it shows, check it renders, then lock it forever. <b>Two steps, in that order.</b></p>
+  <h1>MAKE YOUR TOKEN METADATA IMMUTABLE</h1>
+  <p class="sub">Scanners warn that <b>&ldquo;the creator can change this token&rdquo;</b>. If that's not true of
+  yours any more, prove it on-chain. Free, no signup, no wallet needed to look.</p>
+
+  <div class="card">
+    <div class="k">READ THIS FIRST — IT IS PERMANENT</div>
+    <p class="muted" style="margin:0 0 10px;line-height:1.7">Locking metadata is <b>irreversible</b>. Afterwards
+    nobody can change your token's <b>name, symbol, logo, description or creators</b> — not a hacker, not a
+    future you. There is no undo, no support ticket, no recovery.</p>
+    <p class="muted" style="margin:0 0 10px;line-height:1.7"><b>Don't do this if</b> you might rebrand, you're
+    still settling on artwork, the project is early and the name could change, or someone else needs to be added
+    as a creator later. A mutable token is not a broken token — plenty of good projects stay mutable on purpose.</p>
+    <p class="muted" style="margin:0;line-height:1.7"><b>Do this if</b> your name, ticker and art are final and
+    you want holders to be able to verify that for themselves. That's the whole benefit: it turns
+    &ldquo;trust us&rdquo; into something checkable.</p>
+  </div>
 
   <div class="card">
     <div class="k">TOKEN</div>
@@ -101,8 +115,27 @@
     }).catch(function(e){ $('state').innerHTML = '<div class="card"><span class="bad">' + esc(e.message) + '</span></div>'; });
   });
 
+  // Step 1 lives inside the block render() rebuilds, so connecting a wallet used to silently wipe
+  // everything typed into it — including the rebuilt URI, leaving BUILD UPDATE asking for a URI
+  // that had been there a second earlier. Carry the text fields across a re-render.
+  var CARRY = ['newUri', 'imgOverride', 'descOverride'];
+  function snapshotFields(){
+    var out = {};
+    CARRY.forEach(function(id){ var el = $(id); if (el) out[id] = el.value; });
+    var dc = $('dropCreator'); if (dc) out.dropCreator = dc.checked;
+    return out;
+  }
+  function restoreFields(v){
+    if (!v) return;
+    CARRY.forEach(function(id){ var el = $(id); if (el && v[id] != null) el.value = v[id]; });
+    var dc = $('dropCreator'); if (dc && v.dropCreator != null) dc.checked = v.dropCreator;
+    // The Step 2 confirmations are deliberately NOT carried — they attest to what you saw with a
+    // given wallet connected, and a wallet change invalidates that.
+  }
+
   function render(){
     if (!loaded) { $('state').innerHTML = ''; return; }
+    var carried = snapshotFields();
     var m = loaded.metadata, a = loaded.authorities;
     var rows = [
       ['Name', esc2(m.name)], ['Symbol', esc2(m.symbol)],
@@ -117,7 +150,32 @@
       rows.map(function(r){ return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
       '</div>';
 
-    if (!m.isMutable) { $('state').innerHTML = html + '<div class="card"><span class="ok">This token is already immutable. Nothing here can change it.</span></div>'; return; }
+    // A scanner's warning covers THREE authorities. This tool only closes the third, so a token
+    // with a live mint authority gains nothing from locking metadata — the banner stays. Saying so
+    // is the difference between a tool and a trap: someone locks their name forever, expecting the
+    // warning to clear, and it doesn't.
+    var openFlags = [];
+    if (a.mintAuthority) openFlags.push('<li><b>Mint authority is live.</b> Whoever holds it can create more of your ' +
+      'token at any time, diluting every holder. This is the one scanners weigh most heavily.</li>');
+    if (a.freezeAuthority) openFlags.push('<li><b>Freeze authority is live.</b> Whoever holds it can freeze any ' +
+      'holder\'s tokens in place, so they cannot sell.</li>');
+    if (openFlags.length) {
+      html += '<div class="card"><div class="k">⚠️ THIS TOOL WILL NOT CLEAR YOUR WARNING YET</div>' +
+        '<p class="muted" style="margin:0 0 8px;line-height:1.7">Scanners flag three separate things. This tool ' +
+        'currently fixes only <b>metadata</b>. Your token still has:</p>' +
+        '<ul class="muted" style="margin:0 0 8px;line-height:1.7;padding-left:20px">' + openFlags.join('') + '</ul>' +
+        '<p class="muted" style="margin:0;line-height:1.7">Locking metadata is still a real improvement and it is ' +
+        'permanent — but on its own it <b>will not remove the warning</b>. Revoking mint and freeze authority is done ' +
+        'with your token\'s CLI or the tool you launched with. We are adding it here; until then we would rather say ' +
+        'so than let you freeze your name expecting a result you will not get.</p></div>';
+    } else if (m.isMutable) {
+      html += '<div class="card"><div class="k">GOOD NEWS</div><p class="muted" style="margin:0;line-height:1.7">' +
+        'Mint and freeze authority are already revoked, so <b>metadata is the only flag left</b> on this token. ' +
+        'Locking it clears the warning completely.</p></div>';
+    }
+
+    if (!m.isMutable) { $('state').innerHTML = html + '<div class="card"><span class="ok">✅ This token\'s metadata is ' +
+      'already immutable. Nobody can change its name, symbol, URI or creators — including you. Nothing here can undo that.</span></div>'; return; }
 
     var authMatch = wallet && wallet === m.updateAuthority;
     var gate = wallet
@@ -161,6 +219,7 @@
       '<p class="muted" style="margin:8px 0 0">After this, nobody can change the name, symbol, URI or creators of this token again — including you.</p></div>';
 
     $('state').innerHTML = html;
+    restoreFields(carried);
     var boxes = [].slice.call(document.querySelectorAll('.cx'));
     function refreshLock(){ $('doLock').disabled = !(authMatch && boxes.every(function(b){ return b.checked; })); }
     boxes.forEach(function(b){ b.addEventListener('change', refreshLock); });

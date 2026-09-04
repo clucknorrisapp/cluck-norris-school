@@ -68,6 +68,12 @@ jobs:
       # winner on 2026-09-04 because it judged a hold in dollars and the price cache was cold.
       - name: giveaway hold-check (token-based, survives a cold price feed)
         run: node scripts/giveaway-holdcheck-test.cjs
+      # /api/token-metadata/* is FREE and unauthenticated, and rebuild-json fetches a URL the
+      # caller supplies. That makes the private-network guard load-bearing rather than tidy: a
+      # regression here turns a public tool into a probe of our internal network. Built-ins only,
+      # no outbound network, so it runs in this dependency-free job.
+      - name: SSRF guard for caller-supplied URLs
+        run: node scripts/safe-fetch-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —
