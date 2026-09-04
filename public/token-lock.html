@@ -27,8 +27,8 @@
   pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;font-size:12px;}
 </style></head><body>
 <div class="wrap">
-  <h1>MAKE METADATA IMMUTABLE</h1>
-  <p class="sub">Closes the "creator can change this token" warning. <b>This cannot be undone.</b></p>
+  <h1>TOKEN METADATA</h1>
+  <p class="sub">Fix what it shows, check it renders, then lock it forever. <b>Two steps, in that order.</b></p>
 
   <div class="card">
     <div class="k">TOKEN</div>
@@ -116,35 +116,58 @@
       rows.map(function(r){ return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
       '</div>';
 
-    if (!m.isMutable) { $('state').innerHTML = html + '<div class="card"><span class="ok">Nothing to do — already immutable.</span></div>'; return; }
+    if (!m.isMutable) { $('state').innerHTML = html + '<div class="card"><span class="ok">This token is already immutable. Nothing here can change it.</span></div>'; return; }
 
     var authMatch = wallet && wallet === m.updateAuthority;
-    html += '<div class="card"><div class="k">NEW URI (OPTIONAL BUT USUALLY THE POINT)</div>' +
-      '<input id="newUri" placeholder="https://arweave.net/… (blank = keep the current URI forever)" autocomplete="off" spellcheck="false"/>' +
-      '<p class="muted" style="margin:8px 0 0">If the current URI is an <b>ipfs.io</b> gateway link, change it here. ' +
-      'That gateway is being retired — locking without repointing freezes a dying URL permanently.</p>' +
-      '<div style="margin-top:10px"><button id="prep"' + (authMatch ? '' : ' disabled') + '>BUILD UNSIGNED TRANSACTION</button></div>' +
-      (wallet ? (authMatch ? '' : '<p class="muted" style="margin:8px 0 0"><span class="bad">Connected wallet is not the update authority.</span> Only ' + esc2(m.updateAuthority) + ' can sign this.</p>')
-              : '<p class="muted" style="margin:8px 0 0">Connect the update authority wallet to continue.</p>') +
-      '</div>';
+    var gate = wallet
+      ? (authMatch ? '' : '<p class="muted" style="margin:8px 0 0"><span class="bad">Connected wallet is not the update authority.</span> Only ' + esc2(m.updateAuthority) + ' can sign.</p>')
+      : '<p class="muted" style="margin:8px 0 0">Connect the update authority wallet to continue.</p>';
+    var dis = authMatch ? '' : ' disabled';
+
+    // STEP 1 — still reversible. This is the whole point of splitting the flow: you get to LOOK
+    // at the result before anything becomes permanent.
+    html += '<div class="card"><div class="k">STEP 1 — UPDATE WHAT IT SHOWS <span class="ok">(reversible)</span></div>' +
+      '<input id="newUri" placeholder="https://arweave.net/… new metadata URI" autocomplete="off" spellcheck="false"/>' +
+      '<p class="muted" style="margin:8px 0 0">If the current URI is an <b>ipfs.io</b> gateway link, replace it. That gateway is ' +
+      'being retired. While metadata is still mutable you can run this as many times as you need.</p>' +
+      '<div style="margin-top:10px"><button id="doUpdate"' + dis + '>BUILD UPDATE (KEEPS IT EDITABLE)</button></div>' + gate + '</div>';
+
+    // STEP 2 — the irreversible one, with the checklist that should stand between them.
+    html += '<div class="card"><div class="k">STEP 2 — LOCK FOREVER <span class="bad">(irreversible)</span></div>' +
+      '<p class="muted" style="margin:0 0 10px">Only after you have seen the token render correctly. Check all three:</p>' +
+      '<label style="display:block;margin:4px 0"><input type="checkbox" class="cx"/> The URI above loads, and the image inside it loads</label>' +
+      '<label style="display:block;margin:4px 0"><input type="checkbox" class="cx"/> A wallet (Phantom/Solflare) shows the right name and logo</label>' +
+      '<label style="display:block;margin:4px 0"><input type="checkbox" class="cx"/> Name, symbol and creators are final — no rebrand planned</label>' +
+      '<div style="margin-top:10px"><button id="doLock" disabled>BUILD LOCK</button></div>' +
+      '<p class="muted" style="margin:8px 0 0">After this, nobody can change the name, symbol, URI or creators of this token again — including you.</p></div>';
+
     $('state').innerHTML = html;
-    var pb = $('prep'); if (pb) pb.addEventListener('click', prepare);
+    var boxes = [].slice.call(document.querySelectorAll('.cx'));
+    function refreshLock(){ $('doLock').disabled = !(authMatch && boxes.every(function(b){ return b.checked; })); }
+    boxes.forEach(function(b){ b.addEventListener('change', refreshLock); });
+    refreshLock();
+    $('doUpdate').addEventListener('click', function(){ prepare(false); });
+    $('doLock').addEventListener('click', function(){ prepare(true); });
   }
 
   // ---- build the unsigned tx --------------------------------------------------------------------
-  function prepare(){
-    var body = { mint: loaded.mint };
+  function prepare(makeImmutable){
+    var body = { mint: loaded.mint, makeImmutable: !!makeImmutable };
     var nu = $('newUri') && $('newUri').value.trim();
     if (nu) body.newUri = nu;
+    if (!nu && !makeImmutable) { $('plan').innerHTML = '<div class="card"><span class="bad">Enter a new URI first.</span></div>'; return; }
     $('plan').innerHTML = '<div class="card"><span class="muted">Building…</span></div>';
-    api('/api/token-metadata/prepare-lock', {
+    api('/api/token-metadata/prepare', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }).then(function(d){
       if (!d.ok) { $('plan').innerHTML = '<div class="card"><span class="bad">' + esc2(d.error) + '</span></div>'; return; }
       prepared = d;
       var c = d.changes, p = d.preserved;
-      $('plan').innerHTML = '<div class="card"><div class="k">WHAT THIS TRANSACTION DOES</div>' +
-        '<div class="row"><span>isMutable</span><b>true → <span class="bad">false</span></b></div>' +
+      $('plan').innerHTML = '<div class="card"><div class="k">WHAT THIS TRANSACTION DOES' +
+        (d.irreversible ? ' — <span class="bad">IRREVERSIBLE</span>' : ' — <span class="ok">REVERSIBLE</span>') + '</div>' +
+        '<div class="row"><span>isMutable</span><b>' + (d.irreversible
+            ? 'true → <span class="bad">false</span>'
+            : '<span class="ok">true → true (untouched)</span>') + '</b></div>' +
         '<div class="row"><span>URI</span><b>' + (c.uri.changed
             ? esc2(c.uri.from) + '<br>→ <span class="ok">' + esc2(c.uri.to) + '</span>'
             : '<span class="warn">unchanged — frozen as-is</span>') + '</b></div>' +
@@ -153,7 +176,10 @@
         '<div class="row"><span>Creators</span><b>' + (p.creators ? esc2(JSON.stringify(p.creators)) : 'none') + '</b></div>' +
         '<div class="row"><span>Seller fee</span><b>' + esc2(p.sellerFeeBasisPoints) + ' bps</b></div>' +
         '<div class="row"><span>Update authority</span><b>' + esc2(p.updateAuthority) + ' <span class="muted">(not reassigned)</span></b></div>' +
-        '<div class="danger">⚠️ <b>Irreversible.</b> After this lands, the name, symbol, URI and creators of this token can never be changed again by anyone — including you.</div>' +
+        (d.irreversible
+          ? '<div class="danger">⚠️ <b>Irreversible.</b> After this lands, the name, symbol, URI and creators can never be changed again by anyone — including you.</div>'
+          : '<div class="card" style="background:rgba(16,185,129,0.06);border-color:rgba(16,185,129,0.3);margin:12px 0"><b class="ok">Still editable after this.</b> ' +
+            'Send it, then go and check the token in a wallet and on the aggregators. Come back for Step 2 only when it looks right.</div>') +
         '<div style="display:flex;gap:8px;flex-wrap:wrap"><button id="sign">SIGN IN WALLET &amp; SEND</button>' +
         '<button id="showraw" class="alt">SHOW RAW TX</button></div></div>';
       $('sign').addEventListener('click', signAndSend);
@@ -181,10 +207,14 @@
       }).then(function(j){
         if (j.error) throw new Error(j.error.message || 'send failed');
         var sig = j.result;
+        var wasLock = prepared.irreversible;
         $('out').innerHTML = '<div class="card"><div class="k">SENT</div>' +
           '<p><a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener noreferrer">' + esc(sig) + '</a></p>' +
-          '<p class="muted">Re-load the token above to confirm <b>Metadata mutable</b> now reads <span class="ok">already immutable</span>. ' +
-          'Rugcheck and CoinGecko cache — the banner clears on their next scan, not instantly.</p></div>';
+          (wasLock
+            ? '<p class="muted">Re-load the token above — <b>Metadata mutable</b> should now read <span class="ok">already immutable</span>. ' +
+              'Rugcheck and CoinGecko cache, so the banner clears on their next scan, not instantly.</p>'
+            : '<p class="muted">Re-load the token above to see the new URI. Now go and check it renders: open the URI, open the image ' +
+              'inside it, and look at the token in a wallet. <b>Only then</b> come back for Step 2.</p>') + '</div>';
         btn.textContent = 'SENT';
       }).catch(function(e){
         $('out').innerHTML = '<div class="card"><span class="bad">' + esc(e.message || 'failed') + '</span></div>';

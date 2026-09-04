@@ -7597,9 +7597,12 @@ app.get("/api/token-metadata/read", async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "read failed") }); }
 });
 
-// Build the UNSIGNED lock transaction. Optionally uploads a fresh metadata JSON to Arweave first
-// (permanent) so the URI being frozen is one that will still resolve in ten years.
-app.post("/api/token-metadata/prepare-lock", async (req, res) => {
+// Build an UNSIGNED transaction. TWO STEPS, deliberately separate:
+//   makeImmutable:false  → repoint the URI while still mutable, then go LOOK at it rendering
+//   makeImmutable:true   → lock, only after you have seen it
+// Optionally uploads a fresh metadata JSON to Arweave first, so what eventually gets frozen is a
+// URI that will still resolve in ten years.
+app.post("/api/token-metadata/prepare", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
@@ -7624,7 +7627,8 @@ app.post("/api/token-metadata/prepare-lock", async (req, res) => {
       uploaded = await uploadJsonToArweave(b.uploadJson);
       newUri = uploaded;
     }
-    const built = await tm.buildLockTx({ connection: conn, current, newUri });
+    const built = await tm.buildUpdateTx({ connection: conn, current, newUri,
+      makeImmutable: b.makeImmutable === true });
     res.json({ ok: true, mint, current, uploadedUri: uploaded, ...built });
   } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "prepare failed") }); }
 });

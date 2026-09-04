@@ -61,7 +61,7 @@ const NEW_URI = 'https://arweave.net/EjtH_HUOurkf_rLPeS6QLZprrFP_7OmDZg52JopeyIE
      M.metadataPda(ROSE.mint).toBase58());
 
   console.log('\nthe irreversible edit preserves everything it must\n');
-  const { ix, preserved, changes } = M.buildLockIx({ current: ROSE, newUri: NEW_URI });
+  const { ix, preserved, changes } = M.buildUpdateIx({ current: ROSE, newUri: NEW_URI, makeImmutable: true });
   ok('THE ONE THAT MATTERS: the verified creator survives',
      preserved.creators && preserved.creators.length === 1 &&
      preserved.creators[0].address === ROSE.creators[0].address &&
@@ -83,13 +83,34 @@ const NEW_URI = 'https://arweave.net/EjtH_HUOurkf_rLPeS6QLZprrFP_7OmDZg52JopeyIE
   ok('discriminator is 15 (UpdateMetadataAccountV2)', ix.data[0] === 15);
 
   let threw = null;
-  try { M.buildLockIx({ current: { ...ROSE, isMutable: false }, newUri: NEW_URI }); } catch (e) { threw = e.message; }
+  try { M.buildUpdateIx({ current: { ...ROSE, isMutable: false }, newUri: NEW_URI, makeImmutable: true }); } catch (e) { threw = e.message; }
   ok('refuses to act on already-immutable metadata', /already immutable/.test(threw || ''), String(threw));
   threw = null;
-  try { M.buildLockIx({ current: ROSE, newUri: 'javascript:alert(1)' }); } catch (e) { threw = e.message; }
+  try { M.buildUpdateIx({ current: ROSE, newUri: 'javascript:alert(1)' }); } catch (e) { threw = e.message; }
   ok('refuses a URI that is not https/ipfs/ar', /refusing a non-https/.test(threw || ''), String(threw));
   ok('omitting newUri keeps the existing URI',
-     M.buildLockIx({ current: ROSE }).changes.uri.changed === false);
+     M.buildUpdateIx({ current: ROSE, makeImmutable: true }).changes.uri.changed === false);
+
+  // ---- STEP 1 vs STEP 2 ----------------------------------------------------------------------
+  // The two-step flow is the safety model: repoint the URI while STILL MUTABLE, go and look at it
+  // rendering in a wallet and on the aggregators, and only then lock. A step-1 transaction must
+  // therefore leave the mutable flag completely alone — not set it true, which would be a no-op
+  // today but would silently RE-OPEN a locked token if this were ever aimed at one.
+  console.log('\nstep 1 (update only) vs step 2 (lock)\n');
+  const step1 = M.buildUpdateIx({ current: ROSE, newUri: NEW_URI, makeImmutable: false });
+  ok('step 1 is not marked irreversible', step1.irreversible === false);
+  ok('step 1 leaves isMutable untouched', step1.changes.isMutable.to === true && step1.changes.isMutable.changed === false,
+     JSON.stringify(step1.changes.isMutable));
+  ok('step 1 still repoints the URI', step1.changes.uri.to === NEW_URI && step1.changes.uri.changed === true);
+  ok('step 1 preserves the verified creator too',
+     JSON.stringify(step1.preserved.creators) === JSON.stringify(ROSE.creators));
+  const step2 = M.buildUpdateIx({ current: ROSE, makeImmutable: true });
+  ok('step 2 IS marked irreversible', step2.irreversible === true);
+  ok('step 2 alone does not touch the URI', step2.changes.uri.changed === false);
+  let n = null;
+  try { M.buildUpdateIx({ current: ROSE }); } catch (e) { n = e.message; }
+  ok('a call that would do nothing is refused', /nothing to do/.test(n || ''), String(n));
+  ok('step 1 and step 2 produce DIFFERENT instruction data', !Buffer.from(step1.ix.data).equals(Buffer.from(step2.ix.data)));
 
   // ---- THE BYTE DIFF -------------------------------------------------------------------------
   console.log('\nbyte-for-byte against the real Metaplex serializer\n');
@@ -120,7 +141,7 @@ const NEW_URI = 'https://arweave.net/EjtH_HUOurkf_rLPeS6QLZprrFP_7OmDZg52JopeyIE
      '\n      theirs (' + theirs.length + '): ' + theirs.toString('hex').slice(0, 160));
 
   // and a shape the library would encode differently if we got Options wrong
-  const noChange = Buffer.from(M.buildLockIx({ current: ROSE }).ix.data);
+  const noChange = Buffer.from(M.buildUpdateIx({ current: ROSE, makeImmutable: true }).ix.data);
   const theirsNoChange = Buffer.from(ser.serialize({
     data: { name: ROSE.name, symbol: ROSE.symbol, uri: ROSE.uri, sellerFeeBasisPoints: 0,
             creators: ROSE.creators.map((c) => ({ address: c.address, verified: c.verified, share: c.share })),
@@ -128,6 +149,19 @@ const NEW_URI = 'https://arweave.net/EjtH_HUOurkf_rLPeS6QLZprrFP_7OmDZg52JopeyIE
     updateAuthority: null, primarySaleHappened: null, isMutable: false,
   }));
   ok('...and still identical when the URI is left alone', noChange.equals(theirsNoChange));
+
+  // Step 1 must encode isMutable as Option::None. Getting this byte wrong is how a "just update
+  // the URI" call would quietly carry a lock with it.
+  const theirsStep1 = Buffer.from(ser.serialize({
+    data: { name: ROSE.name, symbol: ROSE.symbol, uri: NEW_URI, sellerFeeBasisPoints: 0,
+            creators: ROSE.creators.map((c) => ({ address: c.address, verified: c.verified, share: c.share })),
+            collection: null, uses: null },
+    updateAuthority: null, primarySaleHappened: null, isMutable: null,
+  }));
+  ok('step 1 encodes isMutable as None, byte-identical to the library',
+     Buffer.from(step1.ix.data).equals(theirsStep1),
+     'ours   : ' + Buffer.from(step1.ix.data).toString('hex').slice(-40) +
+     '\n      theirs : ' + theirsStep1.toString('hex').slice(-40));
 
   done();
   function done() {
