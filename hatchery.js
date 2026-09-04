@@ -398,6 +398,8 @@ async function announceHatch(text) {
 const kv = require("./lib/kvstore");
 const HATCHERY_KV = "hatchery_mints_v1";
 const hatcheryMints = new Set();
+// mintAddress -> the name/symbol the Hatchery actually built it with (see /minted).
+const hatcheryMeta = new Map();
 const announcedMints = new Set();
 (function loadHatcheryState() {
   try {
@@ -510,8 +512,11 @@ router.post("/build", async (req, res) => {
     reapPending();
     pendingMints.set(mintAddress, { mintSecret, builtTxB64: txBase64, cluster: useCluster, ts: Date.now() });
 
-    // Remember this mint so a later /minted report can be trusted + announced.
+    // Remember this mint so a later /minted report can be trusted + announced — and remember the
+    // name/symbol WE built it with, because /minted must not take them from the request body.
     hatcheryMints.add(mintAddress);
+    hatcheryMeta.set(mintAddress, { name: String(name || "").slice(0, 48), symbol: String(symbol || "").slice(0, 16) });
+    if (hatcheryMeta.size > 5000) hatcheryMeta.delete(hatcheryMeta.keys().next().value);
     if (hatcheryMints.size > 5000) hatcheryMints.delete(hatcheryMints.values().next().value);
     saveHatcheryState();
 
@@ -645,17 +650,46 @@ router.post("/minted", async (req, res) => {
     // Only announce mints the Hatchery built, and only once each.
     if (!hatcheryMints.has(mintAddress) || announcedMints.has(mintAddress)) return res.json({ ok: false });
 
-    // Confirm the transaction is real and succeeded before announcing.
+    // Confirm the transaction is real, succeeded, AND ACTUALLY CREATED THIS MINT.
+    //
+    // The previous version only checked that `signature` resolved to some successful mainnet
+    // transaction — any signature at all, entirely unrelated. Combined with /build being
+    // unauthenticated (no wallet signature, no payment, and it adds the address to hatcheryMints
+    // before anything is signed), that let anyone post arbitrary "NEW TOKEN HATCHED" messages to
+    // the real Telegram channel, for a mint that was never created, with a name and symbol of
+    // their choosing: build to get an address, pair it with any confirmed signature from any
+    // wallet, POST /minted. The comment here claimed the check this now performs.
     const conn = new Connection(rpcUrl("mainnet-beta"), "confirmed");
     const tx = await conn.getTransaction(signature, { maxSupportedTransactionVersion: 1 });
     if (!tx || (tx.meta && tx.meta.err)) return res.json({ ok: false });
+    // The transaction must reference this exact mint. Covers both legacy and v0 messages.
+    let keys = [];
+    try {
+      const msg = tx.transaction && tx.transaction.message;
+      const acct = (typeof msg.getAccountKeys === "function"
+        ? msg.getAccountKeys({ accountKeysFromLookups: tx.meta && tx.meta.loadedAddresses })
+        : null);
+      keys = acct ? acct.keySegments().flat().map((k) => k.toBase58())
+                  : (msg.accountKeys || []).map((k) => (k.toBase58 ? k.toBase58() : String(k)));
+    } catch (_) { keys = []; }
+    if (!keys.includes(mintAddress)) return res.json({ ok: false, error: "signature_does_not_reference_mint" });
+    // And the mint must actually exist on-chain now — a referenced-but-never-created address is
+    // still not a hatched token.
+    try {
+      const info = await conn.getParsedAccountInfo(new PublicKey(mintAddress));
+      const parsed = info && info.value && info.value.data && info.value.data.parsed;
+      if (!parsed || parsed.type !== "mint") return res.json({ ok: false, error: "not_a_mint" });
+    } catch (_) { return res.json({ ok: false, error: "mint_read_failed" }); }
 
     announcedMints.add(mintAddress);
     if (announcedMints.size > 5000) announcedMints.delete(announcedMints.values().next().value);
     saveHatcheryState();
     const short = `${mintAddress.slice(0, 4)}…${mintAddress.slice(-4)}`;
-    const nm = escapeHtml(String(name || "A new token").slice(0, 48));
-    const sym = escapeHtml(String(symbol || "").slice(0, 16));
+    // Name and symbol come from what the Hatchery BUILT, never from this request body — the body
+    // is attacker-controlled free text heading for a brand channel. Escaped either way.
+    const built = hatcheryMeta.get(mintAddress) || {};
+    const nm = escapeHtml(String(built.name || "A new token").slice(0, 48));
+    const sym = escapeHtml(String(built.symbol || "").slice(0, 16));
     await announceHatch(
       "🥚 <b>NEW TOKEN HATCHED</b>\n" +
       `<b>${nm}</b>${sym ? ` ($${sym})` : ""} was just created with The Hatchery.\n` +
