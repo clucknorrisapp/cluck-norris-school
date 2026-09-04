@@ -102,6 +102,40 @@ for (const m of serverCode.matchAll(/(?:all\s+)?(\d+)\s+lessons\b/gi)) {
   );
 }
 
+// 4. THE i18n DICTIONARIES ARE KEYED BY THE ENGLISH SOURCE STRING. So a rendered string that
+//    embeds a curriculum count has its curated translation keyed to THAT count — change the
+//    count and the key no longer matches, the curated phrase is bypassed in all six languages,
+//    and the machine-translation fallback quietly fills in instead. Not a blank page, but a
+//    quality drop nobody would notice, in the exact place CLAUDE.md warns about.
+//
+//    The landing CTA is the live case: "🏫 Start the 12-Class Course" is a key in es/hi/it/pt/
+//    vi/zh.json. Rendering the number from LESSONS.length (which it now does, so the button and
+//    the strapline beneath it can never disagree) means adding a lesson silently orphans those
+//    six entries. This checks the keys still match, so that becomes a CI failure with
+//    instructions rather than a silent regression.
+const I18N_DIR = path.join(ROOT, "public", "i18n");
+const CTA_KEY = (n) => `🏫 Start the ${n}-Class Course`;
+if (fs.existsSync(I18N_DIR)) {
+  const expected = CTA_KEY(counts.LESSONS);
+  const stale = [];
+  for (const f of fs.readdirSync(I18N_DIR)) {
+    if (!/^[a-z]{2}\.json$/.test(f)) continue;              // the general dictionary only
+    let dict;
+    try { dict = JSON.parse(read(path.join("public", "i18n", f))); } catch (_) { continue; }
+    const keys = Object.keys(dict).filter((k) => /Start the \d+-Class Course/.test(k));
+    if (!keys.length) continue;                             // this language never had the phrase
+    if (!keys.includes(expected)) stale.push(`${f} (has "${keys[0]}")`);
+  }
+  if (stale.length) {
+    problems.push(
+      `public/i18n — the landing CTA is keyed to the OLD class count. Expected the key ` +
+      `"${expected}". Stale: ${stale.join(", ")}. The dictionaries are keyed by the English ` +
+      `source string, so these entries no longer match what renders and the curated translation ` +
+      `is silently replaced by machine translation. Update the key (and its translation) in each.`
+    );
+  }
+}
+
 if (problems.length) {
   console.error("✗ curriculum count drift:");
   for (const p of problems) console.error("   • " + p);
