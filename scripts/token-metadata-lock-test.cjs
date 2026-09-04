@@ -112,6 +112,50 @@ const NEW_URI = 'https://arweave.net/EjtH_HUOurkf_rLPeS6QLZprrFP_7OmDZg52JopeyIE
   ok('a call that would do nothing is refused', /nothing to do/.test(n || ''), String(n));
   ok('step 1 and step 2 produce DIFFERENT instruction data', !Buffer.from(step1.ix.data).equals(Buffer.from(step2.ix.data)));
 
+  // ---- C then A: the durable-image fallback ---------------------------------------------------
+  // The owner's choice (2026-09-04): try C (mirror the ORIGINAL bytes to Arweave, exact and
+  // permanent), fall back to A (ipfs://<CID>, same file, gateway-agnostic). The branch that
+  // matters is what happens when C FAILS — over Turbo's 100 KiB free ceiling it needs a funded
+  // account — and that cannot be staged against a live account, hence the injected mirror.
+  console.log('\nC then A — durable image fallback\n');
+  var IPFS_IMG = 'https://ipfs.io/ipfs/QmYF2cicUj59Sy9zXPv9s1j6zrq9j6f9bb5xLFyHoy5kkh';
+  {
+    const r = await M.chooseDurableImage({ imageUrl: IPFS_IMG, mirror: async () => 'https://arweave.net/NEWID' });
+    ok('C: a working mirror wins', r.method === 'arweave-mirror' && r.image === 'https://arweave.net/NEWID', JSON.stringify(r));
+  }
+  {
+    const r = await M.chooseDurableImage({ imageUrl: IPFS_IMG, mirror: async () => { throw new Error('HTTP 402 payment required'); } });
+    ok('A: a failed mirror falls back to ipfs://, it does not abort',
+       r.method === 'ipfs-scheme' && r.image === 'ipfs://QmYF2cicUj59Sy9zXPv9s1j6zrq9j6f9bb5xLFyHoy5kkh', JSON.stringify(r));
+    ok('  and the failure reason is reported, not swallowed',
+       r.steps.some((x) => /402|payment/i.test(x)), JSON.stringify(r.steps));
+  }
+  {
+    const r = await M.chooseDurableImage({ imageUrl: IPFS_IMG, mirror: async () => null });
+    ok('a mirror that returns nothing counts as a failure', r.method === 'ipfs-scheme');
+  }
+  {
+    const r = await M.chooseDurableImage({ imageUrl: IPFS_IMG, mirror: null });
+    ok('mirror disabled goes straight to ipfs://', r.method === 'ipfs-scheme');
+  }
+  {
+    const r = await M.chooseDurableImage({ imageUrl: 'ipfs://QmAlreadyFine', mirror: null });
+    ok('an already-durable ipfs:// image is left alone', r.method === 'unchanged' && r.image === 'ipfs://QmAlreadyFine');
+  }
+  {
+    const r = await M.chooseDurableImage({ imageUrl: 'https://example.com/logo.png', mirror: async () => { throw new Error('nope'); } });
+    ok('a non-IPFS image with no mirror has NO durable option — reported, not guessed',
+       r.image === null && r.method === null, JSON.stringify(r));
+  }
+  // THE MISTAKE THIS PREVENTS: an aggregator's smaller copy is never substituted. Jupiter hosts a
+  // 512x512 downscale of ROSE's 1080x1080 logo; using it would have frozen the small one forever.
+  {
+    const r = await M.chooseDurableImage({ imageUrl: IPFS_IMG, mirror: async (u) => { 
+      ok('  the mirror is handed the ORIGINAL url, never a substitute', u === IPFS_IMG, u);
+      return 'https://arweave.net/X'; } });
+    ok('  and returns what the mirror produced from it', r.image === 'https://arweave.net/X');
+  }
+
   // ---- THE BYTE DIFF -------------------------------------------------------------------------
   console.log('\nbyte-for-byte against the real Metaplex serializer\n');
   let lib;

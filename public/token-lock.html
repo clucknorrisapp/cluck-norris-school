@@ -130,7 +130,12 @@
       '<input id="newUri" placeholder="https://arweave.net/… new metadata URI" autocomplete="off" spellcheck="false"/>' +
       '<p class="muted" style="margin:8px 0 0">If the current URI is an <b>ipfs.io</b> gateway link, replace it. That gateway is ' +
       'being retired. While metadata is still mutable you can run this as many times as you need.</p>' +
-      '<div style="margin-top:10px"><button id="doUpdate"' + dis + '>BUILD UPDATE (KEEPS IT EDITABLE)</button></div>' + gate + '</div>';
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button id="rebuild" class="alt">REBUILD JSON → ARWEAVE</button>' +
+      '<button id="doUpdate"' + dis + '>BUILD UPDATE (KEEPS IT EDITABLE)</button></div>' +
+      '<p class="muted" style="margin:8px 0 0">Rebuild reads the CURRENT JSON, keeps every field, and gives the image a durable ' +
+      'home: it mirrors the original bytes to Arweave, and only if that is not possible falls back to <b>ipfs://</b> ' +
+      '(same file, gateway-agnostic). It never downscales your logo.</p>' + gate + '</div>';
 
     // STEP 2 — the irreversible one, with the checklist that should stand between them.
     html += '<div class="card"><div class="k">STEP 2 — LOCK FOREVER <span class="bad">(irreversible)</span></div>' +
@@ -146,8 +151,38 @@
     function refreshLock(){ $('doLock').disabled = !(authMatch && boxes.every(function(b){ return b.checked; })); }
     boxes.forEach(function(b){ b.addEventListener('change', refreshLock); });
     refreshLock();
+    $('rebuild').addEventListener('click', rebuildJson);
     $('doUpdate').addEventListener('click', function(){ prepare(false); });
     $('doLock').addEventListener('click', function(){ prepare(true); });
+  }
+
+  // ---- step 0: give the image a durable home and put a fresh JSON on Arweave -------------------
+  function rebuildJson(){
+    var btn = $('rebuild'); btn.disabled = true; btn.textContent = 'REBUILDING…';
+    $('plan').innerHTML = '<div class="card"><span class="muted">Fetching the current JSON, mirroring the image…</span></div>';
+    api('/api/token-metadata/rebuild-json', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mint: loaded.mint }),
+    }).then(function(d){
+      btn.disabled = false; btn.textContent = 'REBUILD JSON → ARWEAVE';
+      if (!d.ok) { $('plan').innerHTML = '<div class="card"><span class="bad">' + esc2(d.error) + '</span>' +
+        ((d.steps||[]).length ? '<pre>' + esc(d.steps.join('\n')) + '</pre>' : '') + '</div>'; return; }
+      $('newUri').value = d.newUri;
+      $('plan').innerHTML = '<div class="card"><div class="k">NEW METADATA JSON — ON ARWEAVE</div>' +
+        '<div class="row"><span>Method</span><b>' + (d.method === 'arweave-mirror'
+            ? '<span class="ok">image mirrored to Arweave (exact + permanent)</span>'
+            : '<span class="warn">ipfs:// scheme (exact file, gateway-agnostic)</span>') + '</b></div>' +
+        '<div class="row"><span>New JSON</span><b><a href="' + safeUrl(d.newUri) + '" target="_blank" rel="noopener noreferrer">' + esc2(d.newUri) + '</a></b></div>' +
+        '<div class="row"><span>Image now</span><b>' + esc2(d.newImage) + '</b></div>' +
+        '<div class="row"><span>Image was</span><b>' + esc2(d.previousImage) + '</b></div>' +
+        '<div class="row"><span>Fields kept</span><b>' + esc2((d.preservedKeys||[]).join(', ')) + '</b></div>' +
+        '<pre>' + esc((d.steps||[]).join('\n')) + '</pre>' +
+        '<p class="muted">Open the new JSON and its image above and check they load. Then use ' +
+        '<b>BUILD UPDATE</b> — still reversible.</p></div>';
+    }).catch(function(e){
+      btn.disabled = false; btn.textContent = 'REBUILD JSON → ARWEAVE';
+      $('plan').innerHTML = '<div class="card"><span class="bad">' + esc(e.message) + '</span></div>';
+    });
   }
 
   // ---- build the unsigned tx --------------------------------------------------------------------

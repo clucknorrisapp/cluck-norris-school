@@ -193,6 +193,17 @@ async function uploadMetadata({ imageBuffer, imageMime, name, symbol, descriptio
 // now being retired. Repointing at Arweave in the SAME transaction as the lock is the difference
 // between "immutable" and "immutably broken". Same free Turbo path uploadMetadata already uses;
 // a metadata JSON is ~1 KB, far under the 100 KiB free ceiling.
+// Mirror arbitrary bytes (an image) to Arweave. Separate from uploadJsonToArweave because the
+// size story differs: a metadata JSON is ~1 KB and always free, whereas a real logo can exceed
+// Turbo's 100 KiB free ceiling and then needs a funded account. The caller is expected to CATCH
+// the failure and fall back rather than treat it as fatal — see /api/token-metadata/rebuild-json.
+async function uploadBytesToArweave(bytes, contentType) {
+  const key = process.env.HATCHERY_TURBO_KEY;
+  if (!key) throw new Error("Arweave uploads are not configured (HATCHERY_TURBO_KEY missing)");
+  if (!Buffer.isBuffer(bytes) || !bytes.length) throw new Error("no bytes to upload");
+  return arweaveUpload(new SolanaSigner(key), bytes, String(contentType || "application/octet-stream"));
+}
+
 async function uploadJsonToArweave(obj) {
   const key = process.env.HATCHERY_TURBO_KEY;
   if (!key) throw new Error("Arweave uploads are not configured (HATCHERY_TURBO_KEY missing)");
@@ -697,4 +708,4 @@ async function uploadPublicFile(buffer, contentType) {
   return { url, txid: url.split("/").pop() };
 }
 
-module.exports = { uploadJsonToArweave, router, uploadMetadata, buildMintTransaction, uploadPublicFile };
+module.exports = { uploadBytesToArweave, uploadJsonToArweave, router, uploadMetadata, buildMintTransaction, uploadPublicFile };
