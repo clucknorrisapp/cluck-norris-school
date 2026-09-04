@@ -3366,8 +3366,14 @@ function clientIp(req) {
   const xff = String(req.headers["x-forwarded-for"] || "").split(",").map(s => s.trim()).filter(Boolean);
   return String(req.headers["cf-connecting-ip"] || (xff.length ? xff[xff.length - 1] : (req.ip || "")) || "unknown");
 }
-function rateLimit(bucket, { windowMs, max }) {
-  if (windowMs > RL_MAX_WINDOW_MS) RL_MAX_WINDOW_MS = windowMs;   // keep the sweep's retention >= every window
+// Retention is PER BUCKET, not one global maximum. It used to raise a single RL_MAX_WINDOW_MS to
+// the largest window any limiter declared, and the sweep then held every bucket's timestamps for
+// that long — so introducing one day-long limiter would quietly make all fifteen minute-long ones
+// retain a day of timestamps each. The sweep now trims each key by its own window.
+const RL_WINDOWS = new Map();   // bucket -> windowMs
+function rateLimit(bucket, { windowMs, max, message, onLimit }) {
+  RL_WINDOWS.set(bucket, Math.max(RL_WINDOWS.get(bucket) || 0, windowMs));
+  if (windowMs > RL_MAX_WINDOW_MS) RL_MAX_WINDOW_MS = windowMs;   // fallback for un-prefixed keys
   return (req, res, next) => {
     const ip = clientIp(req);
     const now = Date.now();
@@ -3379,8 +3385,11 @@ function rateLimit(bucket, { windowMs, max }) {
     if (!arr) { arr = []; RL_BUCKETS.set(key, arr); }
     while (arr.length && now - arr[0] > windowMs) arr.shift();
     if (arr.length >= max) {
-      res.setHeader("Retry-After", Math.ceil(windowMs / 1000));
-      return res.status(429).json({ success: false, error: "Rate limit exceeded — slow down." });
+      const retryAfter = Math.ceil((windowMs - (now - arr[0])) / 1000);
+      if (typeof onLimit === "function") { try { onLimit(ip, req); } catch (_) {} }
+      res.setHeader("Retry-After", Math.max(1, retryAfter));
+      return res.status(429).json({ success: false,
+        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter) });
     }
     arr.push(now);
     next();
@@ -3390,7 +3399,8 @@ function rateLimit(bucket, { windowMs, max }) {
 setInterval(() => {
   const now = Date.now();
   for (const [k, arr] of RL_BUCKETS) {
-    while (arr.length && now - arr[0] > RL_MAX_WINDOW_MS) arr.shift();
+    const w = RL_WINDOWS.get(k.slice(0, k.indexOf(":"))) || RL_MAX_WINDOW_MS;
+    while (arr.length && now - arr[0] > w) arr.shift();
     if (arr.length === 0) RL_BUCKETS.delete(k);
   }
 }, 120000).unref();
@@ -3410,6 +3420,35 @@ app.use("/api/helius-rpc", rateLimit("heliusrpc", { windowMs: 60000, max: 90 }))
 app.use("/api/helius-tx", rateLimit("heliustx", { windowMs: 60000, max: 30 }));
 app.use("/api/ask-cluck", rateLimit("ai", { windowMs: 60000, max: 15 }));
 app.use("/api/lecture", rateLimit("ai", { windowMs: 60000, max: 15 }));
+// A DAILY CEILING, because the free allowance was only ever enforced in the browser.
+//
+// AskCluck (src/shared.jsx) counts questions in localStorage against DAILY_LIMIT = 10. Clearing
+// site data resets it, and nothing server-side ever knew — so the only real ceiling was the
+// per-minute cap above, which permits ~21,600 billed Anthropic calls per IP per day. The tutor is
+// deliberately free and must stay that way, so this is set an order of magnitude above honest use
+// rather than at the advertised 10: a learner asking their ten questions never sees it, and it
+// leaves room for a shared IP (a school, an office, carrier NAT) where many real people share one
+// address. It cuts the worst case by ~99%.
+//
+// Env-tunable and killable: ASK_CLUCK_DAILY=0 (or AI_DAILY_OFF=1) disables it entirely. Learning
+// staying free is the mission; if this ever bites real learners, turn it off and re-tune.
+const AI_DAILY_MAX = process.env.AI_DAILY_OFF === "1" ? 0 : (Number(process.env.ASK_CLUCK_DAILY) || 150);
+if (AI_DAILY_MAX > 0) {
+  // LOG EVERY TIME IT BITES. This is a new limit on a free, mission-critical surface, and the only
+  // way to know whether it is catching abuse or catching a classroom behind one NAT is to look.
+  // Counted in kv so /api/ops surfaces it, and logged with the IP prefix only — never the full
+  // address, which is not something to accumulate about learners.
+  const aiDaily = rateLimit("aiday", { windowMs: 86400000, max: AI_DAILY_MAX,
+    message: "You've reached today's free question limit. Come back tomorrow — the school is free and stays free.",
+    onLimit: (ip, req) => {
+      try {
+        kv.set("aiDailyBlocks", (kv.get("aiDailyBlocks", 0) || 0) + 1);
+        console.warn(`[AI-DAILY] cap ${AI_DAILY_MAX} hit by ${String(ip).split(".").slice(0, 2).join(".")}.x.x on ${req.path}` +
+          ` — if this is a real learner, raise ASK_CLUCK_DAILY or set AI_DAILY_OFF=1`);
+      } catch (_) {}
+    } });
+  for (const route of ["/api/ask-cluck", "/api/lecture", "/api/lp-ask"]) app.use(route, aiDaily);
+}
 app.use("/api/track", rateLimit("track", { windowMs: 60000, max: 120 })); // learning-funnel events (many per session)
 app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
 // Heavy forensic GETs fan out to many billed Helius/ST/Bags upstream calls each;
