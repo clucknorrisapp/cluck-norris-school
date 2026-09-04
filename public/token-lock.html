@@ -130,6 +130,9 @@
       '<input id="newUri" placeholder="https://arweave.net/… new metadata URI" autocomplete="off" spellcheck="false"/>' +
       '<p class="muted" style="margin:8px 0 0">If the current URI is an <b>ipfs.io</b> gateway link, replace it. That gateway is ' +
       'being retired. While metadata is still mutable you can run this as many times as you need.</p>' +
+      '<input id="imgOverride" placeholder="optional: ipfs://… or https://… image to use instead" autocomplete="off" spellcheck="false" style="margin-top:8px"/>' +
+      '<p class="muted" style="margin:8px 0 0">Leave the image box empty and the rebuild keeps the image the token already has. ' +
+      'Fill it in only if you have pinned the logo somewhere you control — <b>paste the exact file</b>, not a resized copy.</p>' +
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
       '<button id="rebuild" class="alt">REBUILD JSON → ARWEAVE</button>' +
       '<button id="doUpdate"' + dis + '>BUILD UPDATE (KEEPS IT EDITABLE)</button></div>' +
@@ -162,7 +165,7 @@
     $('plan').innerHTML = '<div class="card"><span class="muted">Fetching the current JSON, mirroring the image…</span></div>';
     api('/api/token-metadata/rebuild-json', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mint: loaded.mint }),
+      body: JSON.stringify({ mint: loaded.mint, imageOverride: ($('imgOverride').value || '').trim() || null }),
     }).then(function(d){
       btn.disabled = false; btn.textContent = 'REBUILD JSON → ARWEAVE';
       if (!d.ok) { $('plan').innerHTML = '<div class="card"><span class="bad">' + esc2(d.error) + '</span>' +
@@ -171,6 +174,8 @@
       $('plan').innerHTML = '<div class="card"><div class="k">NEW METADATA JSON — ON ARWEAVE</div>' +
         '<div class="row"><span>Method</span><b>' + (d.method === 'arweave-mirror'
             ? '<span class="ok">image mirrored to Arweave (exact + permanent)</span>'
+            : d.method === 'override'
+            ? '<span class="ok">using the image you supplied</span>'
             : '<span class="warn">ipfs:// scheme (exact file, gateway-agnostic)</span>') + '</b></div>' +
         '<div class="row"><span>New JSON</span><b><a href="' + safeUrl(d.newUri) + '" target="_blank" rel="noopener noreferrer">' + esc2(d.newUri) + '</a></b></div>' +
         '<div class="row"><span>Image now</span><b>' + esc2(d.newImage) + '</b></div>' +

@@ -7643,6 +7643,9 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
     const { uploadBytesToArweave, uploadJsonToArweave } = require("./hatchery");
     const pick = await tm.chooseDurableImage({
       imageUrl: imgUrl,
+      // ?imageOverride=ipfs://… — point at a CID you pinned yourself. See the note in the lib:
+      // a re-upload gets a different CID for the same pixels, and that new one is the whole point.
+      override: b.imageOverride || null,
       mirror: b.preferArweaveMirror === false ? null : async (url) => {
         const ir = await fetch(url, { signal: AbortSignal.timeout(40000) });
         if (!ir.ok) throw new Error(`image fetch HTTP ${ir.status}`);

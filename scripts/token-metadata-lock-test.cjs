@@ -156,6 +156,30 @@ const NEW_URI = 'https://arweave.net/EjtH_HUOurkf_rLPeS6QLZprrFP_7OmDZg52JopeyIE
     ok('  and returns what the mirror produced from it', r.image === 'https://arweave.net/X');
   }
 
+  // An explicit override beats every derived option. This is the ROSE case: the logo was
+  // re-uploaded under the owner's own Pinata account, which produced a DIFFERENT CID for the same
+  // pixels (CIDv1-raw bafkrei… vs the original CIDv0 dag-pb Qm…). Without the override the
+  // rebuild would derive the old CID from the existing metadata and quietly keep depending on
+  // someone else's pin — the exact thing the re-pin was meant to end.
+  var OWN_PIN = 'ipfs://bafkreiehcdpc2orxxzyhgcvskx4hvofbv5zlqrrlb6hpdexsqhzvkhcl5q';
+  {
+    const r = await M.chooseDurableImage({ imageUrl: IPFS_IMG, override: OWN_PIN,
+                                           mirror: async () => 'https://arweave.net/SHOULD_NOT_WIN' });
+    ok('an explicit image override beats even a working mirror',
+       r.method === 'override' && r.image === OWN_PIN, JSON.stringify(r));
+  }
+  {
+    const r = await M.chooseDurableImage({ imageUrl: IPFS_IMG, override: OWN_PIN, mirror: null });
+    ok('  and it is used verbatim, not re-derived from the old metadata', r.image === OWN_PIN);
+    ok('  the derived old CID is NOT what ends up in the JSON',
+       r.image.indexOf('QmYF2c') === -1, r.image);
+  }
+  {
+    let t = null;
+    try { await M.chooseDurableImage({ imageUrl: IPFS_IMG, override: 'javascript:alert(1)' }); } catch (e) { t = e.message; }
+    ok('  a non-https/ipfs/ar override is refused', /refusing a non-https/.test(t || ''), String(t));
+  }
+
   // ---- THE BYTE DIFF -------------------------------------------------------------------------
   console.log('\nbyte-for-byte against the real Metaplex serializer\n');
   let lib;
