@@ -7591,16 +7591,27 @@ app.get("/api/token-metadata/read", async (req, res) => {
       conn.getAccountInfo(tm.metadataPda(mint)),
       conn.getParsedAccountInfo(new PublicKey(mint)),
     ]);
-    if (!metaInfo) return res.json({ ok: false, error: "no_metadata_account", mint });
-    const meta = tm.decodeMetadata(metaInfo.data);
+    // No Metaplex metadata account is NOT a failure. Token-2022 mints commonly carry the native
+    // metadata extension instead, and plenty of older tokens have none at all — those owners still
+    // have a live mint or freeze authority to revoke, and arguably need that more than a metadata
+    // lock. Returning ok:false here made the whole page unreachable for them. metadata:null means
+    // "nothing to lock", not "nothing to do".
+    const meta = metaInfo ? tm.decodeMetadata(metaInfo.data) : null;
     const parsed = mintInfo && mintInfo.value && mintInfo.value.data && mintInfo.value.data.parsed;
+    if (!parsed) return res.status(400).json({ ok: false, error: "not_a_mint", mint });
     const mi = (parsed && parsed.info) || {};
     // Report the OTHER authorities too. "Mutable metadata" is the last flag on a token that has
     // already revoked mint and freeze; showing all three is what makes the banner's claims
     // checkable instead of taken on faith.
     res.json({ ok: true, mint, metadataPda: tm.metadataPda(mint).toBase58(), metadata: meta,
+      hasMetadataAccount: !!metaInfo,
       authorities: { mintAuthority: mi.mintAuthority || null, freezeAuthority: mi.freezeAuthority || null,
-                     decimals: mi.decimals, tokenProgram: (mintInfo.value && mintInfo.value.owner) || null } });
+                     decimals: mi.decimals, tokenProgram: (mintInfo.value && mintInfo.value.owner) || null,
+                     // A Token-2022 mint that creates accounts FROZEN by default cannot survive
+                     // losing its freeze authority — every holder would be stuck, unthawable,
+                     // forever. Surfaced on the read so the page can refuse before the click,
+                     // not only at build time.
+                     defaultAccountStateFrozen: tokenMetaDefaultFrozen(mintInfo) } });
   } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "read failed") }); }
 });
 
@@ -7753,6 +7764,60 @@ app.post("/api/token-metadata/prepare", async (req, res) => {
       makeImmutable: b.makeImmutable === true });
     res.json({ ok: true, mint, current, uploadedUri: uploaded, ...built });
   } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "prepare failed") }); }
+});
+
+// Token-2022 DefaultAccountState. jsonParsed surfaces mint extensions, so no manual TLV walk:
+// the extension is named "defaultAccountState" with a state of "frozen"/"initialized".
+function tokenMetaDefaultFrozen(mintInfo) {
+  try {
+    const exts = ((((mintInfo || {}).value || {}).data || {}).parsed || {}).info || {};
+    const list = exts.extensions || [];
+    for (const e of list) {
+      if (e && e.extension === "defaultAccountState") {
+        return String(((e.state || {}).accountState) || (e.state) || "").toLowerCase() === "frozen";
+      }
+    }
+  } catch (_) {}
+  return false;
+}
+
+// Revoke the mint or freeze authority — the other two flags a scanner warns about. Unsigned only;
+// the token's own authority signs. Guards live in lib/token-authority.js and are byte-tested
+// against the SPL Token serializer.
+app.use("/api/token-authority/prepare", rateLimit("tokenlockbuild", { windowMs: 60000, max: 20 }));
+app.post("/api/token-authority/prepare", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const b = req.body || {};
+    const mint = String(b.mint || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    const type = Number(b.authorityType);
+    if (type !== 0 && type !== 1) return res.status(400).json({ ok: false, error: "bad_authority_type",
+      detail: "0 = mint authority, 1 = freeze authority. Nothing else is revocable here." });
+    const ta = require("./lib/token-authority");
+    const { Connection, PublicKey } = require("@solana/web3.js");
+    const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
+    const mintInfo = await conn.getParsedAccountInfo(new PublicKey(mint));
+    const mi = (((mintInfo.value || {}).data || {}).parsed || {}).info || null;
+    if (!mi) return res.status(400).json({ ok: false, error: "not_a_mint" });
+    // Read the symbol off the metadata when there is one, purely so the warning can name the
+    // token instead of saying "token". Absent metadata must not block a revocation.
+    let symbol = "";
+    try {
+      const tm = require("./lib/token-metadata");
+      const info = await conn.getAccountInfo(tm.metadataPda(mint));
+      const cur = info && tm.decodeMetadata(info.data);
+      if (cur && cur.symbol) symbol = String(cur.symbol).replace(/[^A-Za-z0-9]/g, "").slice(0, 12);
+    } catch (_) {}
+    const built = await ta.buildRevokeTx({ connection: conn, authorityType: type, mintInfo: {
+      mint, symbol,
+      tokenProgram: (mintInfo.value && mintInfo.value.owner) || null,
+      mintAuthority: mi.mintAuthority || null,
+      freezeAuthority: mi.freezeAuthority || null,
+      defaultAccountStateFrozen: tokenMetaDefaultFrozen(mintInfo),
+    } });
+    res.json({ ok: true, mint, ...built });
+  } catch (e) { res.status(400).json({ ok: false, error: publicErrMsg(e, "could not build the revocation") }); }
 });
 
 app.get("/api/tool-gate/config", async (req, res) => {
