@@ -68,6 +68,11 @@ jobs:
       # winner on 2026-09-04 because it judged a hold in dollars and the price cache was cold.
       - name: giveaway hold-check (token-based, survives a cold price feed)
         run: node scripts/giveaway-holdcheck-test.cjs
+      # /api/token-icon fetches whatever icon URL Jupiter's token list carries for a mint, and
+      # anyone can list a token. The old guard tested the first hop's hostname with one regex and
+      # then followed redirects blind.
+      - name: SSRF guard on outbound image fetches
+        run: node scripts/safe-fetch-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —

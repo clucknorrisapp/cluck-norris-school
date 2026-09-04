@@ -6673,8 +6673,13 @@ app.get("/api/tg-test", async (req, res) => {
   }
   if (photo && req.query.upload === "1") {
     try {
+      // Key-gated, so the URL is operator-supplied rather than attacker-supplied — but it is
+      // still a fetch of an arbitrary URL from inside the origin, and a mistyped or pasted link
+      // should not be able to reach the metadata service. Same guard as /api/token-icon.
       if (!/^https:\/\//.test(photo)) return res.status(400).json({ success: false, error: "https URLs only" });
-      const ir = await fetch(photo, { signal: AbortSignal.timeout(30000), redirect: "follow" });
+      const { safeFetchImage } = require("./lib/safe-fetch");
+      const ir = await safeFetchImage(photo, { timeoutMs: 30000 });
+      if (!ir) return res.status(200).json({ success: false, error: "photo URL refused (non-public host, bad redirect, or unreachable)" });
       if (!ir.ok) return res.status(200).json({ success: false, error: `photo fetch ${ir.status}` });
       const buf = Buffer.from(await ir.arrayBuffer());
       if (buf.length > 9.5 * 1024 * 1024) return res.status(200).json({ success: false, error: `photo too large (${buf.length} bytes)` });
@@ -9840,7 +9845,9 @@ app.get("/api/lock/claimable", async (req, res) => {
 // bytes on the /data volume, serve from us forever. Exists because the raw metadata URLs are
 // mostly ipfs.io gateway links that rate-limit/time out in real browsers — the Locker Room
 // strip was rendering letter fallbacks despite having icon URLs. 404 = client keeps its
-// letter avatar. SSRF-guarded: https only, no IP-literal/localhost hosts, image/* only, 512KB cap.
+// letter avatar. SSRF-guarded by lib/safe-fetch: https on every hop, redirects followed by hand
+// with each host resolved and rejected if it lands in a private/loopback/link-local/CGNAT range,
+// image/* only, 512KB cap.
 const TOKEN_ICON_DIR = path.join(process.env.DATA_DIR || "/data", "token-icons");
 const _tokenIconMiss = new Map();   // mint -> ts of last failed fetch (10-min negative cache)
 app.get("/api/token-icon", async (req, res) => {
@@ -9871,10 +9878,15 @@ app.get("/api/token-icon", async (req, res) => {
       const t = Array.isArray(tm) ? (tm.find((x) => x && x.id === mint) || tm[0]) : null;
       if (t && typeof t.icon === "string" && /^https:\/\//.test(t.icon)) iconUrl = t.icon;
     } catch (_) {}
-    let hostOk = false;
-    try { const h = new URL(iconUrl || "").hostname; hostOk = !!h && !/^(\d+\.\d+\.\d+\.\d+|\[|localhost$)/i.test(h); } catch (_) {}
-    if (!iconUrl || !hostOk) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
-    const r = await fetch(iconUrl, { signal: AbortSignal.timeout(9000), redirect: "follow" });
+    // The host check used to be one regex on the FIRST url, with redirect:"follow" after it — so
+    // an ordinary https host answering 302 -> http://169.254.169.254/ was followed unexamined,
+    // and http://2130706433/ (127.0.0.1 in decimal) never matched the dotted-quad pattern at all.
+    // safeFetchImage resolves and validates every hop. See lib/safe-fetch.js for what it does
+    // NOT close (DNS rebinding).
+    if (!iconUrl) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
+    const { safeFetchImage } = require("./lib/safe-fetch");
+    const r = await safeFetchImage(iconUrl, { timeoutMs: 9000 });
+    if (!r) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
     const type = String(r.headers.get("content-type") || "");
     if (!r.ok || !/^image\//.test(type)) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
     const buf = Buffer.from(await r.arrayBuffer());
