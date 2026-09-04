@@ -974,7 +974,7 @@ function CLKNWidget() {
 }
 
 
-function Landing({onStart,onIncubator,onStartHere,completed}){
+function Landing({onStart,onIncubator,onStartHere,onClaim,completed}){
   const pct=Math.round((completed.length/LESSONS.length)*100);
   let consecutive=0;
   for(let i=0;i<LESSONS.length;i++){ if(completed.includes(LESSONS[i].id)) consecutive++; else break; }
@@ -1015,6 +1015,18 @@ function Landing({onStart,onIncubator,onStartHere,completed}){
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
             <Belt belt="EMERITUS"/>
             <span style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FFB627",letterSpacing:1}}>🏆 SCHOOL COMPLETE</span>
+            {/* THE WAY BACK TO THE DIPLOMA. setScreen("complete") fires in exactly one place —
+                the frame the LAST lesson is newly passed — and "complete" is not in the SCREENS
+                whitelist that a reload restores from. So a learner who finished all 12 classes and
+                then refreshed, closed the tab, or simply came back later could never reach the
+                claim form again: replaying a finished lesson does not re-trigger it (that path is
+                gated on !completed.includes(id)), and the only other route out was "REPEAT THE
+                YEAR", which wipes all 12. They had done everything right and could not be
+                graduated. This button is the fix, and it is derived from `completed` rather than
+                from a one-shot transition, so it survives any reload. */}
+            <button onClick={onClaim} style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:1.5,
+              background:"linear-gradient(90deg,#FF7A18,#FFB627)",color:"#1a1200",border:"none",
+              borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>🎓 CLAIM YOUR DIPLOMA</button>
           </div>
         ) : currentBelt ? (
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
@@ -1531,7 +1543,7 @@ export default function App(){
       </div>
       )}
       <div style={{paddingTop:screen==="clkn"?"calc(64px + env(safe-area-inset-top, 0px))":28}}>
-        {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} completed={completed}/>}
+        {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} onClaim={()=>setScreen("complete")} completed={completed}/>}
         {screen==="start"&&<StartHere onGo={(s)=>setScreen(s)}/>}
         {screen==="incubator"&&<Incubator onComplete={()=>{track("incubator_complete");setScreen("select");}} onBack={()=>setScreen("landing")}/>}
         {screen==="clkn"&&<CLKNWidget/>}
