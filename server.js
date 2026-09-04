@@ -894,6 +894,10 @@ const CUNA_QUOTES = [
 // poke ops overview briefly posted to a community chat and had to be deleted. Named so the
 // binding below can refuse it outright rather than relying on us remembering.
 const CUNA_PUBLIC_ROOM = "-1003938497778";
+// The public OnlyRose community room. Its project alert routing is "off" (owner, 2026-08-31),
+// so it no longer resolves to "rose" by telegramChatId — and the CLKN welcome leaked in
+// (owner, 2026-09-02: "that is not allowed"). Room identity is pinned by id, like CUNA.
+const ROSE_PUBLIC_ROOM = process.env.ROSE_TG_CHAT_ID || "-1002625127458";
 function cunaEnsureProject() {
   if (whirlpoolMM.vault.getProject("cuna")) { cunaConfigRatchet(); return; }
   whirlpoolMM.vault.registerProject({
@@ -2392,6 +2396,7 @@ function vaultProjectForChat(chatId) {
   // resolver's answer for the room into the "clkn" default and let CLKN welcomes and the
   // full CLKN command set leak in. Room identity must not follow alert routing.
   if (String(chatId) === CUNA_PUBLIC_ROOM) return "cuna";
+  if (String(chatId) === ROSE_PUBLIC_ROOM) return "rose";
   try {
     const projs = whirlpoolMM.vault.listProjects();
     for (const id of Object.keys(projs)) {
@@ -2556,6 +2561,7 @@ async function welcomeNewMembers(msg) {
   // "cuna" and CLKN welcomes leaked in. Community rooms are excluded by id, not by where a
   // project's alerts happen to point.
   if (String(chatId) === CUNA_PUBLIC_ROOM) return;         // owner: no welcome messages in the CUNA room
+  if (String(chatId) === ROSE_PUBLIC_ROOM) return;         // owner: no welcome messages in the OnlyRose room
   if (vaultProjectForChat(chatId) !== "clkn") return;
   const now = Date.now(), last = welcomeCooldown.get(chatId) || 0;
   if (now - last < WELCOME_COOLDOWN_MS) return;            // anti-spam on join waves
@@ -7985,7 +7991,7 @@ function roseResolveChatId() {
     const projs = whirlpoolMM.vault.listProjects() || {};
     for (const id of Object.keys(projs)) {
       const p = projs[id];
-      if (p && String(p.tokenMint || "") === ROSE_BOT_MINT && p.telegramChatId) return String(p.telegramChatId);
+      if (p && String(p.tokenMint || "") === ROSE_BOT_MINT && p.telegramChatId && String(p.telegramChatId) !== "off") return String(p.telegramChatId);
     }
   } catch (_) {}
   try {
@@ -8629,6 +8635,10 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     // Accept the current name AND the legacy alias; anything else is the raffle.
     if (q.mode) { const m = String(q.mode).toLowerCase(); patch.mode = (m === "special" || m === "contest") ? "special" : "giveaway"; }
     if (q.bonus !== undefined) patch.bonusPct = Number.isFinite(Number(q.bonus)) ? Number(q.bonus) : 0;
+    // &entrymode=per-dollar | per-buy. Changes how a qualifying buy is SCORED, so it is only safe
+    // between promos — flipping it mid-window rescores nothing already counted and leaves a ledger
+    // where early buys used one rule and later ones another. Default stays per-buy.
+    if (q.entrymode) patch.entryMode = String(q.entrymode).toLowerCase() === "per-dollar" ? "per-dollar" : "per-buy";
     if (Object.keys(patch).length) cunaGiveaway.configure(patch);
     const out = { ok: true, config: cunaGiveaway.config() };
     // Manual DQ for a wallet that dumped AFTER the window closed but BEFORE the wheel spins —
@@ -8659,6 +8669,42 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
       const prizes = q.prizes ? String(q.prizes).split(",").map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0) : undefined;
       out.draw = await cunaGiveaway.runDraw({ rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined }, { force: q.force === "1", prizes });
     }
+    // &payout=1 previews what is owed; &payout=1&run=1 actually sends it.
+    //
+    // Owner ask 2026-09-04 ("make it to where you can send it"). Scoped hard, on purpose:
+    //   - recipients come ONLY from the sealed draw, never from the query string, so this cannot
+    //     be used to send tokens to an arbitrary address;
+    //   - alternates and zero-prize rows are excluded;
+    //   - already-paid winners are subtracted first (payoutOwed), so a retry after a timeout
+    //     cannot pay anyone twice, and every landed signature is recorded immediately;
+    //   - caps are passed to the vault, which also REFUSES to sign with a wallet that is the
+    //     token's mint authority — that is what keeps the CLKN treasury (which is CUNA's mint
+    //     authority) out of this path. Fund the CUNA operator hot wallet and pay from there.
+    if (q.payout === "1") {
+      const owed = cunaGiveaway.payoutOwed();
+      if (!owed.ok) out.payout = owed;
+      else if (!owed.owed.length) out.payout = { ok: true, action: "none", reason: "every winner already paid", alreadyPaid: owed.alreadyPaid };
+      else {
+        const cfg = cunaGiveaway.config() || {};
+        // WHICH WALLET PAYS. Defaults to the CUNA operator hot wallet; &from=treasury uses the
+        // treasury, which is where the prize supply actually sits. Treasury is allowed here
+        // because CUNA's mint authority is null on-chain (revoked) — an earlier comment in this
+        // file calls the treasury CUNA's mint authority, which is STALE. The vault re-checks
+        // that itself on every call and refuses if it is ever true again.
+        const payer = q.from === "treasury" ? "treasury" : "cuna";
+        const r = await whirlpoolMM.vault.payoutSpl({
+          projectId: payer,
+          mintAddr: cfg.mint,
+          recipients: owed.owed,
+          perRecipientMaxUi: Number(process.env.GIVEAWAY_MAX_PRIZE) || 10000000,
+          totalMaxUi: Number(process.env.GIVEAWAY_MAX_PAYOUT) || 25000000,
+          dryRun: q.run !== "1",
+        });
+        if (r && r.action === "paid") r.recorded = cunaGiveaway.recordPayout(r.paid);
+        out.payout = { ...r, payer, owedBefore: owed.owed, alreadyPaid: owed.alreadyPaid };
+      }
+    }
+    if (q.payoutstate === "1") out.payoutState = cunaGiveaway.payoutState();
     out.standings = cunaGiveaway.standings(10);
     res.json(out);
   } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
