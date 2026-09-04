@@ -79,5 +79,23 @@
     });
   }
 
-  global.CluckUtil = { esc: esc, rpc: rpc, shortAddr: shortAddr, fmt: fmt, copyText: copyText };
+  // A URL SAFE TO PUT IN AN href. esc() escapes HTML; it does NOT restrict the URL SCHEME, and
+  // escaping is not a defence here. `javascript:alert(document.domain)` contains none of & < > " '
+  // so esc() returns it byte-for-byte. Even when a payload DOES contain quotes and esc() escapes
+  // them, the HTML parser decodes &#39; back to ' before the URL is used — so the script still
+  // runs. The scheme is the thing that has to be checked.
+  //
+  // autopsy.html solved this for itself with a private safeUrl() and nothing else got it —
+  // jupverify-admin.html rendered a PUBLIC, unauthenticated submitter's Website/Icon/Telegram
+  // fields as live anchors in a page holding the admin key in sessionStorage. That is the
+  // "check every form, not one form" trap in CLAUDE.md, so this lives HERE, once, shared.
+  //
+  // Returns "#" for anything that is not http(s) — never the original string, so a caller cannot
+  // accidentally pass the dangerous value through. The result is escaped, ready for an attribute.
+  function safeUrl(u) {
+    var t = String(u == null ? "" : u).trim();
+    return /^https?:\/\//i.test(t) ? esc(t) : "#";
+  }
+
+  global.CluckUtil = { esc: esc, safeUrl: safeUrl, rpc: rpc, shortAddr: shortAddr, fmt: fmt, copyText: copyText };
 })(typeof globalThis !== "undefined" ? globalThis : window);

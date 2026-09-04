@@ -646,7 +646,9 @@ function shortMint(m) { return m.slice(0, 4) + "…" + m.slice(-4); }
 const esc = CluckUtil.esc;
 // Only allow http(s) URLs in href — blocks javascript:/data: schemes from a
 // token's attacker-set social links. Returns "#" for anything else.
-function safeUrl(u){ const s=String(u==null?"":u).trim(); return /^https?:\/\//i.test(s) ? esc(s) : "#"; }
+// Shared, not private — this page had the only copy, which is why jupverify-admin.html never
+// got the same protection. It lives in cluck-util.js now; this alias keeps the call sites.
+const safeUrl = CluckUtil.safeUrl;
 function fmtUsd(n) {
   if (n === null || n === undefined || isNaN(n)) return "—";
   if (n === 0) return "$0";

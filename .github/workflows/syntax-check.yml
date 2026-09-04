@@ -59,6 +59,11 @@ jobs:
       # curriculum held 70 and 7. Hand-typed public counts rot silently; this catches the mirror.
       - name: curriculum count-drift guard
         run: node scripts/check-counts.js
+      # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC
+      # submitter's Website/Icon/Telegram fields as live anchors while holding the admin key in
+      # sessionStorage. autopsy.html had a private safeUrl and nothing else got it.
+      - name: href scheme guard (safeUrl) + admin-panel escaping
+        run: node scripts/safe-url-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
