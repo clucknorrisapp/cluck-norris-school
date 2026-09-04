@@ -297,6 +297,53 @@ const LESSONS = [
       { q: "CLKN is a memecoin built on Bags.fm. What makes it different from a typical memecoin?", options: ["It has a working DeFi product", "It has a real education platform behind it", "It has a fixed supply", "It's backed by real assets"], correct: 1, explanation: "CLKN pairs the token with an actual utility layer — the School of Crypto Hard Knocks — and reinvests its creator fee back into the token. That doesn't make it safe: like any memecoin it can still go to zero. But a token doing real work is rarer than one that isn't." },
     ],
   },
+
+  // ── CUSTODY: the two ways people lose everything without ever being hacked ──────────────
+  // "Wallets & Keys" covers what a seed phrase IS. These cover what happens to it: storing it so
+  // it survives you, and what your family can do if you are not there to use it. Nobody teaches
+  // the second one, and it is where a real share of all lost crypto has gone.
+  {
+    id: "seedphrase", belt: "POST-GRAD", icon: "📝", title: "Seed Phrase Survival",
+    quote: "Cluck Norris memorised his seed phrase. Then he wrote it down anyway, because he isn't an idiot.",
+    color: "#F59E0B", glow: "rgba(245,158,11,0.4)",
+    intro: "Your seed phrase is not a password. A password can be reset by someone who can prove who you are. A seed phrase cannot. It is the wallet itself, written down — anyone holding those words owns everything in it, from anywhere, forever, and there is nobody to appeal to. Far more crypto has been lost to bad backups than to hackers.",
+    concepts: [
+      { term: "Seed Phrase", def: "12 or 24 words in a fixed order that regenerate every key in your wallet. Order matters. There is no 'forgot my phrase' link, and no support desk that can help." },
+      { term: "The Digital Trap", def: "A screenshot, a notes app, a photo, a password manager, a cloud backup, a chat to yourself. All of these have drained real people. Your phone quietly uploads your photos — that is the point of it." },
+      { term: "Paper vs Metal", def: "Paper burns, floods, fades and gets thrown out by someone tidying up. Stamped steel survives a house fire. If losing it would genuinely hurt, use metal." },
+      { term: "Passphrase (25th word)", def: "An optional extra word that turns your seed into a completely DIFFERENT wallet. Real protection if someone finds your words — and permanent loss if you forget it, because the seed alone will not open it." },
+      { term: "Test Restore", def: "Restoring your backup into a fresh wallet BEFORE it holds real money. An untested backup is a guess, and people discover the guess was wrong at the worst possible moment." },
+      { term: "Splitting a Seed", def: "Cutting your 24 words into two halves of 12 is NOT half the risk — each half shrinks the guessing problem enormously. Proper splitting schemes exist precisely because the obvious approach is weak." },
+    ],
+    questions: [
+      { q: "Which of these is a safe place for a seed phrase?", options: ["A photo in your phone's gallery", "A note in your password manager", "Written or stamped on something physical, stored offline", "A draft email to yourself"], correct: 2, explanation: "Anything on a device that touches the internet can be reached — by malware, by a cloud breach, or by someone who picks up your unlocked phone. Photos are the worst of these because phones upload them automatically. Offline and physical is the baseline." },
+      { q: "What does adding a passphrase — the optional '25th word' — actually do?", options: ["Adds a PIN screen to your existing wallet", "Creates an entirely different wallet that the seed alone will not open", "Encrypts your seed phrase file", "Lets you recover the wallet if you lose some words"], correct: 1, explanation: "The passphrase combines with your seed to derive a different wallet. Someone who steals your 24 words gets an empty wallet. But forget the passphrase and your funds are unreachable even though you still have every word — this protection cuts both ways." },
+      { q: "You split your 24 words into two halves and store them in two locations. How much harder is your wallet to crack?", options: ["Twice as hard — two locations means two break-ins", "Far less than you would expect — each half massively narrows the search", "Completely uncrackable, this is best practice", "It makes no difference either way"], correct: 1, explanation: "It feels like halving the risk and it isn't. Finding 12 of 24 words leaves a vastly smaller problem than starting from nothing, and you have now doubled the number of places you can permanently lose half your backup. Splitting done properly needs a scheme designed for it, not scissors." },
+      { q: "Why restore your backup into a fresh wallet before funding it?", options: ["It registers the wallet on the blockchain", "It proves the backup actually works while a mistake is still cheap", "It speeds up future transactions", "It is required by most wallet apps"], correct: 1, explanation: "A word written down wrong, a missing word, an unreadable letter, the wrong order — none of these announce themselves. You find out when you try to restore, and by then the mistake costs whatever the wallet holds. Test it while it holds nothing." },
+      { q: "Wallet support messages you: they need your seed phrase to fix a failed transaction. What is happening?", options: ["Normal troubleshooting — send the words", "Send only the first twelve, that half is harmless", "It is a theft attempt. No legitimate service ever needs your seed phrase", "Type it into their website but never into chat"], correct: 2, explanation: "There is no exception to this and there never will be. No wallet, no exchange, no support agent, no airdrop, no 'validation' page needs your seed phrase for any reason. The request itself is the entire scam — everything around it is decoration." },
+    ],
+  },
+  {
+    id: "inheritance", belt: "LEGACY", icon: "🕯️", title: "If Something Happens To You",
+    quote: "Cluck Norris cannot be killed. Your seed phrase can, and it takes your family's inheritance with it.",
+    color: "#A78BFA", glow: "rgba(167,139,250,0.4)",
+    intro: "A bank has a process for death. Paperwork, a death certificate, a next of kin, someone to call. A blockchain has none of that. If nobody living can reach your seed phrase, those coins do not go to your family — they stop existing for everyone, permanently. A large share of all lost crypto was never stolen. It was simply never passed on.",
+    concepts: [
+      { term: "No Next of Kin", def: "There is no account to close, no branch to visit, no form to file. A wallet nobody can open is not frozen or held in trust — it is gone, and nobody on earth can change that." },
+      { term: "Wills Become Public", def: "In many countries a will becomes a public record once it goes through probate. Writing your seed phrase into your will can publish it to anyone who asks for a copy. Never put the words themselves in a will." },
+      { term: "Letter of Instruction", def: "A sealed document that explains WHAT exists and WHERE to find it — which wallets, which devices, who to ask for help — without containing the secret itself. The map, kept separately from the key." },
+      { term: "Multisig", def: "A wallet that needs, say, 2 of 3 keys to move anything. A partner and a lawyer together can act; neither alone can steal, and neither alone losing a key is fatal." },
+      { term: "Dead-Man's Switch", def: "A service that releases your secrets if you stop checking in. Convenient, and also a single point of failure someone can attack, and a thing that fires by accident when you are on holiday with no signal." },
+      { term: "The Practice Run", def: "Can the person you chose actually do it — find the words, install the wallet, restore it? Walk them through it while you are alive. Almost nobody does this, and it is the step that decides whether any of the rest worked." },
+    ],
+    questions: [
+      { q: "You die tomorrow and nobody can reach your seed phrase. What happens to your crypto?", options: ["It returns to the network and is redistributed", "Your next of kin can claim it with a death certificate", "It stays in the wallet forever and nobody can ever move it", "The wallet provider releases it to your estate after a waiting period"], correct: 2, explanation: "The coins remain visible on-chain for anyone to look at, and unreachable by everyone for the rest of time. There is no authority holding a spare key, because the entire design is that no such authority exists. This is the trade you accepted when you took custody." },
+      { q: "Why is writing your seed phrase into your will a bad idea?", options: ["Wills cannot legally include digital assets", "A will often becomes a public record in probate, exposing the phrase", "The phrase expires when the will is signed", "Executors are not permitted to handle crypto"], correct: 1, explanation: "In many jurisdictions a probated will becomes a public document that anyone can request. Your will should point to where the phrase is kept and who can help — it should never contain the words. Talk to an estate professional where you live about how to do this properly." },
+      { q: "What is a letter of instruction meant to contain?", options: ["Your seed phrase, sealed in an envelope", "What exists and where to find it, without the secret itself", "A list of your exchange passwords", "A signed transfer of your wallet"], correct: 1, explanation: "It is the map, not the key. Which wallets exist, which device or safe holds the backup, who understands crypto well enough to help, and what your wishes are. Kept somewhere your family will actually look, and separate from the backup itself." },
+      { q: "What does a 2-of-3 multisig give an inheritance plan that a single seed phrase cannot?", options: ["Faster transactions when the owner dies", "Recovery by trusted people together, with no one person able to steal", "Automatic conversion of tokens to cash", "Legal recognition by the courts"], correct: 1, explanation: "Splitting authority means your partner and your lawyer can act together, but neither can act alone — and losing one key does not end the story. It removes both failure modes of a single phrase: one person who can steal everything, or one lost backup that ends everything." },
+      { q: "Which step do people most often skip, and most regret skipping?", options: ["Buying a hardware wallet", "Actually telling someone the crypto exists and checking they could reach it", "Diversifying across several blockchains", "Writing the phrase on metal rather than paper"], correct: 1, explanation: "A perfect backup in a safe nobody knows about is the same as no backup. The plan has to survive contact with a grieving family who may not know crypto exists at all. Tell someone it exists, tell them where the instructions are, and walk them through a restore while you still can." },
+    ],
+  },
 ];
 
 
@@ -313,8 +360,8 @@ function shuffleOptions(question) {
   return { ...question, options: newOptions, correct: newCorrect };
 }
 
-const BELT_BG   = { "FRESHMAN":"#F0F0F0","SOPHOMORE":"#FFB627","JUNIOR":"#FF7A18","SENIOR":"#10B981","GRADUATE":"#06B6D4","POST-GRAD":"#92400E","TENURED":"#DC2626","HEADMASTER":"#1a0f08","PROFESSOR":"#14B8A6","DEAN":"#84CC16","CHANCELLOR":"#FF7A18","EMERITUS":"#A855F7" };
-const BELT_TEXT = { "FRESHMAN":"#1a0f08","SOPHOMORE":"#1a0f08","JUNIOR":"#fff","SENIOR":"#fff","GRADUATE":"#fff","POST-GRAD":"#fff","TENURED":"#fff","HEADMASTER":"#FFB627","PROFESSOR":"#fff","DEAN":"#1a0f08","CHANCELLOR":"#fff","EMERITUS":"#fff" };
+const BELT_BG   = { "FRESHMAN":"#F0F0F0","SOPHOMORE":"#FFB627","JUNIOR":"#FF7A18","SENIOR":"#10B981","GRADUATE":"#06B6D4","POST-GRAD":"#92400E","TENURED":"#DC2626","HEADMASTER":"#1a0f08","PROFESSOR":"#14B8A6","DEAN":"#84CC16","CHANCELLOR":"#FF7A18","EMERITUS":"#A855F7","LEGACY":"#7C3AED" };
+const BELT_TEXT = { "FRESHMAN":"#1a0f08","SOPHOMORE":"#1a0f08","JUNIOR":"#fff","SENIOR":"#fff","GRADUATE":"#fff","POST-GRAD":"#fff","TENURED":"#fff","HEADMASTER":"#FFB627","PROFESSOR":"#fff","DEAN":"#1a0f08","CHANCELLOR":"#fff","EMERITUS":"#fff","LEGACY":"#fff" };
 function Belt({belt,small}){return(<span data-read-skip="1" style={{display:"inline-block",background:BELT_BG[belt],color:BELT_TEXT[belt],fontFamily:"'Anton',sans-serif",fontSize:small?9:10,fontWeight:700,letterSpacing:1.5,padding:small?"2px 6px":"3px 10px",borderRadius:3,border:"none",textTransform:"uppercase"}}>{belt}</span>);}
 
 
