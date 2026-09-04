@@ -701,7 +701,9 @@ async function loadCompPresets(){
 (async function init(){
   const q=new URLSearchParams(location.search), key=q.get('key');
   if(localStorage.getItem(OP_FLAG)==='1'){ $('opBanner').classList.remove('hidden'); showTool(); }
-  if(key){ try{ const r=await fetch('/api/admin-check?key='+encodeURIComponent(key)); if(r.ok){ localStorage.setItem(OP_FLAG,'1'); $('opBanner').classList.remove('hidden'); showTool(); } }catch(e){} }
+  // Operator key goes in a HEADER, never a request URL (logs + Referer). adminAuthOK takes
+  // x-premium-key; the ?key= that OPENS the page is unchanged, it just is not re-sent.
+  if(key){ try{ const r=await fetch('/api/admin-check',{headers:{'x-premium-key':key}}); if(r.ok){ localStorage.setItem(OP_FLAG,'1'); $('opBanner').classList.remove('hidden'); showTool(); } }catch(e){} }
   if(isUnlocked()){ showTool(); } else if(localStorage.getItem(OP_FLAG)!=='1'){ showGate(); }
   await loadCompPresets();
   // /rose keeps working as a direct link even after the ROSE chip has aged out.

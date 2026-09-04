@@ -242,6 +242,22 @@ body{background:transparent;font-family:var(--body);}
   // ?key= once, remembers it locally, and appends it to every API call.
   var LPKEY = new URLSearchParams(location.search).get('key') || localStorage.getItem('lpKey') || '';
   if (new URLSearchParams(location.search).get('key')) localStorage.setItem('lpKey', LPKEY);
+  // The operator key travels as a HEADER on every API call. It used to be appended to each
+  // request URL, which puts it in access logs, proxy logs and the Referer header on every scan.
+  // adminAuthOK accepts x-premium-key, so nothing server-side changes. The ?key= that OPENS this
+  // page is untouched — that is how an operator gets in — it just is not re-sent afterwards.
+  function keyFetch(u, o){
+    o = o || {};
+    o.headers = Object.assign({}, o.headers || {}, LPKEY ? { 'x-premium-key': LPKEY } : {});
+    return fetch(u, o);
+  }
+  // ⚠️ STILL URL-KEYED, and it has to be: window.open() cannot send a header, and /api/lp-card is
+  // operator-gated (adminAuthOK), so the image needs the key IN the URL to render at all. The
+  // exposure is bounded — this whole tool is operator-only, so the URL only ever reaches the
+  // operator's own address bar and history. It does mean the "share card" URL must not be pasted
+  // anywhere: a recipient without the key gets a 404 anyway, and the URL carries the secret.
+  // Fixing it properly means a short-lived signed card URL, which is worth doing if this tool
+  // ever goes public.
   function withKey(u){ return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'key=' + encodeURIComponent(LPKEY); }
   if (!LPKEY) document.addEventListener('DOMContentLoaded', function(){
     var b = document.createElement('div');
@@ -276,13 +292,13 @@ body{background:transparent;font-family:var(--body);}
     try{
       if(!b){
         // SINGLE-TOKEN MODE — every pair this token trades in, across all DEXs
-        var r=await fetch(withKey('/api/lp-token?token='+encodeURIComponent(a)+(amt?('&amount='+encodeURIComponent(amt)):'')));
+        var r=await keyFetch(('/api/lp-token?token='+encodeURIComponent(a)+(amt?('&amount='+encodeURIComponent(amt)):'')));
         var d=await r.json();
         if(!d.success){ showErr(d.error||'Scan failed'); return; }
         lastMode='token'; lastScan=d; renderTokenScan(d);
       } else {
-        var url=withKey('/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):''));
-        var r2=await fetch(url); var d2=await r2.json();
+        var url=('/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):''));
+        var r2=await keyFetch(url); var d2=await r2.json();
         if(!d2.success){ showErr(d2.error||'Scan failed'); return; }
         lastMode='pair'; lastScan=d2; renderScan(d2);
       }
@@ -454,7 +470,7 @@ body{background:transparent;font-family:var(--body);}
   }
   async function loadTopPools(){
     try{
-      var r=await fetch(withKey('/api/lp-top?kind='+encodeURIComponent(topKind))); var d=await r.json();
+      var r=await keyFetch(('/api/lp-top?kind='+encodeURIComponent(topKind))); var d=await r.json();
       var strip=document.getElementById('topStrip');
       if(!d.success || !(d.pools||[]).length){ strip.innerHTML='<span class="muted" style="padding:8px;">No pools right now — try the other tab.</span>'; return; }
       topLoaded[topKind]=1;
@@ -494,8 +510,8 @@ body{background:transparent;font-family:var(--body);}
     dd.scrollIntoView({behavior:'smooth', block:'start'});
     var amt=document.getElementById('amount').value.trim();
     try{
-      var url=withKey('/api/lp-pool?pool='+encodeURIComponent(pool)+(amt?('&amount='+encodeURIComponent(amt)):'')+(width?('&width='+encodeURIComponent(width)):''));
-      var r=await fetch(url); var d=await r.json();
+      var url=('/api/lp-pool?pool='+encodeURIComponent(pool)+(amt?('&amount='+encodeURIComponent(amt)):'')+(width?('&width='+encodeURIComponent(width)):''));
+      var r=await keyFetch(url); var d=await r.json();
       if(!d.success){ dd.innerHTML='<button class="closex" onclick="closeDD()">✕</button><div class="sim-sub" style="color:#FCA5A5;">'+esc(d.error||'Could not load this pool.')+'</div>'; return; }
       renderDeepDive(d);
     }catch(e){ dd.innerHTML='<button class="closex" onclick="closeDD()">✕</button><div class="sim-sub" style="color:#FCA5A5;">Network error — try again.</div>'; }
@@ -602,7 +618,7 @@ body{background:transparent;font-family:var(--body);}
       if(q.length<1 || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q)){ drop.classList.remove('show'); return; } // pasted a mint? skip search
       t=setTimeout(async function(){
         try{
-          var r=await fetch(withKey('/api/lp-token-search?q='+encodeURIComponent(q))); var d=await r.json();
+          var r=await keyFetch(('/api/lp-token-search?q='+encodeURIComponent(q))); var d=await r.json();
           var toks=d.tokens||[];
           if(!toks.length){ drop.classList.remove('show'); return; }
           drop.innerHTML=toks.map(function(tk){
