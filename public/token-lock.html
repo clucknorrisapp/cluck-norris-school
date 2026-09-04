@@ -139,6 +139,11 @@
       'border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px"></textarea>' +
       '<p class="muted" style="margin:8px 0 0">The description is the only prose a holder sees in a wallet. After Step 2 it is frozen ' +
       '<b>twice over</b> — the URI cannot be repointed, and Arweave files cannot be edited. Fix any wording now or never.</p>' +
+      '<label style="display:block;margin:10px 0 0"><input type="checkbox" id="dropCreator"/> ' +
+      'Drop the launchpad\'s <code>creator</code> credit from the JSON</label>' +
+      '<p class="muted" style="margin:6px 0 0">Some launchpads stamp a <code>creator: {name, site}</code> block into the metadata. ' +
+      'It is <b>not</b> the on-chain verified creator and nothing reads it for authority — but it is a third-party URL that gets ' +
+      'frozen with everything else, and stays pointing there even if that domain later changes hands.</p>' +
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
       '<button id="rebuild" class="alt">REBUILD JSON → ARWEAVE</button>' +
       '<button id="doUpdate"' + dis + '>BUILD UPDATE (KEEPS IT EDITABLE)</button></div>' +
@@ -177,6 +182,7 @@
         // server rather than silently wiping the description, so it must not be sent by accident.
         var d = ($('descOverride').value || '').trim();
         if (d) b.description = d;
+        if ($('dropCreator') && $('dropCreator').checked) b.omitKeys = ['creator'];
         return JSON.stringify(b);
       })(),
     }).then(function(d){
@@ -193,6 +199,8 @@
         '<div class="row"><span>New JSON</span><b><a href="' + safeUrl(d.newUri) + '" target="_blank" rel="noopener noreferrer">' + esc2(d.newUri) + '</a></b></div>' +
         '<div class="row"><span>Image now</span><b>' + esc2(d.newImage) + '</b></div>' +
         '<div class="row"><span>Image was</span><b>' + esc2(d.previousImage) + '</b></div>' +
+        ((d.omitted || []).length
+          ? '<div class="row"><span>Dropped</span><b><span class="warn">' + esc2(d.omitted.join(', ')) + '</span></b></div>' : '') +
         '<div class="row"><span>Description</span><b>' + (d.descriptionChanged
             ? '<span class="warn">REPLACED</span> — ' + esc2(String(d.json && d.json.description || '').length) + ' chars'
             : '<span class="ok">unchanged</span>') + '</b></div>' +

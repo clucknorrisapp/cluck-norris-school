@@ -7675,9 +7675,26 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
         steps.push(`description replaced (${String(meta.description || "").length} → ${d.length} chars)`);
       }
     }
+    // Drop launchpad cruft — e.g. the `creator: {name, site}` block CoinFactory stamps in, which
+    // is NOT the on-chain verified creator and carries a third-party URL that would be frozen
+    // alongside everything else. Explicit list only, and the fields a wallet actually renders are
+    // refused outright: silently losing a name or an image on the last edit ever made is
+    // unrecoverable, and no convenience is worth that.
+    const OMIT_PROTECTED = new Set(["name", "symbol", "image", "description"]);
+    if (Array.isArray(b.omitKeys) && b.omitKeys.length) {
+      const bad = b.omitKeys.filter((k) => OMIT_PROTECTED.has(String(k)));
+      if (bad.length) return res.status(400).json({ ok: false, error: "protected_key",
+        detail: `refusing to drop ${bad.join(", ")} — a wallet renders these`, steps });
+      for (const k of b.omitKeys) {
+        const key = String(k);
+        if (key in next) { delete next[key]; steps.push(`dropped field: ${key}`); }
+        else steps.push(`field not present, nothing to drop: ${key}`);
+      }
+    }
     const newUri = await uploadJsonToArweave(next);
     steps.push(`uploaded new metadata JSON to Arweave: ${newUri}`);
     res.json({ ok: true, mint, method, newUri, newImage, previousImage: imgUrl,
+               omitted: (b.omitKeys || []).filter((k) => k in meta),
                descriptionChanged: next.description !== meta.description,
                previousDescription: meta.description || null,
                json: next, preservedKeys: Object.keys(meta), steps });
