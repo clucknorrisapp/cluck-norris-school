@@ -10534,6 +10534,11 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     let gate = { ok: true, code: "off" };
     if (gateMode !== "off") {
       gate = schoolProgress.evaluate(sid, wallet, {
+        // 12, NOT LESSONS.length. The curriculum grew to 14 when the custody lessons landed
+        // (2026-09-04) and this deliberately did NOT follow it: the gate has been ENFORCING since
+        // 2026-09-02, so raising the bar would retroactively block every learner who finished the
+        // 12 that existed when they started. Adding material must never un-graduate anyone.
+        // Raise it for new cohorts through the kv key if you want to, knowing that cost.
         requiredLessons: kv.get("gradGateLessons", 12),
         minAgeMs: (kv.get("gradGateMinAgeMin", 15) || 0) * 60000,
         minSpreadBuckets: kv.get("gradGateSpreadBuckets", 3),
@@ -10685,6 +10690,7 @@ app.get("/api/school/grad-gate", (req, res) => {
     mode: gradGateMode(),
     modePinned: kv.get("gradGateMode", "") || null,     // null = auto (date-based)
     autoEnforceAt: new Date(GRAD_GATE_AUTO_ENFORCE).toISOString().slice(0, 10),
+    // See the note at the other call site: 12 is intentional and is NOT LESSONS.length.
     requiredLessons: kv.get("gradGateLessons", 12),
     minAgeMin: kv.get("gradGateMinAgeMin", 15),
     spreadBuckets: kv.get("gradGateSpreadBuckets", 3),
