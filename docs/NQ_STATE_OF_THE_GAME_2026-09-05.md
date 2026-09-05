@@ -147,6 +147,7 @@ My read: both are **preset quick-tag taps, not written feedback** — there is z
 | P11 | **Paywall moment** — fire the pitch on a *clear*, not on a lock | 1-3 is a boss and the last free level; today a player who just lost a boss fight meets the upsell | **S** | Low — `LevelClear` beat rotation already exists | Manual walk of 1-3 → 2-1 on staging |
 | P12 | **Public feedback chip** (debt #15) | 2 comments / 3,762 events | **S** | Low — store is capped at 2,000 | Post one from staging, read it back on the dashboard |
 
+| P13 | **Between-level screens: hold longer, or wait for a tap** (owner, 2026-09-05: *"the pause on normie needs to be a little longer between levels to read the screen, or even require a click or button hit to move forward"*) — the LevelClear / WorldClear / promo beats auto-advance too fast to read | owner report | **S** | Low — timing/flow only; the state test must still see every level boot | Manual walk on staging (phone + desktop); `nq-verify` picks the single-level state test; confirm the tap-to-continue also works from the touch joystick band |
 ---
 
 ## 5. BIGGER — content candidates
@@ -197,7 +198,7 @@ Note: `WORLD_ART` already carries plates through w21, and 59 plates exist for 21
 
 **Weeks 1-2** — all on `develop` → staging; nothing here needs a money decision.
 
-1. **P5 music routing** + **debt #12 hardcoded ranges**. *Unblocks*: the paid tier stops sounding like world 1; the paywall copy stops being a manual edit away from lying. (Debt #14 is **deliberately not in this batch** — it is an auth-surface change needing an owner go and a security review. The runbook line documenting the correct header is fine to write; the code alias is not.)
+1. **P13 between-level screens hold longer / tap to continue** (owner ask, 2026-09-05) + **P5 music routing** + **debt #12 hardcoded ranges**. *Unblocks*: the paid tier stops sounding like world 1; the paywall copy stops being a manual edit away from lying. (Debt #14 is **deliberately not in this batch** — it is an auth-surface change needing an owner go and a security review. The runbook line documenting the correct header is fine to write; the code alias is not.)
 2. **P1 (1-1) + P4 (11-3, 12-3)**. *Unblocks*: the funnel entrance and the tier-1 exit — the two ends of the paying path.
 3. **Wire `nq-verify`/`nq-state-test` and `nq-boss-ground` into CI; generate the boss list from `LEVELS`** (debt #2, #3). *Unblocks*: **every content change after this one is safe to ship.* Do this before, not after, the balance work lands on `main`.
 4. **Cap the unbounded wallet stores + first tests for rewards/ledger/save** (debt #7, #8). *Unblocks*: opening the wheel and lounge to more wallets.
