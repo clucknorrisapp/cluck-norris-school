@@ -71,6 +71,47 @@ t("THE ONE THAT MATTERS: the hourly cap holds — a burst of locks cannot spam t
   assert.deepStrictEqual(none, []);
 });
 
+t("settlePending: sent rows are announced, the rest are cleared when the cap was not hit", () => {
+  const posts = [{ escrow: "A" }, { escrow: "B" }];
+  const r = ann.settlePending({ pending: ["A", "B", "DUST"], posts, sent: ["A", "B"], budget: 10, scanned: ["A", "B", "DUST"] });
+  assert.deepStrictEqual(r, { announced: ["A", "B"], kept: [], cleared: ["DUST"] });
+});
+
+t("settlePending: THE RESTART CASE — a picked row whose send did not go out STAYS pending", () => {
+  // The send returned nothing (Telegram down, container dying). Nothing is stamped, so the next
+  // scan picks it up again instead of the post being lost forever.
+  const r = ann.settlePending({ pending: ["A", "B"], posts: [{ escrow: "A" }, { escrow: "B" }], sent: ["A"], budget: 10, scanned: ["A", "B"] });
+  assert.deepStrictEqual(r.announced, ["A"]);
+  assert.deepStrictEqual(r.kept, ["B"]);
+  assert.deepStrictEqual(r.cleared, []);
+});
+
+t("settlePending: when the hourly cap cut the list, unevaluated rows are kept, not cleared", () => {
+  // Budget 2, three qualifying rows: the third was never looked at. It must carry over to the
+  // next hour — and so must the dust row, because we cannot tell the two apart from here.
+  const r = ann.settlePending({ pending: ["A", "B", "C", "DUST"], posts: [{ escrow: "A" }, { escrow: "B" }], sent: ["A", "B"], budget: 2, scanned: ["A", "B", "C", "DUST"] });
+  assert.deepStrictEqual(r.announced, ["A", "B"]);
+  assert.deepStrictEqual(r.kept, ["C", "DUST"]);
+  assert.deepStrictEqual(r.cleared, []);
+  // budget exhausted entirely: nothing evaluated, everything kept
+  const none = ann.settlePending({ pending: ["A"], posts: [], sent: [], budget: 0, scanned: ["A"] });
+  assert.deepStrictEqual(none, { announced: [], kept: ["A"], cleared: [] });
+});
+
+t("settlePending: a pending row missing from THIS scan is kept — an index blip is not a verdict", () => {
+  const r = ann.settlePending({ pending: ["A", "GONE"], posts: [{ escrow: "A" }], sent: ["A"], budget: 10, scanned: ["A"] });
+  assert.deepStrictEqual(r, { announced: ["A"], kept: ["GONE"], cleared: [] });
+});
+
+t("settlePending + pickAnnouncements: a row flagged pending with no announcedAt is announced; one with announcedAt is not", () => {
+  const l = mk("E1"), l2 = mk("E2", { who: "AZHiexsgs5XvzSvfqmGwsQ3dhU5FFTXaqNCEy3BVknX1" });
+  const ledger = { E1: { announcePending: true }, E2: { announcePending: true, announcedAt: NOW - 5 } };
+  const posts = ann.pickAnnouncements({ added: ["E1", "E2"], locks: [l, l2], cfg: CFG, staking: s, nowUnix: NOW, ledger });
+  assert.deepStrictEqual(posts.map((p) => p.escrow), ["E1"]);
+  const r = ann.settlePending({ pending: ["E1", "E2"], posts, sent: ["E1"], budget: 10, scanned: ["E1", "E2"] });
+  assert.deepStrictEqual(r, { announced: ["E1"], kept: [], cleared: ["E2"] });
+});
+
 t("an escrow in `added` that is not in the scan is skipped, not thrown on", () => {
   const out = ann.pickAnnouncements({ added: ["GHOST"], locks: [], cfg: CFG, staking: s, nowUnix: NOW, ledger: {} });
   assert.deepStrictEqual(out, []);

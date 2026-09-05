@@ -10396,6 +10396,7 @@ const CUNA_STAKE_LEDGER_KV = "cunaStakeLedger"; // { [escrow]: { firstSeenAt, fi
 const CUNA_STAKE_DAYS_KV = "cunaStakeDays";     // { "YYYY-MM-DD": { distributed, credits } }
 let CUNA_SCAN_CACHE = { at: 0, locks: null, err: null };
 const CUNA_CREATION_RETRIES = new Map();   // escrow -> failed creation lookups (see cunaLocks)
+const CUNA_REINDEXED = new Map();          // escrow -> announcedAt, carried across a &reindex so the room is not told twice
 let CUNA_SCAN_INFLIGHT = null;
 const CUNA_SCAN_TTL_MS = 5 * 60 * 1000;
 
@@ -10484,11 +10485,22 @@ async function cunaLocks({ force = false } = {}) {
           }
         }
         if (deferred.length) console.warn(`[cuna-stake] ${deferred.length} new escrow(s) with no creation time (attempt ${Math.max(...deferred.map((k) => CUNA_CREATION_RETRIES.get(k) || 0))}): ${deferred.slice(0, 5).join(", ")}`);
-        kv.set(CUNA_STAKE_LEDGER_KV, ledger);
         // Tell the community about new qualifying locks (owner, 2026-09-05). Deliberately a
         // PUBLIC post to the CUNA room — chain facts only, capped, deduped via the ledger. On
         // staging it goes to the operator chat instead, so a test never reaches the real room.
-        cunaAnnounceLocks({ added: merged.added.filter((k) => ledger[k]), locks: merged.locks, cfg: p.config, ledger, nowUnix })
+        // The announcement is DURABLE: a new row is flagged `announcePending` in the same write
+        // that creates it, and the flag comes off only after the post is out. Two launch-day
+        // locks were lost the other way round — ledger written, container replaced before the
+        // send, fresh container saw "known rows" and said nothing (2026-09-05).
+        for (const k of merged.added) {
+          if (!ledger[k]) continue;                                   // deferred — not persisted yet
+          const before = CUNA_REINDEXED.get(k);
+          if (before) { ledger[k] = { ...ledger[k], announcedAt: before }; CUNA_REINDEXED.delete(k); }
+          else ledger[k] = { ...ledger[k], announcePending: true };
+        }
+        kv.set(CUNA_STAKE_LEDGER_KV, ledger);
+        const pending = Object.keys(ledger).filter((k) => ledger[k].announcePending && !ledger[k].announcedAt);
+        cunaAnnounceLocks({ pending, locks: merged.locks, cfg: p.config, ledger, nowUnix })
           .catch((e) => console.warn("[cuna-announce] " + e.message));
         if (merged.added.length || merged.reset.length) {
           const back = merged.added.filter((k) => merged.ledger[k] && merged.ledger[k].backdated).length;
@@ -10673,6 +10685,9 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
       const led = kv.get(CUNA_STAKE_LEDGER_KV, {}) || {};
       const k = String(q.reindex);
       if (!led[k]) return res.status(404).json({ ok: false, error: "no ledger row for " + k });
+      // The re-stamped row is "new" to the next scan; remember it was announced so the room is
+      // not told about the same lock twice. In-memory on purpose — the rescan is immediate.
+      if (led[k].announcedAt) CUNA_REINDEXED.set(k, led[k].announcedAt);
       delete led[k];
       kv.set(CUNA_STAKE_LEDGER_KV, led);
       CUNA_SCAN_CACHE = { at: 0, locks: null, err: null };
@@ -10748,7 +10763,7 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
       // Railway shell. Read-only: nothing here is an input to anything.
       ledger: Object.fromEntries(Object.entries(kv.get(CUNA_STAKE_LEDGER_KV, {}) || {}).map(([k, r]) => [k, {
         firstSeenAt: r.firstSeenAt, backdated: !!r.backdated, lastSeenAt: r.lastSeenAt,
-        announcedAt: r.announcedAt || null, creationPending: !!r.creationPending,
+        announcedAt: r.announcedAt || null, announcePending: !!r.announcePending, creationPending: !!r.creationPending,
       }])),
       dailyUnlockRaw: unlock.toString(),
       poolTodayRaw: pool.toString(),
@@ -10870,29 +10885,41 @@ async function cunaAccrualTick(reason) {
 // this posts it and remembers it. Cap is per process-hour; the ledger's announcedAt is the durable
 // dedupe, so a restart cannot re-announce.
 const CUNA_ANNOUNCE_TIMES = [];
-async function cunaAnnounceLocks({ added, locks, cfg, ledger, nowUnix }) {
-  if (!added || !added.length) return;
+const CUNA_ANNOUNCE_MAX_PER_HOUR = 10;
+async function cunaAnnounceLocks({ pending, locks, cfg, ledger, nowUnix }) {
+  if (!pending || !pending.length) return;
   const ann = require("./lib/cuna-announce");
   const s = require("./lib/cuna-staking");
   const now = Date.now();
   while (CUNA_ANNOUNCE_TIMES.length && now - CUNA_ANNOUNCE_TIMES[0] > 3600 * 1000) CUNA_ANNOUNCE_TIMES.shift();
+  const budget = Math.max(0, CUNA_ANNOUNCE_MAX_PER_HOUR - CUNA_ANNOUNCE_TIMES.length);
   const posts = ann.pickAnnouncements({
-    added, locks, cfg, staking: s, nowUnix, ledger, maxPerHour: 10, recentAnnounced: CUNA_ANNOUNCE_TIMES.length,
+    added: pending, locks, cfg, staking: s, nowUnix, ledger,
+    maxPerHour: CUNA_ANNOUNCE_MAX_PER_HOUR, recentAnnounced: CUNA_ANNOUNCE_TIMES.length,
     url: process.env.CUNA_STAKE_URL || "https://staking.cunatoken.com",
   });
-  if (!posts.length) return;
   // Staging never posts to the real room. Production posts to the CUNA community room — the one
   // public surface this programme has, by the owner's explicit ask.
   const room = IS_STAGING ? (process.env.CUNA_OPS_CHAT_ID || operatorChatId() || OPERATOR_DM_FALLBACK) : CUNA_PUBLIC_ROOM;
-  const led = kv.get(CUNA_STAKE_LEDGER_KV, {}) || {};
+  const canSend = !!process.env.TELEGRAM_BOT_TOKEN && !!room;
+  const sent = [];
   for (const post of posts) {
     try {
       const r = await tgSend(room, post.text, null, { silent: true });   // SILENT — never &loud without an owner ask
-      CUNA_ANNOUNCE_TIMES.push(Date.now());
-      if (led[post.escrow]) { led[post.escrow] = { ...led[post.escrow], announcedAt: nowUnix }; }
-      console.log(`[cuna-announce] ${post.escrow} -> ${IS_STAGING ? "operator chat (staging)" : "CUNA room"}${r ? "" : " (no bot token — not sent)"}`);
+      CUNA_ANNOUNCE_TIMES.push(Date.now());                              // counts against the cap even when it fails
+      // Nowhere to send (no bot token, no room — a dev box) is done: there is nothing to retry.
+      // A real send that came back without a message id stays pending and retries next scan.
+      if (r || !canSend) sent.push(post.escrow);
+      console.log(`[cuna-announce] ${post.escrow} -> ${IS_STAGING ? "operator chat (staging)" : "CUNA room"}${r ? "" : canSend ? " FAILED (will retry)" : " (no bot token — not sent)"}`);
     } catch (e) { console.warn(`[cuna-announce] ${post.escrow} failed: ${e.message}`); }
   }
+  const settled = ann.settlePending({ pending, posts, sent, budget, scanned: (locks || []).map((l) => l.escrow) });
+  if (!settled.announced.length && !settled.cleared.length) return;
+  // Read-patch-write at the last moment. The scan may have written new rows while the sends were
+  // in flight; a snapshot taken before them would write those rows back out of existence.
+  const led = kv.get(CUNA_STAKE_LEDGER_KV, {}) || {};
+  for (const k of settled.announced) if (led[k]) { led[k] = { ...led[k], announcedAt: nowUnix }; delete led[k].announcePending; }
+  for (const k of settled.cleared) if (led[k]) { led[k] = { ...led[k] }; delete led[k].announcePending; }
   kv.set(CUNA_STAKE_LEDGER_KV, led);
 }
 
