@@ -25,6 +25,14 @@ does not tell you how to write software; use your judgement for that.
 > appendix where every entry cost real money once. Don't improvise a go-live; the sequencing
 > traps in there (arm-first, two-flags, stale PDAs, orphaned positions) all bit within one week.
 
+> 🪙 **Touching CUNA staking or the daily burn? Read `docs/CUNA_STAKING_RUNBOOK.md` first.** Both
+> ship DISARMED and each needs two flags to arm; the burner additionally needs its own
+> `CUNA_BURN_SECRET`. The four things that hold the money are listed there — chief among them that
+> **Rule B (exclude-by-recipient-and-creator) is the ONLY thing keeping 2.285B of treasury locks out
+> of the pool**, since nothing about their terms disqualifies them. Lock terms are measured FORWARD
+> from our own `firstSeenAt`, never from `vesting_start_time` (Jupiter sets that equal to the cliff,
+> and it is creator-set — live CUNA escrows declare 2069 and 2077).
+
 > 🎮 **Working on Normie Quest? Read `docs/HANDOFF_2026-07-27.md` first.** It carries the branch
 > state, the open decisions, and how to verify a change: `node normie-quest/test/nq-verify.cjs
 > <baseUrl>` reads the diff and picks the right checks. Don't run the full state test (every level —
