@@ -100,9 +100,10 @@
 
   <div id="notlive" class="note" hidden>
     <b class="disp">NOT LIVE YET</b><br/>
-    The programme hasn&rsquo;t started. Nothing is earning yet and no rewards are accruing &mdash;
-    the numbers below are what it <i>will</i> pay once it opens. You can lock now if you want to;
-    your lock is judged from the day the programme starts, not the day you make it.
+    The program hasn&rsquo;t started. Nothing is earning yet and no rewards are accruing &mdash;
+    the numbers below are what it <i>will</i> pay once it opens. You can lock now if you want to:
+    the clock on your lock starts the day you make it, not the day the program opens &mdash;
+    rewards themselves just don&rsquo;t start flowing until it does.
   </div>
 
   <div class="card hero">
@@ -118,10 +119,13 @@
     <div class="row"><span>Smallest lock that counts</span><b id="tMin">&mdash;</b></div>
     <div class="row"><span>Locks that qualify right now</span><b id="tCount">&mdash;</b></div>
     <div class="row"><span>CUNA currently earning</span><b id="tLocked">&mdash;</b></div>
-    <p class="muted" style="margin:14px 0 0">Your share is your <b>amount &times; the term you lock
-    for</b>. <b>Lock longer and you earn at a higher rate &mdash; and you keep that rate for every
-    day of your lock</b>, from the first day to the last. It is set when you lock and it never
-    drops. Rewards build daily and are <b>sent to your wallet in batches</b> &mdash; nothing to
+    <p class="muted" style="margin:14px 0 0">You earn on <b>every token that is locked for 90 days
+    or more</b>, at the rate for how long that token is locked &mdash; tokens that unlock sooner
+    simply don&rsquo;t count. <b>Lock longer and that piece earns at a higher rate, held flat for
+    as long as it stays locked</b>, from the first day to the last. It is set when you lock and it
+    never drops. A lock built straight on <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter</a>
+    counts exactly the same way, release by release &mdash; only the part locked 90 days or more
+    earns. Rewards build daily and are <b>sent to your wallet in batches</b> &mdash; nothing to
     claim, no deadline to catch.</p>
     <div class="note" style="margin-top:14px">
       <b class="disp">LOCK LONGER, EARN MORE</b> &mdash; same tokens, different term:
@@ -135,7 +139,10 @@
       </div>
       <p class="muted" style="margin:9px 0 0">No bonus table &mdash; the terms are 90-day steps and
       that is just the division. An 18-month lock earns 6&times; the entry rate on its last day
-      exactly as it did on its first; it never fades to the rate of a shorter lock.
+      exactly as it did on its first; it never fades to the rate of a shorter lock. If a schedule
+      releases in pieces, each piece is judged on its own &mdash; the tokens released early stop
+      earning the moment they unlock, but a tail still locked for 90 days or more keeps earning at
+      its own rate regardless of what already came free.
       <b id="capLine">That top tier is also the ceiling</b> &mdash; a longer lock made elsewhere is
       welcome, but is paid at the top-tier rate, not more.</p>
     </div>
@@ -279,24 +286,34 @@
 
   function loadConfig() {
     return fetch("/api/cuna-stake/config").then(function (r) { return r.json(); }).then(function (d) {
-      if (!d || !d.ok) throw new Error((d && d.error) || "could not read the programme");
+      if (!d || !d.ok) throw new Error((d && d.error) || "could not read the program");
       CFG = d; DEC = d.decimals || 9;
       $("notlive").hidden = !!d.armed;
-      $("pool").textContent = toTokens(d.poolTodayRaw) + " CUNA";
-      // Deliberately does NOT quote a percentage or the size of the treasury's unlock (owner,
-      // 2026-09-05). The useful facts are the number and where it comes from; the fraction just
-      // invites "why only that much?" and puts a treasury figure on a public page for no reason.
-      $("poolsub").textContent = d.armed
-        ? "From tokens set aside for exactly this — a stream that unlocks daily, so the pool cannot run dry."
-        : "This is what the pool will be. Nothing is being paid out yet.";
+      // A scan that has never succeeded reports a pool of "0", and "0 CUNA" reads as a real
+      // number rather than a failure to read the chain — say so instead of showing a false zero.
+      // A scan that DID succeed at some point but is now stale still has a real (if aging) figure
+      // to show, so that case keeps the "stale" wording instead.
+      var poolFailed = !!d.scanError && (!d.poolTodayRaw || d.poolTodayRaw === "0");
+      if (poolFailed) {
+        $("pool").textContent = "—";
+        $("poolsub").innerHTML = '<span class="bad">Couldn’t read the chain</span>';
+      } else {
+        $("pool").textContent = toTokens(d.poolTodayRaw) + " CUNA";
+        // Deliberately does NOT quote a percentage or the size of the treasury's unlock (owner,
+        // 2026-09-05). The useful facts are the number and where it comes from; the fraction just
+        // invites "why only that much?" and puts a treasury figure on a public page for no reason.
+        $("poolsub").textContent = d.armed
+          ? "From tokens set aside for exactly this — a stream that unlocks daily, so the pool cannot run dry."
+          : "This is what the pool will be. Nothing is being paid out yet.";
+        if (d.scanError) {
+          $("poolsub").innerHTML += '<br/><span class="warn">Chain read is stale: ' + esc(d.scanError) + "</span>";
+        }
+      }
       $("tDur").textContent = days(d.terms.minDurationDays);
       $("tMin").textContent = d.terms.minLockRaw && d.terms.minLockRaw !== "0"
         ? toTokens(d.terms.minLockRaw) + " CUNA" : "any amount";
       $("tCount").textContent = d.armed ? String(d.qualifyingLocks) : "not started";
       $("tLocked").textContent = d.armed ? toTokens(d.totalQualifyingRaw) + " CUNA" : "not started";
-      if (d.scanError) {
-        $("poolsub").innerHTML += '<br/><span class="warn">Chain read is stale: ' + esc(d.scanError) + "</span>";
-      }
       buildTermChoices();
     }).catch(function (e) {
       $("poolsub").innerHTML = '<span class="bad">' + esc(e.message) + "</span>";
@@ -309,6 +326,14 @@
   // See the note where the cliff is built: our term rule starts counting when the scanner first
   // sees the lock, not when it is signed, so every term ships with a day in hand.
   var INDEXING_GRACE_DAYS = 1;
+
+  // ONE clock for both the acknowledgement copy and the transaction actually built — the ack used
+  // to promise a date a day earlier than the lock it was attached to, because it computed
+  // `now + dur*DAY` while the build step used `now + (dur+INDEXING_GRACE_DAYS)*DAY`. Whichever term
+  // is selected, both read this.
+  function endUnixFor(dur) {
+    return Math.floor(Date.now() / 1000) + (Number(dur) + INDEXING_GRACE_DAYS) * DAY;
+  }
 
   function buildTermChoices() {
     var minD = CFG.terms.minDurationDays;
@@ -475,7 +500,7 @@
     // someone from typing an amount we simply could not verify.
     var overBal = numeric && BAL != null && Number(amt) > BAL;
     var okAmt = numeric && Number(amt) >= minTok && Number(amt) > 0 && !overBal;
-    var end = Math.floor(Date.now() / 1000) + dur * DAY;
+    var end = endUnixFor(dur);   // same clock the lock itself is built with — see endUnixFor
 
     $("planNote").innerHTML = "Locked until <b>" + dateOf(end) + "</b>.";
     // The first acknowledgement carries the REAL date, recomputed as the term changes — a fixed
@@ -571,16 +596,27 @@
     if (!WALLET) return;
     fetch("/api/cuna-stake/wallet?address=" + encodeURIComponent(WALLET))
       .then(function (r) { return r.json(); }).then(function (d) {
-        if (!d || !d.ok) throw new Error((d && d.error) || "could not read your locks");
+        // "We could not look" and "you have no locks" must never render the same way. A failed or
+        // never-succeeded chain scan (non-ok, e.g. the 503 before any scan has landed — or ok but
+        // carrying a scanError with nothing to show for it) must say so plainly and show NO totals
+        // — never "No CUNA locks on this wallet yet" and never a row of zeros that looks earned.
+        if (!d || !d.ok || (d.scanError && (!d.locks || !d.locks.length))) {
+          throw new Error("Couldn’t read the chain — try again in a minute.");
+        }
         var h = "";
         if (!d.locks.length) {
           h = '<p class="muted">No CUNA locks on this wallet yet.</p>';
         } else {
           h = d.locks.map(function (l) {
             var now = Math.floor(Date.now() / 1000);
-            var head = l.qualifies
+            // "earning" (qualifies AND the program is armed) is the only state that gets the
+            // green EARNING pill. A qualifying lock while disarmed gets WILL EARN instead — real,
+            // but not yet paying — so nobody reads a green pill as money already moving.
+            var head = l.earning
               ? '<span class="pill" style="background:#12603f">EARNING</span>'
-              : '<span class="pill">NOT EARNING</span>';
+              : l.qualifies
+                ? '<span class="pill">WILL EARN</span>'
+                : '<span class="pill">NOT EARNING</span>';
             // Jupiter holds the tokens until the recipient claims. Say so on the lock itself,
             // where it is actually actionable, not only in the general note above.
             if (l.fullyVestedAt && now >= l.fullyVestedAt) {
@@ -594,7 +630,10 @@
             // told that a second lock works.
             var why = "";
             if (!l.qualifies) {
-              var short = l.reasons.some(function (r) { return /left to run/.test(r); });
+              // The weighting rule is per-release now: this is the ONE reason a whole lock can
+              // still fail even though part of it might otherwise qualify — nothing in it is
+              // locked 90 days or more. Matches the exact string lib/cuna-staking.js emits.
+              var short = l.reasons.some(function (r) { return /no tokens locked for/.test(r); });
               var ends = dateOf(l.fullyVestedAt);
               why = '<div class="muted" style="margin-top:8px">Why not: ' +
                 esc(l.reasons.join("; ")) + "</div>";
@@ -624,16 +663,20 @@
               why + claimNote(l) + "</div>";
           }).join("");
         }
-        var anyEarning = d.locks.some(function (l) { return l.qualifies; });
-        if (d.locks.length && !anyEarning) {
+        // This banner is about the TERMS (qualifies), not about whether the program happens to
+        // be armed yet — that is covered separately below and by the NOT LIVE banner up top. A
+        // qualifying-but-disarmed lock should read as "will earn", not "none of your locks meet
+        // the terms".
+        var anyQualifying = d.locks.some(function (l) { return l.qualifies; });
+        if (d.locks.length && !anyQualifying) {
           h = '<div class="note" style="margin:0 0 12px"><b class="disp">NOT EARNING YET</b><br/>' +
               "None of your locks meet the terms. That does not mean waiting &mdash; a new lock " +
               "earns on its own, whatever your existing ones look like." +
               "</div>" + h;
         }
-        // Headline numbers first: what is earning, what is sitting there claimable, what has been
-        // earned. "Total locked" is deliberately the quietest of them — it is the number people
-        // assume they are paid on, and it is the wrong one.
+        // Headline numbers first: what is earning, what has been earned in total, what has
+        // actually gone out, and what is still owed. "Total locked" is deliberately the quietest
+        // of them — it is the number people assume they are paid on, and it is the wrong one.
         h += '<div class="row" style="margin-top:14px"><span><b>Earning on</b></span><b>' +
              toTokens(d.earningOnRaw || "0") + " CUNA</b></div>";
         if (d.readyToClaimRaw && d.readyToClaimRaw !== "0") {
@@ -642,47 +685,99 @@
         }
         h += '<div class="row"><span class="muted">Total across your locks</span><b class="muted">' +
              toTokens(d.totalLockedRaw || "0") + " CUNA</b></div>";
+        // Three numbers instead of one: lifetime credits, what has actually landed in the wallet,
+        // and what is still owed. A single "waiting to be sent" figure could not tell someone who
+        // had already been paid from someone who had never been sent anything at all.
         h += '<div class="row"><span>Rewards earned so far</span><b>' +
              toTokens(d.accruedRaw) + " CUNA</b></div>";
-        h += '<div class="row"><span>Waiting to be sent</span><b>' + toTokens(d.claimableRaw) + " CUNA</b></div>";
+        h += '<div class="row"><span class="muted">Sent to you</span><b class="muted">' +
+             toTokens(d.paidRaw || "0") + " CUNA</b></div>";
+        h += '<div class="row"><span>Waiting to be sent</span><b>' + toTokens(d.owedRaw) + " CUNA</b></div>";
+        if (d.pendingRaw && d.pendingRaw !== "0") {
+          h += '<p class="muted" style="margin-top:6px">' + esc(toTokens(d.pendingRaw)) +
+               " CUNA of that is in the next batch.</p>";
+        }
         if (!d.armed) {
-          h += '<p class="muted" style="margin-top:10px">The programme hasn’t started, so nothing has been earned yet.</p>';
+          h += '<p class="muted" style="margin-top:10px">The program hasn’t started, so nothing has been earned yet.</p>';
         }
         $("mine").innerHTML = h;
         $("mine").hidden = false;
       }).catch(function (e) {
-        $("mine").innerHTML = '<p class="bad">' + esc(e.message) + "</p>";
+        $("mine").innerHTML = '<p class="bad">' + esc((e && e.message) || "Couldn’t read the chain — try again in a minute.") + "</p>";
         $("mine").hidden = false;
       });
   }
 
-  $("connect").addEventListener("click", function () {
-    CluckWallet.connect().then(function (r) {
-      // CluckWallet.connect resolves { provider, pubkey, name, id } — NOT `publicKey`. Reading the
-      // wrong one fails silently: the click does nothing and there is no error to see.
-      if (!r || !r.pubkey) throw new Error("That wallet did not return an address.");
-      WALLET = r.pubkey;
-      PROVIDER = r.provider;
-      $("walletBox").innerHTML =
-        '<div class="row"><span>Connected</span><b>' + esc(r.name || "wallet") + " · " +
-        esc(shortAddr(WALLET)) + "</b></div>" +
-        '<button class="alt" id="disconnect" style="margin-top:10px">DISCONNECT</button>';
-      $("disconnect").addEventListener("click", function () {
-        // Anywhere a wallet can connect it must be able to disconnect: call the provider's own
-        // disconnect AND clear local state, or the page lies about who is connected.
-        try { CluckWallet.disconnect(); } catch (e) {}
-        WALLET = null; BAL = null; PROVIDER = null; $("mine").hidden = true;
-        $("sliderWrap").hidden = true; $("balRow").hidden = true;
-        $("walletBox").innerHTML = '<button id="connect2">CONNECT WALLET</button>';
-        $("connect2").addEventListener("click", function () { location.reload(); });
-        refreshPlan();
-      });
-      loadMine();
-      readBalance().then(function () { showBalance(); refreshPlan(); });
+  // Split into afterConnect (what happens once we HAVE a provider+pubkey) and doConnect (asks
+  // CluckWallet for one) so the click handler can branch on how many wallets are actually
+  // available before deciding whether to connect immediately, show a picker, or hand the user a
+  // mobile deep link — instead of always calling CluckWallet.connect() blind and failing when
+  // that guess is wrong.
+  function afterConnect(r) {
+    // CluckWallet.connect resolves { provider, pubkey, name, id } — NOT `publicKey`. Reading the
+    // wrong one fails silently: the click does nothing and there is no error to see.
+    if (!r || !r.pubkey) throw new Error("That wallet did not return an address.");
+    WALLET = r.pubkey;
+    PROVIDER = r.provider;
+    $("walletBox").innerHTML =
+      '<div class="row"><span>Connected</span><b>' + esc(r.name || "wallet") + " · " +
+      esc(shortAddr(WALLET)) + "</b></div>" +
+      '<button class="alt" id="disconnect" style="margin-top:10px">DISCONNECT</button>';
+    $("disconnect").addEventListener("click", function () {
+      // Anywhere a wallet can connect it must be able to disconnect: call the provider's own
+      // disconnect AND clear local state, or the page lies about who is connected.
+      try { CluckWallet.disconnect(); } catch (e) {}
+      WALLET = null; BAL = null; PROVIDER = null; $("mine").hidden = true;
+      $("sliderWrap").hidden = true; $("balRow").hidden = true;
+      $("walletBox").innerHTML = '<button id="connect2">CONNECT WALLET</button>';
+      $("connect2").addEventListener("click", function () { location.reload(); });
       refreshPlan();
-    }).catch(function (e) {
-      $("walletBox").innerHTML += '<p class="bad">' + esc(e.message || "could not connect") + "</p>";
     });
+    loadMine();
+    readBalance().then(function () { showBalance(); refreshPlan(); });
+    refreshPlan();
+  }
+
+  function doConnect(id) {
+    CluckWallet.connect(id).then(afterConnect).catch(function (e) {
+      $("walletBox").insertAdjacentHTML("beforeend",
+        '<p class="bad">' + esc((e && e.message) || "could not connect") + "</p>");
+    });
+  }
+
+  $("connect").addEventListener("click", function () {
+    var list = CluckWallet.available();
+    if (!list.length) {
+      // Nothing injected. On a normal mobile browser (not a wallet's own in-app browser) that
+      // just means no extension can exist — offer one-tap links that reopen this exact page
+      // inside a wallet's built-in browser instead of a dead-end "not detected" message.
+      if (CluckWallet.isMobile()) {
+        $("walletBox").innerHTML = CluckWallet.mobileLinksHTML({
+          hintClass: "muted",
+          btnStyle: "display:inline-block;margin:0 8px 8px 0;padding:11px 16px;border-radius:10px;" +
+            "border:1px solid var(--border);color:var(--text);font-family:var(--cuna-font);" +
+            "letter-spacing:1px;font-size:14px;",
+        });
+        return;
+      }
+      $("walletBox").insertAdjacentHTML("beforeend",
+        '<p class="bad">No Solana wallet found. Install one, or open this page inside your wallet’s browser.</p>');
+      return;
+    }
+    if (list.length > 1) {
+      // More than one wallet installed: let the user pick rather than CluckWallet.connect()
+      // silently grabbing whichever one happens to be first.
+      $("walletBox").innerHTML = '<p class="muted" style="margin:0 0 10px">Choose a wallet:</p>' +
+        list.map(function (w) {
+          return '<button class="alt" data-wid="' + esc(w.id) + '" style="margin:0 8px 8px 0">' +
+            (w.icon ? esc(w.icon) + " " : "") + esc(w.name) + "</button>";
+        }).join("");
+      Array.prototype.forEach.call($("walletBox").querySelectorAll("[data-wid]"), function (b) {
+        b.addEventListener("click", function () { doConnect(b.getAttribute("data-wid")); });
+      });
+      return;
+    }
+    doConnect(list[0].id);
   });
 
   ["amt", "dur"].forEach(function (id) {
@@ -718,7 +813,7 @@
     // 89.9965 days left when it is judged and be refused by our own minimum, which would reject
     // every 3-month lock this page sells. The extra day is invisible in the copy ("3 months") and
     // costs the locker nothing; it just means the term can never be short at the moment it counts.
-    var endUnix = Math.floor(Date.now() / 1000) + (dur + INDEXING_GRACE_DAYS) * DAY;
+    var endUnix = endUnixFor(dur);   // same clock the acknowledgement copy shows — see endUnixFor
     $("build").disabled = true;
     $("build").textContent = "BUILDING…";
     $("plan").hidden = false;
@@ -764,9 +859,15 @@
   function signLock(built) {
     var btn = $("sign");
     var p = PROVIDER;
+    // ⚠️ Append error text with insertAdjacentHTML, NEVER `$("plan").innerHTML += …`. The +=
+    // getter/setter round-trips the WHOLE container through a string and reparses it, which
+    // recreates #sign as a brand-new node — silently dropping its click listener and freezing
+    // whatever label/disabled state happened to be serialized at that moment (this is exactly how
+    // an "APPROVE IN YOUR WALLET…" button was left permanently disabled with no way to retry).
+    // insertAdjacentHTML only inserts new sibling nodes and leaves #sign alone.
     if (!p || !p.signTransaction) {
-      $("plan").innerHTML += '<p class="bad" style="margin:10px 0 0">This wallet can\u2019t sign here — ' +
-        'try another, or build the lock on <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter</a>.</p>';
+      $("plan").insertAdjacentHTML("beforeend", '<p class="bad" style="margin:10px 0 0">This wallet can\u2019t sign here — ' +
+        'try another, or build the lock on <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter</a>.</p>');
       return;
     }
     btn.disabled = true; btn.textContent = "APPROVE IN YOUR WALLET…";
@@ -777,7 +878,7 @@
       baseKp = window.solanaWeb3.Keypair.fromSecretKey(b64(built.baseSecret));
     } catch (e) {
       btn.disabled = false; btn.textContent = "SIGN IN YOUR WALLET";
-      $("plan").innerHTML += '<p class="bad" style="margin:10px 0 0">Bad transaction from the server.</p>';
+      $("plan").insertAdjacentHTML("beforeend", '<p class="bad" style="margin:10px 0 0">Bad transaction from the server.</p>');
       return;
     }
     // Refresh the blockhash immediately before signing. The tx was built while the user was
@@ -796,12 +897,21 @@
         [btoa(b), { encoding: "base64", skipPreflight: true, preflightCommitment: "confirmed", maxRetries: 5 }]);
     }).then(function (sig) {
       $("plan").innerHTML = '<div class="note" style="margin:16px 0 0">' +
-        "<b class=\"disp\">SENT — CONFIRMING…</b><br/>" + esc(sig) + "</div>";
+        "<b class=\"disp\">SENT — CONFIRMING…</b><br/>" +
+        '<div class="muted" style="margin-top:6px;word-break:break-all">' + esc(sig) + "</div>" +
+        '<div style="margin-top:8px"><a href="https://solscan.io/tx/' + encodeURIComponent(sig) +
+        '" target="_blank" rel="noopener">View on Solscan</a></div></div>';
       return confirmSig(sig).then(function () { return sig; });
     }).then(function (sig) {
+      // Whether it starts earning right away depends on the program, not on the lock — a
+      // disarmed program still records the lock (its clock starts today), it just doesn't pay
+      // anything until the program itself opens.
+      var earnsCopy = CFG && CFG.armed
+        ? "It starts earning on the next daily count."
+        : "It will start earning once the program opens — the clock on it has already started today, so you lose nothing by locking before then.";
       $("plan").innerHTML = '<div class="note" style="margin:16px 0 0">' +
-        '<b class="disp">LOCKED \uD83D\uDD12</b><br/>Your lock is on-chain and starts earning on the ' +
-        'next daily count.<div class="muted" style="margin-top:8px;word-break:break-all">' + esc(sig) + "</div>" +
+        '<b class="disp">LOCKED \uD83D\uDD12</b><br/>Your lock is on-chain. ' + esc(earnsCopy) +
+        '<div class="muted" style="margin-top:8px;word-break:break-all">' + esc(sig) + "</div>" +
         '<div style="margin-top:10px"><a href="https://solscan.io/tx/' + encodeURIComponent(sig) +
         '" target="_blank" rel="noopener">View on Solscan</a></div></div>';
       fetch("/api/lock/record", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -811,10 +921,15 @@
     }).catch(function (e) {
       // On an ambiguous confirm-timeout the lock MAY have landed. Do not re-enable the button —
       // a one-click retry would double-lock. Force a conscious reload instead.
-      $("plan").innerHTML += '<p class="bad" style="margin:10px 0 0">' +
-        esc((e && e.message) || "Wallet cancelled or the transaction failed.") + "</p>";
-      if (e && e.timeout) { btn.textContent = "RELOAD THE PAGE TO RETRY"; }
-      else { btn.disabled = false; btn.textContent = "SIGN IN YOUR WALLET"; }
+      $("plan").insertAdjacentHTML("beforeend", '<p class="bad" style="margin:10px 0 0">' +
+        esc((e && e.message) || "Wallet cancelled or the transaction failed.") + "</p>");
+      // Re-enable/relabel the LIVE node — re-querying rather than trusting the closed-over `btn`
+      // guards against any upstream change that replaces #plan's contents wholesale.
+      var liveBtn = $("sign");
+      if (liveBtn) {
+        if (e && e.timeout) { liveBtn.textContent = "RELOAD THE PAGE TO RETRY"; }
+        else { liveBtn.disabled = false; liveBtn.textContent = "SIGN IN YOUR WALLET"; }
+      }
     });
   }
 
@@ -836,7 +951,7 @@
     });
   }
 
-  loadConfig();  loadConfig();
+  loadConfig();
 })();
 </script>
 </body></html>
