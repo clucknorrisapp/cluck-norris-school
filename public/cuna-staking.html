@@ -49,6 +49,21 @@
         padding:13px;margin:12px 0;font-size:14px;}
   .danger{background:rgba(255,107,107,.10);border:1px solid rgba(255,107,107,.4);border-radius:10px;
           padding:13px;margin:12px 0;font-size:14px;}
+  /* Post-lock announcement. Same shape as the Locker Room's share card (the reference), in this
+     page's palette. Editable text, a live character count, then X's own compose window — nothing
+     is posted by us, and nothing about the lock is invented: every number comes from the plan the
+     wallet just signed and the program config. */
+  .sharecard{margin-top:12px;background:linear-gradient(160deg,rgba(29,155,240,.16),var(--card) 70%);
+             border:1px solid rgba(29,155,240,.5);border-radius:12px;padding:14px;}
+  .sharehead{font-family:var(--cuna-font);letter-spacing:1px;color:#8fd0ff;font-size:16px;
+             text-shadow:1px 1px 0 var(--outline);}
+  .sharecard textarea{width:100%;background:var(--night);border:1px solid var(--border);border-radius:9px;
+             padding:11px;color:var(--text);font:inherit;font-size:13.5px;line-height:1.5;resize:vertical;margin-top:9px;}
+  .sharerow{display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap;}
+  .sharerow button{padding:10px 16px;font-size:13.5px;}
+  .sharerow button.x{background:#1d9bf0;text-shadow:none;}
+  .charc{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted);margin-right:auto;}
+  .charc.over{color:var(--bad);}
   .muted{color:var(--muted);font-size:13px;}
   .pill{display:inline-block;font-family:var(--cuna-font);font-size:11px;letter-spacing:1.5px;
         padding:4px 10px;border-radius:20px;background:var(--outline);color:var(--cream);}
@@ -270,6 +285,10 @@
   var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
   var DAY = 86400;
   var CFG = null, WALLET = null, DEC = 9;
+  // The plan the wallet is asked to sign. Captured when the transaction is BUILT (amount, term,
+  // unlock date) so the post-lock announcement describes exactly that lock, not whatever the form
+  // says by the time the signature lands.
+  var LAST_PLAN = null;
 
   function $(id) { return document.getElementById(id); }
   // Raw base units -> a readable token amount. Raw amounts pass what a JS number holds exactly
@@ -814,6 +833,7 @@
     // every 3-month lock this page sells. The extra day is invisible in the copy ("3 months") and
     // costs the locker nothing; it just means the term can never be short at the moment it counts.
     var endUnix = endUnixFor(dur);   // same clock the acknowledgement copy shows — see endUnixFor
+    LAST_PLAN = { amt: amt, dur: dur, endUnix: endUnix };
     $("build").disabled = true;
     $("build").textContent = "BUILDING…";
     $("plan").hidden = false;
@@ -914,6 +934,7 @@
         '<div class="muted" style="margin-top:8px;word-break:break-all">' + esc(sig) + "</div>" +
         '<div style="margin-top:10px"><a href="https://solscan.io/tx/' + encodeURIComponent(sig) +
         '" target="_blank" rel="noopener">View on Solscan</a></div></div>';
+      showLockShare();
       fetch("/api/lock/record", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sig: sig }) }).catch(function () {});
       loadMine();
@@ -932,6 +953,75 @@
       }
     });
   }
+
+  // ── Announce on X ──────────────────────────────────────────────────────────────────────────
+  // X counts every URL as 23 characters and most emoji as 2; mirror that so the counter is honest.
+  function tweetLen(str) {
+    var t = String(str || "").replace(/https?:\/\/\S+|\b[a-z0-9-]+\.[a-z]{2,}(\/\S*)?/gi, new Array(24).join("x"));
+    var n = 0;
+    for (var i = 0; i < t.length; i++) {
+      var cp = t.codePointAt(i); if (cp > 0xFFFF) i++;
+      n += (cp >= 0x1F000 || (cp >= 0x2600 && cp <= 0x27BF)) ? 2 : 1;
+    }
+    return n;
+  }
+  // The post. Only things that are true of THIS lock and of the program config: the amount and
+  // term the wallet signed, the unlock date the transaction carries, the tier multiplier as the
+  // rule computes it (term / entry term), today's pool from config, and the ceiling. No APY, no
+  // dollar returns, no "guaranteed" — the earning is a share that moves as others lock.
+  function buildLockTweet(plan) {
+    var amt = Number(plan.amt);
+    var minD = Number(CFG && CFG.terms && CFG.terms.minDurationDays) || 90;
+    var maxD = Number(CFG && CFG.terms && CFG.terms.maxTermDays) || 540;
+    var mult = Math.max(1, Math.round(Number(plan.dur) / minD));
+    var top = Math.max(mult, Math.round(maxD / minD));
+    var months = Math.round(Number(plan.dur) / 30.4);
+    var usd = usdOf(amt);
+    var pool = CFG && CFG.poolTodayRaw && CFG.poolTodayRaw !== "0" && !CFG.scanError ? toTokens(CFG.poolTodayRaw) : null;
+    var l1 = "\uD83D\uDD12 Just locked " + amt.toLocaleString("en-US") + " $CUNA" + (usd ? " (~" + usd + ")" : "") +
+      " for " + months + " months on Jupiter Lock \u2014 nothing unlocks before " + dateOf(plan.endUnix) + ".";
+    var l2 = CFG && CFG.armed
+      ? "It earns " + mult + "\u00d7 the entry rate from the CUNA lock-to-earn pool" +
+        (pool ? " (" + pool + " CUNA a day, paid hourly)" : "") + ". Longer locks earn up to " + top + "\u00d7."
+      : "It earns " + mult + "\u00d7 the entry rate once the CUNA lock-to-earn program opens. Longer locks earn up to " + top + "\u00d7.";
+    return l1 + "\n\n" + l2 + "\n\nLock yours: lock.cunatoken.com";
+  }
+  function updShareCnt() {
+    var ta = $("shareTxt"), el = $("shareCnt"); if (!ta || !el) return;
+    var n = tweetLen(ta.value);
+    el.textContent = n + "/280";
+    el.classList.toggle("over", n > 280);
+  }
+  // Rendered under the LOCKED note. insertAdjacentHTML on purpose — see the warning above signLock.
+  function showLockShare() {
+    if (!LAST_PLAN || !$("plan")) return;
+    var old = $("shareCard"); if (old) old.remove();
+    $("plan").insertAdjacentHTML("beforeend",
+      '<div class="sharecard" id="shareCard">' +
+        '<div class="sharehead">\uD83D\uDCE2 ANNOUNCE YOUR LOCK</div>' +
+        '<p class="muted" style="margin:4px 0 0">Here\u2019s a ready-to-post announcement \u2014 tweak it if you like, then post so your community sees it.</p>' +
+        '<textarea id="shareTxt" rows="6" spellcheck="true"></textarea>' +
+        '<div class="sharerow"><span class="charc" id="shareCnt">0/280</span>' +
+          '<button class="x" id="shareX" type="button">\uD835\uDD4F POST ON X</button>' +
+          '<button class="alt" id="shareCopy" type="button">COPY</button></div>' +
+      "</div>");
+    $("shareTxt").value = buildLockTweet(LAST_PLAN);
+    updShareCnt();
+    $("shareTxt").addEventListener("input", updShareCnt);
+    $("shareX").addEventListener("click", function () {
+      window.open("https://twitter.com/intent/tweet?text=" + encodeURIComponent($("shareTxt").value), "_blank", "noopener");
+    });
+    $("shareCopy").addEventListener("click", function () {
+      var b = $("shareCopy");
+      CluckUtil.copyText($("shareTxt").value).then(function () {
+        b.textContent = "COPIED"; setTimeout(function () { b.textContent = "COPY"; }, 1200);
+      });
+    });
+    setTimeout(function () { try { $("shareCard").scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (_) {} }, 60);
+  }
+  // Test hook (headless check in scripts/cuna-share-test.cjs): the card only ever appears after a
+  // real signature, which no test can produce, so the test drives these directly.
+  window.__cunaShare = { build: buildLockTweet, len: tweetLen, show: function (plan) { LAST_PLAN = plan; showLockShare(); }, cfg: function (c) { CFG = c; } };
 
   // Poll until the signature is confirmed. A returned signature is RPC acceptance, not landing.
   function confirmSig(sig) {
