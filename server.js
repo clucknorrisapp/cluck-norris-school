@@ -1578,6 +1578,10 @@ async function deleteTweet(id) {
   } catch (e) { return { ok: false, error: publicErrMsg(e) }; }
 }
 async function postToX(text, opts = {}) {
+  // Staging must never tweet. This sits ABOVE the force carve-out on purpose: the carve-outs
+  // (lock announcements, burn celebrations) pass {force:true} and would otherwise sail straight
+  // past X_AUTOPOST_PAUSED from a staging box. A tweet is the one thing here that cannot be undone.
+  if (IS_STAGING) return { ok: false, staging: true };
   if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true }; // opts.force = scoped carve-out (lock announcements only) — see postLockToX
   if (!xConfigured()) return { ok: false, skipped: true };
   const url = "https://api.x.com/2/tweets";
@@ -2221,6 +2225,10 @@ const TG_WEBHOOK_SECRET = process.env.TELEGRAM_BOT_TOKEN
 async function tgSend(chatId, text, replyTo, opts = {}) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || !chatId) return null;
+  // Marked, not blocked: a staging box pointed at a test room SHOULD be able to post — that is the
+  // point of having one. But if it is ever pointed at the real community room by a copied env var,
+  // the message has to be obviously a test rather than an announcement people act on.
+  if (IS_STAGING) text = "🚧 <b>[STAGING]</b> — test post, ignore\n\n" + text;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -3272,6 +3280,22 @@ app.use((req, res, next) => {
 //   Transform Rule exists, or it will 403 the whole site. Rollout + the exact rule are in
 //   docs/CLOUDFLARE_WAF_RUNBOOK.md. /healthz is exempt (Railway's probe hits the app directly).
 const CF_ORIGIN_SECRET = process.env.CF_ORIGIN_SECRET;
+
+// ── Staging mode ───────────────────────────────────────────────────────────
+// STAGING=1 marks this deploy as NOT production. It exists because staging runs the same code on a
+// public Railway URL with no Cloudflare in front (owner's call, 2026-09-05: keep it simple), so the
+// one real risk is not attackers — it is a page that looks EXACTLY like production being mistaken
+// for it, linked to, or screenshotted as real. Three consequences, all one-way:
+//   · every HTML page carries a banner that cannot be missed
+//   · X-Robots-Tag: noindex on everything, so it never reaches a search result
+//   · postToX is refused outright, and Telegram posts are prefixed [STAGING]
+// Nothing here weakens production: unset (the default) means none of it applies.
+const IS_STAGING = String(process.env.STAGING || "") === "1";
+// Lets a staging box have a bot token + test chat WITHOUT starting the daily automation. Setting
+// TELEGRAM_CHAT_ID is what boots the whole scheduler block — lessons, radar, recap, the graduation
+// watcher, the trade poller — so pointing staging at a test room would otherwise turn it into a
+// second bot running a full schedule, not just a place to try one post.
+const SCHEDULERS_OFF = String(process.env.SCHEDULERS_OFF || "") === "1";
 // ── Dedicated game domain (owner bought normiequest.app, 2026-08-22) ───────
 // Requests whose Host is one of these serve Normie Quest at "/" and only see game surfaces —
 // everything else 301s to clucknorris.app. NQ_GAME_HOSTS env overrides the default pair.
@@ -3349,6 +3373,42 @@ app.use((req, res, next) => {
   if (CUNA_STAKE_PATH.test(req.path) || req.path === "/healthz") return next();
   return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
 });
+
+// Staging marking. Mounted before every route so nothing can be served without it.
+if (IS_STAGING) {
+  app.use((req, res, next) => {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+    const BANNER = '<div style="position:fixed;top:0;left:0;right:0;z-index:2147483647;'
+      + 'background:#B45309;color:#fff;font:700 13px/1.5 system-ui,sans-serif;text-align:center;'
+      + 'padding:6px 10px;letter-spacing:.5px;box-shadow:0 2px 8px rgba(0,0,0,.4)">'
+      + 'STAGING — not the live site. Nothing here is real.</div>'
+      + '<div style="height:29px"></div>';
+    const inject = (html) => html.replace(/<body([^>]*)>/i, (m) => m + BANNER);
+
+    const send = res.send.bind(res);
+    res.send = (body) => {
+      // Only touch real HTML documents — never JSON, never an asset, never a partial.
+      const ct = String(res.getHeader("Content-Type") || "");
+      if (typeof body === "string" && /text\/html/i.test(ct) && /<\/body>/i.test(body)) body = inject(body);
+      return send(body);
+    };
+
+    // sendFile does NOT go through res.send — it streams straight from disk. Nearly every page
+    // here is served that way, so wrapping only res.send marked almost nothing. Read the HTML,
+    // inject, and send it as a normal response; non-HTML files stream as before.
+    const sendFile = res.sendFile.bind(res);
+    res.sendFile = (path, ...rest) => {
+      if (!/\.html?$/i.test(String(path))) return sendFile(path, ...rest);
+      let html;
+      try { html = require("fs").readFileSync(path, "utf8"); }
+      catch (_) { return sendFile(path, ...rest); }   // unreadable → behave exactly as before
+      res.type("html");
+      return send(inject(html));
+    };
+    next();
+  });
+  console.log("[boot] STAGING=1 — noindex, a banner on every page, X posting refused, Telegram prefixed");
+}
 
 // ── Lightweight in-memory rate limiting ───────────────────────────────────
 // The /api proxies forward to PAID upstreams (Helius credits, Anthropic,
@@ -17339,7 +17399,9 @@ app.listen(PORT, () => {
       console.warn("[boot] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID unset → the ENTIRE scheduler block (alerts, lessons, radar, recap, grad watcher, webhook) is OFF");
     }
   }
-  if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+  if (SCHEDULERS_OFF) {
+    console.log("[boot] SCHEDULERS_OFF=1 — the scheduler block is held off (bot commands and manual posts still work)");
+  } else if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
     console.log(`[TELEGRAM] Bot configured · chat ${process.env.TELEGRAM_CHAT_ID} · trade poller starting in 5s`);
     // Brief delay before first poll so server is fully ready
     setTimeout(() => {
