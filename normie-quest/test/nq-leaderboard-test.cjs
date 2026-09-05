@@ -226,6 +226,29 @@ function legacyV2(names, ageMs) {
     const expired = lb.continueRun(legacyV2(['1-1', '1-2'], 3 * 60 * 60 * 1000));
     ok('continue refuses a run token past its 2h TTL', expired.ok === false && expired.status === 'expired');
     ok('continue refuses a tampered token', lb.continueRun({ ...tok, max: tok.max + 99999 }).ok === false);
+
+    // CONTINUES ARE CAPPED PER RUN. continueRun is non-consuming by design (it must not burn the
+    // nonce, or the submit that follows a continue reads as a replay), which also meant one
+    // finished run could mint an unlimited number of fresh, once-usable nonces — each submitting
+    // as a VALID, non-suspect row. No rank inflation (the budget ceiling and best-per-wallet
+    // dedupe still hold), but an unbounded source of real rows, which is what feeds the MAX-cap
+    // eviction that can push a still-claimable winner out of the store.
+    {
+      const src = reach(['1-1', '1-2']);
+      let last = null, refused = null;
+      for (let i = 0; i < 40; i++) {
+        const c = lb.continueRun(src);
+        if (!c.ok) { refused = c; break; }
+        last = c;
+      }
+      ok('one run cannot be continued without limit',
+         refused !== null && refused.status === 'continue_limit',
+         refused ? refused.status : 'never refused after 40 continues');
+      ok('the continues BEFORE the cap still worked (a real player is not blocked)', last && last.ok === true);
+      // a DIFFERENT run must not inherit the exhausted lineage's counter
+      const other = lb.continueRun(reach(['1-1', '1-2', '1-3']));
+      ok('the cap is per-run, not global', other.ok === true, other.status);
+    }
   }
 
   // ---- audit #29: telemetry hardening (via the real router) ----------------------------------
@@ -343,6 +366,61 @@ function legacyV2(names, ageMs) {
     const mine = arcs.find((a) => r.to.endsWith(a.name));
     ok('listArchives surfaces the archive the reset just wrote (with its run count)',
        arcs.length >= 1 && !!mine && mine.count === before);
+  }
+
+  // ---- MAX-cap eviction must never cost a real winner their prize -----------------------------
+  // nq-claims.js recomputes winners LIVE from this store and never reads the season archives, so a
+  // winner's row IS their prize. The cap used to be a flat FIFO slice, which meant a few thousand
+  // cheap junk submits could push a still-claimable winner out with no owner action. Rows are
+  // written straight to the store file here (rather than through add()) so the test can fill the
+  // cap without simulating thousands of runs.
+  {
+    const fs = require('fs');
+    const FILE = path.join(process.env.DATA_DIR, 'nq-leaderboard.json');
+    const MAX = 6000;
+    const now = Date.now();
+    // the winner: recent, wallet-verified, non-suspect, top score — and the OLDEST row in the file,
+    // so a pure insertion-order FIFO is guaranteed to evict it first.
+    const winner = { id: 'winnerrow', at: now - 2 * 24 * 3600 * 1000, name: 'WINNER', world: 8,
+                     level: '8-3', score: 999999, wallet: 'WinnerWallet1111111111111111111111111111', walletVerified: true, suspect: false };
+    const rows = [winner];
+    // fill to exactly MAX with recent junk: non-suspect, but unverified, so never a claim candidate
+    for (let i = 0; i < MAX - 1; i++) {
+      rows.push({ id: 'junk' + i, at: now - 3600 * 1000 + i, name: 'j' + i, world: 1, level: '1-1', score: 10, suspect: false });
+    }
+    fs.writeFileSync(FILE, JSON.stringify(rows));
+    // one more insert pushes the store over MAX and forces an eviction
+    const tok = reach(['1-1', '1-2']);
+    await lb.add({ name: 'overflow', world: 1, level: 'run', score: 50 }, tok);
+    const after = await lb.list();
+    ok('MAX-cap eviction keeps the store at the cap', after.length <= MAX);
+    ok('MAX-cap eviction spares a still-claimable winner and drops junk instead',
+       after.some((r) => r.id === 'winnerrow'));
+    // and the winner is still resolvable as a winner, which is the property that actually matters
+    const claims = require('../nq-claims.js');
+    const winners = await claims.winnersForWeek(require('../nq-leaderboard.js').weekStartMs(winner.at), 10);
+    ok('the spared winner still resolves through claims.winnersForWeek',
+       winners.some((w) => w.wallet === winner.wallet));
+    fs.writeFileSync(FILE, JSON.stringify([]));   // leave a clean store for anything after this
+  }
+
+  // ---- a consumed run-token nonce must stay consumed across a process restart -----------------
+  // usedNonces was in-memory only. A push to `main` restarts the process (Railway auto-deploys it),
+  // which forgot every burned nonce — so any token from the preceding 2h TTL could be resubmitted
+  // and land a second, non-suspect duplicate row. Simulated here by clearing the module cache,
+  // which is what a restart does to that Map.
+  {
+    const tok = reach(['1-1', '1-2']);
+    const first = await lb.add({ name: 'oncer', world: 1, level: 'run', score: 321 }, tok);
+    ok('a fresh token submits once', first && first.ok !== false && first.status !== 'replay');
+    const replaySame = await lb.add({ name: 'oncer', world: 1, level: 'run', score: 321 }, tok);
+    ok('the same token is refused in-process (replay)', replaySame && replaySame.status === 'replay');
+    // restart: drop the module from require cache so its usedNonces Map is rebuilt from disk
+    for (const k of Object.keys(require.cache)) if (k.indexOf('nq-leaderboard.js') !== -1) delete require.cache[k];
+    const lb2 = require('../nq-leaderboard.js');
+    const replayAfterRestart = await lb2.add({ name: 'oncer', world: 1, level: 'run', score: 321 }, tok);
+    ok('the same token is STILL refused after a restart (durable nonce)',
+       replayAfterRestart && replayAfterRestart.status === 'replay');
   }
 
   console.log('\n' + (fail === 0 ? 'ALL PASS' : fail + ' FAILED') + '  (' + pass + '/' + (pass + fail) + ')');

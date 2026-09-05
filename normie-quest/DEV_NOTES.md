@@ -83,6 +83,50 @@ Build with `--test`, load `.nq_test.html`, drive `window.__PG.scene`.
 **Caveat:** headless `game.loop.delta ≈ 0`, so physics/tweens/timers are frozen — step manually with
 `g.physics.world.step(dt)` / `g.update()` and reason about motion; you can't observe live animation.
 
+## ⚠️ Respawn safety — do not "simplify" the `_lastSafe` rules (2026-09-03)
+
+Two things here are load-bearing. Both were real, reproducible defects found in the pre-play review.
+
+**1. `_lastSafe` is banked ONLY on permanent footing.** `onGround` is true on a pump-dump, a bridge
+plank, a depeg peg, a rug plat, a puller rug, a yield lift and a mover — every one of which is
+*designed* to vanish or move out from under you. Banking those was a guaranteed **death loop**: a
+plank is anchored over a pit by design, so when it drops you fall in, the pit death respawns you at
+the banked spot — 1.6s of empty air over that same pit — and you fall again. Roughly three deaths a
+second, every remaining life gone in about two seconds, with no player input. The depeg is worse: it
+fires on a **global rhythm**, so it is not even player-triggered.
+
+The test is a POSITIVE one — "is my footing in `this.platforms`" (the floor run, `plats`, `walls`, all
+static, none of which ever disables its body) — deliberately **not** a blocklist of the temporary
+groups, so a mechanic added later cannot silently re-break it. **If you add a new kind of footing,
+put it in `this.platforms` only if it is permanent.**
+
+`loseLife()` already carried this exact fix for the Bridge Drainer BOSS deck (`restoreDeck()` on
+death, with a comment describing the same death loop). This generalises it to the overworld.
+
+**2. The respawn re-verifies the banked spot** (`footingUnder`) and, if it has gone bad, walks the
+fallback back toward spawn until it finds real floor. Belt-and-braces: respawning into thin air over
+a pit is the one outcome that must never happen, and it now takes two independent failures.
+
+Both checks share **one** iteration over `this.platforms` with the pre-existing anti-wedge
+`_inSolid` scan. Keep it that way — they were briefly two full passes over every ground tile per
+frame (~1300 body tests on a 7800px level, twice), which a phone or iPad pays for.
+
+Regression note: this is engine-wide, so a change here needs the FULL state test
+(`node normie-quest/test/nq-verify.cjs <baseUrl>` picks it automatically for a non-LEVELS edit).
+
+## ⚠️ `resumeGame()` swallows the resuming press — keep it (2026-09-03)
+
+`update()` early-returns while paused, so `prevThrow` / `prevJump` still hold their pre-pause values.
+The button that dismissed the pause card therefore read as a **fresh edge** on the very next frame
+and fired for real: resuming by tapping the on-screen **THROW** — where a thumb naturally rests, and
+the card only says "TAP TO RESUME" — spent a counted Solana disc (10 per level) with no intent, and
+resuming on JUMP burned a jump charge the same way.
+
+`resumeGame()` now latches `prevThrow`/`prevJump` to `true` and drains the pad's `jumpEdge`/`selEdge`,
+so a held button must be **released and pressed again** to count — which is what a player means by
+"unpause, then throw". Don't remove the latch to "fix" a perceived input delay; there isn't one, the
+first genuine press after a release still fires on that frame.
+
 ## 🛍 The shop (Item Reserve) — shipped 2026-08-02, OFF by default
 
 Pay $NORMIE **or SOL**, get ONE banked power-up. It replaces the old `BURN_GATE` / `Gate` scene,
