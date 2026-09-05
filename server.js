@@ -10742,6 +10742,14 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
       config: p.config,
       scanned: locks.length,
       ledgerWritten: snap.armed === true,
+      // The firstSeenAt ledger, read fresh from kv (the announcer writes announcedAt AFTER the scan
+      // cache is built, so the cached copy lags it). Answers "when did we first see this escrow, was
+      // it backdated, did the room hear about it, is its creation time still pending" without a
+      // Railway shell. Read-only: nothing here is an input to anything.
+      ledger: Object.fromEntries(Object.entries(kv.get(CUNA_STAKE_LEDGER_KV, {}) || {}).map(([k, r]) => [k, {
+        firstSeenAt: r.firstSeenAt, backdated: !!r.backdated, lastSeenAt: r.lastSeenAt,
+        announcedAt: r.announcedAt || null, creationPending: !!r.creationPending,
+      }])),
       dailyUnlockRaw: unlock.toString(),
       poolTodayRaw: pool.toString(),
       // What TODAY would pay if a day were accrued now. Preview only — it writes nothing.
@@ -10858,9 +10866,6 @@ async function cunaAccrualTick(reason) {
   return { ok: true, day: gate.day, ...days[gate.day], missed };
 }
 
-// Operator-chat line for the staking programme. SILENT (no &loud=1 — never without an owner ask).
-// Goes to CUNA_OPS_CHAT_ID if set, else the main TELEGRAM_CHAT_ID; tgSend already no-ops when the
-// bot token is missing and prefixes [STAGING] on the staging box.
 // New-lock announcements. The decision (which locks, what text) is pure in lib/cuna-announce.js;
 // this posts it and remembers it. Cap is per process-hour; the ledger's announcedAt is the durable
 // dedupe, so a restart cannot re-announce.

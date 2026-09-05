@@ -136,6 +136,9 @@ curl -X POST "https://clucknorris.app/api/cuna-stake/admin?key=$PREMIUM_ACCESS_K
 
 # 4. Preview what a day would pay. Writes nothing — plain GET.
 curl "https://clucknorris.app/api/cuna-stake/admin?key=$PREMIUM_ACCESS_KEY" | jq '.wouldPay, .eligible'
+# The same GET carries `.ledger` — one row per escrow ever seen: firstSeenAt, backdated,
+# lastSeenAt, announcedAt (null = the room was never told), creationPending (stamped at "now"
+# after three failed creation lookups — the reindex case below).
 
 # 5. ARM. Two flags on purpose — one typo'd query param must not start an emission.
 curl -X POST "https://clucknorris.app/api/cuna-stake/admin?key=$PREMIUM_ACCESS_KEY&arm=1&confirm=go-live"
