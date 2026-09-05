@@ -121,6 +121,12 @@ POST"*), on purpose: a GET that mutates is one pasted link away from firing on i
 bots fetch URLs in chats, browsers prerender history. Every mutating example below needs `curl -X
 POST`; reads (no flags, or `rescan=1`) stay plain GET.
 
+**Announce on X (owner, 2026-09-05):** after a lock confirms, the page renders a share card under the
+LOCKED note — editable text, live 280 counter, POST ON X (X's own compose window; we post nothing) and
+COPY. The text carries only what the wallet signed (amount, term, unlock date), the tier multiplier
+as the rule computes it, today's pool from config, and the ceiling; dollars only when the price is
+known; "once the program opens" while disarmed. `scripts/cuna-share-test.cjs` pins all of it.
+
 ```bash
 # 1. Look at who qualifies TODAY, before anything is armed. Read-only.
 node scripts/cuna-lock-scan-live.cjs
