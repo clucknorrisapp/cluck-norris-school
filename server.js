@@ -733,14 +733,16 @@ function liqTimeout(fn, ms) { if (!LIQ_ENGINE_KILLED) return setTimeout(fn, ms);
 // touches only the POKEAHOE mint, USDC, and wSOL. It must never touch anything else in
 // that wallet — the CLKN brand bag, ROSE, and the rest stay strictly owner-managed.
 //
-// ON BY DEFAULT (owner's explicit go, 2026-08-19: "Why do I need to flip a switch? I am
-// telling you what to do") — deploying this code IS the start. POKE_ENGINE_OFF=1 in
-// Railway is the durable kill; /api/whirlpool/vault/pause?project=poke stops it
-// instantly without a deploy. If MM_OPERATOR_SECRET_TREASURY is unset it no-ops safely.
-// ...and never on staging. Without MM_OPERATOR_SECRET_TREASURY it cannot sign, but "safe because
-// a secret is absent" is one typo away from not being safe at all — a copied env var would arm a
-// second engine running the same pools from a box nobody is watching.
-const POKE_ENGINE_ON = process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING;
+// OFF BY DEFAULT (owner, 2026-09-05: "none of the liquidity engines should be running for any
+// project" — "flip the code default to off too"). It WAS on by default from 2026-08-19 ("why do I
+// need to flip a switch"); that grant is withdrawn. Deploying this code starts NOTHING. The only
+// way this scheduler registers is POKE_ENGINE_ON=1 in Railway, set by the owner in the moment —
+// and POKE_ENGINE_OFF=1 still wins over it as a belt-and-braces kill. The project's own `paused`
+// flag (vault/pause, durable in kv) is the second, independent stop: even a registered scheduler
+// does nothing while it is set. Never on staging. If MM_OPERATOR_SECRET_TREASURY is unset it
+// cannot sign — but "safe because a secret is absent" is one typo away from not being safe at
+// all, which is exactly why the default is now off rather than "off unless a secret exists".
+const POKE_ENGINE_ON = process.env.POKE_ENGINE_ON === "1" && process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING;
 const POKE_MINT = "HRvw81mktEraX9gZLTHKeYGaFygCSNKuAwNLVE6Tpump";
 const POKE_QUOTES = [
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
@@ -859,8 +861,9 @@ if (POKE_ENGINE_ON) {
 // here are deliberately DIFFERENT: ±2.5% bands, not ±1%, because CUNA is far more volatile
 // and a ±1% band would sit out of range more than in it.
 //
-// ⚠️ THIS DOES NOT START ITSELF. The poke block is ON by default because the owner said
-// "why do I need to flip a switch". Here he asked to "get everything ready for how we
+// ⚠️ THIS DOES NOT START ITSELF. (The poke block above used to be on by default because the
+// owner said "why do I need to flip a switch"; since 2026-09-05 it is off by default too — no
+// liquidity engine runs for any project unless he switches it on.) Here he asked to "get everything ready for how we
 // WOULD go live" — so deploying this file changes nothing. Going live is one env var:
 //   CUNA_ENGINE_ON=1     ← required to arm; absent = registered but idle
 //   CUNA_ENGINE_OFF=1    ← hard override, wins even if ON is set
@@ -18706,7 +18709,7 @@ app.listen(PORT, () => {
     rose: () => process.env.ROSE_ENGINE_OFF !== "1" && !!kv.get("roseEngineArmed", false),
     cuna: () => process.env.CUNA_ENGINE_OFF !== "1" && !!kv.get("cunaEngineArmed", false),
     dnc: () => process.env.DNC_ENGINE_OFF !== "1" && !!kv.get("dncEngineArmed", false),
-    poke: () => process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING, // ON by default (owner), never on staging
+    poke: () => process.env.POKE_ENGINE_ON === "1" && process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING, // OFF by default (owner, 2026-09-05), never on staging
   };
   const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {
     const p = whirlpoolMM.vault.getProject(id);

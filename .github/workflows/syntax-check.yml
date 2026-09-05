@@ -184,7 +184,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -270,12 +270,14 @@ jobs:
       # post is built from config numbers, stays under 280, hides dollars when the price is
       # unknown, and opens X's own compose window (we post nothing).
       - name: lock-and-earn announce card
+        if: steps.gate.outputs.run == 'true'
         run: node scripts/cuna-share-test.cjs
       # cluck-wallet.js only found wallets by legacy injection; Jupiter Mobile's in-app browser
       # registers through the Wallet Standard and was invisible on every page (2026-09-05). This
       # drives the shared layer with a fake standard wallet: discovery, the Phantom-shaped shim,
       # dedupe, late registration, the in-app-browser UA path.
       - name: wallet standard discovery
+        if: steps.gate.outputs.run == 'true'
         run: node scripts/wallet-standard-test.cjs
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
