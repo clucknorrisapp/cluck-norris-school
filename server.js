@@ -10499,7 +10499,9 @@ app.post("/api/lock/claim-tx", async (req, res) => {
 //   lib/cuna-lock-scan.js   enumerating escrows + the firstSeenAt ledger terms are measured against
 //   lib/cuna-programme.js   armed/disarmed, the config guard, one-day-once accrual
 //
-// ⛔ SHIPS DISARMED (owner, 2026-09-05: "no one earns until I make the announcements"). While
+// ⛔ SHIPS DISARMED in a fresh environment (two flags to arm) — but PRODUCTION HAS BEEN ARMED since
+// 2026-09-05 20:36 UTC on the owner's go, accruing hourly; read /api/cuna-stake/config before
+// assuming either state. While
 // disarmed the ledger is NOT written: terms are measured forward from firstSeenAt, so indexing
 // before launch would stamp every existing lock with a date from before the programme existed and
 // the cutoff would then reject them all. Pre-arm scans are PREVIEW ONLY.
