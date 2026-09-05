@@ -10483,6 +10483,11 @@ async function cunaLocks({ force = false } = {}) {
         }
         if (deferred.length) console.warn(`[cuna-stake] ${deferred.length} new escrow(s) with no creation time (attempt ${Math.max(...deferred.map((k) => CUNA_CREATION_RETRIES.get(k) || 0))}): ${deferred.slice(0, 5).join(", ")}`);
         kv.set(CUNA_STAKE_LEDGER_KV, ledger);
+        // Tell the community about new qualifying locks (owner, 2026-09-05). Deliberately a
+        // PUBLIC post to the CUNA room — chain facts only, capped, deduped via the ledger. On
+        // staging it goes to the operator chat instead, so a test never reaches the real room.
+        cunaAnnounceLocks({ added: merged.added.filter((k) => ledger[k]), locks: merged.locks, cfg: p.config, ledger, nowUnix })
+          .catch((e) => console.warn("[cuna-announce] " + e.message));
         if (merged.added.length || merged.reset.length) {
           const back = merged.added.filter((k) => merged.ledger[k] && merged.ledger[k].backdated).length;
           console.log(`[cuna-stake] ledger: +${merged.added.length} new (${back} backdated to their on-chain creation), ${merged.reset.length} reset (terms changed at the same address)`);
@@ -10839,6 +10844,36 @@ async function cunaAccrualTick(reason) {
 // Operator-chat line for the staking programme. SILENT (no &loud=1 — never without an owner ask).
 // Goes to CUNA_OPS_CHAT_ID if set, else the main TELEGRAM_CHAT_ID; tgSend already no-ops when the
 // bot token is missing and prefixes [STAGING] on the staging box.
+// New-lock announcements. The decision (which locks, what text) is pure in lib/cuna-announce.js;
+// this posts it and remembers it. Cap is per process-hour; the ledger's announcedAt is the durable
+// dedupe, so a restart cannot re-announce.
+const CUNA_ANNOUNCE_TIMES = [];
+async function cunaAnnounceLocks({ added, locks, cfg, ledger, nowUnix }) {
+  if (!added || !added.length) return;
+  const ann = require("./lib/cuna-announce");
+  const s = require("./lib/cuna-staking");
+  const now = Date.now();
+  while (CUNA_ANNOUNCE_TIMES.length && now - CUNA_ANNOUNCE_TIMES[0] > 3600 * 1000) CUNA_ANNOUNCE_TIMES.shift();
+  const posts = ann.pickAnnouncements({
+    added, locks, cfg, staking: s, nowUnix, ledger, maxPerHour: 10, recentAnnounced: CUNA_ANNOUNCE_TIMES.length,
+    url: process.env.CUNA_STAKE_URL || "https://staking.cunatoken.com",
+  });
+  if (!posts.length) return;
+  // Staging never posts to the real room. Production posts to the CUNA community room — the one
+  // public surface this programme has, by the owner's explicit ask.
+  const room = IS_STAGING ? (process.env.CUNA_OPS_CHAT_ID || operatorChatId() || OPERATOR_DM_FALLBACK) : CUNA_PUBLIC_ROOM;
+  const led = kv.get(CUNA_STAKE_LEDGER_KV, {}) || {};
+  for (const post of posts) {
+    try {
+      const r = await tgSend(room, post.text, null, { silent: true });   // SILENT — never &loud without an owner ask
+      CUNA_ANNOUNCE_TIMES.push(Date.now());
+      if (led[post.escrow]) { led[post.escrow] = { ...led[post.escrow], announcedAt: nowUnix }; }
+      console.log(`[cuna-announce] ${post.escrow} -> ${IS_STAGING ? "operator chat (staging)" : "CUNA room"}${r ? "" : " (no bot token — not sent)"}`);
+    } catch (e) { console.warn(`[cuna-announce] ${post.escrow} failed: ${e.message}`); }
+  }
+  kv.set(CUNA_STAKE_LEDGER_KV, led);
+}
+
 const CUNA_ALERT_SEEN = new Map();   // dedupe key -> unix; the same alert is not repeated within 6h
 async function cunaOpsAlert(text, dedupeKey) {
   // NEVER the public community chat. TELEGRAM_CHAT_ID is the room the whole community reads, and

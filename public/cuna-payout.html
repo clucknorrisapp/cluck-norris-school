@@ -75,6 +75,30 @@
       </div>
     </div>
 
+    <div class="card">
+      <div class="k">PROGRAM CONTROLS</div>
+      <div class="grid2">
+        <div>
+          <div class="row"><span>Started</span><b id="ctStarted">—</b></div>
+          <div class="row"><span>Escrows scanned</span><b id="ctScanned">—</b></div>
+          <div class="row"><span>Would pay today</span><b id="ctWouldPay">—</b></div>
+        </div>
+        <div>
+          <div class="row"><span>Missed days</span><b id="ctMissed">—</b></div>
+          <div class="row"><span>Last accrual</span><b id="ctLast">—</b></div>
+          <div class="row"><span>Ledger written</span><b id="ctLedger">—</b></div>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+        <button id="arm">ARM — start accruing</button>
+        <button class="ghost" id="disarm">DISARM</button>
+        <button class="ghost" id="accrue">ACCRUE TODAY NOW</button>
+        <button class="ghost" id="rescan">RESCAN CHAIN</button>
+      </div>
+      <div class="muted" id="ctNote" style="margin-top:8px">Arming writes the lock ledger and accrues today immediately. It moves no tokens; payouts are always sent from this page by hand.</div>
+      <pre id="ctPay" style="font-family:var(--mono);font-size:12px;white-space:pre-wrap;color:#ccc;max-height:160px;overflow:auto;margin:8px 0 0"></pre>
+    </div>
+
     <div class="card" id="noBatch" hidden>
       <div class="k">NO BATCH PENDING</div>
       <p class="muted">Creating a batch holds every owed amount aside from that moment, so exporting twice can never offer the same money twice.
@@ -182,9 +206,39 @@
     return j.result;
   }
 
+  async function admin(params, method) {
+    var url = "/api/cuna-stake/admin";
+    var opts = { method: method || "GET", headers: { "x-premium-key": KEY } };
+    if (method === "POST") { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(params || {}); }
+    else if (params) { var qs = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&"); if (qs) url += "?" + qs; }
+    var r = await fetch(url, opts);
+    var j = null; try { j = await r.json(); } catch (_) {}
+    if (!j) throw new Error("server returned " + r.status + " with no JSON");
+    if (r.status === 404 && j.error === "not_found") throw new Error("wrong key (or reached the origin directly)");
+    if (!j.ok) throw new Error(j.error || ("server returned " + r.status));
+    return j;
+  }
+  function renderAdmin(a) {
+    $("stArmed").textContent = a.armed ? "ARMED" : "disarmed";
+    $("ctStarted").textContent = a.startedAt ? new Date(a.startedAt * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC" : "never";
+    $("ctScanned").textContent = a.scanned;
+    var wp = a.wouldPay || {}; var n = Object.keys(wp).length;
+    var tot = Object.values(wp).reduce(function (x, v) { return x + Number(v); }, 0);
+    $("ctWouldPay").textContent = n + " wallets · " + cuna(String(tot)) + " CUNA";
+    $("ctMissed").innerHTML = (a.missedDays || []).length ? '<span class="bad">' + esc((a.missedDays || []).join(", ")) + "</span>" : "none";
+    var days = Object.keys(a.recentDays || {}).sort(); var last = days[days.length - 1];
+    $("ctLast").textContent = last ? last + " · " + (a.recentDays[last].eligible || 0) + " earning · " + cuna(a.recentDays[last].distributedRaw || "0") + " CUNA" : "never";
+    $("ctLedger").textContent = a.ledgerWritten ? "yes" : "no (disarmed)";
+    $("ctPay").textContent = Object.keys(wp).sort(function (x, y) { return Number(wp[y]) - Number(wp[x]); })
+      .map(function (w) { return w + "  " + cuna(wp[w]).padStart(10) + " CUNA"; }).join("\n") || "(nobody qualifies)";
+    $("arm").disabled = !!a.armed; $("disarm").disabled = !a.armed; $("accrue").disabled = !a.armed;
+  }
+  async function loadAdmin() { renderAdmin(await admin()); }
+
   async function load() {
     $("keyNote").textContent = "loading…";
     var d = await api();
+    loadAdmin().catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
     STATE = d; MINT = d.mint;
     try { var c = await (await fetch("/api/cuna-stake/config")).json(); PRICE = Number(c.priceUsd) > 0 ? Number(c.priceUsd) : null; $("stArmed").textContent = c.armed ? "ARMED" : "disarmed"; } catch (_) { $("stArmed").textContent = "?"; }
     $("stDays").textContent = d.daysAccrued;
@@ -361,6 +415,24 @@
     api({ export: "1" }, "POST").then(function () { return load(); }).catch(fail);
   });
   $("reload").addEventListener("click", function () { load().catch(fail); });
+  $("arm").addEventListener("click", function () {
+    if (!confirm("ARM the program? The lock ledger is written and today is accrued immediately. Every qualifying lock starts earning from today. No tokens move.")) return;
+    $("ctNote").textContent = "arming — the first scan reads every escrow's creation time, this can take a minute…";
+    admin({ arm: "1", confirm: "go-live" }, "POST").then(function (a) { renderAdmin(a); $("ctNote").textContent = "ARMED. Today accrued: " + ((a.accrualRun && a.accrualRun.ok) ? (a.accrualRun.eligible + " earning, " + cuna(a.accrualRun.distributedRaw || "0") + " CUNA credited") : ((a.accrualRun && a.accrualRun.reason) || "see missed days")); return load(); })
+      .catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+  });
+  $("disarm").addEventListener("click", function () {
+    if (!confirm("DISARM? Accrual stops. The start date and everything earned so far are kept.")) return;
+    admin({ off: "1" }, "POST").then(function (a) { renderAdmin(a); $("ctNote").textContent = "Disarmed."; }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+  });
+  $("accrue").addEventListener("click", function () {
+    admin({ accrue: "1" }, "POST").then(function (a) { renderAdmin(a); var r = a.accrualRun || {}; $("ctNote").textContent = r.ok ? ("Accrued " + r.day + ": " + r.eligible + " earning, " + cuna(r.distributedRaw || "0") + " CUNA credited") : ("Not accrued: " + (r.reason || "?")); return load(); })
+      .catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+  });
+  $("rescan").addEventListener("click", function () {
+    $("ctNote").textContent = "rescanning…";
+    admin({ rescan: "1" }).then(function (a) { renderAdmin(a); $("ctNote").textContent = "Rescanned: " + a.scanned + " escrows."; }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+  });
   $("close").addEventListener("click", function () {
     if (!BATCH) return;
     if (unrecordedSent().length) { alert("Record the SENT — NOT RECORDED rows first. Closing now would return them to owed and pay them twice."); return; }

@@ -102,6 +102,8 @@ jobs:
       # somebody actually receives.
       - name: CUNA payout double-pay guards
         run: node scripts/cuna-payout-test.cjs
+      - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
+        run: node scripts/cuna-announce-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
