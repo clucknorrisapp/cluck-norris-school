@@ -55,6 +55,20 @@
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   @media(max-width:560px){.grid{grid-template-columns:1fr}.hero .big{font-size:30px}h1{font-size:26px}}
   .lockrow{border:1px solid var(--border);border-radius:10px;padding:12px;margin:0 0 10px;}
+  details.card{padding:0;}
+  details.card>summary{list-style:none;cursor:pointer;padding:15px 18px;display:flex;
+    justify-content:space-between;align-items:center;gap:10px;
+    font-family:var(--cuna-font);font-size:13px;letter-spacing:1.5px;color:var(--cream);}
+  details.card>summary::-webkit-details-marker{display:none;}
+  details.card>summary::after{content:"+";font-size:20px;color:var(--muted);line-height:1;}
+  details.card[open]>summary::after{content:"\2013";}
+  details.card>summary:hover{color:var(--hotpink);}
+  details.card .body{padding:0 18px 16px;}
+  details.card .body p{margin:0 0 10px;}
+  details.card .body p:last-child{margin:0;}
+  .ack{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--border);
+       font-size:13.5px;line-height:1.5;cursor:pointer;}
+  .ack input{width:18px;height:18px;flex:0 0 18px;margin:1px 0 0;accent-color:var(--hotpink);cursor:pointer;}
   a{color:var(--hotpink);}
 </style></head><body>
 <div class="wrap">
@@ -84,16 +98,12 @@
     <div class="row"><span>Reward pool</span><b id="tShare">&mdash;</b></div>
     <div class="row"><span>Locks that qualify right now</span><b id="tCount">&mdash;</b></div>
     <div class="row"><span>CUNA currently earning</span><b id="tLocked">&mdash;</b></div>
-    <p class="muted" style="margin:14px 0 0">You start earning the moment your lock exists. Rewards
-    build up every day and are <b>sent out in batches</b> &mdash; nothing to click, nothing to
-    claim, they arrive in your wallet. Your share is your
-    <b>amount &times; days still to run</b>. That one line is the whole formula: a longer lock earns
-    more per token, and your weight falls as the lock matures, which is why re-locking is worth it
-    rather than being forced on you.</p>
+    <p class="muted" style="margin:14px 0 0">Your share is your <b>amount &times; days still to run</b>.
+    Longer locks earn more per token. Rewards build daily and are <b>sent to your wallet in
+    batches</b> &mdash; nothing to claim, no deadline to catch.</p>
     <div class="note" style="margin-top:14px">
-      <b class="disp">WHAT THE TERMS PAY</b><br/>
-      Because your share is amount &times; days left, the terms price themselves. Same tokens locked:
-      <div class="grid" style="margin-top:10px;gap:4px 14px">
+      <b class="disp">WHAT THE TERMS PAY</b> &mdash; same tokens locked:
+      <div class="grid" style="margin-top:8px;gap:2px 14px">
         <div class="row"><span>3 months</span><b>1&times;</b></div>
         <div class="row"><span>6 months</span><b>2&times;</b></div>
         <div class="row"><span>9 months</span><b>3&times;</b></div>
@@ -101,60 +111,51 @@
         <div class="row"><span>15 months</span><b>5&times;</b></div>
         <div class="row"><span>18 months</span><b>6&times;</b></div>
       </div>
-      <p class="muted" style="margin:10px 0 0">No bonus table, no multiplier we picked. That is just
-      what the formula does &mdash; you can check it yourself.</p>
+      <p class="muted" style="margin:9px 0 0">No bonus table. That is just what the formula does.</p>
     </div>
   </div>
 
-  <div class="card">
-    <div class="k">HOW IT&rsquo;S DECIDED &mdash; THERE IS NOTHING TO SUBMIT</div>
-    <p class="muted" style="margin:0 0 10px">A Jupiter Lock is a public account on Solana. We read
-    the chain and work out who qualifies. <b>You never send us proof, a screenshot, or a signature.</b>
-    Nothing you type is an input, so there is nothing anyone can fake.</p>
-    <p class="muted" style="margin:0 0 10px">Rewards work the same way. There is no claim button and
-    no deadline to catch &mdash; what you have earned is counted every day and sent to your wallet
-    in batches. If you do nothing at all after locking, you still get everything you earned.</p>
-    <p class="muted" style="margin:0">That also means it doesn&rsquo;t matter where you make the lock.
-    Build it here, or build it yourself on
-    <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter&rsquo;s own site</a> &mdash;
-    same program, same result, same rewards.</p>
-  </div>
-
-  <div class="card">
-    <div class="k">&ldquo;IS THIS A STAKING CONTRACT?&rdquo;</div>
-    <p class="muted" style="margin:0 0 10px">No &mdash; and that&rsquo;s the point. A normal staking
-    contract is a program that <b>holds your tokens</b>. You send them in and trust the team&rsquo;s
-    code to give them back. That is where a lot of people have lost everything, to bugs and to
-    teams who wrote a withdraw function only they could call.</p>
-    <p class="muted" style="margin:0 0 10px">Here, <b>nobody holds your tokens &mdash; including us</b>.
-    They sit in a Jupiter Lock escrow with your wallet as the recipient. Jupiter&rsquo;s program is
-    audited and used by hundreds of projects, and we could not touch your tokens if we wanted to.
-    We only read the chain and count.</p>
-    <p class="muted" style="margin:0">So it is staking, in the way that matters: you commit tokens,
-    you earn for committing them. It just isn&rsquo;t a vault you have to trust. <b>The minimum is
-    3 months</b> &mdash; short enough to be a real choice, long enough that the commitment means
-    something.</p>
-  </div>
-
-  <div class="card">
-    <div class="k">BEFORE YOU LOCK &mdash; READ THIS</div>
-    <div class="danger">
-      <b>A qualifying lock cannot be undone.</b> Not by you, not by us, not by Jupiter. Your tokens
-      are gone from your wallet for the full term &mdash; three months at the shortest, eighteen at
-      the longest. There is no cancel button, no support ticket, no early exit.
+  <details class="card">
+    <summary>HOW IT&rsquo;S DECIDED &mdash; NOTHING TO SUBMIT</summary>
+    <div class="body muted">
+      <p>A Jupiter Lock is a public account on Solana. We read the chain and work out who qualifies.
+      <b>You never send us proof, a screenshot, or a signature</b> &mdash; nothing you type is an
+      input, so there is nothing anyone can fake.</p>
+      <p>Rewards work the same way: counted daily, sent in batches. Do nothing after locking and you
+      still get everything you earned.</p>
+      <p>It also doesn&rsquo;t matter where you make the lock. Build it here or on
+      <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter&rsquo;s own site</a> &mdash;
+      same program, same rewards.</p>
     </div>
-    <p class="muted" style="margin:0 0 10px"><b>So lock a slice, not your bag.</b> Decide the amount
-    by what you could genuinely not touch for a year and still be fine. If that number is zero, the
-    honest answer is to not lock &mdash; that is a real answer and it costs you nothing.</p>
-    <p class="muted" style="margin:0 0 10px"><b>Ladder it instead of going all in.</b> You can hold
-    several locks at once and they all earn; multiple locks to the same wallet are added together.
-    Lock a piece now and another piece in a few months, and you keep the rest liquid for whatever
-    life does in the meantime.</p>
-    <p class="muted" style="margin:0"><b>Jupiter Lock can also make a cancelable lock</b> that you
-    can undo. Those are a real and sensible thing to make &mdash; but they <b>do not earn here</b>.
-    A lock you can cancel is not a commitment, and paying it the same as a real one would mean the
-    people who genuinely locked up earn the least.</p>
-  </div>
+  </details>
+
+  <details class="card">
+    <summary>&ldquo;IS THIS A STAKING CONTRACT?&rdquo;</summary>
+    <div class="body muted">
+      <p>No &mdash; and that&rsquo;s the point. A normal staking contract <b>holds your tokens</b>.
+      You send them in and trust the team&rsquo;s code to give them back. That is where a lot of
+      people have lost everything.</p>
+      <p>Here, <b>nobody holds your tokens &mdash; including us</b>. They sit in a Jupiter Lock
+      escrow with your wallet as the recipient. We only read the chain and count.</p>
+      <p>So it is staking in the way that matters: you commit tokens, you earn for committing them.
+      It just isn&rsquo;t a vault you have to trust.</p>
+    </div>
+  </details>
+
+  <details class="card">
+    <summary>HOW MUCH SHOULD I LOCK?</summary>
+    <div class="body muted">
+      <p><b>A slice, not your bag.</b> Pick the amount by what you could genuinely not touch for the
+      whole term and still be fine. If that number is zero, the honest answer is don&rsquo;t lock
+      &mdash; that is a real answer and it costs you nothing.</p>
+      <p><b>Ladder it.</b> You can hold several locks at once and they all earn; multiple locks to
+      the same wallet are added together. Lock a piece now and another in a few months, and keep the
+      rest liquid.</p>
+      <p><b>Cancelable locks don&rsquo;t earn here.</b> Jupiter can make one you&rsquo;re able to
+      undo &mdash; a fine thing to make, but a lock you can cancel isn&rsquo;t a commitment, and
+      paying it the same would mean the people who really locked up earn the least.</p>
+    </div>
+  </details>
 
   <div class="card">
     <div class="k">YOUR LOCKS</div>
@@ -168,14 +169,29 @@
 
   <div class="card" id="buildCard">
     <div class="k">MAKE A QUALIFYING LOCK</div>
-    <p class="muted" style="margin:0 0 6px">The form only builds locks that meet the terms above, so
-    you can&rsquo;t accidentally commit your tokens on terms that earn nothing.</p>
+    <p class="muted" style="margin:0 0 6px">The form only builds locks that meet the terms, so you
+    can&rsquo;t commit tokens on terms that earn nothing.</p>
     <label>Amount of CUNA to lock</label>
     <input id="amt" inputmode="decimal" placeholder="e.g. 5000000" autocomplete="off"/>
     <div class="muted" id="amtNote" style="margin-top:6px">&nbsp;</div>
     <label>How long to lock for</label>
     <select id="dur"></select>
     <div class="muted" id="planNote" style="margin:12px 0 0">&nbsp;</div>
+
+    <div style="margin-top:16px">
+      <div class="k" style="margin-bottom:2px">BEFORE YOU LOCK</div>
+      <!-- Three acknowledgements, each naming ONE specific thing that has actually cost people
+           money. Not legal boilerplate: the first carries the real unlock date so it cannot be
+           skimmed, and the button stays dead until all three are ticked. -->
+      <label class="ack"><input type="checkbox" class="ackbox" id="ack1"/>
+        <span id="ackDate">I understand these tokens are gone from my wallet for the full term.</span></label>
+      <label class="ack"><input type="checkbox" class="ackbox" id="ack2"/>
+        <span>There is <b>no cancel</b>, no support ticket and no early exit &mdash; not by me, not
+        by Cluck Norris, not by Jupiter.</span></label>
+      <label class="ack"><input type="checkbox" class="ackbox" id="ack3"/>
+        <span>This is an amount I can afford <b>not to touch</b> for that whole time.</span></label>
+    </div>
+
     <div style="margin-top:14px">
       <button id="build" disabled>REVIEW THIS LOCK</button>
     </div>
@@ -262,12 +278,22 @@
     var dur = Number($("dur").value);
     var okAmt = /^\d+(\.\d+)?$/.test(amt) && Number(amt) > 0;
     var end = Math.floor(Date.now() / 1000) + dur * DAY;
-    $("planNote").innerHTML = "Locked until <b>" + dateOf(end) + "</b>. You cannot get these tokens " +
-      "back before then &mdash; there is no cancel.";
+
+    $("planNote").innerHTML = "Locked until <b>" + dateOf(end) + "</b>.";
+    // The first acknowledgement carries the REAL date, recomputed as the term changes — a fixed
+    // sentence about "the full term" is skimmable in a way an actual date is not.
+    $("ackDate").innerHTML = "I understand these tokens are gone from my wallet until <b>" +
+      dateOf(end) + "</b>.";
     $("amtNote").innerHTML = (okAmt || !amt) ? "&nbsp;"
       : '<span class="bad">Enter a plain number, e.g. 5000000</span>';
-    $("build").disabled = !(okAmt && WALLET);
-    $("build").textContent = WALLET ? "REVIEW THIS LOCK" : "CONNECT A WALLET FIRST";
+
+    var acks = Array.prototype.slice.call(document.querySelectorAll(".ackbox"));
+    var allAcked = acks.every(function (b) { return b.checked; });
+    $("build").disabled = !(okAmt && allAcked && WALLET);
+    $("build").textContent = !WALLET ? "CONNECT A WALLET FIRST"
+      : !okAmt ? "ENTER AN AMOUNT"
+      : !allAcked ? "TICK ALL THREE TO CONTINUE"
+      : "REVIEW THIS LOCK";
   }
 
   function loadMine() {
@@ -336,6 +362,17 @@
   ["amt", "dur"].forEach(function (id) {
     $(id).addEventListener("input", refreshPlan);
     $(id).addEventListener("change", refreshPlan);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".ackbox"), function (b) {
+    b.addEventListener("change", refreshPlan);
+  });
+  // Changing the amount or the term re-opens the question, so the ticks are cleared. Someone who
+  // agreed to a 3-month lock has not agreed to an 18-month one.
+  ["amt", "dur"].forEach(function (id) {
+    $(id).addEventListener("change", function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".ackbox"), function (b) { b.checked = false; });
+      refreshPlan();
+    });
   });
 
   loadConfig();
