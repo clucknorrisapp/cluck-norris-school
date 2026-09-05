@@ -180,12 +180,23 @@ var CluckAirdrop = {
   // Fixed-point string conversion — never amount * 10**decimals, whose float
   // multiply loses precision above ~9M tokens at 9 decimals.
   toBaseUnits: function (amount, decimals) {
+    // STRING surgery, never Number(): a JS number loses precision above ~9e15, and with nine
+    // decimals that is ~9 million tokens — inside a normal weekly payout row. The old
+    // Number().toFixed() path was short by 2 base units at 29M and 6 at 123M, so what was recorded
+    // as paid was not what was sent. A string that is not a plain decimal falls back to the old
+    // behaviour so nothing that worked before breaks.
+    var str = String(amount == null ? "" : amount).trim().replace(/,/g, "");
+    var m = /^(\d+)(?:\.(\d*))?$/.exec(str);
+    if (m) {
+      var intPart = m[1], fracPart = (m[2] || "").slice(0, decimals).padEnd(decimals, "0");
+      var raw = BigInt(intPart) * (10n ** BigInt(decimals)) + BigInt(fracPart || "0");
+      return raw > 0n ? raw : 0n;
+    }
     var n = Number(amount);
     if (!isFinite(n) || n <= 0) return 0n;
     var parts = n.toFixed(decimals).split(".");
-    var intPart = parts[0], fracPart = parts[1] || "";
-    return BigInt(intPart) * (10n ** BigInt(decimals))
-         + BigInt(fracPart.padEnd(decimals, "0").slice(0, decimals) || "0");
+    return BigInt(parts[0]) * (10n ** BigInt(decimals))
+         + BigInt((parts[1] || "").padEnd(decimals, "0").slice(0, decimals) || "0");
   },
 
   // Pack recipients into batches under the tx size limit. A transfer weighs 1;
@@ -323,6 +334,14 @@ var CluckAirdrop = {
     var sent = 0, failed = 0, unconfirmed = 0, done = 0;
     for (var bi = 0; bi < batches.length; bi++) {
       var batch = batches[bi];
+      // A caller that has lost the ability to RECORD what was sent must be able to stop the
+      // engine before the next wallet prompt — otherwise it keeps sending money it cannot account
+      // for. Rows not yet sent are reported failed so the caller's accounting matches the chain.
+      if (typeof opts.shouldContinue === "function" && !opts.shouldContinue()) {
+        batch.forEach(function (r) { failed++; report({ addr: r.addr, amount: r.amount, status: "failed", error: "stopped by the caller before sending" }); });
+        done += batch.length;
+        continue;
+      }
       progress("Transaction " + (bi + 1) + " of " + batches.length + " — " + batch.length + " wallets…",
         (done / active.length) * 100);
       try {

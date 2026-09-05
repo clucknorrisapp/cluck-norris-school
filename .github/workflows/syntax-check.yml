@@ -59,6 +59,51 @@ jobs:
       # curriculum held 70 and 7. Hand-typed public counts rot silently; this catches the mirror.
       - name: curriculum count-drift guard
         run: node scripts/check-counts.js
+      # CUNA lock-to-earn: who qualifies and how a day's pool is split. Zero deps, so it belongs
+      # in this job. Mutation-tested — reverting the cancelable check to the field name that does
+      # not exist, measuring terms backward from vesting_start_time, tolerating a missing
+      # firstSeenAt, flattening the weight or dropping the largest-remainder split each fails the
+      # test named for it.
+      - name: CUNA staking split + qualification
+        run: node scripts/cuna-staking-test.cjs
+      # The firstSeenAt ledger the qualification horizon is measured against. Every case is a way
+      # to move that timestamp earlier, which is the one number in this system worth attacking:
+      # re-scan drift, PDA reuse after a close, a lock dropping out of an RPC index, and escaping
+      # the treasury exclusion by reassigning a lock's recipient.
+      - name: CUNA lock scanner ledger
+        run: node scripts/cuna-lock-scan-test.cjs
+      # The arm gate. The owner's instruction is that nobody earns until he announces, so disarmed
+      # has to be a wall rather than a default: only boolean true arms it, the start date never
+      # moves across a pause, the treasury cannot be dropped from the exclude list, and a day
+      # already accrued is refused so a redeploy mid-run cannot pay it twice.
+      - name: CUNA programme arm gate + config
+        run: node scripts/cuna-programme-test.cjs
+      # The staking domain's origin-lockdown exemption, read out of server.js itself. That
+      # exemption is the one place a request can skip the WAF, so the allowlist must stay
+      # exhaustive and anchored at both ends — a single "^/api/" entry would be a hole through to
+      # every money endpoint for anyone who points a DNS record at our origin. Also pins that
+      # /api/cuna-stake/admin (which ARMS the emission) is unreachable that way, and that the
+      # handler's own req.cluckDirect guard runs before the key comparison.
+      - name: CUNA staking domain lockdown allowlist
+        run: node scripts/cuna-stake-routing-test.cjs
+      # The decisions in front of an irreversible action. Burning cannot be undone and cannot be
+      # partially retried, so every case here is a way the burner could fire when it should not or
+      # for the wrong amount: a truthy (not true) armed flag, a missing signing key, a short
+      # balance (which must burn NOTHING, never a partial), a day already burned, the configured
+      # hour, and the hard cap that config alone cannot reach — 690000 and 690000000 are three
+      # keystrokes apart and one of them is a tenth of the supply.
+      - name: CUNA daily burn guards
+        run: node scripts/cuna-burn-test.cjs
+      # The bookkeeping between "what is owed" and "what was sent" — where a payout system pays
+      # somebody twice. A batch exported for sending is HELD ASIDE from the moment it exists, so
+      # exporting again cannot offer the same money; confirming credits only what the batch
+      # contained, so accrual during a batch's flight is still owed afterwards; and raw amounts
+      # become whole tokens by string surgery, never division, because that number is what
+      # somebody actually receives.
+      - name: CUNA payout double-pay guards
+        run: node scripts/cuna-payout-test.cjs
+      - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
+        run: node scripts/cuna-announce-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.

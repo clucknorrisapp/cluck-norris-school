@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>CUNA Payout — owner console</title>
+<link rel="stylesheet" href="/theme.css"/>
+<style>
+  /* Operator console. Deliberately plain: every number here is money, so nothing decorative
+     competes with it. The ONLY token this page can send is the one the server reports as the
+     program mint — there is no mint selector and never will be. */
+  body{background:#0b0b10;color:var(--text,#eee);font-family:var(--body);margin:0;padding:22px 16px 60px;}
+  .wrap{max-width:900px;margin:0 auto;}
+  h1{font-family:var(--disp);font-size:28px;margin:0 0 4px;letter-spacing:.5px;}
+  .sub{color:var(--muted,#9a9aa5);font-size:14px;margin-bottom:18px;}
+  .card{background:#14141c;border:1px solid #26262f;border-radius:12px;padding:16px;margin:0 0 14px;}
+  .k{font-family:var(--disp);font-size:13px;letter-spacing:1.5px;color:#f3b0d6;margin-bottom:10px;}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #22222b;font-size:14px;}
+  .row:last-child{border-bottom:none}
+  .row b{font-family:var(--mono);font-weight:400;text-align:right;}
+  .muted{color:#9a9aa5;font-size:13px;}
+  .ok{color:#59d38b}.bad{color:#ff6a6a}.warn{color:#f5c451}
+  button{font-family:var(--disp);font-size:15px;letter-spacing:1px;padding:11px 18px;border-radius:9px;border:none;cursor:pointer;background:#e81088;color:#fff;}
+  button:disabled{background:#3a3a44;color:#8a8a95;cursor:not-allowed;}
+  button.ghost{background:transparent;border:1px solid #3a3a44;color:#ddd;}
+  input[type=password],input[type=text]{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #3a3a44;background:#0b0b10;color:#eee;font-family:var(--mono);font-size:14px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:7px 6px;border-bottom:1px solid #22222b;text-align:left;vertical-align:top;}
+  th{color:#9a9aa5;font-weight:400;font-size:12px;letter-spacing:.5px;}
+  td.num{font-family:var(--mono);text-align:right;white-space:nowrap;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;letter-spacing:.5px;font-family:var(--disp);}
+  .pill.sent{background:#153d2a;color:#59d38b}.pill.owed{background:#3a2a10;color:#f5c451}.pill.fail{background:#3d1515;color:#ff6a6a}.pill.unc{background:#2a2a3d;color:#b8b8ff}
+  .check{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #22222b;font-size:14px;}
+  .check:last-child{border-bottom:none}
+  .check .dot{flex:0 0 12px;height:12px;border-radius:50%;margin-top:4px;background:#3a3a44;}
+  .check.ok .dot{background:#59d38b}.check.bad .dot{background:#ff6a6a}.check.soft.bad .dot{background:#f5c451}
+  .check small{display:block;color:#9a9aa5;font-family:var(--mono);font-size:11.5px;margin-top:2px;word-break:break-all;}
+  .progress{height:8px;background:#22222b;border-radius:999px;overflow:hidden;margin:10px 0 6px;}
+  .progress i{display:block;height:100%;background:#e81088;width:0;transition:width .3s;}
+  a{color:#f3b0d6}
+  .big{font-family:var(--disp);font-size:26px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (max-width:640px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>CUNA PAYOUT</h1>
+  <div class="sub">Owner console. Sends the accrued rewards batch from the connected wallet, one confirmed row at a time.
+    This page can only send <b id="mintSym">CUNA</b> — there is no token selector.</div>
+
+  <div class="card" id="keyCard">
+    <div class="k">OWNER KEY</div>
+    <input type="password" id="key" placeholder="PREMIUM_ACCESS_KEY" autocomplete="off"/>
+    <div style="margin-top:10px"><button id="load">LOAD</button> <span class="muted" id="keyNote"></span></div>
+  </div>
+
+  <div id="app" hidden>
+    <div class="card">
+      <div class="k">STATE</div>
+      <div class="grid2">
+        <div>
+          <div class="row"><span>Program</span><b id="stArmed">—</b></div>
+          <div class="row"><span>Hours accrued</span><b id="stDays">—</b></div>
+          <div class="row"><span>Ever credited</span><b id="stCredited">—</b></div>
+          <div class="row"><span>Ever paid</span><b id="stPaid">—</b></div>
+        </div>
+        <div>
+          <div class="row"><span>Owed right now</span><b id="stOwed">—</b></div>
+          <div class="row"><span>Wallets owed</span><b id="stOwedN">—</b></div>
+          <div class="row"><span>Pending batches</span><b id="stPending">—</b></div>
+          <div class="row"><span>CUNA price</span><b id="stPrice">—</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="k">PROGRAM CONTROLS</div>
+      <div class="grid2">
+        <div>
+          <div class="row"><span>Started</span><b id="ctStarted">—</b></div>
+          <div class="row"><span>Escrows scanned</span><b id="ctScanned">—</b></div>
+          <div class="row"><span>Would pay per day, at today's locks</span><b id="ctWouldPay">—</b></div>
+        </div>
+        <div>
+          <div class="row"><span>Missed hours</span><b id="ctMissed">—</b></div>
+          <div class="row"><span>Last hourly slice</span><b id="ctLast">—</b></div>
+          <div class="row"><span>Ledger written</span><b id="ctLedger">—</b></div>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+        <button id="arm">ARM — start accruing</button>
+        <button class="ghost" id="disarm">DISARM</button>
+        <button class="ghost" id="accrue">ACCRUE TODAY NOW</button>
+        <button class="ghost" id="rescan">RESCAN CHAIN</button>
+      </div>
+      <div class="muted" id="ctNote" style="margin-top:8px">Arming writes the lock ledger and accrues the current hour immediately. Each UTC hour credits 1/24 of the daily pool to whoever qualifies at that hour. It moves no tokens; payouts are always sent from this page by hand.</div>
+      <pre id="ctPay" style="font-family:var(--mono);font-size:12px;white-space:pre-wrap;color:#ccc;max-height:160px;overflow:auto;margin:8px 0 0"></pre>
+    </div>
+
+    <div class="card" id="noBatch" hidden>
+      <div class="k">NO BATCH PENDING</div>
+      <p class="muted">Creating a batch holds every owed amount aside from that moment, so exporting twice can never offer the same money twice.
+        Preview of what it would contain:</p>
+      <pre id="preview" style="font-family:var(--mono);font-size:12px;white-space:pre-wrap;color:#ccc;max-height:220px;overflow:auto"></pre>
+      <button id="create">CREATE BATCH</button>
+    </div>
+
+    <div id="batchWrap" hidden>
+      <div class="card">
+        <div class="k">BATCH <span id="bId" style="font-family:var(--mono);color:#ddd"></span></div>
+        <div class="grid2">
+          <div>
+            <div class="row"><span>State</span><b id="bState">—</b></div>
+            <div class="row"><span>Rows</span><b id="bRows">—</b></div>
+            <div class="row"><span>Total</span><b id="bTotal">—</b></div>
+          </div>
+          <div>
+            <div class="row"><span>Sent so far</span><b id="bSent">—</b></div>
+            <div class="row"><span>Still to send</span><b id="bRemain">—</b></div>
+            <div class="row"><span>Still to send (USD)</span><b id="bRemainUsd">—</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="k">DOUBLE-CHECKS — computed by the server from the ledger and the chain, not by this page</div>
+        <div id="checks"></div>
+        <div class="muted" style="margin-top:8px">Red on a hard check disables sending. Re-run with RELOAD after fixing.</div>
+      </div>
+
+      <div class="card">
+        <div class="k">SENDING WALLET</div>
+        <div id="walletBox"><button id="connect">CONNECT WALLET</button></div>
+        <div id="walletChecks" style="margin-top:8px"></div>
+      </div>
+
+      <div class="card">
+        <div class="k">SEND</div>
+        <p class="muted" id="sendNote">Each transaction that confirms is recorded on the server immediately, row by row, with its signature.
+          If anything fails part-way, the rows that landed are paid and the rest stay owed — press SEND again to send only what is left.</p>
+        <div class="progress"><i id="bar"></i></div>
+        <div class="muted" id="progressText">&nbsp;</div>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+          <button id="send" disabled>SEND REMAINING ROWS</button>
+          <button class="ghost" id="reload">RELOAD</button>
+          <button class="ghost" id="close">CLOSE BATCH — return unsent rows to owed</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="k">ROWS</div>
+        <div style="overflow-x:auto"><table id="rows"><thead><tr><th>wallet</th><th class="num">CUNA</th><th class="num">USD</th><th>status</th><th>tx</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/vendor/solana-web3.iife.min.js"></script>
+<script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
+<script src="/airdrop-engine.js"></script>
+<script>
+(function () {
+  "use strict";
+  var esc = CluckUtil.esc;
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = null, STATE = null, BATCH = null, CHECKS = null, PRICE = null, MINT = null;
+  var WALLET = null, PROVIDER = null, WALLET_BAL = null;   // WALLET_BAL: whole tokens, or null = unknown
+  var SENDING = false, ABORT = false;
+  // wallet -> { status, sig, error } from the current send. PERSISTED per batch: a signature the
+  // server has not yet recorded must survive a reload, or the row shows "TO SEND" with no way to
+  // record it and the money is offered again.
+  var ROW_STATUS = {};
+  function statusKey() { return "cuna_payout_rows_" + (BATCH && BATCH.id); }
+  function saveStatus() { try { localStorage.setItem(statusKey(), JSON.stringify(ROW_STATUS)); } catch (_) {} }
+  function loadStatus() { try { ROW_STATUS = JSON.parse(localStorage.getItem(statusKey()) || "{}") || {}; } catch (_) { ROW_STATUS = {}; } }
+
+  var cuna = function (raw) { return (Number(raw) / 1e9).toLocaleString(undefined, { maximumFractionDigits: 2 }); };
+  var usd = function (raw) {
+    if (!(PRICE > 0)) return "—";               // unknown price is unknown, never $0.00
+    var v = Number(raw) / 1e9 * PRICE;
+    return v < 0.01 ? "<$0.01" : "$" + (v < 1000 ? v.toFixed(2) : Math.round(v).toLocaleString());
+  };
+
+  async function api(params, method) {
+    // Key travels in a header, not the query string, so it never lands in an edge/proxy access log.
+    var url = "/api/cuna-stake/payout";
+    var opts = { method: method || "GET", headers: { "x-premium-key": KEY } };
+    if (method === "POST") { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(params || {}); }
+    else if (params) { var qs = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&"); if (qs) url += "?" + qs; }
+    var r = await fetch(url, opts);
+    var j = null;
+    try { j = await r.json(); } catch (_) {}
+    if (!j) throw new Error("server returned " + r.status + " with no JSON");
+    if (r.status === 404 && j.error === "not_found") throw new Error("wrong key (or reached the origin directly)");
+    if (!j.ok) throw new Error(j.error || ("server returned " + r.status));
+    return j;
+  }
+  async function rpc(method, params) {
+    var r = await fetch("/api/helius-rpc", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: method, params: params }) });
+    var j = await r.json();
+    if (j.error) throw new Error(j.error.message || "rpc error");
+    return j.result;
+  }
+
+  async function admin(params, method) {
+    var url = "/api/cuna-stake/admin";
+    var opts = { method: method || "GET", headers: { "x-premium-key": KEY } };
+    if (method === "POST") { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(params || {}); }
+    else if (params) { var qs = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&"); if (qs) url += "?" + qs; }
+    var r = await fetch(url, opts);
+    var j = null; try { j = await r.json(); } catch (_) {}
+    if (!j) throw new Error("server returned " + r.status + " with no JSON");
+    if (r.status === 404 && j.error === "not_found") throw new Error("wrong key (or reached the origin directly)");
+    if (!j.ok) throw new Error(j.error || ("server returned " + r.status));
+    return j;
+  }
+  function renderAdmin(a) {
+    $("stArmed").textContent = a.armed ? "ARMED" : "disarmed";
+    $("ctStarted").textContent = a.startedAt ? new Date(a.startedAt * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC" : "never";
+    $("ctScanned").textContent = a.scanned;
+    var wp = a.wouldPay || {}; var n = Object.keys(wp).length;
+    var tot = Object.values(wp).reduce(function (x, v) { return x + Number(v); }, 0);
+    $("ctWouldPay").textContent = n + " wallets · " + cuna(String(tot)) + " CUNA";
+    var md = a.missedDays || [];
+    $("ctMissed").innerHTML = md.length ? '<span class="bad">' + md.length + " — " + esc(md.slice(-6).join(", ")) + "</span>" : "none";
+    var days = Object.keys(a.recentDays || {}).sort(); var last = days[days.length - 1];
+    $("ctLast").textContent = last ? last.replace("T", " ") + ":00 UTC · " + (a.recentDays[last].eligible || 0) + " earning · " + cuna(a.recentDays[last].distributedRaw || "0") + " CUNA" : "never";
+    $("ctLedger").textContent = a.ledgerWritten ? "yes" : "no (disarmed)";
+    $("ctPay").textContent = Object.keys(wp).sort(function (x, y) { return Number(wp[y]) - Number(wp[x]); })
+      .map(function (w) { return w + "  " + cuna(wp[w]).padStart(10) + " CUNA"; }).join("\n") || "(nobody qualifies)";
+    $("arm").disabled = !!a.armed; $("disarm").disabled = !a.armed; $("accrue").disabled = !a.armed;
+  }
+  async function loadAdmin() { renderAdmin(await admin()); }
+
+  async function load() {
+    $("keyNote").textContent = "loading…";
+    var d = await api();
+    loadAdmin().catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+    STATE = d; MINT = d.mint;
+    try { var c = await (await fetch("/api/cuna-stake/config")).json(); PRICE = Number(c.priceUsd) > 0 ? Number(c.priceUsd) : null; $("stArmed").textContent = c.armed ? "ARMED" : "disarmed"; } catch (_) { $("stArmed").textContent = "?"; }
+    $("stDays").textContent = d.daysAccrued;
+    $("stCredited").textContent = cuna(d.creditedTotalRaw) + " CUNA";
+    $("stPaid").textContent = cuna(d.totalPaidRaw) + " CUNA";
+    $("stOwed").textContent = cuna(d.owedTotalRaw) + " CUNA · " + usd(d.owedTotalRaw);
+    $("stOwedN").textContent = Object.keys(d.owed || {}).length;
+    $("stPending").textContent = (d.pendingBatches || []).length;
+    $("stPrice").textContent = PRICE ? "$" + PRICE.toPrecision(4) : "unknown";
+    $("keyCard").hidden = true; $("app").hidden = false;
+    var pending = (d.pendingBatches || [])[0];
+    if (pending) { await loadBatch(pending.id); }
+    else { $("batchWrap").hidden = true; $("noBatch").hidden = false; $("preview").textContent = d.previewLines || "(nothing owed)"; $("create").disabled = !d.previewLines; }
+  }
+
+  async function loadBatch(id) {
+    var d = await api({ batch: id });
+    BATCH = d.batch; CHECKS = d.checks || [];
+    loadStatus();
+    // anything the server already knows as sent no longer needs a local record
+    BATCH.rows.forEach(function (r) { if (r.sent) delete ROW_STATUS[r.wallet]; });
+    saveStatus();
+    $("noBatch").hidden = true; $("batchWrap").hidden = false;
+    $("bId").textContent = BATCH.id;
+    $("bState").textContent = BATCH.state.toUpperCase();
+    $("bRows").textContent = BATCH.count;
+    $("bTotal").textContent = cuna(BATCH.totalRaw) + " CUNA · " + usd(BATCH.totalRaw);
+    $("bSent").textContent = (BATCH.rows.filter(function (r) { return r.sent; }).length) + " rows";
+    $("bRemain").textContent = BATCH.remainingCount + " rows · " + cuna(BATCH.remainingRaw) + " CUNA";
+    $("bRemainUsd").textContent = usd(BATCH.remainingRaw);
+    renderChecks(); renderRows(); refreshSendButton();
+  }
+
+  function hardChecksOK() { return (CHECKS || []).every(function (c) { return c.ok || !c.hard; }); }
+  function renderChecks() {
+    $("checks").innerHTML = (CHECKS || []).map(function (c) {
+      return '<div class="check ' + (c.ok ? "ok" : "bad") + (c.hard ? "" : " soft") + '"><span class="dot"></span><div>' + esc(c.label) +
+        (c.detail ? "<small>" + esc(c.detail) + "</small>" : "") + "</div></div>";
+    }).join("") || '<div class="muted">no checks returned</div>';
+  }
+  function renderRows() {
+    var tb = $("rows").querySelector("tbody");
+    tb.innerHTML = BATCH.rows.map(function (r) {
+      var live = ROW_STATUS[r.wallet];
+      var pill, tx = "";
+      var recordBtn = function (sig) { return ' <button class="ghost" data-mark="' + esc(r.wallet) + '" data-sig="' + esc(sig) + '" style="padding:3px 8px;font-size:11px">record on server</button>'; };
+      if (r.sent) { pill = '<span class="pill sent">PAID</span>'; tx = r.sig ? txLink(r.sig) : "manual"; }
+      else if (live && live.status === "sent" && live.sig) {
+        // Confirmed on chain but the server has no record (the POST failed, or the tab closed).
+        // This row must NOT read as "to send".
+        pill = '<span class="pill unc">SENT — NOT RECORDED</span>';
+        tx = txLink(live.sig) + recordBtn(live.sig);
+      }
+      else if (live && live.status === "failed") { pill = '<span class="pill fail">FAILED</span> <small class="muted">' + esc(live.error || "") + "</small>"; }
+      else if (live && live.status === "unconfirmed") {
+        pill = '<span class="pill unc">UNCONFIRMED</span>';
+        tx = txLink(live.sig) + recordBtn(live.sig);
+      }
+      else pill = '<span class="pill owed">TO SEND</span>';
+      return "<tr><td style=\"font-family:var(--mono);font-size:12px;word-break:break-all\">" + esc(r.wallet) + "</td><td class=\"num\">" + esc(cuna(r.raw)) +
+        "</td><td class=\"num\">" + esc(usd(r.raw)) + "</td><td>" + pill + "</td><td>" + tx + "</td></tr>";
+    }).join("");
+    Array.prototype.forEach.call(tb.querySelectorAll("button[data-mark]"), function (b) {
+      b.addEventListener("click", function () {
+        recordRows([{ wallet: b.getAttribute("data-mark"), sig: b.getAttribute("data-sig") }]).then(function (rep) {
+          if (rep && rep.ignored && rep.ignored.length) $("progressText").innerHTML = '<span class="warn">Not recorded: ' + esc(rep.ignored.map(function (x) { return x.why; }).join("; ")) + "</span>";
+          return loadBatch(BATCH.id);
+        }).catch(fail);
+      });
+    });
+  }
+  function txLink(sig) { return '<a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:11px">' + esc(String(sig).slice(0, 10)) + "…</a>"; }
+
+  function refreshSendButton() {
+    var ok = !SENDING && BATCH && BATCH.state === "pending" && BATCH.remainingCount > 0 && hardChecksOK() && WALLET && PROVIDER
+      && WALLET_BAL != null && WALLET_BAL >= Number(BATCH.remainingRaw) / 1e9;
+    $("send").disabled = !ok;
+    $("close").disabled = SENDING || !BATCH || BATCH.state !== "pending";
+    var why = [];
+    if (BATCH && BATCH.state !== "pending") why.push("batch is " + BATCH.state);
+    else if (BATCH && !BATCH.remainingCount) why.push("nothing left to send");
+    if (!hardChecksOK()) why.push("a hard check is red");
+    if (!WALLET) why.push("no wallet connected");
+    else if (WALLET_BAL == null) why.push("could not read the wallet's CUNA balance");
+    else if (BATCH && WALLET_BAL < Number(BATCH.remainingRaw) / 1e9) why.push("wallet holds less CUNA than the remaining total");
+    $("walletChecks").innerHTML = why.length ? '<div class="warn">Send is off: ' + esc(why.join("; ")) + "</div>" : '<div class="ok">Ready to send.</div>';
+  }
+
+  async function readWalletBal() {
+    WALLET_BAL = null;
+    var progs = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"];
+    var res = await Promise.all(progs.map(function (pid) {
+      return rpc("getTokenAccountsByOwner", [WALLET, { mint: MINT, programId: pid }, { encoding: "jsonParsed" }])
+        .then(function (r) { return { ok: true, v: r }; }).catch(function () { return { ok: false }; });
+    }));
+    // ANY failed read leaves the balance unknown. Summing the successful half would report a wallet
+    // holding the full batch as short (or empty), and the send button keys on this number.
+    if (!res.every(function (x) { return x.ok; })) { WALLET_BAL = null; return; }
+    var total = 0;
+    res.forEach(function (x) { ((x.v && x.v.value) || []).forEach(function (a) { total += Number(a.account.data.parsed.info.tokenAmount.uiAmount || 0); }); });
+    WALLET_BAL = total;
+  }
+
+  async function recordRows(rows) {
+    if (!rows.length) return null;
+    var r = await api({ batch: BATCH.id, sent: rows }, "POST");
+    (r.sentReport && r.sentReport.recorded || []).forEach(function (w) { delete ROW_STATUS[w]; });
+    saveStatus();
+    return r.sentReport;
+  }
+
+  function unrecordedSent() {
+    return (BATCH ? BATCH.rows : []).filter(function (r) { var l = ROW_STATUS[r.wallet]; return !r.sent && l && l.status === "sent" && l.sig; });
+  }
+
+  async function send() {
+    if ($("send").disabled) return;
+    if (unrecordedSent().length) { $("progressText").innerHTML = '<span class="bad">Record the SENT — NOT RECORDED rows first (buttons in the table). Sending again would pay them twice.</span>'; return; }
+    SENDING = true; ABORT = false; refreshSendButton();
+    // keep failed/unconfirmed rows from a previous attempt visible; only rows we are about to send are reset
+    BATCH.rows.forEach(function (r) { if (!r.sent && !(ROW_STATUS[r.wallet] && ROW_STATUS[r.wallet].status === "sent")) delete ROW_STATUS[r.wallet]; });
+    saveStatus();
+    var lines = String(BATCH.remainingLines || "").split("\n").filter(Boolean);
+    var recipients = lines.map(function (l) { var p = l.split(","); return { addr: p[0].trim(), amount: p[1].trim() }; });
+    var queue = [], flushing = null;
+    var flush = function () {
+      if (flushing || !queue.length) return flushing || Promise.resolve();
+      var batch = queue.splice(0, queue.length);
+      flushing = recordRows(batch).then(function (rep) {
+        if (rep && rep.ignored && rep.ignored.length) {
+          // the server verified these on chain and refused them — leave them visible with buttons
+          $("progressText").innerHTML = '<span class="warn">Server did not record ' + rep.ignored.length + " row(s): " + esc(rep.ignored.map(function (x) { return x.why; }).join("; ")) + "</span>";
+        }
+      }).catch(function (e) {
+        // A recording failure is the one thing that MUST stop the send: rows that landed but were
+        // not recorded would be offered again in the next batch. ABORT makes the engine stop
+        // before its next wallet prompt; the signatures already collected are persisted locally
+        // and show as SENT — NOT RECORDED with a record button.
+        ABORT = true;
+        $("progressText").innerHTML = '<span class="bad">STOPPED — ' + esc(e.message) + ". Rows that landed are on chain and kept in this browser; use the row buttons to record them before sending anything else.</span>";
+        throw e;
+      }).then(function () { flushing = null; if (queue.length) return flush(); });
+      return flushing;
+    };
+    try {
+      await CluckAirdrop.send({
+        rpc: rpc, mint: MINT, recipients: recipients, walletPubkey: WALLET, provider: PROVIDER,
+        memo: "CUNA lock-to-earn rewards " + BATCH.id,
+        onProgress: function (msg, pct) { $("progressText").textContent = msg; $("bar").style.width = Math.max(0, Math.min(100, pct)) + "%"; },
+        shouldContinue: function () { return !ABORT; },
+        onResult: function (r) {
+          ROW_STATUS[r.addr] = { status: r.status, sig: r.sig, error: r.error };
+          saveStatus();
+          if (r.status === "sent") { queue.push({ wallet: r.addr, sig: r.sig }); flush(); }
+          renderRows();
+        },
+      });
+      await flush();
+    } catch (e) { fail(e); }
+    SENDING = false;
+    await loadBatch(BATCH.id).catch(fail);
+  }
+
+  function fail(e) { $("progressText").innerHTML = '<span class="bad">' + esc((e && e.message) || String(e)) + "</span>"; SENDING = false; refreshSendButton(); }
+
+  $("load").addEventListener("click", function () {
+    KEY = $("key").value.trim(); if (!KEY) return;
+    try { sessionStorage.setItem("cuna_payout_key", KEY); } catch (_) {}
+    load().catch(function (e) { $("keyNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+  });
+  $("create").addEventListener("click", function () {
+    if (!confirm("Create a batch for everything owed? Its amounts are held aside from this moment.")) return;
+    $("create").disabled = true;
+    api({ export: "1" }, "POST").then(function () { return load(); }).catch(fail);
+  });
+  $("reload").addEventListener("click", function () { load().catch(fail); });
+  $("arm").addEventListener("click", function () {
+    if (!confirm("ARM the program? The lock ledger is written and today is accrued immediately. Every qualifying lock starts earning from today. No tokens move.")) return;
+    $("ctNote").textContent = "arming — the first scan reads every escrow's creation time, this can take a minute…";
+    admin({ arm: "1", confirm: "go-live" }, "POST").then(function (a) { renderAdmin(a); $("ctNote").textContent = "ARMED. This hour accrued: " + ((a.accrualRun && a.accrualRun.ok) ? (a.accrualRun.eligible + " earning, " + cuna(a.accrualRun.distributedRaw || "0") + " CUNA credited (1/24 of the daily pool)") : ((a.accrualRun && a.accrualRun.reason) || "see missed hours")); return load(); })
+      .catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+  });
+  $("disarm").addEventListener("click", function () {
+    if (!confirm("DISARM? Accrual stops. The start date and everything earned so far are kept.")) return;
+    admin({ off: "1" }, "POST").then(function (a) { renderAdmin(a); $("ctNote").textContent = "Disarmed."; }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+  });
+  $("accrue").addEventListener("click", function () {
+    admin({ accrue: "1" }, "POST").then(function (a) { renderAdmin(a); var r = a.accrualRun || {}; $("ctNote").textContent = r.ok ? ("Accrued " + r.day + ": " + r.eligible + " earning, " + cuna(r.distributedRaw || "0") + " CUNA credited") : ("Not accrued: " + (r.reason || "?")); return load(); })
+      .catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+  });
+  $("rescan").addEventListener("click", function () {
+    $("ctNote").textContent = "rescanning…";
+    admin({ rescan: "1" }).then(function (a) { renderAdmin(a); $("ctNote").textContent = "Rescanned: " + a.scanned + " escrows."; }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+  });
+  $("close").addEventListener("click", function () {
+    if (!BATCH) return;
+    if (unrecordedSent().length) { alert("Record the SENT — NOT RECORDED rows first. Closing now would return them to owed and pay them twice."); return; }
+    if (!confirm("Close batch " + BATCH.id + "? Rows already sent stay paid. Unsent rows go back to owed.")) return;
+    api({ cancel: BATCH.id }, "POST").then(function () { return load(); }).catch(fail);
+  });
+  $("send").addEventListener("click", function () {
+    if (!confirm("Send " + BATCH.remainingCount + " rows totalling " + cuna(BATCH.remainingRaw) + " CUNA (" + usd(BATCH.remainingRaw) + ") from " + WALLET.slice(0, 8) + "…?")) return;
+    send();
+  });
+  $("connect").addEventListener("click", function () {
+    CluckWallet.connect().then(function (r) {
+      if (!r || !r.pubkey) throw new Error("That wallet did not return an address.");
+      WALLET = r.pubkey; PROVIDER = r.provider;
+      $("walletBox").innerHTML = '<div class="row"><span>Connected</span><b>' + esc(r.name || "wallet") + " · " + esc(r.pubkey) + '</b></div>' +
+        '<div class="row"><span>CUNA in wallet</span><b id="wbal">reading…</b></div><button class="ghost" id="disconnect" style="margin-top:8px">DISCONNECT</button>';
+      $("disconnect").addEventListener("click", function () { try { CluckWallet.disconnect(); } catch (_) {} location.reload(); });
+      return readWalletBal().then(function () {
+        $("wbal").textContent = WALLET_BAL == null ? "could not read — send disabled" : WALLET_BAL.toLocaleString() + " CUNA · " + usd(String(Math.round(WALLET_BAL * 1e9)));
+        refreshSendButton();
+      });
+    }).catch(fail);
+  });
+
+  try { var saved = sessionStorage.getItem("cuna_payout_key"); if (saved) { $("key").value = saved; } } catch (_) {}
+})();
+</script>
+</body>
+</html>

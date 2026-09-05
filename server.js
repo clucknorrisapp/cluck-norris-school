@@ -14,6 +14,24 @@ function secretEqual(a, b) {
   const hb = createHash("sha256").update(b).digest();
   return timingSafeEqual(ha, hb);
 }
+// ── Staging mode ───────────────────────────────────────────────────────────
+// STAGING=1 marks this deploy as NOT production. Staging runs the same code on a public Railway
+// URL with no Cloudflare in front (owner's call, 2026-09-05: keep it simple), so the real risk is
+// not attackers — it is a page that looks EXACTLY like production being mistaken for it, linked
+// to, or screenshotted as real. And a money engine that ticks on two boxes instead of one.
+//   · every HTML page carries a banner that cannot be missed
+//   · X-Robots-Tag: noindex on everything, so it never reaches a search result
+//   · postToX refused outright; Telegram posts prefixed [STAGING]
+//   · EVERY money engine held off — not "inert because a secret is missing", actually off
+// Declared here, above every consumer: a const is not hoisted, and the engine gates below run at
+// module load. Nothing here weakens production — unset (the default) means none of it applies.
+const IS_STAGING = String(process.env.STAGING || "") === "1";
+// Lets a staging box have a bot token + test chat WITHOUT starting the daily automation. Setting
+// TELEGRAM_CHAT_ID is what boots the whole scheduler block — lessons, radar, recap, the graduation
+// watcher, the trade poller — so pointing staging at a test room would otherwise turn it into a
+// second bot running a full schedule, not just a place to try one post.
+const SCHEDULERS_OFF = String(process.env.SCHEDULERS_OFF || "") === "1";
+
 const hatchery = require("./hatchery");
 const securityCoop = require("./securitycoop");
 const whirlpoolMM = require("./whirlpool-mm");
@@ -719,7 +737,10 @@ function liqTimeout(fn, ms) { if (!LIQ_ENGINE_KILLED) return setTimeout(fn, ms);
 // telling you what to do") — deploying this code IS the start. POKE_ENGINE_OFF=1 in
 // Railway is the durable kill; /api/whirlpool/vault/pause?project=poke stops it
 // instantly without a deploy. If MM_OPERATOR_SECRET_TREASURY is unset it no-ops safely.
-const POKE_ENGINE_ON = process.env.POKE_ENGINE_OFF !== "1";
+// ...and never on staging. Without MM_OPERATOR_SECRET_TREASURY it cannot sign, but "safe because
+// a secret is absent" is one typo away from not being safe at all — a copied env var would arm a
+// second engine running the same pools from a box nobody is watching.
+const POKE_ENGINE_ON = process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING;
 const POKE_MINT = "HRvw81mktEraX9gZLTHKeYGaFygCSNKuAwNLVE6Tpump";
 const POKE_QUOTES = [
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
@@ -1578,6 +1599,10 @@ async function deleteTweet(id) {
   } catch (e) { return { ok: false, error: publicErrMsg(e) }; }
 }
 async function postToX(text, opts = {}) {
+  // Staging must never tweet. This sits ABOVE the force carve-out on purpose: the carve-outs
+  // (lock announcements, burn celebrations) pass {force:true} and would otherwise sail straight
+  // past X_AUTOPOST_PAUSED from a staging box. A tweet is the one thing here that cannot be undone.
+  if (IS_STAGING) return { ok: false, staging: true };
   if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true }; // opts.force = scoped carve-out (lock announcements only) — see postLockToX
   if (!xConfigured()) return { ok: false, skipped: true };
   const url = "https://api.x.com/2/tweets";
@@ -2221,6 +2246,10 @@ const TG_WEBHOOK_SECRET = process.env.TELEGRAM_BOT_TOKEN
 async function tgSend(chatId, text, replyTo, opts = {}) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || !chatId) return null;
+  // Marked, not blocked: a staging box pointed at a test room SHOULD be able to post — that is the
+  // point of having one. But if it is ever pointed at the real community room by a copied env var,
+  // the message has to be obviously a test rather than an announcement people act on.
+  if (IS_STAGING) text = "🚧 <b>[STAGING]</b> — test post, ignore\n\n" + text;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -3272,6 +3301,7 @@ app.use((req, res, next) => {
 //   Transform Rule exists, or it will 403 the whole site. Rollout + the exact rule are in
 //   docs/CLOUDFLARE_WAF_RUNBOOK.md. /healthz is exempt (Railway's probe hits the app directly).
 const CF_ORIGIN_SECRET = process.env.CF_ORIGIN_SECRET;
+
 // ── Dedicated game domain (owner bought normiequest.app, 2026-08-22) ───────
 // Requests whose Host is one of these serve Normie Quest at "/" and only see game surfaces —
 // everything else 301s to clucknorris.app. NQ_GAME_HOSTS env overrides the default pair.
@@ -3284,6 +3314,38 @@ const isGameHost = (req) => NQ_GAME_HOSTS.includes(String(req.hostname || "").to
 // sfx,worlds}, /nq-assets, /nq-sw.js, the /normie-quest-x7* sub-pages). Keeping the list tight is
 // what makes the direct-DNS lockdown exemption below a GAME-surface exemption, not a site bypass.
 const NQ_GAME_PATH = /^\/($|\?)|^\/api\/nq\/|^\/normie-quest|^\/nq-assets\/|^\/nq-sw\.js$|^\/vendor\//;
+// ── CUNA staking domain (staking.cunatoken.com, lock.cunatoken.com) ───────
+// Same shape as the game domain above: a partner-owned host pointed straight at Railway, so it
+// cannot carry the Cloudflare edge header and needs a scoped exemption from the origin lockdown.
+// Aliases are just extra entries in this comma-separated list — the exemption is per exact host,
+// so every alias also needs its own custom-domain entry in Railway or it never reaches us. A host
+// that resolves here but is MISSING from this list gets a 403, not the page: that is the correct
+// failure, but it looks like the site is down, so add the env var and the domain together.
+const CUNA_STAKE_HOSTS = String(process.env.CUNA_STAKE_HOSTS || "staking.cunatoken.com,www.staking.cunatoken.com,lock.cunatoken.com,www.lock.cunatoken.com")
+  .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+const isStakeHost = (req) => CUNA_STAKE_HOSTS.includes(String(req.hostname || "").toLowerCase());
+// ⚠️ EXHAUSTIVE, NOT A PREFIX. Every entry is anchored at both ends and names one exact surface the
+// staking page loads or calls. A loose prefix here (say /api/) would be a hole straight through the
+// WAF to every money endpoint in the app, reachable by anyone who points a DNS record at our origin
+// and sends the right Host header. Note what is deliberately ABSENT: /api/cuna-stake/admin — the
+// route that ARMS the emission is not reachable this way at any key, and is refused a second time
+// in its own handler (see cunaDirect below).
+const CUNA_STAKE_PATH = new RegExp([
+  "^/$", "^/cuna-staking$",
+  "^/api/cuna-stake/(config|wallet)$",
+  "^/api/lock/create-tx$",              // builds the UNSIGNED lock tx; the wallet still signs it
+  // The page cannot work without these two. /api/helius-rpc is the balance read AND the send path
+  // (fresh blockhash, then sendTransaction) — it is already public and method-allowlisted, so this
+  // exposes nothing the open internet does not already have. /api/lock/record just tags a lock for
+  // the recent-locks feed.
+  "^/api/helius-rpc$",
+  "^/api/lock/record$",
+  // The signing bundle. Pinned filename, SRI-checked in the page — without it the page loads and
+  // then throws the moment anyone tries to sign.
+  "^/vendor/solana-web3-1\\.95\\.8\\.iife\\.min\\.js$",
+  "^/cluck-util\\.js$", "^/cluck-wallet\\.js$",
+  "^/fonts/LuckiestGuy\\.ttf$",
+].join("|"));
 if (CF_ORIGIN_SECRET) {
   const cfExpectedHash = createHash("sha256").update(CF_ORIGIN_SECRET).digest("hex");
   app.use((req, res, next) => {
@@ -3294,12 +3356,54 @@ if (CF_ORIGIN_SECRET) {
     // but ONLY for game paths, so a spoofed Host header can never reach the rest of the app around
     // the WAF. If/when the owner moves the domain behind Cloudflare with the same Transform Rule,
     // the header check above passes first and this branch simply never runs.
-    if (isGameHost(req) && NQ_GAME_PATH.test(req.path)) return next();
+    if (isGameHost(req) && NQ_GAME_PATH.test(req.path)) { req.cluckDirect = true; return next(); }
+    // Same deal for the CUNA staking host, on the tight allowlist above.
+    if (isStakeHost(req) && CUNA_STAKE_PATH.test(req.path)) { req.cluckDirect = true; return next(); }
     return res.status(403).type("text/plain")
       .send("Forbidden: reach this site through clucknorris.app, not the origin directly.");
   });
-  console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked (game hosts exempt for game paths: " + NQ_GAME_HOSTS.join(", ") + ")");
+  console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked (exempt for their own surfaces only: game hosts " + NQ_GAME_HOSTS.join(", ") + "; staking hosts " + CUNA_STAKE_HOSTS.join(", ") + ")");
 }
+// Staging marking. Mounted before every route so nothing can be served without it — and, in
+// particular, ABOVE the two host routers below. Those answer "/" with res.sendFile and return, so
+// with this block underneath them the banner and the noindex header were missing on exactly the
+// URL a reviewer visits: lock.cunatoken.com/ and normiequest.app/ served unmarked while
+// /cuna-staking on the same host was marked. Order is the whole guarantee here; keep it first.
+if (IS_STAGING) {
+  app.use((req, res, next) => {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+    const BANNER = '<div style="position:fixed;top:0;left:0;right:0;z-index:2147483647;'
+      + 'background:#B45309;color:#fff;font:700 13px/1.5 system-ui,sans-serif;text-align:center;'
+      + 'padding:6px 10px;letter-spacing:.5px;box-shadow:0 2px 8px rgba(0,0,0,.4)">'
+      + 'STAGING — not the live site. Nothing here is real.</div>'
+      + '<div style="height:29px"></div>';
+    const inject = (html) => html.replace(/<body([^>]*)>/i, (m) => m + BANNER);
+
+    const send = res.send.bind(res);
+    res.send = (body) => {
+      // Only touch real HTML documents — never JSON, never an asset, never a partial.
+      const ct = String(res.getHeader("Content-Type") || "");
+      if (typeof body === "string" && /text\/html/i.test(ct) && /<\/body>/i.test(body)) body = inject(body);
+      return send(body);
+    };
+
+    // sendFile does NOT go through res.send — it streams straight from disk. Nearly every page
+    // here is served that way, so wrapping only res.send marked almost nothing. Read the HTML,
+    // inject, and send it as a normal response; non-HTML files stream as before.
+    const sendFile = res.sendFile.bind(res);
+    res.sendFile = (path, ...rest) => {
+      if (!/\.html?$/i.test(String(path))) return sendFile(path, ...rest);
+      let html;
+      try { html = require("fs").readFileSync(path, "utf8"); }
+      catch (_) { return sendFile(path, ...rest); }   // unreadable → behave exactly as before
+      res.type("html");
+      return send(inject(html));
+    };
+    next();
+  });
+  console.log("[boot] STAGING=1 — noindex, banner on every page, X posting refused, Telegram prefixed, money engines held off");
+}
+
 // Host router for the game domain — mounted HERE (before every site route) so the main site's
 // own "/" never wins on normiequest.app. Game paths fall through to the normal routes, which are
 // host-agnostic; anything that is not a game surface bounces to the main site.
@@ -3316,6 +3420,19 @@ app.use((req, res, next) => {
   if (NQ_GAME_PATH.test(req.path) || req.path === "/healthz") return next();
   return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
 });
+
+// Host router for the CUNA staking domain. Mounted before every site route so the main site's "/"
+// never wins on staking.cunatoken.com, and anything that is not a staking surface bounces home.
+app.use((req, res, next) => {
+  if (!isStakeHost(req)) return next();
+  if (req.path === "/" || req.path === "") {
+    res.set("Cache-Control", "public, max-age=0, must-revalidate");
+    return res.sendFile(join(__dirname, "public", "cuna-staking.html"));
+  }
+  if (CUNA_STAKE_PATH.test(req.path) || req.path === "/healthz") return next();
+  return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
+});
+
 
 // ── Lightweight in-memory rate limiting ───────────────────────────────────
 // The /api proxies forward to PAID upstreams (Helius credits, Anthropic,
@@ -10256,6 +10373,1145 @@ app.post("/api/lock/claim-tx", async (req, res) => {
   }
 });
 
+
+// ── CUNA lock-to-earn ──────────────────────────────────────────────────────
+// Lock CUNA on Jupiter Lock for >= 1 year with a >= 6 month cliff and earn a share of the tokens
+// the vesting schedules were releasing anyway. Logic lives in three tested libs:
+//   lib/cuna-staking.js     who qualifies, what a lock weighs, how a day's pool splits
+//   lib/cuna-lock-scan.js   enumerating escrows + the firstSeenAt ledger terms are measured against
+//   lib/cuna-programme.js   armed/disarmed, the config guard, one-day-once accrual
+//
+// ⛔ SHIPS DISARMED (owner, 2026-09-05: "no one earns until I make the announcements"). While
+// disarmed the ledger is NOT written: terms are measured forward from firstSeenAt, so indexing
+// before launch would stamp every existing lock with a date from before the programme existed and
+// the cutoff would then reject them all. Pre-arm scans are PREVIEW ONLY.
+//
+// ⚠️ The scan is getProgramAccounts — unbounded and expensive, and deliberately absent from the
+// /api/helius-rpc allowlist. No public route may trigger one per request: everything here reads
+// through one shared cache with a single in-flight scan.
+const CUNA_STAKE_KV = "cunaStake";              // { armed, startedAt, config }
+const CUNA_STAKE_LEDGER_KV = "cunaStakeLedger"; // { [escrow]: { firstSeenAt, fingerprint, lastSeenAt } }
+const CUNA_STAKE_DAYS_KV = "cunaStakeDays";     // { "YYYY-MM-DD": { distributed, credits } }
+let CUNA_SCAN_CACHE = { at: 0, locks: null, err: null };
+const CUNA_CREATION_RETRIES = new Map();   // escrow -> failed creation lookups (see cunaLocks)
+let CUNA_SCAN_INFLIGHT = null;
+const CUNA_SCAN_TTL_MS = 5 * 60 * 1000;
+
+function cunaProgramme() {
+  const prog = require("./lib/cuna-programme");
+  return prog.readProgramme(kv.get(CUNA_STAKE_KV, null));
+}
+
+// One scan, shared. Callers get the cached locks; a stale cache refreshes in the background of the
+// first caller only. When the programme is armed the refresh also persists the firstSeenAt ledger —
+// that is the ONLY thing that writes it, and it cannot run while disarmed.
+// Live CUNA price, for showing someone what they are about to lock in dollars. Display only —
+// nothing about qualification, weight or a payout may ever read this.
+//
+// Cached for a minute: the page fetches config on load and again after every amount change, and a
+// price that hops between requests makes the figure look unreliable even when it is right.
+//
+// ⚠️ RETURNS null WHEN IT DOES NOT KNOW, never 0. This page has already had one bug of exactly this
+// shape — a failed balance read rendered as "0 CUNA in wallet" for a wallet holding 4,598,496 — and
+// "$0.00" next to someone's lock amount is the same lie in the more dangerous direction.
+let CUNA_PRICE = { at: 0, usd: null };
+async function cunaPriceUsd(mint) {
+  const now = Date.now();
+  if (CUNA_PRICE.usd != null && now - CUNA_PRICE.at < 60 * 1000) return CUNA_PRICE.usd;
+  try {
+    const data = await jupPriceV3([String(mint)]);
+    const p = Number(data && data[String(mint)] && data[String(mint)].usdPrice);
+    // A memecoin has no sane band the way SOL does, so the only check that means anything is that
+    // it is a real positive number.
+    if (Number.isFinite(p) && p > 0) { CUNA_PRICE = { at: now, usd: p }; return p; }
+  } catch (_) { /* fall through — unknown, not zero */ }
+  CUNA_PRICE = { at: now, usd: null };
+  return null;
+}
+
+async function cunaLocks({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && CUNA_SCAN_CACHE.locks && now - CUNA_SCAN_CACHE.at < CUNA_SCAN_TTL_MS) return CUNA_SCAN_CACHE;
+  // During an outage, every public request used to kick off a fresh getProgramAccounts. `at` must
+  // keep meaning "last SUCCESS" (the accrual freshness guard reads it), so failures are throttled
+  // on their own timestamp.
+  if (!force && CUNA_SCAN_CACHE.err && now - (CUNA_SCAN_CACHE.lastAttemptAt || 0) < 60 * 1000) return CUNA_SCAN_CACHE;
+  if (CUNA_SCAN_INFLIGHT) return CUNA_SCAN_INFLIGHT;
+  CUNA_SCAN_INFLIGHT = (async () => {
+    try {
+      const scanLib = require("./lib/cuna-lock-scan");
+      const prog = require("./lib/cuna-programme");
+      const jupLock = require("./lib/jup-lock");
+      const p = cunaProgramme();
+      const P = await jupLock.program();
+      const scanned = await scanLib.scanEscrowsByMint(P, p.config.mint);
+      const nowUnix = Math.floor(Date.now() / 1000);
+      const stored = p.armed ? (kv.get(CUNA_STAKE_LEDGER_KV, {}) || {}) : {};
+      // Credit an early locker from the day they actually locked, not the day we armed. Only for
+      // escrows the ledger has never recorded — an entry that already exists keeps its stamp, so
+      // this is a one-time cost per lock and free on a steady state. The date is the account's own
+      // creation slot, which nobody can move; see the note on mergeLedger for why nothing inside
+      // the escrow is usable here.
+      const unknown = scanned.map((x) => String(x.escrow)).filter((k) => !stored[k]);
+      let createdAt = {};
+      // Disarmed: the ledger is not written, so a creation lookup here is discarded. Every 5-minute
+      // preview used to re-run it for every escrow (up to 5 sequential RPCs each) for nothing.
+      if (unknown.length && p.armed) {
+        try { createdAt = await scanLib.creationTimes(P.provider.connection, unknown); }
+        catch (e) { console.warn("[cuna-stake] creation-time lookup failed, using now: " + e.message); }
+      }
+      const merged = scanLib.mergeLedger({ scanned, ledger: stored, nowUnix, createdAt,
+        backdateCapDays: p.config.backdateCapDays, notBefore: p.config.backdateNotBefore });
+      if (p.armed) {
+        // A NEW row whose creation lookup failed is stamped `now` in memory for this scan but NOT
+        // persisted, so the next scan retries the lookup — UP TO THREE TIMES. After that it is
+        // persisted at `now` and flagged, because a row that is never persisted has a clock that
+        // rolls forward every scan (its term shrinks daily until it earns nothing), and ~$2.50 of
+        // dust transactions to an address is enough to make its lookup fail forever. Persisting
+        // caps what a griefer can cost a locker at the backdating window; the flag plus the
+        // &reindex route let the owner restamp it by hand.
+        const ledger = { ...merged.ledger };
+        const deferred = merged.added.filter((k) => createdAt[k] == null);
+        for (const k of deferred) {
+          const n = (CUNA_CREATION_RETRIES.get(k) || 0) + 1;
+          CUNA_CREATION_RETRIES.set(k, n);
+          if (n < 3) delete ledger[k];
+          else {
+            ledger[k] = { ...ledger[k], creationPending: true };
+            cunaOpsAlert(`⚠️ CUNA lock ${k} recorded at today's date after 3 failed creation lookups — if it was made earlier, restamp it: POST /api/cuna-stake/admin?key=…&reindex=${k}`, `pending:${k}`).catch(() => {});
+          }
+        }
+        if (deferred.length) console.warn(`[cuna-stake] ${deferred.length} new escrow(s) with no creation time (attempt ${Math.max(...deferred.map((k) => CUNA_CREATION_RETRIES.get(k) || 0))}): ${deferred.slice(0, 5).join(", ")}`);
+        kv.set(CUNA_STAKE_LEDGER_KV, ledger);
+        // Tell the community about new qualifying locks (owner, 2026-09-05). Deliberately a
+        // PUBLIC post to the CUNA room — chain facts only, capped, deduped via the ledger. On
+        // staging it goes to the operator chat instead, so a test never reaches the real room.
+        cunaAnnounceLocks({ added: merged.added.filter((k) => ledger[k]), locks: merged.locks, cfg: p.config, ledger, nowUnix })
+          .catch((e) => console.warn("[cuna-announce] " + e.message));
+        if (merged.added.length || merged.reset.length) {
+          const back = merged.added.filter((k) => merged.ledger[k] && merged.ledger[k].backdated).length;
+          console.log(`[cuna-stake] ledger: +${merged.added.length} new (${back} backdated to their on-chain creation), ${merged.reset.length} reset (terms changed at the same address)`);
+        }
+      }
+      CUNA_SCAN_CACHE = { at: Date.now(), locks: merged.locks, err: null, ledger: merged.ledger, armed: p.armed };
+    } catch (e) {
+      console.warn("[cuna-stake] scan failed: " + e.message);
+      // Keep serving the last good scan rather than reporting an empty programme — "nobody
+      // qualifies" and "we could not look" must never render the same way.
+      CUNA_SCAN_CACHE = { ...CUNA_SCAN_CACHE, err: publicErrMsg(e), lastAttemptAt: Date.now() };
+    } finally {
+      CUNA_SCAN_INFLIGHT = null;
+    }
+    return CUNA_SCAN_CACHE;
+  })();
+  return CUNA_SCAN_INFLIGHT;
+}
+
+// Everything the page renders from. No amount is ever hardcoded client-side.
+app.get("/api/cuna-stake/config", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  try {
+    const s = require("./lib/cuna-staking");
+    const p = cunaProgramme();
+    const snap = await cunaLocks();
+    const locks = snap.locks || [];
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const unlock = s.dailyUnlockRaw(locks, nowUnix, p.config.fundedBy);
+    const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct,
+      fixedRaw: p.config.poolDailyRaw, maxSharePct: p.config.maxSharePct });
+    const eligible = locks.filter((l) => s.qualifies(l, p.config));
+    let lockedRaw = 0n;
+    for (const l of eligible) lockedRaw += BigInt(l.atRiskRaw);
+    return res.status(200).json({
+      ok: true,
+      armed: p.armed,
+      startedAt: p.startedAt,
+      mint: p.config.mint,
+      decimals: 9,
+      terms: {
+        minDurationDays: p.config.minDurationDays,
+        // The ceiling as well as the floor. The page builds its ladder AND its "6x is the most any
+        // lock earns" line from these two, so the copy cannot drift from the rule that judges a
+        // lock — which is the whole reason neither is hardcoded in the page.
+        maxTermDays: p.config.maxTermDays,
+        minLockRaw: p.config.minLockRaw,
+        maxWalletSharePct: p.config.maxWalletSharePct,
+        sharePct: p.config.sharePct,
+        poolDailyRaw: p.config.poolDailyRaw,
+        cancelableAllowed: false,   // owner, 2026-09-05 — a lock you can undo is not a commitment
+      },
+      // Display only, and null when we could not read it. See cunaPriceUsd.
+      priceUsd: await cunaPriceUsd(p.config.mint).catch(() => null),
+      dailyUnlockRaw: unlock.toString(),
+      poolTodayRaw: pool.toString(),
+      totalQualifyingRaw: lockedRaw.toString(),
+      qualifyingLocks: eligible.length,
+      scannedLocks: locks.length,
+      scanAgeSec: snap.at ? Math.floor((Date.now() - snap.at) / 1000) : null,
+      scanError: snap.err || null,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+// One wallet's locks, each with a plain-English verdict. Address is a lookup key only — no
+// signature needed, because nothing here is private: it is all public chain state.
+app.get("/api/cuna-stake/wallet", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const s = require("./lib/cuna-staking");
+    const addr = String(req.query.address || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) {
+      return res.status(400).json({ ok: false, error: "Connect a wallet first." });
+    }
+    const p = cunaProgramme();
+    const snap = await cunaLocks();
+    const nowUnix = Math.floor(Date.now() / 1000);
+    // "We could not look" and "you have no locks" must never render the same way. A cold
+    // container whose first scan failed has locks == null; say so, do not invent zeros.
+    if (snap.locks == null) {
+      return res.status(503).json({ ok: false, error: "Could not read the chain just now — try again in a minute.", scanError: snap.err || "no scan yet" });
+    }
+    const mine = snap.locks.filter((l) => l.recipient === addr);
+    const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+    let accrued = 0n;
+    for (const d of Object.values(days)) {
+      const c = d && d.credits && d.credits[addr];
+      if (c) accrued += BigInt(c);
+    }
+    // What is actually still to come: accrued minus what has been SENT minus what is held in a
+    // pending batch. Showing lifetime credits as "waiting to be sent" told every paid wallet it
+    // was still owed everything, forever.
+    const pay = require("./lib/cuna-payout");
+    const paidMap = kv.get(CUNA_PAID_KV, {}) || {};
+    const batchMap = kv.get(CUNA_BATCH_KV, {}) || {};
+    let paidRaw = 0n; try { paidRaw = BigInt(paidMap[addr] || 0); } catch (_) {}
+    let pendingRaw = 0n;
+    for (const b of Object.values(batchMap)) {
+      if (!b || b.state !== "pending" || !b.amounts || !b.amounts[addr] || (b.sent && b.sent[addr])) continue;
+      try { pendingRaw += BigInt(b.amounts[addr]); } catch (_) {}
+    }
+    const owedRaw = pay.owedNow({ days, paid: paidMap, pending: batchMap })[addr] || 0n;
+    const claim = s.claimableFor({ accruedRaw: owedRaw.toString(), locks: mine, nowUnix });
+    let earningRaw = 0n, readyRaw = 0n, totalRaw = 0n;
+    for (const l of mine) {
+      const sp = s.splitOf(l, nowUnix);
+      totalRaw += BigInt(sp.totalRaw);
+      readyRaw += BigInt(sp.vestedUnclaimedRaw);
+      if (s.qualifies(l, p.config)) earningRaw += BigInt(sp.unvestedRaw);
+    }
+    return res.status(200).json({
+      ok: true,
+      armed: p.armed,
+      locks: mine.map((l) => ({
+        escrow: l.escrow,
+        amountRaw: l.atRiskRaw,
+        // The three quantities, so the page can show what someone is ACTUALLY earning on rather
+        // than a "total locked" that includes tokens they could withdraw this second.
+        split: s.splitOf(l, nowUnix),
+        cliffTime: l.cliffTime,
+        fullyVestedAt: l.fullyVestedAt,
+        firstSeenAt: l.firstSeenAt,
+        qualifies: s.qualifies(l, p.config),
+        // "earning" is qualifies AND armed. The page used to show a green EARNING pill on a
+        // disarmed programme because nothing distinguished "would earn" from "is earning".
+        earning: p.armed && s.qualifies(l, p.config),
+        reasons: s.disqualify(l, p.config),
+        // cfg matters: without it this falls back to the DEFAULT ceiling rather than the configured
+        // one, so a changed maxTermDays would make the weight SHOWN drift from the weight PAID.
+        weight: s.weightOf(l, nowUnix, p.config).toString(),
+      })),
+      accruedRaw: accrued.toString(),
+      paidRaw: paidRaw.toString(),
+      pendingRaw: pendingRaw.toString(),
+      owedRaw: owedRaw.toString(),
+      scanAgeSec: Math.round((Date.now() - snap.at) / 1000),
+      scanError: snap.err || null,
+      // What the rewards are actually computed on, versus what a naive "total locked" would say.
+      earningOnRaw: earningRaw.toString(),
+      readyToClaimRaw: readyRaw.toString(),
+      totalLockedRaw: totalRaw.toString(),
+      claimableRaw: claim.claimable.toString(),
+      cliffPassed: claim.cliffPassed,
+      unlocksAt: claim.unlocksAt,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+// Owner-only: arm, disarm, tune, and inspect. 404 when the key is unset or wrong, like every
+// other admin surface here. ARMING IS THE GO-LIVE — it is what starts the emission.
+app.all("/api/cuna-stake/admin", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  // Belt and braces on top of the allowlist: a request that reached us WITHOUT traversing
+  // Cloudflare (the partner-domain exemption) can never arm the emission, whatever key it carries.
+  // The allowlist already omits this path; this is the check that holds if someone widens it.
+  if (req.cluckDirect) return res.status(404).json({ ok: false, error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+  try {
+    const prog = require("./lib/cuna-programme");
+    const s = require("./lib/cuna-staking");
+    const q = { ...(req.query || {}), ...(req.body || {}) };
+    let stored = kv.get(CUNA_STAKE_KV, null);
+    // Anything that changes the programme is POST-only. A GET that arms an emission is one pasted
+    // link away from running — link-preview bots fetch URLs in chats, browsers prerender history.
+    const mutating = String(q.arm || "") === "1" || String(q.off || "") === "1" || String(q.config || "") === "1"
+      || String(q.accrue || "") === "1" || q.reindex;
+    if (mutating && req.method !== "POST") {
+      return res.status(405).json({ ok: false, error: "this changes the programme — send it as a POST" });
+    }
+    // Repair route for a ledger row: drops the escrow's firstSeenAt so the next scan re-stamps it
+    // (backdated to its on-chain creation if that lookup succeeds). The only way to fix a row that
+    // was stamped at arm time because the creation lookup failed that day.
+    if (q.reindex) {
+      const led = kv.get(CUNA_STAKE_LEDGER_KV, {}) || {};
+      const k = String(q.reindex);
+      if (!led[k]) return res.status(404).json({ ok: false, error: "no ledger row for " + k });
+      delete led[k];
+      kv.set(CUNA_STAKE_LEDGER_KV, led);
+      CUNA_SCAN_CACHE = { at: 0, locks: null, err: null };
+      console.log(`[cuna-stake] ledger row DROPPED for ${k} — will be re-stamped on the next scan`);
+    }
+
+    if (String(q.config || "") === "1") {
+      const patch = {};
+      for (const k of ["sharePct", "minDurationDays", "minLockRaw", "maxWalletSharePct",
+                       "poolDailyRaw", "maxSharePct"]) if (q[k] != null) patch[k] = q[k];
+      if (q.excludeWallets != null) {
+        patch.excludeWallets = String(q.excludeWallets).split(",").map((x) => x.trim()).filter(Boolean);
+      }
+      if (q.fundedBy != null) {
+        patch.fundedBy = String(q.fundedBy).split(",").map((x) => x.trim()).filter(Boolean);
+      }
+      // validateConfig throws on anything nonsensical — a bad share or a typo'd address is an
+      // emission-sized mistake, so it is refused rather than stored and discovered in a payout.
+      const config = prog.validateConfig(patch, (prog.readProgramme(stored).config));
+      stored = { ...(stored || {}), config };
+      kv.set(CUNA_STAKE_KV, stored);
+      CUNA_SCAN_CACHE = { at: 0, locks: CUNA_SCAN_CACHE.locks, err: null };   // terms changed, re-judge
+      console.log(`[cuna-stake] config updated: ${JSON.stringify(config)}`);
+    }
+
+    // Arming needs BOTH flags in the same call. One typo'd query param must not be able to start
+    // an emission — the same two-key posture the liquidity engines use for going live.
+    if (String(q.arm || "") === "1") {
+      if (String(q.confirm || "") !== "go-live") {
+        return res.status(400).json({ ok: false, error: "arming needs &arm=1&confirm=go-live — two flags on purpose" });
+      }
+      stored = prog.arm(stored, Math.floor(Date.now() / 1000));
+      kv.set(CUNA_STAKE_KV, stored);
+      CUNA_SCAN_CACHE = { at: 0, locks: null, err: null };   // next scan writes the ledger for real
+      console.log(`[cuna-stake] ARMED at ${stored.startedAt} — the emission has started`);
+      // Accrue the arm day NOW rather than on the next hourly tick: armed at 23:30 with the tick at
+      // 00:15 meant launch day was never accrued and (until missedDays was fixed) never reported.
+      q.accrue = "1";
+    } else if (String(q.off || "") === "1") {
+      stored = prog.disarm(stored);
+      kv.set(CUNA_STAKE_KV, stored);
+      console.log("[cuna-stake] DISARMED — accrual stopped, start date kept");
+    }
+
+    const p = prog.readProgramme(stored);
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const snap = await cunaLocks({ force: String(q.rescan || "") === "1" });
+    const locks = snap.locks || [];
+    const unlock = s.dailyUnlockRaw(locks, nowUnix, p.config.fundedBy);
+    const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct,
+      fixedRaw: p.config.poolDailyRaw, maxSharePct: p.config.maxSharePct });
+    const preview = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: p.config });
+    // Manual accrual, for catching up a day the timer missed or for verifying a config change
+    // took. Same gate as the timer: it still refuses a day already accrued.
+    let ranNow = null;
+    if (String(q.accrue || "") === "1") ranNow = await cunaAccrualTick("manual");
+
+    const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+    return res.status(200).json({
+      ok: true,
+      armed: p.armed,
+      accrualRun: ranNow,
+      missedDays: prog.missedSlices({ programme: stored, paidDays: days, nowUnix }),   // hourly slice keys
+      slicesAccrued: Object.keys(days).length,
+      recentDays: Object.fromEntries(Object.keys(days).sort().slice(-7).map((k) => [k, days[k]])),
+      startedAt: p.startedAt,
+      config: p.config,
+      scanned: locks.length,
+      ledgerWritten: snap.armed === true,
+      dailyUnlockRaw: unlock.toString(),
+      poolTodayRaw: pool.toString(),
+      // What TODAY would pay if a day were accrued now. Preview only — it writes nothing.
+      wouldPay: Object.fromEntries(Object.entries(preview.credits).map(([k, v]) => [k, v.toString()])),
+      eligible: preview.eligible,
+      skipped: preview.skipped,
+      daysAccrued: Object.keys(days).length,
+      scanError: snap.err || null,
+    });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+// The CUNA brand display face. It lives with the gif-forge scenes (tools/gif-forge/assets) so the
+// page and the generated art take their lettering from the SAME file and cannot drift apart — and
+// tools/ is not under public/, so it needs an explicit route to be reachable at all.
+
+// ── CUNA accrual scheduler ─────────────────────────────────────────────────
+// Once per UTC day, work out who is owed what and WRITE IT DOWN. That is all.
+//
+// ⛔ THIS MOVES NO TOKENS. Rewards are not minted — every one comes out of the treasury's own
+// vesting stream, so paying them is a transfer the owner signs. This job only ever writes a ledger.
+// If you are adding a payout here, stop: it belongs behind an explicit owner action, not a timer.
+//
+// ⚠️ Deliberately NOT inside the TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID scheduler block. Everything in
+// there silently does not start when either env var is missing, which is the first thing to check
+// when "the bot isn't doing X" — and an accrual that quietly stops because a chat id is unset would
+// mean people earning nothing with no error anywhere.
+//
+// Runs hourly rather than daily: a once-a-day timer that fires while the app happens to be
+// redeploying loses the day outright, and a missed day cannot be reconstructed (weight is amount x
+// days remaining, so replaying it against today's locks pays the wrong people). The UTC-day key in
+// accrualGate is what makes the extra ticks harmless.
+// Every 10 minutes, not hourly: a slice is credited at the first tick inside its hour and the gate
+// refuses the rest, so an hour is only ever missed if the app is down for the whole of it.
+const CUNA_ACCRUAL_TICK_MS = 10 * 60 * 1000;
+
+async function cunaAccrualTick(reason) {
+  const prog = require("./lib/cuna-programme");
+  const s = require("./lib/cuna-staking");
+  const stored = kv.get(CUNA_STAKE_KV, null);
+  const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+  const nowUnix = Math.floor(Date.now() / 1000);
+
+  const gate = prog.accrualGate({ programme: stored, paidDays: days, nowUnix });
+  if (!gate.ok) {
+    // Disarmed and already-accrued are the normal cases and must stay quiet — this runs hourly.
+    if (!/not armed|already accrued/.test(gate.reason)) {
+      console.warn(`[cuna-accrual] not accruing: ${gate.reason}`);
+    }
+    return { ok: false, reason: gate.reason };
+  }
+
+  // A day is written from a FRESH, SUCCESSFUL, PLAUSIBLE scan or not at all. The old guard only
+  // fired when there had never been a good scan: after that, a failed rescan kept serving the
+  // previous locks and the day was written from a snapshot that could be a week old, and an
+  // empty-but-successful scan wrote "nobody qualified" — both permanent, since a written day is
+  // never redone. Skipping leaves the day unwritten, and missedDays reports it until it runs.
+  const tickStart = Date.now();
+  const snap = await cunaLocks({ force: true });
+  const skip = (why) => {
+    console.error(`[cuna-accrual] SKIPPING ${gate.day} — ${why}`);
+    cunaOpsAlert(`⚠️ CUNA accrual skipped ${gate.day}: ${why}. The day stays unwritten; it will retry hourly.`, `skip:${gate.day}:${why.slice(0, 40)}`).catch(() => {});
+    return { ok: false, reason: why };
+  };
+  if (snap.err) return skip(`the chain read failed: ${snap.err}`);
+  if (!snap.locks || snap.at < tickStart) return skip("no fresh scan this tick");
+  const locks = snap.locks;
+  // Rows SEEN IN THE LAST WEEK, not the all-time ledger: closed escrows stay in the ledger forever
+  // (deleting would restart a clock), so measuring against every row ever indexed would wedge
+  // accrual for good once half the locks had matured and been closed.
+  const known = Object.values(kv.get(CUNA_STAKE_LEDGER_KV, {}) || {})
+    .filter((r) => r && Number(r.lastSeenAt || 0) >= nowUnix - 7 * 86400).length;
+  if (locks.length === 0) return skip("the scan returned zero escrows (the treasury's own locks always exist)");
+  if (known >= 10 && locks.length * 2 < known) return skip(`the scan returned ${locks.length} escrows but the ledger knows ${known} — index lag or a layout change`);
+  const unlock = s.dailyUnlockRaw(locks, nowUnix, gate.config.fundedBy);
+  const dailyPool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: gate.config.sharePct,
+    fixedRaw: gate.config.poolDailyRaw, maxSharePct: gate.config.maxSharePct });
+  // This HOUR's share of the daily pool (the last hour of the day carries the rounding remainder).
+  const pool = prog.slicePoolRaw(dailyPool.toString(), gate.sliceIndex);
+  const day = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: gate.config });
+
+  days[gate.day] = {
+    at: nowUnix,
+    sliceIndex: gate.sliceIndex,
+    dailyPoolRaw: dailyPool.toString(),
+    poolRaw: pool.toString(),
+    dailyUnlockRaw: unlock.toString(),
+    sharePct: gate.config.sharePct,
+    distributedRaw: day.distributed.toString(),
+    undistributedRaw: day.undistributed.toString(),
+    eligible: day.eligible,
+    scanned: locks.length,
+    credits: Object.fromEntries(Object.entries(day.credits).map(([k, v]) => [k, v.toString()])),
+  };
+  kv.set(CUNA_STAKE_DAYS_KV, days);
+
+  const missed = prog.missedSlices({ programme: stored, paidDays: days, nowUnix });
+  const line = `${gate.day} (${reason}): ${day.eligible} earning, ` +
+    `${(Number(day.distributed) / 1e9).toFixed(0)} CUNA credited this hour, ` +
+    `${(Number(day.undistributed) / 1e9).toFixed(0)} undistributed` +
+    (missed.length ? ` — ⚠️ ${missed.length} EARLIER HOUR(S) NEVER RAN: ${missed.slice(-5).join(", ")}` : "");
+  console.log(`[cuna-accrual] ${line}`);
+  // A human-readable line once a DAY (on the day's last slice), not 24 times: the day's total,
+  // how many of its slices ran, and anything missed. Skips still alert immediately.
+  if (gate.sliceIndex === prog.SLICES_PER_DAY - 1) {
+    const dayPrefix = gate.day.slice(0, 10);
+    const slices = Object.keys(days).filter((k) => k.startsWith(dayPrefix + "T"));
+    const total = slices.reduce((a, k) => a + BigInt(days[k].distributedRaw || 0), 0n);
+    cunaOpsAlert(`📒 CUNA accrual ${dayPrefix}: ${slices.length}/${prog.SLICES_PER_DAY} hourly slices ran, ${(Number(total) / 1e9).toLocaleString()} CUNA credited` +
+      (missed.length ? `, ⚠️ ${missed.length} hour(s) missed since arming` : "")).catch(() => {});
+  }
+  return { ok: true, day: gate.day, ...days[gate.day], missed };
+}
+
+// Operator-chat line for the staking programme. SILENT (no &loud=1 — never without an owner ask).
+// Goes to CUNA_OPS_CHAT_ID if set, else the main TELEGRAM_CHAT_ID; tgSend already no-ops when the
+// bot token is missing and prefixes [STAGING] on the staging box.
+// New-lock announcements. The decision (which locks, what text) is pure in lib/cuna-announce.js;
+// this posts it and remembers it. Cap is per process-hour; the ledger's announcedAt is the durable
+// dedupe, so a restart cannot re-announce.
+const CUNA_ANNOUNCE_TIMES = [];
+async function cunaAnnounceLocks({ added, locks, cfg, ledger, nowUnix }) {
+  if (!added || !added.length) return;
+  const ann = require("./lib/cuna-announce");
+  const s = require("./lib/cuna-staking");
+  const now = Date.now();
+  while (CUNA_ANNOUNCE_TIMES.length && now - CUNA_ANNOUNCE_TIMES[0] > 3600 * 1000) CUNA_ANNOUNCE_TIMES.shift();
+  const posts = ann.pickAnnouncements({
+    added, locks, cfg, staking: s, nowUnix, ledger, maxPerHour: 10, recentAnnounced: CUNA_ANNOUNCE_TIMES.length,
+    url: process.env.CUNA_STAKE_URL || "https://staking.cunatoken.com",
+  });
+  if (!posts.length) return;
+  // Staging never posts to the real room. Production posts to the CUNA community room — the one
+  // public surface this programme has, by the owner's explicit ask.
+  const room = IS_STAGING ? (process.env.CUNA_OPS_CHAT_ID || operatorChatId() || OPERATOR_DM_FALLBACK) : CUNA_PUBLIC_ROOM;
+  const led = kv.get(CUNA_STAKE_LEDGER_KV, {}) || {};
+  for (const post of posts) {
+    try {
+      const r = await tgSend(room, post.text, null, { silent: true });   // SILENT — never &loud without an owner ask
+      CUNA_ANNOUNCE_TIMES.push(Date.now());
+      if (led[post.escrow]) { led[post.escrow] = { ...led[post.escrow], announcedAt: nowUnix }; }
+      console.log(`[cuna-announce] ${post.escrow} -> ${IS_STAGING ? "operator chat (staging)" : "CUNA room"}${r ? "" : " (no bot token — not sent)"}`);
+    } catch (e) { console.warn(`[cuna-announce] ${post.escrow} failed: ${e.message}`); }
+  }
+  kv.set(CUNA_STAKE_LEDGER_KV, led);
+}
+
+const CUNA_ALERT_SEEN = new Map();   // dedupe key -> unix; the same alert is not repeated within 6h
+async function cunaOpsAlert(text, dedupeKey) {
+  // NEVER the public community chat. TELEGRAM_CHAT_ID is the room the whole community reads, and
+  // this repo already had one incident of an internal alert falling back to it. The private path
+  // is the operator chat the treasury vault uses, then the owner's DM.
+  const chat = process.env.CUNA_OPS_CHAT_ID || operatorChatId() || OPERATOR_DM_FALLBACK;
+  if (!chat) return null;
+  if (dedupeKey) {
+    const now = Date.now();
+    const last = CUNA_ALERT_SEEN.get(dedupeKey) || 0;
+    if (now - last < 6 * 60 * 60 * 1000) return null;
+    CUNA_ALERT_SEEN.set(dedupeKey, now);
+  }
+  return tgSend(chat, text, null, { silent: true });
+}
+
+// If the PREVIOUS full hour was never accrued while armed, say so once per hour. The ten-minute
+// tick retries on its own; this is the line that stops a lost hour being discovered on Friday.
+let CUNA_ACCRUAL_ALERTED_SLICE = null;
+setInterval(() => {
+  try {
+    const prog = require("./lib/cuna-programme");
+    const p = prog.readProgramme(kv.get(CUNA_STAKE_KV, null));
+    if (!p.armed) return;
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const prev = prog.sliceKey(nowUnix - 3600);
+    if (prev < prog.sliceKey(p.startedAt)) return;             // before the arm hour
+    if (new Date().getUTCMinutes() < 20) return;                // give the current hour's tick a chance first
+    const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+    if (days[prev] || CUNA_ACCRUAL_ALERTED_SLICE === prev) return;
+    CUNA_ACCRUAL_ALERTED_SLICE = prev;
+    cunaOpsAlert(`🚨 CUNA accrual did NOT run for the hour ${prev}. The tick keeps retrying every 10 minutes, but if the chain read is failing nobody earns until it is fixed — check /api/cuna-stake/admin.`, `wd:${prev}`).catch(() => {});
+  } catch (e) { console.warn("[cuna-accrual] watchdog: " + e.message); }
+}, 10 * 60 * 1000);
+
+// Hourly, plus one shortly after boot so a redeploy that spans midnight still catches the new day.
+// Both are wrapped: an unhandled rejection in a timer takes the whole process down on Node >= 15.
+setInterval(() => { cunaAccrualTick("hourly").catch((e) => console.error("[cuna-accrual] " + e.message)); },
+  CUNA_ACCRUAL_TICK_MS);
+setTimeout(() => { cunaAccrualTick("boot").catch((e) => console.error("[cuna-accrual] " + e.message)); },
+  90 * 1000);
+
+
+// ── CUNA daily burn ────────────────────────────────────────────────────────
+// Burn a fixed amount of CUNA from the treasury once per UTC day, at a set hour.
+// Owner, 2026-09-05: "we would burn 690K tokens per day same time per day from cuna dev wallet"
+// (confirmed same day that the dev wallet IS the treasury).
+//
+// ⛔ THIS DESTROYS TOKENS AND CANNOT BE UNDONE. It ships DISARMED and needs THREE separate things
+// before it can act: armed:true in kv, a CUNA_BURN_SECRET in the environment, and a configured
+// wallet. Decisions live in lib/cuna-burn.js and are unit-tested; this half only executes what
+// burnGate() authorises.
+//
+// ⚠️ CUNA_BURN_SECRET is deliberately its OWN env var even though it holds the same treasury key
+// as MM_OPERATOR_SECRET_TREASURY. Turning on the burner must be a separate, deliberate act — one
+// key should never quietly gain the power to destroy supply because a different feature was armed.
+// Durable stop: CUNA_BURN_OFF=1.
+const CUNA_BURN_KV = "cunaBurn";          // { armed, armedAt, config }
+const CUNA_BURN_DAYS_KV = "cunaBurnDays"; // { "YYYY-MM-DD": { sig, amountRaw, at } }
+const CUNA_BURN_TICK_MS = 30 * 60 * 1000;
+
+
+// Claim the treasury's own vested CUNA out of its Jupiter escrows and into its wallet, enough to
+// cover `needRaw` plus a few days of headroom. Own escrow -> own wallet: nothing leaves the
+// treasury and nothing is destroyed, which is why this is far safer than the burn it feeds.
+//
+// One transaction per escrow, so lib/cuna-burn.js:planClaims picks the fewest (biggest first)
+// rather than claiming all thirty locks every day.
+async function cunaClaimIntoWallet({ cfg, secret, needRaw }) {
+  const burnLib = require("./lib/cuna-burn");
+  const jupLock = require("./lib/jup-lock");
+  const { Keypair, VersionedTransaction, Transaction } = require("@solana/web3.js");
+  const bs58 = require("bs58");
+  const { connection } = require("./lib/rpc");
+  const conn = connection("confirmed");
+
+  const signer = Keypair.fromSecretKey(bs58.decode(String(secret).trim()));
+  if (signer.publicKey.toBase58() !== cfg.wallet) throw new Error("signing key does not match the configured wallet");
+
+  const escrows = await jupLock.listClaimable(cfg.wallet, cfg.mint);
+  // Five days of headroom, so this signs transactions roughly weekly rather than daily.
+  const plan = burnLib.planClaims(escrows, { needRaw, headroomRaw: (BigInt(cfg.amountRaw) * 5n).toString() });
+  if (!plan.claims.length) return { claimedRaw: "0", sigs: [], shortfallRaw: plan.shortfallRaw };
+
+  const sigs = [];
+  let claimedRaw = 0n;
+  for (const c of plan.claims) {
+    const built = await jupLock.buildClaimTx({ recipient: cfg.wallet, escrow: c.escrow });
+    if (!built || !built.ok) throw new Error(`could not build a claim for ${c.escrow}`);
+    const raw = Buffer.from(built.txBase64, "base64");
+    // buildClaimTx hands back an unsigned tx; refresh the blockhash before signing, because one
+    // built minutes ago has already started expiring. That failure mode has bitten here before.
+    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+    let tx;
+    try { tx = VersionedTransaction.deserialize(raw); tx.message.recentBlockhash = blockhash; tx.sign([signer]); }
+    catch (_) { tx = Transaction.from(raw); tx.recentBlockhash = blockhash; tx.feePayer = signer.publicKey; tx.sign(signer); }
+    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 3 });
+    // Confirm before counting it — a returned signature is RPC acceptance, not landing.
+    const conf = await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    if (conf && conf.value && conf.value.err) throw new Error(`claim ${sig} failed on-chain`);
+    sigs.push(sig);
+    claimedRaw += BigInt(c.claimableRaw);
+    console.log(`[cuna-burn] claimed ${(Number(c.claimableRaw) / 1e9).toLocaleString()} CUNA from ${c.escrow.slice(0, 8)}… — ${sig}`);
+  }
+  return { claimedRaw: claimedRaw.toString(), sigs, shortfallRaw: plan.shortfallRaw };
+}
+
+let CUNA_BURN_INFLIGHT = false;
+async function cunaBurnTick(reason) {
+  // Staging never burns. The secret is meant to be absent there, but "meant to be" is not a gate
+  // — POKE has the same check for the same reason (a money engine ticking on two boxes).
+  if (IS_STAGING) return { ok: false, reason: "staging never burns" };
+  if (String(process.env.CUNA_BURN_OFF || "") === "1") return { ok: false, reason: "CUNA_BURN_OFF=1" };
+  // One burn in flight at a time. The day record is written only after confirmation, and a manual
+  // &run=1 landing while the 30-minute timer's tick was waiting on a claim or a confirm used to pass
+  // the "not burned today" gate a second time.
+  if (CUNA_BURN_INFLIGHT) return { ok: false, reason: "a burn is already in flight" };
+  CUNA_BURN_INFLIGHT = true;
+  try { return await cunaBurnTickInner(reason); } finally { CUNA_BURN_INFLIGHT = false; }
+}
+async function cunaBurnTickInner(reason) {
+  const burnLib = require("./lib/cuna-burn");
+  const stored = kv.get(CUNA_BURN_KV, null);
+  const done = kv.get(CUNA_BURN_DAYS_KV, {}) || {};
+  const nowUnix = Math.floor(Date.now() / 1000);
+
+  // Resolve a day left in "sending": a burn whose transaction was sent but whose confirmation
+  // threw (blockheight exceeded, RPC timeout). Sending again would burn twice, so ask the chain
+  // what happened to THAT signature first, and only drop the reservation if it definitely never
+  // landed.
+  for (const [day, rec] of Object.entries(done)) {
+    if (!rec || rec.state !== "sending") continue;
+    try {
+      const { connection } = require("./lib/rpc");
+      const conn = connection("confirmed");
+      if (rec.sig) {
+        const st = await conn.getSignatureStatuses([rec.sig], { searchTransactionHistory: true });
+        const v = st && st.value && st.value[0];
+        if (v && !v.err && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")) {
+          done[day] = { ...rec, state: "done", resolvedAt: nowUnix };
+          kv.set(CUNA_BURN_DAYS_KV, done);
+          console.log(`[cuna-burn] ${day}: earlier send ${rec.sig} DID land — recorded, not re-sent`);
+          continue;
+        }
+        if (v && v.err) { delete done[day]; kv.set(CUNA_BURN_DAYS_KV, done); console.warn(`[cuna-burn] ${day}: earlier send failed on-chain — will retry`); continue; }
+        // A status of any kind ("processed" included) means the transaction is on the ledger and
+        // may still confirm — never release on that. Only a NULL status past its blockhash, with
+        // a margin for a node that is behind, can never land.
+        if (v) return { ok: false, reason: `${day}: earlier send is ${v.confirmationStatus || "processed"}, waiting (${rec.sig})` };
+        const bh = rec.lastValidBlockHeight ? await conn.getBlockHeight("confirmed") : null;
+        if (bh != null && bh > rec.lastValidBlockHeight + 150) { delete done[day]; kv.set(CUNA_BURN_DAYS_KV, done); console.warn(`[cuna-burn] ${day}: earlier send expired unconfirmed — will retry`); }
+        else return { ok: false, reason: `${day}: waiting for an earlier send to confirm or expire (${rec.sig})` };
+      } else if (nowUnix - (rec.at || 0) > 10 * 60) {
+        // Reserved but no signature ever recorded: the process died between reserving and sending.
+        delete done[day]; kv.set(CUNA_BURN_DAYS_KV, done);
+        console.warn(`[cuna-burn] ${day}: stale reservation with no signature — released`);
+      } else return { ok: false, reason: `${day}: a send is being prepared` };
+    } catch (e) { return { ok: false, reason: `could not resolve an in-flight burn for ${day}: ${e.message}` }; }
+  }
+  const secret = process.env.CUNA_BURN_SECRET;
+  const cfg = burnLib.readBurn(stored).config;
+
+  // Read the balance ON-CHAIN, never from a product tool — those are activity scanners and they
+  // undercount. Both token programs, jsonParsed, same as everywhere else in this repo.
+  let balanceRaw = "0", tokenAccount = null, tokenProgram = null;
+  if (cfg.wallet) {
+    try {
+      const { PublicKey } = require("@solana/web3.js");
+      const { connection } = require("./lib/rpc");
+      const conn = connection("confirmed");
+      const owner = new PublicKey(cfg.wallet), mint = new PublicKey(cfg.mint);
+      const info = await conn.getAccountInfo(mint);
+      if (!info) throw new Error("mint not found on-chain");
+      tokenProgram = info.owner;
+      const r = await conn.getParsedTokenAccountsByOwner(owner, { mint });
+      for (const { pubkey, account } of r.value) {
+        const amt = account.data.parsed.info.tokenAmount.amount;
+        if (BigInt(amt) > BigInt(balanceRaw)) { balanceRaw = amt; tokenAccount = pubkey; }
+      }
+    } catch (e) {
+      console.warn(`[cuna-burn] could not read the balance: ${e.message}`);
+      return { ok: false, reason: "balance read failed: " + publicErrMsg(e) };
+    }
+  }
+
+  // CLAIM FIRST. The treasury's CUNA arrives in Jupiter escrows and only reaches the wallet when a
+  // claim transaction runs — without this the burner works for a fortnight and then goes short
+  // forever. Claiming is NON-DESTRUCTIVE: own escrow -> own wallet, nothing leaves the treasury.
+  // It runs only inside an armed, keyed, at-the-hour burn, so it cannot fire on its own.
+  let claimed = null;
+  if (secret && cfg.wallet && burnLib.readBurn(stored).armed) {
+    try {
+      const amount = BigInt(cfg.amountRaw);
+      if (BigInt(balanceRaw) < amount) {
+        claimed = await cunaClaimIntoWallet({ cfg, secret, needRaw: (amount - BigInt(balanceRaw)).toString() });
+        if (claimed && claimed.claimedRaw && claimed.claimedRaw !== "0") {
+          balanceRaw = (BigInt(balanceRaw) + BigInt(claimed.claimedRaw)).toString();
+        }
+      }
+    } catch (e) {
+      // A failed claim is not fatal — the burn gate below will simply report SHORT and skip,
+      // which is the correct outcome. Never let it throw past here and kill the tick.
+      console.error(`[cuna-burn] claim-first failed: ${e.message}`);
+      claimed = { error: publicErrMsg(e) };
+    }
+  }
+
+  const gate = burnLib.burnGate({ burn: stored, burnedDays: done, nowUnix, balanceRaw, hasSigner: !!secret });
+  if (!gate.ok) {
+    // Quiet on the normal cases (this ticks twice an hour); loud on SHORT, because that is the
+    // one that means a burn the owner expected did not happen.
+    if (gate.short) console.error(`[cuna-burn] ${gate.reason}`);
+    else if (!/not armed|already burned|waiting for|CUNA_BURN_SECRET|no dev wallet/.test(gate.reason)) {
+      console.warn(`[cuna-burn] not burning: ${gate.reason}`);
+    }
+    return { ok: false, reason: gate.reason, balanceRaw, claimed };
+  }
+  if (!tokenAccount) return { ok: false, reason: "no CUNA token account on the wallet" };
+
+  try {
+    const { Keypair, PublicKey, Transaction } = require("@solana/web3.js");
+    const spl = require("@solana/spl-token");
+    const bs58 = require("bs58");
+    const { connection } = require("./lib/rpc");
+    const conn = connection("confirmed");
+
+    const signer = Keypair.fromSecretKey(bs58.decode(secret.trim()));
+    if (signer.publicKey.toBase58() !== cfg.wallet) {
+      // A key that does not match the configured wallet would burn from somewhere else entirely.
+      console.error(`[cuna-burn] REFUSING: CUNA_BURN_SECRET is ${signer.publicKey.toBase58()}, config says ${cfg.wallet}`);
+      return { ok: false, reason: "signing key does not match the configured wallet" };
+    }
+
+    // burnCHECKED, not burn: it carries the decimals and the chain rejects a mismatch. On an
+    // irreversible instruction, paying one extra byte for the chain to check our arithmetic is
+    // obviously worth it — a decimals slip here is a 1000x burn.
+    const ix = spl.createBurnCheckedInstruction(
+      tokenAccount, new PublicKey(cfg.mint), signer.publicKey, BigInt(gate.amountRaw), 9, [], tokenProgram);
+    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+    const tx = new Transaction({ feePayer: signer.publicKey, blockhash, lastValidBlockHeight }).add(ix);
+    tx.sign(signer);
+
+    // RESERVE the day before sending, then attach the signature the instant the RPC accepts it.
+    // If confirmation throws (blockheight exceeded, RPC timeout) the day is left in "sending" with
+    // its signature, and the next tick asks the chain about THAT signature rather than sending a
+    // second burn. The old code recorded nothing on a throw, so an ambiguous confirm meant a retry
+    // — and a retry of a burn that had actually landed burned the day twice.
+    // The signature is known BEFORE sending (it is the signer's signature over the message), so
+    // the reservation carries it from the start. A send that throws after the RPC has already
+    // forwarded the transaction — a socket timeout on the response — used to leave a sig-less
+    // reservation that was released after ten minutes and then re-sent.
+    const sig = bs58.encode(tx.signature);
+    // Re-read the day record at the last moment: another instance (rolling deploy) may have
+    // reserved it while this one was waiting on the balance read and the claims.
+    const fresh = kv.get(CUNA_BURN_DAYS_KV, {}) || {};
+    if (fresh[gate.day]) return { ok: false, reason: `${gate.day} was reserved by another instance while this one prepared` };
+    fresh[gate.day] = { state: "sending", sig, amountRaw: gate.amountRaw, at: nowUnix, wallet: cfg.wallet, lastValidBlockHeight };
+    kv.set(CUNA_BURN_DAYS_KV, fresh);
+    Object.assign(done, fresh);
+    await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 3 });
+    // A returned signature means the RPC ACCEPTED it, not that it landed — that mistake was made
+    // in this repo already and reported as done. Wait for the real thing before recording the day.
+    const conf = await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    if (conf && conf.value && conf.value.err) {
+      console.error(`[cuna-burn] tx ${sig} FAILED on-chain: ${JSON.stringify(conf.value.err)}`);
+      delete done[gate.day]; kv.set(CUNA_BURN_DAYS_KV, done);   // definitely did not burn: free the day
+      return { ok: false, reason: "transaction failed on-chain", sig };
+    }
+
+    done[gate.day] = { state: "done", sig, amountRaw: gate.amountRaw, at: nowUnix, wallet: cfg.wallet,
+                       claimed: claimed && claimed.claimedRaw ? claimed.claimedRaw : null };
+    kv.set(CUNA_BURN_DAYS_KV, done);
+    console.log(`[cuna-burn] ${gate.day} (${reason}): burned ${(Number(gate.amountRaw) / 1e9).toLocaleString()} CUNA — ${sig}`);
+
+    // ANNOUNCE EVERY BURN (owner, 2026-09-05: "we always announce a burn").
+    //
+    // Deliberately routed through the existing /api/burn-receipt path rather than posting
+    // directly: that endpoint re-reads the transaction FROM THE CHAIN, confirms it carries a real
+    // burn of this mint by this wallet, and derives the amount from the balance delta — never from
+    // what the caller claims. So the post says what actually happened, not what this code believed
+    // it was doing, and the receipt link in it resolves because the same call stored it.
+    // It is idempotent by signature, so a retry cannot double-post.
+    //
+    // Fire-and-forget: the burn already landed and is recorded. A failed announcement must never
+    // make the day look unburned, which would burn another 690,000 tomorrow on top.
+    // The loopback has to carry the edge header: in production the origin lockdown 403s anything
+    // without it, /healthz excepted — so "every burn is announced" was true on staging and false
+    // on the only box that burns. And a failed announcement now reaches the operator chat, not
+    // just stdout.
+    const announceHeaders = { "Content-Type": "application/json" };
+    if (CF_ORIGIN_SECRET) announceHeaders["X-Cluck-Edge-Auth"] = CF_ORIGIN_SECRET;
+    fetch(`http://127.0.0.1:${PORT}/api/burn-receipt`, {
+      method: "POST", headers: announceHeaders,
+      body: JSON.stringify({ sig, mint: cfg.mint, wallet: cfg.wallet }),
+    }).then((r) => r.json()).then((r) => {
+      if (!r || !r.success) {
+        console.warn(`[cuna-burn] receipt/announce failed: ${(r && r.error) || "?"} (the burn itself is fine: ${sig})`);
+        cunaOpsAlert(`⚠️ CUNA burn ${gate.day} LANDED (${sig}) but the announcement failed: ${(r && r.error) || "?"}. Post it by hand: https://clucknorris.app/burn/${sig}`).catch(() => {});
+      } else console.log(`[cuna-burn] announced — receipt https://clucknorris.app/burn/${sig}`);
+    }).catch((e) => {
+      console.warn(`[cuna-burn] receipt/announce error: ${e.message} (the burn itself is fine: ${sig})`);
+      cunaOpsAlert(`⚠️ CUNA burn ${gate.day} LANDED (${sig}) but the announcement errored: ${e.message}. Post it by hand.`).catch(() => {});
+    });
+
+    return { ok: true, day: gate.day, sig, amountRaw: gate.amountRaw, claimed };
+  } catch (e) {
+    // A throw AFTER the send leaves the day reserved with its signature; the next tick resolves it
+    // against the chain (landed -> done, failed/expired -> released) rather than sending again. A
+    // throw BEFORE the send left a reservation with no signature, which is released after 10 min.
+    console.error(`[cuna-burn] burn failed: ${e.message}`);
+    cunaOpsAlert(`⚠️ CUNA burn tick failed: ${publicErrMsg(e)}`, `burnfail:${publicErrMsg(e).slice(0, 60)}`).catch(() => {});
+    return { ok: false, reason: publicErrMsg(e) };
+  }
+}
+
+setInterval(() => { cunaBurnTick("timer").catch((e) => console.error("[cuna-burn] " + e.message)); }, CUNA_BURN_TICK_MS);
+
+// Owner-only: arm, disarm, configure, inspect, and run once. Same posture as the staking admin —
+// 404 when the key is unset or wrong, and refused outright for anything that skipped the WAF.
+app.all("/api/cuna-burn/admin", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (req.cluckDirect) return res.status(404).json({ ok: false, error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+  try {
+    const burnLib = require("./lib/cuna-burn");
+    const q = { ...(req.query || {}), ...(req.body || {}) };
+    const mutatingBurn = String(q.arm || "") === "1" || String(q.off || "") === "1" || String(q.config || "") === "1" || String(q.run || "") === "1";
+    if (mutatingBurn && req.method !== "POST") {
+      return res.status(405).json({ ok: false, error: "this changes the burner — send it as a POST" });
+    }
+    let stored = kv.get(CUNA_BURN_KV, null);
+
+    if (String(q.config || "") === "1") {
+      const patch = {};
+      for (const k of ["wallet", "amountRaw", "hourUtc", "mint", "bonusMaxRaw"]) if (q[k] != null) patch[k] = q[k];
+      // Boolean, from an explicit string. "true"/"false" only — a stray value must not switch on
+      // an extra million tokens a day.
+      if (q.bonusEnabled != null) patch.bonusEnabled = String(q.bonusEnabled) === "true";
+      const config = burnLib.validateBurnConfig(patch, burnLib.readBurn(stored).config);
+      stored = { ...(stored || {}), config };
+      kv.set(CUNA_BURN_KV, stored);
+      console.log(`[cuna-burn] config updated: ${JSON.stringify(config)}`);
+    }
+    if (String(q.arm || "") === "1") {
+      if (String(q.confirm || "") !== "burn-daily") {
+        return res.status(400).json({ ok: false, error: "arming needs &arm=1&confirm=burn-daily — two flags, because this destroys tokens" });
+      }
+      stored = burnLib.arm(stored, Math.floor(Date.now() / 1000));
+      kv.set(CUNA_BURN_KV, stored);
+      console.log("[cuna-burn] ARMED — daily burns will run");
+    } else if (String(q.off || "") === "1") {
+      stored = burnLib.disarm(stored);
+      kv.set(CUNA_BURN_KV, stored);
+      console.log("[cuna-burn] DISARMED");
+    }
+
+    const ranNow = String(q.run || "") === "1" ? await cunaBurnTick("manual") : null;
+    const b = burnLib.readBurn(kv.get(CUNA_BURN_KV, null));
+    const days = kv.get(CUNA_BURN_DAYS_KV, {}) || {};
+    let totalRaw = 0n;
+    for (const d of Object.values(days)) if (d && d.amountRaw) totalRaw += BigInt(d.amountRaw);
+    return res.status(200).json({
+      ok: true,
+      armed: b.armed,
+      config: b.config,
+      hasSigner: !!process.env.CUNA_BURN_SECRET,
+      killSwitch: String(process.env.CUNA_BURN_OFF || "") === "1",
+      burnRun: ranNow,
+      // What today would burn, so the owner can see the roll before it fires.
+      today: burnLib.amountForDay(burnLib.dayKey(Math.floor(Date.now() / 1000)), b.config),
+      autoDailyCapRaw: burnLib.AUTO_DAILY_CAP_RAW.toString(),
+      daysBurned: Object.keys(days).length,
+      totalBurnedRaw: totalRaw.toString(),
+      recent: Object.fromEntries(Object.keys(days).sort().slice(-7).map((k) => [k, days[k]])),
+    });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+
+// ── CUNA staking payout ────────────────────────────────────────────────────
+// Turns the accrual ledger into a batch for the airdropper, exactly once per amount.
+//
+// ⛔ SENDS NOTHING. Accrual writes what is owed; this hands the owner a file to airdrop with his
+// own wallet. The gap between "owed" and "sent" is where payout systems pay twice, so the
+// bookkeeping across it is pure and tested in lib/cuna-payout.js.
+//
+// The flow, deliberately three steps:
+//   ?preview=1   see what is owed, change nothing
+//   ?export=1    create a PENDING batch — its amounts are held aside from that moment, so
+//                exporting again cannot offer the same money twice
+//   ?confirm=<id>  after the airdrop lands: pending -> paid
+//   ?cancel=<id>   it never went: back to owed, nothing written to paid
+const CUNA_PAID_KV = "cunaStakePaid";        // { wallet: raw }
+const CUNA_BATCH_KV = "cunaStakeBatches";    // { id: { state, amounts, ... } }
+
+// The double-checks the page shows before a single signature. Each is computed HERE from the
+// ledger and the chain, never from what the page thinks it knows. A red row is a reason to stop;
+// the page will not offer the send button while any hard check is red.
+async function cunaPayoutChecks(batch, { days, paid, batches }) {
+  const pay = require("./lib/cuna-payout");
+  const s = require("./lib/cuna-staking");
+  const p = cunaProgramme();
+  const out = [];
+  const add = (id, ok, label, detail, hard = true) => out.push({ id, ok: !!ok, hard, label, detail: detail == null ? null : String(detail) });
+  const sum = (o) => Object.values(o || {}).reduce((a, v) => { try { return a + BigInt(v); } catch (_) { return a; } }, 0n);
+
+  // 1. Conservation: everything ever credited == owed + held in pending batches + paid. This is
+  //    the check the old verifier script compared to itself; here it compares to the ledger.
+  const owed = pay.owedNow({ days, paid, pending: batches });
+  let held = 0n;
+  for (const b of Object.values(batches)) if (b && b.state === "pending") held += sum(pay.remainingOf(b));
+  const credited = sum(pay.totalCredits(days));
+  const accounted = sum(owed) + held + sum(paid);
+  add("conserve", credited === accounted, "Every credited token is owed, pending, or paid — nothing double-counted",
+    `credited ${credited} = owed ${sum(owed)} + pending ${held} + paid ${sum(paid)} (${accounted})`);
+
+  // 2. This is the only pending batch. Two pending batches means the same money may be in both.
+  const pendingIds = Object.values(batches).filter((b) => b && b.state === "pending").map((b) => b.id);
+  add("single", pendingIds.length <= 1 && (batch.state !== "pending" || pendingIds.includes(batch.id)),
+    "No other batch is pending", pendingIds.join(", ") || "none");
+
+  // 3. Nobody excluded is being paid, and every payee holds a lock we know about.
+  const excluded = (p.config.excludeWallets || []).map(String);
+  const badEx = Object.keys(batch.amounts || {}).filter((w) => excluded.includes(w));
+  add("exclude", badEx.length === 0, "No excluded wallet (treasury) in the batch", badEx.join(", ") || "clean");
+  const snap = await cunaLocks();
+  const known = new Set((snap.locks || []).map((l) => String(l.recipient)));
+  const unknown = Object.keys(batch.amounts || {}).filter((w) => !known.has(w));
+  // SOFT: a payee whose lock matured and was closed since the batch was built is still owed what
+  // they earned while it was open. Red here is a prompt to look, not a reason to withhold.
+  add("known", snap.locks != null && unknown.length === 0,
+    "Every payee still has a CUNA lock on chain (soft — a closed lock is still owed its past days)", snap.locks == null ? "chain scan failed — cannot verify" : (unknown.join(", ") || "all matched"), false);
+  // HARD: writes must reach the volume, or the batch record vanishes on restart and the same
+  // money is offered again.
+  add("storage", kv.isPersistent(), "Payout records are persisted to the volume", kv.isPersistent() ? "DATA_DIR volume mounted" : "MEMORY ONLY — do not send");
+
+  // 4. Rows add up to the batch header.
+  add("rows", sum(batch.amounts) === BigInt(batch.totalRaw || 0), "Row amounts add up to the batch total",
+    `${sum(batch.amounts)} vs ${batch.totalRaw}`);
+
+  // 5. Programme state, as context rather than a blocker: paying while disarmed is legitimate
+  //    (a final batch after a stop) but worth seeing.
+  add("armed", p.armed, "Programme is armed", p.armed ? "armed" : "DISARMED — paying out after a stop?", false);
+  return out;
+}
+
+app.all("/api/cuna-stake/payout", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (req.cluckDirect) return res.status(404).json({ ok: false, error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+  try {
+    const pay = require("./lib/cuna-payout");
+    const q = { ...(req.query || {}), ...(req.body || {}) };
+    const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+    let paid = kv.get(CUNA_PAID_KV, {}) || {};
+    let batches = kv.get(CUNA_BATCH_KV, {}) || {};
+    const nowUnix = Math.floor(Date.now() / 1000);
+
+    // Anything that changes money is POST-only. A GET that mutates is one pasted link away from
+    // running — link-preview bots fetch URLs in chats, browsers prerender history entries — which
+    // is why the POKE pause route is POST-only too. Reads stay on GET so the runbook's
+    // "open this URL" checks keep working.
+    const mutating = q.confirm || q.cancel || q.sent || String(q.export || "") === "1";
+    if (mutating && req.method !== "POST") {
+      return res.status(405).json({ ok: false, error: "this changes payout state — send it as a POST" });
+    }
+
+    let sentReport = null;
+    if (q.sent) {
+      // PER-ROW confirmation from the payout page: [{wallet, sig}] for transactions that CONFIRMED.
+      // Each row is recorded once, with its signature; the batch stays pending until every row is
+      // in, so a partial send leaves exactly the unsent rows owed and nothing else.
+      const id = String(q.batch || "");
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
+      let results = q.sent;
+      if (typeof results === "string") { try { results = JSON.parse(results); } catch (_) { results = null; } }
+      if (!Array.isArray(results) || results.length > 500) return res.status(400).json({ ok: false, error: "sent must be a list of {wallet, sig}" });
+      // Verify every signature ON CHAIN before recording it. The record is what stops a wallet
+      // being paid again, so a typo, an expired unconfirmed transaction, or a signature from some
+      // other transaction must not be able to mark a row paid. One getSignatureStatuses call
+      // covers up to 256 signatures.
+      // A Solana signature is exactly 64 bytes; anything else is refused before it reaches the RPC.
+      const bs58v = require("bs58");
+      const wellFormed = (x) => { try { return /^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(x) && bs58v.decode(x).length === 64; } catch (_) { return false; } };
+      const sigs = [...new Set(results.map((r) => String((r && r.sig) || "").trim()).filter(wellFormed))];
+      let landed = new Set();
+      if (sigs.length) {
+        try {
+          const { connection } = require("./lib/rpc");
+          const st = await connection("confirmed").getSignatureStatuses(sigs, { searchTransactionHistory: true });
+          (st && st.value || []).forEach((v, i) => {
+            if (v && !v.err && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")) landed.add(sigs[i]);
+          });
+        } catch (e) {
+          // Cannot verify -> record nothing, say so plainly. The page keeps the signatures locally
+          // and offers the row buttons again.
+          return res.status(503).json({ ok: false, error: "could not verify signatures on chain right now — nothing recorded, try again: " + publicErrMsg(e) });
+        }
+      }
+      const rejected = results.filter((r) => !landed.has(String((r && r.sig) || "").trim())).map((r) => ({ wallet: r && r.wallet, sig: r && r.sig, why: "signature not confirmed on chain" }));
+      results = results.filter((r) => landed.has(String((r && r.sig) || "").trim()));
+      const r = pay.recordSent({ batch: b, paid, results, nowUnix });
+      r.ignored = [...r.ignored, ...rejected];
+      paid = r.paid;
+      batches = { ...batches, [id]: r.batch };
+      kv.set(CUNA_PAID_KV, paid); kv.set(CUNA_BATCH_KV, batches);
+      // Read back before telling the page anything is paid: a kv write that failed (full or
+      // unmounted volume) must not be reported as recorded, or the page retries nothing and the
+      // next batch offers the same money again.
+      const check = kv.get(CUNA_BATCH_KV, {}) || {};
+      const persisted = kv.isPersistent() && check[id] && check[id].sent && r.recorded.every((w) => check[id].sent[w]);
+      if (!persisted) return res.status(500).json({ ok: false, error: "recorded in memory but the volume is not persistent — STOP and check DATA_DIR before sending more" });
+      sentReport = { recorded: r.recorded, ignored: r.ignored, remaining: Object.keys(r.remaining).length, state: r.batch.state };
+      console.log(`[cuna-payout] batch ${id}: ${r.recorded.length} rows recorded sent, ${Object.keys(r.remaining).length} remaining, state ${r.batch.state}`);
+    } else if (q.confirm) {
+      const id = String(q.confirm);
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
+      const r = pay.confirmBatch({ batch: b, paid, nowUnix });
+      paid = r.paid;
+      batches = { ...batches, [id]: { ...r.batch, confirmedAt: nowUnix, note: String(q.note || "").slice(0, 200) } };
+      kv.set(CUNA_PAID_KV, paid); kv.set(CUNA_BATCH_KV, batches);
+      console.log(`[cuna-payout] batch ${id} CONFIRMED — ${b.count} wallets, ${(Number(b.totalRaw) / 1e9).toLocaleString()} CUNA`);
+    } else if (q.cancel) {
+      const id = String(q.cancel);
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
+      batches = { ...batches, [id]: { ...pay.cancelBatch({ batch: b }), cancelledAt: nowUnix } };
+      kv.set(CUNA_BATCH_KV, batches);
+      console.log(`[cuna-payout] batch ${id} CANCELLED — its amounts are owed again`);
+    }
+
+    const owed = pay.owedNow({ days, paid, pending: batches });
+
+    let created = null, note = null;
+    if (String(q.export || "") === "1") {
+      const id = "cb_" + randomBytes(5).toString("hex");
+      const batch = pay.buildBatch({
+        owed, batchId: id, nowUnix,
+        minPayoutRaw: q.minPayoutRaw != null ? q.minPayoutRaw : pay.DEFAULT_MIN_PAYOUT_RAW,   // 0 = pay everyone
+      });
+      // Nothing to pay is a normal outcome, not a different endpoint: it falls through to the
+      // SAME response shape with created:null and a note. An early return here handed callers a
+      // response missing half its fields, which is how a monitoring script starts throwing.
+      if (!batch.count) {
+        note = "nothing to pay right now — everything owed is either below the floor or already in a pending batch";
+      } else {
+        batches = { ...batches, [id]: batch };
+        kv.set(CUNA_BATCH_KV, batches);
+        created = { ...batch, airdropLines: pay.toAirdropLines(batch.amounts, 9) };
+        console.log(`[cuna-payout] batch ${id} created — ${batch.count} wallets, ${(Number(batch.totalRaw) / 1e9).toLocaleString()} CUNA PENDING`);
+      }
+    }
+
+    const pending = Object.values(batches).filter((b) => b && b.state === "pending");
+    let totalPaid = 0n;
+    for (const v of Object.values(paid)) { try { totalPaid += BigInt(v); } catch (_) {} }
+    return res.status(200).json({
+      ok: true,
+      created,
+      note,
+      owed: fmtOwed(owed),
+      owedTotalRaw: Object.values(owed).reduce((a, v) => a + v, 0n).toString(),
+      // A preview of the file, so the owner can eyeball it before creating a batch that holds funds.
+      previewLines: created ? null : pay.toAirdropLines(
+        pay.buildBatch({ owed, batchId: "preview", nowUnix }).amounts, 9),
+      pendingBatches: pending.map((b) => ({ id: b.id, at: b.at, count: b.count, totalRaw: b.totalRaw })),
+      // Per-wallet rows for one batch, so scripts/cuna-payout-verify.cjs can check the line items
+      // against the header rather than trusting it.
+      batchAmounts: q.batch && batches[String(q.batch)] ? batches[String(q.batch)].amounts : null,
+      // The payout page's view of one batch: every row with its state, and the lines for what
+      // still has to go — so a lost terminal never means hand-converting raw units.
+      batch: q.batch && batches[String(q.batch)] ? (() => {
+        const b = batches[String(q.batch)];
+        const remaining = pay.remainingOf(b);
+        return {
+          id: b.id, state: b.state, at: b.at, count: b.count, totalRaw: b.totalRaw,
+          rows: Object.keys(b.amounts || {}).sort().map((w) => ({
+            wallet: w, raw: b.amounts[w], sent: !!(b.sent && b.sent[w]),
+            sig: b.sent && b.sent[w] ? b.sent[w].sig : null, at: b.sent && b.sent[w] ? b.sent[w].at : null,
+          })),
+          remainingCount: Object.keys(remaining).length,
+          remainingRaw: Object.values(remaining).reduce((a, v) => { try { return a + BigInt(v); } catch (_) { return a; } }, 0n).toString(),
+          remainingLines: pay.toAirdropLines(remaining, 9),
+        };
+      })() : null,
+      sentReport,
+      checks: q.batch && batches[String(q.batch)] ? await cunaPayoutChecks(batches[String(q.batch)], { days, paid, batches }) : null,
+      totalPaidRaw: totalPaid.toString(),
+      // Everything ever credited by accrual. The verifier reconciles this against
+      // owed + pending + paid; if they disagree, somebody is about to be paid twice or not at all.
+      creditedTotalRaw: Object.values(pay.totalCredits(days)).reduce((a, v) => a + v, 0n).toString(),
+      daysAccrued: Object.keys(days).length,
+      mint: require("./lib/cuna-programme").readProgramme(kv.get(CUNA_STAKE_KV, null)).config.mint,
+      decimals: 9,
+    });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+function fmtOwed(owed) {
+  const out = {};
+  for (const [w, v] of Object.entries(owed)) if (v > 0n) out[w] = v.toString();
+  return out;
+}
+
+app.get("/fonts/LuckiestGuy.ttf", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Access-Control-Allow-Origin", "*");   // the staking host is a different origin
+  res.type("font/ttf").sendFile(join(__dirname, "tools", "gif-forge", "assets", "LuckiestGuy.ttf"));
+});
+
+app.get("/cuna-staking", (req, res) => {
+  res.sendFile(join(__dirname, "public", "cuna-staking.html"));
+});
+// Owner payout console. Main domain only: it is deliberately NOT in CUNA_STAKE_PATH, so on the
+// partner hosts it bounces home, and its API refuses anything that skipped the edge.
+app.get("/cuna-payout", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+  res.sendFile(join(__dirname, "public", "cuna-payout.html"));
+});
+
 // -- Fee Share / Analytics endpoints --
 
 app.get("/api/fees", async (req, res) => {
@@ -16656,7 +17912,9 @@ app.listen(PORT, () => {
       console.warn("[boot] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID unset → the ENTIRE scheduler block (alerts, lessons, radar, recap, grad watcher, webhook) is OFF");
     }
   }
-  if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+  if (SCHEDULERS_OFF) {
+    console.log("[boot] SCHEDULERS_OFF=1 — the scheduler block is held off (bot commands and manual posts still work)");
+  } else if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
     console.log(`[TELEGRAM] Bot configured · chat ${process.env.TELEGRAM_CHAT_ID} · trade poller starting in 5s`);
     // Brief delay before first poll so server is fully ready
     setTimeout(() => {
@@ -17410,7 +18668,7 @@ app.listen(PORT, () => {
     rose: () => process.env.ROSE_ENGINE_OFF !== "1" && !!kv.get("roseEngineArmed", false),
     cuna: () => process.env.CUNA_ENGINE_OFF !== "1" && !!kv.get("cunaEngineArmed", false),
     dnc: () => process.env.DNC_ENGINE_OFF !== "1" && !!kv.get("dncEngineArmed", false),
-    poke: () => process.env.POKE_ENGINE_OFF !== "1", // poke's loop is ON by default (owner)
+    poke: () => process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING, // ON by default (owner), never on staging
   };
   const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {
     const p = whirlpoolMM.vault.getProject(id);

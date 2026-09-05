@@ -83,6 +83,54 @@ to look at.
 
 ---
 
+## The five-minute version (start here)
+
+The full setup below is the hardened version. It sat undone for days because it reads like a
+project, and a staging box you never build protects nothing. This is the minimum that actually
+works, and it is all dashboard clicking — **no terminal, no Cloudflare** (owner's call, 2026-09-05).
+
+1. Railway → **New service** → same GitHub repo → **deploy branch `develop`** → auto-deploy on.
+2. Add a **new volume** at `/data`. ⚠️ Not production's — staging must not touch the real
+   transcripts, graduation tracker or analytics.
+3. Set **four** variables:
+
+   ```
+   DATA_DIR=/data
+   STAGING=1
+   SCHEDULERS_OFF=1
+   PREMIUM_ACCESS_KEY=<a NEW random string, NOT production's>
+   ```
+
+4. Use the Railway-generated URL. Done.
+
+**Why those four.** `STAGING=1` puts an unmissable banner on every page, sets `X-Robots-Tag:
+noindex`, **refuses `postToX` outright**, and prefixes every Telegram message with `[STAGING]`.
+`SCHEDULERS_OFF=1` keeps the daily automation from starting even if a bot token appears later.
+A **different** `PREMIUM_ACCESS_KEY` is the one that matters most: staging's admin key must not
+unlock production, because a key that leaks from a staging log or screenshot is a production key.
+
+**On API keys:** reuse the read-only ones (`HELIUS_API_KEY`, `SOLANA_TRACKER_API_KEY`,
+`SOLSCAN_API_KEY`, `BAGS_API_KEY`, `ANTHROPIC_API_KEY`) — staging just shares your quota. Generate
+NEW values for `PREMIUM_ACCESS_KEY` and `BUYCOMP_KEY`. Without a Helius key chain reads fall back
+to the public Solana RPC, which is slower and rate-limited but works fine for looking at pages.
+
+**Never set on staging:** `MM_OPERATOR_SECRET`, `MM_OPERATOR_SECRET_TREASURY`, `CUNA_BURN_SECRET`,
+the four `X_*` keys. A missing secret degrades to a safe no-op here, never a crash — when in doubt,
+leave it out.
+
+### Posting to a test Telegram room
+
+Setting `TELEGRAM_CHAT_ID` is what boots the **entire** scheduler block — lessons, radar, recap,
+graduation watcher, trade poller. Pointing staging at a test room without thinking turns it into a
+second bot running a full daily schedule, not just somewhere to try one post.
+
+So: set `TELEGRAM_BOT_TOKEN` + a **test room's** `TELEGRAM_CHAT_ID`, and keep `SCHEDULERS_OFF=1`.
+Bot commands and manual posts (`/api/tg-test`) work; nothing fires on a timer. Every message is
+prefixed `🚧 [STAGING]`, so if a copied env var ever points it at the real community room, what
+lands is obviously a test rather than an announcement people act on.
+
+---
+
 ## One-time owner setup
 
 Everything below is done **once**, from the Railway and Cloudflare dashboards — it cannot be done
