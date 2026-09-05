@@ -124,6 +124,15 @@ wallet.
 **A short balance burns NOTHING**, never a partial — a partial burn cannot be undone or topped up
 without double-counting. A short day is not marked done, so a top-up plus `&run=1` still burns it.
 
+**Every burn is announced** (owner, 2026-09-05: *"we always announce a burn"*). The burner does not
+post directly — it calls `/api/burn-receipt`, which re-reads the transaction FROM THE CHAIN,
+confirms it carries a real burn of this mint by this wallet, and derives the amount from the
+balance delta. So the post says what actually happened rather than what the burner believed it was
+doing, and the receipt link in it resolves because the same call stored it. X first, then Telegram,
+via the existing `broadcastBurnCelebration` carve-out. Idempotent by signature, so a retry cannot
+double-post — and fire-and-forget, because a failed announcement must never make the day look
+unburned and burn another 690,000 tomorrow.
+
 ⚠️ **A daily burn changes total supply every day.** CoinGecko's supply verification was accepted
 just before this was built; the submitted figure starts drifting immediately. Tell them rather than
 letting them notice.
@@ -182,8 +191,6 @@ hole through the WAF to every money endpoint for anyone who points a DNS record 
 
 ## Still open
 
-- **Announce or silent** on the daily burns. A post every day at the same hour reads as a bot; a
-  weekly or monthly total probably lands better. `broadcastBurnCelebration` exists either way.
 - **The owner's full wallet list** for `excludeWallets`. Two supplied so far: `5WUjHiUV…` (no CUNA
   locks at all) and the treasury.
 - **`staging.clucknorris.app` does not exist** — the one-time Railway/Cloudflare setup in

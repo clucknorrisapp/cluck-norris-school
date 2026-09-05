@@ -10834,6 +10834,26 @@ async function cunaBurnTick(reason) {
                        claimed: claimed && claimed.claimedRaw ? claimed.claimedRaw : null };
     kv.set(CUNA_BURN_DAYS_KV, done);
     console.log(`[cuna-burn] ${gate.day} (${reason}): burned ${(Number(gate.amountRaw) / 1e9).toLocaleString()} CUNA — ${sig}`);
+
+    // ANNOUNCE EVERY BURN (owner, 2026-09-05: "we always announce a burn").
+    //
+    // Deliberately routed through the existing /api/burn-receipt path rather than posting
+    // directly: that endpoint re-reads the transaction FROM THE CHAIN, confirms it carries a real
+    // burn of this mint by this wallet, and derives the amount from the balance delta — never from
+    // what the caller claims. So the post says what actually happened, not what this code believed
+    // it was doing, and the receipt link in it resolves because the same call stored it.
+    // It is idempotent by signature, so a retry cannot double-post.
+    //
+    // Fire-and-forget: the burn already landed and is recorded. A failed announcement must never
+    // make the day look unburned, which would burn another 690,000 tomorrow on top.
+    fetch(`http://127.0.0.1:${PORT}/api/burn-receipt`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sig, mint: cfg.mint, wallet: cfg.wallet }),
+    }).then((r) => r.json()).then((r) => {
+      if (!r || !r.success) console.warn(`[cuna-burn] receipt/announce failed: ${(r && r.error) || "?"} (the burn itself is fine: ${sig})`);
+      else console.log(`[cuna-burn] announced — receipt https://clucknorris.app/burn/${sig}`);
+    }).catch((e) => console.warn(`[cuna-burn] receipt/announce error: ${e.message} (the burn itself is fine: ${sig})`));
+
     return { ok: true, day: gate.day, sig, amountRaw: gate.amountRaw, claimed };
   } catch (e) {
     // Never record the day on a throw: an unrecorded day can be retried, a wrongly-recorded one
