@@ -25,7 +25,7 @@ the same as one made on ours.
 | Minimum term | **90 days** (owner, 09-05: *"no 3 months or bust on this deal"*) |
 | Cliff | **none**, on the lock or on claiming (owner, 09-05: *"remove the cliff part"*) |
 | Cancelable locks | **never earn** (owner, 09-05) |
-| Tiers | 90/180/270/360/450/540 days → **1×–6×**, held for the whole lock |
+| Tiers | 90/180/270/360/450/540 days → **1×–6×**, held for the whole lock, 6× is the ceiling |
 | Pool | **345,000 CUNA/day flat** (owner, 09-05) — half the 690,000 burn, 5× the 69,000 floor, ~5.2% of the stream |
 | Dust floor | **69,000** CUNA minimum lock (~$1.60). **No minimum payout** — everyone gets paid |
 | Daily burn | **690,000 CUNA at 15:00 UTC** from the treasury, claim-first |
@@ -51,6 +51,14 @@ re-locking; that was the old justification and it cost the people it was meant t
 
 The AMOUNT side still moves. A drip schedule that is paying tokens out loses weight as it releases,
 because what has vested is no longer locked up. Only the rate is fixed.
+
+⚠️ **6× is a CEILING, not just the top row** (`maxTermDays`, 540). Weight is amount × committed days
+with nothing else bounding it, so without the cap a lock built straight on Jupiter with a five-year
+term would earn **20×** — a rate the page says is not on offer. Locking longer is allowed and costs
+nothing; it is simply paid the 18-month rate. The ceiling **fails closed and cannot be switched off
+from config**: a cleared, missing or nonsense `maxTermDays` falls back to 540 rather than meaning
+"no cap", because `Number(null)` is 0 and a config typo must never uncap the pool. Raising it raises
+the maximum multiplier, so the page's ladder has to move with it.
 
 ⚠️ **Terms carry one day of grace, added by the page, and it is load-bearing.** The rule measures
 from our own `firstSeenAt`, stamped when the scanner next runs — minutes after signing. A cliff at
@@ -250,7 +258,7 @@ debt.
 | `lib/cuna-burn.js` | burn decisions + claim planning |
 | `lib/cuna-payout.js` | owed / pending / paid bookkeeping |
 | `public/cuna-staking.html` | the page — `/cuna-staking`, and `/` on the CUNA staking hosts |
-| `scripts/cuna-*-test.cjs` | 173 tests, all in CI |
+| `scripts/cuna-*-test.cjs` | 175 tests, all in CI |
 | `scripts/cuna-lock-scan-live.cjs` | who qualifies today, read from the chain |
 | `scripts/cuna-lock-whois.cjs` | check wallets against every CUNA lock |
 

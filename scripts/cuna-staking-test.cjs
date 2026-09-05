@@ -430,11 +430,43 @@ t("two equal locks split it evenly", () => {
   assert.strictEqual(r.credits.B, 500000n);
 });
 
-t("longer remaining time earns more per token", () => {
-  const a = lock({ escrow: "A", recipient: "A", durationDays: 1095 });   // 3-year lock
-  const b = lock({ escrow: "B", recipient: "B", durationDays: 365 });    // 1-year lock
+// A single-cliff lock, exactly what the page builds: everything releases at the end, so the
+// arithmetic is exact and a ratio means what it says.
+const tierLock = (who, days) => s.normalizeEscrow(who, {
+  recipient: who, tokenMint: "CUNA", creator: who, cancelMode: 0, cancelledAt: 0,
+  vestingStartTime: NOW, cliffTime: NOW + days * DAY, frequency: DAY, numberOfPeriod: 1,
+  cliffUnlockAmount: 1000000n, amountPerPeriod: 0n, totalClaimedAmount: 0n,
+}, NOW);
+
+t("a longer term earns more per token — up to the top tier", () => {
+  const a = tierLock("A", 360);    // 12 months
+  const b = tierLock("B", 90);     // 3 months
   const r = s.accrueDay({ locks: [a, b], poolRaw: "1000000", nowUnix: NOW, cfg: CFG });
-  assert.ok(r.credits.A > r.credits.B * 2n, "a 3-year lock should out-earn a 1-year one threefold");
+  assert.strictEqual(r.credits.A, r.credits.B * 4n, "12 months must pay exactly 4x the entry tier");
+});
+
+t("THE CEILING: past 18 months a longer term buys nothing", () => {
+  // Weight is amount x committed days with nothing else bounding it, so without this a five-year
+  // lock built straight on Jupiter would earn 20x — a rate the page says is not on offer. Locking
+  // longer is allowed and costs nothing; it simply earns the top-tier rate.
+  const top = tierLock("T", 540);      // 18 months
+  const huge = tierLock("H", 1825);    // five years
+  const r = s.accrueDay({ locks: [top, huge], poolRaw: "1000000", nowUnix: NOW, cfg: CFG });
+  assert.strictEqual(r.credits.H, r.credits.T, "a five-year lock out-earned the top tier");
+  assert.strictEqual(s.weightOf(huge, NOW, CFG), s.weightOf(top, NOW, CFG));
+});
+
+t("the ceiling CANNOT be switched off by a cleared or nonsense config value", () => {
+  // Number(null) is 0, so a bare `cfg.maxTermDays || DEFAULT` would read a config typo as "no cap".
+  // Every unusable value must fall back to the 540-day default, never to unbounded.
+  const huge = tierLock("H", 1825);
+  const capped = s.weightOf(huge, NOW, { maxTermDays: 540 });
+  for (const bad of [null, 0, "", undefined, NaN, -1, "lots", 1.5, Infinity]) {
+    assert.strictEqual(s.weightOf(huge, NOW, { maxTermDays: bad }), capped,
+      `maxTermDays=${String(bad)} removed the ceiling`);
+  }
+  assert.strictEqual(s.weightOf(huge, NOW, undefined), capped, "no cfg at all removed the ceiling");
+  assert.strictEqual(s.maxTermDaysOf({}), s.DEFAULT_MAX_TERM_DAYS);
 });
 
 t("NO TOKENS ARE CREATED OR DESTROYED, even on awkward splits", () => {
