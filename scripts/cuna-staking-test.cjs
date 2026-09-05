@@ -439,6 +439,30 @@ t("a lock with NO tranche 90+ days out does not qualify, whatever its declared e
   assert.strictEqual(s.weightOf(l, NOW, CFG), 0n);
 });
 
+t("earningRawOf is exactly the tokens weightOf gives weight to", () => {
+  const bn = (n) => ({ toString: () => String(n) });
+  // single cliff: everything unvested earns
+  const single = s.normalizeEscrow("S", { recipient: "a", tokenMint: "CUNA", creator: "a", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 200 * DAY), frequency: bn(DAY), numberOfPeriod: bn(1),
+    cliffUnlockAmount: bn("5000000000"), amountPerPeriod: bn(0), totalClaimedAmount: bn(0) }, NOW);
+  assert.strictEqual(s.earningRawOf(single, NOW, CFG), 5000000000n);
+  assert.strictEqual(s.earningRawOf(single, NOW + 200 * DAY, CFG), 0n, "vested -> nothing earns");
+  // monthly drip from today: tranches at 30/60 days earn nothing, 90..180 earn
+  const per = 8_333_333n * 10n ** 9n;
+  const drip = s.normalizeEscrow("D", { recipient: "b", tokenMint: "CUNA", creator: "b", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW), frequency: bn(30 * DAY), numberOfPeriod: bn(6),
+    cliffUnlockAmount: bn(0), amountPerPeriod: bn(per), totalClaimedAmount: bn(0) }, NOW);
+  assert.strictEqual(s.earningRawOf(drip, NOW, CFG), per * 4n);
+  assert.strictEqual(s.earningRawOf(drip, NOW + 90 * DAY, CFG), per * 3n, "the day-90 tranche has vested");
+  // brute-force cross-check on a hostile one-second schedule
+  const sec = s.normalizeEscrow("SEC", { recipient: "c", tokenMint: "CUNA", creator: "c", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 3 * DAY), frequency: bn(1), numberOfPeriod: bn(500000),
+    cliffUnlockAmount: bn(0), amountPerPeriod: bn(3), totalClaimedAmount: bn(0) }, NOW);
+  let brute = 0n;
+  for (let j = 1; j <= 500000; j++) { const at = sec.cliffTime + j; if (at <= NOW) continue; const d = Math.floor((at - NOW) / DAY); if (d >= 90) brute += 3n; }
+  assert.strictEqual(s.earningRawOf(sec, NOW, CFG), brute);
+});
+
 t("PADDING: empty trailing periods cannot buy a longer term", () => {
   const bn = (n) => ({ toString: () => String(n) });
   // number_of_period is creator-chosen and a period releasing ZERO tokens costs nothing, so the
