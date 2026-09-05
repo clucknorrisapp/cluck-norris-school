@@ -239,6 +239,22 @@ t("a lookup that runs out of pages is OMITTED, not reported as the 5,000th-newes
   assert.strictEqual(out2[ESC], 1_800_000_000 - 2, "a short walk is the creation");
 });
 
+t("backdating is BOUNDED: never past the cap, never before the token existed", () => {
+  const acc = acct({ cliffTime: NOW + 200 * DAY });
+  // a reused address whose oldest signature is 400 days old gets at most the cap
+  const r = scan.mergeLedger({ scanned: [{ escrow: "E1", account: acc }], ledger: {}, nowUnix: NOW,
+    createdAt: { E1: NOW - 400 * DAY }, backdateCapDays: 30, notBefore: 0 });
+  assert.strictEqual(r.ledger.E1.firstSeenAt, NOW - 30 * DAY);
+  // and never before notBefore even inside the cap
+  const r2 = scan.mergeLedger({ scanned: [{ escrow: "E1", account: acc }], ledger: {}, nowUnix: NOW,
+    createdAt: { E1: NOW - 20 * DAY }, backdateCapDays: 30, notBefore: NOW - 10 * DAY });
+  assert.strictEqual(r2.ledger.E1.firstSeenAt, NOW - 10 * DAY);
+  // a genuine early locker inside both bounds is credited exactly
+  const r3 = scan.mergeLedger({ scanned: [{ escrow: "E1", account: acc }], ledger: {}, nowUnix: NOW,
+    createdAt: { E1: NOW - 5 * DAY }, backdateCapDays: 30, notBefore: NOW - 10 * DAY });
+  assert.strictEqual(r3.ledger.E1.firstSeenAt, NOW - 5 * DAY);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }

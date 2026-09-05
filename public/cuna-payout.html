@@ -9,7 +9,7 @@
 <style>
   /* Operator console. Deliberately plain: every number here is money, so nothing decorative
      competes with it. The ONLY token this page can send is the one the server reports as the
-     programme mint — there is no mint selector and never will be. */
+     program mint — there is no mint selector and never will be. */
   body{background:#0b0b10;color:var(--text,#eee);font-family:var(--body);margin:0;padding:22px 16px 60px;}
   .wrap{max-width:900px;margin:0 auto;}
   h1{font-family:var(--disp);font-size:28px;margin:0 0 4px;letter-spacing:.5px;}
@@ -61,7 +61,7 @@
       <div class="k">STATE</div>
       <div class="grid2">
         <div>
-          <div class="row"><span>Programme</span><b id="stArmed">—</b></div>
+          <div class="row"><span>Program</span><b id="stArmed">—</b></div>
           <div class="row"><span>Days accrued</span><b id="stDays">—</b></div>
           <div class="row"><span>Ever credited</span><b id="stCredited">—</b></div>
           <div class="row"><span>Ever paid</span><b id="stPaid">—</b></div>
@@ -144,8 +144,14 @@
   var $ = function (id) { return document.getElementById(id); };
   var KEY = null, STATE = null, BATCH = null, CHECKS = null, PRICE = null, MINT = null;
   var WALLET = null, PROVIDER = null, WALLET_BAL = null;   // WALLET_BAL: whole tokens, or null = unknown
-  var SENDING = false;
-  var ROW_STATUS = {};   // wallet -> { status, sig, error } from the current send
+  var SENDING = false, ABORT = false;
+  // wallet -> { status, sig, error } from the current send. PERSISTED per batch: a signature the
+  // server has not yet recorded must survive a reload, or the row shows "TO SEND" with no way to
+  // record it and the money is offered again.
+  var ROW_STATUS = {};
+  function statusKey() { return "cuna_payout_rows_" + (BATCH && BATCH.id); }
+  function saveStatus() { try { localStorage.setItem(statusKey(), JSON.stringify(ROW_STATUS)); } catch (_) {} }
+  function loadStatus() { try { ROW_STATUS = JSON.parse(localStorage.getItem(statusKey()) || "{}") || {}; } catch (_) { ROW_STATUS = {}; } }
 
   var cuna = function (raw) { return (Number(raw) / 1e9).toLocaleString(undefined, { maximumFractionDigits: 2 }); };
   var usd = function (raw) {
@@ -155,10 +161,11 @@
   };
 
   async function api(params, method) {
-    var url = "/api/cuna-stake/payout?key=" + encodeURIComponent(KEY);
-    var opts = { method: method || "GET", headers: {} };
+    // Key travels in a header, not the query string, so it never lands in an edge/proxy access log.
+    var url = "/api/cuna-stake/payout";
+    var opts = { method: method || "GET", headers: { "x-premium-key": KEY } };
     if (method === "POST") { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(params || {}); }
-    else if (params) { Object.keys(params).forEach(function (k) { url += "&" + encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }); }
+    else if (params) { var qs = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&"); if (qs) url += "?" + qs; }
     var r = await fetch(url, opts);
     var j = null;
     try { j = await r.json(); } catch (_) {}
@@ -196,6 +203,10 @@
   async function loadBatch(id) {
     var d = await api({ batch: id });
     BATCH = d.batch; CHECKS = d.checks || [];
+    loadStatus();
+    // anything the server already knows as sent no longer needs a local record
+    BATCH.rows.forEach(function (r) { if (r.sent) delete ROW_STATUS[r.wallet]; });
+    saveStatus();
     $("noBatch").hidden = true; $("batchWrap").hidden = false;
     $("bId").textContent = BATCH.id;
     $("bState").textContent = BATCH.state.toUpperCase();
@@ -219,18 +230,30 @@
     tb.innerHTML = BATCH.rows.map(function (r) {
       var live = ROW_STATUS[r.wallet];
       var pill, tx = "";
+      var recordBtn = function (sig) { return ' <button class="ghost" data-mark="' + esc(r.wallet) + '" data-sig="' + esc(sig) + '" style="padding:3px 8px;font-size:11px">record on server</button>'; };
       if (r.sent) { pill = '<span class="pill sent">PAID</span>'; tx = r.sig ? txLink(r.sig) : "manual"; }
+      else if (live && live.status === "sent" && live.sig) {
+        // Confirmed on chain but the server has no record (the POST failed, or the tab closed).
+        // This row must NOT read as "to send".
+        pill = '<span class="pill unc">SENT — NOT RECORDED</span>';
+        tx = txLink(live.sig) + recordBtn(live.sig);
+      }
       else if (live && live.status === "failed") { pill = '<span class="pill fail">FAILED</span> <small class="muted">' + esc(live.error || "") + "</small>"; }
       else if (live && live.status === "unconfirmed") {
         pill = '<span class="pill unc">UNCONFIRMED</span>';
-        tx = txLink(live.sig) + ' <button class="ghost" data-mark="' + esc(r.wallet) + '" data-sig="' + esc(live.sig) + '" style="padding:3px 8px;font-size:11px">landed — record it</button>';
+        tx = txLink(live.sig) + recordBtn(live.sig);
       }
       else pill = '<span class="pill owed">TO SEND</span>';
       return "<tr><td style=\"font-family:var(--mono);font-size:12px;word-break:break-all\">" + esc(r.wallet) + "</td><td class=\"num\">" + esc(cuna(r.raw)) +
         "</td><td class=\"num\">" + esc(usd(r.raw)) + "</td><td>" + pill + "</td><td>" + tx + "</td></tr>";
     }).join("");
     Array.prototype.forEach.call(tb.querySelectorAll("button[data-mark]"), function (b) {
-      b.addEventListener("click", function () { recordRows([{ wallet: b.getAttribute("data-mark"), sig: b.getAttribute("data-sig") }]).then(function () { return loadBatch(BATCH.id); }).catch(fail); });
+      b.addEventListener("click", function () {
+        recordRows([{ wallet: b.getAttribute("data-mark"), sig: b.getAttribute("data-sig") }]).then(function (rep) {
+          if (rep && rep.ignored && rep.ignored.length) $("progressText").innerHTML = '<span class="warn">Not recorded: ' + esc(rep.ignored.map(function (x) { return x.why; }).join("; ")) + "</span>";
+          return loadBatch(BATCH.id);
+        }).catch(fail);
+      });
     });
   }
   function txLink(sig) { return '<a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:11px">' + esc(String(sig).slice(0, 10)) + "…</a>"; }
@@ -268,22 +291,40 @@
   async function recordRows(rows) {
     if (!rows.length) return null;
     var r = await api({ batch: BATCH.id, sent: rows }, "POST");
+    (r.sentReport && r.sentReport.recorded || []).forEach(function (w) { delete ROW_STATUS[w]; });
+    saveStatus();
     return r.sentReport;
+  }
+
+  function unrecordedSent() {
+    return (BATCH ? BATCH.rows : []).filter(function (r) { var l = ROW_STATUS[r.wallet]; return !r.sent && l && l.status === "sent" && l.sig; });
   }
 
   async function send() {
     if ($("send").disabled) return;
-    SENDING = true; refreshSendButton(); ROW_STATUS = {};
+    if (unrecordedSent().length) { $("progressText").innerHTML = '<span class="bad">Record the SENT — NOT RECORDED rows first (buttons in the table). Sending again would pay them twice.</span>'; return; }
+    SENDING = true; ABORT = false; refreshSendButton();
+    // keep failed/unconfirmed rows from a previous attempt visible; only rows we are about to send are reset
+    BATCH.rows.forEach(function (r) { if (!r.sent && !(ROW_STATUS[r.wallet] && ROW_STATUS[r.wallet].status === "sent")) delete ROW_STATUS[r.wallet]; });
+    saveStatus();
     var lines = String(BATCH.remainingLines || "").split("\n").filter(Boolean);
     var recipients = lines.map(function (l) { var p = l.split(","); return { addr: p[0].trim(), amount: p[1].trim() }; });
     var queue = [], flushing = null;
     var flush = function () {
       if (flushing || !queue.length) return flushing || Promise.resolve();
       var batch = queue.splice(0, queue.length);
-      flushing = recordRows(batch).catch(function (e) {
+      flushing = recordRows(batch).then(function (rep) {
+        if (rep && rep.ignored && rep.ignored.length) {
+          // the server verified these on chain and refused them — leave them visible with buttons
+          $("progressText").innerHTML = '<span class="warn">Server did not record ' + rep.ignored.length + " row(s): " + esc(rep.ignored.map(function (x) { return x.why; }).join("; ")) + "</span>";
+        }
+      }).catch(function (e) {
         // A recording failure is the one thing that MUST stop the send: rows that landed but were
-        // not recorded would be offered again in the next batch.
-        $("progressText").innerHTML = '<span class="bad">STOPPED — ' + esc(e.message) + ". Rows that landed are on chain; reload and use the row buttons to record them before sending anything else.</span>";
+        // not recorded would be offered again in the next batch. ABORT makes the engine stop
+        // before its next wallet prompt; the signatures already collected are persisted locally
+        // and show as SENT — NOT RECORDED with a record button.
+        ABORT = true;
+        $("progressText").innerHTML = '<span class="bad">STOPPED — ' + esc(e.message) + ". Rows that landed are on chain and kept in this browser; use the row buttons to record them before sending anything else.</span>";
         throw e;
       }).then(function () { flushing = null; if (queue.length) return flush(); });
       return flushing;
@@ -293,8 +334,10 @@
         rpc: rpc, mint: MINT, recipients: recipients, walletPubkey: WALLET, provider: PROVIDER,
         memo: "CUNA lock-to-earn rewards " + BATCH.id,
         onProgress: function (msg, pct) { $("progressText").textContent = msg; $("bar").style.width = Math.max(0, Math.min(100, pct)) + "%"; },
+        shouldContinue: function () { return !ABORT; },
         onResult: function (r) {
           ROW_STATUS[r.addr] = { status: r.status, sig: r.sig, error: r.error };
+          saveStatus();
           if (r.status === "sent") { queue.push({ wallet: r.addr, sig: r.sig }); flush(); }
           renderRows();
         },
@@ -320,6 +363,7 @@
   $("reload").addEventListener("click", function () { load().catch(fail); });
   $("close").addEventListener("click", function () {
     if (!BATCH) return;
+    if (unrecordedSent().length) { alert("Record the SENT — NOT RECORDED rows first. Closing now would return them to owed and pay them twice."); return; }
     if (!confirm("Close batch " + BATCH.id + "? Rows already sent stay paid. Unsent rows go back to owed.")) return;
     api({ cancel: BATCH.id }, "POST").then(function () { return load(); }).catch(fail);
   });

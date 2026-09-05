@@ -10393,6 +10393,7 @@ const CUNA_STAKE_KV = "cunaStake";              // { armed, startedAt, config }
 const CUNA_STAKE_LEDGER_KV = "cunaStakeLedger"; // { [escrow]: { firstSeenAt, fingerprint, lastSeenAt } }
 const CUNA_STAKE_DAYS_KV = "cunaStakeDays";     // { "YYYY-MM-DD": { distributed, credits } }
 let CUNA_SCAN_CACHE = { at: 0, locks: null, err: null };
+const CUNA_CREATION_RETRIES = new Map();   // escrow -> failed creation lookups (see cunaLocks)
 let CUNA_SCAN_INFLIGHT = null;
 const CUNA_SCAN_TTL_MS = 5 * 60 * 1000;
 
@@ -10431,6 +10432,10 @@ async function cunaPriceUsd(mint) {
 async function cunaLocks({ force = false } = {}) {
   const now = Date.now();
   if (!force && CUNA_SCAN_CACHE.locks && now - CUNA_SCAN_CACHE.at < CUNA_SCAN_TTL_MS) return CUNA_SCAN_CACHE;
+  // During an outage, every public request used to kick off a fresh getProgramAccounts. `at` must
+  // keep meaning "last SUCCESS" (the accrual freshness guard reads it), so failures are throttled
+  // on their own timestamp.
+  if (!force && CUNA_SCAN_CACHE.err && now - (CUNA_SCAN_CACHE.lastAttemptAt || 0) < 60 * 1000) return CUNA_SCAN_CACHE;
   if (CUNA_SCAN_INFLIGHT) return CUNA_SCAN_INFLIGHT;
   CUNA_SCAN_INFLIGHT = (async () => {
     try {
@@ -10455,17 +10460,28 @@ async function cunaLocks({ force = false } = {}) {
         try { createdAt = await scanLib.creationTimes(P.provider.connection, unknown); }
         catch (e) { console.warn("[cuna-stake] creation-time lookup failed, using now: " + e.message); }
       }
-      const merged = scanLib.mergeLedger({ scanned, ledger: stored, nowUnix, createdAt });
+      const merged = scanLib.mergeLedger({ scanned, ledger: stored, nowUnix, createdAt,
+        backdateCapDays: p.config.backdateCapDays, notBefore: p.config.backdateNotBefore });
       if (p.armed) {
         // A NEW row whose creation lookup failed is stamped `now` in memory for this scan but NOT
-        // persisted: firstSeenAt is write-once, and a row stamped at arm time because Helius
-        // returned a 429 that day would understate that locker's term for the life of the lock.
-        // Left unpersisted, the next scan retries the lookup. Loud, because it is exactly the
-        // post-announcement, pre-arm lockers this bites.
+        // persisted, so the next scan retries the lookup — UP TO THREE TIMES. After that it is
+        // persisted at `now` and flagged, because a row that is never persisted has a clock that
+        // rolls forward every scan (its term shrinks daily until it earns nothing), and ~$2.50 of
+        // dust transactions to an address is enough to make its lookup fail forever. Persisting
+        // caps what a griefer can cost a locker at the backdating window; the flag plus the
+        // &reindex route let the owner restamp it by hand.
         const ledger = { ...merged.ledger };
         const deferred = merged.added.filter((k) => createdAt[k] == null);
-        for (const k of deferred) delete ledger[k];
-        if (deferred.length) console.warn(`[cuna-stake] ${deferred.length} new escrow(s) NOT recorded — creation lookup failed, will retry: ${deferred.slice(0, 5).join(", ")}`);
+        for (const k of deferred) {
+          const n = (CUNA_CREATION_RETRIES.get(k) || 0) + 1;
+          CUNA_CREATION_RETRIES.set(k, n);
+          if (n < 3) delete ledger[k];
+          else {
+            ledger[k] = { ...ledger[k], creationPending: true };
+            cunaOpsAlert(`⚠️ CUNA lock ${k} recorded at today's date after 3 failed creation lookups — if it was made earlier, restamp it: POST /api/cuna-stake/admin?key=…&reindex=${k}`, `pending:${k}`).catch(() => {});
+          }
+        }
+        if (deferred.length) console.warn(`[cuna-stake] ${deferred.length} new escrow(s) with no creation time (attempt ${Math.max(...deferred.map((k) => CUNA_CREATION_RETRIES.get(k) || 0))}): ${deferred.slice(0, 5).join(", ")}`);
         kv.set(CUNA_STAKE_LEDGER_KV, ledger);
         if (merged.added.length || merged.reset.length) {
           const back = merged.added.filter((k) => merged.ledger[k] && merged.ledger[k].backdated).length;
@@ -10477,7 +10493,7 @@ async function cunaLocks({ force = false } = {}) {
       console.warn("[cuna-stake] scan failed: " + e.message);
       // Keep serving the last good scan rather than reporting an empty programme — "nobody
       // qualifies" and "we could not look" must never render the same way.
-      CUNA_SCAN_CACHE = { ...CUNA_SCAN_CACHE, err: publicErrMsg(e) };
+      CUNA_SCAN_CACHE = { ...CUNA_SCAN_CACHE, err: publicErrMsg(e), lastAttemptAt: Date.now() };
     } finally {
       CUNA_SCAN_INFLIGHT = null;
     }
@@ -10777,13 +10793,17 @@ async function cunaAccrualTick(reason) {
   const snap = await cunaLocks({ force: true });
   const skip = (why) => {
     console.error(`[cuna-accrual] SKIPPING ${gate.day} — ${why}`);
-    cunaOpsAlert(`⚠️ CUNA accrual skipped ${gate.day}: ${why}. The day stays unwritten; it will retry hourly.`).catch(() => {});
+    cunaOpsAlert(`⚠️ CUNA accrual skipped ${gate.day}: ${why}. The day stays unwritten; it will retry hourly.`, `skip:${gate.day}:${why.slice(0, 40)}`).catch(() => {});
     return { ok: false, reason: why };
   };
   if (snap.err) return skip(`the chain read failed: ${snap.err}`);
   if (!snap.locks || snap.at < tickStart) return skip("no fresh scan this tick");
   const locks = snap.locks;
-  const known = Object.keys(kv.get(CUNA_STAKE_LEDGER_KV, {}) || {}).length;
+  // Rows SEEN IN THE LAST WEEK, not the all-time ledger: closed escrows stay in the ledger forever
+  // (deleting would restart a clock), so measuring against every row ever indexed would wedge
+  // accrual for good once half the locks had matured and been closed.
+  const known = Object.values(kv.get(CUNA_STAKE_LEDGER_KV, {}) || {})
+    .filter((r) => r && Number(r.lastSeenAt || 0) >= nowUnix - 7 * 86400).length;
   if (locks.length === 0) return skip("the scan returned zero escrows (the treasury's own locks always exist)");
   if (known >= 10 && locks.length * 2 < known) return skip(`the scan returned ${locks.length} escrows but the ledger knows ${known} — index lag or a layout change`);
   const unlock = s.dailyUnlockRaw(locks, nowUnix, gate.config.fundedBy);
@@ -10819,9 +10839,19 @@ async function cunaAccrualTick(reason) {
 // Operator-chat line for the staking programme. SILENT (no &loud=1 — never without an owner ask).
 // Goes to CUNA_OPS_CHAT_ID if set, else the main TELEGRAM_CHAT_ID; tgSend already no-ops when the
 // bot token is missing and prefixes [STAGING] on the staging box.
-async function cunaOpsAlert(text) {
-  const chat = process.env.CUNA_OPS_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
+const CUNA_ALERT_SEEN = new Map();   // dedupe key -> unix; the same alert is not repeated within 6h
+async function cunaOpsAlert(text, dedupeKey) {
+  // NEVER the public community chat. TELEGRAM_CHAT_ID is the room the whole community reads, and
+  // this repo already had one incident of an internal alert falling back to it. The private path
+  // is the operator chat the treasury vault uses, then the owner's DM.
+  const chat = process.env.CUNA_OPS_CHAT_ID || operatorChatId() || OPERATOR_DM_FALLBACK;
   if (!chat) return null;
+  if (dedupeKey) {
+    const now = Date.now();
+    const last = CUNA_ALERT_SEEN.get(dedupeKey) || 0;
+    if (now - last < 6 * 60 * 60 * 1000) return null;
+    CUNA_ALERT_SEEN.set(dedupeKey, now);
+  }
   return tgSend(chat, text, null, { silent: true });
 }
 
@@ -10953,9 +10983,12 @@ async function cunaBurnTickInner(reason) {
           continue;
         }
         if (v && v.err) { delete done[day]; kv.set(CUNA_BURN_DAYS_KV, done); console.warn(`[cuna-burn] ${day}: earlier send failed on-chain — will retry`); continue; }
-        // Not found: past its blockhash it can never land; before that, keep waiting.
+        // A status of any kind ("processed" included) means the transaction is on the ledger and
+        // may still confirm — never release on that. Only a NULL status past its blockhash, with
+        // a margin for a node that is behind, can never land.
+        if (v) return { ok: false, reason: `${day}: earlier send is ${v.confirmationStatus || "processed"}, waiting (${rec.sig})` };
         const bh = rec.lastValidBlockHeight ? await conn.getBlockHeight("confirmed") : null;
-        if (bh != null && bh > rec.lastValidBlockHeight) { delete done[day]; kv.set(CUNA_BURN_DAYS_KV, done); console.warn(`[cuna-burn] ${day}: earlier send expired unconfirmed — will retry`); }
+        if (bh != null && bh > rec.lastValidBlockHeight + 150) { delete done[day]; kv.set(CUNA_BURN_DAYS_KV, done); console.warn(`[cuna-burn] ${day}: earlier send expired unconfirmed — will retry`); }
         else return { ok: false, reason: `${day}: waiting for an earlier send to confirm or expire (${rec.sig})` };
       } else if (nowUnix - (rec.at || 0) > 10 * 60) {
         // Reserved but no signature ever recorded: the process died between reserving and sending.
@@ -11052,11 +11085,19 @@ async function cunaBurnTickInner(reason) {
     // its signature, and the next tick asks the chain about THAT signature rather than sending a
     // second burn. The old code recorded nothing on a throw, so an ambiguous confirm meant a retry
     // — and a retry of a burn that had actually landed burned the day twice.
-    done[gate.day] = { state: "sending", sig: null, amountRaw: gate.amountRaw, at: nowUnix, wallet: cfg.wallet, lastValidBlockHeight };
-    kv.set(CUNA_BURN_DAYS_KV, done);
-    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 3 });
-    done[gate.day] = { ...done[gate.day], sig };
-    kv.set(CUNA_BURN_DAYS_KV, done);
+    // The signature is known BEFORE sending (it is the signer's signature over the message), so
+    // the reservation carries it from the start. A send that throws after the RPC has already
+    // forwarded the transaction — a socket timeout on the response — used to leave a sig-less
+    // reservation that was released after ten minutes and then re-sent.
+    const sig = bs58.encode(tx.signature);
+    // Re-read the day record at the last moment: another instance (rolling deploy) may have
+    // reserved it while this one was waiting on the balance read and the claims.
+    const fresh = kv.get(CUNA_BURN_DAYS_KV, {}) || {};
+    if (fresh[gate.day]) return { ok: false, reason: `${gate.day} was reserved by another instance while this one prepared` };
+    fresh[gate.day] = { state: "sending", sig, amountRaw: gate.amountRaw, at: nowUnix, wallet: cfg.wallet, lastValidBlockHeight };
+    kv.set(CUNA_BURN_DAYS_KV, fresh);
+    Object.assign(done, fresh);
+    await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 3 });
     // A returned signature means the RPC ACCEPTED it, not that it landed — that mistake was made
     // in this repo already and reported as done. Wait for the real thing before recording the day.
     const conf = await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
@@ -11107,7 +11148,7 @@ async function cunaBurnTickInner(reason) {
     // against the chain (landed -> done, failed/expired -> released) rather than sending again. A
     // throw BEFORE the send left a reservation with no signature, which is released after 10 min.
     console.error(`[cuna-burn] burn failed: ${e.message}`);
-    cunaOpsAlert(`⚠️ CUNA burn tick failed: ${publicErrMsg(e)}`).catch(() => {});
+    cunaOpsAlert(`⚠️ CUNA burn tick failed: ${publicErrMsg(e)}`, `burnfail:${publicErrMsg(e).slice(0, 60)}`).catch(() => {});
     return { ok: false, reason: publicErrMsg(e) };
   }
 }
@@ -11227,8 +11268,13 @@ async function cunaPayoutChecks(batch, { days, paid, batches }) {
   const snap = await cunaLocks();
   const known = new Set((snap.locks || []).map((l) => String(l.recipient)));
   const unknown = Object.keys(batch.amounts || {}).filter((w) => !known.has(w));
+  // SOFT: a payee whose lock matured and was closed since the batch was built is still owed what
+  // they earned while it was open. Red here is a prompt to look, not a reason to withhold.
   add("known", snap.locks != null && unknown.length === 0,
-    "Every payee has a CUNA lock on chain right now", snap.locks == null ? "chain scan failed — cannot verify" : (unknown.join(", ") || "all matched"));
+    "Every payee still has a CUNA lock on chain (soft — a closed lock is still owed its past days)", snap.locks == null ? "chain scan failed — cannot verify" : (unknown.join(", ") || "all matched"), false);
+  // HARD: writes must reach the volume, or the batch record vanishes on restart and the same
+  // money is offered again.
+  add("storage", kv.isPersistent(), "Payout records are persisted to the volume", kv.isPersistent() ? "DATA_DIR volume mounted" : "MEMORY ONLY — do not send");
 
   // 4. Rows add up to the batch header.
   add("rows", sum(batch.amounts) === BigInt(batch.totalRaw || 0), "Row amounts add up to the batch total",
@@ -11272,7 +11318,32 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       let results = q.sent;
       if (typeof results === "string") { try { results = JSON.parse(results); } catch (_) { results = null; } }
       if (!Array.isArray(results) || results.length > 500) return res.status(400).json({ ok: false, error: "sent must be a list of {wallet, sig}" });
+      // Verify every signature ON CHAIN before recording it. The record is what stops a wallet
+      // being paid again, so a typo, an expired unconfirmed transaction, or a signature from some
+      // other transaction must not be able to mark a row paid. One getSignatureStatuses call
+      // covers up to 256 signatures.
+      // A Solana signature is exactly 64 bytes; anything else is refused before it reaches the RPC.
+      const bs58v = require("bs58");
+      const wellFormed = (x) => { try { return /^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(x) && bs58v.decode(x).length === 64; } catch (_) { return false; } };
+      const sigs = [...new Set(results.map((r) => String((r && r.sig) || "").trim()).filter(wellFormed))];
+      let landed = new Set();
+      if (sigs.length) {
+        try {
+          const { connection } = require("./lib/rpc");
+          const st = await connection("confirmed").getSignatureStatuses(sigs, { searchTransactionHistory: true });
+          (st && st.value || []).forEach((v, i) => {
+            if (v && !v.err && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")) landed.add(sigs[i]);
+          });
+        } catch (e) {
+          // Cannot verify -> record nothing, say so plainly. The page keeps the signatures locally
+          // and offers the row buttons again.
+          return res.status(503).json({ ok: false, error: "could not verify signatures on chain right now — nothing recorded, try again: " + publicErrMsg(e) });
+        }
+      }
+      const rejected = results.filter((r) => !landed.has(String((r && r.sig) || "").trim())).map((r) => ({ wallet: r && r.wallet, sig: r && r.sig, why: "signature not confirmed on chain" }));
+      results = results.filter((r) => landed.has(String((r && r.sig) || "").trim()));
       const r = pay.recordSent({ batch: b, paid, results, nowUnix });
+      r.ignored = [...r.ignored, ...rejected];
       paid = r.paid;
       batches = { ...batches, [id]: r.batch };
       kv.set(CUNA_PAID_KV, paid); kv.set(CUNA_BATCH_KV, batches);
@@ -11280,8 +11351,8 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       // unmounted volume) must not be reported as recorded, or the page retries nothing and the
       // next batch offers the same money again.
       const check = kv.get(CUNA_BATCH_KV, {}) || {};
-      const persisted = check[id] && check[id].sent && r.recorded.every((w) => check[id].sent[w]);
-      if (!persisted) return res.status(500).json({ ok: false, error: "recorded in memory but the volume write did not persist — STOP and check DATA_DIR before sending more" });
+      const persisted = kv.isPersistent() && check[id] && check[id].sent && r.recorded.every((w) => check[id].sent[w]);
+      if (!persisted) return res.status(500).json({ ok: false, error: "recorded in memory but the volume is not persistent — STOP and check DATA_DIR before sending more" });
       sentReport = { recorded: r.recorded, ignored: r.ignored, remaining: Object.keys(r.remaining).length, state: r.batch.state };
       console.log(`[cuna-payout] batch ${id}: ${r.recorded.length} rows recorded sent, ${Object.keys(r.remaining).length} remaining, state ${r.batch.state}`);
     } else if (q.confirm) {

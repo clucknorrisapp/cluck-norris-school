@@ -218,7 +218,24 @@ t("recordSent refuses rows without a real signature or outside the batch, and co
   assert.strictEqual(r.ignored.length, 2);
   const r2 = pay.recordSent({ batch: r.batch, paid: r.paid, results: [{ wallet: "A", sig: SIG }], nowUnix: 3 });
   assert.strictEqual(r2.batch.state, "sent", "all rows in -> batch completes by itself");
-  assert.throws(() => pay.recordSent({ batch: r2.batch, paid: r2.paid, results: [], nowUnix: 4 }), /pending/);
+  // a completed batch still accepts a (deduplicated) record without changing anything
+  const r3 = pay.recordSent({ batch: r2.batch, paid: r2.paid, results: [{ wallet: "A", sig: SIG }], nowUnix: 4 });
+  assert.deepStrictEqual(r3.recorded, []); assert.strictEqual(r3.batch.state, "sent"); assert.strictEqual(r3.paid.A, r2.paid.A);
+});
+
+t("a row that confirmed AFTER the batch was closed is still recorded — money moved", () => {
+  // Tab B closed the batch while tab A's transaction was confirming. Refusing the record left the
+  // row in owed and paid it again next week. The batch stays closed; the row goes to paid.
+  const days = { d1: { credits: { A: "100", B: "200" } } };
+  const b = pay.buildBatch({ owed: pay.owedNow({ days, paid: {}, pending: {} }), batchId: "cb_1", nowUnix: 1 });
+  const closed = pay.cancelBatch({ batch: b });
+  const r = pay.recordSent({ batch: closed, paid: {}, results: [{ wallet: "A", sig: SIG }], nowUnix: 2 });
+  assert.deepStrictEqual(r.recorded, ["A"]);
+  assert.strictEqual(r.batch.state, "cancelled", "state is kept");
+  assert.strictEqual(r.paid.A, "100");
+  const owed = pay.owedNow({ days, paid: r.paid, pending: { cb_1: r.batch } });
+  assert.strictEqual(owed.A, 0n, "A is paid and must not be re-offered");
+  assert.strictEqual(owed.B, 200n);
 });
 
 (async () => {
