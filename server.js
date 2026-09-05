@@ -10983,7 +10983,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       const id = "cb_" + randomBytes(5).toString("hex");
       const batch = pay.buildBatch({
         owed, batchId: id, nowUnix,
-        minPayoutRaw: q.minPayoutRaw != null ? q.minPayoutRaw : pay.DEFAULT_MIN_PAYOUT_RAW,
+        minPayoutRaw: q.minPayoutRaw != null ? q.minPayoutRaw : pay.DEFAULT_MIN_PAYOUT_RAW,   // 0 = pay everyone
       });
       // Nothing to pay is a normal outcome, not a different endpoint: it falls through to the
       // SAME response shape with created:null and a note. An early return here handed callers a
@@ -11011,7 +11011,13 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       previewLines: created ? null : pay.toAirdropLines(
         pay.buildBatch({ owed, batchId: "preview", nowUnix }).amounts, 9),
       pendingBatches: pending.map((b) => ({ id: b.id, at: b.at, count: b.count, totalRaw: b.totalRaw })),
+      // Per-wallet rows for one batch, so scripts/cuna-payout-verify.cjs can check the line items
+      // against the header rather than trusting it.
+      batchAmounts: q.batch && batches[String(q.batch)] ? batches[String(q.batch)].amounts : null,
       totalPaidRaw: totalPaid.toString(),
+      // Everything ever credited by accrual. The verifier reconciles this against
+      // owed + pending + paid; if they disagree, somebody is about to be paid twice or not at all.
+      creditedTotalRaw: Object.values(pay.totalCredits(days)).reduce((a, v) => a + v, 0n).toString(),
       daysAccrued: Object.keys(days).length,
       mint: require("./lib/cuna-programme").readProgramme(kv.get(CUNA_STAKE_KV, null)).config.mint,
       decimals: 9,

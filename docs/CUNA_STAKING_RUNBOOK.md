@@ -27,7 +27,7 @@ the same as one made on ours.
 | Cancelable locks | **never earn** (owner, 09-05) |
 | Tiers | 3/6/9/12/15/18 months → **1×–6×**, from the weight formula alone |
 | Pool | **345,000 CUNA/day flat** (owner, 09-05) — half the 690,000 burn, 5× the 69,000 floor, ~5.2% of the stream |
-| Dust floor | **69,000** CUNA minimum lock (~$1.60); 1,000 CUNA minimum payout |
+| Dust floor | **69,000** CUNA minimum lock (~$1.60). **No minimum payout** — everyone gets paid |
 | Daily burn | **690,000 CUNA at 15:00 UTC** from the treasury, claim-first |
 
 ⚠️ **The fixed pool is still capped at 25% of what actually unlocked that day.** The guarantee is
@@ -168,7 +168,36 @@ letting them notice.
 
 ---
 
-## Paying people
+## Paying people — WEEKLY, every Friday
+
+**Schedule: weekly (owner, 2026-09-05 — "this is a meme project, so we are probably going to have
+to do weekly rewards to keep people engaged").** Friday, covering the previous seven days, so
+rewards land before the weekend when the room is busiest.
+
+Weekly only works because there is **no minimum payout**: with a floor, the smallest lockers would
+sit below it most weeks and get nothing until it accumulated. Without one, everybody gets paid
+every Friday however small their share. That is the whole reason the floor came out.
+
+### Before EVERY send, run the verifier
+
+```bash
+node scripts/cuna-payout-verify.cjs https://clucknorris.app "$PREMIUM_ACCESS_KEY" [batchId]
+```
+
+It does not ask the server whether the server is right — it pulls the day ledger, the paid record
+and the batch, recomputes from scratch, and compares. Checks: the line items sum to the stated
+total, owed + pending + paid reconciles with everything ever credited, no excluded wallet is in the
+batch, every recipient actually holds a CUNA lock on-chain, the batch is within days × daily pool,
+and there are no duplicates or non-positive rows.
+
+**It is tamper-tested**, which matters more than the checks themselves — a verifier that always
+says green is worse than none. Inflating one line item, slipping the treasury in, inflating the
+batch 50×, and adding a recipient with no lock are each caught, and an untouched batch passes.
+
+Exit code is non-zero on any problem, so it can gate a script. **A green verifier is not the same
+as a human having looked** — read the wallet list too.
+
+
 
 Accrual writes what is owed. **Sending is your airdrop, signed by you.** Three steps, and the middle
 one is what stops anyone being paid twice.

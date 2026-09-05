@@ -75,24 +75,32 @@ t("an over-payment shows as zero owed, never as a debt", () => {
 
 section("building the batch");
 
-t("dust is left owed, not dropped", () => {
-  const owed = { A: CUNA(5000), B: CUNA(3), C: CUNA(1000) };
-  const b = p.buildBatch({ owed, batchId: "b1", nowUnix: 1 });
-  assert.deepStrictEqual(Object.keys(b.amounts).sort(), ["A", "C"]);
+t("THERE IS NO MINIMUM PAYOUT — the smallest earner is paid", () => {
+  // Owner, 2026-09-05: recipients already hold CUNA and have a lock, so their token account
+  // exists — no rent, just a per-transfer fee worth fractions of a cent in a batch. A floor would
+  // also get MORE exclusionary as the price rose, which is backwards.
+  assert.strictEqual(p.DEFAULT_MIN_PAYOUT_RAW, 0n);
+  const b = p.buildBatch({ owed: { A: CUNA(5000), B: "1", C: CUNA(3) }, batchId: "b1", nowUnix: 1 });
+  assert.deepStrictEqual(Object.keys(b.amounts).sort(), ["A", "B", "C"]);
+  assert.strictEqual(b.amounts.B, "1", "one base unit is still owed and still paid");
+  assert.deepStrictEqual(b.skippedBelowFloor, {});
+});
+
+t("the floor still works if it is ever switched back on", () => {
+  // Kept as a knob because a floor is the right tool if fees ever change.
+  const b = p.buildBatch({ owed: { A: CUNA(5000), B: CUNA(3) }, minPayoutRaw: CUNA(1000),
+                           batchId: "b1", nowUnix: 1 });
+  assert.deepStrictEqual(Object.keys(b.amounts), ["A"]);
   assert.strictEqual(b.skippedBelowFloor.B, CUNA(3));
-  // and it is still owed next time, because nothing was written to paid
+  // and skipped dust is still owed, because nothing was written to paid
   const { paid } = p.confirmBatch({ batch: b, paid: {} });
   assert.strictEqual(paid.B, undefined);
 });
 
-t("exactly the floor is paid", () => {
-  const b = p.buildBatch({ owed: { A: CUNA(1000) }, batchId: "b1", nowUnix: 1 });
-  assert.strictEqual(b.amounts.A, CUNA(1000));
-});
-
 t("the total is the sum of what is actually being sent", () => {
-  const b = p.buildBatch({ owed: { A: CUNA(5000), B: CUNA(3), C: CUNA(2000) }, batchId: "b1", nowUnix: 1 });
-  assert.strictEqual(b.totalRaw, CUNA(7000), "the dust must not be counted in the total");
+  const b = p.buildBatch({ owed: { A: CUNA(5000), B: CUNA(3), C: CUNA(2000) }, minPayoutRaw: CUNA(1000),
+                           batchId: "b1", nowUnix: 1 });
+  assert.strictEqual(b.totalRaw, CUNA(7000), "skipped dust must not be counted in the total");
   assert.strictEqual(b.count, 2);
 });
 
