@@ -205,6 +205,16 @@ const FAKE = (cfg) => `(() => {
     await page.click("#connect");
     const box = await page.$eval("#walletBox", (el) => el.textContent);
     ok("no wallet at all: still the open-in-a-wallet links, Jupiter named in the copy", list.length === 0 && /Open .*inside a wallet/.test(box) && /Jupiter/.test(box), box.trim().slice(0, 160));
+    ok("no diagnostics unless asked for", !/windowNames/.test(box));
+    // ?walletdebug=1 shows what the browser exposes — names only
+    await page.goto(`${BASE}/cuna-staking?walletdebug=1`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!window.CluckWallet, null, { timeout: 15000 });
+    // a wallet-ish namespace that is NOT a provider (what an unknown in-app browser might inject)
+    await page.evaluate(() => { window.jupiterProbe = { secretThing: "DO-NOT-SHOW" }; });
+    await page.click("#connect");
+    const dbg = await page.$eval("#walletBox", (el) => el.textContent);
+    ok("?walletdebug=1 lists the user-agent and wallet-ish window names, never values",
+       /"ua"/.test(dbg) && /iPhone/.test(dbg) && /jupiterProbe/.test(dbg) && /"legacySolana": false/.test(dbg) && !/DO-NOT-SHOW/.test(dbg), dbg.slice(0, 240));
     await ctx.close();
   }
 
