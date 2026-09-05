@@ -288,6 +288,11 @@ jobs:
       # installs none.
       - name: autopsy caches stay bounded
         run: node scripts/cache-bound-test.cjs
+      # The AI tutor's free daily allowance was enforced ONLY in localStorage, so the real ceiling
+      # was ~21,600 billed Anthropic calls per IP per day. This boots the real server, because the
+      # cap has to fire in FRONT of the handler — a 429 after the paid call saves nothing.
+      - name: AI tutor daily cap is enforced server-side
+        run: node scripts/ai-daily-cap-test.cjs
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
