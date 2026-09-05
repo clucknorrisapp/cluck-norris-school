@@ -10364,7 +10364,7 @@ app.get("/api/cuna-stake/config", async (req, res) => {
     const snap = await cunaLocks();
     const locks = snap.locks || [];
     const nowUnix = Math.floor(Date.now() / 1000);
-    const unlock = s.dailyUnlockRaw(locks, nowUnix);
+    const unlock = s.dailyUnlockRaw(locks, nowUnix, p.config.excludeWallets);
     const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct });
     const eligible = locks.filter((l) => s.qualifies(l, p.config));
     let lockedRaw = 0n;
@@ -10488,7 +10488,7 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
     const nowUnix = Math.floor(Date.now() / 1000);
     const snap = await cunaLocks({ force: String(q.rescan || "") === "1" });
     const locks = snap.locks || [];
-    const unlock = s.dailyUnlockRaw(locks, nowUnix);
+    const unlock = s.dailyUnlockRaw(locks, nowUnix, p.config.excludeWallets);
     const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct });
     const preview = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: p.config });
     // Manual accrual, for catching up a day the timer missed or for verifying a config change
@@ -10567,7 +10567,7 @@ async function cunaAccrualTick(reason) {
     return { ok: false, reason: "scan failed" };
   }
   const locks = snap.locks || [];
-  const unlock = s.dailyUnlockRaw(locks, nowUnix);
+  const unlock = s.dailyUnlockRaw(locks, nowUnix, gate.config.excludeWallets);
   const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: gate.config.sharePct });
   const day = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: gate.config });
 
@@ -10598,6 +10598,169 @@ setInterval(() => { cunaAccrualTick("hourly").catch((e) => console.error("[cuna-
   CUNA_ACCRUAL_TICK_MS);
 setTimeout(() => { cunaAccrualTick("boot").catch((e) => console.error("[cuna-accrual] " + e.message)); },
   90 * 1000);
+
+
+// ── CUNA daily burn ────────────────────────────────────────────────────────
+// Burn a fixed amount of CUNA from the treasury once per UTC day, at a set hour.
+// Owner, 2026-09-05: "we would burn 690K tokens per day same time per day from cuna dev wallet"
+// (confirmed same day that the dev wallet IS the treasury).
+//
+// ⛔ THIS DESTROYS TOKENS AND CANNOT BE UNDONE. It ships DISARMED and needs THREE separate things
+// before it can act: armed:true in kv, a CUNA_BURN_SECRET in the environment, and a configured
+// wallet. Decisions live in lib/cuna-burn.js and are unit-tested; this half only executes what
+// burnGate() authorises.
+//
+// ⚠️ CUNA_BURN_SECRET is deliberately its OWN env var even though it holds the same treasury key
+// as MM_OPERATOR_SECRET_TREASURY. Turning on the burner must be a separate, deliberate act — one
+// key should never quietly gain the power to destroy supply because a different feature was armed.
+// Durable stop: CUNA_BURN_OFF=1.
+const CUNA_BURN_KV = "cunaBurn";          // { armed, armedAt, config }
+const CUNA_BURN_DAYS_KV = "cunaBurnDays"; // { "YYYY-MM-DD": { sig, amountRaw, at } }
+const CUNA_BURN_TICK_MS = 30 * 60 * 1000;
+
+async function cunaBurnTick(reason) {
+  const burnLib = require("./lib/cuna-burn");
+  const stored = kv.get(CUNA_BURN_KV, null);
+  const done = kv.get(CUNA_BURN_DAYS_KV, {}) || {};
+  const nowUnix = Math.floor(Date.now() / 1000);
+
+  if (String(process.env.CUNA_BURN_OFF || "") === "1") return { ok: false, reason: "CUNA_BURN_OFF=1" };
+  const secret = process.env.CUNA_BURN_SECRET;
+  const cfg = burnLib.readBurn(stored).config;
+
+  // Read the balance ON-CHAIN, never from a product tool — those are activity scanners and they
+  // undercount. Both token programs, jsonParsed, same as everywhere else in this repo.
+  let balanceRaw = "0", tokenAccount = null, tokenProgram = null;
+  if (cfg.wallet) {
+    try {
+      const { PublicKey } = require("@solana/web3.js");
+      const { connection } = require("./lib/rpc");
+      const conn = connection("confirmed");
+      const owner = new PublicKey(cfg.wallet), mint = new PublicKey(cfg.mint);
+      const info = await conn.getAccountInfo(mint);
+      if (!info) throw new Error("mint not found on-chain");
+      tokenProgram = info.owner;
+      const r = await conn.getParsedTokenAccountsByOwner(owner, { mint });
+      for (const { pubkey, account } of r.value) {
+        const amt = account.data.parsed.info.tokenAmount.amount;
+        if (BigInt(amt) > BigInt(balanceRaw)) { balanceRaw = amt; tokenAccount = pubkey; }
+      }
+    } catch (e) {
+      console.warn(`[cuna-burn] could not read the balance: ${e.message}`);
+      return { ok: false, reason: "balance read failed: " + publicErrMsg(e) };
+    }
+  }
+
+  const gate = burnLib.burnGate({ burn: stored, burnedDays: done, nowUnix, balanceRaw, hasSigner: !!secret });
+  if (!gate.ok) {
+    // Quiet on the normal cases (this ticks twice an hour); loud on SHORT, because that is the
+    // one that means a burn the owner expected did not happen.
+    if (gate.short) console.error(`[cuna-burn] ${gate.reason}`);
+    else if (!/not armed|already burned|waiting for|CUNA_BURN_SECRET|no dev wallet/.test(gate.reason)) {
+      console.warn(`[cuna-burn] not burning: ${gate.reason}`);
+    }
+    return { ok: false, reason: gate.reason, balanceRaw };
+  }
+  if (!tokenAccount) return { ok: false, reason: "no CUNA token account on the wallet" };
+
+  try {
+    const { Keypair, PublicKey, Transaction } = require("@solana/web3.js");
+    const spl = require("@solana/spl-token");
+    const bs58 = require("bs58");
+    const { connection } = require("./lib/rpc");
+    const conn = connection("confirmed");
+
+    const signer = Keypair.fromSecretKey(bs58.decode(secret.trim()));
+    if (signer.publicKey.toBase58() !== cfg.wallet) {
+      // A key that does not match the configured wallet would burn from somewhere else entirely.
+      console.error(`[cuna-burn] REFUSING: CUNA_BURN_SECRET is ${signer.publicKey.toBase58()}, config says ${cfg.wallet}`);
+      return { ok: false, reason: "signing key does not match the configured wallet" };
+    }
+
+    // burnCHECKED, not burn: it carries the decimals and the chain rejects a mismatch. On an
+    // irreversible instruction, paying one extra byte for the chain to check our arithmetic is
+    // obviously worth it — a decimals slip here is a 1000x burn.
+    const ix = spl.createBurnCheckedInstruction(
+      tokenAccount, new PublicKey(cfg.mint), signer.publicKey, BigInt(gate.amountRaw), 9, [], tokenProgram);
+    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+    const tx = new Transaction({ feePayer: signer.publicKey, blockhash, lastValidBlockHeight }).add(ix);
+    tx.sign(signer);
+
+    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 3 });
+    // A returned signature means the RPC ACCEPTED it, not that it landed — that mistake was made
+    // in this repo already and reported as done. Wait for the real thing before recording the day.
+    const conf = await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    if (conf && conf.value && conf.value.err) {
+      console.error(`[cuna-burn] tx ${sig} FAILED on-chain: ${JSON.stringify(conf.value.err)}`);
+      return { ok: false, reason: "transaction failed on-chain", sig };
+    }
+
+    done[gate.day] = { sig, amountRaw: gate.amountRaw, at: nowUnix, wallet: cfg.wallet };
+    kv.set(CUNA_BURN_DAYS_KV, done);
+    console.log(`[cuna-burn] ${gate.day} (${reason}): burned ${(Number(gate.amountRaw) / 1e9).toLocaleString()} CUNA — ${sig}`);
+    return { ok: true, day: gate.day, sig, amountRaw: gate.amountRaw };
+  } catch (e) {
+    // Never record the day on a throw: an unrecorded day can be retried, a wrongly-recorded one
+    // silently skips a burn forever.
+    console.error(`[cuna-burn] burn failed: ${e.message}`);
+    return { ok: false, reason: publicErrMsg(e) };
+  }
+}
+
+setInterval(() => { cunaBurnTick("timer").catch((e) => console.error("[cuna-burn] " + e.message)); }, CUNA_BURN_TICK_MS);
+
+// Owner-only: arm, disarm, configure, inspect, and run once. Same posture as the staking admin —
+// 404 when the key is unset or wrong, and refused outright for anything that skipped the WAF.
+app.all("/api/cuna-burn/admin", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (req.cluckDirect) return res.status(404).json({ ok: false, error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+  try {
+    const burnLib = require("./lib/cuna-burn");
+    const q = { ...(req.query || {}), ...(req.body || {}) };
+    let stored = kv.get(CUNA_BURN_KV, null);
+
+    if (String(q.config || "") === "1") {
+      const patch = {};
+      for (const k of ["wallet", "amountRaw", "hourUtc", "mint"]) if (q[k] != null) patch[k] = q[k];
+      const config = burnLib.validateBurnConfig(patch, burnLib.readBurn(stored).config);
+      stored = { ...(stored || {}), config };
+      kv.set(CUNA_BURN_KV, stored);
+      console.log(`[cuna-burn] config updated: ${JSON.stringify(config)}`);
+    }
+    if (String(q.arm || "") === "1") {
+      if (String(q.confirm || "") !== "burn-daily") {
+        return res.status(400).json({ ok: false, error: "arming needs &arm=1&confirm=burn-daily — two flags, because this destroys tokens" });
+      }
+      stored = burnLib.arm(stored, Math.floor(Date.now() / 1000));
+      kv.set(CUNA_BURN_KV, stored);
+      console.log("[cuna-burn] ARMED — daily burns will run");
+    } else if (String(q.off || "") === "1") {
+      stored = burnLib.disarm(stored);
+      kv.set(CUNA_BURN_KV, stored);
+      console.log("[cuna-burn] DISARMED");
+    }
+
+    const ranNow = String(q.run || "") === "1" ? await cunaBurnTick("manual") : null;
+    const b = burnLib.readBurn(kv.get(CUNA_BURN_KV, null));
+    const days = kv.get(CUNA_BURN_DAYS_KV, {}) || {};
+    let totalRaw = 0n;
+    for (const d of Object.values(days)) if (d && d.amountRaw) totalRaw += BigInt(d.amountRaw);
+    return res.status(200).json({
+      ok: true,
+      armed: b.armed,
+      config: b.config,
+      hasSigner: !!process.env.CUNA_BURN_SECRET,
+      killSwitch: String(process.env.CUNA_BURN_OFF || "") === "1",
+      burnRun: ranNow,
+      daysBurned: Object.keys(days).length,
+      totalBurnedRaw: totalRaw.toString(),
+      recent: Object.fromEntries(Object.keys(days).sort().slice(-7).map((k) => [k, days[k]])),
+    });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
 
 app.get("/fonts/LuckiestGuy.ttf", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");

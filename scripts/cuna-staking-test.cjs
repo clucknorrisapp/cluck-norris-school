@@ -328,15 +328,32 @@ t("nothing accrued means nothing claimable, and it does not throw", () => {
 
 section("the unlock stream the pool is drawn from");
 
+const T = ["Treasury"];
+
 t("only locks past their cliff and still running are releasing anything", () => {
-  const inCliff = lock({ escrow: "A", cliffDays: 180, durationDays: 365 });   // cliff ahead
-  const running = lock({ escrow: "B", seen: NOW - 200 * DAY, cliffDays: 180, durationDays: 400 });
-  const done    = lock({ escrow: "C", seen: NOW - 500 * DAY, cliffDays: 180, durationDays: 365 });
-  assert.strictEqual(s.dailyUnlockRaw([inCliff], NOW), 0n, "a lock inside its cliff releases nothing");
-  assert.strictEqual(s.dailyUnlockRaw([done], NOW), 0n, "a finished lock releases nothing");
-  assert.ok(s.dailyUnlockRaw([running], NOW) > 0n);
-  // and the total is just the sum of the ones actually running
-  assert.strictEqual(s.dailyUnlockRaw([inCliff, running, done], NOW), s.dailyUnlockRaw([running], NOW));
+  const R = (o) => lock({ recipient: "Treasury", ...o });
+  const inCliff = R({ escrow: "A", cliffDays: 180, durationDays: 365 });   // cliff ahead
+  const running = R({ escrow: "B", seen: NOW - 200 * DAY, cliffDays: 180, durationDays: 400 });
+  const done    = R({ escrow: "C", seen: NOW - 500 * DAY, cliffDays: 180, durationDays: 365 });
+  assert.strictEqual(s.dailyUnlockRaw([inCliff], NOW, T), 0n, "a lock inside its cliff releases nothing");
+  assert.strictEqual(s.dailyUnlockRaw([done], NOW, T), 0n, "a finished lock releases nothing");
+  assert.ok(s.dailyUnlockRaw([running], NOW, T) > 0n);
+  assert.strictEqual(s.dailyUnlockRaw([inCliff, running, done], NOW, T), s.dailyUnlockRaw([running], NOW, T));
+});
+
+t("THE ONE THAT MATTERS: a community lock's unlock does NOT fund the pool", () => {
+  // Their tokens land in THEIR wallet. Counting them publishes a pool the treasury cannot pay.
+  const ours   = lock({ escrow: "A", recipient: "Treasury", seen: NOW - 200 * DAY, cliffDays: 180, durationDays: 400 });
+  const theirs = lock({ escrow: "B", recipient: "Someone",  seen: NOW - 200 * DAY, cliffDays: 180, durationDays: 400 });
+  assert.strictEqual(s.dailyUnlockRaw([ours, theirs], NOW, T), s.dailyUnlockRaw([ours], NOW, T));
+  assert.strictEqual(s.dailyUnlockRaw([theirs], NOW, T), 0n);
+});
+
+t("forgetting the funding wallets throws rather than quietly counting everything", () => {
+  const l = lock({ recipient: "Treasury", seen: NOW - 200 * DAY, cliffDays: 180, durationDays: 400 });
+  for (const bad of [undefined, null, []]) {
+    assert.throws(() => s.dailyUnlockRaw([l], NOW, bad), /funding wallets/);
+  }
 });
 
 t("the rate is per DAY whatever the schedule's period is", () => {

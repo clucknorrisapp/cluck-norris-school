@@ -86,6 +86,14 @@ jobs:
       # handler's own req.cluckDirect guard runs before the key comparison.
       - name: CUNA staking domain lockdown allowlist
         run: node scripts/cuna-stake-routing-test.cjs
+      # The decisions in front of an irreversible action. Burning cannot be undone and cannot be
+      # partially retried, so every case here is a way the burner could fire when it should not or
+      # for the wrong amount: a truthy (not true) armed flag, a missing signing key, a short
+      # balance (which must burn NOTHING, never a partial), a day already burned, the configured
+      # hour, and the hard cap that config alone cannot reach — 690000 and 690000000 are three
+      # keystrokes apart and one of them is a tenth of the supply.
+      - name: CUNA daily burn guards
+        run: node scripts/cuna-burn-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
