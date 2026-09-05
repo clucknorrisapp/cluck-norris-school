@@ -29,12 +29,12 @@ function section(n) { queue.push([n, null]); }
 const DAY = 86400;
 const NOW = 1_800_000_000;
 const START = NOW - 30 * DAY;            // programme launched 30 days ago
-const CFG = { mint: "CUNA", startAfterUnix: START, minDurationDays: 365, minCliffDays: 180 };
+const CFG = { mint: "CUNA", startAfterUnix: START, minDurationDays: 90, minLockRaw: 0 };
 
 // An escrow account exactly as the chain hands it over (field names from the deployed IDL).
 const escrowAccount = ({
   recipient = "Alice", mint = "CUNA", creator = "Creator", cancelMode = 0, cancelledAt = 0,
-  start = NOW - DAY, cliffDays = 180, durationDays = 365,   // cliffDays/durationDays are AHEAD of `seen`
+  start = NOW - DAY, cliffDays = 0, durationDays = 365,   // both measured AHEAD of `seen`
   totalRaw = "1000000000000", claimedRaw = "0",
   seen = NOW,
 } = {}) => {
@@ -147,11 +147,45 @@ t("a lock indexed before the programme launched is out", () => {
   assert.ok(why.some((r) => /indexed before the programme began/.test(r)), why.join("; "));
 });
 
-t("a short lock and a short cliff are both refused, and both reported", () => {
-  const why = s.disqualify(lock({ cliffDays: 30, durationDays: 90 }), CFG);
-  assert.ok(why.some((r) => /days to the cliff/.test(r)), why.join("; "));
-  assert.ok(why.some((r) => /less than 365 days left to run/.test(r)), why.join("; "));
-  assert.ok(why.length >= 2, "every failing rule should be reported, not just the first");
+t("a lock shorter than the minimum term is refused", () => {
+  const why = s.disqualify(lock({ cliffDays: 10, durationDays: 60 }), CFG);
+  assert.ok(why.some((r) => /less than 90 days left to run/.test(r)), why.join("; "));
+});
+
+t("THERE IS NO CLIFF REQUIREMENT — a cliff already in the past does not disqualify", () => {
+  // This is a real shape: the 50M community lock (64C6Wee7…) had its cliff three days BEFORE the
+  // programme would launch while still having 177 days to run. Under the old rule it was refused
+  // on a technicality despite being a genuine commitment.
+  const past = lock({ seen: NOW, cliffDays: -30, durationDays: 200 });
+  assert.ok(past.cliffTime < past.firstSeenAt, "fixture should have a cliff in the past");
+  assert.deepStrictEqual(s.disqualify(past, CFG), []);
+});
+
+t("every failing rule is reported, not just the first", () => {
+  const why = s.disqualify(lock({ mint: "OTHER", durationDays: 30, totalRaw: "0" }), CFG);
+  assert.ok(why.length >= 2, why.join("; "));
+});
+
+t("the dust floor keeps spam locks out without gating real ones", () => {
+  // At a 3-month minimum, spamming locks is cheap and each one is a permanent ledger row.
+  const cfg = { ...CFG, minLockRaw: "100000000000000" };          // 100,000 CUNA
+  const dust = lock({ totalRaw: "1000000000" });                   // 1 CUNA
+  assert.ok(s.disqualify(dust, cfg).some((r) => /below the minimum lock size/.test(r)));
+  assert.deepStrictEqual(s.disqualify(lock({ totalRaw: "100000000000000" }), cfg), []);   // exactly at it
+  assert.deepStrictEqual(s.disqualify(dust, { ...CFG, minLockRaw: 0 }), []);              // floor off
+});
+
+t("the tiers price themselves — no multiplier table anywhere", () => {
+  // 3/6/9/12/15/18 months must pay 1x..6x per token purely from amount x days remaining. If a
+  // bonus table is ever added on top, these ratios break and this test says so.
+  const tiers = [90, 180, 270, 365, 456, 547];
+  const locks = tiers.map((d, i) => lock({ escrow: "T" + i, recipient: "T" + i, durationDays: d }));
+  const r = s.accrueDay({ locks, poolRaw: "100000000000", nowUnix: NOW, cfg: CFG });
+  const base = Number(r.credits.T0);
+  tiers.forEach((d, i) => {
+    const ratio = Number(r.credits["T" + i]) / base;
+    assert.ok(Math.abs(ratio - d / 90) < 0.02, `${d}d paid ${ratio.toFixed(2)}x, expected ${(d / 90).toFixed(2)}x`);
+  });
 });
 
 t("another token, an excluded wallet, and a fully-claimed lock are all refused", () => {
@@ -192,9 +226,9 @@ t("THE REAL 226M COMMUNITY LOCK QUALIFIES — the case the backward rule threw o
   // drifted back to measuring the wrong direction.
   const real = REAL_226M();
   assert.deepStrictEqual(s.disqualify(real, { ...CFG, startAfterUnix: 1788566400 }), []);
-  assert.strictEqual(Math.round((real.cliffTime - real.firstSeenAt) / DAY), 227);
   assert.strictEqual(Math.round((real.fullyVestedAt - real.firstSeenAt) / DAY), 471);
-  // The number the backward rule saw. 244 < 365, so it threw the lock out.
+  // The number the backward rule saw: 244 days of "linear tail", when the lock really has 471
+  // still to run. Under the old 365-day minimum that threw the lock out entirely.
   assert.strictEqual(Math.round((real.fullyVestedAt - real.vestingStartTime) / DAY), 244);
 });
 
@@ -273,22 +307,23 @@ t("nobody locked: the pool is reported undistributed, not quietly burned", () =>
   assert.strictEqual(r.undistributed, 1000000n);
 });
 
-section("claiming — earned from creation, released after the cliff");
+section("claiming — there is no cliff");
 
-t("before the cliff: accrued but NOT claimable", () => {
-  const l = lock({ cliffDays: 190 });                                // cliff is 190 days out
-  const r = s.claimableFor({ accruedRaw: "5000", locks: [l], nowUnix: NOW });
-  assert.strictEqual(r.claimable, 0n);
-  assert.strictEqual(r.locked, 5000n);
-  assert.strictEqual(r.cliffPassed, false);
-  assert.strictEqual(r.unlocksAt, l.cliffTime);
+t("everything accrued is claimable, whatever the lock looks like", () => {
+  // Owner, 2026-09-05: "remove the cliff part, that isn't necessary." Safe because a qualifying
+  // lock is non-cancelable — the principal is stuck regardless, so early claiming was never the
+  // risk. If a gate is ever wanted back, claimableFor is the one place it goes.
+  const r = s.claimableFor({ accruedRaw: "5000" });
+  assert.strictEqual(r.claimable, 5000n);
+  assert.strictEqual(r.locked, 0n);
+  assert.strictEqual(r.cliffPassed, true);
+  assert.strictEqual(r.unlocksAt, null);
 });
 
-t("after the cliff: the whole accrued balance is claimable", () => {
-  const l = lock({ seen: NOW - 200 * DAY, cliffDays: 180, durationDays: 400 });
-  const r = s.claimableFor({ accruedRaw: "5000", locks: [l], nowUnix: NOW });
-  assert.strictEqual(r.claimable, 5000n);
-  assert.strictEqual(r.cliffPassed, true);
+t("nothing accrued means nothing claimable, and it does not throw", () => {
+  for (const v of [undefined, null, 0, "0"]) {
+    assert.strictEqual(s.claimableFor({ accruedRaw: v }).claimable, 0n);
+  }
 });
 
 section("the unlock stream the pool is drawn from");

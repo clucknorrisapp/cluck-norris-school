@@ -81,21 +81,21 @@ t("THE ONE THAT MATTERS: different terms at the same address start a NEW clock",
 });
 
 t("the attack fails end to end: a rebuilt short lock does not qualify", () => {
-  const CFG = { mint: "CUNA", minDurationDays: 365, minCliffDays: 180 };
+  const CFG = { mint: "CUNA", minDurationDays: 90 };
   const ledger = scan.mergeLedger({
     scanned: [{ escrow: "E1", account: acct({ cliffTime: NOW + DAY, numberOfPeriod: 2 }) }],
     ledger: {}, nowUnix: NOW,
   }).ledger;
-  // A year on, rebuild at the same address with only 90 days to run. Against a stale firstSeenAt
-  // of NOW its horizon would read as 455 days and sail through.
+  // A year on, rebuild at the same address with only 60 days to run. Against a stale firstSeenAt
+  // of NOW its horizon would read as 425 days and sail through the 90-day minimum.
   const later = NOW + 365 * DAY;
   const r = scan.mergeLedger({
-    scanned: [{ escrow: "E1", account: acct({ cliffTime: later + 30 * DAY, numberOfPeriod: 60 }) }],
+    scanned: [{ escrow: "E1", account: acct({ cliffTime: later + 10 * DAY, numberOfPeriod: 50 }) }],
     ledger, nowUnix: later,
   });
+  assert.strictEqual(Math.round((r.locks[0].fullyVestedAt - later) / DAY), 60, "fixture should be a 60-day lock");
   const why = s.disqualify(r.locks[0], CFG);
-  assert.ok(why.some((rr) => /days to the cliff/.test(rr)), why.join("; "));
-  assert.ok(why.some((rr) => /left to run/.test(rr)), why.join("; "));
+  assert.ok(why.some((rr) => /less than 90 days left to run/.test(rr)), why.join("; "));
 });
 
 t("every immutable term is part of the fingerprint", () => {
@@ -157,7 +157,7 @@ t("scanned locks arrive ready for the rules, with anchor types unwrapped", () =>
   assert.strictEqual(l.recipient, "Alice");
   assert.strictEqual(l.totalRaw, "185500");
   assert.strictEqual(l.atRiskRaw, "185300");
-  assert.deepStrictEqual(s.disqualify(l, { mint: "CUNA", minDurationDays: 365, minCliffDays: 180 }), []);
+  assert.deepStrictEqual(s.disqualify(l, { mint: "CUNA", minDurationDays: 90 }), []);
 });
 
 section("Rule B — keeping the treasury out of its own pool");
@@ -165,7 +165,7 @@ section("Rule B — keeping the treasury out of its own pool");
 t("an excluded wallet cannot escape by reassigning the recipient", () => {
   // update_recipient_mode means a recipient is not fixed. Excluding only by recipient would let
   // the treasury point a lock at a fresh address and collect.
-  const CFG = { mint: "CUNA", minDurationDays: 365, minCliffDays: 180, excludeWallets: ["Treasury"] };
+  const CFG = { mint: "CUNA", minDurationDays: 90, excludeWallets: ["Treasury"] };
   const moved = scan.mergeLedger({
     scanned: [{ escrow: "T", account: acct({ recipient: "FreshWallet", creator: "Treasury" }) }],
     ledger: {}, nowUnix: NOW,

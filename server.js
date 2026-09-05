@@ -10377,7 +10377,7 @@ app.get("/api/cuna-stake/config", async (req, res) => {
       decimals: 9,
       terms: {
         minDurationDays: p.config.minDurationDays,
-        minCliffDays: p.config.minCliffDays,
+        minLockRaw: p.config.minLockRaw,
         sharePct: p.config.sharePct,
         cancelableAllowed: false,   // owner, 2026-09-05 — a lock you can undo is not a commitment
       },
@@ -10455,7 +10455,7 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
 
     if (String(q.config || "") === "1") {
       const patch = {};
-      for (const k of ["sharePct", "minDurationDays", "minCliffDays"]) if (q[k] != null) patch[k] = q[k];
+      for (const k of ["sharePct", "minDurationDays", "minLockRaw"]) if (q[k] != null) patch[k] = q[k];
       if (q.excludeWallets != null) {
         patch.excludeWallets = String(q.excludeWallets).split(",").map((x) => x.trim()).filter(Boolean);
       }

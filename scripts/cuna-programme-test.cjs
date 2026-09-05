@@ -78,9 +78,18 @@ section("the config guard");
 
 t("the defaults are the owner's numbers", () => {
   assert.strictEqual(p.DEFAULTS.sharePct, 20);
-  assert.strictEqual(p.DEFAULTS.minDurationDays, 365);
-  assert.strictEqual(p.DEFAULTS.minCliffDays, 180);
+  assert.strictEqual(p.DEFAULTS.minDurationDays, 90);      // 3 months (owner, 2026-09-05)
+  assert.strictEqual(p.DEFAULTS.minCliffDays, undefined);  // there is no cliff any more
   assert.deepStrictEqual(p.DEFAULTS.excludeWallets, [TREASURY]);
+});
+
+t("the dust floor survives as a string — a JS number would lose it", () => {
+  assert.strictEqual(typeof p.DEFAULTS.minLockRaw, "string");
+  assert.strictEqual(p.validateConfig({ minLockRaw: "250000000000000" }).minLockRaw, "250000000000000");
+  assert.strictEqual(p.validateConfig({ minLockRaw: 0 }).minLockRaw, "0");     // off is allowed
+  for (const bad of ["-1", "lots", "1.5", {}]) {
+    assert.throws(() => p.validateConfig({ minLockRaw: bad }), /minLockRaw/, `${bad} accepted`);
+  }
 });
 
 t("THE OTHER ONE: the treasury cannot be dropped from the exclude list", () => {
@@ -102,19 +111,15 @@ t("a nonsense share is refused, not clamped", () => {
   assert.strictEqual(p.validateConfig({ sharePct: 0.5 }).sharePct, 0.5);
 });
 
-t("a cliff longer than the term is refused — it could never be met", () => {
-  assert.throws(() => p.validateConfig({ minCliffDays: 400, minDurationDays: 365 }), /cannot exceed/);
-});
-
 t("a typo'd address is refused rather than silently excluding nobody", () => {
   assert.throws(() => p.validateConfig({ excludeWallets: [TREASURY, "not-an-address"] }), /not an address/);
   assert.throws(() => p.validateConfig({ mint: "CUNA" }), /mint is not an address/);
 });
 
 t("a stored config survives a round trip, and unknown keys do not break it", () => {
-  const c = p.validateConfig({ sharePct: 25, minCliffDays: 90, weird: true });
+  const c = p.validateConfig({ sharePct: 25, minDurationDays: 180, weird: true });
   assert.strictEqual(p.readProgramme({ config: c }).config.sharePct, 25);
-  assert.strictEqual(p.readProgramme({ config: c }).config.minCliffDays, 90);
+  assert.strictEqual(p.readProgramme({ config: c }).config.minDurationDays, 180);
 });
 
 section("one day, once");
@@ -166,6 +171,7 @@ t("an open gate hands back the day and the config to accrue with", () => {
   assert.strictEqual(g.ok, true);
   assert.strictEqual(g.day, p.dayKey(NOW));
   assert.strictEqual(g.config.sharePct, 20);
+  assert.strictEqual(g.config.minDurationDays, 90);
   assert.deepStrictEqual(g.config.excludeWallets, [TREASURY]);
 });
 

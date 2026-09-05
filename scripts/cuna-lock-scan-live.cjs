@@ -16,7 +16,8 @@ const scan = require('../lib/cuna-lock-scan');
 const s = require('../lib/cuna-staking');
 const CUNA = '4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc';
 const TREASURY = '2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8';
-const CFG = { mint: CUNA, minDurationDays: 365, minCliffDays: 180, excludeWallets: [TREASURY] };
+// The REAL config, so this script cannot drift from what the programme actually enforces.
+const CFG = require('../lib/cuna-programme').validateConfig({}, {});
 (async () => {
   const conn = new Connection(process.env.PROBE_RPC || 'https://api.mainnet-beta.solana.com', 'confirmed');
   const provider = new anchor.AnchorProvider(conn, new anchor.Wallet(Keypair.generate()), {});

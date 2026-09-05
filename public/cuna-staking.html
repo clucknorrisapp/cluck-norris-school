@@ -80,14 +80,29 @@
   <div class="card">
     <div class="k">THE DEAL</div>
     <div class="row"><span>Lock for at least</span><b id="tDur">&mdash;</b></div>
-    <div class="row"><span>With a cliff of at least</span><b id="tCliff">&mdash;</b></div>
+    <div class="row"><span>Smallest lock that counts</span><b id="tMin">&mdash;</b></div>
     <div class="row"><span>Reward pool</span><b id="tShare">&mdash;</b></div>
     <div class="row"><span>Locks that qualify right now</span><b id="tCount">&mdash;</b></div>
     <div class="row"><span>CUNA currently earning</span><b id="tLocked">&mdash;</b></div>
-    <p class="muted" style="margin:14px 0 0">You start earning the moment your lock exists. You can
-    <b>claim</b> once your cliff has passed &mdash; the reward builds through the period your tokens
-    are actually committed. Your share is your <b>amount &times; days still to run</b>, so a longer
-    lock earns more per token, and your weight falls as the lock matures.</p>
+    <p class="muted" style="margin:14px 0 0">You start earning the moment your lock exists, and you
+    can <b>claim any time</b> &mdash; there is no waiting period on rewards. Your share is your
+    <b>amount &times; days still to run</b>. That one line is the whole formula: a longer lock earns
+    more per token, and your weight falls as the lock matures, which is why re-locking is worth it
+    rather than being forced on you.</p>
+    <div class="note" style="margin-top:14px">
+      <b class="disp">WHAT THE TERMS PAY</b><br/>
+      Because your share is amount &times; days left, the terms price themselves. Same tokens locked:
+      <div class="grid" style="margin-top:10px;gap:4px 14px">
+        <div class="row"><span>3 months</span><b>1&times;</b></div>
+        <div class="row"><span>6 months</span><b>2&times;</b></div>
+        <div class="row"><span>9 months</span><b>3&times;</b></div>
+        <div class="row"><span>12 months</span><b>4&times;</b></div>
+        <div class="row"><span>15 months</span><b>5&times;</b></div>
+        <div class="row"><span>18 months</span><b>6&times;</b></div>
+      </div>
+      <p class="muted" style="margin:10px 0 0">No bonus table, no multiplier we picked. That is just
+      what the formula does &mdash; you can check it yourself.</p>
+    </div>
   </div>
 
   <div class="card">
@@ -105,8 +120,8 @@
     <div class="k">BEFORE YOU LOCK &mdash; READ THIS</div>
     <div class="danger">
       <b>A qualifying lock cannot be undone.</b> Not by you, not by us, not by Jupiter. Your tokens
-      are gone from your wallet for the full term. There is no cancel button, no support ticket,
-      no early exit.
+      are gone from your wallet for the full term &mdash; three months at the shortest, eighteen at
+      the longest. There is no cancel button, no support ticket, no early exit.
     </div>
     <p class="muted" style="margin:0 0 10px"><b>So lock a slice, not your bag.</b> Decide the amount
     by what you could genuinely not touch for a year and still be fine. If that number is zero, the
@@ -138,16 +153,8 @@
     <label>Amount of CUNA to lock</label>
     <input id="amt" inputmode="decimal" placeholder="e.g. 5000000" autocomplete="off"/>
     <div class="muted" id="amtNote" style="margin-top:6px">&nbsp;</div>
-    <div class="grid">
-      <div>
-        <label>Total lock length</label>
-        <select id="dur"></select>
-      </div>
-      <div>
-        <label>Cliff &mdash; nothing releases before this</label>
-        <select id="cliff"></select>
-      </div>
-    </div>
+    <label>How long to lock for</label>
+    <select id="dur"></select>
     <div class="muted" id="planNote" style="margin:12px 0 0">&nbsp;</div>
     <div style="margin-top:14px">
       <button id="build" disabled>REVIEW THIS LOCK</button>
@@ -195,7 +202,8 @@
           " CUNA the vesting schedules release today. It is a share of tokens that were unlocking anyway, so it can never run dry."
         : "This is what the pool would be today. Nothing is being paid out yet.";
       $("tDur").textContent = days(d.terms.minDurationDays);
-      $("tCliff").textContent = days(d.terms.minCliffDays);
+      $("tMin").textContent = d.terms.minLockRaw && d.terms.minLockRaw !== "0"
+        ? toTokens(d.terms.minLockRaw) + " CUNA" : "any amount";
       $("tShare").textContent = d.terms.sharePct + "% of the daily unlock";
       $("tCount").textContent = d.armed ? String(d.qualifyingLocks) : "not started";
       $("tLocked").textContent = d.armed ? toTokens(d.totalQualifyingRaw) + " CUNA" : "—";
@@ -208,36 +216,35 @@
     });
   }
 
-  // Only offer terms that PASS. The options are generated from the live config, so the form and
-  // the rule that judges the lock can never disagree — that is the whole point of not hardcoding.
+  // Only offer terms that PASS. The ladder is generated from the live minimum, so the form and the
+  // rule that judges the lock can never disagree — that is the whole point of not hardcoding it.
+  // Multiples of three months, labelled with what they pay relative to the entry tier.
   function buildTermChoices() {
-    var minD = CFG.terms.minDurationDays, minC = CFG.terms.minCliffDays;
-    var durs = [minD, 547, 730, 1095].filter(function (v, i, a) { return v >= minD && a.indexOf(v) === i; });
-    var cliffs = [minC, 270, 365].filter(function (v, i, a) { return v >= minC && a.indexOf(v) === i; });
-    $("dur").innerHTML = durs.map(function (v) {
-      return '<option value="' + v + '">' + days(v) + (v === minD ? " (minimum)" : "") + "</option>";
+    var minD = CFG.terms.minDurationDays;
+    var ladder = [90, 180, 270, 365, 456, 547].filter(function (v) { return v >= minD; });
+    if (!ladder.length) ladder = [minD];
+    $("dur").innerHTML = ladder.map(function (v) {
+      var months = Math.round(v / 30.4);
+      var mult = (v / ladder[0]).toFixed(v % ladder[0] === 0 ? 0 : 1);
+      return '<option value="' + v + '">' + months + " months" +
+             (v === ladder[0] ? " (minimum)" : " — earns " + mult + "\u00d7 the minimum") + "</option>";
     }).join("");
-    $("cliff").innerHTML = cliffs.map(function (v) {
-      return '<option value="' + v + '">' + days(v) + (v === minC ? " (minimum)" : "") + "</option>";
-    }).join("");
+    $("dur").value = String(ladder[Math.min(3, ladder.length - 1)]);   // default to ~12 months
     refreshPlan();
   }
 
   function refreshPlan() {
     if (!CFG) return;
     var amt = String($("amt").value || "").replace(/,/g, "").trim();
-    var dur = Number($("dur").value), cliff = Number($("cliff").value);
+    var dur = Number($("dur").value);
     var okAmt = /^\d+(\.\d+)?$/.test(amt) && Number(amt) > 0;
-    var okTerms = cliff <= dur;
-    $("planNote").innerHTML = okTerms
-      ? 'Locked until <b>' + dateOf(Math.floor(Date.now() / 1000) + dur * DAY) + '</b>. Nothing at all releases before <b>' +
-        dateOf(Math.floor(Date.now() / 1000) + cliff * DAY) + '</b>, then it releases gradually until the end.'
-      : '<span class="bad">The cliff cannot be longer than the lock.</span>';
-    $("amtNote").innerHTML = okAmt || !amt
-      ? '&nbsp;' : '<span class="bad">Enter a plain number, e.g. 5000000</span>';
-    $("build").disabled = !(okAmt && okTerms && WALLET);
-    if (!WALLET) $("build").textContent = "CONNECT A WALLET FIRST";
-    else $("build").textContent = "REVIEW THIS LOCK";
+    var end = Math.floor(Date.now() / 1000) + dur * DAY;
+    $("planNote").innerHTML = "Locked until <b>" + dateOf(end) + "</b>. You cannot get these tokens " +
+      "back before then &mdash; there is no cancel. Rewards you earn are claimable any time.";
+    $("amtNote").innerHTML = (okAmt || !amt) ? "&nbsp;"
+      : '<span class="bad">Enter a plain number, e.g. 5000000</span>';
+    $("build").disabled = !(okAmt && WALLET);
+    $("build").textContent = WALLET ? "REVIEW THIS LOCK" : "CONNECT A WALLET FIRST";
   }
 
   function loadMine() {
@@ -266,9 +273,7 @@
         }
         h += '<div class="row" style="margin-top:12px"><span>Earned so far</span><b>' +
              toTokens(d.accruedRaw) + " CUNA</b></div>";
-        h += '<div class="row"><span>Claimable now</span><b>' +
-             (d.cliffPassed ? toTokens(d.claimableRaw) + " CUNA"
-                            : "after " + (d.unlocksAt ? dateOf(d.unlocksAt) : "your cliff")) + "</b></div>";
+        h += '<div class="row"><span>Claimable now</span><b>' + toTokens(d.claimableRaw) + " CUNA</b></div>";
         if (!d.armed) {
           h += '<p class="muted" style="margin-top:10px">The programme hasn’t started, so nothing has been earned yet.</p>';
         }
@@ -305,7 +310,7 @@
     });
   });
 
-  ["amt", "dur", "cliff"].forEach(function (id) {
+  ["amt", "dur"].forEach(function (id) {
     $(id).addEventListener("input", refreshPlan);
     $(id).addEventListener("change", refreshPlan);
   });
