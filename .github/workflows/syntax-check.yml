@@ -119,6 +119,12 @@ jobs:
       # no outbound network, so it runs in this dependency-free job.
       - name: SSRF guard for caller-supplied URLs
         run: node scripts/safe-fetch-test.cjs
+      # The trade tape can miss trades three ways; only one of them used to be reported, so a
+      # rate-limited scan returned a SHORT tape that looked complete. The giveaway scanner is
+      # incremental and never looks back, so a silently-retired slice loses those trades forever
+      # — and a missed SELL leaves a wallet holding entries that decide who wins a prize.
+      - name: trade-tape coverage honesty
+        run: node scripts/tape-coverage-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —
