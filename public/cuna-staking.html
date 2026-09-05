@@ -423,9 +423,24 @@
             var head = l.qualifies
               ? '<span class="pill" style="background:#12603f">EARNING</span>'
               : '<span class="pill">NOT EARNING</span>';
-            var why = l.qualifies ? "" :
-              '<div class="muted" style="margin-top:8px">Why not: ' +
-              esc(l.reasons.join("; ")) + "</div>";
+            // Saying "NOT EARNING" without saying what to do about it is only half the job. Two
+            // of the three community locks that miss the terms today are held by wallets sitting
+            // on 12M+ liquid CUNA — they are not locked out at all, they simply have not been
+            // told that a second lock works.
+            var why = "";
+            if (!l.qualifies) {
+              var short = l.reasons.some(function (r) { return /left to run/.test(r); });
+              var ends = dateOf(l.fullyVestedAt);
+              why = '<div class="muted" style="margin-top:8px">Why not: ' +
+                esc(l.reasons.join("; ")) + "</div>";
+              if (short) {
+                why += '<div class="note" style="margin:10px 0 0;font-size:13px">' +
+                  "<b>You don't have to wait.</b> A second lock earns on its own — if you hold " +
+                  "more CUNA you can lock some today and start earning straight away. Otherwise " +
+                  "this one frees up on <b>" + ends + "</b> and you can re-lock it then." +
+                  "</div>";
+              }
+            }
             return '<div class="lockrow">' + head +
               '<div class="row"><span>Amount</span><b>' + toTokens(l.amountRaw) + " CUNA</b></div>" +
               '<div class="row"><span>Cliff</span><b>' + dateOf(l.cliffTime) + "</b></div>" +
@@ -433,6 +448,13 @@
               '<div class="row"><span>Lock</span><b>' + esc(shortAddr(l.escrow)) + "</b></div>" +
               why + "</div>";
           }).join("");
+        }
+        var anyEarning = d.locks.some(function (l) { return l.qualifies; });
+        if (d.locks.length && !anyEarning) {
+          h = '<div class="note" style="margin:0 0 12px"><b class="disp">NOT EARNING YET</b><br/>' +
+              "None of your locks meet the terms. That does not mean waiting &mdash; a new lock " +
+              "earns on its own, whatever your existing ones look like." +
+              "</div>" + h;
         }
         h += '<div class="row" style="margin-top:12px"><span>Earned so far</span><b>' +
              toTokens(d.accruedRaw) + " CUNA</b></div>";
