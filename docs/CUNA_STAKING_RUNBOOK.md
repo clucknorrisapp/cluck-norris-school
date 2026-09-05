@@ -25,7 +25,7 @@ the same as one made on ours.
 | Minimum term | **90 days** (owner, 09-05: *"no 3 months or bust on this deal"*) |
 | Cliff | **none**, on the lock or on claiming (owner, 09-05: *"remove the cliff part"*) |
 | Cancelable locks | **never earn** (owner, 09-05) |
-| Tiers | 3/6/9/12/15/18 months → **1×–6×**, from the weight formula alone |
+| Tiers | 90/180/270/360/450/540 days → **1×–6×**, held for the whole lock |
 | Pool | **345,000 CUNA/day flat** (owner, 09-05) — half the 690,000 burn, 5× the 69,000 floor, ~5.2% of the stream |
 | Dust floor | **69,000** CUNA minimum lock (~$1.60). **No minimum payout** — everyone gets paid |
 | Daily burn | **690,000 CUNA at 15:00 UTC** from the treasury, claim-first |
@@ -35,9 +35,28 @@ that this only ever hands out tokens that were unlocking anyway — the treasury
 finish, and a flat 345,000 against a stream that has fallen to 200,000 would be a promise the chain
 cannot keep. Set `poolDailyRaw=0` to fall back to the `sharePct` percentage mode.
 
-**Your share is your amount × days still to run.** That one line is the whole formula. There is no
-bonus table and there must never be one — the tiers already pay 1× to 6×, a CI test pins those
-ratios, and "you can check it yourself" is most of why this is trustworthy.
+**Your share is your amount × the term you committed to.** That one line is the whole formula, and
+the rate is **held flat for the life of the lock** — set the day we index it, unchanged until the
+lock ends, then zero. There is no bonus table and there must never be one: the tiers are exact
+90-day steps so they pay 1× to 6× by division alone, a CI test pins those ratios, and "you can
+check it yourself" is most of why this is trustworthy.
+
+⚠️ **It used to count days REMAINING, and that was wrong** (changed 2026-09-05 on the owner's call).
+The page sells a ladder, and under decay that ladder was only true on day one: a 3-month locker was
+on 0.77× of their own advertised rate by day 30 and earned almost nothing in their last week —
+3.68M over their term against the 6.25M the rate implies. At the top it was worse. An 18-month lock
+with three months left weighed **exactly the same as a brand-new 3-month lock**, so the longest
+commitment on the board finished on the entry-tier rate. Don't reintroduce the decay to encourage
+re-locking; that was the old justification and it cost the people it was meant to reward.
+
+The AMOUNT side still moves. A drip schedule that is paying tokens out loses weight as it releases,
+because what has vested is no longer locked up. Only the rate is fixed.
+
+⚠️ **Terms carry one day of grace, added by the page, and it is load-bearing.** The rule measures
+from our own `firstSeenAt`, stamped when the scanner next runs — minutes after signing. A cliff at
+exactly 90 days is judged at 89.9965 days and refused by our own minimum, so without the grace day
+every 3-month lock the page sells would be rejected. If you change the ladder or the cliff maths,
+re-run the 90-day boundary test.
 
 ---
 
@@ -231,7 +250,7 @@ debt.
 | `lib/cuna-burn.js` | burn decisions + claim planning |
 | `lib/cuna-payout.js` | owed / pending / paid bookkeeping |
 | `public/cuna-staking.html` | the page — `/cuna-staking`, and `/` on the CUNA staking hosts |
-| `scripts/cuna-*-test.cjs` | 163 tests, all in CI |
+| `scripts/cuna-*-test.cjs` | 169 tests, all in CI |
 | `scripts/cuna-lock-scan-live.cjs` | who qualifies today, read from the chain |
 | `scripts/cuna-lock-whois.cjs` | check wallets against every CUNA lock |
 

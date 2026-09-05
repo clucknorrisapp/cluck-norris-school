@@ -287,9 +287,54 @@ t("a matured lock weighs ZERO, never negative", () => {
   assert.strictEqual(s.weightOf(l, NOW), 0n);
 });
 
-t("weight decays as the lock matures", () => {
+t("THE RATE YOU COMMITTED TO IS THE RATE YOU ARE PAID — it does not decay", () => {
+  // A single-cliff lock releases nothing until the end, so its weight must be identical on day 1
+  // and on its last day. This used to count days REMAINING, which quietly cut a locker's rate
+  // every day and left an 18-month lock finishing on the entry-tier rate.
+  const bn = (n) => ({ toString: () => String(n) });
+  const l = s.normalizeEscrow("FLAT", {
+    recipient: "Ann", tokenMint: "CUNA", creator: "Ann", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 540 * DAY), frequency: bn(DAY),
+    numberOfPeriod: bn(1), cliffUnlockAmount: bn("1000000000000000"), amountPerPeriod: bn(0),
+    totalClaimedAmount: bn(0),
+  }, NOW);
+  const day1 = s.weightOf(l, NOW);
+  assert.ok(day1 > 0n);
+  assert.strictEqual(s.weightOf(l, NOW + 200 * DAY), day1, "the rate moved a third of the way in");
+  assert.strictEqual(s.weightOf(l, NOW + 539 * DAY), day1, "the rate moved on the final day");
+  assert.strictEqual(s.weightOf(l, NOW + 540 * DAY), 0n, "a finished lock must weigh nothing");
+});
+
+t("an 18-month lock never falls to the rate of a fresh 3-month one", () => {
+  // The owner's case, and the reason the decay went: under days-remaining, an 18-month lock with
+  // 3 months left weighed EXACTLY the same as a brand-new 3-month lock of the same size.
+  const bn = (n) => ({ toString: () => String(n) });
+  const mk = (who, days, seenAt) => s.normalizeEscrow(who, {
+    recipient: who, tokenMint: "CUNA", creator: who, cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(seenAt), cliffTime: bn(seenAt + days * DAY), frequency: bn(DAY),
+    numberOfPeriod: bn(1), cliffUnlockAmount: bn("1000000000000000"), amountPerPeriod: bn(0),
+    totalClaimedAmount: bn(0),
+  }, seenAt);
+  const eighteen = mk("long", 540, NOW - 450 * DAY);   // locked 15 months ago, 90 days left
+  const three = mk("short", 90, NOW);                  // locked today
+  assert.strictEqual(s.weightOf(three, NOW) * 6n, s.weightOf(eighteen, NOW),
+    "the 18-month lock must still be worth 6x the entry tier in its final quarter");
+});
+
+t("the amount side still moves: a drip lock loses weight as it releases", () => {
+  // Only the RATE is fixed. Tokens that have vested are no longer locked up, so a schedule that is
+  // paying out must weigh less over time — otherwise a lock could be emptied and still draw a full
+  // share on the strength of its start date.
   const l = lock({ durationDays: 301 });
-  assert.ok(s.weightOf(l, NOW) > s.weightOf(l, NOW + 200 * DAY));
+  assert.ok(s.weightOf(l, NOW) > s.weightOf(l, NOW + 200 * DAY),
+    "a vesting lock that has released tokens must weigh less");
+});
+
+t("a lock we have never indexed weighs nothing — it must fail closed", () => {
+  // Without the firstSeenAt guard, (end - 0) reads as a term running since 1970.
+  const l = lock({ durationDays: 301 });
+  assert.strictEqual(s.weightOf({ ...l, firstSeenAt: null }, NOW), 0n);
+  assert.strictEqual(s.weightOf({ ...l, fullyVestedAt: 0 }, NOW), 0n);
 });
 
 t("THE REAL 226M COMMUNITY LOCK QUALIFIES — the case the backward rule threw out", () => {

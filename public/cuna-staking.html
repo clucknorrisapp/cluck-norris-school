@@ -109,11 +109,13 @@
     <div class="row"><span>Smallest lock that counts</span><b id="tMin">&mdash;</b></div>
     <div class="row"><span>Locks that qualify right now</span><b id="tCount">&mdash;</b></div>
     <div class="row"><span>CUNA currently earning</span><b id="tLocked">&mdash;</b></div>
-    <p class="muted" style="margin:14px 0 0">Your share is your <b>amount &times; days still to run</b>.
-    Longer locks earn more per token. Rewards build daily and are <b>sent to your wallet in
-    batches</b> &mdash; nothing to claim, no deadline to catch.</p>
+    <p class="muted" style="margin:14px 0 0">Your share is your <b>amount &times; the term you lock
+    for</b>. <b>Lock longer and you earn at a higher rate &mdash; and you keep that rate for every
+    day of your lock</b>, from the first day to the last. It is set when you lock and it never
+    drops. Rewards build daily and are <b>sent to your wallet in batches</b> &mdash; nothing to
+    claim, no deadline to catch.</p>
     <div class="note" style="margin-top:14px">
-      <b class="disp">WHAT THE TERMS PAY</b> &mdash; same tokens locked:
+      <b class="disp">LOCK LONGER, EARN MORE</b> &mdash; same tokens, different term:
       <div class="grid" style="margin-top:8px;gap:2px 14px">
         <div class="row"><span>3 months</span><b>1&times;</b></div>
         <div class="row"><span>6 months</span><b>2&times;</b></div>
@@ -122,7 +124,9 @@
         <div class="row"><span>15 months</span><b>5&times;</b></div>
         <div class="row"><span>18 months</span><b>6&times;</b></div>
       </div>
-      <p class="muted" style="margin:9px 0 0">No bonus table. That is just what the formula does.</p>
+      <p class="muted" style="margin:9px 0 0">No bonus table &mdash; the terms are 90-day steps and
+      that is just the division. An 18-month lock earns 6&times; the entry rate on its last day
+      exactly as it did on its first; it never fades to the rate of a shorter lock.</p>
     </div>
   </div>
 
@@ -292,14 +296,16 @@
 
   function buildTermChoices() {
     var minD = CFG.terms.minDurationDays;
-    var ladder = [90, 180, 270, 365, 456, 547].filter(function (v) { return v >= minD; });
+    // EXACT 90-DAY STEPS, not calendar months. Weight is amount x the committed term, so with a
+    // 90-day entry tier these steps make the multiplier literally 1x/2x/3x/4x/5x/6x rather than
+    // 1/2/3/4.06/5.07/6.08 — the table on this page and the maths behind it are then the same
+    // thing, and anyone can check it with division.
+    var ladder = [90, 180, 270, 360, 450, 540].filter(function (v) { return v >= minD; });
     if (!ladder.length) ladder = [minD];
-    var baseMonths = Math.round(ladder[0] / 30.4);
     $("dur").innerHTML = ladder.map(function (v) {
       var months = Math.round(v / 30.4);
-      // From the MONTHS, not the raw days: 365/90 is 4.06, and "earns 4.1x" next to a table that
-      // says 4x reads like one of them is wrong.
-      var mult = Math.round(months / baseMonths);
+      // Straight from the days, which is what the rule uses: 180/90 is exactly 2.
+      var mult = Math.round(v / ladder[0]);
       return '<option value="' + v + '">' + months + " months" +
              (v === ladder[0] ? " (minimum)" : " — earns " + mult + "\u00d7 the minimum") + "</option>";
     }).join("");
