@@ -114,6 +114,30 @@ curl "https://clucknorris.app/api/cuna-burn/admin?key=$PREMIUM_ACCESS_KEY&arm=1&
 
 **Stop:** `&off=1` (immediate) or `CUNA_BURN_OFF=1` in Railway (durable, survives a redeploy).
 
+### Bonus burns (optional, OFF by default)
+
+```bash
+curl ".../api/cuna-burn/admin?key=$PREMIUM_ACCESS_KEY&config=1&bonusEnabled=true"
+```
+
+Each day burns the 690,000 base plus a rolled bonus of 0–1,000,000, in clean 10,000 steps. The
+roll is **seeded from the UTC date**, never `Math.random()`: the same day always produces the same
+number, so a retry cannot roll a different amount and burn twice for two different figures, and any
+day's number is reproducible from the date alone if someone asks how it was chosen.
+
+⚠️ **2,000,000 CUNA/day is the hard ceiling on AUTOMATIC burns** (owner, 2026-09-05). That is the
+number that makes the worst possible day knowable in advance — without it the worst day is whatever
+the roll and the retry logic produce together. Config that would exceed it is refused at write
+time, and a stale config stored under an older cap is CLAMPED at burn time rather than obeyed or
+thrown (a burner that crashes on a stale config is a burner that silently stops burning).
+
+Manual celebration burns are the owner's own transactions and are not bound by this. `&run=1` runs
+the normal daily gate; anything bigger is a manual burn from the wallet, which still gets a receipt
+and an announcement through `/project-burn`.
+
+`&run=1` also reports `today` — what the roll has picked — so the number can be seen before it
+fires.
+
 **Claim-first.** The treasury's CUNA sits in Jupiter escrows and only reaches the wallet when a
 claim transaction runs; without this the burner works for ~15 days and then goes short forever. 19
 of the 30 treasury locks vest daily and 11 weekly, so there is normally something to claim. It

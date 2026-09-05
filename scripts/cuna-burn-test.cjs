@@ -97,11 +97,19 @@ t("an unreadable balance burns nothing", () => {
   }
 });
 
-t("THE THIRD ONE: the hard cap cannot be reached from config", () => {
-  // 690000 and 690000000 are three keystrokes apart, and one of them is a tenth of the supply.
+t("THE THIRD ONE: two ceilings, and the tighter one binds", () => {
+  // HARD_DAILY_CAP (5M) is the typo guard — 690000 and 690000000 are three keystrokes apart, and
+  // one of them is a tenth of the supply. AUTO_DAILY_CAP (2M) is the owner's chosen limit for
+  // automatic burns and is stricter, so in practice it is what refuses first. Both are asserted
+  // because the hard cap is the one that still holds if the auto cap is ever raised.
+  assert.ok(b.AUTO_DAILY_CAP_RAW < b.HARD_DAILY_CAP_RAW, "the auto cap should be the tighter of the two");
   assert.throws(() => b.validateBurnConfig({ amountRaw: "690000000000000000" }), /hard daily cap/);
   assert.throws(() => b.validateBurnConfig({ amountRaw: (b.HARD_DAILY_CAP_RAW + 1n).toString() }), /hard daily cap/);
-  assert.doesNotThrow(() => b.validateBurnConfig({ amountRaw: b.HARD_DAILY_CAP_RAW.toString() }));
+  // between the two caps: refused by the auto cap, not the hard one
+  assert.throws(() => b.validateBurnConfig({ amountRaw: (3000000n * 10n ** 9n).toString(), bonusMaxRaw: "0" }),
+    /auto daily cap/);
+  // and the owner's real numbers are comfortably inside both
+  assert.doesNotThrow(() => b.validateBurnConfig({ bonusEnabled: true }));
 });
 
 t("a nonsense amount is refused rather than treated as zero", () => {
@@ -219,6 +227,141 @@ t("the plan is deterministic — same inputs, same transactions", () => {
 t("nonsense input throws rather than planning a wrong claim", () => {
   assert.throws(() => b.planClaims([], { needRaw: "lots" }), /whole base units/);
   assert.throws(() => b.planClaims([], { needRaw: "1", headroomRaw: "1.5" }), /whole base units/);
+});
+
+section("bonus burns — random size, knowable worst day");
+
+t("bonus is OFF by default: the burn is exactly the base", () => {
+  const p = b.amountForDay("2026-09-05", {});
+  assert.strictEqual(p.amountRaw, b.DEFAULTS.amountRaw);
+  assert.strictEqual(p.bonusRaw, "0");
+});
+
+t("only the boolean enables it — a truthy value is not consent for an extra million a day", () => {
+  for (const v of ["yes", "true", 1, 0, "", null, undefined, []]) {
+    assert.throws(() => b.validateBurnConfig({ bonusEnabled: v }), /bonusEnabled/, `${JSON.stringify(v)} accepted`);
+  }
+  assert.doesNotThrow(() => b.validateBurnConfig({ bonusEnabled: true }));
+});
+
+t("THE ONE THAT MATTERS: base + max bonus can never exceed the auto daily cap", () => {
+  // The cap is what makes the worst possible day a number the owner picked, rather than whatever
+  // the roll and the retry logic produce together.
+  assert.strictEqual(b.AUTO_DAILY_CAP_RAW, 2000000n * 10n ** 9n);
+  assert.throws(() => b.validateBurnConfig({ bonusMaxRaw: (2000000n * 10n ** 9n).toString() }), /auto daily cap/);
+  assert.throws(() => b.validateBurnConfig({ amountRaw: (1500000n * 10n ** 9n).toString(),
+                                             bonusMaxRaw: (900000n * 10n ** 9n).toString() }), /auto daily cap/);
+  // and no day's roll can ever land above it
+  const cfg = { bonusEnabled: true };
+  for (let i = 0; i < 400; i++) {
+    const d = new Date(Date.UTC(2026, 0, 1) + i * 86400000).toISOString().slice(0, 10);
+    assert.ok(BigInt(b.amountForDay(d, cfg).amountRaw) <= b.AUTO_DAILY_CAP_RAW, `${d} exceeded the cap`);
+  }
+});
+
+t("THE OTHER ONE: the same day always rolls the same number", () => {
+  // Seeded from the DATE, never Math.random(). A retry must not roll a DIFFERENT amount and burn
+  // twice for two different figures.
+  const cfg = { bonusEnabled: true };
+  for (const d of ["2026-09-05", "2027-01-01", "2026-12-31"]) {
+    const first = b.amountForDay(d, cfg).amountRaw;
+    for (let i = 0; i < 20; i++) assert.strictEqual(b.amountForDay(d, cfg).amountRaw, first, `${d} drifted`);
+  }
+});
+
+t("different days roll genuinely different numbers", () => {
+  // The first version used a bare FNV-1a hash and produced 30,000 three days running and exactly
+  // 1,000,000 twice in a row — consecutive date strings stayed correlated once scaled down.
+  const cfg = { bonusEnabled: true };
+  const vals = [];
+  for (let i = 0; i < 365; i++) {
+    vals.push(b.amountForDay(new Date(Date.UTC(2026, 0, 1) + i * 86400000).toISOString().slice(0, 10), cfg).bonusRaw);
+  }
+  let repeats = 0;
+  for (let i = 1; i < vals.length; i++) if (vals[i] === vals[i - 1]) repeats++;
+  assert.ok(repeats <= 10, `${repeats} days matched the day before — the roll is not avalanching`);
+  assert.ok(new Set(vals).size > 50, `only ${new Set(vals).size} distinct values in a year`);
+  // and it should actually use the range, not hug the middle
+  const nums = vals.map(Number).sort((x, y) => x - y);
+  assert.ok(nums[0] < 200000 * 1e9, "never rolls low");
+  assert.ok(nums[nums.length - 1] > 800000 * 1e9, "never rolls high");
+});
+
+t("THE FOURTH ONE: a stale config is CLAMPED at burn time, not obeyed and not thrown", () => {
+  // A config stored under an older, looser cap must not burn above today's policy — and must not
+  // crash the burner either, because a burner that throws is a burner that silently stops burning.
+  const stale = { amountRaw: (4000000n * 10n ** 9n).toString(), bonusEnabled: true,
+                  bonusMaxRaw: (3000000n * 10n ** 9n).toString() };
+  // validateBurnConfig would refuse to WRITE this...
+  assert.throws(() => b.validateBurnConfig(stale), /cap/);
+  // ...but if it is already stored, the day's amount is clamped rather than honoured or thrown.
+  const p = b.amountForDay("2026-09-05", stale);
+  assert.strictEqual(p.amountRaw, b.AUTO_DAILY_CAP_RAW.toString());
+  assert.strictEqual(p.capped, true);
+});
+
+t("a base OVER the cap is clamped even with the bonus switched off", () => {
+  // The bonus-disabled path returns early, so the total clamp never runs. Without the base clamp
+  // a stale 4M base would burn 4M — twice today's policy — and every other test stayed green.
+  const stale = { amountRaw: (4000000n * 10n ** 9n).toString(), bonusEnabled: false };
+  const p = b.amountForDay("2026-09-05", stale);
+  assert.strictEqual(p.amountRaw, b.AUTO_DAILY_CAP_RAW.toString());
+  assert.strictEqual(p.capped, true);
+  assert.strictEqual(p.bonusRaw, "0");
+});
+
+t("a base UNDER the cap with a bonus that pushes over is still clamped", () => {
+  // The case only the total clamp can catch: base 1.5M is fine on its own, but a 1M bonus would
+  // take the day to 2.5M. Without this the two clamps cover for each other and neither is
+  // actually tested — removing either one alone kept every test green.
+  const stale = { amountRaw: (1500000n * 10n ** 9n).toString(), bonusEnabled: true,
+                  bonusMaxRaw: (1000000n * 10n ** 9n).toString() };
+  assert.throws(() => b.validateBurnConfig(stale), /auto daily cap/);   // never writable
+  let sawClamp = false;
+  for (let i = 0; i < 200; i++) {
+    const d = new Date(Date.UTC(2026, 0, 1) + i * 86400000).toISOString().slice(0, 10);
+    const p = b.amountForDay(d, stale);
+    assert.ok(BigInt(p.amountRaw) <= b.AUTO_DAILY_CAP_RAW, `${d} burned ${p.amountRaw}`);
+    if (p.capped) sawClamp = true;
+  }
+  assert.ok(sawClamp, "no day in 200 hit the clamp — the fixture is not exercising it");
+});
+
+t("garbage in a stored config falls back to the base rather than throwing", () => {
+  for (const bad of [{ amountRaw: "lots" }, { amountRaw: "0" }, { amountRaw: null },
+                     { bonusEnabled: true, bonusMaxRaw: "junk" }, { bonusEnabled: "yes" }]) {
+    const p = b.amountForDay("2026-09-05", bad);
+    assert.ok(BigInt(p.amountRaw) > 0n, `${JSON.stringify(bad)} produced ${p.amountRaw}`);
+    assert.ok(BigInt(p.amountRaw) <= b.AUTO_DAILY_CAP_RAW);
+  }
+});
+
+t("bonus lands on clean multiples, so an announcement reads as a decision", () => {
+  const cfg = { bonusEnabled: true };
+  for (let i = 0; i < 60; i++) {
+    const d = new Date(Date.UTC(2026, 3, 1) + i * 86400000).toISOString().slice(0, 10);
+    assert.strictEqual(BigInt(b.amountForDay(d, cfg).bonusRaw) % b.BONUS_STEP_RAW, 0n, `${d} is not a clean multiple`);
+  }
+});
+
+t("the gate burns the DAY's amount, not the flat base", () => {
+  const cfg = b.validateBurnConfig({ wallet: WALLET, bonusEnabled: true });
+  const armedBonus = b.arm({ config: cfg }, NOW);
+  const g = b.burnGate({ burn: armedBonus, burnedDays: {}, nowUnix: NOW, balanceRaw: PLENTY, hasSigner: true });
+  assert.strictEqual(g.ok, true, g.reason);
+  assert.strictEqual(g.amountRaw, b.amountForDay(b.dayKey(NOW), cfg).amountRaw);
+  assert.ok(BigInt(g.amountRaw) >= BigInt(cfg.amountRaw), "the day's burn must include the base");
+  assert.ok(g.plan && g.plan.bonusRaw != null, "the gate should report how the amount was made up");
+});
+
+t("a short balance still blocks a bonus day — nothing partial", () => {
+  const cfg = b.validateBurnConfig({ wallet: WALLET, bonusEnabled: true });
+  const armedBonus = b.arm({ config: cfg }, NOW);
+  const need = BigInt(b.amountForDay(b.dayKey(NOW), cfg).amountRaw);
+  const g = b.burnGate({ burn: armedBonus, burnedDays: {}, nowUnix: NOW,
+                         balanceRaw: (need - 1n).toString(), hasSigner: true });
+  assert.strictEqual(g.ok, false);
+  assert.strictEqual(g.short, true);
 });
 
 (async () => {

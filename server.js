@@ -10878,7 +10878,10 @@ app.all("/api/cuna-burn/admin", async (req, res) => {
 
     if (String(q.config || "") === "1") {
       const patch = {};
-      for (const k of ["wallet", "amountRaw", "hourUtc", "mint"]) if (q[k] != null) patch[k] = q[k];
+      for (const k of ["wallet", "amountRaw", "hourUtc", "mint", "bonusMaxRaw"]) if (q[k] != null) patch[k] = q[k];
+      // Boolean, from an explicit string. "true"/"false" only — a stray value must not switch on
+      // an extra million tokens a day.
+      if (q.bonusEnabled != null) patch.bonusEnabled = String(q.bonusEnabled) === "true";
       const config = burnLib.validateBurnConfig(patch, burnLib.readBurn(stored).config);
       stored = { ...(stored || {}), config };
       kv.set(CUNA_BURN_KV, stored);
@@ -10909,6 +10912,9 @@ app.all("/api/cuna-burn/admin", async (req, res) => {
       hasSigner: !!process.env.CUNA_BURN_SECRET,
       killSwitch: String(process.env.CUNA_BURN_OFF || "") === "1",
       burnRun: ranNow,
+      // What today would burn, so the owner can see the roll before it fires.
+      today: burnLib.amountForDay(burnLib.dayKey(Math.floor(Date.now() / 1000)), b.config),
+      autoDailyCapRaw: burnLib.AUTO_DAILY_CAP_RAW.toString(),
       daysBurned: Object.keys(days).length,
       totalBurnedRaw: totalRaw.toString(),
       recent: Object.fromEntries(Object.keys(days).sort().slice(-7).map((k) => [k, days[k]])),
