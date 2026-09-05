@@ -83,6 +83,15 @@ t("the defaults are the owner's numbers", () => {
   assert.deepStrictEqual(p.DEFAULTS.excludeWallets, [TREASURY]);
 });
 
+t("the per-wallet cap ships OFF", () => {
+  assert.strictEqual(p.DEFAULTS.maxWalletSharePct, 0);
+  assert.strictEqual(p.validateConfig({}).maxWalletSharePct, 0);
+  assert.strictEqual(p.validateConfig({ maxWalletSharePct: 33 }).maxWalletSharePct, 33);
+  for (const bad of [100, 101, -1, "a third", NaN, null]) {
+    assert.throws(() => p.validateConfig({ maxWalletSharePct: bad }), /maxWalletSharePct/, `${bad} accepted`);
+  }
+});
+
 t("the dust floor survives as a string — a JS number would lose it", () => {
   assert.strictEqual(typeof p.DEFAULTS.minLockRaw, "string");
   assert.strictEqual(p.validateConfig({ minLockRaw: "250000000000000" }).minLockRaw, "250000000000000");

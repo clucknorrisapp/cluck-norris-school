@@ -307,6 +307,99 @@ t("nobody locked: the pool is reported undistributed, not quietly burned", () =>
   assert.strictEqual(r.undistributed, 1000000n);
 });
 
+section("the per-wallet cap (OFF by default)");
+
+t("with no cap set, nothing changes", () => {
+  const a = lock({ escrow: "A", recipient: "A", durationDays: 1095 });
+  const b = lock({ escrow: "B", recipient: "B", durationDays: 90 });
+  const plain = s.accrueDay({ locks: [a, b], poolRaw: "1000000", nowUnix: NOW, cfg: CFG });
+  for (const off of [undefined, 0, null, "", 100, -5, NaN]) {
+    const r = s.accrueDay({ locks: [a, b], poolRaw: "1000000", nowUnix: NOW, cfg: { ...CFG, maxWalletSharePct: off } });
+    assert.deepStrictEqual(r.credits, plain.credits, `maxWalletSharePct=${off} changed the split`);
+    assert.deepStrictEqual(r.capped, []);
+  }
+});
+
+t("THE ONE THAT MATTERS: a dominant wallet is held to the cap", () => {
+  // On the day this was written ONE wallet took 92% of the pool.
+  const whale = lock({ escrow: "W", recipient: "Whale", totalRaw: "226000000000000000", durationDays: 471 });
+  const small = lock({ escrow: "S", recipient: "Small", totalRaw: "50000000000000000", durationDays: 177 });
+  const cfg = { ...CFG, maxWalletSharePct: 33 };
+  const r = s.accrueDay({ locks: [whale, small], poolRaw: "1000000", nowUnix: NOW, cfg });
+  // The whale drops from ~92% to 33%. The freed share then makes the OTHER wallet dominant, so it
+  // is capped too — with two lockers and a 33% ceiling, neither can exceed 33% and 34% simply is
+  // not emitted. That is the cap doing exactly what it says, not a bug.
+  assert.deepStrictEqual(r.capped.sort(), ["Small", "Whale"]);
+  assert.strictEqual(r.credits.Whale, 330000n);
+  assert.strictEqual(r.credits.Small, 330000n);
+  assert.strictEqual(r.undistributed, 340000n);
+});
+
+t("the cap ties total emission to PARTICIPATION — the full pool needs enough lockers", () => {
+  // A 33% ceiling means at most 33% x (lockers) can ever go out: two lockers cap the day at 66%,
+  // three unlock the whole pool. That is a real consequence of setting a cap and worth knowing
+  // before switching one on — it throttles the emission early, when few people have joined.
+  const cfg = { ...CFG, maxWalletSharePct: 33 };
+  const mk = (i) => lock({ escrow: "E" + i, recipient: "W" + i, durationDays: 365 });
+  for (const [n, expected] of [[1, 330000n], [2, 660000n], [3, 990000n], [4, 1000000n]]) {
+    const r = s.accrueDay({ locks: Array.from({ length: n }, (_, i) => mk(i)),
+                            poolRaw: "1000000", nowUnix: NOW, cfg });
+    assert.strictEqual(r.distributed, expected, `${n} locker(s) should emit ${expected}`);
+  }
+});
+
+t("what a capped wallet cannot take is NOT emitted", () => {
+  // Fewer tokens released when few people are locked is the conservative outcome, and the one the
+  // owner asked for. It is reported as undistributed, never carried forward as a debt.
+  const only = lock({ escrow: "W", recipient: "Whale", durationDays: 365 });
+  const r = s.accrueDay({ locks: [only], poolRaw: "1000000", nowUnix: NOW, cfg: { ...CFG, maxWalletSharePct: 33 } });
+  assert.strictEqual(r.credits.Whale, 330000n);
+  assert.strictEqual(r.undistributed, 670000n);
+  assert.strictEqual(r.distributed + r.undistributed, 1000000n, "the pool must still add up");
+});
+
+t("SPLITTING ONE POSITION ACROSS LOCKS DOES NOT BUY MORE CAP", () => {
+  // The cap is per WALLET but weight is per LOCK. Without folding locks together first, three
+  // locks to one wallet would take three times the ceiling.
+  const one = lock({ escrow: "A", recipient: "Same", totalRaw: "30000000000000000", durationDays: 365 });
+  const two = lock({ escrow: "B", recipient: "Same", totalRaw: "30000000000000000", durationDays: 365 });
+  const three = lock({ escrow: "C", recipient: "Same", totalRaw: "30000000000000000", durationDays: 365 });
+  const other = lock({ escrow: "D", recipient: "Other", totalRaw: "1000000000000000", durationDays: 365 });
+  const r = s.accrueDay({ locks: [one, two, three, other], poolRaw: "1000000", nowUnix: NOW,
+                          cfg: { ...CFG, maxWalletSharePct: 33 } });
+  assert.strictEqual(r.credits.Same, 330000n, "three locks took more than one wallet's cap");
+});
+
+t("under the cap, everyone is paid normally and nothing is stranded", () => {
+  const locks = Array.from({ length: 5 }, (_, i) =>
+    lock({ escrow: "E" + i, recipient: "W" + i, durationDays: 365 }));
+  const r = s.accrueDay({ locks, poolRaw: "1000001", nowUnix: NOW, cfg: { ...CFG, maxWalletSharePct: 33 } });
+  assert.deepStrictEqual(r.capped, []);
+  assert.strictEqual(r.distributed, 1000001n);
+  assert.strictEqual(r.undistributed, 0n);
+});
+
+t("several whales are each capped, and the loop terminates", () => {
+  const locks = Array.from({ length: 4 }, (_, i) =>
+    lock({ escrow: "E" + i, recipient: "W" + i, durationDays: 365 }));
+  const r = s.accrueDay({ locks, poolRaw: "1000000", nowUnix: NOW, cfg: { ...CFG, maxWalletSharePct: 20 } });
+  assert.strictEqual(r.capped.length, 4, "all four should hit the 20% ceiling");
+  assert.strictEqual(r.distributed, 800000n);
+  assert.strictEqual(r.undistributed, 200000n);
+});
+
+t("no tokens are created or destroyed with a cap in play", () => {
+  for (const n of [2, 3, 7, 11]) {
+    const locks = Array.from({ length: n }, (_, i) =>
+      lock({ escrow: "E" + i, recipient: "W" + i, durationDays: 365 + i * 100,
+             totalRaw: String((1000000 + i * 7) * 1000000) }));
+    const r = s.accrueDay({ locks, poolRaw: "1000001", nowUnix: NOW, cfg: { ...CFG, maxWalletSharePct: 30 } });
+    const sum = Object.values(r.credits).reduce((a, b) => a + b, 0n);
+    assert.strictEqual(sum, r.distributed, `${n} lockers: credits do not match distributed`);
+    assert.strictEqual(r.distributed + r.undistributed, 1000001n, `${n} lockers: pool does not add up`);
+  }
+});
+
 section("claiming — there is no cliff");
 
 t("everything accrued is claimable, whatever the lock looks like", () => {
