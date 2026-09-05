@@ -348,6 +348,17 @@ served the React shell at 200.
   override mechanism existed. Engine GATE logic is pure in `lib/engine-decisions.js` —
   changing a gate means updating `scripts/engine-sim-test.cjs` (CI runs it; each scenario is
   a real incident) and replaying it locally BEFORE shipping, not debugging in production.
+- ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`
+  defaults to `{}` (`lib/whirlpool-vault.js` ~358), so a missing kv key reads as *not paused*; and
+  `lib/kvstore.js` `mkdirSync`s `DATA_DIR` and reports persistent even when the volume is not the
+  real one, so a bad mount looks healthy while every flag silently resets. cuna/dnc/rose arming
+  falls back to `<X>_ENGINE_ON` env on kv loss the same way. A durable stop is therefore an ENV
+  VAR (`POKE_ENGINE_OFF=1`, `<X>_ENGINE_OFF=1`) or a code default, never a kv flag — which is why
+  POKE's code default was flipped to off on 2026-09-05 (verified read-only by an adversarial pass
+  that day: with the old default, a boot with an empty kv would have started POKE trading 20 s
+  later, signing with the treasury operator key). Verifying a stop via `lastTickTs` is invalid:
+  `tick()` returns on `paused` before writing it, so a registered scheduler no-oping every 2 min
+  is indistinguishable from an unregistered one. Only `paused` + the env/code gate tell you anything.
 - **Escape anything from an API, URL or chain metadata before `innerHTML`** — token names and
   symbols are attacker-controlled. Use `CluckUtil.esc`; five hand-rolled copies were missing the
   single-quote escape.
