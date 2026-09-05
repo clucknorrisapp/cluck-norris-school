@@ -10474,6 +10474,10 @@ app.get("/api/cuna-stake/config", async (req, res) => {
       decimals: 9,
       terms: {
         minDurationDays: p.config.minDurationDays,
+        // The ceiling as well as the floor. The page builds its ladder AND its "6x is the most any
+        // lock earns" line from these two, so the copy cannot drift from the rule that judges a
+        // lock — which is the whole reason neither is hardcoded in the page.
+        maxTermDays: p.config.maxTermDays,
         minLockRaw: p.config.minLockRaw,
         maxWalletSharePct: p.config.maxWalletSharePct,
         sharePct: p.config.sharePct,

@@ -127,8 +127,8 @@
       <p class="muted" style="margin:9px 0 0">No bonus table &mdash; the terms are 90-day steps and
       that is just the division. An 18-month lock earns 6&times; the entry rate on its last day
       exactly as it did on its first; it never fades to the rate of a shorter lock.
-      <b>18 months is also the top: 6&times; is the most any lock earns</b>, so a longer lock made
-      elsewhere is welcome but is paid at the 18-month rate, not more.</p>
+      <b id="capLine">That top tier is also the ceiling</b> &mdash; a longer lock made elsewhere is
+      welcome, but is paid at the top-tier rate, not more.</p>
     </div>
   </div>
 
@@ -302,7 +302,10 @@
     // 90-day entry tier these steps make the multiplier literally 1x/2x/3x/4x/5x/6x rather than
     // 1/2/3/4.06/5.07/6.08 — the table on this page and the maths behind it are then the same
     // thing, and anyone can check it with division.
-    var ladder = [90, 180, 270, 360, 450, 540].filter(function (v) { return v >= minD; });
+    // Bounded by the rule's own ceiling as well as its floor — a term above maxTermDays earns the
+    // same as maxTermDays, so offering one would be selling a step that pays nothing extra.
+    var maxD = Number(CFG.terms.maxTermDays) > 0 ? Number(CFG.terms.maxTermDays) : 540;
+    var ladder = [90, 180, 270, 360, 450, 540].filter(function (v) { return v >= minD && v <= maxD; });
     if (!ladder.length) ladder = [minD];
     $("dur").innerHTML = ladder.map(function (v) {
       var months = Math.round(v / 30.4);
@@ -311,6 +314,13 @@
       return '<option value="' + v + '">' + months + " months" +
              (v === ladder[0] ? " (minimum)" : " — earns " + mult + "\u00d7 the minimum") + "</option>";
     }).join("");
+    // Say the ceiling in the same numbers the rule uses, rather than trusting copy to keep up.
+    var topDays = ladder[ladder.length - 1];
+    var capEl = $("capLine");
+    if (capEl) {
+      capEl.textContent = Math.round(topDays / 30.4) + " months is also the top: "
+        + Math.round(topDays / ladder[0]) + "\u00d7 is the most any lock earns";
+    }
     $("dur").value = String(ladder[Math.min(3, ladder.length - 1)]);   // default to ~12 months
     refreshPlan();
   }
