@@ -757,6 +757,17 @@
     refreshPlan();
   }
 
+  // ?walletdebug=1: when a wallet's in-app browser connects nothing, show what the browser exposes
+  // (names only — never a value or an address) so the missing detector can be written from a
+  // screenshot instead of a guess. Off unless asked for.
+  function walletDebug() {
+    if (!/[?&]walletdebug=1/.test(location.search)) return;
+    var d; try { d = CluckWallet.diagnostics(); } catch (e) { return; }
+    $("walletBox").insertAdjacentHTML("beforeend",
+      '<pre class="muted" style="white-space:pre-wrap;word-break:break-all;font-size:11px;margin-top:10px;border:1px dashed var(--border);border-radius:8px;padding:8px">' +
+      esc(JSON.stringify(d, null, 1)) + "</pre>");
+  }
+
   function doConnect(id) {
     CluckWallet.connect(id).then(afterConnect).catch(function (e) {
       $("walletBox").insertAdjacentHTML("beforeend",
@@ -777,10 +788,12 @@
             "border:1px solid var(--border);color:var(--text);font-family:var(--cuna-font);" +
             "letter-spacing:1px;font-size:14px;",
         });
+        walletDebug();
         return;
       }
       $("walletBox").insertAdjacentHTML("beforeend",
         '<p class="bad">No Solana wallet found. Install one, or open this page inside your wallet’s browser.</p>');
+      walletDebug();
       return;
     }
     if (list.length > 1) {

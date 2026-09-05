@@ -534,9 +534,41 @@
     state = { provider: null, pubkey: null, id: null };
   }
 
+  // What THIS browser exposes, for the case where a wallet's in-app browser still connects
+  // nothing (Jupiter Mobile, 2026-09-05): the user-agent, the names of window properties that look
+  // like a wallet namespace, whether a legacy window.solana exists and which flags it sets, whether
+  // navigator.wallets exists, and the Wallet Standard wallets that registered. NAMES ONLY — never a
+  // value, never a key, never an address. Pages show it behind ?walletdebug=1.
+  function diagnostics() {
+    var names = [];
+    try {
+      var keys = Object.getOwnPropertyNames(global);
+      for (var i = 0; i < keys.length; i++) {
+        if (/solana|wallet|phantom|jupiter|jup|solflare|backpack|okx|coinbase|bitkeep|bitget|trust|glow|exodus|brave|coin98|nightly|magic|bybit|tokenpocket|safepal/i.test(keys[i])) names.push(keys[i]);
+      }
+    } catch (e) {}
+    var flags = [];
+    try { if (global.solana) for (var k in global.solana) { if (/^is[A-Z]/.test(k) && global.solana[k]) flags.push(k); } } catch (e) {}
+    var std = [];
+    for (var j = 0; j < STD_WALLETS.length; j++) {
+      var w = STD_WALLETS[j];
+      std.push({ name: String(w && w.name), chains: (w && w.chains) || [], features: Object.keys((w && w.features) || {}), solana: stdIsSolana(w) });
+    }
+    return {
+      ua: (global.navigator && global.navigator.userAgent) || "",
+      windowNames: names,
+      legacySolana: !!global.solana,
+      legacyFlags: flags,
+      navigatorWallets: !!(global.navigator && global.navigator.wallets),
+      standardWallets: std,
+      available: available().map(function (w) { return w.id + (w.standard ? " (standard)" : ""); }),
+    };
+  }
+
   // Export only what pages call (WALLETS, available, connect, disconnect, isMobile, mobileLinksHTML,
   // watch). deeplinks stays for a QR/hand-off surface; shortAddr lives in /cluck-util.js.
   global.CluckWallet = {
+    diagnostics: diagnostics,
     WALLETS: WALLETS,
     available: available,
     connect: connect,
