@@ -66,6 +66,11 @@
   details.card .body{padding:0 18px 16px;}
   details.card .body p{margin:0 0 10px;}
   details.card .body p:last-child{margin:0;}
+  input[type=range]{width:100%;padding:0;accent-color:var(--hotpink);height:26px;background:none;border:none;}
+  .pctrow{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:-2px;}
+  .balrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:10px;
+          font-size:13px;color:var(--muted);}
+  .balrow b{font-family:ui-monospace,Menlo,monospace;font-weight:400;color:var(--text);}
   .ack{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--border);
        font-size:13.5px;line-height:1.5;cursor:pointer;}
   .ack input{width:18px;height:18px;flex:0 0 18px;margin:1px 0 0;accent-color:var(--hotpink);cursor:pointer;}
@@ -173,6 +178,11 @@
     can&rsquo;t commit tokens on terms that earn nothing.</p>
     <label>Amount of CUNA to lock</label>
     <input id="amt" inputmode="decimal" placeholder="e.g. 5000000" autocomplete="off"/>
+    <div id="sliderWrap" hidden>
+      <input type="range" id="amtRange" min="0" max="100" step="0.5" value="0"/>
+      <div class="pctrow"><span>0%</span><span>50%</span><span>100% of your CUNA</span></div>
+    </div>
+    <div class="balrow" id="balRow" hidden><span id="balPct">&nbsp;</span><b id="balHave">&nbsp;</b></div>
     <div class="muted" id="amtNote" style="margin-top:6px">&nbsp;</div>
     <label>How long to lock for</label>
     <select id="dur"></select>
@@ -272,6 +282,88 @@
     refreshPlan();
   }
 
+  // The connected wallet's liquid CUNA, read on-chain. Both token programs, because a mint can
+  // live under either and checking only the legacy one silently reports zero for a Token-2022
+  // holder. Whole tokens: a balance fits a JS number comfortably (41M), raw base units (4.1e16)
+  // does not — so the conversion is string surgery and the slider never touches raw amounts.
+  var BAL = null;   // whole tokens, or null while unknown
+
+  function readBalance() {
+    if (!WALLET || !CFG) return Promise.resolve(null);
+    var PROGRAMS = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+                    "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"];
+    return Promise.all(PROGRAMS.map(function (pid) {
+      return CluckUtil.rpc("getTokenAccountsByOwner",
+        [WALLET, { programId: pid }, { encoding: "jsonParsed" }])
+        .then(function (r) { return { ok: true, r: r }; })
+        .catch(function () { return { ok: false }; });
+    })).then(function (res) {
+      // "We could not look" must never render as "you hold none". Both reads failing leaves the
+      // balance UNKNOWN — showing 0 would tell someone with a full wallet they have nothing, and
+      // the slider would sit uselessly at zero with no explanation.
+      if (!res.some(function (x) { return x.ok; })) { BAL = null; return null; }
+      var total = 0;
+      res.forEach(function (x) {
+        (((x.r) && x.r.value) || []).forEach(function (a) {
+          var i = a.account.data.parsed.info;
+          if (i.mint !== CFG.mint) return;
+          // uiAmountString is exact; uiAmount is a float and can already have drifted.
+          total += Number(String(i.tokenAmount.uiAmountString || i.tokenAmount.uiAmount || 0));
+        });
+      });
+      BAL = total;
+      return total;
+    }).catch(function () { BAL = null; return null; });
+  }
+
+  function showBalance() {
+    var minTok = CFG && CFG.terms.minLockRaw ? Number(toTokens(CFG.terms.minLockRaw).replace(/,/g, "")) : 0;
+    if (BAL == null) {
+      // Unknown, not zero. Say so — typing an amount still works, only the slider is unavailable.
+      $("sliderWrap").hidden = true;
+      $("balRow").hidden = false;
+      $("balHave").textContent = "";
+      $("balPct").innerHTML = '<span class="warn">Could not read your CUNA balance &mdash; ' +
+        "enter an amount manually</span>";
+      return;
+    }
+    $("balRow").hidden = false;
+    $("balHave").textContent = BAL.toLocaleString(undefined, { maximumFractionDigits: 0 }) + " CUNA in wallet";
+    if (BAL === 0) {
+      $("sliderWrap").hidden = true;
+      $("balPct").innerHTML = '<span class="warn">This wallet holds no CUNA</span>';
+      return;
+    }
+    if (BAL < minTok) {
+      // Don't offer a slider that cannot reach a qualifying amount — it would just look broken.
+      $("sliderWrap").hidden = true;
+      $("balPct").innerHTML = '<span class="warn">Below the ' +
+        minTok.toLocaleString() + " CUNA minimum</span>";
+      return;
+    }
+    $("sliderWrap").hidden = false;
+  }
+
+  function amountFromPct(pct) {
+    if (BAL == null) return 0;
+    return Math.floor(BAL * Number(pct) / 100);
+  }
+  function pctOfBal(amt) {
+    if (!BAL) return null;
+    return Math.min(100, (Number(amt) / BAL) * 100);
+  }
+
+  $("amtRange").addEventListener("input", function () {
+    if (BAL == null) return;
+    $("amt").value = String(amountFromPct(this.value));
+    clearAcks();
+    refreshPlan();
+  });
+
+  function clearAcks() {
+    Array.prototype.forEach.call(document.querySelectorAll(".ackbox"), function (b) { b.checked = false; });
+  }
+
   function refreshPlan() {
     if (!CFG) return;
     var amt = String($("amt").value || "").replace(/,/g, "").trim();
@@ -286,6 +378,28 @@
       dateOf(end) + "</b>.";
     $("amtNote").innerHTML = (okAmt || !amt) ? "&nbsp;"
       : '<span class="bad">Enter a plain number, e.g. 5000000</span>';
+
+    // What this actually costs them, as a share of what they hold. The page tells people to lock a
+    // slice rather than the bag; this is the line that makes that concrete instead of preachy.
+    var pct = okAmt ? pctOfBal(amt) : null;
+    if (pct != null) {
+      var over = Number(amt) > BAL;
+      var label = pct.toFixed(pct < 10 ? 1 : 0) + "% of your CUNA";
+      if (over) {
+        $("balPct").innerHTML = '<span class="bad">More CUNA than this wallet holds</span>';
+      } else if (pct >= 75) {
+        $("balPct").innerHTML = '<span class="bad">' + label +
+          " &mdash; that is nearly everything you hold</span>";
+      } else if (pct >= 50) {
+        $("balPct").innerHTML = '<span class="warn">' + label + " &mdash; over half your bag</span>";
+      } else {
+        $("balPct").innerHTML = label;
+      }
+      // keep the slider in step when the number was typed rather than dragged
+      if (!over) $("amtRange").value = String(Math.min(100, pct));
+    } else if (BAL != null && !amt) {
+      $("balPct").innerHTML = "&nbsp;";
+    }
 
     var acks = Array.prototype.slice.call(document.querySelectorAll(".ackbox"));
     var allAcked = acks.every(function (b) { return b.checked; });
@@ -348,12 +462,15 @@
         // Anywhere a wallet can connect it must be able to disconnect: call the provider's own
         // disconnect AND clear local state, or the page lies about who is connected.
         try { CluckWallet.disconnect(); } catch (e) {}
-        WALLET = null; $("mine").hidden = true;
+        WALLET = null; BAL = null; $("mine").hidden = true;
+        $("sliderWrap").hidden = true; $("balRow").hidden = true;
         $("walletBox").innerHTML = '<button id="connect2">CONNECT WALLET</button>';
         $("connect2").addEventListener("click", function () { location.reload(); });
         refreshPlan();
       });
-      loadMine(); refreshPlan();
+      loadMine();
+      readBalance().then(function () { showBalance(); refreshPlan(); });
+      refreshPlan();
     }).catch(function (e) {
       $("walletBox").innerHTML += '<p class="bad">' + esc(e.message || "could not connect") + "</p>";
     });
