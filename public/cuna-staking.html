@@ -1,0 +1,341 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CUNA Lock to Earn — lock your CUNA, earn from the unlock stream</title>
+<meta name="description" content="Lock CUNA on Jupiter Lock for three months or more and earn a share of the tokens the vesting schedules release every day. Longer locks earn more. Non-custodial, no proof to submit, nothing held by us."/>
+<style>
+  /* CUNA brand — tokens mirror tools/gif-forge/brand.css, the single source for the palette.
+     Luckiest Guy is the brand display face; it is served from the gif-forge asset so the page and
+     the generated art cannot drift apart. */
+  @font-face { font-family:"CunaDisplay"; src:url("/fonts/LuckiestGuy.ttf") format("truetype"); font-display:swap; }
+  :root{
+    --cuna-font:"CunaDisplay","Arial Black",Arial,sans-serif;
+    --pink:#e81088; --hotpink:#ff2fa0; --deep:#b8005f; --cream:#fdf3d8;
+    --outline:#7a0447; --purple:#7a2bd6; --night:#180826;
+    --bg:var(--night); --card:#241033; --border:#3d1a52; --text:var(--cream); --muted:#c9a8d6;
+    --ok:#3ddc97; --bad:#ff6b6b; --warn:#ffc93c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.6;}
+  .wrap{max-width:820px;margin:0 auto;padding:20px 16px 70px;}
+  h1,h2,.disp{font-family:var(--cuna-font);letter-spacing:1px;color:var(--cream);
+              text-shadow:2px 2px 0 var(--outline);}
+  h1{font-size:32px;margin:0 0 6px;line-height:1.15;}
+  h2{font-size:19px;margin:0 0 10px;}
+  .sub{color:var(--muted);font-size:15px;margin:0 0 20px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin:0 0 14px;}
+  .hero{background:linear-gradient(160deg,var(--pink),var(--deep));border:none;}
+  .hero .big{font-family:var(--cuna-font);font-size:38px;line-height:1.1;text-shadow:2px 2px 0 var(--outline);}
+  .hero .lbl{font-family:var(--cuna-font);font-size:12px;letter-spacing:2px;opacity:.9;}
+  .k{font-family:var(--cuna-font);font-size:12px;letter-spacing:2px;color:var(--muted);margin-bottom:10px;}
+  .row{display:flex;gap:10px;justify-content:space-between;padding:8px 0;
+       border-bottom:1px solid var(--border);font-size:14px;}
+  .row:last-child{border-bottom:none;}
+  .row b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:400;text-align:right;
+         word-break:break-all;max-width:60%;}
+  .ok{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+  input,select{width:100%;background:var(--night);color:var(--text);border:1px solid var(--border);
+        border-radius:9px;padding:11px;font-family:ui-monospace,Menlo,monospace;font-size:14px;}
+  label{display:block;font-size:13px;color:var(--muted);margin:12px 0 5px;}
+  button{font-family:var(--cuna-font);letter-spacing:1.5px;border:none;border-radius:10px;
+         padding:13px 20px;cursor:pointer;font-size:16px;
+         background:linear-gradient(90deg,var(--hotpink),var(--pink));color:var(--cream);
+         text-shadow:1px 1px 0 var(--outline);}
+  /* Disabled goes NEUTRAL GREY, never a faded gradient — a dimmed brand colour reads as broken. */
+  button:disabled{background:#3A3A3A;color:#8A8A8A;text-shadow:none;cursor:not-allowed;}
+  button.alt{background:transparent;color:var(--text);border:1px solid var(--border);text-shadow:none;}
+  .note{background:rgba(122,43,214,.16);border:1px solid var(--purple);border-radius:10px;
+        padding:13px;margin:12px 0;font-size:14px;}
+  .danger{background:rgba(255,107,107,.10);border:1px solid rgba(255,107,107,.4);border-radius:10px;
+          padding:13px;margin:12px 0;font-size:14px;}
+  .muted{color:var(--muted);font-size:13px;}
+  .pill{display:inline-block;font-family:var(--cuna-font);font-size:11px;letter-spacing:1.5px;
+        padding:4px 10px;border-radius:20px;background:var(--outline);color:var(--cream);}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media(max-width:560px){.grid{grid-template-columns:1fr}.hero .big{font-size:30px}h1{font-size:26px}}
+  .lockrow{border:1px solid var(--border);border-radius:10px;padding:12px;margin:0 0 10px;}
+  a{color:var(--hotpink);}
+</style></head><body>
+<div class="wrap">
+
+  <h1>CUNA LOCK TO EARN</h1>
+  <p class="sub">Lock your CUNA and earn a share of the tokens the vesting schedules release every
+  day. Non-custodial &mdash; the lock is yours, on Jupiter&rsquo;s program. We never hold anything.</p>
+
+  <div id="notlive" class="note" hidden>
+    <b class="disp">NOT LIVE YET</b><br/>
+    The programme hasn&rsquo;t started. Nothing is earning yet and no rewards are accruing &mdash;
+    the numbers below are what it <i>will</i> pay once it opens. You can lock now if you want to;
+    your lock is judged from the day the programme starts, not the day you make it.
+  </div>
+
+  <div class="card hero">
+    <div class="lbl">TODAY&rsquo;S REWARD POOL</div>
+    <div class="big" id="pool">&mdash;</div>
+    <div class="lbl" style="margin-top:10px">SPLIT ACROSS EVERYONE LOCKED</div>
+    <div class="muted" style="color:#ffe9f6;margin-top:8px" id="poolsub">Reading the chain&hellip;</div>
+  </div>
+
+  <div class="card">
+    <div class="k">THE DEAL</div>
+    <div class="row"><span>Lock for at least</span><b id="tDur">&mdash;</b></div>
+    <div class="row"><span>Smallest lock that counts</span><b id="tMin">&mdash;</b></div>
+    <div class="row"><span>Reward pool</span><b id="tShare">&mdash;</b></div>
+    <div class="row"><span>Locks that qualify right now</span><b id="tCount">&mdash;</b></div>
+    <div class="row"><span>CUNA currently earning</span><b id="tLocked">&mdash;</b></div>
+    <p class="muted" style="margin:14px 0 0">You start earning the moment your lock exists. Rewards
+    build up every day and are <b>sent out in batches</b> &mdash; nothing to click, nothing to
+    claim, they arrive in your wallet. Your share is your
+    <b>amount &times; days still to run</b>. That one line is the whole formula: a longer lock earns
+    more per token, and your weight falls as the lock matures, which is why re-locking is worth it
+    rather than being forced on you.</p>
+    <div class="note" style="margin-top:14px">
+      <b class="disp">WHAT THE TERMS PAY</b><br/>
+      Because your share is amount &times; days left, the terms price themselves. Same tokens locked:
+      <div class="grid" style="margin-top:10px;gap:4px 14px">
+        <div class="row"><span>3 months</span><b>1&times;</b></div>
+        <div class="row"><span>6 months</span><b>2&times;</b></div>
+        <div class="row"><span>9 months</span><b>3&times;</b></div>
+        <div class="row"><span>12 months</span><b>4&times;</b></div>
+        <div class="row"><span>15 months</span><b>5&times;</b></div>
+        <div class="row"><span>18 months</span><b>6&times;</b></div>
+      </div>
+      <p class="muted" style="margin:10px 0 0">No bonus table, no multiplier we picked. That is just
+      what the formula does &mdash; you can check it yourself.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="k">HOW IT&rsquo;S DECIDED &mdash; THERE IS NOTHING TO SUBMIT</div>
+    <p class="muted" style="margin:0 0 10px">A Jupiter Lock is a public account on Solana. We read
+    the chain and work out who qualifies. <b>You never send us proof, a screenshot, or a signature.</b>
+    Nothing you type is an input, so there is nothing anyone can fake.</p>
+    <p class="muted" style="margin:0 0 10px">Rewards work the same way. There is no claim button and
+    no deadline to catch &mdash; what you have earned is counted every day and sent to your wallet
+    in batches. If you do nothing at all after locking, you still get everything you earned.</p>
+    <p class="muted" style="margin:0">That also means it doesn&rsquo;t matter where you make the lock.
+    Build it here, or build it yourself on
+    <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter&rsquo;s own site</a> &mdash;
+    same program, same result, same rewards.</p>
+  </div>
+
+  <div class="card">
+    <div class="k">&ldquo;IS THIS A STAKING CONTRACT?&rdquo;</div>
+    <p class="muted" style="margin:0 0 10px">No &mdash; and that&rsquo;s the point. A normal staking
+    contract is a program that <b>holds your tokens</b>. You send them in and trust the team&rsquo;s
+    code to give them back. That is where a lot of people have lost everything, to bugs and to
+    teams who wrote a withdraw function only they could call.</p>
+    <p class="muted" style="margin:0 0 10px">Here, <b>nobody holds your tokens &mdash; including us</b>.
+    They sit in a Jupiter Lock escrow with your wallet as the recipient. Jupiter&rsquo;s program is
+    audited and used by hundreds of projects, and we could not touch your tokens if we wanted to.
+    We only read the chain and count.</p>
+    <p class="muted" style="margin:0">So it is staking, in the way that matters: you commit tokens,
+    you earn for committing them. It just isn&rsquo;t a vault you have to trust. <b>The minimum is
+    3 months</b> &mdash; short enough to be a real choice, long enough that the commitment means
+    something.</p>
+  </div>
+
+  <div class="card">
+    <div class="k">BEFORE YOU LOCK &mdash; READ THIS</div>
+    <div class="danger">
+      <b>A qualifying lock cannot be undone.</b> Not by you, not by us, not by Jupiter. Your tokens
+      are gone from your wallet for the full term &mdash; three months at the shortest, eighteen at
+      the longest. There is no cancel button, no support ticket, no early exit.
+    </div>
+    <p class="muted" style="margin:0 0 10px"><b>So lock a slice, not your bag.</b> Decide the amount
+    by what you could genuinely not touch for a year and still be fine. If that number is zero, the
+    honest answer is to not lock &mdash; that is a real answer and it costs you nothing.</p>
+    <p class="muted" style="margin:0 0 10px"><b>Ladder it instead of going all in.</b> You can hold
+    several locks at once and they all earn; multiple locks to the same wallet are added together.
+    Lock a piece now and another piece in a few months, and you keep the rest liquid for whatever
+    life does in the meantime.</p>
+    <p class="muted" style="margin:0"><b>Jupiter Lock can also make a cancelable lock</b> that you
+    can undo. Those are a real and sensible thing to make &mdash; but they <b>do not earn here</b>.
+    A lock you can cancel is not a commitment, and paying it the same as a real one would mean the
+    people who genuinely locked up earn the least.</p>
+  </div>
+
+  <div class="card">
+    <div class="k">YOUR LOCKS</div>
+    <div id="walletBox">
+      <p class="muted" style="margin:0 0 12px">Connect to see your locks, what they weigh, and what
+      you&rsquo;ve earned. Read-only &mdash; connecting signs nothing.</p>
+      <button id="connect">CONNECT WALLET</button>
+    </div>
+    <div id="mine" hidden></div>
+  </div>
+
+  <div class="card" id="buildCard">
+    <div class="k">MAKE A QUALIFYING LOCK</div>
+    <p class="muted" style="margin:0 0 6px">The form only builds locks that meet the terms above, so
+    you can&rsquo;t accidentally commit your tokens on terms that earn nothing.</p>
+    <label>Amount of CUNA to lock</label>
+    <input id="amt" inputmode="decimal" placeholder="e.g. 5000000" autocomplete="off"/>
+    <div class="muted" id="amtNote" style="margin-top:6px">&nbsp;</div>
+    <label>How long to lock for</label>
+    <select id="dur"></select>
+    <div class="muted" id="planNote" style="margin:12px 0 0">&nbsp;</div>
+    <div style="margin-top:14px">
+      <button id="build" disabled>REVIEW THIS LOCK</button>
+    </div>
+    <div id="plan" hidden></div>
+  </div>
+
+  <p class="muted" style="text-align:center;margin-top:24px">
+    Built by <a href="https://clucknorris.app" target="_blank" rel="noopener">Cluck Norris</a> for the
+    CUNA community. Locks run on Jupiter&rsquo;s Lock program &mdash; we are not a custodian and we
+    take no cut.
+  </p>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
+<script>
+(function () {
+  "use strict";
+  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
+  var DAY = 86400;
+  var CFG = null, WALLET = null, DEC = 9;
+
+  function $(id) { return document.getElementById(id); }
+  // Raw base units -> a readable token amount. Raw amounts pass what a JS number holds exactly
+  // (175M CUNA at 9dp is 1.75e17), so the integer part is split off as a STRING before any
+  // arithmetic touches it.
+  function toTokens(raw) {
+    var s = String(raw || "0");
+    if (s.length <= DEC) s = "0".repeat(DEC - s.length + 1) + s;
+    var whole = s.slice(0, s.length - DEC);
+    return Number(whole).toLocaleString();
+  }
+  function days(n) { return n === 1 ? "1 day" : n.toLocaleString() + " days"; }
+  function dateOf(unix) { return new Date(unix * 1000).toISOString().slice(0, 10); }
+
+  function loadConfig() {
+    return fetch("/api/cuna-stake/config").then(function (r) { return r.json(); }).then(function (d) {
+      if (!d || !d.ok) throw new Error((d && d.error) || "could not read the programme");
+      CFG = d; DEC = d.decimals || 9;
+      $("notlive").hidden = !!d.armed;
+      $("pool").textContent = toTokens(d.poolTodayRaw) + " CUNA";
+      $("poolsub").textContent = d.armed
+        ? "That is " + d.terms.sharePct + "% of the " + toTokens(d.dailyUnlockRaw) +
+          " CUNA the vesting schedules release today. It is a share of tokens that were unlocking anyway, so it can never run dry."
+        : "This is what the pool would be today. Nothing is being paid out yet.";
+      $("tDur").textContent = days(d.terms.minDurationDays);
+      $("tMin").textContent = d.terms.minLockRaw && d.terms.minLockRaw !== "0"
+        ? toTokens(d.terms.minLockRaw) + " CUNA" : "any amount";
+      $("tShare").textContent = d.terms.sharePct + "% of the daily unlock";
+      $("tCount").textContent = d.armed ? String(d.qualifyingLocks) : "not started";
+      $("tLocked").textContent = d.armed ? toTokens(d.totalQualifyingRaw) + " CUNA" : "—";
+      if (d.scanError) {
+        $("poolsub").innerHTML += '<br/><span class="warn">Chain read is stale: ' + esc(d.scanError) + "</span>";
+      }
+      buildTermChoices();
+    }).catch(function (e) {
+      $("poolsub").innerHTML = '<span class="bad">' + esc(e.message) + "</span>";
+    });
+  }
+
+  // Only offer terms that PASS. The ladder is generated from the live minimum, so the form and the
+  // rule that judges the lock can never disagree — that is the whole point of not hardcoding it.
+  // Multiples of three months, labelled with what they pay relative to the entry tier.
+  function buildTermChoices() {
+    var minD = CFG.terms.minDurationDays;
+    var ladder = [90, 180, 270, 365, 456, 547].filter(function (v) { return v >= minD; });
+    if (!ladder.length) ladder = [minD];
+    $("dur").innerHTML = ladder.map(function (v) {
+      var months = Math.round(v / 30.4);
+      var mult = (v / ladder[0]).toFixed(v % ladder[0] === 0 ? 0 : 1);
+      return '<option value="' + v + '">' + months + " months" +
+             (v === ladder[0] ? " (minimum)" : " — earns " + mult + "\u00d7 the minimum") + "</option>";
+    }).join("");
+    $("dur").value = String(ladder[Math.min(3, ladder.length - 1)]);   // default to ~12 months
+    refreshPlan();
+  }
+
+  function refreshPlan() {
+    if (!CFG) return;
+    var amt = String($("amt").value || "").replace(/,/g, "").trim();
+    var dur = Number($("dur").value);
+    var okAmt = /^\d+(\.\d+)?$/.test(amt) && Number(amt) > 0;
+    var end = Math.floor(Date.now() / 1000) + dur * DAY;
+    $("planNote").innerHTML = "Locked until <b>" + dateOf(end) + "</b>. You cannot get these tokens " +
+      "back before then &mdash; there is no cancel.";
+    $("amtNote").innerHTML = (okAmt || !amt) ? "&nbsp;"
+      : '<span class="bad">Enter a plain number, e.g. 5000000</span>';
+    $("build").disabled = !(okAmt && WALLET);
+    $("build").textContent = WALLET ? "REVIEW THIS LOCK" : "CONNECT A WALLET FIRST";
+  }
+
+  function loadMine() {
+    if (!WALLET) return;
+    fetch("/api/cuna-stake/wallet?address=" + encodeURIComponent(WALLET))
+      .then(function (r) { return r.json(); }).then(function (d) {
+        if (!d || !d.ok) throw new Error((d && d.error) || "could not read your locks");
+        var h = "";
+        if (!d.locks.length) {
+          h = '<p class="muted">No CUNA locks on this wallet yet.</p>';
+        } else {
+          h = d.locks.map(function (l) {
+            var head = l.qualifies
+              ? '<span class="pill" style="background:#12603f">EARNING</span>'
+              : '<span class="pill">NOT EARNING</span>';
+            var why = l.qualifies ? "" :
+              '<div class="muted" style="margin-top:8px">Why not: ' +
+              esc(l.reasons.join("; ")) + "</div>";
+            return '<div class="lockrow">' + head +
+              '<div class="row"><span>Amount</span><b>' + toTokens(l.amountRaw) + " CUNA</b></div>" +
+              '<div class="row"><span>Cliff</span><b>' + dateOf(l.cliffTime) + "</b></div>" +
+              '<div class="row"><span>Fully unlocked</span><b>' + dateOf(l.fullyVestedAt) + "</b></div>" +
+              '<div class="row"><span>Lock</span><b>' + esc(shortAddr(l.escrow)) + "</b></div>" +
+              why + "</div>";
+          }).join("");
+        }
+        h += '<div class="row" style="margin-top:12px"><span>Earned so far</span><b>' +
+             toTokens(d.accruedRaw) + " CUNA</b></div>";
+        h += '<div class="row"><span>Waiting to be sent</span><b>' + toTokens(d.claimableRaw) + " CUNA</b></div>";
+        if (!d.armed) {
+          h += '<p class="muted" style="margin-top:10px">The programme hasn’t started, so nothing has been earned yet.</p>';
+        }
+        $("mine").innerHTML = h;
+        $("mine").hidden = false;
+      }).catch(function (e) {
+        $("mine").innerHTML = '<p class="bad">' + esc(e.message) + "</p>";
+        $("mine").hidden = false;
+      });
+  }
+
+  $("connect").addEventListener("click", function () {
+    CluckWallet.connect().then(function (r) {
+      // CluckWallet.connect resolves { provider, pubkey, name, id } — NOT `publicKey`. Reading the
+      // wrong one fails silently: the click does nothing and there is no error to see.
+      if (!r || !r.pubkey) throw new Error("That wallet did not return an address.");
+      WALLET = r.pubkey;
+      $("walletBox").innerHTML =
+        '<div class="row"><span>Connected</span><b>' + esc(r.name || "wallet") + " · " +
+        esc(shortAddr(WALLET)) + "</b></div>" +
+        '<button class="alt" id="disconnect" style="margin-top:10px">DISCONNECT</button>';
+      $("disconnect").addEventListener("click", function () {
+        // Anywhere a wallet can connect it must be able to disconnect: call the provider's own
+        // disconnect AND clear local state, or the page lies about who is connected.
+        try { CluckWallet.disconnect(); } catch (e) {}
+        WALLET = null; $("mine").hidden = true;
+        $("walletBox").innerHTML = '<button id="connect2">CONNECT WALLET</button>';
+        $("connect2").addEventListener("click", function () { location.reload(); });
+        refreshPlan();
+      });
+      loadMine(); refreshPlan();
+    }).catch(function (e) {
+      $("walletBox").innerHTML += '<p class="bad">' + esc(e.message || "could not connect") + "</p>";
+    });
+  });
+
+  ["amt", "dur"].forEach(function (id) {
+    $(id).addEventListener("input", refreshPlan);
+    $(id).addEventListener("change", refreshPlan);
+  });
+
+  loadConfig();
+})();
+</script>
+</body></html>

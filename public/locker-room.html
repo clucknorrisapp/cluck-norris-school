@@ -109,6 +109,10 @@
   .clamt .n{font-family:var(--disp);font-size:30px;line-height:1.02;letter-spacing:.5px;overflow-wrap:anywhere;}
   .clamt .n.zero{color:#6b6b7a;} .clamt .n.live{color:#34d399;}
   .clamt .u{font-family:var(--mono,monospace);font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;color:#8a8a98;margin-top:2px;}
+  /* USD sits under the token amount, quieter than it — the token count is what is being claimed,
+     the dollar figure is orientation. 12.5px is the theme's small-print floor; do not go under. */
+  .clamt .clusd{font-family:var(--mono,monospace);font-size:12.5px;color:#a8a8b8;margin-top:3px;}
+  .clmeta .clusd{color:#a8a8b8;}
   .clrow .btn{width:auto;margin-top:0;padding:11px 20px;font-size:14px;flex:0 0 auto;}
   .clmeta{font-family:var(--mono,monospace);font-size:10.5px;color:#8a8a98;letter-spacing:.3px;margin-top:11px;padding-top:10px;border-top:1px solid var(--border,rgba(255,255,255,.07));}
   /* form */
@@ -893,9 +897,12 @@
         return '<div class="card claimcard">'+
           '<div class="cltok">'+av+'<div><div class="cltsym" data-sym="'+esc(l.mint)+'">'+esc(shortAddr(l.mint))+'</div>'+
           '<div class="cltmint">'+esc(shortAddr(l.mint))+'</div></div></div>'+
-          '<div class="clrow"><div class="clamt"><span class="n '+(can?'live':'zero')+'">'+claimable+'</span><span class="u">claimable</span></div>'+
+          '<div class="clrow"><div class="clamt"><span class="n '+(can?'live':'zero')+'">'+claimable+'</span><span class="u">claimable</span>'+
+          // Filled in once the price lands. Empty until then, and stays empty if there is no
+          // price — an unpriced token must not render as "$0.00".
+          '<span class="clusd" data-px="'+esc(l.mint)+'" data-raw="'+esc(String(l.claimableRaw||'0'))+'" data-dec="'+esc(String(l.decimals||0))+'"></span></div>'+
           '<button class="btn'+(can?'':' alt')+'" data-esc="'+esc(l.escrow)+'" data-i="'+i+'"'+(can?'':' disabled')+'>'+(can?'💰 Claim':'Nothing yet')+'</button></div>'+
-          '<div class="clmeta">total '+total+' · claimed '+claimed+' · '+when+'</div>'+
+          '<div class="clmeta">total '+total+'<span class="clusd" data-px="'+esc(l.mint)+'" data-raw="'+esc(String(l.totalRaw||'0'))+'" data-dec="'+esc(String(l.decimals||0))+'"></span> · claimed '+claimed+' · '+when+'</div>'+
           '<div class="msg" id="clm'+i+'"></div></div>';
       }).join('');
       // One lookup per DISTINCT mint (a wallet often holds several locks of the same token), then
@@ -914,6 +921,30 @@
           body.querySelectorAll('[data-sym="'+CSS.escape(l.mint)+'"]').forEach(function(el){ el.textContent=sym; });
           var ini=String(sym).slice(0,1).toUpperCase();
           body.querySelectorAll('[data-av="'+CSS.escape(l.mint)+'"]').forEach(function(el){ el.childNodes[0].nodeValue=ini; });
+        }).catch(function(){});
+      });
+      // USD values, from the same per-mint overview call. Kept in its own pass so a token with no
+      // symbol still gets priced, and vice versa — one missing field must not suppress the other.
+      var seenPx={};
+      d.locks.forEach(function(l){
+        if(!l.mint||seenPx[l.mint]) return; seenPx[l.mint]=1;
+        fetch('/api/token-overview?mint='+encodeURIComponent(l.mint)).then(function(r){return r.json();}).then(function(t){
+          var px=t&&t.success?Number(t.priceUsd):0;
+          if(!isFinite(px)||px<=0) return;   // no price → leave it blank rather than imply zero
+          body.querySelectorAll('[data-px="'+CSS.escape(l.mint)+'"]').forEach(function(el){
+            var dec=parseInt(el.getAttribute('data-dec'),10)||0;
+            // Raw amounts are u64 and overflow a JS number at ~9e15 — 175,000,000 tokens at 9
+            // decimals is 1.75e17, so Number() here would quietly lose precision on exactly the
+            // locks this page exists to show. BigInt for the integer part, remainder for the rest.
+            var usd;
+            try {
+              var raw=BigInt(el.getAttribute('data-raw')||'0');
+              var scale=BigInt(10)**BigInt(dec);
+              usd=(Number(raw/scale)+Number(raw%scale)/Number(scale))*px;
+            } catch(e){ return; }
+            var txt=CluckUtil.fmtUsd(usd);
+            if(txt) el.textContent=' ≈ '+txt;
+          });
         }).catch(function(){});
       });
       body.querySelectorAll('button[data-esc]').forEach(function(btn){ btn.addEventListener('click',function(){ doClaim(btn.getAttribute('data-esc'), btn.getAttribute('data-i'), btn); }); });

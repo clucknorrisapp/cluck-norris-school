@@ -3284,6 +3284,25 @@ const isGameHost = (req) => NQ_GAME_HOSTS.includes(String(req.hostname || "").to
 // sfx,worlds}, /nq-assets, /nq-sw.js, the /normie-quest-x7* sub-pages). Keeping the list tight is
 // what makes the direct-DNS lockdown exemption below a GAME-surface exemption, not a site bypass.
 const NQ_GAME_PATH = /^\/($|\?)|^\/api\/nq\/|^\/normie-quest|^\/nq-assets\/|^\/nq-sw\.js$|^\/vendor\//;
+// ── CUNA staking domain (staking.cunatoken.com) ───────────────────────────
+// Same shape as the game domain above: a partner-owned host pointed straight at Railway, so it
+// cannot carry the Cloudflare edge header and needs a scoped exemption from the origin lockdown.
+const CUNA_STAKE_HOSTS = String(process.env.CUNA_STAKE_HOSTS || "staking.cunatoken.com,www.staking.cunatoken.com")
+  .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+const isStakeHost = (req) => CUNA_STAKE_HOSTS.includes(String(req.hostname || "").toLowerCase());
+// ⚠️ EXHAUSTIVE, NOT A PREFIX. Every entry is anchored at both ends and names one exact surface the
+// staking page loads or calls. A loose prefix here (say /api/) would be a hole straight through the
+// WAF to every money endpoint in the app, reachable by anyone who points a DNS record at our origin
+// and sends the right Host header. Note what is deliberately ABSENT: /api/cuna-stake/admin — the
+// route that ARMS the emission is not reachable this way at any key, and is refused a second time
+// in its own handler (see cunaDirect below).
+const CUNA_STAKE_PATH = new RegExp([
+  "^/$", "^/cuna-staking$",
+  "^/api/cuna-stake/(config|wallet)$",
+  "^/api/lock/create-tx$",              // builds the UNSIGNED lock tx; the wallet still signs it
+  "^/cluck-util\\.js$", "^/cluck-wallet\\.js$",
+  "^/fonts/LuckiestGuy\\.ttf$",
+].join("|"));
 if (CF_ORIGIN_SECRET) {
   const cfExpectedHash = createHash("sha256").update(CF_ORIGIN_SECRET).digest("hex");
   app.use((req, res, next) => {
@@ -3294,11 +3313,13 @@ if (CF_ORIGIN_SECRET) {
     // but ONLY for game paths, so a spoofed Host header can never reach the rest of the app around
     // the WAF. If/when the owner moves the domain behind Cloudflare with the same Transform Rule,
     // the header check above passes first and this branch simply never runs.
-    if (isGameHost(req) && NQ_GAME_PATH.test(req.path)) return next();
+    if (isGameHost(req) && NQ_GAME_PATH.test(req.path)) { req.cluckDirect = true; return next(); }
+    // Same deal for the CUNA staking host, on the tight allowlist above.
+    if (isStakeHost(req) && CUNA_STAKE_PATH.test(req.path)) { req.cluckDirect = true; return next(); }
     return res.status(403).type("text/plain")
       .send("Forbidden: reach this site through clucknorris.app, not the origin directly.");
   });
-  console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked (game hosts exempt for game paths: " + NQ_GAME_HOSTS.join(", ") + ")");
+  console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked (exempt for their own surfaces only: game hosts " + NQ_GAME_HOSTS.join(", ") + "; staking hosts " + CUNA_STAKE_HOSTS.join(", ") + ")");
 }
 // Host router for the game domain — mounted HERE (before every site route) so the main site's
 // own "/" never wins on normiequest.app. Game paths fall through to the normal routes, which are
@@ -3314,6 +3335,18 @@ app.use((req, res, next) => {
     return res.sendFile(join(__dirname, "normie-quest", "public", "normie-quest-platformer.html"));
   }
   if (NQ_GAME_PATH.test(req.path) || req.path === "/healthz") return next();
+  return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
+});
+
+// Host router for the CUNA staking domain. Mounted before every site route so the main site's "/"
+// never wins on staking.cunatoken.com, and anything that is not a staking surface bounces home.
+app.use((req, res, next) => {
+  if (!isStakeHost(req)) return next();
+  if (req.path === "/" || req.path === "") {
+    res.set("Cache-Control", "public, max-age=0, must-revalidate");
+    return res.sendFile(join(__dirname, "public", "cuna-staking.html"));
+  }
+  if (CUNA_STAKE_PATH.test(req.path) || req.path === "/healthz") return next();
   return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
 });
 
@@ -3415,6 +3448,14 @@ app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
 // Heavy forensic GETs fan out to many billed Helius/ST/Bags upstream calls each;
 // give them a tight SHARED per-IP budget on top of the global 150/min so an
 // anonymous caller can't drain paid quota. (sec M3)
+// The token tools are FREE and unauthenticated (owner, 2026-09-04) — a safety fix behind a
+// paywall helps nobody. That makes these the caps. `read` and `prepare` only cost an RPC call;
+// `rebuild` fetches a remote document and spends our Arweave upload allowance, so it gets a tight
+// per-minute cap AND an hourly one — a per-minute limit alone still allows 360 uploads an hour.
+app.use("/api/token-metadata/read", rateLimit("tokenmeta", { windowMs: 60000, max: 30 }));
+app.use("/api/token-metadata/prepare", rateLimit("tokenmeta", { windowMs: 60000, max: 20 }));
+app.use("/api/token-metadata/rebuild-json", rateLimit("tokenmetaUpload", { windowMs: 60000, max: 6 }));
+app.use("/api/token-metadata/rebuild-json", rateLimit("tokenmetaUploadHr", { windowMs: 3600000, max: 30 }));
 app.use("/api/autopsy", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/wallet-xray", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/trace", rateLimit("forensic", { windowMs: 60000, max: 15 }));
@@ -7573,7 +7614,6 @@ function tokenMetaRpcUrl() {
 // authority's own signature: the server builds it UNSIGNED and never holds a key.
 app.get("/api/token-metadata/read", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
     const mint = String((req.query && req.query.mint) || "").trim();
     if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
@@ -7584,16 +7624,27 @@ app.get("/api/token-metadata/read", async (req, res) => {
       conn.getAccountInfo(tm.metadataPda(mint)),
       conn.getParsedAccountInfo(new PublicKey(mint)),
     ]);
-    if (!metaInfo) return res.json({ ok: false, error: "no_metadata_account", mint });
-    const meta = tm.decodeMetadata(metaInfo.data);
+    // No Metaplex metadata account is NOT a failure. Token-2022 mints commonly carry the native
+    // metadata extension instead, and plenty of older tokens have none at all — those owners still
+    // have a live mint or freeze authority to revoke, and arguably need that more than a metadata
+    // lock. Returning ok:false here made the whole page unreachable for them. metadata:null means
+    // "nothing to lock", not "nothing to do".
+    const meta = metaInfo ? tm.decodeMetadata(metaInfo.data) : null;
     const parsed = mintInfo && mintInfo.value && mintInfo.value.data && mintInfo.value.data.parsed;
+    if (!parsed) return res.status(400).json({ ok: false, error: "not_a_mint", mint });
     const mi = (parsed && parsed.info) || {};
     // Report the OTHER authorities too. "Mutable metadata" is the last flag on a token that has
     // already revoked mint and freeze; showing all three is what makes the banner's claims
     // checkable instead of taken on faith.
     res.json({ ok: true, mint, metadataPda: tm.metadataPda(mint).toBase58(), metadata: meta,
+      hasMetadataAccount: !!metaInfo,
       authorities: { mintAuthority: mi.mintAuthority || null, freezeAuthority: mi.freezeAuthority || null,
-                     decimals: mi.decimals, tokenProgram: (mintInfo.value && mintInfo.value.owner) || null } });
+                     decimals: mi.decimals, tokenProgram: (mintInfo.value && mintInfo.value.owner) || null,
+                     // A Token-2022 mint that creates accounts FROZEN by default cannot survive
+                     // losing its freeze authority — every holder would be stuck, unthawable,
+                     // forever. Surfaced on the read so the page can refuse before the click,
+                     // not only at build time.
+                     defaultAccountStateFrozen: tokenMetaDefaultFrozen(mintInfo) } });
   } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "read failed") }); }
 });
 
@@ -7611,7 +7662,6 @@ app.get("/api/token-metadata/read", async (req, res) => {
 // 512x512 logo in place of the real 1080x1080 one.
 app.post("/api/token-metadata/rebuild-json", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   // Declared out here so a failure ANYWHERE still reports what had already happened — an error
   // with no trail is what makes "it didn't work" unactionable.
   const steps = [];
@@ -7630,7 +7680,14 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
     // Rewriting it from scratch is how a description quietly disappears on the last edit ever made.
     const srcUrl = String(b.sourceUrl || current.uri || "");
     if (!/^https:\/\//i.test(srcUrl)) return res.status(400).json({ ok: false, error: "unreadable_source_uri", uri: srcUrl });
-    const jr = await fetch(srcUrl, { signal: AbortSignal.timeout(25000) });
+    // sourceUrl is caller-supplied (the on-chain gateway is often the throttled one), so this is a
+    // server fetching a stranger's URL. safeFetch resolves the host, refuses every private range,
+    // and re-checks each redirect hop — a 302 to 169.254.169.254 is the standard way past a check
+    // done only on the original URL. See scripts/safe-fetch-test.cjs.
+    const { safeFetch } = require("./lib/safe-fetch");
+    let jr;
+    try { jr = await safeFetch(srcUrl, { signal: AbortSignal.timeout(25000) }); }
+    catch (e) { return res.status(400).json({ ok: false, error: "refused_source_uri", detail: e.message, steps }); }
     if (!jr.ok) return res.status(502).json({ ok: false, error: `source_json_http_${jr.status}`,
       detail: "the current metadata JSON could not be read — pass sourceUrl with a working gateway" });
     const meta = await jr.json();
@@ -7646,24 +7703,60 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
       // ?imageOverride=ipfs://… — point at a CID you pinned yourself. See the note in the lib:
       // a re-upload gets a different CID for the same pixels, and that new one is the whole point.
       override: b.imageOverride || null,
-      mirror: b.preferArweaveMirror === false ? null : async (url) => {
-        const ir = await fetch(url, { signal: AbortSignal.timeout(40000) });
+      // Mirroring is OPT-IN now this route is public. It fetches a full image and spends our
+      // Arweave allowance per call; the ipfs:// rewrite and a caller-supplied CID both cost
+      // nothing and are what actually worked for ROSE. Opting in still goes through safeFetch.
+      mirror: b.preferArweaveMirror === true ? async (url) => {
+        const ir = await safeFetch(url, { signal: AbortSignal.timeout(40000) });
         if (!ir.ok) throw new Error(`image fetch HTTP ${ir.status}`);
         const bytes = Buffer.from(await ir.arrayBuffer());
         const ctype = String(ir.headers.get("content-type") || "image/jpeg").split(";")[0];
         if (!/^image\//.test(ctype)) throw new Error(`not an image (${ctype})`);
         steps.push(`fetched original image: ${bytes.length} bytes, ${ctype}`);
         return uploadBytesToArweave(bytes, ctype);
-      },
+      } : null,
     });
     steps.push(...pick.steps);
     const newImage = pick.image, method = pick.method;
     if (!newImage) return res.status(400).json({ ok: false, error: "no_durable_image_option", imageUrl: imgUrl, steps });
 
     const next = { ...meta, image: newImage };
+    // The description is the ONLY prose a holder ever sees, and after the lock it is frozen twice
+    // over — the URI can't be repointed and Arweave can't be edited. So it gets an explicit
+    // override here rather than a "just re-upload the JSON by hand" workaround.
+    if (typeof b.description === "string") {
+      const d = b.description.trim();
+      if (!d) return res.status(400).json({ ok: false, error: "empty_description",
+        detail: "omit the field to keep the current description; don't pass an empty one", steps });
+      if (d.length > 4000) return res.status(400).json({ ok: false, error: "description_too_long",
+        detail: `${d.length} chars; keep it under 4000`, steps });
+      if (d !== String(meta.description || "")) {
+        next.description = d;
+        steps.push(`description replaced (${String(meta.description || "").length} → ${d.length} chars)`);
+      }
+    }
+    // Drop launchpad cruft — e.g. the `creator: {name, site}` block CoinFactory stamps in, which
+    // is NOT the on-chain verified creator and carries a third-party URL that would be frozen
+    // alongside everything else. Explicit list only, and the fields a wallet actually renders are
+    // refused outright: silently losing a name or an image on the last edit ever made is
+    // unrecoverable, and no convenience is worth that.
+    const OMIT_PROTECTED = new Set(["name", "symbol", "image", "description"]);
+    if (Array.isArray(b.omitKeys) && b.omitKeys.length) {
+      const bad = b.omitKeys.filter((k) => OMIT_PROTECTED.has(String(k)));
+      if (bad.length) return res.status(400).json({ ok: false, error: "protected_key",
+        detail: `refusing to drop ${bad.join(", ")} — a wallet renders these`, steps });
+      for (const k of b.omitKeys) {
+        const key = String(k);
+        if (key in next) { delete next[key]; steps.push(`dropped field: ${key}`); }
+        else steps.push(`field not present, nothing to drop: ${key}`);
+      }
+    }
     const newUri = await uploadJsonToArweave(next);
     steps.push(`uploaded new metadata JSON to Arweave: ${newUri}`);
     res.json({ ok: true, mint, method, newUri, newImage, previousImage: imgUrl,
+               omitted: (b.omitKeys || []).filter((k) => k in meta),
+               descriptionChanged: next.description !== meta.description,
+               previousDescription: meta.description || null,
                json: next, preservedKeys: Object.keys(meta), steps });
   } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "rebuild failed"), steps }); }
 });
@@ -7675,7 +7768,6 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
 // URI that will still resolve in ten years.
 app.post("/api/token-metadata/prepare", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   // Declared out here so a failure ANYWHERE still reports what had already happened — an error
   // with no trail is what makes "it didn't work" unactionable.
   const steps = [];
@@ -7705,6 +7797,60 @@ app.post("/api/token-metadata/prepare", async (req, res) => {
       makeImmutable: b.makeImmutable === true });
     res.json({ ok: true, mint, current, uploadedUri: uploaded, ...built });
   } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e, "prepare failed") }); }
+});
+
+// Token-2022 DefaultAccountState. jsonParsed surfaces mint extensions, so no manual TLV walk:
+// the extension is named "defaultAccountState" with a state of "frozen"/"initialized".
+function tokenMetaDefaultFrozen(mintInfo) {
+  try {
+    const exts = ((((mintInfo || {}).value || {}).data || {}).parsed || {}).info || {};
+    const list = exts.extensions || [];
+    for (const e of list) {
+      if (e && e.extension === "defaultAccountState") {
+        return String(((e.state || {}).accountState) || (e.state) || "").toLowerCase() === "frozen";
+      }
+    }
+  } catch (_) {}
+  return false;
+}
+
+// Revoke the mint or freeze authority — the other two flags a scanner warns about. Unsigned only;
+// the token's own authority signs. Guards live in lib/token-authority.js and are byte-tested
+// against the SPL Token serializer.
+app.use("/api/token-authority/prepare", rateLimit("tokenlockbuild", { windowMs: 60000, max: 20 }));
+app.post("/api/token-authority/prepare", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const b = req.body || {};
+    const mint = String(b.mint || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    const type = Number(b.authorityType);
+    if (type !== 0 && type !== 1) return res.status(400).json({ ok: false, error: "bad_authority_type",
+      detail: "0 = mint authority, 1 = freeze authority. Nothing else is revocable here." });
+    const ta = require("./lib/token-authority");
+    const { Connection, PublicKey } = require("@solana/web3.js");
+    const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
+    const mintInfo = await conn.getParsedAccountInfo(new PublicKey(mint));
+    const mi = (((mintInfo.value || {}).data || {}).parsed || {}).info || null;
+    if (!mi) return res.status(400).json({ ok: false, error: "not_a_mint" });
+    // Read the symbol off the metadata when there is one, purely so the warning can name the
+    // token instead of saying "token". Absent metadata must not block a revocation.
+    let symbol = "";
+    try {
+      const tm = require("./lib/token-metadata");
+      const info = await conn.getAccountInfo(tm.metadataPda(mint));
+      const cur = info && tm.decodeMetadata(info.data);
+      if (cur && cur.symbol) symbol = String(cur.symbol).replace(/[^A-Za-z0-9]/g, "").slice(0, 12);
+    } catch (_) {}
+    const built = await ta.buildRevokeTx({ connection: conn, authorityType: type, mintInfo: {
+      mint, symbol,
+      tokenProgram: (mintInfo.value && mintInfo.value.owner) || null,
+      mintAuthority: mi.mintAuthority || null,
+      freezeAuthority: mi.freezeAuthority || null,
+      defaultAccountStateFrozen: tokenMetaDefaultFrozen(mintInfo),
+    } });
+    res.json({ ok: true, mint, ...built });
+  } catch (e) { res.status(400).json({ ok: false, error: publicErrMsg(e, "could not build the revocation") }); }
 });
 
 app.get("/api/tool-gate/config", async (req, res) => {
@@ -10143,6 +10289,558 @@ app.post("/api/lock/claim-tx", async (req, res) => {
   }
 });
 
+
+// ── CUNA lock-to-earn ──────────────────────────────────────────────────────
+// Lock CUNA on Jupiter Lock for >= 1 year with a >= 6 month cliff and earn a share of the tokens
+// the vesting schedules were releasing anyway. Logic lives in three tested libs:
+//   lib/cuna-staking.js     who qualifies, what a lock weighs, how a day's pool splits
+//   lib/cuna-lock-scan.js   enumerating escrows + the firstSeenAt ledger terms are measured against
+//   lib/cuna-programme.js   armed/disarmed, the config guard, one-day-once accrual
+//
+// ⛔ SHIPS DISARMED (owner, 2026-09-05: "no one earns until I make the announcements"). While
+// disarmed the ledger is NOT written: terms are measured forward from firstSeenAt, so indexing
+// before launch would stamp every existing lock with a date from before the programme existed and
+// the cutoff would then reject them all. Pre-arm scans are PREVIEW ONLY.
+//
+// ⚠️ The scan is getProgramAccounts — unbounded and expensive, and deliberately absent from the
+// /api/helius-rpc allowlist. No public route may trigger one per request: everything here reads
+// through one shared cache with a single in-flight scan.
+const CUNA_STAKE_KV = "cunaStake";              // { armed, startedAt, config }
+const CUNA_STAKE_LEDGER_KV = "cunaStakeLedger"; // { [escrow]: { firstSeenAt, fingerprint, lastSeenAt } }
+const CUNA_STAKE_DAYS_KV = "cunaStakeDays";     // { "YYYY-MM-DD": { distributed, credits } }
+let CUNA_SCAN_CACHE = { at: 0, locks: null, err: null };
+let CUNA_SCAN_INFLIGHT = null;
+const CUNA_SCAN_TTL_MS = 5 * 60 * 1000;
+
+function cunaProgramme() {
+  const prog = require("./lib/cuna-programme");
+  return prog.readProgramme(kv.get(CUNA_STAKE_KV, null));
+}
+
+// One scan, shared. Callers get the cached locks; a stale cache refreshes in the background of the
+// first caller only. When the programme is armed the refresh also persists the firstSeenAt ledger —
+// that is the ONLY thing that writes it, and it cannot run while disarmed.
+async function cunaLocks({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && CUNA_SCAN_CACHE.locks && now - CUNA_SCAN_CACHE.at < CUNA_SCAN_TTL_MS) return CUNA_SCAN_CACHE;
+  if (CUNA_SCAN_INFLIGHT) return CUNA_SCAN_INFLIGHT;
+  CUNA_SCAN_INFLIGHT = (async () => {
+    try {
+      const scanLib = require("./lib/cuna-lock-scan");
+      const prog = require("./lib/cuna-programme");
+      const jupLock = require("./lib/jup-lock");
+      const p = cunaProgramme();
+      const P = await jupLock.program();
+      const scanned = await scanLib.scanEscrowsByMint(P, p.config.mint);
+      const nowUnix = Math.floor(Date.now() / 1000);
+      const stored = p.armed ? (kv.get(CUNA_STAKE_LEDGER_KV, {}) || {}) : {};
+      const merged = scanLib.mergeLedger({ scanned, ledger: stored, nowUnix });
+      if (p.armed) {
+        kv.set(CUNA_STAKE_LEDGER_KV, merged.ledger);
+        if (merged.added.length || merged.reset.length) {
+          console.log(`[cuna-stake] ledger: +${merged.added.length} new, ${merged.reset.length} reset (terms changed at the same address)`);
+        }
+      }
+      CUNA_SCAN_CACHE = { at: Date.now(), locks: merged.locks, err: null, ledger: merged.ledger, armed: p.armed };
+    } catch (e) {
+      console.warn("[cuna-stake] scan failed: " + e.message);
+      // Keep serving the last good scan rather than reporting an empty programme — "nobody
+      // qualifies" and "we could not look" must never render the same way.
+      CUNA_SCAN_CACHE = { ...CUNA_SCAN_CACHE, err: publicErrMsg(e) };
+    } finally {
+      CUNA_SCAN_INFLIGHT = null;
+    }
+    return CUNA_SCAN_CACHE;
+  })();
+  return CUNA_SCAN_INFLIGHT;
+}
+
+// Everything the page renders from. No amount is ever hardcoded client-side.
+app.get("/api/cuna-stake/config", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  try {
+    const s = require("./lib/cuna-staking");
+    const p = cunaProgramme();
+    const snap = await cunaLocks();
+    const locks = snap.locks || [];
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const unlock = s.dailyUnlockRaw(locks, nowUnix, p.config.excludeWallets);
+    const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct });
+    const eligible = locks.filter((l) => s.qualifies(l, p.config));
+    let lockedRaw = 0n;
+    for (const l of eligible) lockedRaw += BigInt(l.atRiskRaw);
+    return res.status(200).json({
+      ok: true,
+      armed: p.armed,
+      startedAt: p.startedAt,
+      mint: p.config.mint,
+      decimals: 9,
+      terms: {
+        minDurationDays: p.config.minDurationDays,
+        minLockRaw: p.config.minLockRaw,
+        sharePct: p.config.sharePct,
+        cancelableAllowed: false,   // owner, 2026-09-05 — a lock you can undo is not a commitment
+      },
+      dailyUnlockRaw: unlock.toString(),
+      poolTodayRaw: pool.toString(),
+      totalQualifyingRaw: lockedRaw.toString(),
+      qualifyingLocks: eligible.length,
+      scannedLocks: locks.length,
+      scanAgeSec: snap.at ? Math.floor((Date.now() - snap.at) / 1000) : null,
+      scanError: snap.err || null,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+// One wallet's locks, each with a plain-English verdict. Address is a lookup key only — no
+// signature needed, because nothing here is private: it is all public chain state.
+app.get("/api/cuna-stake/wallet", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const s = require("./lib/cuna-staking");
+    const addr = String(req.query.address || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) {
+      return res.status(400).json({ ok: false, error: "Connect a wallet first." });
+    }
+    const p = cunaProgramme();
+    const snap = await cunaLocks();
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const mine = (snap.locks || []).filter((l) => l.recipient === addr);
+    const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+    let accrued = 0n;
+    for (const d of Object.values(days)) {
+      const c = d && d.credits && d.credits[addr];
+      if (c) accrued += BigInt(c);
+    }
+    const claim = s.claimableFor({ accruedRaw: accrued.toString(), locks: mine, nowUnix });
+    return res.status(200).json({
+      ok: true,
+      armed: p.armed,
+      locks: mine.map((l) => ({
+        escrow: l.escrow,
+        amountRaw: l.atRiskRaw,
+        cliffTime: l.cliffTime,
+        fullyVestedAt: l.fullyVestedAt,
+        firstSeenAt: l.firstSeenAt,
+        qualifies: s.qualifies(l, p.config),
+        reasons: s.disqualify(l, p.config),
+        weight: s.weightOf(l, nowUnix).toString(),
+      })),
+      accruedRaw: accrued.toString(),
+      claimableRaw: claim.claimable.toString(),
+      cliffPassed: claim.cliffPassed,
+      unlocksAt: claim.unlocksAt,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+// Owner-only: arm, disarm, tune, and inspect. 404 when the key is unset or wrong, like every
+// other admin surface here. ARMING IS THE GO-LIVE — it is what starts the emission.
+app.all("/api/cuna-stake/admin", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  // Belt and braces on top of the allowlist: a request that reached us WITHOUT traversing
+  // Cloudflare (the partner-domain exemption) can never arm the emission, whatever key it carries.
+  // The allowlist already omits this path; this is the check that holds if someone widens it.
+  if (req.cluckDirect) return res.status(404).json({ ok: false, error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+  try {
+    const prog = require("./lib/cuna-programme");
+    const s = require("./lib/cuna-staking");
+    const q = { ...(req.query || {}), ...(req.body || {}) };
+    let stored = kv.get(CUNA_STAKE_KV, null);
+
+    if (String(q.config || "") === "1") {
+      const patch = {};
+      for (const k of ["sharePct", "minDurationDays", "minLockRaw"]) if (q[k] != null) patch[k] = q[k];
+      if (q.excludeWallets != null) {
+        patch.excludeWallets = String(q.excludeWallets).split(",").map((x) => x.trim()).filter(Boolean);
+      }
+      // validateConfig throws on anything nonsensical — a bad share or a typo'd address is an
+      // emission-sized mistake, so it is refused rather than stored and discovered in a payout.
+      const config = prog.validateConfig(patch, (prog.readProgramme(stored).config));
+      stored = { ...(stored || {}), config };
+      kv.set(CUNA_STAKE_KV, stored);
+      CUNA_SCAN_CACHE = { at: 0, locks: CUNA_SCAN_CACHE.locks, err: null };   // terms changed, re-judge
+      console.log(`[cuna-stake] config updated: ${JSON.stringify(config)}`);
+    }
+
+    // Arming needs BOTH flags in the same call. One typo'd query param must not be able to start
+    // an emission — the same two-key posture the liquidity engines use for going live.
+    if (String(q.arm || "") === "1") {
+      if (String(q.confirm || "") !== "go-live") {
+        return res.status(400).json({ ok: false, error: "arming needs &arm=1&confirm=go-live — two flags on purpose" });
+      }
+      stored = prog.arm(stored, Math.floor(Date.now() / 1000));
+      kv.set(CUNA_STAKE_KV, stored);
+      CUNA_SCAN_CACHE = { at: 0, locks: null, err: null };   // next scan writes the ledger for real
+      console.log(`[cuna-stake] ARMED at ${stored.startedAt} — the emission has started`);
+    } else if (String(q.off || "") === "1") {
+      stored = prog.disarm(stored);
+      kv.set(CUNA_STAKE_KV, stored);
+      console.log("[cuna-stake] DISARMED — accrual stopped, start date kept");
+    }
+
+    const p = prog.readProgramme(stored);
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const snap = await cunaLocks({ force: String(q.rescan || "") === "1" });
+    const locks = snap.locks || [];
+    const unlock = s.dailyUnlockRaw(locks, nowUnix, p.config.excludeWallets);
+    const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct });
+    const preview = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: p.config });
+    // Manual accrual, for catching up a day the timer missed or for verifying a config change
+    // took. Same gate as the timer: it still refuses a day already accrued.
+    let ranNow = null;
+    if (String(q.accrue || "") === "1") ranNow = await cunaAccrualTick("manual");
+
+    const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+    return res.status(200).json({
+      ok: true,
+      armed: p.armed,
+      accrualRun: ranNow,
+      missedDays: prog.missedDays({ programme: stored, paidDays: days, nowUnix }),
+      recentDays: Object.fromEntries(Object.keys(days).sort().slice(-7).map((k) => [k, days[k]])),
+      startedAt: p.startedAt,
+      config: p.config,
+      scanned: locks.length,
+      ledgerWritten: snap.armed === true,
+      dailyUnlockRaw: unlock.toString(),
+      poolTodayRaw: pool.toString(),
+      // What TODAY would pay if a day were accrued now. Preview only — it writes nothing.
+      wouldPay: Object.fromEntries(Object.entries(preview.credits).map(([k, v]) => [k, v.toString()])),
+      eligible: preview.eligible,
+      skipped: preview.skipped,
+      daysAccrued: Object.keys(days).length,
+      scanError: snap.err || null,
+    });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+// The CUNA brand display face. It lives with the gif-forge scenes (tools/gif-forge/assets) so the
+// page and the generated art take their lettering from the SAME file and cannot drift apart — and
+// tools/ is not under public/, so it needs an explicit route to be reachable at all.
+
+// ── CUNA accrual scheduler ─────────────────────────────────────────────────
+// Once per UTC day, work out who is owed what and WRITE IT DOWN. That is all.
+//
+// ⛔ THIS MOVES NO TOKENS. Rewards are not minted — every one comes out of the treasury's own
+// vesting stream, so paying them is a transfer the owner signs. This job only ever writes a ledger.
+// If you are adding a payout here, stop: it belongs behind an explicit owner action, not a timer.
+//
+// ⚠️ Deliberately NOT inside the TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID scheduler block. Everything in
+// there silently does not start when either env var is missing, which is the first thing to check
+// when "the bot isn't doing X" — and an accrual that quietly stops because a chat id is unset would
+// mean people earning nothing with no error anywhere.
+//
+// Runs hourly rather than daily: a once-a-day timer that fires while the app happens to be
+// redeploying loses the day outright, and a missed day cannot be reconstructed (weight is amount x
+// days remaining, so replaying it against today's locks pays the wrong people). The UTC-day key in
+// accrualGate is what makes the extra ticks harmless.
+const CUNA_ACCRUAL_TICK_MS = 60 * 60 * 1000;
+
+async function cunaAccrualTick(reason) {
+  const prog = require("./lib/cuna-programme");
+  const s = require("./lib/cuna-staking");
+  const stored = kv.get(CUNA_STAKE_KV, null);
+  const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+  const nowUnix = Math.floor(Date.now() / 1000);
+
+  const gate = prog.accrualGate({ programme: stored, paidDays: days, nowUnix });
+  if (!gate.ok) {
+    // Disarmed and already-accrued are the normal cases and must stay quiet — this runs hourly.
+    if (!/not armed|already accrued/.test(gate.reason)) {
+      console.warn(`[cuna-accrual] not accruing: ${gate.reason}`);
+    }
+    return { ok: false, reason: gate.reason };
+  }
+
+  const snap = await cunaLocks({ force: true });
+  if (snap.err && !snap.locks) {
+    // Never write a day from a scan that failed. An empty scan would record "nobody qualified"
+    // for a day when we simply could not look, and that day can never be redone.
+    console.error(`[cuna-accrual] SKIPPING ${gate.day} — the chain read failed: ${snap.err}`);
+    return { ok: false, reason: "scan failed" };
+  }
+  const locks = snap.locks || [];
+  const unlock = s.dailyUnlockRaw(locks, nowUnix, gate.config.excludeWallets);
+  const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: gate.config.sharePct });
+  const day = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: gate.config });
+
+  days[gate.day] = {
+    at: nowUnix,
+    poolRaw: pool.toString(),
+    dailyUnlockRaw: unlock.toString(),
+    sharePct: gate.config.sharePct,
+    distributedRaw: day.distributed.toString(),
+    undistributedRaw: day.undistributed.toString(),
+    eligible: day.eligible,
+    scanned: locks.length,
+    credits: Object.fromEntries(Object.entries(day.credits).map(([k, v]) => [k, v.toString()])),
+  };
+  kv.set(CUNA_STAKE_DAYS_KV, days);
+
+  const missed = prog.missedDays({ programme: stored, paidDays: days, nowUnix });
+  console.log(`[cuna-accrual] ${gate.day} (${reason}): ${day.eligible} earning, ` +
+    `${(Number(day.distributed) / 1e9).toFixed(0)} CUNA credited, ` +
+    `${(Number(day.undistributed) / 1e9).toFixed(0)} undistributed` +
+    (missed.length ? ` — ⚠️ ${missed.length} EARLIER DAY(S) NEVER RAN: ${missed.slice(-5).join(", ")}` : ""));
+  return { ok: true, day: gate.day, ...days[gate.day], missed };
+}
+
+// Hourly, plus one shortly after boot so a redeploy that spans midnight still catches the new day.
+// Both are wrapped: an unhandled rejection in a timer takes the whole process down on Node >= 15.
+setInterval(() => { cunaAccrualTick("hourly").catch((e) => console.error("[cuna-accrual] " + e.message)); },
+  CUNA_ACCRUAL_TICK_MS);
+setTimeout(() => { cunaAccrualTick("boot").catch((e) => console.error("[cuna-accrual] " + e.message)); },
+  90 * 1000);
+
+
+// ── CUNA daily burn ────────────────────────────────────────────────────────
+// Burn a fixed amount of CUNA from the treasury once per UTC day, at a set hour.
+// Owner, 2026-09-05: "we would burn 690K tokens per day same time per day from cuna dev wallet"
+// (confirmed same day that the dev wallet IS the treasury).
+//
+// ⛔ THIS DESTROYS TOKENS AND CANNOT BE UNDONE. It ships DISARMED and needs THREE separate things
+// before it can act: armed:true in kv, a CUNA_BURN_SECRET in the environment, and a configured
+// wallet. Decisions live in lib/cuna-burn.js and are unit-tested; this half only executes what
+// burnGate() authorises.
+//
+// ⚠️ CUNA_BURN_SECRET is deliberately its OWN env var even though it holds the same treasury key
+// as MM_OPERATOR_SECRET_TREASURY. Turning on the burner must be a separate, deliberate act — one
+// key should never quietly gain the power to destroy supply because a different feature was armed.
+// Durable stop: CUNA_BURN_OFF=1.
+const CUNA_BURN_KV = "cunaBurn";          // { armed, armedAt, config }
+const CUNA_BURN_DAYS_KV = "cunaBurnDays"; // { "YYYY-MM-DD": { sig, amountRaw, at } }
+const CUNA_BURN_TICK_MS = 30 * 60 * 1000;
+
+
+// Claim the treasury's own vested CUNA out of its Jupiter escrows and into its wallet, enough to
+// cover `needRaw` plus a few days of headroom. Own escrow -> own wallet: nothing leaves the
+// treasury and nothing is destroyed, which is why this is far safer than the burn it feeds.
+//
+// One transaction per escrow, so lib/cuna-burn.js:planClaims picks the fewest (biggest first)
+// rather than claiming all thirty locks every day.
+async function cunaClaimIntoWallet({ cfg, secret, needRaw }) {
+  const burnLib = require("./lib/cuna-burn");
+  const jupLock = require("./lib/jup-lock");
+  const { Keypair, VersionedTransaction, Transaction } = require("@solana/web3.js");
+  const bs58 = require("bs58");
+  const { connection } = require("./lib/rpc");
+  const conn = connection("confirmed");
+
+  const signer = Keypair.fromSecretKey(bs58.decode(String(secret).trim()));
+  if (signer.publicKey.toBase58() !== cfg.wallet) throw new Error("signing key does not match the configured wallet");
+
+  const escrows = await jupLock.listClaimable(cfg.wallet, cfg.mint);
+  // Five days of headroom, so this signs transactions roughly weekly rather than daily.
+  const plan = burnLib.planClaims(escrows, { needRaw, headroomRaw: (BigInt(cfg.amountRaw) * 5n).toString() });
+  if (!plan.claims.length) return { claimedRaw: "0", sigs: [], shortfallRaw: plan.shortfallRaw };
+
+  const sigs = [];
+  let claimedRaw = 0n;
+  for (const c of plan.claims) {
+    const built = await jupLock.buildClaimTx({ recipient: cfg.wallet, escrow: c.escrow });
+    if (!built || !built.ok) throw new Error(`could not build a claim for ${c.escrow}`);
+    const raw = Buffer.from(built.txBase64, "base64");
+    // buildClaimTx hands back an unsigned tx; refresh the blockhash before signing, because one
+    // built minutes ago has already started expiring. That failure mode has bitten here before.
+    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+    let tx;
+    try { tx = VersionedTransaction.deserialize(raw); tx.message.recentBlockhash = blockhash; tx.sign([signer]); }
+    catch (_) { tx = Transaction.from(raw); tx.recentBlockhash = blockhash; tx.feePayer = signer.publicKey; tx.sign(signer); }
+    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 3 });
+    // Confirm before counting it — a returned signature is RPC acceptance, not landing.
+    const conf = await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    if (conf && conf.value && conf.value.err) throw new Error(`claim ${sig} failed on-chain`);
+    sigs.push(sig);
+    claimedRaw += BigInt(c.claimableRaw);
+    console.log(`[cuna-burn] claimed ${(Number(c.claimableRaw) / 1e9).toLocaleString()} CUNA from ${c.escrow.slice(0, 8)}… — ${sig}`);
+  }
+  return { claimedRaw: claimedRaw.toString(), sigs, shortfallRaw: plan.shortfallRaw };
+}
+
+async function cunaBurnTick(reason) {
+  const burnLib = require("./lib/cuna-burn");
+  const stored = kv.get(CUNA_BURN_KV, null);
+  const done = kv.get(CUNA_BURN_DAYS_KV, {}) || {};
+  const nowUnix = Math.floor(Date.now() / 1000);
+
+  if (String(process.env.CUNA_BURN_OFF || "") === "1") return { ok: false, reason: "CUNA_BURN_OFF=1" };
+  const secret = process.env.CUNA_BURN_SECRET;
+  const cfg = burnLib.readBurn(stored).config;
+
+  // Read the balance ON-CHAIN, never from a product tool — those are activity scanners and they
+  // undercount. Both token programs, jsonParsed, same as everywhere else in this repo.
+  let balanceRaw = "0", tokenAccount = null, tokenProgram = null;
+  if (cfg.wallet) {
+    try {
+      const { PublicKey } = require("@solana/web3.js");
+      const { connection } = require("./lib/rpc");
+      const conn = connection("confirmed");
+      const owner = new PublicKey(cfg.wallet), mint = new PublicKey(cfg.mint);
+      const info = await conn.getAccountInfo(mint);
+      if (!info) throw new Error("mint not found on-chain");
+      tokenProgram = info.owner;
+      const r = await conn.getParsedTokenAccountsByOwner(owner, { mint });
+      for (const { pubkey, account } of r.value) {
+        const amt = account.data.parsed.info.tokenAmount.amount;
+        if (BigInt(amt) > BigInt(balanceRaw)) { balanceRaw = amt; tokenAccount = pubkey; }
+      }
+    } catch (e) {
+      console.warn(`[cuna-burn] could not read the balance: ${e.message}`);
+      return { ok: false, reason: "balance read failed: " + publicErrMsg(e) };
+    }
+  }
+
+  // CLAIM FIRST. The treasury's CUNA arrives in Jupiter escrows and only reaches the wallet when a
+  // claim transaction runs — without this the burner works for a fortnight and then goes short
+  // forever. Claiming is NON-DESTRUCTIVE: own escrow -> own wallet, nothing leaves the treasury.
+  // It runs only inside an armed, keyed, at-the-hour burn, so it cannot fire on its own.
+  let claimed = null;
+  if (secret && cfg.wallet && burnLib.readBurn(stored).armed) {
+    try {
+      const amount = BigInt(cfg.amountRaw);
+      if (BigInt(balanceRaw) < amount) {
+        claimed = await cunaClaimIntoWallet({ cfg, secret, needRaw: (amount - BigInt(balanceRaw)).toString() });
+        if (claimed && claimed.claimedRaw && claimed.claimedRaw !== "0") {
+          balanceRaw = (BigInt(balanceRaw) + BigInt(claimed.claimedRaw)).toString();
+        }
+      }
+    } catch (e) {
+      // A failed claim is not fatal — the burn gate below will simply report SHORT and skip,
+      // which is the correct outcome. Never let it throw past here and kill the tick.
+      console.error(`[cuna-burn] claim-first failed: ${e.message}`);
+      claimed = { error: publicErrMsg(e) };
+    }
+  }
+
+  const gate = burnLib.burnGate({ burn: stored, burnedDays: done, nowUnix, balanceRaw, hasSigner: !!secret });
+  if (!gate.ok) {
+    // Quiet on the normal cases (this ticks twice an hour); loud on SHORT, because that is the
+    // one that means a burn the owner expected did not happen.
+    if (gate.short) console.error(`[cuna-burn] ${gate.reason}`);
+    else if (!/not armed|already burned|waiting for|CUNA_BURN_SECRET|no dev wallet/.test(gate.reason)) {
+      console.warn(`[cuna-burn] not burning: ${gate.reason}`);
+    }
+    return { ok: false, reason: gate.reason, balanceRaw, claimed };
+  }
+  if (!tokenAccount) return { ok: false, reason: "no CUNA token account on the wallet" };
+
+  try {
+    const { Keypair, PublicKey, Transaction } = require("@solana/web3.js");
+    const spl = require("@solana/spl-token");
+    const bs58 = require("bs58");
+    const { connection } = require("./lib/rpc");
+    const conn = connection("confirmed");
+
+    const signer = Keypair.fromSecretKey(bs58.decode(secret.trim()));
+    if (signer.publicKey.toBase58() !== cfg.wallet) {
+      // A key that does not match the configured wallet would burn from somewhere else entirely.
+      console.error(`[cuna-burn] REFUSING: CUNA_BURN_SECRET is ${signer.publicKey.toBase58()}, config says ${cfg.wallet}`);
+      return { ok: false, reason: "signing key does not match the configured wallet" };
+    }
+
+    // burnCHECKED, not burn: it carries the decimals and the chain rejects a mismatch. On an
+    // irreversible instruction, paying one extra byte for the chain to check our arithmetic is
+    // obviously worth it — a decimals slip here is a 1000x burn.
+    const ix = spl.createBurnCheckedInstruction(
+      tokenAccount, new PublicKey(cfg.mint), signer.publicKey, BigInt(gate.amountRaw), 9, [], tokenProgram);
+    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+    const tx = new Transaction({ feePayer: signer.publicKey, blockhash, lastValidBlockHeight }).add(ix);
+    tx.sign(signer);
+
+    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 3 });
+    // A returned signature means the RPC ACCEPTED it, not that it landed — that mistake was made
+    // in this repo already and reported as done. Wait for the real thing before recording the day.
+    const conf = await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    if (conf && conf.value && conf.value.err) {
+      console.error(`[cuna-burn] tx ${sig} FAILED on-chain: ${JSON.stringify(conf.value.err)}`);
+      return { ok: false, reason: "transaction failed on-chain", sig };
+    }
+
+    done[gate.day] = { sig, amountRaw: gate.amountRaw, at: nowUnix, wallet: cfg.wallet,
+                       claimed: claimed && claimed.claimedRaw ? claimed.claimedRaw : null };
+    kv.set(CUNA_BURN_DAYS_KV, done);
+    console.log(`[cuna-burn] ${gate.day} (${reason}): burned ${(Number(gate.amountRaw) / 1e9).toLocaleString()} CUNA — ${sig}`);
+    return { ok: true, day: gate.day, sig, amountRaw: gate.amountRaw, claimed };
+  } catch (e) {
+    // Never record the day on a throw: an unrecorded day can be retried, a wrongly-recorded one
+    // silently skips a burn forever.
+    console.error(`[cuna-burn] burn failed: ${e.message}`);
+    return { ok: false, reason: publicErrMsg(e) };
+  }
+}
+
+setInterval(() => { cunaBurnTick("timer").catch((e) => console.error("[cuna-burn] " + e.message)); }, CUNA_BURN_TICK_MS);
+
+// Owner-only: arm, disarm, configure, inspect, and run once. Same posture as the staking admin —
+// 404 when the key is unset or wrong, and refused outright for anything that skipped the WAF.
+app.all("/api/cuna-burn/admin", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (req.cluckDirect) return res.status(404).json({ ok: false, error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+  try {
+    const burnLib = require("./lib/cuna-burn");
+    const q = { ...(req.query || {}), ...(req.body || {}) };
+    let stored = kv.get(CUNA_BURN_KV, null);
+
+    if (String(q.config || "") === "1") {
+      const patch = {};
+      for (const k of ["wallet", "amountRaw", "hourUtc", "mint"]) if (q[k] != null) patch[k] = q[k];
+      const config = burnLib.validateBurnConfig(patch, burnLib.readBurn(stored).config);
+      stored = { ...(stored || {}), config };
+      kv.set(CUNA_BURN_KV, stored);
+      console.log(`[cuna-burn] config updated: ${JSON.stringify(config)}`);
+    }
+    if (String(q.arm || "") === "1") {
+      if (String(q.confirm || "") !== "burn-daily") {
+        return res.status(400).json({ ok: false, error: "arming needs &arm=1&confirm=burn-daily — two flags, because this destroys tokens" });
+      }
+      stored = burnLib.arm(stored, Math.floor(Date.now() / 1000));
+      kv.set(CUNA_BURN_KV, stored);
+      console.log("[cuna-burn] ARMED — daily burns will run");
+    } else if (String(q.off || "") === "1") {
+      stored = burnLib.disarm(stored);
+      kv.set(CUNA_BURN_KV, stored);
+      console.log("[cuna-burn] DISARMED");
+    }
+
+    const ranNow = String(q.run || "") === "1" ? await cunaBurnTick("manual") : null;
+    const b = burnLib.readBurn(kv.get(CUNA_BURN_KV, null));
+    const days = kv.get(CUNA_BURN_DAYS_KV, {}) || {};
+    let totalRaw = 0n;
+    for (const d of Object.values(days)) if (d && d.amountRaw) totalRaw += BigInt(d.amountRaw);
+    return res.status(200).json({
+      ok: true,
+      armed: b.armed,
+      config: b.config,
+      hasSigner: !!process.env.CUNA_BURN_SECRET,
+      killSwitch: String(process.env.CUNA_BURN_OFF || "") === "1",
+      burnRun: ranNow,
+      daysBurned: Object.keys(days).length,
+      totalBurnedRaw: totalRaw.toString(),
+      recent: Object.fromEntries(Object.keys(days).sort().slice(-7).map((k) => [k, days[k]])),
+    });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+app.get("/fonts/LuckiestGuy.ttf", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Access-Control-Allow-Origin", "*");   // the staking host is a different origin
+  res.type("font/ttf").sendFile(join(__dirname, "tools", "gif-forge", "assets", "LuckiestGuy.ttf"));
+});
+
+app.get("/cuna-staking", (req, res) => {
+  res.sendFile(join(__dirname, "public", "cuna-staking.html"));
+});
+
 // -- Fee Share / Analytics endpoints --
 
 app.get("/api/fees", async (req, res) => {
@@ -10421,6 +11119,11 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     let gate = { ok: true, code: "off" };
     if (gateMode !== "off") {
       gate = schoolProgress.evaluate(sid, wallet, {
+        // 12, NOT LESSONS.length. The curriculum grew to 14 when the custody lessons landed
+        // (2026-09-04) and this deliberately did NOT follow it: the gate has been ENFORCING since
+        // 2026-09-02, so raising the bar would retroactively block every learner who finished the
+        // 12 that existed when they started. Adding material must never un-graduate anyone.
+        // Raise it for new cohorts through the kv key if you want to, knowing that cost.
         requiredLessons: kv.get("gradGateLessons", 12),
         minAgeMs: (kv.get("gradGateMinAgeMin", 15) || 0) * 60000,
         minSpreadBuckets: kv.get("gradGateSpreadBuckets", 3),
@@ -10572,6 +11275,7 @@ app.get("/api/school/grad-gate", (req, res) => {
     mode: gradGateMode(),
     modePinned: kv.get("gradGateMode", "") || null,     // null = auto (date-based)
     autoEnforceAt: new Date(GRAD_GATE_AUTO_ENFORCE).toISOString().slice(0, 10),
+    // See the note at the other call site: 12 is intentional and is NOT LESSONS.length.
     requiredLessons: kv.get("gradGateLessons", 12),
     minAgeMin: kv.get("gradGateMinAgeMin", 15),
     spreadBuckets: kv.get("gradGateSpreadBuckets", 3),
@@ -13249,10 +13953,12 @@ app.get("/api/token-card", async (req, res) => {
 app.get("/hatchery", (req, res) => {
   res.sendFile(join(__dirname, "public", "hatchery.html"));
 });
-// Make-metadata-immutable, an OPERATOR tool (noindex, absent from the sitemap). Explicit route
-// because public/ is only served through the vite build's copy in dist/ — without this it 404s on
-// a no-build boot. The page itself is inert without the update authority's signature; the ?key=
-// only unlocks the two API calls behind it.
+// Make-metadata-immutable — PUBLIC and free (owner, 2026-09-04): a safety fix behind a paywall
+// helps nobody, and this is the only tool anywhere that helps a token owner clear the "the creator
+// can change this token" warning rather than just reporting it. Explicit route because public/ is
+// only served through the vite build's copy in dist/ — without this it 404s on a no-build boot.
+// The page is inert without the update authority's signature; the server holds no key and builds
+// UNSIGNED transactions only. Abuse is bounded by the rate limits on /api/token-metadata/*.
 app.get("/token-lock", (req, res) => {
   res.sendFile(join(__dirname, "public", "token-lock.html"));
 });
@@ -14513,6 +15219,8 @@ const SITEMAP_PAGES = [
   "/snapshot", "/holders", "/owners-snapshot", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
   "/wallet-checkup", "/locker-room", "/clkn", "/alpha", "/lp-lab",
   "/classroom", "/bags", "/investors", "/privacy", "/terms",
+  // /token-lock became public + indexable 2026-09-04 (was operator-only, noindex).
+  "/token-lock", "/firepit", "/project-burn",
   // /liquidity + /liquidity-engine dropped 2026-07-19 (audit): both serve a locked
   // "In Development" placeholder — re-add when the engine goes public.
 ];

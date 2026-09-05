@@ -58,6 +58,20 @@
     return Math.round(n).toLocaleString();
   }
 
+  // Money. fmt() rounds to whole numbers, which is right for token counts and wrong for dollars —
+  // an $82.54 claim rendering as "83" is a number nobody can reconcile against their wallet.
+  // Returns null rather than "$0.00" when there is no usable price: a missing feed must not be
+  // shown as a worthless bag. Callers render nothing on null.
+  function fmtUsd(n) {
+    n = Number(n);
+    if (!isFinite(n) || n <= 0) return null;
+    if (n >= 1000) return "$" + Math.round(n).toLocaleString();          // cents are noise up here
+    if (n >= 1) return "$" + n.toFixed(2);
+    if (n >= 0.01) return "$" + n.toFixed(3);
+    // Sub-cent: show enough significant digits to be meaningful instead of "$0.00".
+    return "$" + n.toPrecision(3).replace(/e[-+]\d+$/i, "");
+  }
+
   // Clipboard with the execCommand fallback — navigator.clipboard is unavailable
   // on insecure origins and inside some wallet webviews.
   function copyText(text) {
@@ -79,5 +93,5 @@
     });
   }
 
-  global.CluckUtil = { esc: esc, rpc: rpc, shortAddr: shortAddr, fmt: fmt, copyText: copyText };
+  global.CluckUtil = { esc: esc, rpc: rpc, shortAddr: shortAddr, fmt: fmt, fmtUsd: fmtUsd, copyText: copyText };
 })(typeof globalThis !== "undefined" ? globalThis : window);

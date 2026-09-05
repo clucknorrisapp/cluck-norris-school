@@ -59,6 +59,41 @@ jobs:
       # curriculum held 70 and 7. Hand-typed public counts rot silently; this catches the mirror.
       - name: curriculum count-drift guard
         run: node scripts/check-counts.js
+      # CUNA lock-to-earn: who qualifies and how a day's pool is split. Zero deps, so it belongs
+      # in this job. Mutation-tested — reverting the cancelable check to the field name that does
+      # not exist, measuring terms backward from vesting_start_time, tolerating a missing
+      # firstSeenAt, flattening the weight or dropping the largest-remainder split each fails the
+      # test named for it.
+      - name: CUNA staking split + qualification
+        run: node scripts/cuna-staking-test.cjs
+      # The firstSeenAt ledger the qualification horizon is measured against. Every case is a way
+      # to move that timestamp earlier, which is the one number in this system worth attacking:
+      # re-scan drift, PDA reuse after a close, a lock dropping out of an RPC index, and escaping
+      # the treasury exclusion by reassigning a lock's recipient.
+      - name: CUNA lock scanner ledger
+        run: node scripts/cuna-lock-scan-test.cjs
+      # The arm gate. The owner's instruction is that nobody earns until he announces, so disarmed
+      # has to be a wall rather than a default: only boolean true arms it, the start date never
+      # moves across a pause, the treasury cannot be dropped from the exclude list, and a day
+      # already accrued is refused so a redeploy mid-run cannot pay it twice.
+      - name: CUNA programme arm gate + config
+        run: node scripts/cuna-programme-test.cjs
+      # The staking domain's origin-lockdown exemption, read out of server.js itself. That
+      # exemption is the one place a request can skip the WAF, so the allowlist must stay
+      # exhaustive and anchored at both ends — a single "^/api/" entry would be a hole through to
+      # every money endpoint for anyone who points a DNS record at our origin. Also pins that
+      # /api/cuna-stake/admin (which ARMS the emission) is unreachable that way, and that the
+      # handler's own req.cluckDirect guard runs before the key comparison.
+      - name: CUNA staking domain lockdown allowlist
+        run: node scripts/cuna-stake-routing-test.cjs
+      # The decisions in front of an irreversible action. Burning cannot be undone and cannot be
+      # partially retried, so every case here is a way the burner could fire when it should not or
+      # for the wrong amount: a truthy (not true) armed flag, a missing signing key, a short
+      # balance (which must burn NOTHING, never a partial), a day already burned, the configured
+      # hour, and the hard cap that config alone cannot reach — 690000 and 690000000 are three
+      # keystrokes apart and one of them is a tenth of the supply.
+      - name: CUNA daily burn guards
+        run: node scripts/cuna-burn-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
@@ -68,6 +103,12 @@ jobs:
       # winner on 2026-09-04 because it judged a hold in dollars and the price cache was cold.
       - name: giveaway hold-check (token-based, survives a cold price feed)
         run: node scripts/giveaway-holdcheck-test.cjs
+      # /api/token-metadata/* is FREE and unauthenticated, and rebuild-json fetches a URL the
+      # caller supplies. That makes the private-network guard load-bearing rather than tidy: a
+      # regression here turns a public tool into a probe of our internal network. Built-ins only,
+      # no outbound network, so it runs in this dependency-free job.
+      - name: SSRF guard for caller-supplied URLs
+        run: node scripts/safe-fetch-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —
@@ -208,6 +249,12 @@ jobs:
         env:
           METAPLEX_REQUIRE_BYTEDIFF: "1"
         run: node scripts/token-metadata-lock-test.cjs
+      # Revoking mint/freeze authority is the most destructive thing the tool can do — supply
+      # capped forever, no undo. Byte-diffed against @solana/spl-token's own serializer for the
+      # same reason as the metadata instruction, and here rather than in node-check because that
+      # job installs no dependencies.
+      - name: token-authority revocation (byte-diff vs SPL Token)
+        run: node scripts/token-authority-test.cjs
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
