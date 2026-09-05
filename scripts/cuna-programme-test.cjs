@@ -77,7 +77,7 @@ t("arming with a broken clock throws rather than storing a bad start", () => {
 section("the config guard");
 
 t("the defaults are the owner's numbers", () => {
-  assert.strictEqual(p.DEFAULTS.sharePct, 20);
+  assert.strictEqual(p.DEFAULTS.sharePct, 10);
   assert.strictEqual(p.DEFAULTS.minDurationDays, 90);      // 3 months (owner, 2026-09-05)
   assert.strictEqual(p.DEFAULTS.minCliffDays, undefined);  // there is no cliff any more
   assert.deepStrictEqual(p.DEFAULTS.excludeWallets, [TREASURY]);
