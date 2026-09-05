@@ -284,6 +284,44 @@ function serveDist() {
     }
   }
 
+  // A GRADUATE WHO RELOADS. `setScreen("complete")` fires exactly once — on the click that
+  // completes the twelfth lesson — and "complete" is not in SCREENS, so it has no hash route.
+  // Before the claim button on the Landing existed, a learner who finished the course and then
+  // refreshed (or came back the next day) could never reach the diploma again: the only other
+  // exit was RESET, which wipes all 12 lessons. That is a silent loss of the thing the whole
+  // school is for, and nothing else in this file can see it — every other check navigates by
+  // hash, and this screen has none.
+  log("\ngraduate re-entry:");
+  {
+    let ids = null;
+    try { ids = lessonIds("LESSONS"); } catch (_) {}
+    if (!ids || !ids.length) {
+      failures.push("graduate re-entry — could not read LESSONS ids from src/App.jsx");
+      log("  \u2717 graduate re-entry — could not read LESSONS ids");
+      checks++;
+    } else {
+      const { page, errors } = await open("", { key: "clkn_completed", value: ids });
+      const text = await page.evaluate(() => document.body.innerText);
+      const hasClaim = await page.evaluate(() =>
+        [...document.querySelectorAll("button")].some((b) => /CLAIM YOUR DIPLOMA/i.test(b.textContent || "")));
+      checks++;
+      if (errors.length) {
+        failures.push(`graduate re-entry — uncaught error: ${[...new Set(errors)].join(" | ")}`);
+        log(`  \u2717 graduate re-entry — uncaught error`);
+      } else if (!/SCHOOL COMPLETE/i.test(text)) {
+        failures.push("graduate re-entry — a learner with all 12 lessons done is not shown as complete");
+        log("  \u2717 graduate re-entry — not shown as complete");
+      } else if (!hasClaim) {
+        failures.push("graduate re-entry — SCHOOL COMPLETE renders but there is NO route to the diploma; " +
+          "a learner who refreshes after finishing can never claim (only RESET remains, which wipes progress)");
+        log("  \u2717 graduate re-entry — no claim route after a reload");
+      } else {
+        log("  \u2713 graduate re-entry — the diploma is still claimable after a reload");
+      }
+      await page.close();
+    }
+  }
+
   await browser.close();
   server.close();
 
