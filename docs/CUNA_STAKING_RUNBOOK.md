@@ -322,7 +322,7 @@ at all (see above). An over-payment reads as zero owed, never as a debt.
 |---|---|
 | `lib/cuna-staking.js` | who qualifies, what a lock weighs, how a day's pool splits |
 | `lib/cuna-lock-scan.js` | enumerating escrows + the `firstSeenAt` ledger |
-| `lib/cuna-programme.js` | armed/disarmed, the config guard, one-day-once accrual |
+| `lib/cuna-programme.js` | armed/disarmed, the config guard, once-per-HOUR accrual (24 slices of the daily pool) |
 | `lib/cuna-burn.js` | burn decisions + claim planning |
 | `lib/cuna-payout.js` | owed / pending / paid bookkeeping |
 | `public/cuna-staking.html` | the page — `/cuna-staking`, and `/` on the CUNA staking hosts |
@@ -336,7 +336,7 @@ at all (see above). An over-payment reads as zero owed, never as a debt.
 block.** Everything in there silently fails to start when either is unset — an accrual that stopped
 for that reason would mean people earning nothing with no error anywhere.
 
-**A 03:00 UTC watchdog checks that today actually got accrued.** If the programme is armed and
+**A watchdog checks every 10 minutes that the previous HOUR accrued.** If the programme is armed and
 today's day is still missing from the ledger by then, it fires one `cunaOpsAlert` to the operator
 chat pointing at `/api/cuna-stake/admin` — the hourly tick keeps retrying regardless, but if the
 chain read is failing, nobody earns until someone fixes it, so this is the tripwire that says so

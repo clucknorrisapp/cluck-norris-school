@@ -156,7 +156,7 @@ t("a day is keyed by UTC calendar date", () => {
 t("THE THIRD ONE: an already-accrued day is refused", () => {
   // A redeploy mid-run, a retry, or two schedulers racing would otherwise pay the day twice.
   const armed = p.arm({}, NOW - 10 * p.DAY);
-  const key = p.dayKey(NOW);
+  const key = p.sliceKey(NOW);
   const g = p.accrualGate({ programme: armed, paidDays: { [key]: { distributed: "1" } }, nowUnix: NOW });
   assert.strictEqual(g.ok, false);
   assert.ok(/already accrued/.test(g.reason), g.reason);
@@ -166,7 +166,7 @@ t("THE THIRD ONE: an already-accrued day is refused", () => {
 t("a day recorded as paying nothing still counts as paid", () => {
   // Nobody qualified that day. It must not be retried later and paid at a different rate.
   const armed = p.arm({}, NOW - 10 * p.DAY);
-  const g = p.accrualGate({ programme: armed, paidDays: { [p.dayKey(NOW)]: null }, nowUnix: NOW });
+  const g = p.accrualGate({ programme: armed, paidDays: { [p.sliceKey(NOW)]: null }, nowUnix: NOW });
   assert.strictEqual(g.ok, false);
   assert.ok(/already accrued/.test(g.reason));
 });
@@ -191,7 +191,8 @@ t("an open gate hands back the day and the config to accrue with", () => {
   const armed = p.arm({ config: p.validateConfig({ sharePct: 20 }) }, NOW - p.DAY);
   const g = p.accrualGate({ programme: armed, paidDays: {}, nowUnix: NOW });
   assert.strictEqual(g.ok, true);
-  assert.strictEqual(g.day, p.dayKey(NOW));
+  assert.strictEqual(g.day, p.sliceKey(NOW));
+  assert.strictEqual(g.sliceIndex, new Date(NOW * 1000).getUTCHours());
   assert.strictEqual(g.config.sharePct, 20);
   assert.strictEqual(g.config.minDurationDays, 90);
   assert.deepStrictEqual(g.config.excludeWallets, [TREASURY]);
@@ -202,30 +203,38 @@ section("days the app was down for");
 t("a day with no ledger entry between the start and yesterday is reported missed", () => {
   const armed = p.arm({}, NOW - 5 * p.DAY);
   const paid = {};
-  for (const i of [1, 2, 4]) paid[p.dayKey(NOW - i * p.DAY)] = { distributed: "1" };
-  const missed = p.missedDays({ programme: armed, paidDays: paid, nowUnix: NOW });
-  assert.deepStrictEqual(missed, [p.dayKey(NOW - 5 * p.DAY), p.dayKey(NOW - 3 * p.DAY)]);
+  // armed 5 hours ago; hours -1, -2 and -4 ran; -5 (the arm hour) and -3 did not
+  const HOUR = 3600;
+  const armed5 = { armed: true, startedAt: NOW - 5 * HOUR };
+  for (const i of [1, 2, 4]) paid[p.sliceKey(NOW - i * HOUR)] = { distributed: "1" };
+  const missed = p.missedSlices({ programme: armed5, paidDays: paid, nowUnix: NOW });
+  assert.deepStrictEqual(missed, [p.sliceKey(NOW - 5 * HOUR), p.sliceKey(NOW - 3 * HOUR)]);
 });
 
 t("TODAY is never 'missed' — it has not finished yet", () => {
   const armed = p.arm({}, NOW - 3 * p.DAY);
-  const missed = p.missedDays({ programme: armed, paidDays: {}, nowUnix: NOW });
-  assert.ok(!missed.includes(p.dayKey(NOW)), "today was reported as missed");
+  const missed = p.missedSlices({ programme: armed, paidDays: {}, nowUnix: NOW });
+  assert.ok(!missed.includes(p.sliceKey(NOW)), "the current hour was reported as missed");
 });
 
 t("nothing before the programme started counts as missed", () => {
+  // armed exactly 48 hours ago and never accrued: 48 missed hours — the arm hour through the
+  // previous full hour — and not one earlier
   const armed = p.arm({}, NOW - 2 * p.DAY);
-  const missed = p.missedDays({ programme: armed, paidDays: {}, nowUnix: NOW });
-  assert.strictEqual(missed.length, 2);
-  for (const d of missed) assert.ok(d >= p.dayKey(NOW - 2 * p.DAY));
+  const missed = p.missedSlices({ programme: armed, paidDays: {}, nowUnix: NOW });
+  assert.strictEqual(missed.length, 48);
+  for (const d of missed) assert.ok(d >= p.sliceKey(NOW - 2 * p.DAY));
+  assert.strictEqual(missed[0], p.sliceKey(NOW - 2 * p.DAY), "the arm hour itself is first");
 });
 
 t("a day that paid NOTHING is not a missed day", () => {
   // Nobody qualified that day. It ran. Re-running it later at a different rate would be wrong.
   const armed = p.arm({}, NOW - 2 * p.DAY);
-  const paid = { [p.dayKey(NOW - 1 * p.DAY)]: { distributed: "0", credits: {} },
-                 [p.dayKey(NOW - 2 * p.DAY)]: null };
-  assert.deepStrictEqual(p.missedDays({ programme: armed, paidDays: paid, nowUnix: NOW }), []);
+  const HOUR2 = 3600;
+  const armed2 = { armed: true, startedAt: NOW - 2 * HOUR2 };
+  const paid = { [p.sliceKey(NOW - 1 * HOUR2)]: { distributed: "0", credits: {} },
+                 [p.sliceKey(NOW - 2 * HOUR2)]: null };
+  assert.deepStrictEqual(p.missedSlices({ programme: armed2, paidDays: paid, nowUnix: NOW }), []);
 });
 
 t("a disarmed or unstarted programme reports nothing rather than a year of gaps", () => {
@@ -235,20 +244,43 @@ t("a disarmed or unstarted programme reports nothing rather than a year of gaps"
 
 t("a very long outage is bounded, not an infinite walk", () => {
   const armed = p.arm({}, NOW - 5000 * p.DAY);
-  const missed = p.missedDays({ programme: armed, paidDays: {}, nowUnix: NOW });
-  assert.ok(missed.length <= 400, "the walk must be bounded: got " + missed.length);
+  const missed = p.missedSlices({ programme: armed, paidDays: {}, nowUnix: NOW });
+  assert.ok(missed.length <= 400 * p.SLICES_PER_DAY, "the walk must be bounded: got " + missed.length);
 });
 
 section("the arm day is never lost");
 
-t("missedDays reports the calendar day the programme was armed on", () => {
-  // Armed at 23:30 UTC; the first tick fires at 00:15 and accrues the NEXT day. The arm day was
-  // never accrued and the old loop could never list it.
+t("the arm HOUR is reported if it never accrued", () => {
+  // Armed at 23:30 UTC; nothing ran until the 00:xx tick. The 23:00 slice is missed and listed.
   const armedAt = Date.UTC(2026, 8, 4, 23, 30) / 1000;
   const prog = { armed: true, startedAt: armedAt, config: {} };
-  const paid = { "2026-09-05": {} };
-  const later = Date.UTC(2026, 8, 6, 12, 0) / 1000;
-  assert.deepStrictEqual(p.missedDays({ programme: prog, paidDays: paid, nowUnix: later }), ["2026-09-04"]);
+  const paid = { "2026-09-05T00": {}, "2026-09-05T01": {} };
+  const later = Date.UTC(2026, 8, 5, 2, 30) / 1000;
+  assert.deepStrictEqual(p.missedSlices({ programme: prog, paidDays: paid, nowUnix: later }), ["2026-09-04T23"]);
+});
+
+t("HOURLY SLICES: twenty-four slices sum to exactly the daily pool, remainder on the last", () => {
+  const daily = "345000000000000";
+  let sum = 0n;
+  for (let h = 0; h < p.SLICES_PER_DAY; h++) sum += p.slicePoolRaw(daily, h);
+  assert.strictEqual(sum.toString(), daily);
+  assert.strictEqual(p.slicePoolRaw(daily, 0), 345000000000000n / 24n);
+  assert.ok(p.slicePoolRaw(daily, 23) >= p.slicePoolRaw(daily, 0));
+  // an awkward pool: 7 base units across 24 slices — nothing lost, nothing invented
+  let s7 = 0n; for (let h = 0; h < 24; h++) s7 += p.slicePoolRaw("7", h);
+  assert.strictEqual(s7, 7n);
+});
+
+t("the gate opens once per HOUR: the same hour is refused, the next hour is not", () => {
+  const armed = p.arm({}, NOW - 3600);
+  const first = p.accrualGate({ programme: armed, paidDays: {}, nowUnix: NOW });
+  assert.strictEqual(first.ok, true);
+  const again = p.accrualGate({ programme: armed, paidDays: { [first.slice]: {} }, nowUnix: NOW + 600 });
+  assert.strictEqual(again.ok, /already accrued/.test(again.reason) ? false : again.ok);
+  assert.ok(/already accrued/.test(again.reason));
+  const next = p.accrualGate({ programme: armed, paidDays: { [first.slice]: {} }, nowUnix: NOW + 3600 });
+  assert.strictEqual(next.ok, true);
+  assert.notStrictEqual(next.slice, first.slice);
 });
 
 t("fundedBy is required and validated separately from excludeWallets", () => {

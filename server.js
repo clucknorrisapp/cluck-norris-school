@@ -10731,7 +10731,8 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
       ok: true,
       armed: p.armed,
       accrualRun: ranNow,
-      missedDays: prog.missedDays({ programme: stored, paidDays: days, nowUnix }),
+      missedDays: prog.missedSlices({ programme: stored, paidDays: days, nowUnix }),   // hourly slice keys
+      slicesAccrued: Object.keys(days).length,
       recentDays: Object.fromEntries(Object.keys(days).sort().slice(-7).map((k) => [k, days[k]])),
       startedAt: p.startedAt,
       config: p.config,
@@ -10771,7 +10772,9 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
 // redeploying loses the day outright, and a missed day cannot be reconstructed (weight is amount x
 // days remaining, so replaying it against today's locks pays the wrong people). The UTC-day key in
 // accrualGate is what makes the extra ticks harmless.
-const CUNA_ACCRUAL_TICK_MS = 60 * 60 * 1000;
+// Every 10 minutes, not hourly: a slice is credited at the first tick inside its hour and the gate
+// refuses the rest, so an hour is only ever missed if the app is down for the whole of it.
+const CUNA_ACCRUAL_TICK_MS = 10 * 60 * 1000;
 
 async function cunaAccrualTick(reason) {
   const prog = require("./lib/cuna-programme");
@@ -10812,12 +10815,16 @@ async function cunaAccrualTick(reason) {
   if (locks.length === 0) return skip("the scan returned zero escrows (the treasury's own locks always exist)");
   if (known >= 10 && locks.length * 2 < known) return skip(`the scan returned ${locks.length} escrows but the ledger knows ${known} — index lag or a layout change`);
   const unlock = s.dailyUnlockRaw(locks, nowUnix, gate.config.fundedBy);
-  const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: gate.config.sharePct,
+  const dailyPool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: gate.config.sharePct,
     fixedRaw: gate.config.poolDailyRaw, maxSharePct: gate.config.maxSharePct });
+  // This HOUR's share of the daily pool (the last hour of the day carries the rounding remainder).
+  const pool = prog.slicePoolRaw(dailyPool.toString(), gate.sliceIndex);
   const day = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: gate.config });
 
   days[gate.day] = {
     at: nowUnix,
+    sliceIndex: gate.sliceIndex,
+    dailyPoolRaw: dailyPool.toString(),
     poolRaw: pool.toString(),
     dailyUnlockRaw: unlock.toString(),
     sharePct: gate.config.sharePct,
@@ -10829,15 +10836,21 @@ async function cunaAccrualTick(reason) {
   };
   kv.set(CUNA_STAKE_DAYS_KV, days);
 
-  const missed = prog.missedDays({ programme: stored, paidDays: days, nowUnix });
+  const missed = prog.missedSlices({ programme: stored, paidDays: days, nowUnix });
   const line = `${gate.day} (${reason}): ${day.eligible} earning, ` +
-    `${(Number(day.distributed) / 1e9).toFixed(0)} CUNA credited, ` +
+    `${(Number(day.distributed) / 1e9).toFixed(0)} CUNA credited this hour, ` +
     `${(Number(day.undistributed) / 1e9).toFixed(0)} undistributed` +
-    (missed.length ? ` — ⚠️ ${missed.length} EARLIER DAY(S) NEVER RAN: ${missed.slice(-5).join(", ")}` : "");
+    (missed.length ? ` — ⚠️ ${missed.length} EARLIER HOUR(S) NEVER RAN: ${missed.slice(-5).join(", ")}` : "");
   console.log(`[cuna-accrual] ${line}`);
-  // Say it somewhere a human reads. Until now accrual reported only to stdout, so a day lost to an
-  // RPC outage was noticed only if someone opened the admin URL and read a field.
-  cunaOpsAlert(`📒 CUNA accrual ${line}`).catch(() => {});
+  // A human-readable line once a DAY (on the day's last slice), not 24 times: the day's total,
+  // how many of its slices ran, and anything missed. Skips still alert immediately.
+  if (gate.sliceIndex === prog.SLICES_PER_DAY - 1) {
+    const dayPrefix = gate.day.slice(0, 10);
+    const slices = Object.keys(days).filter((k) => k.startsWith(dayPrefix + "T"));
+    const total = slices.reduce((a, k) => a + BigInt(days[k].distributedRaw || 0), 0n);
+    cunaOpsAlert(`📒 CUNA accrual ${dayPrefix}: ${slices.length}/${prog.SLICES_PER_DAY} hourly slices ran, ${(Number(total) / 1e9).toLocaleString()} CUNA credited` +
+      (missed.length ? `, ⚠️ ${missed.length} hour(s) missed since arming` : "")).catch(() => {});
+  }
   return { ok: true, day: gate.day, ...days[gate.day], missed };
 }
 
@@ -10890,23 +10903,24 @@ async function cunaOpsAlert(text, dedupeKey) {
   return tgSend(chat, text, null, { silent: true });
 }
 
-// If today is still unaccrued by 03:00 UTC while armed, say so once. The hourly tick retries on
-// its own; this is the line that stops a lost day being discovered on Friday.
-let CUNA_ACCRUAL_ALERTED_DAY = null;
+// If the PREVIOUS full hour was never accrued while armed, say so once per hour. The ten-minute
+// tick retries on its own; this is the line that stops a lost hour being discovered on Friday.
+let CUNA_ACCRUAL_ALERTED_SLICE = null;
 setInterval(() => {
   try {
     const prog = require("./lib/cuna-programme");
     const p = prog.readProgramme(kv.get(CUNA_STAKE_KV, null));
     if (!p.armed) return;
-    const now = new Date();
-    if (now.getUTCHours() < 3) return;
-    const today = now.toISOString().slice(0, 10);
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const prev = prog.sliceKey(nowUnix - 3600);
+    if (prev < prog.sliceKey(p.startedAt)) return;             // before the arm hour
+    if (new Date().getUTCMinutes() < 20) return;                // give the current hour's tick a chance first
     const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
-    if (days[today] || CUNA_ACCRUAL_ALERTED_DAY === today) return;
-    CUNA_ACCRUAL_ALERTED_DAY = today;
-    cunaOpsAlert(`🚨 CUNA accrual has NOT run for ${today} and it is past 03:00 UTC. Check /api/cuna-stake/admin — the hourly tick keeps retrying, but if the chain read is failing nobody earns until it is fixed.`).catch(() => {});
+    if (days[prev] || CUNA_ACCRUAL_ALERTED_SLICE === prev) return;
+    CUNA_ACCRUAL_ALERTED_SLICE = prev;
+    cunaOpsAlert(`🚨 CUNA accrual did NOT run for the hour ${prev}. The tick keeps retrying every 10 minutes, but if the chain read is failing nobody earns until it is fixed — check /api/cuna-stake/admin.`, `wd:${prev}`).catch(() => {});
   } catch (e) { console.warn("[cuna-accrual] watchdog: " + e.message); }
-}, 15 * 60 * 1000);
+}, 10 * 60 * 1000);
 
 // Hourly, plus one shortly after boot so a redeploy that spans midnight still catches the new day.
 // Both are wrapped: an unhandled rejection in a timer takes the whole process down on Node >= 15.
