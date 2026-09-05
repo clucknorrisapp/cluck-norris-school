@@ -2591,6 +2591,8 @@ async function welcomeNewMembers(msg) {
   // project's alerts happen to point.
   if (String(chatId) === CUNA_PUBLIC_ROOM) return;         // owner: no welcome messages in the CUNA room
   if (String(chatId) === ROSE_PUBLIC_ROOM) return;         // owner: no welcome messages in the OnlyRose room
+  // The private CUNA lock-to-earn ops chat is an alert sink, not a community room (owner, 2026-09-05).
+  if (process.env.CUNA_OPS_CHAT_ID && String(chatId) === String(process.env.CUNA_OPS_CHAT_ID).trim()) return;
   if (vaultProjectForChat(chatId) !== "clkn") return;
   const now = Date.now(), last = welcomeCooldown.get(chatId) || 0;
   if (now - last < WELCOME_COOLDOWN_MS) return;            // anti-spam on join waves
@@ -10888,11 +10890,13 @@ async function cunaAnnounceLocks({ added, locks, cfg, ledger, nowUnix }) {
 }
 
 const CUNA_ALERT_SEEN = new Map();   // dedupe key -> unix; the same alert is not repeated within 6h
-async function cunaOpsAlert(text, dedupeKey) {
+async function cunaOpsAlert(text, dedupeKey, opts = {}) {
   // NEVER the public community chat. TELEGRAM_CHAT_ID is the room the whole community reads, and
   // this repo already had one incident of an internal alert falling back to it. The private path
   // is the operator chat the treasury vault uses, then the owner's DM.
-  const chat = process.env.CUNA_OPS_CHAT_ID || operatorChatId() || OPERATOR_DM_FALLBACK;
+  // CUNA_OPS_CHAT_ID is for the LOCK-AND-EARN system only (owner, 2026-09-05); anything else —
+  // the daily burn included — goes to the treasury operator room.
+  const chat = (opts.burn ? null : process.env.CUNA_OPS_CHAT_ID) || operatorChatId() || OPERATOR_DM_FALLBACK;
   if (!chat) return null;
   if (dedupeKey) {
     const now = Date.now();
@@ -11184,11 +11188,11 @@ async function cunaBurnTickInner(reason) {
     }).then((r) => r.json()).then((r) => {
       if (!r || !r.success) {
         console.warn(`[cuna-burn] receipt/announce failed: ${(r && r.error) || "?"} (the burn itself is fine: ${sig})`);
-        cunaOpsAlert(`⚠️ CUNA burn ${gate.day} LANDED (${sig}) but the announcement failed: ${(r && r.error) || "?"}. Post it by hand: https://clucknorris.app/burn/${sig}`).catch(() => {});
+        cunaOpsAlert(`⚠️ CUNA burn ${gate.day} LANDED (${sig}) but the announcement failed: ${(r && r.error) || "?"}. Post it by hand: https://clucknorris.app/burn/${sig}`, null, { burn: true }).catch(() => {});
       } else console.log(`[cuna-burn] announced — receipt https://clucknorris.app/burn/${sig}`);
     }).catch((e) => {
       console.warn(`[cuna-burn] receipt/announce error: ${e.message} (the burn itself is fine: ${sig})`);
-      cunaOpsAlert(`⚠️ CUNA burn ${gate.day} LANDED (${sig}) but the announcement errored: ${e.message}. Post it by hand.`).catch(() => {});
+      cunaOpsAlert(`⚠️ CUNA burn ${gate.day} LANDED (${sig}) but the announcement errored: ${e.message}. Post it by hand.`, null, { burn: true }).catch(() => {});
     });
 
     return { ok: true, day: gate.day, sig, amountRaw: gate.amountRaw, claimed };
@@ -11197,7 +11201,7 @@ async function cunaBurnTickInner(reason) {
     // against the chain (landed -> done, failed/expired -> released) rather than sending again. A
     // throw BEFORE the send left a reservation with no signature, which is released after 10 min.
     console.error(`[cuna-burn] burn failed: ${e.message}`);
-    cunaOpsAlert(`⚠️ CUNA burn tick failed: ${publicErrMsg(e)}`, `burnfail:${publicErrMsg(e).slice(0, 60)}`).catch(() => {});
+    cunaOpsAlert(`⚠️ CUNA burn tick failed: ${publicErrMsg(e)}`, `burnfail:${publicErrMsg(e).slice(0, 60)}`, { burn: true }).catch(() => {});
     return { ok: false, reason: publicErrMsg(e) };
   }
 }
