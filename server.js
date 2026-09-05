@@ -10831,6 +10831,103 @@ app.all("/api/cuna-burn/admin", async (req, res) => {
   }
 });
 
+
+// ── CUNA staking payout ────────────────────────────────────────────────────
+// Turns the accrual ledger into a batch for the airdropper, exactly once per amount.
+//
+// ⛔ SENDS NOTHING. Accrual writes what is owed; this hands the owner a file to airdrop with his
+// own wallet. The gap between "owed" and "sent" is where payout systems pay twice, so the
+// bookkeeping across it is pure and tested in lib/cuna-payout.js.
+//
+// The flow, deliberately three steps:
+//   ?preview=1   see what is owed, change nothing
+//   ?export=1    create a PENDING batch — its amounts are held aside from that moment, so
+//                exporting again cannot offer the same money twice
+//   ?confirm=<id>  after the airdrop lands: pending -> paid
+//   ?cancel=<id>   it never went: back to owed, nothing written to paid
+const CUNA_PAID_KV = "cunaStakePaid";        // { wallet: raw }
+const CUNA_BATCH_KV = "cunaStakeBatches";    // { id: { state, amounts, ... } }
+
+app.all("/api/cuna-stake/payout", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (req.cluckDirect) return res.status(404).json({ ok: false, error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+  try {
+    const pay = require("./lib/cuna-payout");
+    const q = { ...(req.query || {}), ...(req.body || {}) };
+    const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+    let paid = kv.get(CUNA_PAID_KV, {}) || {};
+    let batches = kv.get(CUNA_BATCH_KV, {}) || {};
+    const nowUnix = Math.floor(Date.now() / 1000);
+
+    if (q.confirm) {
+      const id = String(q.confirm);
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
+      const r = pay.confirmBatch({ batch: b, paid });
+      paid = r.paid;
+      batches = { ...batches, [id]: { ...r.batch, confirmedAt: nowUnix, note: String(q.note || "").slice(0, 200) } };
+      kv.set(CUNA_PAID_KV, paid); kv.set(CUNA_BATCH_KV, batches);
+      console.log(`[cuna-payout] batch ${id} CONFIRMED — ${b.count} wallets, ${(Number(b.totalRaw) / 1e9).toLocaleString()} CUNA`);
+    } else if (q.cancel) {
+      const id = String(q.cancel);
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
+      batches = { ...batches, [id]: { ...pay.cancelBatch({ batch: b }), cancelledAt: nowUnix } };
+      kv.set(CUNA_BATCH_KV, batches);
+      console.log(`[cuna-payout] batch ${id} CANCELLED — its amounts are owed again`);
+    }
+
+    const owed = pay.owedNow({ days, paid, pending: batches });
+
+    let created = null, note = null;
+    if (String(q.export || "") === "1") {
+      const id = "cb_" + randomBytes(5).toString("hex");
+      const batch = pay.buildBatch({
+        owed, batchId: id, nowUnix,
+        minPayoutRaw: q.minPayoutRaw != null ? q.minPayoutRaw : pay.DEFAULT_MIN_PAYOUT_RAW,
+      });
+      // Nothing to pay is a normal outcome, not a different endpoint: it falls through to the
+      // SAME response shape with created:null and a note. An early return here handed callers a
+      // response missing half its fields, which is how a monitoring script starts throwing.
+      if (!batch.count) {
+        note = "nothing to pay right now — everything owed is either below the floor or already in a pending batch";
+      } else {
+        batches = { ...batches, [id]: batch };
+        kv.set(CUNA_BATCH_KV, batches);
+        created = { ...batch, airdropLines: pay.toAirdropLines(batch.amounts, 9) };
+        console.log(`[cuna-payout] batch ${id} created — ${batch.count} wallets, ${(Number(batch.totalRaw) / 1e9).toLocaleString()} CUNA PENDING`);
+      }
+    }
+
+    const pending = Object.values(batches).filter((b) => b && b.state === "pending");
+    let totalPaid = 0n;
+    for (const v of Object.values(paid)) { try { totalPaid += BigInt(v); } catch (_) {} }
+    return res.status(200).json({
+      ok: true,
+      created,
+      note,
+      owed: fmtOwed(owed),
+      owedTotalRaw: Object.values(owed).reduce((a, v) => a + v, 0n).toString(),
+      // A preview of the file, so the owner can eyeball it before creating a batch that holds funds.
+      previewLines: created ? null : pay.toAirdropLines(
+        pay.buildBatch({ owed, batchId: "preview", nowUnix }).amounts, 9),
+      pendingBatches: pending.map((b) => ({ id: b.id, at: b.at, count: b.count, totalRaw: b.totalRaw })),
+      totalPaidRaw: totalPaid.toString(),
+      daysAccrued: Object.keys(days).length,
+      mint: require("./lib/cuna-programme").readProgramme(kv.get(CUNA_STAKE_KV, null)).config.mint,
+      decimals: 9,
+    });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+function fmtOwed(owed) {
+  const out = {};
+  for (const [w, v] of Object.entries(owed)) if (v > 0n) out[w] = v.toString();
+  return out;
+}
+
 app.get("/fonts/LuckiestGuy.ttf", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   res.setHeader("Access-Control-Allow-Origin", "*");   // the staking host is a different origin

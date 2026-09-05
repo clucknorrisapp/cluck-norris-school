@@ -94,6 +94,14 @@ jobs:
       # keystrokes apart and one of them is a tenth of the supply.
       - name: CUNA daily burn guards
         run: node scripts/cuna-burn-test.cjs
+      # The bookkeeping between "what is owed" and "what was sent" — where a payout system pays
+      # somebody twice. A batch exported for sending is HELD ASIDE from the moment it exists, so
+      # exporting again cannot offer the same money; confirming credits only what the batch
+      # contained, so accrual during a batch's flight is still owed afterwards; and raw amounts
+      # become whole tokens by string surgery, never division, because that number is what
+      # somebody actually receives.
+      - name: CUNA payout double-pay guards
+        run: node scripts/cuna-payout-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
