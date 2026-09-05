@@ -10404,6 +10404,30 @@ function cunaProgramme() {
 // One scan, shared. Callers get the cached locks; a stale cache refreshes in the background of the
 // first caller only. When the programme is armed the refresh also persists the firstSeenAt ledger —
 // that is the ONLY thing that writes it, and it cannot run while disarmed.
+// Live CUNA price, for showing someone what they are about to lock in dollars. Display only —
+// nothing about qualification, weight or a payout may ever read this.
+//
+// Cached for a minute: the page fetches config on load and again after every amount change, and a
+// price that hops between requests makes the figure look unreliable even when it is right.
+//
+// ⚠️ RETURNS null WHEN IT DOES NOT KNOW, never 0. This page has already had one bug of exactly this
+// shape — a failed balance read rendered as "0 CUNA in wallet" for a wallet holding 4,598,496 — and
+// "$0.00" next to someone's lock amount is the same lie in the more dangerous direction.
+let CUNA_PRICE = { at: 0, usd: null };
+async function cunaPriceUsd(mint) {
+  const now = Date.now();
+  if (CUNA_PRICE.usd != null && now - CUNA_PRICE.at < 60 * 1000) return CUNA_PRICE.usd;
+  try {
+    const data = await jupPriceV3([String(mint)]);
+    const p = Number(data && data[String(mint)] && data[String(mint)].usdPrice);
+    // A memecoin has no sane band the way SOL does, so the only check that means anything is that
+    // it is a real positive number.
+    if (Number.isFinite(p) && p > 0) { CUNA_PRICE = { at: now, usd: p }; return p; }
+  } catch (_) { /* fall through — unknown, not zero */ }
+  CUNA_PRICE = { at: now, usd: null };
+  return null;
+}
+
 async function cunaLocks({ force = false } = {}) {
   const now = Date.now();
   if (!force && CUNA_SCAN_CACHE.locks && now - CUNA_SCAN_CACHE.at < CUNA_SCAN_TTL_MS) return CUNA_SCAN_CACHE;
@@ -10484,6 +10508,8 @@ app.get("/api/cuna-stake/config", async (req, res) => {
         poolDailyRaw: p.config.poolDailyRaw,
         cancelableAllowed: false,   // owner, 2026-09-05 — a lock you can undo is not a commitment
       },
+      // Display only, and null when we could not read it. See cunaPriceUsd.
+      priceUsd: await cunaPriceUsd(p.config.mint).catch(() => null),
       dailyUnlockRaw: unlock.toString(),
       poolTodayRaw: pool.toString(),
       totalQualifyingRaw: lockedRaw.toString(),

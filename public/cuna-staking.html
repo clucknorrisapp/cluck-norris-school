@@ -78,6 +78,15 @@
   .balrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:10px;
           font-size:13px;color:var(--muted);}
   .balrow b{font-family:ui-monospace,Menlo,monospace;font-weight:400;color:var(--text);}
+  /* Live before/after as the slider moves: what leaves the wallet, what stays. */
+  .split{margin-top:10px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+  .split div{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+             padding:9px 12px;font-size:13px;}
+  .split div+div{border-top:1px solid var(--border);}
+  .split .lab{color:var(--muted);}
+  .split .val{font-family:ui-monospace,Menlo,monospace;color:var(--text);text-align:right;}
+  .split .usd{color:var(--muted);margin-left:8px;}
+  .split .keep{background:rgba(255,255,255,.03);}
   .ack{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--border);
        font-size:13.5px;line-height:1.5;cursor:pointer;}
   .ack input{width:18px;height:18px;flex:0 0 18px;margin:1px 0 0;accent-color:var(--hotpink);cursor:pointer;}
@@ -195,6 +204,11 @@
       <div class="pctrow"><span id="pctMin">minimum</span><span>&nbsp;</span><span>all of it</span></div>
     </div>
     <div class="balrow" id="balRow" hidden><span id="balPct">&nbsp;</span><b id="balHave">&nbsp;</b></div>
+    <div class="split" id="splitBox" hidden>
+      <div><span class="lab">Locking up</span><span class="val" id="splitLock">&mdash;</span></div>
+      <div class="keep"><span class="lab">Stays in your wallet</span><span class="val" id="splitKeep">&mdash;</span></div>
+    </div>
+    <div class="muted" id="usdNote" hidden style="margin-top:6px"></div>
     <div class="muted" id="amtNote" style="margin-top:6px">&nbsp;</div>
     <label>How long to lock for</label>
     <select id="dur"></select>
@@ -429,6 +443,23 @@
     refreshPlan();
   });
 
+  // What an amount of CUNA is worth, as a string, or null when we do not know.
+  //
+  // ⚠️ null IS NOT ZERO. If the price lookup failed, CFG.priceUsd is null and every USD line is
+  // HIDDEN rather than rendered as "$0.00". This page has already shipped one bug of this exact
+  // shape — a failed balance read told someone holding 4,598,496 CUNA that they had none — and
+  // "$0.00" beside a lock amount is the same lie pointing somewhere more expensive.
+  function usdOf(tokens) {
+    var px = CFG && Number(CFG.priceUsd);
+    if (!(px > 0)) return null;
+    var n = Number(tokens);
+    if (!isFinite(n) || n <= 0) return null;
+    var v = n * px;
+    if (v < 0.01) return "<$0.01";
+    if (v < 1000) return "$" + v.toFixed(2);
+    return "$" + Math.round(v).toLocaleString();
+  }
+
   function clearAcks() {
     Array.prototype.forEach.call(document.querySelectorAll(".ackbox"), function (b) { b.checked = false; });
   }
@@ -478,6 +509,38 @@
       if (!over) $("amtRange").value = String(pctFromAmount(amt));
     } else if (BAL != null && !amt) {
       $("balPct").innerHTML = "&nbsp;";
+    }
+
+    // Live before/after as the slider moves. The percentage says how big the bite is; THIS says
+    // what actually leaves and what is still there afterwards, which is the pair someone needs to
+    // decide they have gone too far. Tokens always; dollars only when the price is known.
+    var showSplit = numeric && Number(amt) > 0 && !overBal;
+    if (showSplit) {
+      var tok = function (n) { return Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }) + " CUNA"; };
+      var usdSpan = function (n) { var u = usdOf(n); return u ? ' <span class="usd">' + esc(u) + "</span>" : ""; };
+      $("splitLock").innerHTML = esc(tok(amt)) + usdSpan(amt);
+      if (BAL != null) {
+        var left = Math.max(0, BAL - Number(amt));
+        // Zero left is the case worth naming out loud rather than printing "0 CUNA" flatly.
+        $("splitKeep").innerHTML = left > 0
+          ? esc(tok(left)) + usdSpan(left)
+          : '<span class="bad">nothing &mdash; this is your whole bag</span>';
+      } else {
+        // Balance unknown: say so rather than implying the wallet is empty.
+        $("splitKeep").innerHTML = '<span class="lab">balance unknown</span>';
+      }
+      $("splitBox").hidden = false;
+    } else {
+      $("splitBox").hidden = true;
+    }
+
+    // One line of context under it, only when we actually have a price.
+    if (showSplit && usdOf(amt)) {
+      $("usdNote").innerHTML = "Dollar values are today\u2019s price and will move. "
+        + "What is locked is the token count, not the value.";
+      $("usdNote").hidden = false;
+    } else {
+      $("usdNote").hidden = true;      // unknown price -> say nothing, never "$0.00"
     }
 
     var acks = Array.prototype.slice.call(document.querySelectorAll(".ackbox"));
@@ -678,7 +741,9 @@
       $("plan").innerHTML =
         '<div class="note" style="margin:16px 0 0">' +
         "<b class=\"disp\">READY TO SIGN</b><br/>" +
-        "Locking <b>" + Number(amt).toLocaleString() + " CUNA</b> until <b>" + ends + "</b>. " +
+        "Locking <b>" + Number(amt).toLocaleString() + " CUNA</b>" +
+        (usdOf(amt) ? " (about <b>" + esc(usdOf(amt)) + "</b>)" : "") +
+        " until <b>" + ends + "</b>. " +
         "It all unlocks in one step on that date &mdash; nothing before it." +
         (d.simError ? '<div class="bad" style="margin-top:9px">' + esc(d.simError) + "</div>" : "") +
         '<div style="margin-top:12px"><button id="sign">SIGN IN YOUR WALLET</button></div>' +
