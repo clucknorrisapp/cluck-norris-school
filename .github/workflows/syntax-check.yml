@@ -127,6 +127,11 @@ jobs:
       # the file after npm ci with NQ_LB_REQUIRE_ROUTER=1, which turns that skip into a failure.
       - name: Normie Quest leaderboard anti-forgery test (dependency-free cases)
         run: node normie-quest/test/nq-leaderboard-test.cjs
+      # Nothing tied a leaderboard run to the wallet's ACCESS TIER, so a zero-holdings throwaway
+      # wallet could script its way to a world-21 run that reads as verified and NOT suspect —
+      # invisible to the suspect-run list reviewed before the weekly physical prize goes out.
+      - name: Normie Quest tier gate (a run cannot claim a world the wallet never had)
+        run: node normie-quest/test/nq-tier-gate-test.cjs
       # Prize claims need real ed25519 signatures (tweetnacl et al) — the whole file skips here
       # and runs strict in smoke-test. Kept in this job anyway so a syntax error still fails fast.
       - name: Normie Quest prize-claim test (skips without deps)
