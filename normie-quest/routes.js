@@ -262,11 +262,43 @@ router.post('/api/nq/score', async (req, res) => {
     // Wallet verification is server-side: a score counts as walletVerified ONLY if the wallet's
     // session token checks out (never trust a client-supplied walletVerified flag).
     const walletVerified = !!(b.wallet && b.walletToken && wallet.checkSession(b.wallet, b.walletToken));
+
+    // DOES THIS WALLET'S TIER EVEN REACH THE WORLD IT IS CLAIMING?
+    //
+    // Nothing used to ask. run-start and run-checkpoint take no session token at all, and
+    // wallet/verify hands a valid session to ANY signature-valid keypair — tier 0, zero holdings,
+    // a Keypair.generate() with no funds. checkpoint() only enforces level-graph adjacency and an
+    // 8s dwell, both calibrated against "90 names in a minute", not against a patient script. So a
+    // throwaway wallet could walk the graph to world 21 over ~15 minutes of scripted calls, post a
+    // score kept just under the budget ceiling, and land on the board as verified and NOT suspect
+    // — invisible to the "☠ SUSPECT RUNS" list the owner reviews before handing out the weekly
+    // physical prize, which is the one human check standing between a forged run and a real prize.
+    //
+    // The access tiers are already the product's rule (free 1-3 · $5 → 4-12 · $50 → all). This
+    // just enforces that rule at the point the prize is decided: a run claiming a world the wallet
+    // was never entitled to play is flagged SUSPECT, not silently accepted.
+    //
+    // Flagged, NOT rejected, deliberately. Balances move — someone who legitimately played world
+    // 15 and then sold before submitting should land in front of the owner for a judgement call,
+    // not get a door slammed on them. Who actually wins is his decision; this only makes sure the
+    // decision is his to make.
+    let tierBlocked = null;
+    if (walletVerified) {
+      try {
+        const grant = await wallet.refresh(b.wallet, b.walletToken);
+        if (grant && grant.ok && !wallet.gate.allowsWorld(grant.worlds, b.world)) {
+          tierBlocked = { tier: grant.tier, worlds: grant.worlds, claimedWorld: Number(b.world) };
+        }
+      } catch (_) { /* RPC down — never turn a read failure into a refusal on someone's run */ }
+    }
+
     const r = await leaderboard.add(
       { name: b.name, world: b.world, level: b.level, score: b.score, lives: b.lives,
-        wallet: b.wallet, walletVerified, mode: b.mode, ua: req.get('user-agent') },
+        wallet: b.wallet, walletVerified, mode: b.mode, ua: req.get('user-agent'),
+        forceSuspect: tierBlocked ? 'world_above_wallet_tier' : null },
       b.token || null,
     );
+    if (tierBlocked) r.tierBlocked = tierBlocked;
     res.status(r.ok ? 200 : 400).json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
