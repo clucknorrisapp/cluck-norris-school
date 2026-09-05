@@ -60,10 +60,18 @@ jobs:
       - name: curriculum count-drift guard
         run: node scripts/check-counts.js
       # CUNA lock-to-earn: who qualifies and how a day's pool is split. Zero deps, so it belongs
-      # in this job. Mutation-tested — removing the cancelable check, the pre-launch cutoff, the
-      # matured-lock floor or the largest-remainder split each fails the test named for it.
+      # in this job. Mutation-tested — reverting the cancelable check to the field name that does
+      # not exist, measuring terms backward from vesting_start_time, tolerating a missing
+      # firstSeenAt, flattening the weight or dropping the largest-remainder split each fails the
+      # test named for it.
       - name: CUNA staking split + qualification
         run: node scripts/cuna-staking-test.cjs
+      # The firstSeenAt ledger the qualification horizon is measured against. Every case is a way
+      # to move that timestamp earlier, which is the one number in this system worth attacking:
+      # re-scan drift, PDA reuse after a close, a lock dropping out of an RPC index, and escaping
+      # the treasury exclusion by reassigning a lock's recipient.
+      - name: CUNA lock scanner ledger
+        run: node scripts/cuna-lock-scan-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
