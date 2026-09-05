@@ -76,6 +76,33 @@ t("an escrow in `added` that is not in the scan is skipped, not thrown on", () =
   assert.deepStrictEqual(out, []);
 });
 
+t("a multi-release lock says EARNING ON X OF Y, never a fractional multiplier", () => {
+  // Shaped like the real 50M lock: cliff today releasing 0, then 6 monthly tranches. The first
+  // two tranches are under 90 days and earn nothing; the text must say what earns of what.
+  const per = 8_333_333n * 10n ** 9n;
+  const l = s.normalizeEscrow("DRIP", {
+    recipient: "6A5uicTYmdVerq5JDKcb3XC9J8sv5F7zMKGqBBYXcnrh", tokenMint: "CUNA", creator: "x", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW), frequency: bn(30 * DAY), numberOfPeriod: bn(6),
+    cliffUnlockAmount: bn(0), amountPerPeriod: bn(per), totalClaimedAmount: bn(0),
+  }, NOW);
+  const out = ann.pickAnnouncements({ added: ["DRIP"], locks: [l], cfg: CFG, staking: s, nowUnix: NOW, ledger: {} });
+  assert.strictEqual(out.length, 1);
+  assert.ok(/earning lock-to-earn rewards on 33,333,332 of 49,999,998 CUNA/.test(out[0].text), out[0].text);
+  assert.ok(!/× the entry rate/.test(out[0].text), "no multiplier on a multi-release lock");
+  // a drip whose every tranche is 90+ days out: "on all N"
+  const all = s.normalizeEscrow("ALL", {
+    recipient: "AZHiexsgs5XvzSvfqmGwsQ3dhU5FFTXaqNCEy3BVknX1", tokenMint: "CUNA", creator: "y", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 200 * DAY), frequency: bn(30 * DAY), numberOfPeriod: bn(8),
+    cliffUnlockAmount: bn(126_000_000n * 10n ** 9n), amountPerPeriod: bn(12_500_000n * 10n ** 9n), totalClaimedAmount: bn(0),
+  }, NOW);
+  const out2 = ann.pickAnnouncements({ added: ["ALL"], locks: [all], cfg: CFG, staking: s, nowUnix: NOW, ledger: {} });
+  assert.ok(/earning lock-to-earn rewards on all 226,000,000 CUNA/.test(out2[0].text), out2[0].text);
+  // and a single-cliff lock keeps its clean tier multiplier
+  const single = mk("S1", { days: 180 });
+  const out3 = ann.pickAnnouncements({ added: ["S1"], locks: [single], cfg: CFG, staking: s, nowUnix: NOW, ledger: {} });
+  assert.ok(/at 2× the entry rate/.test(out3[0].text), out3[0].text);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     try { await f(); console.log("  ✓ " + n); pass++; }

@@ -10601,7 +10601,9 @@ app.get("/api/cuna-stake/wallet", async (req, res) => {
       const sp = s.splitOf(l, nowUnix);
       totalRaw += BigInt(sp.totalRaw);
       readyRaw += BigInt(sp.vestedUnclaimedRaw);
-      if (s.qualifies(l, p.config)) earningRaw += BigInt(sp.unvestedRaw);
+      // Only the tokens that carry weight: for a drip lock the tranches 90+ days out, not the whole
+      // unvested balance. "Earning on X" must never include a token weightOf gives nothing.
+      if (s.qualifies(l, p.config)) earningRaw += s.earningRawOf(l, nowUnix, p.config);
     }
     return res.status(200).json({
       ok: true,
