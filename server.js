@@ -12844,7 +12844,7 @@ YOUR SCHOOL -- KNOW THIS COLD:
 - Built on Bags.fm, powered by the CLKN token on Solana
 - CLKN contract: DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS
 - Trade CLKN at: bags.fm or Jupiter
-- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (12 lessons), the LP Lab, The Library, and Token Data
+- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (14 lessons), the LP Lab, The Library, and Token Data
 
 THE CLKN INCUBATOR:
 - For complete beginners. 7 lessons covering wallets, tokens, on-ramps and off-ramps, DEXs, liquidity, market cap, and staying safe.
@@ -12854,7 +12854,7 @@ SCHOOL OF HARD KNOCKS:
 - 12 progressive lessons with a belt ranking system from Freshman to Emeritus
 - Topics: liquidity pools, tokenomics, MEV, on-chain research, rugs and scams, DeFi strategies and more
 - Each lesson ends in a quiz. Progress saves automatically.
-- Complete all 12 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
+- Complete all 14 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
 
 THE LP LAB (its own tab, not inside the Library):
 - 14 lessons on liquidity providing, from the fundamentals to building a real strategy
@@ -12896,7 +12896,7 @@ CLKN TOKEN UTILITY:
   SOL price buys a 7-day pass to all of them. Premium forensics is separate: 2,000,000 CLKN,
   re-checked live. You connect a wallet and the gate resolves itself -- nothing is sent by hand.
 - Hold CLKN to be eligible for airdrops and exclusive rewards
-- Graduate all 12 lessons and submit your wallet for a transcript and an on-chain graduation NFT
+- Graduate all 14 lessons and submit your wallet for a transcript and an on-chain graduation NFT
 
 FIRECHICKEN CONNECTION:
 - FireChicken (FCKN) was the original token that built the community on Bags.fm
