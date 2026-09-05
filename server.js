@@ -14,6 +14,24 @@ function secretEqual(a, b) {
   const hb = createHash("sha256").update(b).digest();
   return timingSafeEqual(ha, hb);
 }
+// ── Staging mode ───────────────────────────────────────────────────────────
+// STAGING=1 marks this deploy as NOT production. Staging runs the same code on a public Railway
+// URL with no Cloudflare in front (owner's call, 2026-09-05: keep it simple), so the real risk is
+// not attackers — it is a page that looks EXACTLY like production being mistaken for it, linked
+// to, or screenshotted as real. And a money engine that ticks on two boxes instead of one.
+//   · every HTML page carries a banner that cannot be missed
+//   · X-Robots-Tag: noindex on everything, so it never reaches a search result
+//   · postToX refused outright; Telegram posts prefixed [STAGING]
+//   · EVERY money engine held off — not "inert because a secret is missing", actually off
+// Declared here, above every consumer: a const is not hoisted, and the engine gates below run at
+// module load. Nothing here weakens production — unset (the default) means none of it applies.
+const IS_STAGING = String(process.env.STAGING || "") === "1";
+// Lets a staging box have a bot token + test chat WITHOUT starting the daily automation. Setting
+// TELEGRAM_CHAT_ID is what boots the whole scheduler block — lessons, radar, recap, the graduation
+// watcher, the trade poller — so pointing staging at a test room would otherwise turn it into a
+// second bot running a full schedule, not just a place to try one post.
+const SCHEDULERS_OFF = String(process.env.SCHEDULERS_OFF || "") === "1";
+
 const hatchery = require("./hatchery");
 const securityCoop = require("./securitycoop");
 const whirlpoolMM = require("./whirlpool-mm");
@@ -719,7 +737,10 @@ function liqTimeout(fn, ms) { if (!LIQ_ENGINE_KILLED) return setTimeout(fn, ms);
 // telling you what to do") — deploying this code IS the start. POKE_ENGINE_OFF=1 in
 // Railway is the durable kill; /api/whirlpool/vault/pause?project=poke stops it
 // instantly without a deploy. If MM_OPERATOR_SECRET_TREASURY is unset it no-ops safely.
-const POKE_ENGINE_ON = process.env.POKE_ENGINE_OFF !== "1";
+// ...and never on staging. Without MM_OPERATOR_SECRET_TREASURY it cannot sign, but "safe because
+// a secret is absent" is one typo away from not being safe at all — a copied env var would arm a
+// second engine running the same pools from a box nobody is watching.
+const POKE_ENGINE_ON = process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING;
 const POKE_MINT = "HRvw81mktEraX9gZLTHKeYGaFygCSNKuAwNLVE6Tpump";
 const POKE_QUOTES = [
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
@@ -3281,21 +3302,6 @@ app.use((req, res, next) => {
 //   docs/CLOUDFLARE_WAF_RUNBOOK.md. /healthz is exempt (Railway's probe hits the app directly).
 const CF_ORIGIN_SECRET = process.env.CF_ORIGIN_SECRET;
 
-// ── Staging mode ───────────────────────────────────────────────────────────
-// STAGING=1 marks this deploy as NOT production. It exists because staging runs the same code on a
-// public Railway URL with no Cloudflare in front (owner's call, 2026-09-05: keep it simple), so the
-// one real risk is not attackers — it is a page that looks EXACTLY like production being mistaken
-// for it, linked to, or screenshotted as real. Three consequences, all one-way:
-//   · every HTML page carries a banner that cannot be missed
-//   · X-Robots-Tag: noindex on everything, so it never reaches a search result
-//   · postToX is refused outright, and Telegram posts are prefixed [STAGING]
-// Nothing here weakens production: unset (the default) means none of it applies.
-const IS_STAGING = String(process.env.STAGING || "") === "1";
-// Lets a staging box have a bot token + test chat WITHOUT starting the daily automation. Setting
-// TELEGRAM_CHAT_ID is what boots the whole scheduler block — lessons, radar, recap, the graduation
-// watcher, the trade poller — so pointing staging at a test room would otherwise turn it into a
-// second bot running a full schedule, not just a place to try one post.
-const SCHEDULERS_OFF = String(process.env.SCHEDULERS_OFF || "") === "1";
 // ── Dedicated game domain (owner bought normiequest.app, 2026-08-22) ───────
 // Requests whose Host is one of these serve Normie Quest at "/" and only see game surfaces —
 // everything else 301s to clucknorris.app. NQ_GAME_HOSTS env overrides the default pair.
@@ -3407,7 +3413,7 @@ if (IS_STAGING) {
     };
     next();
   });
-  console.log("[boot] STAGING=1 — noindex, a banner on every page, X posting refused, Telegram prefixed");
+  console.log("[boot] STAGING=1 — noindex, banner on every page, X posting refused, Telegram prefixed, money engines held off");
 }
 
 // ── Lightweight in-memory rate limiting ───────────────────────────────────
@@ -18155,7 +18161,7 @@ app.listen(PORT, () => {
     rose: () => process.env.ROSE_ENGINE_OFF !== "1" && !!kv.get("roseEngineArmed", false),
     cuna: () => process.env.CUNA_ENGINE_OFF !== "1" && !!kv.get("cunaEngineArmed", false),
     dnc: () => process.env.DNC_ENGINE_OFF !== "1" && !!kv.get("dncEngineArmed", false),
-    poke: () => process.env.POKE_ENGINE_OFF !== "1", // poke's loop is ON by default (owner)
+    poke: () => process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING, // ON by default (owner), never on staging
   };
   const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {
     const p = whirlpoolMM.vault.getProject(id);
