@@ -109,6 +109,12 @@ jobs:
       # sessionStorage. autopsy.html had a private safeUrl and nothing else got it.
       - name: href scheme guard (safeUrl) + admin-panel escaping
         run: node scripts/safe-url-test.cjs
+      # tgSend swallows its own errors and returns null, so three schedulers advanced durable
+      # state after sends that never landed — including one that permanently dropped new
+      # graduates. And /api/hatchery/minted announced "NEW TOKEN HATCHED" on proof that SOME
+      # unrelated transaction had succeeded.
+      - name: brand-channel broadcast integrity
+        run: node scripts/broadcast-integrity-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
