@@ -921,6 +921,9 @@
       if (r && r.value && r.value.blockhash) tx.recentBlockhash = r.value.blockhash;
       return p.signTransaction(tx);
     }).then(function (signed) {
+      // Not every wallet hands back a web3 Transaction (bytes, a foreign copy, nothing at all) —
+      // "signed.partialSign is not a function" on a live lock, 2026-09-05. Normalise first.
+      signed = CluckWallet.asTransaction(signed, tx);
       signed.partialSign(baseKp);                     // ephemeral base signs AFTER the wallet
       var raw = signed.serialize();
       var b = ""; for (var i = 0; i < raw.length; i++) b += String.fromCharCode(raw[i]);

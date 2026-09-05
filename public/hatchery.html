@@ -723,7 +723,7 @@ async function hatch() {
     // so we hand the wallet-signed tx back to /submit, which co-signs with the mint key
     // and submits — but only after verifying the fee wasn't stripped. This makes the fee
     // enforceable; the browser never receives the mint secret.
-    const signedTx = await activeWallet.provider.signTransaction(tx);
+    const signedTx = CluckWallet.asTransaction(await activeWallet.provider.signTransaction(tx), tx);   // bytes / foreign / in-place → ours
     const signedB64 = btoa(String.fromCharCode(...signedTx.serialize({ requireAllSignatures: false, verifySignatures: false })));
 
     setProgress('Finalizing your mint…');

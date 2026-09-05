@@ -206,7 +206,7 @@
       if (!d.ok) throw new Error(d.error || 'could not build the revocation');
       btn.textContent = 'SIGNING…';
       var tx = solanaWeb3.Transaction.from(Uint8Array.from(atob(d.unsignedBase64), function(c){ return c.charCodeAt(0); }));
-      return provider.signTransaction(tx).then(function(signed){ return { d: d, signed: signed }; });
+      return provider.signTransaction(tx).then(function(signed){ return { d: d, signed: CluckWallet.asTransaction(signed, tx) }; });
     }).then(function(x){
       btn.textContent = 'SENDING…';
       return rpc('sendTransaction', [btoa(String.fromCharCode.apply(null, x.signed.serialize())),
@@ -494,7 +494,7 @@
       prepared = fresh;
       btn.textContent = 'SIGNING…';
       var tx = solanaWeb3.Transaction.from(Uint8Array.from(atob(prepared.unsignedBase64), function(c){ return c.charCodeAt(0); }));
-      return provider.signTransaction(tx);
+      return provider.signTransaction(tx).then(function(signed){ return CluckWallet.asTransaction(signed, tx); });
     }).then(function(signed){
         btn.textContent = 'SENDING…';
         return rpc('sendTransaction', [btoa(String.fromCharCode.apply(null, signed.serialize())),
