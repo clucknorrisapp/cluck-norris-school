@@ -108,6 +108,13 @@ My read: both are **preset quick-tag taps, not written feedback** — there is z
 
 ---
 
+## 2b. Owner-reported bugs on the live game (2026-09-05 23:58 UTC) — fix before anything else in §4
+
+| # | Report (owner's words) | What the code says | Fix shape |
+|---|---|---|---|
+| **P0-A** | *"between a level i hit the grab normie, then it would never let me keep going on the game, like the screen locked with music in background and I clicked everywhere and wouldn't work"* | The between-level beat renders a `🪙 GRAB $NORMIE` (or `🏛 SEE THE LOUNGE`) button at `game_logic.js:7378`; `:5125` notes that beat routes to "wallet / grab NORMIE instead of the next world". After the tap the scene stays up with music and takes no input — the CTA leaves the beat without a way forward. **Not yet reproduced; the owner hit it on a phone.** | Make the CTA open its link in a new tab and leave the beat alive with tap-to-continue (ties into P13); every between-level screen must always have a way forward; add a headless beat-flow check. **First NQ fix.** |
+| **P0-B** | *"normie is also blurry while running, i think it is trying to go between two different run pictures again"* | `main` renders at `RES=3` on desktop, `2` on touch (`game_logic.js:25`). Skins already use one steady run pose (`:6229`, from 791fb8d). The **unmerged** branch `claude/normie-2-hidden-level-odzbkv` carries three more fixes that never landed: crisp characters via NEAREST filtering matching the monsters (8dcabf6), characters rendered clean + run-bob tuning (c90e62c), and the 2x/3x resolution back-and-forth (500b6c0 → bcacf34). "Again" is right — the fix exists and was never merged. | Port the NEAREST-filter + integer-snapped position change from that branch for the base character (not only skins); confirm RES on the owner's phone; re-approve the character visual baselines (`nq-visual --update`, eyeball PNGs). |
+
 ## 3. Reliability debt
 
 | # | Issue | Evidence | Fix shape |
