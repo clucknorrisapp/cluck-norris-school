@@ -34,7 +34,9 @@ const CFG = { mint: CUNA, minDurationDays: 365, minCliffDays: 180, excludeWallet
   const cuna = (raw) => (Number(raw) / 1e9).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
   console.log(`QUALIFYING (${q.length}):`);
-  const pool = s.poolForDay({ dailyUnlockRaw: '6632857000000000', sharePct: 20 });
+  const unlock = s.dailyUnlockRaw(r1.locks, now);
+  const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: 20 });
+  console.log(`daily unlock stream (computed live from the schedules): ${cuna(unlock)} CUNA/day`);
   const day = s.accrueDay({ locks: r1.locks, poolRaw: pool.toString(), nowUnix: now, cfg: CFG });
   for (const l of q) console.log(`  ${l.escrow.slice(0,8)}… ${l.recipient.slice(0,8)}…  ${cuna(l.atRiskRaw).padStart(13)} CUNA` +
     `  cliff +${((l.cliffTime-now)/86400).toFixed(0)}d  ends +${((l.fullyVestedAt-now)/86400).toFixed(0)}d` +

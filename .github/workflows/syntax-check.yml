@@ -78,6 +78,14 @@ jobs:
       # already accrued is refused so a redeploy mid-run cannot pay it twice.
       - name: CUNA programme arm gate + config
         run: node scripts/cuna-programme-test.cjs
+      # The staking domain's origin-lockdown exemption, read out of server.js itself. That
+      # exemption is the one place a request can skip the WAF, so the allowlist must stay
+      # exhaustive and anchored at both ends — a single "^/api/" entry would be a hole through to
+      # every money endpoint for anyone who points a DNS record at our origin. Also pins that
+      # /api/cuna-stake/admin (which ARMS the emission) is unreachable that way, and that the
+      # handler's own req.cluckDirect guard runs before the key comparison.
+      - name: CUNA staking domain lockdown allowlist
+        run: node scripts/cuna-stake-routing-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.

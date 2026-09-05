@@ -3284,6 +3284,25 @@ const isGameHost = (req) => NQ_GAME_HOSTS.includes(String(req.hostname || "").to
 // sfx,worlds}, /nq-assets, /nq-sw.js, the /normie-quest-x7* sub-pages). Keeping the list tight is
 // what makes the direct-DNS lockdown exemption below a GAME-surface exemption, not a site bypass.
 const NQ_GAME_PATH = /^\/($|\?)|^\/api\/nq\/|^\/normie-quest|^\/nq-assets\/|^\/nq-sw\.js$|^\/vendor\//;
+// ── CUNA staking domain (staking.cunatoken.com) ───────────────────────────
+// Same shape as the game domain above: a partner-owned host pointed straight at Railway, so it
+// cannot carry the Cloudflare edge header and needs a scoped exemption from the origin lockdown.
+const CUNA_STAKE_HOSTS = String(process.env.CUNA_STAKE_HOSTS || "staking.cunatoken.com,www.staking.cunatoken.com")
+  .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+const isStakeHost = (req) => CUNA_STAKE_HOSTS.includes(String(req.hostname || "").toLowerCase());
+// ⚠️ EXHAUSTIVE, NOT A PREFIX. Every entry is anchored at both ends and names one exact surface the
+// staking page loads or calls. A loose prefix here (say /api/) would be a hole straight through the
+// WAF to every money endpoint in the app, reachable by anyone who points a DNS record at our origin
+// and sends the right Host header. Note what is deliberately ABSENT: /api/cuna-stake/admin — the
+// route that ARMS the emission is not reachable this way at any key, and is refused a second time
+// in its own handler (see cunaDirect below).
+const CUNA_STAKE_PATH = new RegExp([
+  "^/$", "^/cuna-staking$",
+  "^/api/cuna-stake/(config|wallet)$",
+  "^/api/lock/create-tx$",              // builds the UNSIGNED lock tx; the wallet still signs it
+  "^/cluck-util\\.js$", "^/cluck-wallet\\.js$",
+  "^/fonts/LuckiestGuy\\.ttf$",
+].join("|"));
 if (CF_ORIGIN_SECRET) {
   const cfExpectedHash = createHash("sha256").update(CF_ORIGIN_SECRET).digest("hex");
   app.use((req, res, next) => {
@@ -3294,11 +3313,13 @@ if (CF_ORIGIN_SECRET) {
     // but ONLY for game paths, so a spoofed Host header can never reach the rest of the app around
     // the WAF. If/when the owner moves the domain behind Cloudflare with the same Transform Rule,
     // the header check above passes first and this branch simply never runs.
-    if (isGameHost(req) && NQ_GAME_PATH.test(req.path)) return next();
+    if (isGameHost(req) && NQ_GAME_PATH.test(req.path)) { req.cluckDirect = true; return next(); }
+    // Same deal for the CUNA staking host, on the tight allowlist above.
+    if (isStakeHost(req) && CUNA_STAKE_PATH.test(req.path)) { req.cluckDirect = true; return next(); }
     return res.status(403).type("text/plain")
       .send("Forbidden: reach this site through clucknorris.app, not the origin directly.");
   });
-  console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked (game hosts exempt for game paths: " + NQ_GAME_HOSTS.join(", ") + ")");
+  console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked (exempt for their own surfaces only: game hosts " + NQ_GAME_HOSTS.join(", ") + "; staking hosts " + CUNA_STAKE_HOSTS.join(", ") + ")");
 }
 // Host router for the game domain — mounted HERE (before every site route) so the main site's
 // own "/" never wins on normiequest.app. Game paths fall through to the normal routes, which are
@@ -3314,6 +3335,18 @@ app.use((req, res, next) => {
     return res.sendFile(join(__dirname, "normie-quest", "public", "normie-quest-platformer.html"));
   }
   if (NQ_GAME_PATH.test(req.path) || req.path === "/healthz") return next();
+  return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
+});
+
+// Host router for the CUNA staking domain. Mounted before every site route so the main site's "/"
+// never wins on staking.cunatoken.com, and anything that is not a staking surface bounces home.
+app.use((req, res, next) => {
+  if (!isStakeHost(req)) return next();
+  if (req.path === "/" || req.path === "") {
+    res.set("Cache-Control", "public, max-age=0, must-revalidate");
+    return res.sendFile(join(__dirname, "public", "cuna-staking.html"));
+  }
+  if (CUNA_STAKE_PATH.test(req.path) || req.path === "/healthz") return next();
   return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
 });
 
@@ -10254,6 +10287,243 @@ app.post("/api/lock/claim-tx", async (req, res) => {
   } catch (err) {
     return res.status(400).json({ ok: false, error: publicErrMsg(err) });
   }
+});
+
+
+// ── CUNA lock-to-earn ──────────────────────────────────────────────────────
+// Lock CUNA on Jupiter Lock for >= 1 year with a >= 6 month cliff and earn a share of the tokens
+// the vesting schedules were releasing anyway. Logic lives in three tested libs:
+//   lib/cuna-staking.js     who qualifies, what a lock weighs, how a day's pool splits
+//   lib/cuna-lock-scan.js   enumerating escrows + the firstSeenAt ledger terms are measured against
+//   lib/cuna-programme.js   armed/disarmed, the config guard, one-day-once accrual
+//
+// ⛔ SHIPS DISARMED (owner, 2026-09-05: "no one earns until I make the announcements"). While
+// disarmed the ledger is NOT written: terms are measured forward from firstSeenAt, so indexing
+// before launch would stamp every existing lock with a date from before the programme existed and
+// the cutoff would then reject them all. Pre-arm scans are PREVIEW ONLY.
+//
+// ⚠️ The scan is getProgramAccounts — unbounded and expensive, and deliberately absent from the
+// /api/helius-rpc allowlist. No public route may trigger one per request: everything here reads
+// through one shared cache with a single in-flight scan.
+const CUNA_STAKE_KV = "cunaStake";              // { armed, startedAt, config }
+const CUNA_STAKE_LEDGER_KV = "cunaStakeLedger"; // { [escrow]: { firstSeenAt, fingerprint, lastSeenAt } }
+const CUNA_STAKE_DAYS_KV = "cunaStakeDays";     // { "YYYY-MM-DD": { distributed, credits } }
+let CUNA_SCAN_CACHE = { at: 0, locks: null, err: null };
+let CUNA_SCAN_INFLIGHT = null;
+const CUNA_SCAN_TTL_MS = 5 * 60 * 1000;
+
+function cunaProgramme() {
+  const prog = require("./lib/cuna-programme");
+  return prog.readProgramme(kv.get(CUNA_STAKE_KV, null));
+}
+
+// One scan, shared. Callers get the cached locks; a stale cache refreshes in the background of the
+// first caller only. When the programme is armed the refresh also persists the firstSeenAt ledger —
+// that is the ONLY thing that writes it, and it cannot run while disarmed.
+async function cunaLocks({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && CUNA_SCAN_CACHE.locks && now - CUNA_SCAN_CACHE.at < CUNA_SCAN_TTL_MS) return CUNA_SCAN_CACHE;
+  if (CUNA_SCAN_INFLIGHT) return CUNA_SCAN_INFLIGHT;
+  CUNA_SCAN_INFLIGHT = (async () => {
+    try {
+      const scanLib = require("./lib/cuna-lock-scan");
+      const prog = require("./lib/cuna-programme");
+      const jupLock = require("./lib/jup-lock");
+      const p = cunaProgramme();
+      const P = await jupLock.program();
+      const scanned = await scanLib.scanEscrowsByMint(P, p.config.mint);
+      const nowUnix = Math.floor(Date.now() / 1000);
+      const stored = p.armed ? (kv.get(CUNA_STAKE_LEDGER_KV, {}) || {}) : {};
+      const merged = scanLib.mergeLedger({ scanned, ledger: stored, nowUnix });
+      if (p.armed) {
+        kv.set(CUNA_STAKE_LEDGER_KV, merged.ledger);
+        if (merged.added.length || merged.reset.length) {
+          console.log(`[cuna-stake] ledger: +${merged.added.length} new, ${merged.reset.length} reset (terms changed at the same address)`);
+        }
+      }
+      CUNA_SCAN_CACHE = { at: Date.now(), locks: merged.locks, err: null, ledger: merged.ledger, armed: p.armed };
+    } catch (e) {
+      console.warn("[cuna-stake] scan failed: " + e.message);
+      // Keep serving the last good scan rather than reporting an empty programme — "nobody
+      // qualifies" and "we could not look" must never render the same way.
+      CUNA_SCAN_CACHE = { ...CUNA_SCAN_CACHE, err: publicErrMsg(e) };
+    } finally {
+      CUNA_SCAN_INFLIGHT = null;
+    }
+    return CUNA_SCAN_CACHE;
+  })();
+  return CUNA_SCAN_INFLIGHT;
+}
+
+// Everything the page renders from. No amount is ever hardcoded client-side.
+app.get("/api/cuna-stake/config", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  try {
+    const s = require("./lib/cuna-staking");
+    const p = cunaProgramme();
+    const snap = await cunaLocks();
+    const locks = snap.locks || [];
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const unlock = s.dailyUnlockRaw(locks, nowUnix);
+    const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct });
+    const eligible = locks.filter((l) => s.qualifies(l, p.config));
+    let lockedRaw = 0n;
+    for (const l of eligible) lockedRaw += BigInt(l.atRiskRaw);
+    return res.status(200).json({
+      ok: true,
+      armed: p.armed,
+      startedAt: p.startedAt,
+      mint: p.config.mint,
+      decimals: 9,
+      terms: {
+        minDurationDays: p.config.minDurationDays,
+        minCliffDays: p.config.minCliffDays,
+        sharePct: p.config.sharePct,
+        cancelableAllowed: false,   // owner, 2026-09-05 — a lock you can undo is not a commitment
+      },
+      dailyUnlockRaw: unlock.toString(),
+      poolTodayRaw: pool.toString(),
+      totalQualifyingRaw: lockedRaw.toString(),
+      qualifyingLocks: eligible.length,
+      scannedLocks: locks.length,
+      scanAgeSec: snap.at ? Math.floor((Date.now() - snap.at) / 1000) : null,
+      scanError: snap.err || null,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+// One wallet's locks, each with a plain-English verdict. Address is a lookup key only — no
+// signature needed, because nothing here is private: it is all public chain state.
+app.get("/api/cuna-stake/wallet", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const s = require("./lib/cuna-staking");
+    const addr = String(req.query.address || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) {
+      return res.status(400).json({ ok: false, error: "Connect a wallet first." });
+    }
+    const p = cunaProgramme();
+    const snap = await cunaLocks();
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const mine = (snap.locks || []).filter((l) => l.recipient === addr);
+    const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+    let accrued = 0n;
+    for (const d of Object.values(days)) {
+      const c = d && d.credits && d.credits[addr];
+      if (c) accrued += BigInt(c);
+    }
+    const claim = s.claimableFor({ accruedRaw: accrued.toString(), locks: mine, nowUnix });
+    return res.status(200).json({
+      ok: true,
+      armed: p.armed,
+      locks: mine.map((l) => ({
+        escrow: l.escrow,
+        amountRaw: l.atRiskRaw,
+        cliffTime: l.cliffTime,
+        fullyVestedAt: l.fullyVestedAt,
+        firstSeenAt: l.firstSeenAt,
+        qualifies: s.qualifies(l, p.config),
+        reasons: s.disqualify(l, p.config),
+        weight: s.weightOf(l, nowUnix).toString(),
+      })),
+      accruedRaw: accrued.toString(),
+      claimableRaw: claim.claimable.toString(),
+      cliffPassed: claim.cliffPassed,
+      unlocksAt: claim.unlocksAt,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+// Owner-only: arm, disarm, tune, and inspect. 404 when the key is unset or wrong, like every
+// other admin surface here. ARMING IS THE GO-LIVE — it is what starts the emission.
+app.all("/api/cuna-stake/admin", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  // Belt and braces on top of the allowlist: a request that reached us WITHOUT traversing
+  // Cloudflare (the partner-domain exemption) can never arm the emission, whatever key it carries.
+  // The allowlist already omits this path; this is the check that holds if someone widens it.
+  if (req.cluckDirect) return res.status(404).json({ ok: false, error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+  try {
+    const prog = require("./lib/cuna-programme");
+    const s = require("./lib/cuna-staking");
+    const q = { ...(req.query || {}), ...(req.body || {}) };
+    let stored = kv.get(CUNA_STAKE_KV, null);
+
+    if (String(q.config || "") === "1") {
+      const patch = {};
+      for (const k of ["sharePct", "minDurationDays", "minCliffDays"]) if (q[k] != null) patch[k] = q[k];
+      if (q.excludeWallets != null) {
+        patch.excludeWallets = String(q.excludeWallets).split(",").map((x) => x.trim()).filter(Boolean);
+      }
+      // validateConfig throws on anything nonsensical — a bad share or a typo'd address is an
+      // emission-sized mistake, so it is refused rather than stored and discovered in a payout.
+      const config = prog.validateConfig(patch, (prog.readProgramme(stored).config));
+      stored = { ...(stored || {}), config };
+      kv.set(CUNA_STAKE_KV, stored);
+      CUNA_SCAN_CACHE = { at: 0, locks: CUNA_SCAN_CACHE.locks, err: null };   // terms changed, re-judge
+      console.log(`[cuna-stake] config updated: ${JSON.stringify(config)}`);
+    }
+
+    // Arming needs BOTH flags in the same call. One typo'd query param must not be able to start
+    // an emission — the same two-key posture the liquidity engines use for going live.
+    if (String(q.arm || "") === "1") {
+      if (String(q.confirm || "") !== "go-live") {
+        return res.status(400).json({ ok: false, error: "arming needs &arm=1&confirm=go-live — two flags on purpose" });
+      }
+      stored = prog.arm(stored, Math.floor(Date.now() / 1000));
+      kv.set(CUNA_STAKE_KV, stored);
+      CUNA_SCAN_CACHE = { at: 0, locks: null, err: null };   // next scan writes the ledger for real
+      console.log(`[cuna-stake] ARMED at ${stored.startedAt} — the emission has started`);
+    } else if (String(q.off || "") === "1") {
+      stored = prog.disarm(stored);
+      kv.set(CUNA_STAKE_KV, stored);
+      console.log("[cuna-stake] DISARMED — accrual stopped, start date kept");
+    }
+
+    const p = prog.readProgramme(stored);
+    const snap = await cunaLocks({ force: String(q.rescan || "") === "1" });
+    const locks = snap.locks || [];
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const unlock = s.dailyUnlockRaw(locks, nowUnix);
+    const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct });
+    const preview = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: p.config });
+    const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+    return res.status(200).json({
+      ok: true,
+      armed: p.armed,
+      startedAt: p.startedAt,
+      config: p.config,
+      scanned: locks.length,
+      ledgerWritten: snap.armed === true,
+      dailyUnlockRaw: unlock.toString(),
+      poolTodayRaw: pool.toString(),
+      // What TODAY would pay if a day were accrued now. Preview only — it writes nothing.
+      wouldPay: Object.fromEntries(Object.entries(preview.credits).map(([k, v]) => [k, v.toString()])),
+      eligible: preview.eligible,
+      skipped: preview.skipped,
+      daysAccrued: Object.keys(days).length,
+      scanError: snap.err || null,
+    });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+// The CUNA brand display face. It lives with the gif-forge scenes (tools/gif-forge/assets) so the
+// page and the generated art take their lettering from the SAME file and cannot drift apart — and
+// tools/ is not under public/, so it needs an explicit route to be reachable at all.
+app.get("/fonts/LuckiestGuy.ttf", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Access-Control-Allow-Origin", "*");   // the staking host is a different origin
+  res.type("font/ttf").sendFile(join(__dirname, "tools", "gif-forge", "assets", "LuckiestGuy.ttf"));
+});
+
+app.get("/cuna-staking", (req, res) => {
+  res.sendFile(join(__dirname, "public", "cuna-staking.html"));
 });
 
 // -- Fee Share / Analytics endpoints --

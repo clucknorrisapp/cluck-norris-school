@@ -69,7 +69,8 @@ t("normalizeEscrow produces exactly the fields the rules read, and no invented o
   const l = lock();
   assert.deepStrictEqual(Object.keys(l).sort(), [
     "atRiskRaw", "cancelMode", "cancelledAt", "claimedRaw", "cliffTime", "creator",
-    "escrow", "firstSeenAt", "fullyVestedAt", "mint", "recipient", "totalRaw", "vestingStartTime",
+    "escrow", "firstSeenAt", "fullyVestedAt", "mint", "perDayRaw", "recipient", "totalRaw",
+    "vestingStartTime",
   ]);
   for (const [k, v] of Object.entries(l)) assert.ok(v !== undefined && v !== null, `${k} is ${v}`);
   // The two fields Phase 1 invented must NOT come back to life.
@@ -288,6 +289,29 @@ t("after the cliff: the whole accrued balance is claimable", () => {
   const r = s.claimableFor({ accruedRaw: "5000", locks: [l], nowUnix: NOW });
   assert.strictEqual(r.claimable, 5000n);
   assert.strictEqual(r.cliffPassed, true);
+});
+
+section("the unlock stream the pool is drawn from");
+
+t("only locks past their cliff and still running are releasing anything", () => {
+  const inCliff = lock({ escrow: "A", cliffDays: 180, durationDays: 365 });   // cliff ahead
+  const running = lock({ escrow: "B", seen: NOW - 200 * DAY, cliffDays: 180, durationDays: 400 });
+  const done    = lock({ escrow: "C", seen: NOW - 500 * DAY, cliffDays: 180, durationDays: 365 });
+  assert.strictEqual(s.dailyUnlockRaw([inCliff], NOW), 0n, "a lock inside its cliff releases nothing");
+  assert.strictEqual(s.dailyUnlockRaw([done], NOW), 0n, "a finished lock releases nothing");
+  assert.ok(s.dailyUnlockRaw([running], NOW) > 0n);
+  // and the total is just the sum of the ones actually running
+  assert.strictEqual(s.dailyUnlockRaw([inCliff, running, done], NOW), s.dailyUnlockRaw([running], NOW));
+});
+
+t("the rate is per DAY whatever the schedule's period is", () => {
+  // 100 per period, one period a day vs one every six hours = 4x the daily rate.
+  const daily = s.normalizeEscrow("D", { ...escrowAccount(), frequency: DAY,
+    amountPerPeriod: 100n, cliffUnlockAmount: 0n, numberOfPeriod: 400 }, NOW);
+  const fast = s.normalizeEscrow("F", { ...escrowAccount(), frequency: DAY / 4,
+    amountPerPeriod: 100n, cliffUnlockAmount: 0n, numberOfPeriod: 1600 }, NOW);
+  assert.strictEqual(daily.perDayRaw, "100");
+  assert.strictEqual(fast.perDayRaw, "400");
 });
 
 section("pool sizing and display");

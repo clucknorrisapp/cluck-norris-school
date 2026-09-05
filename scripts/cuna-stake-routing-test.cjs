@@ -1,0 +1,102 @@
+"use strict";
+// The staking domain's origin-lockdown exemption, asserted against server.js itself.
+//
+// staking.cunatoken.com is pointed straight at Railway, so it cannot carry the Cloudflare edge
+// header and is exempted from the origin lockdown for its own surfaces. That exemption is the one
+// place in the app where a request can skip the WAF, so its allowlist has to be exhaustive and
+// anchored. A single loose entry — "^/api/" — would be a hole through the WAF to every money
+// endpoint, reachable by anyone who points a DNS record at our origin and sets a Host header.
+//
+// This reads the real regex out of server.js rather than a copy, so the test cannot drift from
+// what actually runs.
+
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+
+let pass = 0, fail = 0;
+const queue = [];
+function t(n, f) { queue.push([n, f]); }
+
+const SRC = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+
+function allowlist() {
+  const m = SRC.match(/const CUNA_STAKE_PATH = new RegExp\(\[([\s\S]*?)\]\.join\("\|"\)\);/);
+  assert.ok(m, "CUNA_STAKE_PATH is not where this test expects it in server.js");
+  // eslint-disable-next-line no-eval
+  return { parts: eval("[" + m[1] + "]"), re: new RegExp(eval("[" + m[1] + "]").join("|")) };
+}
+
+t("every staking surface the page needs is allowed", () => {
+  const { re } = allowlist();
+  for (const p of ["/", "/cuna-staking", "/api/cuna-stake/config", "/api/cuna-stake/wallet",
+                   "/api/lock/create-tx", "/cluck-util.js", "/cluck-wallet.js",
+                   "/fonts/LuckiestGuy.ttf"]) {
+    assert.ok(re.test(p), `${p} is not reachable on the staking host`);
+  }
+});
+
+t("THE ONE THAT MATTERS: the admin route is NOT reachable through the exemption", () => {
+  // /api/cuna-stake/admin is what ARMS the emission. It must never be reachable by a request that
+  // skipped the WAF, at any key.
+  const { re } = allowlist();
+  assert.strictEqual(re.test("/api/cuna-stake/admin"), false);
+});
+
+t("no money or ops endpoint leaks through", () => {
+  const { re } = allowlist();
+  for (const p of ["/api/whirlpool/vault/pause", "/api/whirlpool/vault/config", "/api/helius-rpc",
+                   "/api/lock/claim-tx", "/api/lock/record", "/api/tg-test", "/api/meme-queue",
+                   "/api/rose-engine", "/api/claim", "/api/track", "/wallet-xray", "/tools",
+                   "/api/", "/api/cuna-stake/", "/admin"]) {
+    assert.strictEqual(re.test(p), false, `${p} is reachable on the staking host`);
+  }
+});
+
+t("every entry is anchored at BOTH ends — a prefix would be the hole", () => {
+  const { parts } = allowlist();
+  for (const p of parts) {
+    assert.ok(p.startsWith("^"), `${p} is not anchored at the start`);
+    assert.ok(p.endsWith("$"), `${p} is not anchored at the end — it matches everything beneath it`);
+  }
+});
+
+t("nothing can be smuggled past an anchored entry", () => {
+  const { re } = allowlist();
+  for (const p of ["/api/cuna-stake/config/../admin", "/api/cuna-stake/configX",
+                   "/x/api/cuna-stake/config", "/api/cuna-stake/config/admin",
+                   "/cluck-util.js.map", "/fonts/LuckiestGuy.ttf/../../server.js"]) {
+    assert.strictEqual(re.test(p), false, `${p} slipped through`);
+  }
+});
+
+t("the admin handler refuses anything that skipped the edge, allowlist or not", () => {
+  // The second line of defence: if someone later widens the allowlist, this still holds.
+  const i = SRC.indexOf('app.all("/api/cuna-stake/admin"');
+  assert.ok(i > 0, "the admin route moved");
+  const body = SRC.slice(i, i + 900);
+  assert.ok(/if \(req\.cluckDirect\) return res\.status\(404\)/.test(body),
+    "the admin route lost its req.cluckDirect guard");
+  // and it must come BEFORE the key check, so a direct request is refused without touching the key
+  assert.ok(body.indexOf("req.cluckDirect") < body.indexOf("adminAuthOK"),
+    "the cluckDirect guard must run before the key comparison");
+});
+
+t("both exempted hosts mark the request as having skipped the edge", () => {
+  // req.cluckDirect is what the admin guard keys on. If an exemption branch forgets to set it,
+  // that host silently gets treated as if it came through Cloudflare.
+  const m = SRC.match(/if \(isGameHost\(req\)[\s\S]{0,400}?return res\.status\(403\)/);
+  assert.ok(m, "the lockdown exemption block moved");
+  const block = m[0];
+  assert.strictEqual((block.match(/req\.cluckDirect = true/g) || []).length, 2,
+    "an exemption branch does not set req.cluckDirect");
+});
+
+(async () => {
+  for (const [n, f] of queue) {
+    try { await f(); console.log("  ✓ " + n); pass++; }
+    catch (e) { console.log("  ✗ " + n + "\n      " + e.message); fail++; }
+  }
+  console.log(`\n${fail === 0 ? "all passed" : fail + " FAILED"} (${pass} passed)`);
+  process.exit(fail ? 1 : 0);
+})();
