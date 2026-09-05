@@ -5905,6 +5905,18 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:pop, alpha:0, delay:1050, duration:850, onComplete:function(){ pop.destroy(); }});
   },
 
+  // Belt-and-braces for the respawn itself: even a banked spot can go bad (a platform destroyed by
+  // a mechanic we haven't written yet), and respawning into thin air over a pit is the one outcome
+  // that must never happen. Cheap, so it runs on every pit death.
+  footingUnder:function(x,y){
+    if(!this.platforms) return false;
+    var found=false;
+    this.platforms.children.iterate(function(t){
+      if(found||!t||!t.body||!t.body.enable) return; var s=t.body;
+      if(x>s.x-4 && x<s.x+s.width+4 && s.y>=y-8 && s.y<y+90) found=true;
+    });
+    return found;
+  },
   loseLife:function(reason){ this.lives--; this._lvDeaths=(this._lvDeaths||0)+1;
     // BRIDGE DRAINER: put the WHOLE deck back on death. Respawn lands you on the last safe spot,
     // and if that tile had since been siphoned you would drop straight back into the void — an
@@ -6072,6 +6084,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ MUSIC.resume(); }catch(e){}
     if(this.pauseUI){ this.pauseUI.forEach(function(o){ try{o.destroy();}catch(e){} }); this.pauseUI=null; }
     this._pauseAudioLine=null;
+    // SWALLOW THE RESUMING PRESS. update() early-returns while paused, so prevThrow/prevJump still
+    // hold their pre-pause values; the button that dismissed the card therefore reads as a FRESH
+    // edge on the very next frame and fires for real. Resuming by tapping the on-screen THROW
+    // (where a thumb naturally rests, and the card only says "TAP TO RESUME") spent a counted disc
+    // — 10 per level — with no player intent; resuming on JUMP burned a jump charge the same way.
+    // Latching both to `true` means the held button must be RELEASED and pressed again to count,
+    // which is what the player means by "unpause, then throw". Pad edges get drained for the same
+    // reason (anyBtnEdge is already handled by the caller; jumpEdge was not).
+    this.prevThrow=true; this.prevJump=true; this.jumpBufferAt=-9999;
+    try{ if(window.__NQ_PAD){ window.__NQ_PAD.jumpEdge=false; window.__NQ_PAD.selEdge=false; } }catch(e){}
     this.lastInputAt=this.time.now; },   // reset idle timer so it doesn't instantly re-pause
 
   update:function(){
@@ -6210,11 +6232,27 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // ANTI-STUCK SAFETY: damage knockback (or any wedge) must never trap the player INSIDE solid
     // geometry (e.g. a steel-locker wall). Record the last safe standing spot; if the player's body
     // CENTER is ever inside a solid tile, pop them back out so a hit can't softlock them in a wall.
-    var _pcx=b.center.x, _pcy=b.center.y, _inSolid=false;
-    this.platforms.children.iterate(function(t){ if(_inSolid||!t||!t.body) return; var s=t.body;
-      if(_pcx>s.x+2 && _pcx<s.x+s.width-2 && _pcy>s.y+3 && _pcy<s.y+s.height-3) _inSolid=true; });
+    // ONE pass over this.platforms answers both questions — "am I wedged inside solid?" and "is my
+    // footing permanent?" (below). They were two separate full iterations over every ground tile,
+    // every frame, which on a 7800px level is ~1300 body tests per frame for nothing; a phone/iPad
+    // pays for that twice.
+    var _pcx=b.center.x, _pcy=b.center.y, _inSolid=false, _onSolid=false;
+    var _fx1=b.left+2, _fx2=b.right-2, _fby=b.bottom;
+    this.platforms.children.iterate(function(t){ if(!t||!t.body||!t.body.enable) return; var s=t.body;
+      if(!_inSolid && _pcx>s.x+2 && _pcx<s.x+s.width-2 && _pcy>s.y+3 && _pcy<s.y+s.height-3) _inSolid=true;
+      if(!_onSolid && _fx2>s.x && _fx1<s.x+s.width && _fby>=s.y-6 && _fby<=s.y+10) _onSolid=true; });
     if(_inSolid){ if(this._lastSafe){ b.reset(this._lastSafe.x, this._lastSafe.y); } b.velocity.set(0,0); this.isJumping=false; }
-    else if(onGround && !this.crouching){ this._lastSafe={ x:p.x, y:p.y }; }
+    // ...but bank the spot ONLY when the footing is PERMANENT. `onGround` is true on a pump-dump,
+    // a bridge plank, a depeg peg, a rug plat, a puller rug, a yield lift and a mover — every one
+    // of which is *designed* to vanish or move away under you. Banking those was a guaranteed
+    // death loop: the plank you are standing on drops (it is anchored over a pit by design), you
+    // fall, the pit death respawns you at the banked spot — which is now 1.6s of empty air over
+    // the same pit — and you fall again, burning every remaining life in about two seconds with
+    // no input. The depeg is worse: it fires on a global rhythm, so it is not even player-triggered.
+    // loseLife() already carries this exact fix for the Bridge Drainer BOSS deck; this generalises
+    // it. Positive test against this.platforms (ground + plats + walls, all static) rather than a
+    // blocklist of the temporary groups, so a mechanic added later cannot silently re-break it.
+    else if(onGround && !this.crouching && _onSolid){ this._lastSafe={ x:p.x, y:p.y }; }
     // Gamepad jump-press latch: a freshly-pressed jump button buffers a jump even if `jump` was
     // already held (stuck d-pad up) or a poll frame dropped — so a controller press is never eaten.
     var _padP=(typeof window!=='undefined')?window.__NQ_PAD:null, _padEdge=!!(_padP&&_padP.jumpEdge);
@@ -6550,8 +6588,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // Respawn on the LAST SAFE STANDING SPOT (recorded only when on solid ground, so never inside
       // a wall) instead of a blind x-260 that could drop you into an obstacle. Falls back to the old
       // offset only if we never banked a safe spot (died before ever landing).
-      if(this._lastSafe){ p.setPosition(this._lastSafe.x, this._lastSafe.y-20); if(p.body) p.body.reset(this._lastSafe.x, this._lastSafe.y-20); }
-      else { p.setPosition(Math.max(this.spawn.x,p.x-260),H-100); }
+      // Re-verify the banked spot still has solid ground under it before using it. Without this a
+      // stale bank drops you straight back down the same pit, death-looping your remaining lives.
+      if(this._lastSafe && this.footingUnder(this._lastSafe.x, this._lastSafe.y)){ p.setPosition(this._lastSafe.x, this._lastSafe.y-20); if(p.body) p.body.reset(this._lastSafe.x, this._lastSafe.y-20); }
+      else { var _fx=Math.max(this.spawn.x,p.x-260), _fy=H-100;
+        // walk back toward spawn until we find real floor, so the fallback can't land in a pit either
+        for(var _i=0;_i<40 && _fx>this.spawn.x && !this.footingUnder(_fx,GY);_i++) _fx-=TILE*2;
+        p.setPosition(Math.max(this.spawn.x,_fx),_fy); if(p.body) p.body.reset(Math.max(this.spawn.x,_fx),_fy); }
       p.invuln=true; this.tweens.add({targets:p,alpha:.3,duration:90,yoyo:true,repeat:6,onComplete:function(){ p.alpha=1; p.invuln=false; }});
       this.cameras.main.flash(150,80,0,0);
     }
@@ -8063,7 +8106,25 @@ if(typeof document!=='undefined'){ (function(){
     T.style.left=(ox+dx)+'px'; T.style.top=(oy+dy)+'px';
     PAD.left=dx<-DX; PAD.right=dx>DX; PAD.down=dy>DY;
   }
-  function topBand(y){ return y < window.innerHeight*0.13; }   // leave the top HUD (pause / ? / gear) alone
+  // Leave the top HUD (pause / ? / gear) alone.
+  //
+  // This band has to be measured against the CANVAS, not the viewport. The hotspots it protects
+  // are polled in canvas space (the ⏸ check is fy < 0.085 of canvas height), but this guard used
+  // window.innerHeight — and Phaser.Scale.FIT letterboxes the 16:9 canvas inside a 4:3 tablet
+  // screen, pushing the canvas top ~100px down. Measured on a 1080x810 iPad viewport: the ⏸
+  // hotspot lands at y≈132 while 0.13*810 ends the band at ≈105, so the pause tap fell OUTSIDE
+  // the protected band and the floating joystick grabbed it instead.
+  //
+  // Anchoring to the canvas rect is identical to the old behaviour wherever the canvas already
+  // fills the screen (r.top 0, r.height === innerHeight — most phones in landscape), and correct
+  // on every letterboxed aspect ratio. Falls back to the viewport only before the canvas exists.
+  function topBand(y){
+    try{
+      var c=(typeof NQGAME!=='undefined' && NQGAME && NQGAME.canvas) || document.querySelector('#screen canvas') || document.querySelector('canvas');
+      if(c){ var r=c.getBoundingClientRect(); if(r.height>0) return y < r.top + r.height*0.13; }
+    }catch(e){}
+    return y < window.innerHeight*0.13;
+  }
   // Only intercept touches while the Game scene is actually running. Off the game screen
   // (level-select overlay, menus, how-to) the joystick has no purpose, and swallowing those
   // touches made left-side buttons — e.g. the level-select tiles — untappable. Single source

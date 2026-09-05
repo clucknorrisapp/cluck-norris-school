@@ -168,12 +168,14 @@ async function submit(pubkeyStr, weekStart, signatureB58) {
   if (!ok) return { ok: false, status: 'bad_signature' };
   const el = await eligibility(week, pk);   // re-check at submit — a reset mid-flow voids the win
   if (!el.ok) return el;
-  pending.delete(pk);
   const arr = load().filter((c) => !(c.week === week && c.wallet === pk));   // re-claim = replace (window still open)
   const dup = arr.some((c) => c.addrHash === ch.hash && c.wallet !== pk);
   arr.push({ week, wallet: pk, rank: el.rank, addrHash: ch.hash, addrEnc: encryptAddress(ch.address),
              dupAddress: dup, at: Date.now(), shippedAt: null });
-  save(arr);
+  // Persist BEFORE clearing the pending challenge: save() can throw (disk full etc.), and if it
+  // does, the winner's signed consent must survive so a retry doesn't force a needless re-sign.
+  try { save(arr); } catch (e) { return { ok: false, status: 'persist_failed' }; }
+  pending.delete(pk);
   return { ok: true, claimed: true, rank: el.rank };
 }
 
