@@ -72,6 +72,12 @@ jobs:
       # the treasury exclusion by reassigning a lock's recipient.
       - name: CUNA lock scanner ledger
         run: node scripts/cuna-lock-scan-test.cjs
+      # The arm gate. The owner's instruction is that nobody earns until he announces, so disarmed
+      # has to be a wall rather than a default: only boolean true arms it, the start date never
+      # moves across a pause, the treasury cannot be dropped from the exclude list, and a day
+      # already accrued is refused so a redeploy mid-run cannot pay it twice.
+      - name: CUNA programme arm gate + config
+        run: node scripts/cuna-programme-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
