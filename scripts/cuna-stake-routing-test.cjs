@@ -30,8 +30,9 @@ function allowlist() {
 t("every staking surface the page needs is allowed", () => {
   const { re } = allowlist();
   for (const p of ["/", "/cuna-staking", "/api/cuna-stake/config", "/api/cuna-stake/wallet",
-                   "/api/lock/create-tx", "/cluck-util.js", "/cluck-wallet.js",
-                   "/fonts/LuckiestGuy.ttf"]) {
+                   "/api/lock/create-tx", "/api/helius-rpc", "/api/lock/record",
+                   "/cluck-util.js", "/cluck-wallet.js", "/fonts/LuckiestGuy.ttf",
+                   "/vendor/solana-web3-1.95.8.iife.min.js"]) {
     assert.ok(re.test(p), `${p} is not reachable on the staking host`);
   }
 });
@@ -45,9 +46,12 @@ t("THE ONE THAT MATTERS: the admin route is NOT reachable through the exemption"
 
 t("no money or ops endpoint leaks through", () => {
   const { re } = allowlist();
-  for (const p of ["/api/whirlpool/vault/pause", "/api/whirlpool/vault/config", "/api/helius-rpc",
-                   "/api/lock/claim-tx", "/api/lock/record", "/api/tg-test", "/api/meme-queue",
+  // /api/helius-rpc and /api/lock/record are deliberately ALLOWED (the page needs both) and are
+  // asserted above. Everything here must stay out.
+  for (const p of ["/api/whirlpool/vault/pause", "/api/whirlpool/vault/config",
+                   "/api/lock/claim-tx", "/api/tg-test", "/api/meme-queue",
                    "/api/rose-engine", "/api/claim", "/api/track", "/wallet-xray", "/tools",
+                   "/vendor/", "/vendor/anything-else.js",
                    "/api/", "/api/cuna-stake/", "/admin"]) {
     assert.strictEqual(re.test(p), false, `${p} is reachable on the staking host`);
   }

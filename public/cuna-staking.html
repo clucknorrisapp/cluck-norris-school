@@ -232,6 +232,9 @@
   </p>
 </div>
 
+<!-- Solana web3, pinned and SRI-checked, same build the Locker Room uses. Without it
+     window.solanaWeb3 is undefined and signing throws on its first line. -->
+<script src="/vendor/solana-web3-1.95.8.iife.min.js" integrity="sha384-ujeTtvHxhu2g5lnu14Roii2ajvVKJ74KQ6eo6GGfAi0IrKZ1YkF8N68Iw5VmIJO0" crossorigin="anonymous"></script>
 <script src="/cluck-util.js"></script>
 <script src="/cluck-wallet.js"></script>
 <script>
@@ -304,7 +307,8 @@
   // live under either and checking only the legacy one silently reports zero for a Token-2022
   // holder. Whole tokens: a balance fits a JS number comfortably (41M), raw base units (4.1e16)
   // does not — so the conversion is string surgery and the slider never touches raw amounts.
-  var BAL = null;   // whole tokens, or null while unknown
+  var BAL = null;      // whole tokens, or null while unknown
+  var PROVIDER = null; // the wallet the user actually chose — never a re-detected default
   // The minimum lock in whole tokens. The slider spans minimum -> balance rather than 0 -> balance:
   // zero is not a lock anyone can make, so a slider that starts there opens on an invalid amount
   // and makes the user drag before the form means anything.
@@ -517,8 +521,18 @@
                   "</div>";
               }
             }
+            var sp = l.split || {};
+            var ready = sp.vestedUnclaimedRaw && sp.vestedUnclaimedRaw !== "0";
             return '<div class="lockrow">' + head +
-              '<div class="row"><span>Amount</span><b>' + toTokens(l.amountRaw) + " CUNA</b></div>" +
+              '<div class="row"><span>Still locked <span class="muted">(what you earn on)</span></span><b>' +
+              toTokens(sp.unvestedRaw || l.amountRaw) + " CUNA</b></div>" +
+              (ready ? '<div class="row"><span class="warn">Vested — yours to claim</span><b class="warn">' +
+                toTokens(sp.vestedUnclaimedRaw) + " CUNA</b></div>" : "") +
+              (sp.claimedRaw && sp.claimedRaw !== "0"
+                ? '<div class="row"><span class="muted">Already claimed</span><b class="muted">' +
+                  toTokens(sp.claimedRaw) + " CUNA</b></div>" : "") +
+              '<div class="row"><span class="muted">Total in this lock</span><b class="muted">' +
+              toTokens(sp.totalRaw || l.amountRaw) + " CUNA</b></div>" +
               '<div class="row"><span>Cliff</span><b>' + dateOf(l.cliffTime) + "</b></div>" +
               '<div class="row"><span>Fully unlocked</span><b>' + dateOf(l.fullyVestedAt) + "</b></div>" +
               '<div class="row"><span>Lock</span><b>' + esc(shortAddr(l.escrow)) + "</b></div>" +
@@ -532,7 +546,18 @@
               "earns on its own, whatever your existing ones look like." +
               "</div>" + h;
         }
-        h += '<div class="row" style="margin-top:12px"><span>Earned so far</span><b>' +
+        // Headline numbers first: what is earning, what is sitting there claimable, what has been
+        // earned. "Total locked" is deliberately the quietest of them — it is the number people
+        // assume they are paid on, and it is the wrong one.
+        h += '<div class="row" style="margin-top:14px"><span><b>Earning on</b></span><b>' +
+             toTokens(d.earningOnRaw || "0") + " CUNA</b></div>";
+        if (d.readyToClaimRaw && d.readyToClaimRaw !== "0") {
+          h += '<div class="row"><span class="warn">Vested — go and claim it</span><b class="warn">' +
+               toTokens(d.readyToClaimRaw) + " CUNA</b></div>";
+        }
+        h += '<div class="row"><span class="muted">Total across your locks</span><b class="muted">' +
+             toTokens(d.totalLockedRaw || "0") + " CUNA</b></div>";
+        h += '<div class="row"><span>Rewards earned so far</span><b>' +
              toTokens(d.accruedRaw) + " CUNA</b></div>";
         h += '<div class="row"><span>Waiting to be sent</span><b>' + toTokens(d.claimableRaw) + " CUNA</b></div>";
         if (!d.armed) {
@@ -552,6 +577,7 @@
       // wrong one fails silently: the click does nothing and there is no error to see.
       if (!r || !r.pubkey) throw new Error("That wallet did not return an address.");
       WALLET = r.pubkey;
+      PROVIDER = r.provider;
       $("walletBox").innerHTML =
         '<div class="row"><span>Connected</span><b>' + esc(r.name || "wallet") + " · " +
         esc(shortAddr(WALLET)) + "</b></div>" +
@@ -560,7 +586,7 @@
         // Anywhere a wallet can connect it must be able to disconnect: call the provider's own
         // disconnect AND clear local state, or the page lies about who is connected.
         try { CluckWallet.disconnect(); } catch (e) {}
-        WALLET = null; BAL = null; $("mine").hidden = true;
+        WALLET = null; BAL = null; PROVIDER = null; $("mine").hidden = true;
         $("sliderWrap").hidden = true; $("balRow").hidden = true;
         $("walletBox").innerHTML = '<button id="connect2">CONNECT WALLET</button>';
         $("connect2").addEventListener("click", function () { location.reload(); });
@@ -590,7 +616,133 @@
     });
   });
 
-  loadConfig();
+  // ── Building the lock ────────────────────────────────────────────────────
+  // ONE CLIFF AT THE END. Everything unlocks in a single step when the term is up: no drip, no
+  // partial release, nothing withdrawable before then. That is the shape people mean by "locked",
+  // it is the strongest commitment available, and it earns full weight for the whole term because
+  // it deserves to. Locks made elsewhere with other shapes are valued honestly by how much is
+  // genuinely unvested at each moment — see unvestedRaw in lib/cuna-staking.js.
+  $("build").addEventListener("click", function () {
+    if ($("build").disabled) return;
+    var amt = String($("amt").value || "").replace(/,/g, "").trim();
+    var dur = Number($("dur").value);
+    var endUnix = Math.floor(Date.now() / 1000) + dur * DAY;
+    $("build").disabled = true;
+    $("build").textContent = "BUILDING…";
+    $("plan").hidden = false;
+    $("plan").innerHTML = '<p class="muted" style="margin:14px 0 0">Building your lock…</p>';
+
+    fetch("/api/lock/create-tx", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mint: CFG.mint, sender: WALLET, recipient: WALLET, amount: amt,
+        cliffUnix: endUnix,     // claiming opens only when the term is up
+        cliffPct: 100,          // and everything is released at that moment
+        periods: 0, interval: "day",
+        cancelable: false,           // a cancelable lock never earns — see the page copy
+        recipientChangeable: false,  // the lock is yours and stays yours
+        name: "CUNA lock-to-earn",
+      }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d || !d.ok) throw new Error((d && d.error) || "could not build the lock");
+      var ends = dateOf(endUnix);
+      $("plan").innerHTML =
+        '<div class="note" style="margin:16px 0 0">' +
+        "<b class=\"disp\">READY TO SIGN</b><br/>" +
+        "Locking <b>" + Number(amt).toLocaleString() + " CUNA</b> until <b>" + ends + "</b>. " +
+        "It all unlocks in one step on that date &mdash; nothing before it." +
+        (d.simError ? '<div class="bad" style="margin-top:9px">' + esc(d.simError) + "</div>" : "") +
+        '<div style="margin-top:12px"><button id="sign">SIGN IN YOUR WALLET</button></div>' +
+        "</div>";
+      $("sign").addEventListener("click", function () { signLock(d); });
+      $("build").textContent = "REVIEW THIS LOCK";
+    }).catch(function (e) {
+      $("plan").innerHTML = '<p class="bad" style="margin:14px 0 0">' + esc(e.message) + "</p>";
+      $("build").disabled = false;
+      $("build").textContent = "REVIEW THIS LOCK";
+    });
+  });
+
+  // The connected wallet signs FIRST, then the ephemeral base keypair. Never the other way round,
+  // and never signAndSendTransaction when a second signer exists — Phantom's Lighthouse flags
+  // those as "may be malicious". This mirrors /locker-room, which is the reference implementation
+  // and has been through real wallets; do not re-derive it.
+  function signLock(built) {
+    var btn = $("sign");
+    var p = PROVIDER;
+    if (!p || !p.signTransaction) {
+      $("plan").innerHTML += '<p class="bad" style="margin:10px 0 0">This wallet can\u2019t sign here — ' +
+        'try another, or build the lock on <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter</a>.</p>';
+      return;
+    }
+    btn.disabled = true; btn.textContent = "APPROVE IN YOUR WALLET…";
+    var b64 = function (s64) { return Uint8Array.from(atob(s64), function (c) { return c.charCodeAt(0); }); };
+    var tx, baseKp;
+    try {
+      tx = window.solanaWeb3.Transaction.from(b64(built.txBase64));
+      baseKp = window.solanaWeb3.Keypair.fromSecretKey(b64(built.baseSecret));
+    } catch (e) {
+      btn.disabled = false; btn.textContent = "SIGN IN YOUR WALLET";
+      $("plan").innerHTML += '<p class="bad" style="margin:10px 0 0">Bad transaction from the server.</p>';
+      return;
+    }
+    // Refresh the blockhash immediately before signing. The tx was built while the user was
+    // reading, and a stale blockhash surfaces as "Blockhash not found" on send — that exact
+    // failure has already cost a session here.
+    CluckUtil.rpc("getLatestBlockhash", [{ commitment: "confirmed" }]).then(function (r) {
+      if (r && r.value && r.value.blockhash) tx.recentBlockhash = r.value.blockhash;
+      return p.signTransaction(tx);
+    }).then(function (signed) {
+      signed.partialSign(baseKp);                     // ephemeral base signs AFTER the wallet
+      var raw = signed.serialize();
+      var b = ""; for (var i = 0; i < raw.length; i++) b += String.fromCharCode(raw[i]);
+      // skipPreflight: preflight defaults to 'finalized' and rejects our fresh 'confirmed'
+      // blockhash as missing even though it is valid. The server already simulated this.
+      return CluckUtil.rpc("sendTransaction",
+        [btoa(b), { encoding: "base64", skipPreflight: true, preflightCommitment: "confirmed", maxRetries: 5 }]);
+    }).then(function (sig) {
+      $("plan").innerHTML = '<div class="note" style="margin:16px 0 0">' +
+        "<b class=\"disp\">SENT — CONFIRMING…</b><br/>" + esc(sig) + "</div>";
+      return confirmSig(sig).then(function () { return sig; });
+    }).then(function (sig) {
+      $("plan").innerHTML = '<div class="note" style="margin:16px 0 0">' +
+        '<b class="disp">LOCKED \uD83D\uDD12</b><br/>Your lock is on-chain and starts earning on the ' +
+        'next daily count.<div class="muted" style="margin-top:8px;word-break:break-all">' + esc(sig) + "</div>" +
+        '<div style="margin-top:10px"><a href="https://solscan.io/tx/' + encodeURIComponent(sig) +
+        '" target="_blank" rel="noopener">View on Solscan</a></div></div>';
+      fetch("/api/lock/record", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sig: sig }) }).catch(function () {});
+      loadMine();
+      readBalance().then(showBalance);
+    }).catch(function (e) {
+      // On an ambiguous confirm-timeout the lock MAY have landed. Do not re-enable the button —
+      // a one-click retry would double-lock. Force a conscious reload instead.
+      $("plan").innerHTML += '<p class="bad" style="margin:10px 0 0">' +
+        esc((e && e.message) || "Wallet cancelled or the transaction failed.") + "</p>";
+      if (e && e.timeout) { btn.textContent = "RELOAD THE PAGE TO RETRY"; }
+      else { btn.disabled = false; btn.textContent = "SIGN IN YOUR WALLET"; }
+    });
+  }
+
+  // Poll until the signature is confirmed. A returned signature is RPC acceptance, not landing.
+  function confirmSig(sig) {
+    var tries = 0;
+    return new Promise(function (resolve, reject) {
+      (function poll() {
+        tries++;
+        CluckUtil.rpc("getSignatureStatuses", [[sig], { searchTransactionHistory: true }])
+          .then(function (r) {
+            var st = r && r.value && r.value[0];
+            if (st && st.err) return reject(new Error("The transaction failed on-chain."));
+            if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return resolve();
+            if (tries > 40) { var e = new Error("Still confirming — check Solscan before retrying."); e.timeout = true; return reject(e); }
+            setTimeout(poll, 1500);
+          }).catch(function () { if (tries > 40) { var e = new Error("Could not confirm."); e.timeout = true; reject(e); } else setTimeout(poll, 1500); });
+      })();
+    });
+  }
+
+  loadConfig();  loadConfig();
 })();
 </script>
 </body></html>

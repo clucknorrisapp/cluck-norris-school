@@ -68,9 +68,9 @@ section("the field contract — the check that would have caught the Phase 1 bug
 t("normalizeEscrow produces exactly the fields the rules read, and no invented ones", () => {
   const l = lock();
   assert.deepStrictEqual(Object.keys(l).sort(), [
-    "atRiskRaw", "cancelMode", "cancelledAt", "claimedRaw", "cliffTime", "creator",
-    "escrow", "firstSeenAt", "fullyVestedAt", "mint", "perDayRaw", "recipient", "totalRaw",
-    "vestingStartTime",
+    "atRiskRaw", "cancelMode", "cancelledAt", "claimedRaw", "cliffTime", "cliffUnlockRaw",
+    "creator", "escrow", "firstSeenAt", "frequency", "fullyVestedAt", "mint", "perDayRaw",
+    "perPeriodRaw", "periods", "recipient", "totalRaw", "vestingStartTime",
   ]);
   for (const [k, v] of Object.entries(l)) assert.ok(v !== undefined && v !== null, `${k} is ${v}`);
   // The two fields Phase 1 invented must NOT come back to life.
@@ -184,7 +184,10 @@ t("the tiers price themselves — no multiplier table anywhere", () => {
   const base = Number(r.credits.T0);
   tiers.forEach((d, i) => {
     const ratio = Number(r.credits["T" + i]) / base;
-    assert.ok(Math.abs(ratio - d / 90) < 0.02, `${d}d paid ${ratio.toFixed(2)}x, expected ${(d / 90).toFixed(2)}x`);
+    // 3% tolerance: the fixture's cliffUnlockAmount absorbs the integer remainder of
+    // total/periods, so identical-looking locks differ by a few base units.
+    assert.ok(Math.abs(ratio - d / 90) / (d / 90) < 0.03,
+      `${d}d paid ${ratio.toFixed(2)}x, expected ${(d / 90).toFixed(2)}x`);
   });
 });
 
@@ -196,6 +199,63 @@ t("another token, an excluded wallet, and a fully-claimed lock are all refused",
   assert.ok(s.disqualify(drained, CFG).some((r) => /nothing still locked/.test(r)));
 });
 
+section("what is actually still locked");
+
+// Two locks holding the same amount, both finishing at the same moment, shaped differently.
+const scheduled = (id, { cliffDays, periods, cliffAmt, per, seen = NOW }) =>
+  s.normalizeEscrow(id, {
+    recipient: id, tokenMint: "CUNA", creator: "C", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: seen, cliffTime: seen + cliffDays * DAY, frequency: DAY,
+    numberOfPeriod: periods, cliffUnlockAmount: cliffAmt, amountPerPeriod: per,
+    totalClaimedAmount: 0n,
+  }, seen);
+
+t("THE ONE THAT MATTERS: a drip lock is not worth a cliff lock", () => {
+  // A 1-day cliff vesting over 18 months lets someone withdraw a growing share from day two.
+  // Valuing it on total-minus-claimed would pay them FULL weight for eighteen months simply for
+  // not pressing claim — the cancelable-lock problem wearing a different hat.
+  const TOTAL = 1000000n * 10n ** 9n;
+  const drip = scheduled("Drip", { cliffDays: 1, periods: 547, cliffAmt: 0n, per: TOTAL / 547n });
+  const cliff = scheduled("Cliff", { cliffDays: 548, periods: 1, cliffAmt: TOTAL, per: 0n });
+  assert.strictEqual(s.unvestedRaw(drip, NOW), BigInt(drip.totalRaw), "nothing has vested on day zero");
+  assert.strictEqual(s.unvestedRaw(cliff, NOW), BigInt(cliff.totalRaw));
+  // ...but a year in they are nothing alike
+  const later = NOW + 365 * DAY;
+  assert.ok(s.unvestedRaw(drip, later) < TOTAL / 2n, "the drip lock should be mostly withdrawable");
+  assert.strictEqual(s.unvestedRaw(cliff, later), BigInt(cliff.totalRaw), "the cliff lock is untouched until the end");
+  assert.ok(s.weightOf(cliff, later) > s.weightOf(drip, later) * 2n,
+    "the real commitment must out-earn the nominal one");
+});
+
+t("NOT CLAIMING does not preserve weight", () => {
+  // The whole exploit is declining to claim so the balance looks locked. Unvested does not care.
+  const TOTAL = 1000000n * 10n ** 9n;
+  const drip = scheduled("D", { cliffDays: 1, periods: 547, cliffAmt: 0n, per: TOTAL / 547n });
+  const later = NOW + 365 * DAY;
+  const unclaimed = s.unvestedRaw(drip, later);
+  const claimedSome = s.unvestedRaw({ ...drip, claimedRaw: (TOTAL / 4n).toString() }, later);
+  assert.strictEqual(unclaimed, claimedSome, "claiming or not must not change what is LOCKED");
+});
+
+t("a lock outside our tool with any cliff shape is valued the same way", () => {
+  // Nothing here reads where a lock was made. A 6-month cliff then a 12-month drip is worth full
+  // weight for six months and then declines — which is exactly what is true of it.
+  const TOTAL = 1000000n * 10n ** 9n;
+  const jup = scheduled("J", { cliffDays: 180, periods: 365, cliffAmt: 0n, per: TOTAL / 365n });
+  assert.strictEqual(s.unvestedRaw(jup, NOW + 179 * DAY), BigInt(jup.totalRaw), "nothing before the cliff");
+  assert.strictEqual(s.unvestedRaw(jup, NOW + 180 * DAY), BigInt(jup.totalRaw), "still nothing AT the cliff");
+  assert.ok(s.unvestedRaw(jup, NOW + 300 * DAY) < BigInt(jup.totalRaw), "declining after it");
+  assert.strictEqual(s.unvestedRaw(jup, NOW + 600 * DAY), 0n, "nothing left once fully vested");
+});
+
+t("a front-loaded cliff lump is counted the moment it unlocks", () => {
+  // 50% at the cliff, 50% dripping. At the cliff, half is gone from the commitment immediately.
+  const TOTAL = 1000000n * 10n ** 9n;
+  const half = scheduled("H", { cliffDays: 90, periods: 90, cliffAmt: TOTAL / 2n, per: TOTAL / 2n / 90n });
+  assert.strictEqual(s.unvestedRaw(half, NOW + 89 * DAY), BigInt(half.totalRaw));
+  assert.strictEqual(s.unvestedRaw(half, NOW + 90 * DAY), BigInt(half.totalRaw) - TOTAL / 2n);
+});
+
 section("weight");
 
 t("weight is the amount STILL LOCKED x whole days remaining", () => {
@@ -203,10 +263,22 @@ t("weight is the amount STILL LOCKED x whole days remaining", () => {
   assert.strictEqual(s.weightOf(l, NOW), BigInt(l.atRiskRaw) * 100n);
 });
 
-t("already-claimed tokens stop earning", () => {
+t("claiming changes NOTHING, because vested tokens already stopped counting", () => {
+  // This replaced an earlier test that measured weight on total-minus-claimed. That framing was
+  // wrong in a way that mattered: it made "have you pressed claim yet?" part of the payout, when
+  // the honest question is "how much of this can you take out at all?" You can only ever claim
+  // what has already vested, and vested tokens have already left the weight — so claiming or not
+  // is invisible here, which is exactly right.
   const full = lock({ cliffDays: 10, durationDays: 100 });
   const half = lock({ cliffDays: 10, durationDays: 100, claimedRaw: "500000000000" });
-  assert.strictEqual(s.weightOf(half, NOW), s.weightOf(full, NOW) / 2n);
+  assert.strictEqual(s.weightOf(half, NOW), s.weightOf(full, NOW));
+  assert.strictEqual(s.unvestedRaw(half, NOW), s.unvestedRaw(full, NOW));
+});
+
+t("a fully vested lock weighs nothing, however little was claimed", () => {
+  const done = lock({ seen: NOW - 400 * DAY, cliffDays: 10, durationDays: 300 });
+  assert.strictEqual(s.unvestedRaw(done, NOW), 0n);
+  assert.strictEqual(s.weightOf(done, NOW), 0n);
 });
 
 t("a matured lock weighs ZERO, never negative", () => {

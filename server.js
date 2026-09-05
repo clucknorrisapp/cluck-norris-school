@@ -3330,6 +3330,15 @@ const CUNA_STAKE_PATH = new RegExp([
   "^/$", "^/cuna-staking$",
   "^/api/cuna-stake/(config|wallet)$",
   "^/api/lock/create-tx$",              // builds the UNSIGNED lock tx; the wallet still signs it
+  // The page cannot work without these two. /api/helius-rpc is the balance read AND the send path
+  // (fresh blockhash, then sendTransaction) — it is already public and method-allowlisted, so this
+  // exposes nothing the open internet does not already have. /api/lock/record just tags a lock for
+  // the recent-locks feed.
+  "^/api/helius-rpc$",
+  "^/api/lock/record$",
+  // The signing bundle. Pinned filename, SRI-checked in the page — without it the page loads and
+  // then throws the moment anyone tries to sign.
+  "^/vendor/solana-web3-1\\.95\\.8\\.iife\\.min\\.js$",
   "^/cluck-util\\.js$", "^/cluck-wallet\\.js$",
   "^/fonts/LuckiestGuy\\.ttf$",
 ].join("|"));
@@ -10484,12 +10493,22 @@ app.get("/api/cuna-stake/wallet", async (req, res) => {
       if (c) accrued += BigInt(c);
     }
     const claim = s.claimableFor({ accruedRaw: accrued.toString(), locks: mine, nowUnix });
+    let earningRaw = 0n, readyRaw = 0n, totalRaw = 0n;
+    for (const l of mine) {
+      const sp = s.splitOf(l, nowUnix);
+      totalRaw += BigInt(sp.totalRaw);
+      readyRaw += BigInt(sp.vestedUnclaimedRaw);
+      if (s.qualifies(l, p.config)) earningRaw += BigInt(sp.unvestedRaw);
+    }
     return res.status(200).json({
       ok: true,
       armed: p.armed,
       locks: mine.map((l) => ({
         escrow: l.escrow,
         amountRaw: l.atRiskRaw,
+        // The three quantities, so the page can show what someone is ACTUALLY earning on rather
+        // than a "total locked" that includes tokens they could withdraw this second.
+        split: s.splitOf(l, nowUnix),
         cliffTime: l.cliffTime,
         fullyVestedAt: l.fullyVestedAt,
         firstSeenAt: l.firstSeenAt,
@@ -10498,6 +10517,10 @@ app.get("/api/cuna-stake/wallet", async (req, res) => {
         weight: s.weightOf(l, nowUnix).toString(),
       })),
       accruedRaw: accrued.toString(),
+      // What the rewards are actually computed on, versus what a naive "total locked" would say.
+      earningOnRaw: earningRaw.toString(),
+      readyToClaimRaw: readyRaw.toString(),
+      totalLockedRaw: totalRaw.toString(),
       claimableRaw: claim.claimable.toString(),
       cliffPassed: claim.cliffPassed,
       unlocksAt: claim.unlocksAt,
