@@ -94,6 +94,7 @@ t("the per-wallet cap ships OFF", () => {
 
 t("the dust floor survives as a string — a JS number would lose it", () => {
   assert.strictEqual(typeof p.DEFAULTS.minLockRaw, "string");
+  assert.strictEqual(BigInt(p.DEFAULTS.minLockRaw) / 10n ** 9n, 69000n);
   assert.strictEqual(p.validateConfig({ minLockRaw: "250000000000000" }).minLockRaw, "250000000000000");
   assert.strictEqual(p.validateConfig({ minLockRaw: 0 }).minLockRaw, "0");     // off is allowed
   for (const bad of ["-1", "lots", "1.5", {}]) {
