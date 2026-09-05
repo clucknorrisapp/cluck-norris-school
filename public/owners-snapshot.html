@@ -115,7 +115,11 @@
     <button id="runBtn" class="run-btn">SNAPSHOT MY HOLDERS</button>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button type="button" id="loadBtn" class="btn2">LOAD LATEST RESULT</button>
-      <span class="sub" style="font-size:12px">No wallet connect. Read-only. A token is re-crawled at most every 6 hours.</span>
+      <button type="button" id="wBtn" class="btn2">CONNECT WALLET</button>
+      <span class="sub" id="wInfo" style="font-size:12px;display:none"></span>
+      <span class="sub" style="font-size:12px">Reading a result is free. A token is re-crawled at most every 6 hours.</span>
+    </div>
+    <div class="sub" id="gateNote" style="margin-top:8px;font-size:12px"></div>
     </div>
   </div>
 
@@ -135,6 +139,7 @@
 
 <script src="/market-header.js"></script>
 <script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js?v=2"></script>
 <script>
 // esc/shortAddr/fmt live in /cluck-util.js — every wallet, symbol and name below goes through esc().
 const { esc, shortAddr, fmt } = CluckUtil;
@@ -161,6 +166,50 @@ function flags(a) {
   return h;
 }
 
+// ---- Access gate (owner, 2026-09-03) ----------------------------------------
+// A crawl is up to an hour of paid RPC reads, so RUNNING one needs TOOLGATE_USD of CLKN held
+// (or an operator comp). Reading an existing result stays free — same shape as every
+// other tool page: preview free, the gate fires on RUN. The dollar figure and the CLKN
+// amount are ALWAYS rendered from /api/owners-snapshot/config; never hardcode either.
+const gate = { wallet: null, cfg: null };
+
+async function loadGateConfig() {
+  try { gate.cfg = await (await fetch("/api/owners-snapshot/config")).json(); }
+  catch (e) { gate.cfg = null; }
+  renderGate();
+}
+function renderGate() {
+  const n = $("#gateNote"), c = gate.cfg;
+  if (!n) return;
+  if (!c || !c.ok) { n.textContent = ""; return; }
+  if (c.gateOff) { n.textContent = "Snapshots are open to everyone right now."; return; }
+  const amt = c.clknNeeded ? " (~" + c.clknNeeded.toLocaleString() + " CLKN at the current price)" : "";
+  const left = c.usedToday ? " " + c.usedToday.remaining + " of " + c.caps.totalPerDay + " runs left today." : "";
+  n.textContent = "Running a snapshot needs about $" + c.holdUsd + " of CLKN held" + amt +
+    ", up to " + c.caps.perWalletPerDay + " per wallet per day." + left +
+    " Loading a saved result is free for everyone.";
+}
+// Anywhere a wallet can connect it must be able to disconnect (CLAUDE.md) — the same
+// button toggles, and disconnect goes through CluckWallet so the provider is told too.
+$("#wBtn").addEventListener("click", async () => {
+  if (gate.wallet) {
+    try { CluckWallet.disconnect(); } catch (e) {}
+    gate.wallet = null;
+    $("#wInfo").style.display = "none";
+    $("#wBtn").textContent = "CONNECT WALLET";
+    return;
+  }
+  try {
+    const w = await CluckWallet.connect();
+    gate.wallet = w.pubkey;
+    $("#wInfo").style.display = "";
+    $("#wInfo").textContent = "🟢 " + CluckUtil.shortAddr(w.pubkey) + " (" + w.name + ")";
+    $("#wBtn").textContent = "DISCONNECT";
+    clearErr();
+  } catch (e) { showErr(e.message || "Wallet connection cancelled."); }
+});
+loadGateConfig();
+
 document.querySelectorAll(".qm").forEach((b) => b.addEventListener("click", () => { $("#mint").value = b.dataset.mint; }));
 $("#runBtn").addEventListener("click", startJob);
 $("#loadBtn").addEventListener("click", () => { const m = mintVal(); if (m) { history.replaceState(null, "", "?mint=" + m); loadResult(m); } });
@@ -171,10 +220,15 @@ async function startJob() {
   history.replaceState(null, "", "?mint=" + mint);
   $("#runBtn").disabled = true;
   try {
-    const r = await fetch("/api/owners-snapshot/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mint }) });
+    const r = await fetch("/api/owners-snapshot/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mint, wallet: gate.wallet || "" }) });
     const d = await r.json();
     if (!d.ok) {
       if (d.error === "cooldown") { showErr(d.detail + " Loading the latest result."); await loadResult(mint); }
+      // The gate answers with a wallet/holdings reason. Say what is needed and how,
+      // rather than the bare error code — the requirement is priced live, so the
+      // number always comes from the server, never from this page (CLAUDE.md).
+      else if (d.error === "wallet_required") { showErr(d.detail + " Hit CONNECT WALLET above."); }
+      else if (d.error === "insufficient_holdings") { showErr(d.detail); }
       else showErr(d.detail || d.error || "Could not start.");
       $("#runBtn").disabled = false; return;
     }

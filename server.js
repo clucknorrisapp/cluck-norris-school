@@ -15733,16 +15733,111 @@ const ownersSnapshot = require("./lib/owners-snapshot").createEngine({
 app.get(["/owners-snapshot", "/owners"], (req, res) => {
   res.sendFile(join(__dirname, "public", "owners-snapshot.html"));
 });
-app.post("/api/owners-snapshot/start", (req, res) => {
+// ── Owners Snapshot access gate + spend caps ────────────────────────────────
+// Owner, 2026-09-03: "we also need some type caps on owners snapshot crawl they should hold at
+// least 50 dollars in CLKN to use … it could use too much resources to be free, we can grant
+// certain wallets free usage if needed." This SUPERSEDES the earlier "keep it free" call — one
+// crawl is up to an hour of paid Helius reads, so an ungated endpoint is a public credit lever
+// (audit finding, lib/owners-snapshot.js:148).
+//
+// Three ways in, checked in this order — the first two cost no network call:
+//   1. the admin key (adminAuthOK)
+//   2. the operator comp list (isToolComped → kv toolCompWallets, managed at /api/tool-comp)
+//      — this is the "grant certain wallets free usage" lever, and it already exists
+//   3. holding TOOLGATE_USD worth of CLKN, LIVE-PRICED. Never a hardcoded token amount
+//      (CLAUDE.md): the requirement is derived from the same toolGatePrice the tools pass uses.
+//
+// ⚠️ This endpoint FAILS CLOSED when CLKN has no usable price, unlike the general tools pass
+// which fails open. Deliberate: failing open here re-opens the credit drain the gate exists to
+// stop, and a snapshot is a heavy convenience rather than one of the safety basics CLAUDE.md
+// keeps free. TOOLGATE_OFF=1 still disables the gate entirely, as it does everywhere else.
+const OWNERS_SNAPSHOT_CAPS = {
+  perWalletPerDay: parseInt(process.env.OWNERS_SNAPSHOT_DAILY_PER_WALLET, 10) || 3,
+  totalPerDay: parseInt(process.env.OWNERS_SNAPSHOT_DAILY_TOTAL, 10) || 25,
+};
+function ownersSnapshotUsage() {
+  const today = new Date().toISOString().slice(0, 10);
+  const u = kv.get("ownersSnapshotUsage", null);
+  return (u && u.dayStamp === today) ? u : { dayStamp: today, total: 0, byWallet: {} };
+}
+// Counted only AFTER the job is actually queued, so a cooldown/queue_full rejection never
+// burns a caller's daily allowance.
+function ownersSnapshotCount(wallet) {
+  const u = ownersSnapshotUsage();
+  u.total += 1;
+  if (wallet) u.byWallet[wallet] = (u.byWallet[wallet] || 0) + 1;
+  kv.set("ownersSnapshotUsage", u);
+}
+async function ownersSnapshotGate(req) {
+  if (adminAuthOK(req)) return { ok: true, via: "owner", wallet: null };
+  if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return { ok: true, via: "gate-off", wallet: null };
+
+  const wallet = String((req.body && req.body.wallet) || req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) {
+    return { ok: false, status: 401, error: "wallet_required",
+      detail: "Connect the wallet you hold CLKN in — a snapshot is a long paid crawl, so it is holder-gated." };
+  }
+  const u = ownersSnapshotUsage();
+  if (u.total >= OWNERS_SNAPSHOT_CAPS.totalPerDay) {
+    return { ok: false, status: 429, error: "daily_cap_total", wallet,
+      detail: "The crawler has hit its daily limit across all users. Try again tomorrow." };
+  }
+  if ((u.byWallet[wallet] || 0) >= OWNERS_SNAPSHOT_CAPS.perWalletPerDay) {
+    return { ok: false, status: 429, error: "daily_cap_wallet", wallet,
+      detail: `That wallet has run ${OWNERS_SNAPSHOT_CAPS.perWalletPerDay} snapshots today. Existing results stay readable.` };
+  }
+  // Comp list short-circuits before any network call, so an RPC blip can never deny a grant.
+  let h = null;
+  try { h = await checkCLKNHolder(wallet); } catch (e) {
+    return { ok: false, status: 503, error: "holder_check_failed", wallet,
+      detail: "Could not read that wallet's CLKN balance just now — try again in a moment." };
+  }
+  if (h && h.comped) return { ok: true, via: "comped", wallet };
+
+  const priceUsd = toolGatePrice.usd || null;
+  if (!priceUsd) {
+    return { ok: false, status: 503, error: "price_unavailable", wallet,
+      detail: "CLKN pricing is unavailable right now, so the holder check cannot run. Try again shortly." };
+  }
+  const needed = Math.ceil(TOOLGATE.usd / priceUsd);
+  const bal = Number(h && h.balance) || 0;
+  if (bal < needed) {
+    return { ok: false, status: 403, error: "insufficient_holdings", wallet,
+      balance: bal, needed, holdUsd: TOOLGATE.usd, priceUsd,
+      detail: `Owners Snapshot needs about $${TOOLGATE.usd} of CLKN held (~${needed.toLocaleString()} CLKN at the current price). That wallet holds ${Math.round(bal).toLocaleString()}.` };
+  }
+  return { ok: true, via: "holder", wallet, balance: bal, needed };
+}
+// What the page renders its gate copy from — never hardcode the amount in the page (CLAUDE.md).
+app.get("/api/owners-snapshot/config", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const priceUsd = toolGatePrice.usd || null;
+  const u = ownersSnapshotUsage();
+  res.json({
+    ok: true,
+    gateOff: /^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || ""),
+    holdUsd: TOOLGATE.usd, priceUsd,
+    clknNeeded: priceUsd ? Math.ceil(TOOLGATE.usd / priceUsd) : null,
+    mint: CLKN_MINT_ADDR,
+    caps: OWNERS_SNAPSHOT_CAPS,
+    usedToday: { total: u.total, remaining: Math.max(0, OWNERS_SNAPSHOT_CAPS.totalPerDay - u.total) },
+  });
+});
+app.post("/api/owners-snapshot/start", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const mint = String((req.body && req.body.mint) || req.query.mint || "").trim();
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
-  const admin = adminAuthOK(req);
-  const out = ownersSnapshot.start({ mint, requestedBy: admin ? "owner" : clientIp(req), force: admin && req.query.force === "1" });
+  const gate = await ownersSnapshotGate(req);
+  if (!gate.ok) return res.status(gate.status).json({ ok: false, ...gate });
+  const admin = gate.via === "owner";
+  // requestedBy is the WALLET now, not the client IP — the gate means we always have one for a
+  // non-owner run, which also closes the audit finding about storing raw IPs in jobs.json.
+  const out = ownersSnapshot.start({ mint, requestedBy: admin ? "owner" : (gate.wallet || "anon"), force: admin && req.query.force === "1" });
   if (!out.ok && out.error === "cooldown") return res.status(429).json({ ok: false, error: "cooldown", retryAfterMs: out.retryAfterMs, job: out.job, detail: "This token was snapshotted recently — open the latest result, or re-run after the cooldown." });
   if (!out.ok && out.error === "queue_full") return res.status(503).json({ ok: false, error: "queue_full", detail: "The crawler queue is full right now — try again in a while." });
+  if (out.ok && gate.via !== "owner") ownersSnapshotCount(gate.wallet);
   try { analytics.trackTool("owners-snapshot"); } catch {}
-  res.json(out);
+  res.json({ ...out, accessVia: gate.via });
 });
 app.get("/api/owners-snapshot/status", (req, res) => {
   res.setHeader("Cache-Control", "no-store");

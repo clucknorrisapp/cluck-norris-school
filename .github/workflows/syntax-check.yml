@@ -290,6 +290,11 @@ jobs:
         env:
           NQ_CLAIMS_REQUIRE_DEPS: "1"
         run: node normie-quest/test/nq-claims-test.cjs
+      # The Owners Snapshot crawl is an hour of paid RPC reads per run, so an ungated
+      # /start is a public credit lever. This boots the server both ways and proves the
+      # gate closes — and that TOOLGATE_OFF still opens it.
+      - name: Owners Snapshot access gate
+        run: node scripts/owners-snapshot-gate-test.cjs
 
   # The static guards AND the smoke test above still cannot SEE the game's own render. Every costly
   # regression this year was visual and built/deployed clean: the HUD slid off-screen at 3x zoom, a
