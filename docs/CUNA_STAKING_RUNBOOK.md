@@ -250,7 +250,7 @@ debt.
 | `lib/cuna-burn.js` | burn decisions + claim planning |
 | `lib/cuna-payout.js` | owed / pending / paid bookkeeping |
 | `public/cuna-staking.html` | the page — `/cuna-staking`, and `/` on the CUNA staking hosts |
-| `scripts/cuna-*-test.cjs` | 169 tests, all in CI |
+| `scripts/cuna-*-test.cjs` | 173 tests, all in CI |
 | `scripts/cuna-lock-scan-live.cjs` | who qualifies today, read from the chain |
 | `scripts/cuna-lock-whois.cjs` | check wallets against every CUNA lock |
 

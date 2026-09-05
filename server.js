@@ -10418,11 +10418,23 @@ async function cunaLocks({ force = false } = {}) {
       const scanned = await scanLib.scanEscrowsByMint(P, p.config.mint);
       const nowUnix = Math.floor(Date.now() / 1000);
       const stored = p.armed ? (kv.get(CUNA_STAKE_LEDGER_KV, {}) || {}) : {};
-      const merged = scanLib.mergeLedger({ scanned, ledger: stored, nowUnix });
+      // Credit an early locker from the day they actually locked, not the day we armed. Only for
+      // escrows the ledger has never recorded — an entry that already exists keeps its stamp, so
+      // this is a one-time cost per lock and free on a steady state. The date is the account's own
+      // creation slot, which nobody can move; see the note on mergeLedger for why nothing inside
+      // the escrow is usable here.
+      const unknown = scanned.map((x) => String(x.escrow)).filter((k) => !stored[k]);
+      let createdAt = {};
+      if (unknown.length) {
+        try { createdAt = await scanLib.creationTimes(P.provider.connection, unknown); }
+        catch (e) { console.warn("[cuna-stake] creation-time lookup failed, using now: " + e.message); }
+      }
+      const merged = scanLib.mergeLedger({ scanned, ledger: stored, nowUnix, createdAt });
       if (p.armed) {
         kv.set(CUNA_STAKE_LEDGER_KV, merged.ledger);
         if (merged.added.length || merged.reset.length) {
-          console.log(`[cuna-stake] ledger: +${merged.added.length} new, ${merged.reset.length} reset (terms changed at the same address)`);
+          const back = merged.added.filter((k) => merged.ledger[k] && merged.ledger[k].backdated).length;
+          console.log(`[cuna-stake] ledger: +${merged.added.length} new (${back} backdated to their on-chain creation), ${merged.reset.length} reset (terms changed at the same address)`);
         }
       }
       CUNA_SCAN_CACHE = { at: Date.now(), locks: merged.locks, err: null, ledger: merged.ledger, armed: p.armed };

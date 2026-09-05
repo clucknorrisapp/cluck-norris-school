@@ -174,6 +174,54 @@ t("an excluded wallet cannot escape by reassigning the recipient", () => {
   assert.ok(why.some((r) => /created by an excluded wallet/.test(r)), why.join("; "));
 });
 
+section("backdating — crediting a lock from the day it was actually made");
+
+t("a new lock is credited from its on-chain creation, not from when we looked", () => {
+  const acc = acct({ cliffTime: NOW + 200 * DAY });
+  const r = scan.mergeLedger({
+    scanned: [{ escrow: "E1", account: acc }], ledger: {}, nowUnix: NOW,
+    createdAt: { E1: NOW - 14 * DAY },
+  });
+  assert.strictEqual(r.ledger.E1.firstSeenAt, NOW - 14 * DAY, "the early locker was not credited");
+  assert.strictEqual(r.ledger.E1.backdated, true);
+  assert.strictEqual(r.locks[0].firstSeenAt, NOW - 14 * DAY, "the lock handed to the rules is not backdated");
+});
+
+t("THE ONE THAT MATTERS: a reset is NEVER backdated", () => {
+  // Same address, different terms = a rebuilt lock. Handing it the original account's creation
+  // date would restore the exact PDA-reuse hole the fingerprint exists to close: index a throwaway
+  // lock, close it, rebuild something short at the same address and have it read as long.
+  const first = acct({ cliffTime: NOW + 200 * DAY });
+  const a = scan.mergeLedger({ scanned: [{ escrow: "E1", account: first }], ledger: {}, nowUnix: NOW - 100 * DAY,
+    createdAt: { E1: NOW - 400 * DAY } });
+  const rebuilt = acct({ cliffTime: NOW + 30 * DAY });
+  const b = scan.mergeLedger({ scanned: [{ escrow: "E1", account: rebuilt }], ledger: a.ledger, nowUnix: NOW,
+    createdAt: { E1: NOW - 400 * DAY } });
+  assert.deepStrictEqual(b.reset, ["E1"]);
+  assert.strictEqual(b.ledger.E1.firstSeenAt, NOW, "a rebuilt lock inherited an older clock");
+  assert.ok(!b.ledger.E1.backdated);
+});
+
+t("an unknown, zero, or future creation time falls back to now — the strict direction", () => {
+  const acc = acct({ cliffTime: NOW + 200 * DAY });
+  for (const bad of [undefined, 0, null, NaN, "nonsense", NOW + 5 * DAY, -1]) {
+    const r = scan.mergeLedger({ scanned: [{ escrow: "E1", account: acc }], ledger: {}, nowUnix: NOW,
+      createdAt: { E1: bad } });
+    assert.strictEqual(r.ledger.E1.firstSeenAt, NOW, `createdAt=${String(bad)} moved the clock`);
+  }
+});
+
+t("backdating never touches a lock the ledger already knows", () => {
+  // firstSeenAt stays write-once. A later scan supplying a creation date must not move a stamp
+  // that already exists, in either direction.
+  const acc = acct({ cliffTime: NOW + 200 * DAY });
+  const a = scan.mergeLedger({ scanned: [{ escrow: "E1", account: acc }], ledger: {}, nowUnix: NOW });
+  const b = scan.mergeLedger({ scanned: [{ escrow: "E1", account: acc }], ledger: a.ledger, nowUnix: NOW + DAY,
+    createdAt: { E1: NOW - 400 * DAY } });
+  assert.strictEqual(b.ledger.E1.firstSeenAt, NOW);
+  assert.deepStrictEqual(b.added, []);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
