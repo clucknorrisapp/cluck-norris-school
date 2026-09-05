@@ -55,6 +55,13 @@
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   @media(max-width:560px){.grid{grid-template-columns:1fr}.hero .big{font-size:30px}h1{font-size:26px}}
   .lockrow{border:1px solid var(--border);border-radius:10px;padding:12px;margin:0 0 10px;}
+  /* The one card that is a DOING surface rather than a reading one. Lifted with the brand pink
+     and a heavier header so the eye lands here after skimming the explainers. */
+  .card.feature{background:linear-gradient(165deg,#3a1240,#241033 60%);
+    border:1px solid var(--hotpink);box-shadow:0 0 0 1px rgba(255,47,160,.15),0 8px 28px rgba(0,0,0,.35);
+    padding:22px;}
+  .card.feature .k{font-size:20px;letter-spacing:1.5px;color:var(--cream);
+    text-shadow:2px 2px 0 var(--outline);margin-bottom:12px;}
   details.card{padding:0;}
   details.card>summary{list-style:none;cursor:pointer;padding:15px 18px;display:flex;
     justify-content:space-between;align-items:center;gap:10px;
@@ -171,7 +178,7 @@
     <div id="mine" hidden></div>
   </div>
 
-  <div class="card" id="buildCard">
+  <div class="card feature" id="buildCard">
     <div class="k">MAKE A QUALIFYING LOCK</div>
     <p class="muted" style="margin:0 0 6px">The form only builds locks that meet the terms, so you
     can&rsquo;t commit tokens on terms that earn nothing.</p>
@@ -203,6 +210,17 @@
 
     <div style="margin-top:14px">
       <button id="build" disabled>REVIEW THIS LOCK</button>
+    </div>
+    <div class="note" style="margin-top:16px">
+      <b class="disp">WHEN YOUR LOCK ENDS, YOU CLAIM IT</b><br/>
+      Tokens do not come back on their own. Jupiter Lock holds them until you send a claim &mdash;
+      there is no deadline and nothing expires, but nothing arrives until you go and get it.
+      <div style="margin-top:9px">
+        Claim at <a href="https://clucknorris.app/locker-room" target="_blank" rel="noopener">the Locker Room</a>
+        or on <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter</a> &mdash; same lock, either works.
+      </div>
+      <div class="muted" style="margin-top:9px">Your <b>rewards</b> are different: those are sent to
+      you in batches with nothing to claim.</div>
     </div>
     <div id="plan" hidden></div>
   </div>
@@ -447,6 +465,19 @@
       : "REVIEW THIS LOCK";
   }
 
+  // Anything a wallet can actually go and collect gets a line saying where. Silence here is how
+  // somebody's tokens sit in an escrow for months after their lock ended.
+  function claimNote(l) {
+    var now = Math.floor(Date.now() / 1000);
+    if (!l.fullyVestedAt || now < (l.cliffTime || l.fullyVestedAt)) return "";
+    var done = now >= l.fullyVestedAt;
+    return '<div class="note" style="margin:10px 0 0;font-size:13px">' +
+      (done ? "<b>This lock has finished.</b> The tokens are waiting in the escrow until you claim them."
+            : "<b>Part of this lock has vested.</b> You can claim what has unlocked so far at any time.") +
+      ' Claim at <a href="https://clucknorris.app/locker-room" target="_blank" rel="noopener">the Locker Room</a>' +
+      ' or on <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter</a>.</div>';
+  }
+
   function loadMine() {
     if (!WALLET) return;
     fetch("/api/cuna-stake/wallet?address=" + encodeURIComponent(WALLET))
@@ -457,9 +488,17 @@
           h = '<p class="muted">No CUNA locks on this wallet yet.</p>';
         } else {
           h = d.locks.map(function (l) {
+            var now = Math.floor(Date.now() / 1000);
             var head = l.qualifies
               ? '<span class="pill" style="background:#12603f">EARNING</span>'
               : '<span class="pill">NOT EARNING</span>';
+            // Jupiter holds the tokens until the recipient claims. Say so on the lock itself,
+            // where it is actually actionable, not only in the general note above.
+            if (l.fullyVestedAt && now >= l.fullyVestedAt) {
+              head += ' <span class="pill" style="background:#B45309">READY TO CLAIM</span>';
+            } else if (l.cliffTime && now >= l.cliffTime) {
+              head += ' <span class="pill" style="background:#5b3a12">PART CLAIMABLE</span>';
+            }
             // Saying "NOT EARNING" without saying what to do about it is only half the job. Two
             // of the three community locks that miss the terms today are held by wallets sitting
             // on 12M+ liquid CUNA — they are not locked out at all, they simply have not been
@@ -483,7 +522,7 @@
               '<div class="row"><span>Cliff</span><b>' + dateOf(l.cliffTime) + "</b></div>" +
               '<div class="row"><span>Fully unlocked</span><b>' + dateOf(l.fullyVestedAt) + "</b></div>" +
               '<div class="row"><span>Lock</span><b>' + esc(shortAddr(l.escrow)) + "</b></div>" +
-              why + "</div>";
+              why + claimNote(l) + "</div>";
           }).join("");
         }
         var anyEarning = d.locks.some(function (l) { return l.qualifies; });
