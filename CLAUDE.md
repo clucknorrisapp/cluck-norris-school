@@ -267,7 +267,10 @@ that was the limiting step.*
   `rpc` (failover), `orca-whirlpools` + `whirlpool-vault` (liquidity engine), kv/sig/recap stores.
 - `hatchery.js`, `securitycoop.js`, `whirlpool-mm.js` — Express routers mounted by server.js.
 - `public/*.html` — vanilla tool pages. `src/` — the React school.
-- Shared browser modules: **`cluck-wallet.js`** (the 11-wallet registry + connect/disconnect) and
+- Shared browser modules: **`cluck-wallet.js`** (the wallet registry + connect/disconnect — legacy
+  injection AND **Wallet Standard** discovery since 2026-09-05, after a Jupiter Mobile user could not
+  connect inside the wallet's own browser: standard-only wallets get a Phantom-shaped shim so pages
+  need no changes; `scripts/wallet-standard-test.cjs` drives it with a fake wallet) and
   **`cluck-util.js`** (`esc` / `rpc` / `shortAddr` / `fmt` / `copyText`). Don't re-type these into
   a page — private copies drifted badly enough to cause real bugs.
 
