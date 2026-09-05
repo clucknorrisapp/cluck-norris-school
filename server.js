@@ -10485,16 +10485,24 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
     }
 
     const p = prog.readProgramme(stored);
+    const nowUnix = Math.floor(Date.now() / 1000);
     const snap = await cunaLocks({ force: String(q.rescan || "") === "1" });
     const locks = snap.locks || [];
-    const nowUnix = Math.floor(Date.now() / 1000);
     const unlock = s.dailyUnlockRaw(locks, nowUnix);
     const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct });
     const preview = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: p.config });
+    // Manual accrual, for catching up a day the timer missed or for verifying a config change
+    // took. Same gate as the timer: it still refuses a day already accrued.
+    let ranNow = null;
+    if (String(q.accrue || "") === "1") ranNow = await cunaAccrualTick("manual");
+
     const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
     return res.status(200).json({
       ok: true,
       armed: p.armed,
+      accrualRun: ranNow,
+      missedDays: prog.missedDays({ programme: stored, paidDays: days, nowUnix }),
+      recentDays: Object.fromEntries(Object.keys(days).sort().slice(-7).map((k) => [k, days[k]])),
       startedAt: p.startedAt,
       config: p.config,
       scanned: locks.length,
@@ -10516,6 +10524,81 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
 // The CUNA brand display face. It lives with the gif-forge scenes (tools/gif-forge/assets) so the
 // page and the generated art take their lettering from the SAME file and cannot drift apart — and
 // tools/ is not under public/, so it needs an explicit route to be reachable at all.
+
+// ── CUNA accrual scheduler ─────────────────────────────────────────────────
+// Once per UTC day, work out who is owed what and WRITE IT DOWN. That is all.
+//
+// ⛔ THIS MOVES NO TOKENS. Rewards are not minted — every one comes out of the treasury's own
+// vesting stream, so paying them is a transfer the owner signs. This job only ever writes a ledger.
+// If you are adding a payout here, stop: it belongs behind an explicit owner action, not a timer.
+//
+// ⚠️ Deliberately NOT inside the TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID scheduler block. Everything in
+// there silently does not start when either env var is missing, which is the first thing to check
+// when "the bot isn't doing X" — and an accrual that quietly stops because a chat id is unset would
+// mean people earning nothing with no error anywhere.
+//
+// Runs hourly rather than daily: a once-a-day timer that fires while the app happens to be
+// redeploying loses the day outright, and a missed day cannot be reconstructed (weight is amount x
+// days remaining, so replaying it against today's locks pays the wrong people). The UTC-day key in
+// accrualGate is what makes the extra ticks harmless.
+const CUNA_ACCRUAL_TICK_MS = 60 * 60 * 1000;
+
+async function cunaAccrualTick(reason) {
+  const prog = require("./lib/cuna-programme");
+  const s = require("./lib/cuna-staking");
+  const stored = kv.get(CUNA_STAKE_KV, null);
+  const days = kv.get(CUNA_STAKE_DAYS_KV, {}) || {};
+  const nowUnix = Math.floor(Date.now() / 1000);
+
+  const gate = prog.accrualGate({ programme: stored, paidDays: days, nowUnix });
+  if (!gate.ok) {
+    // Disarmed and already-accrued are the normal cases and must stay quiet — this runs hourly.
+    if (!/not armed|already accrued/.test(gate.reason)) {
+      console.warn(`[cuna-accrual] not accruing: ${gate.reason}`);
+    }
+    return { ok: false, reason: gate.reason };
+  }
+
+  const snap = await cunaLocks({ force: true });
+  if (snap.err && !snap.locks) {
+    // Never write a day from a scan that failed. An empty scan would record "nobody qualified"
+    // for a day when we simply could not look, and that day can never be redone.
+    console.error(`[cuna-accrual] SKIPPING ${gate.day} — the chain read failed: ${snap.err}`);
+    return { ok: false, reason: "scan failed" };
+  }
+  const locks = snap.locks || [];
+  const unlock = s.dailyUnlockRaw(locks, nowUnix);
+  const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: gate.config.sharePct });
+  const day = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: gate.config });
+
+  days[gate.day] = {
+    at: nowUnix,
+    poolRaw: pool.toString(),
+    dailyUnlockRaw: unlock.toString(),
+    sharePct: gate.config.sharePct,
+    distributedRaw: day.distributed.toString(),
+    undistributedRaw: day.undistributed.toString(),
+    eligible: day.eligible,
+    scanned: locks.length,
+    credits: Object.fromEntries(Object.entries(day.credits).map(([k, v]) => [k, v.toString()])),
+  };
+  kv.set(CUNA_STAKE_DAYS_KV, days);
+
+  const missed = prog.missedDays({ programme: stored, paidDays: days, nowUnix });
+  console.log(`[cuna-accrual] ${gate.day} (${reason}): ${day.eligible} earning, ` +
+    `${(Number(day.distributed) / 1e9).toFixed(0)} CUNA credited, ` +
+    `${(Number(day.undistributed) / 1e9).toFixed(0)} undistributed` +
+    (missed.length ? ` — ⚠️ ${missed.length} EARLIER DAY(S) NEVER RAN: ${missed.slice(-5).join(", ")}` : ""));
+  return { ok: true, day: gate.day, ...days[gate.day], missed };
+}
+
+// Hourly, plus one shortly after boot so a redeploy that spans midnight still catches the new day.
+// Both are wrapped: an unhandled rejection in a timer takes the whole process down on Node >= 15.
+setInterval(() => { cunaAccrualTick("hourly").catch((e) => console.error("[cuna-accrual] " + e.message)); },
+  CUNA_ACCRUAL_TICK_MS);
+setTimeout(() => { cunaAccrualTick("boot").catch((e) => console.error("[cuna-accrual] " + e.message)); },
+  90 * 1000);
+
 app.get("/fonts/LuckiestGuy.ttf", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   res.setHeader("Access-Control-Allow-Origin", "*");   // the staking host is a different origin

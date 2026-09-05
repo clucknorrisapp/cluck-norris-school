@@ -175,6 +175,48 @@ t("an open gate hands back the day and the config to accrue with", () => {
   assert.deepStrictEqual(g.config.excludeWallets, [TREASURY]);
 });
 
+section("days the app was down for");
+
+t("a day with no ledger entry between the start and yesterday is reported missed", () => {
+  const armed = p.arm({}, NOW - 5 * p.DAY);
+  const paid = {};
+  for (const i of [1, 2, 4]) paid[p.dayKey(NOW - i * p.DAY)] = { distributed: "1" };
+  const missed = p.missedDays({ programme: armed, paidDays: paid, nowUnix: NOW });
+  assert.deepStrictEqual(missed, [p.dayKey(NOW - 5 * p.DAY), p.dayKey(NOW - 3 * p.DAY)]);
+});
+
+t("TODAY is never 'missed' — it has not finished yet", () => {
+  const armed = p.arm({}, NOW - 3 * p.DAY);
+  const missed = p.missedDays({ programme: armed, paidDays: {}, nowUnix: NOW });
+  assert.ok(!missed.includes(p.dayKey(NOW)), "today was reported as missed");
+});
+
+t("nothing before the programme started counts as missed", () => {
+  const armed = p.arm({}, NOW - 2 * p.DAY);
+  const missed = p.missedDays({ programme: armed, paidDays: {}, nowUnix: NOW });
+  assert.strictEqual(missed.length, 2);
+  for (const d of missed) assert.ok(d >= p.dayKey(NOW - 2 * p.DAY));
+});
+
+t("a day that paid NOTHING is not a missed day", () => {
+  // Nobody qualified that day. It ran. Re-running it later at a different rate would be wrong.
+  const armed = p.arm({}, NOW - 2 * p.DAY);
+  const paid = { [p.dayKey(NOW - 1 * p.DAY)]: { distributed: "0", credits: {} },
+                 [p.dayKey(NOW - 2 * p.DAY)]: null };
+  assert.deepStrictEqual(p.missedDays({ programme: armed, paidDays: paid, nowUnix: NOW }), []);
+});
+
+t("a disarmed or unstarted programme reports nothing rather than a year of gaps", () => {
+  assert.deepStrictEqual(p.missedDays({ programme: {}, paidDays: {}, nowUnix: NOW }), []);
+  assert.deepStrictEqual(p.missedDays({ programme: p.arm({}, NOW), paidDays: {}, nowUnix: 0 }), []);
+});
+
+t("a very long outage is bounded, not an infinite walk", () => {
+  const armed = p.arm({}, NOW - 5000 * p.DAY);
+  const missed = p.missedDays({ programme: armed, paidDays: {}, nowUnix: NOW });
+  assert.ok(missed.length <= 400, "the walk must be bounded: got " + missed.length);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }

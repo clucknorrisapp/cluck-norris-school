@@ -84,8 +84,9 @@
     <div class="row"><span>Reward pool</span><b id="tShare">&mdash;</b></div>
     <div class="row"><span>Locks that qualify right now</span><b id="tCount">&mdash;</b></div>
     <div class="row"><span>CUNA currently earning</span><b id="tLocked">&mdash;</b></div>
-    <p class="muted" style="margin:14px 0 0">You start earning the moment your lock exists, and you
-    can <b>claim any time</b> &mdash; there is no waiting period on rewards. Your share is your
+    <p class="muted" style="margin:14px 0 0">You start earning the moment your lock exists. Rewards
+    build up every day and are <b>sent out in batches</b> &mdash; nothing to click, nothing to
+    claim, they arrive in your wallet. Your share is your
     <b>amount &times; days still to run</b>. That one line is the whole formula: a longer lock earns
     more per token, and your weight falls as the lock matures, which is why re-locking is worth it
     rather than being forced on you.</p>
@@ -110,6 +111,9 @@
     <p class="muted" style="margin:0 0 10px">A Jupiter Lock is a public account on Solana. We read
     the chain and work out who qualifies. <b>You never send us proof, a screenshot, or a signature.</b>
     Nothing you type is an input, so there is nothing anyone can fake.</p>
+    <p class="muted" style="margin:0 0 10px">Rewards work the same way. There is no claim button and
+    no deadline to catch &mdash; what you have earned is counted every day and sent to your wallet
+    in batches. If you do nothing at all after locking, you still get everything you earned.</p>
     <p class="muted" style="margin:0">That also means it doesn&rsquo;t matter where you make the lock.
     Build it here, or build it yourself on
     <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter&rsquo;s own site</a> &mdash;
@@ -240,7 +244,7 @@
     var okAmt = /^\d+(\.\d+)?$/.test(amt) && Number(amt) > 0;
     var end = Math.floor(Date.now() / 1000) + dur * DAY;
     $("planNote").innerHTML = "Locked until <b>" + dateOf(end) + "</b>. You cannot get these tokens " +
-      "back before then &mdash; there is no cancel. Rewards you earn are claimable any time.";
+      "back before then &mdash; there is no cancel.";
     $("amtNote").innerHTML = (okAmt || !amt) ? "&nbsp;"
       : '<span class="bad">Enter a plain number, e.g. 5000000</span>';
     $("build").disabled = !(okAmt && WALLET);
@@ -273,7 +277,7 @@
         }
         h += '<div class="row" style="margin-top:12px"><span>Earned so far</span><b>' +
              toTokens(d.accruedRaw) + " CUNA</b></div>";
-        h += '<div class="row"><span>Claimable now</span><b>' + toTokens(d.claimableRaw) + " CUNA</b></div>";
+        h += '<div class="row"><span>Waiting to be sent</span><b>' + toTokens(d.claimableRaw) + " CUNA</b></div>";
         if (!d.armed) {
           h += '<p class="muted" style="margin-top:10px">The programme hasn’t started, so nothing has been earned yet.</p>';
         }
