@@ -265,6 +265,18 @@ jobs:
       # job installs no dependencies.
       - name: token-authority revocation (byte-diff vs SPL Token)
         run: node scripts/token-authority-test.cjs
+      # The lock-and-earn page's post-lock "announce on X" card only appears after a real
+      # signature, which no test can produce; this drives it through its test hook and checks the
+      # post is built from config numbers, stays under 280, hides dollars when the price is
+      # unknown, and opens X's own compose window (we post nothing).
+      - name: lock-and-earn announce card
+        run: node scripts/cuna-share-test.cjs
+      # cluck-wallet.js only found wallets by legacy injection; Jupiter Mobile's in-app browser
+      # registers through the Wallet Standard and was invisible on every page (2026-09-05). This
+      # drives the shared layer with a fake standard wallet: discovery, the Phantom-shaped shim,
+      # dedupe, late registration, the in-app-browser UA path.
+      - name: wallet standard discovery
+        run: node scripts/wallet-standard-test.cjs
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
