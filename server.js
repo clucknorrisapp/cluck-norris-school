@@ -10565,7 +10565,9 @@ app.get("/api/cuna-stake/wallet", async (req, res) => {
         firstSeenAt: l.firstSeenAt,
         qualifies: s.qualifies(l, p.config),
         reasons: s.disqualify(l, p.config),
-        weight: s.weightOf(l, nowUnix).toString(),
+        // cfg matters: without it this falls back to the DEFAULT ceiling rather than the configured
+        // one, so a changed maxTermDays would make the weight SHOWN drift from the weight PAID.
+        weight: s.weightOf(l, nowUnix, p.config).toString(),
       })),
       accruedRaw: accrued.toString(),
       // What the rewards are actually computed on, versus what a naive "total locked" would say.
