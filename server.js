@@ -3364,36 +3364,11 @@ if (CF_ORIGIN_SECRET) {
   });
   console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked (exempt for their own surfaces only: game hosts " + NQ_GAME_HOSTS.join(", ") + "; staking hosts " + CUNA_STAKE_HOSTS.join(", ") + ")");
 }
-// Host router for the game domain — mounted HERE (before every site route) so the main site's
-// own "/" never wins on normiequest.app. Game paths fall through to the normal routes, which are
-// host-agnostic; anything that is not a game surface bounces to the main site.
-app.use((req, res, next) => {
-  if (!isGameHost(req)) return next();
-  if (req.path === "/" || req.path === "") {
-    // Same cache posture as /normie-quest-x7 (see gameCacheHeaders in normie-quest/routes.js):
-    // browsers revalidate every load; a Cloudflare edge (if this host is behind one) may hold
-    // the 11MB document 5 minutes so it doesn't stream through Node per player.
-    res.set("Cache-Control", "public, max-age=0, must-revalidate");
-    res.set("CDN-Cache-Control", "max-age=300");
-    return res.sendFile(join(__dirname, "normie-quest", "public", "normie-quest-platformer.html"));
-  }
-  if (NQ_GAME_PATH.test(req.path) || req.path === "/healthz") return next();
-  return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
-});
-
-// Host router for the CUNA staking domain. Mounted before every site route so the main site's "/"
-// never wins on staking.cunatoken.com, and anything that is not a staking surface bounces home.
-app.use((req, res, next) => {
-  if (!isStakeHost(req)) return next();
-  if (req.path === "/" || req.path === "") {
-    res.set("Cache-Control", "public, max-age=0, must-revalidate");
-    return res.sendFile(join(__dirname, "public", "cuna-staking.html"));
-  }
-  if (CUNA_STAKE_PATH.test(req.path) || req.path === "/healthz") return next();
-  return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
-});
-
-// Staging marking. Mounted before every route so nothing can be served without it.
+// Staging marking. Mounted before every route so nothing can be served without it — and, in
+// particular, ABOVE the two host routers below. Those answer "/" with res.sendFile and return, so
+// with this block underneath them the banner and the noindex header were missing on exactly the
+// URL a reviewer visits: lock.cunatoken.com/ and normiequest.app/ served unmarked while
+// /cuna-staking on the same host was marked. Order is the whole guarantee here; keep it first.
 if (IS_STAGING) {
   app.use((req, res, next) => {
     res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
@@ -3428,6 +3403,36 @@ if (IS_STAGING) {
   });
   console.log("[boot] STAGING=1 — noindex, banner on every page, X posting refused, Telegram prefixed, money engines held off");
 }
+
+// Host router for the game domain — mounted HERE (before every site route) so the main site's
+// own "/" never wins on normiequest.app. Game paths fall through to the normal routes, which are
+// host-agnostic; anything that is not a game surface bounces to the main site.
+app.use((req, res, next) => {
+  if (!isGameHost(req)) return next();
+  if (req.path === "/" || req.path === "") {
+    // Same cache posture as /normie-quest-x7 (see gameCacheHeaders in normie-quest/routes.js):
+    // browsers revalidate every load; a Cloudflare edge (if this host is behind one) may hold
+    // the 11MB document 5 minutes so it doesn't stream through Node per player.
+    res.set("Cache-Control", "public, max-age=0, must-revalidate");
+    res.set("CDN-Cache-Control", "max-age=300");
+    return res.sendFile(join(__dirname, "normie-quest", "public", "normie-quest-platformer.html"));
+  }
+  if (NQ_GAME_PATH.test(req.path) || req.path === "/healthz") return next();
+  return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
+});
+
+// Host router for the CUNA staking domain. Mounted before every site route so the main site's "/"
+// never wins on staking.cunatoken.com, and anything that is not a staking surface bounces home.
+app.use((req, res, next) => {
+  if (!isStakeHost(req)) return next();
+  if (req.path === "/" || req.path === "") {
+    res.set("Cache-Control", "public, max-age=0, must-revalidate");
+    return res.sendFile(join(__dirname, "public", "cuna-staking.html"));
+  }
+  if (CUNA_STAKE_PATH.test(req.path) || req.path === "/healthz") return next();
+  return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
+});
+
 
 // ── Lightweight in-memory rate limiting ───────────────────────────────────
 // The /api proxies forward to PAID upstreams (Helius credits, Anthropic,

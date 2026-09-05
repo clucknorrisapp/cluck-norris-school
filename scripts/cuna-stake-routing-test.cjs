@@ -107,6 +107,19 @@ t("host matching is exact — an alias is not a suffix rule", () => {
   assert.strictEqual(isStakeHost({}), false, "a missing hostname was treated as a staking host");
 });
 
+t("the staging marking is mounted ABOVE the host routers", () => {
+  // The host routers answer "/" with res.sendFile and RETURN. Anything mounted below them never
+  // runs for that request, so with the staging block underneath, lock.cunatoken.com/ was served
+  // with no banner and no noindex header while /cuna-staking on the same host was marked. This is
+  // a pure ordering guarantee — nothing about the middleware itself expresses it — so pin it here.
+  const staging = SRC.indexOf("// Staging marking. Mounted before every route");
+  const gameRouter = SRC.indexOf("// Host router for the game domain");
+  const stakeRouter = SRC.indexOf("// Host router for the CUNA staking domain");
+  assert.ok(staging > 0 && gameRouter > 0 && stakeRouter > 0, "one of the three blocks moved");
+  assert.ok(staging < gameRouter, "the staging marking sits below the game host router");
+  assert.ok(staging < stakeRouter, "the staging marking sits below the staking host router");
+});
+
 t("the admin handler refuses anything that skipped the edge, allowlist or not", () => {
   // The second line of defence: if someone later widens the allowlist, this still holds.
   const i = SRC.indexOf('app.all("/api/cuna-stake/admin"');
