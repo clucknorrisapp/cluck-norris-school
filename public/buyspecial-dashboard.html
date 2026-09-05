@@ -355,7 +355,7 @@
         return rpc('getLatestBlockhash',[{commitment:'confirmed'}]).then(function(j){
           var bh=j&&j.value&&j.value.blockhash; if(bh) tx.recentBlockhash=bh;
           return opProvider.signTransaction(tx);
-        }).then(function(signed){ signed.partialSign(base); var raw=signed.serialize();
+        }).then(function(signed){ signed=CluckWallet.asTransaction(signed,tx); signed.partialSign(base); var raw=signed.serialize();
           return rpc('sendTransaction',[bytesToB64(raw),{encoding:'base64',skipPreflight:true,preflightCommitment:'confirmed',maxRetries:5}]);
         }).then(function(sig){ st.textContent='⏳ confirming…'; return confirmSig(sig).then(function(){ return sig; }); })
         .then(function(sig){ ok++; st.innerHTML='✓ <a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'" target="_blank" rel="noopener" style="color:#34d399">done</a>'; i++; setTimeout(next,400); });

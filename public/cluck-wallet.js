@@ -534,6 +534,45 @@
     state = { provider: null, pubkey: null, id: null };
   }
 
+  // What a wallet's signTransaction() hands back is NOT always a web3 Transaction. Phantom returns
+  // the Transaction; others return the serialized bytes, a Transaction from their own bundled copy
+  // of web3 (right shape, wrong prototype, no partialSign), a wrapper {signedTransaction}, or
+  // nothing at all because they signed the object in place. A page that then calls
+  // signed.partialSign(base) — every multi-signer flow here — died with "signed.partialSign is not
+  // a function" for one of those wallets (a lock-and-earn user, 2026-09-05). This turns any of
+  // them into a real Transaction from the page's own web3, or throws something a person can act on.
+  function asTransaction(signed, original) {
+    var W3 = global.solanaWeb3;
+    if (!W3 || !W3.Transaction) throw new Error("web3 is not loaded on this page.");
+    if (signed == null) signed = original;                         // signed in place
+    if (signed && signed.signedTransaction) return asTransaction(signed.signedTransaction, original);
+    if (signed instanceof W3.Transaction) return signed;
+    if (signed instanceof Uint8Array || (signed && signed.buffer instanceof ArrayBuffer && typeof signed.byteLength === "number")) {
+      return W3.Transaction.from(signed);
+    }
+    if (signed instanceof ArrayBuffer) return W3.Transaction.from(new Uint8Array(signed));
+    if (Array.isArray(signed) && signed.length && typeof signed[0] === "number") return W3.Transaction.from(Uint8Array.from(signed));
+    if (signed && typeof signed.serialize === "function") {
+      // a Transaction from another web3 copy: same wire format, so round-trip it through ours
+      return W3.Transaction.from(signed.serialize({ requireAllSignatures: false, verifySignatures: false }));
+    }
+    if (signed && Array.isArray(signed.signatures) && original && Array.isArray(original.signatures)) {
+      // bare {signatures:[{publicKey, signature}]}: graft the wallet's signature onto the original.
+      // A Transaction built in-page has an EMPTY signatures list until it is compiled; one from
+      // Transaction.from() already carries a slot per signer. Compile so the slots exist.
+      if (!original.signatures.length) { try { original.serialize({ requireAllSignatures: false, verifySignatures: false }); } catch (e) {} }
+      for (var i = 0; i < signed.signatures.length; i++) {
+        var sg = signed.signatures[i]; if (!sg || !sg.signature) continue;
+        var pk = String(sg.publicKey && sg.publicKey.toString ? sg.publicKey.toString() : sg.publicKey);
+        for (var k = 0; k < original.signatures.length; k++) {
+          if (String(original.signatures[k].publicKey) === pk) { original.signatures[k].signature = sg.signature; break; }
+        }
+      }
+      return original;
+    }
+    throw new Error("This wallet returned a transaction in a form the page can't complete. Try Phantom or Solflare, or build the lock on lock.jup.ag.");
+  }
+
   // What THIS browser exposes, for the case where a wallet's in-app browser still connects
   // nothing (Jupiter Mobile, 2026-09-05): the user-agent, the names of window properties that look
   // like a wallet namespace, whether a legacy window.solana exists and which flags it sets, whether
@@ -569,6 +608,7 @@
   // watch). deeplinks stays for a QR/hand-off surface; shortAddr lives in /cluck-util.js.
   global.CluckWallet = {
     diagnostics: diagnostics,
+    asTransaction: asTransaction,
     WALLETS: WALLETS,
     available: available,
     connect: connect,

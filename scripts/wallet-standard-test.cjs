@@ -146,6 +146,48 @@ const FAKE = (cfg) => `(() => {
     await ctx.close();
   }
 
+  // 1b. asTransaction: every shape a wallet's signTransaction has handed back becomes OUR Transaction
+  //     with partialSign — the multi-signer flows died on "signed.partialSign is not a function".
+  {
+    const { ctx, page } = await open({ name: "Jupiter", via: "event" });
+    const r = await page.evaluate(() => {
+      const W3 = window.solanaWeb3; if (!W3) return { skip: true };
+      const pk = new W3.PublicKey("6A5uicTYmdVerq5JDKcb3XC9J8sv5F7zMKGqBBYXcnrh");
+      const mk = () => { const t = new W3.Transaction({ feePayer: pk, recentBlockhash: "11111111111111111111111111111111" });
+        t.add(new W3.TransactionInstruction({ keys: [{ pubkey: pk, isSigner: true, isWritable: false }], programId: new W3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"), data: new Uint8Array([104, 105]) })); return t; };
+      const A = window.CluckWallet.asTransaction;
+      const out = {};
+      const good = (t) => t instanceof W3.Transaction && typeof t.partialSign === "function";
+      const tx = mk(); const bytes = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+      out.transaction = good(A(mk(), tx));
+      out.bytes = good(A(bytes, tx));
+      out.arrayBuffer = good(A(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), tx));
+      out.numberArray = good(A(Array.from(bytes), tx));
+      out.wrapped = good(A({ signedTransaction: bytes }, tx));
+      out.inPlace = A(undefined, tx) === tx;
+      // a Transaction from a DIFFERENT web3 copy: same wire format, foreign prototype
+      const foreign = { serialize: (o) => bytes, signatures: [] };
+      out.foreign = good(A(foreign, tx));
+      // bare signatures list grafted onto the original
+      const sig = new Uint8Array(64).fill(3);
+      const t2 = mk(); const grafted = A({ signatures: [{ publicKey: pk.toBase58(), signature: sig }] }, t2);
+      out.graft = grafted === t2 && grafted.signatures[0].signature && grafted.signatures[0].signature[0] === 3;
+      try { A({ nonsense: true }, tx); out.garbage = "no throw"; } catch (e) { out.garbage = /can't complete/.test(e.message) ? "clear error" : e.message; }
+      return out;
+    });
+    if (r.skip) console.log("      (web3 not loaded — asTransaction checks skipped)");
+    else {
+      ok("asTransaction: a real Transaction passes through", r.transaction);
+      ok("asTransaction: serialized bytes → Transaction", r.bytes && r.arrayBuffer && r.numberArray, JSON.stringify(r));
+      ok("asTransaction: {signedTransaction} wrapper → Transaction", r.wrapped);
+      ok("asTransaction: nothing returned (signed in place) → the original", r.inPlace);
+      ok("asTransaction: a foreign web3 Transaction → ours, via the wire format", r.foreign);
+      ok("asTransaction: a bare signatures list is grafted onto the original", r.graft);
+      ok("asTransaction: garbage throws a message a person can act on", r.garbage === "clear error", String(r.garbage));
+    }
+    await ctx.close();
+  }
+
   // 2. Deprecated navigator.wallets path.
   {
     const { ctx, page } = await open({ name: "Jupiter", via: "navigator" });
