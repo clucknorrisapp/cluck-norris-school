@@ -180,7 +180,7 @@
     <input id="amt" inputmode="decimal" placeholder="e.g. 5000000" autocomplete="off"/>
     <div id="sliderWrap" hidden>
       <input type="range" id="amtRange" min="0" max="100" step="0.5" value="0"/>
-      <div class="pctrow"><span>0%</span><span>50%</span><span>100% of your CUNA</span></div>
+      <div class="pctrow"><span id="pctMin">minimum</span><span>&nbsp;</span><span>all of it</span></div>
     </div>
     <div class="balrow" id="balRow" hidden><span id="balPct">&nbsp;</span><b id="balHave">&nbsp;</b></div>
     <div class="muted" id="amtNote" style="margin-top:6px">&nbsp;</div>
@@ -287,6 +287,13 @@
   // holder. Whole tokens: a balance fits a JS number comfortably (41M), raw base units (4.1e16)
   // does not — so the conversion is string surgery and the slider never touches raw amounts.
   var BAL = null;   // whole tokens, or null while unknown
+  // The minimum lock in whole tokens. The slider spans minimum -> balance rather than 0 -> balance:
+  // zero is not a lock anyone can make, so a slider that starts there opens on an invalid amount
+  // and makes the user drag before the form means anything.
+  function minTokens() {
+    if (!CFG || !CFG.terms.minLockRaw) return 0;
+    return Number(String(toTokens(CFG.terms.minLockRaw)).replace(/,/g, ""));
+  }
 
   function readBalance() {
     if (!WALLET || !CFG) return Promise.resolve(null);
@@ -317,7 +324,7 @@
   }
 
   function showBalance() {
-    var minTok = CFG && CFG.terms.minLockRaw ? Number(toTokens(CFG.terms.minLockRaw).replace(/,/g, "")) : 0;
+    var minTok = minTokens();
     if (BAL == null) {
       // Unknown, not zero. Say so — typing an amount still works, only the slider is unavailable.
       $("sliderWrap").hidden = true;
@@ -342,12 +349,30 @@
       return;
     }
     $("sliderWrap").hidden = false;
+    $("pctMin").textContent = minTok.toLocaleString() + " min";
+    // Open on the minimum, not on nothing. Someone who just wants the smallest qualifying lock
+    // should be able to tick the boxes and go without touching the slider at all.
+    if (!String($("amt").value || "").trim()) {
+      $("amt").value = String(minTok);
+      $("amtRange").value = "0";
+    }
   }
 
+  // Slider position -> amount, across the range that is actually lockable.
   function amountFromPct(pct) {
     if (BAL == null) return 0;
-    return Math.floor(BAL * Number(pct) / 100);
+    var lo = minTokens();
+    if (BAL <= lo) return lo;
+    return Math.floor(lo + (BAL - lo) * Number(pct) / 100);
   }
+  // Amount -> slider position. The inverse of the above, so typing and dragging stay in step.
+  function pctFromAmount(amt) {
+    var lo = minTokens();
+    if (BAL == null || BAL <= lo) return 0;
+    return Math.max(0, Math.min(100, ((Number(amt) - lo) / (BAL - lo)) * 100));
+  }
+  // The readout is still a share of the WHOLE balance — that is the number that tells someone
+  // how much of their bag they are committing, which is the point of showing it at all.
   function pctOfBal(amt) {
     if (!BAL) return null;
     return Math.min(100, (Number(amt) / BAL) * 100);
@@ -368,7 +393,13 @@
     if (!CFG) return;
     var amt = String($("amt").value || "").replace(/,/g, "").trim();
     var dur = Number($("dur").value);
-    var okAmt = /^\d+(\.\d+)?$/.test(amt) && Number(amt) > 0;
+    var minTok = minTokens();
+    var numeric = /^\d+(\.\d+)?$/.test(amt);
+    // Over the wallet's balance is refused HERE rather than letting the chain reject it — but only
+    // when the balance is actually known. If the read failed, BAL is null and we must not block
+    // someone from typing an amount we simply could not verify.
+    var overBal = numeric && BAL != null && Number(amt) > BAL;
+    var okAmt = numeric && Number(amt) >= minTok && Number(amt) > 0 && !overBal;
     var end = Math.floor(Date.now() / 1000) + dur * DAY;
 
     $("planNote").innerHTML = "Locked until <b>" + dateOf(end) + "</b>.";
@@ -377,11 +408,15 @@
     $("ackDate").innerHTML = "I understand these tokens are gone from my wallet until <b>" +
       dateOf(end) + "</b>.";
     $("amtNote").innerHTML = (okAmt || !amt) ? "&nbsp;"
-      : '<span class="bad">Enter a plain number, e.g. 5000000</span>';
+      : !numeric ? '<span class="bad">Enter a plain number, e.g. 5000000</span>'
+      : '<span class="bad">The smallest lock that earns is ' + minTok.toLocaleString() + " CUNA</span>";
 
     // What this actually costs them, as a share of what they hold. The page tells people to lock a
     // slice rather than the bag; this is the line that makes that concrete instead of preachy.
-    var pct = okAmt ? pctOfBal(amt) : null;
+    // Sync on NUMERIC, not on VALID. Gating this on okAmt left the slider stranded wherever it
+    // last was whenever the amount dipped below the minimum — the handle sat at "all of it" while
+    // the box read 68,999.
+    var pct = numeric && Number(amt) > 0 ? pctOfBal(amt) : null;
     if (pct != null) {
       var over = Number(amt) > BAL;
       var label = pct.toFixed(pct < 10 ? 1 : 0) + "% of your CUNA";
@@ -396,7 +431,7 @@
         $("balPct").innerHTML = label;
       }
       // keep the slider in step when the number was typed rather than dragged
-      if (!over) $("amtRange").value = String(Math.min(100, pct));
+      if (!over) $("amtRange").value = String(pctFromAmount(amt));
     } else if (BAL != null && !amt) {
       $("balPct").innerHTML = "&nbsp;";
     }
@@ -405,7 +440,9 @@
     var allAcked = acks.every(function (b) { return b.checked; });
     $("build").disabled = !(okAmt && allAcked && WALLET);
     $("build").textContent = !WALLET ? "CONNECT A WALLET FIRST"
-      : !okAmt ? "ENTER AN AMOUNT"
+      : !numeric || !amt ? "ENTER AN AMOUNT"
+      : overBal ? "MORE THAN YOU HOLD"
+      : !okAmt ? "BELOW THE MINIMUM"
       : !allAcked ? "TICK ALL THREE TO CONTINUE"
       : "REVIEW THIS LOCK";
   }
