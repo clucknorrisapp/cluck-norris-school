@@ -319,6 +319,9 @@ served the React shell at 200.
   **attacker-supplied token metadata** to the brand channels, so it hard-sanitizes the symbol to
   `[A-Za-z0-9]` (never the free-form name) and rate-limits itself (per-wallet/mint cooldown + hourly
   cap) so a griefer can't spam our X into a suspension. Don't loosen either without thinking it through.
+- **The CLKN X account has X Premium (owner, 2026-09-05), so brand posts may run past 280
+  characters** — don't trim an owner-initiated announcement to fit the classic limit. The 280
+  counter on the lock-and-earn page's announce card is for LOCKERS' own accounts and stays.
 - **A Telegram post with an image gets 1024 characters, not 4096** — and our own code silently
   truncates at 1024 while returning success. Count the caption; put load-bearing lines (the X
   link, a CTA) where truncation can't eat them. Recover with `&replaceMsg=<oldId>`.
