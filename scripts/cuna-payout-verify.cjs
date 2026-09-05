@@ -81,7 +81,11 @@ function check(ok, label, detail) {
   let pendingTotal = 0n;
   for (const b of pay.pendingBatches || []) pendingTotal += BigInt(b.totalRaw);
   const accountedFor = owedTotal + paidTotal + pendingTotal;
-  const credited = BigInt((admin.creditedTotalRaw != null) ? admin.creditedTotalRaw : accountedFor.toString());
+  // creditedTotalRaw lives on the PAYOUT response, not the admin one. This line used to read
+  // admin.creditedTotalRaw (never present), fall back to accountedFor, and compare a number to
+  // itself — the one check meant to catch a double-pay could never fail.
+  if (pay.creditedTotalRaw == null) throw new Error("payout response has no creditedTotalRaw — refusing to reconcile against nothing");
+  const credited = BigInt(pay.creditedTotalRaw);
   check(credited === accountedFor, "owed + pending + paid reconciles with everything credited",
     `credited ${CUNA(credited)} vs accounted ${CUNA(accountedFor)}`);
 

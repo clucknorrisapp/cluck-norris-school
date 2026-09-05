@@ -11022,6 +11022,52 @@ app.all("/api/cuna-burn/admin", async (req, res) => {
 const CUNA_PAID_KV = "cunaStakePaid";        // { wallet: raw }
 const CUNA_BATCH_KV = "cunaStakeBatches";    // { id: { state, amounts, ... } }
 
+// The double-checks the page shows before a single signature. Each is computed HERE from the
+// ledger and the chain, never from what the page thinks it knows. A red row is a reason to stop;
+// the page will not offer the send button while any hard check is red.
+async function cunaPayoutChecks(batch, { days, paid, batches }) {
+  const pay = require("./lib/cuna-payout");
+  const s = require("./lib/cuna-staking");
+  const p = cunaProgramme();
+  const out = [];
+  const add = (id, ok, label, detail, hard = true) => out.push({ id, ok: !!ok, hard, label, detail: detail == null ? null : String(detail) });
+  const sum = (o) => Object.values(o || {}).reduce((a, v) => { try { return a + BigInt(v); } catch (_) { return a; } }, 0n);
+
+  // 1. Conservation: everything ever credited == owed + held in pending batches + paid. This is
+  //    the check the old verifier script compared to itself; here it compares to the ledger.
+  const owed = pay.owedNow({ days, paid, pending: batches });
+  let held = 0n;
+  for (const b of Object.values(batches)) if (b && b.state === "pending") held += sum(pay.remainingOf(b));
+  const credited = sum(pay.totalCredits(days));
+  const accounted = sum(owed) + held + sum(paid);
+  add("conserve", credited === accounted, "Every credited token is owed, pending, or paid — nothing double-counted",
+    `credited ${credited} = owed ${sum(owed)} + pending ${held} + paid ${sum(paid)} (${accounted})`);
+
+  // 2. This is the only pending batch. Two pending batches means the same money may be in both.
+  const pendingIds = Object.values(batches).filter((b) => b && b.state === "pending").map((b) => b.id);
+  add("single", pendingIds.length <= 1 && (batch.state !== "pending" || pendingIds.includes(batch.id)),
+    "No other batch is pending", pendingIds.join(", ") || "none");
+
+  // 3. Nobody excluded is being paid, and every payee holds a lock we know about.
+  const excluded = (p.config.excludeWallets || []).map(String);
+  const badEx = Object.keys(batch.amounts || {}).filter((w) => excluded.includes(w));
+  add("exclude", badEx.length === 0, "No excluded wallet (treasury) in the batch", badEx.join(", ") || "clean");
+  const snap = await cunaLocks();
+  const known = new Set((snap.locks || []).map((l) => String(l.recipient)));
+  const unknown = Object.keys(batch.amounts || {}).filter((w) => !known.has(w));
+  add("known", snap.locks != null && unknown.length === 0,
+    "Every payee has a CUNA lock on chain right now", snap.locks == null ? "chain scan failed — cannot verify" : (unknown.join(", ") || "all matched"));
+
+  // 4. Rows add up to the batch header.
+  add("rows", sum(batch.amounts) === BigInt(batch.totalRaw || 0), "Row amounts add up to the batch total",
+    `${sum(batch.amounts)} vs ${batch.totalRaw}`);
+
+  // 5. Programme state, as context rather than a blocker: paying while disarmed is legitimate
+  //    (a final batch after a stop) but worth seeing.
+  add("armed", p.armed, "Programme is armed", p.armed ? "armed" : "DISARMED — paying out after a stop?", false);
+  return out;
+}
+
 app.all("/api/cuna-stake/payout", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (req.cluckDirect) return res.status(404).json({ ok: false, error: "not_found" });
@@ -11034,11 +11080,43 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
     let batches = kv.get(CUNA_BATCH_KV, {}) || {};
     const nowUnix = Math.floor(Date.now() / 1000);
 
-    if (q.confirm) {
+    // Anything that changes money is POST-only. A GET that mutates is one pasted link away from
+    // running — link-preview bots fetch URLs in chats, browsers prerender history entries — which
+    // is why the POKE pause route is POST-only too. Reads stay on GET so the runbook's
+    // "open this URL" checks keep working.
+    const mutating = q.confirm || q.cancel || q.sent || String(q.export || "") === "1";
+    if (mutating && req.method !== "POST") {
+      return res.status(405).json({ ok: false, error: "this changes payout state — send it as a POST" });
+    }
+
+    let sentReport = null;
+    if (q.sent) {
+      // PER-ROW confirmation from the payout page: [{wallet, sig}] for transactions that CONFIRMED.
+      // Each row is recorded once, with its signature; the batch stays pending until every row is
+      // in, so a partial send leaves exactly the unsent rows owed and nothing else.
+      const id = String(q.batch || "");
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
+      let results = q.sent;
+      if (typeof results === "string") { try { results = JSON.parse(results); } catch (_) { results = null; } }
+      if (!Array.isArray(results) || results.length > 500) return res.status(400).json({ ok: false, error: "sent must be a list of {wallet, sig}" });
+      const r = pay.recordSent({ batch: b, paid, results, nowUnix });
+      paid = r.paid;
+      batches = { ...batches, [id]: r.batch };
+      kv.set(CUNA_PAID_KV, paid); kv.set(CUNA_BATCH_KV, batches);
+      // Read back before telling the page anything is paid: a kv write that failed (full or
+      // unmounted volume) must not be reported as recorded, or the page retries nothing and the
+      // next batch offers the same money again.
+      const check = kv.get(CUNA_BATCH_KV, {}) || {};
+      const persisted = check[id] && check[id].sent && r.recorded.every((w) => check[id].sent[w]);
+      if (!persisted) return res.status(500).json({ ok: false, error: "recorded in memory but the volume write did not persist — STOP and check DATA_DIR before sending more" });
+      sentReport = { recorded: r.recorded, ignored: r.ignored, remaining: Object.keys(r.remaining).length, state: r.batch.state };
+      console.log(`[cuna-payout] batch ${id}: ${r.recorded.length} rows recorded sent, ${Object.keys(r.remaining).length} remaining, state ${r.batch.state}`);
+    } else if (q.confirm) {
       const id = String(q.confirm);
       const b = batches[id];
       if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
-      const r = pay.confirmBatch({ batch: b, paid });
+      const r = pay.confirmBatch({ batch: b, paid, nowUnix });
       paid = r.paid;
       batches = { ...batches, [id]: { ...r.batch, confirmedAt: nowUnix, note: String(q.note || "").slice(0, 200) } };
       kv.set(CUNA_PAID_KV, paid); kv.set(CUNA_BATCH_KV, batches);
@@ -11090,6 +11168,24 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       // Per-wallet rows for one batch, so scripts/cuna-payout-verify.cjs can check the line items
       // against the header rather than trusting it.
       batchAmounts: q.batch && batches[String(q.batch)] ? batches[String(q.batch)].amounts : null,
+      // The payout page's view of one batch: every row with its state, and the lines for what
+      // still has to go — so a lost terminal never means hand-converting raw units.
+      batch: q.batch && batches[String(q.batch)] ? (() => {
+        const b = batches[String(q.batch)];
+        const remaining = pay.remainingOf(b);
+        return {
+          id: b.id, state: b.state, at: b.at, count: b.count, totalRaw: b.totalRaw,
+          rows: Object.keys(b.amounts || {}).sort().map((w) => ({
+            wallet: w, raw: b.amounts[w], sent: !!(b.sent && b.sent[w]),
+            sig: b.sent && b.sent[w] ? b.sent[w].sig : null, at: b.sent && b.sent[w] ? b.sent[w].at : null,
+          })),
+          remainingCount: Object.keys(remaining).length,
+          remainingRaw: Object.values(remaining).reduce((a, v) => { try { return a + BigInt(v); } catch (_) { return a; } }, 0n).toString(),
+          remainingLines: pay.toAirdropLines(remaining, 9),
+        };
+      })() : null,
+      sentReport,
+      checks: q.batch && batches[String(q.batch)] ? await cunaPayoutChecks(batches[String(q.batch)], { days, paid, batches }) : null,
       totalPaidRaw: totalPaid.toString(),
       // Everything ever credited by accrual. The verifier reconciles this against
       // owed + pending + paid; if they disagree, somebody is about to be paid twice or not at all.
@@ -11116,6 +11212,12 @@ app.get("/fonts/LuckiestGuy.ttf", (req, res) => {
 
 app.get("/cuna-staking", (req, res) => {
   res.sendFile(join(__dirname, "public", "cuna-staking.html"));
+});
+// Owner payout console. Main domain only: it is deliberately NOT in CUNA_STAKE_PATH, so on the
+// partner hosts it bounces home, and its API refuses anything that skipped the edge.
+app.get("/cuna-payout", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+  res.sendFile(join(__dirname, "public", "cuna-payout.html"));
 });
 
 // -- Fee Share / Analytics endpoints --

@@ -5,6 +5,8 @@
 
 const assert = require("assert");
 const p = require("../lib/cuna-payout");
+const pay = p;
+const SIG = "5" + "a".repeat(70);
 
 let pass = 0, fail = 0;
 const queue = [];
@@ -163,6 +165,60 @@ t("paid accumulates across batches", () => {
     ({ paid } = p.confirmBatch({ batch: b, paid }));
   }
   assert.strictEqual(paid.A, CUNA(3000));
+});
+
+section("partial sends — rows are confirmed one at a time");
+
+t("recordSent pays exactly the rows that confirmed, and leaves the rest owed", () => {
+  const days = { d1: { credits: { A: "100", B: "200", C: "300" } } };
+  const b = pay.buildBatch({ owed: pay.owedNow({ days, paid: {}, pending: {} }), batchId: "cb_1", nowUnix: 1 });
+  const r = pay.recordSent({ batch: b, paid: {}, results: [{ wallet: "A", sig: SIG }, { wallet: "C", sig: SIG }], nowUnix: 2 });
+  assert.deepStrictEqual(r.recorded, ["A", "C"]);
+  assert.strictEqual(r.paid.A, "100"); assert.strictEqual(r.paid.C, "300"); assert.strictEqual(r.paid.B, undefined);
+  assert.strictEqual(r.batch.state, "pending", "one row is still unsent");
+  assert.deepStrictEqual(Object.keys(r.remaining), ["B"]);
+  // owed now: A and C are paid, B is still held by the pending batch -> nobody is owed
+  const owed = pay.owedNow({ days, paid: r.paid, pending: { cb_1: r.batch } });
+  assert.deepStrictEqual(owed, { A: 0n, B: 0n, C: 0n });
+  // a NEW accrual after the partial send is owed again, on top
+  const days2 = { ...days, d2: { credits: { A: "5" } } };
+  assert.strictEqual(pay.owedNow({ days: days2, paid: r.paid, pending: { cb_1: r.batch } }).A, 5n);
+});
+
+t("THE ONE THAT MATTERS: a sent row is never counted twice — not by a replay, not by held+paid", () => {
+  const days = { d1: { credits: { A: "100", B: "200" } } };
+  const b = pay.buildBatch({ owed: pay.owedNow({ days, paid: {}, pending: {} }), batchId: "cb_1", nowUnix: 1 });
+  const r1 = pay.recordSent({ batch: b, paid: {}, results: [{ wallet: "A", sig: SIG }], nowUnix: 2 });
+  const r2 = pay.recordSent({ batch: r1.batch, paid: r1.paid, results: [{ wallet: "A", sig: SIG }], nowUnix: 3 });
+  assert.strictEqual(r2.paid.A, "100", "a replayed row inflated paid");
+  assert.deepStrictEqual(r2.recorded, []);
+  assert.strictEqual(r2.ignored[0].why, "already recorded");
+  // and the sent row is NOT also held as pending (that would double-subtract it from owed)
+  const owed = pay.owedNow({ days: { d1: { credits: { A: "150", B: "200" } } }, paid: r2.paid, pending: { cb_1: r2.batch } });
+  assert.strictEqual(owed.A, 50n, "the 50 accrued since should be owed; got " + owed.A);
+});
+
+t("closing a partly-sent batch keeps the sent rows paid and frees only the rest", () => {
+  const days = { d1: { credits: { A: "100", B: "200" } } };
+  const b = pay.buildBatch({ owed: pay.owedNow({ days, paid: {}, pending: {} }), batchId: "cb_1", nowUnix: 1 });
+  const r = pay.recordSent({ batch: b, paid: {}, results: [{ wallet: "A", sig: SIG }], nowUnix: 2 });
+  const closed = pay.cancelBatch({ batch: r.batch });
+  assert.strictEqual(closed.state, "closed");
+  const owed = pay.owedNow({ days, paid: r.paid, pending: { cb_1: closed } });
+  assert.strictEqual(owed.A, 0n, "A was paid and must not be re-offered");
+  assert.strictEqual(owed.B, 200n, "B never went and must be owed again");
+  assert.strictEqual(pay.cancelBatch({ batch: b }).state, "cancelled", "nothing sent -> cancelled, not closed");
+});
+
+t("recordSent refuses rows without a real signature or outside the batch, and completes on the last row", () => {
+  const days = { d1: { credits: { A: "100", B: "200" } } };
+  const b = pay.buildBatch({ owed: pay.owedNow({ days, paid: {}, pending: {} }), batchId: "cb_1", nowUnix: 1 });
+  const r = pay.recordSent({ batch: b, paid: {}, results: [{ wallet: "A", sig: "" }, { wallet: "Z", sig: SIG }, { wallet: "B", sig: SIG }], nowUnix: 2 });
+  assert.deepStrictEqual(r.recorded, ["B"]);
+  assert.strictEqual(r.ignored.length, 2);
+  const r2 = pay.recordSent({ batch: r.batch, paid: r.paid, results: [{ wallet: "A", sig: SIG }], nowUnix: 3 });
+  assert.strictEqual(r2.batch.state, "sent", "all rows in -> batch completes by itself");
+  assert.throws(() => pay.recordSent({ batch: r2.batch, paid: r2.paid, results: [], nowUnix: 4 }), /pending/);
 });
 
 (async () => {
