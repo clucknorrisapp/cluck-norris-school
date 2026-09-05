@@ -1,7 +1,8 @@
 "use strict";
 // The staking domain's origin-lockdown exemption, asserted against server.js itself.
 //
-// staking.cunatoken.com is pointed straight at Railway, so it cannot carry the Cloudflare edge
+// staking.cunatoken.com (and its alias lock.cunatoken.com) is pointed straight at Railway, so it
+// cannot carry the Cloudflare edge
 // header and is exempted from the origin lockdown for its own surfaces. That exemption is the one
 // place in the app where a request can skip the WAF, so its allowlist has to be exhaustive and
 // anchored. A single loose entry — "^/api/" — would be a hole through the WAF to every money
@@ -72,6 +73,38 @@ t("nothing can be smuggled past an anchored entry", () => {
                    "/cluck-util.js.map", "/fonts/LuckiestGuy.ttf/../../server.js"]) {
     assert.strictEqual(re.test(p), false, `${p} slipped through`);
   }
+});
+
+function stakeHosts() {
+  const m = SRC.match(/const CUNA_STAKE_HOSTS = String\(process\.env\.CUNA_STAKE_HOSTS \|\| "([^"]*)"\)/);
+  assert.ok(m, "CUNA_STAKE_HOSTS is not where this test expects it in server.js");
+  return m[1].split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+}
+
+t("the default host list carries staking. and the lock. alias, with their www forms", () => {
+  const hosts = stakeHosts();
+  for (const h of ["staking.cunatoken.com", "www.staking.cunatoken.com",
+                   "lock.cunatoken.com", "www.lock.cunatoken.com"]) {
+    assert.ok(hosts.includes(h), `${h} is not in the default CUNA_STAKE_HOSTS`);
+  }
+  assert.strictEqual(new Set(hosts).size, hosts.length, "duplicate host in the default list");
+});
+
+t("host matching is exact — an alias is not a suffix rule", () => {
+  // isStakeHost compares the whole hostname against the list. If it ever became a suffix or
+  // substring test, lock.cunatoken.com.attacker.tld would inherit the WAF exemption.
+  const m = SRC.match(/const isStakeHost = \(req\) => ([^;]+);/);
+  assert.ok(m, "isStakeHost moved");
+  const hosts = stakeHosts();
+  // eslint-disable-next-line no-new-func
+  const isStakeHost = new Function("CUNA_STAKE_HOSTS", "req", "return " + m[1] + ";")
+    .bind(null, hosts);
+  assert.strictEqual(isStakeHost({ hostname: "LOCK.CunaToken.com" }), true, "host match is case-sensitive");
+  for (const bad of ["lock.cunatoken.com.attacker.tld", "evil-lock.cunatoken.com",
+                     "cunatoken.com", "lock.cunatoken.com:8080", ""]) {
+    assert.strictEqual(isStakeHost({ hostname: bad }), false, `${bad} was treated as a staking host`);
+  }
+  assert.strictEqual(isStakeHost({}), false, "a missing hostname was treated as a staking host");
 });
 
 t("the admin handler refuses anything that skipped the edge, allowlist or not", () => {

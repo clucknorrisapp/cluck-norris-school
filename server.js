@@ -3314,10 +3314,14 @@ const isGameHost = (req) => NQ_GAME_HOSTS.includes(String(req.hostname || "").to
 // sfx,worlds}, /nq-assets, /nq-sw.js, the /normie-quest-x7* sub-pages). Keeping the list tight is
 // what makes the direct-DNS lockdown exemption below a GAME-surface exemption, not a site bypass.
 const NQ_GAME_PATH = /^\/($|\?)|^\/api\/nq\/|^\/normie-quest|^\/nq-assets\/|^\/nq-sw\.js$|^\/vendor\//;
-// ── CUNA staking domain (staking.cunatoken.com) ───────────────────────────
+// ── CUNA staking domain (staking.cunatoken.com, lock.cunatoken.com) ───────
 // Same shape as the game domain above: a partner-owned host pointed straight at Railway, so it
 // cannot carry the Cloudflare edge header and needs a scoped exemption from the origin lockdown.
-const CUNA_STAKE_HOSTS = String(process.env.CUNA_STAKE_HOSTS || "staking.cunatoken.com,www.staking.cunatoken.com")
+// Aliases are just extra entries in this comma-separated list — the exemption is per exact host,
+// so every alias also needs its own custom-domain entry in Railway or it never reaches us. A host
+// that resolves here but is MISSING from this list gets a 403, not the page: that is the correct
+// failure, but it looks like the site is down, so add the env var and the domain together.
+const CUNA_STAKE_HOSTS = String(process.env.CUNA_STAKE_HOSTS || "staking.cunatoken.com,www.staking.cunatoken.com,lock.cunatoken.com,www.lock.cunatoken.com")
   .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
 const isStakeHost = (req) => CUNA_STAKE_HOSTS.includes(String(req.hostname || "").toLowerCase());
 // ⚠️ EXHAUSTIVE, NOT A PREFIX. Every entry is anchored at both ends and names one exact surface the

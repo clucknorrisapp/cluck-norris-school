@@ -230,8 +230,8 @@ debt.
 | `lib/cuna-programme.js` | armed/disarmed, the config guard, one-day-once accrual |
 | `lib/cuna-burn.js` | burn decisions + claim planning |
 | `lib/cuna-payout.js` | owed / pending / paid bookkeeping |
-| `public/cuna-staking.html` | the page — `/cuna-staking`, and `/` on staking.cunatoken.com |
-| `scripts/cuna-*-test.cjs` | 127 tests, all in CI |
+| `public/cuna-staking.html` | the page — `/cuna-staking`, and `/` on the CUNA staking hosts |
+| `scripts/cuna-*-test.cjs` | 162 tests, all in CI |
 | `scripts/cuna-lock-scan-live.cjs` | who qualifies today, read from the chain |
 | `scripts/cuna-lock-whois.cjs` | check wallets against every CUNA lock |
 
@@ -239,8 +239,12 @@ debt.
 block.** Everything in there silently fails to start when either is unset — an accrual that stopped
 for that reason would mean people earning nothing with no error anywhere.
 
-**`staking.cunatoken.com` is exempt from the origin lockdown** for eight exact paths, anchored at
-both ends. `/api/cuna-stake/admin` is deliberately absent, and the handler refuses anything carrying
+**The CUNA staking hosts are exempt from the origin lockdown** for ten exact paths, anchored at
+both ends. The hosts come from `CUNA_STAKE_HOSTS` (comma-separated; default
+`staking.cunatoken.com,www.staking.cunatoken.com,lock.cunatoken.com,www.lock.cunatoken.com`) and are
+matched WHOLE, never as a suffix. Adding an alias is two steps that must happen together: add the
+custom domain in Railway, and add the host to the env var — a host that resolves to us but is
+missing from the list gets a 403, which is the correct failure but reads as "the site is down". `/api/cuna-stake/admin` is deliberately absent, and the handler refuses anything carrying
 `req.cluckDirect` before it even compares the key. `scripts/cuna-stake-routing-test.cjs` reads that
 regex out of `server.js` so it cannot drift. **Never widen it with a prefix** — `^/api/` there is a
 hole through the WAF to every money endpoint for anyone who points a DNS record at our origin.
