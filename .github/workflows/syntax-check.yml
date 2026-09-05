@@ -279,6 +279,13 @@ jobs:
         env:
           NQ_LB_REQUIRE_ROUTER: "1"
         run: node normie-quest/test/nq-leaderboard-test.cjs
+      # The payout-loop cases need @solana/web3.js (whirlpool-vault), so they SKIP in node-check.
+      # Here the deps exist, and GIVEAWAY_REQUIRE_VAULT turns that skip into a failure — this loop
+      # is the send/record/confirm ordering on the prize money path and must not go untested.
+      - name: giveaway payout tests (full, incl. the send/record/confirm loop)
+        env:
+          GIVEAWAY_REQUIRE_VAULT: "1"
+        run: node scripts/giveaway-holdcheck-test.cjs
       - name: Normie Quest prize-claim test (full, incl. signatures + routes)
         env:
           NQ_CLAIMS_REQUIRE_DEPS: "1"
