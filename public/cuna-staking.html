@@ -90,7 +90,7 @@
   </div>
 
   <div class="card hero">
-    <div class="lbl">TODAY&rsquo;S REWARD POOL</div>
+    <div class="lbl">REWARD POOL &mdash; EVERY DAY</div>
     <div class="big" id="pool">&mdash;</div>
     <div class="lbl" style="margin-top:10px">SPLIT ACROSS EVERYONE LOCKED</div>
     <div class="muted" style="color:#ffe9f6;margin-top:8px" id="poolsub">Reading the chain&hellip;</div>
@@ -100,7 +100,6 @@
     <div class="k">THE DEAL</div>
     <div class="row"><span>Lock for at least</span><b id="tDur">&mdash;</b></div>
     <div class="row"><span>Smallest lock that counts</span><b id="tMin">&mdash;</b></div>
-    <div class="row"><span>Reward pool</span><b id="tShare">&mdash;</b></div>
     <div class="row"><span>Locks that qualify right now</span><b id="tCount">&mdash;</b></div>
     <div class="row"><span>CUNA currently earning</span><b id="tLocked">&mdash;</b></div>
     <p class="muted" style="margin:14px 0 0">Your share is your <b>amount &times; days still to run</b>.
@@ -243,14 +242,15 @@
       CFG = d; DEC = d.decimals || 9;
       $("notlive").hidden = !!d.armed;
       $("pool").textContent = toTokens(d.poolTodayRaw) + " CUNA";
+      // Deliberately does NOT quote a percentage or the size of the treasury's unlock (owner,
+      // 2026-09-05). The useful facts are the number and where it comes from; the fraction just
+      // invites "why only that much?" and puts a treasury figure on a public page for no reason.
       $("poolsub").textContent = d.armed
-        ? "That is " + d.terms.sharePct + "% of the " + toTokens(d.dailyUnlockRaw) +
-          " CUNA the vesting schedules release today. It is a share of tokens that were unlocking anyway, so it can never run dry."
-        : "This is what the pool would be today. Nothing is being paid out yet.";
+        ? "From tokens set aside for exactly this — a stream that unlocks daily, so the pool cannot run dry."
+        : "This is what the pool will be. Nothing is being paid out yet.";
       $("tDur").textContent = days(d.terms.minDurationDays);
       $("tMin").textContent = d.terms.minLockRaw && d.terms.minLockRaw !== "0"
         ? toTokens(d.terms.minLockRaw) + " CUNA" : "any amount";
-      $("tShare").textContent = d.terms.sharePct + "% of the daily unlock";
       $("tCount").textContent = d.armed ? String(d.qualifyingLocks) : "not started";
       $("tLocked").textContent = d.armed ? toTokens(d.totalQualifyingRaw) + " CUNA" : "not started";
       if (d.scanError) {
