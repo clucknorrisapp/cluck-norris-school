@@ -8779,6 +8779,9 @@ async function pollProjectBuyBots() {
 // Full rationale (including why this scans incrementally rather than once at the end) is in
 // lib/cuna-giveaway.js. Read-only against the chain — nothing here signs or moves funds.
 const cunaGiveaway = require("./lib/cuna-giveaway");
+// Concurrency on the payout is guarded by a TTL'd lock in the giveaway STORE
+// (payoutLockAcquire/Release), not by a variable here — Railway runs more than one process and a
+// module-scope boolean guards exactly one of them.
 
 // PUBLIC: the live board. No key, no wallet — it is all on-chain anyway, and the whole point is
 // that anyone can check it. Cached-lite via no-store so the pinned Telegram board and the page
@@ -8942,15 +8945,28 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     //   - recipients come ONLY from the sealed draw, never from the query string, so this cannot
     //     be used to send tokens to an arbitrary address;
     //   - alternates and zero-prize rows are excluded;
-    //   - already-paid winners are subtracted first (payoutOwed), so a retry after a timeout
-    //     cannot pay anyone twice, and every landed signature is recorded immediately;
+    //   - already-paid winners are subtracted first (payoutOwed), and each signature is recorded
+    //     the moment the transfer is SUBMITTED (not after it confirms), so a retry after a
+    //     Cloudflare 524 or a mid-run redeploy cannot pay anyone twice. A sent-but-unconfirmed
+    //     record blocks a retry exactly like a confirmed one; &sweep=1 (or &unpay=) resolves it
+    //     against the chain so a dropped tx does not leave a winner permanently unpayable;
     //   - caps are passed to the vault, which also REFUSES to sign with a wallet that is the
     //     token's mint authority — that is what keeps the CLKN treasury (which is CUNA's mint
     //     authority) out of this path. Fund the CUNA operator hot wallet and pay from there.
     if (q.payout === "1") {
       const owed = cunaGiveaway.payoutOwed();
+      const lockState = cunaGiveaway.payoutLockState();
       if (!owed.ok) out.payout = owed;
-      else if (!owed.owed.length) out.payout = { ok: true, action: "none", reason: "every winner already paid", alreadyPaid: owed.alreadyPaid };
+      else if (!owed.owed.length) {
+        // "Everyone is paid" is only true if nothing is still unconfirmed. A run where all four
+        // transfers were sent and none confirmed leaves owed empty too — reporting that as
+        // complete is the same lie as the old unconditional action:"paid", one layer up.
+        out.payout = owed.pending && owed.pending.length
+          ? { ok: true, action: "none", reason: "nothing left to send, but " + owed.pending.length +
+              " transfer(s) are SENT AND UNCONFIRMED — verify these signatures on-chain, then &payout=1&sweep=1",
+              pending: owed.pending, alreadyPaid: owed.alreadyPaid }
+          : { ok: true, action: "none", reason: "every winner already paid", alreadyPaid: owed.alreadyPaid };
+      }
       else {
         const cfg = cunaGiveaway.config() || {};
         // WHICH WALLET PAYS. Defaults to the CUNA operator hot wallet; &from=treasury uses the
@@ -8959,19 +8975,59 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
         // file calls the treasury CUNA's mint authority, which is STALE. The vault re-checks
         // that itself on every call and refuses if it is ever true again.
         const payer = q.from === "treasury" ? "treasury" : "cuna";
-        const r = await whirlpoolMM.vault.payoutSpl({
+        // Record EACH recipient the moment its transfer is submitted, not once at the end of the
+        // batch. A restart (Railway redeploy) or a crash mid-loop used to leave nothing written,
+        // so the next run re-paid everyone who had already received their prize.
+        // A record failure must NOT be swallowed here. payoutSpl catches the throw, stops the
+        // batch, and reports which recipients went unsent — money leaving the wallet with nothing
+        // durable written is what makes the next run pay everyone again.
+        const onPaid = (row) => cunaGiveaway.recordPayout([row], owed.round);
+        // The lock is held in the STORE with a TTL, not in a module-scope boolean — Railway runs
+        // more than one process, and the 524-then-retry path can land on a different instance (or
+        // on a fresh one after a redeploy) where a boolean is back to false.
+        const lock = q.run === "1" ? cunaGiveaway.payoutLockAcquire(owed.round) : { ok: true, token: null };
+        if (!lock.ok) {
+          out.payout = { ok: false, error: 'payout_in_flight', lock,
+                         detail: 'a payout is already running (or crashed mid-run) — wait, then re-check ' +
+                                 '&payoutstate=1. A stale lock clears itself after 10 minutes.' };
+        } else {
+        let r;
+        try {
+        r = await whirlpoolMM.vault.payoutSpl({
+          onPaid,
           projectId: payer,
-          mintAddr: cfg.mint,
+          // Spend the mint the DRAW was sealed against, not whatever the config points at now.
+          // The mismatch check above refuses a changed mint, but the live draw predates mint
+          // pinning and carries no `mint` field, so it falls back to the config for that one.
+          mintAddr: owed.drawMint || cfg.mint,
           recipients: owed.owed,
           perRecipientMaxUi: Number(process.env.GIVEAWAY_MAX_PRIZE) || 10000000,
           totalMaxUi: Number(process.env.GIVEAWAY_MAX_PAYOUT) || 25000000,
           dryRun: q.run !== "1",
         });
-        if (r && r.action === "paid") r.recorded = cunaGiveaway.recordPayout(r.paid);
-        out.payout = { ...r, payer, owedBefore: owed.owed, alreadyPaid: owed.alreadyPaid };
+        } finally { if (lock.token) cunaGiveaway.payoutLockRelease(lock.token); }
+        out.payout = { ...r, payer, round: owed.round, mintPaid: owed.drawMint || cfg.mint,
+                       owedBefore: owed.owed, disqualified: owed.disqualified,
+                       flagged: owed.flagged, alreadyPaid: owed.alreadyPaid };
+        }
       }
     }
-    if (q.payoutstate === "1") out.payoutState = cunaGiveaway.payoutState();
+    // &sweep=1 resolves SENT-BUT-UNCONFIRMED records against the chain. A pending record blocks a
+    // retry on purpose, but confirmSig gives up near blockhash expiry, so a dropped transaction
+    // would otherwise leave that winner unpayable forever. Confirmed -> settled; definitively
+    // absent and well past expiry -> cleared back into `owed`; anything ambiguous is left alone.
+    if (q.sweep === "1") {
+      out.sweep = await cunaGiveaway.payoutSweepPending({
+        rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined });
+    }
+    // &unpay=<wallet>&sig=<sig> is the manual version, for when the sweep cannot decide. The
+    // signature must match the recorded one: clearing a payment record re-opens the door to
+    // paying that wallet again, so it must not be doable by wallet alone.
+    if (q.unpay) out.unpay = cunaGiveaway.payoutUnpay(String(q.unpay), String(q.sig || ""));
+    if (q.payoutstate === "1") {
+      out.payoutState = cunaGiveaway.payoutState();
+      out.payoutLock = cunaGiveaway.payoutLockState();
+    }
     out.standings = cunaGiveaway.standings(10);
     res.json(out);
   } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
