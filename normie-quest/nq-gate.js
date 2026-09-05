@@ -116,10 +116,21 @@ function freeWorlds() {
   return clamp([1, s.freeMax]);
 }
 
+// Does a granted `worlds` value ("all" or [lo, hi]) actually cover world N?
+// Exported because the LEADERBOARD needs it: a run that claims a world the wallet's tier never
+// granted cannot be a real run, and until now nothing checked that at score time.
+function allowsWorld(worlds, world) {
+  const w = Number(world);
+  if (!Number.isFinite(w) || w < 1) return false;
+  if (worlds === 'all') return true;
+  if (Array.isArray(worlds) && worlds.length === 2) return w >= Number(worlds[0]) && w <= Number(worlds[1]);
+  return false;   // unknown shape -> refuse rather than wave through
+}
+
 // Secret-free view for the client. NO thresholds, NO prices, NO unlock terms — just structure.
 function publicState() {
   const s = state();
   return { on: s.on, freeMax: s.freeMax, cap: s.cap };
 }
 
-module.exports = { state, setState, clearOverride, clamp, freeWorlds, publicState, statePath };
+module.exports = { allowsWorld, state, setState, clearOverride, clamp, freeWorlds, publicState, statePath };

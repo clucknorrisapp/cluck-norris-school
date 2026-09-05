@@ -104,6 +104,17 @@ jobs:
         run: node scripts/cuna-payout-test.cjs
       - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
         run: node scripts/cuna-announce-test.cjs
+      # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC
+      # submitter's Website/Icon/Telegram fields as live anchors while holding the admin key in
+      # sessionStorage. autopsy.html had a private safeUrl and nothing else got it.
+      - name: href scheme guard (safeUrl) + admin-panel escaping
+        run: node scripts/safe-url-test.cjs
+      # tgSend swallows its own errors and returns null, so three schedulers advanced durable
+      # state after sends that never landed — including one that permanently dropped new
+      # graduates. And /api/hatchery/minted announced "NEW TOKEN HATCHED" on proof that SOME
+      # unrelated transaction had succeeded.
+      - name: brand-channel broadcast integrity
+        run: node scripts/broadcast-integrity-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
@@ -119,6 +130,18 @@ jobs:
       # no outbound network, so it runs in this dependency-free job.
       - name: SSRF guard for caller-supplied URLs
         run: node scripts/safe-fetch-test.cjs
+      # The trade tape can miss trades three ways; only one of them used to be reported, so a
+      # rate-limited scan returned a SHORT tape that looked complete. The giveaway scanner is
+      # incremental and never looks back, so a silently-retired slice loses those trades forever
+      # — and a missed SELL leaves a wallet holding entries that decide who wins a prize.
+      - name: trade-tape coverage honesty
+        run: node scripts/tape-coverage-test.cjs
+      # Railway runs more than one process against one volume. Both school stores read their file
+      # once at boot and rewrote it wholesale, so a stale instance DELETED the other's work —
+      # lesson marks the graduation gate depends on, and issued transcripts. Spawns real child
+      # processes; it is the only honest way to test this.
+      - name: school stores survive a second process
+        run: node scripts/store-multiprocess-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —
@@ -127,6 +150,11 @@ jobs:
       # the file after npm ci with NQ_LB_REQUIRE_ROUTER=1, which turns that skip into a failure.
       - name: Normie Quest leaderboard anti-forgery test (dependency-free cases)
         run: node normie-quest/test/nq-leaderboard-test.cjs
+      # Nothing tied a leaderboard run to the wallet's ACCESS TIER, so a zero-holdings throwaway
+      # wallet could script its way to a world-21 run that reads as verified and NOT suspect —
+      # invisible to the suspect-run list reviewed before the weekly physical prize goes out.
+      - name: Normie Quest tier gate (a run cannot claim a world the wallet never had)
+        run: node normie-quest/test/nq-tier-gate-test.cjs
       # Prize claims need real ed25519 signatures (tweetnacl et al) — the whole file skips here
       # and runs strict in smoke-test. Kept in this job anyway so a syntax error still fails fast.
       - name: Normie Quest prize-claim test (skips without deps)
@@ -265,6 +293,17 @@ jobs:
       # job installs no dependencies.
       - name: token-authority revocation (byte-diff vs SPL Token)
         run: node scripts/token-authority-test.cjs
+      # The creator-trace cache is fed by the PUBLIC autopsy endpoint and used to grow without
+      # limit — a slow OOM anyone could drive from outside a memory-capped container. It lives in
+      # this job rather than node-check because lib/autopsy.js has dependencies, and node-check
+      # installs none.
+      - name: autopsy caches stay bounded
+        run: node scripts/cache-bound-test.cjs
+      # The AI tutor's free daily allowance was enforced ONLY in localStorage, so the real ceiling
+      # was ~21,600 billed Anthropic calls per IP per day. This boots the real server, because the
+      # cap has to fire in FRONT of the handler — a 429 after the paid call saves nothing.
+      - name: AI tutor daily cap is enforced server-side
+        run: node scripts/ai-daily-cap-test.cjs
       # The lock-and-earn page's post-lock "announce on X" card only appears after a real
       # signature, which no test can produce; this drives it through its test hook and checks the
       # post is built from config numbers, stays under 280, hides dollars when the price is
@@ -282,16 +321,38 @@ jobs:
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
+      # LP Lab progress used to be keyed by ARRAY INDEX, so inserting or reordering a lesson
+      # silently moved every learner's ticks onto different lessons. Nothing errors when that
+      # happens, which is exactly why it needs a test that looks at the rendered tiles.
+      - name: LP Lab progress survives a lesson insert
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          PORT=3111 node server.js & echo $! > /tmp/lp-srv.pid
+          for i in $(seq 1 40); do curl -sf http://127.0.0.1:3111/healthz >/dev/null && break; sleep 1; done
+          node scripts/lplab-progress-test.cjs http://127.0.0.1:3111
+          kill "$(cat /tmp/lp-srv.pid)" || true
       # Full leaderboard suite including the telemetry-router cases that node-check (no deps)
       # skips — here express is installed, so a skip means something is wrong and must fail.
       - name: Normie Quest leaderboard anti-forgery test (full, incl. telemetry router)
         env:
           NQ_LB_REQUIRE_ROUTER: "1"
         run: node normie-quest/test/nq-leaderboard-test.cjs
+      # The payout-loop cases need @solana/web3.js (whirlpool-vault), so they SKIP in node-check.
+      # Here the deps exist, and GIVEAWAY_REQUIRE_VAULT turns that skip into a failure — this loop
+      # is the send/record/confirm ordering on the prize money path and must not go untested.
+      - name: giveaway payout tests (full, incl. the send/record/confirm loop)
+        env:
+          GIVEAWAY_REQUIRE_VAULT: "1"
+        run: node scripts/giveaway-holdcheck-test.cjs
       - name: Normie Quest prize-claim test (full, incl. signatures + routes)
         env:
           NQ_CLAIMS_REQUIRE_DEPS: "1"
         run: node normie-quest/test/nq-claims-test.cjs
+      # The Owners Snapshot crawl is an hour of paid RPC reads per run, so an ungated
+      # /start is a public credit lever. This boots the server both ways and proves the
+      # gate closes — and that TOOLGATE_OFF still opens it.
+      - name: Owners Snapshot access gate
+        run: node scripts/owners-snapshot-gate-test.cjs
 
   # The static guards AND the smoke test above still cannot SEE the game's own render. Every costly
   # regression this year was visual and built/deployed clean: the HUD slid off-screen at 3x zoom, a

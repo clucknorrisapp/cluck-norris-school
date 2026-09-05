@@ -107,8 +107,33 @@ const CP_MIN_DWELL_MS = 8000;
 // ---- run tokens (HMAC) — storage-independent -----------------------------
 function sign(payload) { return crypto.createHmac('sha256', SECRET).update(payload).digest('hex').slice(0, 32); }
 function safeEq(a, b) { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); }
+// Consumed run-token nonces — the thing that makes a token single-use at /score. This was memory
+// ONLY, and CLAUDE.md is explicit that a push to `main` restarts the process (Railway auto-deploys
+// it). So every token accepted in the preceding 2h TTL became replayable the instant we deployed:
+// the same token+score resubmits cleanly and lands a second, non-suspect duplicate row. Backed by
+// a small file on the volume now, so a restart no longer forgets. Entries expire with the token's
+// own 2h TTL, so the file stays small on its own; it is a cache of REFUSALS, so a read failure
+// degrades to the old in-memory behaviour rather than blocking a legitimate submit.
+const NONCE_FILE = path.join(process.env.DATA_DIR || '/data', 'nq-run-nonces.json');
 const usedNonces = new Map();
-function pruneNonces() { const now = Date.now(); for (const [k, exp] of usedNonces) if (exp < now) usedNonces.delete(k); }
+let noncesLoaded = false;
+function loadNonces() {
+  if (noncesLoaded) return; noncesLoaded = true;
+  try {
+    const o = JSON.parse(fs.readFileSync(NONCE_FILE, 'utf8'));
+    if (o && typeof o === 'object') for (const k of Object.keys(o)) {
+      const exp = Number(o[k]); if (Number.isFinite(exp) && exp > Date.now()) usedNonces.set(k, exp);
+    }
+  } catch (e) {}
+}
+function saveNonces() {
+  try {
+    fs.mkdirSync(path.dirname(NONCE_FILE), { recursive: true });
+    require('../lib/atomic-write').atomicWriteFileSync(NONCE_FILE, JSON.stringify(Object.fromEntries(usedNonces)));
+  } catch (e) {}   // best effort: failing to persist must never refuse a real submit
+}
+function pruneNonces() { loadNonces(); const now = Date.now(); for (const [k, exp] of usedNonces) if (exp < now) usedNonces.delete(k); }
+function burnNonce(nonce) { usedNonces.set(nonce, Date.now() + RUN_TTL_MS); saveNonces(); }
 
 // ---- v2 tokens: a signed, DEDUPED list of the levels reached + their summed budget ceiling ------
 // Each level's budget is credited at most once (dedupe by name), so `max` is the honest ceiling of
@@ -194,7 +219,7 @@ function checkRun(tok) {
   if (age < 0 || age > RUN_TTL_MS) return { ok: false, status: 'expired' };
   pruneNonces();
   if (usedNonces.has(nonce)) return { ok: false, status: 'replay' };
-  usedNonces.set(nonce, Date.now() + RUN_TTL_MS);
+  burnNonce(nonce);
   return { ok: true, elapsedMs: age };
 }
 
@@ -207,10 +232,47 @@ function checkRun(tok) {
 // Non-consuming on purpose: it must work after the game-over submit (nonce already burned) and for
 // parked no-handle runs (nonce not yet burned). No escalation surface: the list — and therefore the
 // budget ceiling — is exactly what the original run proved, and boards dedupe best-per-player.
+// How many times ONE run may be continued. Generous — a real player dying repeatedly on a hard
+// world stays well under it — but finite, which is the whole point.
+const MAX_CONTINUES_PER_RUN = 25;
+const continueCounts = new Map();   // lineage key -> { n, exp }
+// A run's LINEAGE, stable across continues. continueRun preserves issuedAt and the proven level
+// list, so those two identify the original run even though the nonce is re-minted each time.
+function lineageKey(names, issuedAt) {
+  return crypto.createHash('sha256').update(names.join('|') + '@' + issuedAt).digest('hex').slice(0, 24);
+}
+
 function continueRun(token) {
   if (!token || token.v !== 2 || !Array.isArray(token.lv)) return { ok: false, status: 'bad_token' };
   const r = checkV2(token);
   if (!r.ok) return { ok: false, status: r.status };
+
+  // continueRun is deliberately NON-CONSUMING — it must not burn the nonce, or the legitimate
+  // submit that follows a continue would be rejected as a replay. But that also meant it never
+  // checked whether the run had ALREADY ENDED, so a client could keep handing back the same
+  // finished token and mint a fresh, once-usable nonce every time. Each of those carries the
+  // same honestly-proven level list and budget, so every one submits as a VALID, non-suspect
+  // row. It cannot inflate a rank (the budget ceiling and best-per-wallet dedupe both still
+  // apply), but it is an unbounded source of real leaderboard rows — which is exactly what
+  // feeds the MAX-cap eviction that can push a still-claimable winner out of the store.
+  //
+  // ⚠️ DO NOT "fix" this by refusing a token whose nonce is already burned. That was the obvious
+  // guard and it is WRONG: continuing AFTER a submit is the designed flow. Game over submits the
+  // score (burning the nonce), and the client then trades the ended token for a same-list reissue
+  // so the carried cumulative total keeps its proof — without that, the next submit looks like a
+  // forged score on a one-level token, which is the exact bug continueRun was added to fix. The
+  // leaderboard suite pins this ("game over burns the nonce" → continue → submit clean); a
+  // burned-nonce check fails four of its cases.
+  //
+  // So the bound is on VOLUME, not on the run being over: cap how many times one run lineage may
+  // be continued. The counter expires with the run's own 2h TTL.
+  const key = lineageKey(r.names, Number(token.issuedAt));
+  const now = Date.now();
+  for (const [k, v] of continueCounts) if (v.exp < now) continueCounts.delete(k);
+  const rec = continueCounts.get(key) || { n: 0, exp: now + RUN_TTL_MS };
+  if (rec.n >= MAX_CONTINUES_PER_RUN) return { ok: false, status: 'continue_limit' };
+  rec.n++; continueCounts.set(key, rec);
+
   const nonce = crypto.randomBytes(12).toString('hex');
   return { ok: true, token: mkV2(r.names, nonce, Number(token.issuedAt), Date.now()) };
 }
@@ -243,8 +305,59 @@ function jsonSave(arr) {
   try { fs.mkdirSync(path.dirname(FILE), { recursive: true }); require("../lib/atomic-write").atomicWriteFileSync(FILE, JSON.stringify(arr)); return true; }
   catch (e) { return false; }
 }
+// ---- MAX-cap eviction that cannot cost a real winner their prize ---------------------------
+// The cap used to be a flat `arr.slice(-MAX)` — pure insertion-order FIFO. A prize winner's row is
+// the ONLY record of them having won: nq-claims.js recomputes winners live from this store and
+// never consults the season archives, so evicting that row makes them permanently `not_a_winner`
+// even though the claim window is still open. And getting a valid non-suspect row into the store
+// is cheap (run-start → score, both 60/min/IP, no real play needed), so a few thousand junk
+// submits could push a genuine winner out with no owner action at all.
+//
+// So evict in order of what we can most afford to lose, and only take as many as we must:
+//   1. suspect rows (already excluded from every board and from winner selection), oldest first
+//   2. rows older than any still-open claim window — genuinely historical, oldest first
+//   3. inside the protected window, rows that are NOT that wallet's best — a wallet's runner-up
+//      run can never be the row a claim resolves against, so it is safe, oldest first
+//   4. last resort, lowest score first. A flood is by nature low-scoring and a winner is by
+//      definition top-scoring, so this is the ordering that keeps a winner alive longest.
+// A protected row is only dropped if steps 1-3 could not free enough, which needs MAX rows all
+// inside one claim window and all a distinct wallet's personal best.
+const CLAIM_PROTECT_MS = (() => {
+  const d = Number(process.env.NQ_CLAIM_DAYS);
+  const days = Number.isFinite(d) && d > 0 ? d : 14;   // mirrors nq-claims.claimDays()
+  // one week for the scoring week itself + the claim window + a day of slack for clock skew
+  return 7 * 24 * 60 * 60 * 1000 + (days + 1) * 24 * 60 * 60 * 1000;
+})();
+function pruneToMax(arr) {
+  const over = arr.length - MAX;
+  if (over <= 0) return arr;
+  const cutoff = Date.now() - CLAIM_PROTECT_MS;
+  // a wallet's best row inside the protected window is the one a claim can resolve against
+  const best = new Map();
+  for (const r of arr) {
+    if (!r || r.suspect || !r.walletVerified || !r.wallet || !(r.at >= cutoff)) continue;
+    const cur = best.get(r.wallet);
+    if (!cur || r.score > cur.score || (r.score === cur.score && r.at < cur.at)) best.set(r.wallet, r);
+  }
+  const protectedRows = new Set(best.values());
+  const tier = (r) => {
+    if (!r || r.suspect) return 0;
+    if (!(r.at >= cutoff)) return 1;
+    return protectedRows.has(r) ? 3 : 2;
+  };
+  // Sort a COPY of the index list, so we never disturb the stored insertion order of the survivors.
+  const idx = arr.map((r, i) => i);
+  idx.sort((a, b) => {
+    const ta = tier(arr[a]), tb = tier(arr[b]);
+    if (ta !== tb) return ta - tb;
+    if (ta === 3) return (Number(arr[a].score) || 0) - (Number(arr[b].score) || 0) || a - b;   // lowest score goes first
+    return a - b;   // oldest first within a tier
+  });
+  const drop = new Set(idx.slice(0, over));
+  return arr.filter((_, i) => !drop.has(i));
+}
 const jsonBackend = {
-  insert(e) { let arr = jsonLoad(); arr.push(e); if (arr.length > MAX) arr = arr.slice(-MAX); return jsonSave(arr); },
+  insert(e) { let arr = jsonLoad(); arr.push(e); if (arr.length > MAX) arr = pruneToMax(arr); return jsonSave(arr); },
   worldTop(w, n) { return rankDistinct(jsonLoad().filter((r) => r.world >= w && notSuspect(r)), n); },
   weeklyTop(n) { const ws = weekStartMs(); return rankDistinct(jsonLoad().filter((r) => r.at >= ws && notSuspect(r)), n); },
   allTimeTop(n) { return rankDistinct(jsonLoad().filter(notSuspect), n); },
@@ -341,7 +454,7 @@ async function add(entry, token) {
       // replay guard: the run nonce is single-use at SUBMIT (checkpoints reuse it, submit burns it)
       pruneNonces();
       if (usedNonces.has(token.nonce)) { tokenOK = false; status = 'replay'; }
-      else usedNonces.set(token.nonce, Date.now() + RUN_TTL_MS);
+      else burnNonce(token.nonce);
     }
   } else if (token && (token.sig || token.nonce)) {
     const r = checkRun(token); tokenOK = r.ok; status = r.ok ? 'ok' : r.status; elapsedMs = r.elapsedMs || 0;
@@ -359,6 +472,12 @@ async function add(entry, token) {
     suspect = score > 0 && (elapsedMs < MIN_RUN_MS || (score / secs) > MAX_PTS_PER_SEC || world > MAX_REAL_WORLD);
   }
 
+  // The caller can force suspect for a reason only IT can see. Today that is the route checking
+  // the wallet's live tier against the world being claimed — this module has no access to
+  // balances, and the run-token machinery deliberately never knew about wallets at all.
+  let forcedReason = null;
+  if (entry.forceSuspect) { suspect = true; forcedReason = String(entry.forceSuspect).slice(0, 40); }
+
   const e = {
     id: crypto.randomBytes(5).toString('hex'), at: Date.now(),
     name: cleanName(entry.name) || 'anon', world, level: clip(entry.level, 24).trim(), score,
@@ -369,7 +488,7 @@ async function add(entry, token) {
   };
   let ok; try { ok = await backend.insert(e); } catch (err) { return { ok: false, status: 'persist_failed' }; }
   if (ok === false) return { ok: false, status: 'persist_failed' };
-  return { ok: true, id: e.id, suspect, verified: tokenOK };
+  return { ok: true, id: e.id, suspect, verified: tokenOK, ...(forcedReason ? { suspectReason: forcedReason } : {}) };
 }
 
 async function topByWorld(world, n) { return backend.worldTop(intIn(world, 1, 99, 0), n || 10); }

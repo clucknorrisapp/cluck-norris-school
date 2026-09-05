@@ -513,15 +513,22 @@ async function buildLockReport(note = "") {
 async function notifyLockReport({ dryRun = false, note = "" } = {}) {
   const built = await buildLockReport(note);
   if (!built.ok) return built;
-  let xResult = null;
+  let xResult = null, tgMsgIdLock = null;
   if (!dryRun) {
     const prev = kv.get("lockSnapshot", null);
     const deltaTokens = (prev && typeof prev.tokens === "number") ? built.data.totalLocked - prev.tokens : 0;
-    await tgSend(process.env.TELEGRAM_CHAT_ID, built.msg);
-    kv.set("lockSnapshot", { tokens: built.data.totalLocked, ts: Date.now() });
+    // tgSend SWALLOWS ITS OWN ERRORS and returns null — a Telegram outage, a 429, a bad chat id
+    // all look identical to success from here. Advancing lockSnapshot on a send that never landed
+    // silently retires that day's locked-supply delta: the community never sees the post, and
+    // tomorrow's report measures from a baseline nobody was told about. Only move the baseline
+    // once the message is actually accepted; if it wasn't, leave it so tomorrow's delta spans
+    // both days and the number stays true.
+    tgMsgIdLock = await tgSend(process.env.TELEGRAM_CHAT_ID, built.msg);
+    if (tgMsgIdLock) kv.set("lockSnapshot", { tokens: built.data.totalLocked, ts: Date.now() });
+    else console.warn("[lock-report] Telegram send FAILED — baseline NOT advanced, tomorrow's delta will cover both days");
     xResult = await postLockToX(built.data, deltaTokens).catch(e => ({ ok: false, error: e.message })); // auto-post new locks to X (scoped carve-out)
   }
-  return { ok: true, posted: !dryRun, xResult, ...built };
+  return { ok: true, posted: !dryRun, telegramOk: dryRun ? null : !!tgMsgIdLock, xResult, ...built };
 }
 // Daily at 16:00 UTC (noon ET), minute-gated; persisted day-guard prevents repeats.
 let lastLockReportDay = kv.get("lockReportDay", -1);
@@ -1606,7 +1613,18 @@ async function postToX(text, opts = {}) {
   // (lock announcements, burn celebrations) pass {force:true} and would otherwise sail straight
   // past X_AUTOPOST_PAUSED from a staging box. A tweet is the one thing here that cannot be undone.
   if (IS_STAGING) return { ok: false, staging: true };
-  if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true }; // opts.force = scoped carve-out (lock announcements only) — see postLockToX
+  // WHAT X_AUTOPOST_PAUSED ACTUALLY SILENCES. This comment used to say the carve-out was "lock
+  // announcements only". It is not, and has not been for a long time — `force: true` is passed
+  // from eleven call sites. An operator flipping the pause during an incident, believing only
+  // lock posts continue, would still be publishing:
+  //   AUTONOMOUS  — lock announcements (postLockToX), project-burn celebrations
+  //                 (broadcastBurnCelebration), the daily lesson tweet + its reply, the lesson
+  //                 bump replies, chain spotlights, and approved queued content.
+  //   OPERATOR-TRIGGERED — the admin post/meme endpoints, which pass force because a human just
+  //                 asked for that specific post; those are not a surprise.
+  // Keep this list in step with the call sites, or the pause flag lies about its own scope.
+  if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true };
+  if (X_AUTOPOST_PAUSED) console.log(`[x-post] posting despite X_AUTOPOST_PAUSED (force carve-out) — ${String(text || "").slice(0, 60)}`);
   if (!xConfigured()) return { ok: false, skipped: true };
   const url = "https://api.x.com/2/tweets";
   const authHeader = xOAuthHeader("POST", url);
@@ -3488,8 +3506,14 @@ function clientIp(req) {
   const xff = String(req.headers["x-forwarded-for"] || "").split(",").map(s => s.trim()).filter(Boolean);
   return String(req.headers["cf-connecting-ip"] || (xff.length ? xff[xff.length - 1] : (req.ip || "")) || "unknown");
 }
-function rateLimit(bucket, { windowMs, max }) {
-  if (windowMs > RL_MAX_WINDOW_MS) RL_MAX_WINDOW_MS = windowMs;   // keep the sweep's retention >= every window
+// Retention is PER BUCKET, not one global maximum. It used to raise a single RL_MAX_WINDOW_MS to
+// the largest window any limiter declared, and the sweep then held every bucket's timestamps for
+// that long — so introducing one day-long limiter would quietly make all fifteen minute-long ones
+// retain a day of timestamps each. The sweep now trims each key by its own window.
+const RL_WINDOWS = new Map();   // bucket -> windowMs
+function rateLimit(bucket, { windowMs, max, message, onLimit }) {
+  RL_WINDOWS.set(bucket, Math.max(RL_WINDOWS.get(bucket) || 0, windowMs));
+  if (windowMs > RL_MAX_WINDOW_MS) RL_MAX_WINDOW_MS = windowMs;   // fallback for un-prefixed keys
   return (req, res, next) => {
     const ip = clientIp(req);
     const now = Date.now();
@@ -3501,8 +3525,11 @@ function rateLimit(bucket, { windowMs, max }) {
     if (!arr) { arr = []; RL_BUCKETS.set(key, arr); }
     while (arr.length && now - arr[0] > windowMs) arr.shift();
     if (arr.length >= max) {
-      res.setHeader("Retry-After", Math.ceil(windowMs / 1000));
-      return res.status(429).json({ success: false, error: "Rate limit exceeded — slow down." });
+      const retryAfter = Math.ceil((windowMs - (now - arr[0])) / 1000);
+      if (typeof onLimit === "function") { try { onLimit(ip, req); } catch (_) {} }
+      res.setHeader("Retry-After", Math.max(1, retryAfter));
+      return res.status(429).json({ success: false,
+        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter) });
     }
     arr.push(now);
     next();
@@ -3512,7 +3539,8 @@ function rateLimit(bucket, { windowMs, max }) {
 setInterval(() => {
   const now = Date.now();
   for (const [k, arr] of RL_BUCKETS) {
-    while (arr.length && now - arr[0] > RL_MAX_WINDOW_MS) arr.shift();
+    const w = RL_WINDOWS.get(k.slice(0, k.indexOf(":"))) || RL_MAX_WINDOW_MS;
+    while (arr.length && now - arr[0] > w) arr.shift();
     if (arr.length === 0) RL_BUCKETS.delete(k);
   }
 }, 120000).unref();
@@ -3532,6 +3560,35 @@ app.use("/api/helius-rpc", rateLimit("heliusrpc", { windowMs: 60000, max: 90 }))
 app.use("/api/helius-tx", rateLimit("heliustx", { windowMs: 60000, max: 30 }));
 app.use("/api/ask-cluck", rateLimit("ai", { windowMs: 60000, max: 15 }));
 app.use("/api/lecture", rateLimit("ai", { windowMs: 60000, max: 15 }));
+// A DAILY CEILING, because the free allowance was only ever enforced in the browser.
+//
+// AskCluck (src/shared.jsx) counts questions in localStorage against DAILY_LIMIT = 10. Clearing
+// site data resets it, and nothing server-side ever knew — so the only real ceiling was the
+// per-minute cap above, which permits ~21,600 billed Anthropic calls per IP per day. The tutor is
+// deliberately free and must stay that way, so this is set an order of magnitude above honest use
+// rather than at the advertised 10: a learner asking their ten questions never sees it, and it
+// leaves room for a shared IP (a school, an office, carrier NAT) where many real people share one
+// address. It cuts the worst case by ~99%.
+//
+// Env-tunable and killable: ASK_CLUCK_DAILY=0 (or AI_DAILY_OFF=1) disables it entirely. Learning
+// staying free is the mission; if this ever bites real learners, turn it off and re-tune.
+const AI_DAILY_MAX = process.env.AI_DAILY_OFF === "1" ? 0 : (Number(process.env.ASK_CLUCK_DAILY) || 150);
+if (AI_DAILY_MAX > 0) {
+  // LOG EVERY TIME IT BITES. This is a new limit on a free, mission-critical surface, and the only
+  // way to know whether it is catching abuse or catching a classroom behind one NAT is to look.
+  // Counted in kv so /api/ops surfaces it, and logged with the IP prefix only — never the full
+  // address, which is not something to accumulate about learners.
+  const aiDaily = rateLimit("aiday", { windowMs: 86400000, max: AI_DAILY_MAX,
+    message: "You've reached today's free question limit. Come back tomorrow — the school is free and stays free.",
+    onLimit: (ip, req) => {
+      try {
+        kv.set("aiDailyBlocks", (kv.get("aiDailyBlocks", 0) || 0) + 1);
+        console.warn(`[AI-DAILY] cap ${AI_DAILY_MAX} hit by ${String(ip).split(".").slice(0, 2).join(".")}.x.x on ${req.path}` +
+          ` — if this is a real learner, raise ASK_CLUCK_DAILY or set AI_DAILY_OFF=1`);
+      } catch (_) {}
+    } });
+  for (const route of ["/api/ask-cluck", "/api/lecture", "/api/lp-ask"]) app.use(route, aiDaily);
+}
 app.use("/api/track", rateLimit("track", { windowMs: 60000, max: 120 })); // learning-funnel events (many per session)
 app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
 // Heavy forensic GETs fan out to many billed Helius/ST/Bags upstream calls each;
@@ -8901,6 +8958,9 @@ async function pollProjectBuyBots() {
 // Full rationale (including why this scans incrementally rather than once at the end) is in
 // lib/cuna-giveaway.js. Read-only against the chain — nothing here signs or moves funds.
 const cunaGiveaway = require("./lib/cuna-giveaway");
+// Concurrency on the payout is guarded by a TTL'd lock in the giveaway STORE
+// (payoutLockAcquire/Release), not by a variable here — Railway runs more than one process and a
+// module-scope boolean guards exactly one of them.
 
 // PUBLIC: the live board. No key, no wallet — it is all on-chain anyway, and the whole point is
 // that anyone can check it. Cached-lite via no-store so the pinned Telegram board and the page
@@ -9064,15 +9124,28 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     //   - recipients come ONLY from the sealed draw, never from the query string, so this cannot
     //     be used to send tokens to an arbitrary address;
     //   - alternates and zero-prize rows are excluded;
-    //   - already-paid winners are subtracted first (payoutOwed), so a retry after a timeout
-    //     cannot pay anyone twice, and every landed signature is recorded immediately;
+    //   - already-paid winners are subtracted first (payoutOwed), and each signature is recorded
+    //     the moment the transfer is SUBMITTED (not after it confirms), so a retry after a
+    //     Cloudflare 524 or a mid-run redeploy cannot pay anyone twice. A sent-but-unconfirmed
+    //     record blocks a retry exactly like a confirmed one; &sweep=1 (or &unpay=) resolves it
+    //     against the chain so a dropped tx does not leave a winner permanently unpayable;
     //   - caps are passed to the vault, which also REFUSES to sign with a wallet that is the
     //     token's mint authority — that is what keeps the CLKN treasury (which is CUNA's mint
     //     authority) out of this path. Fund the CUNA operator hot wallet and pay from there.
     if (q.payout === "1") {
       const owed = cunaGiveaway.payoutOwed();
+      const lockState = cunaGiveaway.payoutLockState();
       if (!owed.ok) out.payout = owed;
-      else if (!owed.owed.length) out.payout = { ok: true, action: "none", reason: "every winner already paid", alreadyPaid: owed.alreadyPaid };
+      else if (!owed.owed.length) {
+        // "Everyone is paid" is only true if nothing is still unconfirmed. A run where all four
+        // transfers were sent and none confirmed leaves owed empty too — reporting that as
+        // complete is the same lie as the old unconditional action:"paid", one layer up.
+        out.payout = owed.pending && owed.pending.length
+          ? { ok: true, action: "none", reason: "nothing left to send, but " + owed.pending.length +
+              " transfer(s) are SENT AND UNCONFIRMED — verify these signatures on-chain, then &payout=1&sweep=1",
+              pending: owed.pending, alreadyPaid: owed.alreadyPaid }
+          : { ok: true, action: "none", reason: "every winner already paid", alreadyPaid: owed.alreadyPaid };
+      }
       else {
         const cfg = cunaGiveaway.config() || {};
         // WHICH WALLET PAYS. Defaults to the CUNA operator hot wallet; &from=treasury uses the
@@ -9081,19 +9154,59 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
         // file calls the treasury CUNA's mint authority, which is STALE. The vault re-checks
         // that itself on every call and refuses if it is ever true again.
         const payer = q.from === "treasury" ? "treasury" : "cuna";
-        const r = await whirlpoolMM.vault.payoutSpl({
+        // Record EACH recipient the moment its transfer is submitted, not once at the end of the
+        // batch. A restart (Railway redeploy) or a crash mid-loop used to leave nothing written,
+        // so the next run re-paid everyone who had already received their prize.
+        // A record failure must NOT be swallowed here. payoutSpl catches the throw, stops the
+        // batch, and reports which recipients went unsent — money leaving the wallet with nothing
+        // durable written is what makes the next run pay everyone again.
+        const onPaid = (row) => cunaGiveaway.recordPayout([row], owed.round);
+        // The lock is held in the STORE with a TTL, not in a module-scope boolean — Railway runs
+        // more than one process, and the 524-then-retry path can land on a different instance (or
+        // on a fresh one after a redeploy) where a boolean is back to false.
+        const lock = q.run === "1" ? cunaGiveaway.payoutLockAcquire(owed.round) : { ok: true, token: null };
+        if (!lock.ok) {
+          out.payout = { ok: false, error: 'payout_in_flight', lock,
+                         detail: 'a payout is already running (or crashed mid-run) — wait, then re-check ' +
+                                 '&payoutstate=1. A stale lock clears itself after 10 minutes.' };
+        } else {
+        let r;
+        try {
+        r = await whirlpoolMM.vault.payoutSpl({
+          onPaid,
           projectId: payer,
-          mintAddr: cfg.mint,
+          // Spend the mint the DRAW was sealed against, not whatever the config points at now.
+          // The mismatch check above refuses a changed mint, but the live draw predates mint
+          // pinning and carries no `mint` field, so it falls back to the config for that one.
+          mintAddr: owed.drawMint || cfg.mint,
           recipients: owed.owed,
           perRecipientMaxUi: Number(process.env.GIVEAWAY_MAX_PRIZE) || 10000000,
           totalMaxUi: Number(process.env.GIVEAWAY_MAX_PAYOUT) || 25000000,
           dryRun: q.run !== "1",
         });
-        if (r && r.action === "paid") r.recorded = cunaGiveaway.recordPayout(r.paid);
-        out.payout = { ...r, payer, owedBefore: owed.owed, alreadyPaid: owed.alreadyPaid };
+        } finally { if (lock.token) cunaGiveaway.payoutLockRelease(lock.token); }
+        out.payout = { ...r, payer, round: owed.round, mintPaid: owed.drawMint || cfg.mint,
+                       owedBefore: owed.owed, disqualified: owed.disqualified,
+                       flagged: owed.flagged, alreadyPaid: owed.alreadyPaid };
+        }
       }
     }
-    if (q.payoutstate === "1") out.payoutState = cunaGiveaway.payoutState();
+    // &sweep=1 resolves SENT-BUT-UNCONFIRMED records against the chain. A pending record blocks a
+    // retry on purpose, but confirmSig gives up near blockhash expiry, so a dropped transaction
+    // would otherwise leave that winner unpayable forever. Confirmed -> settled; definitively
+    // absent and well past expiry -> cleared back into `owed`; anything ambiguous is left alone.
+    if (q.sweep === "1") {
+      out.sweep = await cunaGiveaway.payoutSweepPending({
+        rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined });
+    }
+    // &unpay=<wallet>&sig=<sig> is the manual version, for when the sweep cannot decide. The
+    // signature must match the recorded one: clearing a payment record re-opens the door to
+    // paying that wallet again, so it must not be doable by wallet alone.
+    if (q.unpay) out.unpay = cunaGiveaway.payoutUnpay(String(q.unpay), String(q.sig || ""));
+    if (q.payoutstate === "1") {
+      out.payoutState = cunaGiveaway.payoutState();
+      out.payoutLock = cunaGiveaway.payoutLockState();
+    }
     out.standings = cunaGiveaway.standings(10);
     res.json(out);
   } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
@@ -12752,7 +12865,7 @@ YOUR SCHOOL -- KNOW THIS COLD:
 - Built on Bags.fm, powered by the CLKN token on Solana
 - CLKN contract: DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS
 - Trade CLKN at: bags.fm or Jupiter
-- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (12 lessons), the LP Lab, The Library, and Token Data
+- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (14 lessons), the LP Lab, The Library, and Token Data
 
 THE CLKN INCUBATOR:
 - For complete beginners. 7 lessons covering wallets, tokens, on-ramps and off-ramps, DEXs, liquidity, market cap, and staying safe.
@@ -12762,7 +12875,7 @@ SCHOOL OF HARD KNOCKS:
 - 12 progressive lessons with a belt ranking system from Freshman to Emeritus
 - Topics: liquidity pools, tokenomics, MEV, on-chain research, rugs and scams, DeFi strategies and more
 - Each lesson ends in a quiz. Progress saves automatically.
-- Complete all 12 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
+- Complete all 14 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
 
 THE LP LAB (its own tab, not inside the Library):
 - 14 lessons on liquidity providing, from the fundamentals to building a real strategy
@@ -12804,7 +12917,7 @@ CLKN TOKEN UTILITY:
   SOL price buys a 7-day pass to all of them. Premium forensics is separate: 2,000,000 CLKN,
   re-checked live. You connect a wallet and the gate resolves itself -- nothing is sent by hand.
 - Hold CLKN to be eligible for airdrops and exclusive rewards
-- Graduate all 12 lessons and submit your wallet for a transcript and an on-chain graduation NFT
+- Graduate all 14 lessons and submit your wallet for a transcript and an on-chain graduation NFT
 
 FIRECHICKEN CONNECTION:
 - FireChicken (FCKN) was the original token that built the community on Bags.fm
@@ -15680,16 +15793,111 @@ const ownersSnapshot = require("./lib/owners-snapshot").createEngine({
 app.get(["/owners-snapshot", "/owners"], (req, res) => {
   res.sendFile(join(__dirname, "public", "owners-snapshot.html"));
 });
-app.post("/api/owners-snapshot/start", (req, res) => {
+// ── Owners Snapshot access gate + spend caps ────────────────────────────────
+// Owner, 2026-09-03: "we also need some type caps on owners snapshot crawl they should hold at
+// least 50 dollars in CLKN to use … it could use too much resources to be free, we can grant
+// certain wallets free usage if needed." This SUPERSEDES the earlier "keep it free" call — one
+// crawl is up to an hour of paid Helius reads, so an ungated endpoint is a public credit lever
+// (audit finding, lib/owners-snapshot.js:148).
+//
+// Three ways in, checked in this order — the first two cost no network call:
+//   1. the admin key (adminAuthOK)
+//   2. the operator comp list (isToolComped → kv toolCompWallets, managed at /api/tool-comp)
+//      — this is the "grant certain wallets free usage" lever, and it already exists
+//   3. holding TOOLGATE_USD worth of CLKN, LIVE-PRICED. Never a hardcoded token amount
+//      (CLAUDE.md): the requirement is derived from the same toolGatePrice the tools pass uses.
+//
+// ⚠️ This endpoint FAILS CLOSED when CLKN has no usable price, unlike the general tools pass
+// which fails open. Deliberate: failing open here re-opens the credit drain the gate exists to
+// stop, and a snapshot is a heavy convenience rather than one of the safety basics CLAUDE.md
+// keeps free. TOOLGATE_OFF=1 still disables the gate entirely, as it does everywhere else.
+const OWNERS_SNAPSHOT_CAPS = {
+  perWalletPerDay: parseInt(process.env.OWNERS_SNAPSHOT_DAILY_PER_WALLET, 10) || 3,
+  totalPerDay: parseInt(process.env.OWNERS_SNAPSHOT_DAILY_TOTAL, 10) || 25,
+};
+function ownersSnapshotUsage() {
+  const today = new Date().toISOString().slice(0, 10);
+  const u = kv.get("ownersSnapshotUsage", null);
+  return (u && u.dayStamp === today) ? u : { dayStamp: today, total: 0, byWallet: {} };
+}
+// Counted only AFTER the job is actually queued, so a cooldown/queue_full rejection never
+// burns a caller's daily allowance.
+function ownersSnapshotCount(wallet) {
+  const u = ownersSnapshotUsage();
+  u.total += 1;
+  if (wallet) u.byWallet[wallet] = (u.byWallet[wallet] || 0) + 1;
+  kv.set("ownersSnapshotUsage", u);
+}
+async function ownersSnapshotGate(req) {
+  if (adminAuthOK(req)) return { ok: true, via: "owner", wallet: null };
+  if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return { ok: true, via: "gate-off", wallet: null };
+
+  const wallet = String((req.body && req.body.wallet) || req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) {
+    return { ok: false, status: 401, error: "wallet_required",
+      detail: "Connect the wallet you hold CLKN in — a snapshot is a long paid crawl, so it is holder-gated." };
+  }
+  const u = ownersSnapshotUsage();
+  if (u.total >= OWNERS_SNAPSHOT_CAPS.totalPerDay) {
+    return { ok: false, status: 429, error: "daily_cap_total", wallet,
+      detail: "The crawler has hit its daily limit across all users. Try again tomorrow." };
+  }
+  if ((u.byWallet[wallet] || 0) >= OWNERS_SNAPSHOT_CAPS.perWalletPerDay) {
+    return { ok: false, status: 429, error: "daily_cap_wallet", wallet,
+      detail: `That wallet has run ${OWNERS_SNAPSHOT_CAPS.perWalletPerDay} snapshots today. Existing results stay readable.` };
+  }
+  // Comp list short-circuits before any network call, so an RPC blip can never deny a grant.
+  let h = null;
+  try { h = await checkCLKNHolder(wallet); } catch (e) {
+    return { ok: false, status: 503, error: "holder_check_failed", wallet,
+      detail: "Could not read that wallet's CLKN balance just now — try again in a moment." };
+  }
+  if (h && h.comped) return { ok: true, via: "comped", wallet };
+
+  const priceUsd = toolGatePrice.usd || null;
+  if (!priceUsd) {
+    return { ok: false, status: 503, error: "price_unavailable", wallet,
+      detail: "CLKN pricing is unavailable right now, so the holder check cannot run. Try again shortly." };
+  }
+  const needed = Math.ceil(TOOLGATE.usd / priceUsd);
+  const bal = Number(h && h.balance) || 0;
+  if (bal < needed) {
+    return { ok: false, status: 403, error: "insufficient_holdings", wallet,
+      balance: bal, needed, holdUsd: TOOLGATE.usd, priceUsd,
+      detail: `Owners Snapshot needs about $${TOOLGATE.usd} of CLKN held (~${needed.toLocaleString()} CLKN at the current price). That wallet holds ${Math.round(bal).toLocaleString()}.` };
+  }
+  return { ok: true, via: "holder", wallet, balance: bal, needed };
+}
+// What the page renders its gate copy from — never hardcode the amount in the page (CLAUDE.md).
+app.get("/api/owners-snapshot/config", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const priceUsd = toolGatePrice.usd || null;
+  const u = ownersSnapshotUsage();
+  res.json({
+    ok: true,
+    gateOff: /^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || ""),
+    holdUsd: TOOLGATE.usd, priceUsd,
+    clknNeeded: priceUsd ? Math.ceil(TOOLGATE.usd / priceUsd) : null,
+    mint: CLKN_MINT_ADDR,
+    caps: OWNERS_SNAPSHOT_CAPS,
+    usedToday: { total: u.total, remaining: Math.max(0, OWNERS_SNAPSHOT_CAPS.totalPerDay - u.total) },
+  });
+});
+app.post("/api/owners-snapshot/start", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const mint = String((req.body && req.body.mint) || req.query.mint || "").trim();
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
-  const admin = adminAuthOK(req);
-  const out = ownersSnapshot.start({ mint, requestedBy: admin ? "owner" : clientIp(req), force: admin && req.query.force === "1" });
+  const gate = await ownersSnapshotGate(req);
+  if (!gate.ok) return res.status(gate.status).json({ ok: false, ...gate });
+  const admin = gate.via === "owner";
+  // requestedBy is the WALLET now, not the client IP — the gate means we always have one for a
+  // non-owner run, which also closes the audit finding about storing raw IPs in jobs.json.
+  const out = ownersSnapshot.start({ mint, requestedBy: admin ? "owner" : (gate.wallet || "anon"), force: admin && req.query.force === "1" });
   if (!out.ok && out.error === "cooldown") return res.status(429).json({ ok: false, error: "cooldown", retryAfterMs: out.retryAfterMs, job: out.job, detail: "This token was snapshotted recently — open the latest result, or re-run after the cooldown." });
   if (!out.ok && out.error === "queue_full") return res.status(503).json({ ok: false, error: "queue_full", detail: "The crawler queue is full right now — try again in a while." });
+  if (out.ok && gate.via !== "owner") ownersSnapshotCount(gate.wallet);
   try { analytics.trackTool("owners-snapshot"); } catch {}
-  res.json(out);
+  res.json({ ...out, accessVia: gate.via });
 });
 app.get("/api/owners-snapshot/status", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
@@ -16975,11 +17183,22 @@ async function sendOps12hReport({ send = true } = {}) {
       if (!ok) console.warn("[ops-report] sendPhoto failed:", r.status, (await r.text().catch(() => "")).slice(0, 160));
     } catch (e) { console.warn("[ops-report] sendPhoto error:", e.message); }
   }
-  if (!ok) { try { await tgSend(chat, caption, null, { silent: true }); ok = true; } catch (_) {} }
+  // The text fallback used to force ok = true right after the call, inside a try/catch that could
+  // never fire — tgSend catches everything internally and returns null rather than throwing. So a
+  // run where BOTH the chart post and the text fallback failed still reported sent:true to
+  // /api/ops-report?send=1, and still held the next attempt off for 12 hours.
+  const usedChart = ok && !!chartUrl;
+  if (!ok) {
+    const id = await tgSend(chat, caption, null, { silent: true });
+    ok = !!id;
+    if (!ok) console.warn("[ops-report] BOTH sendPhoto and the text fallback failed — not marking as sent");
+  }
 
   kv.set("opsReportPrev", { ts: Date.now(), mints, score: cur, vol24h: latest ? latest.vol24h : null });
-  kv.set("opsReportAt", Date.now());
-  return { sent: ok, usedChart: ok && !!chartUrl, caption };
+  // Only start the 12h clock if the report actually went out. Advancing it on a failure means the
+  // owner silently gets no ops report for half a day, having been told one was sent.
+  if (ok) kv.set("opsReportAt", Date.now());
+  return { sent: ok, usedChart, caption };
 }
 
 async function opsReportTick() {
@@ -17809,8 +18028,27 @@ async function schoolGradTick({ dryRun = false } = {}) {
     if (sentId && airdropWallets.length && !SCHOOL_AIRDROP_PROMPT_KILLED && schoolAirdrop.isEnabled()) {
       registerAirdropPrompt(sentId, { chatId: chat, wallets: airdropWallets, at: Date.now() });
     }
-    kv.set("schoolGradSeen", { creds: all.map(c => c.wallet), diplomas: mintedWallets, baselinedAt: seen.baselinedAt });
-    return { new: newCreds.length + newDip.length, alerted: !!chat };
+    // DO NOT RETIRE A GRADUATE THE OPERATOR WAS NEVER TOLD ABOUT.
+    //
+    // The watermark used to advance unconditionally. tgSend returns null on any failure, so a
+    // Telegram hiccup meant: the DM never arrived, registerAirdropPrompt never ran (it is gated on
+    // sentId), and the wallets were nonetheless marked seen — so no later tick would ever surface
+    // them again. A learner finished the course, minted a diploma, and their airdrop simply never
+    // happened, discoverable only by hand-diffing schoolGradSeen against the credential store.
+    //
+    // The "baseline still advances" note above is about the FIRST run establishing a baseline, not
+    // about a send that failed. When there is nothing new, or no chat is configured (documented
+    // skip), advancing is still right — retrying a send we deliberately never make would spin.
+    const gradNothingNew = !newCreds.length && !newDip.length;
+    const gradAdvanceOk = gradNothingNew || !chat || !!sentId;
+    if (gradAdvanceOk) {
+      kv.set("schoolGradSeen", { creds: all.map(c => c.wallet), diplomas: mintedWallets, baselinedAt: seen.baselinedAt });
+    } else {
+      console.warn(`[school-grad] Telegram DM FAILED for ${newCreds.length + newDip.length} new graduate(s) — ` +
+        `watermark NOT advanced, they will be re-surfaced on the next tick`);
+    }
+    return { new: newCreds.length + newDip.length, alerted: !!chat && !!sentId,
+             deferred: !gradAdvanceOk };
   } catch (e) { console.warn("[school-grad] tick:", e.message); return { error: e.message }; }
 }
 // ── Data-source health monitor ───────────────────────────────────────────────

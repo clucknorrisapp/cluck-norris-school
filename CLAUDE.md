@@ -160,6 +160,12 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 - **Never commit secrets**, and don't put a model identifier in committed files.
 - **Tell the truth about what you did.** If a check didn't run, say so. Most of the worst bugs
   here survived because something reported green on the wrong thing.
+- ⚠️ **`tgSend` and `postToX` SWALLOW their own errors and return null / `{ok:false}` — they never
+  throw.** So `await tgSend(...)` followed by a `kv.set` watermark is a silent-loss bug, not a
+  send: an outage looks exactly like success. Three schedulers had it (fixed 2026-09-04) — the
+  worst marked new graduates "seen" after a DM that never arrived, so no later tick resurfaced
+  them and their airdrop prompt never registered. **Check the return value, and never advance
+  durable state on a send that did not land.** `scripts/broadcast-integrity-test.cjs` guards it.
 
 ---
 
@@ -300,12 +306,22 @@ served the React shell at 200.
   check when "the bot isn't doing X."
 - **`X_AUTOPOST_PAUSED=true` hard-gates `postToX`.** A new auto-poster that doesn't pass
   `{force:true}` posts nothing and reports `{ok:false,paused:true}`. Carve-outs need an owner ask,
-  and must alert the operator chat on failure rather than failing silently. **Two carve-outs exist:**
-  lock announcements (`postLockToX`) and **project-burn celebrations** (`broadcastBurnCelebration`,
-  owner 2026-08-20 — every verified burn auto-posts X-then-Telegram). ⚠️ The burn broadcaster posts
+  and must alert the operator chat on failure rather than failing silently. ⚠️ **This list said
+  "two carve-outs" and was WRONG** (corrected 2026-09-04 — `force:true` is passed from ELEVEN call
+  sites). Autonomous posters that still reach X while paused: **lock announcements**
+  (`postLockToX`), **project-burn celebrations** (`broadcastBurnCelebration`,
+  owner 2026-08-20 — every verified burn auto-posts X-then-Telegram), the **daily lesson
+  tweet and its reply**, the **lesson bump replies**, **chain spotlights**, and **approved queued
+  content**. The operator-triggered admin post/meme endpoints also pass `force`, which is no
+  surprise — a human just asked for that post. `postToX` now LOGS a line every time the carve-out
+  fires, so the real scope is visible rather than inferred. **Keep this list in step with the
+  call sites.** ⚠️ The burn broadcaster posts
   **attacker-supplied token metadata** to the brand channels, so it hard-sanitizes the symbol to
   `[A-Za-z0-9]` (never the free-form name) and rate-limits itself (per-wallet/mint cooldown + hourly
   cap) so a griefer can't spam our X into a suspension. Don't loosen either without thinking it through.
+- **The CLKN X account has X Premium (owner, 2026-09-05), so brand posts may run past 280
+  characters** — don't trim an owner-initiated announcement to fit the classic limit. The 280
+  counter on the lock-and-earn page's announce card is for LOCKERS' own accounts and stays.
 - **A Telegram post with an image gets 1024 characters, not 4096** — and our own code silently
   truncates at 1024 while returning success. Count the caption; put load-bearing lines (the X
   link, a CTA) where truncation can't eat them. Recover with `&replaceMsg=<oldId>`.
@@ -335,6 +351,17 @@ served the React shell at 200.
   override mechanism existed. Engine GATE logic is pure in `lib/engine-decisions.js` —
   changing a gate means updating `scripts/engine-sim-test.cjs` (CI runs it; each scenario is
   a real incident) and replaying it locally BEFORE shipping, not debugging in production.
+- ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`
+  defaults to `{}` (`lib/whirlpool-vault.js` ~358), so a missing kv key reads as *not paused*; and
+  `lib/kvstore.js` `mkdirSync`s `DATA_DIR` and reports persistent even when the volume is not the
+  real one, so a bad mount looks healthy while every flag silently resets. cuna/dnc/rose arming
+  falls back to `<X>_ENGINE_ON` env on kv loss the same way. A durable stop is therefore an ENV
+  VAR (`POKE_ENGINE_OFF=1`, `<X>_ENGINE_OFF=1`) or a code default, never a kv flag — which is why
+  POKE's code default was flipped to off on 2026-09-05 (verified read-only by an adversarial pass
+  that day: with the old default, a boot with an empty kv would have started POKE trading 20 s
+  later, signing with the treasury operator key). Verifying a stop via `lastTickTs` is invalid:
+  `tick()` returns on `paused` before writing it, so a registered scheduler no-oping every 2 min
+  is indistinguishable from an unregistered one. Only `paused` + the env/code gate tell you anything.
 - **Escape anything from an API, URL or chain metadata before `innerHTML`** — token names and
   symbols are attacker-controlled. Use `CluckUtil.esc`; five hand-rolled copies were missing the
   single-quote escape.

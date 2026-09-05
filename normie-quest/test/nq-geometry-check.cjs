@@ -31,6 +31,8 @@
  *   W8  a coin stacked on top of a powerup or airdrop
  *   W9  a VIP-world level missing the 'solana' SOL-ammo powerup
  *   W2  key higher than a double jump from ground with no platform near it
+ *   F15 a warp return point that is still inside a gap AFTER game_logic's spawn snap
+ *   W11 two gaps with under 48px of floor between them (the spawn snap's step-off is 24px)
  *
  * Usage: node normie-quest/test/nq-geometry-check.cjs [--json]
  * Zero deps, no browser — safe for CI (syntax-check workflow).
@@ -454,6 +456,36 @@ function check(lv) {
     // one ~2-screen (960px) window — that's a clump, even if each pair is >350px apart.
     for (let i = 0; i + 2 < pux.length; i++) {
       if (pux[i + 2] - pux[i] < 960) warns.push(`W6 powerup clump: 3 powerups within ${pux[i + 2] - pux[i]}px (x=${pux[i]}..${pux[i + 2]})`);
+    }
+  }
+
+  // F15/W11: a WARP RETURN must land the player on solid ground.
+  // returnFromHidden() spawns you back at `warp.x + 70` with no terrain awareness — 21-2's
+  // speakeasy return computes to x=1270, dead inside its own 1260-1380 pit. game_logic.js
+  // catches that at spawn time by snapping any spawn within 8px of a gap to the nearer solid
+  // edge + 24px (see the comment at `this.spawn=` — audit #9/#8, a VIP player fell in on
+  // arrival). All 19 current warps snap clean. But that snap takes the FIRST matching gap and
+  // then stops, so it can only ever be right while there is real floor to snap ONTO — which is
+  // a level-DATA property, and level data is what changes. These two rules keep it that way.
+  (lv.warps || []).forEach(w => {
+    const retX = Math.round(w[0] + 70);
+    const g0 = inGap(gaps, retX);
+    if (!g0) return;                                   // lands on floor already, nothing to snap
+    const snapped = (retX - g0[0] < g0[1] - retX)
+      ? Math.max(30, g0[0] - 24)
+      : Math.min((lv.width || 5200) - 30, g0[1] + 24);  // mirrors game_logic exactly
+    const g1 = inGap(gaps, snapped);
+    if (g1) fails.push(`F15 warp at x=${w[0]} returns to x=${retX} (in gap ${g0[0]}-${g0[1]}); the spawn snap sends it to ${snapped}, still inside gap ${g1[0]}-${g1[1]} — the player materialises over a pit`);
+  });
+  // The shape that would defeat the single-pass snap even for a spawn that isn't a warp return:
+  // two gaps with less floor between them than the snap's own 24px step-off on either side.
+  {
+    const sorted = gaps.slice().sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const floorBetween = sorted[i + 1][0] - sorted[i][1];
+      if (floorBetween > 0 && floorBetween < 48) {
+        warns.push(`W11 only ${floorBetween}px of floor between gaps ${sorted[i][0]}-${sorted[i][1]} and ${sorted[i + 1][0]}-${sorted[i + 1][1]} — a 24px spawn snap off either edge can miss it`);
+      }
     }
   }
   return { fails, warns };

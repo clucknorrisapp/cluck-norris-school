@@ -268,7 +268,10 @@
   });
   function renderPayout(j){
     var rows=j.reviewed||[];
-    $('#payoutSummary').innerHTML='<b style="color:#34d399">'+j.eligible+' eligible</b> · '+j.dq+' sold/DQ · '+j.manual+' manual · total bonus '+fmtTok(j.totalBonus)+' '+(curCampaign.tokenSymbol||'tokens');
+    // esc() the symbol: it is resolved server-side from the campaign's mint, so for any non-CLKN
+    // token it is attacker-set on-chain metadata landing in innerHTML — in the panel that builds
+    // and signs the vesting locks. It is escaped in the campaign list above; these two were missed.
+    $('#payoutSummary').innerHTML='<b style="color:#34d399">'+j.eligible+' eligible</b> · '+j.dq+' sold/DQ · '+j.manual+' manual · total bonus '+fmtTok(j.totalBonus)+' '+esc(curCampaign.tokenSymbol||'tokens');
     $('#payoutTable').innerHTML='<table><tr><th>Wallet</th><th>Bought</th><th>Bonus</th><th>Status</th><th></th></tr>'+
       rows.map(function(rw){
         var cls=rw.status==='eligible'?'elig':(rw.status==='dq'?'dq':'manual2');
@@ -292,7 +295,7 @@
     var rows=eligibleRows(); var n=rows.length;
     var total=rows.reduce(function(s,tr){ return s+(parseFloat(tr.querySelector('.bonusIn').value)||0); },0);
     var rent=(n*0.03).toFixed(2);
-    $('#distNote').innerHTML=n?('Will create <b>'+n+'</b> vesting lock'+(n===1?'':'s')+' ('+ (curCampaign.vest?(curCampaign.vest.months+' '+curCampaign.vest.interval+(curCampaign.vest.months>1?'s':'')):'')+'), total <b>'+fmtTok(total)+'</b> '+(curCampaign.tokenSymbol||'tokens')+'. You sign each — budget ~<b>'+rent+' SOL</b> rent + '+n+' signature'+(n===1?'':'s')+'.'):'No eligible winners to distribute.';
+    $('#distNote').innerHTML=n?('Will create <b>'+n+'</b> vesting lock'+(n===1?'':'s')+' ('+ (curCampaign.vest?(curCampaign.vest.months+' '+curCampaign.vest.interval+(curCampaign.vest.months>1?'s':'')):'')+'), total <b>'+fmtTok(total)+'</b> '+esc(curCampaign.tokenSymbol||'tokens')+'. You sign each — budget ~<b>'+rent+' SOL</b> rent + '+n+' signature'+(n===1?'':'s')+'.'):'No eligible winners to distribute.';
   }
   document.addEventListener('input',function(e){ if(e.target&&e.target.classList&&e.target.classList.contains('bonusIn')) updateDistNote(); });
   $('#copyPayout').addEventListener('click',function(){

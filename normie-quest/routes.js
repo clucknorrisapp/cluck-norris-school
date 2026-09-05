@@ -37,7 +37,11 @@ const promo = require('./nq-promo');     // weekly prize card + between-level pr
 function adminOK(req) {
   const k = String((req.query && req.query.key) || req.get('x-nq-key') || '');
   const want = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
-  return !!want && k === want;
+  // Constant-time, like masterOK below. This gate is the LOW-trust one (feedback, telemetry,
+  // dashboard — no funds, no PII), so the timing channel is not worth much; but secretEqual is
+  // already defined two lines down and a plain === here is the kind of inconsistency that gets
+  // copied into the next gate, where it would matter.
+  return !!want && secretEqual(k, want);
 }
 // MASTER KEY ONLY (security review 2026-08-30): adminOK's own header says the feedback key is
 // "no funds/PII" trust — but adminOK was gating the prizes console (DECRYPTED shipping
@@ -262,11 +266,43 @@ router.post('/api/nq/score', async (req, res) => {
     // Wallet verification is server-side: a score counts as walletVerified ONLY if the wallet's
     // session token checks out (never trust a client-supplied walletVerified flag).
     const walletVerified = !!(b.wallet && b.walletToken && wallet.checkSession(b.wallet, b.walletToken));
+
+    // DOES THIS WALLET'S TIER EVEN REACH THE WORLD IT IS CLAIMING?
+    //
+    // Nothing used to ask. run-start and run-checkpoint take no session token at all, and
+    // wallet/verify hands a valid session to ANY signature-valid keypair — tier 0, zero holdings,
+    // a Keypair.generate() with no funds. checkpoint() only enforces level-graph adjacency and an
+    // 8s dwell, both calibrated against "90 names in a minute", not against a patient script. So a
+    // throwaway wallet could walk the graph to world 21 over ~15 minutes of scripted calls, post a
+    // score kept just under the budget ceiling, and land on the board as verified and NOT suspect
+    // — invisible to the "☠ SUSPECT RUNS" list the owner reviews before handing out the weekly
+    // physical prize, which is the one human check standing between a forged run and a real prize.
+    //
+    // The access tiers are already the product's rule (free 1-3 · $5 → 4-12 · $50 → all). This
+    // just enforces that rule at the point the prize is decided: a run claiming a world the wallet
+    // was never entitled to play is flagged SUSPECT, not silently accepted.
+    //
+    // Flagged, NOT rejected, deliberately. Balances move — someone who legitimately played world
+    // 15 and then sold before submitting should land in front of the owner for a judgement call,
+    // not get a door slammed on them. Who actually wins is his decision; this only makes sure the
+    // decision is his to make.
+    let tierBlocked = null;
+    if (walletVerified) {
+      try {
+        const grant = await wallet.refresh(b.wallet, b.walletToken);
+        if (grant && grant.ok && !wallet.gate.allowsWorld(grant.worlds, b.world)) {
+          tierBlocked = { tier: grant.tier, worlds: grant.worlds, claimedWorld: Number(b.world) };
+        }
+      } catch (_) { /* RPC down — never turn a read failure into a refusal on someone's run */ }
+    }
+
     const r = await leaderboard.add(
       { name: b.name, world: b.world, level: b.level, score: b.score, lives: b.lives,
-        wallet: b.wallet, walletVerified, mode: b.mode, ua: req.get('user-agent') },
+        wallet: b.wallet, walletVerified, mode: b.mode, ua: req.get('user-agent'),
+        forceSuspect: tierBlocked ? 'world_above_wallet_tier' : null },
       b.token || null,
     );
+    if (tierBlocked) r.tierBlocked = tierBlocked;
     res.status(r.ok ? 200 : 400).json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
@@ -275,6 +311,11 @@ router.post('/api/nq/score', async (req, res) => {
 // challenge -> the player signs it in their wallet (no tx) -> verify checks the ed25519 signature
 // and reads NORMIE/CLKN balances to grant an access tier + a session token. Reads only; no funds.
 router.get('/api/nq/wallet/config', (req, res) => {
+  // The only public GET in this file without a throttle, and the one the client hits on every
+  // game launch. Ceiling is deliberately HIGH: this endpoint renders the paywall copy, so a
+  // false throttle would show a paying holder the wrong price (or no price at all). 240/min is
+  // far above any real client and still bounds a flood.
+  if (throttled(req, 'walletconfig', 240)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try { res.json({ ok: true, ...wallet.publicConfig() }); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
@@ -299,7 +340,15 @@ router.post('/api/nq/wallet/verify', async (req, res) => {
         const f = path.join(process.env.DATA_DIR || '/data', 'nq-wallet-usage.json');
         let m = {}; try { m = JSON.parse(fs.readFileSync(f, 'utf8')) || {}; } catch (e) {}
         const k = String(b.walletName).replace(/[^\w .-]/g, '').slice(0, 24) || 'unknown';
-        m[k] = (m[k] || 0) + 1;
+        // BOUND THE KEY COUNT. walletName is attacker-chosen, and completing a sign-challenge
+        // with a throwaway keypair costs nothing, so an unbounded map is a slow disk-filler —
+        // the one store in this file without a cap, while nq-feedback caps at 2000 and
+        // nq-ledger drops oldest. There are ~11 real wallet apps; 64 is generous headroom.
+        // A NEW name past the cap is dropped rather than evicting a real one, because the
+        // counts exist to answer "which apps do testers use" and an attacker must not be able
+        // to push Phantom out of that answer.
+        if (m[k] === undefined && Object.keys(m).length >= 64) { /* full — ignore novel names */ }
+        else m[k] = (m[k] || 0) + 1;
         require("../lib/atomic-write").atomicWriteFileSync(f, JSON.stringify(m));
       } catch (e) { /* counting is best-effort */ }
     }
@@ -965,6 +1014,11 @@ router.get('/normie-quest-x7/feedback', (req, res) => {
 router.get('/normie-quest-x7/dashboard', async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   if (!adminOK(req)) return res.status(404).send('Not found');
+  // WHOLE-BODY try/catch. Each data fetch below has its own guard, but the ~350 lines of template
+  // assembly after them did not — so a throw there left the request hanging with no response at
+  // all rather than failing cleanly. The sibling /prizes route already wraps its entire body;
+  // this is the only route in the file that did not.
+  try {
   const key = esc(String((req.query && req.query.key) || ''));
   // Granular death causes shipped in commit 3e2db4c (deploy 2026-07-20 15:39 UTC). Every event
   // BEFORE that carries the legacy generic "WRECKED BY FUD" label; everything after is specific.
@@ -1364,6 +1418,10 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '(function(){var k=new URLSearchParams(location.search).get("key")||"";if(!k)return;document.querySelectorAll("a.klink").forEach(function(a){try{var u=new URL(a.getAttribute("href"),location.origin);u.searchParams.set("key",k);a.setAttribute("href",u.pathname+u.search);}catch(e){}});})();'
     + '</script>'
     + '</body></html>');
+  } catch (e) {
+    console.warn('[nq-dashboard]', e && e.message);
+    if (!res.headersSent) res.status(500).send('dashboard error — see logs');
+  }
 });
 
 // ---- produced music files (optional) -------------------------------------

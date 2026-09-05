@@ -551,8 +551,8 @@ body{background:transparent;font-family:var(--body);}
     </div>
 
     <div class="card hidden-exit-card" id="hiddenExitCard">
-      <div class="card-title">🚨 HIDDEN-EXIT PATTERNS — TRANSFERRED, THEN THE RECIPIENTS DUMPED</div>
-      <div class="hidden-exit-blurb">Wallets that distributed tokens to multiple other wallets which then sold most or all of what they received. The most common exit-obfuscation move — the source looks clean on a sell scan because the actual selling happens from the recipients.</div>
+      <div class="card-title">🚨 TRANSFER-THEN-DUMP — TRANSFERRED OUT, THEN THE RECIPIENTS SOLD</div>
+      <div class="hidden-exit-blurb">Wallets that sent tokens to several other wallets, which then sold most or all of what they received. A sell scan of the source wallet alone would not show this — the selling happened from the recipients. What the transfers were <em>for</em> isn't on the chain; the transfers and the sells are.</div>
       <div class="hidden-exit-list" id="hiddenExitList"></div>
     </div>
 
@@ -646,7 +646,9 @@ function shortMint(m) { return m.slice(0, 4) + "…" + m.slice(-4); }
 const esc = CluckUtil.esc;
 // Only allow http(s) URLs in href — blocks javascript:/data: schemes from a
 // token's attacker-set social links. Returns "#" for anything else.
-function safeUrl(u){ const s=String(u==null?"":u).trim(); return /^https?:\/\//i.test(s) ? esc(s) : "#"; }
+// Shared, not private — this page had the only copy, which is why jupverify-admin.html never
+// got the same protection. It lives in cluck-util.js now; this alias keeps the call sites.
+const safeUrl = CluckUtil.safeUrl;
 function fmtUsd(n) {
   if (n === null || n === undefined || isNaN(n)) return "—";
   if (n === 0) return "$0";

@@ -70,12 +70,68 @@ for (const [re, what] of [
   [/(\d+)"?\s*,?\s*"?EXAMS/, "EXAMS"],
   [/(\d+)"?\s*,?\s*"?BEGINNER LESSONS/, "BEGINNER LESSONS"],
   [/Finish all (\d+) classes/, "Finish all N classes"],
+  // The CTA read "Start the 12-Class Course" three lines above a strapline already rendering
+  // LESSONS.length — so adding one lesson would have shown two different totals on one screen.
+  [/(\d+)-Class Course/, "N-Class Course"],
 ]) {
   const m = re.exec(appCode);
   if (m) {
     problems.push(
       `src/App.jsx — "${m[0].trim()}" hardcodes a curriculum count. Render it from ` +
       `LESSONS.length / INCUBATOR_LESSONS.length / QUIZ_QUESTION_COUNT instead, so it cannot drift.`
+    );
+  }
+}
+
+// 3. server.js tells the AI tutor how many lessons the school has. It cannot import App.jsx
+//    (JSX, and the school is a separate bundle), so the number is typed by hand there — and
+//    nothing could see it drift. A tutor confidently telling learners to "complete all 12
+//    lessons" when there are 13 is exactly the quiet-rot failure this guard exists for.
+//    Comments are stripped first, for the same reason as the App.jsx scan above.
+const serverCode = read("server.js").replace(/^\s*\/\/.*$/gm, "");
+for (const m of serverCode.matchAll(/(?:all\s+)?(\d+)\s+lessons\b/gi)) {
+  const n = Number(m[1]);
+  // Only judge numbers that are plausibly THIS count — the file also talks about the Incubator
+  // and the LP Lab, and flagging every "N lessons" in a 15k-line file would make this noisy
+  // enough to be ignored, which is worse than not checking.
+  if (n === counts.LESSONS || n === counts.INCUBATOR_LESSONS || n === counts.LP_LESSONS) continue;
+  problems.push(
+    `server.js — "${m[0]}" does not match any curriculum: ${counts.LESSONS} classes, ` +
+    `${counts.INCUBATOR_LESSONS} beginner lessons, ${counts.LP_LESSONS} LP Lab lessons. ` +
+    `This copy goes to learners through the AI tutor.`
+  );
+}
+
+// 4. THE i18n DICTIONARIES ARE KEYED BY THE ENGLISH SOURCE STRING. So a rendered string that
+//    embeds a curriculum count has its curated translation keyed to THAT count — change the
+//    count and the key no longer matches, the curated phrase is bypassed in all six languages,
+//    and the machine-translation fallback quietly fills in instead. Not a blank page, but a
+//    quality drop nobody would notice, in the exact place CLAUDE.md warns about.
+//
+//    The landing CTA is the live case: "🏫 Start the 12-Class Course" is a key in es/hi/it/pt/
+//    vi/zh.json. Rendering the number from LESSONS.length (which it now does, so the button and
+//    the strapline beneath it can never disagree) means adding a lesson silently orphans those
+//    six entries. This checks the keys still match, so that becomes a CI failure with
+//    instructions rather than a silent regression.
+const I18N_DIR = path.join(ROOT, "public", "i18n");
+const CTA_KEY = (n) => `🏫 Start the ${n}-Class Course`;
+if (fs.existsSync(I18N_DIR)) {
+  const expected = CTA_KEY(counts.LESSONS);
+  const stale = [];
+  for (const f of fs.readdirSync(I18N_DIR)) {
+    if (!/^[a-z]{2}\.json$/.test(f)) continue;              // the general dictionary only
+    let dict;
+    try { dict = JSON.parse(read(path.join("public", "i18n", f))); } catch (_) { continue; }
+    const keys = Object.keys(dict).filter((k) => /Start the \d+-Class Course/.test(k));
+    if (!keys.length) continue;                             // this language never had the phrase
+    if (!keys.includes(expected)) stale.push(`${f} (has "${keys[0]}")`);
+  }
+  if (stale.length) {
+    problems.push(
+      `public/i18n — the landing CTA is keyed to the OLD class count. Expected the key ` +
+      `"${expected}". Stale: ${stale.join(", ")}. The dictionaries are keyed by the English ` +
+      `source string, so these entries no longer match what renders and the curated translation ` +
+      `is silently replaced by machine translation. Update the key (and its translation) in each.`
     );
   }
 }

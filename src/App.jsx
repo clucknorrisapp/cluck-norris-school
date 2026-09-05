@@ -665,12 +665,21 @@ function Incubator({ onComplete, onBack }) {
 // counts only, no answers.
 function readCoursework() {
   const arr = (k) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return Array.isArray(v) ? v : []; } catch(e) { return []; } };
+  const lpLabCount = () => { try {
+    const v = JSON.parse(localStorage.getItem("lplab_completed") || "null");
+    if (Array.isArray(v)) return v.length;                       // legacy: bare index array
+    return (v && Array.isArray(v.ids)) ? v.ids.length : 0;       // current: {v:2, ids:[...]}
+  } catch(e) { return 0; } };
   let incubator = 0;
   try { const v = JSON.parse(localStorage.getItem("incubator_progress") || "{}"); incubator = Array.isArray(v.completed) ? v.completed.length : 0; } catch(e) {}
   return {
     belts: arr("clkn_completed").length, beltsTotal: LESSONS.length,
     incubator, incubatorTotal: INCUBATOR_LESSONS.length,
-    lpLab: arr("lplab_completed").length, lpLabTotal: LP_LESSONS_COUNT,
+    // LP Lab progress moved from a bare index array to {v:2, ids:[...]} (see LPLab.jsx — index
+    // keying silently reassigned everyone's ticks whenever a lesson was inserted or reordered).
+    // Read BOTH shapes: arr() alone returns [] for the new one, which would quietly report zero
+    // LP Lab lessons on the transcript for every learner who has done them.
+    lpLab: lpLabCount(), lpLabTotal: LP_LESSONS_COUNT,
   };
 }
 
@@ -1021,7 +1030,7 @@ function CLKNWidget() {
 }
 
 
-function Landing({onStart,onIncubator,onStartHere,completed}){
+function Landing({onStart,onIncubator,onStartHere,onClaim,completed}){
   const pct=Math.round((completed.length/LESSONS.length)*100);
   let consecutive=0;
   for(let i=0;i<LESSONS.length;i++){ if(completed.includes(LESSONS[i].id)) consecutive++; else break; }
@@ -1040,9 +1049,11 @@ function Landing({onStart,onIncubator,onStartHere,completed}){
       <h1 style={{fontFamily:"'Anton',sans-serif",fontSize:42,margin:"0 0 8px",color:"#FFB627",textTransform:"uppercase",letterSpacing:1,lineHeight:1}}>The School</h1>
       <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.6,margin:"0 auto 20px",maxWidth:420,fontStyle:"italic"}}>"No participation trophies. No hand-holding. Just hard knocks."</p>
 
-      {/* Primary CTA — the 12-class course */}
+      {/* Primary CTA — the course. The class count is DERIVED here: this button used to carry a
+          typed-in number three lines above a strapline already rendering LESSONS.length, so
+          adding one lesson would have put two different totals on the same screen. */}
       <button onClick={onStart} style={{background:"#FF7A18",border:"none",borderRadius:10,padding:"14px 40px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:2,textTransform:"uppercase",cursor:"pointer",boxShadow:"0 0 28px rgba(255,122,24,0.45)"}}>
-        {completed.length===0?"🏫 Start the 12-Class Course":"📚 Continue Class"}
+        {completed.length===0?`🏫 Start the ${LESSONS.length}-Class Course`:"📚 Continue Class"}
       </button>
       <p style={{marginTop:12,fontSize:13.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>{LESSONS.length} CLASSES • {QUIZ_QUESTION_COUNT} EXAMS • NO EXTRA CREDIT</p>
       <a href="/classroom" style={{display:"inline-block",marginTop:2,fontFamily:"'Anton',sans-serif",fontSize:13.5,letterSpacing:1,color:"#FF7A18",textDecoration:"none"}}>🎓 Prefer a live teacher? Take it in the Classroom →</a>
@@ -1062,6 +1073,18 @@ function Landing({onStart,onIncubator,onStartHere,completed}){
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
             <Belt belt="EMERITUS"/>
             <span style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FFB627",letterSpacing:1}}>🏆 SCHOOL COMPLETE</span>
+            {/* THE WAY BACK TO THE DIPLOMA. setScreen("complete") fires in exactly one place —
+                the frame the LAST lesson is newly passed — and "complete" is not in the SCREENS
+                whitelist that a reload restores from. So a learner who finished all 12 classes and
+                then refreshed, closed the tab, or simply came back later could never reach the
+                claim form again: replaying a finished lesson does not re-trigger it (that path is
+                gated on !completed.includes(id)), and the only other route out was "REPEAT THE
+                YEAR", which wipes all 12. They had done everything right and could not be
+                graduated. This button is the fix, and it is derived from `completed` rather than
+                from a one-shot transition, so it survives any reload. */}
+            <button onClick={onClaim} style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:1.5,
+              background:"linear-gradient(90deg,#FF7A18,#FFB627)",color:"#1a1200",border:"none",
+              borderRadius:8,padding:"8px 16px",cursor:"pointer"}}>🎓 CLAIM YOUR DIPLOMA</button>
           </div>
         ) : currentBelt ? (
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
@@ -1578,7 +1601,7 @@ export default function App(){
       </div>
       )}
       <div style={{paddingTop:screen==="clkn"?"calc(64px + env(safe-area-inset-top, 0px))":28}}>
-        {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} completed={completed}/>}
+        {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} onClaim={()=>setScreen("complete")} completed={completed}/>}
         {screen==="start"&&<StartHere onGo={(s)=>setScreen(s)}/>}
         {screen==="incubator"&&<Incubator onComplete={()=>{track("incubator_complete");setScreen("select");}} onBack={()=>setScreen("landing")}/>}
         {screen==="clkn"&&<CLKNWidget/>}

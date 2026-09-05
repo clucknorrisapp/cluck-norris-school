@@ -82,7 +82,56 @@ function ensurePhaser() {
   const WORKERS = Math.max(1, Math.min(6, parseInt(process.env.NQ_WORKERS, 10) || Math.max(1, Math.floor(CPUS / 2))));
   // …and the build genuinely IS slower with less CPU per browser, so the timeout has to scale
   // with contention rather than staying at the single-worker figure.
-  const BOOT_MS = Math.round(25000 * (1 + (WORKERS - 1) * 0.6));
+  const BOOT_BASE_MS = Math.round(25000 * (1 + (WORKERS - 1) * 0.6));
+  // ...and it has to scale with the LEVEL, not just with contention. The 25s figure was tuned on
+  // ~5200px levels; worlds 13+ run to 8400px with far more placed objects, and they legitimately
+  // take longer to build in headless Canvas. On a fully IDLE box, single worker, 14-2 still blew
+  // 25s and only passed on the 90s retry — so this was never purely contention.
+  //
+  // The file's own note above rightly warns that guessing a bigger timeout "just moves the line on
+  // whatever machine you happen to be on". This is not a guess: the budget is made PROPORTIONAL to
+  // the work, against the same 5200px baseline the 25s was calibrated on, so it travels across
+  // machines the way a flat bump would not. Contention scaling still multiplies on top.
+  //
+  // This also costs real time when it is wrong: every under-budgeted level burns its full timeout
+  // AND a browser relaunch before the retry, which is a large part of why a 90-level run took
+  // 7018s and still reported 14 levels as NO-LOAD.
+  const BOOT_BASELINE_WIDTH = 5200;
+  const bootMsFor = (lv) => Math.round(BOOT_BASE_MS * Math.max(1, (lv.width || 5000) / BOOT_BASELINE_WIDTH));
+  // Belt-and-braces teardown: capture the pid, close politely, then confirm the process really
+  // went and escalate if not.
+  //
+  // ⚠️ CORRECTION (2026-09-03) — read this before "improving" it. I first wrote this believing
+  // browser.close() leaks the headless GPU process and that those orphans accumulate. That was
+  // WRONG, and the way I convinced myself is worth recording: mid-run I saw three GPU processes
+  // where WORKERS=2, one of them 15 minutes old, and called it an orphan WITHOUT checking its
+  // parent. Every one of them turned out to have a live chromium parent, and every browser was
+  // held by the live node process — nothing was orphaned by close() at all. The genuine extra
+  // browser was the bootstrap session below (opened only to read __NQ_LEVELS_LIST, never closed),
+  // which is one idle browser for the whole run, not an accumulating leak.
+  //
+  // What actually starved the first 90-level run was ME: SIGKILLing earlier nq-verify and
+  // boss-ground node processes DOES orphan their chromium children (killing a parent reparents
+  // its children to init — a different mechanism from close() failing), and those orphans then
+  // competed with the run for a 4-core box. If a run is mysteriously slow, check for chromium
+  // whose PPID is 1 — that is the real signature, and `ps -o ppid=` is how you tell.
+  //
+  // This function is kept because verifying a close actually completed is cheap and honest, not
+  // because a leak was ever demonstrated here.
+  async function closeSession(sess) {
+    if (!sess) return;
+    let pid = null;
+    try { const proc = sess.browser.process(); pid = proc && proc.pid; } catch (_) {}
+    try { await sess.browser.close(); } catch (_) {}
+    if (!pid) return;
+    await new Promise(r => setTimeout(r, 500));            // let close() do it properly first
+    for (const sig of ['SIGTERM', 'SIGKILL']) {
+      try { process.kill(pid, 0); } catch (_) { return; }   // already gone — nothing to do
+      try { process.kill(-pid, sig); } catch (_) { try { process.kill(pid, sig); } catch (_) {} }
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }
+
   async function openSession() {
     const errs = [];
     const browser = await chromium.launch({ headless: true, executablePath: findChrome(), args: ['--no-sandbox', '--disable-dev-shm-usage'] });
@@ -102,8 +151,12 @@ function ensurePhaser() {
     return { browser, page, errs };
   }
 
-  let sess = await openSession();
-  let levels = await sess.page.evaluate(() => window.__NQ_LEVELS_LIST);
+  // One browser purely to read the level list. runShard() opens its OWN session per worker, so
+  // this one must be closed here or it idles for the entire run — which is exactly what it was
+  // doing (found 2026-09-03: a 37-minute-old browser alive beside the two worker browsers).
+  const bootSess = await openSession();
+  let levels = await bootSess.page.evaluate(() => window.__NQ_LEVELS_LIST);
+  await closeSession(bootSess);
   // Optional slice filter so a single world can be verified fast (avoids a 60+ level full run).
   //   NQ_ONLY="20-,21-"  → only levels whose name starts with one of these prefixes
   //   NQ_ONLY="55-66"    → only level indices in [55,66]
@@ -120,14 +173,18 @@ function ensurePhaser() {
   const shards = Array.from({ length: WORKERS }, () => []);
   levels.forEach((lv, n) => shards[n % WORKERS].push(lv));
   const activeShards = shards.filter(sh => sh.length);
-  console.log(`[nq-state-test] ${levels.length} levels across ${activeShards.length} worker(s), ${CPUS} cores, boot timeout ${BOOT_MS}ms`);
+  {
+    const budgets = levels.map(bootMsFor);
+    console.log(`[nq-state-test] ${levels.length} levels across ${activeShards.length} worker(s), ${CPUS} cores, `
+      + `boot timeout ${Math.min(...budgets)}-${Math.max(...budgets)}ms (scaled by level width)`);
+  }
 
   async function runShard(shardLevels) {
     const out = [];
     let sess = await openSession();
     let sinceRestart = 0;
     for (const lv of shardLevels) {
-      if (sinceRestart >= RESTART_EVERY) { try { await sess.browser.close(); } catch (_) {} sess = await openSession(); sinceRestart = 0; }
+      if (sinceRestart >= RESTART_EVERY) { await closeSession(sess); sess = await openSession(); sinceRestart = 0; }
       sinceRestart++;
       const page = sess.page;
       sess.errs.length = 0;
@@ -137,7 +194,7 @@ function ensurePhaser() {
         try {
           await page.waitForFunction(
             (name) => { try { return typeof window.__NQ_FORCEBOSS === 'function' && window.__NQ_DBG().level === name; } catch (e) { return false; } },
-            lv.name, { timeout: BOOT_MS }); // wide VIP levels + drone glows are heavy to build in headless Canvas; scales with worker contention
+            lv.name, { timeout: bootMsFor(lv) }); // wide VIP levels + drone glows are heavy to build in headless Canvas; scales with BOTH level width and worker contention
           row.booted = true;
         } catch (e) { row.booted = false; }
 
@@ -151,7 +208,7 @@ function ensurePhaser() {
         // on 2026-07-27 while passing serially on the identical build -- that is the case this
         // exists for.)
         if (!row.booted) {
-          try { await sess.browser.close(); } catch (_) {}
+          await closeSession(sess);
           sess = await openSession(); sinceRestart = 1;
           const p2 = sess.page;
           try {
@@ -183,7 +240,7 @@ function ensurePhaser() {
       const tag = (!row.booted ? 'NO-LOAD' : row.boss ? (row.stompable ? 'BOSS\u2713' : 'BOSS\u2717') : 'ok') + (row.retried ? ' (retried)' : '');
       process.stdout.write(`  [${String(row.i).padStart(2)}] ${row.name.padEnd(10)} ${tag}${row.errs.length ? '  ERR:' + row.errs.join('|') : ''}\n`);
     }
-    try { await sess.browser.close(); } catch (_) {}
+    await closeSession(sess);
     return out;
   }
 
