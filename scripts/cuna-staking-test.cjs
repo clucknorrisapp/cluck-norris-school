@@ -465,6 +465,46 @@ t("pool is the configured share of the day's unlock", () => {
   assert.strictEqual(s.poolForDay({ dailyUnlockRaw: "6632857000000000", sharePct: 20 }), 1326571400000000n);
 });
 
+t("a FIXED pool is a flat number, not arithmetic on a live stream", () => {
+  // 345,000/day: exactly half the 690,000 burn and 5x the 69,000 minimum lock. A percentage of
+  // the stream gives 331,643, which reads as a calculation rather than a decision.
+  const fixed = "345000000000000";
+  assert.strictEqual(s.poolForDay({ dailyUnlockRaw: "6632857000000000", fixedRaw: fixed }), BigInt(fixed));
+  // and it stays flat as the stream wobbles, which is the whole point
+  assert.strictEqual(s.poolForDay({ dailyUnlockRaw: "5000000000000000", fixedRaw: fixed }), BigInt(fixed));
+  assert.strictEqual(s.poolForDay({ dailyUnlockRaw: "9000000000000000", fixedRaw: fixed }), BigInt(fixed));
+});
+
+t("THE ONE THAT MATTERS: a fixed pool is still capped by the stream it comes from", () => {
+  // The guarantee is that this only ever hands out tokens that were unlocking anyway. The
+  // treasury's schedules DO finish; a flat 345,000 against a stream that has fallen to 200,000
+  // would be a promise the chain cannot keep.
+  const fixed = "345000000000000";           // 345,000
+  const thin = "200000000000000";            // the stream is down to 200,000/day
+  const pool = s.poolForDay({ dailyUnlockRaw: thin, fixedRaw: fixed, maxSharePct: 25 });
+  assert.strictEqual(pool, 50000000000000n);  // 25% of 200,000 = 50,000
+  assert.ok(pool < BigInt(fixed));
+  // never more than the ceiling, whatever the stream
+  for (const u of ["6632857000000000", "1000000000000000", "500000000000000", "1000000000"]) {
+    const p = s.poolForDay({ dailyUnlockRaw: u, fixedRaw: fixed, maxSharePct: 25 });
+    assert.ok(p * 100n <= BigInt(u) * 25n, `pool ${p} exceeded 25% of ${u}`);
+  }
+});
+
+t("clearing the fixed amount falls back to the percentage", () => {
+  for (const empty of [null, undefined, "", "0", 0]) {
+    assert.strictEqual(s.poolForDay({ dailyUnlockRaw: "1000000", fixedRaw: empty, sharePct: 5 }), 50000n);
+  }
+});
+
+t("a nonsense fixed amount or ceiling is refused, not silently treated as zero", () => {
+  assert.throws(() => s.poolForDay({ dailyUnlockRaw: "1000000", fixedRaw: "lots" }), /fixedRaw/);
+  assert.throws(() => s.poolForDay({ dailyUnlockRaw: "1000000", fixedRaw: "-5" }), /fixedRaw/);
+  for (const bad of [0, -1, 101, NaN, null]) {
+    assert.throws(() => s.poolForDay({ dailyUnlockRaw: "1000000", fixedRaw: "500", maxSharePct: bad }), /maxSharePct/);
+  }
+});
+
 t("a nonsense share is refused rather than silently treated as zero", () => {
   for (const bad of [0, -5, 101, NaN, null]) {
     assert.throws(() => s.poolForDay({ dailyUnlockRaw: "1000", sharePct: bad }), /sharePct/);

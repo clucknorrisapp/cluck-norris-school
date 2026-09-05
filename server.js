@@ -10431,7 +10431,8 @@ app.get("/api/cuna-stake/config", async (req, res) => {
     const locks = snap.locks || [];
     const nowUnix = Math.floor(Date.now() / 1000);
     const unlock = s.dailyUnlockRaw(locks, nowUnix, p.config.excludeWallets);
-    const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct });
+    const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct,
+      fixedRaw: p.config.poolDailyRaw, maxSharePct: p.config.maxSharePct });
     const eligible = locks.filter((l) => s.qualifies(l, p.config));
     let lockedRaw = 0n;
     for (const l of eligible) lockedRaw += BigInt(l.atRiskRaw);
@@ -10446,6 +10447,7 @@ app.get("/api/cuna-stake/config", async (req, res) => {
         minLockRaw: p.config.minLockRaw,
         maxWalletSharePct: p.config.maxWalletSharePct,
         sharePct: p.config.sharePct,
+        poolDailyRaw: p.config.poolDailyRaw,
         cancelableAllowed: false,   // owner, 2026-09-05 — a lock you can undo is not a commitment
       },
       dailyUnlockRaw: unlock.toString(),
@@ -10522,7 +10524,8 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
 
     if (String(q.config || "") === "1") {
       const patch = {};
-      for (const k of ["sharePct", "minDurationDays", "minLockRaw", "maxWalletSharePct"]) if (q[k] != null) patch[k] = q[k];
+      for (const k of ["sharePct", "minDurationDays", "minLockRaw", "maxWalletSharePct",
+                       "poolDailyRaw", "maxSharePct"]) if (q[k] != null) patch[k] = q[k];
       if (q.excludeWallets != null) {
         patch.excludeWallets = String(q.excludeWallets).split(",").map((x) => x.trim()).filter(Boolean);
       }
@@ -10556,7 +10559,8 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
     const snap = await cunaLocks({ force: String(q.rescan || "") === "1" });
     const locks = snap.locks || [];
     const unlock = s.dailyUnlockRaw(locks, nowUnix, p.config.excludeWallets);
-    const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct });
+    const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: p.config.sharePct,
+      fixedRaw: p.config.poolDailyRaw, maxSharePct: p.config.maxSharePct });
     const preview = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: p.config });
     // Manual accrual, for catching up a day the timer missed or for verifying a config change
     // took. Same gate as the timer: it still refuses a day already accrued.
@@ -10635,7 +10639,8 @@ async function cunaAccrualTick(reason) {
   }
   const locks = snap.locks || [];
   const unlock = s.dailyUnlockRaw(locks, nowUnix, gate.config.excludeWallets);
-  const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: gate.config.sharePct });
+  const pool = s.poolForDay({ dailyUnlockRaw: unlock.toString(), sharePct: gate.config.sharePct,
+    fixedRaw: gate.config.poolDailyRaw, maxSharePct: gate.config.maxSharePct });
   const day = s.accrueDay({ locks, poolRaw: pool.toString(), nowUnix, cfg: gate.config });
 
   days[gate.day] = {

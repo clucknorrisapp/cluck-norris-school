@@ -26,9 +26,14 @@ the same as one made on ours.
 | Cliff | **none**, on the lock or on claiming (owner, 09-05: *"remove the cliff part"*) |
 | Cancelable locks | **never earn** (owner, 09-05) |
 | Tiers | 3/6/9/12/15/18 months → **1×–6×**, from the weight formula alone |
-| Pool | **10%** of the treasury's daily unlock (owner, 09-05, down from 20: *"we can always go up later"*) |
-| Dust floor | 100,000 CUNA minimum lock; 1,000 CUNA minimum payout |
+| Pool | **345,000 CUNA/day flat** (owner, 09-05) — half the 690,000 burn, 5× the 69,000 floor, ~5.2% of the stream |
+| Dust floor | **69,000** CUNA minimum lock (~$1.60); 1,000 CUNA minimum payout |
 | Daily burn | **690,000 CUNA at 15:00 UTC** from the treasury, claim-first |
+
+⚠️ **The fixed pool is still capped at 25% of what actually unlocked that day.** The guarantee is
+that this only ever hands out tokens that were unlocking anyway — the treasury's schedules do
+finish, and a flat 345,000 against a stream that has fallen to 200,000 would be a promise the chain
+cannot keep. Set `poolDailyRaw=0` to fall back to the `sharePct` percentage mode.
 
 **Your share is your amount × days still to run.** That one line is the whole formula. There is no
 bonus table and there must never be one — the tiers already pay 1× to 6×, a CI test pins those

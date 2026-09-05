@@ -77,7 +77,10 @@ t("arming with a broken clock throws rather than storing a bad start", () => {
 section("the config guard");
 
 t("the defaults are the owner's numbers", () => {
-  assert.strictEqual(p.DEFAULTS.sharePct, 10);
+  assert.strictEqual(p.DEFAULTS.sharePct, 5);
+  // 345,000/day flat — half the 690,000 burn, 5x the 69,000 floor
+  assert.strictEqual(BigInt(p.DEFAULTS.poolDailyRaw) / 10n ** 9n, 345000n);
+  assert.strictEqual(p.DEFAULTS.maxSharePct, 25);
   assert.strictEqual(p.DEFAULTS.minDurationDays, 90);      // 3 months (owner, 2026-09-05)
   assert.strictEqual(p.DEFAULTS.minCliffDays, undefined);  // there is no cliff any more
   assert.deepStrictEqual(p.DEFAULTS.excludeWallets, [TREASURY]);
@@ -111,6 +114,15 @@ t("THE OTHER ONE: the treasury cannot be dropped from the exclude list", () => {
   // Adding wallets alongside it is fine — that is the normal edit.
   const ok = p.validateConfig({ excludeWallets: [TREASURY, "6A5uicTYmdVerq5JDKcb3XC9J8sv5F7zMKGqBBYXcnrh"] });
   assert.strictEqual(ok.excludeWallets.length, 2);
+});
+
+t("the fixed pool can be cleared to fall back to the percentage, but not corrupted", () => {
+  assert.strictEqual(p.validateConfig({ poolDailyRaw: "0" }).poolDailyRaw, "0");
+  assert.strictEqual(p.validateConfig({ poolDailyRaw: "" }).poolDailyRaw, "0");
+  assert.strictEqual(p.validateConfig({ poolDailyRaw: "500000000000000" }).poolDailyRaw, "500000000000000");
+  for (const bad of ["lots", "-1", "1.5", {}]) {
+    assert.throws(() => p.validateConfig({ poolDailyRaw: bad }), /poolDailyRaw/, `${JSON.stringify(bad)} accepted`);
+  }
 });
 
 t("a nonsense share is refused, not clamped", () => {
