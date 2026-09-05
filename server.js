@@ -495,15 +495,22 @@ async function buildLockReport(note = "") {
 async function notifyLockReport({ dryRun = false, note = "" } = {}) {
   const built = await buildLockReport(note);
   if (!built.ok) return built;
-  let xResult = null;
+  let xResult = null, tgMsgIdLock = null;
   if (!dryRun) {
     const prev = kv.get("lockSnapshot", null);
     const deltaTokens = (prev && typeof prev.tokens === "number") ? built.data.totalLocked - prev.tokens : 0;
-    await tgSend(process.env.TELEGRAM_CHAT_ID, built.msg);
-    kv.set("lockSnapshot", { tokens: built.data.totalLocked, ts: Date.now() });
+    // tgSend SWALLOWS ITS OWN ERRORS and returns null — a Telegram outage, a 429, a bad chat id
+    // all look identical to success from here. Advancing lockSnapshot on a send that never landed
+    // silently retires that day's locked-supply delta: the community never sees the post, and
+    // tomorrow's report measures from a baseline nobody was told about. Only move the baseline
+    // once the message is actually accepted; if it wasn't, leave it so tomorrow's delta spans
+    // both days and the number stays true.
+    tgMsgIdLock = await tgSend(process.env.TELEGRAM_CHAT_ID, built.msg);
+    if (tgMsgIdLock) kv.set("lockSnapshot", { tokens: built.data.totalLocked, ts: Date.now() });
+    else console.warn("[lock-report] Telegram send FAILED — baseline NOT advanced, tomorrow's delta will cover both days");
     xResult = await postLockToX(built.data, deltaTokens).catch(e => ({ ok: false, error: e.message })); // auto-post new locks to X (scoped carve-out)
   }
-  return { ok: true, posted: !dryRun, xResult, ...built };
+  return { ok: true, posted: !dryRun, telegramOk: dryRun ? null : !!tgMsgIdLock, xResult, ...built };
 }
 // Daily at 16:00 UTC (noon ET), minute-gated; persisted day-guard prevents repeats.
 let lastLockReportDay = kv.get("lockReportDay", -1);
@@ -1578,7 +1585,18 @@ async function deleteTweet(id) {
   } catch (e) { return { ok: false, error: publicErrMsg(e) }; }
 }
 async function postToX(text, opts = {}) {
-  if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true }; // opts.force = scoped carve-out (lock announcements only) — see postLockToX
+  // WHAT X_AUTOPOST_PAUSED ACTUALLY SILENCES. This comment used to say the carve-out was "lock
+  // announcements only". It is not, and has not been for a long time — `force: true` is passed
+  // from eleven call sites. An operator flipping the pause during an incident, believing only
+  // lock posts continue, would still be publishing:
+  //   AUTONOMOUS  — lock announcements (postLockToX), project-burn celebrations
+  //                 (broadcastBurnCelebration), the daily lesson tweet + its reply, the lesson
+  //                 bump replies, chain spotlights, and approved queued content.
+  //   OPERATOR-TRIGGERED — the admin post/meme endpoints, which pass force because a human just
+  //                 asked for that specific post; those are not a surprise.
+  // Keep this list in step with the call sites, or the pause flag lies about its own scope.
+  if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true };
+  if (X_AUTOPOST_PAUSED) console.log(`[x-post] posting despite X_AUTOPOST_PAUSED (force carve-out) — ${String(text || "").slice(0, 60)}`);
   if (!xConfigured()) return { ok: false, skipped: true };
   const url = "https://api.x.com/2/tweets";
   const authHeader = xOAuthHeader("POST", url);
@@ -15678,11 +15696,22 @@ async function sendOps12hReport({ send = true } = {}) {
       if (!ok) console.warn("[ops-report] sendPhoto failed:", r.status, (await r.text().catch(() => "")).slice(0, 160));
     } catch (e) { console.warn("[ops-report] sendPhoto error:", e.message); }
   }
-  if (!ok) { try { await tgSend(chat, caption, null, { silent: true }); ok = true; } catch (_) {} }
+  // The text fallback used to force ok = true right after the call, inside a try/catch that could
+  // never fire — tgSend catches everything internally and returns null rather than throwing. So a
+  // run where BOTH the chart post and the text fallback failed still reported sent:true to
+  // /api/ops-report?send=1, and still held the next attempt off for 12 hours.
+  const usedChart = ok && !!chartUrl;
+  if (!ok) {
+    const id = await tgSend(chat, caption, null, { silent: true });
+    ok = !!id;
+    if (!ok) console.warn("[ops-report] BOTH sendPhoto and the text fallback failed — not marking as sent");
+  }
 
   kv.set("opsReportPrev", { ts: Date.now(), mints, score: cur, vol24h: latest ? latest.vol24h : null });
-  kv.set("opsReportAt", Date.now());
-  return { sent: ok, usedChart: ok && !!chartUrl, caption };
+  // Only start the 12h clock if the report actually went out. Advancing it on a failure means the
+  // owner silently gets no ops report for half a day, having been told one was sent.
+  if (ok) kv.set("opsReportAt", Date.now());
+  return { sent: ok, usedChart, caption };
 }
 
 async function opsReportTick() {
@@ -16512,8 +16541,27 @@ async function schoolGradTick({ dryRun = false } = {}) {
     if (sentId && airdropWallets.length && !SCHOOL_AIRDROP_PROMPT_KILLED && schoolAirdrop.isEnabled()) {
       registerAirdropPrompt(sentId, { chatId: chat, wallets: airdropWallets, at: Date.now() });
     }
-    kv.set("schoolGradSeen", { creds: all.map(c => c.wallet), diplomas: mintedWallets, baselinedAt: seen.baselinedAt });
-    return { new: newCreds.length + newDip.length, alerted: !!chat };
+    // DO NOT RETIRE A GRADUATE THE OPERATOR WAS NEVER TOLD ABOUT.
+    //
+    // The watermark used to advance unconditionally. tgSend returns null on any failure, so a
+    // Telegram hiccup meant: the DM never arrived, registerAirdropPrompt never ran (it is gated on
+    // sentId), and the wallets were nonetheless marked seen — so no later tick would ever surface
+    // them again. A learner finished the course, minted a diploma, and their airdrop simply never
+    // happened, discoverable only by hand-diffing schoolGradSeen against the credential store.
+    //
+    // The "baseline still advances" note above is about the FIRST run establishing a baseline, not
+    // about a send that failed. When there is nothing new, or no chat is configured (documented
+    // skip), advancing is still right — retrying a send we deliberately never make would spin.
+    const gradNothingNew = !newCreds.length && !newDip.length;
+    const gradAdvanceOk = gradNothingNew || !chat || !!sentId;
+    if (gradAdvanceOk) {
+      kv.set("schoolGradSeen", { creds: all.map(c => c.wallet), diplomas: mintedWallets, baselinedAt: seen.baselinedAt });
+    } else {
+      console.warn(`[school-grad] Telegram DM FAILED for ${newCreds.length + newDip.length} new graduate(s) — ` +
+        `watermark NOT advanced, they will be re-surfaced on the next tick`);
+    }
+    return { new: newCreds.length + newDip.length, alerted: !!chat && !!sentId,
+             deferred: !gradAdvanceOk };
   } catch (e) { console.warn("[school-grad] tick:", e.message); return { error: e.message }; }
 }
 // ── Data-source health monitor ───────────────────────────────────────────────
