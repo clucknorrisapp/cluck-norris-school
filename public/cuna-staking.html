@@ -226,7 +226,7 @@
         ? toTokens(d.terms.minLockRaw) + " CUNA" : "any amount";
       $("tShare").textContent = d.terms.sharePct + "% of the daily unlock";
       $("tCount").textContent = d.armed ? String(d.qualifyingLocks) : "not started";
-      $("tLocked").textContent = d.armed ? toTokens(d.totalQualifyingRaw) + " CUNA" : "—";
+      $("tLocked").textContent = d.armed ? toTokens(d.totalQualifyingRaw) + " CUNA" : "not started";
       if (d.scanError) {
         $("poolsub").innerHTML += '<br/><span class="warn">Chain read is stale: ' + esc(d.scanError) + "</span>";
       }
@@ -243,9 +243,12 @@
     var minD = CFG.terms.minDurationDays;
     var ladder = [90, 180, 270, 365, 456, 547].filter(function (v) { return v >= minD; });
     if (!ladder.length) ladder = [minD];
+    var baseMonths = Math.round(ladder[0] / 30.4);
     $("dur").innerHTML = ladder.map(function (v) {
       var months = Math.round(v / 30.4);
-      var mult = (v / ladder[0]).toFixed(v % ladder[0] === 0 ? 0 : 1);
+      // From the MONTHS, not the raw days: 365/90 is 4.06, and "earns 4.1x" next to a table that
+      // says 4x reads like one of them is wrong.
+      var mult = Math.round(months / baseMonths);
       return '<option value="' + v + '">' + months + " months" +
              (v === ladder[0] ? " (minimum)" : " — earns " + mult + "\u00d7 the minimum") + "</option>";
     }).join("");
