@@ -10618,6 +10618,52 @@ const CUNA_BURN_KV = "cunaBurn";          // { armed, armedAt, config }
 const CUNA_BURN_DAYS_KV = "cunaBurnDays"; // { "YYYY-MM-DD": { sig, amountRaw, at } }
 const CUNA_BURN_TICK_MS = 30 * 60 * 1000;
 
+
+// Claim the treasury's own vested CUNA out of its Jupiter escrows and into its wallet, enough to
+// cover `needRaw` plus a few days of headroom. Own escrow -> own wallet: nothing leaves the
+// treasury and nothing is destroyed, which is why this is far safer than the burn it feeds.
+//
+// One transaction per escrow, so lib/cuna-burn.js:planClaims picks the fewest (biggest first)
+// rather than claiming all thirty locks every day.
+async function cunaClaimIntoWallet({ cfg, secret, needRaw }) {
+  const burnLib = require("./lib/cuna-burn");
+  const jupLock = require("./lib/jup-lock");
+  const { Keypair, VersionedTransaction, Transaction } = require("@solana/web3.js");
+  const bs58 = require("bs58");
+  const { connection } = require("./lib/rpc");
+  const conn = connection("confirmed");
+
+  const signer = Keypair.fromSecretKey(bs58.decode(String(secret).trim()));
+  if (signer.publicKey.toBase58() !== cfg.wallet) throw new Error("signing key does not match the configured wallet");
+
+  const escrows = await jupLock.listClaimable(cfg.wallet, cfg.mint);
+  // Five days of headroom, so this signs transactions roughly weekly rather than daily.
+  const plan = burnLib.planClaims(escrows, { needRaw, headroomRaw: (BigInt(cfg.amountRaw) * 5n).toString() });
+  if (!plan.claims.length) return { claimedRaw: "0", sigs: [], shortfallRaw: plan.shortfallRaw };
+
+  const sigs = [];
+  let claimedRaw = 0n;
+  for (const c of plan.claims) {
+    const built = await jupLock.buildClaimTx({ recipient: cfg.wallet, escrow: c.escrow });
+    if (!built || !built.ok) throw new Error(`could not build a claim for ${c.escrow}`);
+    const raw = Buffer.from(built.txBase64, "base64");
+    // buildClaimTx hands back an unsigned tx; refresh the blockhash before signing, because one
+    // built minutes ago has already started expiring. That failure mode has bitten here before.
+    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+    let tx;
+    try { tx = VersionedTransaction.deserialize(raw); tx.message.recentBlockhash = blockhash; tx.sign([signer]); }
+    catch (_) { tx = Transaction.from(raw); tx.recentBlockhash = blockhash; tx.feePayer = signer.publicKey; tx.sign(signer); }
+    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 3 });
+    // Confirm before counting it — a returned signature is RPC acceptance, not landing.
+    const conf = await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    if (conf && conf.value && conf.value.err) throw new Error(`claim ${sig} failed on-chain`);
+    sigs.push(sig);
+    claimedRaw += BigInt(c.claimableRaw);
+    console.log(`[cuna-burn] claimed ${(Number(c.claimableRaw) / 1e9).toLocaleString()} CUNA from ${c.escrow.slice(0, 8)}… — ${sig}`);
+  }
+  return { claimedRaw: claimedRaw.toString(), sigs, shortfallRaw: plan.shortfallRaw };
+}
+
 async function cunaBurnTick(reason) {
   const burnLib = require("./lib/cuna-burn");
   const stored = kv.get(CUNA_BURN_KV, null);
@@ -10651,6 +10697,28 @@ async function cunaBurnTick(reason) {
     }
   }
 
+  // CLAIM FIRST. The treasury's CUNA arrives in Jupiter escrows and only reaches the wallet when a
+  // claim transaction runs — without this the burner works for a fortnight and then goes short
+  // forever. Claiming is NON-DESTRUCTIVE: own escrow -> own wallet, nothing leaves the treasury.
+  // It runs only inside an armed, keyed, at-the-hour burn, so it cannot fire on its own.
+  let claimed = null;
+  if (secret && cfg.wallet && burnLib.readBurn(stored).armed) {
+    try {
+      const amount = BigInt(cfg.amountRaw);
+      if (BigInt(balanceRaw) < amount) {
+        claimed = await cunaClaimIntoWallet({ cfg, secret, needRaw: (amount - BigInt(balanceRaw)).toString() });
+        if (claimed && claimed.claimedRaw && claimed.claimedRaw !== "0") {
+          balanceRaw = (BigInt(balanceRaw) + BigInt(claimed.claimedRaw)).toString();
+        }
+      }
+    } catch (e) {
+      // A failed claim is not fatal — the burn gate below will simply report SHORT and skip,
+      // which is the correct outcome. Never let it throw past here and kill the tick.
+      console.error(`[cuna-burn] claim-first failed: ${e.message}`);
+      claimed = { error: publicErrMsg(e) };
+    }
+  }
+
   const gate = burnLib.burnGate({ burn: stored, burnedDays: done, nowUnix, balanceRaw, hasSigner: !!secret });
   if (!gate.ok) {
     // Quiet on the normal cases (this ticks twice an hour); loud on SHORT, because that is the
@@ -10659,7 +10727,7 @@ async function cunaBurnTick(reason) {
     else if (!/not armed|already burned|waiting for|CUNA_BURN_SECRET|no dev wallet/.test(gate.reason)) {
       console.warn(`[cuna-burn] not burning: ${gate.reason}`);
     }
-    return { ok: false, reason: gate.reason, balanceRaw };
+    return { ok: false, reason: gate.reason, balanceRaw, claimed };
   }
   if (!tokenAccount) return { ok: false, reason: "no CUNA token account on the wallet" };
 
@@ -10695,10 +10763,11 @@ async function cunaBurnTick(reason) {
       return { ok: false, reason: "transaction failed on-chain", sig };
     }
 
-    done[gate.day] = { sig, amountRaw: gate.amountRaw, at: nowUnix, wallet: cfg.wallet };
+    done[gate.day] = { sig, amountRaw: gate.amountRaw, at: nowUnix, wallet: cfg.wallet,
+                       claimed: claimed && claimed.claimedRaw ? claimed.claimedRaw : null };
     kv.set(CUNA_BURN_DAYS_KV, done);
     console.log(`[cuna-burn] ${gate.day} (${reason}): burned ${(Number(gate.amountRaw) / 1e9).toLocaleString()} CUNA — ${sig}`);
-    return { ok: true, day: gate.day, sig, amountRaw: gate.amountRaw };
+    return { ok: true, day: gate.day, sig, amountRaw: gate.amountRaw, claimed };
   } catch (e) {
     // Never record the day on a throw: an unrecorded day can be retried, a wrongly-recorded one
     // silently skips a burn forever.

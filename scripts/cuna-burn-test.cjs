@@ -159,6 +159,68 @@ t("a typo'd wallet is refused rather than burning from nowhere", () => {
   assert.throws(() => b.validateBurnConfig({ mint: "CUNA" }), /mint is not an address/);
 });
 
+section("claim-first: topping the wallet up before burning");
+
+const esc = (id, cuna) => ({ escrow: id, claimableRaw: (BigInt(cuna) * 10n ** 9n).toString() });
+
+t("it claims the fewest escrows that cover the need, biggest first", () => {
+  // One transaction per escrow. Claiming all thirty treasury locks daily would be thirty
+  // signatures and thirty fees for a shortfall one lock usually covers.
+  const r = b.planClaims([esc("a", 100000), esc("b", 900000), esc("c", 50000), esc("d", 400000)],
+    { needRaw: (690000n * 10n ** 9n).toString() });
+  assert.deepStrictEqual(r.claims.map((c) => c.escrow), ["b"]);
+  assert.strictEqual(r.shortfallRaw, "0");
+});
+
+t("it keeps going until the need is met", () => {
+  const r = b.planClaims([esc("a", 300000), esc("b", 300000), esc("c", 300000)],
+    { needRaw: (690000n * 10n ** 9n).toString() });
+  assert.strictEqual(r.claims.length, 3);
+  assert.strictEqual(BigInt(r.totalRaw), 900000n * 10n ** 9n);
+});
+
+t("a shortfall is REPORTED, not hidden", () => {
+  // "We will top up" and "the schedules cannot cover this today" are different facts.
+  const r = b.planClaims([esc("a", 1000)], { needRaw: (690000n * 10n ** 9n).toString() });
+  assert.strictEqual(r.claims.length, 1);
+  assert.strictEqual(BigInt(r.shortfallRaw), 689000n * 10n ** 9n);
+});
+
+t("headroom claims extra so this is not signing transactions every single day", () => {
+  const need = (100000n * 10n ** 9n).toString();
+  const bare = b.planClaims([esc("a", 100000), esc("b", 100000), esc("c", 100000)], { needRaw: need });
+  const roomy = b.planClaims([esc("a", 100000), esc("b", 100000), esc("c", 100000)],
+    { needRaw: need, headroomRaw: (150000n * 10n ** 9n).toString() });
+  assert.strictEqual(bare.claims.length, 1);
+  assert.strictEqual(roomy.claims.length, 3);
+  assert.strictEqual(roomy.shortfallRaw, "0", "headroom must not manufacture a shortfall");
+});
+
+t("escrows with nothing claimable are skipped, not signed for", () => {
+  const r = b.planClaims([esc("a", 0), { escrow: "b", claimableRaw: "junk" }, { claimableRaw: "5" },
+                          esc("c", 700000)], { needRaw: (690000n * 10n ** 9n).toString() });
+  assert.deepStrictEqual(r.claims.map((c) => c.escrow), ["c"]);
+});
+
+t("nothing needed means nothing signed", () => {
+  for (const n of ["0", "-1"]) {
+    assert.deepStrictEqual(b.planClaims([esc("a", 999999)], { needRaw: n }).claims, []);
+  }
+});
+
+t("the plan is deterministic — same inputs, same transactions", () => {
+  const set = [esc("a", 300000), esc("b", 300000), esc("c", 300000), esc("d", 300000)];
+  const need = (690000n * 10n ** 9n).toString();
+  const one = b.planClaims(set, { needRaw: need }).claims.map((c) => c.escrow);
+  const two = b.planClaims([...set].reverse(), { needRaw: need }).claims.map((c) => c.escrow);
+  assert.deepStrictEqual(one, two);
+});
+
+t("nonsense input throws rather than planning a wrong claim", () => {
+  assert.throws(() => b.planClaims([], { needRaw: "lots" }), /whole base units/);
+  assert.throws(() => b.planClaims([], { needRaw: "1", headroomRaw: "1.5" }), /whole base units/);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
