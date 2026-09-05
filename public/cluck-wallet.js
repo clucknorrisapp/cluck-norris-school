@@ -71,6 +71,205 @@
 
   var ORDER = Object.keys(WALLETS);
 
+  // ── Wallet Standard ───────────────────────────────────────────────────────────────────────
+  // Everything above finds wallets by the LEGACY injection (`window.solana`, `window.phantom`…).
+  // Newer wallets — Jupiter Mobile's in-app browser among them — announce themselves through the
+  // Wallet Standard instead: the page dispatches "wallet-standard:app-ready" with a register
+  // function, and each wallet calls it (or dispatches "wallet-standard:register-wallet" with a
+  // callback that we hand the same register function). A wallet that speaks ONLY the standard was
+  // invisible to available(), so someone standing inside that wallet's own browser was told to
+  // "open this page in your wallet's browser" (2026-09-05, a Jupiter Mobile user). No package: the
+  // protocol is two DOM events and a Set.
+  //
+  // The pages were written against the Phantom-style provider (connect() → {publicKey},
+  // signTransaction(web3 Transaction) → signed Transaction, signAndSendTransaction(tx) →
+  // {signature: base58}, signMessage(bytes) → {signature: bytes}). stdProvider() wraps a standard
+  // wallet in exactly that shape, so no page changes. The wallet still shows its own approval UI.
+  var STD_WALLETS = [];
+  var STD_LISTENERS = [];
+  function stdRegister() {
+    for (var i = 0; i < arguments.length; i++) {
+      var w = arguments[i];
+      if (!w || STD_WALLETS.indexOf(w) !== -1) continue;
+      STD_WALLETS.push(w);
+    }
+    for (var k = 0; k < STD_LISTENERS.length; k++) { try { STD_LISTENERS[k](); } catch (e) {} }
+    return function () {};   // the standard's unregister; we never drop a wallet mid-page
+  }
+  var STD_API = { register: stdRegister };
+  (function discover() {
+    if (!global.addEventListener || !global.dispatchEvent) return;
+    try {
+      global.addEventListener("wallet-standard:register-wallet", function (ev) {
+        var cb = ev && ev.detail;
+        if (typeof cb === "function") { try { cb(STD_API); } catch (e) {} }
+      });
+    } catch (e) {}
+    try { global.dispatchEvent(new CustomEvent("wallet-standard:app-ready", { detail: STD_API })); } catch (e) {}
+    // Deprecated fallback some wallets still use: navigator.wallets.push(callback)
+    try {
+      var nav = global.navigator;
+      if (nav) {
+        var existing = Array.isArray(nav.wallets) ? nav.wallets.slice() : [];
+        var shim = { push: function () { for (var i = 0; i < arguments.length; i++) { var cb = arguments[i]; if (typeof cb === "function") { try { cb(STD_API); } catch (e) {} } } } };
+        try { Object.defineProperty(nav, "wallets", { value: shim, configurable: true }); } catch (e) { try { nav.wallets = shim; } catch (e2) {} }
+        for (var i = 0; i < existing.length; i++) shim.push(existing[i]);
+      }
+    } catch (e) {}
+  })();
+
+  function stdIsSolana(w) {
+    if (!w || !w.features || !w.chains) return false;
+    var sol = false;
+    for (var i = 0; i < w.chains.length; i++) if (/^solana:/.test(String(w.chains[i]))) sol = true;
+    if (!sol) return false;
+    if (!w.features["standard:connect"]) return false;
+    return !!(w.features["solana:signTransaction"] || w.features["solana:signAndSendTransaction"] || w.features["solana:signMessage"]);
+  }
+
+  // Minimal base58 for the signature bytes signAndSendTransaction returns — pages pass that
+  // string to Solscan and getSignatureStatuses, so it has to be the real encoding.
+  var B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  function b58encode(bytes) {
+    var digits = [0], i, j, carry;
+    for (i = 0; i < bytes.length; i++) {
+      carry = bytes[i];
+      for (j = 0; j < digits.length; j++) { carry += digits[j] << 8; digits[j] = carry % 58; carry = (carry / 58) | 0; }
+      while (carry > 0) { digits.push(carry % 58); carry = (carry / 58) | 0; }
+    }
+    var out = "";
+    for (i = 0; i < bytes.length && bytes[i] === 0; i++) out += B58[0];
+    for (i = digits.length - 1; i >= 0; i--) out += B58[digits[i]];
+    return out;
+  }
+
+  function stdProvider(w) {
+    var account = null;
+    var pk = null;
+    function mkPk(address) {
+      var W3 = global.solanaWeb3;
+      if (W3 && W3.PublicKey) { try { return new W3.PublicKey(address); } catch (e) {} }
+      return { toString: function () { return address; }, toBase58: function () { return address; } };
+    }
+    function need() { if (!account) throw new Error("Connect the wallet first."); return account; }
+    function toBytes(tx) {
+      if (tx instanceof Uint8Array) return tx;
+      // web3.js legacy Transaction: leave room for the wallet's signature; VersionedTransaction
+      // serializes with no options.
+      if (tx && typeof tx.serialize === "function") {
+        return tx.version !== undefined ? tx.serialize() : tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+      }
+      throw new Error("Unsupported transaction object.");
+    }
+    function fromBytes(bytes, like) {
+      var W3 = global.solanaWeb3;
+      if (like instanceof Uint8Array || !W3) return bytes;
+      if (like && like.version !== undefined && W3.VersionedTransaction) return W3.VersionedTransaction.deserialize(bytes);
+      return W3.Transaction.from(bytes);
+    }
+    var p = {
+      isWalletStandard: true,
+      standardWallet: w,
+      name: w.name,
+      publicKey: null,
+      connect: function (opts) {
+        return Promise.resolve(w.features["standard:connect"].connect(opts && opts.onlyIfTrusted ? { silent: true } : undefined)).then(function (r) {
+          var accts = (r && r.accounts) || [];
+          account = null;
+          for (var i = 0; i < accts.length; i++) {
+            var a = accts[i], ch = a && a.chains ? a.chains : [];
+            for (var k = 0; k < ch.length; k++) if (/^solana:/.test(String(ch[k]))) { account = a; break; }
+            if (account) break;
+          }
+          if (!account) account = accts[0] || null;
+          if (!account || !account.address) throw new Error("Wallet returned no account.");
+          pk = mkPk(String(account.address));
+          p.publicKey = pk;
+          return { publicKey: pk };
+        });
+      },
+      disconnect: function () {
+        var f = w.features["standard:disconnect"];
+        account = null; pk = null; p.publicKey = null;
+        return f && f.disconnect ? Promise.resolve(f.disconnect()).catch(function () {}) : Promise.resolve();
+      },
+      signTransaction: function (tx) {
+        var f = w.features["solana:signTransaction"];
+        if (!f) return Promise.reject(new Error(w.name + " cannot sign a transaction here."));
+        return Promise.resolve(f.signTransaction({ transaction: toBytes(tx), account: need(), chain: "solana:mainnet" })).then(function (out) {
+          var o = out && out[0];
+          if (!o || !o.signedTransaction) throw new Error("Wallet returned no signed transaction.");
+          return fromBytes(o.signedTransaction, tx);
+        });
+      },
+      signAllTransactions: function (txs) {
+        var f = w.features["solana:signTransaction"];
+        if (!f) return Promise.reject(new Error(w.name + " cannot sign a transaction here."));
+        var acct = need();
+        var inputs = (txs || []).map(function (tx) { return { transaction: toBytes(tx), account: acct, chain: "solana:mainnet" }; });
+        return Promise.resolve(f.signTransaction.apply(f, inputs)).then(function (out) {
+          return (out || []).map(function (o, i) { return fromBytes(o.signedTransaction, txs[i]); });
+        });
+      },
+      signAndSendTransaction: function (tx, options) {
+        var f = w.features["solana:signAndSendTransaction"];
+        if (!f) {
+          // Wallet signs only: send it ourselves through the page's RPC, like the pages already do
+          // for the sign-first flows. Keeps the "wallet signs FIRST" rule intact.
+          return p.signTransaction(tx).then(function (signed) {
+            var raw = signed instanceof Uint8Array ? signed : signed.serialize();
+            if (!global.CluckUtil || !global.CluckUtil.rpc) throw new Error(w.name + " cannot send from here.");
+            var b = ""; for (var i = 0; i < raw.length; i++) b += String.fromCharCode(raw[i]);
+            return global.CluckUtil.rpc("sendTransaction", [btoa(b), { encoding: "base64", skipPreflight: !!(options && options.skipPreflight), maxRetries: 3 }])
+              .then(function (sig) { return { signature: sig, publicKey: pk }; });
+          });
+        }
+        return Promise.resolve(f.signAndSendTransaction({ transaction: toBytes(tx), account: need(), chain: "solana:mainnet", options: options || undefined })).then(function (out) {
+          var o = out && out[0];
+          if (!o || !o.signature) throw new Error("Wallet returned no signature.");
+          return { signature: b58encode(o.signature), publicKey: pk };
+        });
+      },
+      signMessage: function (msg) {
+        var f = w.features["solana:signMessage"];
+        if (!f) return Promise.reject(new Error(w.name + " cannot sign a message here."));
+        var bytes = msg instanceof Uint8Array ? msg : new TextEncoder().encode(String(msg));
+        return Promise.resolve(f.signMessage({ message: bytes, account: need() })).then(function (out) {
+          var o = out && out[0];
+          if (!o || !o.signature) throw new Error("Wallet returned no signature.");
+          return { signature: o.signature, publicKey: pk };
+        });
+      },
+    };
+    return p;
+  }
+  var STD_PROVIDERS = [];   // one shim per standard wallet, reused across available() calls
+  function stdProviderFor(w) {
+    for (var i = 0; i < STD_PROVIDERS.length; i++) if (STD_PROVIDERS[i].standardWallet === w) return STD_PROVIDERS[i];
+    var p = stdProvider(w); STD_PROVIDERS.push(p); return p;
+  }
+  function slug(name) { return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+  // Standard wallets as picker entries. A wallet that ALSO injects the legacy object (Phantom,
+  // Solflare, Backpack all do) is already in `found` under its registry id — skip it by name so
+  // one wallet is one button. A standard-only wallet whose name matches a registry entry (Jupiter)
+  // takes that id and icon; anything else gets a generic id and its own icon.
+  function stdEntries(found) {
+    var out = [];
+    var names = {};
+    for (var i = 0; i < found.length; i++) names[slug(found[i].name)] = true;
+    for (var k = 0; k < STD_WALLETS.length; k++) {
+      var w = STD_WALLETS[k];
+      if (!stdIsSolana(w)) continue;
+      var nm = slug(w.name);
+      if (names[nm]) continue;
+      names[nm] = true;
+      var id = null;
+      for (var j = 0; j < ORDER.length; j++) if (slug(WALLETS[ORDER[j]].name) === nm) { id = ORDER[j]; break; }
+      out.push({ id: id || ("std:" + nm), name: String(w.name || "Wallet"), icon: id ? WALLETS[id].icon : "👛", provider: stdProviderFor(w), standard: true });
+    }
+    return out;
+  }
+
   var state = { provider: null, pubkey: null, id: null };
 
   // A wallet's OWN in-app browser is the most reliable identity signal there is: it names itself in
@@ -83,7 +282,8 @@
   var UA_WALLETS = [
     { re: /SafePal/i,   id: "safepal" },
     { re: /Coin98/i,    id: "coin98" },
-    { re: /TokenPocket/i, id: "tokenpocket" }
+    { re: /TokenPocket/i, id: "tokenpocket" },
+    { re: /JupiterMobile|Jupiter Mobile|JupMobile/i, id: "jupiter" }
   ];
   function browserWallet() {
     var ua = (global.navigator && global.navigator.userAgent) || "";
@@ -91,6 +291,12 @@
       if (!UA_WALLETS[i].re.test(ua)) continue;
       var w = WALLETS[UA_WALLETS[i].id]; if (!w) continue;
       var pv = null; try { pv = w.detect(); } catch (e) { pv = null; }
+      if (!pv) {
+        // Not injected the legacy way — but if it registered through the Wallet Standard, that
+        // IS the wallet (Jupiter Mobile). Only then fall back to a bare window.solana.
+        var se = stdEntries([]);
+        for (var q = 0; q < se.length; q++) if (se[q].id === UA_WALLETS[i].id) { pv = se[q].provider; break; }
+      }
       if (!pv) pv = global.solana;   // UA says it's here even if its flags are unusual
       if (pv) return { id: UA_WALLETS[i].id, name: w.name, icon: w.icon, provider: pv };
     }
@@ -116,6 +322,9 @@
       seen.push(p);
       out.push({ id: id, name: WALLETS[id].name, icon: WALLETS[id].icon, provider: p });
     }
+    // Wallet Standard wallets that were not already found by injection (see stdEntries).
+    var std = stdEntries(out);
+    for (var m = 0; m < std.length; m++) out.push(std[m]);
     // Last resort: an injected wallet we don't have a signature for still works
     // if it speaks the standard interface. Better a generic entry than a dead end.
     if (!out.length && global.solana) out.push({ id: "unknown", name: "Wallet", icon: "👛", provider: global.solana });
@@ -284,12 +493,14 @@
     }
     last = sig();
     function poke() { if (!stopped) { last = "\u0000"; tick(); } }   // force a re-render on an explicit signal
+    STD_LISTENERS.push(poke);                                            // a standard wallet registering late
     try { global.addEventListener("solana#initialized", poke); } catch (e) {}
     try { global.addEventListener("load", poke); } catch (e) {}
     timers.push(setTimeout(tick, 400));
     return function stop() {
       stopped = true;
       for (var i = 0; i < timers.length; i++) clearTimeout(timers[i]);
+      var at = STD_LISTENERS.indexOf(poke); if (at !== -1) STD_LISTENERS.splice(at, 1);
       try { global.removeEventListener("solana#initialized", poke); } catch (e) {}
       try { global.removeEventListener("load", poke); } catch (e) {}
     };
