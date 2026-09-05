@@ -125,6 +125,12 @@ jobs:
       # — and a missed SELL leaves a wallet holding entries that decide who wins a prize.
       - name: trade-tape coverage honesty
         run: node scripts/tape-coverage-test.cjs
+      # Railway runs more than one process against one volume. Both school stores read their file
+      # once at boot and rewrote it wholesale, so a stale instance DELETED the other's work —
+      # lesson marks the graduation gate depends on, and issued transcripts. Spawns real child
+      # processes; it is the only honest way to test this.
+      - name: school stores survive a second process
+        run: node scripts/store-multiprocess-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —
