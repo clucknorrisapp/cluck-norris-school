@@ -69,8 +69,8 @@ t("normalizeEscrow produces exactly the fields the rules read, and no invented o
   const l = lock();
   assert.deepStrictEqual(Object.keys(l).sort(), [
     "atRiskRaw", "cancelMode", "cancelledAt", "claimedRaw", "cliffTime", "cliffUnlockRaw",
-    "creator", "escrow", "firstSeenAt", "frequency", "fullyVestedAt", "mint", "perDayRaw",
-    "perPeriodRaw", "periods", "recipient", "totalRaw", "vestingStartTime",
+    "creator", "declaredEndAt", "escrow", "firstSeenAt", "frequency", "fullyVestedAt", "mint",
+    "perDayRaw", "perPeriodRaw", "periods", "recipient", "totalRaw", "vestingStartTime",
   ]);
   for (const [k, v] of Object.entries(l)) assert.ok(v !== undefined && v !== null, `${k} is ${v}`);
   // The two fields Phase 1 invented must NOT come back to life.
@@ -302,6 +302,64 @@ t("THE REAL 226M COMMUNITY LOCK QUALIFIES — the case the backward rule threw o
   // The number the backward rule saw: 244 days of "linear tail", when the lock really has 471
   // still to run. Under the old 365-day minimum that threw the lock out entirely.
   assert.strictEqual(Math.round((real.fullyVestedAt - real.vestingStartTime) / DAY), 244);
+});
+
+t("PADDING: empty trailing periods cannot buy a longer term", () => {
+  const bn = (n) => ({ toString: () => String(n) });
+  // number_of_period is creator-chosen and a period releasing ZERO tokens costs nothing, so the
+  // declared end can sit far past the moment the tokens are already free. Weight is amount x days
+  // remaining, so trusting it pays an 18-month reward for a 3-month commitment.
+  const padded = s.normalizeEscrow("PAD", {
+    recipient: "Mallory", tokenMint: "CUNA", creator: "Mallory", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 90 * DAY), frequency: bn(DAY),
+    numberOfPeriod: bn(100000), cliffUnlockAmount: bn(1000000), amountPerPeriod: bn(0),
+    totalClaimedAmount: bn(0),
+  }, NOW);
+  assert.strictEqual(padded.declaredEndAt, NOW + 90 * DAY + 100000 * DAY, "the declared end is still reported");
+  assert.strictEqual(padded.fullyVestedAt, NOW + 90 * DAY, "the REAL end is the cliff — nothing releases after it");
+
+  // and the weight that falls out of it is a 90-day weight, not a 100,090-day one
+  const honest = s.normalizeEscrow("HON", {
+    recipient: "Alice", tokenMint: "CUNA", creator: "Alice", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 547 * DAY), frequency: bn(DAY),
+    numberOfPeriod: bn(1), cliffUnlockAmount: bn(1000000), amountPerPeriod: bn(0),
+    totalClaimedAmount: bn(0),
+  }, NOW);
+  assert.ok(s.weightOf(honest, NOW) > s.weightOf(padded, NOW),
+    "an honest 18-month lock must outweigh a padded 3-month lock of the same size");
+});
+
+t("PADDING: a real drip schedule keeps its full term", () => {
+  const bn = (n) => ({ toString: () => String(n) });
+  // The fix must only bite on periods that release nothing. A lock that actually pays out every
+  // period is unchanged — otherwise it would quietly shorten every honest vesting lock.
+  const drip = s.normalizeEscrow("DRIP", {
+    recipient: "Bob", tokenMint: "CUNA", creator: "Bob", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 30 * DAY), frequency: bn(DAY),
+    numberOfPeriod: bn(300), cliffUnlockAmount: bn(0), amountPerPeriod: bn(5),
+    totalClaimedAmount: bn(0),
+  }, NOW);
+  assert.strictEqual(drip.fullyVestedAt, NOW + 330 * DAY);
+  assert.strictEqual(drip.fullyVestedAt, drip.declaredEndAt);
+});
+
+t("THE 90-DAY BOUNDARY: the entry tier still qualifies once the padding is gone", () => {
+  const bn = (n) => ({ toString: () => String(n) });
+  // The page sells a 90-day tier and firstSeenAt is stamped minutes LATER, when the scanner next
+  // runs. The accidental 1-day padding used to cover that gap; with it removed the page has to add
+  // a day of grace or every 3-month lock it sells is rejected by our own minimum.
+  const signed = NOW, seen = NOW + 300;          // indexed 5 minutes after signing
+  const mk = (days) => s.normalizeEscrow("TIER", {
+    recipient: "Carol", tokenMint: "CUNA", creator: "Carol", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(signed), cliffTime: bn(signed + days * DAY), frequency: bn(DAY),
+    numberOfPeriod: bn(1), cliffUnlockAmount: bn("69000000000000"), amountPerPeriod: bn(0),
+    totalClaimedAmount: bn(0),
+  }, seen);
+  const cfg = { mint: "CUNA", minDurationDays: 90, minLockRaw: "69000000000000", excludeWallets: [] };
+  assert.deepStrictEqual(s.disqualify(mk(90), cfg), ["less than 90 days left to run"],
+    "a bare 90-day cliff misses by the indexing lag — this is why the page adds grace");
+  assert.deepStrictEqual(s.disqualify(mk(91), cfg), [],
+    "with one day of grace the entry tier qualifies");
 });
 
 t("vesting_start_time is INFORMATIONAL — no rule and no weight may read it", () => {

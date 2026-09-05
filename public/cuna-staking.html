@@ -286,6 +286,10 @@
   // Only offer terms that PASS. The ladder is generated from the live minimum, so the form and the
   // rule that judges the lock can never disagree — that is the whole point of not hardcoding it.
   // Multiples of three months, labelled with what they pay relative to the entry tier.
+  // See the note where the cliff is built: our term rule starts counting when the scanner first
+  // sees the lock, not when it is signed, so every term ships with a day in hand.
+  var INDEXING_GRACE_DAYS = 1;
+
   function buildTermChoices() {
     var minD = CFG.terms.minDurationDays;
     var ladder = [90, 180, 270, 365, 456, 547].filter(function (v) { return v >= minD; });
@@ -626,7 +630,14 @@
     if ($("build").disabled) return;
     var amt = String($("amt").value || "").replace(/,/g, "").trim();
     var dur = Number($("dur").value);
-    var endUnix = Math.floor(Date.now() / 1000) + dur * DAY;
+    // One day of grace on top of the term you picked.
+    //
+    // The rule measures a lock from the day WE first index it, and the scanner runs on a cycle —
+    // so a lock signed now is first seen minutes later. A cliff at exactly 90 days would then have
+    // 89.9965 days left when it is judged and be refused by our own minimum, which would reject
+    // every 3-month lock this page sells. The extra day is invisible in the copy ("3 months") and
+    // costs the locker nothing; it just means the term can never be short at the moment it counts.
+    var endUnix = Math.floor(Date.now() / 1000) + (dur + INDEXING_GRACE_DAYS) * DAY;
     $("build").disabled = true;
     $("build").textContent = "BUILDING…";
     $("plan").hidden = false;
