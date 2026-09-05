@@ -5,6 +5,12 @@
 // earning on tokens it can withdraw, the treasury's own vesting farming its own emission, a
 // matured lock going negative, and integer division destroying tokens a hundred base units a day.
 //
+// ⚠️ TERMS ARE MEASURED FORWARD FROM firstSeenAt, never backward from vesting_start_time. That is
+// not a stylistic choice: a scan of the live chain found Jupiter sets vesting_start_time equal to
+// the cliff, so the real 226M CUNA community lock (471 days still to run) reads as a 244-day lock
+// and would have been thrown out. It is creator-set too — there are live escrows declaring 2069
+// and 2077. There is a fixture below taken from that real lock; it must always qualify.
+//
 // ⚠️ FIXTURES ARE BUILT FROM ESCROW ACCOUNTS, NOT FROM LOCK OBJECTS. The first version of this
 // file handed `disqualify()` hand-written objects carrying `createdAt` and `cancelable` — two
 // fields that do not exist on a Jupiter Lock escrow. Every test passed while the real guard read
@@ -28,10 +34,11 @@ const CFG = { mint: "CUNA", startAfterUnix: START, minDurationDays: 365, minClif
 // An escrow account exactly as the chain hands it over (field names from the deployed IDL).
 const escrowAccount = ({
   recipient = "Alice", mint = "CUNA", creator = "Creator", cancelMode = 0, cancelledAt = 0,
-  start = NOW - DAY, cliffDays = 180, durationDays = 365,
+  start = NOW - DAY, cliffDays = 180, durationDays = 365,   // cliffDays/durationDays are AHEAD of `seen`
   totalRaw = "1000000000000", claimedRaw = "0",
+  seen = NOW,
 } = {}) => {
-  const cliffTime = start + cliffDays * DAY;
+  const cliffTime = seen + cliffDays * DAY;
   const periods = Math.max(1, durationDays - cliffDays);
   const total = BigInt(totalRaw);
   const per = total / BigInt(periods + 1);
@@ -43,7 +50,18 @@ const escrowAccount = ({
   };
 };
 // A qualifying lock: started after launch, 1 year, 6 month cliff, non-cancelable.
-const lock = (over = {}) => s.normalizeEscrow(over.escrow || "E1", escrowAccount(over));
+const lock = (over = {}) =>
+  s.normalizeEscrow(over.escrow || "E1", escrowAccount(over),
+                    over.seen === undefined ? NOW : over.seen);
+
+// Straight from the chain: escrow BAC7TQrZ…, 226M CUNA to AZHiexsg…, scanned 2026-09-05.
+// vesting_start_time == cliff_time == 2027-04-20, fully vested 2027-12-20. Measured backward it
+// is a 244-day lock and fails; measured forward it has 227 days to its cliff and 471 to run.
+const REAL_226M = () => s.normalizeEscrow("BAC7TQrZ", {
+  recipient: "AZHiexsg", tokenMint: "CUNA", creator: "C", cancelMode: 0, cancelledAt: 0,
+  vestingStartTime: 1808179200, cliffTime: 1808179200, frequency: DAY, numberOfPeriod: 244,
+  cliffUnlockAmount: 0n, amountPerPeriod: 926229508196721n, totalClaimedAmount: 0n,
+}, 1788566400);   // firstSeenAt = 2026-09-05
 
 section("the field contract — the check that would have caught the Phase 1 bug");
 
@@ -51,7 +69,7 @@ t("normalizeEscrow produces exactly the fields the rules read, and no invented o
   const l = lock();
   assert.deepStrictEqual(Object.keys(l).sort(), [
     "atRiskRaw", "cancelMode", "cancelledAt", "claimedRaw", "cliffTime", "creator",
-    "escrow", "fullyVestedAt", "mint", "recipient", "totalRaw", "vestingStartTime",
+    "escrow", "firstSeenAt", "fullyVestedAt", "mint", "recipient", "totalRaw", "vestingStartTime",
   ]);
   for (const [k, v] of Object.entries(l)) assert.ok(v !== undefined && v !== null, `${k} is ${v}`);
   // The two fields Phase 1 invented must NOT come back to life.
@@ -106,22 +124,32 @@ t("a cancelled lock stops qualifying the moment it is cancelled", () => {
   assert.ok(why.some((r) => /already cancelled/.test(r)), why.join("; "));
 });
 
-t("THE OTHER ONE: pre-launch locks are excluded, which is what stops the treasury paying itself", () => {
-  const why = s.disqualify(lock({ start: START - DAY }), CFG);
-  assert.ok(why.some((r) => /before the programme began/.test(r)), why.join("; "));
+t("a lock not yet indexed cannot qualify — no firstSeenAt, no earnings", () => {
+  const orphan = s.normalizeEscrow("O", escrowAccount());          // no firstSeenAt passed
+  assert.strictEqual(orphan.firstSeenAt, null);
+  assert.ok(s.disqualify(orphan, CFG).some((r) => /not yet indexed/.test(r)));
 });
 
-t("a real treasury vesting lock (huge, old, long) is refused on the cutoff alone", () => {
-  // Shaped like the 7.1B of CUNA already in escrow: it would otherwise eat the entire pool.
+t("THE OTHER ONE: the treasury's own vesting never earns, by RECIPIENT", () => {
+  // 7.1B of CUNA is already in escrow to the treasury on terms that pass every shape check —
+  // 1000-day locks, non-cancelable. Nothing about their SHAPE can keep them out. Only the
+  // recipient list can, which is why the owner picked exclude-by-recipient (Rule B).
   const treasury = lock({ escrow: "T", recipient: "Treasury", totalRaw: "175000000000000000",
-    start: START - 200 * DAY, cliffDays: 200, durationDays: 900 });
-  assert.strictEqual(s.qualifies(treasury, CFG), false);
+    cliffDays: 200, durationDays: 1000 });
+  assert.deepStrictEqual(s.disqualify(treasury, CFG), [], "shape checks alone do NOT stop it");
+  const why = s.disqualify(treasury, { ...CFG, excludeWallets: ["Treasury"] });
+  assert.ok(why.some((r) => /excluded wallet/.test(r)), why.join("; "));
+});
+
+t("a lock indexed before the programme launched is out", () => {
+  const why = s.disqualify(lock({ seen: START - DAY }), CFG);
+  assert.ok(why.some((r) => /indexed before the programme began/.test(r)), why.join("; "));
 });
 
 t("a short lock and a short cliff are both refused, and both reported", () => {
-  const why = s.disqualify(lock({ start: NOW, cliffDays: 30, durationDays: 90 }), CFG);
-  assert.ok(why.some((r) => /cliff shorter/.test(r)), why.join("; "));
-  assert.ok(why.some((r) => /less than 365 days/.test(r)), why.join("; "));
+  const why = s.disqualify(lock({ cliffDays: 30, durationDays: 90 }), CFG);
+  assert.ok(why.some((r) => /days to the cliff/.test(r)), why.join("; "));
+  assert.ok(why.some((r) => /less than 365 days left to run/.test(r)), why.join("; "));
   assert.ok(why.length >= 2, "every failing rule should be reported, not just the first");
 });
 
@@ -136,19 +164,19 @@ t("another token, an excluded wallet, and a fully-claimed lock are all refused",
 section("weight");
 
 t("weight is the amount STILL LOCKED x whole days remaining", () => {
-  const l = lock({ start: NOW - DAY, cliffDays: 10, durationDays: 101 });
+  const l = lock({ cliffDays: 10, durationDays: 100 });
   assert.strictEqual(s.weightOf(l, NOW), BigInt(l.atRiskRaw) * 100n);
 });
 
 t("already-claimed tokens stop earning", () => {
-  const full = lock({ start: NOW - DAY, cliffDays: 10, durationDays: 101 });
-  const half = lock({ start: NOW - DAY, cliffDays: 10, durationDays: 101, claimedRaw: "500000000000" });
+  const full = lock({ cliffDays: 10, durationDays: 100 });
+  const half = lock({ cliffDays: 10, durationDays: 100, claimedRaw: "500000000000" });
   assert.strictEqual(s.weightOf(half, NOW), s.weightOf(full, NOW) / 2n);
 });
 
 t("a matured lock weighs ZERO, never negative", () => {
   // A negative weight would subtract from the total and hand everyone else more than the pool.
-  const l = lock({ start: NOW - 400 * DAY, cliffDays: 180, durationDays: 350 });
+  const l = lock({ seen: NOW - 400 * DAY, cliffDays: 180, durationDays: 350 });
   assert.strictEqual(s.weightOf(l, NOW), 0n);
 });
 
@@ -157,26 +185,29 @@ t("weight decays as the lock matures", () => {
   assert.ok(s.weightOf(l, NOW) > s.weightOf(l, NOW + 200 * DAY));
 });
 
-t("backdating past the programme start is refused outright", () => {
-  // vesting_start_time is CREATOR-SET, so a lock can claim any shape it likes. While the
-  // programme is young the launch cutoff alone makes a fake 1-year lock impossible: to have a
-  // year of shape AND be nearly over, it must have started before we launched.
-  const faked = lock({ start: NOW - 400 * DAY, cliffDays: 355, durationDays: 370 });
-  assert.ok(s.disqualify(faked, CFG).some((r) => /before the programme began/.test(r)));
+t("THE REAL 226M COMMUNITY LOCK QUALIFIES — the case the backward rule threw out", () => {
+  // vesting_start_time == cliff_time on this lock, so "end minus start" calls it 244 days and
+  // fails the 1-year rule. It has 471 days left to run. If this test ever goes red, the rule has
+  // drifted back to measuring the wrong direction.
+  const real = REAL_226M();
+  assert.deepStrictEqual(s.disqualify(real, { ...CFG, startAfterUnix: 1788566400 }), []);
+  assert.strictEqual(Math.round((real.cliffTime - real.firstSeenAt) / DAY), 227);
+  assert.strictEqual(Math.round((real.fullyVestedAt - real.firstSeenAt) / DAY), 471);
+  // The number the backward rule saw. 244 < 365, so it threw the lock out.
+  assert.strictEqual(Math.round((real.fullyVestedAt - real.vestingStartTime) / DAY), 244);
 });
 
-t("BACKDATING BUYS ALMOST NOTHING once the cutoff no longer covers it", () => {
-  // A year in, the cutoff is a year back and a faked lock CAN pass every shape check: 370-day
-  // term, 355-day cliff, ten days left to run. The rules do let it through — the weight is what
-  // makes the attack worthless, because it prices a lock by the days it actually has left.
-  const CFG_MATURE = { ...CFG, startAfterUnix: NOW - 500 * DAY };
-  const honest = lock({ escrow: "H", recipient: "Honest", start: NOW - DAY, durationDays: 365 });
-  const faked = lock({ escrow: "F", recipient: "Faker", start: NOW - 360 * DAY, cliffDays: 355,
-                       durationDays: 370 });
-  assert.deepStrictEqual(s.disqualify(faked, CFG_MATURE), [], "the shape checks pass — that is the point");
-  const r = s.accrueDay({ locks: [honest, faked], poolRaw: "1000000", nowUnix: NOW, cfg: CFG_MATURE });
-  assert.ok(r.credits.Faker * 20n < r.credits.Honest,
-    `faker got ${r.credits.Faker}, honest got ${r.credits.Honest}`);
+t("vesting_start_time is INFORMATIONAL — no rule and no weight may read it", () => {
+  // Live CUNA escrows declare start dates of 2069 and 2077. If any of that reached the money
+  // logic it would be a free hand on the terms; the ONLY timestamp that decides anything is
+  // firstSeenAt, which is ours.
+  const base = lock({ escrow: "A", recipient: "A" });
+  for (const absurd of [0, 1, NOW - 20000 * DAY, NOW + 20000 * DAY]) {
+    const twisted = { ...base, vestingStartTime: absurd };
+    assert.deepStrictEqual(s.disqualify(twisted, CFG), s.disqualify(base, CFG),
+      `vestingStartTime=${absurd} changed the verdict`);
+    assert.strictEqual(s.weightOf(twisted, NOW), s.weightOf(base, NOW));
+  }
 });
 
 section("splitting a day's pool");
@@ -244,7 +275,7 @@ t("nobody locked: the pool is reported undistributed, not quietly burned", () =>
 section("claiming — earned from creation, released after the cliff");
 
 t("before the cliff: accrued but NOT claimable", () => {
-  const l = lock({ start: NOW - 10 * DAY, cliffDays: 190 });        // cliff is 180 days out
+  const l = lock({ cliffDays: 190 });                                // cliff is 190 days out
   const r = s.claimableFor({ accruedRaw: "5000", locks: [l], nowUnix: NOW });
   assert.strictEqual(r.claimable, 0n);
   assert.strictEqual(r.locked, 5000n);
@@ -253,7 +284,7 @@ t("before the cliff: accrued but NOT claimable", () => {
 });
 
 t("after the cliff: the whole accrued balance is claimable", () => {
-  const l = lock({ start: NOW - 200 * DAY, cliffDays: 180 });
+  const l = lock({ seen: NOW - 200 * DAY, cliffDays: 180, durationDays: 400 });
   const r = s.claimableFor({ accruedRaw: "5000", locks: [l], nowUnix: NOW });
   assert.strictEqual(r.claimable, 5000n);
   assert.strictEqual(r.cliffPassed, true);
@@ -279,8 +310,7 @@ t("yield is derived for display and says so when nothing is locked", () => {
 
 t("u64 amounts survive: a 175M-token lock does not lose precision", () => {
   // 175,000,000 CUNA at 9dp is 1.75e17 — past what a JS number holds exactly.
-  const big = lock({ totalRaw: "175000000000000000", start: NOW - DAY, cliffDays: 180,
-                     durationDays: 401 });
+  const big = lock({ totalRaw: "175000000000000000", cliffDays: 180, durationDays: 400 });
   assert.strictEqual(big.totalRaw, "175000000000000000", "the amount must round-trip exactly");
   assert.strictEqual(s.weightOf(big, NOW), BigInt("175000000000000000") * 400n);
 });
