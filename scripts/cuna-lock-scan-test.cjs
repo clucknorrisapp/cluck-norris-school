@@ -95,7 +95,7 @@ t("the attack fails end to end: a rebuilt short lock does not qualify", () => {
   });
   assert.strictEqual(Math.round((r.locks[0].fullyVestedAt - later) / DAY), 60, "fixture should be a 60-day lock");
   const why = s.disqualify(r.locks[0], CFG);
-  assert.ok(why.some((rr) => /less than 90 days left to run/.test(rr)), why.join("; "));
+  assert.ok(why.some((rr) => /no tokens locked for 90 days or more/.test(rr)), why.join("; "));
 });
 
 t("every immutable term is part of the fingerprint", () => {
@@ -220,6 +220,23 @@ t("backdating never touches a lock the ledger already knows", () => {
     createdAt: { E1: NOW - 400 * DAY } });
   assert.strictEqual(b.ledger.E1.firstSeenAt, NOW);
   assert.deepStrictEqual(b.added, []);
+});
+
+section("creation lookup — only a walk that reached the first signature counts");
+
+t("a lookup that runs out of pages is OMITTED, not reported as the 5,000th-newest signature", async () => {
+  // Five full pages, all newer than the true creation. The old loop fell out and used the last
+  // one it saw — a confidently wrong, too-late time that ~$5 of memo spam can manufacture.
+  const page = Array.from({ length: 1000 }, (_, i) => ({ signature: "s" + i, blockTime: 1_800_000_000 - i }));
+  const conn = { getSignaturesForAddress: async () => page };
+  // a REAL pubkey string: "E1" would make new PublicKey() throw and pass this test for the wrong reason
+  const ESC = "11111111111111111111111111111111";
+  const out = await scan.creationTimes(conn, [ESC], { maxPages: 5, pageSize: 1000 });
+  assert.deepStrictEqual(out, {}, "a truncated walk must not produce a time");
+  // a short walk (fewer than a page) IS the creation
+  const conn2 = { getSignaturesForAddress: async () => page.slice(0, 3) };
+  const out2 = await scan.creationTimes(conn2, [ESC]);
+  assert.strictEqual(out2[ESC], 1_800_000_000 - 2, "a short walk is the creation");
 });
 
 (async () => {

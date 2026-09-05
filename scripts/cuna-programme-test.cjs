@@ -239,6 +239,25 @@ t("a very long outage is bounded, not an infinite walk", () => {
   assert.ok(missed.length <= 400, "the walk must be bounded: got " + missed.length);
 });
 
+section("the arm day is never lost");
+
+t("missedDays reports the calendar day the programme was armed on", () => {
+  // Armed at 23:30 UTC; the first tick fires at 00:15 and accrues the NEXT day. The arm day was
+  // never accrued and the old loop could never list it.
+  const armedAt = Date.UTC(2026, 8, 4, 23, 30) / 1000;
+  const prog = { armed: true, startedAt: armedAt, config: {} };
+  const paid = { "2026-09-05": {} };
+  const later = Date.UTC(2026, 8, 6, 12, 0) / 1000;
+  assert.deepStrictEqual(p.missedDays({ programme: prog, paidDays: paid, nowUnix: later }), ["2026-09-04"]);
+});
+
+t("fundedBy is required and validated separately from excludeWallets", () => {
+  assert.throws(() => p.validateConfig({ fundedBy: [] }), /fundedBy/);
+  assert.throws(() => p.validateConfig({ fundedBy: ["not-an-address"] }), /fundedBy/);
+  const c = p.validateConfig({ excludeWallets: ["2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8", "5WUjHiUVxmUuBnYZx3b5SyFiR7vW2N19VUhgCr2ZRZQ"] });
+  assert.deepStrictEqual(c.fundedBy, ["2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8"], "adding an exclude must not widen the funding set");
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }

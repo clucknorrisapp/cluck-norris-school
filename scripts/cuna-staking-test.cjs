@@ -149,7 +149,7 @@ t("a lock indexed before the programme launched is out", () => {
 
 t("a lock shorter than the minimum term is refused", () => {
   const why = s.disqualify(lock({ cliffDays: 10, durationDays: 60 }), CFG);
-  assert.ok(why.some((r) => /less than 90 days left to run/.test(r)), why.join("; "));
+  assert.ok(why.some((r) => /no tokens locked for 90 days or more/.test(r)), why.join("; "));
 });
 
 t("THERE IS NO CLIFF REQUIREMENT — a cliff already in the past does not disqualify", () => {
@@ -176,19 +176,23 @@ t("the dust floor keeps spam locks out without gating real ones", () => {
 });
 
 t("the tiers price themselves — no multiplier table anywhere", () => {
-  // 3/6/9/12/15/18 months must pay 1x..6x per token purely from amount x days remaining. If a
-  // bonus table is ever added on top, these ratios break and this test says so.
-  const tiers = [90, 180, 270, 365, 456, 547];
-  const locks = tiers.map((d, i) => lock({ escrow: "T" + i, recipient: "T" + i, durationDays: d }));
-  const r = s.accrueDay({ locks, poolRaw: "100000000000", nowUnix: NOW, cfg: CFG });
-  const base = Number(r.credits.T0);
+  // 3/6/9/12/15/18 months must pay 1x..6x per token purely from amount x days, for the SINGLE-CLIFF
+  // shape the page builds. (A linear drip is judged tranche by tranche and is deliberately NOT on
+  // this ladder — see the per-release tests below.)
+  const bn = (n) => ({ toString: () => String(n) });
+  const tiers = [90, 180, 270, 360, 450, 540];
+  const locks = tiers.map((d, i) => s.normalizeEscrow("T" + i, {
+    recipient: "T" + i, tokenMint: "CUNA", creator: "T" + i, cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + d * DAY), frequency: bn(DAY), numberOfPeriod: bn(1),
+    cliffUnlockAmount: bn("1000000000000"), amountPerPeriod: bn(0), totalClaimedAmount: bn(0),
+  }, NOW));
+  // Compare WEIGHTS, which are exact; a pool split carries largest-remainder dust of a base unit.
+  const base = s.weightOf(locks[0], NOW, CFG);
   tiers.forEach((d, i) => {
-    const ratio = Number(r.credits["T" + i]) / base;
-    // 3% tolerance: the fixture's cliffUnlockAmount absorbs the integer remainder of
-    // total/periods, so identical-looking locks differ by a few base units.
-    assert.ok(Math.abs(ratio - d / 90) / (d / 90) < 0.03,
-      `${d}d paid ${ratio.toFixed(2)}x, expected ${(d / 90).toFixed(2)}x`);
+    assert.strictEqual(s.weightOf(locks[i], NOW, CFG), base * BigInt(d / 90), `${d}d must weigh exactly ${d / 90}x`);
   });
+  const r = s.accrueDay({ locks, poolRaw: "100000000000", nowUnix: NOW, cfg: CFG });
+  assert.strictEqual(Object.values(r.credits).reduce((a, v) => a + v, 0n), 100000000000n, "pool fully distributed");
 });
 
 t("another token, an excluded wallet, and a fully-claimed lock are all refused", () => {
@@ -258,9 +262,40 @@ t("a front-loaded cliff lump is counted the moment it unlocks", () => {
 
 section("weight");
 
-t("weight is the amount STILL LOCKED x whole days remaining", () => {
-  const l = lock({ cliffDays: 10, durationDays: 100 });
-  assert.strictEqual(s.weightOf(l, NOW), BigInt(l.atRiskRaw) * 100n);
+t("weight is the sum over UNVESTED releases of amount x that release's own days", () => {
+  // Brute force the definition and compare with the day-bucketed implementation, on the drip
+  // fixture and on a hostile one-second schedule. If the bucketing ever drifts by a base unit,
+  // this is where it shows.
+  const brute = (l, now, cfg) => {
+    const seen = l.firstSeenAt, cliff = l.cliffTime, freq = l.frequency;
+    const minD = cfg.minDurationDays, maxD = s.maxTermDaysOf(cfg);
+    const clamp = (d) => (d < minD ? 0 : Math.min(d, maxD));
+    let w = 0n;
+    if (cliff > now) w += BigInt(l.cliffUnlockRaw) * BigInt(clamp(Math.floor((cliff - seen) / DAY)));
+    for (let j = 1; j <= l.periods; j++) {
+      const at = cliff + j * freq;
+      if (at <= now) continue;
+      w += BigInt(l.perPeriodRaw) * BigInt(clamp(Math.floor((at - seen) / DAY)));
+    }
+    return w;
+  };
+  const cases = [
+    lock({ durationDays: 301 }),
+    lock({ cliffDays: 45, durationDays: 400 }),
+    lock({ cliffDays: 10, durationDays: 95, totalRaw: "7777777777777" }),
+  ];
+  const bn = (n) => ({ toString: () => String(n) });
+  // one-second frequency, 2 million periods: bucketing must give the brute-force answer
+  cases.push(s.normalizeEscrow("SEC", {
+    recipient: "S", tokenMint: "CUNA", creator: "S", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 3 * DAY), frequency: bn(1), numberOfPeriod: bn(2000000),
+    cliffUnlockAmount: bn(0), amountPerPeriod: bn(3), totalClaimedAmount: bn(0),
+  }, NOW));
+  for (const l of cases) {
+    for (const t of [NOW, NOW + 20 * DAY, NOW + 200 * DAY, NOW + 600 * DAY]) {
+      assert.strictEqual(s.weightOf(l, t, CFG), brute(l, t, CFG), `${l.escrow} at +${(t - NOW) / DAY}d`);
+    }
+  }
 });
 
 t("claiming changes NOTHING, because vested tokens already stopped counting", () => {
@@ -334,7 +369,7 @@ t("a lock we have never indexed weighs nothing — it must fail closed", () => {
   // Without the firstSeenAt guard, (end - 0) reads as a term running since 1970.
   const l = lock({ durationDays: 301 });
   assert.strictEqual(s.weightOf({ ...l, firstSeenAt: null }, NOW), 0n);
-  assert.strictEqual(s.weightOf({ ...l, fullyVestedAt: 0 }, NOW), 0n);
+  assert.strictEqual(s.weightOf({ ...l, cliffTime: 0 }, NOW), 0n);
 });
 
 t("THE REAL 226M COMMUNITY LOCK QUALIFIES — the case the backward rule threw out", () => {
@@ -347,6 +382,61 @@ t("THE REAL 226M COMMUNITY LOCK QUALIFIES — the case the backward rule threw o
   // The number the backward rule saw: 244 days of "linear tail", when the lock really has 471
   // still to run. Under the old 365-day minimum that threw the lock out entirely.
   assert.strictEqual(Math.round((real.fullyVestedAt - real.vestingStartTime) / DAY), 244);
+});
+
+t("FLASH LOCK: a near cliff with a padded tail weighs almost nothing", () => {
+  // The hole the verifier reproduced: 99.99% released one hour out, one base unit per period for
+  // 1000 months. Under a per-lock term it weighed as a full 18-month lock; per release it weighs
+  // 99.99% x nothing plus dust on the dust.
+  const bn = (n) => ({ toString: () => String(n) });
+  const total = 10_000_000n * 10n ** 9n;
+  const tail = 1n, periods = 1000n;
+  const flash = s.normalizeEscrow("FLASH", {
+    recipient: "M", tokenMint: "CUNA", creator: "M", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 3600), frequency: bn(2628000), numberOfPeriod: bn(periods),
+    cliffUnlockAmount: bn(total - tail * periods), amountPerPeriod: bn(tail), totalClaimedAmount: bn(0),
+  }, NOW);
+  const honest90 = s.normalizeEscrow("H90", {
+    recipient: "H", tokenMint: "CUNA", creator: "H", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 90 * DAY), frequency: bn(DAY), numberOfPeriod: bn(1),
+    cliffUnlockAmount: bn(total), amountPerPeriod: bn(0), totalClaimedAmount: bn(0),
+  }, NOW);
+  const wf = s.weightOf(flash, NOW, CFG), wh = s.weightOf(honest90, NOW, CFG);
+  assert.ok(wf * 1000000n < wh, `flash lock weighs ${wf} vs honest 90-day ${wh}`);
+  // and a 90-day cliff with the same padded tail is exactly a 90-day lock plus dust
+  const padded90 = s.normalizeEscrow("P90", { ...flash.__raw || {}, recipient: "P", tokenMint: "CUNA", creator: "P", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 90 * DAY), frequency: bn(2628000), numberOfPeriod: bn(periods),
+    cliffUnlockAmount: bn(total - tail * periods), amountPerPeriod: bn(tail), totalClaimedAmount: bn(0) }, NOW);
+  const wp = s.weightOf(padded90, NOW, CFG);
+  assert.ok(wp >= (total - tail * periods) * 90n && wp < wh + 540n * periods, "padded 90-day lock is not ~1x");
+});
+
+t("a Jupiter-default monthly drip earns on the tranches 90+ days out and nothing on the rest", () => {
+  // Shaped like the real 50M community lock: cliff today releasing 0, then 6 monthly tranches.
+  const bn = (n) => ({ toString: () => String(n) });
+  const per = 8_333_333n * 10n ** 9n;
+  const l = s.normalizeEscrow("DRIP", {
+    recipient: "D", tokenMint: "CUNA", creator: "D", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW), frequency: bn(30 * DAY), numberOfPeriod: bn(6),
+    cliffUnlockAmount: bn(0), amountPerPeriod: bn(per), totalClaimedAmount: bn(0),
+  }, NOW);
+  assert.deepStrictEqual(s.disqualify(l, CFG), [], "it qualifies — four tranches are 90+ days out");
+  // tranches at 30 and 60 days weigh 0; 90, 120, 150, 180 weigh their own days
+  const expect = per * (90n + 120n + 150n + 180n);
+  assert.strictEqual(s.weightOf(l, NOW, CFG), expect);
+  // once the day-90 tranche has vested, it drops out
+  assert.strictEqual(s.weightOf(l, NOW + 90 * DAY, CFG), per * (120n + 150n + 180n));
+});
+
+t("a lock with NO tranche 90+ days out does not qualify, whatever its declared end", () => {
+  const bn = (n) => ({ toString: () => String(n) });
+  const l = s.normalizeEscrow("SHORT", {
+    recipient: "S", tokenMint: "CUNA", creator: "S", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 30 * DAY), frequency: bn(DAY), numberOfPeriod: bn(50),
+    cliffUnlockAmount: bn(1000), amountPerPeriod: bn(10), totalClaimedAmount: bn(0),
+  }, NOW);
+  assert.deepStrictEqual(s.disqualify(l, CFG), ["no tokens locked for 90 days or more"]);
+  assert.strictEqual(s.weightOf(l, NOW, CFG), 0n);
 });
 
 t("PADDING: empty trailing periods cannot buy a longer term", () => {
@@ -401,7 +491,7 @@ t("THE 90-DAY BOUNDARY: the entry tier still qualifies once the padding is gone"
     totalClaimedAmount: bn(0),
   }, seen);
   const cfg = { mint: "CUNA", minDurationDays: 90, minLockRaw: "69000000000000", excludeWallets: [] };
-  assert.deepStrictEqual(s.disqualify(mk(90), cfg), ["less than 90 days left to run"],
+  assert.deepStrictEqual(s.disqualify(mk(90), cfg), ["no tokens locked for 90 days or more"],
     "a bare 90-day cliff misses by the indexing lag — this is why the page adds grace");
   assert.deepStrictEqual(s.disqualify(mk(91), cfg), [],
     "with one day of grace the entry tier qualifies");
@@ -725,10 +815,14 @@ t("yield is derived for display and says so when nothing is locked", () => {
 });
 
 t("u64 amounts survive: a 175M-token lock does not lose precision", () => {
-  // 175,000,000 CUNA at 9dp is 1.75e17 — past what a JS number holds exactly.
-  const big = lock({ totalRaw: "175000000000000000", cliffDays: 180, durationDays: 400 });
-  assert.strictEqual(big.totalRaw, "175000000000000000", "the amount must round-trip exactly");
-  assert.strictEqual(s.weightOf(big, NOW), BigInt("175000000000000000") * 400n);
+  const bn = (n) => ({ toString: () => String(n) });
+  const big = s.normalizeEscrow("BIG", {
+    recipient: "B", tokenMint: "CUNA", creator: "B", cancelMode: 0, cancelledAt: 0,
+    vestingStartTime: bn(NOW), cliffTime: bn(NOW + 400 * DAY), frequency: bn(DAY), numberOfPeriod: bn(1),
+    cliffUnlockAmount: bn("175000000000000000"), amountPerPeriod: bn(0), totalClaimedAmount: bn(0),
+  }, NOW);
+  assert.strictEqual(s.weightOf(big, NOW, CFG), BigInt("175000000000000000") * 400n);
+  assert.strictEqual(s.splitOf(big, NOW).unvestedRaw, "175000000000000000");
 });
 
 (async () => {
