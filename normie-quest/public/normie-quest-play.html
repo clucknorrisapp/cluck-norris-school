@@ -7436,6 +7436,12 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ d=d||{}; this.nextLevel=d.next||0; this.score=d.score||0; this.lab=d.lab; this.cleared=d.cleared||''; },
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0;
+    // Phaser REUSES the scene object between runs, so anything create() does not set is whatever
+    // the previous beat left behind. `runner` is only made by the nation beat; a later beat found
+    // the destroyed sprite still on `this`, update() called setTexture on it, the throw escaped
+    // Phaser's step and the whole frame loop stopped — the game froze on the card with the music
+    // playing and every tap dead (found 2026-09-06 by the beat test; CI hit it one seed in six).
+    this.runner=null; this.cont=null; this._adv=null; this._buyOpen=false;
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
     // ROTATION (owner ask 2026-08-30: "fun screens randomly between levels — normie quest, the
     // leaderboards and pending giveaways"). Cycle over every beat that has CONTENT right now:
@@ -7553,10 +7559,13 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     // closes, the hold restarts from zero so the card is readable again before it moves on.
     if(nqPanelOpen()){ this.t0=this.time.now; this._buyOpen=true; this._padPrev=true; return; }
     if(this._buyOpen){ this._buyOpen=false; this.t0=this.time.now; }
-    if(this.runner){ var k=(Math.floor(this.time.now/110)%2)?'nrun2':'nrun1';
-      if(this.runner.texture.key!==k) this.runner.setTexture(k).setScale(44/this.runner.height);
-      this.runner.y=96+Math.sin(this.time.now/90)*2; }
-    if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
+    // Cosmetics can never take the loop down: a throw out of update() ends Phaser's rAF chain.
+    try{
+      if(this.runner&&this.runner.scene){ var k=(Math.floor(this.time.now/110)%2)?'nrun2':'nrun1';
+        if(this.runner.texture.key!==k) this.runner.setTexture(k).setScale(44/this.runner.height);
+        this.runner.y=96+Math.sin(this.time.now/90)*2; }
+      if(this.cont&&this.cont.scene) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
+    }catch(e){}
     // The on-screen D-pad stays visible on this beat, so a tap has to DO something. Edge-triggered
     // with the same 500ms grace padAdvance uses, and _padPrev starts latched so a direction still
     // held from the run-in to the flag does not skip the card before it is read.

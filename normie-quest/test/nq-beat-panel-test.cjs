@@ -50,6 +50,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const browser = await chromium.launch({ headless: true, executablePath: findChromium(), args: ["--no-sandbox", "--disable-dev-shm-usage", "--autoplay-policy=no-user-gesture-required"] });
   const page = await browser.newPage({ viewport: { width: 960, height: 600 } });
   await page.addInitScript(() => { window.__NQ_RENDER = "canvas"; });   // headless WebGL is 0.5 fps on SwiftShader; the canvas renderer runs the same logic at 60 fps
+  // A throw that escapes a scene's update() ends Phaser's rAF chain — the game freezes on the card
+  // with the music playing. That is invisible to scene-state checks, so every page error fails the run.
+  const pageErrors = [];
+  page.on("pageerror", (e) => pageErrors.push(String(e && e.stack || e).slice(0, 300)));
   await page.goto(`${BASE}/normie-quest-x7-lab`, { waitUntil: "domcontentloaded", timeout: 30000 });
   await page.waitForFunction(() => typeof window.__NQ_STARTLEVEL === "function" && Array.isArray(window.__NQ_LEVELS_LIST) && typeof window.__NQ_BEAT === "function", null, { timeout: 40000 });
   // Which scenes are live, through the lab hook (NQGAME itself is not a window global).
@@ -96,6 +100,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // from the built shell below, where a clock cannot blur them.
   await page.waitForFunction(() => { try { return (window.__NQ_SCENES() || []).some((s) => JSON.stringify(s).indexOf('"Game"') !== -1); } catch (e) { return false; } }, null, { timeout: 45000 }).catch(() => {});
   ok("with no panel it auto-advances on its own (no tap, no key)", await active("Game"), `LevelClear=${await active("LevelClear")} Game=${await active("Game")}`);
+  // 4. EVERY beat advances on its own. The rotation is seeded per session, so a single run only ever
+  // sees one or two beats; here the seed and turn are pinned so all of them come up in order. The
+  // 2026-09-06 freeze (a stale `runner` from the nation beat, setTexture on a destroyed sprite,
+  // frame loop dead) only showed on the seeds that put a runner-less beat after the nation beat.
+  // Two full cycles, so every beat is also seen AFTER the runner beat (the stale-sprite case).
+  const nBeats = 7;
+  for (let turn = 0; turn < 2 * nBeats; turn++) {
+    await page.evaluate((t) => { sessionStorage.setItem("nqLcSeed", "0"); sessionStorage.setItem("nqLcTurn", String(t)); }, turn);
+    const before = pageErrors.length;
+    await page.evaluate(() => window.__NQ_BEAT(1, "1-1"));
+    await sleep(800);
+    const label = await page.evaluate(() => { try { const l = window.__NQ_SCENES() || []; const s = l.find((x) => x.key === "LevelClear"); return s ? String(s.text).replace(/^LEVEL CLEAR \| 1-1 \| SCORE\s+0 \| /, "").slice(0, 40) : "(no LevelClear)"; } catch (e) { return "?"; } });
+    await page.waitForFunction(() => { try { return (window.__NQ_SCENES() || []).some((s) => JSON.stringify(s).indexOf('"Game"') !== -1); } catch (e) { return false; } }, null, { timeout: 45000 }).catch(() => {});
+    ok(`beat ${turn} "${label}" advances on its own with no page error`, (await active("Game")) && pageErrors.length === before, `Game=${await active("Game")} errors=${pageErrors.slice(before).join(" || ")}`);
+  }
+  ok("no page error escaped the whole run (a throw out of update() kills the frame loop)", pageErrors.length === 0, pageErrors.join(" || "));
   const shell = fs.readFileSync(path.join(__dirname, "..", "public", "normie-quest-platformer.html"), "utf8");
   ok("the shipped hold is 8s for info beats / 6s for plain beats (owner: 'a little longer')", /this\._hold=\(beat==='board'\|\|beat==='card'\|\|beat==='fact'\|\|beat==='perks'\)\?8000:6000;/.test(shell));
 

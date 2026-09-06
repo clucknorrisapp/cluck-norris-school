@@ -90,6 +90,15 @@ shard is allowed to block a merge. Delete that line to promote it once a clean w
   a slow loop; drive the target scene directly with a lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`,
   `__NQ_STARTLEVEL`) instead. Cost: two runs on 2026-09-06, plus the beat test flaking red on a PR
   that never touched the game.
+- **A throw out of a scene's `update()` kills the whole game.** Phaser's rAF chain requests the
+  next frame AFTER the step; an exception that escapes never requests it, so the game freezes on
+  whatever is on screen with the music still playing and every tap dead — which is exactly what
+  "locks up between levels" looks like from a phone. Found 2026-09-06: Phaser REUSES the scene
+  object, so `this.runner` from the nation beat survived into a beat that never creates one,
+  `setTexture` on the destroyed sprite threw, loop dead. Rules: `create()` resets every per-run
+  field; cosmetic work in `update()` sits in try/catch; the beat test fails on ANY page error and
+  pins every beat in order across two cycles (the rotation is seeded per session, so a plain run
+  sees one seed — CI hit the bad one about one run in six and it read as a flake).
 - **The built shells are derived.** `src/build.js` writes them from `game_logic.js` + assets. They
   are in git so a no-build boot serves the game, but a rebuilt shell in a commit is not a change of
   its own — the old planner counted it as "other normie-quest code" and pushed every rebuilt commit

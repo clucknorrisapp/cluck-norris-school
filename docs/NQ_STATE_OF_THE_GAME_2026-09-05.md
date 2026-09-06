@@ -238,3 +238,11 @@ Note: `WORLD_ART` already carries plates through w21, and 59 plates exist for 21
 8. **VIP numbering**: is the "VIP wing" worlds 13-15 (the 2026-07-21 doc) or the deep worlds 13-21 (the 2026-08-22 launch gate), or both, separately? Terms can't be written until that's one answer.
 9. **Prize flow**: its live state is unverified — the prizes console decrypts shipping addresses, so no session has touched it. Do you want to confirm the pending winner and the 14-day window yourself, or authorise a check and say exactly how far it may go?
 10. **8.15 MB** to load the game. Acceptable through the app-store transition, or does the atlas work jump the queue?
+
+---
+
+**Addendum 2026-09-06 — the between-level freeze had a second root cause.** Beyond the panel
+lock (P0-A), LevelClear kept a stale `runner` sprite from the nation beat on the reused scene
+object; the next runner-less beat threw in `update()` and Phaser's frame loop died (music on,
+taps dead). Fixed in `fix/nq-go-audio-guard`: `create()` resets per-run state, cosmetics are
+guarded, and the beat test now pins every beat across two cycles and fails on any page error.
