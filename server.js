@@ -15853,6 +15853,133 @@ const ownersSnapshot = require("./lib/owners-snapshot").createEngine({
 app.get(["/owners-snapshot", "/owners"], (req, res) => {
   res.sendFile(join(__dirname, "public", "owners-snapshot.html"));
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// LISTING CHECKUP — a project's listings sleuthed across the aggregators and compared to its
+// canonical record (owner ask 2026-09-06; plan: docs/LISTING_CHECKUP_PLAN.md).
+//   free preview  = on-chain metadata + CoinGecko + GeckoTerminal + DexScreener + Jupiter
+//   full sweep    = every source (the tools pass gates RUN in the page, like the other heavy
+//                   tools; the server caps full sweeps per mint and per IP per day)
+// Pure core: lib/listing-checkup.js. Adapters: lib/listing-checkup-sources.js. Every adapter
+// failure is an `unread` row — a report is never a 500 and "could not read" is never "clean".
+const listingCheckup = require("./lib/listing-checkup");
+const listingSources = require("./lib/listing-checkup-sources").SOURCES;
+const LISTING_CAPS = { fullPerMintPerDay: 3, fullPerIpPerDay: 20 };
+app.use("/api/listing-checkup", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+app.get("/listing-checkup", (req, res) => res.sendFile(join(__dirname, "public", "listing-checkup.html")));
+// The fetcher every adapter reads through: JSON with a hard timeout, non-2xx surfaced as
+// {__status} so a 404 reads as "not found" and a 5xx as "unread" rather than a thrown shape.
+async function listingFetchJson(url, opts = {}) {
+  // LISTING_CHECKUP_OFFLINE=1 (CI's routes test): every source reads as `unread` without a network
+  // call, so the run/cache/report-page path is exercised offline and no aggregator sees CI traffic.
+  if (process.env.LISTING_CHECKUP_OFFLINE === "1") throw new Error("offline (LISTING_CHECKUP_OFFLINE=1)");
+  const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "clucknorris-listing-checkup/1.0 (+https://clucknorris.app/listing-checkup)", ...(opts.headers || {}) }, signal: AbortSignal.timeout(opts.timeoutMs || 15000) });
+  if (!r.ok) return { __status: r.status };
+  const text = await r.text();
+  if (text.length > 2_000_000) throw new Error("response too large");
+  try { return JSON.parse(text); } catch (_) { throw new Error("not JSON"); }
+}
+// Logo bytes → sha256, capped at 2 MB, for the full tier's byte comparison.
+async function listingHashLogo(url) {
+  const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error("logo " + r.status);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > 2_000_000) throw new Error("logo too large");
+  return createHash("sha256").update(buf).digest("hex");
+}
+function listingUsage() {
+  const today = new Date().toISOString().slice(0, 10);
+  const u = kv.get("listingCheckupUsage", null);
+  return (u && u.dayStamp === today) ? u : { dayStamp: today, byMint: {}, byIp: {} };
+}
+app.get("/api/listing-checkup/config", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ ok: true, chain: "solana", caps: LISTING_CAPS,
+    sources: listingSources.map((s) => ({ id: s.id, label: s.label, tier: s.tier })),
+    keyed: { solscan: !!process.env.SOLSCAN_API_KEY, coinmarketcap: !!process.env.CMC_API_KEY, birdeye: !!process.env.BIRDEYE_API_KEY } });
+});
+app.post("/api/listing-checkup/run", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  let canonical;
+  try { canonical = listingCheckup.canonicalFrom(req.body || {}); }
+  catch (e) { return res.status(400).json({ ok: false, error: String(e.message || e) }); }
+  const tier = req.body && req.body.tier === "full" ? "full" : "preview";
+  const ip = String(req.headers["cf-connecting-ip"] || req.ip || "").slice(0, 64);
+  if (tier === "full") {
+    const u = listingUsage();
+    if ((u.byMint[canonical.mint] || 0) >= LISTING_CAPS.fullPerMintPerDay) return res.status(429).json({ ok: false, error: "daily_cap_mint", detail: `That token has had ${LISTING_CAPS.fullPerMintPerDay} full sweeps today — the last report is still readable at /listing/${canonical.mint}.` });
+    if ((u.byIp[ip] || 0) >= LISTING_CAPS.fullPerIpPerDay) return res.status(429).json({ ok: false, error: "daily_cap_ip", detail: "Too many full sweeps from this connection today." });
+  }
+  const deps = {
+    fetchJson: listingFetchJson,
+    rpcCall: (id, method, params) => { if (process.env.LISTING_CHECKUP_OFFLINE === "1") throw new Error("offline (LISTING_CHECKUP_OFFLINE=1)"); return heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)(id, method, params); },
+    env: { SOLSCAN_API_KEY: process.env.SOLSCAN_API_KEY, CMC_API_KEY: process.env.CMC_API_KEY, BIRDEYE_API_KEY: process.env.BIRDEYE_API_KEY },
+  };
+  try {
+    const report = await listingCheckup.runCheckup(canonical, { sources: listingSources, deps, tier, concurrency: 4, hashLogo: tier === "full" ? listingHashLogo : null });
+    const now = Date.now();
+    listingCheckup.cachePut(kv, canonical.mint, report, now);
+    if (tier === "full") { const u = listingUsage(); u.byMint[canonical.mint] = (u.byMint[canonical.mint] || 0) + 1; u.byIp[ip] = (u.byIp[ip] || 0) + 1; kv.set("listingCheckupUsage", u); }
+    try { analytics.trackTool("listing-checkup"); } catch {}
+    return res.json({ ok: true, report: { ...report, at: now }, shareUrl: `https://clucknorris.app/listing/${canonical.mint}` });
+  } catch (e) {
+    console.warn("[listing-checkup] run failed:", e && e.message);
+    return res.status(500).json({ ok: false, error: publicErrMsg(e) });
+  }
+});
+// The last runs for a mint (what the share page renders). Read-only; nothing here is an input.
+app.get("/api/listing-checkup/report", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String(req.query.mint || "").trim();
+  if (!listingCheckup.SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  const e = listingCheckup.cacheGet(kv, mint);
+  return res.json({ ok: true, mint, runs: e ? e.runs : [] });
+});
+// Shareable report page. Everything rendered comes from the cached report, which holds
+// attacker-controlled strings (a token's name, whatever a site shows) — all escaped server-side.
+app.get("/listing/:mint", (req, res) => {
+  const mint = String(req.params.mint || "").trim();
+  if (!listingCheckup.SOL_ADDR_RE.test(mint)) return res.status(404).send("Not found");
+  const e = listingCheckup.cacheGet(kv, mint);
+  const run = e && e.runs[0];
+  const escH = escHtml;
+  const title = run ? `${escH(run.canonical.name)} ($${escH(run.canonical.symbol)}) listing checkup` : "Listing Checkup";
+  const desc = run ? `${run.summary.correct} listings correct · ${run.summary.incorrect} with errors · ${run.summary["not-found"]} not found · ${run.summary.unread} unread` : "No checkup has been run for this token yet.";
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=120");
+  const rows = run ? run.sources.map((sr) => {
+    const badge = { correct: ["✅", "CORRECT", "#7BE26B"], incorrect: ["⚠️", "NEEDS A FIX", "#FFB627"], "not-found": ["—", "NOT FOUND", "#9C7E68"], unread: ["?", "COULD NOT READ", "#C9A892"] }[sr.status] || ["?", sr.status, "#C9A892"];
+    const fields = sr.fields.filter((f) => f.status === "differs" || f.status === "missing").map((f) => `<div class="frow"><span class="fk">${escH(f.label)}</span><span class="fo">ours: ${escH(f.ours)}</span><span class="ft">theirs: ${f.theirs ? escH(f.theirs) : "<i>missing</i>"}</span></div>`).join("");
+    return `<div class="src"><div class="srow"><b>${escH(sr.label)}</b><span class="badge" style="color:${badge[2]}">${badge[0]} ${badge[1]}</span></div>${fields}${sr.error ? `<div class="muted">${escH(sr.error)}</div>` : ""}<div class="links">${sr.pageUrl ? `<a href="${escH(sr.pageUrl)}" target="_blank" rel="noopener noreferrer">view listing</a>` : ""}${sr.status === "incorrect" || sr.status === "not-found" ? `<a href="${escH(sr.fixUrl || "#")}" target="_blank" rel="noopener noreferrer">where to fix it</a>` : ""}</div></div>`;
+  }).join("") : "";
+  const fixFirst = run && run.fixFirst.length ? `<div class="card warn"><b>Fix this first.</b> The on-chain metadata differs from your record on: ${run.fixFirst.map(escH).join(", ")}. Most sites copy the on-chain record, so fixing it there fixes the copies over time.</div>` : "";
+  return res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🔎 ${title} · Cluck Norris</title>
+<meta name="description" content="${escH(desc)}"/>
+<meta property="og:title" content="🔎 ${title}"/><meta property="og:description" content="${escH(desc)}"/><meta property="og:url" content="https://clucknorris.app/listing/${escH(mint)}"/>
+<link rel="icon" href="/cluck-norris-logo.jpg"/><link rel="stylesheet" href="/theme.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--body-text);font-family:var(--body);font-size:15px;line-height:1.6;padding:20px 14px 60px}
+.wrap{max-width:680px;margin:0 auto}.brand{display:flex;align-items:center;gap:10px;margin-bottom:18px}.brand img{width:34px;height:34px;border-radius:50%;border:2px solid var(--orange)}
+.brand b{color:var(--orange);letter-spacing:2px;font-size:13px;font-family:var(--disp);font-weight:400}.brand span{color:var(--muted);font-size:12px}
+h1{font-family:var(--disp);font-weight:400;font-size:26px;letter-spacing:1px;color:var(--text);margin-bottom:6px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}.card.warn{border-color:rgba(255,182,39,.4);background:rgba(255,182,39,.07)}
+.sum{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}.sum div{background:rgba(0,0,0,.25);border:1px solid var(--border-soft);border-radius:10px;padding:10px;text-align:center}.sum b{display:block;font-family:var(--disp);font-weight:400;font-size:26px;color:var(--text)}.sum span{font-size:10px;letter-spacing:2px;color:var(--sub)}
+.src{border-top:1px solid var(--border-soft);padding:12px 0}.srow{display:flex;justify-content:space-between;align-items:center;gap:10px}.badge{font-size:11px;letter-spacing:1.5px;font-weight:700}
+.frow{display:grid;grid-template-columns:110px 1fr 1fr;gap:8px;font-size:12.5px;margin-top:6px;word-break:break-all}.fk{color:var(--sub)}.fo{color:var(--green)}.ft{color:#F87171}
+.links{display:flex;gap:12px;margin-top:6px;font-size:12px}.links a{color:var(--gold)}.muted{color:var(--muted);font-size:12px;margin-top:4px}
+.mono{font-family:var(--mono);font-size:12px;color:var(--sub);word-break:break-all}
+.btn{display:inline-block;background:var(--orange);color:#0a0a0a;font-weight:700;border-radius:9px;padding:11px 18px;text-decoration:none;font-size:14px;margin-top:8px}
+</style></head><body><div class="wrap">
+<div class="brand"><img src="/cluck-norris-logo.jpg" alt=""/><div><b>CLUCK NORRIS · LISTING CHECKUP</b><br/><span>what every site shows for this token, compared to the project's own record</span></div></div>
+${run ? `<h1>${escH(run.canonical.name)} <span style="color:var(--sub)">$${escH(run.canonical.symbol)}</span></h1><div class="mono">${escH(mint)}</div>
+<div class="sum"><div><b>${run.summary.correct}</b><span>CORRECT</span></div><div><b>${run.summary.incorrect}</b><span>NEED A FIX</span></div><div><b>${run.summary["not-found"]}</b><span>NOT FOUND</span></div><div><b>${run.summary.unread}</b><span>UNREAD</span></div></div>
+${fixFirst}<div class="card">${rows}</div>
+<div class="muted">Checked ${run.checked} sources on ${escH(new Date(run.at).toISOString().slice(0, 16).replace("T", " "))} UTC (${escH(run.tier)} tier). We report what each site shows, never why. "Not found" means the site answered with no record; "unread" means we could not read it — it is not a pass.</div>`
+  : `<h1>No checkup yet</h1><div class="mono">${escH(mint)}</div><div class="card">Nobody has run a Listing Checkup for this token. Run one below — the preview is free.</div>`}
+<a class="btn" href="/listing-checkup?mint=${escH(mint)}">${run ? "Run it again" : "Run a checkup"}</a>
+</div></body></html>`);
+});
 // ── Owners Snapshot access gate + spend caps ────────────────────────────────
 // Owner, 2026-09-03: "we also need some type caps on owners snapshot crawl they should hold at
 // least 50 dollars in CLKN to use … it could use too much resources to be free, we can grant

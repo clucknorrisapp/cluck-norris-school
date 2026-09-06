@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🔎 Listing Checkup — is your token listed correctly everywhere?</title>
+<meta name="description" content="Give us your token's official name, website and socials. We read what CoinGecko, GeckoTerminal, DexScreener, Jupiter and the rest actually show for your contract, tell you where it is correct, where it is wrong, and where to fix it."/>
+<meta property="og:title" content="🔎 Listing Checkup — Cluck Norris"/>
+<meta property="og:description" content="Every place your Solana token is listed, checked against your official record — with the link to fix each one."/>
+<link rel="icon" href="/cluck-norris-logo.jpg"/>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html{background:var(--bg-grad);background-attachment:fixed;}
+  body { background:transparent; color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:680px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-weight:400; font-size:30px; letter-spacing:1px; color:var(--gold); }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .intro { font-size:13.5px; color:var(--body-text); line-height:1.7; }
+  .intro b { color:var(--text); }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  .grid .full { grid-column:1 / -1; }
+  label { display:block; font-size:10px; letter-spacing:2px; color:var(--sub); margin-bottom:4px; }
+  .in { width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:13px; }
+  .in:focus { border-color:var(--accent); outline:none; }
+  textarea.in { font-family:var(--body); min-height:64px; resize:vertical; }
+  .btns { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+  .run-btn { flex:1; min-width:180px; background:var(--orange); border:none; border-radius:8px; padding:12px 18px; font-size:13px; font-weight:700; letter-spacing:2px; color:#0a0a0a; cursor:pointer; }
+  .run-btn.alt { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); }
+  .run-btn:disabled { background:rgba(255,255,255,.05); color:var(--muted); cursor:not-allowed; border:1px solid var(--border-soft); }
+  .hint { font-size:12px; color:var(--sub); margin-top:8px; line-height:1.6; }
+  .err { background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; display:none; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; display:none; }
+  .sum { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:4px 0 14px; }
+  .sum div { background:rgba(0,0,0,.25); border:1px solid var(--border-soft); border-radius:10px; padding:10px; text-align:center; }
+  .sum b { display:block; font-family:var(--disp); font-weight:400; font-size:26px; color:var(--text); }
+  .sum span { font-size:10px; letter-spacing:2px; color:var(--sub); }
+  .warn { border-color:rgba(255,182,39,.4); background:rgba(255,182,39,.07); }
+  .sec { font-family:var(--disp); font-weight:400; font-size:13px; letter-spacing:2px; margin:16px 0 6px; color:var(--sub); }
+  .src { border-top:1px solid var(--border-soft); padding:12px 0; }
+  .srow { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .badge { font-size:11px; letter-spacing:1.5px; font-weight:700; white-space:nowrap; }
+  .frow { display:grid; grid-template-columns:100px 1fr 1fr; gap:8px; font-size:12.5px; margin-top:6px; word-break:break-all; }
+  .fk { color:var(--sub); } .fo { color:var(--green); } .ft { color:#F87171; } .fm { color:var(--muted); }
+  .links { display:flex; gap:12px; margin-top:6px; font-size:12px; flex-wrap:wrap; }
+  .links a { color:var(--gold); }
+  .muted { color:var(--muted); font-size:12px; margin-top:4px; }
+  .share { display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap; font-size:12.5px; }
+  .share code { font-family:var(--mono); background:rgba(0,0,0,.3); padding:4px 8px; border-radius:6px; word-break:break-all; }
+  .footer { text-align:center; font-size:12.5px; color:var(--sub); letter-spacing:2px; margin-top:24px; }
+  @media (max-width:560px) { .grid { grid-template-columns:1fr; } .frow { grid-template-columns:1fr; } .sum { grid-template-columns:repeat(2,1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-home" href="/tools"><img src="/cluck-norris-logo.jpg" alt=""/> ← ALL TOOLS</a>
+  <div class="header">
+    <h1>🔎 LISTING CHECKUP</h1>
+    <p>EVERY PLACE YOUR TOKEN IS LISTED · CHECKED AGAINST YOUR OWN RECORD</p>
+  </div>
+
+  <div class="card">
+    <div class="intro">
+      Give us your token's <b>official</b> details. We read what each aggregator actually shows for your contract — CoinGecko, GeckoTerminal, DexScreener, Jupiter and more — and tell you where it is <b>correct</b>, where it is <b>wrong</b> (field by field), where it is <b>not found</b>, and the exact page to fix each one. We report what each site shows, never why, and we never submit anything on your behalf.
+    </div>
+    <div class="grid">
+      <div><label>TOKEN NAME</label><input class="in" id="f-name" placeholder="Cluck Norris" autocomplete="off"/></div>
+      <div><label>SYMBOL</label><input class="in" id="f-symbol" placeholder="CLKN" autocomplete="off"/></div>
+      <div class="full"><label>CONTRACT (MINT) ADDRESS · SOLANA</label><input class="in" id="f-mint" placeholder="Paste the mint address" autocomplete="off" spellcheck="false"/></div>
+      <div><label>OFFICIAL WEBSITE</label><input class="in" id="f-website" placeholder="https://…" autocomplete="off"/></div>
+      <div><label>X / TWITTER</label><input class="in" id="f-x" placeholder="@handle or link" autocomplete="off"/></div>
+      <div><label>TELEGRAM</label><input class="in" id="f-telegram" placeholder="t.me/… or handle" autocomplete="off"/></div>
+      <div><label>DISCORD (OPTIONAL)</label><input class="in" id="f-discord" placeholder="discord.gg/…" autocomplete="off"/></div>
+      <div class="full"><label>LOGO URL (OPTIONAL — compared by image bytes on a full sweep)</label><input class="in" id="f-logo" placeholder="https://…/logo.png" autocomplete="off"/></div>
+      <div class="full"><label>DESCRIPTION (OPTIONAL)</label><textarea class="in" id="f-description" placeholder="The one-paragraph description you use everywhere"></textarea></div>
+    </div>
+    <div class="btns">
+      <button class="run-btn alt" id="previewBtn" onclick="runPreview()">FREE PREVIEW · 5 SOURCES</button>
+      <button class="run-btn" id="fullBtn" onclick="runFull()">FULL SWEEP · ALL SOURCES</button>
+    </div>
+    <div class="hint" id="gateHint">The preview reads the on-chain record, CoinGecko, GeckoTerminal, DexScreener and Jupiter, free. The full sweep adds every other source, compares logos by bytes, and gives you a shareable report page — it runs on the unified tools pass, same as the other heavy tools.</div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="status" id="status">READING WHAT EVERY SITE SHOWS…</div>
+  <div id="out"></div>
+
+  <div class="footer">SAY WHAT IS SHOWN · NEVER WHY · <a href="/tools" style="color:var(--gold)">MORE TOOLS</a></div>
+</div>
+
+<script src="/cluck-wallet.js?v=2"></script>
+<script src="/cluck-util.js"></script>
+<script src="/cluck-gate.js"></script>
+<script>
+// esc lives in /cluck-util.js — never a private copy (CLAUDE.md: the private copies drifted).
+var esc = CluckUtil.esc;
+var BADGE = { correct: ['✅', 'CORRECT', 'var(--green)'], incorrect: ['⚠️', 'NEEDS A FIX', 'var(--gold)'], 'not-found': ['—', 'NOT FOUND', 'var(--muted)'], unread: ['?', 'COULD NOT READ', 'var(--sub)'] };
+
+function readForm() {
+  var g = function (id) { return (document.getElementById(id).value || '').trim(); };
+  return { name: g('f-name'), symbol: g('f-symbol'), mint: g('f-mint'), website: g('f-website'), x: g('f-x'), telegram: g('f-telegram'), discord: g('f-discord'), logo: g('f-logo'), description: g('f-description') };
+}
+function showErr(m) { var e = document.getElementById('err'); e.textContent = m; e.style.display = m ? 'block' : 'none'; }
+function busy(on) { document.getElementById('previewBtn').disabled = on; document.getElementById('fullBtn').disabled = on; document.getElementById('status').style.display = on ? 'block' : 'none'; }
+
+async function run(tier) {
+  showErr('');
+  var body = readForm(); body.tier = tier;
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(body.mint)) return showErr('That does not look like a Solana mint address.');
+  if (!body.name || !body.symbol) return showErr('Name and symbol are required — they are what the sites are compared against.');
+  busy(true);
+  try {
+    var r = await fetch('/api/listing-checkup/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    var d = await r.json();
+    if (!d || !d.ok) { showErr((d && (d.detail || d.error)) || 'The checkup could not run just now.'); return; }
+    render(d.report, d.shareUrl);
+    try { history.replaceState(null, '', '/listing-checkup?mint=' + encodeURIComponent(body.mint)); } catch (e) {}
+  } catch (e) { showErr('Network error — try again in a moment.'); }
+  finally { busy(false); }
+}
+function runPreview() { run('preview'); }
+function runFull() { run('full'); }
+// Unified tools pass (owner, 2026-09-06): the preview is free; the FULL sweep runs behind the pass.
+runFull = CluckGate.guard(runFull, { tool: 'Listing Checkup', anchor: '#fullBtn' });
+
+function render(rep, shareUrl) {
+  var s = rep.summary;
+  var groups = { incorrect: [], 'not-found': [], correct: [], unread: [] };
+  rep.sources.forEach(function (src) { (groups[src.status] || groups.unread).push(src); });
+  var h = '<div class="card">'
+    + '<div class="sum"><div><b>' + s.correct + '</b><span>CORRECT</span></div><div><b>' + s.incorrect + '</b><span>NEED A FIX</span></div><div><b>' + s['not-found'] + '</b><span>NOT FOUND</span></div><div><b>' + s.unread + '</b><span>UNREAD</span></div></div>';
+  if (rep.fixFirst && rep.fixFirst.length) {
+    h += '<div class="card warn"><b>Fix this first.</b> Your on-chain metadata differs from your record on: <b>' + rep.fixFirst.map(esc).join(', ') + '</b>. Most sites copy the on-chain record, so fixing it there fixes the copies over time. <a href="/hatchery#metadata" style="color:var(--gold)">Update on-chain metadata →</a></div>';
+  }
+  var order = [['incorrect', 'NEEDS A FIX'], ['not-found', 'NOT FOUND THERE'], ['correct', 'LISTED CORRECTLY'], ['unread', 'COULD NOT READ']];
+  order.forEach(function (o) {
+    var list = groups[o[0]]; if (!list.length) return;
+    h += '<div class="sec">' + o[1] + ' · ' + list.length + '</div>';
+    list.forEach(function (src) {
+      var b = BADGE[src.status] || BADGE.unread;
+      h += '<div class="src"><div class="srow"><b>' + esc(src.label) + '</b><span class="badge" style="color:' + b[2] + '">' + b[0] + ' ' + b[1] + '</span></div>';
+      (src.fields || []).forEach(function (f) {
+        if (f.status === 'match') return;
+        var theirs = f.status === 'missing' ? '<span class="fm">missing there</span>' : (f.status === 'unverified' ? '<span class="fm">' + esc(f.note || 'not compared') + '</span>' : '<span class="ft">theirs: ' + esc(f.theirs) + '</span>');
+        h += '<div class="frow"><span class="fk">' + esc(f.label) + '</span><span class="fo">ours: ' + esc(f.ours) + '</span>' + theirs + '</div>';
+      });
+      if (src.error) h += '<div class="muted">' + esc(src.error) + '</div>';
+      h += '<div class="links">' + (src.pageUrl ? '<a href="' + esc(src.pageUrl) + '" target="_blank" rel="noopener noreferrer">view listing</a>' : '')
+        + ((src.status === 'incorrect' || src.status === 'not-found') && src.fixUrl ? '<a href="' + esc(src.fixUrl) + '" target="_blank" rel="noopener noreferrer">where to fix it →</a>' : '') + '</div></div>';
+    });
+  });
+  h += '<div class="muted" style="margin-top:12px">Checked ' + rep.checked + ' sources (' + esc(rep.tier) + ' tier). "Not found" means the site answered with no record for this mint; "unread" means we could not read it — never a pass.</div>';
+  if (rep.tier === 'full' && shareUrl) h += '<div class="share">Share this report: <code>' + esc(shareUrl) + '</code> <a href="' + esc(shareUrl) + '" style="color:var(--gold)">open →</a></div>';
+  h += '</div>';
+  document.getElementById('out').innerHTML = h;
+}
+
+// Deep link: /listing-checkup?mint=… pre-fills the mint (from a share page's "run it again").
+(function () {
+  try { var m = new URLSearchParams(location.search).get('mint'); if (m && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(m)) document.getElementById('f-mint').value = m; } catch (e) {}
+})();
+</script>
+</body>
+</html>
