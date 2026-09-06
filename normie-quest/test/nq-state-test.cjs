@@ -167,6 +167,22 @@ function ensurePhaser() {
     else { const pre = only.split(',').map(s => s.trim()).filter(Boolean); levels = levels.filter(l => pre.some(p => l.name.indexOf(p) === 0)); }
     console.log(`[nq-state-test] NQ_ONLY=${only} → testing ${levels.length} level(s)`);
   }
+  // CROSS-MACHINE SPLIT (owner, 2026-09-06: "use multiple agents and split the levels up so they
+  // don't have to work so long"). NQ_SHARD="2/6" keeps every 6th level starting at the 2nd, by
+  // POSITION in the (already NQ_ONLY-filtered) list — round-robin, so the wide VIP levels at the
+  // end are spread across shards instead of landing on the last one. Each CI runner / session /
+  // agent takes one shard and the union is the full suite; NQ_WORKERS still parallelises WITHIN a
+  // shard. Note this is the knob for MORE MACHINES: N agents on ONE box each running a shard are
+  // no faster than one process with NQ_WORKERS (they share the same cores and starve each other —
+  // the NO-LOAD note below is exactly that failure).
+  const shardM = (process.env.NQ_SHARD || '').trim().match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (shardM) {
+    const si = +shardM[1], sn = +shardM[2];
+    if (!(si >= 1 && si <= sn)) { console.error(`[nq-state-test] bad NQ_SHARD=${process.env.NQ_SHARD} (want i/n with 1<=i<=n)`); process.exit(2); }
+    levels = levels.filter((_, k) => k % sn === si - 1);
+    console.log(`[nq-state-test] NQ_SHARD=${si}/${sn} → ${levels.length} level(s) in this shard: ${levels.map(l => l.name).join(' ')}`);
+  }
+  if (!levels.length) { console.log('[nq-state-test] no levels selected — nothing to test (PASS, vacuously)'); process.exit(0); }
   // Round-robin the shards rather than handing each worker a contiguous block: the wide VIP
   // levels are clustered at the end of the list, so contiguous slices would dump all the slow
   // ones on the last worker and the run would finish no faster than that worker.

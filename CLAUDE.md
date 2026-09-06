@@ -37,10 +37,17 @@ does not tell you how to write software; use your judgement for that.
 > from our own `firstSeenAt`, never from `vesting_start_time` (Jupiter sets that equal to the cliff,
 > and it is creator-set — live CUNA escrows declare 2069 and 2077).
 
-> 🎮 **Working on Normie Quest? Read `docs/HANDOFF_2026-07-27.md` first.** It carries the branch
-> state, the open decisions, and how to verify a change: `node normie-quest/test/nq-verify.cjs
-> <baseUrl>` reads the diff and picks the right checks. Don't run the full state test (every level —
-> 90 today) by reflex — a day went to running it for icon swaps it could never have validated.
+> 🎮 **Working on Normie Quest? Read `docs/NQ_TESTING_RULES.md` and `docs/HANDOFF_2026-07-27.md`
+> first.** The testing rules (owner, 2026-09-06) are mechanised: `node normie-quest/test/nq-verify.cjs
+> <baseUrl>` reads the diff, classifies it by REGION (an icon, a backdrop, a between-level card, a
+> menu or a DOM control never buys a level run; only ENGINE code or a level's own data does) and
+> picks the checks. A FULL run is **sharded across CI runners** (`nq-state` matrix, advisory until
+> 2026-09-13) or across machines with `NQ_SHARD=i/n` — never N agents on one box, they starve
+> each other. Don't run the full state test (every level — 90 today) by reflex — a day went to
+> running it for icon swaps it could never have validated, and a 90-level run for a LevelClear card
+> timed out under load on 2026-09-05. ⚠️ Headless Phaser on a slow box pins DELTA at the 60fps
+> target, so a test that waits on a `delayedCall` crawls or never fires — drive the target scene
+> with a lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`) instead.
 
 > 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
 > `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts
