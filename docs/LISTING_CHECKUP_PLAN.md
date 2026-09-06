@@ -43,7 +43,7 @@ the vendor's published free-tier numbers and must be re-checked at build time.
 | 5 | **Jupiter** | token API `GET /tokens/v2/search?query={mint}` (or the strict list) | name, symbol, logo, tags (verified / community) | Jupiter Verify (catdet / the JVP flow we already run for partners) | free |
 | 6 | **Solscan** | `GET /v2.0/token/meta?address={mint}` (key we hold) | name, symbol, icon, website, twitter, description | Solscan pulls metadata; fix on-chain | free tier on our key |
 | 7 | **Rugcheck** | `GET /v1/tokens/{mint}/report` | name, symbol, links it shows, verification badge | rugcheck.xyz project verification | free |
-| 8 | **Birdeye** | `GET /defi/token_overview?address={mint}` (`extensions`: website, twitter, telegram, discord, description) | those fields | birdeye.so token page "Update token profile" | needs a key; free tier is small — **owner decision** |
+| 8 | **Birdeye** | `GET /defi/v3/token/meta-data/single?address={mint}` (`extensions`: website, twitter, telegram, discord, description; `logo_uri`) | those fields | birdeye.so token page "Update token profile" | needs a key; free tier is small — **owner decision** |
 | 9 | **CoinMarketCap** | `GET /v2/cryptocurrency/info?address={mint}` | urls.website / twitter / chat / message_board, logo, description | coinmarketcap.com "Request update" | needs a free key (10k credits/mo) — **owner decision** |
 | 10 | **pump.fun** (if the mint is a pump token) | `frontend-api` coin endpoint | name, symbol, image, website, twitter, telegram, description | pump.fun creator profile | free, unofficial — read only, tolerate failure |
 | 11 | **DEXTools** | page fetch + parse (API is paid) | socials shown on the pair page | dextools.io "Update token info" form | HTML parse; mark unread on change |
@@ -90,6 +90,25 @@ Preview ≈ 6 API calls (Helius, CoinGecko, GeckoTerminal ×2, DexScreener, Jupi
 Full sweep ≈ 15 API calls + up to 8 page fetches + 2 search calls; the only metered ones are Helius
 (one DAS call), Birdeye and CMC (if keyed), and Brave (free 2k/mo → ~60 full sweeps a day at the
 cap). At the caps above the monthly cost stays inside every free tier.
+
+## Batch A — shipped 2026-09-06 (owner: "ship and build A")
+
+`lib/listing-checkup-checks.js` runs beside the sources and lands on `report.checks`; the page and
+the `/listing/<mint>` share page render every section; a throwing check is `unread` with its error.
+
+| Check | Tier | Reads | Says |
+|---|---|---|---|
+| **chainFacts** | preview (+locks on full) | the DAS row the on-chain adapter already fetched (`row.extra`), Rugcheck's `lpLockedPct`, and on the full sweep the Locker Room's on-chain lock scan (`getLockedSupply`) | mint / freeze authority revoked or active, metadata mutable, token program, LP locked %, token locks with a Lock of Fame link |
+| **impersonators** | preview | Jupiter token search + DexScreener search by NAME and by SYMBOL, merged by mint, ours removed, other chains dropped | every other Solana mint using the name or symbol, with liquidity / holders / Jupiter-verified — Jupiter's own #1 refusal reason is "duplicate of another token" |
+| **linkHealth** | preview | website (follow redirects, off-domain landing flagged), Telegram public page, Discord invite via the invites API; X is `unverified` — it refuses anonymous reads and we do not guess | ok / broken / redirect / unverified per link, with the HTTP status and the reason |
+| **logoSpec** | preview | the logo bytes (PNG / JPEG / GIF / WebP / SVG header parsing, no image library) | format, size, transparency, and pass / fail against each site's stated rule, dated (`LOGO_SPECS`) |
+| **howToList** | both | static `LISTING_HOW` table, one entry per source | on every NOT FOUND row: what that site says it needs and the page to apply, replacing the dead end |
+
+Honesty rules kept: chain facts and the impersonator list are reported as what the chain and the
+sites show, never why; every rule and requirement carries the date it was read from the site's own
+form; nothing is submitted. Jupiter's fix link moved from the retired Catdet list to Jupiter Verify.
+Tests: `scripts/listing-checkup-checks-test.cjs` (23 fixture cases, CI node-check) and the routes
+test asserts the checks ride along offline as `unread`, never a throw.
 
 ## Tests before it ships
 

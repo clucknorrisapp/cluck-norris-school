@@ -64,6 +64,14 @@ jobs:
       # not exist, measuring terms backward from vesting_start_time, tolerating a missing
       # firstSeenAt, flattening the weight or dropping the largest-remainder split each fails the
       # test named for it.
+      # Listing Checkup: the normaliser, comparator, verdicts, the source adapters on recorded
+      # fixtures and the capped cache — pure node, no network.
+      - name: Listing Checkup core + adapters (fixtures)
+        run: node scripts/listing-checkup-test.cjs
+      # Batch A checks: image-header parsing, per-site logo rules, impersonator merge, link health
+      # verdicts, chain facts from the DAS row, the how-to table covering every source, the runner.
+      - name: Listing Checkup checks (fixtures)
+        run: node scripts/listing-checkup-checks-test.cjs
       - name: CUNA staking split + qualification
         run: node scripts/cuna-staking-test.cjs
       # The firstSeenAt ledger the qualification horizon is measured against. Every case is a way
@@ -311,6 +319,11 @@ jobs:
       # throwaway key and no secrets.
       - name: admin mutation discipline (405 on GET, explicit project, pool allowlist)
         run: node scripts/mutating-get-guard-test.cjs
+      # Listing Checkup routes: validation, the offline run → cache → share page with every
+      # attacker-controlled string escaped, the unknown-mint page. LISTING_CHECKUP_OFFLINE=1 keeps
+      # CI off the aggregators' APIs.
+      - name: Listing Checkup routes (offline)
+        run: node scripts/listing-checkup-routes-test.cjs
       # The lock-and-earn page's post-lock "announce on X" card only appears after a real
       # signature, which no test can produce; this drives it through its test hook and checks the
       # post is built from config numbers, stays under 280, hides dollars when the price is
