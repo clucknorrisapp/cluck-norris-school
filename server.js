@@ -15874,7 +15874,11 @@ async function listingFetchJson(url, opts = {}) {
   // LISTING_CHECKUP_OFFLINE=1 (CI's routes test): every source reads as `unread` without a network
   // call, so the run/cache/report-page path is exercised offline and no aggregator sees CI traffic.
   if (process.env.LISTING_CHECKUP_OFFLINE === "1") throw new Error("offline (LISTING_CHECKUP_OFFLINE=1)");
-  const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "clucknorris-listing-checkup/1.0 (+https://clucknorris.app/listing-checkup)", ...(opts.headers || {}) }, signal: AbortSignal.timeout(opts.timeoutMs || 15000) });
+  let r = await fetch(url, { headers: { accept: "application/json", "user-agent": "clucknorris-listing-checkup/1.0 (+https://clucknorris.app/listing-checkup)", ...(opts.headers || {}) }, signal: AbortSignal.timeout(opts.timeoutMs || 15000) });
+  if (r.status === 429) {   // shared egress trips the free tiers' per-IP limit; one polite retry, then report it
+    await new Promise((res) => setTimeout(res, 1800));
+    r = await fetch(url, { headers: { accept: "application/json", "user-agent": "clucknorris-listing-checkup/1.0 (+https://clucknorris.app/listing-checkup)", ...(opts.headers || {}) }, signal: AbortSignal.timeout(opts.timeoutMs || 15000) });
+  }
   if (!r.ok) return { __status: r.status };
   const text = await r.text();
   if (text.length > 2_000_000) throw new Error("response too large");
@@ -15932,7 +15936,7 @@ app.post("/api/listing-checkup/run", async (req, res) => {
   const deps = {
     fetchJson: listingFetchJson,
     rpcCall: (id, method, params) => { if (process.env.LISTING_CHECKUP_OFFLINE === "1") throw new Error("offline (LISTING_CHECKUP_OFFLINE=1)"); return heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)(id, method, params); },
-    env: { SOLSCAN_API_KEY: process.env.SOLSCAN_API_KEY, CMC_API_KEY: process.env.CMC_API_KEY, BIRDEYE_API_KEY: process.env.BIRDEYE_API_KEY },
+    env: { SOLSCAN_API_KEY: process.env.SOLSCAN_API_KEY, CMC_API_KEY: process.env.CMC_API_KEY, BIRDEYE_API_KEY: process.env.BIRDEYE_API_KEY, COINGECKO_API_KEY: process.env.COINGECKO_API_KEY },
     fetchText: listingFetchText,
     fetchBytes: listingFetchBytes,
     // Full tier only (the check gates it): the same on-chain lock scan the Locker Room runs.
