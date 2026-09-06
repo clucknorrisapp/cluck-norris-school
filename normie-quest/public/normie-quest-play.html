@@ -7189,7 +7189,7 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     this.lastAdv=now;
     if(this.page===0){ try{ if(SFX&&SFX.blip) SFX.blip(); }catch(e){} this.showPage(1); }
     else this.go(); },
-  go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3}); },
+  go:function(){ if(this.done) return; this.done=true; try{ SFX.power(); }catch(e){} /* a sound can never block the next scene — a closed iOS audio context throws on node creation */ this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3}); },
   update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
     if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
     // PAD READ — EVERY PAGE, ANY BUTTON.
@@ -7264,7 +7264,7 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
     this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; self.go(); });
     padAdvance(this, function(){ self.go(); });   // controller button also starts
   },
-  go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
+  go:function(){ if(this.done) return; this.done=true; try{ SFX.power(); }catch(e){} /* a sound can never block the next scene — a closed iOS audio context throws on node creation */ this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
   update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
     if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
     if(!nqPanelOpen() && this.time.now-this.t0>16000) this.go();   // safety auto-advance so it can never soft-lock — but never under an open wallet panel
@@ -7436,6 +7436,12 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ d=d||{}; this.nextLevel=d.next||0; this.score=d.score||0; this.lab=d.lab; this.cleared=d.cleared||''; },
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0;
+    // Phaser REUSES the scene object between runs, so anything create() does not set is whatever
+    // the previous beat left behind. `runner` is only made by the nation beat; a later beat found
+    // the destroyed sprite still on `this`, update() called setTexture on it, the throw escaped
+    // Phaser's step and the whole frame loop stopped — the game froze on the card with the music
+    // playing and every tap dead (found 2026-09-06 by the beat test; CI hit it one seed in six).
+    this.runner=null; this.cont=null; this._adv=null; this._buyOpen=false;
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
     // ROTATION (owner ask 2026-08-30: "fun screens randomly between levels — normie quest, the
     // leaderboards and pending giveaways"). Cycle over every beat that has CONTENT right now:
@@ -7543,7 +7549,7 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.input.keyboard.on('keydown',function(ev){ if(ev&&ev.repeat) return; if(self.time.now-(self.t0||self.time.now)<500) return; adv(); });
     padAdvance(this, adv);
   },
-  go:function(){ if(this.done) return; this.done=true; SFX.power();
+  go:function(){ if(this.done) return; this.done=true; try{ SFX.power(); }catch(e){} /* a sound can never block the next scene — a closed iOS audio context throws on node creation */
     this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
   update:function(){
     if(this.done) return;
@@ -7553,10 +7559,13 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     // closes, the hold restarts from zero so the card is readable again before it moves on.
     if(nqPanelOpen()){ this.t0=this.time.now; this._buyOpen=true; this._padPrev=true; return; }
     if(this._buyOpen){ this._buyOpen=false; this.t0=this.time.now; }
-    if(this.runner){ var k=(Math.floor(this.time.now/110)%2)?'nrun2':'nrun1';
-      if(this.runner.texture.key!==k) this.runner.setTexture(k).setScale(44/this.runner.height);
-      this.runner.y=96+Math.sin(this.time.now/90)*2; }
-    if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
+    // Cosmetics can never take the loop down: a throw out of update() ends Phaser's rAF chain.
+    try{
+      if(this.runner&&this.runner.scene){ var k=(Math.floor(this.time.now/110)%2)?'nrun2':'nrun1';
+        if(this.runner.texture.key!==k) this.runner.setTexture(k).setScale(44/this.runner.height);
+        this.runner.y=96+Math.sin(this.time.now/90)*2; }
+      if(this.cont&&this.cont.scene) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
+    }catch(e){}
     // The on-screen D-pad stays visible on this beat, so a tap has to DO something. Edge-triggered
     // with the same 500ms grace padAdvance uses, and _padPrev starts latched so a direction still
     // held from the run-in to the flag does not skip the card before it is read.
@@ -7674,7 +7683,7 @@ var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
     var mint=(window.__NQ_NORMIE_MINT||NQ_NORMIE_MINT_DEFAULT);
     try{ window.open('https://jup.ag/swap/SOL-'+encodeURIComponent(mint),'_blank'); }catch(e){}
   },
-  go:function(){ if(this.done) return; this.done=true; SFX.power();
+  go:function(){ if(this.done) return; this.done=true; try{ SFX.power(); }catch(e){} /* a sound can never block the next scene — a closed iOS audio context throws on node creation */
     if(this.locked){
       // LevelSelect is the TEST BUILD picker. Until the 2026-08-22 launch gate this branch could
       // only ever fire in the setup lane, so it was safe; now a public player who hits the world
@@ -7691,10 +7700,17 @@ var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
   }
 });
 
+// LAB renderer switch (2026-09-06). Headless Chromium has no GPU, so Phaser.AUTO picks WebGL on
+// SwiftShader and the game renders at 0.5 fps — that is the "1-4 fps headless box" behind every
+// delayedCall timeout and 90-level run that took hours. The 2D canvas renderer runs the same game
+// at a full 60 fps there (measured: 0.5 → 60). A test opts in by setting window.__NQ_RENDER='canvas'
+// in an init script; nothing in the shipped game sets it, and the visual gate stays on WebGL because
+// its baselines are WebGL pixels.
+var NQ_RENDER_TYPE=Phaser.AUTO; try{ if(typeof window!=='undefined' && window.__NQ_RENDER==='canvas') NQ_RENDER_TYPE=Phaser.CANVAS; }catch(e){}
 var NQGAME=new Phaser.Game({
   // Render at 2x internal resolution (each scene camera zooms 2x, so the world view is
   // unchanged but the backing store is 960x540 -> crisp, not blocky, when displayed big).
-  type:Phaser.AUTO, parent:'screen', width:W*RES, height:H*RES, pixelArt:true, backgroundColor:'#0a0813', roundPixels:true,
+  type:NQ_RENDER_TYPE, parent:'screen', width:W*RES, height:H*RES, pixelArt:true, backgroundColor:'#0a0813', roundPixels:true,
   scale:{ mode:Phaser.Scale.FIT, autoCenter:Phaser.Scale.CENTER_BOTH },
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
   scene:[Boot,Title,LevelSelect,Controls,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]

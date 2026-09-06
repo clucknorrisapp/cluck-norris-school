@@ -45,9 +45,11 @@ does not tell you how to write software; use your judgement for that.
 > 2026-09-13) or across machines with `NQ_SHARD=i/n` — never N agents on one box, they starve
 > each other. Don't run the full state test (every level — 90 today) by reflex — a day went to
 > running it for icon swaps it could never have validated, and a 90-level run for a LevelClear card
-> timed out under load on 2026-09-05. ⚠️ Headless Phaser on a slow box pins DELTA at the 60fps
-> target, so a test that waits on a `delayedCall` crawls or never fires — drive the target scene
-> with a lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`) instead.
+> timed out under load on 2026-09-05. ⚠️ Headless Chromium renders the game's WebGL at ~0.5 fps
+> (SwiftShader, no flag fixes it) and Phaser pins DELTA at the 60fps target while frames overrun,
+> so a `delayedCall` crawls or never fires. Logic tests set `window.__NQ_RENDER='canvas'` in an
+> init script (60 fps, same logic; the state and beat tests do) and drive the target scene with a
+> lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`); the visual gate stays on WebGL.
 
 > 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
 > `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts
@@ -157,6 +159,19 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   **frequency** instead, and prefer a fresh-session routine when the job needs no conversation
   context. Applied 2026-09-03: lock-celebration watcher → `claude-sonnet-5`; CUNA meme queue
   hourly → every 3h.
+- ⛔ **Multi-agent BUDGET (owner, 2026-09-06, after the Normie Quest deep dive ran 18 hours:
+  "this is unacceptable").** Measured cause, `docs/NQ_DEEP_DIVE_POSTMORTEM_2026-09-06.md`: 592
+  agents through a box that runs **2–3 workflow agents at a time**, three verifier votes on every
+  one of 201 findings (603 verifiers, mostly on P2/P3 polish), a third of the runs re-executed by
+  resumes, and no output until the last vote. Rules: (1) a workflow script computes its agent count
+  and prints the ETA (`agents × 2.5 min ÷ 2.5 concurrent`) BEFORE running anything — over **60
+  agents or 90 minutes**, stop and ask the owner with the number; (2) P0/P1 get ONE verifier, money /
+  PII / engine paths two more lenses, **P2/P3 never get a verifier**; (3) a finder returns at most
+  10 ranked findings; (4) the findings list is written to `docs/` and shown to the owner the moment
+  the Find phase ends — verification refines it, never gates it; (5) report at every phase boundary
+  with the ETA, cut the plan when the ETA passes the budget; (6) never resume a workflow twice — one
+  resume, or finish, or kill and synthesize from the journal on disk; (7) plan for 2–3 concurrent
+  agents on this box, not N.
 - ⛔ **PLAN ≠ EXECUTE for money.** For anything that moves funds, opens or closes positions, or
   resumes an engine: state the exact plan and STOP. Execute only on an explicit go. An owner
   message describing intent ("thinking we should Y") opens a discussion, not authorisation —
