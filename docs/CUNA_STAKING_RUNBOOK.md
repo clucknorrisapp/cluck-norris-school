@@ -5,6 +5,12 @@ one deliberately. This is the document to read before arming either.
 
 Built 2026-09-05. Owner decisions are dated inline — where this contradicts an older note, this wins.
 
+> **Current state (2026-09-05 23:50 UTC):** lock-to-earn **ARMED on production** since 20:36 UTC
+> (owner's go), accruing hourly (24 slices a day of 345,000 CUNA), 48 escrows scanned, 15 qualifying,
+> no missed slices. Payouts are **weekly** from `/cuna-payout` — day and time owner-TBA (announced to
+> the room and X on 2026-09-05). The burner is **DISARMED**; a signer is present on production, so it
+> is one two-flag arm away. Staging has no volume: its armed state is lost on every deploy.
+
 ---
 
 ## What it is

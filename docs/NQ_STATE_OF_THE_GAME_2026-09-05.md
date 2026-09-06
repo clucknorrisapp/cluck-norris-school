@@ -108,6 +108,13 @@ My read: both are **preset quick-tag taps, not written feedback** — there is z
 
 ---
 
+## 2b. Owner-reported bugs on the live game (2026-09-05 23:58 UTC) — fix before anything else in §4
+
+| # | Report (owner's words) | What the code says | Fix shape |
+|---|---|---|---|
+| **P0-A** | *"between a level i hit the grab normie, then it would never let me keep going on the game, like the screen locked with music in background and I clicked everywhere and wouldn't work"* | The between-level beat renders a `🪙 GRAB $NORMIE` (or `🏛 SEE THE LOUNGE`) button at `game_logic.js:7378`; `:5125` notes that beat routes to "wallet / grab NORMIE instead of the next world". After the tap the scene stays up with music and takes no input — the CTA leaves the beat without a way forward. **Not yet reproduced; the owner hit it on a phone.** | Make the CTA open its link in a new tab and leave the beat alive with tap-to-continue (ties into P13); every between-level screen must always have a way forward; add a headless beat-flow check. **First NQ fix.** |
+| **P0-B** | *"normie is also blurry while running, i think it is trying to go between two different run pictures again"* | `main` renders at `RES=3` on desktop, `2` on touch (`game_logic.js:25`). Skins already use one steady run pose (`:6229`, from 791fb8d). The **unmerged** branch `claude/normie-2-hidden-level-odzbkv` carries three more fixes that never landed: crisp characters via NEAREST filtering matching the monsters (8dcabf6), characters rendered clean + run-bob tuning (c90e62c), and the 2x/3x resolution back-and-forth (500b6c0 → bcacf34). "Again" is right — the fix exists and was never merged. | Port the NEAREST-filter + integer-snapped position change from that branch for the base character (not only skins); confirm RES on the owner's phone; re-approve the character visual baselines (`nq-visual --update`, eyeball PNGs). |
+
 ## 3. Reliability debt
 
 | # | Issue | Evidence | Fix shape |
@@ -147,6 +154,7 @@ My read: both are **preset quick-tag taps, not written feedback** — there is z
 | P11 | **Paywall moment** — fire the pitch on a *clear*, not on a lock | 1-3 is a boss and the last free level; today a player who just lost a boss fight meets the upsell | **S** | Low — `LevelClear` beat rotation already exists | Manual walk of 1-3 → 2-1 on staging |
 | P12 | **Public feedback chip** (debt #15) | 2 comments / 3,762 events | **S** | Low — store is capped at 2,000 | Post one from staging, read it back on the dashboard |
 
+| P13 | **Between-level screens: hold longer, or wait for a tap** (owner, 2026-09-05: *"the pause on normie needs to be a little longer between levels to read the screen, or even require a click or button hit to move forward"*) — the LevelClear / WorldClear / promo beats auto-advance too fast to read | owner report | **S** | Low — timing/flow only; the state test must still see every level boot | Manual walk on staging (phone + desktop); `nq-verify` picks the single-level state test; confirm the tap-to-continue also works from the touch joystick band |
 ---
 
 ## 5. BIGGER — content candidates
@@ -197,7 +205,7 @@ Note: `WORLD_ART` already carries plates through w21, and 59 plates exist for 21
 
 **Weeks 1-2** — all on `develop` → staging; nothing here needs a money decision.
 
-1. **P5 music routing** + **debt #12 hardcoded ranges**. *Unblocks*: the paid tier stops sounding like world 1; the paywall copy stops being a manual edit away from lying. (Debt #14 is **deliberately not in this batch** — it is an auth-surface change needing an owner go and a security review. The runbook line documenting the correct header is fine to write; the code alias is not.)
+1. **P13 between-level screens hold longer / tap to continue** (owner ask, 2026-09-05) + **P5 music routing** + **debt #12 hardcoded ranges**. *Unblocks*: the paid tier stops sounding like world 1; the paywall copy stops being a manual edit away from lying. (Debt #14 is **deliberately not in this batch** — it is an auth-surface change needing an owner go and a security review. The runbook line documenting the correct header is fine to write; the code alias is not.)
 2. **P1 (1-1) + P4 (11-3, 12-3)**. *Unblocks*: the funnel entrance and the tier-1 exit — the two ends of the paying path.
 3. **Wire `nq-verify`/`nq-state-test` and `nq-boss-ground` into CI; generate the boss list from `LEVELS`** (debt #2, #3). *Unblocks*: **every content change after this one is safe to ship.* Do this before, not after, the balance work lands on `main`.
 4. **Cap the unbounded wallet stores + first tests for rewards/ledger/save** (debt #7, #8). *Unblocks*: opening the wheel and lounge to more wallets.

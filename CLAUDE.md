@@ -11,7 +11,9 @@ does not tell you how to write software; use your judgement for that.
 > strategies — lives in `git log` and `docs/`. It was trimmed out of here on 2026-07-30 because
 > a stale instruction stated with authority is worse than no instruction, and several were.
 
-> 📋 **Starting a session? Read `docs/HANDOFF_2026-08-02.md` first** — the permissions answer that
+> 📋 **Starting a session? Read `docs/HANDOFF_2026-09-05.md` first** — the lock-to-earn launch
+> night: what shipped, what is live, the traps learned, what is held and why. Then
+> `docs/HANDOFF_2026-08-02.md` — the permissions answer that
 > cost an afternoon (and why it is NOT fixable from this repo), the RPC method name that fails only
 > in production, and the i18n keys that silently drop six languages if you edit English copy.
 > Nothing in it is blocking: §0 is resolved.
@@ -25,9 +27,11 @@ does not tell you how to write software; use your judgement for that.
 > appendix where every entry cost real money once. Don't improvise a go-live; the sequencing
 > traps in there (arm-first, two-flags, stale PDAs, orphaned positions) all bit within one week.
 
-> 🪙 **Touching CUNA staking or the daily burn? Read `docs/CUNA_STAKING_RUNBOOK.md` first.** Both
-> ship DISARMED and each needs two flags to arm; the burner additionally needs its own
-> `CUNA_BURN_SECRET`. The four things that hold the money are listed there — chief among them that
+> 🪙 **Touching CUNA lock-to-earn or the daily burn? Read `docs/CUNA_STAKING_RUNBOOK.md` first.**
+> **Lock-to-earn is LIVE — armed on production since 2026-09-05 20:36 UTC**, accruing hourly, paid
+> weekly from `/cuna-payout` (day and time owner-TBA). The burner is still DISARMED. Both ship
+> disarmed in a fresh environment and each needs two flags to arm; the burner additionally needs its
+> own `CUNA_BURN_SECRET`. The four things that hold the money are listed there — chief among them that
 > **Rule B (exclude-by-recipient-and-creator) is the ONLY thing keeping 2.285B of treasury locks out
 > of the pool**, since nothing about their terms disqualifies them. Lock terms are measured FORWARD
 > from our own `firstSeenAt`, never from `vesting_start_time` (Jupiter sets that equal to the cliff,
@@ -497,12 +501,13 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
   the tier stands out, or restyle on-brand? Decide deliberately before touching.
 - ✅ **Graduation gate shipped 2026-08-19** (was: pure client assertion → treasury-paid cNFT).
   `/api/claim` now checks a server-side lesson ledger (`lib/school-progress`, fed by `/api/track`
-  with an anonymous per-browser sid). Runs in **monitor** (log-only) until **2026-09-02**, then
-  auto-enforces; pre-gate learners are grandfathered via localStorage backfill until 2026-09-19.
+  with an anonymous per-browser sid). Ran in **monitor** (log-only) until **2026-09-02** and has
+  been **ENFORCING since**; pre-gate learners are grandfathered via localStorage backfill until 2026-09-19.
   Owner controls: `/api/school/grad-gate?key=…` (mode/thresholds/inspection), `GRAD_GATE_OFF=1`
   kill. A blocked claim still saves the transcript — it withholds the badge, sheet row, and mint.
-  ⚠️ Before the enforce date, glance at the `[GRAD-GATE] monitor (would block)` log lines /
-  `blockedOrWouldBlock` counter — if legit learners are tripping it, tune before it arms.
+  ⚠️ Live read 2026-09-05 23:50 UTC: `mode: enforce`, `blockedOrWouldBlock: 1` — one claim has
+  tripped it since arming and nobody has checked whether that was a legit learner. The audit's
+  live-data check owns that question; `GRAD_GATE_OFF=1` is the kill if it is blocking real people.
 - **Never verified end-to-end:** no rendered autopsy report, no real lock, and no connect-and-sign
   with a real wallet has ever been exercised by a session — they need keys a cloud container
   doesn't have. They're also where the worst bugs have hidden.
