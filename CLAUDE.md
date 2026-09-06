@@ -228,7 +228,7 @@ The owner manages all liquidity positions **manually**. Read freely; touch nothi
   bag is never sold. But the owner revised the blanket rule: a tight-quoting engine that ABSORBS
   someone's sell may sell that absorbed inventory back to recoup its quote funds ("those sells
   would show up on the chart anyway — it's only fair we recoup as our base funds for volume").
-  Mechanism: `/api/whirlpool/vault/recoup-baseline?project=…&arm=1` snapshots current holdings as
+  Mechanism: `POST /api/whirlpool/vault/recoup-baseline?project=…&arm=1` snapshots current holdings as
   a protected baseline; `manualSwap` then allows selling ONLY the amount above it. Disarmed +
   baseline-less = the historic never-sell behavior, and that is the default everywhere. Also:
   **never buy CLKN with operator funds** without asking in that moment (owner rule, after
@@ -352,9 +352,24 @@ served the React shell at 200.
   write silently reverts on the next push to `main` unless it was made with `&durable=1`
   (stored in kv `ratchetOverrides:<project>`, merged over the code defaults at boot, cleared
   by writing the key as null). This trap cost live tuning twice on 2026-08-28 before the
-  override mechanism existed. Engine GATE logic is pure in `lib/engine-decisions.js` —
+  override mechanism existed. ⚠️ Until the 2026-09-06 code batch only the `dnc` and `rose`
+  ratchets merged the override table — `cuna` and `poke` answered `durable:true` and reverted on
+  the next deploy anyway (audit #3); all four merge it now. Engine GATE logic is pure in `lib/engine-decisions.js` —
   changing a gate means updating `scripts/engine-sim-test.cjs` (CI runs it; each scenario is
   a real incident) and replaying it locally BEFORE shipping, not debugging in production.
+- ⛔ **Admin routes that ACT are POST-only, and armed vault calls must name `project=`** (audit
+  2026-09-05, shipped in the code batch): `run=1` / `arm=1` / `disarm=1` / `set=` on any
+  `/api/whirlpool/vault/*` route, `clear=1`/`run=1`/`probe=` on `/api/lock-celebration`, `run=1` on
+  `/api/x-delete`, any field or flag on `/api/buybot`, `arm/disarm/setmin/test/announce/backfill`
+  on `/api/rose-buybot`, `post=1` on the two Telegram test routes, and arming
+  `/api/treasury-engine-window` all answer **405 on a GET** — the same request as a POST goes
+  through, and a flag-less GET is still the dry run / read. A POST with `run=1` and no
+  `project=` is refused with 400 rather than defaulting to `clkn`, and every vault response
+  echoes `project` + `operator`. The hourly lock-celebration routine, the two skills and the
+  runbooks were switched to POST in the same change; `scripts/mutating-get-guard-test.cjs` (CI)
+  pins all of it. **The burn celebration also has a value floor now**: a verified burn Jupiter
+  prices under `BURN_BROADCAST_MIN_USD` (default $10; unpriced = skipped) gets its receipt page
+  but no auto-post — a stranger's one-unit mint could otherwise force a brand tweet.
 - ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`
   defaults to `{}` (`lib/whirlpool-vault.js` ~358), so a missing kv key reads as *not paused*; and
   `lib/kvstore.js` `mkdirSync`s `DATA_DIR` and reports persistent even when the volume is not the

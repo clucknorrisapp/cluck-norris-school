@@ -56,7 +56,7 @@ decision that sticks.
 ## 3. Post — X FIRST, then Telegram (if `announced:false`)
 1. X: `GET /api/x-announce?key=…&post=1&text={pending.xText}&image={rawUrl}` → capture post id.
 2. Telegram (SILENT — never loud): `GET /api/tg-test?key=…&photo={rawUrl}&text={pending.tgText}%0A%0A🐦 On X — like %26 repost: https://x.com/FireChicken007/status/{id}`
-3. Clear: `GET /api/lock-celebration?key=…&clear=1`
+3. Clear: `curl -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/lock-celebration?clear=1"` — **POST only** since audit 2026-09-05 #8 (a GET with `clear=1` is refused with 405; the read without flags stays a GET).
 
 ## 3b. Fallback already fired (`announced:true`)
 Degrade to two-step: X image reply under `xPostId` with a SHORT punchline (never restate numbers);

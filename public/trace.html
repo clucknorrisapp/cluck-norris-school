@@ -441,8 +441,9 @@ if (urlParams.get('mint')) mintInput.value = urlParams.get('mint').trim();
 updateRunBtn();
 // Arriving from Wallet X-Ray with both fields already filled: this is the token-ledger
 // MODE of that tool, not a separate destination, so run it instead of making the user
-// press a button they already pressed once (owner's merge call, 2026-07-29).
-if (walletInput.value && mintInput.value && !runBtn.disabled) runTrace();
+// press a button they already pressed once (owner's merge call, 2026-07-29). The call itself
+// sits at the END of the script, after runTrace is wrapped by the tools-pass guard — here it
+// ran the unguarded function (audit 2026-09-05 #2).
 
 function showErr(m) { const e = document.getElementById('err'); e.textContent = m; e.classList.add('show'); }
 function hideErr() { document.getElementById('err').classList.remove('show'); }
@@ -909,6 +910,7 @@ function downloadCsv() {
 // Unified tools pass (owner, 2026-08-18): the page previews free — RUN needs the pass
 // (hold $50 of CLKN = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
 runTrace = CluckGate.guard(runTrace, { tool: 'Cluck Trace', anchor: '#runBtn' });
+if (walletInput.value && mintInput.value && !runBtn.disabled) runTrace();   // the X-Ray hand-off auto-run, now guarded
 </script>
 <script defer src="/cluck-nav.js"></script>
 </body>

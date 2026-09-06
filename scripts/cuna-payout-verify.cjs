@@ -111,11 +111,16 @@ function check(ok, label, detail) {
   }
 
   // 5. Sanity ceiling. The batch cannot exceed what the programme could possibly have emitted
-  //    across the days it has accrued. Catches an accrual that ran many times or a pool misread.
+  //    across the SLICES it has accrued — dailyPool × slices / 24. Catches an accrual that ran many
+  //    times, a pool misread, or a slice that credited a whole day (audit 2026-09-05 #4: the old
+  //    line multiplied the daily pool by the slice count, a ceiling 24× too loose — a batch that
+  //    over-credited every wallet exactly 24× would have landed exactly on it).
   const poolRaw = BigInt(admin.poolTodayRaw || 0);
-  const ceiling = poolRaw * BigInt(Math.max(1, pay.daysAccrued));
-  check(BigInt(batch.totalRaw) <= ceiling, "batch is within days × daily pool",
-    `${CUNA(batch.totalRaw)} vs ceiling ${CUNA(ceiling)} (${pay.daysAccrued} days)`);
+  const slices = Number(pay.slicesAccrued != null ? pay.slicesAccrued : admin.slicesAccrued) || 0;
+  const ceiling = (poolRaw * BigInt(Math.max(1, slices)) + 23n) / 24n;
+  check(slices > 0, "the payout route reports slicesAccrued (server has the audit #4 fix)", `slices=${slices} days=${pay.daysAccrued}`);
+  check(BigInt(batch.totalRaw) <= ceiling, "batch is within slices/24 × daily pool",
+    `${CUNA(batch.totalRaw)} vs ceiling ${CUNA(ceiling)} (${slices} slices ≈ ${pay.daysAccrued} days)`);
 
   // 6. No duplicates, no zero or negative rows, nothing under the payout floor.
   if (amounts) {

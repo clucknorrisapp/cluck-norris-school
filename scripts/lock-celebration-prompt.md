@@ -21,6 +21,6 @@ e) POST X FIRST (Bash; use curl -G with --data-urlencode for every param; header
 f) THEN Telegram (SILENT — never pass loud=1): GET "https://clucknorris.app/api/tg-test" with photo=<rawUrl> and:
    - Normal case: text=<pending.tgText VERBATIM> + append "\n\n🐦 On X — like & repost:\nhttps://x.com/FireChicken007/status/<tweet id>"
    - Fallback case (announced true): a self-sufficient caption (numbers + https://lock.jup.ag/token/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS + the X link line) AND replaceMsg=<pending.tgMessageIds comma-joined> so the photo replaces the fallback text(s).
-g) ONLY after BOTH posts succeeded: curl -sS "https://clucknorris.app/api/lock-celebration?clear=1" -H "x-premium-key: $PREMIUM_ACCESS_KEY" then report probe=ok-posted-x<tweet id>.
+g) ONLY after BOTH posts succeeded: curl -sS -X POST "https://clucknorris.app/api/lock-celebration?clear=1" -H "x-premium-key: $PREMIUM_ACCESS_KEY" then report probe=ok-posted-x<tweet id>.
 
 HARD RULES: Never post anything if pending was null. ONE combined post per channel — never post text separately from the image. Only the two posts described. Silent Telegram always. If any step fails mid-way, leave the flag set so the next hourly run retries. Do not touch anything else (no trades, no pool operations, no other posts, no code changes). The treasury vault is deliberately PAUSED — never resume it.

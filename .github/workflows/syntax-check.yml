@@ -304,6 +304,13 @@ jobs:
       # cap has to fire in FRONT of the handler — a 429 after the paid call saves nothing.
       - name: AI tutor daily cap is enforced server-side
         run: node scripts/ai-daily-cap-test.cjs
+      # Audit 2026-09-05 #5-#9: admin routes that arm, run, post or delete answer 405 on a GET (a
+      # pasted link that a chat client unfurls must never move funds), armed vault calls must name
+      # their project and every vault response echoes it, the Meteora pool lever is allowlisted, and
+      # the two Telegram test routes 404 like every other admin route. Boots the real server with a
+      # throwaway key and no secrets.
+      - name: admin mutation discipline (405 on GET, explicit project, pool allowlist)
+        run: node scripts/mutating-get-guard-test.cjs
       # The lock-and-earn page's post-lock "announce on X" card only appears after a real
       # signature, which no test can produce; this drives it through its test hook and checks the
       # post is built from config numbers, stays under 280, hides dollars when the price is
