@@ -136,6 +136,7 @@ function ensurePhaser() {
     const errs = [];
     const browser = await chromium.launch({ headless: true, executablePath: findChrome(), args: ['--no-sandbox', '--disable-dev-shm-usage'] });
     const page = await browser.newPage();
+    await page.addInitScript(() => { window.__NQ_RENDER = 'canvas'; });   // headless WebGL is 0.5 fps on SwiftShader; the canvas renderer runs the same logic at 60 fps (2026-09-06)
     // Per-session error sink. This used to push into a single module-level `curErrs`, which is
     // exactly the kind of shared mutable state that would silently misattribute one worker's page
     // errors to another worker's level once this went parallel.

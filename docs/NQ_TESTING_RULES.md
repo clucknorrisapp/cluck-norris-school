@@ -74,13 +74,22 @@ shard is allowed to block a merge. Delete that line to promote it once a clean w
 
 ## Traps this file exists to keep
 
-- **Phaser time on a slow headless box.** Phaser 3.60 pins each frame's delta at the 60 fps target
+- **Headless WebGL is 0.5 fps — use the canvas renderer for logic tests.** Headless Chromium has no
+  GPU, so `Phaser.AUTO` picks WebGL on SwiftShader and the game renders at ~0.5 fps in a level
+  (measured 2026-09-06: Phaser's own step costs 6 ms, but `requestAnimationFrame` fires once a
+  second — the box is not slow, the software GL raster is). No Chromium flag changes it
+  (`--disable-gpu`, `--use-angle=swiftshader`, `--disable-frame-rate-limit` all measured the same).
+  The 2D **canvas** renderer runs the same game logic at a full 60 fps there. A test opts in with
+  `page.addInitScript(() => { window.__NQ_RENDER = 'canvas'; })` before `goto` — the state test and
+  the beat test do; the visual gate and boss-ground stay on WebGL because their baselines and
+  measurements are WebGL output. Nothing shipped sets the global.
+- **Phaser time on a slow frame loop.** Phaser 3.60 pins each frame's delta at the 60 fps target
   while frames overrun (`smoothDelta` copies the history entry back), so anything counted in
-  DELTA — `delayedCall`, tweens — crawls when Chromium renders at 1–4 fps (this box under load,
-  WebGL through SwiftShader). Anything read from `time.now` is wall-clock and fine. A test that
-  waits for a `delayedCall` to fire will time out or flake there; drive the target scene directly
-  with a lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`) instead. Cost: two runs on
-  2026-09-06.
+  DELTA — `delayedCall`, tweens — crawls whenever frames run slow. Anything read from `time.now`
+  is wall-clock and fine. A test that waits for a `delayedCall` to fire will time out or flake on
+  a slow loop; drive the target scene directly with a lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`,
+  `__NQ_STARTLEVEL`) instead. Cost: two runs on 2026-09-06, plus the beat test flaking red on a PR
+  that never touched the game.
 - **The built shells are derived.** `src/build.js` writes them from `game_logic.js` + assets. They
   are in git so a no-build boot serves the game, but a rebuilt shell in a commit is not a change of
   its own — the old planner counted it as "other normie-quest code" and pushed every rebuilt commit

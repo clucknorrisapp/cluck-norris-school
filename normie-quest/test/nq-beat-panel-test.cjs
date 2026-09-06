@@ -49,6 +49,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log("\nNormie Quest: between-level beat vs the buy/wallet panel\n");
   const browser = await chromium.launch({ headless: true, executablePath: findChromium(), args: ["--no-sandbox", "--disable-dev-shm-usage", "--autoplay-policy=no-user-gesture-required"] });
   const page = await browser.newPage({ viewport: { width: 960, height: 600 } });
+  await page.addInitScript(() => { window.__NQ_RENDER = "canvas"; });   // headless WebGL is 0.5 fps on SwiftShader; the canvas renderer runs the same logic at 60 fps
   await page.goto(`${BASE}/normie-quest-x7-lab`, { waitUntil: "domcontentloaded", timeout: 30000 });
   await page.waitForFunction(() => typeof window.__NQ_STARTLEVEL === "function" && Array.isArray(window.__NQ_LEVELS_LIST) && typeof window.__NQ_BEAT === "function", null, { timeout: 40000 });
   // Which scenes are live, through the lab hook (NQGAME itself is not a window global).
