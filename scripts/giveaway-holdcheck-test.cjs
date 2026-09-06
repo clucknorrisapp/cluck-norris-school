@@ -216,8 +216,13 @@ const gw = require(path.join(__dirname, '..', 'lib', 'cuna-giveaway.js'));
     // left by the 2026-09-04 payout.
     const st5 = JSON.parse(fs.readFileSync(file, 'utf8'));
     st5.wallets[W1] = { entries: 3, usd: 30, tokens: 1000, dq: null };
-    st5.payouts = { [W1]: { amountUi: 4000000, sig: 'LEGACY_FLAT', at: Date.now() } };   // OLD shape
-    st5.draw = { at: Date.now(), seedHash: 'ROUND_LIVE', mint: MINT, winners: [
+    // ONE clock for both stamps. Two Date.now() calls straddled a millisecond on a slow CI runner
+    // (2026-09-06 00:02 UTC), so the payout read as OLDER than the draw and was filed as an
+    // earlier promo's record instead of migrated — a flake, not a regression. A real payout is
+    // always after its draw, so stamp it a millisecond later.
+    const t5 = Date.now();
+    st5.payouts = { [W1]: { amountUi: 4000000, sig: 'LEGACY_FLAT', at: t5 + 1 } };   // OLD shape
+    st5.draw = { at: t5, seedHash: 'ROUND_LIVE', mint: MINT, winners: [
       { place: 1, wallet: W1, prize: 4000000, entries: 3 },
     ] };
     fs.writeFileSync(file, JSON.stringify(st5));
