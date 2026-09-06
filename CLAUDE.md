@@ -159,6 +159,19 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   **frequency** instead, and prefer a fresh-session routine when the job needs no conversation
   context. Applied 2026-09-03: lock-celebration watcher → `claude-sonnet-5`; CUNA meme queue
   hourly → every 3h.
+- ⛔ **Multi-agent BUDGET (owner, 2026-09-06, after the Normie Quest deep dive ran 18 hours:
+  "this is unacceptable").** Measured cause, `docs/NQ_DEEP_DIVE_POSTMORTEM_2026-09-06.md`: 592
+  agents through a box that runs **2–3 workflow agents at a time**, three verifier votes on every
+  one of 201 findings (603 verifiers, mostly on P2/P3 polish), a third of the runs re-executed by
+  resumes, and no output until the last vote. Rules: (1) a workflow script computes its agent count
+  and prints the ETA (`agents × 2.5 min ÷ 2.5 concurrent`) BEFORE running anything — over **60
+  agents or 90 minutes**, stop and ask the owner with the number; (2) P0/P1 get ONE verifier, money /
+  PII / engine paths two more lenses, **P2/P3 never get a verifier**; (3) a finder returns at most
+  10 ranked findings; (4) the findings list is written to `docs/` and shown to the owner the moment
+  the Find phase ends — verification refines it, never gates it; (5) report at every phase boundary
+  with the ETA, cut the plan when the ETA passes the budget; (6) never resume a workflow twice — one
+  resume, or finish, or kill and synthesize from the journal on disk; (7) plan for 2–3 concurrent
+  agents on this box, not N.
 - ⛔ **PLAN ≠ EXECUTE for money.** For anything that moves funds, opens or closes positions, or
   resumes an engine: state the exact plan and STOP. Execute only on an explicit go. An owner
   message describing intent ("thinking we should Y") opens a discussion, not authorisation —
