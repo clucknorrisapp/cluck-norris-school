@@ -23,7 +23,7 @@ Three tracks, all free, in **seven languages** (English · Español · हिन
 | Track | Size | For |
 |---|---|---|
 | 🥚 **The Incubator** | 7 lessons | Total beginners — wallets, tokens, on/off-ramps, DEXs, liquidity, market cap, not getting drained |
-| 🏫 **School of Hard Knocks** | 12 lessons | The core course, belt-ranked Freshman → Emeritus |
+| 🏫 **School of Hard Knocks** | 14 lessons | The core course, belt-ranked Freshman → Emeritus |
 | ⚗️ **[LP Lab](https://clucknorris.app/lp-lab)** | 14 lessons | Liquidity providing in depth — impermanent loss, ranges, fees, bins, DLMM shapes, laddering — with interactive calculators throughout |
 
 Plus **📚 the Library** (glossary + deep dives across Survival / Research / Concepts) and **🤖 Ask Cluck**, a Claude-powered tutor embedded in every lesson, live in the Telegram group, and standalone at [`/ask-cluck`](https://clucknorris.app/ask-cluck).
@@ -71,7 +71,7 @@ subscriptions, no accounts.
 | 💰 **[Batch airdrop sender](https://clucknorris.app/airdrop)** | **Free** holding ~$50 of CLKN (live-priced) · else **0.05 SOL** = a 7-day pass to every heavy tool |
 | 🎯 **[Buy Special](https://clucknorris.app/buyspecial)** — buy-competition engine | Same unified pass: **free** at ~$50 of CLKN · else **0.05 SOL** (7 days, all tools) |
 | 🔬 **[Premium Forensics](https://clucknorris.app/premium)** | Holder-gated on a live 2,000,000 CLKN balance |
-| 🥚 **[The Hatchery](https://clucknorris.app/hatchery)** — guided token creator | **0.1 SOL**, or the CLKN equivalent at a **~30% discount** · free for 2M+ holders |
+| 🥚 **[The Hatchery](https://clucknorris.app/hatchery)** — guided token creator | **0.1 SOL**, or the CLKN equivalent at a **~30% discount** · free above the live holder threshold at `/api/hatchery/config` |
 
 The heavy tools — Wallet X-Ray, Holders, Trace, the airdropper and Buy Special — share **one**
 pass: hold about $50 worth of CLKN (computed from the live price, never a fixed token count —
@@ -98,7 +98,7 @@ free daily allowance and that's the whole offer.
 
 Two places you *do* connect — not to hand anything over, but to **sign your own transactions**. Keys never touch the server.
 
-- **[The Hatchery](https://clucknorris.app/hatchery)** — a guided SPL token creator that explains every mint-time decision (supply, decimals, metadata, mint/freeze authority), stores metadata permanently on Arweave, and **deliberately stops before liquidity**. Minting a token is not launching a project, and a token with no pool can't rug anyone. 0.1 SOL, or CLKN at a discount; free for 2M+ holders.
+- **[The Hatchery](https://clucknorris.app/hatchery)** — a guided SPL token creator that explains every mint-time decision (supply, decimals, metadata, mint/freeze authority), stores metadata permanently on Arweave, and **deliberately stops before liquidity**. Minting a token is not launching a project, and a token with no pool can't rug anyone. 0.1 SOL, or CLKN at a discount; free above the live holder threshold published at `/api/hatchery/config`.
 - **[The Jup Locker Room](https://clucknorris.app/locker-room)** — free, non-custodial token locking for **any** Solana project, built directly on the open-source Jupiter Lock program, **Token-2022** mints included. Because it calls the program directly, the whole flow is ours: every field is explained in plain English before you sign, so a first-time team can prove they can't dump without needing to already understand vesting. **No fee** — users pay only network gas, and tokens go into the audited Jupiter escrow, never through us. Every lock carries a `locked via clucknorris.app` memo, and each project gets a shareable **Lock of Fame** page to broadcast the receipt.
 
 ---
@@ -182,6 +182,11 @@ The product reaches into Telegram and X, not just the website.
 
 Admin, operator and holder-gated routes return **404 rather than 401**, so probing them tells you nothing.
 
+Two of the hardening items above shipped as fixes to findings from our security-scan partner
+**[RootCrak](https://rootcrak.com/?ref=clucknorris)** (X: [@ro0TCr4k](https://x.com/ro0TCr4k)): a
+Cloudflare WAF/CDN cutover and a `CF_ORIGIN_SECRET` origin lockdown that 403s any request that
+didn't traverse the WAF. Both are live since 2026-08-04.
+
 **Public API:** `/api/wallet-xray` · `/api/snapshot` (the holder engine) · `/api/trace` · `/api/wallet-checkup` · `/api/token-overview` · `/api/ask-cluck` · `/api/verify-sol-payment` · `/api/premium-verify-sig` · `/api/hatchery/*` · `/api/security-coop/*` · `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply` · `/api/bags-*` · `/api/helius-rpc`, `/api/helius-tx` (keys hidden server-side) · `/api/credential/:slug`, `/api/school-stats`
 
 ### CI
@@ -191,7 +196,7 @@ Admin, operator and holder-gated routes return **404 rather than 401**, so probi
 - `node --check` on every backend entrypoint and lib
 - **undefined-JSX-component guard** — an undefined component compiles fine and only throws at runtime; one shipped and left the LP Lab blank in production for a day
 - **curriculum count guard** — the landing page advertised "72 exams · 6 beginner lessons" when the truth was 70 and 7
-- **render smoke test** — opens every screen and all 33 lessons in headless Chromium, failing on an uncaught error or a blank page
+- **render smoke test** — opens every screen and all 35 lessons in headless Chromium, failing on an uncaught error or a blank page
 - **level-geometry guard** for the game — jumpability, no floating fixtures
 - **liquidity-engine decision simulator** — replays thousands of ticks against the real gate logic; every scenario is a past live incident
 - **visual-regression gate** for the game — boots the server and pixel-diffs the title, HUD, characters and a creature against committed baselines, the render-broke-but-built-clean class nothing above can see
@@ -212,7 +217,7 @@ Admin, operator and holder-gated routes return **404 rather than 401**, so probi
 
 ## 🤝 Ecosystem
 
-- **🎮 Normie Quest** — a complete crypto-education platformer (original pixel art, 21 worlds, boss fights themed on real market lessons, leaderboards, playtest telemetry) built under Cluck Norris production for the **NORMIE** community — a separate project with its own token. It's the proof the stack white-labels beyond our own. Access and reward mechanics are still being agreed with the NORMIE team, so nothing about them is promised here.
+- **🎮 Normie Quest** — a complete crypto-education platformer (original pixel art, 21 worlds, boss fights themed on real market lessons, leaderboards, playtest telemetry) built under Cluck Norris production for the **NORMIE** community — a separate project with its own token. It's the proof the stack white-labels beyond our own. **Public since 2026-08-22** at [/normie-quest-x7](https://clucknorris.app/normie-quest-x7): worlds 1-3 are free, the rest unlock at live-priced NORMIE holder tiers rendered from `/api/nq/wallet/config` (never a fixed dollar figure quoted here). Reward/prize terms with the NORMIE team remain unagreed, so nothing about those is promised.
 - **🔒 The Locker Room as shared infrastructure** — any project locks free, gets a public Lock of Fame page, and can broadcast the receipt. The on-chain memo makes the relationship verifiable rather than claimed.
 - **Building through the bear.** The tools, the school, the game and the lock infrastructure are being hardened now, so they're standing when the cycle turns.
 

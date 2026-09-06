@@ -73,9 +73,10 @@ curl -sI https://clucknorris.app/ | grep -iE 'server:|cf-ray'
 #   → expect  server: cloudflare  AND a  cf-ray:  header  (currently: server: railway-hikari, no cf-ray)
 ```
 
-- **Telegram bot:** send a test post (`/api/tg-test?key=$PREMIUM_ACCESS_KEY&text=cf%20cutover%20ok`)
-  and confirm the webhook still receives updates (`/api/tg-webhook-info?key=…` shows a recent
-  delivery, 0 queued). This is the check that catches the Bot-Fight-Mode trap.
+- **Telegram bot:** send a test post (`curl -H "x-premium-key: $PREMIUM_ACCESS_KEY"
+  "https://clucknorris.app/api/tg-test?text=cf%20cutover%20ok"`) and confirm the webhook still
+  receives updates (`/api/tg-webhook-info`, same header, shows a recent delivery, 0 queued). This
+  is the check that catches the Bot-Fight-Mode trap.
 - **Wallet reads:** open `/wallet-checkup` or `/locker-room`, connect, confirm a balance loads
   (exercises the `/api/helius-rpc` proxy).
 - **Game:** `/normie-quest-x7` loads and plays.
@@ -174,11 +175,11 @@ curl -sI https://clucknorris.app/ | grep -iE 'server:|cf-ray'
 #    expect:  server: cloudflare   +   cf-ray: <hash>-<POP>
 
 # 2) Telegram webhook still delivering (the Bot-Fight-Mode trap check):
-curl -s "https://clucknorris.app/api/tg-webhook-info?key=$PREMIUM_ACCESS_KEY"
+curl -s -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/tg-webhook-info"
 #    expect: webhook url registered, pending/queued 0, a recent last-delivery time, no last_error
 
 # 3) Bot can still post out:
-curl -s "https://clucknorris.app/api/tg-test?key=$PREMIUM_ACCESS_KEY&text=cf%20cutover%20ok"
+curl -s -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/tg-test?text=cf%20cutover%20ok"
 
 # 4) RPC proxy works (wallet balance path): open /wallet-checkup or /locker-room, connect, read a balance.
 # 5) Game loads: open /normie-quest-x7.
@@ -187,7 +188,8 @@ curl -s "https://clucknorris.app/api/tg-test?key=$PREMIUM_ACCESS_KEY&text=cf%20c
 
 If step 2 shows a `last_error` about the webhook being unreachable or challenged, the §1 Skip rule
 is missing or Bot Fight Mode is on — fix that first, then re-register the webhook via
-`/api/tg-webhook-info?key=…&reset=1` (add `&drop=1` to also clear any queued backlog).
+`/api/tg-webhook-info?reset=1` (add `&drop=1` to also clear any queued backlog), key in the
+`x-premium-key` header as above.
 
 ---
 
@@ -228,7 +230,8 @@ site 403s. `/healthz` is exempt in code (Railway's probe hits the origin directl
    The second command hitting `403` is the whole point: the WAF can no longer be bypassed.
 
 6. **Re-check the bot + wallet reads** (all go through Cloudflare, so they carry the header):
-   `/api/tg-webhook-info?key=…` shows recent delivery; a wallet balance still loads.
+   `/api/tg-webhook-info` (key via `x-premium-key`) shows recent delivery; a wallet balance still
+   loads.
 
 7. **Check the in-process price consumers** — hit `/api/tool-gate/config` and confirm
    `clknNeeded` is a number, not null. History: from 2026-08-04 to 2026-08-18 two internal

@@ -1617,6 +1617,7 @@ export default function App(){
       <div data-read-skip="1" style={{borderTop:"1px solid rgba(255,122,24,0.14)",marginTop:40,padding:"22px 18px calc(28px + env(safe-area-inset-bottom, 0px))",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
         <RootCrakBadge/>
         <a href={ROOTCRAK.verifyUrl} target="_blank" rel="noopener noreferrer" style={{fontFamily:"'Anton',sans-serif",fontSize:10.5,letterSpacing:1,color:"#6B7280",textDecoration:"none"}}>SECURITY VERIFIED · {ROOTCRAK.grade} · {ROOTCRAK.score}/100 — VIEW REPORT →</a>
+        <a href={ROOTCRAK.referral} target="_blank" rel="noopener noreferrer" style={{fontFamily:"var(--body)",fontSize:11,color:"#6B7280",textDecoration:"none"}}>Security scans by RootCrak</a>
       </div>
     </div>
   );

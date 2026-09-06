@@ -5,6 +5,10 @@ one deliberately. This is the document to read before arming either.
 
 Built 2026-09-05. Owner decisions are dated inline — where this contradicts an older note, this wins.
 
+⚠️ **The admin key goes in a header, never the URL.** Every curl below sends
+`-H "x-premium-key: $PREMIUM_ACCESS_KEY"` — a `?key=…`/`&key=…` on the URL lands in shell
+history and the Cloudflare edge request log.
+
 > **Current state (2026-09-05 23:50 UTC):** lock-to-earn **ARMED on production** since 20:36 UTC
 > (owner's go), accruing hourly (24 slices a day of 345,000 CUNA), 48 escrows scanned, 15 qualifying,
 > no missed slices. Payouts are **weekly** from `/cuna-payout` — day and time owner-TBA (announced to
@@ -144,10 +148,10 @@ node scripts/cuna-lock-whois.cjs <wallet> [<wallet> ...]
 #    cannot be removed. `fundedBy` is a SEPARATE config key — it names the wallets whose unlock
 #    stream the pool is a share of, not who is barred from earning. Setting one does not touch
 #    the other; both need to be right independently.
-curl -X POST "https://clucknorris.app/api/cuna-stake/admin?key=$PREMIUM_ACCESS_KEY&config=1&excludeWallets=2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8,<yours>,<yours>"
+curl -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/cuna-stake/admin?config=1&excludeWallets=2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8,<yours>,<yours>"
 
 # 4. Preview what a day would pay. Writes nothing — plain GET.
-curl "https://clucknorris.app/api/cuna-stake/admin?key=$PREMIUM_ACCESS_KEY" | jq '.wouldPay, .eligible'
+curl -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/cuna-stake/admin" | jq '.wouldPay, .eligible'
 # The same GET carries `.ledger` — one row per escrow ever seen: firstSeenAt, backdated,
 # lastSeenAt, announcedAt (null = the room was never told), announcePending (flagged in the
 # same write that creates the row; clears only after the post is out, so a restart between the
@@ -155,10 +159,10 @@ curl "https://clucknorris.app/api/cuna-stake/admin?key=$PREMIUM_ACCESS_KEY" | jq
 # creation lookups — the reindex case below).
 
 # 5. ARM. Two flags on purpose — one typo'd query param must not start an emission.
-curl -X POST "https://clucknorris.app/api/cuna-stake/admin?key=$PREMIUM_ACCESS_KEY&arm=1&confirm=go-live"
+curl -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/cuna-stake/admin?arm=1&confirm=go-live"
 ```
 
-**Repairing a ledger row:** `curl -X POST ".../api/cuna-stake/admin?key=…&reindex=<escrow>"` drops
+**Repairing a ledger row:** `curl -X POST -H "x-premium-key: …" ".../api/cuna-stake/admin?reindex=<escrow>"` drops
 that one escrow's `firstSeenAt`, so the next scan re-stamps it — backdated to its on-chain creation
 if that lookup succeeds this time. It is the only way to fix a row that got stamped at arm time
 because the creation lookup failed that day.
@@ -193,13 +197,13 @@ Needs **three** separate things. Any one missing and it does nothing.
 #    destroy supply because a different feature was switched on.
 
 # 2. Point it at the wallet.
-curl "https://clucknorris.app/api/cuna-burn/admin?key=$PREMIUM_ACCESS_KEY&config=1&wallet=2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8"
+curl -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/cuna-burn/admin?config=1&wallet=2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8"
 
 # 3. Dry-run: everything except armed.
-curl "https://clucknorris.app/api/cuna-burn/admin?key=$PREMIUM_ACCESS_KEY&run=1" | jq '.burnRun'
+curl -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/cuna-burn/admin?run=1" | jq '.burnRun'
 
 # 4. ARM.
-curl "https://clucknorris.app/api/cuna-burn/admin?key=$PREMIUM_ACCESS_KEY&arm=1&confirm=burn-daily"
+curl -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/cuna-burn/admin?arm=1&confirm=burn-daily"
 ```
 
 **Stop:** `&off=1` (immediate) or `CUNA_BURN_OFF=1` in Railway (durable, survives a redeploy).
@@ -207,7 +211,7 @@ curl "https://clucknorris.app/api/cuna-burn/admin?key=$PREMIUM_ACCESS_KEY&arm=1&
 ### Bonus burns (optional, OFF by default)
 
 ```bash
-curl ".../api/cuna-burn/admin?key=$PREMIUM_ACCESS_KEY&config=1&bonusEnabled=true"
+curl -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY" ".../api/cuna-burn/admin?config=1&bonusEnabled=true"
 ```
 
 Each day burns the 690,000 base plus a rolled bonus of 0–1,000,000, in clean 10,000 steps. The
@@ -274,7 +278,7 @@ every Friday however small their share. That is the whole reason the floor came 
 ### The console: `/cuna-payout`
 
 Sending now happens **on the page**, not by pasting a file into `/airdrop`. Open
-`https://clucknorris.app/cuna-payout?key=$PREMIUM_ACCESS_KEY` (owner key; the **main domain only** —
+`https://clucknorris.app/cuna-payout` (owner key, entered on the page; the **main domain only** —
 it is deliberately absent from `CUNA_STAKE_PATH`, so it bounces home on the partner hosts, and its
 API refuses anything that reached us without traversing the edge, same as `/api/cuna-stake/admin`).
 Connect the payer wallet there and the page walks the whole flow:
