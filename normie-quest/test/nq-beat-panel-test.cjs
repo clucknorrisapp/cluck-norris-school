@@ -8,6 +8,15 @@
 // Drives the lab lane's QA hooks in a headless Chromium: force a clear → LevelClear; open the panel;
 // the beat must hold; Escape closes it; a tap continues; and with no panel the beat still
 // auto-advances after its (now longer) hold. Needs playwright(-core) + a Chromium.
+//
+// ⚠️ HOW THE BEAT IS REACHED (found 2026-09-06, cost two runs): NOT through __NQ_FORCECLEAR. That
+// path waits on Game's 1.5s delayedCall, which counts Phaser DELTA — and Phaser 3.60 pins delta at
+// the 60fps target while frames overrun (smoothDelta copies the history entry back), so on a
+// headless box rendering at 1-4 fps the hand-off took 22-60s of wall time or never came, and every
+// later assertion cascaded. The lab hook __NQ_BEAT() stops every scene and starts LevelClear
+// directly, exactly as a real clear leaves it. The beat's hold is wall-clock (time.now - t0), so
+// the timing assertions below hold on any machine; only the "tap → Game" waits are generous,
+// because BUILDING a level at 1 fps is slow.
 
 const { spawn } = require("child_process");
 const fs = require("fs");
@@ -41,23 +50,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const browser = await chromium.launch({ headless: true, executablePath: findChromium(), args: ["--no-sandbox", "--disable-dev-shm-usage", "--autoplay-policy=no-user-gesture-required"] });
   const page = await browser.newPage({ viewport: { width: 960, height: 600 } });
   await page.goto(`${BASE}/normie-quest-x7-lab`, { waitUntil: "domcontentloaded", timeout: 30000 });
-  await page.waitForFunction(() => typeof window.__NQ_STARTLEVEL === "function" && Array.isArray(window.__NQ_LEVELS_LIST) && typeof window.__NQ_FORCECLEAR === "function", null, { timeout: 40000 });
+  await page.waitForFunction(() => typeof window.__NQ_STARTLEVEL === "function" && Array.isArray(window.__NQ_LEVELS_LIST) && typeof window.__NQ_BEAT === "function", null, { timeout: 40000 });
   // Which scenes are live, through the lab hook (NQGAME itself is not a window global).
   const active = (key) => page.evaluate((k) => { try { const l = window.__NQ_SCENES() || []; return l.some((s) => (s && (s.key === k || s.k === k)) || (typeof s === "string" && s === k) || JSON.stringify(s).indexOf('"' + k + '"') !== -1); } catch (e) { return false; } }, key);
   const panelOpen = () => page.evaluate(() => !!window.__NQ_PANEL_OPEN);
 
   async function toLevelClear() {
-    await page.evaluate(() => window.__NQ_STARTLEVEL(0));
-    await page.waitForFunction(() => { try { return typeof window.__NQ_DBG === "function" && !!window.__NQ_DBG() && (window.__NQ_SCENES() || []).some((s) => JSON.stringify(s).indexOf('"Game"') !== -1); } catch (e) { return false; } }, null, { timeout: 20000 });
-    await sleep(800);
-    const forced = await page.evaluate(() => window.__NQ_FORCECLEAR());
-    await page.waitForFunction(() => { try { return (window.__NQ_SCENES() || []).some((s) => JSON.stringify(s).indexOf('"LevelClear"') !== -1); } catch (e) { return false; } }, null, { timeout: 15000 }).catch(() => {});
-    return forced;
+    const started = await page.evaluate(() => window.__NQ_BEAT(1, "1-1"));
+    await page.waitForFunction(() => { try { return (window.__NQ_SCENES() || []).some((s) => JSON.stringify(s).indexOf('"LevelClear"') !== -1); } catch (e) { return false; } }, null, { timeout: 20000 }).catch(() => {});
+    return started;
   }
 
   // 1. Panel open on the beat: the level must NOT start underneath.
   const f1 = await toLevelClear();
-  ok("force-clear lands on the LevelClear beat", f1 && (await active("LevelClear")));
+  ok("the beat comes up (LevelClear alone)", f1 && (await active("LevelClear")) && !(await active("Game")));
   await page.evaluate(() => window.__NQ_OPENPREMIUM());
   await sleep(300);
   ok("the buy/wallet panel reports open", await panelOpen());
@@ -73,19 +79,24 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.keyboard.press("Escape");
   await sleep(300);
   ok("Escape closes the panel", !(await panelOpen()));
-  await sleep(1200);
+  await sleep(400);
   ok("the beat is still up right after closing (hold restarted, not expired)", await active("LevelClear"));
   await page.mouse.click(480, 300);
-  await page.waitForFunction(() => { try { return (window.__NQ_SCENES() || []).some((s) => JSON.stringify(s).indexOf('"Game"') !== -1); } catch (e) { return false; } }, null, { timeout: 5000 }).catch(() => {});
+  await page.waitForFunction(() => { try { return (window.__NQ_SCENES() || []).some((s) => JSON.stringify(s).indexOf('"Game"') !== -1); } catch (e) { return false; } }, null, { timeout: 45000 }).catch(() => {});   // building a level at 1 fps is slow
   ok("a tap after closing continues to the next level", await active("Game"), `LevelClear=${await active("LevelClear")} Game=${await active("Game")}`);
 
   // 3. No panel: the beat still auto-advances on its own (a between-level beat, not a toll gate).
   const f3 = await toLevelClear();
-  ok("second force-clear lands on the beat", f3 && (await active("LevelClear")));
+  ok("the beat comes up again", f3 && (await active("LevelClear")));
   await sleep(2500);
   ok("2.5s in, the beat is still readable (hold is longer than the old 3s)", await active("LevelClear"));
-  await page.waitForFunction(() => { try { return (window.__NQ_SCENES() || []).some((s) => JSON.stringify(s).indexOf('"Game"') !== -1); } catch (e) { return false; } }, null, { timeout: 10000 }).catch(() => {});
-  ok("with no panel it auto-advances within the 8s ceiling", await active("Game"));
+  // The hold is 6-8s wall-clock; the wait is dominated by BUILDING the next level (10-25s at the
+  // 1 fps this box manages), so the bound is generous. The hold values themselves are asserted
+  // from the built shell below, where a clock cannot blur them.
+  await page.waitForFunction(() => { try { return (window.__NQ_SCENES() || []).some((s) => JSON.stringify(s).indexOf('"Game"') !== -1); } catch (e) { return false; } }, null, { timeout: 45000 }).catch(() => {});
+  ok("with no panel it auto-advances on its own (no tap, no key)", await active("Game"), `LevelClear=${await active("LevelClear")} Game=${await active("Game")}`);
+  const shell = fs.readFileSync(path.join(__dirname, "..", "public", "normie-quest-platformer.html"), "utf8");
+  ok("the shipped hold is 8s for info beats / 6s for plain beats (owner: 'a little longer')", /this\._hold=\(beat==='board'\|\|beat==='card'\|\|beat==='fact'\|\|beat==='perks'\)\?8000:6000;/.test(shell));
 
   await browser.close();
   done();
