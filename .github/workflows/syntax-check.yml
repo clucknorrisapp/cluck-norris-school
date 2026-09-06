@@ -68,6 +68,10 @@ jobs:
       # fixtures and the capped cache — pure node, no network.
       - name: Listing Checkup core + adapters (fixtures)
         run: node scripts/listing-checkup-test.cjs
+      # Batch A checks: image-header parsing, per-site logo rules, impersonator merge, link health
+      # verdicts, chain facts from the DAS row, the how-to table covering every source, the runner.
+      - name: Listing Checkup checks (fixtures)
+        run: node scripts/listing-checkup-checks-test.cjs
       - name: CUNA staking split + qualification
         run: node scripts/cuna-staking-test.cjs
       # The firstSeenAt ledger the qualification horizon is measured against. Every case is a way

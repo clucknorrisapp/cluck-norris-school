@@ -49,10 +49,14 @@
   .links { display:flex; gap:12px; margin-top:6px; font-size:12px; flex-wrap:wrap; }
   .links a { color:var(--gold); }
   .muted { color:var(--muted); font-size:12px; margin-top:4px; }
+  .facts { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 14px; font-size:13px; }
+  .facts div { display:flex; justify-content:space-between; gap:8px; border-bottom:1px solid var(--border-soft); padding:4px 0; }
+  .facts span { color:var(--sub); }
+  .frow.imp { grid-template-columns:1.5fr 1fr 1fr; }
   .share { display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap; font-size:12.5px; }
   .share code { font-family:var(--mono); background:rgba(0,0,0,.3); padding:4px 8px; border-radius:6px; word-break:break-all; }
   .footer { text-align:center; font-size:12.5px; color:var(--sub); letter-spacing:2px; margin-top:24px; }
-  @media (max-width:560px) { .grid { grid-template-columns:1fr; } .frow { grid-template-columns:1fr; } .sum { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:560px) { .grid { grid-template-columns:1fr; } .frow { grid-template-columns:1fr; } .facts { grid-template-columns:1fr; } .sum { grid-template-columns:repeat(2,1fr); } }
 </style>
 </head>
 <body>
@@ -136,6 +140,7 @@ function render(rep, shareUrl) {
   if (rep.fixFirst && rep.fixFirst.length) {
     h += '<div class="card warn"><b>Fix this first.</b> Your on-chain metadata differs from your record on: <b>' + rep.fixFirst.map(esc).join(', ') + '</b>. Most sites copy the on-chain record, so fixing it there fixes the copies over time. <a href="/hatchery#metadata" style="color:var(--gold)">Update on-chain metadata →</a></div>';
   }
+  h += renderChecks(rep.checks || {});
   var order = [['incorrect', 'NEEDS A FIX'], ['not-found', 'NOT FOUND THERE'], ['correct', 'LISTED CORRECTLY'], ['unread', 'COULD NOT READ']];
   order.forEach(function (o) {
     var list = groups[o[0]]; if (!list.length) return;
@@ -148,15 +153,54 @@ function render(rep, shareUrl) {
         var theirs = f.status === 'missing' ? '<span class="fm">missing there</span>' : (f.status === 'unverified' ? '<span class="fm">' + esc(f.note || 'not compared') + '</span>' : '<span class="ft">theirs: ' + esc(f.theirs) + '</span>');
         h += '<div class="frow"><span class="fk">' + esc(f.label) + '</span><span class="fo">ours: ' + esc(f.ours) + '</span>' + theirs + '</div>';
       });
+      if (src.status === 'not-found' && src.howToList) h += '<div class="muted">To be listed there: ' + esc(src.howToList.needs) + '.</div>';
       if (src.error) h += '<div class="muted">' + esc(src.error) + '</div>';
       h += '<div class="links">' + (src.pageUrl ? '<a href="' + esc(src.pageUrl) + '" target="_blank" rel="noopener noreferrer">view listing</a>' : '')
-        + ((src.status === 'incorrect' || src.status === 'not-found') && src.fixUrl ? '<a href="' + esc(src.fixUrl) + '" target="_blank" rel="noopener noreferrer">where to fix it →</a>' : '') + '</div></div>';
+        + (src.status === 'incorrect' && src.fixUrl ? '<a href="' + esc(src.fixUrl) + '" target="_blank" rel="noopener noreferrer">where to fix it →</a>' : '')
+        + (src.status === 'not-found' ? '<a href="' + esc((src.howToList && src.howToList.url) || src.fixUrl || '#') + '" target="_blank" rel="noopener noreferrer">how to get listed →</a>' : '') + '</div></div>';
     });
   });
   h += '<div class="muted" style="margin-top:12px">Checked ' + rep.checked + ' sources (' + esc(rep.tier) + ' tier). "Not found" means the site answered with no record for this mint; "unread" means we could not read it — never a pass.</div>';
   if (rep.tier === 'full' && shareUrl) h += '<div class="share">Share this report: <code>' + esc(shareUrl) + '</code> <a href="' + esc(shareUrl) + '" style="color:var(--gold)">open →</a></div>';
   h += '</div>';
   document.getElementById('out').innerHTML = h;
+}
+
+// Batch A checks — chain facts, impersonators, link health, logo spec. Every string escaped.
+function renderChecks(c) {
+  var h = '';
+  var cf = c.chainFacts;
+  if (cf && cf.status === 'ok' && cf.facts) {
+    var f = cf.facts;
+    var auth = function (a) { return a && a.revoked ? '<b style="color:var(--green)">revoked</b>' : '<b style="color:#F87171">active</b>' + (a && a.address ? ' <span class="mono">' + esc(String(a.address).slice(0, 8)) + '…</span>' : ''); };
+    var cells = [['Mint authority', auth(f.mintAuthority)], ['Freeze authority', auth(f.freezeAuthority)], ['Metadata', f.metadataMutable === true ? 'mutable' : f.metadataMutable === false ? 'immutable' : 'unknown'], ['Program', esc(f.tokenProgram || '?')]];
+    if (cf.lpLockedPct != null) cells.push(['LP locked (Rugcheck)', esc(String(Math.round(cf.lpLockedPct))) + '%']);
+    if (cf.locks) cells.push(['Token locks', esc(String(cf.locks.lockCount)) + ' lock' + (cf.locks.lockCount === 1 ? '' : 's') + ' · ' + (cf.locks.pctOfSupply != null ? esc((cf.locks.pctOfSupply * 100).toFixed(1)) + '% of supply' : '?') + (cf.locks.partial ? ' (partial read)' : '') + ' · <a href="' + esc(cf.locks.page) + '" style="color:var(--gold)">Lock of Fame</a>']);
+    else if (cf.locksError) cells.push(['Token locks', 'unread — ' + esc(cf.locksError)]);
+    h += '<div class="sec">CHAIN FACTS</div><div class="facts">' + cells.map(function (kv) { return '<div><span>' + esc(kv[0]) + '</span>' + kv[1] + '</div>'; }).join('') + '</div><div class="muted">What the chain holds, read directly. We say what is on-chain, never why.' + (cf.locks ? '' : ' Token locks are read on the full sweep.') + '</div>';
+  } else if (cf && cf.status === 'unread') h += '<div class="sec">CHAIN FACTS</div><div class="muted">' + esc(cf.note || cf.error || 'unread') + '</div>';
+  var im = c.impersonators;
+  if (im && im.status === 'ok') {
+    h += '<div class="sec" style="margin-top:14px">POSSIBLE IMPERSONATORS · ' + im.matches.length + (im.total > im.matches.length ? ' of ' + im.total : '') + '</div>';
+    if (!im.matches.length) h += '<div class="muted">No other Solana mint using this name or symbol was found on Jupiter or DexScreener.</div>';
+    im.matches.forEach(function (m) {
+      h += '<div class="frow imp"><span class="mono">' + esc(m.mint) + '</span><span>' + esc(m.name || '') + ' <b>$' + esc(m.symbol || '') + '</b> · same ' + esc(m.matchOn.join(' + ')) + '</span><span>' + (m.liquidityUsd ? '$' + esc(Math.round(m.liquidityUsd).toLocaleString('en-US')) + ' liq' : 'no liquidity') + (m.holders ? ' · ' + esc(String(m.holders)) + ' holders' : '') + (m.verified ? ' · <b>Jupiter-verified</b>' : '') + ' · <a href="/wallet-xray?q=' + encodeURIComponent(m.mint) + '" target="_blank" rel="noopener noreferrer" style="color:var(--gold)">x-ray</a></span></div>';
+    });
+    h += '<div class="muted">' + esc(im.note) + (im.partial ? ' One search source did not answer, so this list may be short.' : '') + ' Jupiter\'s most common reason for refusing verification is a duplicate name or symbol.</div>';
+  } else if (im && im.status === 'unread') h += '<div class="sec" style="margin-top:14px">POSSIBLE IMPERSONATORS</div><div class="muted">Could not read the search sources: ' + esc(im.error || '') + '</div>';
+  var lh = c.linkHealth;
+  if (lh && lh.status === 'ok' && lh.links.length) {
+    var col = { ok: 'var(--green)', broken: '#F87171', redirect: 'var(--gold)', unverified: 'var(--sub)', unread: 'var(--sub)' };
+    h += '<div class="sec" style="margin-top:14px">LINK HEALTH</div>';
+    lh.links.forEach(function (l) { h += '<div class="frow"><span class="fk">' + esc(l.field) + '</span><span class="mono">' + esc(l.url) + '</span><span style="color:' + (col[l.status] || 'var(--sub)') + '"><b>' + esc(l.status) + '</b>' + (l.http ? ' ' + esc(String(l.http)) : '') + (l.note ? ' — ' + esc(l.note) : '') + '</span></div>'; });
+  }
+  var lg = c.logoSpec;
+  if (lg && lg.status === 'ok') {
+    h += '<div class="sec" style="margin-top:14px">LOGO</div><div class="muted">' + esc(String(lg.format || '?').toUpperCase()) + ' · ' + (lg.width && lg.height ? esc(lg.width + '×' + lg.height) : 'size unknown') + ' · ' + esc(String(Math.round((lg.bytes || 0) / 1024))) + ' KB' + (lg.alpha === true ? ' · transparent' : lg.alpha === false ? ' · no transparency' : '') + (lg.https ? '' : ' · <b>not https</b>') + '</div>';
+    lg.sites.forEach(function (s) { h += '<div class="frow"><span class="fk">' + esc(s.label) + '</span><span>' + esc(s.wants) + '</span><span style="color:' + (s.ok === true ? 'var(--green)' : s.ok === false ? '#F87171' : 'var(--sub)') + '"><b>' + (s.ok === true ? 'passes' : s.ok === false ? 'fails' : 'unknown') + '</b>' + (s.why ? ' — ' + esc(s.why) : '') + '</span></div>'; });
+    h += '<div class="muted">' + esc(lg.note) + '</div>';
+  } else if (lg && lg.status === 'unread') h += '<div class="sec" style="margin-top:14px">LOGO</div><div class="muted">Could not read the logo URL: ' + esc(lg.error || '') + '</div>';
+  return h ? '<div class="card">' + h + '</div>' : '';
 }
 
 // Deep link: /listing-checkup?mint=… pre-fills the mint (from a share page's "run it again").

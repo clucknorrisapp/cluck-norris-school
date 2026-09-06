@@ -33,16 +33,23 @@ const post = (p, body) => fetch(BASE + p, { method: "POST", headers: { "content-
   r = await post("/api/listing-checkup/run", { mint: MINT, name: "x", symbol: "x", website: "javascript:alert(1)<" }); j = await r.json();
   ok("a website that cannot be a link → 400", r.status === 400 && /link/.test(j.error));
 
-  const hostile = { mint: MINT, name: "<script>alert(1)</script>", symbol: "X<b>", website: "https://clucknorris.app", tier: "preview" };
+  const hostile = { mint: MINT, name: "<script>alert(1)</script>", symbol: "X<b>", website: "https://clucknorris.app", logo: "https://clucknorris.app/cluck-norris-logo.jpg", tier: "preview" };
   r = await post("/api/listing-checkup/run", hostile); j = await r.json();
   ok("offline preview still returns a report (every source unread, never a 500)", r.status === 200 && j.ok && j.report && j.report.summary.unread === j.report.checked, JSON.stringify(j).slice(0, 200));
   ok("…and the on-chain row says why it could not read", j.report && j.report.sources.find((s) => s.id === "onchain").error.includes("offline"));
+  // Batch A: the checks ride along — offline every network-backed one is unread (never a throw),
+  // chainFacts says the on-chain row was unread, and the how-to never appears on an unread row.
+  const ch = j.report && j.report.checks;
+  ok("preview carries the Batch A checks (chainFacts, impersonators, linkHealth, logoSpec)", ch && ["chainFacts", "impersonators", "linkHealth", "logoSpec"].every((k) => ch[k] && ch[k].id === k), JSON.stringify(ch).slice(0, 200));
+  ok("…offline: impersonators + logoSpec are unread with the reason, chainFacts unread (no invented facts)", ch && ch.impersonators.status === "unread" && /offline/.test(ch.impersonators.error) && ch.logoSpec.status === "unread" && ch.chainFacts.status === "unread" && !ch.chainFacts.facts);
+  ok("…linkHealth marks every link broken/unverified offline, never ok", ch && ch.linkHealth.status === "ok" && ch.linkHealth.links.length > 0 && ch.linkHealth.links.every((l) => l.status !== "ok"));
   r = await fetch(BASE + "/api/listing-checkup/report?mint=" + MINT); j = await r.json();
   ok("the report endpoint returns the cached run", r.status === 200 && j.runs && j.runs.length === 1 && j.runs[0].canonical.name === hostile.name);
   r = await fetch(BASE + "/listing/" + MINT); const html = await r.text();
   ok("the share page renders the cached run", r.status === 200 && /LISTING CHECKUP/.test(html));
   ok("…with the hostile name ESCAPED (no raw <script>)", !html.includes("<script>alert(1)") && html.includes("&lt;script&gt;alert(1)"));
   ok("…and the symbol escaped", !html.includes("$X<b>") && html.includes("X&lt;b&gt;"));
+  ok("…and the unread check sections render escaped (LOGO / IMPERSONATORS blocks present)", /POSSIBLE IMPERSONATORS/.test(html) && /LOGO/.test(html) && !/<script>alert/.test(html));
   r = await fetch(BASE + "/listing/11111111111111111111111111111111"); const h2 = await r.text();
   ok("an unknown mint gets the 'no checkup yet' page, not an error", r.status === 200 && /No checkup yet/.test(h2));
   r = await fetch(BASE + "/listing/not-a-mint");

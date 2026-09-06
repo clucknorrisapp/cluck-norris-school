@@ -91,6 +91,25 @@ Full sweep ≈ 15 API calls + up to 8 page fetches + 2 search calls; the only me
 (one DAS call), Birdeye and CMC (if keyed), and Brave (free 2k/mo → ~60 full sweeps a day at the
 cap). At the caps above the monthly cost stays inside every free tier.
 
+## Batch A — shipped 2026-09-06 (owner: "ship and build A")
+
+`lib/listing-checkup-checks.js` runs beside the sources and lands on `report.checks`; the page and
+the `/listing/<mint>` share page render every section; a throwing check is `unread` with its error.
+
+| Check | Tier | Reads | Says |
+|---|---|---|---|
+| **chainFacts** | preview (+locks on full) | the DAS row the on-chain adapter already fetched (`row.extra`), Rugcheck's `lpLockedPct`, and on the full sweep the Locker Room's on-chain lock scan (`getLockedSupply`) | mint / freeze authority revoked or active, metadata mutable, token program, LP locked %, token locks with a Lock of Fame link |
+| **impersonators** | preview | Jupiter token search + DexScreener search by NAME and by SYMBOL, merged by mint, ours removed, other chains dropped | every other Solana mint using the name or symbol, with liquidity / holders / Jupiter-verified — Jupiter's own #1 refusal reason is "duplicate of another token" |
+| **linkHealth** | preview | website (follow redirects, off-domain landing flagged), Telegram public page, Discord invite via the invites API; X is `unverified` — it refuses anonymous reads and we do not guess | ok / broken / redirect / unverified per link, with the HTTP status and the reason |
+| **logoSpec** | preview | the logo bytes (PNG / JPEG / GIF / WebP / SVG header parsing, no image library) | format, size, transparency, and pass / fail against each site's stated rule, dated (`LOGO_SPECS`) |
+| **howToList** | both | static `LISTING_HOW` table, one entry per source | on every NOT FOUND row: what that site says it needs and the page to apply, replacing the dead end |
+
+Honesty rules kept: chain facts and the impersonator list are reported as what the chain and the
+sites show, never why; every rule and requirement carries the date it was read from the site's own
+form; nothing is submitted. Jupiter's fix link moved from the retired Catdet list to Jupiter Verify.
+Tests: `scripts/listing-checkup-checks-test.cjs` (23 fixture cases, CI node-check) and the routes
+test asserts the checks ride along offline as `unread`, never a throw.
+
 ## Tests before it ships
 
 - `scripts/listing-checkup-test.cjs` (pure): the normaliser (30 URL/handle cases), the comparator

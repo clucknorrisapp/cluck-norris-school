@@ -15864,6 +15864,7 @@ app.get(["/owners-snapshot", "/owners"], (req, res) => {
 // failure is an `unread` row — a report is never a 500 and "could not read" is never "clean".
 const listingCheckup = require("./lib/listing-checkup");
 const listingSources = require("./lib/listing-checkup-sources").SOURCES;
+const listingChecks = require("./lib/listing-checkup-checks");
 const LISTING_CAPS = { fullPerMintPerDay: 3, fullPerIpPerDay: 20 };
 app.use("/api/listing-checkup", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.get("/listing-checkup", (req, res) => res.sendFile(join(__dirname, "public", "listing-checkup.html")));
@@ -15886,6 +15887,24 @@ async function listingHashLogo(url) {
   const buf = Buffer.from(await r.arrayBuffer());
   if (buf.length > 2_000_000) throw new Error("logo too large");
   return createHash("sha256").update(buf).digest("hex");
+}
+// Text / bytes fetchers for the Batch A checks (link health, logo spec). Redirects are followed so
+// the final host is visible; bodies are capped; nothing here is ever written anywhere.
+async function listingFetchText(url, opts = {}) {
+  if (process.env.LISTING_CHECKUP_OFFLINE === "1") throw new Error("offline (LISTING_CHECKUP_OFFLINE=1)");
+  const r = await fetch(url, { redirect: "follow", headers: { accept: "text/html,application/json;q=0.9,*/*;q=0.5", "user-agent": "clucknorris-listing-checkup/1.0 (+https://clucknorris.app/listing-checkup)" }, signal: AbortSignal.timeout(opts.timeoutMs || 12000) });
+  const max = opts.maxBytes || 300000;
+  let text = "";
+  try { const buf = Buffer.from(await r.arrayBuffer()); text = buf.subarray(0, max).toString("utf8"); } catch (_) { text = ""; }
+  return { status: r.status, finalUrl: r.url || url, text };
+}
+async function listingFetchBytes(url, opts = {}) {
+  if (process.env.LISTING_CHECKUP_OFFLINE === "1") throw new Error("offline (LISTING_CHECKUP_OFFLINE=1)");
+  const r = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(opts.timeoutMs || 10000) });
+  if (!r.ok) return { status: r.status, buf: null };
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > (opts.maxBytes || 3_000_000)) throw new Error("file too large");
+  return { status: r.status, buf };
 }
 function listingUsage() {
   const today = new Date().toISOString().slice(0, 10);
@@ -15914,9 +15933,13 @@ app.post("/api/listing-checkup/run", async (req, res) => {
     fetchJson: listingFetchJson,
     rpcCall: (id, method, params) => { if (process.env.LISTING_CHECKUP_OFFLINE === "1") throw new Error("offline (LISTING_CHECKUP_OFFLINE=1)"); return heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)(id, method, params); },
     env: { SOLSCAN_API_KEY: process.env.SOLSCAN_API_KEY, CMC_API_KEY: process.env.CMC_API_KEY, BIRDEYE_API_KEY: process.env.BIRDEYE_API_KEY },
+    fetchText: listingFetchText,
+    fetchBytes: listingFetchBytes,
+    // Full tier only (the check gates it): the same on-chain lock scan the Locker Room runs.
+    lockedSupply: (mint) => { if (process.env.LISTING_CHECKUP_OFFLINE === "1") throw new Error("offline (LISTING_CHECKUP_OFFLINE=1)"); if (!process.env.HELIUS_API_KEY) throw new Error("no rpc"); return getLockedSupply(mint, heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)); },
   };
   try {
-    const report = await listingCheckup.runCheckup(canonical, { sources: listingSources, deps, tier, concurrency: 4, hashLogo: tier === "full" ? listingHashLogo : null });
+    const report = await listingCheckup.runCheckup(canonical, { sources: listingSources, checks: listingChecks.CHECKS, howToList: listingChecks.LISTING_HOW, deps, tier, concurrency: 4, hashLogo: tier === "full" ? listingHashLogo : null });
     const now = Date.now();
     listingCheckup.cachePut(kv, canonical.mint, report, now);
     if (tier === "full") { const u = listingUsage(); u.byMint[canonical.mint] = (u.byMint[canonical.mint] || 0) + 1; u.byIp[ip] = (u.byIp[ip] || 0) + 1; kv.set("listingCheckupUsage", u); }
@@ -15937,6 +15960,34 @@ app.get("/api/listing-checkup/report", (req, res) => {
 });
 // Shareable report page. Everything rendered comes from the cached report, which holds
 // attacker-controlled strings (a token's name, whatever a site shows) — all escaped server-side.
+// The Batch A check sections, server-rendered for the share page (every string escaped).
+function listingChecksHtml(checks, escH) {
+  const out = [];
+  const cf = checks.chainFacts;
+  if (cf && cf.status === "ok" && cf.facts) {
+    const f = cf.facts;
+    const auth = (a) => a && a.revoked ? '<b style="color:var(--green)">revoked</b>' : `<b style="color:#F87171">active</b>${a && a.address ? ` <span class="mono">${escH(String(a.address).slice(0, 8))}…</span>` : ""}`;
+    const cells = [["Mint authority", auth(f.mintAuthority)], ["Freeze authority", auth(f.freezeAuthority)], ["Metadata", f.metadataMutable === true ? "mutable" : f.metadataMutable === false ? "immutable" : "unknown"], ["Program", escH(f.tokenProgram || "?")]];
+    if (cf.lpLockedPct != null) cells.push(["LP locked (Rugcheck)", `${escH(String(Math.round(cf.lpLockedPct)))}%`]);
+    if (cf.locks) cells.push(["Token locks", `${escH(String(cf.locks.lockCount))} lock${cf.locks.lockCount === 1 ? "" : "s"} · ${cf.locks.pctOfSupply != null ? escH((cf.locks.pctOfSupply * 100).toFixed(1)) + "% of supply" : "?"}${cf.locks.partial ? " (partial read)" : ""} · <a href="${escH(cf.locks.page)}">Lock of Fame</a>`]);
+    out.push(`<div class="card"><div class="sec">CHAIN FACTS</div><div class="facts">${cells.map(([k, v]) => `<div><span>${escH(k)}</span>${v}</div>`).join("")}</div><div class="muted">What the chain holds, read directly. We say what is on-chain, never why.</div></div>`);
+  }
+  const im = checks.impersonators;
+  if (im && im.status === "ok") {
+    const rows = im.matches.length ? im.matches.map((m) => `<div class="frow imp"><span class="mono">${escH(m.mint)}</span><span>${escH(m.name || "")} <b>$${escH(m.symbol || "")}</b> · same ${escH(m.matchOn.join(" + "))}</span><span>${m.liquidityUsd ? "$" + escH(Math.round(m.liquidityUsd).toLocaleString("en-US")) + " liq" : "no liquidity"}${m.holders ? " · " + escH(String(m.holders)) + " holders" : ""}${m.verified ? " · Jupiter-verified" : ""}</span></div>`).join("") : `<div class="muted">No other Solana mint using this name or symbol was found on Jupiter or DexScreener.</div>`;
+    out.push(`<div class="card${im.matches.length ? " warn" : ""}"><div class="sec">POSSIBLE IMPERSONATORS · ${im.matches.length}${im.total > im.matches.length ? " of " + im.total : ""}</div>${rows}<div class="muted">${escH(im.note)}${im.partial ? " One search source did not answer, so this list may be short." : ""}</div></div>`);
+  } else if (im && im.status === "unread") out.push(`<div class="card"><div class="sec">POSSIBLE IMPERSONATORS</div><div class="muted">Could not read the search sources: ${escH(im.error || "")}</div></div>`);
+  const lh = checks.linkHealth;
+  if (lh && lh.status === "ok" && lh.links.length) {
+    const col = { ok: "var(--green)", broken: "#F87171", redirect: "var(--gold)", unverified: "var(--sub)", unread: "var(--sub)" };
+    out.push(`<div class="card"><div class="sec">LINK HEALTH</div>${lh.links.map((l) => `<div class="frow"><span class="fk">${escH(l.field)}</span><span class="mono">${escH(l.url)}</span><span style="color:${col[l.status] || "var(--sub)"}"><b>${escH(l.status)}</b>${l.http ? " " + escH(String(l.http)) : ""}${l.note ? " — " + escH(l.note) : ""}</span></div>`).join("")}</div>`);
+  }
+  const lg = checks.logoSpec;
+  if (lg && lg.status === "ok") {
+    out.push(`<div class="card"><div class="sec">LOGO</div><div class="muted">${escH(String(lg.format || "?").toUpperCase())} · ${lg.width && lg.height ? escH(lg.width + "×" + lg.height) : "size unknown"} · ${escH(String(Math.round((lg.bytes || 0) / 1024)))} KB${lg.alpha === true ? " · transparent" : lg.alpha === false ? " · no transparency" : ""}${lg.https ? "" : " · not https"}</div>${lg.sites.map((s) => `<div class="frow"><span class="fk">${escH(s.label)}</span><span>${escH(s.wants)}</span><span style="color:${s.ok === true ? "var(--green)" : s.ok === false ? "#F87171" : "var(--sub)"}"><b>${s.ok === true ? "passes" : s.ok === false ? "fails" : "unknown"}</b>${s.why ? " — " + escH(s.why) : ""}</span></div>`).join("")}<div class="muted">${escH(lg.note)}</div></div>`);
+  } else if (lg && lg.status === "unread") out.push(`<div class="card"><div class="sec">LOGO</div><div class="muted">Could not read the logo URL: ${escH(lg.error || "")}</div></div>`);
+  return out.join("");
+}
 app.get("/listing/:mint", (req, res) => {
   const mint = String(req.params.mint || "").trim();
   if (!listingCheckup.SOL_ADDR_RE.test(mint)) return res.status(404).send("Not found");
@@ -15950,8 +16001,10 @@ app.get("/listing/:mint", (req, res) => {
   const rows = run ? run.sources.map((sr) => {
     const badge = { correct: ["✅", "CORRECT", "#7BE26B"], incorrect: ["⚠️", "NEEDS A FIX", "#FFB627"], "not-found": ["—", "NOT FOUND", "#9C7E68"], unread: ["?", "COULD NOT READ", "#C9A892"] }[sr.status] || ["?", sr.status, "#C9A892"];
     const fields = sr.fields.filter((f) => f.status === "differs" || f.status === "missing").map((f) => `<div class="frow"><span class="fk">${escH(f.label)}</span><span class="fo">ours: ${escH(f.ours)}</span><span class="ft">theirs: ${f.theirs ? escH(f.theirs) : "<i>missing</i>"}</span></div>`).join("");
-    return `<div class="src"><div class="srow"><b>${escH(sr.label)}</b><span class="badge" style="color:${badge[2]}">${badge[0]} ${badge[1]}</span></div>${fields}${sr.error ? `<div class="muted">${escH(sr.error)}</div>` : ""}<div class="links">${sr.pageUrl ? `<a href="${escH(sr.pageUrl)}" target="_blank" rel="noopener noreferrer">view listing</a>` : ""}${sr.status === "incorrect" || sr.status === "not-found" ? `<a href="${escH(sr.fixUrl || "#")}" target="_blank" rel="noopener noreferrer">where to fix it</a>` : ""}</div></div>`;
+    const how = sr.status === "not-found" && sr.howToList ? `<div class="muted">To be listed there: ${escH(sr.howToList.needs)}.</div>` : "";
+    return `<div class="src"><div class="srow"><b>${escH(sr.label)}</b><span class="badge" style="color:${badge[2]}">${badge[0]} ${badge[1]}</span></div>${fields}${how}${sr.error ? `<div class="muted">${escH(sr.error)}</div>` : ""}<div class="links">${sr.pageUrl ? `<a href="${escH(sr.pageUrl)}" target="_blank" rel="noopener noreferrer">view listing</a>` : ""}${sr.status === "incorrect" ? `<a href="${escH(sr.fixUrl || "#")}" target="_blank" rel="noopener noreferrer">where to fix it</a>` : ""}${sr.status === "not-found" ? `<a href="${escH((sr.howToList && sr.howToList.url) || sr.fixUrl || "#")}" target="_blank" rel="noopener noreferrer">how to get listed</a>` : ""}</div></div>`;
   }).join("") : "";
+  const checksHtml = run && run.checks ? listingChecksHtml(run.checks, escH) : "";
   const fixFirst = run && run.fixFirst.length ? `<div class="card warn"><b>Fix this first.</b> The on-chain metadata differs from your record on: ${run.fixFirst.map(escH).join(", ")}. Most sites copy the on-chain record, so fixing it there fixes the copies over time.</div>` : "";
   return res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🔎 ${title} · Cluck Norris</title>
@@ -15969,12 +16022,13 @@ h1{font-family:var(--disp);font-weight:400;font-size:26px;letter-spacing:1px;col
 .frow{display:grid;grid-template-columns:110px 1fr 1fr;gap:8px;font-size:12.5px;margin-top:6px;word-break:break-all}.fk{color:var(--sub)}.fo{color:var(--green)}.ft{color:#F87171}
 .links{display:flex;gap:12px;margin-top:6px;font-size:12px}.links a{color:var(--gold)}.muted{color:var(--muted);font-size:12px;margin-top:4px}
 .mono{font-family:var(--mono);font-size:12px;color:var(--sub);word-break:break-all}
+.sec{font-size:11px;letter-spacing:2px;color:var(--sub);margin-bottom:8px}.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 14px;font-size:13px}.facts div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--border-soft);padding:4px 0}.facts span{color:var(--sub)}.frow.imp{grid-template-columns:1fr 1fr 1fr}
 .btn{display:inline-block;background:var(--orange);color:#0a0a0a;font-weight:700;border-radius:9px;padding:11px 18px;text-decoration:none;font-size:14px;margin-top:8px}
 </style></head><body><div class="wrap">
 <div class="brand"><img src="/cluck-norris-logo.jpg" alt=""/><div><b>CLUCK NORRIS · LISTING CHECKUP</b><br/><span>what every site shows for this token, compared to the project's own record</span></div></div>
 ${run ? `<h1>${escH(run.canonical.name)} <span style="color:var(--sub)">$${escH(run.canonical.symbol)}</span></h1><div class="mono">${escH(mint)}</div>
 <div class="sum"><div><b>${run.summary.correct}</b><span>CORRECT</span></div><div><b>${run.summary.incorrect}</b><span>NEED A FIX</span></div><div><b>${run.summary["not-found"]}</b><span>NOT FOUND</span></div><div><b>${run.summary.unread}</b><span>UNREAD</span></div></div>
-${fixFirst}<div class="card">${rows}</div>
+${fixFirst}${checksHtml}<div class="card">${rows}</div>
 <div class="muted">Checked ${run.checked} sources on ${escH(new Date(run.at).toISOString().slice(0, 16).replace("T", " "))} UTC (${escH(run.tier)} tier). We report what each site shows, never why. "Not found" means the site answered with no record; "unread" means we could not read it — it is not a pass.</div>`
   : `<h1>No checkup yet</h1><div class="mono">${escH(mint)}</div><div class="card">Nobody has run a Listing Checkup for this token. Run one below — the preview is free.</div>`}
 <a class="btn" href="/listing-checkup?mint=${escH(mint)}">${run ? "Run it again" : "Run a checkup"}</a>
