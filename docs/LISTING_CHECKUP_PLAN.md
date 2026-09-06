@@ -43,7 +43,7 @@ the vendor's published free-tier numbers and must be re-checked at build time.
 | 5 | **Jupiter** | token API `GET /tokens/v2/search?query={mint}` (or the strict list) | name, symbol, logo, tags (verified / community) | Jupiter Verify (catdet / the JVP flow we already run for partners) | free |
 | 6 | **Solscan** | `GET /v2.0/token/meta?address={mint}` (key we hold) | name, symbol, icon, website, twitter, description | Solscan pulls metadata; fix on-chain | free tier on our key |
 | 7 | **Rugcheck** | `GET /v1/tokens/{mint}/report` | name, symbol, links it shows, verification badge | rugcheck.xyz project verification | free |
-| 8 | **Birdeye** | `GET /defi/token_overview?address={mint}` (`extensions`: website, twitter, telegram, discord, description) | those fields | birdeye.so token page "Update token profile" | needs a key; free tier is small — **owner decision** |
+| 8 | **Birdeye** | `GET /defi/v3/token/meta-data/single?address={mint}` (`extensions`: website, twitter, telegram, discord, description; `logo_uri`) | those fields | birdeye.so token page "Update token profile" | needs a key; free tier is small — **owner decision** |
 | 9 | **CoinMarketCap** | `GET /v2/cryptocurrency/info?address={mint}` | urls.website / twitter / chat / message_board, logo, description | coinmarketcap.com "Request update" | needs a free key (10k credits/mo) — **owner decision** |
 | 10 | **pump.fun** (if the mint is a pump token) | `frontend-api` coin endpoint | name, symbol, image, website, twitter, telegram, description | pump.fun creator profile | free, unofficial — read only, tolerate failure |
 | 11 | **DEXTools** | page fetch + parse (API is paid) | socials shown on the pair page | dextools.io "Update token info" form | HTML parse; mark unread on change |
