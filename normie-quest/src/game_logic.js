@@ -7122,7 +7122,7 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
   go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
   update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
     if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
-    if(this.time.now-this.t0>16000) this.go();   // safety auto-advance so it can never soft-lock
+    if(!nqPanelOpen() && this.time.now-this.t0>16000) this.go();   // safety auto-advance so it can never soft-lock — but never under an open wallet panel
   }
 });
 
@@ -7201,6 +7201,9 @@ function nqCardImage(scene,x,y,maxH,place){
 }
 // Shared buy path — the in-game Jupiter widget when it exists, else a direct swap link.
 // Duplicated intentionally as a free function so the scenes below do not depend on VipPitch.
+// Is the premium/wallet DOM panel open? Set by the panel itself (see openOv/closeOv). Beats and
+// pitches read it so a Phaser timer never starts a level underneath a modal.
+function nqPanelOpen(){ try{ return !!window.__NQ_PANEL_OPEN; }catch(e){ return false; } }
 function nqBuyNormie(){
   try{ if(typeof window.__NQ_OPENPREMIUM==='function'){ window.__NQ_OPENPREMIUM(); return; } }catch(e){}
   var mint=(window.__NQ_NORMIE_MINT||NQ_NORMIE_MINT_DEFAULT);
@@ -7307,7 +7310,9 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     var prev=(beat==='preview')?nqPreviewPick():null;
     if(beat==='preview'&&!prev) beat='fact';   // preview pool empty for this player -> fact
     var n=nqNationNext();
-    this._hold=(beat==='board'||beat==='card'||beat==='fact'||beat==='perks')?4600:3000;   // info beats get read time
+    // Owner, 2026-09-05: "a little longer between levels to read the screen". Plain beats 3s → 6s,
+    // info beats 4.6s → 8s. Tap / key / pad still advance at once. (A tap-only card is his call.)
+    this._hold=(beat==='board'||beat==='card'||beat==='fact'||beat==='perks')?8000:6000;   // info beats get read time
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x151030,1); g.fillRect(0,0,W,26); g.fillRect(0,H-20,W,20);
     this.add.text(cx,13,'LEVEL CLEAR',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
@@ -7381,7 +7386,10 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
       self.t0=self.time.now;   // and the auto-advance clock restarts — the level must not start under the buy widget (review 2026-08-30)
       if(_lounge){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} } else nqBuyNormie(); });
     this.cont=this.add.text(cx,H-10,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff6e'}).setOrigin(.5);
-    var adv=function(){ if(self.done||self._buyOpen){ self._buyOpen=false; return; } self.go(); };
+    // While the buy/wallet panel is open nothing advances (the overlay eats taps anyway, but a
+    // key or pad press must not start the level behind it). update() clears _buyOpen and restarts
+    // the hold the frame the panel closes, so the first tap afterwards continues immediately.
+    var adv=function(){ if(self.done||self._buyOpen||nqPanelOpen()) return; self.go(); };
     this._padPrev=true;   // start latched: a direction HELD as the level ended must not insta-skip
     this._adv=adv;
     this.input.on('pointerdown',function(p){ if(buy.getBounds().contains(p.worldX,p.worldY)) return; adv(); });
@@ -7395,6 +7403,11 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
   update:function(){
     if(this.done) return;
     if(!this.t0){ this.t0=this.time.now; return; }
+    // The buy/wallet panel is a DOM overlay the beat cannot see through Phaser input. While it is
+    // open the beat holds still: no auto-advance, no pad/key advance, clock parked. The frame it
+    // closes, the hold restarts from zero so the card is readable again before it moves on.
+    if(nqPanelOpen()){ this.t0=this.time.now; this._buyOpen=true; this._padPrev=true; return; }
+    if(this._buyOpen){ this._buyOpen=false; this.t0=this.time.now; }
     if(this.runner){ var k=(Math.floor(this.time.now/110)%2)?'nrun2':'nrun1';
       if(this.runner.texture.key!==k) this.runner.setTexture(k).setScale(44/this.runner.height);
       this.runner.y=96+Math.sin(this.time.now/90)*2; }
@@ -7529,7 +7542,7 @@ var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
   },
   update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
     // the teaser auto-advances so it can NEVER soft-lock; the locked card waits for a choice.
-    if(!this.locked && this.time.now-this.t0>22000) this.go();
+    if(!this.locked && !nqPanelOpen() && this.time.now-this.t0>22000) this.go();   // never start a level behind the open wallet panel
   }
 });
 
@@ -7619,6 +7632,19 @@ try{ if(typeof window!=='undefined' && window.__NQ_SETUP){
     },250);
   } else if(_pw){ try{ sessionStorage.removeItem('nqPendingWarp'); }catch(e){} }
 } }catch(e){}
+// LAB toolkit: bring up the between-level beat DIRECTLY, with every other scene stopped, the way
+// a real clear leaves it (LevelClear alone, its hold running). The beat-vs-panel test used to get
+// there through __NQ_FORCECLEAR and wait for Game's 1.5s delayedCall — which is measured in
+// Phaser DELTA, and Phaser 3.60 pins delta at the 60fps target while frames run slow (smoothDelta
+// copies the history entry back when a frame overruns 200ms), so on a headless box rendering at
+// 2-4 fps that 1.5s took 22-60s of wall time, or never came. The beat's own hold is wall-clock
+// (time.now - t0), so once it is up the assertions hold on any machine. Setup-lane only.
+try{ if(typeof window!=='undefined') window.__NQ_BEAT=function(next,cleared){ try{
+  if(!window.__NQ_SETUP) return false;
+  NQGAME.scene.getScenes(true).forEach(function(sc){ var k=sc.sys&&sc.sys.settings&&sc.sys.settings.key; if(k) NQGAME.scene.stop(k); });
+  var n=(next>0?Math.floor(next):1);
+  NQGAME.scene.start('LevelClear',{next:n,score:0,lab:1,cleared:cleared||(LEVELS[n-1]&&LEVELS[n-1].name)||'1-1'}); return true;
+}catch(e){ return false; } }; }catch(e){}
 // LAB toolkit: start any scene by key, so the harness can bring up an interstitial directly
 // instead of having to PLAY to it. The whole file is an IIFE, so NQGAME is private and there was
 // no way to reach LevelClear / WorldClear / VipPitch from a test at all — those screens could
@@ -9280,8 +9306,13 @@ if(typeof document!=='undefined'){ (function(){
     // manual P/Esc pause. Same pattern as the feedback modal above.
     var ovPaused = false;
     function ovKb(on){ try { if (window.__NQ_KBGAME) window.__NQ_KBGAME(on); } catch (e) {} }
-    function openOv(){ ov.classList.add('on'); ovKb(false); try { ovPaused = !!(window.__NQ_PAUSE && window.__NQ_PAUSE()); } catch (e) { ovPaused = false; } }
-    function closeOv(){ ov.classList.remove('on'); ovKb(true); if (ovPaused) { try { window.__NQ_RESUME && window.__NQ_RESUME(); } catch (e) {} ovPaused = false; }
+    // __NQ_PANEL_OPEN: the between-level beats read this. Before it existed, GRAB $NORMIE on the
+    // LevelClear card opened this panel, the beat's 3-second auto-advance kept running underneath
+    // (the Game scene is not live on a beat, so __NQ_PAUSE could not freeze anything) and the NEXT
+    // LEVEL STARTED BEHIND THE PANEL — music playing, every tap eaten by the overlay, nothing to
+    // see. Owner, 2026-09-05: "the screen locked with music in background and I clicked everywhere".
+    function openOv(){ ov.classList.add('on'); ovKb(false); try { window.__NQ_PANEL_OPEN = true; } catch (e) {} try { ovPaused = !!(window.__NQ_PAUSE && window.__NQ_PAUSE()); } catch (e) { ovPaused = false; } }
+    function closeOv(){ ov.classList.remove('on'); ovKb(true); try { window.__NQ_PANEL_OPEN = false; } catch (e) {} if (ovPaused) { try { window.__NQ_RESUME && window.__NQ_RESUME(); } catch (e) {} ovPaused = false; }
       // Hand keyboard focus back to the game canvas so desktop players can move immediately after
       // closing the panel (the DOM panel had focus while it was open).
       try { var c = document.querySelector('#screen canvas') || document.querySelector('canvas'); if (c && c.focus) c.focus(); } catch (e) {} }
@@ -9304,6 +9335,8 @@ if(typeof document!=='undefined'){ (function(){
       } catch (e) {}
     }, 900);
     ov.addEventListener('click', function (e) { if (e.target === ov || e.target.hasAttribute('data-close')) closeOv(); });
+    // Escape always closes it — a panel with no way out is exactly the failure above.
+    try { document.addEventListener('keydown', function (e) { if (e && e.key === 'Escape' && ov.classList.contains('on')) closeOv(); }); } catch (e) {}
     // CHARACTER PICKER — render the roster (real idle sprites as thumbnails) with the current pick
     // highlighted; tapping a card saves the choice (localStorage, via the game's exposed setter).
     function renderChars() {
