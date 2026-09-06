@@ -22,12 +22,12 @@ All endpoints gated with `&key=$PREMIUM_ACCESS_KEY`, base `https://clucknorris.a
 
 ## Retune width (close → reopen, per pool, one at a time)
 1. Set config: `POST /vault/config?key=…&project=treasury` body `{"widthPct":X,"solWidthPct":X,"jupWidthPct":X}`
-2. Close the tight position: `GET /vault/close-position?key=…&project=treasury&mint=<positionMint>&run=1`
+2. Close the tight position: `curl -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY" ".../vault/close-position?project=treasury&mint=<positionMint>&run=1"` — **armed vault calls are POST-only and must name `project=`** (a GET with `run=1` is refused with 405; a missing project is refused with 400 — audit 2026-09-05). Dry runs stay GET.
 3. Wait ~6s, re-read status; confirm freed tokens landed in `float` (a "failed" call may have EXECUTED — status first, never blind-retry).
 4. Dry-run the reopen: `GET /vault/open-anchor?key=…&project=treasury&quote=SOL|USDC|JUP&usd=<clknSideUsd>&down=X&up=X`
    — `usd` sizes the CLKN side; `est.maxQuote` shows the quote it will pull. Size so maxQuote ≤ float
    (leave ≥0.35 SOL gas). Symmetric retune at same center = ~50/50 redeposit, NO swap needed.
-5. Execute with `&run=1` → returns `positionMint` (auto-PINNED in anchorMints; automation can't adopt it).
+5. Execute with `&run=1` **as a POST** → returns `positionMint` (auto-PINNED in anchorMints; automation can't adopt it). Every response echoes `project` and `operator` — read them on the dry run before the armed run.
 6. Verify: re-read positions — width correct, `inRange`, price ~50% in band. Then re-baseline:
    `GET /vault/lp-vs-hodl?key=…&project=treasury&reset=1`
 
@@ -36,7 +36,7 @@ Same ritual: close tights one at a time (keep the wide anchors — they keep poo
 never dislocates), verify float on-chain, then reopen per the owner's widths.
 
 ## Invariants after ANY op
-- Vault stays **paused** unless the owner explicitly says resume (`/vault/pause|resume?…&project=treasury&run=1`).
+- Vault stays **paused** unless the owner explicitly says resume (`POST /vault/pause|resume?project=treasury`).
 - The wpTightOorTick alert (server.js) DMs the PRIVATE treasury chat, loud, on OOR — leave it alone.
 - Report the final table (pool, mint, width, $, in-range) to the owner; update CLAUDE.md's engine
   status banner if the structure changed.

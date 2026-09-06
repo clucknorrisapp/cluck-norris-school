@@ -290,6 +290,27 @@ t("fundedBy is required and validated separately from excludeWallets", () => {
   assert.deepStrictEqual(c.fundedBy, ["2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8"], "adding an exclude must not widen the funding set");
 });
 
+t("daysAccruedFrom counts DAYS, not hourly slices (audit #4: the payout ceiling was 24× loose)", () => {
+  const days = { "2026-09-05T20": {}, "2026-09-05T21": {}, "2026-09-05T22": {}, "2026-09-05T23": {}, "2026-09-06T00": {}, "2026-09-06T01": {} };
+  assert.strictEqual(Object.keys(days).length, 6, "six slices");
+  assert.strictEqual(p.daysAccruedFrom(days), 2, "…across two calendar days");
+  assert.strictEqual(p.daysAccruedFrom({ "2026-08-30": {}, "2026-09-05T03": {} }), 2, "a legacy whole-day key counts once");
+  assert.strictEqual(p.daysAccruedFrom({}), 0);
+});
+
+t("maxEmittedRaw is slices/24 of the daily pool, rounded up — a 24×-over-credited batch is rejected", () => {
+  const daily = 345000n * 10n ** 9n;
+  const six = p.maxEmittedRaw(daily, 6);
+  // six honest slices sum to exactly 6/24 of the pool (the last-slice remainder only appears at slice 23)
+  let honest = 0n; for (let i = 20; i < 24; i++) honest += p.slicePoolRaw(daily, i); honest += p.slicePoolRaw(daily, 0) + p.slicePoolRaw(daily, 1);
+  assert.ok(honest <= six, "an honest six-slice total fits under the ceiling");
+  const buggy = daily * 6n;   // each slice credited the whole daily pool
+  assert.ok(buggy > six, "a whole-day-per-slice regression blows through it");
+  // a full day of 24 slices caps at exactly the daily pool
+  assert.strictEqual(p.maxEmittedRaw(daily, 24), daily);
+  assert.strictEqual(p.maxEmittedRaw(daily, 0), 0n);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
