@@ -318,6 +318,13 @@ jobs:
       - name: wallet standard discovery
         if: steps.gate.outputs.run == 'true'
         run: node scripts/wallet-standard-test.cjs
+      # GRAB $NORMIE on the between-level beat opened the wallet panel while the beat's auto-advance
+      # kept running underneath, so the next level started behind the panel — music, dead taps
+      # (owner, 2026-09-05). This drives the lab hooks: panel open → the beat holds; Escape closes;
+      # a tap continues; with no panel the beat still auto-advances.
+      - name: Normie Quest between-level beat vs wallet panel
+        if: steps.gate.outputs.run == 'true'
+        run: node normie-quest/test/nq-beat-panel-test.cjs
       - name: render every screen and lesson
         if: steps.gate.outputs.run == 'true'
         run: node scripts/smoke-test.js
