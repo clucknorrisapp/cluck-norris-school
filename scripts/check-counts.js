@@ -136,6 +136,33 @@ if (fs.existsSync(I18N_DIR)) {
   }
 }
 
+// 5. README.md quotes two of these numbers by hand for human readers (the table row for the
+//    core course, and the CI section describing the render smoke test's total lesson count).
+//    Neither is derived — they're prose — so they rot exactly like the landing-page strings in
+//    #2 did. Caught 2026-09-05 audit: README said "12 lessons" / "all 33 lessons" while the
+//    real counts were 14 / 35.
+const readme = read("README.md");
+const totalLessons = counts.LESSONS + counts.INCUBATOR_LESSONS + counts.LP_LESSONS;
+const coreCourseMatch = /School of Hard Knocks\*\*\s*\|\s*(\d+) lessons/.exec(readme);
+if (!coreCourseMatch) {
+  problems.push('README.md — could not find the "School of Hard Knocks" lesson-count row to check.');
+} else if (Number(coreCourseMatch[1]) !== counts.LESSONS) {
+  problems.push(
+    `README.md — the "School of Hard Knocks" row says ${coreCourseMatch[1]} lessons but ` +
+    `LESSONS has ${counts.LESSONS}. Update the table row.`
+  );
+}
+const smokeTestMatch = /all (\d+) lessons in headless Chromium/.exec(readme);
+if (!smokeTestMatch) {
+  problems.push('README.md — could not find the "all N lessons in headless Chromium" sentence to check.');
+} else if (Number(smokeTestMatch[1]) !== totalLessons) {
+  problems.push(
+    `README.md — "all ${smokeTestMatch[1]} lessons in headless Chromium" does not match the ` +
+    `real total (${counts.LESSONS} + ${counts.INCUBATOR_LESSONS} + ${counts.LP_LESSONS} = ` +
+    `${totalLessons}). Update the sentence.`
+  );
+}
+
 if (problems.length) {
   console.error("✗ curriculum count drift:");
   for (const p of problems) console.error("   • " + p);

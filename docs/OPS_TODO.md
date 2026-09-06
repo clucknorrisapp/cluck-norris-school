@@ -9,7 +9,7 @@ Two-sided market-making on Orca, running UNPAUSED. Relaunched after a holder sel
   - Pools **UNCAPPED** — `maxUsd` 1000000 / `solMaxSol` 100000 (effectively no cap); pools grow with whatever's available beyond the reserve.
   - Reserve floors: **`usdcFloor` 150, `swapSolFloor` 2** ← the dry powder.
   - `swapEnabled` true (SOL↔USDC rebalancing) · `askWallEnabled` false · `widthPct` 10 / `solWidthPct` 15 · `baseDeployThresholdUsd` 40 · `minRebalanceIntervalSec` 1800 · `maxActionsPerDay` 40.
-- **⚠️ Shuffle gotcha (was happening, now fixed):** a `maxUsd` cap + `swapEnabled` + idle USDC the base can't pair (because CLKN was parked in the ask wall) → the base force-rolls EVERY tick to "deploy staged USDC" it can't place → gas-burn loop. Fix: don't cap the base below what it can absorb, and keep CLKN free to pair deployed USDC. Uncapping + taking the wall down resolved it. Re-check: `GET /api/whirlpool/vault/dislocation?key=&project=clkn` and a dry-run `tick` (should say "hold", not "would-roll").
+- **⚠️ Shuffle gotcha (was happening, now fixed):** a `maxUsd` cap + `swapEnabled` + idle USDC the base can't pair (because CLKN was parked in the ask wall) → the base force-rolls EVERY tick to "deploy staged USDC" it can't place → gas-burn loop. Fix: don't cap the base below what it can absorb, and keep CLKN free to pair deployed USDC. Uncapping + taking the wall down resolved it. Re-check: `curl -H "x-premium-key: $PREMIUM_ACCESS_KEY" ".../api/whirlpool/vault/dislocation?project=clkn"` and a dry-run `tick` (should say "hold", not "would-roll").
 - **Lesson:** the autonomous scheduler (~10 min) races manual multi-step staging — set final config in ONE shot then tick immediately, or expect mid-stage rolls.
 
 ## CLKN liquidity — pulled for a holder sell (2026-06-08)  [HISTORY]
@@ -58,7 +58,8 @@ Two-sided market-making on Orca, running UNPAUSED. Relaunched after a holder sel
       - Mitigation already shipped: `publicPositions` caches 30s and **serves the last good
         snapshot on a 429** (so `/liquidity` shows real depth through blips instead of a false
         "no positions"); `/liquidity` now says "rate-limited, try again" instead of "no positions".
-      - Diagnostic added: `GET /api/tg-webhook-info?key=…` (Telegram webhook health; `&reset=1`).
+      - Diagnostic added: `GET /api/tg-webhook-info` (key via `x-premium-key` header; Telegram
+        webhook health; `&reset=1`).
 - [x] _(complements the upgrade)_ **Fallback RPC** ✅ Done 2026-06-08. `lib/rpc.js`: one ordered
       endpoint list (primary Helius → `FALLBACK_RPC_URL` backups → `HELIUS_API_KEY_2` → public node)
       + a failover `fetch`/`connection()` that rolls to the next endpoint on 429/5xx/network error.

@@ -57,9 +57,11 @@ function hatcheryFeeClknSol() {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 // Wallets holding at least HATCHERY_FREE_HOLDER_CLKN whole CLKN mint for free.
-// Default 100,000 (owner, 2026-08-13). NOTE: the Railway env var OVERRIDES this default,
-// and is currently set to 2,000,000 — so to make 100k live, set HATCHERY_FREE_HOLDER_CLKN
-// to 100000 (or clear it to use this default). Set the env to 0 to turn the perk off.
+// Default 100,000 (owner, 2026-08-13). NOTE: the Railway env var OVERRIDES this default, and
+// the number actually live at any given time is whatever Railway has it set to — check
+// `/api/hatchery/config` for the live figure, never assume a value here or quote one in docs
+// (README/investors have gone stale against the live env before). Set the env to 0 to turn
+// the perk off.
 function hatcheryFreeHolderClkn() {
   const raw = process.env.HATCHERY_FREE_HOLDER_CLKN;
   if (raw === "0") return 0;                       // explicit off

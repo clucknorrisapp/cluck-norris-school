@@ -359,9 +359,14 @@ served the React shell at 200.
   write silently reverts on the next push to `main` unless it was made with `&durable=1`
   (stored in kv `ratchetOverrides:<project>`, merged over the code defaults at boot, cleared
   by writing the key as null). This trap cost live tuning twice on 2026-08-28 before the
-  override mechanism existed. Engine GATE logic is pure in `lib/engine-decisions.js` —
-  changing a gate means updating `scripts/engine-sim-test.cjs` (CI runs it; each scenario is
-  a real incident) and replaying it locally BEFORE shipping, not debugging in production.
+  override mechanism existed. **⚠️ Only `dnc` and `rose` actually merge it today** (`server.js`
+  ~1173 and ~1341) — the `cuna` and `poke` ratchets (`server.js` ~995-1029 and ~795-836) never
+  read `ratchetOverrides:*`, so `&durable=1` on those two projects returns `durable:true` and
+  then reverts on the very next deploy anyway (audit finding #3, 2026-09-05, unfixed as of this
+  writing — check whether it's shipped before trusting a durable write on cuna/poke). Engine
+  GATE logic is pure in `lib/engine-decisions.js` — changing a gate means updating
+  `scripts/engine-sim-test.cjs` (CI runs it; each scenario is a real incident) and replaying it
+  locally BEFORE shipping, not debugging in production.
 - ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`
   defaults to `{}` (`lib/whirlpool-vault.js` ~358), so a missing kv key reads as *not paused*; and
   `lib/kvstore.js` `mkdirSync`s `DATA_DIR` and reports persistent even when the volume is not the
