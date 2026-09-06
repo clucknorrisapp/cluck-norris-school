@@ -116,6 +116,19 @@ t("adapters that need a missing key throw (→ unread), never return a clean row
   await assert.rejects(() => byId.coinmarketcap.read(MINT, deps), /CMC_API_KEY/);
   await assert.rejects(() => byId.birdeye.read(MINT, deps), /BIRDEYE_API_KEY/);
 });
+t("birdeye adapter parses the v3 metadata shape (owner's sample, address-keyed and single)", async () => {
+  const SOL = "So11111111111111111111111111111111111111112";
+  const sample = { data: { [SOL]: { address: SOL, symbol: "SOL", name: "Wrapped SOL", decimals: 9, extensions: { coingecko_id: "solana", website: "https://solana.com/", twitter: "https://twitter.com/solana", discord: "https://discordapp.com/invite/pquxPsq", medium: "https://medium.com/solana-labs" }, logo_uri: "https://img.fotofolio.xyz/?url=x" } }, success: true };
+  const d2 = { fetchJson: async () => sample, env: { BIRDEYE_API_KEY: "k" } };
+  const r = await byId.birdeye.read(SOL, d2);
+  assert.strictEqual(r.found, true); assert.strictEqual(r.shown.website, "https://solana.com/"); assert.strictEqual(r.shown.x, "https://twitter.com/solana"); assert.strictEqual(r.shown.discord, "https://discordapp.com/invite/pquxPsq"); assert.strictEqual(r.shown.telegram, "");
+  const single = { data: sample.data[SOL], success: true };
+  const r2 = await byId.birdeye.read(SOL, { fetchJson: async () => single, env: { BIRDEYE_API_KEY: "k" } });
+  assert.strictEqual(r2.found, true); assert.strictEqual(r2.shown.name, "Wrapped SOL");
+  const c = lc.canonicalFrom({ mint: SOL, name: "Wrapped SOL", symbol: "SOL", website: "solana.com", x: "@solana" });
+  const rows = lc.compareFields(c, r.shown);
+  assert.deepStrictEqual(Object.fromEntries(rows.map((x) => [x.field, x.status])), { name: "match", symbol: "match", website: "match", x: "match" });
+});
 t("pumpfun adapter is not-found for a non-pump mint without a network call", async () => {
   const r = await byId.pumpfun.read(MINT, { fetchJson: async () => { throw new Error("should not be called"); } }); assert.strictEqual(r.found, false);
 });
