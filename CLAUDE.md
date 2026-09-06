@@ -45,9 +45,11 @@ does not tell you how to write software; use your judgement for that.
 > 2026-09-13) or across machines with `NQ_SHARD=i/n` — never N agents on one box, they starve
 > each other. Don't run the full state test (every level — 90 today) by reflex — a day went to
 > running it for icon swaps it could never have validated, and a 90-level run for a LevelClear card
-> timed out under load on 2026-09-05. ⚠️ Headless Phaser on a slow box pins DELTA at the 60fps
-> target, so a test that waits on a `delayedCall` crawls or never fires — drive the target scene
-> with a lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`) instead.
+> timed out under load on 2026-09-05. ⚠️ Headless Chromium renders the game's WebGL at ~0.5 fps
+> (SwiftShader, no flag fixes it) and Phaser pins DELTA at the 60fps target while frames overrun,
+> so a `delayedCall` crawls or never fires. Logic tests set `window.__NQ_RENDER='canvas'` in an
+> init script (60 fps, same logic; the state and beat tests do) and drive the target scene with a
+> lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`); the visual gate stays on WebGL.
 
 > 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
 > `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts
