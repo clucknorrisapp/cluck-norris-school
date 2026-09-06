@@ -618,11 +618,12 @@ document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='
 // without a report (the profile is just richer once one exists).
 document.getElementById('askFab').classList.add('show');
 
-if(qp.get('wallet'))run();
-
 // Unified tools pass (owner, 2026-08-18): the page previews free — RUN needs the pass
 // (hold $50 of CLKN = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
 run = CluckGate.guard(run, { tool: 'Wallet X-Ray', anchor: '#runBtn' });
+// ?wallet= auto-run goes through the SAME guarded run — it used to fire one line above the wrap,
+// so a pasted URL ran the paid tool with the gate card never rendering (audit 2026-09-05 #2).
+if(qp.get('wallet'))run();
 </script>
 <script defer src="/cluck-nav.js"></script>
 </body>

@@ -44,6 +44,7 @@ function proj(req) { return (req.query.project || (req.body && req.body.project)
 // silent default to "clkn" could stop/start the WRONG tenant. Returns "" when absent.
 function projExplicit(req) { return String((req.query && req.query.project) || (req.body && req.body.project) || "").trim(); }
 
+
 // ── Client portal auth (wallet-signature) ────────────────────────────────────
 // A project owner proves control of their wallet by signing a fresh message; we then
 // issue a short-lived HMAC session token that scopes them to THEIR project only. No
@@ -97,6 +98,44 @@ function projectOwnedBy(wallet) {
 
 const router = express.Router();
 router.use(express.json());
+
+// ── Armed-call discipline for every /vault route (audit 2026-09-05 #5 and #7) ──────────────
+// Three rules, one place, so the next route added cannot forget them:
+//  1. A request that EXECUTES (run=1 / arm=1 / disarm=1 / set=) is POST only. A GET with the same
+//     flags is refused with 405 — a pasted URL that a chat client unfurls must never move funds.
+//     GET without the flags is the dry run it always was.
+//  2. An executing call — and any config/mode write — must name its project. proj() defaults to
+//     "clkn" (the brand project, with its own live operator and float), so an armed call meant for
+//     treasury with project= forgotten used to hit CLKN silently. Pause/resume already refused
+//     that; now every armed route does.
+//  3. Every /vault response echoes the project it resolved and that project's operator pubkey, so
+//     the dry run shows the mistake before the armed run makes it.
+// The client-portal routes (/vault/client/*) are wallet-scoped and untouched.
+const ARMED_FLAGS = ["run", "arm", "disarm", "set"];
+router.use("/vault", (req, res, next) => {
+  if (req.path.startsWith("/client")) return next();
+  const q = req.query || {};
+  const armed = ARMED_FLAGS.filter((f) => q[f] != null && q[f] !== "" && q[f] !== "0");
+  if (armed.length && req.method !== "POST") {
+    res.setHeader("Allow", "GET, POST");
+    return res.status(405).json({ error: `${armed.join(", ")} executes — send it as a POST (a GET here is the dry run)` });
+  }
+  const writes = req.method === "POST" && /^\/(config|mode)$/.test(req.path);
+  if ((armed.length || writes) && !projExplicit(req)) {
+    return res.status(400).json({ error: "Specify project= explicitly for an armed or config call (e.g. project=treasury) — refusing to default to clkn." });
+  }
+  const json = res.json.bind(res);
+  res.json = (body) => {
+    if (body && typeof body === "object" && !Array.isArray(body) && body.project === undefined) {
+      const pid = projExplicit(req) || "clkn";
+      let operator = null;
+      try { operator = vault.operatorPubkey(pid); } catch (_) {}
+      body = { project: pid, operator, ...body };
+    }
+    return json(body);
+  };
+  next();
+});
 
 // ── Public engine LOCK (owner's call) ────────────────────────────────────────
 // The Liquidity Engine is in private testing — the public, non-custodial build/use
@@ -219,7 +258,7 @@ router.post("/close", async (req, res) => {
 
 // ── Autonomous vault admin (gated on PREMIUM_ACCESS_KEY) ─────────────────────
 // GET /api/whirlpool/vault/status?key=… — operator wallet, float, config, position.
-router.get("/vault/status", async (req, res) => {
+router.all("/vault/status", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.status(proj(req))); }
   catch (e) { res.status(500).json({ error: e.message || "status failed" }); }
@@ -228,7 +267,7 @@ router.get("/vault/status", async (req, res) => {
 // GET /api/whirlpool/vault/costs?key=… — PRIVATE operational-cost readout: tx
 // fees the engine has paid moving its own positions (today + lifetime, SOL + USD).
 // Gated like the rest of the vault admin (404 without the key); never public.
-router.get("/vault/costs", async (req, res) => {
+router.all("/vault/costs", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.costs(proj(req))); }
   catch (e) { res.status(500).json({ error: e.message || "costs failed" }); }
@@ -237,7 +276,7 @@ router.get("/vault/costs", async (req, res) => {
 // GET /api/whirlpool/vault/dislocation?key=&project=… — how far each engine pool's
 // on-chain tick sits from the true market (the deepest "main LP", e.g. Meteora), with
 // a convergence verdict. The redeploy gate + a quick post-trade dislocation check.
-router.get("/vault/dislocation", async (req, res) => {
+router.all("/vault/dislocation", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.dislocation(proj(req))); }
   catch (e) { res.status(500).json({ error: e.message || "dislocation failed" }); }
@@ -246,7 +285,7 @@ router.get("/vault/dislocation", async (req, res) => {
 // GET /api/whirlpool/vault/earnings?key=… — PRIVATE earnings readout: LP fees the
 // engine has EARNED — pending (uncollected, real-time) + realized (collected on
 // past rolls), valued in USD. Gated; never public. Pair with /costs for net P&L.
-router.get("/vault/earnings", async (req, res) => {
+router.all("/vault/earnings", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.earnings(proj(req))); }
   catch (e) { res.status(500).json({ error: e.message || "earnings failed" }); }
@@ -256,7 +295,7 @@ router.get("/vault/earnings", async (req, res) => {
 // total basket (positions + pending fees + float) valued now vs the baseline basket
 // priced now. The gap = fees − IL − tx costs. First call seeds the baseline; reset=1
 // re-baselines (do this right after any manual deposit/withdrawal or the number skews).
-router.get("/vault/lp-vs-hodl", async (req, res) => {
+router.all("/vault/lp-vs-hodl", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.lpVsHodl({ projectId: proj(req), reset: req.query.reset === "1" })); }
   catch (e) { res.status(500).json({ error: e.message || "lp-vs-hodl failed" }); }
@@ -264,7 +303,7 @@ router.get("/vault/lp-vs-hodl", async (req, res) => {
 
 // GET /api/whirlpool/vault/tick?key=…[&run=1] — run one cycle. Without run=1 it's
 // a DRY RUN (plans, signs nothing). With run=1 it may actually roll the position.
-router.get("/vault/tick", async (req, res) => {
+router.all("/vault/tick", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.tick({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "tick failed" }); }
@@ -272,7 +311,7 @@ router.get("/vault/tick", async (req, res) => {
 
 // GET /api/whirlpool/vault/wall-tick?key=…[&run=1] — run one ask-wall cycle.
 // DRY RUN unless run=1.
-router.get("/vault/wall-tick", async (req, res) => {
+router.all("/vault/wall-tick", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.tickAskWall({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "wall tick failed" }); }
@@ -280,7 +319,7 @@ router.get("/vault/wall-tick", async (req, res) => {
 
 // GET /api/whirlpool/vault/sol-tick?key=…[&run=1] — run one CLKN/SOL cycle.
 // DRY RUN unless run=1.
-router.get("/vault/sol-tick", async (req, res) => {
+router.all("/vault/sol-tick", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.tickSol({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "sol tick failed" }); }
@@ -288,7 +327,7 @@ router.get("/vault/sol-tick", async (req, res) => {
 
 // GET /api/whirlpool/vault/btc-tick?key=…[&run=1] — run one CLKN/cbBTC cycle.
 // DRY RUN unless run=1.
-router.get("/vault/btc-tick", async (req, res) => {
+router.all("/vault/btc-tick", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.tickBtc({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "btc tick failed" }); }
@@ -296,7 +335,7 @@ router.get("/vault/btc-tick", async (req, res) => {
 
 // GET /api/whirlpool/vault/jup-tick?key=…[&run=1] — run one CLKN/JUP cycle.
 // DRY RUN unless run=1.
-router.get("/vault/jup-tick", async (req, res) => {
+router.all("/vault/jup-tick", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.tickJup({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "jup tick failed" }); }
@@ -304,7 +343,7 @@ router.get("/vault/jup-tick", async (req, res) => {
 
 // GET /api/whirlpool/vault/treasury-tick?key=…[&run=1] — run one dual-sleeve cycle
 // (wide + tight, cbBTC/SOL). DRY RUN unless run=1. Needs dualSleeveEnabled on the project.
-router.get("/vault/treasury-tick", async (req, res) => {
+router.all("/vault/treasury-tick", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.tickTreasury({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "treasury tick failed" }); }
@@ -312,7 +351,7 @@ router.get("/vault/treasury-tick", async (req, res) => {
 
 // GET /api/whirlpool/vault/rebalance?key=…[&run=1] — run one inventory rebalance
 // (swap SOL→USDC toward target). DRY RUN unless run=1.
-router.get("/vault/rebalance", async (req, res) => {
+router.all("/vault/rebalance", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.rebalancePools({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "rebalance failed" }); }
@@ -320,7 +359,7 @@ router.get("/vault/rebalance", async (req, res) => {
 
 // GET /api/whirlpool/vault/transfer?key=…&project=<from>&toProject=<to>&sym=SOL|USDC|CLKN&amount=<n|all>[&run=1]
 // Moves funds between OUR OWN project operator wallets (allow-listed destinations only).
-router.get("/vault/transfer", async (req, res) => {
+router.all("/vault/transfer", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.transferToProject({
@@ -335,7 +374,7 @@ router.get("/vault/transfer", async (req, res) => {
 
 // GET /api/whirlpool/vault/swap?key=…&from=SOL&to=USDC&amount=315[&slippage=100][&run=1]
 // Ad-hoc swap between SOL/USDC/CLKN via Jupiter. DRY RUN unless run=1.
-router.get("/vault/swap", async (req, res) => {
+router.all("/vault/swap", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.manualSwap({
@@ -353,7 +392,7 @@ router.get("/vault/swap", async (req, res) => {
 // Owner carve-out (2026-08-26): small code-capped project-token→USDC clip to rebuild
 // quote-side depth in a downdraft. Allowlisted projects only; per-clip/per-day/cooldown/
 // impact ceilings live in lib/whirlpool-vault.js and cannot be raised by request.
-router.get("/vault/sell-clip", async (req, res) => {
+router.all("/vault/sell-clip", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.sellClip({
@@ -366,7 +405,7 @@ router.get("/vault/sell-clip", async (req, res) => {
 
 // GET /api/whirlpool/vault/positions?key=&project=<id> — per-position depth (the same
 // sanitized shape the /liquidity command uses: pair, role, $depth, amounts, in-range).
-router.get("/vault/positions", async (req, res) => {
+router.all("/vault/positions", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.publicPositions(proj(req))); }
   catch (e) { res.status(500).json({ error: e.message || "positions failed" }); }
@@ -374,7 +413,7 @@ router.get("/vault/positions", async (req, res) => {
 
 // GET /api/whirlpool/vault/buyback?key=&project=<id>[&run=1] — flywheel buyback.
 // DRY RUN unless run=1. Spends only USDC above floor+reserve; needs buybackEnabled.
-router.get("/vault/buyback", async (req, res) => {
+router.all("/vault/buyback", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(await vault.buyback({ projectId: proj(req), dryRun: req.query.run !== "1" })); }
   catch (e) { res.status(500).json({ error: e.message || "buyback failed" }); }
@@ -435,7 +474,7 @@ router.post("/vault/client/mode", (req, res) => {
 // GET /api/whirlpool/vault/create-pool?key=&project=rose&quote=SOL&feeTier=0.05[&run=1]
 // Onboarding: create a NEW Orca pool for the project's token at the live market price.
 // DRY RUN unless run=1. Costs ~0.03 SOL (rent) from the project's operator wallet.
-router.get("/vault/create-pool", async (req, res) => {
+router.all("/vault/create-pool", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.createPool({
@@ -455,7 +494,7 @@ router.get("/vault/create-pool", async (req, res) => {
 // Recoup carve-out (owner, 2026-08-31): arm lets the engine sell project-token
 // inventory it ABSORBED above the recorded baseline (default: current balance at arm
 // time). The bag below the baseline stays unsellable. GET with no flags inspects.
-router.get("/vault/recoup-baseline", async (req, res) => {
+router.all("/vault/recoup-baseline", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.recoupBaseline({
@@ -472,7 +511,7 @@ router.get("/vault/recoup-baseline", async (req, res) => {
 // dust swaps (zero liquidity = nothing fills; each step costs a tx fee). Refuses pools
 // holding any active liquidity. &price= is REQUIRED (Jupiter freezes unverified tokens).
 // DRY RUN unless run=1.
-router.get("/vault/reprice-pool", async (req, res) => {
+router.all("/vault/reprice-pool", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.repricePool({
@@ -487,7 +526,7 @@ router.get("/vault/reprice-pool", async (req, res) => {
 
 // GET /api/whirlpool/vault/close-position?key=&project=&mint=…[&run=1]
 // Close a specific position (orphan cleanup / wind-down). DRY unless run=1.
-router.get("/vault/close-position", async (req, res) => {
+router.all("/vault/close-position", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   const mint = String(req.query.mint || "");
   if (!mint) return res.status(400).json({ error: "mint required" });
@@ -501,7 +540,7 @@ router.get("/vault/close-position", async (req, res) => {
 // continuously quotable so pulling the tight positions doesn't leave it empty/stale —
 // on redeploy the price is already live + in-range (no settle/recenter front-end work).
 // Pinned + excluded from autonomous adoption. DRY RUN unless run=1.
-router.get("/vault/open-anchor", async (req, res) => {
+router.all("/vault/open-anchor", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.openAnchor({
@@ -519,7 +558,7 @@ router.get("/vault/open-anchor", async (req, res) => {
 // Open a single-sided CLKN SELL-WALL at a custom band ABOVE spot (laddered take-profit that
 // also cushions price impact on big buys). Deposits CLKN only; sells into a run-up. Pinned +
 // excluded from autonomous adoption. DRY RUN unless run=1.
-router.get("/vault/open-wall", async (req, res) => {
+router.all("/vault/open-wall", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.openWall({
@@ -536,7 +575,7 @@ router.get("/vault/open-wall", async (req, res) => {
 // GET /api/whirlpool/vault/add-liquidity?key=&project=&mint=&from=SOL&amount=…[&run=1]
 // Top up an EXISTING position (no close/reopen) — deposit `amount` of `from` into its
 // range; the SDK pulls the matching other side. DRY RUN unless run=1.
-router.get("/vault/add-liquidity", async (req, res) => {
+router.all("/vault/add-liquidity", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.addLiquidity({
@@ -551,7 +590,7 @@ router.get("/vault/add-liquidity", async (req, res) => {
 
 // GET /api/whirlpool/vault/remove-liquidity?key=&project=&mint=&pct=0.5[&run=1]
 // Withdraw pct (0..1) of a position's liquidity back to the wallet (no close). DRY unless run=1.
-router.get("/vault/remove-liquidity", async (req, res) => {
+router.all("/vault/remove-liquidity", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.removeLiquidity({
@@ -565,7 +604,7 @@ router.get("/vault/remove-liquidity", async (req, res) => {
 
 // GET /api/whirlpool/vault/concentration?key=&project=&mode=wide|tight|mega[&run=1]
 // Switch the treasury's concentration mode on command. DRY RUN unless run=1 (shows the plan).
-router.get("/vault/concentration", async (req, res) => {
+router.all("/vault/concentration", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try {
     res.json(await vault.concentrate({
@@ -578,7 +617,7 @@ router.get("/vault/concentration", async (req, res) => {
 
 // GET /api/whirlpool/vault/alerts-to-main?key=…&hours=24 — temporarily route ALL
 // engine alerts to the main community chat (transparency/test window). hours=0 cancels.
-router.get("/vault/alerts-to-main", (req, res) => {
+router.all("/vault/alerts-to-main", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   try { res.json(vault.routeAlertsToMain(req.query.hours != null ? req.query.hours : 24)); }
   catch (e) { res.status(500).json({ error: e.message || "failed" }); }

@@ -76,6 +76,20 @@ function adminAuthOK(req) {
   const provided = req.headers["x-premium-key"] || req.query.key;
   return secretEqual(String(provided || ""), String(KEY || ""));
 }
+// A GET that MUTATES is one pasted link away from running: link-preview bots fetch URLs in chats,
+// browsers prerender history, a stray click re-fires it. The CUNA admin route had this rule first
+// (audit 2026-09-05 #7/#8 found ~15 more admin routes that arm, post, delete or run on a GET flag).
+// Routes call this with the flags that change state; the same request sent as a POST goes through
+// and a flag-less GET stays a read. Registered with app.all so the POST actually reaches the handler.
+function mutatingGetRefused(req, res, flags) {
+  if (req.method === "POST") return false;
+  const q = req.query || {};
+  const hit = flags.filter((f) => q[f] != null && q[f] !== "");
+  if (!hit.length) return false;
+  res.setHeader("Allow", "GET, POST");
+  res.status(405).json({ ok: false, error: `${hit.join(", ")} changes state — send it as a POST (a GET here is read-only)` });
+  return true;
+}
 
 // Public-facing error text — internal errors (RPC/Helius/fetch) can carry URLs
 // that embed credentials (e.g. ?api-key=...). Strip anything secret-shaped and
@@ -812,6 +826,12 @@ function pokeConfigRatchet() {
   // H5WXSBJmY1uCr5EbVnJRxsiquKRKVAsP2pQBPMKJbRhM. Allocation is now POKE = half of total,
   // SOL/USDC/JUP a sixth each — three even pools, each half-POKE.
   if (!c.jupEnabled) { patch.jupEnabled = true; patch.jupFeeTierPct = 0.01; patch.jupWidthPct = 1; patch.jupMaxJup = 99999; patch.jupDeployThreshold = 5; }
+  // DURABLE overrides (audit 2026-09-05 #3) — see cunaConfigRatchet; poke's min-bumps above never
+  // read ratchetOverrides:poke either, so a durable write here was a no-op across deploys. An
+  // override wins over both the live value and any bump this block would have made.
+  const overrides = kv.get("ratchetOverrides:poke", {}) || {};
+  if (Object.keys(overrides).length) console.log("[poke] ratchet overrides active:", JSON.stringify(overrides));
+  for (const k of Object.keys(overrides)) { if (c[k] !== overrides[k] || k in patch) patch[k] = overrides[k]; }
   if (Object.keys(patch).length) whirlpoolMM.vault.setConfig(patch, "poke");
   // Alerts must NEVER hit the public community chat (the TELEGRAM_CHAT_ID fallback —
   // on 2026-08-20 one ops overview briefly landed there and had to be deleted). Bind
@@ -1007,8 +1027,15 @@ function cunaConfigRatchet() {
     solEnabled: true, jupEnabled: false, swapEnabled: false,
     buybackEnabled: false,             // owner call 2026-08-23 after an unwanted buy — stays off
   };
+  // DURABLE overrides (audit 2026-09-05 #3): /api/whirlpool/vault/config?durable=1 wrote
+  // ratchetOverrides:cuna and answered durable:true, but this ratchet never read it back — so a
+  // "durable" live retune reverted on the very next deploy, exactly the 2026-08-28 incident the
+  // mechanism was built for. Same merge dnc and rose have had since then.
+  const overrides = kv.get("ratchetOverrides:cuna", {}) || {};
+  if (Object.keys(overrides).length) console.log("[cuna] ratchet overrides active:", JSON.stringify(overrides));
+  const target = { ...want, ...overrides };
   const patch = {};
-  for (const k of Object.keys(want)) if (c[k] !== want[k]) patch[k] = want[k];
+  for (const k of Object.keys(target)) if (c[k] !== target[k]) patch[k] = target[k];
   // Caps and tuning knobs are floors/ceilings, not fixed values — only correct them while they
   // still hold a vault default, so the owner can raise a cap without it being stamped back down.
   if (c.feeTierPct === 0.3 || c.widthPct === 10) {
@@ -1022,6 +1049,7 @@ function cunaConfigRatchet() {
       buybackReserveUsd: 0, maxBuybackUsdPerCycle: 50, minBuybackUsd: 10, maxBuybacksPerDay: 12,
       buybackMinIntervalSec: 900, buybackSlippageBps: 300,
     });
+    for (const k of Object.keys(overrides)) if (k in patch) patch[k] = overrides[k];   // a durable override beats the default table too
   }
   if (Object.keys(patch).length) {
     whirlpoolMM.vault.setConfig(patch, "cuna");
@@ -1675,12 +1703,29 @@ async function postLockToX(data, deltaTokens) {
 //    failure, per the house rule).
 const BURN_BROADCAST_HOURLY_CAP = 12;
 const BURN_BROADCAST_COOLDOWN_MS = 10 * 60 * 1000;
+// LEGITIMACY FLOOR (audit 2026-09-05 #1). Verification proves the burn is REAL, not that it is
+// worth announcing: mint a token with supply 1, burn the 1 unit, POST the signature, and every
+// check passes — the brand X account then tweets "100% of supply burned" for a stranger's
+// one-unit mint, up to the hourly cap. The floor is a minimum USD value of the burn as priced
+// by Jupiter: a token Jupiter cannot price gets a receipt page but no auto-post (the owner can
+// still post it by hand). An allowlist would break the self-serve tool; a value floor does not.
+// BURN_BROADCAST_MIN_USD=0 turns the floor off. The receipt and its 200 are never affected.
+const BURN_BROADCAST_MIN_USD = (() => { const n = Number(process.env.BURN_BROADCAST_MIN_USD); return Number.isFinite(n) && n >= 0 ? n : 10; })();
+function burnBroadcastFloor(receipt) {
+  if (BURN_BROADCAST_MIN_USD <= 0) return null;
+  const usd = Number(receipt && receipt.usdValue);
+  if (!Number.isFinite(usd) || usd <= 0) return "unpriced";        // no Jupiter price → not a token anyone trades
+  if (usd < BURN_BROADCAST_MIN_USD) return `below-floor:${usd.toFixed(2)}<${BURN_BROADCAST_MIN_USD}`;
+  return null;
+}
 function burnSymbolSafe(sym) {
   const s = String(sym || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 12);
   return s || "TOKEN";
 }
 async function broadcastBurnCelebration(receipt) {
   try {
+    const floor = burnBroadcastFloor(receipt);
+    if (floor) { console.log(`[burn-celebrate] skip (${floor}) ${String(receipt.mint).slice(0, 8)}… by ${String(receipt.wallet).slice(0, 8)}…`); return { skipped: floor }; }
     // anti-spam: per-(wallet,mint) cooldown + global hourly cap (kv-backed, survives redeploys)
     const now = Date.now();
     const gate = kv.get("burnBroadcastGate", { hourStamp: 0, hourCount: 0, last: {} }) || { hourStamp: 0, hourCount: 0, last: {} };
@@ -6676,11 +6721,10 @@ app.get("/api/grad-watch-add", async (req, res) => {
 // Bags Launch Radar — manual/dry-run trigger for the 2-hourly Telegram post.
 // Gated by PREMIUM_ACCESS_KEY. Without ?post=1 it just RETURNS the composed
 // text (verify the format, no spam); ?post=1 actually fires the Telegram post.
-app.get("/api/bags-radar-test", async (req, res) => {
+app.all("/api/bags-radar-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  const KEY = process.env.PREMIUM_ACCESS_KEY;
-  const provided = req.query.key || req.headers["x-premium-key"];
-  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(403).json({ error: "forbidden" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });   // 404 like every sibling admin route (audit #9: these two answered 403 and advertised themselves)
+  if (mutatingGetRefused(req, res, ["post"])) return;
   try {
     const text = await buildBagsRadarText();
     if (req.query.post === "1") await notifyBagsLaunches();
@@ -6689,11 +6733,10 @@ app.get("/api/bags-radar-test", async (req, res) => {
 });
 
 // Market Check — manual/dry-run trigger (gated). ?post=1 fires the Telegram post.
-app.get("/api/market-check-test", async (req, res) => {
+app.all("/api/market-check-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  const KEY = process.env.PREMIUM_ACCESS_KEY;
-  const provided = req.query.key || req.headers["x-premium-key"];
-  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(403).json({ error: "forbidden" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["post"])) return;
   try {
     const text = await buildMarketCheckText();
     if (req.query.post === "1") await notifyMarketCheck();
@@ -6769,9 +6812,10 @@ app.get("/api/x-announce", async (req, res) => {
 });
 
 // Delete a tweet by id (owner-gated). Dry-run unless &run=1. Use to pull a post we're not happy with.
-app.get("/api/x-delete", async (req, res) => {
+app.all("/api/x-delete", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deleting a tweet is irreversible — never on a GET
   const id = String(req.query.id || "").replace(/[^0-9]/g, "");
   if (!id) return res.status(400).json({ error: "missing id" });
   if (req.query.run !== "1") return res.status(200).json({ ok: true, dryRun: true, id });
@@ -6781,9 +6825,15 @@ app.get("/api/x-delete", async (req, res) => {
 
 // Arm/disarm the treasury engine's auto-stop window (gated). ?hours=48 arms it; ?off=1 disarms.
 // On elapse, a 5-min checker pauses the treasury vault back to watch-only (positions untouched).
-app.get("/api/treasury-engine-window", (req, res) => {
+// POST-only to arm or disarm (audit #8: a bare GET with no params used to arm a 48h window — a link
+// preview could start the clock). GET reports the window.
+app.all("/api/treasury-engine-window", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (req.method !== "POST") {
+    const at = Number(kv.get("treasuryEnginePauseAt", 0)) || 0;
+    return res.status(200).json({ ok: true, armed: at > Date.now(), pauseAt: at > 0 ? new Date(at).toISOString() : null, note: "POST with ?hours=N to arm, ?off=1 to disarm" });
+  }
   if (req.query.off === "1") { kv.set("treasuryEnginePauseAt", 0); return res.status(200).json({ ok: true, armed: false }); }
   const hours = Math.min(168, Math.max(1, parseFloat(req.query.hours || "48") || 48));
   const at = Date.now() + hours * 3600 * 1000;
@@ -6963,9 +7013,11 @@ app.post("/api/tg-test", express.raw({ type: () => true, limit: "12mb" }), async
 //  GET            → { pending } (null when nothing to celebrate) + { probe } (last run's Higgsfield status)
 //  ?clear=1       → celebration handled, clear the flag
 //  ?probe=STATUS  → the scheduled run reports whether Higgsfield tools were reachable (observability)
-app.get("/api/lock-celebration", async (req, res) => {
+app.all("/api/lock-celebration", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // clear / run / probe write state → POST (the hourly watcher and .claude/skills/lock-celebration send POST)
+  if (mutatingGetRefused(req, res, ["clear", "run", "probe"])) return;
   if (req.query.clear === "1") { kv.set("lockCelebrationPending", null); return res.status(200).json({ ok: true, cleared: true }); }
   // Force a lock-watch scan NOW instead of waiting for the 30-min tick (owner "go post the
   // lock" lever). Runs the exact same tick logic — it only BUILDS the pending payload from
@@ -9256,9 +9308,12 @@ setInterval(() => {
 //   ?project=cuna&run=1  → run one real poll cycle now (even while disarmed)
 //   ?project=cuna&status=1 (or no action) → read-back the config
 //   ?list=1              → list all configured buy bots
-app.get("/api/buybot", async (req, res) => {
+app.all("/api/buybot", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // Everything below except ?list=1 / ?status=1 / a bare ?project= WRITES the bot config or fires a
+  // post — POST only (audit #8). GET stays the read-back.
+  if (mutatingGetRefused(req, res, ["mint", "pool", "symbol", "chat", "chatId", "min", "emoji", "image", "arm", "disarm", "burns", "burntarget", "pools", "dev", "persona", "test", "burntest", "run"])) return;
   const q = req.query;
   if (q.list === "1") return res.json({ ok: true, bots: Object.values(buyBotsAll()).map(b => ({ ...b, armed: !!b.armed })) });
   const id = String(q.project || "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 24);
@@ -9348,10 +9403,9 @@ app.get("/api/meme-queue", (req, res) => {
 //   ?test=1    → fire a sample buy alert (verify chat + image wiring)
 //   ?announce=1→ post the one-off "buy bot warming up" announcement
 //   ?loud=1    → make THIS post notify (announce/test only; silent otherwise per owner rule)
-app.get("/api/rose-buybot", async (req, res) => {
-  const KEY = process.env.PREMIUM_ACCESS_KEY;
-  const provided = req.query.key || req.headers["x-premium-key"];
-  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(404).json({ ok: false, error: "not found" });
+app.all("/api/rose-buybot", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not found" });
+  if (mutatingGetRefused(req, res, ["arm", "disarm", "setmin", "test", "announce", "backfill"])) return;   // audit #8; the flag-less poll stays a GET
   try {
     if (req.query.arm === "1") kv.set("roseBuyArmed", true);
     if (req.query.disarm === "1") kv.set("roseBuyArmed", false);
@@ -10889,7 +10943,9 @@ app.all("/api/cuna-stake/admin", async (req, res) => {
       wouldPay: Object.fromEntries(Object.entries(preview.credits).map(([k, v]) => [k, v.toString()])),
       eligible: preview.eligible,
       skipped: preview.skipped,
-      daysAccrued: Object.keys(days).length,
+      // Since the hourly-slice move the keys are YYYY-MM-DDTHH, so this used to equal slicesAccrued —
+      // 24× the real day count — and the payout verifier's ceiling inherited it (audit #4).
+      daysAccrued: prog.daysAccruedFrom(days),
       scanError: snap.err || null,
     });
   } catch (err) {
@@ -11638,7 +11694,9 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       // Everything ever credited by accrual. The verifier reconciles this against
       // owed + pending + paid; if they disagree, somebody is about to be paid twice or not at all.
       creditedTotalRaw: Object.values(pay.totalCredits(days)).reduce((a, v) => a + v, 0n).toString(),
-      daysAccrued: Object.keys(days).length,
+      // Hourly slices, not days (audit #4): the verifier's magnitude ceiling is dailyPool × slices / 24.
+      slicesAccrued: Object.keys(days).length,
+      daysAccrued: require("./lib/cuna-programme").daysAccruedFrom(days),
       mint: require("./lib/cuna-programme").readProgramme(kv.get(CUNA_STAKE_KV, null)).config.mint,
       decimals: 9,
     });
