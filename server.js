@@ -2016,12 +2016,14 @@ function buyCompRender(c, standings) {
            : c.usdPrize ? ` — <b>$${c.places[i].amount.toLocaleString()} in ${tgEsc(c.ticker)}</b>`
            : ` — <b>${c.places[i].amount.toLocaleString()} ${tgEsc(c.ticker)}</b>`)
         : "";
-      lines.push(`${tag} <code>${short}</code> · ${(s[key] || 0).toFixed(2)} SOL${prize}`);
+      const horses = (c.entryUsd > 0) ? (s.horses != null ? ` · 🐎 ${s.horses}` : " · 🐎 —") : "";
+      lines.push(`${tag} <code>${short}</code> · ${(s[key] || 0).toFixed(2)} SOL${horses}${prize}`);
     });
   }
   lines.push("");
   const metricLabel = c.metric === "single" ? "biggest single buy" : "cumulative bought";
   const filterNote = c.liveHoldFilter !== false ? " · 🤖 in-window sellers auto-removed" : "";
+  if (c.entryUsd > 0) lines.push(`<i>🐎 = horses: every $${c.entryUsd} buy earns ${c.entryHorses || 1} (per buy, not per total)</i>`);
   lines.push(`<i>metric: ${metricLabel} · refreshes ~${c.updateMins}m${filterNote} · type /buyleaders anytime</i>`);
   lines.push(ended
     ? `⚠️ PROVISIONAL. Winners must hold ${c.holdHours}h (no sells/transfers); official results come from the Rose scan after the hold.`
@@ -2052,6 +2054,7 @@ const BC_ENH_CACHE = new Map();  // Helius ENHANCED cache (position / sold-check
 // One source chain shared by the buy COMPETITION and the buy-SPECIAL raffle, so
 // both prefer Helius (paid plan) and only touch ST as a last resort.
 async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
+  let solUsdSeen = 0;   // handed back so entries ("every $3 buy") can price per-buy SOL sizes
   if (BC_TX_CACHE.size > 8000) BC_TX_CACHE.clear();
   if (BC_ENH_CACHE.size > 8000) BC_ENH_CACHE.clear();
   try {
@@ -2059,6 +2062,7 @@ async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
       getSolUsd().catch(() => 0),
       getTokenMarket(mint).catch(() => null),
     ]);
+    solUsdSeen = solUsd || 0;
     const h = await getTokenBuyersInWindowHelius(mint, fromMs, toMs, {
       heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched,
       solUsd: solUsd || 0, tokenPriceUsd: (mkt && mkt.priceUsd) || 0, txCache: BC_TX_CACHE,
@@ -2067,18 +2071,29 @@ async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
     // covered the whole window. An empty result from a truncated scan (or a non-empty one)
     // reports its real coverage; empty + truncated falls through to the backup sources.
     if (h && h.buyers && (h.buyers.length || h.reachedWindowStart)) {
-      return { buyers: h.buyers, source: "helius", reachedWindowStart: h.reachedWindowStart !== false };
+      return { buyers: h.buyers, source: "helius", reachedWindowStart: h.reachedWindowStart !== false, solUsd: solUsdSeen };
     }
   } catch (e) { console.warn("[BUY] helius buyers failed:", e.message); }
   try {
     const g = await geckoBuyersInWindow(mint, fromMs, toMs);
-    if (g.length) return { buyers: g, source: "geckoterminal", reachedWindowStart: true };
+    if (g.length) return { buyers: g, source: "geckoterminal", reachedWindowStart: true, solUsd: solUsdSeen };
   } catch (e) { console.warn("[BUY] gecko buyers failed:", e.message); }
   try {
     const r = await solanaTracker.getTokenBuyersInWindow(mint, Math.floor(fromMs / 1000), Math.floor(toMs / 1000), { maxPages });
-    if (r) return { buyers: r.buyers || [], source: "solana-tracker", reachedWindowStart: r.reachedWindowStart };
+    if (r) return { buyers: r.buyers || [], source: "solana-tracker", reachedWindowStart: r.reachedWindowStart, solUsd: solUsdSeen };
   } catch (e) { console.warn("[BUY] ST buyers failed:", e.message); }
-  return { buyers: [], source: "none", reachedWindowStart: false };
+  return { buyers: [], source: "none", reachedWindowStart: false, solUsd: solUsdSeen };
+}
+// Buy-comp entries per wallet ("every $3 buy = 2 horses"): annotate in place; null when the
+// comp has no entry rule or the source carried no per-buy sizes.
+function buyCompAnnotateEntries(c, buyers, solUsd) {
+  if (!(Number(c && c.entryUsd) > 0)) return buyers;
+  const { entriesFromBuys } = require("./lib/helius-trades");
+  for (const b of (buyers || [])) {
+    const e = entriesFromBuys(b.buysSol, solUsd, Number(c.entryUsd), Number(c.entryHorses) || 1);
+    b.entries = e ? e.entries : null; b.horses = e ? e.horses : null;
+  }
+  return buyers;
 }
 // Wallet's hold position (balance + sells) — Helius first, ST fallback. Returns
 // { sells, balance } in the shape the verify logic expects.
@@ -2132,7 +2147,8 @@ async function buyCompSoldSet(c, wallets, toMs) {
 }
 async function buyCompStandings(c) {
   const toMs = Math.min(Date.now(), c.endTs);
-  const { buyers: raw } = await buyersInWindowMulti(c.mint, c.startTs, toMs);
+  const { buyers: raw, solUsd } = await buyersInWindowMulti(c.mint, c.startTs, toMs);
+  buyCompAnnotateEntries(c, raw, solUsd);
   const key = buyCompMetricKey(c);
   // Drop MM/engine wallets + manual excludes, then any sub-floor cumulative (dust/bot filter).
   const ex = buyCompExcludeSet(c);
@@ -2251,7 +2267,7 @@ async function buyCompUpdate(c) {
   let standings;
   try { standings = await buyCompStandings(c); }
   catch (e) { console.warn("[BUYCOMP] standings fetch failed:", e.message); return; }
-  c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, maxBuySol: s.maxBuySol, buyCount: s.buyCount }));
+  c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, maxBuySol: s.maxBuySol, buyCount: s.buyCount, entries: s.entries ?? null, horses: s.horses ?? null }));
   const text = buyCompRender(c, standings);
   // Self-cleaning hourly repost: post a fresh board (so it resurfaces in the feed
   // as a "comp is live" reminder), then delete the previous one — one board at a
@@ -7309,7 +7325,10 @@ app.post("/api/buycomp/start", (req, res) => {
   const liveHoldFilter = !["0", "false", "no", "off"].includes(String(q.liveHoldFilter ?? "").toLowerCase());
   // Optional 1-2 char emoji for the comp's shortcut chip on the Buy Special tool.
   const emoji = String(q.emoji || "").trim().slice(0, 4) || null;
+  // Entry rule ("every $3 buy = 2 horses"): counted per qualifying BUY, alongside the cumulative board.
+  const entryUsd = Math.max(0, Number(q.entryUsd) || 0), entryHorses = Math.max(1, parseInt(q.entryHorses) || 1);
   const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, emoji, startTs, endTs, holdHours, places, pctPrize, usdPrize, exclude, minVolSol, liveHoldFilter, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
+  c.entryUsd = entryUsd; c.entryHorses = entryHorses;
   buyCompSave(c);
   buyCompUpdate(c).catch(() => {});    // post the initial board now (if the window has started)
   return res.status(200).json({ ok: true, id, competition: c });
@@ -7367,6 +7386,9 @@ app.post("/api/buycomp/edit", async (req, res) => {
   if (q.ticker != null) c.ticker = String(q.ticker).trim().slice(0, 12) || c.ticker;
   if (q.emoji != null) c.emoji = String(q.emoji).trim().slice(0, 4) || c.emoji;
   if (q.minVolSol != null) c.minVolSol = Math.max(0, Number(q.minVolSol) || 0);
+  if (q.update != null && q.update !== "") c.updateMins = Math.max(5, parseInt(q.update) || c.updateMins || 60);   // board cadence in minutes (self-cleaning repost)
+  if (q.entryUsd != null) c.entryUsd = Math.max(0, Number(q.entryUsd) || 0);
+  if (q.entryHorses != null) c.entryHorses = Math.max(1, parseInt(q.entryHorses) || 1);
   if (q.pct != null) c.pctPrize = (q.pct === "1" || q.pct === 1);
   if (q.usd != null) c.usdPrize = (q.usd === "1" || q.usd === 1);   // render places as $amount in TICKER
   if (q.places != null && q.places !== "") {
@@ -7569,7 +7591,8 @@ app.get("/api/buycomp/standings", async (req, res) => {
   if (!c) return res.status(404).json({ error: "no such competition" });
   try {
     const toMs = Math.min(Date.now(), c.endTs);
-    const { buyers: raw, source, reachedWindowStart } = await buyersInWindowMulti(c.mint, c.startTs, toMs);
+    const { buyers: raw, source, reachedWindowStart, solUsd } = await buyersInWindowMulti(c.mint, c.startTs, toMs);
+    buyCompAnnotateEntries(c, raw, solUsd);
     const key = buyCompMetricKey(c);
     const ex = [...buyCompExcludeSet(c)];
     const exSet = new Set(ex);
@@ -7584,7 +7607,7 @@ app.get("/api/buycomp/standings", async (req, res) => {
     }
     const soldSet = new Set(sold);
     const final = afterFilters.filter((b) => !soldSet.has(b.wallet));
-    const trim = (list) => list.slice(0, 25).map((b) => ({ wallet: b.wallet, volumeSol: +(b.volumeSol || 0).toFixed(5), maxBuySol: +(b.maxBuySol || 0).toFixed(5), buyCount: b.buyCount || 0 }));
+    const trim = (list) => list.slice(0, 25).map((b) => ({ wallet: b.wallet, volumeSol: +(b.volumeSol || 0).toFixed(5), maxBuySol: +(b.maxBuySol || 0).toFixed(5), buyCount: b.buyCount || 0, entries: b.entries ?? null, horses: b.horses ?? null }));
     const findWallet = String(req.query.wallet || "").trim();
     return res.status(200).json({
       ok: true, buildTag: "raw-meta-scanner-2de75a7", source, reachedWindowStart, metric: key, minVol, exclude: ex,
