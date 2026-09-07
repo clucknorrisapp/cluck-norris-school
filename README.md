@@ -71,6 +71,7 @@ subscriptions, no accounts.
 | 💰 **[Batch airdrop sender](https://clucknorris.app/airdrop)** | **Free** holding ~$50 of CLKN (live-priced) · else **0.05 SOL** = a 7-day pass to every heavy tool |
 | 🎯 **[Buy Special](https://clucknorris.app/buyspecial)** — buy-competition engine | Same unified pass: **free** at ~$50 of CLKN · else **0.05 SOL** (7 days, all tools) |
 | 🔬 **[Premium Forensics](https://clucknorris.app/premium)** | Holder-gated on a live 2,000,000 CLKN balance |
+| 🔎 **[Listing Checkup](https://clucknorris.app/listing-checkup)** — a project's listings vs. its own on-chain record, with a fix link for each mismatch | **Free preview** (on-chain metadata, CoinGecko, GeckoTerminal, DexScreener, Jupiter) · full sweep (+ Solscan, Rugcheck, pump.fun, CoinMarketCap, Birdeye, byte-level logo compare, shareable report) on the unified tools pass |
 | 🥚 **[The Hatchery](https://clucknorris.app/hatchery)** — guided token creator | **0.1 SOL**, or the CLKN equivalent at a **~30% discount** · free above the live holder threshold at `/api/hatchery/config` |
 
 The heavy tools — Wallet X-Ray, Holders, Trace, the airdropper and Buy Special — share **one**

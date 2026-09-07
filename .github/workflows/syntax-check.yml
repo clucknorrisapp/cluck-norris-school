@@ -334,6 +334,10 @@ jobs:
       # CI off the aggregators' APIs.
       - name: Listing Checkup routes (offline)
         run: node scripts/listing-checkup-routes-test.cjs
+      # CSP scoping: 'unsafe-eval' (Phaser needs it; nothing else does) must stay confined to the
+      # Normie Quest game shell and never leak onto the site-wide default policy.
+      - name: CSP scoping (unsafe-eval confined to the Normie Quest shell)
+        run: node scripts/csp-scope-test.cjs
       # Launch checklist 18: the airdrop signup honeypot swallows bot posts without storing them.
       - name: Airdrop signup honeypot (offline)
         run: node scripts/airdrop-collect-honeypot-test.cjs

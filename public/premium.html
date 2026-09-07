@@ -270,11 +270,11 @@ async function run(){
       $('runBtn').disabled=false; return;
     }
     const d = await res.json();
-    if(!d.success){ $('status').innerHTML='<div class="err">'+(d.error||'Trace failed')+'</div>'; $('runBtn').disabled=false; return; }
+    if(!d.success){ $('status').innerHTML='<div class="err">'+esc(d.error||'Trace failed')+'</div>'; $('runBtn').disabled=false; return; }
     const access = d.accessVia==='holder' ? ('✓ holder · '+Math.round(d.holderBalance||0).toLocaleString()+' CLKN') : (d.accessVia==='admin-key'?'✓ admin':'');
     $('status').innerHTML='<div class="status">✓ complete in '+((Date.now()-t0)/1000).toFixed(1)+'s · '+access+' · creator '+shortA(d.creatorWallet)+' ('+(d.creatorSource||'?')+')</div>';
     render(d);
-  }catch(e){ clearInterval(tick); $('status').innerHTML='<div class="err">'+e.message+'</div>'; }
+  }catch(e){ clearInterval(tick); $('status').innerHTML='<div class="err">'+esc(e.message)+'</div>'; }
   $('runBtn').disabled=false;
 }
 

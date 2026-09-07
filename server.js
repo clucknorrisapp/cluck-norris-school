@@ -2451,6 +2451,9 @@ function tgCommandReply(cmd, arg) {
       return `🛟 <b>LP Rescue</b> — can't find your LP position in the app? We search the blockchain directly (Meteora, Orca, Raydium), show what's really there, and build a withdrawal your own wallet signs. Free, non-custodial.\n${link("/lp-rescue")}`;
     case "bags":
       return `🎒 <b>Bags.fm</b> — live launches, near-grad &amp; recently graduated\n${link("/bags")}`;
+    case "listing":
+    case "listingcheckup":
+      return `🔎 <b>Listing Checkup</b> — checks a project's listings across the aggregators against its own on-chain record, with a fix link for each mismatch\nhttps://clucknorris.app/listing-checkup`;
     case "tools":
       return `🛠 <b>The Cluck Norris Toolkit</b> — every live Solana tool\n${link("/tools")}`;
     default: // start / help / commands
@@ -2474,6 +2477,7 @@ function tgCommandReply(cmd, arg) {
         "🔥 /firepit — burn junk tokens, reclaim your SOL rent\n" +
         "🛟 /lprescue — find LP positions that aren't showing in the app, withdraw yourself\n" +
         "🎒 /bags — live Bags.fm launches\n" +
+        "🔎 /listing — check a project's listings against its on-chain record\n" +
         "🛠 /tools — every tool in one place\n" +
         "📊 /liquidity — live AMM depth &amp; positions\n" +
         "📋 /commands — show this list\n\n" +
@@ -3306,7 +3310,7 @@ app.use(require("compression")());
 // wallets and RPC endpoints vary per user.
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://plugin.jup.ag https://www.googletagmanager.com",
+  "script-src 'self' 'unsafe-inline' https://plugin.jup.ag https://www.googletagmanager.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
@@ -3317,6 +3321,20 @@ const CSP = [
   "base-uri 'self'",
   "object-src 'none'",
 ].join("; ");
+// Normie Quest ships Phaser (public/vendor/phaser-3.60.0.min.js), which needs 'unsafe-eval'.
+// Confirmed nothing else does: grepped public/ and src/ for `new Function(` / bare `eval(` and
+// vendored Phaser is the only hit. Everywhere else stays on the tighter default CSP above — only
+// the game shell gets this variant (picked per-request below).
+const CSP_NQ = CSP.replace(
+  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+);
+// The exact game-shell surfaces that load Phaser: the two static routes, and "/" only when served
+// as the normiequest.app root (isGameHost/rawHost are declared further down and read the raw Host
+// header, not req.hostname, for the same anti-spoof reason documented there).
+const NQ_EVAL_PATH = /^\/normie-quest-x7(-lab)?$/;
+const needsEvalCSP = (req) =>
+  NQ_EVAL_PATH.test(req.path) || (isGameHost(req) && (req.path === "/" || req.path === ""));
 
 // PERMISSIONS-POLICY. Denies powerful browser features we never use, so an injected script
 // can't prompt for them under our origin. Only four are listed, and the omissions matter:
@@ -3334,7 +3352,7 @@ app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Content-Security-Policy", CSP);
+  res.setHeader("Content-Security-Policy", needsEvalCSP(req) ? CSP_NQ : CSP);
   res.setHeader("Permissions-Policy", PERMISSIONS_POLICY);
   next();
 });
@@ -3561,7 +3579,15 @@ app.set("trust proxy", true);
 // un-.catch'd setInterval tick) terminates the process, taking down every scheduler AND the
 // web server. Log and survive instead — a single flaky tick must never crash the app.
 process.on("unhandledRejection", (reason) => console.error("[unhandledRejection]", (reason && reason.message) || reason));
-process.on("uncaughtException", (err) => console.error("[uncaughtException]", err && err.message));
+// uncaughtException means a throw escaped every try/catch — unlike a rejected scheduler tick, the
+// process's own state is now unverified, and schedulers + money paths (vault ticks, payment checks)
+// must never keep running on a half-initialised process. Log the full stack, then exit so Railway
+// restarts us clean; the short delay just lets the log line flush before the process dies. Kill
+// switches / paused flags live in env/kv, not memory, so a restart can't re-arm anything stopped.
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException] unrecoverable, exiting for a clean restart:", (err && err.stack) || err);
+  setTimeout(() => process.exit(1), 1500).unref();
+});
 
 // ── First-party page-view analytics ───────────────────────────────────────
 // Counts human page loads (privacy-respecting; see lib/analytics.js). Mounted
