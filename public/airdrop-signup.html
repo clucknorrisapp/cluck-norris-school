@@ -5,6 +5,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🪂 Airdrop List — occasional community drops</title>
+<meta name="description" content="Join the list for occasional community airdrops — no schedule, no promises, just a wallet on file if one happens.">
 <meta property="og:title" content="Airdrop List — Cluck Norris"/>
 <meta property="og:description" content="Join the list for occasional community airdrops — no schedule, no promises, just a wallet on file if one happens. Validated on-chain, one entry per wallet."/>
 <meta property="og:image" content="https://clucknorris.app/cluck-norris-logo.jpg"/>
@@ -35,6 +36,8 @@
   .foot a{color:var(--gold);}
   .safe{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--sub);line-height:1.5;margin-top:12px;background:rgba(255,255,255,.03);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;}
   .hidden{display:none!important;}
+  /* Honeypot: off-screen, not display:none — bots that skip visibility checks still fill it. */
+  .hp{position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;}
 </style>
 </head>
 <body>
@@ -53,6 +56,11 @@
 
     <label class="fl" for="handle" style="margin-top:14px;">X HANDLE <span style="color:var(--muted);font-weight:400;letter-spacing:0;">(optional)</span></label>
     <input class="txt" id="handle" autocomplete="off" spellcheck="false" placeholder="@yourhandle"/>
+
+    <div class="hp" aria-hidden="true">
+      <label for="website">Website</label>
+      <input type="text" id="website" name="website" tabindex="-1" autocomplete="off"/>
+    </div>
 
     <button class="btn" id="go" disabled>🪂 GET ON THE LIST</button>
     <div class="status" id="status"></div>
@@ -109,7 +117,7 @@ async function submit(){
   try {
     var r = await fetch("/api/airdrop-collect", {
       method: "POST", headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ address: a, handle: handle.value.trim(), campaign: CAMPAIGN })
+      body: JSON.stringify({ address: a, handle: handle.value.trim(), campaign: CAMPAIGN, website: $("website").value })
     });
     var d = await r.json().catch(function(){ return {}; });
     if (!r.ok || !d.success) { setStatus("⚠️ " + esc(d.error || "Couldn't add that — try again in a moment."), "err"); go.disabled = false; return; }

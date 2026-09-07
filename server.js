@@ -15145,6 +15145,7 @@ app.get("/memes/:file", (req, res) => {
 // POST { address, handle?, campaign? } — validate + dedupe + store. GET (admin-gated,
 // ?key=…&c=<campaign>&export=csv|json) — export the collected list; without export it
 // returns just the public count so the page can show "N wallets registered".
+let _airdropHoneypotHits = 0;
 app.post("/api/airdrop-collect", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -15153,6 +15154,13 @@ app.post("/api/airdrop-collect", async (req, res) => {
   if (!AIRDROP_CAMPAIGN_RE.test(campaign)) return res.status(400).json({ success: false, error: "Bad campaign id." });
   const address = String(b.address || "").trim();
   if (!SOL_ADDR_RE.test(address)) return res.status(400).json({ success: false, error: "That doesn't look like a Solana address — paste it again from your wallet." });
+  // Honeypot: a hidden "website" field a real visitor never sees or fills. A bot that fills
+  // every field gets the normal success shape (so it doesn't adapt) but nothing is stored.
+  if (String(b.website || "").trim()) {
+    _airdropHoneypotHits++;
+    console.log(`[airdrop-collect] honeypot tripped (total: ${_airdropHoneypotHits})`);
+    return res.status(200).json({ success: true, count: Object.keys(kv.get(airdropKey(campaign), {}) || {}).length, message: "You're on the list — if a community drop happens, your wallet is on file. No schedule, no promises. 🐔" });
+  }
   // Same on-chain guard as /api/claim: reject a mint / token account / program / exchange
   // address so the owner never airdrops into a black hole. Fails open on an RPC blip.
   const problem = await rejectNonWallet(address);
@@ -16503,6 +16511,12 @@ app.get(["/lp-lab", "/lplab"], (req, res) => {
   try { res.type("html").send(lpLabShell()); }
   catch (e) { res.sendFile(join(__dirname, "dist", "index.html")); }   // never 500 a public page over a meta swap
 });
+
+// Content-hashed vite bundles (dist/assets/*.js, *.css, ...) are safe to cache forever —
+// a code change ships under a new filename, so the old cached copy is never stale. Mount
+// this BEFORE the general dist mount below (which still serves cluck-util.js / cluck-wallet.js
+// / cluck-gate.js and everything else with no explicit cache header, unchanged).
+app.use("/assets", express.static(join(__dirname, "dist", "assets"), { maxAge: "365d", immutable: true }));
 
 // -- Serve React app (the school) at /school + every non-root path via the catch-all --
 app.use(express.static(join(__dirname, "dist"), { index: false }));
