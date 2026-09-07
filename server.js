@@ -2267,7 +2267,7 @@ async function buyCompUpdate(c) {
   let standings;
   try { standings = await buyCompStandings(c); }
   catch (e) { console.warn("[BUYCOMP] standings fetch failed:", e.message); return; }
-  c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, maxBuySol: s.maxBuySol, buyCount: s.buyCount }));
+  c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, maxBuySol: s.maxBuySol, buyCount: s.buyCount, entries: s.entries ?? null, horses: s.horses ?? null }));
   const text = buyCompRender(c, standings);
   // Self-cleaning hourly repost: post a fresh board (so it resurfaces in the feed
   // as a "comp is live" reminder), then delete the previous one — one board at a
@@ -7386,6 +7386,7 @@ app.post("/api/buycomp/edit", async (req, res) => {
   if (q.ticker != null) c.ticker = String(q.ticker).trim().slice(0, 12) || c.ticker;
   if (q.emoji != null) c.emoji = String(q.emoji).trim().slice(0, 4) || c.emoji;
   if (q.minVolSol != null) c.minVolSol = Math.max(0, Number(q.minVolSol) || 0);
+  if (q.update != null && q.update !== "") c.updateMins = Math.max(5, parseInt(q.update) || c.updateMins || 60);   // board cadence in minutes (self-cleaning repost)
   if (q.entryUsd != null) c.entryUsd = Math.max(0, Number(q.entryUsd) || 0);
   if (q.entryHorses != null) c.entryHorses = Math.max(1, parseInt(q.entryHorses) || 1);
   if (q.pct != null) c.pctPrize = (q.pct === "1" || q.pct === 1);
