@@ -98,6 +98,8 @@ jobs:
       # handler's own req.cluckDirect guard runs before the key comparison.
       - name: CUNA staking domain lockdown allowlist
         run: node scripts/cuna-stake-routing-test.cjs
+      - name: Buy-comp entries (every $N buy = horses)
+        run: node scripts/buycomp-entries-test.cjs
       # The decisions in front of an irreversible action. Burning cannot be undone and cannot be
       # partially retried, so every case here is a way the burner could fire when it should not or
       # for the wrong amount: a truthy (not true) armed flag, a missing signing key, a short
