@@ -1722,6 +1722,13 @@ function burnSymbolSafe(sym) {
   const s = String(sym || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 12);
   return s || "TOKEN";
 }
+// Which Telegram room a burn celebration goes to. Partner mints map to their own public room;
+// everything else (CLKN, strangers' tokens) goes to the CLKN community chat. Never a room on staging.
+const BURN_ROOM_BY_MINT = { [CUNA_MINT]: CUNA_PUBLIC_ROOM };
+function burnCelebrationRoom(mint) {
+  const room = BURN_ROOM_BY_MINT[String(mint || "")];
+  return (room && !IS_STAGING) ? room : process.env.TELEGRAM_CHAT_ID;
+}
 async function broadcastBurnCelebration(receipt) {
   try {
     const floor = burnBroadcastFloor(receipt);
@@ -1764,7 +1771,10 @@ async function broadcastBurnCelebration(receipt) {
     const xres = await postToX(xText, { force: true });
     // Telegram to the PUBLIC community chat (celebration). Not silent — a celebration should
     // ping. Preview ON so the receipt card renders. Include the X link if the tweet landed.
-    const chat = process.env.TELEGRAM_CHAT_ID, token = process.env.TELEGRAM_BOT_TOKEN;
+    // Routed by MINT (2026-09-07): a partner token's burn belongs in THAT community's room, not the
+    // CLKN chat — the first automatic CUNA burn posted to TELEGRAM_CHAT_ID and the CUNA room saw
+    // nothing. Staging keeps the CLKN test destination so a staging burn can never reach a real room.
+    const chat = burnCelebrationRoom(receipt.mint), token = process.env.TELEGRAM_BOT_TOKEN;
     if (chat && token) {
       const xLink = xres && xres.ok && xres.id ? `\n\n𝕏 → https://x.com/i/status/${xres.id}` : "";
       const tgText =
