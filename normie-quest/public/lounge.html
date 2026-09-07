@@ -361,7 +361,26 @@
   function renderButtons() {
     var box = document.getElementById('wallets'), ws = detect();
     box.innerHTML = '';
-    if (!ws.length) { box.innerHTML = '<p style="font-size:13px;color:#b6bfe0">No Solana wallet detected — open this page in your wallet\'s browser, or install Phantom / Solflare / Jupiter and reload.</p>'; return; }
+    if (!ws.length) {
+      // F19: mobile browsers can't inject a provider — port the game's deep-link branch
+      // (game_logic.js's no-wallet path) instead of a dead-end paragraph.
+      var mob = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (!mob) { box.innerHTML = '<p style="font-size:13px;color:#b6bfe0">No Solana wallet detected in this browser. Install Phantom, Solflare or the Jupiter wallet extension, then reload this page.</p>'; return; }
+      var dlUrl = encodeURIComponent(location.href), dlRef = encodeURIComponent(location.origin);
+      box.innerHTML = '<p style="font-size:13px;color:#b6bfe0;margin-bottom:8px">📱 No wallet detected in this browser — open the Lounge inside your wallet app:</p>'
+        + '<button style="display:block;width:100%" id="lngphantom">🔮 Open in Phantom</button>'
+        + '<button style="display:block;width:100%" id="lngsolflare">☀️ Open in Solflare</button>'
+        + '<button class="ghost" style="display:block;width:100%" id="lngcopylink">🪐 Jupiter Mobile: copy link, paste in its browser</button>'
+        + '<p style="font-size:12px;color:#7d715c;margin-top:8px">The links only open this page in the wallet\'s browser — nothing is signed or shared by them. In Jupiter Mobile, open the in-app browser and paste the copied link; the connect button appears there.</p>';
+      document.getElementById('lngphantom').onclick = function () { location.href = 'https://phantom.app/ul/browse/' + dlUrl + '?ref=' + dlRef; };
+      document.getElementById('lngsolflare').onclick = function () { location.href = 'https://solflare.com/ul/v1/browse/' + dlUrl + '?ref=' + dlRef; };
+      document.getElementById('lngcopylink').onclick = function (ev) {
+        var cpb = ev.target, done = function () { cpb.textContent = '✓ Link copied — paste it in Jupiter\'s browser'; };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(location.href).then(done).catch(function () { prompt('Copy this link:', location.href); });
+        else prompt('Copy this link:', location.href);
+      };
+      return;
+    }
     ws.forEach(function (w) {
       var b = document.createElement('button'); b.textContent = 'Connect ' + w.name;
       b.onclick = function () { go(w).catch(function (e) { errEl.textContent = String(e && e.message || e); }); };
@@ -473,7 +492,8 @@
         + '<p>Your free daily spin is above — it is yours every day, VIP or not.</p>'
         + '<p>A VIP seat adds better wheel odds, bonus spins through the day, the members\' feed '
         + '(giveaways, alpha drops and perks), and the VIP worlds.</p>'
-        + '<p style="color:#6e6a86;font-size:12px">Seats come from holding $NORMIE or from winning one in a community competition — terms are still in testing.</p>'
+        // F17-adjacent: no token name here either — the hold requirement is unagreed/unset.
+        + '<p style="color:#6e6a86;font-size:12px">Seats come from meeting the game\'s holding requirement or from winning one in a community competition — terms are still in testing.</p>'
         + '</div>';
       return;
     }
@@ -551,7 +571,7 @@
     if (h <= 0) return m >= 1 ? m + 'm' : 'under a minute';
     return h + 'h ' + m + 'm';
   }
-  // 🎫 running drawing-entry tally + 🪙 the $NORMIE jackpot teaser (a labeled 'coming soon' — NOT a
+  // 🎫 running drawing-entry tally + 🔒 THE VAULT teaser (a labeled 'sealed' state — NOT a
   // wheel wedge, so the wheel's slice-size-equals-odds honesty stays intact).
   function renderJackpot(st) {
     var el = document.getElementById('jackpot'); if (!el) return;
@@ -565,10 +585,11 @@
     }
     if (st && st.raffle) html += '<div class="raffleline">🎫 You hold <b>' + st.raffle + '</b> drawing '
       + (st.raffle === 1 ? 'entry' : 'entries') + ' — winners drawn in the members’ feed.</div>';
-    if (st && st.jackpotSoon) html += '<div class="jackteaser"><span class="jt-coin">🪙</span>'
-      + '<div><div class="jt-t">MEGA JACKPOT — real $NORMIE</div>'
-      + '<div class="jt-d">Coming soon. When it’s live, the rarest spin pays out real tokens.</div></div>'
-      + '<span class="jt-soon">SOON</span></div>';
+    // F17: no token name, no mechanism, no amount, no promise — reward terms are unagreed.
+    if (st && st.jackpotSoon) html += '<div class="jackteaser"><span class="jt-coin">🔒</span>'
+      + '<div><div class="jt-t">THE VAULT</div>'
+      + '<div class="jt-d">Members will be the first to know what’s inside.</div></div>'
+      + '<span class="jt-soon">SEALED</span></div>';
     el.innerHTML = html;
   }
   async function renderWheel(pk, token) {
@@ -631,6 +652,12 @@
       // — a perk they will never get, promised by a bug. Adopt it only when st.vip.
       if (!res.ok) {
         if (res.error === 'already_spun') { st.nextSpinAt = res.nextSpinAt; if (st.vip) st.nextBonusAt = res.nextBonusAt; lockUntil(); }
+        // F15: the prize queue is full — the spin was already consumed server-side, so tell the
+        // truth instead of "try again" forever, and leave the button spent (no retry loop).
+        else if (res.reason === 'queue_full' || res.error === 'queue_full') {
+          btn.disabled = true; btn.textContent = 'SPIN UNAVAILABLE';
+          msg.textContent = 'The prize queue is full right now — spins reopen as claims clear. Your spin was used.';
+        }
         else { btn.disabled = false; btn.textContent = 'SPIN'; msg.textContent = 'Spin failed — try again.'; }
         return;
       }

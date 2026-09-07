@@ -117,11 +117,29 @@ function activeHeartBuff(wallet, nowMs) {
 }
 
 function storePath() { return path.join(process.env.DATA_DIR || '/data', 'nq-rewards.json'); }
+// F13: /api/nq/wheel/status alone calls load() 5-7 times per request (canSpin, bonusAvailable,
+// pendingCount, odds, previewRoom, activePass, raffleEntries, activeHeartBuff) — each a sync
+// readFileSync+JSON.parse of the whole store (124ms/call measured at 28.8k wallets). Memoize the
+// parsed object for a short window; any save() in this process invalidates it immediately so a
+// grant/spin is never served stale. Response shapes are unchanged — this only cuts redundant reads.
+const LOAD_CACHE_MS = 2000;
+let _cache = null, _cacheAt = 0;
 function load() {
-  try { const o = JSON.parse(fs.readFileSync(storePath(), 'utf8')); return o && typeof o === 'object' ? o : {}; }
-  catch (e) { return {}; }
+  const now = Date.now();
+  if (_cache && (now - _cacheAt) < LOAD_CACHE_MS) return _cache;
+  let o;
+  try { o = JSON.parse(fs.readFileSync(storePath(), 'utf8')); o = o && typeof o === 'object' ? o : {}; }
+  catch (e) { o = {}; }
+  _cache = o; _cacheAt = now;
+  return o;
 }
-function save(o) { try { require("../lib/atomic-write").atomicWriteFileSync(storePath(), JSON.stringify(o)); return true; } catch (e) { return false; } }
+function save(o) {
+  try {
+    require("../lib/atomic-write").atomicWriteFileSync(storePath(), JSON.stringify(o));
+    _cache = o; _cacheAt = Date.now();   // F13: keep the cache in step with our own writes
+    return true;
+  } catch (e) { return false; }
+}
 function utcDay(ts) { return new Date(ts == null ? Date.now() : ts).toISOString().slice(0, 10); }
 
 // ---- pending queue ------------------------------------------------------
@@ -212,6 +230,13 @@ function spin(wallet, nowMs, opts) {
   // same store, records the used spin below). It can only be drawn from the VIP table, so a free
   // wallet never lands here.
   let pass = null, entries = null, buff = null, pending;
+  // F15: queueFull tracks a reserve-item draw landing on an already-full queue (20 pending). It used
+  // to return early here — BEFORE the daily/bonus flag below was ever written — so the spin was never
+  // consumed: a free wallet (100% queue items) got the same "Spin failed" message forever, and a VIP
+  // could just call spin() again for a free re-roll, which quietly breaks the wheel's declared
+  // wedge-size-is-real-odds honesty. It now falls through so the spin is marked used exactly once
+  // regardless of which branch it took, same as every other outcome.
+  let queueFull = false;
   if (item === 'preview') {
     const gp = grantPass(w, nowMs);
     if (!gp.ok) return { ok: false, error: gp.error, nextSpinAt: nextSpinAt(nowMs) };
@@ -230,13 +255,30 @@ function spin(wallet, nowMs, opts) {
     pending = pendingCount(w);
   } else {
     const g = grant(w, item, nowMs);
-    if (!g.ok) return { ok: false, error: g.error, nextSpinAt: nextSpinAt(nowMs) };
-    pending = g.pending;
+    if (!g.ok) {
+      // F15: queue_full is the only expected grant() failure on a real wallet; anything else
+      // (bad item id) is a bug, not a player-facing state, so keep refusing without consuming.
+      if (g.error !== 'queue_full') return { ok: false, error: g.error, nextSpinAt: nextSpinAt(nowMs) };
+      queueFull = true;
+      pending = MAX_PENDING;
+    } else {
+      pending = g.pending;
+    }
   }
+  // F15: this write is now reached on EVERY outcome (including queue_full), so a spin — daily or
+  // bonus — is consumed exactly once per call no matter which branch above ran.
   const s = load();
   if (daily) { s.spins = s.spins || {}; s.spins[w] = utcDay(nowMs); }
   else { s.bonus = s.bonus || {}; s.bonus[w] = bonusWindowKey(nowMs); }
   save(s);
+  if (queueFull) {
+    // F15: distinct reason so the client can show "queue is full, come back later" instead of a
+    // generic failure; `error` is kept too for callers still matching on it. The alternative the
+    // owner may prefer instead of consuming the spin here is re-picking from non-queue prizes —
+    // left as a follow-up, not implemented, since that changes the published odds table.
+    return { ok: false, reason: 'queue_full', error: 'queue_full', prize: item, pending: pending,
+      nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs), bonusAvailable: bonusAvailable(w, nowMs) };
+  }
   return { ok: true, prize: item, pass: pass, entries: entries, buff: buff, bonus: !!bonus, pending: pending, nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs), bonusAvailable: bonusAvailable(w, nowMs) };
 }
 // Published odds (shown on the wheel — provably-honest since it's server-authoritative + declared).
