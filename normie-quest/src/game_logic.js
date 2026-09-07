@@ -2385,6 +2385,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
          // LAB-only physics-health probe: counts NaN-position/velocity bodies (a single NaN body
          // poisons Arcade's RTree broad-phase → ALL overlaps silently fail — coins, damage, etc).
          // __NQ_COINGRAB teleports the player onto a coin so a caller can confirm overlap fires.
+         // Visual-gate lab hook (2026-09-07): the gravemite surface is a miniworm turret, and F11's
+         // rise/hold timing made "which pose is on screen when the shot is taken" a coin flip across
+         // machines (CI diffed 7.6% against a baseline captured 2 s earlier on this box). Freeze every
+         // turret fully UP so the capture is the same pose every time; 'frozen' matches no branch in
+         // miniwormTick, so nothing moves or fires until the level restarts.
+         window.__NQ_MWFREEZE=function(){ try{ var n=0; if(_sc.miniworms) _sc.miniworms.children.iterate(function(mw){ if(!mw||!mw.active) return; _sc.tweens.killTweensOf(mw); mw.y=mw.upY; mw.setVisible(true); mw.mwState='frozen'; mw.mwFireAt=0; mw.mwNextAt=Infinity; n++; }); return n; }catch(e){ return -1; } };
          window.__NQ_PHYS=function(){ try{ var w=_sc.physics.world,nan=0; w.bodies.iterate(function(b){ if(b&&(!isFinite(b.x)||!isFinite(b.y)||!isFinite(b.velocity.x)||!isFinite(b.velocity.y))) nan++; }); return {nan:nan, total:w.bodies.size, coins:(_sc.coins?_sc.coins.countActive(true):-1), lives:_sc.lives}; }catch(e){ return {err:String(e)}; } };
          window.__NQ_COINGRAB=function(){ try{ var fc=null; _sc.coins.children.iterate(function(c){ if(c&&c.active&&!fc) fc=c; }); if(!fc) return {err:'nocoin'}; var before=_sc.coins.countActive(true); _sc.player.body.reset(fc.x,fc.y); _sc.player.x=fc.x; _sc.player.y=fc.y; return {before:before, at:[Math.round(fc.x),Math.round(fc.y)]}; }catch(e){ return {err:String(e)}; } };
          // LAB-only designer levers: grant the level key / land one boss hit (test boss fights &
