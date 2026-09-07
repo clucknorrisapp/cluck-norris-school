@@ -330,6 +330,9 @@ jobs:
       # CI off the aggregators' APIs.
       - name: Listing Checkup routes (offline)
         run: node scripts/listing-checkup-routes-test.cjs
+      # Launch checklist 18: the airdrop signup honeypot swallows bot posts without storing them.
+      - name: Airdrop signup honeypot (offline)
+        run: node scripts/airdrop-collect-honeypot-test.cjs
       # The lock-and-earn page's post-lock "announce on X" card only appears after a real
       # signature, which no test can produce; this drives it through its test hook and checks the
       # post is built from config numbers, stays under 280, hides dollars when the price is
