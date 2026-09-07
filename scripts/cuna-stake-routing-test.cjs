@@ -95,16 +95,27 @@ t("host matching is exact — an alias is not a suffix rule", () => {
   // substring test, lock.cunatoken.com.attacker.tld would inherit the WAF exemption.
   const m = SRC.match(/const isStakeHost = \(req\) => ([^;]+);/);
   assert.ok(m, "isStakeHost moved");
+  // F12 (2026-09-07): the host comes from rawHost(req) — the TCP Host header, lowercased, port
+  // stripped — never req.hostname, which Express derives from X-Forwarded-Host under trust proxy.
+  const rh = SRC.match(/const rawHost = \(req\) => ([^;]+);/);
+  assert.ok(rh, "rawHost moved");
+  assert.ok(/req\.headers/.test(rh[1]) && !/hostname/.test(rh[1]), "rawHost must read the raw Host header, not req.hostname");
   const hosts = stakeHosts();
   // eslint-disable-next-line no-new-func
-  const isStakeHost = new Function("CUNA_STAKE_HOSTS", "req", "return " + m[1] + ";")
-    .bind(null, hosts);
-  assert.strictEqual(isStakeHost({ hostname: "LOCK.CunaToken.com" }), true, "host match is case-sensitive");
-  for (const bad of ["lock.cunatoken.com.attacker.tld", "evil-lock.cunatoken.com",
-                     "cunatoken.com", "lock.cunatoken.com:8080", ""]) {
-    assert.strictEqual(isStakeHost({ hostname: bad }), false, `${bad} was treated as a staking host`);
+  const rawHost = new Function("req", "return " + rh[1] + ";");
+  // eslint-disable-next-line no-new-func
+  const isStakeHost = new Function("CUNA_STAKE_HOSTS", "rawHost", "req", "return " + m[1] + ";")
+    .bind(null, hosts, rawHost);
+  const withHost = (h) => ({ headers: { host: h } });
+  assert.strictEqual(isStakeHost(withHost("LOCK.CunaToken.com")), true, "host match is case-insensitive on the raw header");
+  assert.strictEqual(isStakeHost(withHost("lock.cunatoken.com:8080")), true, "a port suffix on the raw Host is stripped");
+  for (const bad of ["lock.cunatoken.com.attacker.tld", "evil-lock.cunatoken.com", "cunatoken.com", ""]) {
+    assert.strictEqual(isStakeHost(withHost(bad)), false, `${bad} was treated as a staking host`);
   }
-  assert.strictEqual(isStakeHost({}), false, "a missing hostname was treated as a staking host");
+  assert.strictEqual(isStakeHost({}), false, "a missing Host was treated as a staking host");
+  // the spoof itself: a forged X-Forwarded-Host must not make a request look like the staking host
+  assert.strictEqual(isStakeHost({ hostname: "lock.cunatoken.com", headers: { host: "clucknorris.app", "x-forwarded-host": "lock.cunatoken.com" } }), false,
+    "X-Forwarded-Host (req.hostname) must not be consulted");
 });
 
 t("the staging marking is mounted ABOVE the host routers", () => {

@@ -39,6 +39,32 @@ function ok(name, cond, detail) {
   else { fail++; console.log('  FAIL  ' + name + (detail ? '\n          ' + detail : '')); }
 }
 
+// ---- pick the level with the most timer-driven hazards, straight from LEVELS ------------------
+// (mirrors the LEVELS extraction in nq-geometry-check.cjs / nq-verify.cjs — pure data, no browser).
+// Picked programmatically rather than hand-typed so a level rebalance can't silently point this
+// at an empty level: snipers/miniworms/pullerRugs/rugPlats are exactly the per-enemy timer groups
+// resumeGame()'s allowlist has to rebase (P11 in the 2026-09-06 deep dive).
+function pickHazardLevel() {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'game_logic.js'), 'utf8');
+  const start = src.indexOf('var LEVELS=[');
+  const open = src.indexOf('[', start);
+  let depth = 0, end = -1;
+  for (let i = open; i < src.length; i++) {
+    const c = src[i];
+    if (c === '[') depth++; else if (c === ']') { depth--; if (!depth) { end = i; break; } }
+  }
+  const H = 270, TILE = 24, W = 480, GY = H - TILE;
+  const levels = new Function('H', 'TILE', 'W', 'GY', 'return ' + src.slice(open, end + 1) + ';')(H, TILE, W, GY);
+  let best = { idx: 0, score: -1 };
+  levels.forEach((lv, i) => {
+    if (!lv || lv.boss) return;   // a boss level's own timers are scene-level fields, already rebased
+    const rangedOrTimed = (lv.enemies || []).filter(e => ['sniper', 'drillbit', 'laserbot', 'mevdrone'].includes(e[0])).length;
+    const score = rangedOrTimed + (lv.miniworms || []).length + (lv.pullerRugs || []).length + (lv.rugplats || []).length;
+    if (score > best.score) best = { idx: i, score, name: lv.name };
+  });
+  return best;
+}
+
 function chromePath() {
   const root = process.env.PLAYWRIGHT_CHROMIUM_PATH || process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
   if (fs.existsSync(root) && fs.statSync(root).isFile()) return root;
@@ -194,6 +220,101 @@ async function pauseHotspot(page) {
     ok('resuming on THROW (F) does NOT spend a Solana disc',
        afterResume && afterResume.throwAmmo === ammoBefore,
        'ammo ' + ammoBefore + ' -> ' + (afterResume && afterResume.throwAmmo));
+  }
+
+  // ---- 9.7: PAUSE-REBASE REGRESSION ----------------------------------------------------------
+  // P11 (2026-09-06 deep dive): Phaser's Clock keeps advancing `this.time.now` even while
+  // `time.paused` is true (it stamps `now` BEFORE checking paused), so every raw `now > deadline`
+  // check in the boss/enemy/hazard machines kept counting through a pause. resumeGame() rebases
+  // every live deadline by the paused span — but the ORIGINAL fix only matched scene-level field
+  // NAMES (.../(Until|At|T0|Cool)$|Next[A-Z]/ on `Object.keys(this)`), which reaches almost no
+  // PER-OBJECT field (an enemy's own `nextFire`, a rugPlat's `crumbleAt`, a miniworm's `mwNextAt`
+  // live on the enemy/plat/worm object, not on the scene) — so those stayed stale across a pause
+  // and all fired together on the very first frame back. game_logic.js now carries an explicit
+  // named allowlist per group (enemies/miniworms/pullerRugs/rugPlats/movers/npcs/waterMonsters/
+  // dumpZones/drainDeck/slots/cascade, plus `_rkNext`/`_dnNext`/`_rkDust`) alongside the generic
+  // scene-field pass — this guards that allowlist from silently narrowing again.
+  //
+  // WHAT THIS CAN AND CANNOT PROVE. No lab hook exposes a generic per-enemy deadline (only the
+  // single "boss" handle's position/texture is exposed, via __NQ_DBG().bossSprite — every OTHER
+  // group's timers listed above have no reader at all). So this cannot read `nextFire` off a
+  // sniper directly; it uses the best OBSERVABLE proxy available today, stated as best-effort per
+  // the task: __NQ_PHYS().total (live physics-body count — already built for exactly this class of
+  // "something is silently poisoned/misbehaving" check, see its own comment). The invariant that
+  // must hold regardless of the fix's exact mechanism: resuming after a LONG real-world pause must
+  // not spawn more bodies on the very next frame than resuming after a near-instant one — if the
+  // per-enemy allowlist regresses, every overdue sniper/drillbit/miniworm fires AT ONCE on that
+  // frame, and each shot is a new physics body, so the long-pause delta spikes while the
+  // short-pause delta (nothing had time to go overdue) stays near zero.
+  console.log('\npause-rebase — does resuming after a LONGER pause spawn a burst of extra bodies? (P11)\n');
+  const hazardLv = pickHazardLevel();
+  console.log('  test level: ' + hazardLv.name + ' (idx ' + hazardLv.idx + ', hazard score ' + hazardLv.score + ')');
+
+  async function pauseResumeBodyDelta(pauseMs) {
+    await page.evaluate(i => window.__NQ_STARTLEVEL(i, 0), hazardLv.idx);
+    await sleep(900);                                            // let the level finish settling
+    const before = await page.evaluate(() => window.__NQ_PHYS && window.__NQ_PHYS());
+    await page.evaluate(() => window.__NQ_PAUSE && window.__NQ_PAUSE());
+    await sleep(pauseMs);
+    await page.evaluate(() => window.__NQ_RESUME && window.__NQ_RESUME());
+    // read on the very next tick this process gets, not after an extra settle — the burst (if any)
+    // is a first-frame effect and would be masked by giving the game more frames to clear it.
+    const after = await page.evaluate(() => window.__NQ_PHYS && window.__NQ_PHYS());
+    return { before, after, delta: (before && after) ? after.total - before.total : null };
+  }
+
+  const shortRun = await pauseResumeBodyDelta(60);      // barely a pause: nothing should be overdue
+  const longRun = await pauseResumeBodyDelta(4500);     // long enough that a stale deadline WOULD trip
+
+  console.log('  short pause (60ms):   bodies ' + (shortRun.before && shortRun.before.total) + ' -> '
+    + (shortRun.after && shortRun.after.total) + '  (Δ' + shortRun.delta + ')');
+  console.log('  long  pause (4500ms): bodies ' + (longRun.before && longRun.before.total) + ' -> '
+    + (longRun.after && longRun.after.total) + '  (Δ' + longRun.delta + ')');
+
+  ok('resuming after a long pause does not burst-spawn extra bodies vs a near-instant pause '
+     + '(proxy for "no per-enemy timer fires early" — see the file header for why this is a proxy, not a direct read)',
+     shortRun.delta != null && longRun.delta != null && longRun.delta <= shortRun.delta + 4,
+     'short Δ=' + shortRun.delta + ', long Δ=' + longRun.delta + ' (long must track short, not spike)');
+  ok('no physics body went NaN across the long pause/resume (a single poisoned body silently kills ALL overlaps)',
+     longRun.after && longRun.after.nan === 0, 'nan=' + (longRun.after && longRun.after.nan));
+
+  // Secondary, more literal reading of the task ("position/texture unchanged on frame 1"): the ONE
+  // enemy whose position AND texture a lab hook does expose is the boss (__NQ_DBG().bossSprite).
+  // Weaker signal than the body-count proxy above — the boss's OWN deadlines (this.kolNextShill
+  // etc.) are scene-level fields already covered by the generic regex, so this mainly guards the
+  // boss's rendering staying frozen across a pause, not the per-enemy-group allowlist — kept as a
+  // second, independent check rather than the only one.
+  {
+    const bossLv = (() => {
+      const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'game_logic.js'), 'utf8');
+      const start = src.indexOf('var LEVELS=[');
+      const open = src.indexOf('[', start);
+      let depth = 0, end = -1;
+      for (let i = open; i < src.length; i++) { const c = src[i]; if (c === '[') depth++; else if (c === ']') { depth--; if (!depth) { end = i; break; } } }
+      const H = 270, TILE = 24, W = 480, GY = H - TILE;
+      const levels = new Function('H', 'TILE', 'W', 'GY', 'return ' + src.slice(open, end + 1) + ';')(H, TILE, W, GY);
+      const i = levels.findIndex(l => l && l.boss && l.bossType && l.bossType !== 'wormhole');
+      return { idx: i < 0 ? 2 : i, name: (i < 0 ? levels[2] : levels[i]).name };
+    })();
+    console.log('  boss level: ' + bossLv.name + ' (idx ' + bossLv.idx + ')');
+    await page.evaluate(i => window.__NQ_STARTLEVEL(i, 0), bossLv.idx);
+    await sleep(1400);
+    const d0 = await page.evaluate(() => window.__NQ_DBG && window.__NQ_DBG());
+    if (d0 && d0.bossSprite && d0.bossSprite !== 'err') {
+      await page.evaluate(() => window.__NQ_PAUSE && window.__NQ_PAUSE());
+      await sleep(4500);
+      await page.evaluate(() => window.__NQ_RESUME && window.__NQ_RESUME());
+      const d1 = await page.evaluate(() => window.__NQ_DBG && window.__NQ_DBG());
+      const b0 = d0.bossSprite, b1 = d1 && d1.bossSprite;
+      ok('boss texture is unchanged on the first read after resume (no attack-state jump)',
+         !!b1 && b1 !== 'err' && b1.tex === b0.tex, 'tex ' + b0.tex + ' -> ' + (b1 && b1.tex));
+      const dx = b1 && b1 !== 'err' ? Math.abs(b1.x - b0.x) : Infinity;
+      const dy = b1 && b1 !== 'err' ? Math.abs(b1.y - b0.y) : Infinity;
+      ok('boss position has not teleported on the first read after resume (small drift only)',
+         dx <= 24 && dy <= 24, 'Δx=' + dx + ' Δy=' + dy + ' (x ' + b0.x + '->' + (b1 && b1.x) + ', y ' + b0.y + '->' + (b1 && b1.y) + ')');
+    } else {
+      console.log('  note: no boss sprite readable at idx ' + bossLv.idx + ' — skipping the position/texture check');
+    }
   }
 
   await browser.close();

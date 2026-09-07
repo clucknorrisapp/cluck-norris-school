@@ -1,14 +1,22 @@
 // Build the Normie Quest platformer HTML from src/game_logic.js (marker-based) + the base64
 // sprite/audio assets in src/assets/. Run from anywhere:  node normie-quest/src/build.js
 //
-// Emits three files into normie-quest/public/:
-//   - normie-quest-platformer.html   (CDN Phaser — the deployed game)
-//   - normie-quest-play.html          (inlined Phaser — CSP-free standalone)
+// Emits into normie-quest/public/:
+//   - normie-quest-platformer.html   (CDN Phaser — the deployed game, the only shipped output)
 //   - ../../.nq_test.html  is NOT written here; the instrumented test build lives in dev only.
+// normie-quest-play.html (inlined-Phaser standalone) is assembled in-memory for the --test build
+// only and is NOT written to public/ — it had no route and was reachable raw via the dist/
+// fallback at 12.5MB; deleted from the shipped build 2026-09-07.
 //
 // game_logic.js references sprite/audio assets by __MARKER__ tokens; this script swaps each
 // marker for the matching `data:` URI built from src/assets/<file>. If you add a new asset,
 // drop the raw base64 in src/assets/ and add its marker->file mapping to FILE_MARKERS/AUDIO_MARKERS.
+//
+// Lossless WebP re-encode (build-time only): each inlined PNG is also encoded to lossless WebP
+// via `sharp`; if the WebP result is smaller it replaces the PNG data URI (`data:image/webp;...`).
+// Every candidate is decode-verified pixel-for-pixel against the source PNG before it is used —
+// a mismatch throws and fails the build, it never silently falls back. `NQ_NO_WEBP=1` skips this
+// entirely (e.g. `sharp` unavailable) and emits the original PNG data URIs unchanged.
 const fs = require('fs');
 const path = require('path');
 
@@ -20,6 +28,12 @@ const HTML = path.join(PUBLIC, 'normie-quest-platformer.html');
 
 const deployed = fs.readFileSync(HTML, 'utf8');
 let logic = fs.readFileSync(path.join(SRC, 'game_logic.js'), 'utf8');
+
+const NO_WEBP = process.env.NQ_NO_WEBP === '1';
+let sharp = null;
+if (!NO_WEBP) {
+  try { sharp = require('sharp'); } catch (e) { sharp = null; }
+}
 
 // NEW sprites injected from a raw-base64 .b64 file in src/assets/ (prepend the data-URI prefix).
 const FILE_MARKERS = {
@@ -58,48 +72,96 @@ const FILE_MARKERS = {
   __PR_IDLE__:'char_pr_idle.b64', __PR_RUN1__:'char_pr_run1.b64', __PR_RUN2__:'char_pr_run2.b64', __PR_JUMP__:'char_pr_jump.b64', __PR_DUCK__:'char_pr_duck.b64',
   __KD_IDLE__:'char_kd_idle.b64', __KD_RUN1__:'char_kd_run1.b64', __KD_RUN2__:'char_kd_run2.b64', __KD_JUMP__:'char_kd_jump.b64', __KD_DUCK__:'char_kd_duck.b64'
 };
-for(const [marker,file] of Object.entries(FILE_MARKERS)){
-  if(!logic.includes(marker)) continue;
-  const raw = fs.readFileSync(path.join(ASSETS, file),'utf8').trim();
-  logic = logic.split(marker).join('data:image/png;base64,'+raw);
+// Encode one PNG asset to a data URI, trying lossless WebP first (build-time only) and
+// verifying it decodes to pixel-identical RGBA before ever using it. Falls back to the plain
+// PNG data URI when webp isn't smaller, sharp is unavailable, or NQ_NO_WEBP=1 is set.
+async function encodeImageAsset(file, raw, buf) {
+  const pngUri = 'data:image/png;base64,' + raw;
+  if (!sharp) return { uri: pngUri, webp: false, origBytes: buf.length, outBytes: buf.length };
+  let webpBuf;
+  try {
+    // `exact:true` is required for byte-identical round-tripping: without it libwebp is free to
+    // rewrite RGB under fully-transparent pixels (invisible on screen, but not byte-identical),
+    // which fails the verify step below on every sprite with transparent padding.
+    webpBuf = await sharp(buf).webp({ lossless: true, exact: true }).toBuffer();
+  } catch (e) {
+    console.warn('sharp webp encode failed for', file, '-', e.message, '(keeping PNG)');
+    return { uri: pngUri, webp: false, origBytes: buf.length, outBytes: buf.length };
+  }
+  if (webpBuf.length >= buf.length) {
+    return { uri: pngUri, webp: false, origBytes: buf.length, outBytes: buf.length };
+  }
+  // Verify losslessness: decode both to raw RGBA and compare buffers exactly.
+  const [orig, webp] = await Promise.all([
+    sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+    sharp(webpBuf).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  ]);
+  const identical = orig.info.width === webp.info.width &&
+    orig.info.height === webp.info.height &&
+    orig.info.channels === webp.info.channels &&
+    orig.data.equals(webp.data);
+  if (!identical) {
+    throw new Error('WebP re-encode of ' + file + ' is NOT pixel-identical to the source PNG — failing the build.');
+  }
+  return { uri: 'data:image/webp;base64,' + webpBuf.toString('base64'), webp: true, origBytes: buf.length, outBytes: webpBuf.length };
 }
 
-// audio assets: same idea, audio/wav data URI
-const AUDIO_MARKERS = { __SFX_POWER__:'sfx_power.b64' };
-for(const [marker,file] of Object.entries(AUDIO_MARKERS)){
-  if(!logic.includes(marker)) continue;
-  const raw = fs.readFileSync(path.join(ASSETS, file),'utf8').trim();
-  logic = logic.split(marker).join('data:audio/wav;base64,'+raw);
+async function main() {
+  let webpCount = 0, origBytesTotal = 0, outBytesTotal = 0, candidates = 0;
+  for (const [marker, file] of Object.entries(FILE_MARKERS)) {
+    if (!logic.includes(marker)) continue;
+    candidates++;
+    const raw = fs.readFileSync(path.join(ASSETS, file), 'utf8').trim();
+    const buf = Buffer.from(raw, 'base64');
+    const { uri, webp, origBytes, outBytes } = await encodeImageAsset(file, raw, buf);
+    if (webp) webpCount++;
+    origBytesTotal += origBytes;
+    outBytesTotal += outBytes;
+    logic = logic.split(marker).join(uri);
+  }
+  if (sharp) {
+    const savedPct = origBytesTotal ? ((origBytesTotal - outBytesTotal) / origBytesTotal * 100).toFixed(1) : '0.0';
+    console.log(`webp: ${webpCount}/${candidates} images converted, ${origBytesTotal} -> ${outBytesTotal} decoded bytes (-${savedPct}%)`);
+  } else {
+    console.log('webp: skipped (' + (NO_WEBP ? 'NQ_NO_WEBP=1' : 'sharp not installed') + ') — PNG data URIs unchanged');
+  }
+
+  // audio assets: same idea, audio/wav data URI
+  const AUDIO_MARKERS = { __SFX_POWER__:'sfx_power.b64' };
+  for(const [marker,file] of Object.entries(AUDIO_MARKERS)){
+    if(!logic.includes(marker)) continue;
+    const raw = fs.readFileSync(path.join(ASSETS, file),'utf8').trim();
+    logic = logic.split(marker).join('data:audio/wav;base64,'+raw);
+  }
+
+  // splice: keep the deployed file's <head> up to & including the Phaser <script>, then our game.
+  // Phaser is vendored same-origin (/vendor/phaser-3.60.0.min.js) — SRI still validates the bytes.
+  // NOTE: must match the tag in normie-quest-platformer.html EXACTLY (incl. the SRI attributes) —
+  // build.js splices the head at this tag, so a mismatch throws "phaser CDN tag not found".
+  const cdnTag = '<script src="/vendor/phaser-3.60.0.min.js" integrity="sha384-bcpiSslshEqIfUoxXWFNw7kqGDrRhwSYbr2IHOzGmD5dX3pDoM89ZGkqW9qFP0Ks" crossorigin="anonymous"></script>';
+  const cut = deployed.indexOf(cdnTag);
+  if(cut < 0) throw new Error('phaser CDN tag not found in deployed HTML');
+  const headBody = deployed.slice(0, cut + cdnTag.length);
+
+  const out = headBody + '\n<script>\n' + logic.trim() + '\n</script>\n</body>\n</html>\n';
+  fs.writeFileSync(HTML, out);
+  console.log('wrote', path.relative(ROOT, HTML), '('+out.length+' bytes)');
+
+  // --- inlined-Phaser build (CSP-free standalone) ---
+  // ONE vendored Phaser: the same bytes the served build loads via the SRI-pinned /vendor tag.
+  const phaser = fs.readFileSync(path.join(ROOT, 'public', 'vendor', 'phaser-3.60.0.min.js'), 'utf8');
+  const inlineHead = headBody.replace(cdnTag, '<script>\n'+phaser+'\n</script>');
+  const play = inlineHead + '\n<script>\n' + logic.trim() + '\n</script>\n</body>\n</html>\n';
+
+  // --- optional instrumented test build (window.__PG) for headless testing ---
+  // Writes only when a --test flag is passed, to a path you choose (default: repo root .nq_test.html).
+  if(process.argv.includes('--test')){
+    let test = play.replace('new Phaser.Game({', 'window.__PG=new Phaser.Game({');
+    if(!test.includes('window.__PG=new Phaser.Game(')) throw new Error('could not inject __PG capture');
+    const testPath = path.join(ROOT, '.nq_test.html');
+    fs.writeFileSync(testPath, test);
+    console.log('wrote', path.relative(ROOT, testPath), '(instrumented)');
+  }
 }
 
-// splice: keep the deployed file's <head> up to & including the Phaser <script>, then our game.
-// Phaser is vendored same-origin (/vendor/phaser-3.60.0.min.js) — SRI still validates the bytes.
-// NOTE: must match the tag in normie-quest-platformer.html EXACTLY (incl. the SRI attributes) —
-// build.js splices the head at this tag, so a mismatch throws "phaser CDN tag not found".
-const cdnTag = '<script src="/vendor/phaser-3.60.0.min.js" integrity="sha384-bcpiSslshEqIfUoxXWFNw7kqGDrRhwSYbr2IHOzGmD5dX3pDoM89ZGkqW9qFP0Ks" crossorigin="anonymous"></script>';
-const cut = deployed.indexOf(cdnTag);
-if(cut < 0) throw new Error('phaser CDN tag not found in deployed HTML');
-const headBody = deployed.slice(0, cut + cdnTag.length);
-
-const out = headBody + '\n<script>\n' + logic.trim() + '\n</script>\n</body>\n</html>\n';
-fs.writeFileSync(HTML, out);
-console.log('wrote', path.relative(ROOT, HTML), '('+out.length+' bytes)');
-
-// --- inlined-Phaser build (CSP-free standalone) ---
-// ONE vendored Phaser: the same bytes the served build loads via the SRI-pinned /vendor tag.
-const phaser = fs.readFileSync(path.join(ROOT, 'public', 'vendor', 'phaser-3.60.0.min.js'), 'utf8');
-const inlineHead = headBody.replace(cdnTag, '<script>\n'+phaser+'\n</script>');
-const play = inlineHead + '\n<script>\n' + logic.trim() + '\n</script>\n</body>\n</html>\n';
-const playPath = path.join(PUBLIC, 'normie-quest-play.html');
-fs.writeFileSync(playPath, play);
-console.log('wrote', path.relative(ROOT, playPath));
-
-// --- optional instrumented test build (window.__PG) for headless testing ---
-// Writes only when a --test flag is passed, to a path you choose (default: repo root .nq_test.html).
-if(process.argv.includes('--test')){
-  let test = play.replace('new Phaser.Game({', 'window.__PG=new Phaser.Game({');
-  if(!test.includes('window.__PG=new Phaser.Game(')) throw new Error('could not inject __PG capture');
-  const testPath = path.join(ROOT, '.nq_test.html');
-  fs.writeFileSync(testPath, test);
-  console.log('wrote', path.relative(ROOT, testPath), '(instrumented)');
-}
+main().catch(e => { console.error(e); process.exit(1); });
