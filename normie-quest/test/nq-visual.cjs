@@ -69,7 +69,7 @@ function chromePath() {
 // build; the rest are the HARD GATE.
 //   - TEXT surfaces (title, hud) are advisory: the arcade font (Press Start 2P, from Google Fonts)
 //     rasterises a few % differently per machine (measured: title 6.8%, hud 4.7% CI-vs-dev).
-//   - CHARACTER surfaces are advisory FOR NOW: the player spawns mid-air and physics-settles, so a
+//   - CHARACTER surfaces WERE advisory (until 2026-09-07 — see freeze:'player' below; hard gates now): the player spawns mid-air and physics-settles, so a
 //     capture at a fixed wall-clock time catches a slightly different pose depending on the machine's
 //     timing — in CI the same unchanged game swung a char surface 0% → 4.4% between runs, tripping a
 //     hard gate on nothing. Making them deterministic (settle + freeze the player before the shot,
@@ -85,9 +85,9 @@ const SURFACES = [
   // and shipped unseen. Advisory (text-heavy, font-noisy across machines); the char gate hard-catches
   // the same res regression, so this stays informational rather than a flaky blocker.
   { name: 'hud',             char: 'normie',    url: '/normie-quest-x7?room=scary&at=200',  clip: { x: 0, y: 0, w: 1, h: 0.24 }, advisory: true, thresh: 2.0 },
-  { name: 'char-normie',     char: 'normie',    url: '/normie-quest-x7?room=scary&at=200',  rect: 'player', pad: { x: 0.10, y: 0.13 }, advisory: true, thresh: 4.0 },
-  { name: 'char-princess',   char: 'princess',  url: '/normie-quest-x7?room=scary&at=200',  rect: 'player', pad: { x: 0.10, y: 0.13 }, advisory: true, thresh: 4.0 },
-  { name: 'char-lilnormie',  char: 'lilnormie', url: '/normie-quest-x7?room=scary&at=200',  rect: 'player', pad: { x: 0.10, y: 0.13 }, advisory: true, thresh: 4.0 },
+  { name: 'char-normie',     char: 'normie',    url: '/normie-quest-x7?room=scary&at=200',  rect: 'player', pad: { x: 0.10, y: 0.13 }, thresh: 4.0, freeze: 'player' },
+  { name: 'char-princess',   char: 'princess',  url: '/normie-quest-x7?room=scary&at=200',  rect: 'player', pad: { x: 0.10, y: 0.13 }, thresh: 4.0, freeze: 'player' },
+  { name: 'char-lilnormie',  char: 'lilnormie', url: '/normie-quest-x7?room=scary&at=200',  rect: 'player', pad: { x: 0.10, y: 0.13 }, thresh: 4.0, freeze: 'player' },
   // The gravemite turret — the creature that shipped with a black box baked around it. Stationary,
   // sits low with a tall mostly-transparent frame, so a fixed clip on the visible burst frames it
   // better than its padded bounding box would.
@@ -122,6 +122,13 @@ async function capture(ctx, s) {
   } else {
     // room=* auto-boots into the level; let the intro banner settle so it isn't mid-fade
     await sleep(1600);
+  }
+  if (s.freeze === 'player') {
+    // Deterministic pose: __NQ_PLAYERFREEZE parks the player on the ground in the idle frame so the
+    // character surfaces no longer depend on where physics-settling is when the shot is taken.
+    const n = await page.evaluate(() => { try { return window.__NQ_PLAYERFREEZE ? window.__NQ_PLAYERFREEZE() : -2; } catch (e) { return -3; } });
+    if (!(n > 0)) throw new Error(`__NQ_PLAYERFREEZE found no player (${n}) — game not in a level?`);
+    await sleep(600);
   }
   if (s.freeze === 'miniworms') {
     // Deterministic pose: the gravemite is a miniworm turret whose rise/hold cycle (F11, 2026-09-07)

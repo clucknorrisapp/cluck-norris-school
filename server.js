@@ -2451,6 +2451,9 @@ function tgCommandReply(cmd, arg) {
       return `🛟 <b>LP Rescue</b> — can't find your LP position in the app? We search the blockchain directly (Meteora, Orca, Raydium), show what's really there, and build a withdrawal your own wallet signs. Free, non-custodial.\n${link("/lp-rescue")}`;
     case "bags":
       return `🎒 <b>Bags.fm</b> — live launches, near-grad &amp; recently graduated\n${link("/bags")}`;
+    case "listing":
+    case "listingcheckup":
+      return `🔎 <b>Listing Checkup</b> — checks a project's listings across the aggregators against its own on-chain record, with a fix link for each mismatch\nhttps://clucknorris.app/listing-checkup`;
     case "tools":
       return `🛠 <b>The Cluck Norris Toolkit</b> — every live Solana tool\n${link("/tools")}`;
     default: // start / help / commands
@@ -2474,6 +2477,7 @@ function tgCommandReply(cmd, arg) {
         "🔥 /firepit — burn junk tokens, reclaim your SOL rent\n" +
         "🛟 /lprescue — find LP positions that aren't showing in the app, withdraw yourself\n" +
         "🎒 /bags — live Bags.fm launches\n" +
+        "🔎 /listing — check a project's listings against its on-chain record\n" +
         "🛠 /tools — every tool in one place\n" +
         "📊 /liquidity — live AMM depth &amp; positions\n" +
         "📋 /commands — show this list\n\n" +

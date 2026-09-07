@@ -2572,6 +2572,28 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
          // machines (CI diffed 7.6% against a baseline captured 2 s earlier on this box). Freeze every
          // turret fully UP so the capture is the same pose every time; 'frozen' matches no branch in
          // miniwormTick, so nothing moves or fires until the level restarts.
+         // Visual-gate lab hook (2026-09-07): the player spawns mid-air and physics-settles onto
+         // the ground over several frames, so "which frame is on screen when the shot is taken"
+         // was a coin flip per run/machine — the reason the three character surfaces stayed
+         // advisory. Snap straight to a pinned idle pose ON the ground (no waiting for physics)
+         // and hold it: gravity off, tweens killed, _frozenForShot=true makes the per-frame
+         // pose/scale/wobble block (F2/F3, in the update loop) skip the player while set, so the
+         // very next frame can't immediately overwrite the frozen pose. Mirrors __NQ_MWFREEZE.
+         window.__NQ_PLAYERFREEZE=function(){ try{
+           var p=_sc.player; if(!p||!p.body) return -1;
+           _sc.tweens.killTweensOf(p);
+           var x=(_sc._lastSafe&&_sc._lastSafe.x!=null)?_sc._lastSafe.x:p.x;
+           var animKey=_sc.charPrefix ? _sc.charPrefix+'normie' : ((_sc.moonSuit&&_sc.textures.exists('mnormie'))?'mnormie':'normie');
+           if(_sc.textures.exists(animKey)) p.setTexture(animKey);
+           p.setRotation(0);
+           var bs=_sc.charPrefix ? _sc.baseScale*Math.max(1,(36/48)*_sc.pscale.v) : _sc.baseScale*_sc.pscale.v;
+           p.setScale(bs);                        // uniform scale, same as the run/F3 branch — no squash/stretch
+           p.body.reset(x, GY);                    // recompute body bounds at this texture+scale (reset() calls updateBounds())
+           p.body.reset(x, 2*GY - p.body.bottom);  // body.bottom-to-y offset is now known; place feet exactly on GY
+           p.body.allowGravity=false;
+           _sc._frozenForShot=true;
+           return 1;
+         }catch(e){ return -1; } };
          window.__NQ_MWFREEZE=function(){ try{ var n=0; if(_sc.miniworms) _sc.miniworms.children.iterate(function(mw){ if(!mw||!mw.active) return; _sc.tweens.killTweensOf(mw); mw.y=mw.upY; mw.setVisible(true); mw.mwState='frozen'; mw.mwFireAt=0; mw.mwNextAt=Infinity; n++; }); return n; }catch(e){ return -1; } };
          window.__NQ_PHYS=function(){ try{ var w=_sc.physics.world,nan=0; w.bodies.iterate(function(b){ if(b&&(!isFinite(b.x)||!isFinite(b.y)||!isFinite(b.velocity.x)||!isFinite(b.velocity.y))) nan++; }); return {nan:nan, total:w.bodies.size, coins:(_sc.coins?_sc.coins.countActive(true):-1), lives:_sc.lives}; }catch(e){ return {err:String(e)}; } };
          window.__NQ_COINGRAB=function(){ try{ var fc=null; _sc.coins.children.iterate(function(c){ if(c&&c.active&&!fc) fc=c; }); if(!fc) return {err:'nocoin'}; var before=_sc.coins.countActive(true); _sc.player.body.reset(fc.x,fc.y); _sc.player.x=fc.x; _sc.player.y=fc.y; return {before:before, at:[Math.round(fc.x),Math.round(fc.y)]}; }catch(e){ return {err:String(e)}; } };
@@ -6564,7 +6586,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // flipping that fast read as a bounce/blur while moving (owner playtest 2026-08-15). Everyone
     // but the moon suit now holds nrun1; restore the cycle here if run2 is ever re-cut as a real
     // opposite-leg pose.
-    var baseKey = this.crouching ? 'nduck'
+    var baseKey = this._frozenForShot ? 'normie'   // visual-gate freeze: hold the idle pose (see __NQ_PLAYERFREEZE)
+                : this.crouching ? 'nduck'
                 : !onGround ? 'njump'
                 : (Math.abs(b.velocity.x)>25 ? ((!this.charPrefix && this.moonSuit) ? ((Math.floor(now/(fast?70:100))%2) ? 'nrun2':'nrun1') : 'nrun1')
                 : 'normie');

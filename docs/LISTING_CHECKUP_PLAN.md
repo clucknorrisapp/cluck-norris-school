@@ -1,5 +1,12 @@
 # Listing Checkup — build plan (owner ask 2026-09-06)
 
+> **Shipped 2026-09-07.** Live at `/listing-checkup`. Free preview covers sources 1–5 (on-chain
+> metadata, CoinGecko, GeckoTerminal, DexScreener, Jupiter) plus the Batch A checks (chain facts,
+> impersonator sweep, link health, logo spec, how-to-get-listed lines). The unified tools pass adds
+> sources 6–10 (Solscan, Rugcheck, pump.fun, CoinMarketCap, Birdeye), byte-level logo compare, and
+> the shareable report at `/listing/<mint>`. Not yet shipped: the DEXTools/Photon page-parse sources
+> (#11–12), a discovery tier, and watch mode.
+
 > "A project puts in their name, chain, contract, official website, Telegram and other info, and we
 > sleuth the internet for everywhere that contract is listed — CoinGecko, CoinMarketCap, GeckoTerminal,
 > DexScreener, DEXTools, all of them — and tell them where it is listed, where the info is correct,
