@@ -32,6 +32,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      # The build-freshness guard below rebuilds the game shell, and since batch 2 (2026-09-07)
+      # build.js encodes the sprites to lossless WebP through `sharp` (a devDependency). Without the
+      # install the build silently fell back to PNG data URIs and the guard diffed every sprite.
+      - run: npm ci --no-audit --no-fund
       # normie-quest/*.js is in this list because server.js require()s two of them at the top
       # level -- routes.js (app.use, server.js:10946) and nq-digest.js (:11862) -- with no try.
       # A parse error in either does not break Normie Quest, it stops the whole site booting,
