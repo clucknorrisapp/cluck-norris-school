@@ -97,6 +97,14 @@ t("onchain adapter reads DAS + the URI JSON into canonical fields", async () => 
   const r = await byId.onchain.read(MINT, deps);
   assert.strictEqual(r.found, true); assert.strictEqual(r.shown.website, "https://clucknorris.app"); assert.strictEqual(r.shown.x, "https://twitter.com/FireChicken007");
 });
+
+t("onchain adapter unwraps the JSON-RPC envelope heliusRpcCall returns (live 2026-09-06: every token read not-found without this)", async () => {
+  const wrapped = { ...deps, rpcCall: async (id, method, params) => ({ jsonrpc: "2.0", id, result: await deps.rpcCall(id, method, params) }) };
+  const r = await byId.onchain.read(MINT, wrapped);
+  assert.strictEqual(r.found, true); assert.ok(r.shown && r.shown.name, "name read through the envelope");
+  const errored = { ...deps, rpcCall: async () => ({ jsonrpc: "2.0", error: { code: -32000, message: "boom" } }) };
+  await assert.rejects(byId.onchain.read(MINT, errored), /rpc: boom/);
+});
 t("coingecko adapter: 404 is not-found, never an error", async () => {
   const r = await byId.coingecko.read(MINT, deps); assert.strictEqual(r.found, false);
 });
