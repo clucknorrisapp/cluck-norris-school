@@ -452,7 +452,7 @@ function lfPaint(){
     const cardLabel=grad?'📊 CHART →':'TRADE →';
     return '<a class="lf-card'+(isNew?' new':'')+'" href="'+esc(cardHref)+'" target="_blank" rel="noreferrer">'
       +'<div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">'
-      +'<div class="lf-ic">'+(img?'<img src="'+esc(img)+'" onerror="this.style.display=\'none\'"/>':esc((t.symbol||'?')[0]))+'</div>'
+      +'<div class="lf-ic">'+(img?'<img src="'+esc(img)+'" alt="" onerror="this.style.display=\'none\'"/>':esc((t.symbol||'?')[0]))+'</div>'
       +'<div style="flex:1;min-width:0">'
       +'<div class="lf-name">'+(isNew?'<span class="lf-new">🆕 NEW</span>':'')+esc(t.name||'?')+' <span class="sym">('+esc(t.symbol||'?')+')</span></div>'
       +'<div class="lf-metrics"><span style="font-weight:700;color:'+col+'">'+lab+'</span>'

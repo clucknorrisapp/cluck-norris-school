@@ -607,7 +607,7 @@ body{background:transparent;font-family:var(--body);}
           if(!toks.length){ drop.classList.remove('show'); return; }
           drop.innerHTML=toks.map(function(tk){
             return '<div class="ac-item" data-sym="'+esc(tk.symbol)+'" data-mint="'+esc(tk.mint)+'">'
-              +(tk.logo?'<img src="'+esc(tk.logo)+'" onerror="this.style.visibility=\'hidden\'"/>':'<img/>')
+              +(tk.logo?'<img src="'+esc(tk.logo)+'" alt="" onerror="this.style.visibility=\'hidden\'"/>':'<img alt=""/>')
               +'<span class="s">'+esc(tk.symbol)+'</span><span class="n">'+esc(tk.name||'')+'</span></div>';
           }).join('');
           drop.classList.add('show');

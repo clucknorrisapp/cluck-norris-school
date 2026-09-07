@@ -9016,7 +9016,11 @@ if(typeof document!=='undefined'){ (function(){
     // mirroring, which pillarboxes an iPad's 4:3 screen inside a 16:9 set and adds input lag.
     +'<div class="nqhow-sec"><div class="t">📺 ON YOUR TV</div><div class="r">open this page in the <span class="k">TV’s own browser</span> (sharpest) · or <span class="k">AirPlay / cast</span> from your tablet · pair a wallet from your phone in <span class="k">🎮 → Wallet</span></div></div>'
     +'</div>'
-    +'<button id="nqhow-go">LET’S GO ▶</button>'));
+    +'<button id="nqhow-go">LET’S GO ▶</button>'
+    +'<div style="margin-top:8px;text-align:center;font-size:8px;line-height:1.6">'
+    +'<a href="https://clucknorris.app/privacy" target="_blank" rel="noopener" style="color:#8f89b8;text-decoration:underline">Privacy</a>'
+    +' · <a href="https://clucknorris.app/terms" target="_blank" rel="noopener" style="color:#8f89b8;text-decoration:underline">Terms</a>'
+    +'</div>'));
   document.body.appendChild(btn); document.body.appendChild(wrap);
   function padOn(){ try{ return !!window.__NQ_GAMEPAD_ACTIVE; }catch(e){ return false; } }
   // F8: the '?' card is live DURING gameplay and used to leave the run simulating underneath it —
