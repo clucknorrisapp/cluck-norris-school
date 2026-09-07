@@ -87,7 +87,7 @@ try {
   changed = [...new Set(changed)];
 } catch (e) { console.error('git diff failed: ' + e.message); process.exit(2); }
 
-const plan = { syntax: true, build: false, geometry: false, state: null, smoke: false, beat: false, visual: false, bossGround: false, reason: [] };
+const plan = { syntax: true, build: false, geometry: false, state: null, smoke: false, beat: false, visual: false, bossGround: false, touchPause: false, reason: [] };
 const finish = () => {
   if (JSON_OUT) { console.log(JSON.stringify({ ref: REF, changed, plan }, null, 2)); }
 };
@@ -181,7 +181,7 @@ if (touched(GL)) {
   plan.build = true;
 
   if (!A || !B || !A.levels || !B.levels) {
-    plan.geometry = true; plan.state = 'ALL';
+    plan.geometry = true; plan.state = 'ALL'; plan.touchPause = true;
     plan.reason.push('could not parse LEVELS on both sides — assuming the worst and running everything');
   } else {
     // 1. the LEVELS data, per level
@@ -196,6 +196,17 @@ if (touched(GL)) {
     const regionNames = [...new Set([...Object.keys(RA), ...Object.keys(RB)])];
     const changedRegions = regionNames.filter(r => stripComments(RA[r] || '') !== stripComments(RB[r] || ''));
     regionClasses = [...new Set(changedRegions.map(r => REGION_CLASS[r] || 'engine'))];
+
+    // 9.4: pause/resume touch-input regressions (the joystick guard band, the resume-spends-a-disc
+    // latch) live in the Game scene, its helpers, and the DOM overlay layer (the pause card, the
+    // joystick module) — exactly the regions nq-pause-touch.cjs exercises. A change confined to
+    // an interstitial screen or a menu cannot touch either bug, so this is its own flag rather
+    // than riding on 'engine' or 'dom' membership alone (mirrors how bossGround is its own flag
+    // alongside — not folded into — the state-test decision, both in this planner and the workflow).
+    if (changedRegions.includes('Game') || changedRegions.includes('GameHelpers') || changedRegions.includes('dom')) {
+      plan.touchPause = true;
+      plan.reason.push('Game / GameHelpers / DOM layer changed — pause-touch regression test (nq-pause-touch.cjs)');
+    }
 
     if (regionClasses.includes('engine')) {
       plan.geometry = true; plan.state = 'ALL';
@@ -273,7 +284,8 @@ say('');
 const stateLabel = plan.state === 'ALL' ? ' + FULL state test (' + NLEV + (SHARD ? `, shard ${SHARD}` : '') + ')'
   : Array.isArray(plan.state) && plan.state.length ? (plan.smoke ? ' + smoke level ' + plan.state.join(', ') : ` + state test on: ${plan.state.join(', ')}`) : '';
 say('  PLAN: syntax' + (plan.build ? ' + build' : '') + (plan.geometry ? ' + geometry' : '') + stateLabel
-  + (plan.beat ? ' + beat/panel test' : '') + (plan.visual && !NO_VISUAL ? ' + visual gate' : '') + (plan.bossGround ? ' + boss-ground' : ''));
+  + (plan.beat ? ' + beat/panel test' : '') + (plan.visual && !NO_VISUAL ? ' + visual gate' : '') + (plan.bossGround ? ' + boss-ground' : '')
+  + (plan.touchPause ? ' + pause-touch' : ''));
 if (plan.state === 'ALL' && !SHARD) {
   say('');
   say('  A full run is the one that takes long. Split it across MACHINES, not agents on this box:');
@@ -318,6 +330,7 @@ if (plan.state === 'ALL' || (Array.isArray(plan.state) && plan.state.length)) {
 }
 if (plan.beat) step('beat vs wallet panel (boots its own server)', () => sh('node normie-quest/test/nq-beat-panel-test.cjs', { maxBuffer: 1 << 24 }).trim().split('\n').slice(-3).join('\n'));
 if (plan.bossGround) step('boss ground', () => sh(`node normie-quest/test/nq-boss-ground.cjs ${JSON.stringify(BASE)}`, { maxBuffer: 1 << 24 }).trim().split('\n').slice(-4).join('\n'));
+if (plan.touchPause) step('pause-touch (joystick guard band + resume latch)', () => sh(`node normie-quest/test/nq-pause-touch.cjs ${JSON.stringify(BASE)}`, { maxBuffer: 1 << 24 }).trim().split('\n').slice(-6).join('\n'));
 if (plan.visual && !NO_VISUAL) step('visual gate (regression detector, not a judge of taste)', () => sh(`node normie-quest/test/nq-visual.cjs ${JSON.stringify(BASE)}`, { maxBuffer: 1 << 24 }).trim().split('\n').slice(-8).join('\n'));
 
 say('');

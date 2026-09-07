@@ -101,7 +101,7 @@ const SURFACES = [
   // catch — the black-box creature, the res=3 HUD slide — lights up at 10%+, well clear of it.
   // The real cure is capturing this surface on a frozen frame; that is the same fix the char
   // surfaces need (see the determinism TODO below) and would let this drop back down.
-  { name: 'scary-gravemite', char: 'normie',    url: '/normie-quest-x7?room=scary&at=1040', clip: { x: 0.52, y: 0.78, w: 0.20, h: 0.21 },         thresh: 5.0 },
+  { name: 'scary-gravemite', char: 'normie',    url: '/normie-quest-x7?room=scary&at=1040', clip: { x: 0.52, y: 0.78, w: 0.20, h: 0.21 },         thresh: 5.0, freeze: 'miniworms' },
 ];
 
 async function capture(ctx, s) {
@@ -122,6 +122,13 @@ async function capture(ctx, s) {
   } else {
     // room=* auto-boots into the level; let the intro banner settle so it isn't mid-fade
     await sleep(1600);
+  }
+  if (s.freeze === 'miniworms') {
+    // Deterministic pose: the gravemite is a miniworm turret whose rise/hold cycle (F11, 2026-09-07)
+    // otherwise decides which frame the shot lands on. __NQ_MWFREEZE parks every turret fully up.
+    const n = await page.evaluate(() => { try { return window.__NQ_MWFREEZE ? window.__NQ_MWFREEZE() : -2; } catch (e) { return -3; } });
+    if (!(n > 0)) throw new Error(`__NQ_MWFREEZE froze no turrets (${n}) — game not in the scary room?`);
+    await sleep(600);
   }
   const canvas = await page.$('canvas'); const box = canvas ? await canvas.boundingBox() : null;
   let clip;

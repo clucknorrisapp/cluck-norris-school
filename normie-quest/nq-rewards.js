@@ -285,7 +285,12 @@ function spin(wallet, nowMs, opts) {
 function odds(vip) {
   const table = wheelFor(vip);
   const total = table.reduce((n, p) => n + p.weight, 0);
-  return table.map((p) => ({ item: p.item, pct: Math.round((p.weight / total) * 100) }));
+  // `weight` travels alongside `pct` so the lounge wheel can size its wedges from the RAW weights.
+  // pct is rounded per entry, so a table whose rounded percentages do not happen to sum to 100
+  // (any table where the weights are not already out of 100) would draw wedges that no longer
+  // match the real odds — the one dishonesty this wheel must not have. Additive field: every
+  // existing consumer reading {item, pct} is unaffected.
+  return table.map((p) => ({ item: p.item, pct: Math.round((p.weight / total) * 100), weight: p.weight }));
 }
 
 module.exports = { grant, pendingCount, claimOne, canSpin, nextSpinAt, spin, odds, ITEMS, wheelFor,

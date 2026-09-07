@@ -74,6 +74,30 @@ function esc(s) {
   });
 }
 
+// ---- §9.11: admin routes that ACT are POST-only ----------------------------------------------
+// Repo rule (CLAUDE.md, audit 2026-09-05): a flag-less GET on an admin route is the READ, the same
+// call with a mutating flag answers 405, and a POST goes through — so a pasted link that a chat
+// client unfurls, a crawler, or a browser prefetch can never grant VIP, wipe a shipping address or
+// reset the season. server.js owns the helper (`mutatingGetRefused`) and injects it at mount time;
+// requiring server.js from here would be a circular require.
+// EXCEPTION (owner decision): /api/nq/gate stays a GET — it is the phone panic lever.
+let _mutatingGetRefused = null;
+router.setHelpers = function (h) {
+  if (h && typeof h.mutatingGetRefused === 'function') _mutatingGetRefused = h.mutatingGetRefused;
+};
+function actGuard(req, res, flags) {
+  if (_mutatingGetRefused) return _mutatingGetRefused(req, res, flags);
+  // Fail CLOSED when the router is mounted without server.js (a test harness, a future embed):
+  // refuse the mutating GET rather than quietly performing it.
+  if (req.method === 'POST') return false;
+  const q = req.query || {};
+  const hit = flags.filter((f) => q[f] != null && q[f] !== '');
+  if (!hit.length) return false;
+  res.setHeader('Allow', 'GET, POST');
+  res.status(405).json({ ok: false, error: hit.join(', ') + ' changes state — send it as a POST (a GET here is read-only)' });
+  return true;
+}
+
 // Serves the side-scrolling platformer (real Normie character + JEET enemy).
 // The original coin-grabber prototype (normie-quest.html) was removed 2026-09-02 — it was
 // served by nothing; git history keeps it. Still hidden: unguessable URL, noindex, linked nowhere.
@@ -358,11 +382,14 @@ router.post('/api/nq/wallet/verify', async (req, res) => {
 // ULTRA VIP allowlist admin (owner only): grant/revoke wallets that qualified via big buys,
 // token locks, burns, or SOL payments — the paths not yet automated. ?add= / ?remove= / list.
 // ⚠ ALL VIP terms are TESTING-ONLY (owner-to-confirm); never publish qualification numbers.
-router.get('/normie-quest-x7/vip', (req, res) => {
+// §9.11: GET = read the list; GET with &add=/&remove= = 405; POST = through. Registered on both
+// verbs so the same handler serves the read and the write.
+const vipAdmin = (req, res) => {
   // STRICT admin: env keys ONLY — adminOK also accepts the tester-known dashboard password,
   // which must NOT be able to grant ULTRA VIP (owner call 2026-07-21: VIP is owner-only).
   // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
   if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (actGuard(req, res, ['add', 'remove'])) return;   // §9.11
   try {
     let list = wallet.vipList();
     const add = String(req.query.add || '').trim(), rem = String(req.query.remove || '').trim();
@@ -370,7 +397,9 @@ router.get('/normie-quest-x7/vip', (req, res) => {
     if (rem) { const i = list.indexOf(rem); if (i !== -1) { list.splice(i, 1); wallet.vipListWrite(list); } }
     res.json({ ok: true, count: list.length, wallets: list });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
-});
+};
+router.get('/normie-quest-x7/vip', vipAdmin);
+router.post('/normie-quest-x7/vip', vipAdmin);
 // ---- 👑 VIP LOUNGE — a separate wallet-gated page for VIPs: giveaways, alpha, perks ----
 // Page: /normie-quest-x7/lounge (noindex). Feed API requires a verified session token AND the
 // VIP grant. Posts live at /data/nq-lounge.json, owner-managed via the strict-key admin below.
@@ -380,22 +409,25 @@ router.get('/normie-quest-x7/lounge', (req, res) => {
 });
 function loungePath() { return path.join(process.env.DATA_DIR || '/data', 'nq-lounge.json'); }
 function loungePosts() { try { const a = JSON.parse(fs.readFileSync(loungePath(), 'utf8')); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
-router.get('/api/nq/lounge', (req, res) => {
+router.get('/api/nq/lounge', async (req, res) => {
   // F13: this route did 5-7 sync readFileSync+JSON.parse of the whole rewards/lounge store with
   // no per-IP cap, unlike every sibling route (124ms/call measured at 28.8k wallets).
   if (throttled(req, 'lounge', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
     const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
     if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
-    if (!wallet.isVip(pk, null)) return res.status(403).json({ ok: false, error: 'not_vip' });
+    // F18: isVip(pk, null) disabled both balance paths — only the manual allowlist answered.
+    if (!(await wallet.isVipAsync(pk))) return res.status(403).json({ ok: false, error: 'not_vip' });
     res.json({ ok: true, posts: loungePosts() });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 // Owner posting (STRICT env key only, same as the VIP allowlist): &title=&body=[&tag=giveaway|alpha|perk]
 // to add; &remove=<id> to delete; bare call lists everything.
-router.get('/normie-quest-x7/lounge-admin', (req, res) => {
+// §9.11: GET = list the posts; GET with &title=/&body=/&remove= = 405; POST = through.
+const loungeAdmin = (req, res) => {
   // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
   if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (actGuard(req, res, ['title', 'body', 'remove'])) return;   // §9.11
   try {
     let posts = loungePosts();
     const title = String(req.query.title || '').slice(0, 140), body = String(req.query.body || '').slice(0, 4000);
@@ -406,7 +438,9 @@ router.get('/normie-quest-x7/lounge-admin', (req, res) => {
     require("../lib/atomic-write").atomicWriteFileSync(loungePath(), JSON.stringify(posts));
     res.json({ ok: true, count: posts.length, posts });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
-});
+};
+router.get('/normie-quest-x7/lounge-admin', loungeAdmin);
+router.post('/normie-quest-x7/lounge-admin', loungeAdmin);
 // ---- 🎁 REWARDS: wallet-bound game-boost queue + the daily VIP prize wheel -------------------
 // Winnings are IN-GAME items (disc/vial/shield), never tokens — no funds move, nothing to sign.
 // Owner/wheel grants queue per wallet; the game claims them into the Item Reserve on next login.
@@ -415,18 +449,22 @@ function strictAdmin(req) {
   return masterOK(req);
 }
 // Owner grant (STRICT key): &wallet=PUBKEY&item=disc|vial|shield ; bare call shows a wallet's queue.
-router.get('/normie-quest-x7/reward', (req, res) => {
+// §9.11: GET = read a wallet's queue or the odds; GET with &item= (the grant) = 405; POST = through.
+const rewardAdmin = (req, res) => {
   if (!strictAdmin(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (actGuard(req, res, ['item'])) return;   // §9.11
   try {
     const w = String(req.query.wallet || '').trim(), item = String(req.query.item || '').trim();
     if (w && item) return res.json(rewards.grant(w, item));
     if (w) return res.json({ ok: true, wallet: w, pending: rewards.pendingCount(w) });
     res.json({ ok: true, odds: rewards.odds() });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
-});
+};
+router.get('/normie-quest-x7/reward', rewardAdmin);
+router.post('/normie-quest-x7/reward', rewardAdmin);
 // Daily VIP wheel — player-triggered, server-authoritative (every spin wins; odds published).
 // Gated: valid session token AND VIP; one spin per UTC day per wallet.
-router.post('/api/nq/wheel/spin', (req, res) => {
+router.post('/api/nq/wheel/spin', async (req, res) => {
   try {
     if (throttled(req, 'wheelspin', 20)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
@@ -434,7 +472,7 @@ router.post('/api/nq/wheel/spin', (req, res) => {
     if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
     // Open to any VERIFIED wallet — the daily spin is the free player's reason to come back.
     // VIP is no longer a gate here, it selects the better prize table and the bonus windows.
-    const result = rewards.spin(pk, null, { vip: wallet.isVip(pk, null) });
+    const result = rewards.spin(pk, null, { vip: await wallet.isVipAsync(pk) });   // F18: was isVip(pk, null) — holder-based VIP never counted
     // The wheel outcome is decided SERVER-SIDE, so a successful spin is a safe, server-authoritative
     // place to also credit off-chain Normie Cash points. Env-gated (NQ_WHEEL_POINTS, default 0 = OFF)
     // so this changes nothing until the owner sets an amount. Idempotent by a per-spin id; the wheel's
@@ -460,13 +498,25 @@ router.get('/api/nq/ledger', (req, res) => {
     res.json({ ok: true, ...ledger.balance(pk), history: ledger.history(pk, 25) });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
-router.get('/api/nq/wheel/status', (req, res) => {
+router.get('/api/nq/wheel/status', async (req, res) => {
   // F13: same unthrottled sync-read cost as /api/nq/lounge above.
   if (throttled(req, 'wheelstatus', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
+    // ?public=1 — the WALLET-LESS read the lounge paints before anyone connects, so the signature
+    // request follows a reason instead of preceding one. STRICTLY read-only and strictly
+    // impersonal: the published odds tables (both, so "better odds" is verifiable rather than
+    // claimed) and the room featured this rotation. No session, no wallet, and deliberately NONE
+    // of the per-user fields below — no pending count, no pass, no entries, no buff, no spin
+    // timers, no VIP flag. Same per-IP throttle as the authenticated read (above).
+    if (String(req.query.public || '') === '1') {
+      const pr = rewards.previewRoom() || null;
+      return res.json({ ok: true, publicView: true,
+        odds: rewards.odds(false), memberOdds: rewards.odds(true),
+        featured: pr ? { room: pr.room, label: pr.label, emoji: pr.emoji } : null });
+    }
     const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
     if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
-    const vip = wallet.isVip(pk, null);
+    const vip = await wallet.isVipAsync(pk);   // F18: was isVip(pk, null) — holder-based VIP never counted
     const dailyReady = rewards.canSpin(pk), bonusReady = vip && rewards.bonusAvailable(pk);
     // 🎟️ Preview Pass surface: `preview` = the hidden world featured on the wheel this rotation (shown
     // to everyone, so free players see the perk they'd get); `pass` = the wallet's own active pass or null.
@@ -595,9 +645,14 @@ router.post('/api/nq/claim', async (req, res) => {
 // cutoff countdown, completed weeks with claim state + decrypted addresses (this page is the ONLY
 // place they decrypt; “mark shipped” wipes them), the suspect-run review list, and season control —
 // the archive-first reset button plus every archive the resets have written.
-router.get('/normie-quest-x7/prizes', async (req, res) => {
+// §9.11: the PAGE stays a GET (it is a browser console, and decrypting for display is its whole
+// job). The one thing on it that ACTS — &shipped=<week>:<wallet>, which permanently wipes a
+// winner's address — is refused on a GET and must be POSTed; the console's link below does that
+// with fetch. Registered on both verbs so a POST re-renders the page in the same request.
+const prizesConsole = async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   if (!masterOK(req)) return res.status(404).send('Not found');
+  if (actGuard(req, res, ['shipped'])) return;   // §9.11 — irreversible: markShipped wipes the address
   const key = esc(String((req.query && req.query.key) || ''));
   const ago = (t) => {
     if (!t) return '—';
@@ -658,8 +713,10 @@ router.get('/normie-quest-x7/prizes', async (req, res) => {
           const a = c.addrEnc ? claims.decryptAddress(c.addrEnc) : null;
           addr = a ? esc([a.name, a.line1, a.line2, a.city, a.region, a.postal, a.country].filter(Boolean).join(', '))
                    : '<span class="dim">decrypt failed (secret rotated?)</span>';
-          st = '<a href="/normie-quest-x7/prizes?key=' + key + '&shipped=' + wk + ':' + esc(w.wallet) + '&confirm=SHIPPED" '
-             + 'onclick="return confirm(\'Mark shipped and permanently wipe the address?\')">mark shipped ✓</a>'
+          // §9.11: POST, not a link — a GET here is refused with 405, and this action is irreversible.
+          st = '<a href="#" onclick="if(!confirm(\'Mark shipped and permanently wipe the address?\'))return false;'
+             + 'fetch(\'/normie-quest-x7/prizes?key=' + key + '&shipped=' + wk + ':' + esc(w.wallet) + '&confirm=SHIPPED\''
+             + ',{method:\'POST\'}).then(function(){location.reload()});return false">mark shipped ✓</a>'
              + (c.dupAddress ? ' <b class="warn">⚠ address matches another winner</b>' : '');
         }
         return '<tr><td>#' + w.rank + '</td><td>' + esc(w.name || 'anon') + '</td><td class="mono">' + esc(w.wallet) + '</td>'
@@ -686,7 +743,7 @@ router.get('/normie-quest-x7/prizes', async (req, res) => {
       + '<p>The board holds <b>' + nRuns + '</b> runs. Reset archives every entry first (nothing is destroyed), then starts a fresh season — '
       + 'the first full prize week begins the Monday after.</p>'
       + '<button class="danger" onclick="if(confirm(\'Archive all ' + nRuns + ' runs and start a fresh season?\')&&confirm(\'Really reset the live leaderboard NOW?\'))'
-      + 'fetch(' + JSON.stringify(resetUrl) + ').then(function(r){return r.json()}).then(function(j){alert(j.ok?(\'Archived \'+j.archived+\' runs to \'+j.to):(\'Failed: \'+(j.error||\'\')));location.reload()})">'
+      + 'fetch(\'' + resetUrl + '\',{method:\'POST\'}).then(function(r){return r.json()}).then(function(j){alert(j.ok?(\'Archived \'+j.archived+\' runs to \'+j.to):(\'Failed: \'+(j.error||\'\')));location.reload()})">'
       + 'ARCHIVE + RESET SEASON</button>'
       + '<h3>Past season archives</h3><table><tr><th>ARCHIVE</th><th>RUNS</th><th></th></tr>'
       + (archRows || '<tr><td colspan="3" class="dim">No archives yet — no reset has run.</td></tr>') + '</table>';
@@ -716,20 +773,27 @@ router.get('/normie-quest-x7/prizes', async (req, res) => {
       + '<a href="/normie-quest-x7/feedback?key=' + key + '">feedback</a> · '
       + '<a href="/api/nq/claim/status">raw claim status</a></p>');
   } catch (e) { res.status(500).send('server error'); }
-});
+};
+router.get('/normie-quest-x7/prizes', prizesConsole);
+router.post('/normie-quest-x7/prizes', prizesConsole);
 
 // Owner season reset — archives every entry (volume file / PG table) THEN clears the board.
-// GET on purpose (owner fires it from a phone browser, like the wallet-watch lever); it is 404
-// without the admin key and refuses without confirm=RESET, so a crawler or prefetch can't wipe it.
-router.get('/api/nq/leaderboard/reset', async (req, res) => {
+// §9.11: the reset is now POST-only (it was a GET "so the owner can fire it from a phone"; the
+// console button below sends the POST, and a pasted/unfurled link can no longer wipe a season).
+// Flag-less GET still answers 400 with the instructions, so the URL remains self-documenting.
+// It is 404 without the master key and still refuses without confirm=RESET.
+const leaderboardReset = async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   if (!masterOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (actGuard(req, res, ['confirm'])) return;   // §9.11
   if (String((req.query && req.query.confirm) || '') !== 'RESET') {
-    return res.status(400).json({ ok: false, error: 'add &confirm=RESET to archive the current board and wipe it' });
+    return res.status(400).json({ ok: false, error: 'POST here with &confirm=RESET to archive the current board and wipe it' });
   }
   try { res.json({ ok: true, ...(await leaderboard.resetBoard()) }); }
   catch (e) { res.status(500).json({ ok: false, error: 'reset_failed_board_untouched' }); }
-});
+};
+router.get('/api/nq/leaderboard/reset', leaderboardReset);
+router.post('/api/nq/leaderboard/reset', leaderboardReset);
 
 // ---- /api/nq/gate : the LAUNCH LOCK lever (owner-keyed) --------------------
 // The whole "3 worlds now, more worlds later" switch. GET on purpose — the owner fires it from a
@@ -773,9 +837,27 @@ router.get('/api/nq/gate', (req, res) => {
 // (all players sharing a single 60/min counter). CF-Connecting-IP restores true per-visitor caps.
 // Falls back to the last XFF hop, then req.ip, when the header is absent.
 const pubRate = new Map();   // key -> {n, resetAt}
+// F12: `cf-connecting-ip` is an ordinary request header. Express runs with `trust proxy: true`, and
+// the Railway origin IP is reachable directly, so a caller who skips Cloudflare can set it (and
+// x-forwarded-for) to anything and get a fresh bucket per request — every cap below became
+// forgeable. Believe it ONLY when server.js proved the request carried the X-Cluck-Edge-Auth
+// secret, i.e. it really came through our edge:
+//   req.cluckEdgeVerified === true  → Cloudflare set the header, use it.
+//   req.cluckEdgeVerified === false → direct-to-origin (incl. the game/staking host exemptions):
+//                                     ignore every forwarded header, key on the socket address.
+//   null/undefined                  → CF_ORIGIN_SECRET unset (dev, CI, a staging box with no rule)
+//                                     or the router mounted standalone: nothing to verify against,
+//                                     so keep the pre-lockdown behaviour exactly.
 function clientIp(req) {
-  const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
-  return String(req.headers['cf-connecting-ip'] || (xff.length ? xff[xff.length - 1] : (req.ip || '?')));
+  const cf = String(req.headers['cf-connecting-ip'] || '').trim();
+  const verified = req.cluckEdgeVerified;
+  if (cf && verified !== false) return cf;
+  if (verified == null) {
+    const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (xff.length) return xff[xff.length - 1];
+    return String(req.ip || '?');
+  }
+  return String((req.socket && req.socket.remoteAddress) || req.connection && req.connection.remoteAddress || '?');
 }
 function throttled(req, bucket, max) {
   const key = bucket + ':' + clientIp(req);

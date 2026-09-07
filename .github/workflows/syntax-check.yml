@@ -32,6 +32,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      # The build-freshness guard below rebuilds the game shell, and since batch 2 (2026-09-07)
+      # build.js encodes the sprites to lossless WebP through `sharp` (a devDependency). Without the
+      # install the build silently fell back to PNG data URIs and the guard diffed every sprite.
+      - run: npm ci --no-audit --no-fund
       # normie-quest/*.js is in this list because server.js require()s two of them at the top
       # level -- routes.js (app.use, server.js:10946) and nq-digest.js (:11862) -- with no try.
       # A parse error in either does not break Normie Quest, it stops the whole site booting,
@@ -152,6 +156,12 @@ jobs:
         run: node scripts/store-multiprocess-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
+      # WORLD_ART integrity (deep dive 9.5): a level's bgArt is loaded LAZILY by key, so a typo in
+      # either direction — a level naming a key WORLD_ART doesn't have, or a WORLD_ART entry
+      # pointing at a plate file that was renamed/deleted — ships green and only shows up as a
+      # blank backdrop in front of a real player. Pure data, no browser.
+      - name: Normie Quest world-art integrity (bgArt keys <-> worlds/ files)
+        run: node normie-quest/test/nq-world-art-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —
       # a regression silently re-opens score forgery. This job installs nothing, so the four
       # telemetry cases that mount the real express router SKIP here; the smoke-test job re-runs
@@ -184,7 +194,7 @@ jobs:
       - name: Normie Quest build-freshness guard (served HTML == build(source))
         run: |
           node normie-quest/src/build.js
-          git diff --exit-code normie-quest/public/normie-quest-platformer.html normie-quest/public/normie-quest-play.html \
+          git diff --exit-code normie-quest/public/normie-quest-platformer.html \
             || (echo "::error::served HTML is stale — run node normie-quest/src/build.js and commit" && exit 1)
 
   # Renders the actual app. The checks above are all static — they cannot see a component that
@@ -324,6 +334,9 @@ jobs:
       # CI off the aggregators' APIs.
       - name: Listing Checkup routes (offline)
         run: node scripts/listing-checkup-routes-test.cjs
+      # Launch checklist 18: the airdrop signup honeypot swallows bot posts without storing them.
+      - name: Airdrop signup honeypot (offline)
+        run: node scripts/airdrop-collect-honeypot-test.cjs
       # The lock-and-earn page's post-lock "announce on X" card only appears after a real
       # signature, which no test can produce; this drives it through its test hook and checks the
       # post is built from config numbers, stays under 280, hides dollars when the price is
@@ -511,6 +524,7 @@ jobs:
       only: ${{ steps.plan.outputs.only }}
       shards: ${{ steps.plan.outputs.shards }}
       bossGround: ${{ steps.plan.outputs.bossGround }}
+      touchPause: ${{ steps.plan.outputs.touchPause }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -519,6 +533,14 @@ jobs:
         with:
           node-version: "20"
       # No npm ci: the planner is plain node + git.
+      # nq-verify.cjs's REGION_BOUNDS decide which test tier a game_logic.js change gets. If a
+      # boundary regex ever stops matching (a reworded banner comment, a renamed scene), the
+      # region it anchors silently MERGES into the region before it — no error, just a plan that
+      # quietly under-tests (e.g. losing the 'Game' boundary would downgrade tier-gate code from a
+      # full state-test run to a smoke level). Prove every boundary still matches, IN ORDER, before
+      # trusting the plan that follows.
+      - name: nq-verify self-test (REGION_BOUNDS still match game_logic.js, in order)
+        run: node normie-quest/test/nq-verify-selftest.cjs
       - name: plan the state test from the diff
         id: plan
         run: |
@@ -533,20 +555,22 @@ jobs:
             BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
           fi
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            MODE=full; ONLY=""; BOSSGROUND=true; echo "plan: no resolvable base — full run"
+            MODE=full; ONLY=""; BOSSGROUND=true; TOUCHPAUSE=true; echo "plan: no resolvable base — full run"
           else
             node normie-quest/test/nq-verify.cjs --against "$BASE" --json > /tmp/nq-plan.json
             cat /tmp/nq-plan.json
             MODE=$(node -e "const p=require('/tmp/nq-plan.json').plan;console.log(p.state==='ALL'?'full':(Array.isArray(p.state)&&p.state.length?'some':'none'))")
             ONLY=$(node -e "const p=require('/tmp/nq-plan.json').plan;console.log(Array.isArray(p.state)?p.state.join(','):'')")
             BOSSGROUND=$(node -e "console.log(!!require('/tmp/nq-plan.json').plan.bossGround)")
+            TOUCHPAUSE=$(node -e "console.log(!!require('/tmp/nq-plan.json').plan.touchPause)")
           fi
           if [ "$MODE" = "full" ]; then SHARDS='["1/6","2/6","3/6","4/6","5/6","6/6"]'; else SHARDS='["1/1"]'; fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "only=$ONLY" >> "$GITHUB_OUTPUT"
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
           echo "bossGround=$BOSSGROUND" >> "$GITHUB_OUTPUT"
-          echo "plan: mode=$MODE only='$ONLY' shards=$SHARDS bossGround=$BOSSGROUND"
+          echo "touchPause=$TOUCHPAUSE" >> "$GITHUB_OUTPUT"
+          echo "plan: mode=$MODE only='$ONLY' shards=$SHARDS bossGround=$BOSSGROUND touchPause=$TOUCHPAUSE"
 
   nq-state:
     needs: nq-state-plan
@@ -616,6 +640,42 @@ jobs:
           node server.js & echo $! > /tmp/nq_server.pid
           for i in $(seq 1 40); do curl -sf "http://localhost:3111/healthz" >/dev/null && break || sleep 2; done
           timeout 900 node normie-quest/test/nq-boss-ground.cjs http://localhost:3111
+          code=$?
+          kill "$(cat /tmp/nq_server.pid)" 2>/dev/null || true
+          exit $code
+
+  # ---- Normie Quest PAUSE-TOUCH: gate the joystick guard band + resume latch on real input -----
+  # 9.4 (2026-09-06 deep dive): nq-pause-touch.cjs was fully written, exits real pass/fail, and was
+  # never invoked. Wired the same way as nq-boss-ground above: nq-state-plan already asks
+  # nq-verify.cjs for the full plan, so it also surfaces plan.touchPause as a job output, and this
+  # job runs the harness only when the Game scene, its helpers, or the DOM overlay layer actually
+  # changed — exactly the regions the two bugs this file guards (the joystick's top-band geometry;
+  # resume-on-a-held-button spending a Solana disc; the pause-rebase timer burst) live in. A PR
+  # touching neither gets touchPause=false from nq-verify and this job is skipped entirely.
+  nq-pause-touch:
+    needs: nq-state-plan
+    if: needs.nq-state-plan.outputs.touchPause == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - name: install playwright chromium
+        run: |
+          npm i --no-save playwright@1.62.1   # pinned — see the smoke-test job
+          npx playwright install --with-deps chromium
+      - name: boot server + pause-touch check
+        env:
+          PORT: "3111"
+          # Booted with NO secrets on purpose — same reasoning as the visual/state/boss-ground
+          # jobs: no scheduler, no money path, nothing live can be reached from a level boot.
+        run: |
+          node server.js & echo $! > /tmp/nq_server.pid
+          for i in $(seq 1 40); do curl -sf "http://localhost:3111/healthz" >/dev/null && break || sleep 2; done
+          timeout 900 node normie-quest/test/nq-pause-touch.cjs http://localhost:3111
           code=$?
           kill "$(cat /tmp/nq_server.pid)" 2>/dev/null || true
           exit $code

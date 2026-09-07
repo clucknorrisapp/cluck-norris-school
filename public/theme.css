@@ -106,7 +106,7 @@ a { color: var(--orange); }
   cursor: pointer; box-shadow: 0 6px 18px rgba(232,30,14,.4); transition: transform .1s;
 }
 .ck-btn:active { transform: scale(.96); }
-.ck-btn:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+.ck-btn:disabled { background: #3a3a3f; color: #8a8a90; opacity: 1; cursor: not-allowed; box-shadow: none; }
 
 .ck-chip {
   font-family: var(--body); font-weight: 600; font-size: 13px; color: #FFD9A0;

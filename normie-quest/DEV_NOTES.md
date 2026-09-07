@@ -28,7 +28,6 @@ normie-quest/src/build.js        ← assembler.  Run:  node normie-quest/src/bui
 
 `build.js` swaps `__MARKER__` tokens in `game_logic.js` for `data:` URIs from `assets/`, then writes:
 - `normie-quest/public/normie-quest-platformer.html` — CDN Phaser, **the deployed game**
-- `normie-quest/public/normie-quest-play.html` — inlined Phaser, standalone
 - `.nq_test.html` (repo root) only with `node normie-quest/src/build.js --test` — instrumented
   build that exposes `window.__PG` for headless Playwright testing.
 

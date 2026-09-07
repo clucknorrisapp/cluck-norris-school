@@ -3376,12 +3376,43 @@ const CF_ORIGIN_SECRET = process.env.CF_ORIGIN_SECRET;
 // A different ORIGIN also means a clean localStorage: no persisted tester flags, no stale caches.
 const NQ_GAME_HOSTS = String(process.env.NQ_GAME_HOSTS || "normiequest.app,www.normiequest.app")
   .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
-const isGameHost = (req) => NQ_GAME_HOSTS.includes(String(req.hostname || "").toLowerCase());
-// The ONLY paths that exist on the game domain. Everything the game page loads or calls is under
-// these prefixes (checked against the built HTML: /vendor/phaser, /api/nq/*, /normie-quest/{music,
-// sfx,worlds}, /nq-assets, /nq-sw.js, the /normie-quest-x7* sub-pages). Keeping the list tight is
-// what makes the direct-DNS lockdown exemption below a GAME-surface exemption, not a site bypass.
-const NQ_GAME_PATH = /^\/($|\?)|^\/api\/nq\/|^\/normie-quest|^\/nq-assets\/|^\/nq-sw\.js$|^\/vendor\//;
+// F12: the TCP-level Host header, NEVER req.hostname. Express runs with `trust proxy: true`
+// (below, so the rate limiters see the real client IP), and that makes req.hostname prefer a
+// client-supplied X-Forwarded-Host. Anyone who reaches the Railway origin IP directly could
+// therefore send `X-Forwarded-Host: normiequest.app` and take the game-host exemption below
+// straight past the Cloudflare WAF. req.headers.host is the value the client actually connected
+// with and no forwarded header can move it. (`trust proxy: 1` does NOT fix this — verified.)
+const rawHost = (req) => String((req.headers && req.headers.host) || "").toLowerCase().replace(/:\d+$/, "");
+const isGameHost = (req) => NQ_GAME_HOSTS.includes(rawHost(req));
+// The ONLY paths that exist on the game domain — and, because the origin-lockdown block below
+// exempts this host from the Cloudflare edge check, the only paths a direct-to-origin caller can
+// reach on it. F12: this was a PREFIX list (`^/normie-quest`, `^/api/nq/`), so it also exempted
+// /normie-quest-x7/{prizes,vip,reward,lounge-admin,dashboard} — the PII / owner consoles — and the
+// two owner levers under /api/nq (gate, leaderboard/reset) from the WAF. Now EXHAUSTIVE and
+// anchored at both ends, like CUNA_STAKE_PATH below: one entry per surface the game shell, the
+// lounge page or the service worker actually loads or calls (derived from game_logic.js,
+// normie-quest-platformer.html and lounge.html). Anything admin-, key- or PII-shaped is absent on
+// purpose — those stay behind the WAF and are reached through clucknorris.app.
+// ⚠️ Adding a fetch to the game means adding it HERE too, or it 403s on normiequest.app once the
+// lockdown is armed. Adding a PREFIX here re-opens the hole this replaced.
+const NQ_GAME_PATH = new RegExp([
+  "^/robots\\.txt$", "^/sitemap\\.xml$",     // launch checklist 9: crawlers got a 403 here (the page is noindex; give them the answer, not a wall)
+  "^/$",                                    // the game document itself (host router below sendFiles it)
+  "^/normie-quest-x7$", "^/normie-quest-x7-lab$", "^/normie-quest-x7\\.webmanifest$",
+  "^/normie-quest-x7/lounge$",              // the VIP lounge PAGE (wallet-gated in its own API; not the -admin console)
+  "^/nq-sw\\.js$", "^/nq-assets/",           // service worker + PWA icons
+  "^/normie-quest/(music|sfx|worlds)/",     // the three express.static mounts in normie-quest/routes.js
+  "^/vendor/",                              // phaser (SRI-pinned in the shell)
+  // The public game API. Deliberately ABSENT: /api/nq/gate and /api/nq/leaderboard/reset (owner
+  // levers), /api/nq/journey and /api/nq/hotspots (dashboard reads). /feedback and /telemetry are
+  // here because the game POSTs to them; their keyed GET reads ride along and are low-trust.
+  "^/api/nq/(config|burn-tx|burn-send|shop/(session|claim)"
+    + "|run-start|run-checkpoint|run-continue|score"
+    + "|wallet/(config|challenge|verify|refresh)"
+    + "|lounge|wheel/(spin|status)|ledger|rewards/claim"
+    + "|save|promo|leaderboard|claim|claim/(status|prepare)"
+    + "|pair/(new|claim|poll|qr)|feedback|telemetry)$",
+].join("|"));
 // ── CUNA staking domain (staking.cunatoken.com, lock.cunatoken.com) ───────
 // Same shape as the game domain above: a partner-owned host pointed straight at Railway, so it
 // cannot carry the Cloudflare edge header and needs a scoped exemption from the origin lockdown.
@@ -3391,7 +3422,7 @@ const NQ_GAME_PATH = /^\/($|\?)|^\/api\/nq\/|^\/normie-quest|^\/nq-assets\/|^\/n
 // failure, but it looks like the site is down, so add the env var and the domain together.
 const CUNA_STAKE_HOSTS = String(process.env.CUNA_STAKE_HOSTS || "staking.cunatoken.com,www.staking.cunatoken.com,lock.cunatoken.com,www.lock.cunatoken.com")
   .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
-const isStakeHost = (req) => CUNA_STAKE_HOSTS.includes(String(req.hostname || "").toLowerCase());
+const isStakeHost = (req) => CUNA_STAKE_HOSTS.includes(rawHost(req));   // F12: raw Host, not req.hostname — same X-Forwarded-Host spoof as the game host above
 // ⚠️ EXHAUSTIVE, NOT A PREFIX. Every entry is anchored at both ends and names one exact surface the
 // staking page loads or calls. A loose prefix here (say /api/) would be a hole straight through the
 // WAF to every money endpoint in the app, reachable by anyone who points a DNS record at our origin
@@ -3399,6 +3430,7 @@ const isStakeHost = (req) => CUNA_STAKE_HOSTS.includes(String(req.hostname || ""
 // route that ARMS the emission is not reachable this way at any key, and is refused a second time
 // in its own handler (see cunaDirect below).
 const CUNA_STAKE_PATH = new RegExp([
+  "^/robots\\.txt$", "^/sitemap\\.xml$",     // launch checklist 9: same as the game host
   "^/$", "^/cuna-staking$",
   "^/api/cuna-stake/(config|wallet)$",
   "^/api/lock/create-tx$",              // builds the UNSIGNED lock tx; the wallet still signs it
@@ -3414,8 +3446,22 @@ const CUNA_STAKE_PATH = new RegExp([
   "^/cluck-util\\.js$", "^/cluck-wallet\\.js$",
   "^/fonts/LuckiestGuy\\.ttf$",
 ].join("|"));
+// F12: stamp EVERY request with whether it provably arrived through our Cloudflare edge, so code
+// further down (normie-quest/routes.js `clientIp`) can decide whether `cf-connecting-ip` — a plain
+// request header, trivially forged by anyone hitting the origin IP directly — is worth believing.
+//   true  = the X-Cluck-Edge-Auth secret matched: Cloudflare set the header, trust it.
+//   false = it did not: a direct-to-origin caller, every header is attacker-chosen.
+//   null  = CF_ORIGIN_SECRET is unset (dev / CI / a staging box with no rule): nothing to verify
+//           against, so behaviour stays exactly as it was before the lockdown existed.
+// Mounted unconditionally and above the lockdown so the flag exists even when the lockdown is dark.
+const cfExpectedHash = CF_ORIGIN_SECRET ? createHash("sha256").update(CF_ORIGIN_SECRET).digest("hex") : "";
+app.use((req, res, next) => {
+  req.cluckEdgeVerified = CF_ORIGIN_SECRET
+    ? createHash("sha256").update(String(req.get("x-cluck-edge-auth") || "")).digest("hex") === cfExpectedHash
+    : null;
+  next();
+});
 if (CF_ORIGIN_SECRET) {
-  const cfExpectedHash = createHash("sha256").update(CF_ORIGIN_SECRET).digest("hex");
   app.use((req, res, next) => {
     if (req.path === "/healthz") return next();
     const got = req.get("x-cluck-edge-auth") || "";
@@ -15145,6 +15191,7 @@ app.get("/memes/:file", (req, res) => {
 // POST { address, handle?, campaign? } — validate + dedupe + store. GET (admin-gated,
 // ?key=…&c=<campaign>&export=csv|json) — export the collected list; without export it
 // returns just the public count so the page can show "N wallets registered".
+let _airdropHoneypotHits = 0;
 app.post("/api/airdrop-collect", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -15153,6 +15200,13 @@ app.post("/api/airdrop-collect", async (req, res) => {
   if (!AIRDROP_CAMPAIGN_RE.test(campaign)) return res.status(400).json({ success: false, error: "Bad campaign id." });
   const address = String(b.address || "").trim();
   if (!SOL_ADDR_RE.test(address)) return res.status(400).json({ success: false, error: "That doesn't look like a Solana address — paste it again from your wallet." });
+  // Honeypot: a hidden "website" field a real visitor never sees or fills. A bot that fills
+  // every field gets the normal success shape (so it doesn't adapt) but nothing is stored.
+  if (String(b.website || "").trim()) {
+    _airdropHoneypotHits++;
+    console.log(`[airdrop-collect] honeypot tripped (total: ${_airdropHoneypotHits})`);
+    return res.status(200).json({ success: true, count: Object.keys(kv.get(airdropKey(campaign), {}) || {}).length, message: "You're on the list — if a community drop happens, your wallet is on file. No schedule, no promises. 🐔" });
+  }
   // Same on-chain guard as /api/claim: reject a mint / token account / program / exchange
   // address so the owner never airdrops into a black hole. Fails open on an RPC blip.
   const problem = await rejectNonWallet(address);
@@ -16454,7 +16508,11 @@ app.get("/curriculum", (req, res) => res.redirect(301, "/education"));
 // side project (a friend's NORMIE token game); shares nothing with CLKN code.
 // Mounted before the React catch-all so its explicit /normie-quest-x7 route wins.
 // Not in sitemap.xml (hardcoded list) and not linked anywhere — noindex/nofollow.
-app.use(require("./normie-quest/routes"));
+// §9.11: hand the NQ router the repo-wide "admin routes that ACT are POST-only" guard rather than
+// letting it grow a second copy (or require server.js back — that would be a circular require).
+const nqRouter = require("./normie-quest/routes");
+if (typeof nqRouter.setHelpers === "function") nqRouter.setHelpers({ mutatingGetRefused });
+app.use(nqRouter);
 
 // Gated dry-run / manual-fire of the Normie Quest playtest digest (the twice-daily auto-DM).
 // Dry by default (returns the preview it WOULD send); &send=1 actually DMs the operator chat;
@@ -16503,6 +16561,12 @@ app.get(["/lp-lab", "/lplab"], (req, res) => {
   try { res.type("html").send(lpLabShell()); }
   catch (e) { res.sendFile(join(__dirname, "dist", "index.html")); }   // never 500 a public page over a meta swap
 });
+
+// Content-hashed vite bundles (dist/assets/*.js, *.css, ...) are safe to cache forever —
+// a code change ships under a new filename, so the old cached copy is never stale. Mount
+// this BEFORE the general dist mount below (which still serves cluck-util.js / cluck-wallet.js
+// / cluck-gate.js and everything else with no explicit cache header, unchanged).
+app.use("/assets", express.static(join(__dirname, "dist", "assets"), { maxAge: "365d", immutable: true }));
 
 // -- Serve React app (the school) at /school + every non-root path via the catch-all --
 app.use(express.static(join(__dirname, "dist"), { index: false }));
