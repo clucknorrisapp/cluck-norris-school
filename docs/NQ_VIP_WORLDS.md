@@ -1,25 +1,35 @@
-# Normie Quest — ULTRA VIP Wing (Worlds 13–15)
+# Normie Quest — ULTRA VIP Wing (Worlds 13–21)
 
-**Status: BUILT + TESTING-ONLY (2026-07-21).** Three exclusive worlds for the project's biggest
-supporters. ⚠ **Per the standing NORMIE strategy note (CLAUDE.md): ALL gating terms are
-TESTING-ONLY. No qualification numbers, prices, or NORMIE-vs-CLKN terms may be promised on any
-public surface until the owner locks them (and the NORMIE-team agreement lands).**
+**Status: BUILT + TESTING-ONLY (2026-07-21).** Nine exclusive worlds for the project's biggest
+supporters (grew from the original 3-world wing — see the deep dive, 2026-09-06). ⚠ **Per the
+standing NORMIE strategy note (CLAUDE.md): ALL gating terms are TESTING-ONLY. No qualification
+numbers, prices, or NORMIE-vs-CLKN terms may be promised on any public surface until the owner
+locks them (and the NORMIE-team agreement lands).**
 
 ## The wing
 
-| World | Name | Theme | Signature hazards |
+| World | Name | Theme | Boss |
 |---|---|---|---|
-| 13 | THE WHALE POD | abyssal royal blue (theme 18) | priority gates, MEV scanners |
-| 14 | THE BURN SHRINE | ember black-red (theme 19) | dump zones, scanners |
-| 15 | THE DIAMOND DIMENSION | glacial crystal (theme 20) | rug platforms, scanners |
+| 13 | THE WHALE POD | abyssal royal blue (theme 18) | Leviathan |
+| 14 | THE BURN SHRINE | ember black-red (theme 19) | Burnlord |
+| 15 | THE DIAMOND DIMENSION | glacial crystal (theme 20) | Diamond Titan |
+| 16 | THE CITADEL | cyber-vault violet-steel (theme 21) | Core Sentinel |
+| 17 | THE EXCHANGE SPIRE | neon bourse cyan-violet (theme 22) | Market Maker |
+| 18 | THE GOLD RESERVE | institutional gold vault (theme 23) | The Chairman |
+| 19 | THE ORBITAL VAULT | space-station chrome (theme 24) | Sat Warden |
+| 20 | THE ASCENT / SAYLOR SUMMIT | storm-height tower (themes 25/26) | Storm Herald + Saylor |
+| 21 | THE MOON | lunar finale (theme 27) | Wen Moon |
 
-- 9 levels (idx 43–51), `vip:true` on every def. No bosses — dense, loot-heavy runs:
-  extra caches, premium powerups (whale/megawhale/diamond/coldwallet spreads), and the
-  **secret steel stashes** mechanic is live here (previously hidden-levels-only).
+- 27 levels (worlds 13–21 × 3), `vip:true` on every def. **Every world ends in a boss fight**
+  (world 20 has two: Storm Herald on 20-2, Saylor on 20-3) — dense, loot-heavy runs with extra
+  caches, premium powerups (whale/megawhale/diamond/coldwallet spreads), and the **secret steel
+  stashes** mechanic (previously hidden-levels-only).
+- Separately, **9 grant-only hidden rooms** (WHALEGROTTO, MOONCACHE, DEADWALLET, COLDSTORAGE,
+  DARKPOOL, ICEBERG, PROOFVAULT, SATSTATION, SUPERCYCLE) also carry `vip:true` — these are bonus
+  rooms reached via warps, not part of the 13–21 world chain.
 - Not part of the main 12-world story: 12-3 still ends the run at the RELAUNCH Win.
-  The wing is entered from LEVEL SELECT (👑 gold rows). 13-x → 14-x → 15-x chain
-  naturally with their own travel pages (BURN / DIAMOND HANDS term cards); clearing
-  15-3 shows the dedicated ULTRA VIP Win tableau.
+  The wing is entered from LEVEL SELECT (👑 gold rows) and chains 13-x → 14-x → … → 21-x, with
+  travel pages between bands; clearing 21-3 shows the dedicated ULTRA VIP Win tableau.
 - All public world counts (title, Win screen, leaderboard tiers) EXCLUDE the wing —
   the game still presents as 12 worlds.
 
@@ -33,11 +43,12 @@ lab lever `__NQ_FORCE_VIP=true` bypasses for QA).
 1. **Balance threshold** — `NQ_VIP_NORMIE` / `NQ_VIP_CLKN` env vars, **default 0 = OFF**
    (so no whale tester accidentally qualifies). Set them only when terms are locked.
 2. **Manual allowlist** — `/data/nq-vip.json`, managed via
-   `GET /normie-quest-x7/vip?key=…[&add=PUBKEY|&remove=PUBKEY]`. This endpoint requires the
-   REAL admin key (`NQ_FEEDBACK_KEY` or `PREMIUM_ACCESS_KEY`) — the tester-known dashboard
-   password deliberately does NOT work here. The owner adds their own wallet to grant
-   themself access; the client-side QA lever (`__NQ_FORCE_VIP`) additionally requires the
-   designer-lab flag, so plain testers can't console-flip it.
+   `GET /normie-quest-x7/vip?key=…[&add=PUBKEY|&remove=PUBKEY]`. This endpoint requires
+   `masterOK`, which checks **`PREMIUM_ACCESS_KEY` only** (`routes.js`) — the low-trust
+   `NQ_FEEDBACK_KEY` and the tester-known dashboard password deliberately do NOT work here.
+   The owner adds their own wallet to grant themself access; the client-side QA lever
+   (`__NQ_FORCE_VIP`) additionally requires the designer-lab flag, so plain testers can't
+   console-flip it.
 
 ## 👑 The VIP Lounge (separate page)
 

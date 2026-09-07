@@ -122,6 +122,20 @@ const ADDRESS = { name: 'Norm Ie', line1: '123 Chain St', line2: '', city: 'Solv
     const r = await claims.submit(runnerUp.pub, week, signMsg(prep.message, stranger.sec));
     ok('signature from a different key is rejected', r.ok === false && r.status === 'bad_signature');
   }
+  // 5b. F14: an attacker calling prepare() with the WINNER'S PUBLIC pubkey (prepare needs no
+  // signature) must not clobber the winner's own pending challenge — the winner's original
+  // signature, from their own earlier prepare(), must still verify and land the real address.
+  {
+    const prepReal = await claims.prepare(runnerUp.pub, week, ADDRESS);
+    const attackerAddr = { name: 'Attacker', line1: '1 Evil Ln', city: 'Nowhere', region: 'XX', postal: '00000', country: 'US' };
+    await claims.prepare(runnerUp.pub, week, attackerAddr);          // attacker: no key needed, just the pubkey
+    await claims.prepare(runnerUp.pub, week, attackerAddr);          // a second clobber attempt for good measure
+    const r = await claims.submit(runnerUp.pub, week, signMsg(prepReal.message, runnerUp.sec));
+    const rec = claims.claimFor(week, runnerUp.pub);
+    const dec = rec && claims.decryptAddress(rec.addrEnc);
+    ok('F14: attacker prepare() cannot clobber the winner\'s pending challenge',
+       r.ok === true && r.claimed === true && dec && dec.line1 === ADDRESS.line1);
+  }
   // 6. Rank-2 winner claims the SAME address -> stored, flagged for owner review (never hard-blocked).
   {
     const prep = await claims.prepare(runnerUp.pub, week, ADDRESS);

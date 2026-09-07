@@ -510,6 +510,7 @@ jobs:
       mode: ${{ steps.plan.outputs.mode }}
       only: ${{ steps.plan.outputs.only }}
       shards: ${{ steps.plan.outputs.shards }}
+      bossGround: ${{ steps.plan.outputs.bossGround }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -532,18 +533,20 @@ jobs:
             BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
           fi
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            MODE=full; ONLY=""; echo "plan: no resolvable base — full run"
+            MODE=full; ONLY=""; BOSSGROUND=true; echo "plan: no resolvable base — full run"
           else
             node normie-quest/test/nq-verify.cjs --against "$BASE" --json > /tmp/nq-plan.json
             cat /tmp/nq-plan.json
             MODE=$(node -e "const p=require('/tmp/nq-plan.json').plan;console.log(p.state==='ALL'?'full':(Array.isArray(p.state)&&p.state.length?'some':'none'))")
             ONLY=$(node -e "const p=require('/tmp/nq-plan.json').plan;console.log(Array.isArray(p.state)?p.state.join(','):'')")
+            BOSSGROUND=$(node -e "console.log(!!require('/tmp/nq-plan.json').plan.bossGround)")
           fi
           if [ "$MODE" = "full" ]; then SHARDS='["1/6","2/6","3/6","4/6","5/6","6/6"]'; else SHARDS='["1/1"]'; fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "only=$ONLY" >> "$GITHUB_OUTPUT"
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
-          echo "plan: mode=$MODE only='$ONLY' shards=$SHARDS"
+          echo "bossGround=$BOSSGROUND" >> "$GITHUB_OUTPUT"
+          echo "plan: mode=$MODE only='$ONLY' shards=$SHARDS bossGround=$BOSSGROUND"
 
   nq-state:
     needs: nq-state-plan
@@ -577,6 +580,42 @@ jobs:
           node server.js & echo $! > /tmp/nq_server.pid
           for i in $(seq 1 40); do curl -sf "http://localhost:3111/healthz" >/dev/null && break || sleep 2; done
           timeout 1500 node normie-quest/test/nq-state-test.cjs http://localhost:3111
+          code=$?
+          kill "$(cat /tmp/nq_server.pid)" 2>/dev/null || true
+          exit $code
+
+  # ---- Normie Quest BOSS GROUND: gate a boss-plate swap against the shared body constants ----
+  # F22 (2026-09-06 deep dive): nq-boss-ground.cjs existed, worked, and never ran in CI — nq-verify
+  # computed plan.bossGround from the diff and the workflow discarded it. Wired the same way as the
+  # state-test plan/run split above: nq-state-plan already asks nq-verify.cjs for the full plan, so
+  # it also surfaces plan.bossGround as a job output, and this job runs the harness only when a
+  # boss plate actually changed. Real gate, not advisory — a swapped plate with a different bottom
+  # margin silently sinks or floats a boss (CLAUDE.md, 2026-08-16); a PR touching no boss plate
+  # gets bossGround=false from nq-verify and this job is skipped entirely.
+  nq-boss-ground:
+    needs: nq-state-plan
+    if: needs.nq-state-plan.outputs.bossGround == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - name: install playwright chromium
+        run: |
+          npm i --no-save playwright@1.62.1   # pinned — see the smoke-test job
+          npx playwright install --with-deps chromium
+      - name: boot server + boss-ground check
+        env:
+          PORT: "3111"
+          # Booted with NO secrets on purpose — same reasoning as the visual/state jobs: no
+          # scheduler, no money path, nothing live can be reached from a level boot.
+        run: |
+          node server.js & echo $! > /tmp/nq_server.pid
+          for i in $(seq 1 40); do curl -sf "http://localhost:3111/healthz" >/dev/null && break || sleep 2; done
+          timeout 900 node normie-quest/test/nq-boss-ground.cjs http://localhost:3111
           code=$?
           kill "$(cat /tmp/nq_server.pid)" 2>/dev/null || true
           exit $code

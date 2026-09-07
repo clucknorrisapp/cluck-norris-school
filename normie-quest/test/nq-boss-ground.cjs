@@ -51,6 +51,12 @@ const BOSSES = [
   { idx: 28, label: 'Troll (TRENCHES)',      tex: 'troll', slack: 3.2 },
 ];
 
+// This is the source of truth for "which asset is a boss plate" (nq-verify.cjs requires this file
+// for BOSSES rather than keeping its own copy — F22: a hand-maintained regex there missed 5 of 13
+// bosses). Exporting is safe: requiring this module must NOT launch a browser or exit the process,
+// which is why the runner below is gated on require.main.
+module.exports = { BOSSES };
+
 function chromePath() {
   const root = process.env.PLAYWRIGHT_CHROMIUM_PATH || process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
   if (fs.existsSync(root) && fs.statSync(root).isFile()) return root;
@@ -98,7 +104,7 @@ async function measure(page, b) {
   return { ...b, ok: true, forced, ...g, delta: +(g.feet - GY).toFixed(2) };
 }
 
-(async () => {
+if (require.main === module) (async () => {
   const browser = await chromium.launch({ executablePath: chromePath(), args: LAUNCH_ARGS });
   const ctx = await browser.newContext({ viewport: { width: 1194, height: 834 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();

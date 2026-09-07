@@ -111,8 +111,23 @@ async function winnersForWeek(weekStart, n) {
 function windowEndsAt(weekStart) { return weekStart + WEEK_MS + claimDays() * 24 * 60 * 60 * 1000; }
 
 // ---- claim flow: prepare (mint the consent message) → submit (verify signature) ---------------
-const pending = new Map();   // pubkey -> { week, address, hash, nonce, message, expiresAt }
-function prunePending() { const now = Date.now(); for (const [k, v] of pending) if (v.expiresAt < now) pending.delete(k); }
+// F14: `pending` used to be pubkey -> ONE challenge object, last-write-wins. Winner wallets are
+// public on the leaderboard, so anyone could call prepare() with a winner's pubkey (no signing
+// needed — prepare never required a signature) and clobber their real pending challenge; the
+// winner's own later signature then verified against the attacker's overwritten message and
+// failed as 'bad_signature', permanently, for the rest of the claim window. Now each pubkey keeps
+// a small bounded LIST of challenges (own nonce/expiry each); submit() accepts whichever one the
+// signature actually verifies against, so an attacker can only ever ADD noise, never evict the
+// winner's real challenge outright (oldest is evicted only past the cap).
+const pending = new Map();   // pubkey -> [{ week, address, hash, nonce, message, expiresAt }, ...]
+const MAX_PENDING_PER_WALLET = 5;
+function prunePending() {
+  const now = Date.now();
+  for (const [k, arr] of pending) {
+    const fresh = arr.filter((v) => v.expiresAt >= now);
+    if (fresh.length) pending.set(k, fresh); else pending.delete(k);
+  }
+}
 
 async function eligibility(weekStart, pubkey) {
   const now = Date.now();
@@ -147,7 +162,13 @@ async function prepare(pubkeyStr, weekStart, address) {
     + 'Nonce: ' + nonce + '\n\n'
     + 'I authorize Cluck Norris to use the shipping address I provided solely to deliver this prize. '
     + 'This is a signature only — it does NOT move any funds or approve any transaction.';
-  pending.set(pk, { week, address: addr, hash, nonce, message, expiresAt: Date.now() + CHALLENGE_TTL_MS });
+  // F14: append rather than overwrite; cap the list so an attacker spamming prepare() can't grow
+  // it unbounded, evicting only the OLDEST entry once past the cap (never the newest real one a
+  // winner just requested).
+  const arr = pending.get(pk) || [];
+  arr.push({ week, address: addr, hash, nonce, message, expiresAt: Date.now() + CHALLENGE_TTL_MS });
+  while (arr.length > MAX_PENDING_PER_WALLET) arr.shift();
+  pending.set(pk, arr);
   return { ok: true, message, expiresIn: CHALLENGE_TTL_MS, rank: el.rank };
 }
 
@@ -155,17 +176,24 @@ async function submit(pubkeyStr, weekStart, signatureB58) {
   if (!enabled()) return { ok: false, status: 'not_configured' };
   const pk = clip(pubkeyStr, 64).trim();
   const week = Number(weekStart);
-  const ch = pending.get(pk);
-  if (!ch || ch.week !== week) return { ok: false, status: 'no_pending_claim' };
-  if (ch.expiresAt < Date.now()) { pending.delete(pk); return { ok: false, status: 'expired' }; }
-  let ok = false;
+  // F14: try every pending challenge for this pubkey (this week's, unexpired) and accept whichever
+  // one the signature actually verifies against — the real winner's own prepare() call is one of
+  // possibly several entries here (an attacker's clobber attempts just add noise, see above).
+  const forWeek = (pending.get(pk) || []).filter((c) => c.week === week);
+  if (!forWeek.length) return { ok: false, status: 'no_pending_claim' };
+  const now = Date.now();
+  const candidates = forWeek.filter((c) => c.expiresAt >= now);
+  if (!candidates.length) { pending.delete(pk); return { ok: false, status: 'expired' }; }
+  let ch = null;
   try {
-    const msgBytes = new TextEncoder().encode(ch.message);
     const sigBytes = bs58().decode(String(signatureB58 || ''));
     const pubBytes = new (web3().PublicKey)(pk).toBytes();
-    ok = nacl().sign.detached.verify(msgBytes, sigBytes, pubBytes);
+    for (const c of candidates) {
+      const msgBytes = new TextEncoder().encode(c.message);
+      if (nacl().sign.detached.verify(msgBytes, sigBytes, pubBytes)) { ch = c; break; }
+    }
   } catch (e) { return { ok: false, status: 'bad_signature' }; }
-  if (!ok) return { ok: false, status: 'bad_signature' };
+  if (!ch) return { ok: false, status: 'bad_signature' };
   const el = await eligibility(week, pk);   // re-check at submit — a reset mid-flow voids the win
   if (!el.ok) return el;
   const arr = load().filter((c) => !(c.week === week && c.wallet === pk));   // re-claim = replace (window still open)
@@ -175,6 +203,8 @@ async function submit(pubkeyStr, weekStart, signatureB58) {
   // Persist BEFORE clearing the pending challenge: save() can throw (disk full etc.), and if it
   // does, the winner's signed consent must survive so a retry doesn't force a needless re-sign.
   try { save(arr); } catch (e) { return { ok: false, status: 'persist_failed' }; }
+  // F14: clear ALL pending challenges for this pubkey on success, not just the one that matched —
+  // a used claim shouldn't leave stray attacker-planted entries sitting around for the pubkey.
   pending.delete(pk);
   return { ok: true, claimed: true, rank: el.rank };
 }

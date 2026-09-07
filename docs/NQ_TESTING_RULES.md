@@ -67,8 +67,9 @@ shard is allowed to block a merge. Delete that line to promote it once a clean w
   the between-level beat holds while the wallet panel is open, Escape closes it, a tap continues,
   and with no panel it auto-advances. Reaches the beat through the lab hook `__NQ_BEAT()`, never
   by playing to it (see the trap below). CI job `smoke-test`.
-- **Boss ground** — `node normie-quest/test/nq-boss-ground.cjs <url>`: the seven ground bosses
-  measure feet exactly on GY. Runs when a boss plate changes (bosses scale by height).
+- **Boss ground** — `node normie-quest/test/nq-boss-ground.cjs <url>`: 13 of 27 ground bosses
+  measure feet exactly on GY. Runs when a boss plate changes (bosses scale by height). CI job
+  `nq-boss-ground`, gated on `nq-verify`'s `plan.bossGround`.
 - **Geometry** — `node normie-quest/test/nq-geometry-check.cjs`: pure data, no browser; every
   gap makeable, every drop survivable. CI job `node-check`.
 

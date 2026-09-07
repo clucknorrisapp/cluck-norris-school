@@ -20,7 +20,7 @@ so any fresh session (or a human/external auditor) can pick up cleanly.
 The game is authored as ONE readable source file and assembled into a self-contained HTML:
 
 ```
-normie-quest/src/game_logic.js   ← THE source (~3.1k lines). Edit this, never the built HTML.
+normie-quest/src/game_logic.js   ← THE source (~9.8k lines). Edit this, never the built HTML.
 normie-quest/src/assets/*.b64    ← 58 cut-out sprite/audio assets (raw base64), inlined at build.
 public/vendor/phaser-3.60.0.min.js ← Phaser 3.60 (the ONE vendored copy), inlined for the CSP-free standalone build.
 normie-quest/src/build.js        ← assembler.  Run:  node normie-quest/src/build.js
@@ -39,7 +39,8 @@ normie-quest/src/build.js        ← assembler.  Run:  node normie-quest/src/bui
 normie-quest/src/build.js` → commit the built `public/*.html` (+ the `src/` change) → merge to `main`.
 
 ## Level model (`LEVELS[]` in game_logic.js)
-- 24 normal levels = **8 worlds × 3** (indices 0–23). Level def fields: `gaps, walls, plats, spikes,
+- 90 levels total: **21 worlds × 3** normal levels (63) plus 27 hidden/bonus levels reached via
+  warps. Level def fields: `gaps, walls, plats, spikes,
   powerups:[[type,x,y]], coins, enemies:[[kind,x,y,range]], bonusblocks, caches, warps, key, door,
   boss, bossType, yields/pegs/planks (world mechanics), theme, width, time`.
 - **Hidden bonus levels (idx 24+)** have `hidden:true` (excluded from world-count + level-select) and
