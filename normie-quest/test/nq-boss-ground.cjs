@@ -16,7 +16,9 @@
  * Positive delta = SUNK below the floor. Negative = HOVERING above it.
  */
 const path = require('path');
-const { chromium } = require(path.join(__dirname, '..', '..', 'node_modules', 'playwright-core'));
+// playwright-core is required LAZILY inside the require.main guard: nq-verify.cjs requires this
+// file only for its BOSSES list, and CI's nq-state-plan job runs with no npm ci — a top-level
+// require threw MODULE_NOT_FOUND there and skipped the whole state matrix (2026-09-07).
 const fs = require('fs');
 
 const BASE = process.argv.find(a => /^https?:\/\//.test(a)) || 'http://localhost:3111';
@@ -105,6 +107,7 @@ async function measure(page, b) {
 }
 
 if (require.main === module) (async () => {
+  const { chromium } = require(path.join(__dirname, '..', '..', 'node_modules', 'playwright-core'));
   const browser = await chromium.launch({ executablePath: chromePath(), args: LAUNCH_ARGS });
   const ctx = await browser.newContext({ viewport: { width: 1194, height: 834 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
