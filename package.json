@@ -6,7 +6,9 @@
     "start": "node server.js",
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:fast": "for f in server.js hatchery.js securitycoop.js whirlpool-mm.js swap.js lib/*.js lib/lp-rescue/*.js normie-quest/*.js; do node --check \"$f\" || exit 1; done && node scripts/check-jsx-components.js && node scripts/check-counts.js && node scripts/listing-checkup-test.cjs && node scripts/listing-checkup-checks-test.cjs && node scripts/cuna-staking-test.cjs && node scripts/cuna-lock-scan-test.cjs && node scripts/cuna-programme-test.cjs && node scripts/cuna-stake-routing-test.cjs && node scripts/cuna-burn-test.cjs && node scripts/cuna-payout-test.cjs && node scripts/cuna-announce-test.cjs && node scripts/safe-url-test.cjs && node scripts/broadcast-integrity-test.cjs && node scripts/engine-sim-test.cjs && node scripts/giveaway-holdcheck-test.cjs && node scripts/safe-fetch-test.cjs && node scripts/tape-coverage-test.cjs && node scripts/store-multiprocess-test.cjs && node normie-quest/test/nq-geometry-check.cjs && node normie-quest/test/nq-world-art-check.cjs && node normie-quest/test/nq-leaderboard-test.cjs && node normie-quest/test/nq-tier-gate-test.cjs && node normie-quest/test/nq-claims-test.cjs && node normie-quest/tools/gen-budgets.cjs && node normie-quest/tools/gen-level-graph.cjs && git diff --exit-code normie-quest/nq-budgets.json normie-quest/nq-level-graph.json && node normie-quest/src/build.js && git diff --exit-code normie-quest/public/normie-quest-platformer.html",
+    "test": "npm run test:fast && node scripts/listing-checkup-routes-test.cjs && node scripts/airdrop-collect-honeypot-test.cjs && node scripts/mutating-get-guard-test.cjs && node scripts/csp-scope-test.cjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
