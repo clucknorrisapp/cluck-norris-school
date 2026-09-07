@@ -63,4 +63,26 @@ ok("a pool swap where the receiver paid nothing and NOBODY else spent quote is s
     postTokenBalances: [{ owner: POOL, mint: ROSE, uiTokenAmount: { uiAmount: 0 } }, { owner: A, mint: ROSE, uiTokenAmount: { uiAmount: 1000 } }] } };
   assert.deepStrictEqual(classifyBuyersFromRawTxs([tx], ROSE, { solUsd: 104 }), []);
 });
+
+// Second miss the same evening: a $3.57 buy PAID WITH A DIFFERENT TOKEN (49UaN2…), routed by DFlow
+// through a pump.fun pool into SOL and then into ROSE. No real wallet spent SOL/USDC/CASH at all —
+// only the ROSE pool took in 0.0345 wSOL. The pool leg is the proof of purchase.
+const fx2 = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "fixtures", "rose-other-token-route-buy.json"), "utf8"));
+ok("a buy paid with some other token is credited to the receiver, sized by the ROSE pool's quote intake", () => {
+  const out = classifyBuyersFromRawTxs([fx2], ROSE, { solUsd: 104, tokenPriceUsd: 0 });
+  assert.strictEqual(out.length, 1, "exactly one buyer");
+  assert.strictEqual(out[0].wallet, "CZ3RmVckng86ppyGw11kwDJpsnG5BVTNbHbeN8ULrREi");
+  assert.ok(Math.abs(out[0].tokensBought - 10569.56) < 0.01, "tokens bought = the pool's ROSE out");
+  assert.ok(out[0].volumeSol > 0.033 && out[0].volumeSol < 0.036, "≈0.0345 wSOL into the pool, got " + out[0].volumeSol);
+  assert.deepStrictEqual(entriesFromBuys(out[0].buysSol, 104, 3, 2), { entries: 1, horses: 2 }, "a $3.57 buy is one entry = 2 horses");
+});
+ok("an LP withdrawal (pool loses the token but takes in no quote) is not a buy", () => {
+  const A = "HiahJYkBMSYzckeb8XeZ7dvxVeWTsq8jQQ2wq4Jo4SDZ", POOL = "7JtHjSAm7emq5Mc9GQgVZwfDY3Ma1TcE2cEwiy9mgkP6";
+  const WS = "So11111111111111111111111111111111111111112";
+  const tx = { transaction: { message: { accountKeys: [A] } }, meta: { err: null, preBalances: [1e9], postBalances: [1e9 - 5000],
+    preTokenBalances: [{ owner: POOL, mint: ROSE, uiTokenAmount: { uiAmount: 1000 } }, { owner: POOL, mint: WS, uiTokenAmount: { uiAmount: 5 } }],
+    postTokenBalances: [{ owner: POOL, mint: ROSE, uiTokenAmount: { uiAmount: 0 } }, { owner: POOL, mint: WS, uiTokenAmount: { uiAmount: 4 } },
+      { owner: A, mint: ROSE, uiTokenAmount: { uiAmount: 1000 } }, { owner: A, mint: WS, uiTokenAmount: { uiAmount: 1 } }] } };
+  assert.deepStrictEqual(classifyBuyersFromRawTxs([tx], ROSE, { solUsd: 104 }), []);
+});
 console.log(`\nall passed (${n})`);
