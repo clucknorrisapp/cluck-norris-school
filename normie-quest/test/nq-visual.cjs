@@ -38,7 +38,12 @@ const NQ_RES = process.env.NQ_RES;
 const withRes = u => NQ_RES ? u + (u.includes('?') ? '&' : '?') + 'res=' + NQ_RES : u;
 const BASE_DIR = path.join(__dirname, 'visual-baselines');
 const DIFF_DIR = path.join(__dirname, 'visual-diffs');           // gitignored; only written on failure
-const VIEW = { width: 1194, height: 834, dpr: 2 };
+// 900×600 @2 (since 2026-09-07): the game now picks its render zoom from the DEVICE pixels of the
+// viewport on non-touch hosts (integer fit — see the RES note at the top of game_logic.js). This
+// viewport (1800×1200 device px) resolves to RES 3 shown 1:1, the same buffer the thresholds below
+// were calibrated on and the same SwiftShader fill cost — the old 1194×834 would have produced a
+// RES 4 buffer (1.8× the pixels, and a render the calibration never saw). Baselines re-approved.
+const VIEW = { width: 900, height: 600, dpr: 2 };
 const TOL = 32;                                                  // per-channel delta to count a pixel "changed"
 // Hardened for containers/CI: --disable-dev-shm-usage routes shared memory to /tmp (the default
 // /dev/shm is tiny in Docker and causes "Failed to open a new tab" crashes under the game's heavy
