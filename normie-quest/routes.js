@@ -502,6 +502,18 @@ router.get('/api/nq/wheel/status', async (req, res) => {
   // F13: same unthrottled sync-read cost as /api/nq/lounge above.
   if (throttled(req, 'wheelstatus', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
+    // ?public=1 — the WALLET-LESS read the lounge paints before anyone connects, so the signature
+    // request follows a reason instead of preceding one. STRICTLY read-only and strictly
+    // impersonal: the published odds tables (both, so "better odds" is verifiable rather than
+    // claimed) and the room featured this rotation. No session, no wallet, and deliberately NONE
+    // of the per-user fields below — no pending count, no pass, no entries, no buff, no spin
+    // timers, no VIP flag. Same per-IP throttle as the authenticated read (above).
+    if (String(req.query.public || '') === '1') {
+      const pr = rewards.previewRoom() || null;
+      return res.json({ ok: true, publicView: true,
+        odds: rewards.odds(false), memberOdds: rewards.odds(true),
+        featured: pr ? { room: pr.room, label: pr.label, emoji: pr.emoji } : null });
+    }
     const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
     if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
     const vip = await wallet.isVipAsync(pk);   // F18: was isVip(pk, null) — holder-based VIP never counted

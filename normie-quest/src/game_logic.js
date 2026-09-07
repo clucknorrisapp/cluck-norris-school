@@ -798,6 +798,7 @@ var LEVELS=[
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
     enemies:[['paper',340,230,100],['jeet',700,230,70],['ghost',1000,212,80],['paper',1120,230,90],['paper',1500,230,100],['ghost',1900,212,90],['jeet',2400,230,80],['paper',2680,230,70],['ghost',2900,212,90],['paper',3220,230,70],['bot',3600,230,80],['ghost',3820,212,90],['paper',4120,230,90],['bot',4500,230,80]],
     bonusblocks:[[1100,5],[1950,8],[2950,5],[4020,8],[4960,8]],
+    warps:[[4380,27,1]],
     key:[1624,H-150], door:5680 },
 
   { name:'1-3', sub:"THE RUG KING'S KEEP", time:135, theme:2, bgArt:'w01keep', width:6400, boss:true,
@@ -842,6 +843,7 @@ var LEVELS=[
     honeypots:[[2772,232],[3900,232]], pumpdumps:[[1600,174],[3600,174]], npcs:[[1100,80]],
     casinoFolk:[[1450,'drink',70],[2250,'show',40],[3800,'drink',70],[4550,'show',50]],
     bonusblocks:[[820,5],[1680,8],[2700,5],[3530,8],[4420,8]],
+    warps:[[1800,33,1]],
     key:[1650,H-150], door:5080 },
 
   // WORLD 2 boss arena (level 2-1 will slot in BEFORE this once built). Flat desert arena:
@@ -868,7 +870,7 @@ var LEVELS=[
     enemies:[['jeet',340,230,80],['bot',680,230,60],['ghost',1050,212,80],['fudster',1150,230,60],['sniper',1900,230,30],['bitmaxi',2380,230,70],['bot',2800,230,70],['ghost',2820,212,60],['sniper',3150,230,30],['fudster',3600,230,70],['bitmaxi',4100,230,70],['bot',4500,230,70],['ghost',4700,212,90]],
     pumpdumps:[[1500,174],[3700,174]], honeypots:[], npcs:[[2900,90]],
     bonusblocks:[[1280,5],[2950,'moon'],[4760,8]],
-    warps:[[3620,28]],
+    warps:[[3620,28,1]],
     key:[1624,H-150], door:5680 },
 
   { name:'3-2', sub:'THE TIMELINE', time:145, theme:5, bgArt:'w03skyline2', width:6400, bgImage:'skyline',
@@ -1897,8 +1899,14 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     var self=this;
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x0b0a1c);
-    this.add.text(W/2,14,'LEVEL SELECT',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#ffd23f'}).setOrigin(.5);
-    this.add.text(W/2,30,'TEST BUILD · tap any level',{fontFamily:UIFONT,fontStyle:'600',fontSize:'12px',color:'#c3cdf0',resolution:UIRES}).setOrigin(.5);
+    // §6.2: the same scene serves the public WORLD MAP and the tester picker — only the wording
+    // and (via DEV, below) the hidden rooms differ.
+    this.add.text(W/2,14,TEST_MODE?'LEVEL SELECT':'WORLD MAP',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#ffd23f'}).setOrigin(.5);
+    this.add.text(W/2,30,TEST_MODE?'TEST BUILD · tap any level':'tap a world to play it · locked worlds say what opens them',
+      {fontFamily:UIFONT,fontStyle:'600',fontSize:'12px',color:'#c3cdf0',resolution:UIRES}).setOrigin(.5);
+    // a way back out — the map is reachable from the title for everyone now, so it needs a door home
+    var _bk=this.add.text(14,13,'◀ TITLE',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#a7b2dc',resolution:UIRES}).setOrigin(0,.5).setInteractive({useHandCursor:true});
+    _bk.on('pointerup',function(pp){ if(pp.getDistance()<12) self.scene.start('Title'); });
     // 👑 VIPs get a door to the Lounge (giveaways / alpha / perks) right from the world map
     try{ if(typeof window.__NQ_VIP==='function'&&window.__NQ_VIP()){
       var lg=this.add.text(W-14,13,'👑 VIP LOUNGE',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#ffd23f',resolution:UIRES}).setOrigin(1,.5).setInteractive({useHandCursor:true});
@@ -1924,10 +1932,16 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
         // 10+ worlds shrink the rows below what two stacked text lines can fit — go single-line there
         var oneLine=cardH<20;
         var t1=self.add.text(x+8,oneLine?cy:cy-cardH*0.24,(allowed?'':'🔒 ')+o.l.name+(oneLine?(' '+(isBoss?'★ ':'')+sub):''),{fontFamily:UIFONT,fontStyle:'bold',fontSize:oneLine?'10px':'9px',color:allowed?(isBoss?'#ff9ec0':'#ffffff'):'#8a8a98',resolution:UIRES}).setOrigin(0,.5);
-        var t2=oneLine?null:self.add.text(x+8,cy+cardH*0.27,(isBoss?'★ ':'')+sub,{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:allowed?(isBoss?'#ffd6e6':'#eef2ff'):'#6e6e7c',resolution:UIRES}).setOrigin(0,.5);
+        // §6.2: a locked card sells the world instead of describing it — tier copy, never an amount
+        var sub2=allowed?((isBoss?'★ ':'')+sub):nqLockCopy(o.l);
+        var t2=oneLine?null:self.add.text(x+8,cy+cardH*0.27,sub2,{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:allowed?(isBoss?'#ffd6e6':'#eef2ff'):'#ffb43a',resolution:UIRES}).setOrigin(0,.5);
         if(!allowed){ box.setAlpha(.55); t1.setAlpha(.75); if(t2) t2.setAlpha(.6); }
         var go=allowed
-          ? function(){ self.scene.start('Game',{level:o.i,score:0,lives:3}); }
+          // §6.2: replaying from the map is a NEW run — drop the old leaderboard token first, or the
+          // server judges the new score against the previous run's start time (same reason
+          // __NQ_TOLEVELS abandons it on the way in).
+          ? function(){ try{ if(window.NQLB&&window.NQLB.abandonRun) window.NQLB.abandonRun(); }catch(e){}
+                        self.scene.start('Game',{level:o.i,score:0,lives:3}); }
           : function(){ try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} };   // locked → open the premium panel (verify wallet / buy NORMIE)
         box.on('pointerup',function(p){ if(p.getDistance()<12) go(); });   // pointerup + drag guard: a scroll-drag over a card must not launch it
         box.on('pointerover',function(){ box.setFillStyle(isBoss?0x4a1848:0x1e2842,1); });
@@ -1948,7 +1962,9 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
       this.input.keyboard.on('keydown-UP',function(){ setOff(off-40); });
       this.add.text(W-14,top-6,'▼ scroll for more',{fontFamily:UIFONT,fontStyle:'600',fontSize:'10px',color:'#ffb43a',resolution:UIRES}).setOrigin(1,.5);
     }
-    this.add.text(W/2,contentBottom+8,'in a level: press L to return here  ·  tap any card to play',{fontFamily:UIFONT,fontStyle:'600',fontSize:'10px',color:'#a7b2dc',resolution:UIRES}).setOrigin(.5);
+    this.add.text(W/2,contentBottom+8,TEST_MODE?'in a level: press L to return here  ·  tap any card to play'
+                                                 :'every run starts fresh from here  ·  your best score is what counts',
+      {fontFamily:UIFONT,fontStyle:'600',fontSize:'10px',color:'#a7b2dc',resolution:UIRES}).setOrigin(.5);
     try{ if(typeof window!=='undefined') window.__NQ_LEVEL='level-select'; }catch(e){}
   }
 });
@@ -2035,6 +2051,9 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     // throw the save away. Both paths start through Controls exactly as before, so HOW TO PLAY
     // and the destination world's Briefing still fire.
     var _res=null; try{ _res=nqResumePoint(); }catch(e){}
+    // §6.2: the world map, for everyone — a tier-1 holder could not revisit a world they own.
+    // Top-left so it stays clear of the crowded bottom band (NEW GAME / chips / credit line).
+    var _mapBtn=this.add.text(12,13,'🗺 WORLD MAP',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#66ccff',resolution:UIRES}).setOrigin(0,.5);
     var _newBtn=null;
     if(_res){
       p.setText('CONTINUE \u00B7 WORLD '+_res.name);
@@ -2049,12 +2068,14 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
       // inflated because the chip is 11px tall in game units and this is played on phones.
       var onNew=false;
       try{ if(_newBtn&&pointer&&pointer.worldX!=null){ var _b=_newBtn.getBounds(); Phaser.Geom.Rectangle.Inflate(_b,14,10); onNew=_b.contains(pointer.worldX,pointer.worldY); } }catch(e){}
+      if(nqOnBtn(_mapBtn,pointer)){ if(self.started) return; self.started=true; self.scene.start('LevelSelect'); return; }   // §6.2
       if(_res&&!onNew) start(_res.level,_res.score); else start(0,0);
     };
     // Tap anywhere = play (from the save if there is one, else 1-1). In TEST BUILD, the reliable
     // DOM "≡ Levels" button (bottom-left, works from here too) is how you reach the level picker.
     this.input.once('pointerdown',go,this);
-    this.input.keyboard.once('keydown',function(ev){ if(_res&&ev&&(ev.key==='n'||ev.key==='N')) start(0,0); else go(); },this);
+    this.input.keyboard.once('keydown',function(ev){ if(ev&&(ev.key==='m'||ev.key==='M')){ if(!self.started){ self.started=true; self.scene.start('LevelSelect'); } return; }   // §6.2: M = world map
+      if(_res&&ev&&(ev.key==='n'||ev.key==='N')) start(0,0); else go(); },this);
     padAdvance(this, function(){ go(); });   // controller button also starts
     if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
   }
@@ -2090,9 +2111,19 @@ function nqFreeMax(){ var g=nqGate(); var f=g&&+g.freeMax; return (f>0)?f:2; }
 // tier2Normie} — fetched from /api/nq/wallet/config by the boot shim, null until it lands.
 // Copy MUST render from this, never hardcode an amount: the numbers are live-priced server-side.
 function nqTerms(){ try{ var t=window.__NQ_TERMS; return (t&&typeof t==='object')?t:null; }catch(e){ return null; } }
-// Does THIS player have the LevelSelect world map? It is the TEST BUILD picker (TEST_MODE), so a
-// normal public player does not — anything that sends someone "back to the map" must check first.
-function nqHasPicker(){ try{ return !!TEST_MODE; }catch(e){ return false; } }
+// §6.2: the world map is PUBLIC. It used to be the TEST BUILD picker only, so a holder could not
+// revisit a single world they had paid for and every "back to the map" affordance fell back to the
+// title. LevelSelect itself filters by nqWorldAllowed, so a locked world is still un-enterable —
+// it is drawn as a locked card instead. TEST_MODE/DEV still add the hidden rooms and the tester
+// wording; nothing about the lab lanes changes.
+function nqHasPicker(){ return true; }
+// §6.2: what a locked world card says — the SAME words the title screen's tier chips use, and
+// never an amount (amounts render only from live /api/nq/wallet/config, and this is a public
+// surface). A world above the launch cap is not obtainable by anyone, so it says that instead.
+function nqLockCopy(def){
+  var cap=nqGateCap(); if(cap){ var m=/^(\d+)-/.exec((def&&def.name)||''); if(m && +m[1]>cap) return 'OPENING SOON'; }
+  return (def&&def.vip)?'BIG HOLDERS':'HOLDERS';
+}
 function nqWorldAllowed(def){
   var setup=false; try{ setup=!!window.__NQ_SETUP; }catch(e){}
   if(!nqGateOn() && !setup) return true;   // gate off outside the lab = nothing is locked
@@ -2308,7 +2339,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // transitions hung, timers died. Reset ALL pause machinery on every level entry.
     try{ this.time.paused=false; }catch(e){}
     try{ this.tweens.resumeAll(); }catch(e){}
-    this.paused=false; this.lastInputAt=this.time.now;   // pause state + idle-auto-pause timer
+    this.paused=false; this.lastInputAt=this.time.now; this._hadInput=false;   // pause state + idle-auto-pause timer (P9: the level-0 latch resets with the level)
     try{ window.__NQ_PAUSED=false; }catch(e){}   // fresh level = not paused (the flag gates no-gesture music restarts)
     this._lastSafe=null;   // ⚠ the scene INSTANCE is reused across scene.start — without this, falling before first landing respawns at the PREVIOUS level's banked spot (audit #8, reproduced live)
     this._lvStartAt=Date.now(); this._lvDeaths=0; this._pausedMs=0; this._pausedAtWall=null; this._pausedAtClock=null;   // difficulty telemetry: time-in-level (minus paused spans) + lives lost this level
@@ -2573,7 +2604,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // (3-5)=+15% enemy speed, World 3 (6-8)=+30%. Per-level override via def.diff.
     this.diffMul = def.diff || [1,1,1,1.15,1.15,1.15,1.3,1.3,1.3,1.45,1.45,1.55,1.6,1.6,1.7,1.75,1.75,1.85,1.9,1.9,2.0,2.1,2.1,2.25][this.levelIdx] || 1;
     this.timeLeft=def.time; this.over=false; this.hasKey=false; this._doorHint=false;
-    if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqCp',0); this.registry.set('nqCpScore',0); this.registry.set('nqLvlCp',0); this.registry.set('nqLvlCpScore',0); this.registry.set('nqUsedWarps',{}); }   // fresh run → zero the casino tally (the localStorage BANK deliberately survives — world progress is a permanent unlock) + clear all world AND level checkpoints + reset one-time speakeasies
+    if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqCp',0); this.registry.set('nqCpScore',0); this.registry.set('nqLvlCp',0); this.registry.set('nqLvlCpScore',0); this.registry.set('nqMidCp',null); this.registry.set('nqUsedWarps',{}); }   // fresh run → zero the casino tally (the localStorage BANK deliberately survives — world progress is a permanent unlock) + clear all world AND level checkpoints + reset one-time speakeasies
     this.spawn={x:(this._spawnX!=null?this._spawnX:60),y:H-60};
     // Never spawn OVER A PIT: warp returns are computed as door-x+70 with no terrain awareness, and
     // 21-2's speakeasy return landed exactly inside its own gap — a VIP player fell into the pit on
@@ -3188,6 +3219,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Lab-only by construction (__NQ_SETUP is URL-derived); visibility tracks live toggles in update().
     if(window.__NQ_SETUP){ this._godBadge=this.hb(this.add.text(14,46,'⚡ GOD MODE ON — hits do nothing (untick in 🛠 LAB)',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ff3860',backgroundColor:'#1a0611',padding:{x:4,y:3}}).setDepth(45).setVisible(!!window.__NQ_GOD)); }
     this.keyIcon=this.hb(this.add.image(W-18,30,'key').setAlpha(.2)); this.keyIcon.setScale(22/this.keyIcon.height);
+    // P4: on 1-1 the key sits ~3,500px before the door, elevated, with no cue that a key is even
+    // part of the game — first-timers ran to the door and bounced off it. One arrow under the HUD
+    // key icon, tutorial level only, shown until you have it. It rides hudBox, which is anchored
+    // on SCREEN_RECT(cam), so it is RES-invariant like every other HUD child.
+    this.keyArrow=(def.name==='1-1')?this.hb(this.add.text(W-18,46,'▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffd23f'}).setOrigin(.5)):null;
+    if(this.keyArrow) this.tweens.add({targets:this.keyArrow,alpha:.35,duration:700,yoyo:true,repeat:-1});
     // Returning from a speakeasy/bonus room with the carried key (nqCarryKey): grant it and
     // remove the field key — no backtracking past the return point. Never applies to hidden
     // levels themselves (their key opens their own exit).
@@ -3300,6 +3337,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // (no throw button — Solana symbols auto-fire during SOLANA MODE)
 
     this.cameras.main.startFollow(this.player,true,0.12,0.12); this.cameras.main.setDeadzone(80,60);
+    try{ this.cameras.main.followOffset.set(0,0); }catch(e){}   // P1: the camera survives scene.start — a look-ahead offset must not carry into the next level
     this.lastGround=-9999; this.jumpBufferAt=-9999; this.prevJump=false; this.jumpsLeft=2; this.isJumping=false;
   },
 
@@ -3352,7 +3390,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
 
   grabCoin:function(player,coin){ var cx=coin.x,cy=coin.y; this.tweens.killTweensOf(coin); coin.destroy(); this.addScore(10); SFX.coin(); this.burst(cx,cy,0xffd23f,6); },
-  grabKey:function(player,key){ if(this.hasKey) return; this.hasKey=true; this.tweens.killTweensOf(key); key.destroy(); this.keyIcon.setAlpha(1); this.addScore(50); this.flash('KEY TO THE LOUNGE!','#ffd23f'); SFX.key(); },
+  grabKey:function(player,key){ if(this.hasKey) return; this.hasKey=true; this.tweens.killTweensOf(key); key.destroy(); this.keyIcon.setAlpha(1); this.addScore(50); this.flash('KEY TO THE LOUNGE!','#ffd23f'); SFX.key();
+    // P3: MID-LEVEL CHECKPOINT, free for everyone. Three deaths on a 5,200px level sent a player
+    // back to x=60 with score 0 — the single biggest reason a first session ends. The key is the
+    // natural halfway mark (it gates the door), so banking here needs no new fixture. Stored at
+    // the last SAFE STANDING spot, never the raw player x: the key is usually taken mid-jump, and
+    // the spawn code must not be handed a point over a pit. Consumed only by gameOver(), only for
+    // this same level, and only when no world/level checkpoint is banked ahead of it.
+    try{ var _kx=(this._lastSafe&&this._lastSafe.x!=null)?this._lastSafe.x:(player?player.x:0);
+      this.registry.set('nqMidCp',{lvl:this.levelIdx,x:Math.round(_kx),score:this.score}); }catch(e){} },
   grabCache:function(player,pile){ if(pile.grabbed||this.over) return; pile.grabbed=true; if(pile.body) pile.body.enable=false;
     var self=this, n=pile.cacheN; this.addScore(n); this.registry.set('nqCasino',(this.registry.get('nqCasino')||0)+n); SFX.power(); SFX.coin();
     this.burst(pile.x, pile.y, 0xffd23f, 30); this.cameras.main.flash(220,255,235,140); this.flash('CACHE!  +'+n+' COINS','#3dff6e');
@@ -5997,13 +6043,19 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // they died somewhere the perk would have saved them a replay. No token amounts, no thresholds:
     // NQ gating terms are still in testing and must never be promised on any surface.
     var contTease = (!resumeUnlocked && (this.registry.get('nqLvlCp')||0) > cont);
+    // P3: nothing banked ahead of you (worlds 1-2, or a first level) -> fall back to the key you
+    // already reached on THIS level rather than 1-1 with score 0. Hidden rooms keep their own
+    // return path, so they are excluded.
+    var contX=null, _mid=null; try{ _mid=this.registry.get('nqMidCp')||null; }catch(e){}
+    if(cont===0 && _mid && _mid.lvl===this.levelIdx && !(this.def&&this.def.hidden)){
+      cont=this.levelIdx; contScore=_mid.score||0; contKind='mid'; contX=_mid.x; }
     // URL-entered PRIVATE room (no return level banked): defeat must restart the SAME room, not
     // silently dump the player into campaign 1-1 with the lab flag dropped (audit #24). Victory
     // already routes correctly; only the defeat path misrouted.
     try{ if(this.def && this.def.private && this.registry.get('nqRetLvl')==null){ cont=this.levelIdx; contScore=0; contKind='room'; } }catch(e){}
     this._cont=cont; this._contScore=contScore; this._contKind=contKind;   // (exposed for tests)
     var contName = (cont>0 && LEVELS[cont]) ? (LEVELS[cont].name||'') : '';
-    this.time.delayedCall(600,function(){ this.scene.start('Over',{score:this.score,reason:reason,level:this.def.name,cont:cont,contScore:contScore,contKind:contKind,contName:contName,contTease:contTease}); },[],this); },
+    this.time.delayedCall(600,function(){ this.scene.start('Over',{score:this.score,reason:reason,level:this.def.name,cont:cont,contScore:contScore,contKind:contKind,contName:contName,contTease:contTease,contX:contX}); },[],this); },
 
   // ---- PAUSE (manual ⏸ / P / Esc, or 10s idle auto-pause). Self-contained in-scene freeze:
   //      physics + the scene clock (level countdown + boss delayedCalls) + tweens, plus a HUD
@@ -6029,7 +6081,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var padOn=(typeof window!=='undefined')&&window.__NQ_GAMEPAD_ACTIVE;
     mk(this.add.text(W/2,H/2+26,(padOn?'PRESS ANY BUTTON':(isTouch?'TAP':'PRESS ANY KEY'))+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5));
     // audio-state line, refreshed in update() while paused — see the field-diagnostics note there
-    this._pauseAudioLine=mk(this.add.text(W/2,H/2+44,'audio: …',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f9bb3'}).setOrigin(.5)); this._paLast=0; this._paT0=null; },
+    // P9: field diagnostics, not player copy — only the tester/lab lanes see it (the owner reads
+    // it off an iPad there). update()'s refresh is already guarded on this being non-null.
+    this._pauseAudioLine=(TEST_MODE||(typeof window!=='undefined'&&window.__NQ_SETUP))
+      ? mk(this.add.text(W/2,H/2+44,'audio: …',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f9bb3'}).setOrigin(.5))
+      : null;
+    this._paLast=0; this._paT0=null; },
   resumeGame:function(){ if(!this.paused) return; this.paused=false;
     try{ window.__NQ_PAUSED=false; }catch(e){}
     // REBASE every live deadline by the span the pause lasted (see the note in pauseGame). Fields
@@ -6184,7 +6241,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // mid-fight (audit #23); an active SOLANA MODE counts too (its auto-fire is deliberate play).
     var throwHeld2=this.keys.F.isDown||this.keys.X.isDown||this.touch.throwBtn;
     var useAny=this.keys.Q.isDown||this.keys.E.isDown||(this.keys.ONE&&this.keys.ONE.isDown)||(this.keys.TWO&&this.keys.TWO.isDown)||(this.keys.THREE&&this.keys.THREE.isDown)||now<this.solanaUntil;
-    if(left||right||jump||duck||throwHeld2||useAny) this.lastInputAt=now; else if(this.lastInputAt&&now-this.lastInputAt>10000){ if(this.nearActiveSlot()){ this.lastInputAt=now; } else { this.pauseGame(true); return; } }
+    // P9: 10s fired while a first-time player was still READING the screen. 30s, and on 1-1 the
+    // timer does not start at all until they have touched a control once — the auto-pause card is
+    // for someone who walked away, not for someone deciding which key to press.
+    if(left||right||jump||duck||throwHeld2||useAny){ this.lastInputAt=now; this._hadInput=true; }
+    else if(this.levelIdx===0 && !this._hadInput){ this.lastInputAt=now; }
+    else if(this.lastInputAt&&now-this.lastInputAt>30000){ if(this.nearActiveSlot()){ this.lastInputAt=now; } else { this.pauseGame(true); return; } }
     // CROUCH: duck in place on the ground (jump cancels it) — shrinks the hitbox so fireballs / sniper bolts pass over.
     // 90ms grounded-hysteresis: blocked.down drops out for single frames on tile seams, and that
     // 1-frame loss was toggling the crouch — the visible duck "flicker".
@@ -6231,6 +6293,21 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     else if(left&&!right){ if(b.velocity.x>0) accel*=2; p.setAccelerationX(-accel); p.setFlipX(true); }
     else if(right&&!left){ if(b.velocity.x<0) accel*=2; p.setAccelerationX(accel); p.setFlipX(false); }
     else { p.setAccelerationX(0); p.setDragX(1600); }
+
+    // P1: CAMERA LOOK-AHEAD. Running at 192 the player sat dead centre, so the level ahead was
+    // only ~1.0-1.25s away — every sniper and pit was a reaction test. Slide the follow offset the
+    // way you are travelling (negative offset pushes the camera AHEAD of the player) and ease it
+    // back when you stop. Lerped, never snapped, and the camera's own setBounds still clamps it,
+    // so at the two ends of a level the view simply stops instead of showing the void.
+    var _cam=this.cameras.main, _vx=b.velocity.x;
+    var _want=(Math.abs(_vx)>40)?(_vx>0?-70:70):0;
+    _cam.followOffset.x=Phaser.Math.Linear(_cam.followOffset.x, _want, (_want===0?0.045:0.075));
+
+    // P4: point at the key while it is still out there (1-1 only — keyArrow is null elsewhere)
+    if(this.keyArrow){
+      if(this.hasKey||!this.key||!this.key.active) this.keyArrow.setVisible(false);
+      else { this.keyArrow.setVisible(true); this.keyArrow.setText(this.key.x<p.x?'◀':'▶'); }
+    }
 
     var onGround=b.blocked.down||b.touching.down;
     if(onGround){ this.lastGround=now; this.jumpsLeft=2; this.isJumping=false; }
@@ -6631,15 +6708,35 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 /* ---------- Over ---------- */
 var Over=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Over'}); },
-  init:function(d){ this.finalScore=d.score||0; this.reason=d.reason||''; this.level=d.level||''; this.cont=d.cont||0; this.contScore=d.contScore||0; this.contKind=d.contKind||''; this.contName=d.contName||''; this.contTease=!!d.contTease; },
+  init:function(d){ this.finalScore=d.score||0; this.reason=d.reason||''; this.level=d.level||''; this.cont=d.cont||0; this.contScore=d.contScore||0; this.contKind=d.contKind||''; this.contName=d.contName||''; this.contTease=!!d.contTease; this.contX=(d.contX!=null?d.contX:null); },   // P3: contX = the mid-level respawn point
   create:function(){
     // SETUP LANE: run ended (game over) — submit the final score to the leaderboard.
     if(window.NQLB){ try{ window.NQLB.submitRun(window.NQLB.worldOf(this.level), this.finalScore); }catch(e){} }
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
-    this.add.text(W/2,48,this.reason,{fontFamily:'"Press Start 2P"',fontSize:'15px',color:'#ff3860'}).setOrigin(.5);
-    this.add.text(W/2,80,'reached world '+this.level,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
-    this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#b6bfe0'}).setOrigin(.5);
-    this.add.text(W/2,150,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
+    // §6.1: the LIVE weekly top three, right where the run ended — the one screen every player
+    // reaches and the only place a contest can recruit them. Data is already in hand (nqLbTease,
+    // fetched once at boot); no new endpoint. The screen keeps its shipped layout byte-for-byte
+    // when there is no board to show, and compacts only when there is.
+    var _lb=nqLbTease()||[], _hasLb=_lb.length>0;
+    var Y=_hasLb
+      ? {reason:40,world:64,scoreLbl:84,score:108,parked:204,cp:(this.contTease?226:236),tease:248,press:262}
+      : {reason:48,world:80,scoreLbl:118,score:150,parked:176,cp:198,tease:229,press:(this.contTease?250:244)};
+    this.add.text(W/2,Y.reason,this.reason,{fontFamily:'"Press Start 2P"',fontSize:_hasLb?'13px':'15px',color:'#ff3860'}).setOrigin(.5);
+    this.add.text(W/2,Y.world,'reached world '+this.level,{fontFamily:UIFONT,resolution:UIRES,fontSize:_hasLb?'15px':'18px',color:'#b6bfe0'}).setOrigin(.5);
+    this.add.text(W/2,Y.scoreLbl,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:_hasLb?'9px':'11px',color:'#b6bfe0'}).setOrigin(.5);
+    this.add.text(W/2,Y.score,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:_hasLb?'24px':'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
+    if(_hasLb){
+      this.add.rectangle(W/2,158,W-56,70,0x101a2e,0.92).setStrokeStyle(2,0xffd23f);
+      this.add.text(W/2,131,'🏆 THIS WEEK\'S TOP NORMIES 🏆',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center'}).setOrigin(.5);
+      var _md=['🥇','🥈','🥉'];
+      for(var _li=0;_li<Math.min(3,_lb.length);_li++){ var _r=_lb[_li];
+        this.add.text(W/2,145+_li*12,_md[_li]+'  '+String(_r.name||'').slice(0,14)+'   '+(_r.score||0),
+          {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:_li===0?'#ffffff':'#c9c2ea',align:'center'}).setOrigin(.5);
+      }
+      var _rk=nqLbRankOf(this.finalScore,_lb);
+      this.add.text(W/2,186,"YOU'D BE #"+_rk.n+(_rk.exact?'':'+')+' THIS WEEK',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:_rk.exact?'#3dff6e':'#8891b5',align:'center'}).setOrigin(.5);
+    }
+    var _share=nqShareBtn(this, W-10, 14, nqShareLine(this.finalScore, 'reached world '+this.level));
     // Per-world checkpoint continue takes priority over the leaderboard/free-preview copy.
     var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Depeg',18:'WORLD 7\ncontinue from the Yield Farm',21:'WORLD 8\ncontinue from the Bear Market',24:'WORLD 9\ncontinue from the Mines',34:'WORLD 10\ncontinue from the Euphoria',37:'WORLD 11\ncontinue from the Citadel gates',40:'WORLD 12\ncontinue from the Relaunch'};
     var NWORLDS=worldCount();
@@ -6648,27 +6745,33 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     // "LEVEL 23" (a raw array index + 1, meaningless to a player) — it prints the level's real
     // name now.
     var cpMsg;
-    if(this.cont>0 && this.contKind==='level') cpMsg='★ RESUME: '+(this.contName||('LEVEL '+(this.cont+1)))+'\nright where you fell';
+    if(this.cont>0 && this.contKind==='mid') cpMsg='★ CHECKPOINT: '+(this.contName||('LEVEL '+(this.cont+1)))+'\nback at the key you found';   // P3
+    else if(this.cont>0 && this.contKind==='level') cpMsg='★ RESUME: '+(this.contName||('LEVEL '+(this.cont+1)))+'\nright where you fell';
     else if(this.cont>0) cpMsg='★ CHECKPOINT: '+(CP_LABEL[this.cont]||(this.contName||('LEVEL '+(this.cont+1))));
     else cpMsg='free preview · all '+NWORLDS+' Worlds\ngood luck out there';
     // The tease needs a row of its own. First attempt shifted cpMsg UP to 190 to make room --
     // which drove it straight into the 30px SCORE number at y=150. cpMsg stays put; the tease goes
     // BELOW it and the prompt moves down, because the free space on this screen is at the bottom.
-    this.add.text(W/2,198, cpMsg,{fontFamily:UIFONT,resolution:UIRES,fontSize:'19px',color:this.cont>0?'#3dff6e':'#b6bfe0',align:'center'}).setOrigin(.5);
+    this.add.text(W/2,Y.cp, cpMsg,{fontFamily:UIFONT,resolution:UIRES,fontSize:_hasLb?'13px':'19px',color:this.cont>0?'#3dff6e':'#b6bfe0',align:'center'}).setOrigin(.5);
     // Locked players who would have benefited get one restrained line. Deliberately NO token
     // amounts or thresholds — NQ gating terms are still in testing and are never promised anywhere.
-    if(this.contTease) this.add.text(W/2,229,'TIER 2 / VIP resume right where you died',{fontFamily:UIFONT,resolution:UIRES,fontSize:'13px',color:'#c99bff',align:'center'}).setOrigin(.5);
-    var p=this.add.text(W/2,(this.contTease?250:244), this.cont>0 ? 'PRESS TO CONTINUE →' : 'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
+    if(this.contTease) this.add.text(W/2,Y.tease,'TIER 2 / VIP resume right where you died',{fontFamily:UIFONT,resolution:UIRES,fontSize:_hasLb?'11px':'13px',color:'#c99bff',align:'center'}).setOrigin(.5);
+    var p=this.add.text(W/2,Y.press, this.cont>0 ? 'PRESS TO CONTINUE →' : 'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:_hasLb?'10px':'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    nqParkedPrompt(this, 176);   // F6: only renders when this run is parked for want of a handle
+    nqParkedPrompt(this, Y.parked);   // F6: only renders when this run is parked for want of a handle
     // Continue from the World-2 checkpoint if premium banked one; else restart from 1-1.
-    var self=this; this.started=false; var go=function(){ if(self.started) return;
+    var self=this; this.started=false; var go=function(pointer){ if(self.started) return;
       if(nqPanelOpen()){ self._arm(); return; }   // F6: the naming panel is open — don't restart underneath it
+      if(nqOnBtn(_share,pointer)){ self._arm(); return; }   // §6.3: a tap on SHARE is not a restart
       self.started=true;
       if(self.cont>0){ if(self.contKind==='room'){ self.scene.start('Game',{level:self.cont,score:0,lives:3,lab:1}); }   // private-room retry keeps the tier-gate bypass the URL entry had (audit #24)
                         else { // score-carrying continue: reissue the run token FIRST so the banked total stays inside the budget ceiling (audit #7)
                           if(window.NQLB&&window.NQLB.continueRun){ try{ window.NQLB.continueRun(); }catch(e){} }
-                          if(typeof BRIEFINGS!=='undefined'&&BRIEFINGS[self.cont]) self.scene.start('Briefing',{next:self.cont,score:self.contScore});   // show the world briefing (control reminder) on continue
+                          // P3: a mid-level checkpoint drops you back INSIDE the level, so it goes
+                          // straight to Game with its spawn point — a world Briefing here would be
+                          // the wrong card and would also throw the spawn away.
+                          if(self.contKind==='mid') self.scene.start('Game',{level:self.cont,score:self.contScore,lives:3,spawnX:(self.contX!=null?self.contX:undefined)});
+                          else if(typeof BRIEFINGS!=='undefined'&&BRIEFINGS[self.cont]) self.scene.start('Briefing',{next:self.cont,score:self.contScore});   // show the world briefing (control reminder) on continue
                           else self.scene.start('Game',{level:self.cont,score:self.contScore,lives:3}); } }
       else self.scene.start('Game',{level:0,score:0,lives:3}); };
     // F6: naming yourself happens in a DOM panel over this screen, so a tap on it — or a keystroke
@@ -6746,8 +6849,11 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
     var p=this.add.text(W/2,246,'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     nqParkedPrompt(this, 259);   // F6: only renders when this run is parked for want of a handle
-    var self=this; this.started=false; var go=function(){ if(self.started) return;
+    // §6.3: same share card as the Over screen — a private dev-room win states no world count.
+    var _share=nqShareBtn(this, W-10, 14, nqShareLine(this.finalScore, this.private?null:(nw+(nw===1?' world cleared':' worlds cleared'))));
+    var self=this; this.started=false; var go=function(pointer){ if(self.started) return;
       if(nqPanelOpen()){ self._arm(); return; }   // F6: the naming panel is open — don't restart underneath it
+      if(nqOnBtn(_share,pointer)){ self._arm(); return; }   // §6.3: a tap on SHARE is not a replay
       self.started=true; self.scene.start('Game',{level:self.replayLevel,score:0,lives:3,lab:(self.private?1:undefined)}); };
     this._arm=function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); };
     this.time.delayedCall(500,function(){ self._arm(); });
@@ -6848,7 +6954,46 @@ var WORLD_CLEARS = {
         theme:20, dest:'INTO THE DIAMOND DIMENSION…',
         story:'The flame took its tribute. Beyond it lies the dimension where hands never sell — where every surface is pressure-formed carbon and patience.',
         term:{name:'DIAMOND HANDS',def:'Holding through drawdowns that shake everyone else out. Pressure makes diamonds; panic makes exit liquidity.'},
-        nostalgia:'ACHIEVEMENT UNLOCKED: HANDS OF PURE CARBON.' }
+        nostalgia:'ACHIEVEMENT UNLOCKED: HANDS OF PURE CARBON.' },
+  // §5.2: worlds 16-21 had no clear card at all — six of the top tier's nine worlds cut from a
+  // generic LevelClear straight into the next level. Same shape/voice as the neighbours above:
+  // colour + bg belong to the world just CLEARED, theme + dest to the one being entered.
+  52: { world:15, title:'THE DIAMOND TITAN, SHATTERED!', color:'#9fe8ff', bg:0x0a1c2a,
+        boss:{img:'diamondtitan',scale:90,tint:0,angle:12},
+        theme:21, dest:'INTO THE CITADEL…',
+        story:'The Titan cracked and the dimension held. That pressure came from somewhere — a citadel above the crystal, where the keys to every vault sit behind one sealed core.',
+        term:{name:'AUDIT',def:'An outside review of a contract\'s code. It finds bugs; it never promises there are none left.'},
+        nostalgia:'ALL YOUR VAULT ARE BELONG TO US.' },
+  55: { world:16, title:'THE CORE SENTINEL, BREACHED!', color:'#b06bff', bg:0x191426,
+        boss:{img:'coresentinel',scale:88,tint:0,angle:12},
+        theme:22, dest:'UP THE EXCHANGE SPIRE…',
+        story:'The core is open and the keys are yours. Keys only matter where prices are made — and that is the spire, where the order book never sleeps.',
+        term:{name:'ORDER BOOK',def:'The live list of every buy and sell offer. Thin books move on small trades — read the depth before you size up.'},
+        nostalgia:'A WINNER IS YOU. THE SPIRE DOES NOT CARE.' },
+  58: { world:17, title:'THE MARKET MAKER, OUTBID!', color:'#2ee6c0', bg:0x0a1a2e,
+        boss:{img:'marketmaker',scale:88,tint:0,angle:12},
+        theme:23, dest:'INTO THE GOLD RESERVE…',
+        story:'The spread is broken and the book is honest for one whole minute. Below the spire sits the older machine — the one that makes the money everything else is priced in.',
+        term:{name:'INFLATION',def:'Print more units and each one buys less. A fixed supply is the whole reason Bitcoin exists.'},
+        nostalgia:'YOU MUST CONSTRUCT ADDITIONAL RESERVES.' },
+  61: { world:18, title:'THE CHAIRMAN, OUTVOTED!', color:'#ffd23f', bg:0x2a1c06,
+        boss:{img:'chairman',scale:90,tint:0,angle:10},
+        theme:24, dest:'LAUNCHING TO THE ORBITAL VAULT…',
+        story:'The printer is off and the marble is quiet. The last custody left on this rock is not on it: a vault in orbit, one warden, and a very long way down.',
+        term:{name:'CUSTODY',def:'Who actually holds the keys. If it is not you, your balance is a promise somebody else can break.'},
+        nostalgia:'THANK YOU NORMIE! BUT YOUR KEYS ARE IN ANOTHER ORBIT.' },
+  64: { world:19, title:'THE SATELLITE WARDEN, DEORBITED!', color:'#66ddff', bg:0x060a1a,
+        boss:{img:'satwarden',scale:90,tint:0,angle:12},
+        theme:25, dest:'BEGINNING THE ASCENT…',
+        story:'The orbital vault is yours and the whole map is visible from up here. One structure still rises above it: the monolith tower, storm-wrapped, with a summit nobody has reached.',
+        term:{name:'NODE',def:'A machine that keeps its own copy of the chain and checks every block. Run one and you take nobody\'s word for it.'},
+        nostalgia:'THE PRINCESS IS IN THE LAST CASTLE. IT IS VERY TALL.' },
+  67: { world:20, title:'SAYLOR TOPPLED AT THE SUMMIT!', color:'#ffb43a', bg:0x1a0c04,
+        boss:{img:'saylor',scale:94,tint:0,angle:12},
+        theme:27, dest:'ESCAPE VELOCITY — TO THE MOON…',
+        story:'The storm broke, the summit fell, and there is nothing above you but sky. Three levels left, gravity halves, and the oldest question in crypto is waiting to be answered in person.',
+        term:{name:'WEN MOON',def:'The oldest question in the group chat. Nobody knows — and anyone who says they do is selling.'},
+        nostalgia:'THE CAKE IS REAL. THE MOON IS THREE LEVELS AWAY.' }
 };
 var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'WorldClear'}); },
@@ -7178,7 +7323,68 @@ var BRIEFINGS = {
          {tex:'bot', name:'CRYSTAL SCANNERS', desc:'the dimension tests your timing'},
          {tex:'paper', name:'RUG CRYSTALS', desc:'some floors are prettier than they are solid'}
        ],
-       tip:'The final VIP world. Clear it and the whole wing bows. Hands of diamond, Normie.' }
+       tip:'Clear this one and the citadel gates open. Hands of diamond, Normie.' },
+  // §5.2: worlds 16-21 had no Briefing either — the top tier walked into six unexplained worlds.
+  52: { title:'ULTRA VIP — WORLD 16: THE CITADEL',
+       powers:[
+         {tex:'solana', name:'SOL DISCS', desc:'Ammo caches line the conduit — stock up.'},
+         {tex:'supergeek', name:'SUPER GEEK', desc:'Audit on — the vault reads your code.'}
+       ],
+       threats:[
+         {tex:'laserbot', name:'LASER BOTS', desc:'they lock on from across the hall'},
+         {tex:'mevdrone', name:'MEV DRONES', desc:'they charge the moment you commit'}
+       ],
+       tip:'The Citadel holds the keys to everything. Take the stairs it does not know about.' },
+  55: { title:'ULTRA VIP — WORLD 17: THE EXCHANGE SPIRE',
+       powers:[
+         {tex:'caffeine', name:'CAFFEINE', desc:'Match the floor speed for a while.'},
+         {tex:'coldwallet', name:'COLD WALLET', desc:'Freeze the book mid-quote.'}
+       ],
+       threats:[
+         {tex:'laserbot', name:'HFT BOTS', desc:'they fire faster than you can read'},
+         {tex:'bot', name:'SANDWICH DESKS', desc:'they trade in front of you and behind you'}
+       ],
+       tip:'Every price on the spire is somebody else\'s offer. Nobody up here is on your side.' },
+  58: { title:'ULTRA VIP — WORLD 18: THE GOLD RESERVE',
+       powers:[
+         {tex:'diamond', name:'DIAMOND', desc:'Bullion counts as treasure. Take it.'},
+         {tex:'omegachad', name:'GIGA CHAD', desc:'Walk the marble like you own it.'}
+       ],
+       threats:[
+         {tex:'ghost', name:'AUDITORS', desc:'the vault is watched, always'},
+         {tex:'mevdrone', name:'PRINTER DRONES', desc:'more supply, aimed at you'}
+       ],
+       tip:'They print the money and they guard the money. Ask who checks the shelves.' },
+  61: { title:'ULTRA VIP — WORLD 19: THE ORBITAL VAULT',
+       powers:[
+         {tex:'moon', name:'MOON POWER', desc:'Thin gravity favours the brave.'},
+         {tex:'solana', name:'SOL DISCS', desc:'The only thing that carries in a vacuum.'}
+       ],
+       threats:[
+         {tex:'laserbot', name:'ORBITAL TURRETS', desc:'they own the high ground'},
+         {tex:'mevdrone', name:'DEBRIS DRONES', desc:'they dive the second you drift'}
+       ],
+       tip:'A vault in orbit still has to be honest. Watch what it does, not what it broadcasts.' },
+  64: { title:'ULTRA VIP — WORLD 20: THE ASCENT',
+       powers:[
+         {tex:'caffeine', name:'CAFFEINE', desc:'The tower rewards momentum.'},
+         {tex:'candle', name:'GREEN CANDLE', desc:'Heals — the storm takes hearts.'}
+       ],
+       threats:[
+         {tex:'laserbot', name:'STORM SENTRIES', desc:'the tower defends every landing'},
+         {tex:'ghost', name:'THIN AIR', desc:'nothing up here stays solid for long'}
+       ],
+       tip:'Two fights on this climb: the storm first, then the man at the summit.' },
+  67: { title:'ULTRA VIP — WORLD 21: THE MOON',
+       powers:[
+         {tex:'moon', name:'MOON JUMP', desc:'Gravity is half. Use all of it.'},
+         {tex:'megawhale', name:'MEGA WHALE', desc:'The wing keeps one fuelled up here.'}
+       ],
+       threats:[
+         {tex:'laserbot', name:'LANDING GUNS', desc:'the site was never abandoned'},
+         {tex:'bitmaxi', name:'FLAG PLANTERS', desc:'somebody got here first and wants it back'}
+       ],
+       tip:'The last three levels in the game. Up here WEN MOON stops being a question.' }
 };
 
 /* ---------- Controls: opening HOW-TO-PLAY screen shown before World 1 ---------- */
@@ -7226,7 +7432,10 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     this.input.keyboard.on('keydown',function(){ self.advance(); });
     // (no padAdvance here — update() owns pad-advance for this scene, on every page. A one-shot
     //  watcher spent itself on page 0 and left the START page unreachable by controller.)
-    this.showPage(0);
+    // P2: if the '?' card was dismissed moments ago, page 0 would restate its first section
+    // verbatim. Skip straight to THE GOAL page in that case; the pad/tap flow is identical.
+    var _howRecent=false; try{ _howRecent=!!(window.__NQ_HOWTO_AT && Date.now()-window.__NQ_HOWTO_AT<60000); }catch(e){}
+    this.showPage(_howRecent?1:0);
   },
   showPage:function(n){ this.page=n; this.t0=0;   // t0=0 → update() re-stamps it, giving each page its own idle timer
     for(var i=0;i<this.p0.length;i++) this.p0[i].setVisible(n===0);
@@ -7408,6 +7617,43 @@ function nqParkedPrompt(scene, y){
   scene.tweens.add({targets:t,alpha:.4,duration:900,yoyo:true,repeat:-1});
   return t;
 }
+// §6.3: SHAREABLE RUN CARD. One plain-text line — score, how far the run got, the public link.
+// States a fact, promises nothing: no token amounts, no rewards, no prize language. No endpoint.
+// Did this pointer land on a small text button? (The end screens restart on a tap ANYWHERE, so
+// every button on them has to be excluded by bounds — the pattern the Title's NEW GAME chip uses.)
+function nqOnBtn(t, pointer){
+  try{ if(!t||!t.scene||!pointer||pointer.worldX==null) return false;
+    var b=t.getBounds(); Phaser.Geom.Rectangle.Inflate(b,12,10); return b.contains(pointer.worldX,pointer.worldY); }
+  catch(e){ return false; }
+}
+function nqShareLine(score, reachTxt){
+  return 'NORMIE QUEST — '+(Math.round(score)||0)+' points'+(reachTxt?(' · '+reachTxt):'')+' · https://normiequest.app';
+}
+// A small text button. Touch devices get the native share sheet (a clipboard write from a
+// webview is frequently refused); everything else copies, with execCommand as the last resort.
+// The caller must exclude its bounds from any tap-anywhere handler — see Over/Win.
+function nqShareBtn(scene, x, y, line){
+  var t=scene.add.text(x,y,'⇪ SHARE',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#66ddff'}).setOrigin(1,.5).setDepth(60).setInteractive({useHandCursor:true});
+  var say=function(m,c){ try{ if(t&&t.scene) t.setText(m).setColor(c); }catch(e){} };
+  t.on('pointerup',function(){
+    var isTouch=false;
+    try{ isTouch=!!(scene.sys.game.device.input.touch||(navigator.maxTouchPoints>0)||('ontouchstart' in window)); }catch(e){}
+    try{
+      if(isTouch && navigator.share){ navigator.share({text:line}).then(function(){ say('SHARED ✓','#3dff6e'); }).catch(function(){}); return; }
+      if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(line).then(function(){ say('COPIED ✓','#3dff6e'); }).catch(function(){ say('COPY FAILED','#ff8a8a'); }); return; }
+    }catch(e){}
+    try{ var ta=document.createElement('textarea'); ta.value=line; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); say('COPIED ✓','#3dff6e'); }
+    catch(e){ say('COPY FAILED','#ff8a8a'); }
+  });
+  return t;
+}
+// Would this score place on the live weekly board? Only the top three are known client-side, so a
+// score below all of them is reported as "#4+" rather than inventing a position.
+function nqLbRankOf(score, lb){
+  var r=1; for(var i=0;i<lb.length;i++){ if((lb[i].score||0)>=score) r++; }
+  return { n:r, exact:(r<=lb.length) };
+}
 function nqBuyNormie(){
   try{ if(typeof window.__NQ_OPENPREMIUM==='function'){ window.__NQ_OPENPREMIUM(); return; } }catch(e){}
   var mint=(window.__NQ_NORMIE_MINT||NQ_NORMIE_MINT_DEFAULT);
@@ -7449,14 +7695,23 @@ function nqPreviewBand(){
 // Rotate within the eligible set, and weight the VIP wing in for lower tiers too: seeing the
 // FINAL boss is a stronger pull than seeing the next world, and it is the whole Nation pitch.
 function nqPreviewPick(){
-  // ⛔ TESTING LANES ONLY (audit #10). The cards promise $NORMIE unlocks and VIP perk terms, and
-  // CLAUDE.md is explicit: no gating terms on any PUBLIC surface — there is no agreement with the
-  // NORMIE team. On the public build (__NQ_SETUP false) __NQ_ACCESS is never published, the band
-  // defaulted to t1 and EVERY card showed, including "STILL LOCKED" over content that is not
-  // actually locked publicly. Interstitials fall back to the Nation identity line instead.
-  try{ if(typeof window==='undefined' || !window.__NQ_SETUP) return null; }catch(e){ return null; }
+  // §5.3: the SETUP-only gate above rested on "__NQ_ACCESS is never published on the public
+  // build" — untrue since the 2026-08-22 launch, where it is published on EVERY build (see the
+  // panel block's own note). So nqPreviewBand() reads the player's REAL band everywhere and the
+  // card shows content that is genuinely locked for them. The copy discipline is unchanged: the
+  // card names a world or a perk and carries the amount-free "terms still in testing" hedge —
+  // never a holding, a threshold or a reward.
+  try{ if(typeof window==='undefined') return null; }catch(e){ return null; }
+  if(!nqGateOn()) return null;   // §5.3: gate off = nothing IS locked, so "STILL LOCKED" would be a lie
   var band=nqPreviewBand(); if(!band) return null;
+  // §5.3: a world card only shows if that world is genuinely out of reach for THIS player right
+  // now — the live gate answers that (launch cap included), so the band is only the ordering.
   var pool=NQ_PREVIEWS.filter(function(p){
+    if(p.world){ var _d=null; for(var _i=0;_i<LEVELS.length;_i++){ if(LEVELS[_i]&&LEVELS[_i].name===(p.world+'-1')){ _d=LEVELS[_i]; break; } }
+      if(_d && nqWorldAllowed(_d)) return false; }
+    // Same rule for the perk teases: LEVEL RESUME is unlocked for everyone outside the setup lane
+    // today, so a "STILL LOCKED" card over it would be selling something the player already has.
+    if(p.feature==='resume'){ var _ru=true; try{ _ru=nqLevelResumeUnlocked(); }catch(e){} if(_ru) return false; }
     if(band==='vip') return p.band==='vip';
     if(band==='t2') return p.band==='t2'||p.band==='vip';
     return true;
@@ -7509,7 +7764,7 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
     // build before any card is configured rotates nation/fact exactly like it shipped.
     var _turn=0; try{ _turn=parseInt(sessionStorage.getItem('nqLcTurn')||'0',10)||0; sessionStorage.setItem('nqLcTurn',String(_turn+1)); }catch(e){}
     var _beats=['nation','fact'];
-    try{ if(window.__NQ_SETUP) _beats.push('preview'); }catch(e){}
+    _beats.push('preview');   // §5.3: nqPreviewPick() now answers on every build and returns null when this player has nothing locked (the beat then falls through to 'fact' below)
     if(nqLbTease()) _beats.push('board');
     if(nqPromoCard()) _beats.push('card');
     if(nqTerms()) _beats.push('perks');   // holder-perks beat only once LIVE terms have landed — amounts are never hardcoded
@@ -7589,12 +7844,21 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
       this.add.text(cx,150,n.body,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:W-60}}).setOrigin(.5,0);
     }
     var _lounge=!!(prev&&prev.feature==='lounge');
-    var buy=this.add.rectangle(cx,216,206,18,_lounge?0x9b6bff:0xffd23f,1).setStrokeStyle(2,0xffffff,0.18).setInteractive({useHandCursor:true});
-    this.add.text(cx,216,_lounge?'🏛  SEE THE LOUNGE':'🪙  GRAB $NORMIE',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:_lounge?'#ffffff':'#0a0813'}).setOrigin(.5).setDepth(1);
+    // P10: a BUY button on EVERY clear card, now held 6-8s, turned the reading beat into ad time.
+    // Suppress it on the first three clears of the session — a player who has seen three levels
+    // has not decided anything yet — and on the two beats that are not selling anything ('fact',
+    // 'board'). Those cards get the leaderboard door instead, which is what they are about.
+    var _softBeat=(beat==='fact'||beat==='board'), _early=(_turn<3);
+    var _noBuy=(_early||_softBeat)&&!_lounge;
+    var buy=this.add.rectangle(cx,216,206,18,_noBuy?0x101a2e:(_lounge?0x9b6bff:0xffd23f),1)
+      .setStrokeStyle(2,_noBuy?0xffd23f:0xffffff,_noBuy?1:0.18).setInteractive({useHandCursor:true});
+    this.add.text(cx,216,_noBuy?'🏆  SEE THE LEADERBOARD':(_lounge?'🏛  SEE THE LOUNGE':'🪙  GRAB $NORMIE'),
+      {fontFamily:'"Press Start 2P"',fontSize:'8px',color:_noBuy?'#ffd23f':(_lounge?'#ffffff':'#0a0813')}).setOrigin(.5).setDepth(1);
     buy.on('pointerover',function(){ buy.setScale(1.05); }); buy.on('pointerout',function(){ buy.setScale(1); });
     buy.on('pointerup',function(){ self._buyOpen=true;   // opening a panel must not also advance the beat
       self.t0=self.time.now;   // and the auto-advance clock restarts — the level must not start under the buy widget (review 2026-08-30)
-      if(_lounge){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} } else nqBuyNormie(); });
+      if(_noBuy){ try{ if(window.__NQ_OPENBOARD) window.__NQ_OPENBOARD(); else if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} }
+      else if(_lounge){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} } else nqBuyNormie(); });
     this.cont=this.add.text(cx,H-10,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff6e'}).setOrigin(.5);
     // While the buy/wallet panel is open nothing advances (the overlay eats taps anyway, but a
     // key or pad press must not start the level behind it). update() clears _buyOpen and restarts
@@ -8768,12 +9032,17 @@ if(typeof document!=='undefined'){ (function(){
   function open(){ document.getElementById('nqhow-pad').className='nqhow-sec'+(padOn()?' on':''); wrap.classList.add('on');
     howKb(false); try{ howPaused=!!(window.__NQ_PAUSE&&window.__NQ_PAUSE()); }catch(e){ howPaused=false; } }
   function close(){ wrap.classList.remove('on'); try{ localStorage.setItem('nqHowTo1','1'); }catch(e){}
+    // P2: stamp the dismissal so the Controls scene can skip its own controls page rather than
+    // saying the same thing a third time to someone who has just read it.
+    try{ window.__NQ_HOWTO_AT=Date.now(); }catch(e){}
     howKb(true); if(howPaused){ try{ window.__NQ_RESUME&&window.__NQ_RESUME(); }catch(e){} howPaused=false; } }
   btn.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); if(wrap.classList.contains('on')) close(); else open(); });
   document.getElementById('nqhow-go').addEventListener('click',close);
   wrap.addEventListener('click',function(e){ if(e.target===wrap) close(); });
-  var seen=false; try{ seen=localStorage.getItem('nqHowTo1')==='1'; }catch(e){}
-  if(!seen) setTimeout(open,900);   // let the title screen paint first
+  // P2: NO AUTO-OPEN. A first-timer met three text screens and four taps before a single frame of
+  // game: this card over the title, then Controls page 1, then Controls page 2. The Controls scene
+  // already teaches the controls on the way into 1-1, so this card is now opt-in only — the '?'
+  // button (top-right, live everywhere including mid-run) is unchanged and still opens it.
 })(); }
 </script>
 <script>

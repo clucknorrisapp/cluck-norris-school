@@ -104,6 +104,65 @@ function pk(seed) { return 'W' + seed + 'x'.repeat(40); }   // fake pubkey, good
   ok('F15: every VIP spin — win or queue_full — consumes exactly one spin, no free re-roll', allSingleConsumed);
 }
 
+// ---- odds(): raw weight travels with pct -----------------------------------
+// The lounge sizes its wedges from `weight`. pct is rounded per entry, so a table whose rounded
+// percentages do not sum to 100 would draw wedges that no longer match the real odds — the one
+// dishonesty this wheel must not have. Assert the relationship, not the literal numbers.
+{
+  [false, true].forEach((vip) => {
+    const label = vip ? 'member' : 'free';
+    const table = rewards.wheelFor(vip);
+    const o = rewards.odds(vip);
+    const wTotal = o.reduce((n, e) => n + e.weight, 0);
+    ok('odds(' + label + '): every entry carries a positive numeric weight',
+       o.length === table.length && o.every((e) => typeof e.weight === 'number' && e.weight > 0));
+    ok('odds(' + label + '): weights are the wheel table\'s own weights, in order',
+       o.every((e, i) => e.item === table[i].item && e.weight === table[i].weight));
+    ok('odds(' + label + '): pct is exactly the rounded share of the weight total',
+       o.every((e) => e.pct === Math.round((e.weight / wTotal) * 100)));
+    // The wedge geometry: share-of-weight-total is what the page draws, and it must sum to the
+    // whole circle even when the rounded percentages do not sum to 100.
+    const spanTotal = o.reduce((n, e) => n + (e.weight / wTotal) * 360, 0);
+    ok('odds(' + label + '): weight shares fill exactly 360°', Math.abs(spanTotal - 360) < 1e-9);
+    ok('odds(' + label + '): pct is still present and backward compatible',
+       o.every((e) => typeof e.pct === 'number' && e.item));
+  });
+}
+
 fs.readFileSync = origReadFileSync;
-console.log('\n' + (fail === 0 ? 'ALL PASS' : fail + ' FAILED') + '  (' + pass + '/' + (pass + fail) + ')');
-process.exit(fail === 0 ? 0 : 1);
+
+// ---- routes: the wallet-less ?public=1 read --------------------------------
+// Strictly read-only and strictly impersonal — it exists so the lounge can paint the wheel before
+// anyone signs anything. Same optional-express skip rule as nq-claims-test.cjs.
+(async () => {
+  let express = null;
+  try { express = require('express'); } catch (e) { console.log('  SKIP  public wheel-status route (express not installed)'); }
+  if (express) {
+    const app = express();
+    app.use(express.json());
+    app.use(require('../routes.js'));
+    const srv = await new Promise((res) => { const s = app.listen(0, () => res(s)); });
+    const base = 'http://127.0.0.1:' + srv.address().port;
+    const j = await (await fetch(base + '/api/nq/wheel/status?public=1')).json();
+    ok('public=1: answers without a wallet or a session token, with both odds tables',
+       j.ok === true && j.publicView === true && Array.isArray(j.odds) && j.odds.length > 0
+       && Array.isArray(j.memberOdds) && j.memberOdds.length > 0);
+    ok('public=1: odds carry weight + pct, same shape as the authenticated read',
+       j.odds.every((o) => o.item && typeof o.pct === 'number' && typeof o.weight === 'number'));
+    ok('public=1: the featured room teaser is an id/label pair, nothing more',
+       !!j.featured && typeof j.featured.room === 'string' && typeof j.featured.label === 'string'
+       && Object.keys(j.featured).sort().join(',') === 'emoji,label,room');
+    // No per-user field may appear: not one of these exists without a verified session.
+    const leaked = ['pending', 'pass', 'raffle', 'heartBuff', 'nextSpinAt', 'nextBonusAt',
+                    'canSpin', 'dailyReady', 'bonusReady', 'vip', 'jackpotSoon', 'preview']
+      .filter((k) => Object.prototype.hasOwnProperty.call(j, k));
+    ok('public=1: leaks no per-user field (' + (leaked.join(',') || 'none present') + ')', leaked.length === 0);
+    // A wallet-less read WITHOUT the flag must still be refused.
+    const noFlag = await fetch(base + '/api/nq/wheel/status');
+    ok('the authenticated read still refuses a wallet-less caller', noFlag.status === 401);
+    srv.close();
+  }
+
+  console.log('\n' + (fail === 0 ? 'ALL PASS' : fail + ' FAILED') + '  (' + pass + '/' + (pass + fail) + ')');
+  process.exit(fail === 0 ? 0 : 1);
+})();
