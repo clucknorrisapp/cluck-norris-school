@@ -65,7 +65,9 @@ body{background:transparent;font-family:var(--body);}
   <div class="foot" id="foot"></div>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
+  var esc = CluckUtil.esc;
   var KEY_LS='clkn_pm_key';
   function getKey(){ try{ return localStorage.getItem(KEY_LS)||''; }catch(e){ return ''; } }
   function saveKey(){ var k=document.getElementById('keyInput').value.trim(); if(!k)return; try{localStorage.setItem(KEY_LS,k);}catch(e){} document.getElementById('keyRow').style.display='none'; load(); }
@@ -82,7 +84,7 @@ body{background:transparent;font-family:var(--body);}
       var r=await fetch('/api/pool-monitor',{cache:'no-store',headers:{'x-premium-key':key}});
       if(r.status===404){ document.getElementById('keyRow').style.display='flex'; document.getElementById('content').innerHTML='<div class="card bad" style="text-align:center">Key rejected — try again.</div>'; return; }
       var d=await r.json();
-      if(!d.success){ document.getElementById('content').innerHTML='<div class="card muted" style="text-align:center">'+(d.error||'No data yet — the monitor warms up a couple minutes after deploy.')+'</div>'; return; }
+      if(!d.success){ document.getElementById('content').innerHTML='<div class="card muted" style="text-align:center">'+esc(d.error||'No data yet — the monitor warms up a couple minutes after deploy.')+'</div>'; return; }
       render(d);
       document.getElementById('foot').textContent='auto-refreshing · data '+ago(d.updatedAt);
     }catch(e){ document.getElementById('content').innerHTML='<div class="card muted" style="text-align:center">Network hiccup — retrying…</div>'; }
