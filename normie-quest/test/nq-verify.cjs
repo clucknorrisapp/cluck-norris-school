@@ -228,8 +228,14 @@ const isNqServer = f => /^normie-quest\/[^/]+\.js$/.test(f);
 const isBuiltShell = f => /^normie-quest\/public\/normie-quest-(platformer|play)\.html$/.test(f);
 const isAsset = f => /^normie-quest\/(src\/assets\/|public\/(worlds|sfx|music|pwa)\/)/.test(f);
 // The plates nq-boss-ground.cjs measures (its BOSSES table). A swapped plate with a different bottom
-// margin silently re-sinks or floats a boss — CLAUDE.md, 2026-08-16.
-const isBossPlate = f => /(rugking|scammykol|ceoboss|cut_tom|shark|sandlord|ghostship)/.test(f);
+// margin silently re-sinks or floats a boss — CLAUDE.md, 2026-08-16. Derived from the harness's own
+// BOSSES list (F22: a hand-maintained copy here missed 5 of 13 bosses and silently gave the all-clear)
+// so the two files cannot drift — each boss's `tex` is a substring of its asset filename
+// (cut_rugking.b64, scary_ghostship.b64, …).
+const { BOSSES: BOSS_GROUND_BOSSES } = require('./nq-boss-ground.cjs');
+const BOSS_TEX_RE = new RegExp('(' + [...new Set(BOSS_GROUND_BOSSES.map(b => b.tex))]
+  .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')');
+const isBossPlate = f => BOSS_TEX_RE.test(f);
 const otherNq = changed.filter(f => f.startsWith('normie-quest/') && f !== GL
   && !f.startsWith('normie-quest/test/') && !/\.md$/.test(f) && !isNqServer(f) && !isBuiltShell(f) && f !== 'normie-quest/src/build.js');
 const assets = otherNq.filter(isAsset);

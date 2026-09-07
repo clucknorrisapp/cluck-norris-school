@@ -16,7 +16,9 @@
  * Positive delta = SUNK below the floor. Negative = HOVERING above it.
  */
 const path = require('path');
-const { chromium } = require(path.join(__dirname, '..', '..', 'node_modules', 'playwright-core'));
+// playwright-core is required LAZILY inside the require.main guard: nq-verify.cjs requires this
+// file only for its BOSSES list, and CI's nq-state-plan job runs with no npm ci — a top-level
+// require threw MODULE_NOT_FOUND there and skipped the whole state matrix (2026-09-07).
 const fs = require('fs');
 
 const BASE = process.argv.find(a => /^https?:\/\//.test(a)) || 'http://localhost:3111';
@@ -50,6 +52,12 @@ const BOSSES = [
   //    this harness measures the FRAME bottom; his visible feet sit on GY exactly.
   { idx: 28, label: 'Troll (TRENCHES)',      tex: 'troll', slack: 3.2 },
 ];
+
+// This is the source of truth for "which asset is a boss plate" (nq-verify.cjs requires this file
+// for BOSSES rather than keeping its own copy — F22: a hand-maintained regex there missed 5 of 13
+// bosses). Exporting is safe: requiring this module must NOT launch a browser or exit the process,
+// which is why the runner below is gated on require.main.
+module.exports = { BOSSES };
 
 function chromePath() {
   const root = process.env.PLAYWRIGHT_CHROMIUM_PATH || process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
@@ -98,7 +106,8 @@ async function measure(page, b) {
   return { ...b, ok: true, forced, ...g, delta: +(g.feet - GY).toFixed(2) };
 }
 
-(async () => {
+if (require.main === module) (async () => {
+  const { chromium } = require(path.join(__dirname, '..', '..', 'node_modules', 'playwright-core'));
   const browser = await chromium.launch({ executablePath: chromePath(), args: LAUNCH_ARGS });
   const ctx = await browser.newContext({ viewport: { width: 1194, height: 834 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();

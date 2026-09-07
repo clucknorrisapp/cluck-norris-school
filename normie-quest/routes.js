@@ -381,6 +381,9 @@ router.get('/normie-quest-x7/lounge', (req, res) => {
 function loungePath() { return path.join(process.env.DATA_DIR || '/data', 'nq-lounge.json'); }
 function loungePosts() { try { const a = JSON.parse(fs.readFileSync(loungePath(), 'utf8')); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
 router.get('/api/nq/lounge', (req, res) => {
+  // F13: this route did 5-7 sync readFileSync+JSON.parse of the whole rewards/lounge store with
+  // no per-IP cap, unlike every sibling route (124ms/call measured at 28.8k wallets).
+  if (throttled(req, 'lounge', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
     const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
     if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
@@ -458,6 +461,8 @@ router.get('/api/nq/ledger', (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.get('/api/nq/wheel/status', (req, res) => {
+  // F13: same unthrottled sync-read cost as /api/nq/lounge above.
+  if (throttled(req, 'wheelstatus', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
     const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
     if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
