@@ -140,6 +140,18 @@ function isVip(owner, balances) {
   if (c.vipClkn > 0 && Number(b.clkn || 0) >= c.vipClkn) return true;
   return vipList().indexOf(String(owner)) !== -1;
 }
+// F18: the three lounge/wheel routes had no balances object to hand isVip and passed `null`, which
+// short-circuits BOTH balance paths above and leaves only the manual allowlist — so the holder
+// path is dead the moment the owner sets vipNormie/vipClkn, with no error to notice. This is the
+// form the tier routes (verify/refresh) already use: readBalancesCached, i.e. one RPC per wallet
+// per NQ_BALANCE_CACHE_SEC window, shared with those routes rather than added on top of them.
+// A failed balance read falls back to the allowlist answer, so an RPC outage can never lock an
+// owner-granted VIP out of the lounge.
+async function isVipAsync(owner) {
+  let balances = null;
+  try { balances = await readBalancesCached(String(owner || '')); } catch (e) { balances = null; }
+  return isVip(owner, balances);
+}
 // Public, secret-free view for the client (what to show on the gate).
 function publicConfig() {
   const c = cfg(), t = thresholds();
@@ -290,4 +302,4 @@ function tierForBalances(b) {
   return { tier: 0, worlds: gate.freeWorlds() };
 }
 
-module.exports = { cfg, publicConfig, challenge, verify, refresh, checkSession, tierForBalances, thresholds, refreshPrice, normiePriceUsd, readBalances, isVip, vipList, vipListWrite, gate, CLKN_MINT_DEFAULT };
+module.exports = { cfg, publicConfig, challenge, verify, refresh, checkSession, tierForBalances, thresholds, refreshPrice, normiePriceUsd, readBalances, isVip, isVipAsync, vipList, vipListWrite, gate, CLKN_MINT_DEFAULT };

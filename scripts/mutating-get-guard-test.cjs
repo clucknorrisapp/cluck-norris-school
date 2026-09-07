@@ -7,6 +7,7 @@
 // answer 404 like every other admin route. Boots the real server with a throwaway key and no
 // secrets, so nothing here can reach a chain, a wallet, X or Telegram.
 const { spawn } = require("child_process");
+const http = require("http");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -22,6 +23,24 @@ async function call(method, p, withKey = true) {
   const r = await fetch(BASE + p, { method, headers: withKey ? { "x-premium-key": KEY } : {} });
   let body = null; try { body = await r.json(); } catch (_) { body = null; }
   return { status: r.status, body };
+}
+// The Normie Quest router takes its admin key as ?key= / x-nq-key, not x-premium-key.
+const NQK = "key=" + encodeURIComponent(KEY);
+// Raw request: node's fetch SILENTLY DROPS a client-set Host header (it is on the forbidden-header
+// list), and the F12 host-derivation assertions have to control Host and X-Forwarded-Host
+// independently. Also returns Location without following redirects.
+function raw(method, p, headers) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: "127.0.0.1", port: PORT, path: p, method, headers: headers || {} }, (res) => {
+      let data = ""; res.setEncoding("utf8");
+      res.on("data", (c) => { data += c; });
+      res.on("end", () => {
+        let body = null; try { body = JSON.parse(data); } catch (_) {}
+        resolve({ status: res.statusCode, location: res.headers.location || "", text: data, body });
+      });
+    });
+    req.on("error", reject); req.end();
+  });
 }
 
 (async () => {
@@ -97,6 +116,85 @@ async function call(method, p, withKey = true) {
   // ── #4 the admin route reports days as DAYS and the payout route reports slices
   r = await call("GET", "/api/cuna-stake/admin");
   ok("cuna admin reports daysAccrued and slicesAccrued as numbers", r.status === 200 && r.body && typeof r.body.daysAccrued === "number" && typeof r.body.slicesAccrued === "number" && r.body.daysAccrued <= r.body.slicesAccrued, JSON.stringify({ d: r.body && r.body.daysAccrued, s: r.body && r.body.slicesAccrued, status: r.status }));
+
+  // ── F12 (deep dive 2026-09-06): the Cloudflare origin-lockdown exemption for the game host.
+  // This harness boots with CF_ORIGIN_SECRET UNSET, which is the required dev/CI posture: the
+  // lockdown is dark, nothing 403s, and clientIp() keeps its pre-lockdown behaviour (server.js
+  // stamps req.cluckEdgeVerified = null when there is no secret to verify against, and
+  // normie-quest/routes.js only distrusts `cf-connecting-ip` when that flag is explicitly false).
+  // So the two halves that ARE assertable secret-free are the ones that scope the exemption:
+  //   (a) the game host is derived from the TCP Host header, never X-Forwarded-Host — Express runs
+  //       `trust proxy: true`, which made req.hostname honour a client-supplied forwarded host;
+  //   (b) NQ_GAME_PATH is exhaustive, so the admin/PII consoles are not game surfaces.
+  // WITH the secret set, (a)+(b) are exactly what the 403 branch keys off: a spoofed
+  // X-Forwarded-Host no longer buys the exemption, and /normie-quest-x7/{prizes,vip,reward,
+  // lounge-admin,dashboard} plus /api/nq/{gate,leaderboard/reset} fall through to the 403 instead
+  // of being waved past the WAF. Those paths cannot be exercised here without arming the secret,
+  // which would 403 the rest of this file.
+  let x = await raw("GET", "/api/nq/gate?key=nope", { "x-forwarded-host": "normiequest.app" });
+  ok("X-Forwarded-Host cannot make a request look like the game host (F12)", x.status === 404 && !x.location, x.status + " " + x.location);
+  x = await raw("GET", "/normie-quest-x7", { host: "normiequest.app" });
+  ok("a real Host: normiequest.app still serves the game shell", x.status === 200, String(x.status));
+  x = await raw("GET", "/api/nq/config", { host: "normiequest.app" });
+  ok("…and the public game API", x.status === 200, String(x.status));
+  x = await raw("GET", "/normie-quest-x7/prizes?" + NQK, { host: "normiequest.app" });
+  ok("…but the PII console is NOT a game surface — it bounces off the game host", x.status === 301 && /clucknorris\.app/.test(x.location), x.status + " " + x.location);
+  x = await raw("GET", "/normie-quest-x7/dashboard?" + NQK, { host: "normiequest.app" });
+  ok("…nor is the operator dashboard", x.status === 301, x.status + " " + x.location);
+  x = await raw("GET", "/api/nq/leaderboard/reset?" + NQK, { host: "normiequest.app" });
+  ok("…nor the owner season-reset lever", x.status === 301, x.status + " " + x.location);
+  x = await raw("GET", "/api/nq/gate?" + NQK, { host: "normiequest.app" });
+  ok("…nor the launch-gate lever", x.status === 301, x.status + " " + x.location);
+
+  // ── §9.11: the Normie Quest admin routes that ACT follow the repo POST-only rule.
+  // One triple per converted route: flag-less GET = the read, GET with a mutating flag = 405,
+  // POST = through. DATA_DIR is the throwaway temp dir above, so every write here is discarded.
+  const PK = "A".repeat(32);   // valid base58 shape for the VIP allowlist regex; not a real wallet
+  r = await call("GET", "/normie-quest-x7/vip?" + NQK + "&add=" + PK);
+  ok("GET /normie-quest-x7/vip?add= is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/normie-quest-x7/vip?" + NQK);
+  ok("GET /normie-quest-x7/vip still lists the allowlist", r.status === 200 && r.body && Array.isArray(r.body.wallets), JSON.stringify(r.body));
+  r = await call("POST", "/normie-quest-x7/vip?" + NQK + "&add=" + PK);
+  ok("POST /normie-quest-x7/vip?add= grants", r.status === 200 && r.body && r.body.wallets.indexOf(PK) !== -1, JSON.stringify(r.body));
+  r = await call("POST", "/normie-quest-x7/vip?" + NQK + "&remove=" + PK);
+  ok("POST /normie-quest-x7/vip?remove= revokes", r.status === 200 && r.body && r.body.wallets.indexOf(PK) === -1, JSON.stringify(r.body));
+
+  r = await call("GET", "/normie-quest-x7/lounge-admin?" + NQK + "&title=t&body=b");
+  ok("GET /normie-quest-x7/lounge-admin?title=&body= is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/normie-quest-x7/lounge-admin?" + NQK);
+  ok("GET /normie-quest-x7/lounge-admin still lists posts", r.status === 200 && r.body && Array.isArray(r.body.posts), JSON.stringify(r.body));
+  r = await call("POST", "/normie-quest-x7/lounge-admin?" + NQK + "&title=t&body=b");
+  ok("POST /normie-quest-x7/lounge-admin posts", r.status === 200 && r.body && r.body.count === 1, JSON.stringify(r.body));
+
+  r = await call("GET", "/normie-quest-x7/reward?" + NQK + "&wallet=" + PK + "&item=disc");
+  ok("GET /normie-quest-x7/reward?item= is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/normie-quest-x7/reward?" + NQK + "&wallet=" + PK);
+  ok("GET /normie-quest-x7/reward still reads a wallet's queue", r.status === 200 && r.body && r.body.pending === 0, JSON.stringify(r.body));
+  r = await call("POST", "/normie-quest-x7/reward?" + NQK + "&wallet=" + PK + "&item=disc");
+  ok("POST /normie-quest-x7/reward grants the item", r.status === 200 && r.body && r.body.ok === true && r.body.pending === 1, JSON.stringify(r.body));
+
+  // The giveaway console renders on GET (it is a browser page); only &shipped= acts — and it
+  // permanently wipes a winner's decrypted address, so it must never fire on a link unfurl.
+  r = await call("GET", "/normie-quest-x7/prizes?" + NQK + "&shipped=0:" + PK + "&confirm=SHIPPED");
+  ok("GET /normie-quest-x7/prizes?shipped= is refused with 405 (irreversible)", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/normie-quest-x7/prizes?" + NQK);
+  ok("GET /normie-quest-x7/prizes still renders the console", r.status === 200);
+  r = await call("POST", "/normie-quest-x7/prizes?" + NQK + "&shipped=0:" + PK + "&confirm=SHIPPED");
+  ok("POST /normie-quest-x7/prizes?shipped= goes through (no such claim here — status only)", r.status === 200);
+
+  r = await call("GET", "/api/nq/leaderboard/reset?" + NQK + "&confirm=RESET");
+  ok("GET /api/nq/leaderboard/reset?confirm=RESET is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/nq/leaderboard/reset?" + NQK);
+  ok("GET /api/nq/leaderboard/reset without confirm stays the self-documenting 400", r.status === 400, JSON.stringify(r.body));
+  r = await call("POST", "/api/nq/leaderboard/reset?" + NQK + "&confirm=RESET");
+  ok("POST /api/nq/leaderboard/reset?confirm=RESET archives + clears", r.status === 200 && r.body && r.body.ok === true, JSON.stringify(r.body));
+  r = await call("GET", "/api/nq/leaderboard/reset?confirm=RESET&key=wrong", false);
+  ok("…and it is still an indistinguishable 404 with a wrong admin key", r.status === 404, String(r.status));
+
+  // EXCEPTION, owner decision: /api/nq/gate is the phone panic lever and stays a GET. Pinned so a
+  // future "make every admin route POST" pass does not quietly take it away.
+  r = await call("GET", "/api/nq/gate?" + NQK + "&cap=0");
+  ok("/api/nq/gate?cap= stays a working GET (owner's phone panic lever — deliberate exception)", r.status === 200 && r.body && r.body.changed === true, JSON.stringify(r.body));
 
   done();
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");

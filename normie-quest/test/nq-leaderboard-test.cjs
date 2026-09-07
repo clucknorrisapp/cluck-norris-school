@@ -311,7 +311,7 @@ function legacyV2(names, ageMs) {
 
     // ---- owner season-reset route: keyed, confirm-guarded ------------------
     {
-      const get = (q) => fetch(base + '/api/nq/leaderboard/reset' + q);
+      const get = (q) => fetch(base + '/api/nq/leaderboard/reset' + q, { method: 'POST' });   // §9.11: reset is POST-only now
       // 19. Wrong key → indistinguishable 404. The master key is CONFIGURED first: with the env
       // empty, masterOK() 404s on its own and the probe would prove nothing about the route.
       process.env.PREMIUM_ACCESS_KEY = 'test-admin-key';
@@ -421,6 +421,55 @@ function legacyV2(names, ageMs) {
     const replayAfterRestart = await lb2.add({ name: 'oncer', world: 1, level: 'run', score: 321 }, tok);
     ok('the same token is STILL refused after a restart (durable nonce)',
        replayAfterRestart && replayAfterRestart.status === 'replay');
+  }
+
+  // ---- 9.10 (2026-09-06 deep dive, F4/F5): pin the exact shape of the bug that shipped ----------
+  // worldCount() answers 21 for every non-private Win, so submitting THAT instead of the world the
+  // run actually REACHED got every legitimate full clear (worlds 1-12; the VIP wing 13-21 was
+  // unreachable pre-F1) filtered off every board as "suspect", while a run claiming an impossible
+  // world was correctly caught. Batch 1 fixed the Win scene to submit `this.worldsCleared` (the
+  // reached world) instead of `worldCount()` — these two cases pin BOTH halves of that fix so a
+  // future regression (reverting to worldCount(), or a bad refactor) shows up here first.
+  {
+    // A full, honest 1-1 -> 12-3 clear (36 levels — the whole tier-1 campaign). Checkpointed at a
+    // realistic pace so nothing trips the dwell/adjacency guards along the way.
+    const twelveWorlds = [];
+    for (let w = 1; w <= 12; w++) for (let l = 1; l <= 3; l++) twelveWorlds.push(w + '-' + l);
+    const tok = reach(twelveWorlds);
+    const cap = budgetOf(twelveWorlds);
+    const r12 = await lb.add({ name: 'reached12', world: 12, level: 'run', score: Math.max(1, cap - 200) }, tok);
+    ok('a real 12-world clear, submitted as world=12 (the world REACHED), is accepted and NOT suspect',
+       r12.ok === true && r12.suspect === false, JSON.stringify(r12));
+
+    // The SAME proven levels, submitted as world=21 (what worldCount() would have sent for every
+    // non-private Win before the fix) — this is the exact regression, and it must stay suspect:
+    // nq-leaderboard.js:469's world<=reachedWorld bound is the anti-forgery floor, not something
+    // to relax (see the note on case 3 above).
+    const tok21 = reach(twelveWorlds);
+    const r21 = await lb.add({ name: 'claimed21', world: 21, level: 'run', score: Math.max(1, cap - 200) }, tok21);
+    ok('the identical 12-world clear, submitted as world=21 (the pre-fix worldCount() bug), IS flagged suspect',
+       r21.ok === true && r21.suspect === true, JSON.stringify(r21));
+  }
+
+  // Source guard: the Win scene's own submitRun call must pass the world REACHED, never
+  // worldCount(). Grepping rather than re-deriving from game_logic.js's parsed structure — this is
+  // a single call site and a regex pin is what actually catches "someone changed the argument
+  // back", which is the failure mode the case above cannot see from the leaderboard module alone
+  // (the module has no idea what game_logic.js passes it).
+  {
+    const fs = require('fs');
+    const glPath = path.join(__dirname, '..', 'src', 'game_logic.js');
+    const gl = fs.readFileSync(glPath, 'utf8');
+    // Win's create(): `if(window.NQLB && !this.private){ try{ window.NQLB.submitRun(this.worldsCleared, this.finalScore); }catch(e){} }`
+    const m = /var Win=new Phaser\.Class\(\{[\s\S]*?NQLB\.submitRun\(([^,]+),/.exec(gl);
+    ok('Win scene\'s submitRun call exists and passes an argument',
+       !!m, 'could not find NQLB.submitRun(...) inside the Win scene in game_logic.js');
+    if (m) {
+      ok('Win\'s submitRun call passes worldsCleared (the world reached), not worldCount()',
+         m[1].trim() === 'this.worldsCleared', 'submitRun(' + m[1].trim() + ', ...) — expected "this.worldsCleared"');
+      ok('Win\'s submitRun call does NOT pass worldCount()',
+         !/worldCount\s*\(\s*\)/.test(m[1]), 'found worldCount() in the submitRun argument: ' + m[1]);
+    }
   }
 
   console.log('\n' + (fail === 0 ? 'ALL PASS' : fail + ' FAILED') + '  (' + pass + '/' + (pass + fail) + ')');

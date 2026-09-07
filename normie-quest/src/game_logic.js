@@ -243,6 +243,40 @@ var EXTRA={ princess:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAADYCAYA
   nduck:'data:image/png;base64,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',
 blackswan:'__BLACKSWAN__',
   rugking:'__RUGKING__', shark:'__SHARK__', sandlord:'__SANDLORD__', squid:'__SQUID__', nautilus:'__NAUTILUS__', dirtywhale:'__DIRTYWHALE__', mevdragon:'__MEVDRAGON__', rugkingdown:'__RUGKINGDOWN__', coin:'__COIN__', airdrop:'__AIRDROP__', key:'__KEY__', door:'__DOOR__', wormhole:'__WORMHOLE__', miniworm:'__MINIWORM__', sentry:'__SENTRY__', slot:'__SLOT__', honeypot:'__HONEYPOT__', vegas:'__VEGAS__', scammykol:'__SCAMMYKOL__', tom:'__TOM__', skyline:'__SKYLINE__', ceoboss:'__CEOBOSS__', exchange:'__EXCHANGE__', wyrm:'__WYRM__', golem:'__GOLEM__', sacred:'__SACRED__', mines:'__MINES__', reaper:'__REAPER__', greatbear:'__GREATBEAR__', troll:'__TROLL__', saylor:'__SAYLOR__', wenmoon:'__WENMOON__', leviathan:'__LEVIATHAN__', burnlord:'__BURNLORD__', diamondtitan:'__DIAMONDTITAN__', coresentinel:'__CORESENTINEL__', marketmaker:'__MARKETMAKER__', chairman:'__CHAIRMAN__', satwarden:'__SATWARDEN__', stormherald:'__STORMHERALD__', laserbot:'__LASERBOT__', mevdrone:'__MEVDRONE__' };
+// ---------- F21: BACKDROP EVICTION ----------
+// The painted world plates (1376x768 each, 59 of them) were loaded and NEVER released — textures
+// .remove() appeared nowhere in this file — so a long session could hold ~237 MB of VRAM, on the
+// memory-constrained devices this repo already has eviction history with. Plates are tracked in an
+// LRU as they are painted; entering a level drops any plate that is more than NQ_ART_KEEP worlds
+// back, is not the current or the prefetched destination, is not mid-fetch (__NQ_ARTPENDING) and
+// is not still referenced by a live object in any running scene.
+var NQ_ART_KEEP = 2;
+var _nqArtLru = [];
+function nqTouchBackdrop(key){ if(!key) return; var i=_nqArtLru.indexOf(key); if(i>=0) _nqArtLru.splice(i,1); _nqArtLru.unshift(key); }
+function nqArtInUse(scene,key){
+  var seen=function(list,depth){
+    if(!list) return false;
+    for(var j=0;j<list.length;j++){ var o=list[j]; if(!o) continue;
+      if(o.texture && o.texture.key===key) return true;
+      if(depth<2 && o.list && seen(o.list,depth+1)) return true;   // containers hold their own children
+    }
+    return false; };
+  try{ var scs=scene.game.scene.getScenes(true);
+    for(var i=0;i<scs.length;i++){ if(seen(scs[i].children&&scs[i].children.list,0)) return true; }
+  }catch(e){ return true; }   // can't prove it is free -> keep it
+  return false;
+}
+function nqEvictBackdrops(scene, keep){
+  try{
+    var pend=(typeof window!=='undefined'&&window.__NQ_ARTPENDING)||{};
+    for(var i=_nqArtLru.length-1;i>=NQ_ART_KEEP;i--){ var k=_nqArtLru[i];
+      if(!scene.textures.exists(k)){ _nqArtLru.splice(i,1); continue; }
+      if((keep&&keep[k])||pend[k]) continue;
+      if(nqArtInUse(scene,k)) continue;
+      scene.textures.remove(k); _nqArtLru.splice(i,1);
+    }
+  }catch(e){}
+}
 
 // --- tiny Web-Audio sound engine: procedural arcade blips, zero assets ---
 var _AC=null;
@@ -2148,6 +2182,12 @@ function nqTele(ev,d){
 // the effect to the live Game scene. Extend this to add new held boosts (wheel prizes, etc.).
 // UNIQUE VIP-WORLD BOSSES (13-20). Each: its own sprite/name/HP/attack color/taunts; all use the
 // shared charger+ranged+stomp engine (startVipBoss/vipBossTick). Sprite keys map to IMG + build markers.
+// Enemy kind -> texture key (was an inline ternary inside makeEnemy; one table, same mapping).
+var NQ_ENEMY_TEX = { sniper:'bot', sandwich:'bot', gasgoblin:'troll', drillbit:'drillworm', flashbot:'flashdrone', flyfish:'squid', jumpfish:'nautilus' };
+// F10: sniper/laserbot fairness — engage range (owner, 2026-09-07: 330 -> 230, i.e. inside the
+// ~240px of level that is actually on screen) and the wind-up that must elapse between acquiring
+// the player and the first bolt. Both apply to the laserbot, which shares the 'sniper' behaviour.
+var NQ_SNIPE_RANGE = 230, NQ_SNIPE_WINDUP = 280;
 var VIP_BOSSES = {
   leviathan:    { sprite:'leviathan',    name:'THE LEVIATHAN',       banner:'ABYSSAL WHALE-KING — STOMP HIM x4', hp:4, col:0x3ad6ff, glow:0x2aa8ff, scale:66, taunts:['THE ABYSS OWNS YOU','DROWN IN LIQUIDITY','I AM THE POD','BOW TO THE WHALE','SLURRRP'] },
   burnlord:     { sprite:'burnlord',     name:'THE BURN LORD',       banner:'SUPPLY BURNS — STOMP HIM x4', hp:4, col:0xff7a20, glow:0xff5a10, scale:66, taunts:['BURN IT ALL','DEFLATION IS PAIN','ASH TO ASH','FEEL THE HEAT','SUPPLY SHOCK'] },
@@ -2574,6 +2614,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         // middle 1/RES showed: the levels rendered a blown-up crop of the artwork (moon, skyline
         // tops and the rooftop foreground all cropped away) instead of the whole backdrop.
         var _r=SCREEN_RECT(_cam);
+        nqTouchBackdrop(_key);   // F21: newest end of the plate LRU
         _self.add.image(_r.x,_r.y,_key).setOrigin(0,0).setScrollFactor(0).setDisplaySize(_r.w,_r.h).setDepth(-58);
         _self.add.rectangle(_r.x,_r.y,_r.w,_r.h,0x05040a,0.22).setOrigin(0,0).setScrollFactor(0).setDepth(-57); };
       if(this.textures.exists(_key)){ _renderArt(false); }
@@ -2590,6 +2631,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
           this.load.once('loaderror', function(){ delete _pend[_key]; });
           this.load.start(); }
       }
+      // F21: arrival is complete (this level's plate is painted or queued) — release the departed
+      // world's plate. Keeps this one, the next level's (the WorldClear prefetch target), anything
+      // still fetching, and the NQ_ART_KEEP most recent.
+      try{ var _keep={}; _keep[_key]=1;
+        var _nx=LEVELS[(this.def&&this.def.next!=null)?this.def.next:this.levelIdx+1];
+        if(_nx&&_nx.bgArt) _keep[_nx.bgArt]=1;
+        nqEvictBackdrops(this,_keep);
+      }catch(e){}
     } else {
     // stars scattered across the whole level with a slight parallax
     for(i=0;i<Math.ceil(LW/90);i++){ var ss=Phaser.Math.RND.pick([1,1,1,2]); this.add.rectangle(Phaser.Math.RND.between(0,LW),Phaser.Math.RND.between(3,Math.floor(H*0.6)),ss,ss,0xffffff,Phaser.Math.RND.between(18,50)/100).setScrollFactor(0.25).setDepth(-55); }
@@ -2815,7 +2864,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       mw.body.setAllowGravity(false); mw.setImmovable(true);
       mw.body.setSize(mw.width*0.6, mw.height*0.5).setOffset(mw.width*0.2, mw.height*0.34);
       mw.upY=GY - mw.displayHeight/2 + 14; mw.downY=GY + mw.displayHeight/2 + 6;
-      mw.setPosition(mx, mw.downY).setVisible(false); mw.mwState='hidden'; mw.dead=false;
+      mw.setPosition(mx, mw.downY).setVisible(false); mw.mwState='hidden'; mw.dead=false; mw.mwFireAt=0;   // F11: held-burst deadline
       mw.mwNextAt=self.time.now + 900 + i*450 + Phaser.Math.RND.between(0,700);
       var _grav=(_mwKey==='gravemite');   // scary-den goblins glow BRIGHTER + bigger so they read as "light glowing goblins in a den" against the mostly-dark
       var mg=self.addGlow(mw,(_mwKey==='sentry'?0xff7a2b:(_grav?0xb46bff:0x3dff6e)),_grav?5:3); if(mg) self.tweens.add({targets:mg,outerStrength:_grav?13:8,duration:_grav?520:600,yoyo:true,repeat:-1,ease:'Sine.inOut'});
@@ -2940,6 +2989,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       a.glowFx=self.addGlow(a,0x3dff6e,3);
     });
     this.shieldUntil=0; this.bullUntil=0; this.moonUntil=0; this.caffeineUntil=0; this.solanaUntil=0;
+    this.invulnUntil=0;   // P12: damage i-frames are a DEADLINE (the longest window wins), not a boolean the last timer to fire owns
     this.omegaUntil=0; this.geekShield=false;   // Omega Chad transform + Super Geek one-hit shield
     this.whaleUntil=0; this.coldUntil=0; this.whaleShockAt=0;   // late-game transforms: Whale Mode + Cold Wallet
     this.throwAmmo=10;   // MANUAL THROW: 10 Solana discs per level (F/X or the THROW button); refilled by a SOLANA pickup
@@ -3254,7 +3304,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // the AI (turret/charge) is shared without duplication; e.kind still drives art + tint.
     var BEH={ laserbot:'sniper', mevdrone:'sandwich' };
     var beh=BEH[kind]||kind;
-    var tex = (kind==='sniper'||kind==='sandwich') ? 'bot' : (kind==='gasgoblin' ? 'troll' : (kind==='drillbit' ? 'drillworm' : (kind==='flashbot' ? 'flashdrone' : (kind==='flyfish' ? 'squid' : (kind==='jumpfish' ? 'nautilus' : kind)))));   // FLYFISH -> squid sprite (dive-bomber), JUMPFISH -> nautilus sprite (erupts from the sand); both reuse the proven flash-drone / drill-worm behaviour
+    var tex = NQ_ENEMY_TEX[kind] || kind;   // FLYFISH -> squid sprite (dive-bomber), JUMPFISH -> nautilus sprite (erupts from the sand); both reuse the proven flash-drone / drill-worm behaviour
     var e=this.enemies.create(x,y,tex); e.kind=kind; e.beh=beh;
     e.setScale((kind==='ghost'?26:kind==='bitmaxi'?34:kind==='fudster'?38:kind==='gasgoblin'?28:kind==='laserbot'?32:kind==='mevdrone'?34:kind==='drillbit'?34:kind==='rugpuller'?46:kind==='eyeball'?35:kind==='longneck'?42:(kind==='flyfish'||kind==='jumpfish')?32:30)/e.height);   // eyeball 35 (owner: ~33% bigger)
     e.body.setSize(e.width*0.70,e.height*0.78).setOffset(e.width*0.15,e.height*0.16); e.setBounce(0);
@@ -3263,7 +3313,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     e.baseSpeed=(spd+Phaser.Math.RND.between(0,12))*(this.diffMul||1)
       *((window.__NQ_SETUP&&window.__NQ_TUNE&&Number(window.__NQ_TUNE.espd))||1);   // LAB tuning knob
     e.homeX=x; e.homeY=y; e.range=range||70; e.bob=Phaser.Math.RND.frac()*6.28;
-    if(beh==='sniper'){ if(kind==='sniper') e.setTint(0xff6b6b); e.nextFire=this.time.now+1100+Phaser.Math.RND.between(0,900); if(kind==='laserbot'){ e.nextFire=this.time.now+900+Phaser.Math.RND.between(0,700); var lg=this.addGlow(e,0xffa030,3); if(lg) this.tweens.add({targets:lg,outerStrength:7,duration:600,yoyo:true,repeat:-1,ease:'Sine.inOut'}); } }   // ranged shooter (sniper / modern laser drone)
+    if(beh==='sniper'){ if(kind==='sniper') e.setTint(0xff6b6b); e.aimUntil=0; e.acquired=false; /* F10: aimUntil/acquired drive the wind-up (rebased on resume) */ e.nextFire=this.time.now+1100+Phaser.Math.RND.between(0,900); if(kind==='laserbot'){ e.nextFire=this.time.now+900+Phaser.Math.RND.between(0,700); var lg=this.addGlow(e,0xffa030,3); if(lg) this.tweens.add({targets:lg,outerStrength:7,duration:600,yoyo:true,repeat:-1,ease:'Sine.inOut'}); } }   // ranged shooter (sniper / modern laser drone)
     if(kind==='fudster'||kind==='gasgoblin'){ e.nextGas=this.time.now+1000+Phaser.Math.RND.between(0,700); if(kind==='gasgoblin') e.setTint(0x8ad86a); var fg=this.addGlow(e,0x7ec86e,3); if(fg) this.tweens.add({targets:fg,outerStrength:7,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }
     if(beh==='sandwich'){ if(kind==='sandwich') e.setTint(0x9b6bff); e.mev='idle'; e.nextCharge=this.time.now+700+Phaser.Math.RND.between(0,800); if(kind==='mevdrone'){ e.nextCharge=this.time.now+600+Phaser.Math.RND.between(0,700); var mg=this.addGlow(e,0x9b6bff,3); if(mg) this.tweens.add({targets:mg,outerStrength:8,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'}); } }   // MEV bot — charges to "sandwich" you (bot / modern drone)
     // Drones are GROUNDED (identical proven physics to sniper/sandwich — no hover/pit edge cases);
@@ -3605,12 +3655,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(onTop && enemy.drillImmune){ player.setVelocityY(-220); return; }   // DRILLBIT spinning mid-drill: can't be stomped — clang off it (no kill, no damage). Stomp it on the wind-up.
     if(onTop && enemy.kind==='rugpuller'){   // caught the scammer before he pulls → rug stays solid (he never yanks), extra bounty
       var rrx=enemy.x, rry=enemy.y; enemy.disableBody(true,true); player.setVelocityY(-300); this.addScore(50); this.cameras.main.shake(70,.006); SFX.stomp(); this.burst(rrx,rry,0xffd23f,16); this.flash('SCAM BUSTED! +50','#3dff6e');
-      player.invuln=true; this.time.delayedCall(140,function(){ if(player.active) player.invuln=false; },[],this);
+      this.invulnUntil=Math.max(this.invulnUntil||0, now+140); player.invuln=true;   // P12
+      this.time.delayedCall(140,function(){ if(player.active && this.time.now>=this.invulnUntil) player.invuln=false; },[],this);
       return;
     }
     if(onTop){
       var ex=enemy.x,ey=enemy.y; enemy.disableBody(true,true); player.setVelocityY(-300); this.addScore(20); this.cameras.main.shake(60,.006); SFX.stomp(); this.burst(ex,ey,0xffd23f,10);
-      player.invuln=true; this.time.delayedCall(140,function(){ if(player.active) player.invuln=false; },[],this);
+      // P12: a 140ms stomp window must never CUT SHORT the 1800ms window a hit just granted —
+      // it used to overwrite it, so you were stompable-then-killable while the sprite still flashed.
+      this.invulnUntil=Math.max(this.invulnUntil||0, now+140); player.invuln=true;
+      this.time.delayedCall(140,function(){ if(player.active && this.time.now>=this.invulnUntil) player.invuln=false; },[],this);
       return;
     }
     if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;   // i-frames / diamond / cold wallet: no damage
@@ -3629,8 +3683,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(steal>0) this.coinLossBanner(steal,'BITCOIN MAXI!','#ff9500');   // same clear mid-tier notice as the honeypot
     else this.flash('MAXI FOUND NOTHING!','#ff9500');
     SFX.hurt(); this.burst(player.x,player.y-4,0xff9500,12);
-    player.invuln=true; player.setVelocity((maxi.x<player.x?1:-1)*170,-150);
-    this.tweens.add({targets:player,alpha:.4,duration:90,yoyo:true,repeat:5,onComplete:function(){ if(player.active){ player.alpha=1; player.invuln=false; } }});
+    var _self=this; this.invulnUntil=Math.max(this.invulnUntil||0, this.time.now+1080); player.invuln=true;   // P12: 90ms x yoyo x 6 = the flash the deadline follows
+    player.setVelocity((maxi.x<player.x?1:-1)*170,-150);
+    this.tweens.add({targets:player,alpha:.4,duration:90,yoyo:true,repeat:5,onComplete:function(){ if(player.active){ player.alpha=1; if(_self.time.now>=_self.invulnUntil) player.invuln=false; } }});
     // the thief cackles and sprints off in the direction he was heading
     maxi.baseSpeed=Math.min(maxi.baseSpeed*1.6,150); this.cameras.main.shake(90,.006);
   },
@@ -5342,10 +5397,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.miniworms) this.miniworms.children.iterate(function(mw){
       if(!mw||!mw.active||mw.dead) return; var st=mw.mwState;
       if(st==='hidden' && now>mw.mwNextAt){
-        mw.mwState='rising'; mw.setVisible(true);
-        self.tweens.add({targets:mw, y:mw.upY, duration:230, ease:'Back.out', onComplete:function(){ if(!mw.active||mw.dead) return; mw.mwState='up'; self.fireMiniBurst(mw); mw.mwNextAt=self.time.now+1200; }});
+        // F11: 230ms rise straight into a near-hemispherical fan was "already be elsewhere" — every
+        // other threat telegraphs 360-780ms. Rise 400ms, then HOLD 200ms with the fan still coming.
+        // The hold is a deadline checked here (not a delayedCall) so it rebases on pause/resume and
+        // a worm killed mid-hold simply never reaches the shot.
+        mw.mwState='rising'; mw.setVisible(true); mw.mwFireAt=0;
+        self.tweens.add({targets:mw, y:mw.upY, duration:400, ease:'Back.out', onComplete:function(){ if(!mw.active||mw.dead) return; mw.mwState='up'; mw.mwFireAt=self.time.now+200; mw.mwNextAt=self.time.now+1400; }});
+      } else if(st==='up' && mw.mwFireAt && now>mw.mwFireAt){ mw.mwFireAt=0; self.fireMiniBurst(mw);   // F11: the held shot
       } else if(st==='up' && now>mw.mwNextAt){
-        mw.mwState='retreat';
+        mw.mwState='retreat'; mw.mwFireAt=0;   // F11: retreating cancels an unfired burst
         self.tweens.add({targets:mw, y:mw.downY, duration:230, ease:'Quad.in', onComplete:function(){ if(!mw.active||mw.dead) return; mw.setVisible(false); mw.mwState='hidden'; mw.mwNextAt=self.time.now+Phaser.Math.Between(1500,2500); }});
       }
     });
@@ -5355,7 +5415,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     });
   },
   fireMiniBurst:function(mw){
-    if(this.over) return; var n=7, spread=Math.PI*0.92, base=-Math.PI/2 - spread/2, self=this;
+    // F11: never fire from a worm that died (or whose scene went away) during the rise/hold, and
+    // narrow the fan from 165 deg (a near hemisphere — nothing to dodge into) to ~110 deg.
+    if(this.over||!this.enemyShots||!mw||!mw.active||mw.dead||!mw.scene) return;
+    var n=7, spread=Math.PI*0.61, base=-Math.PI/2 - spread/2, self=this;
     for(var i=0;i<n;i++){
       var ang=base + spread*(i/(n-1));
       var s=this.enemyShots.create(mw.x, mw.y-mw.displayHeight*0.28, 'stick').setDepth(6); s.srcCause='GROUND-WORM SPIT';
@@ -5426,6 +5489,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil) return;
     var goingL=(cloud.body&&cloud.body.velocity.x<0); if(cloud.active) cloud.destroy();   // one puff = one hit, then it's spent
     this.hurt(player, goingL?1:-1, 'POISON GAS');
+  },
+  // F10: every enemy flash must end on the kind's BASE tint, never on a bare clearTint() — the
+  // sniper is tinted 0xff6b6b at spawn, so clearTint() leaves it white for the rest of the level.
+  restoreEnemyTint:function(e){
+    if(!e) return;
+    if(e.kind==='sniper') e.setTint(0xff6b6b);
+    else if(e.kind==='gasgoblin') e.setTint(0x8ad86a);
+    else if(e.kind==='sandwich') e.setTint(0x9b6bff);
+    else e.clearTint();
   },
   sniperFire:function(e,p){   // Sniper Bot fires an aimed bolt at the player
     if(this.over||!this.enemyShots) return;
@@ -5827,12 +5899,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   hurt:function(player,knockDir,reason){
     if(window.__NQ_SETUP&&window.__NQ_GOD) return;   // LAB god mode: designer walks through everything
     // Super Geek audit: absorb the next hit instead of losing a life (consumes the shield)
-    if(this.geekShield){ this.geekShield=false; player.invuln=true; this.cameras.main.flash(150,46,230,200); SFX.power(); this.flash('AUDIT BLOCKED IT!','#2ee6c0');
-      this.tweens.add({targets:player,alpha:.3,duration:90,yoyo:true,repeat:5,onComplete:function(){ player.alpha=1; player.invuln=false; }}); return; }
+    var _self=this;
+    if(this.geekShield){ this.geekShield=false; this.invulnUntil=Math.max(this.invulnUntil||0, this.time.now+1080); player.invuln=true;   // P12
+      this.cameras.main.flash(150,46,230,200); SFX.power(); this.flash('AUDIT BLOCKED IT!','#2ee6c0');
+      this.tweens.add({targets:player,alpha:.3,duration:90,yoyo:true,repeat:5,onComplete:function(){ player.alpha=1; if(_self.time.now>=_self.invulnUntil) player.invuln=false; }}); return; }
     this.solanaUntil=0;   // taking damage ends SOLANA MODE
     this.cameras.main.shake(140,.012); SFX.hurt(); this.burst(player.x,player.y,0xff3860,12); this.loseLife(reason||'WRECKED BY FUD'); if(this.over) return;
-    player.invuln=true; player.setVelocity(knockDir*160,-160);
-    this.tweens.add({targets:player,alpha:.25,duration:100,yoyo:true,repeat:8,onComplete:function(){ player.alpha=1; player.invuln=false; }});
+    this.invulnUntil=Math.max(this.invulnUntil||0, this.time.now+1800); player.invuln=true;   // P12: 100ms x yoyo x 9 = 1800ms, and the flash follows this deadline
+    player.setVelocity(knockDir*160,-160);
+    this.tweens.add({targets:player,alpha:.25,duration:100,yoyo:true,repeat:8,onComplete:function(){ player.alpha=1; if(_self.time.now>=_self.invulnUntil) player.invuln=false; }});
   },
   hb:function(o){ this.hudBox.add(o); return o; },   // route a HUD object into the pinned container
   addGlow:function(o,color,outer){ if(this.renderer.type!==Phaser.WEBGL||!o.postFX) return null; try{ return o.postFX.addGlow(color, outer||4, 0, false, 0.1, 16); }catch(e){ return null; } },
@@ -5967,12 +6042,34 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
           if(!_PAT.test(k) && k!=='nextThrow') return;
           var v=_self[k]; if(typeof v==='number' && isFinite(v) && v>0) _self[k]=v+_dt;
         });
+        // P11: the pattern above only ever reaches SCENE fields, and `Next[A-Z]` matches almost no
+        // per-object one — so `_rkNext`/`_dnNext` and every per-enemy/per-hazard deadline stayed in
+        // the past across a pause and fired together on the first frame back. Named allowlist per
+        // group/array below; the scene extras are the three the pattern cannot see.
+        ['_rkNext','_dnNext','_rkDust'].forEach(function(k){ var v=_self[k]; if(typeof v==='number' && isFinite(v) && v>0) _self[k]=v+_dt; });
         var _shift=function(o,f){ if(o && typeof o[f]==='number' && isFinite(o[f]) && o[f]>0) o[f]+=_dt; };
-        try{ if(this.enemyShots) this.enemyShots.children.iterate(function(s){ _shift(s,'dieAt'); }); }catch(e){}
-        try{ if(this.enemies) this.enemies.children.iterate(function(s){ _shift(s,'nextFire'); }); }catch(e){}
-        try{ if(this.miniworms) this.miniworms.children.iterate(function(s){ _shift(s,'mwNextAt'); }); }catch(e){}
-        try{ if(this.pullerRugs&&this.pullerRugs.children) this.pullerRugs.children.iterate(function(s){ _shift(s,'respawnAt'); }); }catch(e){}
-        try{ (this.dumpZones||[]).forEach(function(z){ _shift(z,'nextAt'); }); }catch(e){}
+        var _shiftAll=function(coll,fields){
+          if(!coll) return;
+          var each=function(o){ if(o) for(var i=0;i<fields.length;i++) _shift(o,fields[i]); };
+          try{ if(coll.children && coll.children.iterate) coll.children.iterate(each); else if(coll.length!=null) Array.prototype.forEach.call(coll,each); else each(coll); }catch(e){}
+        };
+        _shiftAll(this.enemyShots, ['dieAt']);
+        _shiftAll(this.projectiles, ['dieAt']);
+        // sniper/laserbot (nextFire + the F10 aim deadline), FUDster/goblin gas, MEV charge, flash-drone
+        // dive, drill-worm burrow, long-neck spray, rug-puller perch
+        _shiftAll(this.enemies, ['nextFire','aimUntil','nextGas','nextCharge','chargeUntil','teleUntil','fbT','fbNext','drillT','dustAt','nextSpray','sprayUntil','rpT','rpGrace']);
+        _shiftAll(this.miniworms, ['mwNextAt','mwFireAt']);
+        _shiftAll(this.pullerRugs, ['respawnAt','crumbleAt']);
+        _shiftAll(this.rugPlats, ['crumbleAt','respawnAt']);
+        _shiftAll(this.movers, ['compAt','pdAt','bpAt']);
+        _shiftAll(this.npcs, ['nextSay']);
+        _shiftAll(this.casino, ['coolUntil']);
+        _shiftAll(this.bonusBlocks, ['cool']);
+        _shiftAll(this.waterMonsters, ['next','t0']);
+        _shiftAll(this.dumpZones, ['nextAt']);
+        _shiftAll(this.drainDeck, ['restoreAt']);
+        _shiftAll(this.slots, ['nextCycle','hideAt']);
+        _shiftAll(this.cascade, ['nextRumble','lastNow']);
       }
       // wall-clock pause accumulator for the difficulty telemetry (audit #28): _lvStartAt is
       // Date.now-based and pause spans were inflating time-in-level; consumers subtract this.
@@ -6035,6 +6132,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.penBoss();   // keep every boss inside its own arena and off the bottom of a pit
     try{ window.__NQ_POS=Math.round(p.x); }catch(e){}   // live position for "stuck HERE" feedback tags
     // dark (mines) levels: keep the torchlight centred on Normie; a candle widens it briefly
+    // P12: i-frames end when the DEADLINE passes — a belt so a killed flash tween can never leave
+    // the player permanently invulnerable, and so the longest granted window always wins.
+    if(p && p.invuln && now>=(this.invulnUntil||0)){ p.invuln=false; p.alpha=1; }
     if(this.darkOverlay){
       var want=(now<(this.candleUntil||0))?1.7:1;
       this.darkScale += (want-this.darkScale)*0.1;
@@ -6313,7 +6413,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.enemies.children.iterate(function(e){
       if(!e||!e.active) return;
       if(frozen){ e.setVelocity(0,0); e.setTint(0x9fe8ff); return; }   // iced — no move, no fire
-      if(e.tintTopLeft===0x9fe8ff){ if(e.kind==='sniper') e.setTint(0xff6b6b); else if(e.kind==='gasgoblin') e.setTint(0x8ad86a); else if(e.kind==='sandwich') e.setTint(0x9b6bff); else e.clearTint(); }   // thaw → restore each kind's base tint (sniper red / goblin green / MEV violet)
+      if(e.tintTopLeft===0x9fe8ff){ self.restoreEnemyTint(e); }   // F10: one shared per-kind restore (a plain clearTint leaves the sniper WHITE — its base tint is 0xff6b6b) // thaw → restore each kind's base tint (sniper red / goblin green / MEV violet)
       if(e.kind==='ghost'){
         if(e.x<e.homeX-e.range) e.dir=1; if(e.x>e.homeX+e.range) e.dir=-1;
         e.setVelocityX(e.dir*e.baseSpeed);
@@ -6403,8 +6503,23 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(e.beh==='sniper'){ e.setVelocityX(0); e.setFlipX(e.kind==='laserbot' ? p.x>e.x : p.x<e.x); e.setRotation(0); }   // ranged TURRET: holds position + aims at the player. ⚠ cut_laserbot's cannon points LEFT in the art (opposite the default convention), so its flip test is inverted — unflipped polarity had all 29 placements aiming away from the player, bolts flying out of their backs (audit #19)
       else if(e.beh==='sandwich'){ self.sandwichTick(now,e,p); }   // MEV Sandwich Bot / drone: telegraphed charge
       else { e.setVelocityX(e.dir*e.baseSpeed); e.setFlipX(e.dir>0); e.setRotation(Math.sin((now+e.homeX)/110)*0.06); }
-      // Sniper Bot / laser drone: fire an aimed bolt when the player is roughly in range
-      if(e.beh==='sniper' && now>e.nextFire && Math.abs(e.x-p.x)<330){ self.sniperFire(e,p); e.nextFire=now+(e.kind==='laserbot'?1500:1900); }
+      // F10: Sniper Bot / laser drone — ACQUIRE, TELEGRAPH, then fire. It used to be the only ranged
+      // threat with no wind-up: nextFire stayed in the past while you were out of range, so the first
+      // bolt landed, already aimed, on the frame you crossed the line — and it crossed at 330px when
+      // only ~240px of level is on screen. Range is now 230 (owner, 2026-09-07) and acquiring the
+      // player schedules the shot NQ_SNIPE_WINDUP ms out instead of firing it, with a white flash
+      // (restored to the per-kind base tint on release) as the tell. The laserbot shares the 'sniper'
+      // behaviour and had the same no-wind-up bug, so it gets the same treatment.
+      if(e.beh==='sniper'){
+        var _inR=Math.abs(e.x-p.x)<NQ_SNIPE_RANGE;
+        if(!_inR){ if(e.acquired||e.aimUntil){ e.acquired=false; e.aimUntil=0; self.restoreEnemyTint(e); } if(e.nextFire<now) e.nextFire=now; }   // out of range: no stale cooldown banked, no held flash
+        else {
+          if(!e.acquired){ e.acquired=true; e.nextFire=Math.max(e.nextFire, now+NQ_SNIPE_WINDUP); }   // acquired → SCHEDULE the shot, never fire on the crossing frame
+          var _aim=(now>=e.nextFire-NQ_SNIPE_WINDUP);
+          if(_aim!==!!e.aimUntil){ e.aimUntil=_aim?e.nextFire:0; if(_aim) e.setTint(0xffffff); else self.restoreEnemyTint(e); }   // flash only inside the wind-up
+          if(now>e.nextFire){ self.sniperFire(e,p); e.nextFire=now+(e.kind==='laserbot'?1500:1900); e.aimUntil=0; self.restoreEnemyTint(e); }
+        }
+      }
       // FUDster / Gas Goblin: cough a slow-gas puff on a cadence
       if((e.kind==='fudster'||e.kind==='gasgoblin') && now>e.nextGas){ self.emitGas(e); e.nextGas=now+2100; }
       // LONG-NECK (scary world): roams until a pit is just ahead, then rears up and SPRAYS
@@ -6778,6 +6893,7 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
         if(!self.sys) return;
         if(_async && !self.sys.isActive()) return;         // late arrival into a dead scene
         if(!self.textures.exists(_dst) || !self.p2) return;
+        nqTouchBackdrop(_dst);   // F21: the prefetched destination joins the LRU too, so a plate the player never reaches can still be released later (it is the NEXT level's key, so the eviction pass keeps it)
         var im=self.add.image(0,0,_dst).setOrigin(0,0).setDisplaySize(W,H).setAlpha(0.55);
         self.p2.add(im); self.p2.moveTo(im,1);             // just above the gradient, below all copy
       };
