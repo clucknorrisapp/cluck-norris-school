@@ -173,12 +173,33 @@ var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
 // timeline matches exactly (both symptoms appeared with the 3x ship). Detection is maxTouchPoints:
 // modern iPadOS masquerades as desktop Mac in the UA, but Macs report 0 touch points. Desktops keep
 // the full 3x sharpness.
-var RES=3; try{ if(typeof navigator!=='undefined' && navigator.maxTouchPoints>1) RES=2; }catch(e){}
+var RES=3, NQ_INTFIT=false;
+try{
+  if(typeof navigator!=='undefined' && navigator.maxTouchPoints>1){ RES=2; }
+  else if(typeof window!=='undefined' && !(navigator.maxTouchPoints>0) && window.innerWidth>0){
+    // DESKTOP INTEGER FIT (owner, MacBook Pro Chrome 2026-09-07: "normie looks blurry while running").
+    // Measured cause: the 1440px buffer was CSS-stretched to 2.099 device pixels per buffer pixel
+    // under image-rendering:pixelated, so every ~10th column drew 3 device px wide instead of 2. A
+    // sprite moving one buffer pixel per frame lands on a different set of fat columns every frame —
+    // its device-pixel width flipped 73↔74 and ~8% of its pixels changed between consecutive frames
+    // of the SAME texture. Crisp standing still (static grid), "blurry" the moment it moves. The fix
+    // is to never stretch by a fraction: pick the largest whole-number zoom whose buffer fits the
+    // screen's DEVICE pixels, and show the canvas at exactly 1 device px per buffer px
+    // (nqIntegerFit, below the Game config). On a 1512×850 @2 MacBook that is RES 6 → 2880×1620,
+    // 95% of the width, and the 216px character art draws 1:1 for the first time. 1920×1080 @1 →
+    // RES 4, exact fill. Capped at 6 (4.7 MP of fill). Falls back to the old FIT-to-viewport when
+    // the integer picture would cover under 80% of the window (a 1366px laptop would drop to 70%).
+    // Touch devices are untouched: RES 2 and FIT, exactly as before (iPad eviction, see above).
+    var _dpr=window.devicePixelRatio||1, _dw=window.innerWidth*_dpr, _dh=window.innerHeight*_dpr;
+    var _r=Math.floor(Math.min(_dw/W, _dh/H));
+    if(_r>=2 && (_r*W)/_dw>=0.8 && (_r*H)/_dh>=0.8){ RES=Math.min(6,_r); NQ_INTFIT=true; }
+  }
+}catch(e){}
 // Clean, highly-legible UI font for menus / interstitials (the pixel fonts read as blocky
 // once scaled 2x by the scene cameras). UIRES renders text at higher DPI so it stays crisp
 // despite pixelArt:true. Big arcade titles keep 'Press Start 2P'; body text uses this.
 var UIFONT='system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-var UIRES=3;
+var UIRES=Math.max(3,RES);   // text rasterises at the buffer's own scale on desktop (RES 4–6) — 3 stays the floor so touch (RES 2) renders exactly as before
 
 // ── scrollFactor(0) UNDER A ZOOMED CAMERA — read this before placing ANY screen-pinned object ──
 // scrollFactor(0) stops an object SCROLLING; it does NOT take it out of the camera transform. The
@@ -579,6 +600,14 @@ if(typeof window!=='undefined'){
     // the audio context (_unlockAudio runs on every pointer/key event).
     try{ if(window.__NQ_PAUSE) window.__NQ_PAUSE(true); }catch(e){}
   } });
+  // PAUSE ON WINDOW BLUR too (owner, MacBook Chrome 2026-09-07: "when I go to a different tab or
+  // application it is still playing"). Cmd-Tab to another app, a second browser window, DevTools —
+  // the tab stays VISIBLE, so document.hidden never flips and the handler above never runs; the
+  // run kept going with nobody at the keys. window 'blur' is the signal for that case. It also
+  // fires when focus enters a same-page iframe (the Jupiter widget) — harmless: __NQ_PAUSE is a
+  // no-op when the run is already paused behind that panel. Phaser resets held keys on blur, so
+  // a held ArrowRight cannot carry into the pause.
+  try{ window.addEventListener('blur',function(){ try{ if(window.__NQ_PAUSE) window.__NQ_PAUSE(true); }catch(e){} },{passive:true}); }catch(e){}
   // Safari fires these on the page itself when audio is interrupted and restored.
   ['pageshow','focus'].forEach(function(ev){ try{ window.addEventListener(ev,function(){ var c=_ac(); if(_acDead(c)) _acResume(c); _acHealth(); },{passive:true}); }catch(e){} });
 }
@@ -2126,7 +2155,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x120c2e);
     this.add.image(90,70,'cloud').setScale(1.4).setAlpha(.7); this.add.image(360,50,'cloud').setScale(1.1).setAlpha(.6);
     // clean gold logo — a crisp drop shadow, NO blurry glow FX (looked smeared)
-    this.add.text(W/2,66,'NORMIE\nQUEST',{fontFamily:'"Press Start 2P"',fontSize:'26px',color:'#ffd23f',align:'center',lineSpacing:10,resolution:3}).setOrigin(.5).setStroke('#2a1a00',5).setShadow(2,3,'#140d00',0,true,true);
+    this.add.text(W/2,66,'NORMIE\nQUEST',{fontFamily:'"Press Start 2P"',fontSize:'26px',color:'#ffd23f',align:'center',lineSpacing:10,resolution:UIRES}).setOrigin(.5).setStroke('#2a1a00',5).setShadow(2,3,'#140d00',0,true,true);
     var tcoin=this.add.image(W/2-68,152,'coin'); tcoin.setScale(28/tcoin.height);
     // Normie: the centerpiece, height-normalized so it fits between the logo and "TAP TO PLAY"
     // (must not overlap the title text — the sprite canvas is tall, so scale by height).
@@ -4744,17 +4773,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.door.setVisible(false);
     this.bossPips=[]; for(var i=0;i<3;i++) this.bossPips.push(this.hb(this.add.image(W/2-24+i*24, 22, 'heart').setScale(1.4).setDepth(40).setTint(0xff8a30)));
     this.hb(this.add.text(W/2, 42, 'THE BRIDGE DRAINER', {fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ff8a30'}).setOrigin(.5,0).setDepth(40));
-    this.powerBanner('THE BRIDGE DRAINER','IT IS EATING THE BRIDGE — STOMP IT x3','#ff8a30');
+    this.powerBanner('THE BRIDGE DRAINER','IT SPITS WHAT IT SIPHONED — STOMP IT x3','#ff8a30');
     this.rugIntro=true; this.rugGraceUntil=this.time.now+1800;
-    var midL=aL+(aR-aL)*0.34, midR=aL+(aR-aL)*0.66;
+    // OWNER 2026-09-07 (played 5-3 on a MacBook): "there should not be a gaping hole on the 5-3
+    // boss to trap me in, and the screen motion was limited." The deck-draining mechanic opened up to
+    // 125px of floor on EACH side of a 380px arena and left you on the island with the camera boxed
+    // in — exactly the trap he describes. The floor now stays put: the deck is never catalogued
+    // (drainDeck stays empty, so every restore path is a no-op) and the same telegraph fires a
+    // three-bolt siphon spit (drainerSpit) in place of drainChunk. The arena-eating design, its
+    // four safety rails and the drain/restore code are kept below for a future boss that wants them.
     this.drainDeck=[];
-    this.platforms.children.iterate(function(t){
-      if(!t) return;
-      if(t.y < GY) return;                      // ground rows only — never the walls or platforms above
-      if(t.x < aL+18 || t.x > aR-18) return;    // inside the arena only
-      if(t.x > midL && t.x < midR) return;      // the island that always survives
-      t.deckHomeY=t.y; t.drained=false; t.restoreAt=0; self.drainDeck.push(t);
-    });
     this._dnHomeY=k.y; this._dnState='hover'; this._dnT0=this.time.now;
     this._dnNext=this.time.now+3200; this._dnSide=1;
   },
@@ -4775,12 +4803,24 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     } else if(this._dnState==='tele'){          // wind-up so a chunk of floor never vanishes unannounced
       if(Math.floor(now/70)%2){ k.setTint(0xffdca8); } else { k.clearTint(); }
       if(now>this._dnT0+700){ k.clearTint(); this._dnState='hover'; this._dnT0=now;
-        this.drainChunk();
+        this.drainerSpit(k,p);
         this._dnNext=now + (this.bossHP>=3?3400:(this.bossHP===2?2900:2400));   // hungrier as he weakens
       }
     }
   },
-  drainChunk:function(){    // siphon the outermost surviving deck on one side, alternating ends
+  drainerSpit:function(k,p){   // spits the siphoned bag back as a three-bolt spread (the wyrm's proven pattern, its colours)
+    if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // don't punish a committed stomp with point-blank fire
+    var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
+    [-0.2,0,0.2].forEach(function(off){
+      var ang=base+off, sp=200, s=self.enemyShots.create(k.x, k.y-4, 'bullet').setDepth(6); s.srcCause='SIPHON BOLT';
+      if(!s||!s.body) return; s.body.setAllowGravity(false); s.body.setSize(s.width*0.9,s.height*0.9);
+      s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.setTint(0xff8a30); s.setScale(1.2); s.dieAt=self.time.now+2900;
+    });
+    this.burst(k.x, k.y+10, 0xff8a30, 10);
+    _tone(260,100,0.14,'sawtooth',0.06);
+  },
+  drainChunk:function(){    // (unused since 2026-09-07 — see startDrainerBoss) siphon the outermost surviving deck on one side, alternating ends
     var self=this, now=this.time.now, mid=(this._arenaL+this._arenaR)/2, side=this._dnSide;
     this._dnSide=-side;
     var live=(this.drainDeck||[]).filter(function(t){ return !t.drained; });
@@ -6414,12 +6454,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // mid-fight (audit #23); an active SOLANA MODE counts too (its auto-fire is deliberate play).
     var throwHeld2=this.keys.F.isDown||this.keys.X.isDown||this.touch.throwBtn;
     var useAny=this.keys.Q.isDown||this.keys.E.isDown||(this.keys.ONE&&this.keys.ONE.isDown)||(this.keys.TWO&&this.keys.TWO.isDown)||(this.keys.THREE&&this.keys.THREE.isDown)||now<this.solanaUntil;
-    // P9: 10s fired while a first-time player was still READING the screen. 30s, and on 1-1 the
-    // timer does not start at all until they have touched a control once — the auto-pause card is
-    // for someone who walked away, not for someone deciding which key to press.
+    // P9 (2026-09-07) stretched this to 30s because 10s fired while a first-time player was still
+    // READING the screen; the owner played it the same day: 30s "takes way too long to autopause".
+    // Back to the 10s he tuned on 2026-07-20. The reading problem is solved by the OTHER half of
+    // P9, kept: on 1-1 the timer does not start until they have touched a control once — the
+    // auto-pause card is for someone who walked away, not for someone deciding which key to press.
     if(left||right||jump||duck||throwHeld2||useAny){ this.lastInputAt=now; this._hadInput=true; }
     else if(this.levelIdx===0 && !this._hadInput){ this.lastInputAt=now; }
-    else if(this.lastInputAt&&now-this.lastInputAt>30000){ if(this.nearActiveSlot()){ this.lastInputAt=now; } else { this.pauseGame(true); return; } }
+    else if(this.lastInputAt&&now-this.lastInputAt>10000){ if(this.nearActiveSlot()){ this.lastInputAt=now; } else { this.pauseGame(true); return; } }
     // CROUCH: duck in place on the ground (jump cancels it) — shrinks the hitbox so fireballs / sniper bolts pass over.
     // 90ms grounded-hysteresis: blocked.down drops out for single frames on tile seams, and that
     // 1-frame loss was toggling the crouch — the visible duck "flicker".
@@ -7395,7 +7437,7 @@ var BRIEFINGS = {
        ],
        threats:[
          {tex:'bitmaxi', name:'BITCOIN MAXI', desc:'steals your coins — stomp him'},
-         {tex:'drainer', name:'THE BRIDGE DRAINER', desc:'siphons the bridge dry at the far side'}
+         {tex:'drainer', name:'THE BRIDGE DRAINER', desc:'spits the bags it siphoned right back at you'}
        ],
        tip:'CROSS-CHAIN BRIDGE: the wooden planks get exploited & collapse a beat after you step on them — KEEP MOVING, never stand still over the void.' },
   15: { title:'WORLD 6 — THE DEPEG',
@@ -8212,6 +8254,27 @@ var NQGAME=new Phaser.Game({
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
   scene:[Boot,Title,LevelSelect,Controls,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]
 });
+// INTEGER FIT (desktop only — see the RES note at the top). Size the #screen box so the canvas is
+// shown at a whole number of DEVICE pixels per buffer pixel: k = floor(min(devW/bufW, devH/bufH)),
+// CSS size = buf*k/dpr, centred by body's flex. The stylesheet's min(100dvw,177.78dvh) fit stays as
+// the fallback (inline style cleared) whenever the window shrinks below one whole multiple, so a
+// small window still fills rather than vanishing. Re-run on resize / fullscreen / a DPR change
+// (moving the window to another monitor fires resize in Chrome). scale.refresh() re-reads the canvas
+// rect so pointer mapping follows the new box.
+try{ if(typeof window!=='undefined' && NQ_INTFIT){
+  var nqIntegerFit=function(){ try{
+    var el=document.getElementById('screen'); if(!el) return;
+    var dpr=window.devicePixelRatio||1, bw=W*RES, bh=H*RES;
+    var k=Math.floor(Math.min(window.innerWidth*dpr/bw, window.innerHeight*dpr/bh));
+    if(k>=1){ el.style.width=(bw*k/dpr)+'px'; el.style.height=(bh*k/dpr)+'px'; }
+    else { el.style.width=''; el.style.height=''; }
+    try{ NQGAME.scale.refresh(); }catch(e){}
+    try{ window.__NQ_INTFIT={res:RES,k:k,dpr:dpr,css:[el.clientWidth,el.clientHeight]}; }catch(e){}
+  }catch(e){} };
+  nqIntegerFit();
+  window.addEventListener('resize',nqIntegerFit);
+  document.addEventListener('fullscreenchange',nqIntegerFit); document.addEventListener('webkitfullscreenchange',nqIntegerFit);
+} }catch(e){}
 // CROSS-SESSION SAVE — rehydrate the checkpoint registry BEFORE any scene runs, so a resumed run
 // keeps its checkpoints for every later death too (not just the first jump in). Starting a fresh
 // run zeroes these again in Game.create at levelIdx 0, so this can never leak into a NEW GAME.
