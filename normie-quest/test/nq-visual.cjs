@@ -72,7 +72,10 @@ function chromePath() {
 //
 // TWO TIERS. `advisory: true` surfaces report a diff (and write a diff image) but never fail the
 // build; the rest are the HARD GATE.
-//   - TEXT surfaces (title, hud) are advisory: the arcade font (Press Start 2P, from Google Fonts)
+//   - TEXT surfaces (title, hud) were advisory while the arcade font came from Google Fonts; since
+//     2026-09-08 the faces are self-hosted, Boot waits for them, and this file refuses to capture without
+//     them — measured run-to-run 0.33% / 0.00%, so both are HARD gates now. (Historical note follows:)
+//   - the arcade font (Press Start 2P, formerly from Google Fonts)
 //     rasterises a few % differently per machine (measured: title 6.8%, hud 4.7% CI-vs-dev).
 //   - CHARACTER surfaces WERE advisory (until 2026-09-07 — see freeze:'player' below; hard gates now): the player spawns mid-air and physics-settles, so a
 //     capture at a fixed wall-clock time catches a slightly different pose depending on the machine's
@@ -85,11 +88,11 @@ function chromePath() {
 // A res=3-class break still can't slip silently — it blows up title/hud/char all at once, all of
 // which are imaged for the owner to see even while advisory.
 const SURFACES = [
-  { name: 'title',           char: 'normie',    url: '/normie-quest-x7',                    titleScreen: true, clip: null,             advisory: true, thresh: 3.0 },
+  { name: 'title',           char: 'normie',    url: '/normie-quest-x7',                    titleScreen: true, clip: null,             thresh: 3.0 },   // HARD since 2026-09-08: self-hosted font + Boot font wait; measured run-to-run 0.33% (the random background stars)
   // The persistent top HUD (score / hearts / world / timer / key) — the strip that slid off at 3x
   // and shipped unseen. Advisory (text-heavy, font-noisy across machines); the char gate hard-catches
   // the same res regression, so this stays informational rather than a flaky blocker.
-  { name: 'hud',             char: 'normie',    url: '/normie-quest-x7?room=scary&at=200',  clip: { x: 0, y: 0, w: 1, h: 0.24 }, advisory: true, thresh: 2.0 },
+  { name: 'hud',             char: 'normie',    url: '/normie-quest-x7?room=scary&at=200',  clip: { x: 0, y: 0, w: 1, h: 0.24 }, thresh: 2.0 },   // HARD since 2026-09-08: measured run-to-run 0.00%
   { name: 'char-normie',     char: 'normie',    url: '/normie-quest-x7?room=scary&at=200',  rect: 'player', pad: { x: 0.10, y: 0.13 }, thresh: 4.0, freeze: 'player' },
   { name: 'char-princess',   char: 'princess',  url: '/normie-quest-x7?room=scary&at=200',  rect: 'player', pad: { x: 0.10, y: 0.13 }, thresh: 4.0, freeze: 'player' },
   { name: 'char-lilnormie',  char: 'lilnormie', url: '/normie-quest-x7?room=scary&at=200',  rect: 'player', pad: { x: 0.10, y: 0.13 }, thresh: 4.0, freeze: 'player' },
@@ -116,10 +119,15 @@ async function capture(ctx, s) {
   await page.addInitScript(cid => { try { localStorage.setItem('nqHowTo1', '1'); localStorage.setItem('nqChar', cid);
     Object.defineProperty(document, 'hidden', { get: () => false, configurable: true }); } catch (e) {} }, s.char);
   await page.goto(BASE + withRes(s.url), { waitUntil: 'domcontentloaded' });
-  // Converge font state: the game's arcade font (Press Start 2P) loads from Google Fonts, and Phaser
-  // rasterises HUD text once — if we shoot before it settles, text can differ run to run. Bounded so
-  // a fontless environment can't hang the capture.
-  await Promise.race([page.evaluate(() => document.fonts && document.fonts.ready), sleep(3000)]).catch(() => {});
+  // Fonts: the arcade faces (Press Start 2P, VT323) are SELF-HOSTED under /vendor/fonts since
+  // 2026-09-08 and the Boot scene waits for them before any text is rasterised, so text surfaces no
+  // longer depend on a third-party fetch. Load them explicitly here and REFUSE to capture without
+  // them — a baseline of the fallback serif would be a lie this gate would then defend.
+  const fontOk = await page.evaluate(async () => {
+    try { await document.fonts.load('12px "Press Start 2P"'); await document.fonts.load('12px "VT323"');
+      return document.fonts.check('12px "Press Start 2P"') && document.fonts.check('12px "VT323"'); } catch (e) { return false; }
+  });
+  if (!fontOk) throw new Error('arcade font not available — is /vendor/fonts served? Refusing to capture text against a fallback face.');
   await sleep(2600);
   if (s.titleScreen) {
     // stay on the title; dismiss the how-to overlay if present

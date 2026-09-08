@@ -2144,6 +2144,15 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     if(_bootPfx){ ['normie','nrun1','nrun2','njump','nduck'].forEach(function(b){ var k=_bootPfx+b; if(CHAR_ART[k]) _bootSkin[k]=CHAR_ART[k]; }); _nqSkinLoaded[_bootPfx]=1; }
     var self=this, all=Object.assign({},SPRITES,POWERUPS,EXTRA,SCARY_ART,_bootSkin), keys=Object.keys(all), need=keys.length, started=false;
     var go=function(){ if(started) return; started=true;
+      // FONTS BEFORE TEXT (2026-09-08): Phaser rasterises each Text once, at create() — if the arcade
+      // face is not loaded by then the fallback serif is baked into the texture for the life of the
+      // scene (that is why title/HUD renders differed run to run and the visual gate could only treat
+      // them as advisory). The faces are self-hosted + preloaded in the shell; this waits for them —
+      // bounded, so a fontless environment still boots. Textures already decoded above are untouched.
+      var _fontsReady=Promise.resolve();
+      try{ if(document.fonts&&document.fonts.load) _fontsReady=Promise.race([Promise.all([document.fonts.load('12px "Press Start 2P"'),document.fonts.load('12px "VT323"')]),new Promise(function(r){ setTimeout(r,1500); })]); }catch(e){}
+      _fontsReady.then(goNow,goNow); };
+    var goNow=function(){
       // PRIVATE ROOM DOOR: ?room=<name> boots straight into a level flagged private:true (e.g.
       // ?room=myspace → the MySpace/Tom dev room) — routed HERE, before the tappable Title ever
       // shows, so there's no title-screen flash and no race with a habitual "Play" tap landing on
