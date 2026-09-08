@@ -5,10 +5,10 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🐔 Cluck Holders — Solana Holder Breakdown + Airdrop CSV</title>
-<meta name="description" content="See who really holds any Solana token — true human holders separated from LP pools, lock escrows and program accounts, with real supply concentration and an airdrop-ready CSV. Preview free — hold CLKN or a small SOL pass to run."/>
+<meta name="description" content="See who holds any Solana token — wallet addresses separated from LP pools, lock escrows and program accounts, with supply concentration and a CSV of filtered recipient candidates. Preview free — hold CLKN or a small SOL pass to run."/>
 <link rel="canonical" href="https://clucknorris.app/holders"/>
-<meta property="og:title" content="🐔 Cluck Holders — Who Really Holds Any Solana Token"/>
-<meta property="og:description" content="Paste any Solana mint — see true human holders versus LP, locks and program accounts, real supply concentration, and export an airdrop-ready CSV. One tool, filterable."/>
+<meta property="og:title" content="🐔 Cluck Holders — Who Holds Any Solana Token"/>
+<meta property="og:description" content="Paste any Solana mint — see wallet addresses versus LP, locks and program accounts, supply concentration, and export a CSV of filtered recipient candidates. One tool, filterable."/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
@@ -229,7 +229,7 @@ body{background:transparent;font-family:var(--body);}
   <div class="hero">
     <div class="hero-tag">PASTE ANY MINT · HOLD $50 OF CLKN = FREE · OR 0.05 SOL / 7 DAYS</div>
     <div class="hero-title">See who really holds any Solana token</div>
-    <div class="hero-sub">True holders vs LP, locks &amp; programs · real concentration · every wallet and balance · CSV ready for the airdropper</div>
+    <div class="hero-sub">Wallet addresses vs LP, locks &amp; programs · supply concentration · every wallet and balance · CSV of filtered recipient candidates</div>
   </div>
 
   <!-- Education panel — what a holder read is + common mistakes -->
@@ -274,7 +274,7 @@ body{background:transparent;font-family:var(--body);}
   <div class="gate">
     <label>
       <input type="checkbox" id="ack"/>
-      <span>I understand that LP pools, locks and program accounts are separated out of the airdrop-safe list by default, and that I'm responsible for verifying the mint address before sending any airdrop based on this list.</span>
+      <span>I understand that LP pools, locks and program accounts are separated out of the filtered recipient candidates list by default, and that I'm responsible for verifying the mint address before sending any airdrop based on this list.</span>
     </label>
   </div>
 
@@ -326,7 +326,7 @@ body{background:transparent;font-family:var(--body);}
       <div class="card-title" style="margin-top:18px">SELECTED SET</div>
       <div class="stats-grid" id="statsGrid"></div>
 
-      <div class="card-title" style="margin-top: 18px">SUPPLY CONCENTRATION — TRUE HOLDERS ONLY (% OF TOTAL)</div>
+      <div class="card-title" style="margin-top: 18px">SUPPLY CONCENTRATION — WALLET ADDRESSES ONLY (% OF TOTAL)</div>
       <div class="dist-row" id="distRow"></div>
 
       <div id="excludedPanel"></div>
@@ -459,14 +459,14 @@ const esc = CluckUtil.esc;
 // The key change: we always request excludeNonHuman=0 so the server returns EVERY
 // holder already classified (human / lp / locker / contract), then switch views
 // client-side. One network call, instant filtering, and — importantly — the
-// concentration figures are always computed over TRUE HOLDERS. Raw top-10 that
+// concentration figures are always computed over the wallet-address view. Raw top-10 that
 // includes pool vaults and lock escrows is the classic "false whale" reading;
 // our own Autopsy engine corrects for it, so this tool does too.
 let allHolders = [];       // every holder, each tagged .type and .category
 let currentView = 'human';
 
 const VIEWS = {
-  human:   { label: '👤 TRUE HOLDERS', note: 'Real wallets only — LP pools, lock escrows and program accounts removed. This is the airdrop-safe set.', match: h => h.type === 'human' },
+  human:   { label: '👤 WALLET ADDRESSES', note: 'LP pools, lock escrows and program accounts removed by known-address matching. These are filtered recipient candidates, not confirmed human holders — the exclusion list cannot prove a remaining wallet belongs to a person or is suitable for a payout.', match: h => h.type === 'human' },
   lp:      { label: '💧 LIQUIDITY POOLS', note: 'Token sitting in AMM pools. Not a holder — it is the market.', match: h => h.category === 'lp' },
   locker:  { label: '🔒 LOCKS & VESTING', note: 'Locked or vesting escrows. Removed from circulation, not owned by a trader.', match: h => h.category === 'locker' },
   contract:{ label: '⚙️ PROGRAM ACCOUNTS', note: 'Other on-chain programs holding this token.', match: h => h.category === 'contract' },
@@ -544,7 +544,7 @@ function renderResult(d) {
   const breakdown = [
     { lbl: "TOKEN ACCOUNTS", val: fmtNum(s.tokenAccountCount), sub: "raw positions on-chain", cls: "" },
     { lbl: "UNIQUE ADDRESSES", val: fmtNum(allHolders.length), sub: "deduplicated by owner", cls: "blue" },
-    { lbl: "TRUE HOLDERS", val: fmtNum(humans.length), sub: "real wallets", cls: "green" },
+    { lbl: "WALLET ADDRESSES", val: fmtNum(humans.length), sub: "not LP/locks/programs", cls: "green" },
     { lbl: "LP + LOCKS", val: fmtNum(lps.length + locks.length), sub: `${lps.length} pools · ${locks.length} locks`, cls: "amber" },
     { lbl: "% HELD BY HUMANS", val: fmtPct(pctOf(humanHeld)), sub: "of total supply", cls: "accent" },
     { lbl: "TOTAL SUPPLY", val: fmtNum(supply, dec), sub: `${dec} decimals`, cls: "" },
@@ -579,7 +579,7 @@ function renderResult(d) {
   document.getElementById('statsGrid').innerHTML = stats.map(c =>
     `<div class="stat-cell ${c.cls}"><div class="lbl">${c.lbl}</div><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>`).join('');
 
-  // ── Concentration — ALWAYS over true holders ───────────────────────────────
+  // ── Concentration — ALWAYS over the wallet-addresses view ──────────────────
   // Measuring the raw top 10 (pools and lock escrows included) manufactures
   // "whales" that are really the market and the vault. This is the honest read.
   const topN = (n) => humans.slice(0, n).reduce((t, h) => t + h.balance, 0);

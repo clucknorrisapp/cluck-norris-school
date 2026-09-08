@@ -190,6 +190,19 @@ function render(d){
     +'<div class="stat"><div class="v" style="color:'+(risky.length?'#F59E0B':'#6EE7B7')+'">'+risky.length+'</div><div class="l">RISKY HOLDINGS</div></div>'
     +'</div>';
 
+  // Checks completed / not completed — shown beside every result, clear or not, so
+  // "no issues" never reads as a full pass when tokens were capped or unreadable.
+  const capped=!!d.capped, unverified=d.unverified||0, scanned=d.scanned||0, tokensHeld=d.tokensHeld||0;
+  const tokenScopeNote = capped ? ('checked on '+scanned+' of '+tokensHeld+' held tokens') : ('checked on all '+tokensHeld+' held token'+(tokensHeld===1?'':'s'));
+  html+='<div class="card" style="padding:14px 16px">'
+    +'<div style="font-family:var(--mono);font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Checks in this scan</div>'
+    +'<div style="display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.5;color:#D1D5DB">'
+      +'<div><span style="color:#6EE7B7">✓</span> Open delegate approvals — checked</div>'
+      +'<div><span style="color:'+(capped?'#F59E0B':'#6EE7B7')+'">'+(capped?'◐':'✓')+'</span> Honeypot / Token-2022 trap extensions — '+tokenScopeNote+'</div>'
+      +'<div><span style="color:'+(capped?'#F59E0B':'#6EE7B7')+'">'+(capped?'◐':'✓')+'</span> Live mint / freeze authority — '+tokenScopeNote+'</div>'
+      +(unverified>0?'<div><span style="color:#F59E0B">?</span> '+unverified+' token mint'+(unverified>1?'s':'')+' returned no data from the RPC — status <b>unknown</b>, not verified clean</div>':'')
+    +'</div></div>';
+
   // Portfolio — live holdings by USD value (the wallet-tracker view)
   if(holdings.length){
     html+='<div class="card"><div class="sec-title" style="color:#6EE7B7">💰 PORTFOLIO — '+fmtUsd(d.portfolioUsd||0)+'</div>';
@@ -207,15 +220,11 @@ function render(d){
   }
 
   if(!approvals.length && !risky.length){
-    // Honesty: only say "all clear" for what we actually inspected. If the scan was capped
-    // (more tokens than we checked) or some mint accounts couldn't be read, say so plainly
-    // rather than implying a full pass — the dangerous holdings are exactly the untested ones.
-    const partial=(d.capped||(d.unverified>0));
-    const caveat=partial
-      ? ' — but this is NOT a full pass: '+(d.capped?('only the first '+d.scanned+' of '+d.tokensHeld+' tokens were scanned'):'')+(d.capped&&d.unverified>0?', and ':'')+(d.unverified>0?(d.unverified+' token'+(d.unverified>1?'s':'')+' couldn’t be verified'):'')+'.'
-      : '.';
-    html+='<div class="card"><div class="clear"><div class="big">'+(partial?'🛡':'🛡✅')+'</div><div class="t">'+(partial?'NOTHING FOUND — PARTIAL SCAN':'ALL CLEAR')+'</div>'
-      +'<div style="font-size:13px;color:#9CA3AF;margin-top:8px;line-height:1.6">No open token approvals and no honeypot or authority-risk holdings in what was checked'+caveat+' Keep verifying every popup before you sign.</div></div></div>';
+    // Honesty: never claim a full pass — say what was actually inspected. The "Checks in
+    // this scan" card above already spells out scope/gaps; this just states the verdict.
+    const partial=(capped||(unverified>0));
+    html+='<div class="card"><div class="clear"><div class="big">🛡</div><div class="t">NO ISSUES FOUND IN THE CHECKS COMPLETED</div>'
+      +'<div style="font-size:13px;color:#9CA3AF;margin-top:8px;line-height:1.6">No open token approvals and no honeypot or authority-risk holdings in what was checked'+(partial?' — see the scan scope above, some tokens were not checked or could not be verified.':'.')+' Keep verifying every popup before you sign.</div></div></div>';
     document.getElementById('results').innerHTML=html;
     return;
   }

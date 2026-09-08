@@ -212,64 +212,18 @@
     <div class="recent-row" id="recentRow"></div>
   </div>
 
+  <!-- Working controls first (View locks / Create a lock / Claim tokens) — education is a tab
+       away, not the thing you land on. Reordered 2026-09-08 per reviewer feedback; a first-time
+       visitor used to land on a wall of reading with the actual tools three clicks deep. -->
   <div class="tabs">
-    <div class="tab on" data-tab="learn">📚 How Locks Work</div>
-    <div class="tab" data-tab="fame">🏆 Lock of Fame</div>
-    <div class="tab" data-tab="create">🔐 Lock Your Tokens</div>
-    <div class="tab" data-tab="claim">💰 Claim</div>
-  </div>
-
-  <!-- ============ LEARN ============ -->
-  <div class="pane on" data-pane="learn">
-    <div class="card">
-      <div class="sec">What is a token lock?</div>
-      <p class="muted">A lock takes tokens <b>out of circulation</b> and hands control to an on-chain program instead of a wallet. The tokens can only be released on a <b>fixed, public schedule</b> — nobody, not even the team, can pull them early. It’s the difference between a promise and a padlock: anyone can verify it on-chain.</p>
-      <div class="steps" style="margin-top:14px">
-        <div class="step"><div class="n">01</div><h4>Deposit</h4><p>Tokens are sent into a vesting escrow you create — a program-owned vault, not a wallet.</p></div>
-        <div class="step"><div class="n">02</div><h4>Cliff</h4><p>An optional waiting period before <i>anything</i> unlocks. Great for “nothing moves for 6 months.”</p></div>
-        <div class="step"><div class="n">03</div><h4>Vest</h4><p>After the cliff, tokens release gradually over time — daily, weekly, monthly — until fully unlocked.</p></div>
-        <div class="step"><div class="n">04</div><h4>Claim</h4><p>The recipient claims what has vested so far. Everything is public and verifiable, forever.</p></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="sec">How Jupiter Lock works</div>
-      <div class="faq"><h4>No token cut, non-custodial</h4><p>Jupiter Lock is an open-source program that takes <b>no cut of your tokens</b> and charges <b>no protocol fee</b> — you pay only Solana’s network gas. Your tokens go into a program you can read on-chain — Jupiter never holds them, and neither do we.</p></div>
-      <div class="faq"><h4>Cliff + vesting schedule</h4><p>You set a <b>start</b>, an optional <b>cliff</b>, and a <b>vesting duration + interval</b>. Example: lock 10M, cliff 3 months, then vest linearly over 12 months — the schedule is fixed the moment you create it.</p></div>
-      <div class="faq"><h4>Why it builds trust</h4><p>Locked supply = supply that <b>can’t be dumped</b>. It’s one of the clearest on-chain signals that a team is aligned for the long term — which is exactly why we track and celebrate it for CLKN.</p></div>
-      <div class="faq"><h4>Verify everything</h4><p>Every lock lives on Solana. See CLKN’s at <a href="https://lock.jup.ag/" target="_blank" rel="noopener">lock.jup.ag</a> or right here in the <b>Lock of Fame</b>.</p></div>
-    </div>
-    <div class="card">
-      <div class="sec">Fees &amp; Token-2022 tokens</div>
-      <div class="faq"><h4>The cheapest lock there is — and no cut of your tokens</h4><p>This page runs on <b>Jupiter Lock</b>: <b>zero protocol fees</b>, no percentage of your tokens, ever. You pay only Solana’s network fee plus a small account rent (~0.01 SOL). Most other lockers charge a flat fee <i>and/or</i> a percentage of the tokens you lock — that’s the model we deliberately don’t use.</p></div>
-      <div class="faq"><h4>Locking a Token-2022 token?</h4><p>Token-2022 mints lock here exactly like any other token, on the same <b>no-token-cut, no-protocol-fee</b> terms — this page calls the <b>Jupiter Lock program directly</b>. Jupiter’s own UI at <a href="https://lock.jup.ag/" target="_blank" rel="noopener">lock.jup.ag</a> handles Token-2022 as well, so use whichever you prefer. What this page adds is a walkthrough that explains <b>every field before you sign</b>, and a shareable <b>Lock of Fame</b> page once the lock is done.</p></div>
-      <div class="faq"><h4>Where your lock shows up</h4><p>Your lock lives on-chain in the <b>Jupiter Lock</b> program, so it’s viewable at <a href="https://lock.jup.ag/" target="_blank" rel="noopener">lock.jup.ag</a> <i>and</i> in the <b>Lock of Fame</b> here — the same escrow either way. Pursuing <b>Jupiter verification</b> for your token separately (real liquidity, metadata and socials all help the case) improves how it presents across Jupiter’s surfaces generally.</p></div>
-    </div>
-    <div class="card">
-      <div class="sec">Is this safe?</div>
-      <div class="faq"><h4>No approvals. Nothing to revoke.</h4><p>Locking here does <b>not</b> grant a token approval, a delegate, or any standing permission on your wallet — the kind of thing that later needs revoking. It’s a <b>single transfer</b> into Jupiter’s program, signed once by you. When it’s done, there’s nothing left on your wallet to take back.</p></div>
-      <div class="faq"><h4>Non-custodial &amp; open-source</h4><p>Your tokens go into <b>Jupiter Lock</b> — an <b>open-source</b> program anyone can read on-chain — not a wallet we (or Jupiter) control. We never touch your keys: we build the transaction, <b>you</b> sign it in your own wallet.</p></div>
-      <div class="faq"><h4>The one thing to know</h4><p>A <b>non-cancelable</b> lock is <b>permanent</b> — that’s the point of it. Choose your schedule and cancelable/permanent setting deliberately before you sign. (Curious about wallet permissions in general? Our free <a href="/security-coop">Security Co-op</a> scans and revokes risky approvals on any wallet.)</p></div>
-    </div>
-    <div class="card">
-      <div class="ac-head"><img src="/cluck-norris-mascot.jpg" alt="Cluck Norris"/><div class="sec" style="margin-bottom:0">🐔 Ask Cluck about locks</div></div>
-      <p class="muted">Cliffs, vesting, whether a lock is legit, what to pick — ask our AI crypto professor. Free, instant, grounded in the school’s curriculum.</p>
-      <div class="ac-suggest">
-        <button type="button" class="ac-chip">What’s the difference between a cliff and vesting?</button>
-        <button type="button" class="ac-chip">Does locking my tokens cost a fee?</button>
-        <button type="button" class="ac-chip">How can I tell if a project’s lock is legit?</button>
-        <button type="button" class="ac-chip">Should I make my lock cancelable?</button>
-      </div>
-      <div class="ac-inrow">
-        <input id="acQ" maxlength="300" placeholder="Ask anything about token locks…" autocomplete="off"/>
-        <button class="btn" id="acAsk">Ask →</button>
-      </div>
-      <div class="ac-answer" id="acAns"><div class="who"><img src="/cluck-norris-mascot.jpg" alt=""/>Cluck Norris</div><div class="body" id="acBody"></div></div>
-      <div class="muted" style="font-size:11px;margin-top:10px">Want the full class? <a href="/ask-cluck">Open Ask Cluck →</a></div>
-    </div>
+    <div class="tab on" data-tab="fame">🏆 View Locks</div>
+    <div class="tab" data-tab="create">🔐 Create a Lock</div>
+    <div class="tab" data-tab="claim">💰 Claim Tokens</div>
+    <div class="tab" data-tab="learn">📚 How Locks Work</div>
   </div>
 
   <!-- ============ LOCK OF FAME ============ -->
-  <div class="pane" data-pane="fame">
+  <div class="pane on" data-pane="fame">
     <div class="card">
       <div class="eyebrow">Viewing locks for</div>
       <div class="row2" style="grid-template-columns:1fr auto">
@@ -362,6 +316,7 @@
       <div class="msg" id="cMsg"></div>
       <div class="verifycard" id="cVerify" style="display:none">
         <div class="vhead">✅ Your lock is on-chain — verify it anywhere</div>
+        <div class="muted" id="vRights" style="font-size:12.5px;margin-bottom:9px"></div>
         <div class="vrow"><span class="vk">Transaction</span><code class="vv" id="vSig"></code><button class="vcopy" data-copy="sig" type="button">Copy</button><a class="vlink" id="vSigLink" target="_blank" rel="noopener">Solscan ↗</a></div>
         <div class="vrow" id="vEscRow"><span class="vk">Lock account</span><code class="vv" id="vEsc"></code><button class="vcopy" data-copy="esc" type="button">Copy</button><a class="vlink" id="vEscLink" target="_blank" rel="noopener">Solscan ↗</a></div>
         <a class="vjup" id="vJup" target="_blank" rel="noopener">🔎 View your lock on Jupiter Lock (lock.jup.ag) ↗</a>
@@ -392,6 +347,55 @@
       <div class="muted" style="font-size:11px;margin-top:12px">Questions about vesting or claiming? <a href="#" class="acjump">Ask Cluck about locks →</a></div>
     </div>
     <div id="clList"></div>
+  </div>
+
+  <!-- ============ LEARN ============ -->
+  <div class="pane" data-pane="learn">
+    <div class="card">
+      <div class="sec">What is a token lock?</div>
+      <p class="muted">A lock takes tokens <b>out of circulation</b> and hands control to an on-chain program instead of a wallet. The tokens can only be released on a <b>fixed, public schedule</b> — and unless the lock was created <b>cancelable</b>, not even the team can pull them early. Cancel and recipient-change rights are set once, at creation, and can’t be changed after: we show you both before you sign, and on any lock paying out to your own wallet under <b>💰 Claim</b>. It’s the difference between a promise and a padlock: anyone can verify it on-chain.</p>
+      <div class="steps" style="margin-top:14px">
+        <div class="step"><div class="n">01</div><h4>Deposit</h4><p>Tokens are sent into a vesting escrow you create — a program-owned vault, not a wallet.</p></div>
+        <div class="step"><div class="n">02</div><h4>Cliff</h4><p>An optional waiting period before <i>anything</i> unlocks. Great for “nothing moves for 6 months.”</p></div>
+        <div class="step"><div class="n">03</div><h4>Vest</h4><p>After the cliff, tokens release gradually over time — daily, weekly, monthly — until fully unlocked.</p></div>
+        <div class="step"><div class="n">04</div><h4>Claim</h4><p>The recipient claims what has vested so far. Everything is public and verifiable, forever.</p></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec">How Jupiter Lock works</div>
+      <div class="faq"><h4>No token cut, non-custodial</h4><p>Jupiter Lock is an open-source program that takes <b>no cut of your tokens</b> and charges <b>no protocol fee</b> — you pay only Solana’s network gas. Your tokens go into a program you can read on-chain — Jupiter never holds them, and neither do we.</p></div>
+      <div class="faq"><h4>Cliff + vesting schedule</h4><p>You set a <b>start</b>, an optional <b>cliff</b>, and a <b>vesting duration + interval</b>. Example: lock 10M, cliff 3 months, then vest linearly over 12 months — the schedule is fixed the moment you create it.</p></div>
+      <div class="faq"><h4>Why it builds trust</h4><p>Locked supply = supply that <b>can’t be dumped</b>. It’s one of the clearest on-chain signals that a team is aligned for the long term — which is exactly why we track and celebrate it for CLKN.</p></div>
+      <div class="faq"><h4>Verify everything</h4><p>Every lock lives on Solana. See CLKN’s at <a href="https://lock.jup.ag/" target="_blank" rel="noopener">lock.jup.ag</a> or right here in the <b>Lock of Fame</b>.</p></div>
+    </div>
+    <div class="card">
+      <div class="sec">Fees &amp; Token-2022 tokens</div>
+      <div class="faq"><h4>The cheapest lock there is — and no cut of your tokens</h4><p>This page runs on <b>Jupiter Lock</b>: <b>zero protocol fees</b>, no percentage of your tokens, ever. You pay only Solana’s network fee plus a small account rent (~0.01 SOL). Most other lockers charge a flat fee <i>and/or</i> a percentage of the tokens you lock — that’s the model we deliberately don’t use.</p></div>
+      <div class="faq"><h4>Locking a Token-2022 token?</h4><p>Token-2022 mints lock here exactly like any other token, on the same <b>no-token-cut, no-protocol-fee</b> terms — this page calls the <b>Jupiter Lock program directly</b>. Jupiter’s own UI at <a href="https://lock.jup.ag/" target="_blank" rel="noopener">lock.jup.ag</a> handles Token-2022 as well, so use whichever you prefer. What this page adds is a walkthrough that explains <b>every field before you sign</b>, and a shareable <b>Lock of Fame</b> page once the lock is done.</p></div>
+      <div class="faq"><h4>Where your lock shows up</h4><p>Your lock lives on-chain in the <b>Jupiter Lock</b> program, so it’s viewable at <a href="https://lock.jup.ag/" target="_blank" rel="noopener">lock.jup.ag</a> <i>and</i> in the <b>Lock of Fame</b> here — the same escrow either way. Pursuing <b>Jupiter verification</b> for your token separately (real liquidity, metadata and socials all help the case) improves how it presents across Jupiter’s surfaces generally.</p></div>
+    </div>
+    <div class="card">
+      <div class="sec">Is this safe?</div>
+      <div class="faq"><h4>No approvals. Nothing to revoke.</h4><p>Locking here does <b>not</b> grant a token approval, a delegate, or any standing permission on your wallet — the kind of thing that later needs revoking. It’s a <b>single transfer</b> into Jupiter’s program, signed once by you. When it’s done, there’s nothing left on your wallet to take back.</p></div>
+      <div class="faq"><h4>Non-custodial &amp; open-source</h4><p>Your tokens go into <b>Jupiter Lock</b> — an <b>open-source</b> program anyone can read on-chain — not a wallet we (or Jupiter) control. We never touch your keys: we build the transaction, <b>you</b> sign it in your own wallet.</p></div>
+      <div class="faq"><h4>The one thing to know</h4><p>A <b>non-cancelable</b> lock is <b>permanent</b> — that’s the point of it. Choose your schedule and cancelable/permanent setting deliberately before you sign. (Curious about wallet permissions in general? Our free <a href="/security-coop">Security Co-op</a> scans and revokes risky approvals on any wallet.)</p></div>
+    </div>
+    <div class="card">
+      <div class="ac-head"><img src="/cluck-norris-mascot.jpg" alt="Cluck Norris"/><div class="sec" style="margin-bottom:0">🐔 Ask Cluck about locks</div></div>
+      <p class="muted">Cliffs, vesting, whether a lock is legit, what to pick — ask our AI crypto professor. Free, instant, grounded in the school’s curriculum.</p>
+      <div class="ac-suggest">
+        <button type="button" class="ac-chip">What’s the difference between a cliff and vesting?</button>
+        <button type="button" class="ac-chip">Does locking my tokens cost a fee?</button>
+        <button type="button" class="ac-chip">How can I tell if a project’s lock is legit?</button>
+        <button type="button" class="ac-chip">Should I make my lock cancelable?</button>
+      </div>
+      <div class="ac-inrow">
+        <input id="acQ" maxlength="300" placeholder="Ask anything about token locks…" autocomplete="off"/>
+        <button class="btn" id="acAsk">Ask →</button>
+      </div>
+      <div class="ac-answer" id="acAns"><div class="who"><img src="/cluck-norris-mascot.jpg" alt=""/>Cluck Norris</div><div class="body" id="acBody"></div></div>
+      <div class="muted" style="font-size:11px;margin-top:10px">Want the full class? <a href="/ask-cluck">Open Ask Cluck →</a></div>
+    </div>
   </div>
 
   <div class="foot">
@@ -494,9 +498,12 @@
     window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(txt),'_blank','noopener');
   }
   $('#fameGo').addEventListener('click',function(){ var m=$('#fameMint').value.trim(); if(m) loadFame(m); });
-  // Deep link: /locker-room?fame=<mint> opens straight to that project's Lock of Fame (shareable).
+  // View Locks is the default landing pane (working controls first, per reviewer feedback), so
+  // load it immediately rather than waiting for a tab click. Deep link: /locker-room?fame=<mint>
+  // still opens straight to that project's Lock of Fame (shareable) — just fills the mint first.
   (function(){ var fm=(new URLSearchParams(location.search).get('fame')||'').trim();
-    if(fm){ $('#fameMint').value=fm; var tb=document.querySelector('.tab[data-tab="fame"]'); if(tb) tb.click(); }
+    if(fm) $('#fameMint').value=fm;
+    loadFame($('#fameMint').value.trim()||CLKN);
   })();
 
   // ---- Create configurator + live preview ----
@@ -821,6 +828,10 @@
     // it by that name.
     var escrow=(res&&res.escrow)?res.escrow:'';
     window.__lastLock={ sig:sig, esc:escrow };
+    // The mode you chose, restated on the receipt — we know it exactly here, it's what you just sent.
+    var wasCancelable=$('#cCancel')&&$('#cCancel').checked, wasUpdRec=$('#cUpdRec')&&$('#cUpdRec').checked;
+    $('#vRights').innerHTML = (wasCancelable ? '⚠ <b>Cancelable</b> — you (the creator) can cancel this lock and reclaim the tokens before it fully vests.' : '🔒 <b>Not cancelable</b> — permanent, nobody (including us) can pull these back early.')
+      + '<br/>' + (wasUpdRec ? '↪ The recipient can be changed later.' : 'The recipient is permanent.');
     $('#vSig').textContent=shortAddr(sig); $('#vSig').title=sig;
     $('#vSigLink').href='https://solscan.io/tx/'+encodeURIComponent(sig);
     if(escrow){ $('#vEsc').textContent=shortAddr(escrow); $('#vEsc').title=escrow; $('#vEscLink').href='https://solscan.io/account/'+encodeURIComponent(escrow); $('#vEscRow').style.display='flex'; }
@@ -890,6 +901,12 @@
         var claimable=fmtAmt(l.claimableRaw,l.decimals), total=fmtAmt(l.totalRaw,l.decimals), claimed=fmtAmt(l.claimedRaw,l.decimals);
         var can=l.claimableRaw && l.claimableRaw!=='0';
         var when=l.fullyVested?'fully vested':(l.startsClaimingAt*1000>Date.now()?('unlocks from '+new Date(l.startsClaimingAt*1000).toLocaleDateString()):'vesting');
+        // Cancel rights, read straight off this escrow's on-chain account (cancelMode). 0 is the
+        // only value meaning "nobody can cancel" — anything else, or anything unreadable, must NOT
+        // be shown as safe. We don't have updateRecipientMode here (the reader we call doesn't
+        // decode it), so we show cancel rights only rather than invent a recipient-change verdict.
+        var cm=l.cancelMode, cmReadable=(typeof cm==='number')&&Number.isInteger(cm);
+        var rightsTxt = cmReadable ? (cm===0 ? ' · 🔒 not cancelable' : cm===1 ? ' · ⚠ cancelable by its creator' : cm===2 ? ' · ⚠ cancelable by the recipient' : ' · ⚠ cancelable by creator or recipient') : '';   // Jupiter Lock cancelMode: 0 none, 1 creator, 2 recipient, 3 either
         // Token identity first — ticker + logo, so several locks are told apart at a glance.
         // The symbol is filled in ASYNCHRONOUSLY below via textContent (never innerHTML): symbols
         // are chain metadata and therefore attacker-controlled.
@@ -903,7 +920,7 @@
           // price — an unpriced token must not render as "$0.00".
           '<span class="clusd" data-px="'+esc(l.mint)+'" data-raw="'+esc(String(l.claimableRaw||'0'))+'" data-dec="'+esc(String(l.decimals||0))+'"></span></div>'+
           '<button class="btn'+(can?'':' alt')+'" data-esc="'+esc(l.escrow)+'" data-i="'+i+'"'+(can?'':' disabled')+'>'+(can?'💰 Claim':'Nothing yet')+'</button></div>'+
-          '<div class="clmeta">total '+total+'<span class="clusd" data-px="'+esc(l.mint)+'" data-raw="'+esc(String(l.totalRaw||'0'))+'" data-dec="'+esc(String(l.decimals||0))+'"></span> · claimed '+claimed+' · '+when+'</div>'+
+          '<div class="clmeta">total '+total+'<span class="clusd" data-px="'+esc(l.mint)+'" data-raw="'+esc(String(l.totalRaw||'0'))+'" data-dec="'+esc(String(l.decimals||0))+'"></span> · claimed '+claimed+' · '+when+rightsTxt+'</div>'+
           '<div class="msg" id="clm'+i+'"></div></div>';
       }).join('');
       // One lookup per DISTINCT mint (a wallet often holds several locks of the same token), then

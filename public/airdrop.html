@@ -268,6 +268,20 @@
   .tx-link-small{color:var(--gold);text-decoration:none;font-size:10px;}
   .tx-link-small:hover{text-decoration:underline;}
   .warning{color:var(--gold);}
+
+  /* ── Interrupted-batch recovery: confirmed / failed / unresolved, kept visually separate ── */
+  .result-group{margin-top:14px;}
+  .result-group:first-child{margin-top:0;}
+  .result-group-title{font-family:var(--disp);font-size:11.5px;letter-spacing:1.5px;color:var(--body-text);margin-bottom:4px;}
+  .result-group-hint{font-size:11px;color:var(--sub);margin-bottom:5px;line-height:1.5;}
+  .recon-btn{width:100%;margin-top:10px;padding:11px;background:rgba(255,182,39,.12);border:1px solid rgba(255,182,39,.4);
+             border-radius:8px;font-family:var(--disp);font-size:13.5px;font-weight:700;color:var(--gold);
+             letter-spacing:2px;cursor:pointer;}
+  .recon-btn:disabled{background:rgba(255,255,255,.05);color:var(--muted);border-color:var(--border);cursor:not-allowed;}
+  .retry-btn{width:100%;margin-top:8px;padding:11px;background:rgba(255,122,24,.14);border:1px solid rgba(255,122,24,.45);
+             border-radius:8px;font-family:var(--disp);font-size:13.5px;font-weight:700;color:var(--gold);
+             letter-spacing:2px;cursor:pointer;}
+  .retry-btn:disabled{background:rgba(255,255,255,.05);color:var(--muted);border-color:var(--border);cursor:not-allowed;}
 </style>
   <meta name="theme-color" content="#0b0c10">
   <meta property="og:title" content="Cluck Airdropper">
@@ -566,6 +580,11 @@
     <div class="progress-text" id="progressText">Preparing transactions...</div>
     <div class="progress-bar-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
     <div id="resultList" style="margin-top:12px;max-height:300px;overflow-y:auto"></div>
+    <!-- Interrupted-batch recovery: a "sent but not yet confirmed" recipient must never be
+         retried blind (double-pay risk) — Reconcile re-queries those signatures first, and
+         Retry stays disabled until that has run at least once since the last send. -->
+    <button id="reconcileBtn" class="recon-btn" style="display:none" onclick="reconcileStatus()">🔄 RECONCILE STATUS</button>
+    <button id="retryBtn" class="retry-btn" style="display:none" disabled onclick="retryUnresolved()">↻ RETRY FAILED / UNRESOLVED</button>
     <button id="exportRecordBtn" onclick="exportAirdropRecord()" style="display:none;width:100%;margin-top:10px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-family:var(--disp);font-size:13.5px;font-weight:700;color:var(--body-text);letter-spacing:2px;cursor:pointer">📋 EXPORT AIRDROP RECORD</button>
     <div id="recordPanel" style="display:none;margin-top:8px"></div>
   </div>
@@ -1064,6 +1083,10 @@ function removeRecipient(idx) {
 }
 
 // ── Send Airdrop ─────────────────────────────────────────────────────────────
+// Whether reconcileStatus() has run since the last send/retry — gates the Retry button
+// whenever there is anything unresolved to reconcile (see runSendBatches / renderResultGroups).
+var reconcileDone = false;
+
 async function sendAirdrop() {
   if (!walletPubkey) { showError('Connect a wallet first.'); return; }
   if (!currentMint) { showError('Please select a token.'); return; }
@@ -1075,12 +1098,23 @@ async function sendAirdrop() {
   document.getElementById('progressCard').classList.add('show');
   document.getElementById('progressCard').scrollIntoView({ behavior: 'smooth' });
 
-  const resultList = document.getElementById('resultList');
-  resultList.innerHTML = '';
+  // A brand-new send (not a retry) starts the record over — a retry calls runSendBatches
+  // directly and deliberately skips this reset so the confirmed/failed history survives.
+  document.getElementById('resultList').innerHTML = '';
   window._airdropResults = [];
   document.getElementById('exportRecordBtn').style.display = 'none';
   document.getElementById('recordPanel').style.display = 'none';
+  document.getElementById('reconcileBtn').style.display = 'none';
+  document.getElementById('retryBtn').style.display = 'none';
+  reconcileDone = false;
 
+  await runSendBatches(active);
+  document.getElementById('sendBtn').disabled = false;
+}
+
+// The actual batch-send loop, shared by the first send and by retryUnresolved() — identical
+// build/sign/send/confirm path either way, just handed a different (smaller) recipient list.
+async function runSendBatches(active) {
   let sent = 0;
   let failed = 0;
 
@@ -1189,18 +1223,19 @@ async function sendAirdrop() {
           if (confirmed) {
             sent++;
             recipient.skipReason = 'Sent';
-            addResult(recipient.addr, recipient.amount, 'sent', signature);
+            addResult(recipient.addr, recipient.amount, 'sent', signature, null, recipient);
           } else if (confirmFailed) {
             // Provably failed on-chain — re-arm for retry so it isn't silently dropped.
             failed++;
             recipient.skip = false;
             recipient.skipReason = '';
-            addResult(recipient.addr, recipient.amount, 'failed', null, 'transaction failed on-chain');
+            addResult(recipient.addr, recipient.amount, 'failed', null, 'transaction failed on-chain', recipient);
           } else {
             // Submitted but unconfirmed — may well have landed. Keep it marked handled (do NOT
-            // auto-retry → no double-pay) and flag it so the operator verifies on Solscan.
-            recipient.skipReason = 'Submitted (unconfirmed — verify on Solscan before resending)';
-            addResult(recipient.addr, recipient.amount, 'unconfirmed', signature);
+            // auto-retry → no double-pay); it now shows in its own UNRESOLVED group and Reconcile
+            // status is the only path back to retryable.
+            recipient.skipReason = 'Submitted (unconfirmed — reconcile before resending)';
+            addResult(recipient.addr, recipient.amount, 'unconfirmed', signature, null, recipient);
           }
         }
 
@@ -1208,7 +1243,7 @@ async function sendAirdrop() {
         console.error('Batch error:', batchErr);
         for (const recipient of batch) {
           failed++;
-          addResult(recipient.addr, recipient.amount, 'failed', null, batchErr.message);
+          addResult(recipient.addr, recipient.amount, 'failed', null, batchErr.message, recipient);
         }
       }
 
@@ -1223,16 +1258,13 @@ async function sendAirdrop() {
       `✅ Done — ${sent} sent, ${failed} failed`,
       100
     );
-    if ((window._airdropResults || []).length > 0) {
-      document.getElementById('exportRecordBtn').style.display = 'block';
-    }
 
   } catch(e) {
     showError('Airdrop failed: ' + e.message);
     setProgress('Error: ' + e.message, 0);
   }
-
-  document.getElementById('sendBtn').disabled = false;
+  // renderResultGroups() (called from every addResult above) already keeps the export button,
+  // and the reconcile/retry buttons, in sync with the current confirmed/failed/unresolved split.
 }
 
 // ── Transaction Builder ──────────────────────────────────────────────────────
@@ -1255,28 +1287,144 @@ function setProgress(text, pct) {
   document.getElementById('progressFill').style.width = pct + '%';
 }
 
-function addResult(addr, amount, status, sig, errMsg) {
-  // Keep a data copy of every result so the airdrop can be exported as a record.
-  (window._airdropResults || (window._airdropResults = [])).push(
-    { addr, amount, status, sig: sig || null, errMsg: errMsg || '' });
-  const div = document.createElement('div');
-  div.className = 'result-item';
+// Records one recipient's outcome and re-renders the three recovery groups (confirmed / failed /
+// unresolved) from scratch. Upserts by address rather than always pushing, so a retry updates the
+// SAME row in place instead of stacking a second entry for the same recipient underneath it.
+// `recipient` is the live object from the `recipients` array — kept (not rendered) so
+// reconcileStatus()/retryUnresolved() can flip its skip flag without a second lookup.
+function addResult(addr, amount, status, sig, errMsg, recipient) {
+  const list = (window._airdropResults || (window._airdropResults = []));
+  const row = { addr, amount, status, sig: sig || null, errMsg: errMsg || '', recipient: recipient || null };
+  const idx = list.findIndex(r => r.addr === addr);
+  if (idx >= 0) list[idx] = row; else list.push(row);
+  renderResultGroups();
+}
+
+function resultLineHtml(r) {
   let statusHtml = '';
-  if (status === 'sent') {
-    statusHtml = `<span class="status-sent result-status">✅ SENT</span>
-      ${sig ? `<a class="tx-link-small" href="https://solscan.io/tx/${esc(sig)}" target="_blank">↗ Solscan</a>` : ''}`;
-  } else if (status === 'unconfirmed') {
-    statusHtml = `<span class="status-fail result-status" style="color:#e0a800">⏳ UNCONFIRMED — check Solscan</span>
-      ${sig ? `<a class="tx-link-small" href="https://solscan.io/tx/${esc(sig)}" target="_blank">↗ Solscan</a>` : ''}`;
-  } else if (status === 'failed') {
+  if (r.status === 'sent') {
+    statusHtml = `<span class="status-sent result-status">✅ CONFIRMED</span>
+      ${r.sig ? `<a class="tx-link-small" href="https://solscan.io/tx/${esc(r.sig)}" target="_blank">↗ Solscan</a>` : ''}`;
+  } else if (r.status === 'unconfirmed') {
+    statusHtml = `<span class="status-fail result-status" style="color:#e0a800">⏳ UNRESOLVED</span>
+      ${r.sig ? `<a class="tx-link-small" href="https://solscan.io/tx/${esc(r.sig)}" target="_blank">↗ Solscan</a>` : ''}`;
+  } else {
     statusHtml = `<span class="status-fail result-status">❌ FAILED</span>
-      <span style="font-size:11.5px;color:var(--sub)">${esc(errMsg || '')}</span>`;
+      <span style="font-size:11.5px;color:var(--sub)">${esc(r.errMsg || '')}</span>`;
   }
-  div.innerHTML = `
-    <span class="result-addr">${shortAddr(addr)}</span>
-    <span class="result-amt">${fmtNum(amount)}</span>
-    ${statusHtml}`;
-  document.getElementById('resultList').appendChild(div);
+  return `<div class="result-item">
+    <span class="result-addr">${shortAddr(r.addr)}</span>
+    <span class="result-amt">${fmtNum(r.amount)}</span>
+    ${statusHtml}</div>`;
+}
+
+// Interrupted-batch recovery lives here: three CLEARLY SEPARATE lists, never merged, so a
+// still-in-flight send can never be mistaken for a landed one at a glance. Also keeps the
+// Reconcile / Retry / Export buttons in sync with what's actually in window._airdropResults.
+function renderResultGroups() {
+  const rows = window._airdropResults || [];
+  const confirmed = rows.filter(r => r.status === 'sent');
+  const failed = rows.filter(r => r.status === 'failed');
+  const unresolved = rows.filter(r => r.status === 'unconfirmed');
+
+  const group = (title, arr, hint) => arr.length
+    ? `<div class="result-group"><div class="result-group-title">${title} (${arr.length})</div>` +
+      (hint ? `<div class="result-group-hint">${hint}</div>` : '') +
+      arr.map(resultLineHtml).join('') + '</div>'
+    : '';
+  document.getElementById('resultList').innerHTML =
+    group('✅ CONFIRMED', confirmed) +
+    group('❌ FAILED', failed, failed.length ? 'Included automatically when you Retry.' : '') +
+    group('⏳ UNRESOLVED — sent, not yet confirmed', unresolved,
+      unresolved.length ? 'Run Reconcile status first — Retry stays off until you do.' : '');
+
+  const reconcileBtn = document.getElementById('reconcileBtn');
+  const retryBtn = document.getElementById('retryBtn');
+  reconcileBtn.style.display = unresolved.length ? 'block' : 'none';
+  const retryCount = failed.length + unresolved.length;
+  retryBtn.style.display = retryCount ? 'block' : 'none';
+  retryBtn.textContent = `↻ RETRY ${retryCount} FAILED / UNRESOLVED`;
+  // The one rule this whole feature exists for: never let Retry go live while something
+  // unresolved hasn't been through a reconcile pass yet.
+  retryBtn.disabled = retryCount === 0 || (unresolved.length > 0 && !reconcileDone);
+
+  if (rows.length > 0) document.getElementById('exportRecordBtn').style.display = 'block';
+}
+
+// Re-queries every UNRESOLVED signature this page already holds (never builds a new
+// transaction) and reclassifies each recipient as confirmed or failed where the chain now has
+// an answer. Whatever is still genuinely ambiguous afterward stays unresolved — that's the
+// "still-unresolved-after-reconcile" case Retry is allowed to include.
+async function reconcileStatus() {
+  const rows = window._airdropResults || [];
+  const unresolved = rows.filter(r => r.status === 'unconfirmed');
+  const btn = document.getElementById('reconcileBtn');
+  if (!unresolved.length) { reconcileDone = true; renderResultGroups(); return; }
+
+  btn.disabled = true; btn.textContent = '🔄 CHECKING…';
+  // One RPC call per UNIQUE signature — a batch shares one signature across every recipient in it.
+  const sigs = [...new Set(unresolved.map(r => r.sig).filter(Boolean))];
+  const statusBySig = {};
+  for (const sig of sigs) {
+    try {
+      const st = await rpc('getSignatureStatuses', [[sig], { searchTransactionHistory: true }]);
+      statusBySig[sig] = (st && st.value && st.value[0]) || null;
+    } catch (e) {
+      statusBySig[sig] = undefined;   // the check itself failed — this signature stays ambiguous
+    }
+  }
+  for (const r of unresolved) {
+    const s = r.sig ? statusBySig[r.sig] : null;
+    if (s === undefined) continue;   // couldn't check right now — leave it, Reconcile again later
+    if (s && s.err) {
+      r.status = 'failed';
+      r.errMsg = 'transaction failed on-chain (found by Reconcile)';
+      if (r.recipient) { r.recipient.skip = false; r.recipient.skipReason = ''; }
+    } else if (s && (s.confirmationStatus === 'confirmed' || s.confirmationStatus === 'finalized')) {
+      r.status = 'sent';
+      if (r.recipient) { r.recipient.skip = true; r.recipient.skipReason = 'Sent (confirmed by Reconcile)'; }
+    }
+    // else: RPC found nothing / still pending — remains 'unconfirmed', i.e. still unresolved.
+  }
+  reconcileDone = true;
+  btn.disabled = false; btn.textContent = '🔄 RECONCILE STATUS';
+  renderResultGroups();
+}
+
+// Sends only what's left to send: FAILED rows, plus whatever is still UNRESOLVED after a
+// reconcile pass — never a CONFIRMED one. Reuses runSendBatches() unchanged, so the actual
+// build/sign/send/confirm path is identical to the first send; this only decides which
+// recipients get handed to it.
+async function retryUnresolved() {
+  const rows = window._airdropResults || [];
+  const stillUnresolved = rows.filter(r => r.status === 'unconfirmed');
+  if (stillUnresolved.length && !reconcileDone) {
+    showError('Run Reconcile status first — some sends are still unresolved.');
+    return;
+  }
+  const toRetry = rows.filter(r => r.status === 'failed' || r.status === 'unconfirmed');
+  if (!toRetry.length) return;
+  if (stillUnresolved.length && !confirm(
+    stillUnresolved.length + ' recipient(s) are still unresolved even after reconciling — ' +
+    'retrying them risks paying twice if the original transaction lands later. Continue anyway?'
+  )) return;
+
+  const retrySet = [];
+  toRetry.forEach(r => {
+    if (!r.recipient) return;
+    r.recipient.skip = false; r.recipient.skipReason = '';
+    retrySet.push(r.recipient);
+  });
+  if (!retrySet.length) return;
+
+  reconcileDone = false;
+  document.getElementById('reconcileBtn').style.display = 'none';
+  document.getElementById('retryBtn').style.display = 'none';
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('progressCard').classList.add('show');
+  document.getElementById('progressCard').scrollIntoView({ behavior: 'smooth' });
+  await runSendBatches(retrySet);
+  document.getElementById('sendBtn').disabled = false;
 }
 
 // Build a record of the airdrop — every recipient, the amount, the status and a
@@ -1293,7 +1441,10 @@ function exportAirdropRecord() {
   }
   const sent = rows.filter(r => r.status === 'sent').length;
   const failed = rows.filter(r => r.status === 'failed').length;
-  txt += '\n' + sent + ' sent, ' + failed + ' failed, ' + rows.length + ' total.\n';
+  const unresolved = rows.filter(r => r.status === 'unconfirmed').length;
+  txt += '\n' + sent + ' confirmed, ' + failed + ' failed' +
+    (unresolved ? ', ' + unresolved + ' unresolved (reconcile before resending)' : '') +
+    ', ' + rows.length + ' total.\n';
   const panel = document.getElementById('recordPanel');
   panel.style.display = 'block';
   panel.innerHTML =
@@ -1638,7 +1789,9 @@ initUnlockGate();
 // Unified tools pass (owner, 2026-08-18): building + previewing a drop is free — SENDING
 // needs the pass (hold $50 of CLKN = free, else 0.05 SOL / 7 days, all tools). This
 // replaces the per-tool 50k-CLKN gate that was parked on 2026-08-10. /cluck-gate.js.
+// Retry sends real transactions too, so it goes through the same gate as the first send.
 sendAirdrop = CluckGate.guard(sendAirdrop, { tool: 'Airdrop Tool', anchor: '#sendBtn' });
+retryUnresolved = CluckGate.guard(retryUnresolved, { tool: 'Airdrop Tool', anchor: '#retryBtn' });
 </script>
 
 <script defer src="/cluck-nav.js"></script>

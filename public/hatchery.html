@@ -136,6 +136,20 @@
   .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: var(--disp); font-size: 12px; color: var(--sub); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
 
+  /* Final review — one last plain-English summary before the wallet popup */
+  .modal { position: fixed; inset: 0; background: rgba(4,2,1,.82); display: none; align-items: center; justify-content: center; padding: 18px; z-index: 50; }
+  .modal.show { display: flex; }
+  .modal .box { background: var(--card); border: 1px solid var(--border); border-radius: 16px; max-width: 480px; width: 100%; padding: 22px; max-height: 88vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .modal h2 { font-family: var(--disp); font-size: 19px; letter-spacing: 1px; color: var(--gold); margin-bottom: 4px; }
+  .modal .sub { font-size: 12.5px; color: var(--subtext); margin-bottom: 12px; }
+  .modal .srow { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 13px; }
+  .modal .srow:last-child { border-bottom: none; }
+  .modal .srow span:first-child { color: var(--subtext); flex: none; }
+  .modal .srow b { font-family: var(--mono); font-weight: 400; text-align: right; }
+  .modal .mbtns { display: flex; gap: 10px; margin-top: 16px; }
+  .modal .mbtns .hatch-btn { padding: 13px; font-size: 14px; }
+  .modal .mbtn-cancel { flex: none; background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--sub); border-radius: 12px; padding: 13px 18px; font-family: var(--disp); font-size: 13px; letter-spacing: 1px; cursor: pointer; }
+
   /* Desktop — wider container so the page fills a larger screen */
   @media (min-width: 1040px) {
     .wrap { max-width: 1040px; }
@@ -286,7 +300,7 @@ body{background:transparent;font-family:var(--body);}
     </div>
     <div style="margin-top:10px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.22);border-radius:8px;padding:11px 13px;font-size:12.5px;line-height:1.6;color:#9CA3AF">
       <b style="color:#93C5FD">A third authority worth knowing — metadata (update authority).</b><br>
-      Beyond mint and freeze there's the <b>update authority</b>: it controls whether your token's <b>name, logo, and socials</b> can be changed after launch. This minter leaves your metadata <b>mutable</b> on purpose — so you can fix a broken image or legitimately rebrand later. The tradeoff is real: a <b>mutable</b> token asks buyers to trust you won't bait-and-switch, while an <b>immutable</b> one locks the branding forever. Rug-checkers — including our own <a href="/autopsy" style="color:#FCD34D">Token Autopsy</a> — surface which one it is. If you'd rather lock yours permanently, you can set the metadata immutable or renounce the update authority after minting with a Metaplex tool (e.g. the Metaboss CLI). Neither choice is "right" — just know who can change what, because your holders will check.
+      Beyond mint and freeze there's the <b>update authority</b>: it controls whether your token's <b>name, logo, and socials</b> can be changed after launch. This minter leaves your metadata <b>mutable</b> on purpose — so you can fix a broken image or legitimately rebrand later. The tradeoff is real: a <b>mutable</b> token asks buyers to trust you won't bait-and-switch, while an <b>immutable</b> one locks the branding forever. Rug-checkers — including our own <a href="/autopsy" style="color:#FCD34D">Token Autopsy</a> — surface which one it is. If you'd rather lock yours permanently, our free <a href="/token-lock" style="color:#FCD34D">Token Metadata Lock</a> makes it immutable — do that after minting, once your name and art are final. Neither choice is "right" — just know who can change what, because your holders will check.
     </div>
   </div>
 
@@ -407,8 +421,21 @@ body{background:transparent;font-family:var(--body);}
         education for that step (the LP Lab), but the launch is mine to do.</span>
       </div>
     </div>
-    <button class="hatch-btn" id="hatchBtn" onclick="hatch()">🥚 HATCH TOKEN</button>
+    <button class="hatch-btn" id="hatchBtn" onclick="reviewHatch()">🥚 HATCH TOKEN</button>
     <div class="progress" id="progress"></div>
+  </div>
+
+  <!-- Final review — shown once, right before the wallet is asked to sign -->
+  <div class="modal" id="reviewModal">
+    <div class="box">
+      <h2>🥚 Final check before you sign</h2>
+      <div class="sub">This is what will be minted. Read it once more before your wallet opens.</div>
+      <div id="reviewBody"></div>
+      <div class="mbtns">
+        <button class="hatch-btn" id="confirmHatchBtn" onclick="doHatch()" style="flex:1">🔏 CONFIRM &amp; SIGN</button>
+        <button class="mbtn-cancel" onclick="closeReviewModal()">BACK</button>
+      </div>
+    </div>
   </div>
 
   <!-- Result -->
@@ -460,6 +487,7 @@ function setProgress(msg) {
 // JSON-RPC helper lives in /cluck-util.js. Six pages had their own copy and one
 // of them returned the raw envelope instead of throwing on a JSON-RPC error.
 const rpc = CluckUtil.rpc;
+const esc = CluckUtil.esc;
 
 // ── Starting-price calculator ────────────────────────────────────────────────
 function fmtUsdBig(n) {
@@ -608,6 +636,9 @@ async function confirmTx(signature) {
 // SOL/CLKN chooser when both are enabled. Paying in CLKN is the cheaper path
 // and the UI says so loudly. The chosen method rides along on the build.
 let payMethod = 'sol';
+// The last successful /api/hatchery/config read — the final review summary quotes THIS,
+// never a re-derived number, so what the user reviews always matches what's on screen.
+let hatcheryCfg = null;
 function setPay(m) {
   payMethod = m;
   const s = document.getElementById('paySol'), c = document.getElementById('payClkn');
@@ -620,6 +651,7 @@ async function loadHatcheryConfig() {
   try {
     const cfg = await (await fetch('/api/hatchery/config' + (walletPubkey ? '?wallet=' + encodeURIComponent(walletPubkey) : ''))).json();
     if (!cfg) throw new Error('empty config');
+    hatcheryCfg = cfg;
     hatchBtn.disabled = false;   // config readable again — clear any fee-read lockout
     if (!cfg.solEnabled && !cfg.clknEnabled) {
       box.innerHTML = '<div class="fee-title">MINT FEE</div>'
@@ -681,8 +713,9 @@ async function loadHatcheryConfig() {
 }
 loadHatcheryConfig();
 
-async function hatch() {
-  if (!walletPubkey) { showError('Connect your wallet first.'); return; }
+// Reads + validates every hatch input in one place, so the review step and the actual
+// build/sign call are always looking at the exact same data — never two copies that can drift.
+function collectHatchFields() {
   const name = document.getElementById('tokenName').value.trim();
   const symbol = document.getElementById('tokenSymbol').value.trim();
   const decimals = document.getElementById('tokenDecimals').value;
@@ -691,13 +724,63 @@ async function hatch() {
   const revokeMint = document.getElementById('revokeMint').checked;
   const revokeFreeze = document.getElementById('revokeFreeze').checked;
 
-  if (!name) { showError('Token name is required.'); return; }
-  if (!symbol) { showError('Token symbol is required.'); return; }
-  if (!/^\d+$/.test(supply) || BigInt(supply) <= 0n) { showError('Total supply must be a whole number greater than 0.'); return; }
-  if (!logoData) { showError('Choose a logo image.'); return; }
+  if (!name) { showError('Token name is required.'); return null; }
+  if (!symbol) { showError('Token symbol is required.'); return null; }
+  if (!/^\d+$/.test(supply) || BigInt(supply) <= 0n) { showError('Total supply must be a whole number greater than 0.'); return null; }
+  if (!logoData) { showError('Choose a logo image.'); return null; }
   if (!document.getElementById('ackBox').checked || !document.getElementById('ackBox2').checked) {
-    showError('Please check both acknowledgement boxes before hatching.'); return;
+    showError('Please check both acknowledgement boxes before hatching.'); return null;
   }
+  return { name, symbol, decimals, supply, description, revokeMint, revokeFreeze };
+}
+
+// The cost line for the review summary — reads the SAME cfg + payMethod the fee box on the
+// page already shows, so this can never quote a different number than what's on screen.
+function costSummaryText() {
+  const cfg = hatcheryCfg;
+  if (!cfg) return 'Unavailable — reload the page before hatching.';
+  if (!cfg.solEnabled && !cfg.clknEnabled) return 'Minting is temporarily disabled.';
+  if (cfg.feeWaived) return 'Free (CLKN holder waiver) + a small Solana network fee';
+  if (payMethod === 'clkn' && cfg.clknEnabled) return '≈' + Number(cfg.feeClkn).toLocaleString() + ' CLKN (network fee included)';
+  if (cfg.solEnabled) return Number(cfg.feeSol) + ' SOL (network fee included)';
+  return '≈' + Number(cfg.feeClkn).toLocaleString() + ' CLKN (network fee included)';
+}
+
+function reviewRow(k, v) { return '<div class="srow"><span>' + k + '</span><b>' + v + '</b></div>'; }
+
+// The concise final summary this review asks for: name/symbol, supply, decimals, which
+// authorities are kept vs revoked, whether metadata is mutable, and the total estimated cost —
+// all values already computed elsewhere on the page, never re-guessed here.
+function openReviewModal(f) {
+  const authLine = (revoked, kept) => revoked
+    ? '<span style="color:#4ade80">revoked</span>'
+    : '<span style="color:#FCD34D">kept — ' + kept + '</span>';
+  document.getElementById('reviewBody').innerHTML =
+    reviewRow('Token', esc(f.name) + ' (' + esc(f.symbol) + ')') +
+    reviewRow('Supply', Number(f.supply).toLocaleString() + ' @ ' + esc(String(f.decimals)) + ' decimals') +
+    reviewRow('Mint authority', authLine(f.revokeMint, 'you can mint more later')) +
+    reviewRow('Freeze authority', authLine(f.revokeFreeze, 'you can freeze a holder')) +
+    reviewRow('Metadata', '<span style="color:#FCD34D">mutable</span> — lock it permanently anytime with <a href="/token-lock" style="color:#93C5FD">Token Metadata Lock</a>') +
+    reviewRow('Estimated cost', costSummaryText());
+  document.getElementById('reviewModal').classList.add('show');
+}
+function closeReviewModal() { document.getElementById('reviewModal').classList.remove('show'); }
+
+// Visible "HATCH TOKEN" button — validates, then shows the final review. Signing itself
+// only happens from the review modal's CONFIRM button (doHatch), never from here directly.
+function reviewHatch() {
+  if (!walletPubkey) { showError('Connect your wallet first.'); return; }
+  const f = collectHatchFields();
+  if (!f) return;
+  openReviewModal(f);
+}
+
+async function doHatch() {
+  if (!walletPubkey) { closeReviewModal(); showError('Connect your wallet first.'); return; }
+  const f = collectHatchFields();
+  if (!f) { closeReviewModal(); return; }   // something changed since the review opened — re-check
+  closeReviewModal();
+  const { name, symbol, decimals, supply, description, revokeMint, revokeFreeze } = f;
 
   const btn = document.getElementById('hatchBtn');
   btn.disabled = true;
