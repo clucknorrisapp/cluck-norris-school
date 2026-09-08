@@ -67,7 +67,7 @@
   "· made right here": "· feitos aqui mesmo",
   ", an optional": ", um opcional",
   ", and a": ", e uma",
-  ", and a shareable": ", e uma compartilhável página do",
+  ", and a shareable": ", e uma página compartilhável do",
   ", and lock your own tokens with": ", e bloqueie seus próprios tokens com",
   ", not even the team can pull them early. Cancel and recipient-change rights are set once, at creation, and can’t be changed after: we show you both before you sign, and on any lock paying out to your own wallet under": "nem mesmo a equipe pode retirá-los antes. Os direitos de cancelamento e de troca de destinatário são definidos uma única vez, na criação, e não podem ser alterados depois: mostramos os dois antes de você assinar, e em qualquer bloqueio que pague para a sua própria carteira, em",
   ". Example: lock 10M, cliff 3 months, then vest linearly over 12 months — the schedule is fixed the moment you create it.": ". Exemplo: bloqueie 10M, cliff de 3 meses, depois vesting linear por 12 meses — o cronograma fica fixo no momento em que você o cria.",
