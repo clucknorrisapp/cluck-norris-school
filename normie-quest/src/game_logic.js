@@ -3425,13 +3425,27 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // where per-object hit testing is unreliable. Pointer coords are zoom/container-immune.
     this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE,F,X,Q,E,ONE,TWO,THREE');
     // PAUSE keys: while paused, ANY key resumes; while playing, P / Esc pause. (Touch: ⏸ hotspot in update; tap resumes.)
-    this.input.keyboard.on('keydown',function(e){ if(self.paused){ self.resumeGame(); } else if(e.key==='p'||e.key==='P'||e.key==='Escape'){ self.pauseGame(false); } });
+    this.input.keyboard.on('keydown',function(e){ if(self.paused){
+        // D toggles the diag line instead of resuming — the one exception to "any key resumes"
+        // (item 5). Every other key (including the D/A/W/S movement keys the rest of the time)
+        // keeps resuming exactly as before.
+        if(e&&(e.key==='d'||e.key==='D')){ nqDiagSet(!nqDiagOn()); self.refreshPauseDiag(); return; }
+        self.resumeGame();
+      } else if(e.key==='p'||e.key==='P'||e.key==='Escape'){ self.pauseGame(false); } });
     // tap anywhere resumes; otherwise a tap in the INVENTORY strip spends that slot. Slot taps are
     // resolved HERE with raw zoom-immune pointer coords (panel finding 2026-07-22: the per-object
     // box.on('pointerdown') hit areas are unreliable under the 2x-zoom HUD container — iPad taps
     // never landed). Desktop clicks route through the same zone, so mouse + touch behave alike.
     this.input.on('pointerdown',function(ptr){
-      if(self.paused){ self.resumeGame(); return; }
+      if(self.paused){
+        // The "diag" toggle is a real interactive object on the pause card (item 5) — a tap there
+        // must flip diagnostics, not blow through and resume the run underneath it. hitTestPointer
+        // is the same mechanism Phaser used to decide whether the button's OWN pointerup handler
+        // fires, so this can never disagree with what the button itself does.
+        var hits=[]; try{ hits=self.input.hitTestPointer(ptr); }catch(e){}
+        if(self._pauseDiagBtn && hits.indexOf(self._pauseDiagBtn)>=0) return;
+        self.resumeGame(); return;
+      }
       try{ var gx=ptr.x/self.scale.width*W, gy=ptr.y/self.scale.height*H;
         if(gy>=16&&gy<=44){ for(var _si=0;_si<RESERVE_SLOTS;_si++){ if(Math.abs(gx-(92+_si*23))<=12){
           self._hotDown=true;   // consume the press so the PAUSE hotspot poll skips it (sweep finding: slot taps also paused)
@@ -6222,13 +6236,44 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(auto) mk(this.add.text(W/2,H/2+2,'you stepped away — your run is safe',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5));
     var padOn=(typeof window!=='undefined')&&window.__NQ_GAMEPAD_ACTIVE;
     mk(this.add.text(W/2,H/2+26,(padOn?'PRESS ANY BUTTON':(isTouch?'TAP':'PRESS ANY KEY'))+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5));
-    // audio-state line, refreshed in update() while paused — see the field-diagnostics note there
-    // P9: field diagnostics, not player copy — only the tester/lab lanes see it (the owner reads
-    // it off an iPad there). update()'s refresh is already guarded on this being non-null.
-    this._pauseAudioLine=(TEST_MODE||(typeof window!=='undefined'&&window.__NQ_SETUP))
-      ? mk(this.add.text(W/2,H/2+44,'audio: …',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f9bb3'}).setOrigin(.5))
-      : null;
-    this._paLast=0; this._paT0=null; },
+    // Sound state + a pointer to the full settings — readable at a glance, no need to leave pause.
+    var _sfxOn=true; try{ _sfxOn=!(window.__NQ_MUSIC&&window.__NQ_MUSIC.muted&&window.__NQ_MUSIC.muted()); }catch(e){}
+    mk(this.add.text(W/2,H/2+46,(_sfxOn?'🔊 sound on':'🔇 music muted')+'  ·  ⚙ top-right for sound & FX settings',
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8fa0c8',align:'center'}).setOrigin(.5));
+    mk(this.add.text(W/2,H/2+60,'? top-right — how to play',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8fa0c8'}).setOrigin(.5));
+    // Cloud-save status (item: cloud-save status visible), surfaced here too — nqSaveLine() is the
+    // same formatter the Title CONTINUE line uses, so the wording can never disagree between them.
+    // Refreshed every frame while paused (see update()) since the state can change mid-pause
+    // (a checkpoint synced right before the player walked away).
+    this._pauseSaveLine=mk(this.add.text(W/2,H/2+74,'progress: '+nqSaveLine(),
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#cbd6ff'}).setOrigin(.5));
+    // Diagnostics toggle (off by default, remembered per device) — reveals the SAME audio/fps
+    // line the TEST/lab builds always show, for field debugging on a live build without needing
+    // a TEST_MODE/__NQ_SETUP build. TEST_MODE/lab still show it unconditionally either way.
+    this._pauseDiagBtn=mk(this.add.text(W/2,H/2+88,'diag',{fontFamily:UIFONT,resolution:UIRES,fontSize:'8px',color:'#4a5578'})
+      .setOrigin(.5).setInteractive({useHandCursor:true}));
+    this._pauseDiagBtn.on('pointerup',function(){ nqDiagSet(!nqDiagOn()); self.refreshPauseDiag(); });
+    this._paLast=0; this._paT0=null;
+    this.refreshPauseDiag();   // creates/labels the audio-state line per the current diag setting
+  },
+  // Shows or hides the audio/fps diagnostic line to match TEST_MODE / __NQ_SETUP / the diag
+  // toggle, and relabels the toggle button. Callable while paused (the toggle click) or from
+  // pauseGame() itself (initial state) — a no-op outside pause.
+  refreshPauseDiag:function(){
+    if(!this.paused) return;
+    var on=TEST_MODE||(typeof window!=='undefined'&&window.__NQ_SETUP)||nqDiagOn();
+    if(on && !this._pauseAudioLine){
+      // audio-state line, refreshed in update() while paused — see the field-diagnostics note there.
+      // P9: field diagnostics, not player copy.
+      var o=this.add.text(W/2,H/2+104,'audio: …',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f9bb3'}).setOrigin(.5);
+      this.hb(o); o.setDepth(3000); if(this.pauseUI) this.pauseUI.push(o);
+      this._pauseAudioLine=o; this._paLast=0; this._paT0=null;
+    } else if(!on && this._pauseAudioLine){
+      try{ this._pauseAudioLine.destroy(); }catch(e){}
+      this._pauseAudioLine=null;
+    }
+    if(this._pauseDiagBtn) this._pauseDiagBtn.setText(on?'diag ▲ hide':'diag ▼ show');
+  },
   resumeGame:function(){ if(!this.paused) return; this.paused=false;
     try{ window.__NQ_PAUSED=false; }catch(e){}
     // REBASE every live deadline by the span the pause lasted (see the note in pauseGame). Fields
@@ -6285,7 +6330,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ this.tweens.resumeAll(); }catch(e){}
     try{ MUSIC.resume(); }catch(e){}
     if(this.pauseUI){ this.pauseUI.forEach(function(o){ try{o.destroy();}catch(e){} }); this.pauseUI=null; }
-    this._pauseAudioLine=null;
+    this._pauseAudioLine=null; this._pauseSaveLine=null; this._pauseDiagBtn=null;
     // SWALLOW THE RESUMING PRESS. update() early-returns while paused, so prevThrow/prevJump still
     // hold their pre-pause values; the button that dismissed the card therefore reads as a FRESH
     // edge on the very next frame and fires for real. Resuming by tapping the on-screen THROW
@@ -6322,6 +6367,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // can READ the context state off an iPad, where there is no console — 'running@12.3s' good,
       // 'running@FROZEN' = the WebKit zombie, 'suspended/interrupted' = awaiting the resume tap).
       this._paFrames=(this._paFrames||0)+1;   // update() runs per rAF even while paused — that IS the frame rate
+      // Cloud-save status can change mid-pause (a checkpoint synced right as the player walked
+      // away) — keep the pause card's line honest too. Cheap enough to run every frame.
+      if(this.paused && this._pauseSaveLine) this._pauseSaveLine.setText('progress: '+nqSaveLine());
       if(this.paused && this._pauseAudioLine && (!this._paLast || Date.now()-this._paLast>600)){
         var _dtMs=Date.now()-(this._paLast||Date.now()-600);
         var _fps=Math.round(this._paFrames/Math.max(0.001,_dtMs/1000)); this._paFrames=0; this._paLast=Date.now();
