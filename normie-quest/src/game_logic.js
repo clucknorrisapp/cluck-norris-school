@@ -209,6 +209,12 @@ function paintSaveStatus(){
     });
   }catch(e){}
 }
+// ⚠ game_logic.js is built as SEVERAL separate top-level <script> blocks (see build.js / the
+// literal <script> markers in this file) — each is its OWN scope, sharing only `window`. The
+// wallet/leaderboard code (cloudSync, renderWallet) lives in a LATER block than this one, so it
+// cannot see the two functions above by their bare names — publish them the same way every other
+// cross-block hook here already does (__NQ_CLOUDPUSH, __NQ_APPLYSAVE, __NQ_GETSAVE, __NQ_SAVESTATE).
+try{ window.__NQ_SAVE_STATUS_HTML=nqSaveStatusHtml; window.__NQ_PAINT_SAVE_STATUS=paintSaveStatus; }catch(e){}
 // Diagnostics toggle (item: pause screen) — off by default, remembered per device. Lets anyone
 // reveal the audio/fps line the TEST/lab builds always show, for field debugging on a live build.
 var NQ_DIAG_KEY='nqPauseDiag';
@@ -9361,7 +9367,9 @@ if(typeof document!=='undefined'){ (function(){
     _saveState.state = st;
     if (extra && extra.at) _saveState.at = extra.at;
     _saveState.error = (extra && extra.error) || null;
-    try { paintSaveStatus(); } catch (e) {}
+    // paintSaveStatus lives in an EARLIER top-level <script> block (a separate scope) — reach it
+    // through the window export, never by bare name (see the note above its definition).
+    try { if (window.__NQ_PAINT_SAVE_STATUS) window.__NQ_PAINT_SAVE_STATUS(); } catch (e) {}
   }
   try { window.__NQ_SAVESTATE = function () { return { state: _saveState.state, at: _saveState.at, error: _saveState.error }; }; } catch (e) {}
   function cloudSync(push) {
@@ -10337,17 +10345,19 @@ if(typeof document!=='undefined'){ (function(){
           + ((TIERED && ws.worlds) ? '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>' : '')
           + (ws.balances ? '<div class="nqp-sub" style="margin:8px 0">NORMIE: ' + ws.balances.normie.toLocaleString() + ' · CLKN: ' + ws.balances.clkn.toLocaleString() + '</div>' : '')
           // Cloud-save status (item: cloud-save status visible) — a live read of window.__NQ_SAVESTATE(),
-          // repainted in place by paintSaveStatus() below and again on every state change (cloudSync's
-          // _setSaveState). The furthest-progress merge and the leaderboard restrictions are untouched —
+          // repainted in place by window.__NQ_PAINT_SAVE_STATUS() below and again on every state
+          // change (cloudSync's _setSaveState — nqSaveStatusHtml/paintSaveStatus live in an EARLIER
+          // <script> block, a separate scope, so they're reached through the window export, never by
+          // bare name). The furthest-progress merge and the leaderboard restrictions are untouched —
           // this only ever shows what already happened, never decides anything.
-          + '<div class="nqp-sub" id="nqp-savestat" style="margin:8px 0">' + nqSaveStatusHtml() + '</div>'
+          + '<div class="nqp-sub" id="nqp-savestat" style="margin:8px 0">' + (window.__NQ_SAVE_STATUS_HTML ? window.__NQ_SAVE_STATUS_HTML() : 'Progress: <b style="color:#cbd6ff">Saved on this device</b>') + '</div>'
           + '<div class="nqp-sub" style="margin-top:8px">Remembered on this device until you disconnect · scores post with a verified wallet ✓</div>'
           + '<button class="nqp-b alt" id="nqp-tvpair" style="margin-top:12px">📱 I\u2019m the phone — enter a TV\u2019s code</button>'
           + '<button class="nqp-b alt" id="nqp-tvshow" style="margin-top:6px">📺 I\u2019m the TV — show a pairing code</button>'
           + '<button class="nqp-b alt" id="nqp-disconnect" style="margin-top:6px">Disconnect</button>';
         ov.querySelector('#nqp-tvpair').addEventListener('click', function () { startPhonePair(host, typeof pendingPhonePair === 'string' ? pendingPhonePair : null); pendingPhonePair = null; });
         ov.querySelector('#nqp-tvshow').addEventListener('click', function () { startTvPair(host); });
-        paintSaveStatus();   // wires the RETRY button when the state is 'error' (no-op otherwise)
+        try { if (window.__NQ_PAINT_SAVE_STATUS) window.__NQ_PAINT_SAVE_STATUS(); } catch (e) {}   // wires the RETRY button when the state is 'error' (no-op otherwise)
         ov.querySelector('#nqp-disconnect').addEventListener('click', function () { disconnectWallet(); renderWallet(); });
       } else {
         var det = detectWallets();
