@@ -174,8 +174,22 @@ var CluckAirdrop = {
   // checked transfer (adds the mint account) plus the per-tx memo pushes the densest
   // ATA-heavy batch close to the limit — hold at 16 for a safe ~110-byte margin.
   TX_WEIGHT_BUDGET: 16,
-  LAMPORTS_PER_ATA_RENT: 2039280,   // rent for a 165-byte SPL token account
+  LAMPORTS_PER_ATA_RENT: 2039280,   // rent for a 165-byte SPL token account — the pre-Agave-4.2 value, a FALLBACK only (see refreshRent)
   LAMPORTS_PER_TX_FEE: 5000,
+
+  // Agave 4.2 (mainnet epoch 1032, 2026-09-10) starts lowering rent across five feature gates, so a
+  // hardcoded per-ATA rent goes stale the moment the first gate lands (the ATA program charges the
+  // live Rent sysvar; only our ESTIMATE would drift, and it would drift UP — overstating cost).
+  // Ask the chain once per page load and keep the constant as the fallback. Bounded to a sane band so
+  // a broken RPC answer can never zero the estimate or blow it up.
+  refreshRent: async function (rpcFn) {
+    try {
+      var v = await rpcFn("getMinimumBalanceForRentExemption", [165]);
+      v = Number(v);
+      if (Number.isFinite(v) && v >= 200000 && v <= 3000000) { CluckAirdrop.LAMPORTS_PER_ATA_RENT = Math.round(v); }
+    } catch (e) { /* keep the fallback */ }
+    return CluckAirdrop.LAMPORTS_PER_ATA_RENT;
+  },
 
   // Fixed-point string conversion — never amount * 10**decimals, whose float
   // multiply loses precision above ~9M tokens at 9 decimals.
