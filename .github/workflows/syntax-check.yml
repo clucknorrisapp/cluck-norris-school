@@ -65,14 +65,16 @@ jobs:
         run: node scripts/check-counts.js
       # Seven languages are promised (CLAUDE.md); six are curated dicts keyed on the English
       # source string itself (no en.json — see the script header). Cross-language key diffs and
-      # placeholder drift are real bugs and gate; the base/school source-scan is informational
-      # (most of that surface is meant to fall through to machine translation, by design) but the
-      # locker-room source-scan gates too — docs/HANDOFF_2026-08-02.md caught 10 of 14 FAQ
-      # headers on that one page silently missing their curated key. WARN-ONLY for now
-      # (docs/I18N_AUDIT_2026-09-08.md: the locker-room gap is real and un-fixed) — flip to
-      # blocking once that gap is closed; see the doc for exactly what.
-      - name: i18n audit (warn-only — see docs/I18N_AUDIT_2026-09-08.md)
-        run: node scripts/i18n-audit.cjs --warn-only
+      # placeholder drift are real bugs and gate; the base/school source-scan stays informational
+      # (most of that surface is meant to fall through to machine translation, by design), but the
+      # locker-room source-scan gates too — docs/HANDOFF_2026-08-02.md caught 10 of 14 FAQ headers
+      # on that one page silently missing their curated key, and docs/I18N_AUDIT_2026-09-08.md
+      # mechanised the check and found 109 more. BLOCKING as of 2026-09-08 (no --warn-only): that
+      # 109-gap was the only thing the default mode failed on, and it's now filled in all six
+      # public/i18n/<lang>.locker.json files — a future PR that adds locker copy without a
+      # dictionary key, or drops a key from one language, now fails CI instead of shipping silent.
+      - name: i18n audit (gating — see docs/I18N_AUDIT_2026-09-08.md)
+        run: node scripts/i18n-audit.cjs
       # CUNA lock-to-earn: who qualifies and how a day's pool is split. Zero deps, so it belongs
       # in this job. Mutation-tested — reverting the cancelable check to the field name that does
       # not exist, measuring terms backward from vesting_start_time, tolerating a missing
