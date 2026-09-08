@@ -215,6 +215,14 @@ var NQ_DIAG_KEY='nqPauseDiag';
 function nqDiagOn(){ try{ return localStorage.getItem(NQ_DIAG_KEY)==='1'; }catch(e){ return false; } }
 function nqDiagSet(v){ try{ if(v) localStorage.setItem(NQ_DIAG_KEY,'1'); else localStorage.removeItem(NQ_DIAG_KEY); }catch(e){} }
 
+// Onboarding-seen flag (item: returning players skip Controls) — set once the Controls scene has
+// actually been shown, so a returning player with a save never sits through it twice. Title only
+// ever SKIPS Controls when both this is true AND there is a resume point — a brand-new device
+// (cloud save landed, tutorial never shown here) still gets it once.
+var NQ_ONBOARDED_KEY='nqOnboarded';
+function nqOnboarded(){ try{ return localStorage.getItem(NQ_ONBOARDED_KEY)==='1'; }catch(e){ return false; } }
+function nqSetOnboarded(){ try{ localStorage.setItem(NQ_ONBOARDED_KEY,'1'); }catch(e){} }
+
 // PREMIUM version flag — the paid/premium build (or a ?premium=1 link, remembered) grants LONGER
 // Whale Mode + Cold Wallet durations. The free version keeps the shorter times; nothing else changes.
 var PREMIUM = (function(){ try{ var q=((location.search||'')+(location.hash||'')); if(/[?&#](premium|prem)=1/i.test(q)){ try{ localStorage.setItem('nqPremium','1'); }catch(e){} return true; } return (typeof localStorage!=='undefined' && localStorage.getItem('nqPremium')==='1'); }catch(e){ return false; } })();
@@ -2124,27 +2132,45 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
       window.addEventListener('nq-gate-ready',_onReady);
       this.events.once('shutdown',function(){ try{ window.removeEventListener('nq-gate-ready',_onReady); }catch(e){} });
     } }catch(e){}
-    this.add.text(W/2,246,_maxWorld+" worlds · "+_named.length+" levels + more secrets than you'd think  ·  a Cluck Norris production",{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#b6bfe0',align:'center'}).setOrigin(.5);
+    var _creditTxt=this.add.text(W/2,246,_maxWorld+" worlds · "+_named.length+" levels + more secrets than you'd think  ·  a Cluck Norris production",{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#b6bfe0',align:'center'}).setOrigin(.5);
     // Free to play, always: tap straight into the game. Nothing is ever charged to START a run
     // (the only burn in the game is the optional Item Reserve shop in the panel overlay).
     var self=this;
     // CROSS-SESSION CONTINUE. A returning player with a banked world resumes there instead of
     // being dumped back on 1-1. Tap-anywhere keeps doing the friendly thing (CONTINUE when there
     // is a save, a fresh run when there isn't) and a small NEW GAME chip is the explicit way to
-    // throw the save away. Both paths start through Controls exactly as before, so HOW TO PLAY
-    // and the destination world's Briefing still fire.
+    // throw the save away. A first-timer (or a save with onboarding never seen on THIS device)
+    // still starts through Controls, so HOW TO PLAY and the destination hand-off fire exactly as
+    // before; a player who has already sat through Controls once skips straight to Game instead
+    // — see `start()` below. How To Play stays reachable any time via the '?' button (top-right).
     var _res=null; try{ _res=nqResumePoint(); }catch(e){}
     // §6.2: the world map, for everyone — a tier-1 holder could not revisit a world they own.
     // Top-left so it stays clear of the crowded bottom band (NEW GAME / chips / credit line).
     var _mapBtn=this.add.text(12,13,'🗺 WORLD MAP',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#66ccff',resolution:UIRES}).setOrigin(0,.5);
-    var _newBtn=null;
+    var _newBtn=null, _contSub=null;
     if(_res){
-      p.setText('CONTINUE \u00B7 WORLD '+_res.name);
-      _newBtn=this.add.text(W/2,262,'NEW GAME',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#8f96b8',resolution:UIRES}).setOrigin(.5);
+      // "4-2" -> "WORLD 4 · LEVEL 2" (falls back to the raw name if a level is ever named
+      // differently — VIP/private rooms keep the world-dash-level convention today).
+      var _rm=/^(\d+)-(\d+)/.exec(_res.name||'');
+      p.setText('CONTINUE \u00B7 '+(_rm?('WORLD '+_rm[1]+' \u00B7 LEVEL '+_rm[2]):('WORLD '+_res.name)));
+      // Small honest line under CONTINUE: where the save lives (window.__NQ_SAVESTATE(), item 1)
+      // plus the same score/leaderboard rule nqResumePoint() already enforces — a cross-session
+      // resume restores PROGRESS only, never a score, and never posts to the leaderboard.
+      _contSub=this.add.text(W/2,207,nqSaveLine()+' \u00B7 resumes at score 0 — not a leaderboard run',
+        {fontFamily:UIFONT,resolution:UIRES,fontSize:'8px',color:'#8fa0c8',align:'center',wordWrap:{width:W-24}}).setOrigin(.5);
+      // Room for the subtitle: nudge the rest of the tightly-packed footer down a few px so
+      // nothing overlaps (only on the CONTINUE layout — a fresh visit's spacing is unchanged).
+      nw.y+=6; _chips.forEach(function(t){ t.y+=6; }); _creditTxt.y+=6;
+      _newBtn=this.add.text(W/2,268,'NEW GAME',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#8f96b8',resolution:UIRES}).setOrigin(.5);
     }
-    var start=function(lvl,score){ if(self.started) return; self.started=true;
+    var start=function(lvl,score,isResume){ if(self.started) return; self.started=true;
       // NEW GAME starts at 1-1 but does NOT delete the bank — progress is a permanent unlock, and
       // deleting it here would also delete it for every other device synced to the same wallet.
+      // Returning-player skip: only when RESUMING (never for NEW GAME/1-1) and only once THIS
+      // device has actually sat through Controls before (nqSetOnboarded, set in Controls.create).
+      // Matches exactly what Controls.go() itself sends for a resumed run — level+score, lives:3,
+      // no `lab` — the same destination, just reached one screen sooner.
+      if(isResume && nqOnboarded()){ self.scene.start('Game',{level:lvl||0,score:0,lives:3}); return; }
       self.scene.start('Controls',{next:lvl||0,score:score||0}); };
     var go=function(pointer){
       // one tap surface, two outcomes — NEW GAME wins if the tap landed on its chip. The hit box is
@@ -2152,13 +2178,13 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
       var onNew=false;
       try{ if(_newBtn&&pointer&&pointer.worldX!=null){ var _b=_newBtn.getBounds(); Phaser.Geom.Rectangle.Inflate(_b,14,10); onNew=_b.contains(pointer.worldX,pointer.worldY); } }catch(e){}
       if(nqOnBtn(_mapBtn,pointer)){ if(self.started) return; self.started=true; self.scene.start('LevelSelect'); return; }   // §6.2
-      if(_res&&!onNew) start(_res.level,_res.score); else start(0,0);
+      if(_res&&!onNew) start(_res.level,_res.score,true); else start(0,0,false);
     };
     // Tap anywhere = play (from the save if there is one, else 1-1). In TEST BUILD, the reliable
     // DOM "≡ Levels" button (bottom-left, works from here too) is how you reach the level picker.
     this.input.once('pointerdown',go,this);
     this.input.keyboard.once('keydown',function(ev){ if(ev&&(ev.key==='m'||ev.key==='M')){ if(!self.started){ self.started=true; self.scene.start('LevelSelect'); } return; }   // §6.2: M = world map
-      if(_res&&ev&&(ev.key==='n'||ev.key==='N')) start(0,0); else go(); },this);
+      if(_res&&ev&&(ev.key==='n'||ev.key==='N')) start(0,0,false); else go(); },this);
     padAdvance(this, function(){ go(); });   // controller button also starts
     if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
   }
@@ -7512,6 +7538,12 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ d=d||{}; this.nextLevel=d.next!=null?d.next:0; this.score=d.score||0; },
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0; this.page=0; this.lastAdv=0;
+    // item 2: mark onboarding seen the moment this screen actually shows — a returning player with
+    // a save skips straight here from Title (see Title.create's `start()`) only once this has run
+    // at least once on the device. Setting it up-front (not on go()) means an interrupted first
+    // visit (tab closed mid-page) still counts as "has seen it" rather than showing it a second
+    // time; the content itself is unchanged either way.
+    try{ nqSetOnboarded(); }catch(e){}
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x1a1533,1); g.fillRect(0,0,W,28);
