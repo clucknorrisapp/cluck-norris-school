@@ -608,7 +608,7 @@ const PRESETS = {
 const TX_BATCH_SIZE = 20; // legacy cap; planBatches() does the real sizing now
 // Minimum rent for an SPL token account (165 bytes) at current Solana rent rate.
 // Sender pays this every time the recipient doesn't already have a token account for the mint.
-const LAMPORTS_PER_ATA_RENT = 2039280; // 0.00203928 SOL
+let LAMPORTS_PER_ATA_RENT = 2039280; // pre-Agave-4.2 value; refreshed from the chain on load (rent is lowered from 2026-09-10) — the engine script loads later in the page, so no reference to it here
 const LAMPORTS_PER_TX_FEE = 5000;      // base fee per signed Solana tx
 // Per-recipient batch weight: a transfer slot is 1, an ATA-create+transfer slot is 2.
 // Solana's 1232-byte tx limit fits ~18 weighted slots of plain transfers — but the
@@ -663,6 +663,8 @@ function shortAddr(a) {
 // JSON-RPC helper lives in /cluck-util.js. Six pages had their own copy and one
 // of them returned the raw envelope instead of throwing on a JSON-RPC error.
 const rpc = CluckUtil.rpc;
+// Live per-ATA rent for the cost estimate (the chain charges the live value regardless; this keeps the preview honest).
+window.addEventListener('load', function () { try { if (window.CluckAirdrop && CluckAirdrop.refreshRent) CluckAirdrop.refreshRent(rpc).then(function (v) { LAMPORTS_PER_ATA_RENT = v; }); } catch (e) {} });   // the engine <script> sits near the end of the page
 
 // ── Wallet Connect ───────────────────────────────────────────────────────────
 // Registry of supported wallets. Each entry knows how to detect its provider
