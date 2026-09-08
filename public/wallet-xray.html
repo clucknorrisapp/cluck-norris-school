@@ -55,15 +55,30 @@
   .verdict{background:rgba(255,182,39,0.07);border:1px solid rgba(255,182,39,0.3);border-radius:14px;padding:16px 17px;margin-bottom:14px;}
   .verdict .lbl{font-family:var(--disp);font-size:11.5px;color:var(--gold);letter-spacing:2px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
   .verdict .body{font-family:var(--body);font-size:14.5px;line-height:1.7;color:var(--body-text);}
+  /* .soft = the behavioral read, deliberately quieter than the fact cards above it —
+     same info, less visual weight, so a pattern-based read never outranks the evidence. */
+  .verdict.soft{background:rgba(255,255,255,0.02);border:1px solid var(--border);}
+  .verdict.soft .lbl{color:var(--sub);font-size:10.5px;}
+  .verdict.soft .body{font-size:13px;color:var(--sub);}
   .miniask{font-family:var(--disp);font-size:12px;letter-spacing:.5px;color:#1a0d04;background:var(--gold);border:none;border-radius:999px;padding:6px 12px;cursor:pointer;}
   /* label chips */
   .labels{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+  .labels.soft{opacity:.92;}
   .chip{display:flex;flex-direction:column;gap:3px;border-radius:10px;padding:9px 12px;min-width:140px;flex:1 1 200px;border:1px solid var(--border);background:rgba(255,255,255,0.02);}
   .chip .t{font-family:var(--disp);font-size:14px;letter-spacing:0.5px;}
   .chip .e{font-family:var(--body);font-size:12.5px;color:var(--sub);line-height:1.5;}
   .chip.high{border-color:rgba(239,68,68,0.45);background:rgba(239,68,68,0.07);}.chip.high .t{color:var(--red);}
   .chip.med{border-color:rgba(245,158,11,0.45);background:rgba(245,158,11,0.07);}.chip.med .t{color:var(--amber);}
   .chip.info{border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.06);}.chip.info .t{color:var(--blue);}
+  .labels.soft .chip{padding:7px 10px;min-width:120px;}
+  .labels.soft .chip .t{font-size:12.5px;}
+  .labels.soft .chip .e{font-size:11.5px;}
+  /* factual summary line + tool-boundary note — both plain facts, both lead the page/results */
+  .xr-summary{font-family:var(--mono);font-size:12.5px;color:var(--text);background:rgba(255,182,39,0.05);border:1px solid rgba(255,182,39,0.25);border-radius:10px;padding:10px 13px;margin-bottom:12px;line-height:1.6;}
+  .xr-boundary{font-family:var(--body);font-weight:500;font-size:12.5px;color:var(--sub);background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:9px 13px;margin-bottom:14px;line-height:1.55;}
+  .xr-boundary b{color:var(--text);}
+  .xr-boundary a{color:var(--blue);text-decoration:none;font-weight:700;}
+  .xr-boundary a:hover{text-decoration:underline;}
   /* stat grid */
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;}
   .stat{background:#0d0d0d;border:1px solid var(--border);border-radius:9px;padding:10px 11px;}
@@ -189,6 +204,8 @@ body{background:transparent;font-family:var(--body);}
     <div class="hero-sub">Paste any Solana wallet. X-Ray reads its whole recent history — where it was first funded, everything it bought / sold / transferred across <b>every</b> token, the behavior pattern (bot, dumper, cash-out, LP, holder), a full searchable timeline, charts — and you can <b>ask Cluck Norris about any specific transaction</b>.</div>
   </div>
 
+  <div class="xr-boundary">🩻 <b>X-Ray</b> = one wallet across all tokens. 🔍 <b>Trace</b> = one wallet's history with one token. <a href="/trace" id="xrTraceLink">Open Trace instead →</a></div>
+
   <div class="card">
     <div class="field-label">WALLET ADDRESS</div>
     <input type="text" class="token-input" id="walletInput" placeholder="Paste any Solana wallet address…" autocomplete="off"/>
@@ -270,9 +287,13 @@ function syncMode(){
     : 'Scanning <b>every token</b> this wallet has touched — behaviour, funding origin, risk.';
 }
 if(mi) mi.addEventListener('input', syncMode);
-wi.addEventListener('input',()=>{runBtn.disabled=wi.value.trim().length<32;});
+// The boundary note's Trace link carries the wallet already typed here — Trace accepts
+// ?wallet= — so following it doesn't mean re-pasting an address you just entered.
+function syncTraceLink(){const tl=document.getElementById('xrTraceLink');if(!tl)return;const w=wi.value.trim();tl.href=w.length>=32?('/trace?wallet='+encodeURIComponent(w)):'/trace';}
+wi.addEventListener('input',()=>{runBtn.disabled=wi.value.trim().length<32;syncTraceLink();});
 const qp=new URLSearchParams(location.search);
 if(qp.get('wallet')){wi.value=qp.get('wallet').trim();runBtn.disabled=wi.value.trim().length<32;}
+syncTraceLink();
 
 // esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
 // esc() had drifted and four pages weren't escaping the single quote.
@@ -354,16 +375,21 @@ function renderOverview(){
   const oldestTs=d.funding?(d.funding.firstTs||d.funding.ts):sc.firstSeen; // wallet's first-ever appearance
   const ageD=ageExact&&oldestTs?(Date.now()/1000-oldestTs)/86400:null;
   let h='';
+  // Lead with the plain facts: what was read and over what period. Everything below this
+  // line is either that same coverage in more detail, or hard transaction evidence — the
+  // behavioral read (verdict + bot/dumper labels) is pattern-based judgment and is pushed
+  // below the evidence and styled quieter, on purpose (reviewer ask, 2026-09-08).
+  const coverageLine=ageExact
+    ? ('covering '+(ageD>=1?Math.round(ageD)+' day'+(Math.round(ageD)===1?'':'s'):dur(ageD*86400))+' of history, back to '+fmtDate(oldestTs))
+    : ('back to '+fmtDate(oldestTs)+' — the wallet is older than this scan could page to');
+  h+='<div class="xr-summary">📊 Read <b>'+fmtNum(sc.txCount)+'</b> transactions, '+coverageLine+'.'
+    +(sc.truncated?' <span style="color:var(--amber)">Scan hit its depth limit — see below.</span>':'')+'</div>';
   // Coal Miner banner — offer the deep dig (truncated standard scan) or report the deep result.
   if(d.mode==='coalminer'){
     h+='<div class="origin" style="border-color:rgba(252,211,77,0.4);background:rgba(252,211,77,0.05)"><div class="lbl" style="color:var(--accent)">⛏ COAL MINER MODE — DEEP DIG</div><div class="body">Scanned <b>'+fmtNum(sc.txCount)+'</b> transactions'
       +(d.truncated?' and the history is <b>still deeper than this</b> — an extremely heavy wallet. Recent + bulk history is captured; the very oldest may remain below the floor.':' — reached the full readable history. 🏆')+'</div></div>';
   } else if(d.truncated){
     h+='<div class="origin" style="border-color:rgba(252,211,77,0.4);background:rgba(252,211,77,0.05)"><div class="lbl" style="color:var(--accent)">⛏ THIS WALLET HAS MORE HISTORY</div><div class="body">The standard scan hit its '+fmtNum(sc.txCount)+'-txn floor — there is older activity below. Fire up <b>Coal Miner mode</b> to dig the full history (up to ~5,000 txns; takes a few minutes).<br><button class="miniask" style="margin-top:9px" onclick="run(true)">⛏ RUN COAL MINER MODE</button></div></div>';
-  }
-  h+='<div class="verdict"><div class="lbl"><span>🐔 CLUCK\'S READ</span><button class="miniask" data-ask="Give me your overall read on this wallet — what stands out?">Ask a follow-up →</button></div><div class="body">'+esc(d.verdict)+'</div></div>';
-  if((d.labels||[]).length){
-    h+='<div class="labels">'+d.labels.map(l=>'<div class="chip '+esc(l.level)+'"><div class="t">'+esc(l.icon)+' '+esc(l.tag)+'</div><div class="e">'+esc(l.evidence)+'</div></div>').join('')+'</div>';
   }
   if(d.funding){const fn=d.funding;const isCex=!!fn.label;
     const head=fn.exact?'🌱 WALLET ORIGIN — WHERE THE MONEY CAME FROM':'🌱 FUNDING ORIGIN — EARLIEST REACHED';
@@ -413,6 +439,12 @@ function renderOverview(){
     if((d.cex||[]).length)h+='<div style="margin-bottom:8px">'+d.cex.map(c=>'<span class="pill cexpill">🏦 '+esc(c.name)+': '+c.out+' out / '+c.in+' in</span>').join('')+'</div>';
     if((d.topSources||[]).length)h+='<div>'+d.topSources.map(s=>'<span class="pill">'+esc((s.source||'').replace(/_/g,' '))+' ·'+s.count+'</span>').join('')+'</div>';
     h+='</div>';
+  }
+  // Behavioral read — pattern-based judgment, not on-chain fact. Kept, but below the
+  // evidence above and styled quieter (soft) so it can't be mistaken for a transaction fact.
+  h+='<div class="verdict soft"><div class="lbl"><span>🐔 CLUCK\'S READ <span style="font-weight:400;text-transform:none;letter-spacing:0">— a pattern read, not a verdict</span></span><button class="miniask" data-ask="Give me your overall read on this wallet — what stands out?">Ask a follow-up →</button></div><div class="body">'+esc(d.verdict)+'</div></div>';
+  if((d.labels||[]).length){
+    h+='<div class="labels soft">'+d.labels.map(l=>'<div class="chip '+esc(l.level)+'"><div class="t">'+esc(l.icon)+' '+esc(l.tag)+'</div><div class="e">'+esc(l.evidence)+'</div></div>').join('')+'</div>';
   }
   document.getElementById('p-overview').innerHTML=h;
   document.querySelectorAll('#p-overview .miniask[data-ask]').forEach(b=>b.addEventListener('click',()=>openChat(b.dataset.ask,b.dataset.sig||null)));

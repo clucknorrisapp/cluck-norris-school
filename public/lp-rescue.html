@@ -85,7 +85,7 @@
     <div class="sub">Can't find your liquidity? Search the blockchain directly.</div>
   </div>
 
-  <p class="lede">Sometimes a real LP position doesn't show up in a DEX website — a newer pool misses the search index, a portfolio page comes up blank. It happens on every DEX, and the funds are always still on-chain. <b>LP Rescue reads Solana directly</b>, shows you exactly what exists, and if it's yours, builds a withdrawal that <b>your own wallet signs</b>. Free, for everyone.</p>
+  <p class="lede">Sometimes a real LP position doesn't show up in a DEX website — a newer pool misses the search index, a portfolio page comes up blank. It happens on every DEX. <b>LP Rescue reads Solana directly</b> and shows you exactly what's there — most missing-from-the-app positions turn out safely recoverable, though some may be locked, already empty, or owned by a different wallet. If it's yours and recoverable, LP Rescue builds a withdrawal that <b>your own wallet signs</b>. Free, for everyone.</p>
 
   <div class="secline">🔒&nbsp;<span><b>Cluck Norris never asks for your seed phrase or private key.</b> LP Rescue reads public blockchain data and creates transactions that are reviewed and signed directly by your wallet. Connecting a wallet does not give Cluck Norris control over your funds.</span></div>
 
@@ -127,6 +127,13 @@
       <button class="btn ghost" id="m-cancel">CANCEL</button>
     </div>
     <div class="status" id="m-status"></div>
+    <!-- Guided recovery from a failed build/simulate/submit: re-reads this position's CURRENT
+         on-chain state and rebuilds from there — never a blind retry of stale amounts. Hidden
+         until a failure below actually needs it. -->
+    <div style="margin-top:12px" id="m-refresh-wrap" class="hidden">
+      <button class="btn warn sm" id="m-refresh">↻ REFRESH POSITION &amp; REBUILD REMAINING STEPS</button>
+      <div class="hint">Re-reads this position on-chain right now and rebuilds a withdrawal for whatever is actually left — safe to click even after a partial recovery.</div>
+    </div>
   </div>
 </div>
 
@@ -357,6 +364,7 @@ async function openWithdraw(p){
   $("m-preview").innerHTML = '<div class="hint">Refreshing chain state and building the recovery…</div>';
   $("m-txs").innerHTML = ""; setStatus($("m-sim"), ""); setStatus($("m-status"), "");
   $("m-go").disabled = true;
+  $("m-refresh-wrap").classList.add("hidden"); $("m-refresh").disabled = false;
   $("modal-bg").classList.add("show");
   try {
     var r = await fetch("/api/lp-rescue/build-withdraw", {
@@ -392,7 +400,8 @@ async function openWithdraw(p){
     for (var si=0; si<d.transactions.length; si++){
       var sim = await rpc("simulateTransaction", [d.transactions[si].base64, { encoding: "base64", sigVerify: false, replaceRecentBlockhash: true, commitment: "confirmed" }]);
       if (sim && sim.value && sim.value.err){
-        setStatus($("m-sim"), "Simulation failed — no transaction has been submitted. (" + esc(JSON.stringify(sim.value.err)) + "). Close, rescan and retry.", "err");
+        setStatus($("m-sim"), "Simulation failed — no transaction has been submitted. (" + esc(JSON.stringify(sim.value.err)) + "). The chain state may have moved since this was built.", "err");
+        $("m-refresh-wrap").classList.remove("hidden");
         return;
       }
     }
@@ -402,8 +411,46 @@ async function openWithdraw(p){
   } catch(e){
     $("m-preview").innerHTML = "";
     setStatus($("m-status"), "Could not build the withdrawal: " + esc(e.message || e), "err");
+    $("m-refresh-wrap").classList.remove("hidden");
   }
 }
+
+// Guided recovery: re-read this exact position's LIVE on-chain state, then rebuild via the
+// same openWithdraw() path used for a first attempt. buildFullWithdrawal() on the server always
+// re-fetches the position and removes 100% of whatever remains right now — so after a partial
+// recovery this naturally rebuilds only the steps still outstanding, with no separate "partial"
+// code path to keep in sync with the real one.
+function refreshRebuild(){
+  if (!activeWithdraw) return;
+  var p = activeWithdraw.position;
+  $("m-refresh").disabled = true;
+  setStatus($("m-status"), "Re-reading the position on-chain…");
+  fetch("/api/lp-rescue/scan?pool=" + encodeURIComponent(p.poolAddress) + "&owner=" + encodeURIComponent(p.ownerAddress) + "&position=" + encodeURIComponent(p.positionAddress))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.success){
+        // Same honest distinction as Step 1: a failed re-read is not "nothing left".
+        setStatus($("m-status"), d.code === "RPC_SCAN_FAILED"
+          ? "Could not re-read the position — the network read failed. This does NOT mean anything is wrong; try Refresh again in a moment."
+          : "Could not re-read the position: " + esc(d.error || "scan failed") + ".", "err");
+        $("m-refresh").disabled = false;
+        return;
+      }
+      var fresh = (d.positions || []).find(function(q){ return q.positionAddress === p.positionAddress; });
+      var stillHasBalance = fresh && (fresh.tokenX.rawAmount !== "0" || fresh.tokenY.rawAmount !== "0");
+      if (!stillHasBalance){
+        setStatus($("m-status"), "✓ Nothing left to recover — this position is already empty on-chain (an earlier attempt likely went through). Close this window and rescan Step 1 to see the final state.", "ok");
+        $("m-refresh").disabled = false;
+        return;
+      }
+      openWithdraw(fresh); // rebuilds the remaining withdrawal from current on-chain state
+    })
+    .catch(function(){
+      setStatus($("m-status"), "Network error re-reading the position. Try Refresh again.", "err");
+      $("m-refresh").disabled = false;
+    });
+}
+$("m-refresh").addEventListener("click", refreshRebuild);
 
 $("m-cancel").addEventListener("click", function(){ $("modal-bg").classList.remove("show"); });
 $("m-go").addEventListener("click", runWithdraw);
@@ -450,10 +497,11 @@ async function runWithdraw(){
       setTx(i, "fail", "FAILED");
       if (i > 0){
         // Partial recovery: chain state has moved — NEVER blindly restart.
-        setStatus($("m-status"), "PARTIAL RECOVERY — " + i + " of " + n + " transactions confirmed, then one failed (" + esc(e.message || e) + "). The blockchain state has changed. Close this window and rescan: the tool will rebuild a withdrawal for whatever remains.", "err");
+        setStatus($("m-status"), "PARTIAL RECOVERY — " + i + " of " + n + " transactions confirmed, then one failed (" + esc(e.message || e) + "). The blockchain state has changed — click Refresh below (or rescan Step 1) and the tool will rebuild a withdrawal for whatever remains.", "err");
       } else {
-        setStatus($("m-status"), "Withdrawal not completed: " + esc(e.message || e) + ". Nothing further was submitted — rescan and retry.", "err");
+        setStatus($("m-status"), "Withdrawal not completed: " + esc(e.message || e) + ". Nothing further was submitted — click Refresh below to rebuild and retry.", "err");
       }
+      $("m-refresh-wrap").classList.remove("hidden");
       $("m-cancel").disabled = false;
       return;
     }

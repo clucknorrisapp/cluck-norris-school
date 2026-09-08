@@ -204,7 +204,7 @@ body{background:transparent;font-family:var(--body);}
 <body>
 <div class="wrap">
   <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);"/>&larr; CLUCK NORRIS HOME</a>
-  <a href="/wallet-xray" class="back-home" style="margin-left:14px">&larr; FULL WALLET X-RAY</a>
+  <a href="/wallet-xray" class="back-home" id="xrayBackLink" style="margin-left:14px">&larr; FULL WALLET X-RAY</a>
 
   <div class="header">
     <div class="header-icon">🔍</div>
@@ -217,29 +217,7 @@ body{background:transparent;font-family:var(--body);}
 
   <div class="hero">
     <div class="hero-tag">INVESTIGATION TOOL</div>
-    <div class="hero-sub">Paste a wallet and a token mint. Get every transaction between the two — buys, sells, transfers in and out — in chronological order, with running balance and where the funds came from. No more hours digging on Solscan.</div>
-  </div>
-
-  <div class="edu" id="edu">
-    <div class="edu-head" onclick="toggleEdu()">
-      <div class="lbl">📘 HOW TO USE TRACE — WHAT IT SHOWS YOU</div>
-      <div class="tg" id="eduTg">read</div>
-    </div>
-    <div class="edu-body">
-      <h4>WHAT THIS TOOL DOES</h4>
-      <p>Paste any <strong>wallet</strong> and any <strong>token mint</strong>. Trace pulls the wallet's complete history with that token and lays out exactly what it did — so a project lead can vet a suspicious wallet in minutes instead of an hour lost in Solscan.</p>
-
-      <h4>YOU SEE THE HEADLINE FIRST</h4>
-      <p>The top of the results is built for a fast read: a <strong>summary</strong>, a <strong>full-accounting reconciliation</strong> (every token traced), and a <strong>visual flow map</strong> of where the tokens moved. That's the whole story at a glance — then you choose what to dig into.</p>
-
-      <h4>WHAT YOU CAN DIG INTO</h4>
-      <p><span class="ico">↔</span> <strong>Direct transfers</strong> — wallet-to-wallet sends. These are the forensically interesting movements: a wallet quietly shifting tokens to other wallets, separate from normal DEX trading. Use the flow-map filter to isolate them.</p>
-      <p><span class="ico">🔗</span> <strong>Multi-hop</strong> — follow the money one step further. When the investigated wallet sends tokens to another wallet, multi-hop traces what <em>that</em> wallet then did — sold, held, or forwarded again — so you can chase a trail across several wallets.</p>
-      <p><span class="ico">🌱</span> <strong>Fund origin</strong> — where the wallet's tokens (and the SOL / USDC / USDT it traded with) <em>first</em> came from. If a cluster of wallets all trace back to one funding source, that's a signal worth knowing.</p>
-
-      <h4>A NOTE ON SPEED</h4>
-      <p>A full history can take a few minutes, and multi-hop adds more — it's pulling and parsing every transaction on-chain. Worth the wait for a real investigation.</p>
-    </div>
+    <div class="hero-sub">Paste a wallet and a token mint. Get the history between the two we're able to read — buys, sells, transfers in and out — in chronological order, with running balance and where the funds came from. No more hours digging on Solscan.</div>
   </div>
 
   <div class="card">
@@ -252,12 +230,34 @@ body{background:transparent;font-family:var(--body);}
 
   <div class="err" id="err"></div>
 
+  <div class="edu" id="edu">
+    <div class="edu-head" onclick="toggleEdu()">
+      <div class="lbl">📘 HOW TO USE TRACE — WHAT IT SHOWS YOU</div>
+      <div class="tg" id="eduTg">read</div>
+    </div>
+    <div class="edu-body">
+      <h4>WHAT THIS TOOL DOES</h4>
+      <p>Paste any <strong>wallet</strong> and any <strong>token mint</strong>. Trace pulls the history we can read for that wallet with that token and lays out exactly what it did — so a project lead can vet a suspicious wallet in minutes instead of an hour lost in Solscan.</p>
+
+      <h4>YOU SEE THE HEADLINE FIRST</h4>
+      <p>The top of the results is built for a fast read: a <strong>summary</strong>, a <strong>full-accounting reconciliation</strong> (every token traced), and a <strong>visual flow map</strong> of where the tokens moved. That's the whole story at a glance — then you choose what to dig into.</p>
+
+      <h4>WHAT YOU CAN DIG INTO</h4>
+      <p><span class="ico">↔</span> <strong>Direct transfers</strong> — wallet-to-wallet sends. These are the forensically interesting movements: a wallet quietly shifting tokens to other wallets, separate from normal DEX trading. Use the flow-map filter to isolate them.</p>
+      <p><span class="ico">🔗</span> <strong>Multi-hop</strong> — follow the money one step further. When the investigated wallet sends tokens to another wallet, multi-hop traces what <em>that</em> wallet then did — sold, held, or forwarded again — so you can chase a trail across several wallets.</p>
+      <p><span class="ico">🌱</span> <strong>Fund origin</strong> — where the wallet's tokens (and the SOL / USDC / USDT it traded with) <em>first</em> came from. If a cluster of wallets all trace back to one funding source, that's a signal worth knowing.</p>
+
+      <h4>A NOTE ON SPEED</h4>
+      <p>Reading the history we can find can take a few minutes, and multi-hop adds more — it's pulling and parsing transactions on-chain. Worth the wait for a real investigation. Very active wallets get truncated — see the warning banner in the results.</p>
+    </div>
+  </div>
+
   <div class="loading" id="loading">
     <div class="loading-spinner">🐔</div>
     <div class="loading-title">TRACING</div>
     <div class="loading-stage" id="loadingStage">Resolving the wallet's token account…</div>
     <div class="loading-timer" id="loadingTimer">0s</div>
-    <div class="loading-note">A full history can take a few minutes — worth the wait.</div>
+    <div class="loading-note">Reading the history we can find can take a few minutes — worth the wait.</div>
   </div>
 
   <div id="marketHeader"></div>
@@ -430,9 +430,14 @@ async function runMultiHop() {
 const walletInput = document.getElementById('walletInput');
 const mintInput = document.getElementById('mintInput');
 const runBtn = document.getElementById('runBtn');
+const xrayBackLink = document.getElementById('xrayBackLink');
 [walletInput, mintInput].forEach(el => el.addEventListener('input', updateRunBtn));
 function updateRunBtn() {
   runBtn.disabled = !(walletInput.value.trim().length >= 32 && mintInput.value.trim().length >= 32);
+  // Carry the wallet through to X-Ray (it accepts ?wallet=) so following the link doesn't
+  // mean re-pasting an address you already typed here.
+  const w = walletInput.value.trim();
+  xrayBackLink.href = w.length >= 32 ? ('/wallet-xray?wallet=' + encodeURIComponent(w)) : '/wallet-xray';
 }
 
 const urlParams = new URLSearchParams(location.search);
