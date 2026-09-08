@@ -11312,7 +11312,7 @@ async function cunaClaimIntoWallet({ cfg, secret, needRaw }) {
 }
 
 let CUNA_BURN_INFLIGHT = false;
-async function cunaBurnTick(reason) {
+async function cunaBurnTick(reason, extra) {
   // Staging never burns. The secret is meant to be absent there, but "meant to be" is not a gate
   // — POKE has the same check for the same reason (a money engine ticking on two boxes).
   if (IS_STAGING) return { ok: false, reason: "staging never burns" };
@@ -11322,9 +11322,17 @@ async function cunaBurnTick(reason) {
   // the "not burned today" gate a second time.
   if (CUNA_BURN_INFLIGHT) return { ok: false, reason: "a burn is already in flight" };
   CUNA_BURN_INFLIGHT = true;
-  try { return await cunaBurnTickInner(reason); } finally { CUNA_BURN_INFLIGHT = false; }
+  try { return await cunaBurnTickInner(reason, extra); } finally { CUNA_BURN_INFLIGHT = false; }
 }
-async function cunaBurnTickInner(reason) {
+async function cunaBurnTickInner(reason, extra) {
+  // `extra` = a ONE-OFF burn the owner asked for by hand (2026-09-08: "I just need to do a big burn
+  // today, back to normal rules tomorrow"): { amountRaw, key }. It rides the same claim-first, send,
+  // confirm, ledger and announce path as the daily burn, but its gate is its own — armed + keyed +
+  // enough balance — with NO hour, NO already-burned-today, NO auto daily cap. The HARD cap
+  // (5,000,000 CUNA per burn) still applies; the route enforces it before we get here and it is
+  // re-checked below. The ledger key is `<day>#extra-<unix>`, so it never collides with the day's
+  // automatic record, still counts toward the totals, and still goes through the in-flight
+  // resolver above if confirmation is ambiguous.
   const burnLib = require("./lib/cuna-burn");
   const stored = kv.get(CUNA_BURN_KV, null);
   const done = kv.get(CUNA_BURN_DAYS_KV, {}) || {};
@@ -11396,7 +11404,7 @@ async function cunaBurnTickInner(reason) {
   let claimed = null;
   if (secret && cfg.wallet && burnLib.readBurn(stored).armed) {
     try {
-      const amount = BigInt(cfg.amountRaw);
+      const amount = extra ? BigInt(extra.amountRaw) : BigInt(cfg.amountRaw);
       if (BigInt(balanceRaw) < amount) {
         claimed = await cunaClaimIntoWallet({ cfg, secret, needRaw: (amount - BigInt(balanceRaw)).toString() });
         if (claimed && claimed.claimedRaw && claimed.claimedRaw !== "0") {
@@ -11411,7 +11419,18 @@ async function cunaBurnTickInner(reason) {
     }
   }
 
-  const gate = burnLib.burnGate({ burn: stored, burnedDays: done, nowUnix, balanceRaw, hasSigner: !!secret });
+  let gate;
+  if (extra) {
+    const b = burnLib.readBurn(stored);
+    let amt = 0n; try { amt = BigInt(extra.amountRaw); } catch (_) { amt = 0n; }
+    if (!b.armed) gate = { ok: false, reason: "not armed" };
+    else if (!secret) gate = { ok: false, reason: "CUNA_BURN_SECRET is not set" };
+    else if (amt <= 0n || amt > burnLib.HARD_DAILY_CAP_RAW) gate = { ok: false, reason: `extra amount must be 1..${burnLib.HARD_DAILY_CAP_RAW} base units` };
+    else if (BigInt(balanceRaw) < amt) gate = { ok: false, short: true, reason: `SHORT for the extra burn: wallet holds ${balanceRaw}, needs ${amt}` };
+    else gate = { ok: true, day: extra.key, amountRaw: amt.toString() };
+  } else {
+    gate = burnLib.burnGate({ burn: stored, burnedDays: done, nowUnix, balanceRaw, hasSigner: !!secret });
+  }
   if (!gate.ok) {
     // Quiet on the normal cases (this ticks twice an hour); loud on SHORT, because that is the
     // one that means a burn the owner expected did not happen.
@@ -11530,7 +11549,7 @@ app.all("/api/cuna-burn/admin", async (req, res) => {
   try {
     const burnLib = require("./lib/cuna-burn");
     const q = { ...(req.query || {}), ...(req.body || {}) };
-    const mutatingBurn = String(q.arm || "") === "1" || String(q.off || "") === "1" || String(q.config || "") === "1" || String(q.run || "") === "1";
+    const mutatingBurn = String(q.arm || "") === "1" || String(q.off || "") === "1" || String(q.config || "") === "1" || String(q.run || "") === "1" || String(q.extra || "") === "1";
     if (mutatingBurn && req.method !== "POST") {
       return res.status(405).json({ ok: false, error: "this changes the burner — send it as a POST" });
     }
@@ -11560,7 +11579,20 @@ app.all("/api/cuna-burn/admin", async (req, res) => {
       console.log("[cuna-burn] DISARMED");
     }
 
-    const ranNow = String(q.run || "") === "1" ? await cunaBurnTick("manual") : null;
+    let ranNow = null;
+    if (String(q.run || "") === "1") ranNow = await cunaBurnTick("manual");
+    else if (String(q.extra || "") === "1") {
+      // ONE-OFF burn on top of the daily one. Owner's explicit ask in the moment, never scheduled.
+      // Whole-token amount in the confirm string so a raw-units typo cannot pass as intent:
+      //   POST ?extra=1&amountRaw=5000000000000000&confirm=burn-extra-5000000
+      let amt = 0n; try { amt = BigInt(String(q.amountRaw || "")); } catch (_) { amt = 0n; }
+      const whole = amt / (10n ** 9n);
+      if (amt <= 0n || amt % (10n ** 9n) !== 0n) return res.status(400).json({ ok: false, error: "extra needs amountRaw in whole tokens × 1e9" });
+      if (amt > burnLib.HARD_DAILY_CAP_RAW) return res.status(400).json({ ok: false, error: `extra burn exceeds the hard cap of ${burnLib.HARD_DAILY_CAP_RAW} base units` });
+      if (String(q.confirm || "") !== `burn-extra-${whole}`) return res.status(400).json({ ok: false, error: `extra needs &confirm=burn-extra-${whole} (the whole-token amount) — this destroys tokens` });
+      const nowUnix = Math.floor(Date.now() / 1000);
+      ranNow = await cunaBurnTick("extra", { amountRaw: amt.toString(), key: `${burnLib.dayKey(nowUnix)}#extra-${nowUnix}` });
+    }
     const b = burnLib.readBurn(kv.get(CUNA_BURN_KV, null));
     const days = kv.get(CUNA_BURN_DAYS_KV, {}) || {};
     let totalRaw = 0n;
@@ -11575,7 +11607,7 @@ app.all("/api/cuna-burn/admin", async (req, res) => {
       // What today would burn, so the owner can see the roll before it fires.
       today: burnLib.amountForDay(burnLib.dayKey(Math.floor(Date.now() / 1000)), b.config),
       autoDailyCapRaw: burnLib.AUTO_DAILY_CAP_RAW.toString(),
-      daysBurned: Object.keys(days).length,
+      daysBurned: Object.keys(days).filter((k) => !k.includes("#")).length,   // extras (`<day>#extra-…`) count in the total, not as days
       totalBurnedRaw: totalRaw.toString(),
       recent: Object.fromEntries(Object.keys(days).sort().slice(-7).map((k) => [k, days[k]])),
     });
