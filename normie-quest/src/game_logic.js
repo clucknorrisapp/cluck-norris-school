@@ -161,6 +161,60 @@ function nqResumePoint(){
   return { level:lvl, score:0, kind:kind, name:def.name||'' };
 }
 
+// ---- CLOUD-SAVE STATUS — shared formatting (item: cloud-save status visible) --------------------
+// window.__NQ_SAVESTATE() (published near cloudSync, in the wallet block) is the single source of
+// truth: {state:'local'|'syncing'|'synced'|'error', at, error}. Everything that SHOWS the status
+// (the 🎮 panel's wallet pane, the pause card, the Title CONTINUE line) reads it through these two
+// tiny formatters so the wording can never drift between surfaces.
+function nqSaveState(){ try{ return window.__NQ_SAVESTATE?window.__NQ_SAVESTATE():null; }catch(e){ return null; } }
+function nqAgoShort(ts){
+  if(!ts) return '';
+  var d=Date.now()-ts; if(d<0) d=0;
+  var s=Math.floor(d/1000); if(s<60) return 'just now';
+  var m=Math.floor(s/60); if(m<60) return m+'m ago';
+  var h=Math.floor(m/60); if(h<24) return h+'h ago';
+  return Math.floor(h/24)+'d ago';
+}
+// Plain-text line — the pause card and the Title continue subline use this (no markup).
+function nqSaveLine(){
+  var s=nqSaveState();
+  if(!s||s.state==='local') return 'Saved on this device';
+  if(s.state==='syncing') return 'Syncing to your wallet…';
+  if(s.state==='synced') return 'Synced to your wallet'+(s.at?(' · '+nqAgoShort(s.at)):'');
+  if(s.state==='error') return 'Sync failed — progress kept locally';
+  return 'Saved on this device';
+}
+// HTML line (with a RETRY control on failure) — the 🎮 panel's wallet pane uses this one.
+function nqSaveStatusHtml(){
+  var s=nqSaveState();
+  if(!s||s.state==='local') return 'Progress: <b style="color:#cbd6ff">Saved on this device</b>';
+  if(s.state==='syncing') return 'Progress: <b style="color:#8fd0ff">Syncing…</b>';
+  if(s.state==='synced') return 'Progress: <b style="color:#8dffc0">Synced to your wallet</b>'+(s.at?(' <span style="color:#8f89b8">('+nqAgoShort(s.at)+')</span>'):'');
+  if(s.state==='error') return 'Progress: <b style="color:#ff9db8">Sync failed — local progress retained</b> '
+    +'<button class="nqp-b alt" id="nqp-saveretry" style="display:inline-block;width:auto;padding:3px 10px;margin-left:6px;font-size:11px">Retry</button>';
+  return 'Progress: <b style="color:#cbd6ff">Saved on this device</b>';
+}
+// Re-paints the wallet-pane's status line IN PLACE (no full renderWallet() re-render) whenever the
+// state changes — a no-op when the pane isn't open (the element just doesn't exist yet). The pane's
+// own renderWallet() also calls this once right after it builds the DOM, so both paths share one
+// place that wires the retry button.
+function paintSaveStatus(){
+  try{
+    var el=document.getElementById('nqp-savestat'); if(!el) return;
+    el.innerHTML=nqSaveStatusHtml();
+    var b=document.getElementById('nqp-saveretry');
+    if(b) b.addEventListener('click',function(){
+      b.textContent='Retrying…'; b.disabled=true;
+      try{ if(window.__NQ_SAVE_RETRY) window.__NQ_SAVE_RETRY(); }catch(e){}
+    });
+  }catch(e){}
+}
+// Diagnostics toggle (item: pause screen) — off by default, remembered per device. Lets anyone
+// reveal the audio/fps line the TEST/lab builds always show, for field debugging on a live build.
+var NQ_DIAG_KEY='nqPauseDiag';
+function nqDiagOn(){ try{ return localStorage.getItem(NQ_DIAG_KEY)==='1'; }catch(e){ return false; } }
+function nqDiagSet(v){ try{ if(v) localStorage.setItem(NQ_DIAG_KEY,'1'); else localStorage.removeItem(NQ_DIAG_KEY); }catch(e){} }
+
 // PREMIUM version flag — the paid/premium build (or a ?premium=1 link, remembered) grants LONGER
 // Whale Mode + Cold Wallet durations. The free version keeps the shorter times; nothing else changes.
 var PREMIUM = (function(){ try{ var q=((location.search||'')+(location.hash||'')); if(/[?&#](premium|prem)=1/i.test(q)){ try{ localStorage.setItem('nqPremium','1'); }catch(e){} return true; } return (typeof localStorage!=='undefined' && localStorage.getItem('nqPremium')==='1'); }catch(e){ return false; } })();
@@ -9217,18 +9271,39 @@ if(typeof document!=='undefined'){ (function(){
   // the game via __NQ_APPLYSAVE. So a single round trip both pushes local progress up AND pulls
   // any further progress from another device down. Fire-and-forget: a save must never block play.
   var _cloudLastBody = '';
+  // Cloud-save STATUS state machine (was fire-and-forget with no visible state — an outage looked
+  // exactly like a save). 'local' (no wallet / no token) | 'syncing' | 'synced' (at = last success)
+  // | 'error' (error = short reason, local progress is untouched either way — this only affects
+  // what the UI SAYS, never the save itself). Published as window.__NQ_SAVESTATE() so the Title,
+  // pause card and the wallet pane can all read the one truth.
+  var _saveState = { state: 'local', at: 0, error: null };
+  function _setSaveState(st, extra) {
+    _saveState.state = st;
+    if (extra && extra.at) _saveState.at = extra.at;
+    _saveState.error = (extra && extra.error) || null;
+    try { paintSaveStatus(); } catch (e) {}
+  }
+  try { window.__NQ_SAVESTATE = function () { return { state: _saveState.state, at: _saveState.at, error: _saveState.error }; }; } catch (e) {}
   function cloudSync(push) {
-    if (!walletState.pubkey || !walletState.token) return;
+    if (!walletState.pubkey || !walletState.token) { _setSaveState('local'); return; }
     var body = { pubkey: walletState.pubkey, token: walletState.token };
     if (push && (push.cp > 0 || push.lvlCp > 0)) body.save = { cp: push.cp || 0, cpScore: push.cpScore || 0, lvlCp: push.lvlCp || 0, lvlCpScore: push.lvlCpScore || 0 };
     var enc = JSON.stringify(body);
-    if (body.save && enc === _cloudLastBody) return;   // identical re-push (e.g. a clear that banked nothing new) — skip the round trip
+    if (body.save && enc === _cloudLastBody) return;   // identical re-push (e.g. a clear that banked nothing new) — skip the round trip, leave the status as-is
     _cloudLastBody = body.save ? enc : _cloudLastBody;
+    _setSaveState('syncing');
     fetch('/api/nq/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: enc })
       .then(function (r) { return r.json(); })
-      .then(function (j) { try { if (j && j.ok && j.save && window.__NQ_APPLYSAVE) window.__NQ_APPLYSAVE(j.save); } catch (e) {} })
-      .catch(function () {});
+      .then(function (j) {
+        try { if (j && j.ok && j.save && window.__NQ_APPLYSAVE) window.__NQ_APPLYSAVE(j.save); } catch (e) {}
+        if (j && j.ok) _setSaveState('synced', { at: Date.now() });
+        else _setSaveState('error', { error: (j && j.error) || 'sync_failed' });
+      })
+      .catch(function () { _setSaveState('error', { error: 'network_error' }); });
   }
+  // RETRY control (item: cloud-save status visible) — re-fires cloudSync with whatever is banked
+  // locally right now, exactly what a fresh checkpoint push would send.
+  try { window.__NQ_SAVE_RETRY = function () { cloudSync(window.__NQ_GETSAVE ? window.__NQ_GETSAVE() : null); }; } catch (e) {}
   // The game's bank hook (nqRunMerge) pushes through here on every checkpoint; wallet-less players
   // no-op and keep the localStorage save only.
   try { window.__NQ_CLOUDPUSH = function (s) { cloudSync(s); }; } catch (e) {}
@@ -9430,6 +9505,7 @@ if(typeof document!=='undefined'){ (function(){
     activeProvider = null;
     walletState = { pubkey: null, token: null, tier: null, worlds: null, balances: null, vip: false };
     try { localStorage.removeItem('nqWallet'); } catch (e) {}
+    _setSaveState('local');   // no wallet, no cloud — the honest status is "saved on this device"
   }
   // Restore from storage + refresh tier from live balance (no re-signing). Rejected token → forget it.
   function restoreWallet(cb, fresh) {
@@ -10180,12 +10256,18 @@ if(typeof document!=='undefined'){ (function(){
           + ((TIERED && ws.tier != null) ? '<span class="nqp-tier">TIER ' + ws.tier + '</span>' : '<span class="nqp-tier">CONNECTED</span>') + '</div>'
           + ((TIERED && ws.worlds) ? '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>' : '')
           + (ws.balances ? '<div class="nqp-sub" style="margin:8px 0">NORMIE: ' + ws.balances.normie.toLocaleString() + ' · CLKN: ' + ws.balances.clkn.toLocaleString() + '</div>' : '')
+          // Cloud-save status (item: cloud-save status visible) — a live read of window.__NQ_SAVESTATE(),
+          // repainted in place by paintSaveStatus() below and again on every state change (cloudSync's
+          // _setSaveState). The furthest-progress merge and the leaderboard restrictions are untouched —
+          // this only ever shows what already happened, never decides anything.
+          + '<div class="nqp-sub" id="nqp-savestat" style="margin:8px 0">' + nqSaveStatusHtml() + '</div>'
           + '<div class="nqp-sub" style="margin-top:8px">Remembered on this device until you disconnect · scores post with a verified wallet ✓</div>'
           + '<button class="nqp-b alt" id="nqp-tvpair" style="margin-top:12px">📱 I\u2019m the phone — enter a TV\u2019s code</button>'
           + '<button class="nqp-b alt" id="nqp-tvshow" style="margin-top:6px">📺 I\u2019m the TV — show a pairing code</button>'
           + '<button class="nqp-b alt" id="nqp-disconnect" style="margin-top:6px">Disconnect</button>';
         ov.querySelector('#nqp-tvpair').addEventListener('click', function () { startPhonePair(host, typeof pendingPhonePair === 'string' ? pendingPhonePair : null); pendingPhonePair = null; });
         ov.querySelector('#nqp-tvshow').addEventListener('click', function () { startTvPair(host); });
+        paintSaveStatus();   // wires the RETRY button when the state is 'error' (no-op otherwise)
         ov.querySelector('#nqp-disconnect').addEventListener('click', function () { disconnectWallet(); renderWallet(); });
       } else {
         var det = detectWallets();
