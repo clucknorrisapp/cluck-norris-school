@@ -124,32 +124,68 @@
     <div class="status" id="status"></div>
   </div>
 
-  <div class="card hidden" id="results-card">
-    <div class="card-title">🪵 YOUR TOKEN ACCOUNTS</div>
-    <div class="totals">
-      <div class="t rec">SOL to reclaim: <b id="tot-rec">0</b></div>
-      <div class="t val">Value to destroy: <b id="tot-val">$0</b></div>
-      <div class="t"><span id="tot-count" style="color:var(--sub)">0 selected</span></div>
+  <div class="hidden" id="results-card">
+
+    <!-- Job 1: reclaim rent from empty accounts — no value ever destroyed here -->
+    <div class="card">
+      <div class="card-title">♻️ RECLAIM RENT — empty accounts</div>
+      <p style="font-size:13px;color:var(--sub);line-height:1.55;margin:0 0 12px;">
+        These accounts hold a zero balance but still lock a small SOL deposit. Closing them is
+        risk-free — nothing of value is destroyed, only the deposit comes back to you.
+      </p>
+      <div class="toolbar">
+        <button class="btn ghost sm" id="sel-empty-all">Select all empty accounts</button>
+        <button class="btn ghost sm" id="sel-empty-none">Clear</button>
+        <span id="empty-count" style="align-self:center;font-family:var(--mono);font-size:12.5px;color:var(--sub);">0 selected</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th style="width:34px;"></th><th>Token</th><th class="num">Rent SOL</th></tr></thead>
+          <tbody id="rows-empty"></tbody>
+        </table>
+      </div>
+      <div class="totals" style="margin-top:14px;">
+        <div class="t rec">You'll receive: <b id="empty-net">0 SOL</b></div>
+        <span style="font-size:12.5px;color:var(--sub);">minus network fees</span>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn a" id="reclaim-btn" disabled>♻️ Reclaim SOL</button>
+      </div>
     </div>
-    <div class="toolbar">
-      <button class="btn a sm" id="sel-empties">Select empty accounts (rent only, $0)</button>
-      <button class="btn ghost sm" id="sel-none">Clear</button>
+
+    <!-- Job 2: burn tokens that still hold a balance, then reclaim the rent too -->
+    <div class="card">
+      <div class="card-title">🔥 BURN TOKENS — and reclaim rent too</div>
+      <p style="font-size:13px;color:var(--sub);line-height:1.55;margin:0 0 12px;">
+        These accounts hold a balance. Burning it is <b style="color:var(--gold)">permanent</b> —
+        you'll confirm any known dollar value before anything is destroyed.
+      </p>
+      <div class="totals">
+        <div class="t rec">SOL to reclaim: <b id="tot-rec">0</b></div>
+        <div class="t val">Value to destroy: <b id="tot-val">$0</b></div>
+        <div class="t"><span id="tot-count" style="color:var(--sub)">0 selected</span></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn ghost sm" id="sel-burn-all">Select all</button>
+        <button class="btn ghost sm" id="sel-burn-none">Clear</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr>
+            <th style="width:34px;"></th>
+            <th>Token</th>
+            <th class="num hide-sm">Balance</th>
+            <th class="num">Value</th>
+            <th class="num">Rent SOL</th>
+          </tr></thead>
+          <tbody id="rows-burn"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="btn danger" id="burn-btn" disabled>🔥 Burn tokens &amp; reclaim SOL</button>
+      </div>
     </div>
-    <div style="overflow-x:auto;">
-      <table>
-        <thead><tr>
-          <th style="width:34px;"></th>
-          <th>Token</th>
-          <th class="num hide-sm">Balance</th>
-          <th class="num">Value</th>
-          <th class="num">Rent SOL</th>
-        </tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-    <div style="margin-top:16px;">
-      <button class="btn danger" id="burn-btn" disabled>🔥 Burn selected</button>
-    </div>
+
     <div class="foot" id="scan-foot"></div>
   </div>
 
@@ -319,6 +355,9 @@ async function scan(){
     var r = await fetchScan(wPubkey, 3);
     accounts = r.accounts || [];
     selected = {};
+    // Pre-select the empty (rent-only) accounts so the "you'll receive" number is meaningful
+    // the moment the scan lands — reclaiming them is risk-free, unlike the burn job below.
+    accounts.forEach(function(a){ if (burnable(a) && a.empty) selected[a.tokenAccount] = true; });
     clearStatus($("status"));
     $("results-card").classList.remove("hidden");
     render();
@@ -357,76 +396,105 @@ async function rescanUntilClean(burnedSet){
 // not frozen, and not an NFT (NFT floor-price safety is phase 2).
 function burnable(a){ return !a.frozen && !a.isNft; }
 
-function render(){
-  var rows = $("rows"); rows.innerHTML = "";
-  accounts.forEach(function(a){
-    var tr = document.createElement("tr");
-    var canBurn = burnable(a);
-    // classList, not className — a selected-but-unburnable row needs BOTH classes,
-    // and assignment made the second write clobber the first.
-    if (!canBurn) tr.classList.add("disabled");
-    if (selected[a.tokenAccount]) tr.classList.add("sel");
+// One row-builder shared by both tables (empty-account "reclaim" job and
+// non-empty "burn" job) — same markup either way, just a different tbody
+// and a trimmed column set for the empty table (no Balance/Value columns).
+function rowHtml(a, compact){
+  var canBurn = burnable(a);
+  var sym = a.symbol ? esc(a.symbol) : "Unknown";
+  var nm = a.name ? esc(a.name) : "";
+  var logo = a.logo ? '<img src="'+esc(a.logo)+'" alt="" onerror="this.style.display=\'none\'"/>' : '<span class="noimg">🪙</span>';
+  // A non-empty token whose mint GeckoTerminal never priced (a.priceKnown === false) has UNKNOWN
+  // value, not $0 — the two must not look alike, or a valuable-but-unindexed bag reads as junk.
+  var unpriced = !a.empty && a.priceKnown === false && a.mint !== SOL_MINT;
+  var tags = "";
+  if (a.frozen) tags += '<span class="tagpill">frozen</span>';
+  if (a.isNft) tags += '<span class="tagpill">NFT · soon</span>';
+  if (a.valueUsd >= 1) tags += '<span class="warnpill">worth '+fmtUsd(a.valueUsd)+'</span>';
+  if (unpriced) tags += '<span class="warnpill" style="background:#E8A33D;color:#1a0f05">unpriced · value unknown</span>';
 
-    var sym = a.symbol ? esc(a.symbol) : "Unknown";
-    var nm = a.name ? esc(a.name) : "";
-    var logo = a.logo ? '<img src="'+esc(a.logo)+'" alt="" onerror="this.style.display=\'none\'"/>' : '<span class="noimg">🪙</span>';
-    // A non-empty token whose mint GeckoTerminal never priced (a.priceKnown === false) has UNKNOWN
-    // value, not $0 — the two must not look alike, or a valuable-but-unindexed bag reads as junk.
-    var unpriced = !a.empty && a.priceKnown === false && a.mint !== SOL_MINT;
-    var tags = "";
-    if (a.frozen) tags += '<span class="tagpill">frozen</span>';
-    if (a.isNft) tags += '<span class="tagpill">NFT · soon</span>';
-    if (a.empty) tags += '<span class="tagpill">empty</span>';
-    if (a.valueUsd >= 1) tags += '<span class="warnpill">worth '+fmtUsd(a.valueUsd)+'</span>';
-    if (unpriced) tags += '<span class="warnpill" style="background:#E8A33D;color:#1a0f05">unpriced · value unknown</span>';
-
-    var valCls = a.valueUsd > 0 ? "valpos" : "val0";
-    var valDisp = unpriced ? '<span style="color:#E8A33D" title="Not priced — value unknown, not zero">?</span>' : fmtUsd(a.valueUsd);
-    var cb = canBurn
-      ? '<input type="checkbox" data-ta="'+esc(a.tokenAccount)+'" '+(selected[a.tokenAccount]?"checked":"")+'/>'
-      : '';
-
-    tr.innerHTML =
-      '<td>'+cb+'</td>' +
-      '<td><div class="tok">'+logo+'<div><div class="nm">'+sym+tags+'</div><div class="mm">'+(nm?esc(nm.slice(0,28))+' · ':'')+esc(shortAddr(a.mint))+'</div></div></div></td>' +
-      '<td class="num hide-sm">'+(a.empty?'—':fmtBal(a.uiAmount))+'</td>' +
+  var valCls = a.valueUsd > 0 ? "valpos" : "val0";
+  var valDisp = unpriced ? '<span style="color:#E8A33D" title="Not priced — value unknown, not zero">?</span>' : fmtUsd(a.valueUsd);
+  var cb = canBurn
+    ? '<input type="checkbox" data-ta="'+esc(a.tokenAccount)+'" '+(selected[a.tokenAccount]?"checked":"")+'/>'
+    : '';
+  var tokCell = '<td><div class="tok">'+logo+'<div><div class="nm">'+sym+tags+'</div><div class="mm">'+(nm?esc(nm.slice(0,28))+' · ':'')+esc(shortAddr(a.mint))+'</div></div></div></td>';
+  var tailCells = compact
+    ? '<td class="num" style="color:#12C98B">'+(a.rentLamports/LAMPORTS).toFixed(5)+'</td>'
+    : '<td class="num hide-sm">'+(a.empty?'—':fmtBal(a.uiAmount))+'</td>' +
       '<td class="num '+valCls+'">'+valDisp+'</td>' +
       '<td class="num" style="color:#12C98B">'+(a.rentLamports/LAMPORTS).toFixed(5)+'</td>';
-    rows.appendChild(tr);
+  return { canBurn: canBurn, html: '<td>'+cb+'</td>'+tokCell+tailCells };
+}
+function fillGroup(tbodyEl, list, compact, emptyMsg, colspan){
+  tbodyEl.innerHTML = "";
+  if (!list.length){
+    tbodyEl.innerHTML = '<tr><td colspan="'+colspan+'" style="color:var(--muted);padding:10px 8px;">'+emptyMsg+'</td></tr>';
+    return;
+  }
+  list.forEach(function(a){
+    var tr = document.createElement("tr");
+    var r = rowHtml(a, compact);
+    // classList, not className — a selected-but-unburnable row needs BOTH classes,
+    // and assignment made the second write clobber the first.
+    if (!r.canBurn) tr.classList.add("disabled");
+    if (selected[a.tokenAccount]) tr.classList.add("sel");
+    tr.innerHTML = r.html;
+    tbodyEl.appendChild(tr);
   });
-  rows.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+  tbodyEl.querySelectorAll('input[type=checkbox]').forEach(function(cb){
     cb.addEventListener("change", function(){
       var ta = cb.getAttribute("data-ta");
       if (cb.checked) selected[ta] = true; else delete selected[ta];
-      render(); updateTotals();
+      render();
     });
   });
+}
+function render(){
+  var emptyAccts = accounts.filter(function(a){ return a.empty; });
+  var burnAccts = accounts.filter(function(a){ return !a.empty; });
+  fillGroup($("rows-empty"), emptyAccts, true, "No empty accounts to reclaim right now.", 3);
+  fillGroup($("rows-burn"), burnAccts, false, "No tokens with a balance found.", 5);
   updateTotals();
 }
 
+// Selection is one shared map keyed by token account, but each job only ever
+// reads/writes its own half of it — an empty account can't appear in the burn
+// table and vice versa, so the two jobs can't cross-contaminate each other.
 function selectedList(){ return accounts.filter(function(a){ return selected[a.tokenAccount] && burnable(a); }); }
+function selectedEmpty(){ return selectedList().filter(function(a){ return a.empty; }); }
+function selectedBurn(){ return selectedList().filter(function(a){ return !a.empty; }); }
+
 function updateTotals(){
-  var sel = selectedList();
-  var rent = sel.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
-  var val = sel.reduce(function(s,a){ return s + (Number(a.valueUsd)||0); }, 0);
-  $("tot-rec").textContent = rent ? fmtSol(rent) : "0";
-  $("tot-val").textContent = fmtUsd(val);
-  $("tot-count").textContent = sel.length + " selected";
-  $("burn-btn").disabled = sel.length === 0;
+  var selE = selectedEmpty();
+  var rentE = selE.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
+  $("empty-net").textContent = rentE ? fmtSol(rentE) : "0 SOL";
+  $("empty-count").textContent = selE.length + " selected";
+  $("reclaim-btn").disabled = selE.length === 0;
+
+  var selB = selectedBurn();
+  var rentB = selB.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
+  var valB = selB.reduce(function(s,a){ return s + (Number(a.valueUsd)||0); }, 0);
+  $("tot-rec").textContent = rentB ? fmtSol(rentB) : "0";
+  $("tot-val").textContent = fmtUsd(valB);
+  $("tot-count").textContent = selB.length + " selected";
+  $("burn-btn").disabled = selB.length === 0;
 }
 
-function selectEmpties(){
-  selected = {};
-  accounts.forEach(function(a){ if (burnable(a) && a.empty && (Number(a.valueUsd)||0) === 0) selected[a.tokenAccount] = true; });
-  render();
-}
-function selectNone(){ selected = {}; render(); }
+function selectAllEmpty(){ accounts.forEach(function(a){ if (burnable(a) && a.empty) selected[a.tokenAccount] = true; }); render(); }
+function clearEmpty(){ accounts.forEach(function(a){ if (a.empty) delete selected[a.tokenAccount]; }); render(); }
+function selectAllBurn(){ accounts.forEach(function(a){ if (burnable(a) && !a.empty) selected[a.tokenAccount] = true; }); render(); }
+function clearBurn(){ accounts.forEach(function(a){ if (!a.empty) delete selected[a.tokenAccount]; }); render(); }
 
 // ── value-guard confirmation ────────────────────────────────────────────────
 function isNativeSol(a){ return a.mint === SOL_MINT; }   // closing wSOL UNWRAPS it back to the owner — not destroyed
-function openConfirm(){
-  var sel = selectedList();
+var confirmSel = [];   // the exact list the modal showed — doBurn signs THIS, never a freshly-recomputed selection
+function openConfirm(list){
+  // The caller passes EXACTLY the group its button owns (empties for Reclaim, tokens for Burn). Never
+  // fall back to the whole selection — an empty reclaim list must not open a confirm over burnable tokens.
+  var sel = Array.isArray(list) ? list : [];
   if (!sel.length) return;
+  confirmSel = sel;
   var rent = sel.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
   // "Destroy value" excludes wrapped SOL (closing it returns the SOL to you, it isn't destroyed).
   var val = sel.reduce(function(s,a){ return s + (isNativeSol(a)?0:(Number(a.valueUsd)||0)); }, 0);
@@ -477,7 +545,9 @@ $("m-type").addEventListener("input", function(){
 
 // ── build + sign the burn/close transactions ────────────────────────────────
 async function doBurn(){
-  var sel = selectedList();
+  // Sign exactly what the modal showed and the user typed BURN against — never a freshly
+  // recomputed selection, which could differ if checkboxes changed while the modal was open.
+  var sel = confirmSel;
   if (!sel.length) return;
   if (typeof solanaWeb3 === "undefined"){ setStatus($("m-status"), "Wallet library still loading — try again in a second.", "err"); return; }
   var Transaction = solanaWeb3.Transaction, PublicKey = solanaWeb3.PublicKey;
@@ -580,9 +650,12 @@ renderPicker();
 try { CluckWallet.watch(renderPicker); } catch(_){ setTimeout(renderPicker, 600); setTimeout(renderPicker, 1600); }   // wallets can inject a beat after load
 $("disconnect").addEventListener("click", disconnect);
 $("rescan").addEventListener("click", scan);
-$("sel-empties").addEventListener("click", selectEmpties);
-$("sel-none").addEventListener("click", selectNone);
-$("burn-btn").addEventListener("click", openConfirm);
+$("sel-empty-all").addEventListener("click", selectAllEmpty);
+$("sel-empty-none").addEventListener("click", clearEmpty);
+$("sel-burn-all").addEventListener("click", selectAllBurn);
+$("sel-burn-none").addEventListener("click", clearBurn);
+$("reclaim-btn").addEventListener("click", function(){ openConfirm(selectedEmpty()); });
+$("burn-btn").addEventListener("click", function(){ openConfirm(selectedBurn()); });
 $("m-cancel").addEventListener("click", closeConfirm);
 $("m-go").addEventListener("click", doBurn);
 $("modal").addEventListener("click", function(e){ if (e.target === $("modal")) closeConfirm(); });

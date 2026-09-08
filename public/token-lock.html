@@ -27,9 +27,10 @@
   pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;font-size:12px;}
 </style></head><body>
 <div class="wrap">
-  <h1>MAKE YOUR TOKEN METADATA IMMUTABLE</h1>
-  <p class="sub">Scanners warn that <b>&ldquo;the creator can change this token&rdquo;</b>. If that's not true of
-  yours any more, prove it on-chain. Free, no signup, no wallet needed to look.</p>
+  <h1>TOKEN METADATA LOCK</h1>
+  <p class="sub">Scanners warn that <b>&ldquo;the creator can change this token&rdquo;</b> based on <b>three separate
+  on-chain switches</b> — mint authority, freeze authority, and metadata mutability. This tool reads all three and
+  lets you revoke each one, one at a time, with its own confirmation. Free, no signup, no wallet needed to look.</p>
 
   <div class="card">
     <div class="k">READ THIS FIRST — IT IS PERMANENT</div>
@@ -154,8 +155,9 @@
     var out = '';
     REVOKE.forEach(function(r){
       var held = a[r.key];
+      var sectionId = r.type === 0 ? 'mint-section' : 'freeze-section';
       if (!held) {
-        out += '<div class="card"><div class="k">' + r.title + ' <span class="ok">— already revoked</span></div>' +
+        out += '<div class="card" id="' + sectionId + '"><div class="k">' + r.title + ' <span class="ok">— already revoked</span></div>' +
           '<p class="muted" style="margin:0;line-height:1.7">Nothing to do. No one can ' +
           (r.type === 0 ? 'mint more of this token' : 'freeze a holder') + ', including you.</p></div>';
         return;
@@ -178,7 +180,7 @@
             ? (match ? '' : '<p class="muted" style="margin:8px 0 0"><span class="bad">Connected wallet is not this authority.</span> Only ' + esc2(held) + ' can sign.</p>')
             : '<p class="muted" style="margin:8px 0 0">Connect ' + esc2(held) + ' to revoke this.</p>');
       }
-      out += '<div class="card"><div class="k">' + r.title + ' <span class="bad">(live — irreversible to revoke)</span></div>' + body + '</div>';
+      out += '<div class="card" id="' + sectionId + '"><div class="k">' + r.title + ' <span class="bad">(live — irreversible to revoke)</span></div>' + body + '</div>';
     });
     return out;
   }
@@ -255,7 +257,32 @@
       ['Creators', m.creators ? esc2(m.creators.map(function(c){ return c.address.slice(0,4)+'…'+(c.verified?' ✓':'')+' '+c.share+'%'; }).join(', ')) : '—'],
       ['Current URI', '<a href="' + safeUrl(m.uri) + '" target="_blank" rel="noopener noreferrer">' + esc2(m.uri) + '</a>']
     );
-    var html = '<div class="card"><div class="k">ON-CHAIN NOW</div>' +
+
+    // This tool is really three separate irreversible decisions wearing one name. Spell them out
+    // up front — current state, what revoking/locking costs in one line, and a jump straight to
+    // that decision's OWN confirmation below — before the raw on-chain dump.
+    var decisions = [
+      { label: '🔒 Lock branding (metadata immutable)', anchor: 'metadata-section',
+        na: !m, done: !!(m && !m.isMutable),
+        line: !m ? 'No metadata account on this mint — there is nothing here to lock.'
+          : (m.isMutable ? 'Freezes name, symbol, image and creators forever — including for you.'
+                         : 'Already locked — nobody can change name, symbol or image, including you.') },
+      { label: '🪙 Revoke mint authority', anchor: 'mint-section', na: false, done: !a.mintAuthority,
+        line: a.mintAuthority ? 'Caps supply forever — you can never mint another unit after this.'
+                               : 'Already revoked — supply is capped forever.' },
+      { label: '🧊 Revoke freeze authority', anchor: 'freeze-section', na: false, done: !a.freezeAuthority,
+        line: a.freezeAuthority ? 'You give up the power to freeze any holder\'s tokens, ever again.'
+                                 : 'Already revoked — no one, including you, can freeze a holder.' }
+    ];
+    var html = '<div class="card"><div class="k">THREE SEPARATE DECISIONS — EACH WITH ITS OWN CONFIRMATION</div>' +
+      decisions.map(function(d){
+        var pill = d.na ? '<span class="muted">n/a</span>' : (d.done ? '<span class="ok">done</span>' : '<span class="bad">live</span>');
+        var link = d.na ? '' : ' &nbsp;<a href="#' + d.anchor + '" style="color:var(--text)">review ↓</a>';
+        return '<div class="row"><span>' + d.label + '<br><span class="muted" style="font-size:12px;font-family:var(--body)">' +
+          esc(d.line) + '</span></span><b style="font-family:var(--body)">' + pill + link + '</b></div>';
+      }).join('') + '</div>';
+
+    html += '<div class="card"><div class="k">ON-CHAIN NOW</div>' +
       rows.map(function(r){ return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
       '</div>';
 
@@ -286,10 +313,10 @@
     // open. Render the metadata verdict, then fall through to the revocation section, which used
     // to be unreachable for exactly the tokens that needed it.
     if (m && !m.isMutable) {
-      html += '<div class="card"><span class="ok">✅ This token\'s metadata is already immutable. Nobody can change ' +
+      html += '<div class="card" id="metadata-section"><span class="ok">✅ This token\'s metadata is already immutable. Nobody can change ' +
         'its name, symbol, URI or creators — including you. Nothing here can undo that.</span></div>';
     } else if (!m) {
-      html += '<div class="card"><p class="muted" style="margin:0;line-height:1.7">This mint has <b>no Metaplex ' +
+      html += '<div class="card" id="metadata-section"><p class="muted" style="margin:0;line-height:1.7">This mint has <b>no Metaplex ' +
         'metadata account</b>, so there is nothing here to lock. Token-2022 mints often carry metadata as an ' +
         'extension instead. The authorities below are still revocable.</p></div>';
     }
@@ -328,7 +355,7 @@
       '(same file, gateway-agnostic). It never downscales your logo.</p>' + gate + '</div>';
 
     // STEP 2 — the irreversible one, with the checklist that should stand between them.
-    html += '<div class="card"><div class="k">STEP 2 — LOCK FOREVER <span class="bad">(irreversible)</span></div>' +
+    html += '<div class="card" id="metadata-section"><div class="k">STEP 2 — LOCK FOREVER <span class="bad">(irreversible)</span></div>' +
       '<p class="muted" style="margin:0 0 10px">Only after you have seen the token render correctly. Check all three:</p>' +
       '<label style="display:block;margin:4px 0"><input type="checkbox" class="cx"/> The URI above loads, and the image inside it loads</label>' +
       '<label style="display:block;margin:4px 0"><input type="checkbox" class="cx"/> A wallet (Phantom/Solflare) shows the right name and logo</label>' +

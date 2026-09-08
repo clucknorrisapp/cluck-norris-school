@@ -178,12 +178,17 @@
       <small id="m-pct"></small>
     </div>
     <p style="font-size:13px;color:var(--sub);line-height:1.55;text-align:center;">This is <b style="color:#FF8FA3">permanent</b> — these tokens are destroyed forever and can never be recovered.</p>
-    <div class="confirmrow">
+    <div class="confirmrow" id="m-typebox">
       <label>Type <b style="color:#FF8FA3">BURN</b> to confirm you understand:</label>
       <input id="m-type" autocomplete="off" autocapitalize="characters" placeholder="BURN"/>
     </div>
     <div class="mbtns">
       <button class="btn danger" id="m-go" disabled>🔥 Burn now</button>
+      <!-- Shown ONLY when a previous burn's confirmation timed out. It is the PRIMARY action then —
+           re-queries the signature this page already holds — and "Burn now" stays hidden until that
+           check comes back absent/failed, so a slow confirmation can never be mistaken for a green
+           light to burn the same amount twice. -->
+      <button class="btn hidden" id="m-check">🔍 Check transaction status</button>
       <button class="btn ghost" id="m-cancel">Cancel</button>
     </div>
     <div class="status" id="m-status"></div>
@@ -207,6 +212,10 @@ var LAMPORTS = 1e9;
 
 var wProvider = null, wPubkey = null, wName = "";
 var tok = null;   // { mint, symbol, name, decimals, program, supply, priceUsd, walletBalance, walletBalanceRaw }
+// Set when a burn was SENT but its confirmation poll timed out — the tx may still land later.
+// While this is non-null the burn button (outer AND modal) stays off; only a status check that
+// comes back absent/failed clears it. { sig, amt }
+var pendingBurn = null;
 
 function setStatus(el, msg, cls){ el.className = "status show" + (cls ? " " + cls : ""); el.textContent = msg; }
 function clearStatus(el){ el.className = "status"; el.textContent = ""; }
@@ -316,7 +325,9 @@ function updateLiveVal(){
   el.innerHTML = over
     ? '<b>You only hold ' + esc(fmtNum(bal)) + ' ' + esc(tok.symbol) + '</b> — reduce the amount.'
     : (parts.length ? "Burning <b>" + esc(fmtNum(amt)) + " " + esc(tok.symbol) + "</b> — " + esc(parts.join(" · ")) : "Burning <b>" + esc(fmtNum(amt)) + " " + esc(tok.symbol) + "</b>");
-  $("burn-btn").disabled = amt <= 0 || over;
+  // Never let a fresh amount re-enable Burn while a previous burn's confirmation is unresolved —
+  // that's the exact ordering bug this guard exists to close.
+  $("burn-btn").disabled = amt <= 0 || over || !!pendingBurn;
 }
 function setPct(p){
   if (tok.walletBalance == null){ return; }
@@ -328,6 +339,8 @@ function setPct(p){
 
 // ── confirm + burn ──
 function openConfirm(){
+  // A previous burn's confirmation never resolved — surface THAT instead of starting a new one.
+  if (pendingBurn){ $("modal").classList.add("show"); showUnresolvedState("A previous burn hasn't been confirmed yet."); return; }
   var amt = parseFloat($("amt").value) || 0;
   if (amt <= 0) return;
   var full = tok.walletBalance != null && amt >= Number(tok.walletBalance) - 1e-12;
@@ -337,10 +350,32 @@ function openConfirm(){
   $("m-sub").textContent = sub.join("");
   $("m-pct").textContent = tok.supply ? (fmtPctSupply(amt / tok.supply * 100) + " of total supply" + (full ? " · your entire balance" : "")) : (full ? "Your entire balance" : "");
   $("m-type").value = ""; $("m-go").disabled = true;
+  $("m-go").classList.remove("hidden"); $("m-check").classList.add("hidden");
+  $("m-typebox").classList.remove("hidden");
   clearStatus($("m-status"));
   $("modal").classList.add("show");
 }
 function closeConfirm(){ $("modal").classList.remove("show"); }
+
+// Puts the modal into the "unresolved — check before retrying" state and keeps BOTH the modal's
+// Burn button and the page's own burn-btn off until checkPendingStatus() clears pendingBurn.
+function showUnresolvedState(lead){
+  setStatus($("m-status"), lead + " Signature: " + pendingBurn.sig + ". Check its status before trying " +
+    "again — retrying while this is unresolved risks burning twice.", "err");
+  $("m-go").classList.add("hidden");
+  $("m-typebox").classList.add("hidden");   // nothing to "type BURN" against while there's no Burn button to arm
+  $("m-check").classList.remove("hidden");
+  $("m-check").disabled = false; $("m-check").textContent = "🔍 Check transaction status";
+  $("m-cancel").disabled = false;
+  $("burn-btn").disabled = true;
+}
+// Absent/failed clears the hold and hands control back to the normal amount/balance checks.
+function clearUnresolved(){
+  pendingBurn = null;
+  $("m-check").classList.add("hidden");
+  $("m-go").classList.remove("hidden");
+  updateLiveVal();
+}
 
 async function doBurn(){
   var amt = parseFloat($("amt").value) || 0;
@@ -399,25 +434,74 @@ async function doBurn(){
       } catch(e){ if (String(e.message||"").indexOf("failed on-chain")>=0) throw e; }
       await new Promise(function(r){ setTimeout(r, 2000); });
     }
-    if (!confirmed){ setStatus($("m-status"), "Sent, but it didn’t confirm in time. Check the signature before retrying: " + sig, "err"); $("m-go").disabled = false; $("m-cancel").disabled = false; return; }
+    if (!confirmed){
+      // Sent is not landed. Hold the burn button off (modal AND page) until a status check
+      // actually clears this signature — the old code re-enabled Burn here, which let a second
+      // click fire a second burn while the first might still land.
+      pendingBurn = { sig: sig, amt: amt };
+      showUnresolvedState("Sent, but it didn’t confirm within the wait window.");
+      return;
+    }
 
-    // Record the receipt (server re-verifies from the chain and stores the TRUE amount).
-    setStatus($("m-status"), "Burn confirmed — minting your receipt…");
-    var receipt = null;
-    try {
-      var rr = await fetch("/api/burn-receipt", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sig: sig, mint: tok.mint, wallet: wPubkey }) });
-      var rd = await rr.json();
-      if (rd.success) receipt = rd.receipt;
-    } catch(_){}
-    closeConfirm();
-    showReceipt(sig, amt, receipt);
-    // Refresh the wallet balance so a second burn sees the new figure.
-    try { var r2 = await fetch("/api/burn-token-info?mint=" + encodeURIComponent(tok.mint) + "&wallet=" + encodeURIComponent(wPubkey)); var d2 = await r2.json(); if (d2.success){ tok = d2; renderToken(); } } catch(_){}
+    await finalizeConfirmedBurn(sig, amt);
   } catch(e){
     setStatus($("m-status"), "Burn failed: " + (e.message || e), "err");
     $("m-go").disabled = false; $("m-cancel").disabled = false;
   } finally {
     $("m-cancel").disabled = false;
+  }
+}
+
+// Shared tail for "the burn is confirmed on-chain" — reached either straight from doBurn's own
+// poll, or later from checkPendingStatus() finding out a timed-out send actually landed. Mints
+// the receipt, shows it, and refreshes the balance. Does not touch how the burn was built/signed.
+async function finalizeConfirmedBurn(sig, amt){
+  setStatus($("m-status"), "Burn confirmed — minting your receipt…");
+  var receipt = null;
+  try {
+    var rr = await fetch("/api/burn-receipt", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sig: sig, mint: tok.mint, wallet: wPubkey }) });
+    var rd = await rr.json();
+    if (rd.success) receipt = rd.receipt;
+  } catch(_){}
+  closeConfirm();
+  showReceipt(sig, amt, receipt);
+  // Refresh the wallet balance so a second burn sees the new figure.
+  try { var r2 = await fetch("/api/burn-token-info?mint=" + encodeURIComponent(tok.mint) + "&wallet=" + encodeURIComponent(wPubkey)); var d2 = await r2.json(); if (d2.success){ tok = d2; renderToken(); } } catch(_){}
+}
+
+// Manual re-check for a burn whose confirmation poll timed out (pendingBurn set). This is the
+// PRIMARY recovery action in that state: re-queries the exact signature already held, and only an
+// absent/failed result clears the hold on the burn button — a "still pending" result changes
+// nothing so a stray click can't be read as permission to retry.
+async function checkPendingStatus(){
+  if (!pendingBurn) return;
+  var sig = pendingBurn.sig, amt = pendingBurn.amt;
+  $("m-check").disabled = true; $("m-check").textContent = "Checking…";
+  setStatus($("m-status"), "Re-checking " + sig + " on-chain…");
+  try {
+    var st = await rpc("getSignatureStatuses", [[sig], { searchTransactionHistory: true }]);
+    var s = st && st.value && st.value[0];
+    if (s && s.err){
+      setStatus($("m-status"), "That transaction landed but FAILED on-chain — nothing was burned. Safe to retry.", "err");
+      clearUnresolved();
+      return;
+    }
+    if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")){
+      pendingBurn = null;
+      await finalizeConfirmedBurn(sig, amt);
+      return;
+    }
+    if (!s){
+      setStatus($("m-status"), "Not found on-chain — it was dropped and never landed. Nothing was burned. Safe to retry.", "err");
+      clearUnresolved();
+      return;
+    }
+    // Still processing — leave the hold in place; nothing here permits a retry.
+    setStatus($("m-status"), "Still pending on-chain (" + (s.confirmationStatus || "processing") + ") — wait a moment and check again.", "err");
+    $("m-check").disabled = false; $("m-check").textContent = "🔍 Check transaction status";
+  } catch(e){
+    setStatus($("m-status"), "Status check failed: " + (e.message || e) + " — try again.", "err");
+    $("m-check").disabled = false; $("m-check").textContent = "🔍 Check transaction status";
   }
 }
 
@@ -481,6 +565,7 @@ Array.prototype.forEach.call(document.querySelectorAll("#pcts button"), function
 $("burn-btn").addEventListener("click", openConfirm);
 $("m-type").addEventListener("input", function(){ $("m-go").disabled = $("m-type").value.trim().toUpperCase() !== "BURN"; });
 $("m-go").addEventListener("click", doBurn);
+$("m-check").addEventListener("click", checkPendingStatus);
 $("m-cancel").addEventListener("click", closeConfirm);
 $("modal").addEventListener("click", function(e){ if (e.target === $("modal")) closeConfirm(); });
 </script>

@@ -138,6 +138,14 @@
       <div class="note" id="rewardNote">Winners are paid in the token they bought.</div>
     </div>
 
+    <!-- Worked example, built live from whatever's actually configured below — never hardcoded
+         numbers. Sits before the scan controls so an operator (or their community) can read
+         exactly how eligibility and payout will be judged before anything runs. -->
+    <div class="card">
+      <div class="card-title">🧾 HOW THIS COMP DECIDES A PAYOUT</div>
+      <div class="note" id="eligExample" style="font-size:12.5px;line-height:1.75"></div>
+    </div>
+
     <div class="card">
       <div class="card-title"><span class="step-n">1</span>BUY WINDOW</div>
       <div class="presets" id="winPresets">
@@ -169,8 +177,14 @@
         </div>
       </div>
 
-      <div class="cbrow"><input type="checkbox" id="requireHold" checked/><label for="requireHold">Require holding — disqualify wallets that sold before the hold period is up (recommended)</label></div>
-      <div class="row" style="margin-top:8px">
+      <div class="cbrow"><input type="checkbox" id="requireHold" checked/><label for="requireHold">Require holding (recommended)</label></div>
+      <!-- These are two DIFFERENT rules that one checkbox turns on together — spelled out
+           separately so an operator isn't guessing what "require holding" actually checks. -->
+      <div class="note" style="margin:2px 0 0 27px;line-height:1.7">
+        <div>🚫 <b>Disqualify sellers</b> — sold any of it inside the hold period? Out, no payout.</div>
+        <div>✅ <b>Verify holdings</b> — still holding at the check time? Required to be paid.</div>
+      </div>
+      <div class="row" style="margin-top:10px">
         <div class="fld"><label>HOLD FOR (HOURS AFTER WINDOW)</label><input type="number" id="holdHours" min="0" step="1" placeholder="e.g. 24 · blank = must still hold now" style="width:230px"/></div>
       </div>
       <div class="note" style="margin-top:4px">Set the hold period and a wallet only has to hold that long — selling <b>after</b> it no longer disqualifies. Blank = the old behavior (must still hold right now).</div>
@@ -289,10 +303,10 @@ $('rewardPresets').addEventListener('click',e=>{ const b=e.target.closest('.chip
   rewardKind=b.getAttribute('data-kind');
   $('rewardMint').classList.toggle('hidden', rewardKind!=='custom');
   if(rewardKind==='custom'){ rewardMint=$('rewardMint').value.trim(); $('rewardMint').focus(); }
-  rewardUsd=null; syncRewardNote(); loadPrices();
+  rewardUsd=null; syncRewardNote(); loadPrices(); renderEligExample();
 });
 $('rewardMint').addEventListener('input',()=>{ rewardMint=$('rewardMint').value.trim(); rewardUsd=null; rewardDecimals=9; syncRewardNote();
-  clearTimeout(window._rwT); window._rwT=setTimeout(loadPrices,600); });
+  clearTimeout(window._rwT); window._rwT=setTimeout(loadPrices,600); renderEligExample(); });
 
 // Delegated so chips injected later (live comps) work the same as the static ones.
 $('tokPresets').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return;
@@ -303,7 +317,7 @@ $('tokPresets').addEventListener('click',e=>{ const b=e.target.closest('.chip');
   const f=b.getAttribute('data-from'), t=b.getAttribute('data-to');
   if(f&&t){ $('from').value=toLocal(+f); $('to').value=toLocal(+t); refUtc(); }
   const pct=b.getAttribute('data-pct'); if(pct) $('bonus').value=pct;
-  syncRewardNote();
+  syncRewardNote(); renderEligExample();
 });
 $('mint').addEventListener('input',()=>{ mint=$('mint').value.trim();
   const chip=document.querySelector('#tokPresets .chip[data-mint="'+mint+'"]');
@@ -318,12 +332,48 @@ document.querySelectorAll('#modeTog button').forEach(b=>b.addEventListener('clic
     ? 'Every buyer who still holds (no in-window sells) earns a % of what they bought.'
     : 'The top N buyers by amount win prizes. Sellers can be disqualified before ranking.';
   $('computeBtn').innerHTML='<span class="step-n" style="background:#fff;color:#4c1d95">2</span>'+(mode==='all'?'VERIFY HOLDS &amp; BUILD PAYOUT':'VERIFY HOLDS &amp; RANK WINNERS');
+  renderEligExample();
 }));
-$('prizeMethod').addEventListener('change',()=>{ const m=$('prizeMethod').value; $('poolFld').classList.toggle('hidden', m==='fixed'); $('fixedFld').classList.toggle('hidden', m!=='fixed'); });
+$('prizeMethod').addEventListener('change',()=>{ const m=$('prizeMethod').value; $('poolFld').classList.toggle('hidden', m==='fixed'); $('fixedFld').classList.toggle('hidden', m!=='fixed'); renderEligExample(); });
+
+// ── Worked example, above the scan controls — built live from whatever's actually
+// configured below (never hardcoded numbers), so an operator can read exactly how
+// eligibility and payout will be judged before running anything. Purely display: it
+// mirrors the same fields buildRewardAll/buildRanked read, it never feeds back into them.
+function renderEligExample(){
+  const el=$('eligExample'); if(!el) return;
+  const fromV=$('from').value, toV=$('to').value;
+  if(!fromV||!toV){ el.textContent='Set the buy window, hold rule and payout below — this example fills in with the exact numbers as you configure them.'; return; }
+  const fmtLocal=v=>{ try{ return new Date(v).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }catch(_){ return v; } };
+  const requireHold=$('requireHold').checked, holdHours=Math.max(0,parseFloat($('holdHours').value)||0);
+  let holdTxt;
+  if(!requireHold) holdTxt='no hold required — every buyer with a qualifying buy is paid, whether or not they still hold';
+  else if(holdHours>0) holdTxt=holdHours+'h after the window ends (selling after that is fine)';
+  else holdTxt='the moment the check runs (selling any time before that disqualifies)';
+  let payoutTxt;
+  if(mode==='all'){
+    const pct=parseFloat($('bonus').value)||0;
+    const basisLbl=rewardKind==='comp'?'what they bought':rewardKind==='sol'?'the SOL they spent':'the value of what they bought';
+    payoutTxt=pct+'% of '+basisLbl+(rewardKind==='comp'?'':', paid in '+(rewardName||'the reward token'))+' to every eligible buyer';
+  } else {
+    const N=Math.max(1,parseInt($('numWinners').value)||1), rankBy=$('rankBy').value, method=$('prizeMethod').value;
+    const methodTxt=({equal:'an equal split of the prize pool',fixed:'a fixed prize per rank',prorata:'the prize pool shared pro-rata by amount'})[method]||'the configured prize';
+    payoutTxt='the top '+N+' eligible buyers by '+(rankBy==='sol'?'SOL spent':'tokens bought')+' split '+methodTxt;
+  }
+  el.innerHTML='<b>Bought during this window:</b> '+esc(fmtLocal(fromV))+' &rarr; '+esc(fmtLocal(toV))+'.<br/>'
+    +'<b>Required to hold until:</b> '+esc(holdTxt)+'.<br/>'
+    +'<b>Payout:</b> '+esc(payoutTxt)+'.';
+}
+$('requireHold').addEventListener('change',renderEligExample);
+$('holdHours').addEventListener('input',renderEligExample);
+$('bonus').addEventListener('input',renderEligExample);
+$('rankBy').addEventListener('change',renderEligExample);
+$('numWinners').addEventListener('input',renderEligExample);
 
 function toLocal(u){ const d=new Date(u*1000), p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
 function refUtc(){ const f=$('from').value?Math.floor(new Date($('from').value).getTime()/1000):0, t=$('to').value?Math.floor(new Date($('to').value).getTime()/1000):0;
-  $('winUtc').textContent=(f&&t)?('UTC '+new Date(f*1000).toISOString().slice(0,16)+'Z → '+new Date(t*1000).toISOString().slice(0,16)+'Z'):''; }
+  $('winUtc').textContent=(f&&t)?('UTC '+new Date(f*1000).toISOString().slice(0,16)+'Z → '+new Date(t*1000).toISOString().slice(0,16)+'Z'):'';
+  renderEligExample(); }
 $('winPresets').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return;
   const f=b.getAttribute('data-from'), t=b.getAttribute('data-to'), now=Math.floor(Date.now()/1000);
   if(f&&t){ $('from').value=toLocal(+f); $('to').value=toLocal(+t); }
@@ -704,6 +754,7 @@ async function loadCompPresets(){
   if(localStorage.getItem(OP_FLAG)==='1'){ $('opBanner').classList.remove('hidden'); showTool(); }
   if(key){ try{ const r=await fetch('/api/admin-check?key='+encodeURIComponent(key)); if(r.ok){ localStorage.setItem(OP_FLAG,'1'); $('opBanner').classList.remove('hidden'); showTool(); } }catch(e){} }
   if(isUnlocked()){ showTool(); } else if(localStorage.getItem(OP_FLAG)!=='1'){ showGate(); }
+  renderEligExample();
   await loadCompPresets();
   // /rose keeps working as a direct link even after the ROSE chip has aged out.
   const wantRose=/rose/i.test(location.pathname);

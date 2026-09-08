@@ -38,6 +38,9 @@
   .err.show { display: block; }
   .progress { display: none; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
   .progress.show { display: block; }
+  .pjoblink { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: rgba(255,182,39,0.08); border: 1px solid var(--gold); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 12.5px; line-height: 1.5; color: var(--text); }
+  .pjoblink b { color: var(--gold); }
+  .pjoblink .pjl-url { font-family: var(--mono); font-size: 12px; color: var(--text); word-break: break-all; }
   .pstage { font-family: var(--disp); font-size: 15px; color: var(--gold); letter-spacing: 2px; margin-bottom: 8px; }
   .pbar { height: 8px; background: rgba(255,255,255,.06); border-radius: 999px; overflow: hidden; margin: 8px 0; }
   .pbar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--orange)); width: 0%; transition: width .4s; }
@@ -124,6 +127,7 @@
   </div>
 
   <div class="progress" id="progress">
+    <div class="pjoblink" id="pjoblink"></div>
     <div class="pstage" id="pstage">QUEUED</div>
     <div class="pbar"><i id="pfill"></i></div>
     <div class="pnote" id="pnote"></div>
@@ -238,12 +242,28 @@ async function startJob() {
 
 function poll(mint) {
   clearInterval(pollTimer);
+  const jobUrl = location.origin + location.pathname + "?mint=" + encodeURIComponent(mint);
+  let linkRendered = false;
   const tick = async () => {
     try {
       const d = await (await fetch("/api/owners-snapshot/status?mint=" + mint)).json();
       const j = d.job;
       if (!j) return;
       const p = $("#progress"); p.classList.add("show");
+      // Runs take hours — this box is the first thing in the progress card, on purpose,
+      // so the saved-job link and "safe to close" guidance can't be missed or scrolled past.
+      if (!linkRendered) {
+        linkRendered = true;
+        const jl = $("#pjoblink");
+        jl.innerHTML = `<div style="flex:1 1 260px"><b>This run can take hours.</b> It's safe to close this tab — the result is saved, come back any time with the link below.</div><div class="pjl-url">${esc(jobUrl)}</div><button type="button" class="btn2" id="pjlCopy">COPY THIS LINK</button>`;
+        const cb = document.getElementById("pjlCopy");
+        if (cb) cb.addEventListener("click", () => {
+          CluckUtil.copyText(jobUrl).then((ok) => {
+            cb.textContent = ok ? "COPIED ✓" : "COPY FAILED — SELECT MANUALLY";
+            setTimeout(() => { cb.textContent = "COPY THIS LINK"; }, 1800);
+          });
+        });
+      }
       if (j.state === "queued") {
         $("#pstage").textContent = "QUEUED" + (j.queuePosition > 1 ? ` · #${j.queuePosition} in line` : "");
         $("#pfill").style.width = "2%";
@@ -302,8 +322,8 @@ function render(R) {
     STATUSES.map((s) => `<div class="tile"><div class="k">${esc(s)}</div><div class="v st-${esc(s)}">${fmt(S.counts[s] || 0)}</div><div class="s">${esc(pct(S.supplyPctByStatus[s] || 0))} of supply</div></div>`).join("") +
     `<div class="tile"><div class="k">SOLD · 7D</div><div class="v st-OUT">${esc(usd(S.draining7dUsd))}</div><div class="s">by wallets in this set</div></div>
      <div class="tile"><div class="k">BOUGHT · 7D</div><div class="v st-ACCUMULATING">${esc(usd(S.bought7dUsd))}</div><div class="s">by wallets in this set</div></div>
-     <div class="tile"><div class="k">LINKED GROUPS</div><div class="v">${fmt(S.clusterCount)}</div><div class="s">${fmt(S.flaggedClusters)} worth a look</div></div>
-     <div class="tile"><div class="k">FREE BAGS</div><div class="v">${fmt(S.freeBagWallets)}</div><div class="s">received, not bought</div></div>
+     <div class="tile"><div class="k">SHARED FUNDING / CASH-OUT GROUPS</div><div class="v">${fmt(S.clusterCount)}</div><div class="s">${fmt(S.flaggedClusters)} worth a look</div></div>
+     <div class="tile"><div class="k">RECEIVED BY TRANSFER</div><div class="v">${fmt(S.freeBagWallets)}</div><div class="s">received, not bought</div></div>
      <div class="tile"><div class="k">FRESH WALLETS</div><div class="v">${fmt(S.freshWallets)}</div><div class="s">under 14 days old</div></div>
     </div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn2" id="csvBtn">EXPORT CSV</button><button type="button" class="btn2" id="jsonBtn">COPY JSON</button></div>
@@ -329,15 +349,15 @@ function render(R) {
   // Watchlists
   const wl = (title, lead, arr, extra) => `<div class="sec"><h3>${title}</h3><p class="lead">${lead}</p>${arr.length ? `<div class="tscroll"><table><tr><th>WALLET</th><th>STATUS</th><th class="num">HOLDS</th><th class="num">OF SUPPLY</th>${extra.h}</tr>` + arr.map((a) => `<tr class="row" data-w="${esc(a.wallet)}"><td>${link(a.wallet)} ${flags(a)}</td><td>${pill(a.status)}<div class="sub" style="font-size:11.5px">${esc(a.why || "")}</div></td><td class="num">${esc(usd(a.usd))}</td><td class="num">${esc(pct(a.supplyPct))}</td>${extra.r(a)}</tr>`).join("") + "</table></div>" : `<div class="muted" style="font-size:12.5px">none</div>`}</div>`;
   h += `<div class="card"><div class="card-title">WATCHLIST</div>` +
-    wl("DRAINING YOU RIGHT NOW", "Wallets selling into your market on a pattern — repeated sells, most of their peak already gone. Sorted by what they sold in the last 7 days.", W.drainingNow, { h: `<th class="num">SOLD 7D</th><th class="num">OF PEAK GONE</th><th class="num">SELLS</th>`, r: (a) => `<td class="num">${esc(usd(a.soldUsd7d))}</td><td class="num">${esc(pct(a.soldOfPeak * 100))}</td><td class="num">${a.sellCount}</td>` }) +
+    wl("REPEATED SELLERS", "Wallets selling into your market on a pattern — repeated sells, most of their peak already gone. Sorted by what they sold in the last 7 days.", W.drainingNow, { h: `<th class="num">SOLD 7D</th><th class="num">OF PEAK GONE</th><th class="num">SELLS</th>`, r: (a) => `<td class="num">${esc(usd(a.soldUsd7d))}</td><td class="num">${esc(pct(a.soldOfPeak * 100))}</td><td class="num">${a.sellCount}</td>` }) +
     wl("WHO IS OUT", "Held a real position and no longer does. The biggest former positions first.", W.exits, { h: `<th class="num">PEAK WAS</th>`, r: (a) => `<td class="num">${esc(usd(a.peakUsd))}</td>` }) +
     wl("NEW MONEY · 7 DAYS", "Wallets that bought in the last week, biggest buyers first — the ones actually funding your chart.", W.newMoney, { h: `<th class="num">BOUGHT 7D</th>`, r: (a) => `<td class="num">${esc(usd(a.boughtUsd7d))}</td>` }) +
-    wl("FREE BAGS", "Holdings that arrived by transfer, not purchase — an airdrop, a gift, an OTC deal, a distribution. The chain can't tell which. It matters because a wallet with no cost basis can sell at any price.", W.freeBags, { h: `<th>RECEIVED FROM</th>`, r: (a) => `<td>${(current.wallets.find((w) => w.wallet === a.wallet)?.recvFrom || []).slice(0, 2).map((x) => link(x.from)).join(", ") || "—"}</td>` }) +
+    wl("RECEIVED BY TRANSFER", "Holdings that arrived by transfer, not purchase — an airdrop, a gift, an OTC deal, a distribution. The chain can't tell which. It matters because a wallet with no cost basis can sell at any price.", W.freeBags, { h: `<th>RECEIVED FROM</th>`, r: (a) => `<td>${(current.wallets.find((w) => w.wallet === a.wallet)?.recvFrom || []).slice(0, 2).map((x) => link(x.from)).join(", ") || "—"}</td>` }) +
     wl("FRESH WALLETS", "Wallets whose first on-chain activity is under 14 days old and that already hold a position. New buyers look like this. So do wallets made for a purpose.", W.fresh, { h: `<th>FIRST SEEN</th><th>FUNDED BY</th>`, r: (a) => `<td>${esc(ago(a.firstSeenTs))}</td><td>${a.funder ? link(a.funder) + (a.funderLabel ? " <span class='sub'>(" + esc(a.funderLabel) + ")</span>" : "") : "<span class='muted'>—</span>"}</td>` }) +
     `</div>`;
 
   // Clusters
-  h += `<div class="card"><div class="card-title">LINKED WALLETS <small>${fmt(R.clusters.length)} groups · patterns, not verdicts</small></div>
+  h += `<div class="card"><div class="card-title">SHARED FUNDING / CASH-OUT ADDRESS <small>${fmt(R.clusters.length)} groups · patterns, not verdicts</small></div>
     <p class="lead sub" style="font-size:12.5px;line-height:1.55;margin-bottom:10px">Wallets are grouped when they share a <b>first funder</b>, <b>pass this token between each other</b>, or <b>send sell proceeds to the same address</b>. A shared funder is a presale, an airdrop, a team distribution, a CEX batch withdrawal — or a ring. On-chain data cannot tell those apart. Groups with something worth a look are listed first.</p>` +
     (R.clusters.length ? R.clusters.slice(0, 30).map((c) => `<div class="cluster">
         <div class="ch"><b>${c.size} WALLETS · ${esc(usd(c.usd))} · ${esc(pct(c.supplyPct))} OF SUPPLY</b><span class="sub" style="font-size:12px">linked by ${c.linkKinds.map(esc).join(" + ")}${c.draining ? ` · ${c.draining} draining/out` : ""}${c.soldUsd7d ? ` · sold ${esc(usd(c.soldUsd7d))} in 7d` : ""}</span></div>
