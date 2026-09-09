@@ -312,6 +312,27 @@
       });
     });
   }
+  // In-page confirmation. Jupiter Mobile's in-app browser (and some other wallet WebViews) implement
+  // window.confirm() as "return false, show nothing", so a native dialog makes every button look dead —
+  // that is exactly what the first real payout hit on 2026-09-08 ("when I hit send nothing happens").
+  // Renders CONFIRM / CANCEL next to the button that asked, and resolves true only on CONFIRM.
+  function askConfirm(msg, anchor) {
+    return new Promise(function (resolve) {
+      var old = document.getElementById("confirmBar"); if (old) old.remove();
+      var bar = document.createElement("div"); bar.id = "confirmBar";
+      bar.style.cssText = "margin-top:10px;padding:10px 12px;border:1px solid #f5c451;border-radius:8px;background:rgba(245,196,81,.08)";
+      bar.innerHTML = '<div class="warn" style="margin-bottom:8px"></div><button id="confirmYes">CONFIRM</button> <button class="ghost" id="confirmNo">CANCEL</button>';
+      bar.firstChild.textContent = msg;
+      var host = (anchor && anchor.parentNode) || document.body;
+      host.appendChild(bar);
+      var done = function (v) { bar.remove(); resolve(v); };
+      bar.querySelector("#confirmYes").addEventListener("click", function () { done(true); });
+      bar.querySelector("#confirmNo").addEventListener("click", function () { done(false); });
+      try { bar.scrollIntoView({ block: "nearest" }); } catch (_) {}
+    });
+  }
+  function notice(msg, anchor) { return askConfirm(msg, anchor).then(function () {}); }
+
   function txLink(sig) { return '<a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:11px">' + esc(String(sig).slice(0, 10)) + "…</a>"; }
 
   function refreshSendButton() {
@@ -413,20 +434,26 @@
     load().catch(function (e) { $("keyNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
   });
   $("create").addEventListener("click", function () {
-    if (!confirm("Create a batch for everything owed? Its amounts are held aside from this moment.")) return;
-    $("create").disabled = true;
-    api({ export: "1" }, "POST").then(function () { return load(); }).catch(fail);
+    askConfirm("Create a batch for everything owed? Its amounts are held aside from this moment.", $("create")).then(function (yes) {
+      if (!yes) return;
+      $("create").disabled = true;
+      api({ export: "1" }, "POST").then(function () { return load(); }).catch(fail);
+    });
   });
   $("reload").addEventListener("click", function () { load().catch(fail); });
   $("arm").addEventListener("click", function () {
-    if (!confirm("ARM the program? The lock ledger is written and today is accrued immediately. Every qualifying lock starts earning from today. No tokens move.")) return;
+   askConfirm("ARM the program? The lock ledger is written and today is accrued immediately. Every qualifying lock starts earning from today. No tokens move.", $("arm")).then(function (yes) {
+    if (!yes) return;
     $("ctNote").textContent = "arming — the first scan reads every escrow's creation time, this can take a minute…";
     admin({ arm: "1", confirm: "go-live" }, "POST").then(function (a) { renderAdmin(a); $("ctNote").textContent = "ARMED. This hour accrued: " + ((a.accrualRun && a.accrualRun.ok) ? (a.accrualRun.eligible + " earning, " + cuna(a.accrualRun.distributedRaw || "0") + " CUNA credited (1/24 of the daily pool)") : ((a.accrualRun && a.accrualRun.reason) || "see missed hours")); return load(); })
       .catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+   });
   });
   $("disarm").addEventListener("click", function () {
-    if (!confirm("DISARM? Accrual stops. The start date and everything earned so far are kept.")) return;
-    admin({ off: "1" }, "POST").then(function (a) { renderAdmin(a); $("ctNote").textContent = "Disarmed."; }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+    askConfirm("DISARM? Accrual stops. The start date and everything earned so far are kept.", $("disarm")).then(function (yes) {
+      if (!yes) return;
+      admin({ off: "1" }, "POST").then(function (a) { renderAdmin(a); $("ctNote").textContent = "Disarmed."; }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+    });
   });
   $("accrue").addEventListener("click", function () {
     admin({ accrue: "1" }, "POST").then(function (a) { renderAdmin(a); var r = a.accrualRun || {}; $("ctNote").textContent = r.ok ? ("Accrued " + r.day + ": " + r.eligible + " earning, " + cuna(r.distributedRaw || "0") + " CUNA credited") : ("Not accrued: " + (r.reason || "?")); return load(); })
@@ -438,13 +465,17 @@
   });
   $("close").addEventListener("click", function () {
     if (!BATCH) return;
-    if (unrecordedSent().length) { alert("Record the SENT — NOT RECORDED rows first. Closing now would return them to owed and pay them twice."); return; }
-    if (!confirm("Close batch " + BATCH.id + "? Rows already sent stay paid. Unsent rows go back to owed.")) return;
-    api({ cancel: BATCH.id }, "POST").then(function () { return load(); }).catch(fail);
+    if (unrecordedSent().length) { notice("Record the SENT — NOT RECORDED rows first. Closing now would return them to owed and pay them twice.", $("close")); return; }
+    askConfirm("Close batch " + BATCH.id + "? Rows already sent stay paid. Unsent rows go back to owed.", $("close")).then(function (yes) {
+      if (!yes) return;
+      api({ cancel: BATCH.id }, "POST").then(function () { return load(); }).catch(fail);
+    });
   });
   $("send").addEventListener("click", function () {
-    if (!confirm("Send " + BATCH.remainingCount + " rows totalling " + cuna(BATCH.remainingRaw) + " CUNA (" + usd(BATCH.remainingRaw) + ") from " + WALLET.slice(0, 8) + "…?")) return;
-    send();
+    if ($("send").disabled || !BATCH || !WALLET) return;
+    askConfirm("Send " + BATCH.remainingCount + " rows totalling " + cuna(BATCH.remainingRaw) + " CUNA (" + usd(BATCH.remainingRaw) + ") from " + WALLET.slice(0, 8) + "… ?", $("send")).then(function (yes) {
+      if (yes) send();
+    });
   });
   $("connect").addEventListener("click", function () {
     CluckWallet.connect().then(function (r) {
