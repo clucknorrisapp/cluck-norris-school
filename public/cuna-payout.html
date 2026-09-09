@@ -331,16 +331,17 @@
 
   async function readWalletBal() {
     WALLET_BAL = null;
-    var progs = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"];
-    var res = await Promise.all(progs.map(function (pid) {
-      return rpc("getTokenAccountsByOwner", [WALLET, { mint: MINT, programId: pid }, { encoding: "jsonParsed" }])
-        .then(function (r) { return { ok: true, v: r }; }).catch(function () { return { ok: false }; });
-    }));
-    // ANY failed read leaves the balance unknown. Summing the successful half would report a wallet
-    // holding the full batch as short (or empty), and the send button keys on this number.
-    if (!res.every(function (x) { return x.ok; })) { WALLET_BAL = null; return; }
+    // ONE filter key only. getTokenAccountsByOwner takes EITHER { mint } OR { programId } — a filter
+    // carrying both is rejected by the RPC ("expected map with a single key"), which is exactly what
+    // happened on the first real send (2026-09-08: "could not read — send disabled" with 3.9M CUNA in
+    // the wallet). A mint belongs to exactly one token program, so { mint } alone already covers
+    // legacy and Token-2022 accounts; no second call needed.
+    var res = await rpc("getTokenAccountsByOwner", [WALLET, { mint: MINT }, { encoding: "jsonParsed" }])
+      .then(function (r) { return { ok: true, v: r }; }).catch(function () { return { ok: false }; });
+    // A failed read leaves the balance unknown — never a zero — and the send button keys on this number.
+    if (!res.ok) { WALLET_BAL = null; return; }
     var total = 0;
-    res.forEach(function (x) { ((x.v && x.v.value) || []).forEach(function (a) { total += Number(a.account.data.parsed.info.tokenAmount.uiAmount || 0); }); });
+    ((res.v && res.v.value) || []).forEach(function (a) { total += Number(a.account.data.parsed.info.tokenAmount.uiAmount || 0); });
     WALLET_BAL = total;
   }
 
