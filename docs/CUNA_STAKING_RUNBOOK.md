@@ -309,6 +309,38 @@ excluded wallet is in this one, every payee actually holds a CUNA lock on-chain 
 amounts add up to the batch total. A **hard** check failing holds the send button; programme-armed
 is shown for context only and never blocks.
 
+### The first real payout (2026-09-09 00:44 UTC) — what bit, and the two-minute routine now
+
+Batch `cb_8d28a7ea39`: 13 wallets, 1,092,500 CUNA, 76 hourly slices, sent from the treasury in ONE
+transaction (`37hhsCCh…Z2bVkiP`; the airdrop engine packs the rows). Every balance change matched
+its row to the unit. It took ninety minutes instead of two because the page had never met a real
+wallet before, and the owner was in **Jupiter Mobile's in-app browser** on an iPad:
+
+1. **"CUNA in wallet: could not read — send disabled"** with 3.9M CUNA in the wallet. The balance
+   read filtered `getTokenAccountsByOwner` by `{ mint, programId }`; the RPC takes exactly ONE
+   filter key and rejected it, so the page (correctly) refused to send an unknown balance. Fixed in
+   #277: one `{ mint }` call — a mint belongs to one token program, so that already covers legacy
+   and Token-2022. Do not add the second key back.
+2. **"When I hit SEND nothing happens."** Every action button opened with `window.confirm()`.
+   Jupiter's WebView implements it as "return false, show nothing" (and `alert()` as a no-op), so
+   the handler returned before doing anything. Fixed in #278: an in-page CONFIRM / CANCEL bar
+   (`askConfirm`) next to the button. **No native dialogs anywhere on a page a wallet browser will
+   open** — that includes `alert`, `confirm`, `prompt`.
+3. **Railway sat on the #278 deploy for 30 minutes** (the first fix had deployed in two). An empty
+   commit to `main` kicked it. If a merge to `main` is not live within five minutes, look at the
+   Railway Deployments tab before debugging anything else.
+4. The session could not have sent for the owner: it holds no treasury key, and the server's only
+   outside-wallet payout route pays giveaway winners from a sealed draw. That is by design. The
+   fallback when the page fails is the row list from `/api/cuna-stake/payout?batch=<id>`
+   (`remainingLines`) sent from the wallet by hand, then `&sent=[{wallet,sig}]` (POST) to record
+   the signatures — the route verifies each one on chain before it records.
+
+**The routine now:** create the batch (page or `POST ?export=1`), run
+`scripts/cuna-payout-verify.cjs` on it, open `/cuna-payout` in a browser the wallet can sign from,
+connect the treasury, SEND, CONFIRM. Then read the batch back and diff the transaction's
+`postTokenBalances − preTokenBalances` per owner against the rows — that is the check that says
+"paid", not the page.
+
 ### Before a send from anywhere else, run the independent verifier
 
 ```bash
