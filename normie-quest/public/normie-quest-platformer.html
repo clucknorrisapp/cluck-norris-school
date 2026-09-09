@@ -24,8 +24,17 @@
 <meta name="twitter:title" content="Normie Quest">
 <meta name="twitter:description" content="A retro platformer that teaches crypto survival skills, level by level, for the NORMIE community.">
 <meta name="twitter:image" content="https://normiequest.app/nq-assets/icon-512.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<!-- Arcade fonts are SELF-HOSTED (2026-09-08): Google Fonts made every title/HUD render depend on a
+     third-party fetch — blocked in CI, slow on first paint — so the visual gate could only treat text
+     surfaces as advisory and a player could see the fallback serif for a beat. Latin subsets of
+     Press Start 2P + VT323 (both SIL OFL) live under /vendor/fonts; preloaded so they are ready
+     before Phaser rasterises its first text. Boot waits on document.fonts (see game_logic.js). -->
+<link rel="preload" as="font" type="font/woff2" crossorigin href="/vendor/fonts/press-start-2p-latin.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="/vendor/fonts/vt323-latin.woff2">
+<style>
+  @font-face{font-family:'Press Start 2P';font-style:normal;font-weight:400;font-display:block;src:url(/vendor/fonts/press-start-2p-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+  @font-face{font-family:'VT323';font-style:normal;font-weight:400;font-display:block;src:url(/vendor/fonts/vt323-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+</style>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{height:100%;width:100%;overflow:hidden;background:#07060f;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
@@ -311,6 +320,87 @@ function nqResumePoint(){
   // for the in-session death-continue and any future server-verified restore.
   return { level:lvl, score:0, kind:kind, name:def.name||'' };
 }
+
+// ---- CLOUD-SAVE STATUS — shared formatting (item: cloud-save status visible) --------------------
+// window.__NQ_SAVESTATE() (published near cloudSync, in the wallet block) is the single source of
+// truth: {state:'local'|'syncing'|'synced'|'error', at, error}. Everything that SHOWS the status
+// (the 🎮 panel's wallet pane, the pause card, the Title CONTINUE line) reads it through these two
+// tiny formatters so the wording can never drift between surfaces.
+function nqSaveState(){ try{ return window.__NQ_SAVESTATE?window.__NQ_SAVESTATE():null; }catch(e){ return null; } }
+function nqAgoShort(ts){
+  if(!ts) return '';
+  var d=Date.now()-ts; if(d<0) d=0;
+  var s=Math.floor(d/1000); if(s<60) return 'just now';
+  var m=Math.floor(s/60); if(m<60) return m+'m ago';
+  var h=Math.floor(m/60); if(h<24) return h+'h ago';
+  return Math.floor(h/24)+'d ago';
+}
+// Plain-text line — the pause card and the Title continue subline use this (no markup).
+function nqSaveLine(){
+  var s=nqSaveState();
+  if(!s||s.state==='local') return 'Saved on this device';
+  if(s.state==='syncing') return 'Syncing to your wallet…';
+  if(s.state==='synced') return 'Synced to your wallet'+(s.at?(' · '+nqAgoShort(s.at)):'');
+  if(s.state==='error') return 'Sync failed — progress kept locally';
+  return 'Saved on this device';
+}
+// HTML line (with a RETRY control on failure) — the 🎮 panel's wallet pane uses this one.
+function nqSaveStatusHtml(){
+  var s=nqSaveState();
+  if(!s||s.state==='local') return 'Progress: <b style="color:#cbd6ff">Saved on this device</b>';
+  if(s.state==='syncing') return 'Progress: <b style="color:#8fd0ff">Syncing…</b>';
+  if(s.state==='synced') return 'Progress: <b style="color:#8dffc0">Synced to your wallet</b>'+(s.at?(' <span style="color:#8f89b8">('+nqAgoShort(s.at)+')</span>'):'');
+  if(s.state==='error') return 'Progress: <b style="color:#ff9db8">Sync failed — local progress retained</b> '
+    +'<button class="nqp-b alt" id="nqp-saveretry" style="display:inline-block;width:auto;padding:3px 10px;margin-left:6px;font-size:11px">Retry</button>';
+  return 'Progress: <b style="color:#cbd6ff">Saved on this device</b>';
+}
+// Re-paints the wallet-pane's status line IN PLACE (no full renderWallet() re-render) whenever the
+// state changes — a no-op when the pane isn't open (the element just doesn't exist yet). The pane's
+// own renderWallet() also calls this once right after it builds the DOM, so both paths share one
+// place that wires the retry button.
+function paintSaveStatus(){
+  try{
+    var el=document.getElementById('nqp-savestat'); if(!el) return;
+    el.innerHTML=nqSaveStatusHtml();
+    var b=document.getElementById('nqp-saveretry');
+    if(b) b.addEventListener('click',function(){
+      b.textContent='Retrying…'; b.disabled=true;
+      try{ if(window.__NQ_SAVE_RETRY) window.__NQ_SAVE_RETRY(); }catch(e){}
+    });
+  }catch(e){}
+}
+// ⚠ game_logic.js is built as SEVERAL separate top-level <script> blocks (see build.js / the
+// literal <script> markers in this file) — each is its OWN scope, sharing only `window`. The
+// wallet/leaderboard code (cloudSync, renderWallet) lives in a LATER block than this one, so it
+// cannot see the two functions above by their bare names — publish them the same way every other
+// cross-block hook here already does (__NQ_CLOUDPUSH, __NQ_APPLYSAVE, __NQ_GETSAVE, __NQ_SAVESTATE).
+try{ window.__NQ_SAVE_STATUS_HTML=nqSaveStatusHtml; window.__NQ_PAINT_SAVE_STATUS=paintSaveStatus; }catch(e){}
+// Diagnostics toggle (item: pause screen) — off by default, remembered per device. Lets anyone
+// reveal the audio/fps line the TEST/lab builds always show, for field debugging on a live build.
+var NQ_DIAG_KEY='nqPauseDiag';
+function nqDiagOn(){ try{ return localStorage.getItem(NQ_DIAG_KEY)==='1'; }catch(e){ return false; } }
+function nqDiagSet(v){ try{ if(v) localStorage.setItem(NQ_DIAG_KEY,'1'); else localStorage.removeItem(NQ_DIAG_KEY); }catch(e){} }
+
+// Onboarding-seen flag (item: returning players skip Controls) — set once the Controls scene has
+// actually been shown, so a returning player with a save never sits through it twice. Title only
+// ever SKIPS Controls when both this is true AND there is a resume point — a brand-new device
+// (cloud save landed, tutorial never shown here) still gets it once.
+var NQ_ONBOARDED_KEY='nqOnboarded';
+function nqOnboarded(){ try{ return localStorage.getItem(NQ_ONBOARDED_KEY)==='1'; }catch(e){ return false; } }
+function nqSetOnboarded(){ try{ localStorage.setItem(NQ_ONBOARDED_KEY,'1'); }catch(e){} }
+
+// ---- REDUCED MOTION / FLASH preferences (item 3) --------------------------------------------
+// Two independent settings, each 'full' | 'reduced' | 'off', persisted per device. Both default to
+// 'full' UNLESS the OS says prefers-reduced-motion on this device's very first run, in which case
+// BOTH default to 'reduced' (a first-run heuristic only — an explicit choice always wins after
+// that). Read fresh on every fxShake/fxFlash call: cheap (a couple of localStorage/matchMedia
+// reads at most a few times a second even in a boss fight), and it means a mid-run settings
+// change (the ⚙ panel) takes effect on the very next hit, no scene restart needed.
+function nqFxMotionDefault(){ try{ return (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'reduced' : 'full'; }catch(e){ return 'full'; } }
+function nqFxMotionMode(){ try{ var v=localStorage.getItem('nqFxMotion'); if(v==='full'||v==='reduced'||v==='off') return v; }catch(e){} return nqFxMotionDefault(); }
+function nqFxFlashMode(){ try{ var v=localStorage.getItem('nqFxFlash'); if(v==='full'||v==='reduced'||v==='off') return v; }catch(e){} return nqFxMotionDefault(); }
+function nqFxSetMotion(v){ try{ localStorage.setItem('nqFxMotion',v); }catch(e){} }
+function nqFxSetFlash(v){ try{ localStorage.setItem('nqFxFlash',v); }catch(e){} }
 
 // PREMIUM version flag — the paid/premium build (or a ?premium=1 link, remembered) grants LONGER
 // Whale Mode + Cold Wallet durations. The free version keeps the shorter times; nothing else changes.
@@ -2054,6 +2144,15 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     if(_bootPfx){ ['normie','nrun1','nrun2','njump','nduck'].forEach(function(b){ var k=_bootPfx+b; if(CHAR_ART[k]) _bootSkin[k]=CHAR_ART[k]; }); _nqSkinLoaded[_bootPfx]=1; }
     var self=this, all=Object.assign({},SPRITES,POWERUPS,EXTRA,SCARY_ART,_bootSkin), keys=Object.keys(all), need=keys.length, started=false;
     var go=function(){ if(started) return; started=true;
+      // FONTS BEFORE TEXT (2026-09-08): Phaser rasterises each Text once, at create() — if the arcade
+      // face is not loaded by then the fallback serif is baked into the texture for the life of the
+      // scene (that is why title/HUD renders differed run to run and the visual gate could only treat
+      // them as advisory). The faces are self-hosted + preloaded in the shell; this waits for them —
+      // bounded, so a fontless environment still boots. Textures already decoded above are untouched.
+      var _fontsReady=Promise.resolve();
+      try{ if(document.fonts&&document.fonts.load) _fontsReady=Promise.race([Promise.all([document.fonts.load('12px "Press Start 2P"'),document.fonts.load('12px "VT323"')]),new Promise(function(r){ setTimeout(r,1500); })]); }catch(e){}
+      _fontsReady.then(goNow,goNow); };
+    var goNow=function(){
       // PRIVATE ROOM DOOR: ?room=<name> boots straight into a level flagged private:true (e.g.
       // ?room=myspace → the MySpace/Tom dev room) — routed HERE, before the tappable Title ever
       // shows, so there's no title-screen flash and no race with a habitual "Play" tap landing on
@@ -2221,27 +2320,45 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
       window.addEventListener('nq-gate-ready',_onReady);
       this.events.once('shutdown',function(){ try{ window.removeEventListener('nq-gate-ready',_onReady); }catch(e){} });
     } }catch(e){}
-    this.add.text(W/2,246,_maxWorld+" worlds · "+_named.length+" levels + more secrets than you'd think  ·  a Cluck Norris production",{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#b6bfe0',align:'center'}).setOrigin(.5);
+    var _creditTxt=this.add.text(W/2,246,_maxWorld+" worlds · "+_named.length+" levels + more secrets than you'd think  ·  a Cluck Norris production",{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#b6bfe0',align:'center'}).setOrigin(.5);
     // Free to play, always: tap straight into the game. Nothing is ever charged to START a run
     // (the only burn in the game is the optional Item Reserve shop in the panel overlay).
     var self=this;
     // CROSS-SESSION CONTINUE. A returning player with a banked world resumes there instead of
     // being dumped back on 1-1. Tap-anywhere keeps doing the friendly thing (CONTINUE when there
     // is a save, a fresh run when there isn't) and a small NEW GAME chip is the explicit way to
-    // throw the save away. Both paths start through Controls exactly as before, so HOW TO PLAY
-    // and the destination world's Briefing still fire.
+    // throw the save away. A first-timer (or a save with onboarding never seen on THIS device)
+    // still starts through Controls, so HOW TO PLAY and the destination hand-off fire exactly as
+    // before; a player who has already sat through Controls once skips straight to Game instead
+    // — see `start()` below. How To Play stays reachable any time via the '?' button (top-right).
     var _res=null; try{ _res=nqResumePoint(); }catch(e){}
     // §6.2: the world map, for everyone — a tier-1 holder could not revisit a world they own.
     // Top-left so it stays clear of the crowded bottom band (NEW GAME / chips / credit line).
     var _mapBtn=this.add.text(12,13,'🗺 WORLD MAP',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#66ccff',resolution:UIRES}).setOrigin(0,.5);
-    var _newBtn=null;
+    var _newBtn=null, _contSub=null;
     if(_res){
-      p.setText('CONTINUE \u00B7 WORLD '+_res.name);
-      _newBtn=this.add.text(W/2,262,'NEW GAME',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#8f96b8',resolution:UIRES}).setOrigin(.5);
+      // "4-2" -> "WORLD 4 · LEVEL 2" (falls back to the raw name if a level is ever named
+      // differently — VIP/private rooms keep the world-dash-level convention today).
+      var _rm=/^(\d+)-(\d+)/.exec(_res.name||'');
+      p.setText('CONTINUE \u00B7 '+(_rm?('WORLD '+_rm[1]+' \u00B7 LEVEL '+_rm[2]):('WORLD '+_res.name)));
+      // Small honest line under CONTINUE: where the save lives (window.__NQ_SAVESTATE(), item 1)
+      // plus the same score/leaderboard rule nqResumePoint() already enforces — a cross-session
+      // resume restores PROGRESS only, never a score, and never posts to the leaderboard.
+      _contSub=this.add.text(W/2,207,nqSaveLine()+' \u00B7 resumes at score 0 — not a leaderboard run',
+        {fontFamily:UIFONT,resolution:UIRES,fontSize:'8px',color:'#8fa0c8',align:'center',wordWrap:{width:W-24}}).setOrigin(.5);
+      // Room for the subtitle: nudge the rest of the tightly-packed footer down a few px so
+      // nothing overlaps (only on the CONTINUE layout — a fresh visit's spacing is unchanged).
+      nw.y+=6; _chips.forEach(function(t){ t.y+=6; }); _creditTxt.y+=6;
+      _newBtn=this.add.text(W/2,268,'NEW GAME',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#8f96b8',resolution:UIRES}).setOrigin(.5);
     }
-    var start=function(lvl,score){ if(self.started) return; self.started=true;
+    var start=function(lvl,score,isResume){ if(self.started) return; self.started=true;
       // NEW GAME starts at 1-1 but does NOT delete the bank — progress is a permanent unlock, and
       // deleting it here would also delete it for every other device synced to the same wallet.
+      // Returning-player skip: only when RESUMING (never for NEW GAME/1-1) and only once THIS
+      // device has actually sat through Controls before (nqSetOnboarded, set in Controls.create).
+      // Matches exactly what Controls.go() itself sends for a resumed run — level+score, lives:3,
+      // no `lab` — the same destination, just reached one screen sooner.
+      if(isResume && nqOnboarded()){ self.scene.start('Game',{level:lvl||0,score:0,lives:3}); return; }
       self.scene.start('Controls',{next:lvl||0,score:score||0}); };
     var go=function(pointer){
       // one tap surface, two outcomes — NEW GAME wins if the tap landed on its chip. The hit box is
@@ -2249,13 +2366,13 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
       var onNew=false;
       try{ if(_newBtn&&pointer&&pointer.worldX!=null){ var _b=_newBtn.getBounds(); Phaser.Geom.Rectangle.Inflate(_b,14,10); onNew=_b.contains(pointer.worldX,pointer.worldY); } }catch(e){}
       if(nqOnBtn(_mapBtn,pointer)){ if(self.started) return; self.started=true; self.scene.start('LevelSelect'); return; }   // §6.2
-      if(_res&&!onNew) start(_res.level,_res.score); else start(0,0);
+      if(_res&&!onNew) start(_res.level,_res.score,true); else start(0,0,false);
     };
     // Tap anywhere = play (from the save if there is one, else 1-1). In TEST BUILD, the reliable
     // DOM "≡ Levels" button (bottom-left, works from here too) is how you reach the level picker.
     this.input.once('pointerdown',go,this);
     this.input.keyboard.once('keydown',function(ev){ if(ev&&(ev.key==='m'||ev.key==='M')){ if(!self.started){ self.started=true; self.scene.start('LevelSelect'); } return; }   // §6.2: M = world map
-      if(_res&&ev&&(ev.key==='n'||ev.key==='N')) start(0,0); else go(); },this);
+      if(_res&&ev&&(ev.key==='n'||ev.key==='N')) start(0,0,false); else go(); },this);
     padAdvance(this, function(){ go(); });   // controller button also starts
     if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
   }
@@ -2476,7 +2593,7 @@ var RESERVE_ITEMS = {
   bomb:   { icon:'missile',   emoji:'🚀', label:'AIR STRIKE', desc:'missile wipes every enemy', use:function(g){
             var hit=0;
             if(g.enemies) g.enemies.children.iterate(function(e){ if(e&&e.active){ var ex=e.x,ey=e.y; e.disableBody(true,true); hit++; if(g.addScore) g.addScore(20); if(g.burst) g.burst(ex,ey,0xffd23f,8); } });
-            g.cameras.main.shake(220,0.011);
+            g.fxShake(220,0.011);
             if(g.powerBanner) g.powerBanner('AIR STRIKE', hit+(hit===1?' TARGET DOWN':' TARGETS DOWN'), '#ff8a2b');
           } }
 };
@@ -3496,13 +3613,27 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // where per-object hit testing is unreliable. Pointer coords are zoom/container-immune.
     this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE,F,X,Q,E,ONE,TWO,THREE');
     // PAUSE keys: while paused, ANY key resumes; while playing, P / Esc pause. (Touch: ⏸ hotspot in update; tap resumes.)
-    this.input.keyboard.on('keydown',function(e){ if(self.paused){ self.resumeGame(); } else if(e.key==='p'||e.key==='P'||e.key==='Escape'){ self.pauseGame(false); } });
+    this.input.keyboard.on('keydown',function(e){ if(self.paused){
+        // D toggles the diag line instead of resuming — the one exception to "any key resumes"
+        // (item 5). Every other key (including the D/A/W/S movement keys the rest of the time)
+        // keeps resuming exactly as before.
+        if(e&&(e.key==='d'||e.key==='D')){ nqDiagSet(!nqDiagOn()); self.refreshPauseDiag(); return; }
+        self.resumeGame();
+      } else if(e.key==='p'||e.key==='P'||e.key==='Escape'){ self.pauseGame(false); } });
     // tap anywhere resumes; otherwise a tap in the INVENTORY strip spends that slot. Slot taps are
     // resolved HERE with raw zoom-immune pointer coords (panel finding 2026-07-22: the per-object
     // box.on('pointerdown') hit areas are unreliable under the 2x-zoom HUD container — iPad taps
     // never landed). Desktop clicks route through the same zone, so mouse + touch behave alike.
     this.input.on('pointerdown',function(ptr){
-      if(self.paused){ self.resumeGame(); return; }
+      if(self.paused){
+        // The "diag" toggle is a real interactive object on the pause card (item 5) — a tap there
+        // must flip diagnostics, not blow through and resume the run underneath it. hitTestPointer
+        // is the same mechanism Phaser used to decide whether the button's OWN pointerup handler
+        // fires, so this can never disagree with what the button itself does.
+        var hits=[]; try{ hits=self.input.hitTestPointer(ptr); }catch(e){}
+        if(self._pauseDiagBtn && hits.indexOf(self._pauseDiagBtn)>=0) return;
+        self.resumeGame(); return;
+      }
       try{ var gx=ptr.x/self.scale.width*W, gy=ptr.y/self.scale.height*H;
         if(gy>=16&&gy<=44){ for(var _si=0;_si<RESERVE_SLOTS;_si++){ if(Math.abs(gx-(92+_si*23))<=12){
           self._hotDown=true;   // consume the press so the PAUSE hotspot poll skips it (sweep finding: slot taps also paused)
@@ -3603,7 +3734,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.registry.set('nqMidCp',{lvl:this.levelIdx,x:Math.round(_kx),score:this.score}); }catch(e){} },
   grabCache:function(player,pile){ if(pile.grabbed||this.over) return; pile.grabbed=true; if(pile.body) pile.body.enable=false;
     var self=this, n=pile.cacheN; this.addScore(n); this.registry.set('nqCasino',(this.registry.get('nqCasino')||0)+n); SFX.power(); SFX.coin();
-    this.burst(pile.x, pile.y, 0xffd23f, 30); this.cameras.main.flash(220,255,235,140); this.flash('CACHE!  +'+n+' COINS','#3dff6e');
+    this.burst(pile.x, pile.y, 0xffd23f, 30); this.fxFlash(220,255,235,140); this.flash('CACHE!  +'+n+' COINS','#3dff6e');
     for(var i=0;i<8;i++){ var a=(i/8)*Math.PI*2, fc=this.add.image(pile.x,pile.y,'coin').setDepth(20).setScale(pile.scaleX*0.55);
       this.tweens.add({targets:fc, x:pile.x+Math.cos(a)*42, y:pile.y-28-Math.sin(a)*22, alpha:0, duration:560, ease:'Quad.out', onComplete:(function(o){ return function(){ o.destroy(); }; })(fc)}); }
     this.tweens.add({targets:pile, y:pile.y-20, alpha:0, scaleX:0, scaleY:0, duration:480, onComplete:function(){ pile.destroy(); }});
@@ -3613,7 +3744,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(!this.crouching) return;                   // the secret knock: you must DUCK in front to slip in
     this._warping=true; w.used=true;
     this.registry.set('nqRetLvl', this.levelIdx); this.registry.set('nqRetX', Math.round(w.x+70));
-    this.cameras.main.flash(360, 120, 60, 170); SFX.power();
+    this.fxFlash(360, 120, 60, 170); SFX.power();
     var tgt=w.target, wk=w.warpKey;
     this.time.delayedCall(340, function(){
       // mark the speakeasy SPENT only when the transition actually happens — writing it up-front
@@ -3652,9 +3783,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // ROTATING TRANSFORM: Giga Chad returns MEGA in the late worlds — a shock ring, but not so long it lasts a whole level.
       var mega=this.levelIdx>=18;   // World 7+
       this.omegaUntil=now+(mega?9000:8000); if(mega) this.whaleShockAt=now+1000;
-      this.cameras.main.shake(240,.009);
+      this.fxShake(240,.009);
       this.powerBanner(mega?'MEGA GIGA CHAD':'GIGA CHAD', mega?'UNSTOPPABLE + SHOCK RING — 9s':'UNSTOPPABLE — plow through enemies 8s','#ffa020'); }
-    else if(type==='whale'){ this.whaleUntil=now+WHALE_MS; this.whaleShockAt=now+900; this.cameras.main.shake(280,.011);
+    else if(type==='whale'){ this.whaleUntil=now+WHALE_MS; this.whaleShockAt=now+900; this.fxShake(280,.011);
       this.powerBanner('WHALE MODE'+(PREMIUM?' ⭐':''),'MARKET MOVER — huge, invincible, shock stomps '+(WHALE_MS/1000)+'s','#2f7fff'); }
     else if(type==='coldwallet'){ this.coldUntil=now+COLD_MS; this.freezeEnemies(COLD_MS);
       this.powerBanner('COLD WALLET'+(PREMIUM?' ⭐':''),'SECURED — can\'t be liquidated + enemies FROZEN '+(COLD_MS/1000)+'s','#9fe8ff'); }
@@ -3663,11 +3794,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // whale-mode immunity + enemy-crush + hazard-immunity that's already wired everywhere; the flight,
       // ride visual, HUD label and shock-suppression are keyed on megaWhaleUntil so it reads distinctly.
       var mwMs=PREMIUM?13000:10000; this.megaWhaleUntil=now+mwMs; this.whaleUntil=now+mwMs;
-      this.whaleRideY=this.player.y-40; this.cameras.main.shake(300,.012); this.cameras.main.flash(200,40,120,255);
+      this.whaleRideY=this.player.y-40; this.fxShake(300,.012); this.fxFlash(200,40,120,255);
       this.powerBanner('MEGA WHALE'+(PREMIUM?' ⭐':''),'RIDE THE WHALE — fly, invincible, crush everything '+(mwMs/1000)+'s!','#2f7fff');
       this.flash('🐋 MEGA WHALE — TO THE MOON!','#2f7fff'); }
     else if(type==='supergeek'){ this.geekShield=true; this.powerBanner('SUPER GEEK','AUDIT ON — blocks the next hit','#2ee6c0'); }
-    this.addScore(30); this.cameras.main.flash(120,60,120,40); SFX.power();
+    this.addScore(30); this.fxFlash(120,60,120,40); SFX.power();
   },
 
   // ? BONUS BLOCK — bonk from BELOW only (block above player + head stopped by it).
@@ -3699,7 +3830,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:block, y:block.homeY-7, duration:90, yoyo:true, ease:'Quad.out'});   // the bump
     // CLUTCH HEAL: on your last heart, a bonus block also gives back a heart (you paused near the
     // roaming enemies to hit it — this makes that risk worth taking in the tight later levels).
-    if(this.lives<=1 && this.lives<this.maxLives){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); SFX.power(); this.cameras.main.flash(160,255,120,160); this.flash('CLUTCH! +1 HEART','#ff5a8a'); }
+    if(this.lives<=1 && this.lives<this.maxLives){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); SFX.power(); this.fxFlash(160,255,120,160); this.flash('CLUTCH! +1 HEART','#ff5a8a'); }
     if(!isCoin){                                                    // a POWER-UP pops out the top (single use)
       SFX.power();
       var o=this.powerups.create(block.x, block.homeY-2, r); o.ptype=r;
@@ -3824,7 +3955,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var _tgt=0; if(this.enemies) this.enemies.children.iterate(function(e){ if(e&&e.active) _tgt++; });
       if(!_tgt){ this.flash('NO TARGETS — SAVE IT','#ff8a2b'); return; }
     }
-    it.use(this); try{ SFX.power(); }catch(e){} this.flash(it.label+'!','#ffd23f'); this.cameras.main.flash(120,255,210,80);
+    it.use(this); try{ SFX.power(); }catch(e){} this.flash(it.label+'!','#ffd23f'); this.fxFlash(120,255,210,80);
     this.reserve.splice(idx,1);
     if(this.reserveSel>=this.reserve.length) this.reserveSel=0;   // selection must stay on a real slot
     this.saveReserve(); this.updateReserveHud();
@@ -3870,13 +4001,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   coinHitEnemy:function(coin,enemy){
     if(this.over||!enemy.active||!coin.active) return;
     var ex=enemy.x,ey=enemy.y; enemy.disableBody(true,true); coin.destroy();
-    this.addScore(20); this.burst(ex,ey,0xffd23f,10); SFX.stomp(); this.cameras.main.shake(40,0.004);
+    this.addScore(20); this.burst(ex,ey,0xffd23f,10); SFX.stomp(); this.fxShake(40,0.004);
   },
   grabAirdrop:function(player,a){
     if(this.over||!a.active||a.consumed) return;
     a.consumed=true; if(a.bob){ a.bob.stop(); a.bob=null; }
     var ax=a.x, ay=a.y; this.tweens.killTweensOf(a); a.disableBody(true,true);
-    this.burst(ax,ay,0xff3860,18); SFX.power(); this.cameras.main.flash(120,40,120,60);
+    this.burst(ax,ay,0xff3860,18); SFX.power(); this.fxFlash(120,40,120,60);
     if(this.lives<this.maxLives){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); this.powerBanner('HEALING AIRDROP','BAGS SAVED — +1 HEART','#3dff6e'); }
     else { this.addScore(150); this.powerBanner('HEALING AIRDROP','BAGS FULL — +150','#3dff6e'); }
   },
@@ -3904,17 +4035,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!enemy.active) return;
     if(enemy.phasing) return;   // FLASHBOT mid-blink: intangible — no stomp, no damage
     var now=this.time.now;
-    if(now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil){ var mx=enemy.x,my=enemy.y; enemy.disableBody(true,true); this.addScore(20); this.burst(mx,my,now<this.whaleUntil?0x2f7fff:(now<this.omegaUntil?0xffa020:0xffd23f),12); this.cameras.main.shake(50,.005); return; }   // MOON / GIGA CHAD / WHALE: smash through everything
+    if(now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil){ var mx=enemy.x,my=enemy.y; enemy.disableBody(true,true); this.addScore(20); this.burst(mx,my,now<this.whaleUntil?0x2f7fff:(now<this.omegaUntil?0xffa020:0xffd23f),12); this.fxShake(50,.005); return; }   // MOON / GIGA CHAD / WHALE: smash through everything
     var onTop=(player.body.bottom<=enemy.body.top+12)&&player.body.velocity.y>=-20;
     if(onTop && enemy.drillImmune){ player.setVelocityY(-220); return; }   // DRILLBIT spinning mid-drill: can't be stomped — clang off it (no kill, no damage). Stomp it on the wind-up.
     if(onTop && enemy.kind==='rugpuller'){   // caught the scammer before he pulls → rug stays solid (he never yanks), extra bounty
-      var rrx=enemy.x, rry=enemy.y; enemy.disableBody(true,true); player.setVelocityY(-300); this.addScore(50); this.cameras.main.shake(70,.006); SFX.stomp(); this.burst(rrx,rry,0xffd23f,16); this.flash('SCAM BUSTED! +50','#3dff6e');
+      var rrx=enemy.x, rry=enemy.y; enemy.disableBody(true,true); player.setVelocityY(-300); this.addScore(50); this.fxShake(70,.006); SFX.stomp(); this.burst(rrx,rry,0xffd23f,16); this.flash('SCAM BUSTED! +50','#3dff6e');
       this.invulnUntil=Math.max(this.invulnUntil||0, now+140); player.invuln=true;   // P12
       this.time.delayedCall(140,function(){ if(player.active && this.time.now>=this.invulnUntil) player.invuln=false; },[],this);
       return;
     }
     if(onTop){
-      var ex=enemy.x,ey=enemy.y; enemy.disableBody(true,true); player.setVelocityY(-300); this.addScore(20); this.cameras.main.shake(60,.006); SFX.stomp(); this.burst(ex,ey,0xffd23f,10);
+      var ex=enemy.x,ey=enemy.y; enemy.disableBody(true,true); player.setVelocityY(-300); this.addScore(20); this.fxShake(60,.006); SFX.stomp(); this.burst(ex,ey,0xffd23f,10);
       // P12: a 140ms stomp window must never CUT SHORT the 1800ms window a hit just granted —
       // it used to overwrite it, so you were stompable-then-killable while the sprite still flashed.
       this.invulnUntil=Math.max(this.invulnUntil||0, now+140); player.invuln=true;
@@ -3941,7 +4072,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     player.setVelocity((maxi.x<player.x?1:-1)*170,-150);
     this.tweens.add({targets:player,alpha:.4,duration:90,yoyo:true,repeat:5,onComplete:function(){ if(player.active){ player.alpha=1; if(_self.time.now>=_self.invulnUntil) player.invuln=false; } }});
     // the thief cackles and sprints off in the direction he was heading
-    maxi.baseSpeed=Math.min(maxi.baseSpeed*1.6,150); this.cameras.main.shake(90,.006);
+    maxi.baseSpeed=Math.min(maxi.baseSpeed*1.6,150); this.fxShake(90,.006);
   },
   spikeHit:function(player,spike){ var now=this.time.now; if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil) return; this.hurt(player, player.body.velocity.x>0?-1:1, 'SPIKES'); },
   firePitHit:function(player,fp){ var now=this.time.now; if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil) return; this.hurt(player, player.body.velocity.x>0?-1:1, 'BURNED'); },
@@ -4037,7 +4168,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var dx=this.def.door, self=this;
     // portal into the lounge's back room: flash, pull Normie BACK across the room, and drop the
     // Rug King in on the far side. He stays inert for a beat so you can never get clipped instantly.
-    this.cameras.main.flash(420, 150, 40, 170);
+    this.fxFlash(420, 150, 40, 170);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     // arena walls at BOTH ends so the fight is contained
     self.makeArena(dx-340, dx+40);
@@ -4119,7 +4250,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
           try{ _tone(260,180,0.10,'square',0.05); }catch(e){}
         } else {
           this._rkState='charge'; this._rkNext=now+(760+tier*40);
-          k.setVelocityX(k.dir*(200+tier*25)); this.cameras.main.shake(120,.008);
+          k.setVelocityX(k.dir*(200+tier*25)); this.fxShake(120,.008);
           try{ _tone(120,90,0.12,'sawtooth',0.05); }catch(e){}
         }
       }
@@ -4131,7 +4262,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       k.setRotation(Math.sin(now/70)*0.18);
       var landed=k.body.blocked.down||k.body.touching.down;
       if(landed && now>this._rkNext-1000){                            // ignore the first frame off the floor
-        this.cameras.main.shake(280,.022); this.burst(k.x, GY-6, 0xff3860, 18);
+        this.fxShake(280,.022); this.burst(k.x, GY-6, 0xff3860, 18);
         this.rugPullWave(k);
         this._rkState='recover'; this._rkNext=now+(1000-tier*100); k.setVelocityX(0); k.setRotation(0);
       } else if(now>=this._rkNext){ this._rkState='recover'; this._rkNext=now+900; k.setVelocityX(0); k.setRotation(0); }
@@ -4156,7 +4287,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
   bossHit:function(){
     SFX.boss(); if(this.rugking) this.burst(this.rugking.x,this.rugking.y,0xff3860,20); this.bossHP--; if(this.bossPips[this.bossHP]) this.bossPips[this.bossHP].setAlpha(.16);
-    var k=this.rugking; k.invuln=true; k.setVelocityX(0); this.addScore(100); this.cameras.main.shake(220,.02);
+    var k=this.rugking; k.invuln=true; k.setVelocityX(0); this.addScore(100); this.fxShake(220,.02);
     // BRIDGE DRAINER: every hit makes it cough up deck. Aggression is how you dig yourself out of a
     // shrinking arena, so the fight rewards attacking instead of turtling on the last safe island.
     if(this.def.bossType==='drainer' && this.restoreDeck(6)) this.flash('IT COUGHS UP THE DECK!','#3dff6e');
@@ -4473,7 +4604,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(bTex==='sandlord') this.drawSandLordTex(); // second prize room: the Sandcastle Lord
     if(bTex==='ghostship') this.drawGhostShipTex(); // scary world: the haunted galleon + its big big monster
     this.bossHP=bHits;
-    this.cameras.main.flash(420, 120, 40, 160);
+    this.fxFlash(420, 120, 40, 160);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-60, GY-54, bTex);   // stored in rugking = generic melee-boss handle
@@ -4569,7 +4700,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   /* ---------- THE TROLL boss (Crypto Trenches finale): charges + stomp x4, lobs REKT candles, teleports ---------- */
   startTrollBoss:function(){
     var dx=this.def.door, self=this; this.bossHP=3;
-    this.cameras.main.flash(420, 30, 150, 70);
+    this.fxFlash(420, 30, 150, 70);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-60, GY-60, 'troll');   // stored in rugking = generic melee-boss handle
@@ -4624,7 +4755,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   /* ---------- The Custodian boss (corrupt CEX CEO): stomp x3; freezes withdrawals at range ---------- */
   startCeoBoss:function(){
     var dx=this.def.door, self=this;
-    this.cameras.main.flash(420, 60, 130, 170);
+    this.fxFlash(420, 60, 130, 170);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-60, GY-56, 'ceoboss');   // stored in rugking = generic melee-boss handle
@@ -4664,7 +4795,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
        hurls "leverage bombs" that fan wider as he enrages, and taunts in maximalist. HP 5. ---------- */
   startSaylorBoss:function(){
     var dx=this.def.door, self=this; this.bossHP=5;
-    this.cameras.main.flash(520, 170, 90, 20);
+    this.fxFlash(520, 170, 90, 20);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-64, GY-60, 'saylor');   // stored in rugking = generic melee-boss handle
@@ -4704,7 +4835,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   startVipBoss:function(){
     var cfg=VIP_BOSSES[this.def.bossType]; if(!cfg) return;
     var dx=this.def.door, self=this; this.bossHP=cfg.hp;
-    this.cameras.main.flash(500, (cfg.col>>16)&255, (cfg.col>>8)&255, cfg.col&255);
+    this.fxFlash(500, (cfg.col>>16)&255, (cfg.col>>8)&255, cfg.col&255);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     // Arena walls. These used to collide with the PLAYER ONLY, which meant the boss was free to
     // walk out of its own arena -- and into any pit beyond it. The Storm Herald (20-2) fell into
@@ -4760,7 +4891,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
      image; restoring kills the tween and re-enables it. Same trick the rug plats use. */
   startDrainerBoss:function(){
     var dx=this.def.door, self=this;
-    this.cameras.main.flash(420, 200, 90, 30);
+    this.fxFlash(420, 200, 90, 30);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     var aL=dx-340, aR=dx+40; self.makeArena(aL, aR);
     // Sized + flown at the wyrm's proven head height: the stomp window is a tuned thing and a
@@ -4836,7 +4967,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       self.tweens.add({targets:t, y:t.deckHomeY+150, alpha:0.05, angle:Phaser.Math.Between(-18,18), duration:520, ease:'Quad.in'});
     });
     if(!any) return;
-    this.cameras.main.shake(180,.008);
+    this.fxShake(180,.008);
     this.burst(cols[0], GY-6, 0xff8a30, 16);
     if(SFX&&SFX.stomp) SFX.stomp();
     this.flash('THE DECK IS DRAINING','#ff8a30');
@@ -4856,7 +4987,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   startWyrmBoss:function(){
     var dx=this.def.door, self=this;
-    this.cameras.main.flash(420, 40, 160, 60);
+    this.fxFlash(420, 40, 160, 60);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-70, GY-58, 'wyrm');
@@ -4891,7 +5022,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   /* ---------- The Hash Lord (World 6 golem, FINAL boss): stomp x3; hurls stone blocks ---------- */
   startGolemBoss:function(){
     var dx=this.def.door, self=this;
-    this.cameras.main.flash(420, 150, 130, 40);
+    this.fxFlash(420, 150, 130, 40);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-66, GY-56, 'golem');
@@ -4929,7 +5060,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
      until the dedicated 'blackswan' texture lands (same swap pattern as 'nduck'). */
   startSwanBoss:function(){
     var dx=this.def.door, self=this;
-    this.cameras.main.flash(520, 30, 10, 60);
+    this.fxFlash(520, 30, 10, 60);
     this.player.setPosition(dx-280, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-360, dx+40);
     var tex=this.textures.exists('blackswan')?'blackswan':'ghost';
@@ -4996,7 +5127,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         k.setVelocity(0,0); k.y=GY-28;
         this._swanState='grounded'; this._swanT0=now; k.invuln=false; this.bossVulnCue(k);
         if(this._swanMark) this._swanMark.setVisible(false);
-        this.cameras.main.shake(200,.012); _tone(120,60,0.2,'square',0.08);
+        this.fxShake(200,.012); _tone(120,60,0.2,'square',0.08);
       }
     } else if(st==='grounded'){
       if(now-this._swanT0>3400){ this._swanState='rise'; this._swanT0=now; k.invuln=true; this.swanFeathers(k,p); }   // was 2200ms — same narrow-window issue as the MEV dragon/Dirty Whale: bossHit()'s ~1.4s i-frame ate most of it, so only ~1 stomp landed per grounded cycle. 3.4s fits a 2nd stomp.
@@ -5029,7 +5160,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   /* ---------- The Yield Reaper (World 7 farm boss, FINAL boss): stomp x3; reaps a spread of scythe-shots ---------- */
   startReaperBoss:function(){
     var dx=this.def.door, self=this;
-    this.cameras.main.flash(420, 40, 150, 60);
+    this.fxFlash(420, 40, 150, 60);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-66, GY-56, 'reaper');
@@ -5068,7 +5199,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
      the door; freed in bossDefeat. ---------- */
   startDragonBoss:function(){
     var dx=this.def.door, self=this;
-    this.cameras.main.flash(520, 90, 30, 140);
+    this.fxFlash(520, 90, 30, 140);
     this.player.setPosition(dx-300, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-380, dx+40);
     if(!this.textures.exists('sigorb')){
@@ -5139,7 +5270,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         k.setVelocity(0,0); k.y=GY-44;   // was GY-38: claws sat ~6px in the floor every vulnerable window (polish)
         this._drState='grounded'; this._drT0=now; k.invuln=false; this.bossVulnCue(k);
         if(this._drMark) this._drMark.setVisible(false);
-        this.cameras.main.shake(220,.013); _tone(110,55,0.2,'square',0.08);
+        this.fxShake(220,.013); _tone(110,55,0.2,'square',0.08);
         this._drBreathAt=now+340; this._drBreathDone=false;   // let a committed stomp land BEFORE the breath spawns on the head (owner: "jumping on top and taking damage")
       }
     } else if(st==='grounded'){
@@ -5182,7 +5313,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
      -> slams the wall -> STUNNED (vulnerable stomp window) -> recover. STOMP x6. ---------- */
   startWhaleBoss:function(){
     var dx=this.def.door, self=this;
-    this.cameras.main.flash(480, 40, 90, 120);
+    this.fxFlash(480, 40, 90, 120);
     this.player.setPosition(dx-300, GY-40); this.player.setVelocity(0,0);
     this._whWallL=dx-380; this._whWallR=dx+40;
     self.makeArena(this._whWallL, this._whWallR);
@@ -5235,7 +5366,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(nearWall || now-this._whT0>2600){
         k.setVelocityX(0);
         this._whState='stunned'; this._whT0=now; k.invuln=false; this.bossVulnCue(k);
-        this.cameras.main.shake(240,.015); _tone(90,45,0.22,'square',0.09);
+        this.fxShake(240,.015); _tone(90,45,0.22,'square',0.09);
         this.burst(k.x+(this._whDir*30), k.y, 0x8fd0f0, 14);
       }
     } else if(st==='stunned'){
@@ -5259,7 +5390,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   startLiquidatorBoss:function(){
     var dx=this.def.door, self=this;
-    this.cameras.main.flash(480, 150, 20, 20);
+    this.fxFlash(480, 150, 20, 20);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-360, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-72, GY-62, 'greatbear');
@@ -5295,7 +5426,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   bearSlam:function(k){   // telegraphed ground-slam: a low wave of candles skittering along the floor both ways
     if(this.over||!this.enemyShots) return; var self=this;
-    this.cameras.main.shake(260,0.012); _tone(90,200,0.18,'sawtooth',0.08); this.burst(k.x,GY-6,0xff3030,20);
+    this.fxShake(260,0.012); _tone(90,200,0.18,'sawtooth',0.08); this.burst(k.x,GY-6,0xff3030,20);
     [-1,1].forEach(function(d){
       var s=self.enemyShots.create(k.x, GY-14, 'candle').setDepth(6); s.srcCause='BEAR SLAM WAVE';
       if(!s||!s.body) return; s.setScale(0.6); s.body.setAllowGravity(false); s.body.setSize(s.width*0.8,s.height*0.7);
@@ -5316,7 +5447,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Sound + shake go here, at the TOP of bossDefeat, so every ending gets them: the generic VIP
     // path, each per-boss branch and both finales all return from below this line.
     try{ SFX.bossDown(); }catch(e){}
-    this.cameras.main.shake(300,0.010); this.cameras.main.flash(220,255,210,110);
+    this.fxShake(300,0.010); this.fxFlash(220,255,210,110);
     this.addScore(500);
     this.tweens.add({targets:k, angle:720, alpha:0, y:k.y-50, duration:1300, ease:'Cubic.in', onComplete:function(){ if(k.active) k.destroy(); }});
     // BOSS DROP: beating a boss banks a random boost for later (skipped if the slot's already full).
@@ -5537,7 +5668,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var wm=this.worm; if(!wm||wm.invuln) return; wm.invuln=true;
     SFX.boss(); this.burst(wm.x, wm.y+wm.displayHeight*0.15, 0x2ea8ff, 22); this.bossHP--;
     if(this.bossPips[this.bossHP]) this.bossPips[this.bossHP].setAlpha(.16);
-    this.addScore(150); this.cameras.main.shake(240,.02);
+    this.addScore(150); this.fxShake(240,.02);
     this.tweens.add({targets:wm,alpha:.35,duration:90,yoyo:true,repeat:5,onComplete:function(){ if(wm.active) wm.alpha=1; }});
     if(this.bossHP<=0){ this.wormDefeat(); return; }
     if(this.wormState==='up') this.wormNextAt=this.time.now;   // hit → retreat immediately
@@ -5549,7 +5680,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // The WORMHOLE (2-3) does NOT route through bossDefeat — it is its own ending, so it needs its
     // own call or the first boss most players ever beat would still go down in silence.
     try{ SFX.bossDown(); }catch(e){}
-    wm.invuln=true; this.addScore(800); this.cameras.main.shake(520,.03); this.cameras.main.flash(220,255,210,110);
+    wm.invuln=true; this.addScore(800); this.fxShake(520,.03); this.fxFlash(220,255,210,110);
     this.tweens.add({targets:wm, y:this.wormDownY+40, angle:18, alpha:0, duration:1400, ease:'Cubic.in', onComplete:function(){ if(wm.active) wm.destroy(); }});
     this.bankCheckpoint();   // World 2 done → checkpoint at the start of World 3
     this.powerBanner('WORMHOLE CLOSED!','NORMIE SEALS THE BRIDGE — GG','#66ddff');
@@ -5583,7 +5714,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       wm.setPosition(this.wormTargetX, this.wormDownY).setVisible(true).setAngle(0).setAlpha(1); wm.invuln=false;
       var grounded=p.body.blocked.down||p.body.touching.down;   // erupting under a grounded player hurts (dodge!)
       if(grounded && Math.abs(p.x-this.wormTargetX)<wm.displayWidth*0.45 && !p.invuln && now>=this.shieldUntil && now>=this.coldUntil && now>=this.whaleUntil && now>=this.moonUntil && now>=this.omegaUntil) this.hurt(p, p.x<this.wormTargetX?-1:1, 'WORMHOLE ERUPTION');
-      this.cameras.main.shake(220,.015);
+      this.fxShake(220,.015);
       this.tweens.add({targets:wm, y:this.wormUpY, duration:280, ease:'Back.out'});
       this.wormState='up'; this.wormNextAt=now+(2400-wtier*300);
       if(this.bossHP<=2) this.wormSpit(wm);
@@ -5654,7 +5785,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       else dz.sh.setAlpha(0);
     }
     if(this.dumpZones.length&&this.enemyShots) this.enemyShots.children.iterate(function(sh2){
-      if(sh2&&sh2.active&&sh2._dump&&sh2.y>=GY-10){ self.burst(sh2.x,GY-8,0xff3030,10); try{ self.cameras.main.shake(90,0.004); }catch(e){} sh2.destroy(); } });
+      if(sh2&&sh2.active&&sh2._dump&&sh2.y>=GY-10){ self.burst(sh2.x,GY-8,0xff3030,10); try{ self.fxShake(90,0.004); }catch(e){} sh2.destroy(); } });
   },
   /* ---------- mini-worms (World 2 hazard): burrow / pop / spit a radial fan of sticks ---------- */
   miniwormTick:function(now){
@@ -5782,9 +5913,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // one hazard that ignored the game's own invincibility.
     if(now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil){ hp.sprung=true; if(hp.body) hp.body.enable=false; this.tweens.killTweensOf(hp);
       var hc=now<this.whaleUntil?0x2f7fff:(now<this.coldUntil?0x9fe8ff:0xffa020);
-      this.burst(hp.x,hp.y,hc,14); this.cameras.main.shake(70,.006); this.flash('HONEYPOT SMASHED!','#ffd23f'); return; }
+      this.burst(hp.x,hp.y,hc,14); this.fxShake(70,.006); this.flash('HONEYPOT SMASHED!','#ffd23f'); return; }
     hp.sprung=true;
-    this.tweens.killTweensOf(hp); this.cameras.main.shake(120,.008); this.burst(hp.x,hp.y,0xff5544,16);
+    this.tweens.killTweensOf(hp); this.fxShake(120,.008); this.burst(hp.x,hp.y,0xff5544,16);
     hp.setTint(0xff6644); this.tweens.add({targets:hp,scaleX:hp.scaleX*1.18,duration:110,yoyo:true});
     if(hp.body) hp.body.enable=false;   // one-shot
     // A honeypot is a can't-sell scam: it drains your COINS (never a heart) + a brief sticky snare.
@@ -5838,7 +5969,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.depegPhase='warn'; this.depegNextAt=now+780;
       this.pegs.children.iterate(function(m){ if(m) m.setTint(0xffd23f); });
     } else if(this.depegPhase==='warn'){    // → DEPEG: the peg drops into the void
-      this.depegPhase='dropped'; this.depegNextAt=now+1400; this.cameras.main.shake(220,.010);
+      this.depegPhase='dropped'; this.depegNextAt=now+1400; this.fxShake(220,.010);
       this.pegs.children.iterate(function(m){ if(!m) return; m.body.enable=false; m.setAlpha(1).setTint(0xff5544);
         self.tweens.add({targets:m, y:m.homeY+150, alpha:0.06, angle:Phaser.Math.Between(-14,14), duration:460, ease:'Quad.in'}); });
     } else {                                 // dropped → RE-PEG (restore)
@@ -5890,7 +6021,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     g.fillStyle(0xb01418,0.55); g.fillRect(edge-26,top,26,bot);            // darker leading band
     g.fillStyle(0xff3030,0.95); g.fillRect(edge-4,top,7,bot);             // bright liquidation edge
     for(var i=0;i<12;i++){ var yy=((now*0.25+i*47)%bot); g.fillStyle(0xff5a4a,0.7); g.fillRect(edge-2, yy, 3, 10); }  // dripping candles
-    if(now>c.nextRumble){ c.nextRumble=now+900; this.cameras.main.shake(120,0.003); _tone(70,140,0.10,'sawtooth',0.05); }
+    if(now>c.nextRumble){ c.nextRumble=now+900; this.fxShake(120,0.003); _tone(70,140,0.10,'sawtooth',0.05); }
     // caught behind the edge?
     if(p.x < c.x+6){
       var immune=(now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil);
@@ -5906,7 +6037,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var active = now<this.whaleUntil || (now<this.omegaUntil && this.levelIdx>=18);
     if(!active || now<this.whaleShockAt) return;
     this.whaleShockAt=now+1200; var p=this.player, R=132, col=(now<this.whaleUntil)?0x2f7fff:0xffa020, self=this;
-    this.burst(p.x,p.y,col,24); this.cameras.main.shake(110,0.006); _tone(150,55,0.14,'sawtooth',0.05);   // low shockwave thud — NOT the power-up jingle (it fires every 1.2s)
+    this.burst(p.x,p.y,col,24); this.fxShake(110,0.006); _tone(150,55,0.14,'sawtooth',0.05);   // low shockwave thud — NOT the power-up jingle (it fires every 1.2s)
     if(this.enemies) this.enemies.children.iterate(function(e){ if(e&&e.active && Phaser.Math.Distance.Between(e.x,e.y,p.x,p.y)<R){ var ex=e.x,ey=e.y; e.disableBody(true,true); self.addScore(20); self.burst(ex,ey,col,8); } });
     var ring=this.add.circle(p.x,p.y,10).setStrokeStyle(3,col,0.9).setDepth(8);
     this.tweens.add({targets:ring, radius:R, alpha:0, duration:430, ease:'Quad.out', onComplete:function(){ ring.destroy(); }});
@@ -5968,7 +6099,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.kids=(this.kids||0)+1; this.childSupportAt=now+4000;
       this.spawnLilNormie(f);
       this.flash(this.kids>1?('LIL NORMIE #'+this.kids+'! MORE CHILD SUPPORT 👶'):"IT'S LIL NORMIE! CHILD SUPPORT DUE 👶",'#ffd23f');
-      this.cameras.main.flash(160,255,240,150);
+      this.fxFlash(160,255,240,150);
     }
   },
   spawnLilNormie:function(f){   // a baby Normie pops out and toddles off (cosmetic)
@@ -6024,7 +6155,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         var lt=Math.min(1,(now-m.t0)/200);
         m.y = (m.surfY+12) - (12+REACH)*Math.sin(lt*Math.PI*0.5);       // shoot up to REACH above the surface
         if(!m.hitLunge && canHit && Math.abs(p.x-m.x)<HITX && Math.abs(p.y-m.y)<HITY){
-          m.hitLunge=true; self.cameras.main.shake(120,.01);
+          m.hitLunge=true; self.fxShake(120,.01);
           this.hurt(p, p.x<m.x?-1:1, 'DRAGGED UNDER'); if(this.over) return;
         }
         if(now-m.t0>=340){ m.st='retract'; m.t0=now; }                  // hold at apex, then retract
@@ -6034,7 +6165,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         m.arm.x=m.gcx; m.arm.y=m.surfY; m.arm.setScale(0.9, ext*alen/54);
         var tipX=m.gcx + m.aimDX*ext, tipY=m.surfY - ARM_REACH*ext;
         if(!m.hitLunge && ext>0.5 && canHit && Math.abs(p.x-tipX)<18 && Math.abs(p.y-tipY)<20){
-          m.hitLunge=true; self.cameras.main.shake(120,.01);
+          m.hitLunge=true; self.fxShake(120,.01);
           this.hurt(p, p.x<tipX?-1:1, 'DRAGGED UNDER'); if(this.over) return;
         }
         if(now-m.t0>=560){ m.st='armretract'; m.t0=now; }               // extend, hold, then retract
@@ -6132,7 +6263,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     pay=Math.round(pay*(S.mult||1)); if(S.big){ big=big||pay>=300; if(msg==='JACKPOT!') msg='💎 MEGA JACKPOT!'; }
     this.addScore(pay); this.registry.set('nqCasino',(this.registry.get('nqCasino')||0)+pay);   // tally run-total casino winnings for the finale
     this.burst(S.m.x, S.m.y-24, 0xffd23f, big?26:14); SFX.power();
-    this.flash(msg+' +'+pay+' COINS', big?'#3dff6e':'#ffd23f'); this.cameras.main.flash(200, 255, big?255:220, big?150:90);
+    this.flash(msg+' +'+pay+' COINS', big?'#3dff6e':'#ffd23f'); this.fxFlash(200, 255, big?255:220, big?150:90);
     // floating "+N COINS" popup right AT the machine so the win is unmistakable — pops in, HOLDS
     // ~1s at full opacity (so you can actually read the amount), THEN floats up and fades.
     var wy=S.m.y - S.m.displayHeight*0.5 - 4;
@@ -6166,15 +6297,38 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Super Geek audit: absorb the next hit instead of losing a life (consumes the shield)
     var _self=this;
     if(this.geekShield){ this.geekShield=false; this.invulnUntil=Math.max(this.invulnUntil||0, this.time.now+1080); player.invuln=true;   // P12
-      this.cameras.main.flash(150,46,230,200); SFX.power(); this.flash('AUDIT BLOCKED IT!','#2ee6c0');
+      this.fxFlash(150,46,230,200); SFX.power(); this.flash('AUDIT BLOCKED IT!','#2ee6c0');
       this.tweens.add({targets:player,alpha:.3,duration:90,yoyo:true,repeat:5,onComplete:function(){ player.alpha=1; if(_self.time.now>=_self.invulnUntil) player.invuln=false; }}); return; }
     this.solanaUntil=0;   // taking damage ends SOLANA MODE
-    this.cameras.main.shake(140,.012); SFX.hurt(); this.burst(player.x,player.y,0xff3860,12); this.loseLife(reason||'WRECKED BY FUD'); if(this.over) return;
+    this.fxShake(140,.012); SFX.hurt(); this.burst(player.x,player.y,0xff3860,12); this.loseLife(reason||'WRECKED BY FUD'); if(this.over) return;
     this.invulnUntil=Math.max(this.invulnUntil||0, this.time.now+1800); player.invuln=true;   // P12: 100ms x yoyo x 9 = 1800ms, and the flash follows this deadline
     player.setVelocity(knockDir*160,-160);
     this.tweens.add({targets:player,alpha:.25,duration:100,yoyo:true,repeat:8,onComplete:function(){ player.alpha=1; if(_self.time.now>=_self.invulnUntil) player.invuln=false; }});
   },
   hb:function(o){ this.hudBox.add(o); return o; },   // route a HUD object into the pinned container
+  // ---- reduced-motion / reduced-flash camera FX (item 3) -------------------------------------
+  // The ONLY place cameras.main.shake()/flash() should be called from now on — every one of the
+  // 32 shake + 27 flash call sites in this scene was migrated to go through these (grep for the
+  // raw calls afterward: 0 outside this pair). 'reduced' shortens/softens the effect rather than
+  // cutting it silently, so it still reads as "something happened"; 'off' skips it entirely.
+  // Physics, damage and scoring never touch these — they only ever wrap the two camera FX calls.
+  // Audited every attack telegraph (kolShill/ceoFreeze/saylorBomb/vipBossBomb/wyrmFire/
+  // golemThrow/reaperThrow/bearThrow's projectile sprites; the sandwich-bot tint flicker; the
+  // depeg tint+alpha warn phase; the whale/swan/dragon/liquidator state-machine "telegraph" tween
+  // squash) before migrating: none of them use shake/flash as their WARNING — every shake/flash
+  // call site is a boss-intro flash, a hit/pickup reaction, or a defeat celebration, always fired
+  // reactively (after or alongside the event), never as the sole cue an attack is coming. So
+  // reducing or disabling these effects cannot hide a telegraph.
+  fxShake:function(dur,intensity){
+    var m=nqFxMotionMode(); if(m==='off') return;
+    if(m==='reduced'){ dur=Math.round((dur||0)*0.4); intensity=(intensity||0)*0.4; }
+    try{ this.cameras.main.shake(dur,intensity); }catch(e){}
+  },
+  fxFlash:function(dur,r,g,b){
+    var m=nqFxFlashMode(); if(m==='off') return;
+    if(m==='reduced') dur=Math.round((dur||0)*0.5);
+    try{ this.cameras.main.flash(dur,r,g,b); }catch(e){}
+  },
   addGlow:function(o,color,outer){ if(this.renderer.type!==Phaser.WEBGL||!o.postFX) return null; try{ return o.postFX.addGlow(color, outer||4, 0, false, 0.1, 16); }catch(e){ return null; } },
   addScore:function(n){ this.score+=n; this.hudScore.setText('SCORE '+this.score); },
   burst:function(x,y,tint,count){ var e=this.add.particles(x,y,'spark',{speed:{min:30,max:160},lifespan:420,scale:{start:1.1,end:0},tint:tint,emitting:false,blendMode:'ADD'}).setDepth(30); e.explode(count||10); this.time.delayedCall(520,function(){ e.destroy(); }); },
@@ -6199,7 +6353,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var items=[pill,ic,t1,t2]; items.forEach(function(o){ o.alpha=0; });
     this.tweens.add({targets:items,alpha:1,duration:170});
     this.tweens.add({targets:t2,scale:{from:0.7,to:1},duration:260,ease:'Back.out'});
-    this.cameras.main.shake(90,.004);
+    this.fxShake(90,.004);
     this.time.delayedCall(1350,function(){ this.tweens.add({targets:items,alpha:0,y:'-=12',duration:420,onComplete:function(){ items.forEach(function(o){o.destroy();}); }}); },[],this);
   },
 
@@ -6293,13 +6447,44 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(auto) mk(this.add.text(W/2,H/2+2,'you stepped away — your run is safe',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5));
     var padOn=(typeof window!=='undefined')&&window.__NQ_GAMEPAD_ACTIVE;
     mk(this.add.text(W/2,H/2+26,(padOn?'PRESS ANY BUTTON':(isTouch?'TAP':'PRESS ANY KEY'))+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5));
-    // audio-state line, refreshed in update() while paused — see the field-diagnostics note there
-    // P9: field diagnostics, not player copy — only the tester/lab lanes see it (the owner reads
-    // it off an iPad there). update()'s refresh is already guarded on this being non-null.
-    this._pauseAudioLine=(TEST_MODE||(typeof window!=='undefined'&&window.__NQ_SETUP))
-      ? mk(this.add.text(W/2,H/2+44,'audio: …',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f9bb3'}).setOrigin(.5))
-      : null;
-    this._paLast=0; this._paT0=null; },
+    // Sound state + a pointer to the full settings — readable at a glance, no need to leave pause.
+    var _sfxOn=true; try{ _sfxOn=!(window.__NQ_MUSIC&&window.__NQ_MUSIC.muted&&window.__NQ_MUSIC.muted()); }catch(e){}
+    mk(this.add.text(W/2,H/2+46,(_sfxOn?'🔊 sound on':'🔇 music muted')+'  ·  ⚙ top-right for sound & FX settings',
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8fa0c8',align:'center'}).setOrigin(.5));
+    mk(this.add.text(W/2,H/2+60,'? top-right — how to play',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8fa0c8'}).setOrigin(.5));
+    // Cloud-save status (item: cloud-save status visible), surfaced here too — nqSaveLine() is the
+    // same formatter the Title CONTINUE line uses, so the wording can never disagree between them.
+    // Refreshed every frame while paused (see update()) since the state can change mid-pause
+    // (a checkpoint synced right before the player walked away).
+    this._pauseSaveLine=mk(this.add.text(W/2,H/2+74,'progress: '+nqSaveLine(),
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#cbd6ff'}).setOrigin(.5));
+    // Diagnostics toggle (off by default, remembered per device) — reveals the SAME audio/fps
+    // line the TEST/lab builds always show, for field debugging on a live build without needing
+    // a TEST_MODE/__NQ_SETUP build. TEST_MODE/lab still show it unconditionally either way.
+    this._pauseDiagBtn=mk(this.add.text(W/2,H/2+88,'diag',{fontFamily:UIFONT,resolution:UIRES,fontSize:'8px',color:'#4a5578'})
+      .setOrigin(.5).setInteractive({useHandCursor:true}));
+    this._pauseDiagBtn.on('pointerup',function(){ nqDiagSet(!nqDiagOn()); self.refreshPauseDiag(); });
+    this._paLast=0; this._paT0=null;
+    this.refreshPauseDiag();   // creates/labels the audio-state line per the current diag setting
+  },
+  // Shows or hides the audio/fps diagnostic line to match TEST_MODE / __NQ_SETUP / the diag
+  // toggle, and relabels the toggle button. Callable while paused (the toggle click) or from
+  // pauseGame() itself (initial state) — a no-op outside pause.
+  refreshPauseDiag:function(){
+    if(!this.paused) return;
+    var on=TEST_MODE||(typeof window!=='undefined'&&window.__NQ_SETUP)||nqDiagOn();
+    if(on && !this._pauseAudioLine){
+      // audio-state line, refreshed in update() while paused — see the field-diagnostics note there.
+      // P9: field diagnostics, not player copy.
+      var o=this.add.text(W/2,H/2+104,'audio: …',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f9bb3'}).setOrigin(.5);
+      this.hb(o); o.setDepth(3000); if(this.pauseUI) this.pauseUI.push(o);
+      this._pauseAudioLine=o; this._paLast=0; this._paT0=null;
+    } else if(!on && this._pauseAudioLine){
+      try{ this._pauseAudioLine.destroy(); }catch(e){}
+      this._pauseAudioLine=null;
+    }
+    if(this._pauseDiagBtn) this._pauseDiagBtn.setText(on?'diag ▲ hide':'diag ▼ show');
+  },
   resumeGame:function(){ if(!this.paused) return; this.paused=false;
     try{ window.__NQ_PAUSED=false; }catch(e){}
     // REBASE every live deadline by the span the pause lasted (see the note in pauseGame). Fields
@@ -6356,7 +6541,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ this.tweens.resumeAll(); }catch(e){}
     try{ MUSIC.resume(); }catch(e){}
     if(this.pauseUI){ this.pauseUI.forEach(function(o){ try{o.destroy();}catch(e){} }); this.pauseUI=null; }
-    this._pauseAudioLine=null;
+    this._pauseAudioLine=null; this._pauseSaveLine=null; this._pauseDiagBtn=null;
     // SWALLOW THE RESUMING PRESS. update() early-returns while paused, so prevThrow/prevJump still
     // hold their pre-pause values; the button that dismissed the card therefore reads as a FRESH
     // edge on the very next frame and fires for real. Resuming by tapping the on-screen THROW
@@ -6393,6 +6578,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // can READ the context state off an iPad, where there is no console — 'running@12.3s' good,
       // 'running@FROZEN' = the WebKit zombie, 'suspended/interrupted' = awaiting the resume tap).
       this._paFrames=(this._paFrames||0)+1;   // update() runs per rAF even while paused — that IS the frame rate
+      // Cloud-save status can change mid-pause (a checkpoint synced right as the player walked
+      // away) — keep the pause card's line honest too. Cheap enough to run every frame.
+      if(this.paused && this._pauseSaveLine) this._pauseSaveLine.setText('progress: '+nqSaveLine());
       if(this.paused && this._pauseAudioLine && (!this._paLast || Date.now()-this._paLast>600)){
         var _dtMs=Date.now()-(this._paLast||Date.now()-600);
         var _fps=Math.round(this._paFrames/Math.max(0.001,_dtMs/1000)); this._paFrames=0; this._paLast=Date.now();
@@ -6775,7 +6963,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
             e.rpState='flee'; e.rpT=now; e.clearTint(); e.x=e.homeX; e.y=e.homeY; e.phasing=true; e.rpFlee=(p.x>e.x)?-1:1;   // fleeing rat is intangible; scurries AWAY from you
             if(e.rugTiles) e.rugTiles.forEach(function(t){ if(!t.active||t.fallen) return; t.fallen=true; t.body.enable=false; t.respawnAt=now+2600; t.setAlpha(1);
               self.tweens.add({targets:t,y:t.homeY+140,alpha:0.05,angle:Phaser.Math.Between(-20,20),duration:520,ease:'Quad.in'}); });
-            self.burst(e.x,e.rugHomeY,0xd9a066,18); self.cameras.main.shake(120,.007); if(SFX&&SFX.stomp)SFX.stomp(); self.flash('RUGGED! liquidity gone','#ff3860');
+            self.burst(e.x,e.rugHomeY,0xd9a066,18); self.fxShake(120,.007); if(SFX&&SFX.stomp)SFX.stomp(); self.flash('RUGGED! liquidity gone','#ff3860');
           }
         } else {   // flee: scurry off (no gravity, intangible), then set up shop again further down the level
           e.setVelocity(e.rpFlee*e.baseSpeed,-40); e.setFlipX(e.rpFlee<0); e.setRotation(e.rpFlee*0.12);
@@ -6916,7 +7104,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         for(var _i=0;_i<40 && _fx>this.spawn.x && !this.footingUnder(_fx,GY);_i++) _fx-=TILE*2;
         p.setPosition(Math.max(this.spawn.x,_fx),_fy); if(p.body) p.body.reset(Math.max(this.spawn.x,_fx),_fy); }
       p.invuln=true; this.tweens.add({targets:p,alpha:.3,duration:90,yoyo:true,repeat:6,onComplete:function(){ p.alpha=1; p.invuln=false; }});
-      this.cameras.main.flash(150,80,0,0);
+      this.fxFlash(150,80,0,0);
     }
   }
 });
@@ -7609,6 +7797,12 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ d=d||{}; this.nextLevel=d.next!=null?d.next:0; this.score=d.score||0; },
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0; this.page=0; this.lastAdv=0;
+    // item 2: mark onboarding seen the moment this screen actually shows — a returning player with
+    // a save skips straight here from Title (see Title.create's `start()`) only once this has run
+    // at least once on the device. Setting it up-front (not on go()) means an interrupted first
+    // visit (tab closed mid-page) still counts as "has seen it" rather than showing it a second
+    // time; the content itself is unchanged either way.
+    try{ nqSetOnboarded(); }catch(e){}
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x1a1533,1); g.fillRect(0,0,W,28);
@@ -8461,6 +8655,12 @@ if(typeof document!=='undefined'){ (function(){
   panel.innerHTML='<div class="row"><label>♪ Music</label><input id="nqvm" type="range" min="0" max="100"></div>'
     +'<div class="row"><label>🔊 Effects</label><input id="nqvs" type="range" min="0" max="100"></div>'
     +'<div class="mute" id="nqsetmute">🔇 Mute music</div>'   // NOT id=nqmute — that id belongs to the round top-left button; the dup id let its fixed-circle CSS rip this row out of the panel
+    // Reduced motion / flash (item 3) — a tap cycles Full -> Reduced -> Off. Camera FX only:
+    // physics, damage and scoring are unaffected; attack telegraphs stay visible either way (see
+    // the note above fxShake/fxFlash in the Game scene for the per-boss audit).
+    +'<div class="mute" id="nqfxmotion" style="margin-top:6px;font-size:15px"></div>'
+    +'<div class="mute" id="nqfxflash" style="font-size:15px"></div>'
+    +'<div style="font-size:11px;color:#8fa0c8;margin-top:2px">tap to cycle Full → Reduced → Off · enemy attacks stay visible either way</div>'
     +'<div class="mute" id="nqrotpref" style="margin-top:6px;font-size:15px"></div>'
     // "Sound isn't working" has at least four distinct causes that all look identical from the
     // outside (context suspended, effects slider at 0, music muted, iOS silent switch), and none
@@ -8485,11 +8685,24 @@ if(typeof document!=='undefined'){ (function(){
     }catch(e){ out=['']; }
     diag.innerHTML=out.join('<br>');
   }
-  cog.addEventListener('click',function(){ panel.classList.toggle('on'); if(panel.classList.contains('on')){ initVals(); upDiag(); } });
+  cog.addEventListener('click',function(){ panel.classList.toggle('on'); if(panel.classList.contains('on')){ initVals(); upDiag(); paintFx(); } });
   vm.addEventListener('input',function(){ try{ window.__NQ_MUSIC&&window.__NQ_MUSIC.setVol&&window.__NQ_MUSIC.setVol(vm.value/100); }catch(e){} });
   vs.addEventListener('input',function(){ try{ window.__NQ_SFX&&window.__NQ_SFX.setVol&&window.__NQ_SFX.setVol(vs.value/100); }catch(e){} });
   vs.addEventListener('change',function(){ try{ window.__NQ_SFX&&window.__NQ_SFX.power&&window.__NQ_SFX.power(); }catch(e){} });   // preview at the new level on release
   mute.addEventListener('click',function(){ try{ window.__NQ_MUSIC&&window.__NQ_MUSIC.toggle&&window.__NQ_MUSIC.toggle(); upMute(); }catch(e){} });
+  // Reduced motion / flash toggles (item 3) — reads/writes the same nqFxMotion/nqFxFlash
+  // localStorage keys fxShake()/fxFlash() check on every call, so a change here takes effect on
+  // the very next hit with no scene restart.
+  var fxm=panel.querySelector('#nqfxmotion'), fxf=panel.querySelector('#nqfxflash');
+  var FX_CYCLE=['full','reduced','off'];
+  function fxLabel(v){ return v==='full'?'Full':(v==='reduced'?'Reduced':'Off'); }
+  function paintFx(){
+    try{ if(fxm) fxm.textContent='🎬 Screen shake: '+fxLabel(nqFxMotionMode()); }catch(e){}
+    try{ if(fxf) fxf.textContent='💥 Flash effects: '+fxLabel(nqFxFlashMode()); }catch(e){}
+  }
+  if(fxm) fxm.addEventListener('click',function(){ nqFxSetMotion(FX_CYCLE[(FX_CYCLE.indexOf(nqFxMotionMode())+1)%3]); paintFx(); });
+  if(fxf) fxf.addEventListener('click',function(){ nqFxSetFlash(FX_CYCLE[(FX_CYCLE.indexOf(nqFxFlashMode())+1)%3]); paintFx(); });
+  paintFx();
   // Orientation preference: the rotate prompt's "play anyway" override lives in nqRotateOK;
   // this row shows the current choice and lets the player flip it back.
   var rot=panel.querySelector('#nqrotpref');
@@ -9368,18 +9581,41 @@ if(typeof document!=='undefined'){ (function(){
   // the game via __NQ_APPLYSAVE. So a single round trip both pushes local progress up AND pulls
   // any further progress from another device down. Fire-and-forget: a save must never block play.
   var _cloudLastBody = '';
+  // Cloud-save STATUS state machine (was fire-and-forget with no visible state — an outage looked
+  // exactly like a save). 'local' (no wallet / no token) | 'syncing' | 'synced' (at = last success)
+  // | 'error' (error = short reason, local progress is untouched either way — this only affects
+  // what the UI SAYS, never the save itself). Published as window.__NQ_SAVESTATE() so the Title,
+  // pause card and the wallet pane can all read the one truth.
+  var _saveState = { state: 'local', at: 0, error: null };
+  function _setSaveState(st, extra) {
+    _saveState.state = st;
+    if (extra && extra.at) _saveState.at = extra.at;
+    _saveState.error = (extra && extra.error) || null;
+    // paintSaveStatus lives in an EARLIER top-level <script> block (a separate scope) — reach it
+    // through the window export, never by bare name (see the note above its definition).
+    try { if (window.__NQ_PAINT_SAVE_STATUS) window.__NQ_PAINT_SAVE_STATUS(); } catch (e) {}
+  }
+  try { window.__NQ_SAVESTATE = function () { return { state: _saveState.state, at: _saveState.at, error: _saveState.error }; }; } catch (e) {}
   function cloudSync(push) {
-    if (!walletState.pubkey || !walletState.token) return;
+    if (!walletState.pubkey || !walletState.token) { _setSaveState('local'); return; }
     var body = { pubkey: walletState.pubkey, token: walletState.token };
     if (push && (push.cp > 0 || push.lvlCp > 0)) body.save = { cp: push.cp || 0, cpScore: push.cpScore || 0, lvlCp: push.lvlCp || 0, lvlCpScore: push.lvlCpScore || 0 };
     var enc = JSON.stringify(body);
-    if (body.save && enc === _cloudLastBody) return;   // identical re-push (e.g. a clear that banked nothing new) — skip the round trip
+    if (body.save && enc === _cloudLastBody) return;   // identical re-push (e.g. a clear that banked nothing new) — skip the round trip, leave the status as-is
     _cloudLastBody = body.save ? enc : _cloudLastBody;
+    _setSaveState('syncing');
     fetch('/api/nq/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: enc })
       .then(function (r) { return r.json(); })
-      .then(function (j) { try { if (j && j.ok && j.save && window.__NQ_APPLYSAVE) window.__NQ_APPLYSAVE(j.save); } catch (e) {} })
-      .catch(function () {});
+      .then(function (j) {
+        try { if (j && j.ok && j.save && window.__NQ_APPLYSAVE) window.__NQ_APPLYSAVE(j.save); } catch (e) {}
+        if (j && j.ok) _setSaveState('synced', { at: Date.now() });
+        else _setSaveState('error', { error: (j && j.error) || 'sync_failed' });
+      })
+      .catch(function () { _setSaveState('error', { error: 'network_error' }); });
   }
+  // RETRY control (item: cloud-save status visible) — re-fires cloudSync with whatever is banked
+  // locally right now, exactly what a fresh checkpoint push would send.
+  try { window.__NQ_SAVE_RETRY = function () { cloudSync(window.__NQ_GETSAVE ? window.__NQ_GETSAVE() : null); }; } catch (e) {}
   // The game's bank hook (nqRunMerge) pushes through here on every checkpoint; wallet-less players
   // no-op and keep the localStorage save only.
   try { window.__NQ_CLOUDPUSH = function (s) { cloudSync(s); }; } catch (e) {}
@@ -9581,6 +9817,7 @@ if(typeof document!=='undefined'){ (function(){
     activeProvider = null;
     walletState = { pubkey: null, token: null, tier: null, worlds: null, balances: null, vip: false };
     try { localStorage.removeItem('nqWallet'); } catch (e) {}
+    _setSaveState('local');   // no wallet, no cloud — the honest status is "saved on this device"
   }
   // Restore from storage + refresh tier from live balance (no re-signing). Rejected token → forget it.
   function restoreWallet(cb, fresh) {
@@ -10331,12 +10568,20 @@ if(typeof document!=='undefined'){ (function(){
           + ((TIERED && ws.tier != null) ? '<span class="nqp-tier">TIER ' + ws.tier + '</span>' : '<span class="nqp-tier">CONNECTED</span>') + '</div>'
           + ((TIERED && ws.worlds) ? '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>' : '')
           + (ws.balances ? '<div class="nqp-sub" style="margin:8px 0">NORMIE: ' + ws.balances.normie.toLocaleString() + ' · CLKN: ' + ws.balances.clkn.toLocaleString() + '</div>' : '')
+          // Cloud-save status (item: cloud-save status visible) — a live read of window.__NQ_SAVESTATE(),
+          // repainted in place by window.__NQ_PAINT_SAVE_STATUS() below and again on every state
+          // change (cloudSync's _setSaveState — nqSaveStatusHtml/paintSaveStatus live in an EARLIER
+          // <script> block, a separate scope, so they're reached through the window export, never by
+          // bare name). The furthest-progress merge and the leaderboard restrictions are untouched —
+          // this only ever shows what already happened, never decides anything.
+          + '<div class="nqp-sub" id="nqp-savestat" style="margin:8px 0">' + (window.__NQ_SAVE_STATUS_HTML ? window.__NQ_SAVE_STATUS_HTML() : 'Progress: <b style="color:#cbd6ff">Saved on this device</b>') + '</div>'
           + '<div class="nqp-sub" style="margin-top:8px">Remembered on this device until you disconnect · scores post with a verified wallet ✓</div>'
           + '<button class="nqp-b alt" id="nqp-tvpair" style="margin-top:12px">📱 I\u2019m the phone — enter a TV\u2019s code</button>'
           + '<button class="nqp-b alt" id="nqp-tvshow" style="margin-top:6px">📺 I\u2019m the TV — show a pairing code</button>'
           + '<button class="nqp-b alt" id="nqp-disconnect" style="margin-top:6px">Disconnect</button>';
         ov.querySelector('#nqp-tvpair').addEventListener('click', function () { startPhonePair(host, typeof pendingPhonePair === 'string' ? pendingPhonePair : null); pendingPhonePair = null; });
         ov.querySelector('#nqp-tvshow').addEventListener('click', function () { startTvPair(host); });
+        try { if (window.__NQ_PAINT_SAVE_STATUS) window.__NQ_PAINT_SAVE_STATUS(); } catch (e) {}   // wires the RETRY button when the state is 'error' (no-op otherwise)
         ov.querySelector('#nqp-disconnect').addEventListener('click', function () { disconnectWallet(); renderWallet(); });
       } else {
         var det = detectWallets();

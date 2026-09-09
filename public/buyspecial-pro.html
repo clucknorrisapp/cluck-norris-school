@@ -640,6 +640,7 @@ let GATE_CFG=null;   // live numbers from /api/tool-gate/config (fallbacks below
 const SOL_LAMPORTS=50000000;
 let wProvider=null, wPubkey=null;
 const rpcCall = CluckUtil.rpc;   // shared helper — see /cluck-util.js
+window.addEventListener('load', function () { try { if (window.CluckAirdrop && CluckAirdrop.refreshRent) CluckAirdrop.refreshRent(rpcCall); } catch (e) {} });   // live per-ATA rent for the payout cost estimate (Agave 4.2 lowers rent from 2026-09-10)
 // Wallet detection lives in /cluck-wallet.js — this page used to look for Phantom
 // and Solflare only, behind a bare window.solana fallback, so Backpack/OKX/Coinbase/
 // Exodus/Bitget/Glow/Brave/Jupiter users were told no wallet was found.
