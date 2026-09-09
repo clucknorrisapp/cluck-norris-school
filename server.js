@@ -2053,7 +2053,7 @@ const BC_ENH_CACHE = new Map();  // Helius ENHANCED cache (position / sold-check
 // ── Multi-source buy data (Helius primary → GeckoTerminal → Solana Tracker) ──
 // One source chain shared by the buy COMPETITION and the buy-SPECIAL raffle, so
 // both prefer Helius (paid plan) and only touch ST as a last resort.
-async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
+async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60, extraTargets = [] } = {}) {
   let solUsdSeen = 0;   // handed back so entries ("every $3 buy") can price per-buy SOL sizes
   if (BC_TX_CACHE.size > 8000) BC_TX_CACHE.clear();
   if (BC_ENH_CACHE.size > 8000) BC_ENH_CACHE.clear();
@@ -2066,6 +2066,7 @@ async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
     const h = await getTokenBuyersInWindowHelius(mint, fromMs, toMs, {
       heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched,
       solUsd: solUsd || 0, tokenPriceUsd: (mkt && mkt.priceUsd) || 0, txCache: BC_TX_CACHE,
+      extraTargets,   // pools pinned on the comp (`pools=` on start/edit) are always scanned
     });
     // A successful Helius scan is authoritative even with ZERO buyers — but only when it
     // covered the whole window. An empty result from a truncated scan (or a non-empty one)
@@ -2147,7 +2148,7 @@ async function buyCompSoldSet(c, wallets, toMs) {
 }
 async function buyCompStandings(c) {
   const toMs = Math.min(Date.now(), c.endTs);
-  const { buyers: raw, solUsd } = await buyersInWindowMulti(c.mint, c.startTs, toMs);
+  const { buyers: raw, solUsd } = await buyersInWindowMulti(c.mint, c.startTs, toMs, { extraTargets: c.pools || [] });
   buyCompAnnotateEntries(c, raw, solUsd);
   const key = buyCompMetricKey(c);
   // Drop MM/engine wallets + manual excludes, then any sub-floor cumulative (dust/bot filter).
@@ -7327,8 +7328,11 @@ app.post("/api/buycomp/start", (req, res) => {
   const emoji = String(q.emoji || "").trim().slice(0, 4) || null;
   // Entry rule ("every $3 buy = 2 horses"): counted per qualifying BUY, alongside the cumulative board.
   const entryUsd = Math.max(0, Number(q.entryUsd) || 0), entryHorses = Math.max(1, parseInt(q.entryHorses) || 1);
+  // pools=<csv> — pool addresses the scan must ALWAYS cover, ahead of anything the indexers
+  // know about (a freshly opened pool can sit unindexed for hours; its buys must still count).
+  const pools = String(q.pools || "").split(",").map((s) => s.trim()).filter((w) => SOL_ADDR_RE.test(w));
   const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, emoji, startTs, endTs, holdHours, places, pctPrize, usdPrize, exclude, minVolSol, liveHoldFilter, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
-  c.entryUsd = entryUsd; c.entryHorses = entryHorses;
+  c.entryUsd = entryUsd; c.entryHorses = entryHorses; c.pools = pools;
   buyCompSave(c);
   buyCompUpdate(c).catch(() => {});    // post the initial board now (if the window has started)
   return res.status(200).json({ ok: true, id, competition: c });
@@ -7389,6 +7393,7 @@ app.post("/api/buycomp/edit", async (req, res) => {
   if (q.update != null && q.update !== "") c.updateMins = Math.max(5, parseInt(q.update) || c.updateMins || 60);   // board cadence in minutes (self-cleaning repost)
   if (q.entryUsd != null) c.entryUsd = Math.max(0, Number(q.entryUsd) || 0);
   if (q.entryHorses != null) c.entryHorses = Math.max(1, parseInt(q.entryHorses) || 1);
+  if (q.pools != null) c.pools = String(q.pools).split(",").map((s) => s.trim()).filter((w) => SOL_ADDR_RE.test(w));   // pinned pools (empty clears)
   if (q.pct != null) c.pctPrize = (q.pct === "1" || q.pct === 1);
   if (q.usd != null) c.usdPrize = (q.usd === "1" || q.usd === 1);   // render places as $amount in TICKER
   if (q.places != null && q.places !== "") {
@@ -7591,7 +7596,7 @@ app.get("/api/buycomp/standings", async (req, res) => {
   if (!c) return res.status(404).json({ error: "no such competition" });
   try {
     const toMs = Math.min(Date.now(), c.endTs);
-    const { buyers: raw, source, reachedWindowStart, solUsd } = await buyersInWindowMulti(c.mint, c.startTs, toMs);
+    const { buyers: raw, source, reachedWindowStart, solUsd } = await buyersInWindowMulti(c.mint, c.startTs, toMs, { extraTargets: c.pools || [] });
     buyCompAnnotateEntries(c, raw, solUsd);
     const key = buyCompMetricKey(c);
     const ex = [...buyCompExcludeSet(c)];
