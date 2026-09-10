@@ -20,8 +20,15 @@
   a.back{display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--gold);text-decoration:none;margin-bottom:14px;opacity:.85;}
   a.back:hover{opacity:1;}
   .header{display:flex;align-items:center;gap:14px;margin-bottom:8px;}
-  .header h1{font-family:var(--disp);font-size:40px;line-height:.95;letter-spacing:1.5px;background:linear-gradient(92deg,#FFE08A,#FFB627 40%,#FF7A18);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .header .htext{min-width:0;flex:1;}
+  .header h1{font-family:var(--disp);font-size:40px;line-height:1.02;letter-spacing:1.5px;background:linear-gradient(92deg,#FFE08A,#FFB627 40%,#FF7A18);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;overflow-wrap:break-word;}
   .header .ic{font-size:42px;filter:drop-shadow(0 4px 14px rgba(255,122,24,.4));}
+  /* The renamed h1 ("BUY SPECIAL — BUY COMPETITION", 2026-09-10) is much longer than the
+     old one-line "BUY SPECIAL" this size was tuned for — shrink it on phones so it wraps
+     inside the header instead of overflowing off-screen. */
+  @media(max-width:480px){
+    .header h1{font-size:24px;}
+  }
   .lede{font-size:14.5px;color:var(--sub);line-height:1.65;margin-bottom:20px;max-width:680px;}
   .lede b{color:var(--gold);}
   .card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:0 6px 22px rgba(0,0,0,.32);}
@@ -87,7 +94,7 @@
 <body>
 <div class="wrap">
   <a href="/tools" class="back">&larr; TOOLS</a>
-  <div class="header"><div class="ic">🎯</div><div><h1>BUY SPECIAL — BUY COMPETITION</h1></div></div>
+  <div class="header"><div class="ic">🎯</div><div class="htext"><h1>BUY SPECIAL — BUY COMPETITION</h1></div></div>
   <div class="lede">Run a buy competition on any Solana token. <b>Reward all holders</b> a % of what they bought, or <b>rank the top buyers</b> for prizes. Buyer discovery + the hold check run <b>server-side, on-chain</b> — then pay the winners straight from your own wallet — in the comp token, SOL, USDC, or any token you choose.</div>
 
   <div class="opbanner hidden" id="opBanner">✓ Operator mode — free unlimited runs.</div>
