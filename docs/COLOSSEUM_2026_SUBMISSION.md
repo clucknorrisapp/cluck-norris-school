@@ -1,7 +1,12 @@
 # Colosseum "Crypto World's Fair" 2026 — submission package
 
-**Event:** Colosseum online hackathon, **September 14 – October 12, 2026**. Registration is open at
-colosseum.com; the owner registers the team there before Sep 14. Everything below is drafted from
+**Event:** Colosseum "Crypto World's Fair", **September 14 – October 12, 2026**. Registration is
+open at colosseum.com; the owner registers the team before Sep 14. **Rules that shape this
+document (verified 2026-09-10):** products are judged only on work completed between the start
+and end dates; pre-existing code is allowed but all prior development must be disclosed
+(misrepresentation = disqualification); prize tracks are by ecosystem — we enter the **Solana**
+track. The disclosure is `docs/PRE_EVENT_STATE.md`; the pitch must lead with what was built
+inside the window and present everything older as the platform it was built on. Everything below is drafted from
 what is LIVE on clucknorris.app on 2026-09-10 — nothing here promises a feature that does not exist.
 
 **Submission form asks for:** product description · chain and tools used · team backgrounds ·

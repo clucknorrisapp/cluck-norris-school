@@ -34,7 +34,31 @@ whitelistable for anyone); "I am building an empire."
    action history exists in the store yet, and a fake-live gauge would be found out. History,
    the anti-wash organic-versus-router split, and the pure decision engine are the story.
 
-Track to enter: **Consumer Apps.** Infrastructure winners are developer plumbing.
+Track to enter: **the Solana ecosystem prize track.** (Corrected 2026-09-10 after Codex read the
+live rules: this event's prize tracks are by blockchain ecosystem, not by product area. The
+"Consumer Apps" framing from the historical corpus still describes the *shape* judges reward.)
+
+## 0. The rule that reorders everything (verified on colosseum.com/hackathon, 2026-09-10)
+
+> "Teams may begin development before the hackathon, but products are judged only on the work
+> completed between the competition's start and end dates." · "Builders may use pre-existing
+> code, but teams must disclose all relevant past development work in the submission form."
+
+So: **everything built before Sep 14 is baseline; everything built Sep 14 – Oct 12 is what is
+scored.** The owner's call (2026-09-10): *thoughts now, build inside the window.* Until Sep 14 we
+fix, document, design and record the baseline; the headline builds start Sep 14 so the scored
+delta is large, visible and honestly disclosed. `docs/PRE_EVENT_STATE.md` will be the disclosure
+(a tag `pre-colosseum-2026-09-14` on `main` and `develop`, plus an inventory of what existed).
+
+**Before Sep 14 (allowed, not scored):** security and bug fixes (the signed tools pass, PR #283),
+docs and designs (this file, the lock-to-earn design, the For Projects spec), the pre-event
+inventory, registration, the repo description, the founder story, the staging eyeball and the
+promotion of what is already built. **Sep 14 onward (scored):** multi-mint lock-to-earn for
+whitelisted projects (the headline — Codex independently landed on the same feature: "a
+project-owned holder rewards program with verifiable terms and payouts"), the For Projects hub,
+public Buy Special standings and hold-through proof, airdrop receipts, the dashboard's timeline
+and simulator replay, the embeddable trust badge from the red team, and the demo and pitch
+videos of that work.
 
 ---
 
