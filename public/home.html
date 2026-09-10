@@ -164,23 +164,31 @@
       <span class="chev">▾</span>
     </button>
     <div class="guidemenu" id="guidemenu" hidden>
-      <!-- Six routes, down from nine (owner: "clean up the Cluck concierge", 2026-07-29).
+      <!-- Was six routes, down from nine (owner: "clean up the Cluck concierge", 2026-07-29).
            The four that went were all learning tracks that /education now splits out
            properly: the belt course, chain-by-chain guides, the Library and the AI
            Classroom. Nothing is orphaned - every one of them is a card or a link on
-           /education. Advanced tools stays because /premium is linked from nowhere else. -->
+           /education. Advanced tools stays because /premium is linked from nowhere else.
+           Seventh route added 2026-09-10 ("I run a project or community" -> /tools#for-projects)
+           per the owner's "one-stop shop, we meet you where you are" positioning — project
+           tools get their own front door instead of hiding inside research tools. -->
       <a class="gopt" href="/school#incubator"><span class="oic"><img src="/icons/egg.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I'm brand new</b><i>Wallets, keys, safety &mdash; start in the Incubator</i></span><span class="oar">&rarr;</span></a>
       <a class="gopt" href="/education"><span class="oic"><img src="/icons/book.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I want to learn crypto</b><i>Courses, chain-by-chain guides &amp; the Library &mdash; all free</i></span><span class="oar">&rarr;</span></a>
       <a class="gopt" href="/lp-lab"><span class="oic"><img src="/icons/flask.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I want to go deep on LP</b><i>The LP Lab &mdash; ranges, impermanent loss, the real math</i></span><span class="oar">&rarr;</span></a>
-      <a class="gopt" href="/tools"><span class="oic"><img src="/icons/glass.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I need research tools</b><i>Wallet X-Ray, Holders, Trace &mdash; any wallet or token</i></span><span class="oar">&rarr;</span></a>
+      <a class="gopt" href="/tools"><span class="oic"><img src="/icons/glass.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I need research tools</b><i>Check a wallet or token first &mdash; Wallet Checkup is free, then X-Ray, Holders, Trace</i></span><span class="oar">&rarr;</span></a>
+      <a class="gopt" href="/tools#for-projects"><span class="oic"><img src="/icons/lock.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I run a project or community</b><i>Lock tokens, run a buy competition, airdrop holders, get listed right</i></span><span class="oar">&rarr;</span></a>
       <a class="gopt" href="/premium"><span class="oic"><img src="/icons/tools.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I need advanced / operator tools</b><i>Operator-grade forensics &amp; builder tooling</i></span><span class="oar">&rarr;</span></a>
       <a class="gopt" href="/clkn"><span class="oic"><img class="mascot" src="/cluck-norris-mascot.jpg" alt=""></span><span class="ol"><b>I want to know about CLKN</b><i>The token &mdash; price, holders, chart &amp; where to buy</i></span><span class="oar">&rarr;</span></a>
     </div>
   </div>
 
-  <!-- simple quick links -->
-  <div class="quick">
+  <!-- simple quick links. data-clkn-avoid: cluck-nav.js's floating Listen/EN pills lift
+       above any tile here they'd otherwise sit on top of at first paint (2026-09-10). -->
+  <div class="quick" data-clkn-avoid="1">
     <a class="ql" href="/ask-cluck"><span class="qi"><img src="/icons/flame.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">Ask Cluck</span><span class="qd">Ask him anything — instant AI answers</span></a>
+    <!-- The free safety check gets a tile of its own, up front — the school's whole point
+         is catching people before they get hurt (2026-09-10). -->
+    <a class="ql" href="/wallet-checkup"><span class="qi"><img src="/icons/shield.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">Wallet Checkup</span><span class="qd">Free safety scan — approvals, honeypots, revoke</span></a>
     <!-- Learn Crypto + Incubator + School folded into one EDUCATION tile (owner's call,
          2026-07-29 — three of seven tiles pointed at the same place). It points at the
          /education hub, which does the splitting: Incubator, School, Chain Info, Library. -->
@@ -189,7 +197,7 @@
          most advanced thing we teach and the feature we're best at. -->
     <a class="ql lab" href="/lp-lab"><span class="qi"><img src="/icons/flask.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">LP Lab</span><span class="qd">Advanced liquidity training — our specialty</span></a>
     <a class="ql" href="/tools"><span class="qi"><img src="/icons/glass.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">Tools</span><span class="qd">Research &amp; development tools</span></a>
-    <a class="ql" href="/locker-room"><span class="qi"><img src="/icons/lock.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">Jup Locker Room</span><span class="qd">Lock your Solana tokens — no token cut</span></a>
+    <a class="ql" href="/locker-room#create"><span class="qi"><img src="/icons/lock.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">Jup Locker Room</span><span class="qd">Lock your Solana tokens — no token cut</span></a>
     <a class="ql" href="/firepit"><span class="qi" style="font-size:30px;line-height:34px;">🔥</span><span class="qt">Firepit</span><span class="qd">Burn junk tokens, reclaim SOL rent</span></a>
     <a class="ql" href="/clkn"><span class="qi"><img src="/icons/coin.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">CLKN Token</span><span class="qd">Price, holders, chart &amp; where to buy</span></a>
   </div>

@@ -67,6 +67,16 @@
     .tool-grid .tool { margin-bottom: 0; }
   }
 
+  /* Three-group layout (owner positioning, 2026-09-10): "one-stop shop, we meet you
+     where you are" — project tools get the big stage, research and safety follow. */
+  .tool-section { margin-top: 30px; }
+  .tool-section:first-of-type { margin-top: 22px; }
+  .tool-section h2 {
+    font-family: var(--disp); font-size: 20px; font-weight: 900; letter-spacing: 1.5px;
+    color: var(--gold); text-transform: uppercase; margin: 0 0 4px;
+  }
+  .tool-section .section-sub { font-size: 12.5px; color: var(--sub); margin-bottom: 14px; }
+
 html{background:var(--bg-grad);background-attachment:fixed;}
 body{background:transparent;font-family:var(--body);}
 </style>
@@ -103,16 +113,31 @@ body{background:transparent;font-family:var(--body);}
     Wallet Checkup, Firepit and the Locker Room stay free, no wallet needed.
   </div>
 
-  <div class="tool-grid">
-  <!-- Order is deliberate (owner, 2026-08-02): the Locker Room is the flagship and the
-       airdropper sits with it, so they lead. Liquidity Engine is still IN DEVELOPMENT and
-       not offered to other projects, so it goes last rather than fronting the page. -->
+  <!-- Grouped under three headers (owner positioning, 2026-09-10: "one-stop shop, we
+       meet you where you are") — project tools lead, research and safety follow.
+       Card markup is unchanged from before the grouping, only moved and (Buy Special
+       only) relabeled. data-clkn-avoid: cluck-nav.js's floating Listen/EN pills lift
+       above any card here they'd otherwise sit on top of at first paint. -->
+  <div class="tool-section" id="for-projects-wrap">
+    <h2 id="for-projects">For your project</h2>
+    <div class="section-sub">Lock tokens, run a buy competition, airdrop holders, mint, burn, and get listed right.</div>
+    <div class="tool-grid" data-clkn-avoid="1">
+
   <a class="tool" href="/locker-room">
     <div class="emoji"><img src="/icons/lock.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
       <div class="name">Jup Locker Room</div>
       <div class="desc">Token locks, explained and made easy. Learn how locking works, see the CLKN <b>Lock of Fame</b> (how much supply is locked and where), and lock your own tokens with <b>Jupiter Lock</b> — free, non-custodial, audited.</div>
       <div class="go">OPEN THE LOCKER ROOM →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/buyspecial">
+    <div class="emoji"><img src="/icons/target.webp" width="38" height="38" alt="" loading="lazy"></div>
+    <div class="body">
+      <div class="name">Buy Special — Buy Competition <span class="tag clkn">HOLD OR SOL</span></div>
+      <div class="desc">Run a buy competition on any Solana token — <em>reward every holder</em> a % of what they bought, or <em>rank the top buyers</em> for prizes. On-chain buyer discovery + a hold-verified no-sells check, then one click straight to the airdropper.</div>
+      <div class="go">RUN A COMPETITION →</div>
     </div>
   </a>
 
@@ -125,30 +150,12 @@ body{background:transparent;font-family:var(--body);}
     </div>
   </a>
 
-  <a class="tool" href="/wallet-checkup">
-    <div class="emoji"><img src="/icons/shield.webp" width="38" height="38" alt="" loading="lazy"></div>
-    <div class="body">
-      <div class="name">Wallet Checkup <span class="tag free">FREE</span></div>
-      <div class="desc">One scan for the three things that actually drain people: lingering token approvals, honeypot holdings you can't sell, and tokens whose dev can still mint or freeze. Paste any address to look — read-only, no connect. Find approvals on your own wallet and you can <b>revoke them right here</b>, signing it yourself.</div>
-      <div class="go">CHECK A WALLET →</div>
-    </div>
-  </a>
-
   <a class="tool" href="/listing-checkup">
     <div class="emoji" style="font-size:34px;line-height:38px;">🔎</div>
     <div class="body">
       <div class="name">Listing Checkup <span class="tag free">FREE PREVIEW</span></div>
       <div class="desc">For project teams: give us your token's official name, website and socials, and we read what <b>CoinGecko, GeckoTerminal, DexScreener, Jupiter</b> and the rest actually show for your contract. Where it is correct, where it is wrong field by field, where it is not found, and the exact page to fix each one. The full sweep across every source runs on the tools pass.</div>
       <div class="go">CHECK YOUR LISTINGS →</div>
-    </div>
-  </a>
-
-  <a class="tool" href="/firepit">
-    <div class="emoji" style="font-size:34px;line-height:38px;">🔥</div>
-    <div class="body">
-      <div class="name">Firepit <span class="tag free">FREE</span></div>
-      <div class="desc">Burn worthless tokens and reclaim the <b>SOL rent</b> locked in their accounts — the safe alternative to the incinerators people worry about. You sign, we take <b>zero cut</b>, and a live <b>value-guard</b> won't let you torch a bag that's still worth money. Only ever touches the accounts you tick.</div>
-      <div class="go">CLEAN OUT YOUR WALLET →</div>
     </div>
   </a>
 
@@ -170,12 +177,12 @@ body{background:transparent;font-family:var(--body);}
     </div>
   </a>
 
-  <a class="tool" href="/lp-rescue">
-    <div class="emoji" style="font-size:34px;line-height:38px;">🛟</div>
+  <a class="tool" href="/owners-snapshot">
+    <div class="emoji" style="font-size:34px;line-height:38px;">🧾</div>
     <div class="body">
-      <div class="name">LP Rescue <span class="tag free">FREE</span></div>
-      <div class="desc">Can't find your LP position in the app? <b>LP Rescue searches the blockchain directly</b> — Meteora DLMM, Orca &amp; Raydium — finds positions that aren't showing, explains why, and builds a withdrawal <b>your own wallet signs</b>. Non-custodial, never asks for a key, and free because a rescue shouldn't cost anything.</div>
-      <div class="go">FIND MY LIQUIDITY →</div>
+      <div class="name">Owners Snapshot <span class="tag free">FREE</span></div>
+      <div class="desc">For token owners: submit your mint and get the whole holder base read, wallet by wallet — <b>who is in</b>, <b>who is out</b>, and <b>who is draining you</b>. Every holder over $5, their full history with your token, dumping patterns, bags that were handed out rather than bought, and wallets linked by a shared funder or a shared cash-out address. Runs as a slow background crawl (can take hours on a big token) and keeps a snapshot history so you can diff runs.</div>
+      <div class="go">SNAPSHOT MY HOLDERS →</div>
     </div>
   </a>
 
@@ -188,15 +195,24 @@ body{background:transparent;font-family:var(--body);}
     </div>
   </a>
 
-  <a class="tool" href="/buyspecial">
-    <div class="emoji"><img src="/icons/target.webp" width="38" height="38" alt="" loading="lazy"></div>
+  <!-- Liquidity Engine isn't in the owner's three named groups (still IN DEVELOPMENT,
+       not offered to other projects) — kept here, trailing, rather than dropped. -->
+  <a class="tool" href="/liquidity-engine">
+    <div class="emoji"><img src="/icons/droplet.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
-      <div class="name">Buy Special <span class="tag clkn">HOLD OR SOL</span></div>
-      <div class="desc">Run a buy competition on any Solana token — <em>reward every holder</em> a % of what they bought, or <em>rank the top buyers</em> for prizes. On-chain buyer discovery + a hold-verified no-sells check, then one click straight to the airdropper.</div>
-      <div class="go">RUN A COMPETITION →</div>
+      <div class="name">Liquidity Engine <span class="tag" style="color:var(--muted);background:rgba(255,255,255,.05);border:1px solid var(--border)">IN DEVELOPMENT</span></div>
+      <div class="desc">Honest, automated market making on Orca — <em>real</em> two-sided depth that fills real traders, not a wash-trading volume bot. We're <b>building and testing it on CLKN's own pools</b>; not yet offered to other projects.</div>
+      <div class="go">HOW IT WORKS →</div>
     </div>
   </a>
 
+    </div>
+  </div>
+
+  <div class="tool-section" id="research-wrap">
+    <h2 id="research">Research any wallet or token</h2>
+    <div class="section-sub">Read-only forensics on any Solana wallet or token — no connect needed.</div>
+    <div class="tool-grid" data-clkn-avoid="1">
 
   <a class="tool" href="/wallet-xray">
     <div class="emoji"><img src="/icons/xray.webp" width="38" height="38" alt="" loading="lazy"></div>
@@ -204,17 +220,6 @@ body{background:transparent;font-family:var(--body);}
       <div class="name">Wallet X-Ray <span class="tag clkn">HOLD OR SOL</span></div>
       <div class="desc">Paste one wallet — get its whole story across <em>every</em> token, or add a token mint to trace just that one (every buy, sell and transfer between the two, in order, with running balance). Where it was first funded from, everything it bought, sold and transferred, and the behavior read — bot cadence, fast-flip dumper, CEX cash-out, LP, or diamond-hands holder. Deep-dive mode, no Solscan dig.</div>
       <div class="go">X-RAY A WALLET →</div>
-    </div>
-  </a>
-
-
-
-  <a class="tool" href="/trace">
-    <div class="emoji" style="font-size:34px;line-height:38px;">🔍</div>
-    <div class="body">
-      <div class="name">Cluck Trace <span class="tag clkn">HOLD OR SOL</span></div>
-      <div class="desc">Follow the money, hop by hop — where a wallet's funds <b>came from</b> and where they <b>went</b>, across any Solana token. The chain shows the path; you draw the conclusions. Read-only, no connect.</div>
-      <div class="go">TRACE A WALLET →</div>
     </div>
   </a>
 
@@ -227,26 +232,62 @@ body{background:transparent;font-family:var(--body);}
     </div>
   </a>
 
-  <a class="tool" href="/owners-snapshot">
-    <div class="emoji" style="font-size:34px;line-height:38px;">🧾</div>
+  <a class="tool" href="/trace">
+    <div class="emoji" style="font-size:34px;line-height:38px;">🔍</div>
     <div class="body">
-      <div class="name">Owners Snapshot <span class="tag free">FREE</span></div>
-      <div class="desc">For token owners: submit your mint and get the whole holder base read, wallet by wallet — <b>who is in</b>, <b>who is out</b>, and <b>who is draining you</b>. Every holder over $5, their full history with your token, dumping patterns, bags that were handed out rather than bought, and wallets linked by a shared funder or a shared cash-out address. Runs as a slow background crawl (can take hours on a big token) and keeps a snapshot history so you can diff runs.</div>
-      <div class="go">SNAPSHOT MY HOLDERS →</div>
+      <div class="name">Cluck Trace <span class="tag clkn">HOLD OR SOL</span></div>
+      <div class="desc">Follow the money, hop by hop — where a wallet's funds <b>came from</b> and where they <b>went</b>, across any Solana token. The chain shows the path; you draw the conclusions. Read-only, no connect.</div>
+      <div class="go">TRACE A WALLET →</div>
     </div>
   </a>
 
-
-
-  <a class="tool" href="/liquidity-engine">
-    <div class="emoji"><img src="/icons/droplet.webp" width="38" height="38" alt="" loading="lazy"></div>
+  <!-- Bags Hub existed at /bags but wasn't linked from this page (orphaned) — surfaced
+       here since it's exactly this section's kind of tool. -->
+  <a class="tool" href="/bags">
+    <div class="emoji" style="font-size:34px;line-height:38px;">🎒</div>
     <div class="body">
-      <div class="name">Liquidity Engine <span class="tag" style="color:var(--muted);background:rgba(255,255,255,.05);border:1px solid var(--border)">IN DEVELOPMENT</span></div>
-      <div class="desc">Honest, automated market making on Orca — <em>real</em> two-sided depth that fills real traders, not a wash-trading volume bot. We're <b>building and testing it on CLKN's own pools</b>; not yet offered to other projects.</div>
-      <div class="go">HOW IT WORKS →</div>
+      <div class="name">Bags Hub <span class="tag free">FREE</span></div>
+      <div class="desc">Live Bags.fm launches and graduations, with market cap, progress and price verified against Solana Tracker — auto-refreshing.</div>
+      <div class="go">SEE LIVE LAUNCHES →</div>
     </div>
   </a>
 
+  <a class="tool" href="/lp-rescue">
+    <div class="emoji" style="font-size:34px;line-height:38px;">🛟</div>
+    <div class="body">
+      <div class="name">LP Rescue <span class="tag free">FREE</span></div>
+      <div class="desc">Can't find your LP position in the app? <b>LP Rescue searches the blockchain directly</b> — Meteora DLMM, Orca &amp; Raydium — finds positions that aren't showing, explains why, and builds a withdrawal <b>your own wallet signs</b>. Non-custodial, never asks for a key, and free because a rescue shouldn't cost anything.</div>
+      <div class="go">FIND MY LIQUIDITY →</div>
+    </div>
+  </a>
+
+    </div>
+  </div>
+
+  <div class="tool-section" id="safety-wrap">
+    <h2 id="safety">Safety, free for everyone</h2>
+    <div class="section-sub">No wallet, no signup, no catch — the safety basics stay free for everyone.</div>
+    <div class="tool-grid" data-clkn-avoid="1">
+
+  <a class="tool" href="/wallet-checkup">
+    <div class="emoji"><img src="/icons/shield.webp" width="38" height="38" alt="" loading="lazy"></div>
+    <div class="body">
+      <div class="name">Wallet Checkup <span class="tag free">FREE</span></div>
+      <div class="desc">One scan for the three things that actually drain people: lingering token approvals, honeypot holdings you can't sell, and tokens whose dev can still mint or freeze. Paste any address to look — read-only, no connect. Find approvals on your own wallet and you can <b>revoke them right here</b>, signing it yourself.</div>
+      <div class="go">CHECK A WALLET →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/firepit">
+    <div class="emoji" style="font-size:34px;line-height:38px;">🔥</div>
+    <div class="body">
+      <div class="name">Firepit <span class="tag free">FREE</span></div>
+      <div class="desc">Burn worthless tokens and reclaim the <b>SOL rent</b> locked in their accounts — the safe alternative to the incinerators people worry about. You sign, we take <b>zero cut</b>, and a live <b>value-guard</b> won't let you torch a bag that's still worth money. Only ever touches the accounts you tick.</div>
+      <div class="go">CLEAN OUT YOUR WALLET →</div>
+    </div>
+  </a>
+
+    </div>
   </div>
 
   <div class="footer-tag">

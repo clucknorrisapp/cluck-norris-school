@@ -36,27 +36,42 @@
   // Method: reset to the default anchor, measure, and if the floater overlaps any visible form
   // control it doesn't contain, lift it 10px above the highest one. Re-runs on resize (covers the
   // on-screen keyboard) and on two delayed passes for late-rendering pages like the React school.
+  // Also opts in plain content (tile/card grids), not just form controls: a page marks its grid
+  // with data-clkn-avoid and every DIRECT CHILD is checked individually — found on / (the quick
+  // tile grid's first row) and /tools (the Airdrop card) at 390px and 1280px, where the pills sat
+  // on ordinary <a> cards on first paint, nothing to do with an on-screen keyboard (2026-09-10).
   window.__clknDockFloat = function (el) {
     if (!el || el.__clknDocked) return; el.__clknDocked = 1;
     var DEF = "calc(14px + env(safe-area-inset-bottom,0px))";
     function fit() {
       try {
-        el.style.bottom = DEF;                                    // measure from the default anchor
-        var b = el.getBoundingClientRect(); if (!b.width) return;
         var lift = 0;
-        var els = document.querySelectorAll("input,textarea,select,button,[contenteditable='true']");
-        for (var i = 0; i < els.length; i++) {
-          var e = els[i];
-          if (el.contains(e)) continue;
-          var host = e.closest && e.closest("#clkn-read-bar,#clkn-lang-toggle,#cluck-nav-bar");
-          if (host) continue;
-          var r = e.getBoundingClientRect();
-          if (!r.width || !r.height) continue;
-          var ox = Math.min(b.right, r.right) - Math.max(b.left, r.left);
-          var oy = Math.min(b.bottom, r.bottom) - Math.max(b.top, r.top);
-          if (ox > 0 && oy > 0) lift = Math.max(lift, (window.innerHeight - r.top) + 10);
+        // Iterative: a single measure-and-lift pass is enough to clear one composer, but
+        // stacked cards (tile/card grids) sit only ~12px apart, so lifting to clear the one
+        // the pill first touches can walk it straight into the NEXT one up. Re-measure at
+        // the new position and keep climbing until nothing overlaps (found this on /tools,
+        // where clearing card #2 pushed the pill into card #1 above it — 2026-09-10).
+        for (var pass = 0; pass < 20; pass++) {
+          el.style.bottom = lift ? (lift + "px") : DEF;             // measure from current anchor
+          var b = el.getBoundingClientRect(); if (!b.width) return;
+          var found = false;
+          var els = document.querySelectorAll("input,textarea,select,button,[contenteditable='true'],[data-clkn-avoid] > *");
+          for (var i = 0; i < els.length; i++) {
+            var e = els[i];
+            if (el.contains(e)) continue;
+            var host = e.closest && e.closest("#clkn-read-bar,#clkn-lang-toggle,#cluck-nav-bar");
+            if (host) continue;
+            var r = e.getBoundingClientRect();
+            if (!r.width || !r.height) continue;
+            var ox = Math.min(b.right, r.right) - Math.max(b.left, r.left);
+            var oy = Math.min(b.bottom, r.bottom) - Math.max(b.top, r.top);
+            if (ox > 0 && oy > 0) {
+              var need = (window.innerHeight - r.top) + 10;         // r.top already includes the safe area
+              if (need > lift) { lift = need; found = true; }
+            }
+          }
+          if (!found) break;
         }
-        if (lift) el.style.bottom = lift + "px";                   // r.top already includes the safe area
       } catch (_) {}
     }
     fit();
