@@ -187,6 +187,43 @@ this is the video where the owner talks, not the product.
 
 ---
 
+## 9. Competitive landscape — from Colosseum Copilot (read 2026-09-10)
+
+Colosseum Copilot indexes every prior submission (Renaissance 1,076 · Radar 1,360 · Breakout
+1,416 · Cypherpunk 1,576). Four similarity searches (crypto education, wallet forensics, token
+locking / lock-to-earn, wallet safety) show where we sit. Judges use the same corpus, so the
+pitch should say this out loud.
+
+**Education cluster (162 projects).** Nearest neighbours: GALIA, Educational Platform on
+Blockchain Basics, Girls That Crypto, Edu-crypto, CopyCats — all 2024 Renaissance/Radar entries,
+mobile courses or quiz games, none with a prize, none with a shipped product that is still live.
+Nobody in the cluster ships seven languages, an AI tutor, or a server-gated on-chain credential.
+
+**Rug detection cluster (~450 projects across two clusters).** Rug Raider, AI Guardian, amIrug.xyz,
+Pepelock, MintEye, Agent Cypher. Every one is an **AI risk score**: paste a token, get a verdict.
+That is the opposite of our forensic rule. Our tools show what is on-chain (funding origin,
+holder concentration on humans only, delegate approvals) and refuse to say why. Say it in the
+pitch: verdict scanners give good scores to tokens that then rug (we retired our own Cluck Score
+for exactly that reason); evidence does not.
+
+**Locking cluster.** Capult Eternal Vaults (permanent burns-by-lock), Zenlok (private vesting
+on Arcium), NOOTTOOLS (launcher with milestone locks). None builds on Jupiter Lock, none is free
+for any project, none pays holders to lock. Lock-to-earn with a real weekly payout has no
+precedent in the corpus.
+
+**Wallet safety.** Lazor Kit took an Infrastructure honourable mention (Breakout) for invisible
+wallets; the rest are AI wallets and link scanners. Wallet Checkup's in-place revoke is unmatched.
+
+**Positioning line for the pitch:** every overlapping entry is a prototype in one of our four
+boxes. We are the only one with all four live, open source, with revenue, and with the honesty
+rule that keeps the tools from becoming another risk score.
+
+Source: `copilot.colosseum.com` search/projects with the owner's Copilot token (read-only,
+expires 2026-12-09). The token is NOT in the repo; it lives only in the owner's Colosseum
+account and can be regenerated at colosseum.com/arena/copilot.
+
+---
+
 ## 8. Pre-submission checklist
 
 - [ ] Owner registers on colosseum.com before **Sep 14**; confirms the track/prize category on the
@@ -199,3 +236,4 @@ this is the video where the owner talks, not the product.
 - [ ] Keep Normie Quest to one aside at most: reward and prize terms are unagreed, so promise nothing.
 - [ ] Do not mention Wallet Watch anywhere.
 - [ ] Security mentions credit RootCrak and carry the referral link.
+- [ ] Use the section 9 positioning line in the pitch video and the product description.
