@@ -144,8 +144,10 @@
     var badge = $('fleetBadge');
     var fs = o.fleetState || (o.fleetPaused ? 'paused' : 'unknown'), fc = o.fleetCounts || {};
     var stop = o.ownerStopOrder ? ' · owner stop order since ' + esc(o.ownerStopOrder.since) : '';
-    if (fs === 'paused') { badge.className = 'badge'; badge.innerHTML = '<span class="dot"></span><span>Observed: no engine running' + stop + '</span>'; }
-    else if (fs === 'running') { badge.className = 'badge run'; badge.innerHTML = '<span class="dot"></span><span>Observed: ' + esc(String(fc.running || 0)) + ' engine(s) running' + stop + '</span>'; }
+    var ff = o.fleetFreshness || {};
+    var when = ff.state === 'stale' ? ' (last successful read ' + esc(rel(ff.oldestObservedAt)) + ', refresh failing)' : ff.oldestObservedAt ? ' (read ' + esc(rel(ff.oldestObservedAt)) + ')' : '';
+    if (fs === 'paused') { badge.className = 'badge'; badge.innerHTML = '<span class="dot"></span><span>' + (ff.state === 'stale' ? 'Last observed: no engine running' : 'Observed: no engine running') + when + stop + '</span>'; }
+    else if (fs === 'running') { badge.className = 'badge run'; badge.innerHTML = '<span class="dot"></span><span>' + (ff.state === 'stale' ? 'Last observed: ' : 'Observed: ') + esc(String(fc.running || 0)) + ' engine(s) running' + when + stop + '</span>'; }
     else { badge.className = 'badge'; badge.innerHTML = '<span class="dot"></span><span>Fleet state unknown — ' + esc(String(fc.unknown || 0)) + ' status read(s) failed' + stop + '</span>'; }
     var clkn = (o.projects || []).filter(function (p) { return p.id === 'clkn'; })[0];
     if (clkn && clkn.market && clkn.market.organicScore != null) $('clknScoreLine').textContent = 'CLKN reads ' + clkn.market.organicScore + ' (' + (clkn.market.organicLabel || '—') + ') today.';
@@ -303,7 +305,8 @@
     if (!base) return;
     $('detail').hidden = false;
     $('detailTitle').textContent = base.symbol + ' — ' + base.label;
-    $('detailSub').textContent = base.tokenMint + ' · ' + base.venue;
+    var bf = base.freshness || {};
+    $('detailSub').textContent = base.tokenMint + ' · ' + base.venue + (bf.summary === 'stale' ? ' · some panels served from cache (refresh failing)' : bf.summary === 'partial' ? ' · some reads unavailable' : '');
     renderPoolMap(base); renderSplit(base); renderOrganic(base); renderDecision(base); renderProfile(base);
     $('volumeChart').innerHTML = '<p class="muted">Loading hourly volume…</p>';
     try { history.replaceState(null, '', '?p=' + encodeURIComponent(id)); } catch (e) {}

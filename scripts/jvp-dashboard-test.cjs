@@ -93,6 +93,27 @@ console.log("\nJVP dashboard — freshness and fleet state\n");
   const ov = await d.overview({ vault, kv: { get: () => [] }, clknMint: "M1" });
   ok("all status reads failed → fleetState unknown, not paused", ov.fleetState === "unknown" && ov.fleetPaused === false && ov.fleetCounts.unknown === 2, JSON.stringify({ s: ov.fleetState, c: ov.fleetCounts }));
   ok("owner stop order is shown as a separate historical fact", ov.ownerStopOrder && ov.ownerStopOrder.since === "2026-09-05");
+  // The assembled response keeps freshness: a paused status read once, then a failed refresh, must
+  // still say "paused" AND "stale" with the original observation time — through sanitisation.
+  d._resetCache();
+  let n = 0;
+  const flaky = { listProjects: () => ({ cuna: { id: "cuna", label: "CUNA", symbol: "CUNA", tokenMint: "M2" } }),
+    status: async () => { n++; if (n === 1) return { project: "cuna", enabled: true, paused: true, config: {}, state: {} }; throw new Error("rpc down"); },
+    publicPositions: async () => ({ enabled: true, positions: [], totalUsd: 0 }), dislocation: async () => ({ pools: [] }) };
+  const first = await d.projectSnapshot({ vault: flaky, kv: { get: () => [] }, id: "cuna", project: flaky.listProjects().cuna, clknMint: "M1" });
+  ok("first snapshot: paused, fresh", first.status.paused === true && first.status.freshness.state === "fresh" && typeof first.status.freshness.observedAt === "number");
+  // force the memo past its ttl so the next snapshot refreshes and fails
+  d._expireForTests && d._expireForTests();
+  const second = await d.projectSnapshot({ vault: flaky, kv: { get: () => [] }, id: "cuna", project: flaky.listProjects().cuna, clknMint: "M1" });
+  ok("second snapshot: still paused, marked stale with the original observation time", second.status && second.status.paused === true && second.status.freshness.state === "stale" && second.status.freshness.observedAt === first.status.freshness.observedAt, JSON.stringify(second.status && second.status.freshness));
+  ok("project-level freshness names the stale status (market for a fake mint is unavailable, so the summary is partial)", second.freshness && second.freshness.status.state === "stale" && ["stale", "partial"].includes(second.freshness.summary), JSON.stringify(second.freshness));
+  d._resetCache();
+  let m = 0;
+  const flaky2 = { ...flaky, status: async () => { m++; if (m === 1) return { project: "cuna", enabled: true, paused: true, config: {}, state: {} }; throw new Error("rpc down"); } };
+  const ov2 = await d.overview({ vault: flaky2, kv: { get: () => [] }, clknMint: "M1" });
+  d._expireForTests();
+  const ov3 = await d.overview({ vault: flaky2, kv: { get: () => [] }, clknMint: "M1" });
+  ok("fleet aggregate carries staleness", ov3.fleetState === "paused" && ov3.fleetFreshness.state === "stale" && ov3.fleetFreshness.staleStatuses === 1 && ov3.fleetFreshness.oldestObservedAt === ov2.fleetFreshness.oldestObservedAt, JSON.stringify(ov3.fleetFreshness));
   console.log(failures ? `\n${failures} failed` : "\nall passed");
   process.exit(failures ? 1 : 0);
 })();
