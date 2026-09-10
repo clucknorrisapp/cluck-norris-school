@@ -27,12 +27,13 @@ whitelistable for anyone); "I am building an empire."
 3. **Three claims fail a two-minute check today**: the tools pass (X-Ray API answers with no
    pass), "seven languages" (two newest lessons untranslated in all six), and "multi-quote
    generates volume" (every Orca pool at $0 because the engines are paused). Fix or reword each.
-4. **The numbers that survive multiplication:** 105k visitor-days lifetime, ~5k visitors/day
+4. **The numbers that survive multiplication:** 105k visitor-days in the last 30 days (not lifetime — analytics retain 90 days; corrected 2026-09-10), ~5k visitors/day
    this month, 4 client tokens on our infrastructure, first lock-to-earn payout on-chain. The
    numbers that don't: $12 payout, $2.2k lifetime fees all reinvested, 1 tools pass ever sold.
 5. **The engine dashboard is the right showpiece, if it leads with the paused state.** No
    action history exists in the store yet, and a fake-live gauge would be found out. History,
-   the anti-wash organic-versus-router split, and the pure decision engine are the story.
+   the organic share as Jupiter tags it (an observation, not an anti-wash proof), and the decision
+   engine replayed illustratively are the story.
 
 Track to enter: **the Solana ecosystem prize track.** (Corrected 2026-09-10 after Codex read the
 live rules: this event's prize tracks are by blockchain ecosystem, not by product area. The
@@ -70,7 +71,7 @@ for any project we whitelist.* First real payout landed 2026-09-09. This is the 
 5,400-entry corpus with no precedent.
 
 **The loop.** LEARN: the school is the front door, free, seven languages, an AI tutor, a
-server-verified credential (105k visitor-days say people come). BUILD: the same team gets the
+server-verified credential (105k visitor-days in 30 days say people come). BUILD: the same team gets the
 project toolkit — lock on Jupiter Lock, run a fair buy competition, airdrop the holder list,
 check listings, burn with a receipt — and, for tokens that qualify, the liquidity engine that
 puts real two-sided depth on Orca so aggregators route through them. EARN: lock-to-earn keeps the
@@ -125,7 +126,7 @@ CLKN reads 0 today* — the stop levers proven on live data.
 | Live pool map: price vs ±1% ranges per quote | `/api/whirlpool/pools`, `publicPositions()`, `dislocation()` | 2 |
 | Volume generated per pool, hourly, vs baseline | GeckoTerminal pool `volume_usd` + `/ohlcv/hour` (~40 days, free) | 2 |
 | Organic score + holder trajectory, all 4 projects | `clknOrganicLog`, extend `recordOrganicSnapshot()` (server.js ~17466) to POKE/ROSE with holders/liq/mcap | 1.5 |
-| Organic vs router volume split — the anti-wash proof | Jupiter `tokens/v2` `buyOrganicVolume` vs `buyVolume` | 1 |
+| Organic share of volume as Jupiter tags it (an observation, not an anti-wash proof) | Jupiter `tokens/v2` `buyOrganicVolume` vs `buyVolume` | 1 |
 | "What the engine would do now" | new GET `/api/engine-decision?project=` over the pure `lib/engine-decisions.js` | 2 |
 
 P1 (≈8.5 days, after P0 ships): engine timeline with tx links (needs the one new kv ring
@@ -247,5 +248,5 @@ the demo could have.
 - **First run:** no door for project teams; Wallet Checkup invisible from the homepage; phone
   pill overlap on first paint; `/tools` a flat wall of 15 cards.
 - **Feasibility:** the 12-day line above; lock-to-earn math already mint-agnostic.
-- **Proof:** 140,462 views / 105,185 visitor-days lifetime; 22 graduates; 1 pass sold; hatchery
+- **Proof:** 140,462 views / 105,185 visitor-days in the 30-day analytics window (not lifetime); 22 graduates; 1 pass sold; hatchery
   and pass share one receiver with five signatures ever.

@@ -31,8 +31,9 @@ permanent transcript page and an on-chain graduation NFT, gated by a server-side
 the credential means something.
 
 Around the school sit the tools people actually need once they are in: **Wallet X-Ray** (any
-address's full story, true funding origin traced to its first transaction), **Holders** (human
-holders separated from pools, escrows and program accounts), **Trace** (wallet × token history
+address's observed history, funding origin traced back through recorded transfers), **Holders**
+(wallet addresses separated from pools, escrows and program accounts — address classification,
+not personhood), **Trace** (wallet × token history
 with one-hop follow-the-money), **Wallet Checkup** (delegate approvals, honeypots, mint/freeze
 risk — with in-place revoke), a **batch airdropper**, a **buy-competition engine** that pays on what
 each wallet actually bought, a **guided token creator** that deliberately stops before liquidity,
@@ -87,7 +88,7 @@ Judges weight traction and revenue. These are all verifiable on-chain or on the 
 
 | Signal | Today (2026-09-10) | Where to re-read it |
 |---|---|---|
-| Learners and visitors | 140,462 lifetime page views · 105,185 visitor-days lifetime · ~5k visitors/day this month · 22 graduates | server analytics; `/api/school-stats` |
+| Learners and visitors | 140,462 page views · 105,185 visitor-days in the 30 days to 2026-09-10 (server analytics retain 90 days; visitor-days = unique daily visitors summed, not unique people) · ~5k visitors/day this month · 22 graduates | server analytics; `/api/school-stats` |
 | Partner tokens on our infrastructure | 4 — POKE, CUNA, DNC, ROSE: locking, verification, buy comps, and (paused) liquidity engine service | JVP runbook, `docs/CLKN_JUP_VERIFICATION_PROTOCOL.md` |
 | Lock-to-earn — mechanism proof | First weekly payout landed 2026-09-09: 13 wallets, one transaction (proves the mechanism runs end-to-end; not a dollar claim) | tx `37hhsCCh…Z2bVkiP` |
 | CLKN locks — our own supply, via our own tooling | 73 locks, 48.8% of supply (488M CLKN) | `/api/locks?mint=DW6DF2…BAGS` |
@@ -121,7 +122,7 @@ community's float off the market — proven live with the CUNA program.
    lock-to-earn, verification) brings its whole Telegram into the school and the tools. Four
    today; each one is a warm referral to the next.
 2. Telegram and X automation as the content engine: a daily Claude-written lesson, in-chat tutor,
-   lock celebrations, buy alerts, meme drops. Zero marginal cost per day.
+   lock celebrations, buy alerts, meme drops. Low marginal cost per day — model and API usage, measured, not zero.
 3. Seven languages. Most Solana education is English-only; ES/PT/VI/HI/ZH/IT are where the next
    wave of first-timers is, and the whole school ships there already.
 4. Solana Seeker dApp Store presence for mobile-first users.
@@ -218,7 +219,7 @@ a verdict. None placed. The winners near this space protect the *wallet*, not th
 Unruggable (hardware wallet — Grand Prize Cypherpunk, accelerator C4), Lazor Kit (invisible
 wallets, honourable mention Breakout). The one accelerator company touching rug-checking is
 Crypto Dropcopy (C1, Renaissance: PnL + SGX rugcheck). Our angle is the opposite of a score: show
-what is on-chain (funding origin, human-only holder concentration, delegate approvals) and refuse
+what is on-chain (funding origin, holder concentration on classified wallets, delegate approvals) and refuse
 to say why. Say it in the pitch: verdict scanners bless tokens that then rug — we retired our own
 Cluck Score for exactly that reason.
 
