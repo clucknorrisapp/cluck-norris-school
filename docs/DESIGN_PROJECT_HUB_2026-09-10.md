@@ -53,22 +53,46 @@ All identifiers are explicit; nothing is inferred from "the current project".
   fundingWallet, signer: fundingWallet, hash }`. Immutable once effective; a change creates
   version+1 with a new `effectiveFrom`. `hash` = sha256 of the canonical JSON, shown on the page.
 - **Period** — one accrual day `YYYY-MM-DD` under one program version (the existing
-  `cunaStakeDays` shape: `{ distributed, credits }`), stored per project.
+  `cunaStakeDays` shape: `{ distributed, credits }`), stored per project. **Version boundaries
+  are UTC-day boundaries:** a new version's `effectiveFrom` is always a `YYYY-MM-DD` and takes
+  effect at 00:00 UTC of that day; a period never straddles two versions. Slices already
+  accrued that day under v1 are final.
+- **Reward asset — first release: one immutable reward asset per project**, fixed at approval,
+  equal to or different from the project mint, with `rewardMint`, `rewardTokenProgram` and
+  `rewardDecimals` pinned on the Project and echoed on every program version, batch and receipt.
+  Changing the reward asset is a new project id. Raw units are never summed across assets.
 - **Eligibility record** — per escrow: `{ escrow, owner, amountRaw, termDays, firstSeenAt,
   fingerprint, qualifies:boolean, reasons[] }`. The `reasons[]` are the codes `disqualify()`
   already produces, made public: `below_min_lock`, `term_too_short`, `cancelable`,
   `excluded_creator`, `excluded_recipient`, `seen_before_program`, `unvested_only`, …
-- **Balance states, kept separate and never summed across states:**
+- **Balance states.** `accrued` is the TOTAL earned; the other three partition it:
+  **`accrued = available + reserved + paid`** (estimates excluded, never stored). Example: 100
+  accrued, 30 reserved, 20 paid → 50 available, not 150 of anything.
   - `estimated` — what today's slice would credit if nothing changes (page preview only, never stored)
-  - `accrued` — credits written by the accrual tick (`credits` in the period)
+  - `accrued` — credits written by the accrual tick (`credits` in the period), the total earned
   - `reserved` — sitting in a pending batch (`pending` in `owedNow`)
-  - `paid` — confirmed rows with a signature verified on-chain
+  - `paid` — confirmed rows with a transfer verified on-chain
+  - `available` — `accrued − reserved − paid`, the only number a new batch may draw on
+  - **Overpayment is surfaced, not floored away:** if `paid > accrued` (a manual send outside the
+    system) the wallet shows `overpaidRaw` on the operator console and the public page, and the
+    next batch draws nothing until accrual catches up. `owedNow`'s zero floor stays for safety;
+    the delta is reported beside it.
 - **Batch** — the existing `cunaStakeBatches` record plus `projectId`, `programVersion`, the
   periods it covers, and `reservedFundingRaw`. `state: pending|sent|closed|cancelled`.
-- **Receipt** — one per recipient per batch: `{ projectId, programVersion, periods[], wallet,
-  amountRaw, decimals, sig, slot, at, verifiedBy:"getTransaction", inputs: { creditsByPeriod } }`.
-  Public at `/receipt/<batchId>/<wallet>`; the amount is the RAW units in the transfer that
-  `recordSent` verified, never a recomputation.
+- **Receipt** — one per recipient per batch: `{ projectId, programVersion, rewardMint,
+  rewardDecimals, periods[], wallet, amountRaw, transferId, sig, slot, at,
+  verifiedBy:"getTransaction" }`. Public at `/receipt/<batchId>/<wallet>`; the amount is the RAW
+  units in the transfer that `recordSent` verified, never a recomputation. Two distinct claims are
+  shown separately: **payment verified** (the transfer exists on-chain and matches) and
+  **calculation reproducible** (the export below reruns to the same raw amount).
+- **Reproduction export** (per receipt, JSON): the dated observations the accrual actually used —
+  every eligible escrow that period with `amountRaw`, `termDays`, `firstSeenAt`, `fingerprint`,
+  the exclusion list applied, `poolDailyRaw` and the slice count and timestamps, the competing
+  eligible weights (or the per-escrow weight table), the rounding rule (integer floor per slice,
+  remainder policy), and the algorithm/config version (`lib/cuna-staking.js` git SHA + program
+  hash). A developer runs `node scripts/reproduce-receipt.cjs <export.json>` and gets the raw
+  amount. Periods whose observations were not retained are labelled `inputs: missing` and the
+  receipt shows "payment verified; calculation not reproducible for N of M periods".
 - **Funding status** — `{ obligationsRaw (accrued − paid), reservedRaw (pending batches),
   observedBalanceRaw (funding wallet, on-chain, dated), shortfallRaw }`. An observed balance is
   NOT reserved funding; a scheduled unlock is NOT funding. The page says which of the three it is
@@ -99,11 +123,22 @@ is refused.
 - Terms measured forward from OUR `firstSeenAt`, never from `vesting_start_time`; no cliff; term
   tiers exactly as `cuna-staking.js` (1x–6x, 6x ceiling); `cancelableAllowed:false` unless a
   program version says otherwise.
-- `owedNow = credits − paid − reserved`, never negative; `recordSent` dedups per wallet per
-  batch; a batch reserves atomically; a timed-out send is reconciled from the chain before any
-  retry (the 2026-09-09 payout's `remainingLines` + `&sent=` flow, generalised).
-- A batch may contain several transfers per transaction; verification matches the specific
-  transfer (mint, source = fundingWallet, destination owner, raw amount), not "one tx = one row".
+- `owedNow = credits − paid − reserved`, never negative; a batch reserves atomically; a
+  timed-out send is reconciled from the chain before any retry (the 2026-09-09 payout's
+  `remainingLines` + `&sent=` flow, generalised).
+- **Transfer identity is global, not per batch.** A consumed transfer is keyed
+  `<projectId>:<rewardMint>:<sig>:<instructionIndex>[:<innerIndex>]` and stored in one
+  project-wide consumed set; the same on-chain transfer can never satisfy two batches, two rows,
+  or two projects. `recordSent` verifies the specific transfer (token program, mint, source =
+  fundingWallet, destination owner, raw amount) and consumes that identity; "one tx = one row"
+  is never assumed.
+- **Batch rows carry a `submitted` state.** `pending → submitted (sig known, unconfirmed) →
+  paid | failed`. A batch with any `submitted` row cannot be cancelled and its reservation cannot
+  be released until every submitted row resolves from the chain (confirmed, or expired blockhash
+  with no confirmation). Tests: two operators creating batches concurrently (only one reserves a
+  given credit), a lost response after a send (row reconciles to paid from the chain, never
+  resent), cancellation during confirmation (refused), late confirmation after a restart (row
+  flips to paid on reconcile), and restart mid-batch (reservation survives).
 - **Who signs:** the project's `fundingWallet`, from the project's own payout page, in its own
   wallet. We hold no key. The server builds nothing that moves funds; it verifies signatures
   after the fact, exactly as today.
@@ -134,8 +169,27 @@ Owner (admin key, POST-only):
   project (two flags, disarmed by default, exactly like CUNA today).
 
 APIs mirror the pages: `GET /api/program/:projectId/{config,wallet,eligibility,batches,receipt}`
-public; `POST /api/program/:projectId/{batch,record,cancel,arm,disarm}` operator or owner; every
-acting route POST-only and `project`-explicit (the `mutating-get-guard` test extends to them).
+public; acting routes POST-only, `project`-explicit, and authorised per the matrix below (the
+`mutating-get-guard` test extends to them).
+
+**Permission matrix** (re-checked on EVERY mutation against the current Project record — removing
+an operator wallet revokes it immediately; no cached authority):
+
+| Action | Owner (admin key, POST) | Operator (challenge-signed login, wallet ∈ `operatorWallets`) | Funding wallet |
+|---|---|---|---|
+| approve / suspend project, set `fundingWallet`, set `operatorWallets` | ✔ | ✖ | ✖ |
+| arm / disarm accrual | ✔ | ✖ | ✖ |
+| draft a program version (unpublished) | ✔ | ✔ (first cohort: owner may restrict) | ✖ |
+| publish a program version | ✔ | ✖ (owner publishes in the first cohort) | ✖ |
+| create a batch (reserve) | ✔ | ✔ | ✖ |
+| sign and send a batch | ✖ (never holds the key) | ✖ | ✔ (its own wallet, its own page) |
+| record sent rows | server verifies from the chain; any authenticated party may trigger the reconcile | | |
+| cancel a batch (no submitted rows) | ✔ | ✔ | ✖ |
+| read operator console | ✔ | ✔ | ✔ if also an operator |
+
+Operator login is **not** the tools-pass session: it uses a server-issued, single-use, expiring
+challenge bound to the purpose (`clkn-hub-operator`) and the project id, and its token is a
+separate HMAC purpose with a short TTL. Money administration never reuses a tools-pass token.
 
 ## 6. The demo this enables (inside the window)
 
@@ -224,8 +278,37 @@ Explained per operator.
 specific protocols and position types first); automated liquidity provisioning; any new
 money-moving integration. LP *education* and transaction previews come first.
 
+**"Verified" carries a date, a scope and a freshness state.** Every verified item records
+`{ observedAt, source: "chain" | "external-service", reader, evidenceRef, freshness: fresh |
+stale | unavailable }`. Chain evidence (mint authority, locks, positions) is re-read on a schedule
+and shown with its observation time; an external listing-service response is labelled as such and
+never presented as on-chain evidence. A change of ownership, an unavailable reader, or a
+contradiction between a Declared statement and a Verified reading flips the item to the honest
+state (stale / unavailable / contradicted) while the historical evidence stays visible with its
+date. Historical evidence is never presented as current verification.
+
 **Acceptance tests added.** 11. Each checklist item resolves to exactly one of
-explained/declared/verified/none with its evidence link; a declared item never renders as
-verified. 12. The reward-budget planner reproduces the CUNA programme's published figures from
-its config. 13. A project with no Hatchery mint (an existing token) completes the checklist from
-Declare onward. 14. No route or copy anywhere renders a "safe" / "verified project" summary badge.
+explained/declared/verified/none with its evidence link, observation time and freshness; a
+declared item never renders as verified; an item whose underlying assertion no longer holds
+(ownership changed, reader unavailable, declaration contradicted) renders stale / unavailable /
+contradicted, not verified. 12. The reward-budget planner reproduces the CUNA programme's
+published figures AND handles: zero budget, zero daily distribution, eligible participation
+changing mid-run, payout caps, 6- and 9-decimal assets, and an unavailable funding observation;
+runway is labelled a scenario, never committed funding or guaranteed earnings. 13. A project with
+no Hatchery mint (an existing token) completes the checklist from Declare onward. 14. No route or
+copy anywhere renders a "safe" / "verified project" summary badge.
+
+**Funding accounting, defined.** `obligationsRaw = accrued − paid` (project-wide); `reservedRaw`
+= sum of pending + submitted batch rows — an **accounting** reservation only, nothing is moved;
+`observedBalanceRaw` = the funding wallet's balance of the reward asset at `observedAt`;
+`shortfallRaw = max(0, obligationsRaw − observedBalanceRaw)`. A funding wallet shared by several
+projects (or by a project and its own treasury use) is flagged `sharedFunding: true` and its
+observed balance is shown once with the list of projects that draw on it — it is never counted
+toward each project's coverage separately. Whether a project must pre-fund before accrual arms
+remains the owner's policy decision; the accounting above holds either way.
+
+**Migration test 10, extended:** the migration script is idempotent (run twice → identical
+state), survives interruption (partial run → rerun completes with no duplicates), and while both
+key shapes exist the old `/api/cuna-stake/*` routes and the new `/api/program/cuna/*` routes read
+one ledger — neither can accrue or reserve the same obligation twice (a reservation made through
+one is visible to the other).
