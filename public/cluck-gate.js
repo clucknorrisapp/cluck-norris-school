@@ -95,7 +95,7 @@
     document.head.appendChild(st);
   }
 
-  var state = { provider: null, pubkey: null, card: null, onUnlock: null, paying: false, signed: null };
+  var state = { provider: null, pubkey: null, card: null, onUnlock: null, paying: false, payIntent: null };
 
   function statusEl() { return state.card && state.card.querySelector('.ckg-status'); }
   function say(msg, ok) { var s = statusEl(); if (s) { s.textContent = msg; s.className = 'ckg-status' + (ok ? ' ok' : ''); } }
@@ -132,7 +132,7 @@
 
   function disconnect() {
     try { state.provider && state.provider.disconnect && state.provider.disconnect(); } catch (e) {}
-    state.provider = null; state.pubkey = null; state.signed = null;
+    state.provider = null; state.pubkey = null; state.payIntent = null;
     if (!state.card) return;
     state.card.querySelector('[data-ckg="connect"]').style.display = '';
     state.card.querySelector('[data-ckg="pay"]').style.display = 'none';
@@ -170,33 +170,44 @@
     } catch (e) { say('Connect failed: ' + (e.message || e)); }
   }
 
-  // Proof of wallet ownership: a signed one-line message (the same shape /premium uses). Cached
-  // for a few minutes so the PAY path can reuse the signature instead of prompting twice.
-  async function signSession() {
-    if (state.signed && state.signed.wallet === state.pubkey && Date.now() - state.signed.at < 8 * 60 * 1000) return state.signed;
+  // Proof of wallet ownership: the wallet signs a SERVER-ISSUED, single-use challenge (no
+  // transaction, no approval). One signature = one session request, so nothing is cached here;
+  // the PAY leg carries a short-lived payIntent the server hands back instead of a second prompt.
+  async function signChallenge() {
     if (!state.provider || typeof state.provider.signMessage !== 'function') throw new Error('this wallet cannot sign messages — try Phantom, Solflare, Backpack or Jupiter');
-    var message = 'Cluck Norris — unlock the tools pass\nwallet: ' + state.pubkey + '\nnonce: ' + Date.now()
-      + '\nThis only proves you own this wallet. It is NOT a transaction and grants no spending approval.';
+    var ch = await fetch('/api/tool-gate/challenge?wallet=' + encodeURIComponent(state.pubkey)).then(function (r) { return r.json(); });
+    if (!ch || !ch.success || !ch.message) throw new Error((ch && ch.error) || 'could not get a challenge');
     say('Approve the signature in your wallet — it is not a transaction.');
-    var enc = new TextEncoder().encode(message);
+    var enc = new TextEncoder().encode(ch.message);
     var res = await state.provider.signMessage(enc, 'utf8');
     var bytes = (res && res.signature) ? res.signature : res;
     if (bytes && bytes.data && !bytes.length) bytes = bytes.data;
     var b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(bytes)));
-    state.signed = { wallet: state.pubkey, message: message, signature: b64, at: Date.now() };
-    return state.signed;
+    return { wallet: state.pubkey, message: ch.message, signature: b64 };
   }
-  // The only issuer of passes: verifies the signature server-side, qualifies the wallet
-  // (comped / live CLKN balance / the payer of paySig) and answers with the session token.
+  // The only issuer of passes: verifies the signature (or the payIntent) server-side, qualifies
+  // the wallet (comped / live CLKN balance / the payer of paySig) and answers with the token.
   async function openSession(paySig) {
-    var sg = await signSession();
-    var body = { wallet: sg.wallet, message: sg.message, signature: sg.signature };
-    if (paySig) body.paySig = paySig;
+    var body = { wallet: state.pubkey };
+    if (paySig && state.payIntent && state.payIntent.wallet === state.pubkey && Date.now() - state.payIntent.at < 14 * 60 * 1000) {
+      body.payIntent = state.payIntent.token; body.paySig = paySig;
+    } else {
+      var sg = await signChallenge();
+      body.message = sg.message; body.signature = sg.signature;
+      if (paySig) body.paySig = paySig;
+    }
     var r = await fetch('/api/tool-gate/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     var j = null; try { j = await r.json(); } catch (e) {}
     if (!j) throw new Error('pass service unavailable (' + r.status + ')');
+    if (j.payIntent) state.payIntent = { token: j.payIntent, wallet: state.pubkey, at: Date.now() };
     return j;
   }
+  // A payment we sent but never got a pass for (closed tab, lost response) is remembered so the
+  // same wallet can recover it instead of paying twice.
+  var PAYKEY = 'clkn_tools_paysig';
+  function rememberPay(sig) { try { localStorage.setItem(PAYKEY, JSON.stringify({ sig: sig, wallet: state.pubkey, at: Date.now() })); } catch (e) {} }
+  function forgetPay() { try { localStorage.removeItem(PAYKEY); } catch (e) {} }
+  function pendingPay() { try { var d = JSON.parse(localStorage.getItem(PAYKEY) || 'null'); return d && d.wallet === state.pubkey && Date.now() - d.at < 8 * 24 * 3600 * 1000 ? d : null; } catch (e) { return null; } }
 
   async function checkHolder(c, walletName) {
     // Comped wallets, holders and the price-outage grace are all decided SERVER-SIDE now — the
@@ -245,6 +256,20 @@
     if (!state.provider || !state.pubkey) return connect(c);
     state.paying = true; btn.disabled = true;
     try {
+      // A previous payment from this wallet that never turned into a pass? Recover it first —
+      // the server re-issues the pass to the same payer with its original expiry.
+      var prev = pendingPay();
+      if (prev) {
+        say('Checking a previous payment from this wallet…');
+        for (var k = 0; k < 6; k++) {
+          try {
+            var pv = await openSession(prev.sig);
+            if (pv.success && pv.pass) { forgetPay(); grant(pv.days || c.days, 'paid', pv.pass); say('✓ Your earlier payment was found — every heavy tool is unlocked for ' + (pv.days || c.days) + ' days.', true); return finish(); }
+            if (/different wallet|not addressed|amount too low|already redeemed/.test(pv.error || '')) { forgetPay(); break; }
+          } catch (e) {}
+          await new Promise(function (r2) { setTimeout(r2, 2000); });
+        }
+      }
       say('Loading payment libraries…');
       await ensurePayLibs();
       var bh = await CluckUtil.rpc('getLatestBlockhash', [{ commitment: 'finalized' }]);
@@ -258,17 +283,18 @@
       var res = await state.provider.signAndSendTransaction(tx);
       var sig = (res && res.signature) || (typeof res === 'string' ? res : null);
       if (!sig) throw new Error('wallet returned no signature');
+      rememberPay(sig);
       say('Confirming payment on-chain…');
-      // The pass is issued to the PAYER only: the session call re-proves this wallet (the
-      // signature from the connect step is reused when it is fresh) and the server checks the
-      // transaction's fee payer is the same wallet before consuming the payment.
+      // The pass is issued to the PAYER only: the payIntent from the connect step (or a fresh
+      // signed challenge) proves this wallet, and the server checks the transaction's fee payer
+      // is the same wallet before consuming the payment.
       var ok = null, lastErr = '';
       for (var i = 0; i < 24; i++) {
         try { var v = await openSession(sig); if (v.success && v.pass) { ok = v; break; } lastErr = v.error || ''; if (/different wallet|already redeemed/.test(lastErr)) break; } catch (e) { lastErr = e.message || ''; }
-        await new Promise(function (r2) { setTimeout(r2, 2500); });
+        await new Promise(function (r3) { setTimeout(r3, 2500); });
       }
-      if (ok) { grant(ok.days || c.days, 'paid', ok.pass); say('✓ Paid — every heavy tool is unlocked for ' + (ok.days || c.days) + ' days.', true); return finish(); }
-      say(/different wallet|already redeemed/.test(lastErr) ? ('Payment could not be applied: ' + lastErr) : 'Payment sent but not confirmed yet — tap PAY again in a moment to re-check (it will not charge twice: the same signature is re-verified).');
+      if (ok) { forgetPay(); grant(ok.days || c.days, 'paid', ok.pass); say('✓ Paid — every heavy tool is unlocked for ' + (ok.days || c.days) + ' days.', true); return finish(); }
+      say(/different wallet|already redeemed/.test(lastErr) ? ('Payment could not be applied: ' + lastErr) : 'Payment sent but not confirmed yet — tap PAY again in a moment; it will pick up this same payment, not charge you twice.');
       btn.disabled = false; state.paying = false;
     } catch (e) { say('Payment failed: ' + (e.message || e)); btn.disabled = false; state.paying = false; }
   }
