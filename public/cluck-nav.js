@@ -36,10 +36,16 @@
   // Method: reset to the default anchor, measure, and if the floater overlaps any visible form
   // control it doesn't contain, lift it 10px above the highest one. Re-runs on resize (covers the
   // on-screen keyboard) and on two delayed passes for late-rendering pages like the React school.
-  // Also opts in plain content (tile/card grids), not just form controls: a page marks its grid
-  // with data-clkn-avoid and every DIRECT CHILD is checked individually — found on / (the quick
-  // tile grid's first row) and /tools (the Airdrop card) at 390px and 1280px, where the pills sat
-  // on ordinary <a> cards on first paint, nothing to do with an on-screen keyboard (2026-09-10).
+  // Also opts in plain content (tile/card grids, short headings/sub-lines), not just form
+  // controls: a page marks a container with data-clkn-avoid and every DIRECT CHILD is checked
+  // individually, or marks one short element with it directly to be checked itself — found on
+  // / (the quick tile grid's first row, the hero lede) and /tools (tool cards, section
+  // sub-lines) at 390px and 1280px, where the pills sat on ordinary text and <a> cards on first
+  // paint, nothing to do with an on-screen keyboard (2026-09-10). Only tag SHORT elements
+  // directly (a line of text, a card) — a tall container matched directly would count as
+  // "overlapping" across its whole height and lift the pill absurdly high; a container's own
+  // top usually already equals its first child's top, so tagging it directly is harmless, but
+  // don't tag something like a whole hero section that way.
   window.__clknDockFloat = function (el) {
     if (!el || el.__clknDocked) return; el.__clknDocked = 1;
     var DEF = "calc(14px + env(safe-area-inset-bottom,0px))";
@@ -55,7 +61,7 @@
           el.style.bottom = lift ? (lift + "px") : DEF;             // measure from current anchor
           var b = el.getBoundingClientRect(); if (!b.width) return;
           var found = false;
-          var els = document.querySelectorAll("input,textarea,select,button,[contenteditable='true'],[data-clkn-avoid] > *");
+          var els = document.querySelectorAll("input,textarea,select,button,[contenteditable='true'],[data-clkn-avoid],[data-clkn-avoid] > *");
           for (var i = 0; i < els.length; i++) {
             var e = els[i];
             if (el.contains(e)) continue;
