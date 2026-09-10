@@ -30,10 +30,33 @@
     } catch (e) {}
     return null;
   }
-  function grant(days, why) {
-    var d = { unlockedAt: Date.now(), expiresAt: Date.now() + days * 24 * 60 * 60 * 1000, why: why || 'paid' };
+  // proof is what the SERVER re-checks on every gated run (x-clkn-pass): 'w:<wallet>' for the
+  // holder / comped path, 's:<sig>' for a redeemed SOL payment. A grant without proof (pre-2026-09-10
+  // localStorage) still opens the page, but the API answers 402 and the pass is re-done once.
+  function grant(days, why, proof) {
+    var d = { unlockedAt: Date.now(), expiresAt: Date.now() + days * 24 * 60 * 60 * 1000, why: why || 'paid', proof: proof || null };
     try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
     return d;
+  }
+  function proof() { var d = pass(); return (d && d.proof) || null; }
+  function clear() { try { localStorage.removeItem(KEY); } catch (e) {} }
+  // fetch() for a gated API: sends the proof, and when the server refuses the pass (expired,
+  // never redeemed, balance fell under the threshold) drops the local grant so the next RUN
+  // re-opens the gate card instead of failing silently forever.
+  var PASS_ERRORS = { pass_required: 1, pass_expired: 1, bad_pass: 1, insufficient_holdings: 1 };
+  async function gatedFetch(url, opts) {
+    opts = opts || {};
+    var h = new Headers(opts.headers || {});
+    var p = proof();
+    if (p) h.set('x-clkn-pass', p);
+    var r = await fetch(url, Object.assign({}, opts, { headers: h }));
+    if (r.status === 402 || r.status === 403) {
+      try {
+        var j = await r.clone().json();
+        if (j && PASS_ERRORS[j.error]) clear();
+      } catch (e) {}
+    }
+    return r;
   }
   async function config() {
     if (cfg && Date.now() - cfgAt < 60000) return cfg;
@@ -151,7 +174,7 @@
     // {comped:true, why:'nft'}; no client change needed beyond the label.
     try {
       var comp = await fetch('/api/tool-comp/check?wallet=' + encodeURIComponent(state.pubkey)).then(function (r) { return r.json(); });
-      if (comp && comp.comped) { grant(3650, 'comp'); say('✓ Comped wallet — unlocked.', true); return finish(); }
+      if (comp && comp.comped) { grant(3650, 'comp', 'w:' + state.pubkey); say('✓ Comped wallet — unlocked.', true); return finish(); }
     } catch (e) {}
     try {
       var r = await CluckUtil.rpc('getTokenAccountsByOwner', [state.pubkey, { mint: c.mint }, { encoding: 'jsonParsed' }]);
@@ -163,13 +186,13 @@
       });
       var worth = c.priceUsd ? bal * c.priceUsd : null;
       if (c.clknNeeded && bal >= c.clknNeeded) {
-        grant(c.days, 'holder');
+        grant(c.days, 'holder', 'w:' + state.pubkey);
         say('✓ ' + (walletName || 'Holder') + ' — ' + fmtI(Math.floor(bal)) + ' CLKN (≈$' + fmtI(Math.floor(worth || 0)) + '). All tools free.', true);
         return finish();
       }
       if (!c.clknNeeded) {
         // price feed down — never punish the user for our outage
-        grant(1, 'grace');
+        grant(1, 'grace', 'w:' + state.pubkey);
         say('✓ Unlocked (price check unavailable right now).', true);
         return finish();
       }
@@ -221,7 +244,7 @@
         try { var v = await fetch('/api/verify-sol-payment?sig=' + encodeURIComponent(sig) + '&min=' + c.lamports).then(function (r) { return r.json(); }); if (v.success) { ok = true; break; } } catch (e) {}
         await new Promise(function (r2) { setTimeout(r2, 2500); });
       }
-      if (ok) { grant(c.days, 'paid'); say('✓ Paid — every heavy tool is unlocked for ' + c.days + ' days.', true); return finish(); }
+      if (ok) { grant(c.days, 'paid', 's:' + sig); say('✓ Paid — every heavy tool is unlocked for ' + c.days + ' days.', true); return finish(); }
       say('Payment sent but not confirmed yet — tap PAY again in a moment to re-check (it will not charge twice: the same signature is re-verified).');
       btn.disabled = false; state.paying = false;
     } catch (e) { say('Payment failed: ' + (e.message || e)); btn.disabled = false; state.paying = false; }
@@ -258,5 +281,5 @@
     };
   }
 
-  global.CluckGate = { guard: guard, config: config, pass: pass, grant: grant };
+  global.CluckGate = { guard: guard, config: config, pass: pass, grant: grant, proof: proof, fetch: gatedFetch, clear: clear };
 })(window);

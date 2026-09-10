@@ -1480,7 +1480,7 @@ function StartHere({ onGo }){
         <p style={txt}>Cluck Norris is the free School of Crypto Hard Knocks + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility. CLKN unlocks premium tools — hold it and they're free. The school itself is always free.</p>
         <Act label="💸 Buy CLKN on Jupiter" onClick={goExt(JUPITER_TRADE_LINK)} color="#34D399" bg="rgba(16,185,129,0.14)" bd="rgba(16,185,129,0.5)"/>
         <Act label="📊 Token data & chart" onClick={()=>onGo("clkn")}/>
-        <Act label="📜 The story & investors" onClick={goIn("/investors")}/>
+        <Act label="📜 About the project" onClick={goIn("/about")}/>
       </>)},
     { key:"explore", icon:"🧭", title:"Just exploring", tag:"The lay of the land", body:()=>(<>
         <p style={txt}>Poke around — here's everything in one place.</p>

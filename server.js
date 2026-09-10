@@ -7902,6 +7902,55 @@ const TOOLGATE = {
 // inside the refresh branch, so every request racing a cold-start refresh read usd=0 and the
 // paywall failed open for the whole first-fetch window after each deploy.
 let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: null };
+
+// SERVER-SIDE enforcement of the tools pass (2026-09-10). Until now the pass lived only in
+// localStorage (cluck-gate.js) and the heavy APIs answered anyone — a bare curl pulled a full
+// X-Ray report with no wallet, no pass, no signature, which made the whole revenue model a
+// localStorage.setItem away. The page still previews free; RUN sends proof in `x-clkn-pass`:
+//   w:<wallet>  — holder path: comped wallet, or a LIVE CLKN balance worth TOOLGATE_USD
+//   s:<sig>     — paid path: the SOL payment signature /api/verify-sol-payment redeemed,
+//                 recorded as toolPass:<sig> with the same TOOLGATE_DAYS expiry the client uses
+// Same fail-open rule as the client: no usable CLKN price (or an RPC blip on the balance read)
+// never punishes a user for our outage. TOOLGATE_OFF=1 disables it everywhere, as before.
+const toolPassHolderCache = new Map();   // wallet -> { ok, at } — one balance read per wallet per 5 min
+async function toolPassGate(req) {
+  if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return { ok: true, via: "gate-off" };
+  const raw = String(req.get("x-clkn-pass") || (req.query && req.query.pass) || "").trim();
+  if (!raw) {
+    return { ok: false, status: 402, error: "pass_required",
+      detail: `This tool runs on the unified tools pass: hold about $${TOOLGATE.usd} of CLKN (free) or ${TOOLGATE.lamports / 1e9} SOL for ${TOOLGATE.days} days. Run it from the page to unlock.` };
+  }
+  const m = /^(w|s):([1-9A-HJ-NP-Za-km-z]{32,100})$/.exec(raw);
+  if (!m) return { ok: false, status: 403, error: "bad_pass", detail: "Unrecognised pass proof." };
+  if (m[1] === "s") {
+    const rec = kv.get("toolPass:" + m[2], null);
+    if (rec && Number(rec.expiresAt) > Date.now()) return { ok: true, via: "paid" };
+    return { ok: false, status: 403, error: "pass_expired", detail: "That tools pass has expired or was never redeemed here — unlock again from the page." };
+  }
+  const wallet = m[2];
+  if (!SOL_ADDR_RE.test(wallet)) return { ok: false, status: 403, error: "bad_pass", detail: "Unrecognised wallet in pass proof." };
+  if (isToolComped(wallet)) return { ok: true, via: "comp", wallet };
+  const cached = toolPassHolderCache.get(wallet);
+  if (cached && Date.now() - cached.at < 5 * 60e3) return cached.ok ? { ok: true, via: "holder-cached", wallet } : { ok: false, status: 403, ...cached.deny };
+  const priceUsd = toolGatePrice.usd || null;
+  if (!priceUsd) return { ok: true, via: "grace-price", wallet };
+  let h;
+  try { h = await checkCLKNHolder(wallet); } catch (e) { console.warn("[tool-pass] balance read failed, failing open:", e.message); return { ok: true, via: "grace-rpc", wallet }; }
+  const needed = Math.ceil(TOOLGATE.usd / priceUsd);
+  const bal = Number(h && h.balance) || 0;
+  if (bal >= needed) { toolPassHolderCache.set(wallet, { ok: true, at: Date.now() }); return { ok: true, via: "holder", wallet, balance: bal, needed }; }
+  const deny = { error: "insufficient_holdings", balance: bal, needed, holdUsd: TOOLGATE.usd, priceUsd,
+    detail: `The free tier needs about $${TOOLGATE.usd} of CLKN (~${needed.toLocaleString()} at the current price); that wallet holds ${Math.round(bal).toLocaleString()}. ${TOOLGATE.lamports / 1e9} SOL unlocks every heavy tool for ${TOOLGATE.days} days.` };
+  toolPassHolderCache.set(wallet, { ok: false, at: Date.now(), deny });
+  return { ok: false, status: 403, ...deny };
+}
+// One line per gated route: answers the JSON the page renders, or null to continue.
+async function requireToolPass(req, res) {
+  const g = await toolPassGate(req);
+  if (g.ok) return null;
+  const { status, ...body } = g;
+  return res.status(status || 403).json({ success: false, ...body });
+}
 // Same RPC selection the rest of the file uses: the failover primary when configured, else the
 // Helius key directly. Named locally so this block does not depend on load order.
 function tokenMetaRpcUrl() {
@@ -8305,7 +8354,10 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     if (!sigStore.add("sol:" + sig)) {
       return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
     }
-    return res.status(200).json({ success: true, lamports: delta });
+    // The server-side tools pass (toolPassGate): the redeemed signature IS the pass for
+    // TOOLGATE.days, so the page can send it back as proof on every gated run.
+    kv.set("toolPass:" + sig, { at: Date.now(), expiresAt: Date.now() + TOOLGATE.days * 24 * 3600e3, lamports: delta });
+    return res.status(200).json({ success: true, lamports: delta, pass: "s:" + sig, days: TOOLGATE.days });
   } catch (err) {
     console.error("[verify-sol-payment] error:", err.message);
     return res.status(200).json({ success: false, error: err.message });
@@ -12267,6 +12319,9 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
       // Close this browser session to other wallets once a mint lands — a second
       // wallet minting off the same session is a farm signature, not a household.
       if (nft && nft.ok && sid) schoolProgress.bindWallet(sid, wallet);
+      // Persist the mint on the credential so /transcript can link the on-chain NFT — until
+      // 2026-09-10 the signature was returned in this response and then forgotten.
+      if (nft && nft.ok && nft.sig) { try { credentials.setNft(wallet, { sig: nft.sig, tree: nft.tree || null }); } catch (_) {} }
     }
     return res.status(200).json({
       success: true, isHolder, balance, verified,
@@ -12322,6 +12377,10 @@ app.get("/api/credential/:id", (req, res) => {
   // Public view: expose holder STATUS but never the balance (the owner may not
   // want their bag size on a shareable page).
   const pub = { ...rec, holder: rec.holder ? { isHolder: rec.holder.isHolder } : null };
+  // Graduates minted before the record carried the signature: read it from the mint ledger.
+  if (!pub.nft) {
+    try { const m = (kv.get(diplomaNft.MINTED_KV, {}) || {})[rec.wallet]; if (m && m.sig) pub.nft = { sig: m.sig, at: m.at ? new Date(m.at).toISOString() : null }; } catch (_) {}
+  }
   return res.status(200).json({ success: true, transcript: pub });
 });
 
@@ -13374,6 +13433,7 @@ app.get("/api/snapshot", async (req, res) => {
   if (!SOL_ADDR_RE.test(mint)) {
     return res.status(400).json({ success: false, error: "Invalid mint address" });
   }
+  if (await requireToolPass(req, res)) return;   // unified tools pass, enforced server-side
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) {
     return res.status(500).json({ success: false, error: "Server not configured" });
@@ -13576,6 +13636,7 @@ app.get("/api/trace", async (req, res) => {
   if (!SOL_ADDR_RE.test(wallet) || !SOL_ADDR_RE.test(mint)) {
     return res.status(400).json({ success: false, error: "Provide a valid wallet and token mint address" });
   }
+  if (await requireToolPass(req, res)) return;   // unified tools pass, enforced server-side
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
@@ -14052,6 +14113,7 @@ app.get("/api/wallet-xray", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const wallet = String(req.query.wallet || "").trim();
   if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "Provide a valid wallet address" });
+  if (await requireToolPass(req, res)) return;   // unified tools pass, enforced server-side
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
@@ -14975,7 +15037,7 @@ app.get("/api/token-card", async (req, res) => {
 });
 
 // -- ROSE Buy Competition Analyzer --
-// The Hatchery — guided token creator. Unlisted: not linked from nav anywhere,
+// The Hatchery — guided token creator. Linked from /tools (the "unlisted" note here was stale),
 // reachable only by direct URL while in private testing.
 app.get("/hatchery", (req, res) => {
   res.sendFile(join(__dirname, "public", "hatchery.html"));
@@ -15270,10 +15332,6 @@ app.get("/airdrop-signup", (req, res) => res.sendFile(join(__dirname, "public", 
 // Decorative only — the wheel draws and spins without them.
 app.get("/img-cuna-taco.png", (req, res) => res.sendFile(join(__dirname, "public", "img-cuna-taco.png")));
 app.get("/img-cuna-lips.png", (req, res) => res.sendFile(join(__dirname, "public", "img-cuna-lips.png")));
-app.get("/prize-wheel", (req, res) => {
-  res.setHeader("X-Robots-Tag", "noindex, nofollow");
-  res.sendFile(join(__dirname, "public", "prize-wheel.html"));
-});
 app.get("/drop", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
 // Community meme art (AI-generated project images posted to rooms via /api/tg-test &photo= —
 // Telegram fetches by URL, ≤5MB). public/ is not statically mounted, so explicit route.
@@ -15648,6 +15706,7 @@ app.get("/pool-monitor", (req, res) => {
 // Deliberately unlinked everywhere; noindex).
 app.get("/whale-panel", (req, res) => {
   res.setHeader("Cache-Control", "no-store, must-revalidate");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
   res.sendFile(join(__dirname, "public", "whale-panel.html"));
 });
 
@@ -15717,6 +15776,7 @@ app.get("/liquidity-engine", (req, res) => {
 
 // Liquidity Engine — multi-project operator dashboard (key-gated client-side).
 app.get("/engine-dashboard", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
   res.sendFile(join(__dirname, "public", "engine-dashboard.html"));
 });
 
@@ -15883,7 +15943,14 @@ app.get("/terms", (req, res) => {
 
 // Buy-Competition operator portal (hidden, unadvertised; actions are key-gated server-side).
 app.get("/buycomp-admin", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
   res.sendFile(join(__dirname, "public", "buycomp-admin.html"));
+});
+// Project client portal (key/wallet-gated inside the page). Routed so the raw .html is not the
+// only way in and so it carries noindex like the other consoles.
+app.get("/client-portal", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.sendFile(join(__dirname, "public", "client-portal.html"));
 });
 
 // Buy Special random-draw runner + public results/verification view (?id=<drawId>).
@@ -15947,17 +16014,17 @@ app.get(["/holders", "/snapshot"], (req, res) => {
 // catch-all, which would answer an old bookmark with the school shell and a 200.
 // /grant retired 2026-07-29 (the ecosystem-grant avenues went nowhere); Token Vitals was
 // folded away in the same consolidation and /holders is its nearest replacement.
-app.get("/grant", (req, res) => res.redirect(301, "/investors"));
+app.get("/grant", (req, res) => res.redirect(301, "/about"));
 app.get("/token-vitals", (req, res) => res.redirect(301, "/holders"));
 
 // -- Investor / Interested Party page (live stats, pitch, real-talk risks) --
-app.get("/investors", (req, res) => {
+// /about is the canonical name (2026-09-10): the page is written for judges, partners and
+// anyone evaluating the project, not for token buyers. The old /investors URL is in old posts
+// and the footer of cached pages, so it redirects rather than 404s.
+app.get("/about", (req, res) => {
   res.sendFile(join(__dirname, "public", "investors.html"));
 });
-app.get("/investor", (req, res) => {
-  // Singular alias for whoever types it that way
-  res.sendFile(join(__dirname, "public", "investors.html"));
-});
+app.get(["/investors", "/investor"], (req, res) => res.redirect(301, "/about"));
 
 // -- Cluck Order Book (resting orders + cross-pool AMM depth; UI for /api/order-scan) --
 app.get("/order-book", (req, res) => {
@@ -16533,7 +16600,7 @@ const SITEMAP_PAGES = [
   "/", "/school", "/education", "/tools", "/wallet-xray", "/trace",
   "/snapshot", "/holders", "/owners-snapshot", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
   "/wallet-checkup", "/locker-room", "/clkn", "/alpha", "/lp-lab",
-  "/classroom", "/bags", "/investors", "/privacy", "/terms",
+  "/classroom", "/bags", "/about", "/privacy", "/terms",
   // /token-lock became public + indexable 2026-09-04 (was operator-only, noindex).
   "/token-lock", "/firepit", "/project-burn",
   // /liquidity + /liquidity-engine dropped 2026-07-19 (audit): both serve a locked
@@ -16665,6 +16732,14 @@ app.get(["/lp-lab", "/lplab"], (req, res) => {
 app.use("/assets", express.static(join(__dirname, "dist", "assets"), { maxAge: "365d", immutable: true }));
 
 // -- Serve React app (the school) at /school + every non-root path via the catch-all --
+// Operator consoles and the owner payout page are served ONLY through their routes (which set
+// noindex and, for some, gate the page): the vite publicDir copy would otherwise answer the raw
+// /<name>.html with none of those headers — found indexable on 2026-09-10.
+const RAW_HTML_CONSOLES = /^\/(engine-dashboard|buycomp-admin|jupverify-admin|jupverify|client-portal|whale-panel|cuna-payout|cuna-staking|prize-wheel)\.html$/i;
+app.use((req, res, next) => {
+  if (RAW_HTML_CONSOLES.test(req.path)) return res.status(404).json({ error: "not_found" });
+  next();
+});
 app.use(express.static(join(__dirname, "dist"), { index: false }));
 
 // Static-asset extensions. A request for one of these that reaches the catch-all
