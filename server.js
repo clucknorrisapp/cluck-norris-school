@@ -52,6 +52,7 @@ const kv = require("./lib/kvstore");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
 const credentials = require("./lib/credentials");
+const jvpDashboard = require("./lib/jvp-dashboard");
 const curriculumPage = require("./lib/curriculum"); // lesson COUNTS only — the SEO mirror page was removed 2026-07-29
 const rpc = require("./lib/rpc"); // resilient RPC: primary Helius + automatic failover
 const {
@@ -6755,6 +6756,30 @@ app.get("/api/content-engine-test", async (req, res) => {
 // /liquidity-engine page's proof chart. Organic score / volume / price are all public
 // market data; this exposes no wallet, position, or strategy detail. Cached 2 min.
 let _engineProofCache = null, _engineProofAt = 0;
+// ── JVP engine dashboard (read-only, public, sanitized in lib/jvp-dashboard.js) ──────────
+// The fleet view behind /liquidity-engine. GET-only by construction: nothing here can arm,
+// pause, roll or sign, and the responses carry no operator pubkey, float or P&L. The treasury
+// vault is CLKN's own book, not a client, so it is not part of the public story.
+const JVP_PUBLIC_PROJECTS = ["clkn", "poke", "cuna", "dnc", "rose"];
+app.get("/api/jvp/overview", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  try {
+    const out = await jvpDashboard.overview({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, include: JVP_PUBLIC_PROJECTS });
+    return res.status(200).json({ success: true, ...out });
+  } catch (e) { console.warn("[jvp] overview failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
+});
+app.get("/api/jvp/project/:id", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const id = String(req.params.id || "").toLowerCase();
+  if (!JVP_PUBLIC_PROJECTS.includes(id)) return res.status(404).json({ success: false, error: "not_found" });
+  try {
+    const hours = Math.max(24, Math.min(720, parseInt(req.query.hours, 10) || 168));
+    const out = await jvpDashboard.projectDetail({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, id, hours });
+    if (!out) return res.status(404).json({ success: false, error: "not_found" });
+    return res.status(200).json({ success: true, updatedAt: Date.now(), project: out });
+  } catch (e) { console.warn("[jvp] project failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
+});
+
 app.get("/api/engine-proof", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=120");
   try {
@@ -10618,8 +10643,10 @@ app.get("/api/lock/recent", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=120");
   try {
     const now = Date.now();
-    if (_recentLocksCache.data && now - _recentLocksCache.t < 120000) {
-      return res.status(200).json({ ok: true, cached: true, locks: _recentLocksCache.data });
+    // ?limit= (default 12 for the Locker Room feed, up to 200 for the Lock of Fame index).
+    const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 12));
+    if (_recentLocksCache.data && now - _recentLocksCache.t < 120000 && (_recentLocksCache.limit || 12) >= limit) {
+      return res.status(200).json({ ok: true, cached: true, locks: _recentLocksCache.data.slice(0, limit) });
     }
     const jupLock = require("./lib/jup-lock");
     // OUR locker only (owner's call 2026-07-17): the feed shows locks made through THIS UI,
@@ -10632,7 +10659,7 @@ app.get("/api/lock/recent", async (req, res) => {
     const bySig = new Map();
     for (const e of events) bySig.set(e.sig, { mint: e.mint, amount: e.amount, creator: e.creator, sig: e.sig, ts: e.ts || e.recordedAt || 0, name: e.name || null, symbol: e.symbol || null, icon: e.icon || null, via: e.via || null });
     for (const l of scanned) if (!bySig.has(l.sig)) bySig.set(l.sig, l);
-    const merged = [...bySig.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 12);
+    const merged = [...bySig.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, limit);
     // Enrich any (scan) entries that don't already have token identity.
     const metaCache = new Map();
     for (const l of merged) {
@@ -10649,7 +10676,7 @@ app.get("/api/lock/recent", async (req, res) => {
       const m = metaCache.get(l.mint) || {};
       l.name = m.name || null; l.symbol = m.symbol || null; l.icon = m.icon || null;
     }
-    _recentLocksCache = { t: now, data: merged };
+    _recentLocksCache = { t: now, data: merged, limit };
     return res.status(200).json({ ok: true, locks: merged });
   } catch (err) {
     return res.status(200).json({ ok: false, error: publicErrMsg(err), locks: [] });
@@ -10683,9 +10710,10 @@ app.post("/api/lock/record", async (req, res) => {
       if (t) { name = t.name || null; symbol = t.symbol || null; icon = (typeof t.icon === "string" && /^https:\/\//.test(t.icon)) ? t.icon : null; }
     } catch (_) {}
     const ev = { mint: v.mint, amount: v.amount, creator: v.creator, sig: v.sig, ts: v.ts || Date.now(), name, symbol, icon, via: "clucknorris", recordedAt: Date.now() };
-    // No time-based prune: since the feed is OUR-locker-only, keep the latest 40 UI locks
-    // regardless of age so a quiet day never empties the strip.
-    const next = [ev, ...events.filter((e) => e.sig !== sig)].slice(0, 40);
+    // No time-based prune: since the feed is OUR-locker-only, keep the latest 400 UI locks
+    // regardless of age (was 40 — the Lock of Fame index, 2026-09-10, is the full record of
+    // every lock made through us, so the ring must outlive a busy week). ~300 bytes each.
+    const next = [ev, ...events.filter((e) => e.sig !== sig)].slice(0, 400);
     kv.set("recentLockEvents", next);
     _recentLocksCache = { t: 0, data: null };   // bust cache so it appears on the next fetch
     return res.status(200).json({ ok: true });
@@ -15661,8 +15689,14 @@ app.get("/rosehorses", (req, res) => {
 });
 
 // Liquidity Engine — Orca Whirlpools concentrated-liquidity market maker.
-app.get("/liquidity", (req, res) => {
-  res.sendFile(join(__dirname, "public", "liquidity-locked.html"));
+// The Liquidity Engine — public, read-only dashboard (2026-09-10). Replaced the "in
+// development" placeholder; both historical URLs serve it.
+app.get(["/liquidity", "/liquidity-engine"], (req, res) => {
+  res.sendFile(join(__dirname, "public", "liquidity-engine.html"));
+});
+// Lock of Fame index — every lock that carries our on-chain memo, grouped by mint.
+app.get("/lock-of-fame", (req, res) => {
+  res.sendFile(join(__dirname, "public", "lock-of-fame.html"));
 });
 
 // LP Pair Scanner — standalone flagship: every pool for a pair across every DEX + Ask Cluck.
@@ -15770,9 +15804,6 @@ for (const asset of ["airdrop-engine.js", "airdrop-handoff.js"]) {
 }
 
 // Liquidity Engine — product / education / platform page (the flagship pitch).
-app.get("/liquidity-engine", (req, res) => {
-  res.sendFile(join(__dirname, "public", "liquidity-locked.html"));
-});
 
 // Liquidity Engine — multi-project operator dashboard (key-gated client-side).
 app.get("/engine-dashboard", (req, res) => {
@@ -16665,7 +16696,14 @@ app.get(["/education", "/education.html"], (req, res) => {
 // text as one flat page. Permanent redirect rather than deletion: the page was in the
 // sitemap and is indexed, and without an explicit route the SPA catch-all would answer
 // it with the React shell — a 200 soft-404 on every result that still points here.
-app.get("/curriculum", (req, res) => res.redirect(301, "/education"));
+// Quiz-free syllabus (2026-09-10): what the school teaches, never the assessment. Generated
+// from the lesson source by scripts/build-curriculum.cjs (runs in `npm run build`); the old
+// page was removed because it published every quiz question and answer.
+app.get("/curriculum", (req, res) => {
+  const f = join(__dirname, "public", "curriculum.html");
+  if (!fs.existsSync(f)) return res.redirect(302, "/education");
+  res.sendFile(f);
+});
 
 // Normie Quest — hidden feature (Phase 0 demo page). Self-contained, isolated
 // side project (a friend's NORMIE token game); shares nothing with CLKN code.
@@ -17562,19 +17600,38 @@ async function recordOrganicSnapshot() {
       const qd = await q.json();
       entry.orcaRoutable = !(qd && qd.error);
     } catch (_) { entry.orcaRoutable = null; }
+    // Dashboard fields (2026-09-10): holders, liquidity, mcap and the organic-vs-total 24h
+    // volume split from Jupiter's token stats — the trajectory panels and the anti-wash panel
+    // on /liquidity-engine read these. Best effort; the entry is still written without them.
+    try {
+      const mf = await jvpDashboard.marketFacts(CLKN_MINT_ADDR);
+      if (mf) { entry.holders = mf.holderCount; entry.liqUsd = mf.liquidityUsd; entry.mcapUsd = mf.mcapUsd; entry.organicVol = mf.vol24h.organic; entry.totalVol = mf.vol24h.total; }
+    } catch (_) {}
     const log = kv.get("clknOrganicLog", []) || [];
     log.push(entry);
     kv.set("clknOrganicLog", log.slice(-800));
     // Multi-mint (audit: the logger only tracked CLKN, so the DNC/CUNA score experiments had
     // no hourly record and every comparison leaned on memory + ad-hoc reads). Same cadence,
-    // score+price only, per-mint ring. Read back via /api/clkn-organic-log?mint=<mint>.
-    for (const [sym, mint] of [["DNC", DNC_MINT], ["CUNA", CUNA_MINT]]) {
+    // per-mint ring. Since 2026-09-10 EVERY registered engine project is logged (POKE and ROSE
+    // had no series at all) with holders/liquidity/organic split, so the dashboard can draw
+    // a trajectory for each client token. Read back via /api/clkn-organic-log?mint=<mint>.
+    const projMints = [];
+    try {
+      for (const [id, p] of Object.entries(whirlpoolMM.vault.listProjects() || {})) {
+        if (!p || !p.tokenMint || p.tokenMint === CLKN_MINT_ADDR || id === "treasury") continue;
+        if (!projMints.some((x) => x.mint === p.tokenMint)) projMints.push({ sym: p.symbol || id.toUpperCase(), mint: p.tokenMint });
+      }
+    } catch (_) {}
+    for (const [sym, mint] of [["DNC", DNC_MINT], ["CUNA", CUNA_MINT]]) if (!projMints.some((x) => x.mint === mint)) projMints.push({ sym, mint });
+    for (const { sym, mint } of projMints) {
       try {
-        const o = await getClknOrganicScore(mint).catch(() => null);
-        if (!o) continue;
+        const [o, mf] = await Promise.all([getClknOrganicScore(mint).catch(() => null), jvpDashboard.marketFacts(mint).catch(() => null)]);
+        if (!o && !mf) continue;
         const k = `organicLog:${mint}`;
         const l = kv.get(k, []) || [];
-        l.push({ ts: now, sym, score: Number.isFinite(o.score) ? Number(o.score.toFixed(2)) : null, label: o.label || null });
+        const e = { ts: now, sym, score: o && Number.isFinite(o.score) ? Number(o.score.toFixed(2)) : (mf ? mf.organicScore : null), label: (o && o.label) || (mf && mf.organicLabel) || null };
+        if (mf) { e.holders = mf.holderCount; e.liqUsd = mf.liquidityUsd; e.mcapUsd = mf.mcapUsd; e.organicVol = mf.vol24h.organic; e.totalVol = mf.vol24h.total; e.priceUsd = mf.usdPrice; }
+        l.push(e);
         kv.set(k, l.slice(-800));
       } catch (_) { /* per-mint best effort */ }
     }
