@@ -62,6 +62,13 @@ does not tell you how to write software; use your judgement for that.
 > hackathon-scope work done right (the quiz-free `/curriculum` came back this way); it is a record
 > of what failed and why, so the rebuild does not repeat the failure. Second reviewer: **Codex**
 > reads `docs/CODEX_REVIEWER_BRIEF.md` and comments on PRs; findings, not rewrites.
+> ⛔ **PUBLISH NOTHING UNTIL THE HACKATHON WINDOW OPENS (owner, 2026-09-10: "publish nothing til
+> we are in hackathon").** Until 2026-09-14 00:00 UTC: no merge to `main`, no promotion, no
+> public post about hackathon work, no submission, and PR #282 (dashboard, Lock of Fame, syllabus,
+> navigation) stays OPEN. Only fixes may land on `develop` (staging). Colosseum scores work done
+> inside the window and requires disclosure of what came before; the tag `pre-colosseum-2026-09-14`
+> is that line. From Sep 14: merge #282 first, then build the Project Hub + verifiable program
+> terms and receipts as the in-window centerpiece.
 > ⚠️ **The tools pass is a SIGNED SESSION** (reworked 2026-09-10 after Codex found that a pasted
 > holder address and a public payment signature were both bearer passes): the wallet signs a
 > one-line nonce message, `POST /api/tool-gate/session` verifies it and issues an HMAC token, and
