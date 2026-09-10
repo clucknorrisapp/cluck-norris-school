@@ -119,6 +119,16 @@
     .hero h1{font-size:44px;}
     .guidebtn .gt{font-size:19px;}
     .nav .links a:not(.cta):not(.ask){display:none;}
+    /* Trim hero spacing on phones (2026-09-10): on a short phone viewport (e.g. 390x844)
+       the hero + guide capsule alone nearly filled the screen, leaving the quick-tile
+       grid's first row sitting right in the fold where the fixed Listen/EN pills also
+       live. This is the real fix — shrinking real vertical space — the dock-lift JS in
+       cluck-nav.js (data-clkn-avoid) is left as a safety net, not the primary fix. */
+    .hero{padding:30px 10px 4px;}
+    .hero .avatar{width:112px;height:112px;}
+    .hero .kicker{margin-top:10px;}
+    .guide{margin-top:16px;}
+    .quick{margin-top:16px;}
   }
 </style>
   <meta name="theme-color" content="#0b0c10">
@@ -148,7 +158,7 @@
   <header class="hero">
     <img class="avatar" src="/cluck-norris-mascot.jpg" alt="Cluck Norris">
     <div class="kicker">School of Crypto Hard Knocks</div>
-    <h1><span class="c">CLUCK</span> <span class="n">NORRIS</span></h1>
+    <h1 data-clkn-avoid="1"><span class="c">CLUCK</span> <span class="n">NORRIS</span></h1>
     <p class="lede" data-clkn-avoid="1">Crypto knowledge from your first wallet to advanced strategy.</p>
   </header>
 
@@ -184,7 +194,7 @@
 
   <!-- simple quick links. data-clkn-avoid: cluck-nav.js's floating Listen/EN pills lift
        above any tile here they'd otherwise sit on top of at first paint (2026-09-10). -->
-  <div class="quick" data-clkn-avoid="1">
+  <div class="quick" data-clkn-avoid-kids="1">
     <a class="ql" href="/ask-cluck"><span class="qi"><img src="/icons/flame.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">Ask Cluck</span><span class="qd">Ask him anything — instant AI answers</span></a>
     <!-- The free safety check gets a tile of its own, up front — the school's whole point
          is catching people before they get hurt (2026-09-10). -->

@@ -37,15 +37,18 @@
   // control it doesn't contain, lift it 10px above the highest one. Re-runs on resize (covers the
   // on-screen keyboard) and on two delayed passes for late-rendering pages like the React school.
   // Also opts in plain content (tile/card grids, short headings/sub-lines), not just form
-  // controls: a page marks a container with data-clkn-avoid and every DIRECT CHILD is checked
-  // individually, or marks one short element with it directly to be checked itself — found on
-  // / (the quick tile grid's first row, the hero lede) and /tools (tool cards, section
-  // sub-lines) at 390px and 1280px, where the pills sat on ordinary text and <a> cards on first
-  // paint, nothing to do with an on-screen keyboard (2026-09-10). Only tag SHORT elements
-  // directly (a line of text, a card) — a tall container matched directly would count as
-  // "overlapping" across its whole height and lift the pill absurdly high; a container's own
-  // top usually already equals its first child's top, so tagging it directly is harmless, but
-  // don't tag something like a whole hero section that way.
+  // controls — two opt-in markers, and they are NOT interchangeable:
+  //   data-clkn-avoid-kids on a container  → every DIRECT CHILD is checked individually
+  //     (a grid of cards: each card's own top is what matters, e.g. two rows 12px apart).
+  //   data-clkn-avoid on one short element  → that element itself is checked
+  //     (a one-line heading or sub-line).
+  // Marking a tall multi-row container directly (instead of -kids) was tried and is wrong:
+  // its OWN top is the first row's top, so the pill "overlaps" across the container's full
+  // height and climbs way past where any actual row sits — caught on / where it cascaded the
+  // pill all the way up into the hero text. Found the underlying overlap on / (the quick tile
+  // grid's rows, the hero lede) and /tools (tool cards, section sub-lines) at 390px and
+  // 1280px, where the pills sat on ordinary text and <a> cards on first paint, nothing to do
+  // with an on-screen keyboard (2026-09-10).
   window.__clknDockFloat = function (el) {
     if (!el || el.__clknDocked) return; el.__clknDocked = 1;
     var DEF = "calc(14px + env(safe-area-inset-bottom,0px))";
@@ -61,7 +64,7 @@
           el.style.bottom = lift ? (lift + "px") : DEF;             // measure from current anchor
           var b = el.getBoundingClientRect(); if (!b.width) return;
           var found = false;
-          var els = document.querySelectorAll("input,textarea,select,button,[contenteditable='true'],[data-clkn-avoid],[data-clkn-avoid] > *");
+          var els = document.querySelectorAll("input,textarea,select,button,[contenteditable='true'],[data-clkn-avoid],[data-clkn-avoid-kids] > *");
           for (var i = 0; i < els.length; i++) {
             var e = els[i];
             if (el.contains(e)) continue;
