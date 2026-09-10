@@ -51,6 +51,15 @@ does not tell you how to write software; use your judgement for that.
 > init script (60 fps, same logic; the state and beat tests do) and drive the target scene with a
 > lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`); the visual gate stays on WebGL.
 
+> 🏛️ **Colosseum Crypto World's Fair (Sep 14 – Oct 12, 2026) — we are ENTERED (owner, 2026-09-10).**
+> The submission package is `docs/COLOSSEUM_2026_SUBMISSION.md` (product description, GTM, demo
+> script, pitch outline, competitive landscape). The **Colosseum Copilot** research skill is
+> installed (`.agents/skills/colosseum-copilot`, `/colosseum-copilot`); it needs the owner's
+> personal access token in the env var `COLOSSEUM_COPILOT_PAT` (read-only, regenerate at
+> colosseum.com/arena/copilot, expires 2026-12-09) — **never commit it**. Anything the pitch
+> claims must be true in the code; the README's Liquidity Engine / JVP wording is still the
+> owner's open call.
+
 > 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
 > `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts
 > had no feet — NOT a position or resolution bug (that finding cost ~24h).

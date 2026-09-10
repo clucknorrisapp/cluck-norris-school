@@ -132,8 +132,13 @@ priced per project. `[OWNER — state the per-project figure or "custom"]`.
 Token-2022 made verifiable "we can't dump" cheap. The team that makes locking and proving it
 one-click, and teaches the holders why it matters, owns the trust layer for small tokens.
 
-**Market size** `[OWNER — one sourced number: Solana monthly active wallets or memecoin launch
-count; judges want a figure with a citation, not a guess]`.
+**Market size (sourced).** Galaxy Research, *The State of Memecoins* (2025-10-01,
+galaxy.com/insights/research/memecoins-pump-fun-solana-kols): more than 32 million tokens exist
+on Solana, 12.9 million of them launched on Pump.fun alone, and just 12 tokens hold 56% of that
+launchpad's $4.8B fully diluted value. Every one of the other millions has a team that needs to
+prove it can't rug and holders who bought without a lesson. That long tail, not the 12 winners,
+is our market. `[OWNER — add one line on how many of those are live communities today if you
+have a number; otherwise this stands.]`
 
 ---
 
@@ -189,38 +194,53 @@ this is the video where the owner talks, not the product.
 
 ## 9. Competitive landscape — from Colosseum Copilot (read 2026-09-10)
 
-Colosseum Copilot indexes every prior submission (Renaissance 1,076 · Radar 1,360 · Breakout
-1,416 · Cypherpunk 1,576). Four similarity searches (crypto education, wallet forensics, token
-locking / lock-to-earn, wallet safety) show where we sit. Judges use the same corpus, so the
-pitch should say this out loud.
+Colosseum Copilot indexes every prior submission (Renaissance Mar 2024 · 1,076 — Radar Sep 2024 ·
+1,360 — Breakout Apr 2025 · 1,416 — Cypherpunk Sep 2025 · 1,576). Judges have the same corpus.
+Four similarity searches (crypto education, wallet forensics, token locking / lock-to-earn,
+wallet safety), each re-run with `winnersOnly` and `acceleratorOnly`, plus an archive pass. All
+claims below are "as far as the corpus shows, as of 2026-09-10" — absence of evidence is not
+evidence of absence, and the current hackathon's entries are not indexed yet (a search for our
+own name returns nothing).
 
-**Education cluster (162 projects).** Nearest neighbours: GALIA, Educational Platform on
-Blockchain Basics, Girls That Crypto, Edu-crypto, CopyCats — all 2024 Renaissance/Radar entries,
-mobile courses or quiz games, none with a prize, none with a shipped product that is still live.
-Nobody in the cluster ships seven languages, an AI tutor, or a server-gated on-chain credential.
+**Education (cluster of 162).** Nearest: GALIA, Educational Platform on Blockchain Basics, Girls
+That Crypto, Edu-crypto (all Renaissance, Mar 2024), CopyCats (Radar, Sep 2024). Mobile courses
+and quiz games; none placed, none is still live. The only education winner in the corpus is
+Zircon (Public Goods Award, Renaissance) — developer challenges, not consumer safety. No
+education project has entered the accelerator. Nobody in the cluster ships seven languages, an AI
+tutor, or a server-gated on-chain credential.
 
-**Rug detection cluster (~450 projects across two clusters).** Rug Raider, AI Guardian, amIrug.xyz,
-Pepelock, MintEye, Agent Cypher. Every one is an **AI risk score**: paste a token, get a verdict.
-That is the opposite of our forensic rule. Our tools show what is on-chain (funding origin,
-holder concentration on humans only, delegate approvals) and refuse to say why. Say it in the
-pitch: verdict scanners give good scores to tokens that then rug (we retired our own Cluck Score
-for exactly that reason); evidence does not.
+**Rug detection (two clusters, ~450 projects).** Rug Raider, AI Guardian, amIrug.xyz (Breakout,
+Apr 2025), Pepelock, Agent Cypher, MintEye. Every one is an **AI risk score**: paste a token, get
+a verdict. None placed. The winners near this space protect the *wallet*, not the judgment:
+Unruggable (hardware wallet — Grand Prize Cypherpunk, accelerator C4), Lazor Kit (invisible
+wallets, honourable mention Breakout). The one accelerator company touching rug-checking is
+Crypto Dropcopy (C1, Renaissance: PnL + SGX rugcheck). Our angle is the opposite of a score: show
+what is on-chain (funding origin, human-only holder concentration, delegate approvals) and refuse
+to say why. Say it in the pitch: verdict scanners bless tokens that then rug — we retired our own
+Cluck Score for exactly that reason.
 
-**Locking cluster.** Capult Eternal Vaults (permanent burns-by-lock), Zenlok (private vesting
-on Arcium), NOOTTOOLS (launcher with milestone locks). None builds on Jupiter Lock, none is free
-for any project, none pays holders to lock. Lock-to-earn with a real weekly payout has no
-precedent in the corpus.
+**Locking.** Capult Eternal Vaults (permanent locks, Renaissance), Zenlok (private vesting on
+Arcium, Cypherpunk), NOOTTOOLS (launcher with milestone locks, Cypherpunk); none placed. The one
+vesting winner is Valhalla.so (honourable mention, Renaissance, Mar 2024) — a DAO-governed vesting
+program. Nothing in the corpus builds on Jupiter Lock, is free for any project, or pays holders to
+lock. A lock-to-earn program with a real weekly payout has no precedent we could find.
 
-**Wallet safety.** Lazor Kit took an Infrastructure honourable mention (Breakout) for invisible
-wallets; the rest are AI wallets and link scanners. Wallet Checkup's in-place revoke is unmatched.
+**Wallet safety.** Beyond Unruggable and Lazor Kit, the field is AI wallets (Armor, Neptune) and
+link scanners (Detectify). Nothing matches Wallet Checkup's read-only scan with in-place revoke.
+
+**Archive framing (Galaxy Research, *The State of Memecoins*, Oct 2025).** 32M+ Solana tokens,
+12.9M from one launchpad, 12 of them holding 56% of its FDMC. The long tail is millions of teams
+and holders with no trust layer and no education — the market in section 5.
 
 **Positioning line for the pitch:** every overlapping entry is a prototype in one of our four
-boxes. We are the only one with all four live, open source, with revenue, and with the honesty
-rule that keeps the tools from becoming another risk score.
+boxes, and the winners nearby protect keys, not judgment. We are the only one with all four live,
+open source, with revenue, and with the honesty rule that keeps the tools from becoming another
+risk score.
 
-Source: `copilot.colosseum.com` search/projects with the owner's Copilot token (read-only,
-expires 2026-12-09). The token is NOT in the repo; it lives only in the owner's Colosseum
-account and can be regenerated at colosseum.com/arena/copilot.
+Source: `copilot.colosseum.com` with the owner's Copilot token (read-only, expires 2026-12-09).
+The token is NOT in the repo. The Copilot skill is installed at `.agents/skills/colosseum-copilot`
+(symlinked into `.claude/skills/`); a session with `COLOSSEUM_COPILOT_PAT` in its environment can
+re-run any of these searches.
 
 ---
 
