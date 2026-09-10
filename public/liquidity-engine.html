@@ -81,7 +81,7 @@
   <div class="grid">
     <div class="card"><h3>Depth, not trades</h3><p class="muted">The engine never buys its own token to fake activity. It places liquidity and gets filled by other people. If nobody trades, the volume is zero — which is exactly what the paused fleet shows below.</p></div>
     <div class="card"><h3>Multi-quote dislocation</h3><p class="muted">Token/USDC, token/SOL and token/JUP pools each move with their quote. Every 1% move re-centres a pool and hands an arbitrageur a real trade. That is where the organic flow comes from.</p></div>
-    <div class="card"><h3>The score is rented</h3><p class="muted">Jupiter's organic score decays to zero without runtime. <span id="clknScoreLine">CLKN reads it today.</span> A stopped engine that still showed a high score would be the thing to distrust.</p></div>
+    <div class="card"><h3>The score is rented</h3><p class="muted">Jupiter's organic score reflects live trading and decays without it. <span id="clknScoreLine">CLKN reads it today.</span> A stopped engine that still showed a high score would be the thing to distrust.</p></div>
   </div>
 
   <h2>The fleet</h2>
@@ -94,7 +94,7 @@
 
     <div class="two">
       <div class="card"><h3>Pools and ranges</h3><div id="poolMap"></div></div>
-      <div class="card"><h3>Organic vs router flow · 24h</h3><div id="organicSplit"></div></div>
+      <div class="card"><h3>Organic share of 24h volume · as Jupiter tags it</h3><div id="organicSplit"></div></div>
     </div>
 
     <div class="card" style="margin-top:14px"><h3>Volume through the engine's pools · hourly, last 7 days</h3><div id="volumeChart"></div></div>
@@ -108,10 +108,10 @@
 
   <h2>The hard questions</h2>
   <div class="qa">
-    <div class="card"><b>Is this wash trading?</b><p class="muted">No. The engine posts two-sided depth and is filled by third parties. The split above shows Jupiter's own tagging of organic versus router flow; router flow is greyed exactly as Jupiter greys it. Routing volume is bought with real depth at one or two basis points — and it is the arbitrageur who trades, not us.</p></div>
+    <div class="card"><b>Is this wash trading?</b><p class="muted">The engine never trades against itself: it posts two-sided depth and is filled by third parties, and a fill is a real trade by someone else. We do not claim more than that. The organic share above is Jupiter's tag, shown as they compute it; it is one observation, not a proof, and a token-wide score moving is not evidence this engine moved it.</p></div>
     <div class="card"><b>Who signs?</b><p class="muted">A per-project operator hot wallet that holds only that client's float. Never a mint authority, never a freeze authority, never the treasury for a client token.</p></div>
     <div class="card"><b>Is it custody?</b><p class="muted">Yes, and we call it that. The client sends the float, the engine may sell absorbed inventory back to recoup its quote side by design, and wind-down returns what is there. It is a managed service, not a protocol.</p></div>
-    <div class="card"><b>Is the score bought?</b><p class="muted">Rented. It rises while real depth is live and it decays when the engine stops. The trajectory panel is that claim on live data.</p></div>
+    <div class="card"><b>Is the score bought?</b><p class="muted">Rented at best. Jupiter's organic score reflects the whole token's trading, on every venue; it has decayed while the engines are stopped, and the trajectory panel shows that observation without claiming the engine was the only cause.</p></div>
     <div class="card"><b>Why is everything paused?</b><p class="muted">The owner's call on 2026-09-05: no engine runs for any project until this dashboard shows the record in the open. The stop is an environment flag and a code default, not a database row, so a redeploy cannot un-pause it.</p></div>
   </div>
 
@@ -142,8 +142,11 @@
 
   function renderFleet(o) {
     var badge = $('fleetBadge');
-    if (o.fleetPaused) { badge.className = 'badge'; badge.innerHTML = '<span class="dot"></span><span>All engines paused by the owner · since ' + esc(o.pausedSince) + '</span>'; }
-    else { badge.className = 'badge run'; badge.innerHTML = '<span class="dot"></span><span>Engines running</span>'; }
+    var fs = o.fleetState || (o.fleetPaused ? 'paused' : 'unknown'), fc = o.fleetCounts || {};
+    var stop = o.ownerStopOrder ? ' · owner stop order since ' + esc(o.ownerStopOrder.since) : '';
+    if (fs === 'paused') { badge.className = 'badge'; badge.innerHTML = '<span class="dot"></span><span>Observed: no engine running' + stop + '</span>'; }
+    else if (fs === 'running') { badge.className = 'badge run'; badge.innerHTML = '<span class="dot"></span><span>Observed: ' + esc(String(fc.running || 0)) + ' engine(s) running' + stop + '</span>'; }
+    else { badge.className = 'badge'; badge.innerHTML = '<span class="dot"></span><span>Fleet state unknown — ' + esc(String(fc.unknown || 0)) + ' status read(s) failed' + stop + '</span>'; }
     var clkn = (o.projects || []).filter(function (p) { return p.id === 'clkn'; })[0];
     if (clkn && clkn.market && clkn.market.organicScore != null) $('clknScoreLine').textContent = 'CLKN reads ' + clkn.market.organicScore + ' (' + (clkn.market.organicLabel || '—') + ') today.';
     var html = '';
@@ -210,10 +213,10 @@
     if (!v || !(v.total > 0)) { $('organicSplit').innerHTML = '<p class="muted">Jupiter reports no 24h volume for this token right now' + (m && m.stale ? ' (cached)' : '') + '. With the engine paused, that is the honest reading.</p>'; return; }
     var op = v.organicPct == null ? 0 : v.organicPct;
     $('organicSplit').innerHTML = '<div class="split"><div class="org" style="width:' + op + '%" title="organic"></div><div class="rtr" style="width:' + (100 - op) + '%" title="router"></div></div>'
-      + '<div class="legend"><span><i style="background:#22c55e"></i>organic ' + esc(usd(v.organic, 0)) + ' (' + esc(pct(op)) + ')</span><span><i style="background:#6b7280"></i>router / other ' + esc(usd(v.router, 0)) + '</span></div>'
+      + '<div class="legend"><span><i style="background:#22c55e"></i>organic ' + esc(usd(v.organic, 0)) + ' (' + esc(pct(op)) + ')</span><span><i style="background:#6b7280"></i>not tagged organic ' + esc(usd(v.router, 0)) + '</span></div>'
       + '<div class="kv"><span>24h total</span><b>' + esc(usd(v.total, 0)) + '</b><span>buys / sells</span><b>' + esc(v.numBuys + ' / ' + v.numSells) + '</b><span>traders</span><b>' + esc(num(v.numTraders)) + '</b>'
       + '<span>liquidity / market cap</span><b>' + esc(pct(m.liqToMcapPct, 2)) + '</b><span>holders</span><b>' + esc(num(m.holderCount)) + '</b></div>'
-      + '<p class="stale">"Organic" is Jupiter\'s own tag on the token\'s 24h buy and sell volume. We show it as they compute it; we do not re-score it.</p>';
+      + '<p class="stale">"Organic" is Jupiter\'s own tag on the token\'s 24h buy and sell volume; the remainder is simply volume Jupiter did not tag organic. Shown as they compute it, not re-scored, and not a proof about who traded or why — the whole token trades on every venue, not only through this engine.</p>';
   }
   function lineChart(series, opts) {
     // series: [{pts:[{t,y}], color, label, axis:'l'|'r'}] — hand-drawn SVG, no library.
@@ -266,17 +269,17 @@
   function renderDecision(p) {
     var d = p.decisions;
     if (!d) { $('decision').innerHTML = '<p class="muted">No decision data.</p>'; return; }
-    var html = '<p class="muted">The same pure functions the vault calls (<span style="font-family:var(--mono)">lib/engine-decisions.js</span>) replayed on the live inputs below. A read, not a simulation of a different model.</p>';
+    var html = '<p class="muted">Illustrative. The buyback gate is the function the vault calls; the sleeve rows apply the pinned roll <i>specification</i> (<span style="font-family:var(--mono)">lib/engine-decisions.js</span>) to each position\'s public range position. It is not a trace of the running loop, and inventory is shown only as coarse buckets against the published deploy threshold.</p>';
     if (d.paused) html += '<div class="note">Paused: whatever the gates say, nothing executes.</div>';
     if (d.sleeves && d.sleeves.length) {
-      html += '<div class="tblwrap"><table><thead><tr><th>sleeve</th><th class="num">position in range</th><th>gate</th><th>reason</th></tr></thead><tbody>';
+      html += '<div class="tblwrap"><table><thead><tr><th>sleeve</th><th class="num">position in range</th><th>gate</th><th>why</th></tr></thead><tbody>';
       d.sleeves.forEach(function (s) {
-        html += '<tr><td>' + esc(s.pair) + ' <span class="muted">' + esc(s.role) + '</span></td><td class="num">' + esc(pct(s.frac * 100, 0)) + '</td><td>' + esc(s.action) + (s.urgent ? ' <span class="pill out">urgent</span>' : '') + '</td><td>' + esc(s.reason) + '</td></tr>';
+        html += '<tr><td>' + esc(s.pair) + ' <span class="muted">' + esc(s.role) + '</span></td><td class="num">' + esc(pct(s.frac * 100, 0)) + '</td><td>' + esc(s.action) + (s.urgent ? ' <span class="pill out">urgent</span>' : '') + '</td><td>' + esc(String(s.reasonCode || s.reason || '').replace(/_/g, ' ')) + '</td></tr>';
       });
       html += '</tbody></table></div>';
     } else html += '<p class="muted">No open sleeves to gate.</p>';
-    if (d.buyback) html += '<div class="kv"><span>buyback gate</span><b>' + esc(d.buyback.action) + '</b><span>reason</span><b style="text-align:left;grid-column:1/3;font-weight:400;color:var(--sub)">' + esc(d.buyback.reason) + '</b></div>';
-    if (d.inputs) html += '<div class="kv"><span>since last roll</span><b>' + esc(d.inputs.sinceLastRollSec >= 1e8 ? 'no roll recorded' : rel(Date.now() - d.inputs.sinceLastRollSec * 1000)) + '</b><span>actions today</span><b>' + esc(num(d.inputs.dayActions)) + '</b><span>staged quote</span><b>' + esc(usd(d.inputs.stagedQuoteUsd)) + '</b><span>idle token</span><b>' + esc(usd(d.inputs.idleTokenUsd)) + '</b></div>';
+    if (d.buyback) html += '<div class="kv"><span>buyback gate</span><b>' + esc(d.buyback.action) + '</b><span>why</span><b>' + esc(String(d.buyback.reasonCode || d.buyback.reason || '').replace(/_/g, ' ')) + '</b></div>';
+    if (d.inputs) html += '<div class="kv"><span>since last roll</span><b>' + esc(d.inputs.sinceLastRollSec == null ? 'no roll recorded' : rel(Date.now() - d.inputs.sinceLastRollSec * 1000)) + '</b><span>actions today</span><b>' + esc(num(d.inputs.dayActions)) + '</b><span>staged quote</span><b>' + esc(String(d.inputs.stagedQuote || '—').replace(/_/g, ' ')) + '</b><span>idle token</span><b>' + esc(String(d.inputs.idleToken || '—').replace(/_/g, ' ')) + '</b></div>';
     if (d.assumptions) html += '<p class="stale">assumed: ' + esc(d.assumptions.join(' · ')) + '</p>';
     $('decision').innerHTML = html;
   }
