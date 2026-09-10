@@ -57,8 +57,18 @@ does not tell you how to write software; use your judgement for that.
 > installed (`.agents/skills/colosseum-copilot`, `/colosseum-copilot`); it needs the owner's
 > personal access token in the env var `COLOSSEUM_COPILOT_PAT` (read-only, regenerate at
 > colosseum.com/arena/copilot, expires 2026-12-09) — **never commit it**. Anything the pitch
-> claims must be true in the code; the README's Liquidity Engine / JVP wording is still the
-> owner's open call.
+> claims must be true in the code. **Owner, 2026-09-10: "we can rebuild anything needed for the
+> hackathon — make this the best that it can be."** The "Removed" list below is not a wall for
+> hackathon-scope work done right (the quiz-free `/curriculum` came back this way); it is a record
+> of what failed and why, so the rebuild does not repeat the failure. Second reviewer: **Codex**
+> reads `docs/CODEX_REVIEWER_BRIEF.md` and comments on PRs; findings, not rewrites.
+> ⚠️ **The tools pass is a SIGNED SESSION** (reworked 2026-09-10 after Codex found that a pasted
+> holder address and a public payment signature were both bearer passes): the wallet signs a
+> one-line nonce message, `POST /api/tool-gate/session` verifies it and issues an HMAC token, and
+> `x-clkn-pass: t:<token>` is what the heavy APIs check (`toolPassGate` in `server.js`). A payment
+> signature is evidence, bound to its payer, consumed once — never the credential. RPC outage is
+> `unavailable`, never a zero balance, never cached as a denial. `scripts/tool-pass-gate-test.cjs`
+> drives the whole flow with a real ed25519 keypair.
 
 > 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
 > `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts
