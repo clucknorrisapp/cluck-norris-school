@@ -9,7 +9,7 @@
    unlock to run"). Buy Special drives its own gate UI off CluckGate.config()/CluckGate.grant().
 
    Server truth: /api/tool-gate/config publishes the live numbers (the CLKN amount is derived
-   from the live price — NEVER hardcode it); /api/verify-sol-payment confirms the payment
+   from the live price — NEVER hardcode it); POST /api/tool-gate/session verifies the signed nonce + the payment
    (replay-guarded + receiver-checked server-side); /api/tool-comp/check honors comped wallets.
    The pass lives in localStorage under ONE key shared by all tools. FAIL-OPEN: if our config
    or price feed is down, the tool runs free on a short grace pass — an outage on our side
@@ -30,9 +30,12 @@
     } catch (e) {}
     return null;
   }
-  // proof is what the SERVER re-checks on every gated run (x-clkn-pass): 'w:<wallet>' for the
-  // holder / comped path, 's:<sig>' for a redeemed SOL payment. A grant without proof (pre-2026-09-10
-  // localStorage) still opens the page, but the API answers 402 and the pass is re-done once.
+  // proof is what the SERVER re-checks on every gated run (x-clkn-pass): 't:<token>', a session
+  // token /api/tool-gate/session issues only after this wallet SIGNED a one-line message (no
+  // transaction, no approval) and qualified — comped, holding enough CLKN, or the payer of a SOL
+  // payment. A pasted address or a public payment signature is never a credential. A grant
+  // without proof (older localStorage) still opens the page, but the API answers 402/403 and
+  // the pass is re-done once.
   function grant(days, why, proof) {
     var d = { unlockedAt: Date.now(), expiresAt: Date.now() + days * 24 * 60 * 60 * 1000, why: why || 'paid', proof: proof || null };
     try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
@@ -92,7 +95,7 @@
     document.head.appendChild(st);
   }
 
-  var state = { provider: null, pubkey: null, card: null, onUnlock: null, paying: false };
+  var state = { provider: null, pubkey: null, card: null, onUnlock: null, paying: false, signed: null };
 
   function statusEl() { return state.card && state.card.querySelector('.ckg-status'); }
   function say(msg, ok) { var s = statusEl(); if (s) { s.textContent = msg; s.className = 'ckg-status' + (ok ? ' ok' : ''); } }
@@ -129,7 +132,7 @@
 
   function disconnect() {
     try { state.provider && state.provider.disconnect && state.provider.disconnect(); } catch (e) {}
-    state.provider = null; state.pubkey = null;
+    state.provider = null; state.pubkey = null; state.signed = null;
     if (!state.card) return;
     state.card.querySelector('[data-ckg="connect"]').style.display = '';
     state.card.querySelector('[data-ckg="pay"]').style.display = 'none';
@@ -167,38 +170,55 @@
     } catch (e) { say('Connect failed: ' + (e.message || e)); }
   }
 
+  // Proof of wallet ownership: a signed one-line message (the same shape /premium uses). Cached
+  // for a few minutes so the PAY path can reuse the signature instead of prompting twice.
+  async function signSession() {
+    if (state.signed && state.signed.wallet === state.pubkey && Date.now() - state.signed.at < 8 * 60 * 1000) return state.signed;
+    if (!state.provider || typeof state.provider.signMessage !== 'function') throw new Error('this wallet cannot sign messages — try Phantom, Solflare, Backpack or Jupiter');
+    var message = 'Cluck Norris — unlock the tools pass\nwallet: ' + state.pubkey + '\nnonce: ' + Date.now()
+      + '\nThis only proves you own this wallet. It is NOT a transaction and grants no spending approval.';
+    say('Approve the signature in your wallet — it is not a transaction.');
+    var enc = new TextEncoder().encode(message);
+    var res = await state.provider.signMessage(enc, 'utf8');
+    var bytes = (res && res.signature) ? res.signature : res;
+    if (bytes && bytes.data && !bytes.length) bytes = bytes.data;
+    var b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(bytes)));
+    state.signed = { wallet: state.pubkey, message: message, signature: b64, at: Date.now() };
+    return state.signed;
+  }
+  // The only issuer of passes: verifies the signature server-side, qualifies the wallet
+  // (comped / live CLKN balance / the payer of paySig) and answers with the session token.
+  async function openSession(paySig) {
+    var sg = await signSession();
+    var body = { wallet: sg.wallet, message: sg.message, signature: sg.signature };
+    if (paySig) body.paySig = paySig;
+    var r = await fetch('/api/tool-gate/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var j = null; try { j = await r.json(); } catch (e) {}
+    if (!j) throw new Error('pass service unavailable (' + r.status + ')');
+    return j;
+  }
+
   async function checkHolder(c, walletName) {
-    // comped wallets (server-side list) unlock free regardless of balance.
-    // FUTURE (owner, 2026-08-18): lifetime-pass NFTs slot in HERE — when the collection
-    // exists, /api/tool-comp/check grows a DAS collection lookup server-side and returns
-    // {comped:true, why:'nft'}; no client change needed beyond the label.
+    // Comped wallets, holders and the price-outage grace are all decided SERVER-SIDE now — the
+    // page only proves the wallet and shows the answer. FUTURE (owner, 2026-08-18): lifetime-pass
+    // NFTs slot into the server's comp check; no client change needed beyond the label.
     try {
-      var comp = await fetch('/api/tool-comp/check?wallet=' + encodeURIComponent(state.pubkey)).then(function (r) { return r.json(); });
-      if (comp && comp.comped) { grant(3650, 'comp', 'w:' + state.pubkey); say('✓ Comped wallet — unlocked.', true); return finish(); }
-    } catch (e) {}
-    try {
-      var r = await CluckUtil.rpc('getTokenAccountsByOwner', [state.pubkey, { mint: c.mint }, { encoding: 'jsonParsed' }]);
-      var bal = 0;
-      // uiAmountString, not uiAmount — the float is null for whale-sized balances
-      ((r && r.value) || []).forEach(function (a) {
-        var ta = a.account && a.account.data && a.account.data.parsed && a.account.data.parsed.info.tokenAmount;
-        bal += Number(ta && (ta.uiAmountString || ta.uiAmount)) || 0;
-      });
-      var worth = c.priceUsd ? bal * c.priceUsd : null;
-      if (c.clknNeeded && bal >= c.clknNeeded) {
-        grant(c.days, 'holder', 'w:' + state.pubkey);
-        say('✓ ' + (walletName || 'Holder') + ' — ' + fmtI(Math.floor(bal)) + ' CLKN (≈$' + fmtI(Math.floor(worth || 0)) + '). All tools free.', true);
+      var j = await openSession(null);
+      if (j.success && j.pass) {
+        grant(j.days || c.days, j.via || 'holder', j.pass);
+        if (j.via === 'comp') say('✓ Comped wallet — unlocked.', true);
+        else if (j.via === 'holder') say('✓ ' + (walletName || 'Holder') + ' — ' + fmtI(Math.floor(j.balance || 0)) + ' CLKN. All tools free while you hold.', true);
+        else say('✓ Unlocked (balance check unavailable right now — a short grace pass was issued).', true);
         return finish();
       }
-      if (!c.clknNeeded) {
-        // price feed down — never punish the user for our outage
-        grant(1, 'grace', 'w:' + state.pubkey);
-        say('✓ Unlocked (price check unavailable right now).', true);
-        return finish();
+      if (j.error === 'insufficient_holdings') {
+        var worth = c.priceUsd ? (j.balance || 0) * c.priceUsd : null;
+        say('This wallet holds ' + fmtI(Math.floor(j.balance || 0)) + ' CLKN (≈$' + fmtI(Math.floor(worth || 0)) + ') — the free tier needs ≈' + fmtI(j.needed || c.clknNeeded) + ' ($' + fmtI(c.holdUsd) + ' worth). Not holding? PAY unlocks all tools for ' + c.days + ' days.');
+        state.card.querySelector('[data-ckg="pay"]').style.display = '';
+        return;
       }
-      say('This wallet holds ' + fmtI(Math.floor(bal)) + ' CLKN (≈$' + fmtI(Math.floor(worth || 0)) + ') — the free tier needs ≈' + fmtI(c.clknNeeded) + ' ($' + fmtI(c.holdUsd) + ' worth). Top up, or take the SOL pass:');
-      state.card.querySelector('[data-ckg="pay"]').style.display = '';
-    } catch (e) { say('Balance check failed: ' + (e.message || e)); }
+      say(j.error || 'Could not verify this wallet.');
+    } catch (e) { say('Wallet check failed: ' + (e.message || e)); }
   }
 
   // Payment libs load only if someone actually pays — free pages stay light.
@@ -239,13 +259,16 @@
       var sig = (res && res.signature) || (typeof res === 'string' ? res : null);
       if (!sig) throw new Error('wallet returned no signature');
       say('Confirming payment on-chain…');
-      var ok = false;
+      // The pass is issued to the PAYER only: the session call re-proves this wallet (the
+      // signature from the connect step is reused when it is fresh) and the server checks the
+      // transaction's fee payer is the same wallet before consuming the payment.
+      var ok = null, lastErr = '';
       for (var i = 0; i < 24; i++) {
-        try { var v = await fetch('/api/verify-sol-payment?sig=' + encodeURIComponent(sig) + '&min=' + c.lamports).then(function (r) { return r.json(); }); if (v.success) { ok = true; break; } } catch (e) {}
+        try { var v = await openSession(sig); if (v.success && v.pass) { ok = v; break; } lastErr = v.error || ''; if (/different wallet|already redeemed/.test(lastErr)) break; } catch (e) { lastErr = e.message || ''; }
         await new Promise(function (r2) { setTimeout(r2, 2500); });
       }
-      if (ok) { grant(c.days, 'paid', 's:' + sig); say('✓ Paid — every heavy tool is unlocked for ' + c.days + ' days.', true); return finish(); }
-      say('Payment sent but not confirmed yet — tap PAY again in a moment to re-check (it will not charge twice: the same signature is re-verified).');
+      if (ok) { grant(ok.days || c.days, 'paid', ok.pass); say('✓ Paid — every heavy tool is unlocked for ' + (ok.days || c.days) + ' days.', true); return finish(); }
+      say(/different wallet|already redeemed/.test(lastErr) ? ('Payment could not be applied: ' + lastErr) : 'Payment sent but not confirmed yet — tap PAY again in a moment to re-check (it will not charge twice: the same signature is re-verified).');
       btn.disabled = false; state.paying = false;
     } catch (e) { say('Payment failed: ' + (e.message || e)); btn.disabled = false; state.paying = false; }
   }
