@@ -50,8 +50,10 @@ otherwise 0.05 SOL buys a 7-day pass to all of them. The whole thing is open sou
 
 - **Chain:** Solana mainnet. Programs called directly: SPL Token and Token-2022, Jupiter Lock
   (open-source lock program, used for the Locker Room and for lock-to-earn accounting), Metaplex
-  (graduation NFTs, Hatchery metadata), Orca Whirlpools / Raydium CLMM / Meteora DLMM (liquidity
-  adapters).
+  (graduation NFTs, Hatchery metadata), Orca Whirlpools / Raydium CLMM / Meteora DLMM (adapters for
+  the Liquidity Engine — an operator-run concentrated-liquidity service we have run for four
+  partner tokens; paused by the owner since 2026-09-05 while the public dashboard is built; not
+  self-serve).
 - **RPC and data:** Helius (DAS + enhanced transactions) with automatic failover; Jupiter price
   and quote APIs; DexScreener, GeckoTerminal, Bags.fm, Solana Tracker, Solscan, Bubblemaps.
 - **Storage:** Arweave for permanent token metadata.
@@ -80,19 +82,15 @@ Judges weight traction and revenue. These are all verifiable on-chain or on the 
 
 | Signal | Today (2026-09-10) | Where to re-read it |
 |---|---|---|
+| Learners and visitors | 140,462 lifetime page views · 105,185 visitor-days lifetime · ~5k visitors/day this month · 22 graduates | server analytics; `/api/school-stats` |
+| Partner tokens on our infrastructure | 4 — POKE, CUNA, DNC, ROSE: locking, verification, buy comps, and (paused) liquidity engine service | JVP runbook, `docs/CLKN_JUP_VERIFICATION_PROTOCOL.md` |
+| Lock-to-earn — mechanism proof | First weekly payout landed 2026-09-09: 13 wallets, one transaction (proves the mechanism runs end-to-end; not a dollar claim) | tx `37hhsCCh…Z2bVkiP` |
+| CLKN locks — our own supply, via our own tooling | 73 locks, 48.8% of supply (488M CLKN) | `/api/locks?mint=DW6DF2…BAGS` |
 | Live product, public | clucknorris.app, since 2025; Seeker dApp Store listing live | site |
 | Curriculum | 35 lessons, 7 languages, read-aloud | `/`, `/lp-lab` |
-| CLKN supply locked through the ecosystem's own lock tooling | 73 locks, 48.8% of supply (488M CLKN) | `/api/locks?mint=DW6DF2…BAGS` |
-| Lock-to-earn (CUNA partner token) | 57 escrows scanned, 23 qualifying locks, 378.6M CUNA qualifying; **first weekly payout landed 2026-09-09** — 13 wallets, 1,092,500 CUNA, one transaction | `/api/cuna-stake/config`; tx `37hhsCCh…Z2bVkiP` |
-| Revenue lines | unified tools pass (0.05 SOL / 7 days); Hatchery mint fee (0.1 SOL, or CLKN at ~30% off); CLKN trade fee (~1%, reinvested); operator liquidity service run for four partner tokens (POKE, CUNA, DNC, ROSE) | `/api/tool-gate/config`, `/api/hatchery/config` |
-| Graduates / transcripts issued | `[OWNER — pull from the dashboard]` | admin |
+| Services model | verification, lock-to-earn, buy comps, engine — priced per project `[OWNER]` | this doc §5 |
 | Community | `[OWNER — Telegram members, X followers]` | |
 | Security | Cloudflare WAF cutover + origin lockdown live since 2026-08-04, from findings by our scan partner RootCrak (@ro0TCr4k, https://rootcrak.com/?ref=clucknorris) | README |
-
-⚠️ **Before judges read the repo:** `README.md` still says the Liquidity Engine "is not offered to
-other projects", while the JVP doc records it running for four partner tokens. That wording is an
-open owner decision (listed in CLAUDE.md's open items). Settle it before Sep 14 so the README and
-the pitch say the same thing — a claim that isn't true in the code is a real problem here.
 
 ---
 
@@ -248,7 +246,8 @@ re-run any of these searches.
 
 - [ ] Owner registers on colosseum.com before **Sep 14**; confirms the track/prize category on the
       live site (the pasted schedule was out of date — the event is the Crypto World's Fair).
-- [ ] Settle the Liquidity Engine / JVP wording in `README.md` (section 4 warning).
+- [x] Settle the Liquidity Engine / JVP wording — README, `/about`, `/liquidity-engine` and this
+      doc all now carry the one sentence (2026-09-10).
 - [ ] Fill every `[OWNER]` placeholder in this file.
 - [ ] Refresh the traction table numbers on submission day from the endpoints listed.
 - [ ] Record the nine demo captures (section 6) and the pitch video (section 7).
