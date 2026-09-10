@@ -7903,47 +7903,135 @@ const TOOLGATE = {
 // paywall failed open for the whole first-fetch window after each deploy.
 let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: null };
 
-// SERVER-SIDE enforcement of the tools pass (2026-09-10). Until now the pass lived only in
-// localStorage (cluck-gate.js) and the heavy APIs answered anyone — a bare curl pulled a full
-// X-Ray report with no wallet, no pass, no signature, which made the whole revenue model a
-// localStorage.setItem away. The page still previews free; RUN sends proof in `x-clkn-pass`:
-//   w:<wallet>  — holder path: comped wallet, or a LIVE CLKN balance worth TOOLGATE_USD
-//   s:<sig>     — paid path: the SOL payment signature /api/verify-sol-payment redeemed,
-//                 recorded as toolPass:<sig> with the same TOOLGATE_DAYS expiry the client uses
-// Same fail-open rule as the client: no usable CLKN price (or an RPC blip on the balance read)
-// never punishes a user for our outage. TOOLGATE_OFF=1 disables it everywhere, as before.
-const toolPassHolderCache = new Map();   // wallet -> { ok, at } — one balance read per wallet per 5 min
+// SERVER-SIDE enforcement of the tools pass (2026-09-10, reworked the same night after a
+// second-reviewer pass found two bypasses). Until now the pass lived only in localStorage and
+// the heavy APIs answered anyone — a bare curl pulled a full X-Ray report. The first server
+// version accepted `w:<wallet>` (any copied address of a qualifying holder) and `s:<sig>` (a
+// public on-chain payment signature) as the credential. Both are public data, so both were
+// bearer passes anyone could reuse.
+//
+// Now the credential is a SESSION TOKEN the server issues only after the wallet PROVES itself:
+//   1. the page asks the wallet to signMessage a one-line text carrying the wallet and a fresh
+//      timestamp nonce (same pattern as /api/premium-verify-sig — no transaction, no approval);
+//   2. POST /api/tool-gate/session verifies the ed25519 signature, then qualifies the wallet
+//      (comped, or a LIVE CLKN balance worth TOOLGATE_USD, or a SOL payment whose PAYER is that
+//      same wallet), and answers with an HMAC token {t:"tools", w, v, exp} keyed by
+//      PREMIUM_ACCESS_KEY (the issuePremiumProof scheme, distinct purpose so the two can't be
+//      swapped);
+//   3. every gated run sends `x-clkn-pass: t:<token>`; holder tokens are re-checked against the
+//      live balance every 5 minutes, comped tokens against the comp list every call.
+// A payment signature is evidence of payment, never the credential; it is consumed once
+// (sigStore "sol:" namespace, shared with /api/verify-sol-payment) and bound to the payer.
+// Fail-open rule, unchanged in spirit: no usable CLKN price, or an RPC read that FAILS (as
+// opposed to a verified zero balance), never punishes a user for our outage — and an outage
+// is never cached as a denial. TOOLGATE_OFF=1 disables it everywhere, as before.
+const TOOL_PASS_MSG_RE = /^Cluck Norris — unlock the tools pass\nwallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nnonce: (\d{10,16})\n/;
+function issueToolPass(wallet, via, ttlMs) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  if (!secret || !wallet) return null;
+  const body = Buffer.from(JSON.stringify({ t: "tools", w: wallet, v: String(via || "holder"), exp: Date.now() + ttlMs })).toString("base64url");
+  const sig = createHmac("sha256", secret).update("tools." + body).digest("base64url");
+  return body + "." + sig;
+}
+function verifyToolPass(token) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  if (!secret || !token) return null;
+  const [body, sig] = String(token).split(".");
+  if (!body || !sig) return null;
+  const expect = createHmac("sha256", secret).update("tools." + body).digest("base64url");
+  if (!secretEqual(sig, expect)) return null;
+  let p; try { p = JSON.parse(Buffer.from(body, "base64url").toString("utf8")); } catch (_) { return null; }
+  if (!p || p.t !== "tools" || !p.w || !SOL_ADDR_RE.test(String(p.w)) || !p.exp || Date.now() > p.exp) return null;
+  return p;
+}
+// Live qualification of a wallet for the free tier. `unavailable` means the balance could not
+// be read (RPC down) — callers apply the outage policy instead of treating it as zero.
+const toolPassHolderCache = new Map();   // wallet -> { ok, at, deny } — one balance read per wallet per 5 min
+async function toolPassQualify(wallet) {
+  if (isToolComped(wallet)) return { ok: true, via: "comp" };
+  const cached = toolPassHolderCache.get(wallet);
+  if (cached && Date.now() - cached.at < 5 * 60e3) return cached.ok ? { ok: true, via: "holder" } : { ok: false, ...cached.deny };
+  const priceUsd = toolGatePrice.usd || null;
+  if (!priceUsd) return { ok: true, via: "grace-price" };
+  let h;
+  try { h = await checkCLKNHolder(wallet); } catch (e) { h = { unavailable: true, error: e.message }; }
+  if (!h || h.unavailable) { console.warn("[tool-pass] balance read unavailable, failing open:", (h && h.error) || "no result"); return { ok: true, via: "grace-rpc" }; }
+  const needed = Math.ceil(TOOLGATE.usd / priceUsd);
+  const bal = Number(h.balance) || 0;
+  if (bal >= needed) { toolPassHolderCache.set(wallet, { ok: true, at: Date.now() }); return { ok: true, via: "holder", balance: bal, needed }; }
+  const deny = { error: "insufficient_holdings", balance: bal, needed, holdUsd: TOOLGATE.usd, priceUsd,
+    detail: `The free tier needs about $${TOOLGATE.usd} of CLKN (~${needed.toLocaleString()} at the current price); that wallet holds ${Math.round(bal).toLocaleString()}. ${TOOLGATE.lamports / 1e9} SOL unlocks every heavy tool for ${TOOLGATE.days} days.` };
+  toolPassHolderCache.set(wallet, { ok: false, at: Date.now(), deny });
+  return { ok: false, ...deny };
+}
 async function toolPassGate(req) {
   if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return { ok: true, via: "gate-off" };
+  if (!process.env.PREMIUM_ACCESS_KEY) { console.warn("[tool-pass] PREMIUM_ACCESS_KEY unset — cannot issue or verify passes, failing open"); return { ok: true, via: "no-key" }; }
   const raw = String(req.get("x-clkn-pass") || (req.query && req.query.pass) || "").trim();
   if (!raw) {
     return { ok: false, status: 402, error: "pass_required",
       detail: `This tool runs on the unified tools pass: hold about $${TOOLGATE.usd} of CLKN (free) or ${TOOLGATE.lamports / 1e9} SOL for ${TOOLGATE.days} days. Run it from the page to unlock.` };
   }
-  const m = /^(w|s):([1-9A-HJ-NP-Za-km-z]{32,100})$/.exec(raw);
-  if (!m) return { ok: false, status: 403, error: "bad_pass", detail: "Unrecognised pass proof." };
-  if (m[1] === "s") {
-    const rec = kv.get("toolPass:" + m[2], null);
-    if (rec && Number(rec.expiresAt) > Date.now()) return { ok: true, via: "paid" };
-    return { ok: false, status: 403, error: "pass_expired", detail: "That tools pass has expired or was never redeemed here — unlock again from the page." };
-  }
-  const wallet = m[2];
-  if (!SOL_ADDR_RE.test(wallet)) return { ok: false, status: 403, error: "bad_pass", detail: "Unrecognised wallet in pass proof." };
-  if (isToolComped(wallet)) return { ok: true, via: "comp", wallet };
-  const cached = toolPassHolderCache.get(wallet);
-  if (cached && Date.now() - cached.at < 5 * 60e3) return cached.ok ? { ok: true, via: "holder-cached", wallet } : { ok: false, status: 403, ...cached.deny };
-  const priceUsd = toolGatePrice.usd || null;
-  if (!priceUsd) return { ok: true, via: "grace-price", wallet };
-  let h;
-  try { h = await checkCLKNHolder(wallet); } catch (e) { console.warn("[tool-pass] balance read failed, failing open:", e.message); return { ok: true, via: "grace-rpc", wallet }; }
-  const needed = Math.ceil(TOOLGATE.usd / priceUsd);
-  const bal = Number(h && h.balance) || 0;
-  if (bal >= needed) { toolPassHolderCache.set(wallet, { ok: true, at: Date.now() }); return { ok: true, via: "holder", wallet, balance: bal, needed }; }
-  const deny = { error: "insufficient_holdings", balance: bal, needed, holdUsd: TOOLGATE.usd, priceUsd,
-    detail: `The free tier needs about $${TOOLGATE.usd} of CLKN (~${needed.toLocaleString()} at the current price); that wallet holds ${Math.round(bal).toLocaleString()}. ${TOOLGATE.lamports / 1e9} SOL unlocks every heavy tool for ${TOOLGATE.days} days.` };
-  toolPassHolderCache.set(wallet, { ok: false, at: Date.now(), deny });
+  const m = /^t:([A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)$/.exec(raw);
+  if (!m) return { ok: false, status: 403, error: "bad_pass", detail: "Unrecognised pass proof — unlock again from the page." };
+  const p = verifyToolPass(m[1]);
+  if (!p) return { ok: false, status: 403, error: "pass_expired", detail: "That tools pass has expired or is not valid — unlock again from the page." };
+  if (p.v === "paid" || p.v === "gate-off" || p.v === "grace-price" || p.v === "grace-rpc") return { ok: true, via: p.v, wallet: p.w };
+  // Holder and comped tokens stay honest: the free tier is "while you hold", re-read live.
+  const q = await toolPassQualify(p.w);
+  if (q.ok) return { ok: true, via: q.via, wallet: p.w };
+  const { ok, ...deny } = q;
   return { ok: false, status: 403, ...deny };
 }
+// Verify a SOL payment to the unlock wallet: confirmed, addressed to SOL_UNLOCK_WALLET, at least
+// `min` lamports. Returns the amount and the PAYER (fee payer = first signer). Does NOT consume
+// the signature — callers decide (sigStore "sol:" namespace, shared, one redemption ever).
+async function verifySolPaymentTx(sig, min) {
+  const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
+  const r = await rpcCall("verify-sol", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
+  const tx = r && r.result;
+  if (!tx || (tx.meta && tx.meta.err)) return { ok: false, error: "tx not found or failed" };
+  const keys = ((tx.transaction && tx.transaction.message && tx.transaction.message.accountKeys) || []).map(k => (typeof k === "string" ? k : k.pubkey));
+  const idx = keys.indexOf(SOL_UNLOCK_WALLET);
+  if (idx < 0) return { ok: false, error: "payment not addressed to the unlock wallet" };
+  const delta = ((tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0));
+  if (delta < min) return { ok: false, error: "amount too low", lamports: delta };
+  return { ok: true, lamports: delta, payer: keys[0] || null };
+}
+// POST /api/tool-gate/session — the only issuer of tools-pass tokens (see the block above).
+// Body: { wallet, message, signature (base64), paySig? }.
+app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const b = req.body || {};
+  const wallet = String(b.wallet || "").trim(), message = String(b.message || ""), signature = String(b.signature || "");
+  if (!SOL_ADDR_RE.test(wallet) || !message || !signature) return res.status(400).json({ success: false, error: "need wallet, message, signature" });
+  const mm = TOOL_PASS_MSG_RE.exec(message);
+  if (!mm || mm[1] !== wallet) return res.status(400).json({ success: false, error: "message does not match wallet" });
+  const ts = parseInt(mm[2], 10);
+  if (!ts || Math.abs(Date.now() - ts) > 10 * 60 * 1000) return res.status(400).json({ success: false, error: "Stale or missing nonce — try again" });
+  if (!verifySolanaSignature(message, signature, wallet)) return res.status(401).json({ success: false, error: "Signature did not verify" });
+  if (!process.env.PREMIUM_ACCESS_KEY) return res.status(503).json({ success: false, error: "pass issuer not configured" });
+  const dayMs = 24 * 3600e3;
+  if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) {
+    return res.status(200).json({ success: true, via: "gate-off", pass: "t:" + issueToolPass(wallet, "gate-off", TOOLGATE.days * dayMs), days: TOOLGATE.days });
+  }
+  const paySig = String(b.paySig || "").trim();
+  if (paySig) {
+    if (paySig.length < 80 || paySig.length > 100) return res.status(400).json({ success: false, error: "bad payment signature" });
+    let v;
+    try { v = await verifySolPaymentTx(paySig, TOOLGATE.lamports); } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+    if (!v.ok) return res.status(200).json({ success: false, error: v.error, lamports: v.lamports });
+    // Bound to the PAYER: a signature seen on an explorer is worthless to anyone but the wallet
+    // that paid, and that wallet just proved itself above.
+    if (v.payer !== wallet) return res.status(403).json({ success: false, error: "payment was made by a different wallet" });
+    if (!sigStore.add("sol:" + paySig)) return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
+    return res.status(200).json({ success: true, via: "paid", lamports: v.lamports, pass: "t:" + issueToolPass(wallet, "paid", TOOLGATE.days * dayMs), days: TOOLGATE.days });
+  }
+  const q = await toolPassQualify(wallet);
+  if (!q.ok) { const { ok, ...deny } = q; return res.status(200).json({ success: false, ...deny }); }
+  const ttl = q.via === "comp" ? 30 * dayMs : q.via === "holder" ? TOOLGATE.days * dayMs : 1 * dayMs;   // grace = 1 day, like the client's old grace grant
+  return res.status(200).json({ success: true, via: q.via, balance: q.balance, needed: q.needed, pass: "t:" + issueToolPass(wallet, q.via, ttl), days: Math.round(ttl / dayMs) });
+});
 // One line per gated route: answers the JSON the page renders, or null to continue.
 async function requireToolPass(req, res) {
   const g = await toolPassGate(req);
@@ -8333,15 +8421,9 @@ app.get("/api/verify-sol-payment", async (req, res) => {
   if (!sig || sig.length < 80 || sig.length > 100 || !askedMin) return res.status(400).json({ success: false, error: "need sig + min (lamports)" });
   const min = Math.max(askedMin, SOL_UNLOCK_MIN_LAMPORTS);
   try {
-    const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
-    const r = await rpcCall("verify-sol", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
-    const tx = r && r.result;
-    if (!tx || (tx.meta && tx.meta.err)) return res.status(200).json({ success: false, error: "tx not found or failed" });
-    const keys = ((tx.transaction && tx.transaction.message && tx.transaction.message.accountKeys) || []).map(k => (typeof k === "string" ? k : k.pubkey));
-    const idx = keys.indexOf(SOL_UNLOCK_WALLET);
-    if (idx < 0) return res.status(200).json({ success: false, error: "payment not addressed to the unlock wallet" });
-    const delta = ((tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0));
-    if (delta < min) return res.status(200).json({ success: false, error: "amount too low", lamports: delta });
+    const v = await verifySolPaymentTx(sig, min);
+    if (!v.ok) return res.status(200).json({ success: false, error: v.error, lamports: v.lamports });
+    const delta = v.lamports;
     // 🔒 REPLAY GUARD — this endpoint had NONE (found in the 2026-07-27 wallet sweep).
     // The retired CLKN send path consumed each signature via sigStore the same way;
     // the SOL path verified the transfer and returned success WITHOUT marking it spent. Because
@@ -8354,10 +8436,10 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     if (!sigStore.add("sol:" + sig)) {
       return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
     }
-    // The server-side tools pass (toolPassGate): the redeemed signature IS the pass for
-    // TOOLGATE.days, so the page can send it back as proof on every gated run.
-    kv.set("toolPass:" + sig, { at: Date.now(), expiresAt: Date.now() + TOOLGATE.days * 24 * 3600e3, lamports: delta });
-    return res.status(200).json({ success: true, lamports: delta, pass: "s:" + sig, days: TOOLGATE.days });
+    // NOTE (2026-09-10): this endpoint verifies and consumes a payment; it does NOT issue a tools
+    // pass. A transaction signature is public and therefore never a credential — the tools pass
+    // is issued by POST /api/tool-gate/session to the proven payer wallet.
+    return res.status(200).json({ success: true, lamports: delta });
   } catch (err) {
     console.error("[verify-sol-payment] error:", err.message);
     return res.status(200).json({ success: false, error: err.message });
@@ -12093,7 +12175,13 @@ async function checkCLKNHolder(wallet) {
       })
     });
     const data = await response.json();
-    const accounts = data?.result?.value || [];
+    // An RPC error (no result.value) is NOT a zero balance. Callers that gate on the balance
+    // (the tools pass) apply their outage policy on `unavailable`; the old shape is preserved
+    // for everyone else. Found by the second-reviewer pass, 2026-09-10.
+    if (!data || !data.result || !Array.isArray(data.result.value)) {
+      return { isHolder: false, balance: 0, unavailable: true, error: (data && data.error && data.error.message) || "no result" };
+    }
+    const accounts = data.result.value;
     // A wallet can hold the same mint across several token accounts; sum them all
     // so a holder with split accounts isn't undercounted (and doesn't lose their tier).
     const balance = accounts.reduce(
@@ -12103,7 +12191,7 @@ async function checkCLKNHolder(wallet) {
     return { isHolder: balance > 0, balance };
   } catch(e) {
     console.error("Holder check error:", e.message);
-    return { isHolder: false, balance: 0 };
+    return { isHolder: false, balance: 0, unavailable: true, error: e.message };
   }
 }
 

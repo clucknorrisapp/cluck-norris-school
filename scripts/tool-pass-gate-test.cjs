@@ -10,6 +10,26 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const crypto = require("crypto");
+const { PublicKey } = require("@solana/web3.js");
+const KEY = "toolpass-test-key";
+// An ed25519 keypair standing in for a wallet: node's crypto signs exactly what a Solana wallet's
+// signMessage produces, so the session endpoint can be driven end to end without a wallet.
+function makeWallet() {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+  const raw = Buffer.from(publicKey.export({ format: "jwk" }).x, "base64url");
+  return { pub: new PublicKey(raw).toBase58(), sign: (msg) => crypto.sign(null, Buffer.from(msg, "utf8"), privateKey).toString("base64") };
+}
+function passMsg(wallet, nonce) { return `Cluck Norris — unlock the tools pass\nwallet: ${wallet}\nnonce: ${nonce || Date.now()}\nThis only proves you own this wallet.`; }
+function forgeToken(payload, key) {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  return body + "." + crypto.createHmac("sha256", key).update("tools." + body).digest("base64url");
+}
+async function post(base, p, body) {
+  const r = await fetch(base + p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  let j = null; try { j = await r.clone().json(); } catch (_) {}
+  return { status: r.status, body: j };
+}
 
 const W = "2nAYWqxLN9P5HKRxgbcPVKrboWZiTNncfvUhPNYXzWtv";
 const MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
@@ -19,7 +39,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function boot(port, extraEnv) {
   const DIR = fs.mkdtempSync(path.join(os.tmpdir(), "toolpass-test-"));
-  const env = { ...process.env, PORT: String(port), DATA_DIR: DIR, PREMIUM_ACCESS_KEY: "toolpass-test-key",
+  const env = { ...process.env, PORT: String(port), DATA_DIR: DIR, PREMIUM_ACCESS_KEY: KEY,
     TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", HELIUS_API_KEY: "", MM_OPERATOR_SECRET: "", MM_OPERATOR_SECRET_TREASURY: "",
     FALLBACK_RPC_URL: "http://127.0.0.1:9", ...extraEnv };
   const srv = spawn(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env, stdio: "ignore" });
@@ -40,20 +60,56 @@ async function get(base, p, headers) {
   const A = await boot(Number(process.env.TOOLPASS_TEST_PORT || 3141), { TOOLGATE_OFF: "" });
   try {
     console.log("\nTools pass — server-side enforcement\n");
-    for (const [name, p] of [["wallet-xray", `/api/wallet-xray?wallet=${W}`], ["snapshot", `/api/snapshot?mint=${MINT}`], ["trace", `/api/trace?wallet=${W}&mint=${MINT}`]]) {
-      let r = await get(A.base, p);
-      ok(`${name}: no proof → 402 pass_required`, r.status === 402 && r.body && r.body.error === "pass_required", JSON.stringify(r.body));
-      r = await get(A.base, p, { "x-clkn-pass": "hello" });
-      ok(`${name}: malformed proof → 403 bad_pass`, r.status === 403 && r.body && r.body.error === "bad_pass", JSON.stringify(r.body));
-      r = await get(A.base, p, { "x-clkn-pass": "s:5Kd3NBzz8aYCMcgHrZfYDaKXfF1x2yv1rM4xQe9v7pQnQhY3wA8u2LxgC2DqYFBHwXk1mZ9cN5b6T8K7pR4sV3wJ" });
-      ok(`${name}: never-redeemed payment sig → 403 pass_expired`, r.status === 403 && r.body && r.body.error === "pass_expired", JSON.stringify(r.body));
-      // Holder path with no CLKN price loaded fails OPEN (the pass's own rule) — the request then
-      // reaches the tool, which has no Helius key here, so the visible answer is its 500, not 402/403.
-      r = await get(A.base, p, { "x-clkn-pass": "w:" + W });
-      ok(`${name}: wallet proof with no price → passes the gate (fail-open)`, r.status !== 402 && r.status !== 403, "status " + r.status);
-    }
-    ok("?pass= query form is honoured too", (await get(A.base, `/api/trace?wallet=${W}&mint=${MINT}&pass=s:abc`)).status === 403);
-    ok("Wallet Checkup stays free (no gate)", [200, 400, 500, 502, 503].includes((await get(A.base, `/api/wallet-checkup?wallet=${W}`)).status) && (await get(A.base, `/api/wallet-checkup?wallet=${W}`)).status !== 402);
+    // /api/wallet-xray, /api/snapshot, /api/trace and /api/wallet-checkup share ONE "forensic"
+    // rate bucket of 15/min, so the full matrix runs on X-Ray and the other routes get one probe each.
+    const XR = `/api/wallet-xray?wallet=${W}`;
+    let r = await get(A.base, XR);
+    ok("wallet-xray: no proof → 402 pass_required", r.status === 402 && r.body && r.body.error === "pass_required", JSON.stringify(r.body));
+    r = await get(A.base, XR, { "x-clkn-pass": "hello" });
+    ok("wallet-xray: malformed proof → 403 bad_pass", r.status === 403 && r.body && r.body.error === "bad_pass", JSON.stringify(r.body));
+    // The two bypasses a second reviewer found on the first version: a copied holder address and
+    // a public payment signature are NOT credentials any more.
+    r = await get(A.base, XR, { "x-clkn-pass": "w:" + W });
+    ok("wallet-xray: a pasted wallet address is refused (bad_pass)", r.status === 403 && r.body && r.body.error === "bad_pass", JSON.stringify(r.body));
+    r = await get(A.base, XR, { "x-clkn-pass": "s:5Kd3NBzz8aYCMcgHrZfYDaKXfF1x2yv1rM4xQe9v7pQnQhY3wA8u2LxgC2DqYFBHwXk1mZ9cN5b6T8K7pR4sV3wJ" });
+    ok("wallet-xray: a payment signature is refused (bad_pass)", r.status === 403 && r.body && r.body.error === "bad_pass", JSON.stringify(r.body));
+    r = await get(A.base, XR, { "x-clkn-pass": "t:" + forgeToken({ t: "tools", w: W, v: "paid", exp: Date.now() - 1000 }, KEY) });
+    ok("wallet-xray: an expired token → 403 pass_expired", r.status === 403 && r.body && r.body.error === "pass_expired", JSON.stringify(r.body));
+    r = await get(A.base, XR, { "x-clkn-pass": "t:" + forgeToken({ t: "tools", w: W, v: "paid", exp: Date.now() + 1e7 }, "wrong-key") });
+    ok("wallet-xray: a token signed with the wrong key → 403", r.status === 403, "status " + r.status);
+    r = await get(A.base, XR, { "x-clkn-pass": "t:" + forgeToken({ w: W, exp: Date.now() + 1e7 }, KEY) });
+    ok("wallet-xray: a premium-shaped proof is not a tools pass", r.status === 403, "status " + r.status);
+    r = await get(A.base, `/api/snapshot?mint=${MINT}`);
+    ok("snapshot: no proof → 402 pass_required", r.status === 402 && r.body && r.body.error === "pass_required", JSON.stringify(r.body));
+    r = await get(A.base, `/api/trace?wallet=${W}&mint=${MINT}`);
+    ok("trace: no proof → 402 pass_required", r.status === 402 && r.body && r.body.error === "pass_required", JSON.stringify(r.body));
+    ok("?pass= query form is honoured too", (await get(A.base, `/api/trace?wallet=${W}&mint=${MINT}&pass=t:abc.def`)).status === 403);
+
+    console.log("\nSession issuance — the wallet must prove itself\n");
+    const wal = makeWallet(), other = makeWallet();
+    let s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: passMsg(wal.pub), signature: other.sign(passMsg(wal.pub)) });
+    ok("signature from a different key → 401", s.status === 401, JSON.stringify(s.body));
+    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: passMsg(other.pub), signature: wal.sign(passMsg(other.pub)) });
+    ok("message naming another wallet → 400", s.status === 400, JSON.stringify(s.body));
+    const stale = passMsg(wal.pub, Date.now() - 20 * 60 * 1000);
+    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: stale, signature: wal.sign(stale) });
+    ok("stale nonce → 400", s.status === 400, JSON.stringify(s.body));
+    const premiumMsg = "Cluck Norris — verify wallet for premium access\nwallet: " + wal.pub + "\nnonce: " + Date.now() + "\n";
+    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: premiumMsg, signature: wal.sign(premiumMsg) });
+    ok("a premium-purpose signature is not accepted here", s.status === 400, JSON.stringify(s.body));
+    const good = passMsg(wal.pub);
+    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: good, signature: wal.sign(good) });
+    // No CLKN price is loaded in this environment → the outage policy issues a short grace pass.
+    ok("valid signature, no price → grace pass issued", s.status === 200 && s.body && s.body.success && /^t:/.test(s.body.pass) && /grace/.test(s.body.via), JSON.stringify(s.body));
+    const tok = s.body && s.body.pass;
+    let g = await get(A.base, `/api/wallet-xray?wallet=${W}`, { "x-clkn-pass": tok });
+    ok("that pass opens the gate (reaches the tool: 500 here, no Helius key)", g.status !== 402 && g.status !== 403, "status " + g.status);
+    g = await get(A.base, `/api/wallet-xray?wallet=${W}`, { "x-clkn-pass": tok + "x" });
+    ok("a tampered pass is refused", g.status === 403, "status " + g.status);
+    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: good, signature: wal.sign(good), paySig: "5Kd3NBzz8aYCMcgHrZfYDaKXfF1x2yv1rM4xQe9v7pQnQhY3wA8u2LxgC2DqYFBHwXk1mZ9cN5b6T8K7pR4sV3wJ" });
+    ok("paid path with an unverifiable signature does not issue a pass", !(s.body && s.body.success), JSON.stringify(s.body));
+    const wc = await get(A.base, `/api/wallet-checkup?wallet=${W}`);
+    ok("Wallet Checkup stays free (no gate)", wc.status !== 402 && wc.status !== 403, "status " + wc.status);
     ok("tool-gate config is public", (await get(A.base, "/api/tool-gate/config")).status === 200);
 
     console.log("\nOperator consoles are not served raw\n");
