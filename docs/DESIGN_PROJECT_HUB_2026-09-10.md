@@ -182,3 +182,50 @@ is paid for the camera.
 Self-service public enrollment; any escrow protocol of our own; the CUNA burner generalised; a
 task marketplace (one manually reviewed pilot task at most, and only if the hub ships early);
 engine restarts of any kind.
+
+---
+
+## Addendum A — Launch Readiness: the Hatchery as the "Build" stage (Codex proposal, 2026-09-10; adopted)
+
+**Idea.** Extend the Hatchery from "mint a token, stop before liquidity" into a guided *launch
+your project responsibly* journey whose public face is a **Launch Readiness checklist** on the
+Project Hub. Every item carries one of three states, never a score:
+
+| State | Meaning | Source of truth |
+|---|---|---|
+| **Explained** | the operator completed the lesson attached to the step | the school's progress ledger (`lib/school-progress.js`), per operator wallet session |
+| **Declared** | the operator published an intention (allocation, vesting plan, who keeps control) | a signed statement stored on the program record, shown verbatim with its date |
+| **Verified** | specific on-chain evidence exists | our existing readers: locks by mint, metadata immutability, mint/freeze authority, burn receipts, listing checkup, LP position scan |
+
+A complete checklist is **never** a "safe token" badge (the Cluck Score lesson). The page shows
+the three columns and lets the reader draw their own conclusion; "Declared" without "Verified" is
+displayed as exactly that.
+
+**The journey and what already exists for each stage**
+
+| Stage | Hatchery helps the operator… | Exists today | New in the window |
+|---|---|---|---|
+| Plan | define purpose, supply, allocations, what holders are and are not promised | Hatchery explains supply/decimals/authorities; Incubator + belt lessons | a short *Plan* form → the first Declared items; the **reward-budget planner** (pure calculator on `lib/cuna-staking.js`: where rewards come from, runway in days at `poolDailyRaw`, who qualifies, what happens when funding ends, what the operator can change) |
+| Create | mint with permissions, metadata and irreversible choices explained | the Hatchery, Arweave metadata, Token Metadata Lock | none beyond linking; **optional** — an existing token enters at Declare |
+| Add liquidity | understand pairs, initial pricing, depth, fees, position risk before signing | LP Lab (14 lessons), LP Rescue scanner, `/api/whirlpool/pools` | the *Explained* hooks for three LP Lab lessons; a **transaction preview** explainer for the pool-creation step (what the signature does, what is irreversible) — no automated deployment |
+| Explain commitments | publish allocations, vesting, liquidity arrangements, who retains control | Locker Room, Lock of Fame, Project Burn receipts | the Declared statements + Verified readers side by side; the three-way distinction taught explicitly: locking project tokens ≠ vesting allocations ≠ restricting control over LP positions |
+| Support holders | set up a clearly funded participation program | CUNA lock-to-earn | the multi-project program record (§2–§5 above) |
+| Prove delivery | show actual locks, terms, confirmed distributions | `/lock/:mint`, receipts (§2) | the Project Hub page composing all of it |
+
+**Checklist items (first cut).** Purpose and promises declared · supply and decimals verified on
+the mint · mint authority state verified · freeze authority state verified · metadata immutable
+verified · allocation plan declared · team/treasury locks verified (with Rule B exclusions shown) ·
+liquidity: pools verified, LP position ownership verified (scan), LP lock status *declared* until a
+supported reader exists · listings verified (Listing Checkup) · holder program: terms published
+(program record hash), funding status shown, first receipt verified · LP Lab and safety lessons
+Explained per operator.
+
+**What stays out of the window.** Farm deployment and any LP-locking integration (review the
+specific protocols and position types first); automated liquidity provisioning; any new
+money-moving integration. LP *education* and transaction previews come first.
+
+**Acceptance tests added.** 11. Each checklist item resolves to exactly one of
+explained/declared/verified/none with its evidence link; a declared item never renders as
+verified. 12. The reward-budget planner reproduces the CUNA programme's published figures from
+its config. 13. A project with no Hatchery mint (an existing token) completes the checklist from
+Declare onward. 14. No route or copy anywhere renders a "safe" / "verified project" summary badge.
