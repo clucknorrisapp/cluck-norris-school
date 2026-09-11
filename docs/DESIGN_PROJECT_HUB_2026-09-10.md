@@ -4,7 +4,10 @@ Status: **design only, no code** (owner rule 2026-09-10: publish nothing until t
 build from 2026-09-14). Written for a second-reviewer pass (Codex) before implementation.
 Revision 3 (2026-09-11, Codex re-review): transfer identity is chain-global with project as
 metadata; a pre-broadcast `signing` state with server-side reconcile closes the
-broadcast-before-recording gap; acceptance test 5 states the partition and the overpayment cases. Every
+broadcast-before-recording gap; acceptance test 5 states the partition and the overpayment cases.
+Revision 4 (2026-09-11, Codex round 3): every attempt is identified by its own signature,
+registered before WE broadcast (sign-only wallets, no heuristic matching, incomplete history
+never releases a reservation); a partial payment keeps the remainder reserved on the row. Every
 acceptance test at the end is meant to become a CI script the way `scripts/cuna-payout-test.cjs`
 and `scripts/tool-pass-gate-test.cjs` already are.
 
@@ -141,30 +144,51 @@ is refused.
   mints, the same reward mint, the same funding wallet, the same recipient and the same amount —
   one transfer settles exactly one row in one project; the other project's `recordSent` with the
   same `sig:index` is refused with `transfer_already_consumed` naming the owning project and row.
-- **Batch rows are registered BEFORE the wallet is asked to sign (rev 3).** States:
-  `pending → signing → submitted → paid | failed`. The client never asks the wallet to sign a
-  row the server does not already hold in `signing`: before the transaction is built,
-  `POST …/rows/:id/attempt` records `{ attemptId (client random), recentBlockhash,
-  lastValidBlockHeight, startedAt }` on the row and moves it to `signing`; the transaction is
-  built with exactly that blockhash. A row in `signing` or `submitted` **cannot be cancelled and
-  its reservation cannot be released**, so "the wallet broadcast and the tab closed before any
-  callback reached the server" leaves a row the server refuses to rebuild or cancel. A `signing`
-  row resolves only by (a) the client reporting the signature (→ `submitted`), or (b) the
-  server's reconcile: once `lastValidBlockHeight` has passed it scans the funding wallet's
-  signatures since `startedAt` for a transfer matching the row (token program, mint, source,
-  destination owner, raw amount); a match → `paid` (consumed under the global identity above);
-  no match after the blockhash has expired → back to `pending` (that attempt can never land).
-  `attempt` is refused on a row that still has a live attempt, and a rebuild is only possible
-  from `pending`. Tests: (1) tab lost immediately after broadcast, before any callback — the row
-  is `signing`, cancel is refused, reconcile finds the transfer, the row is `paid`, a rebuild is
-  refused; (2) tab lost after signing but the wallet never broadcast — after blockhash expiry,
-  reconcile finds nothing, the row returns to `pending`, a rebuild is allowed; (3) reconcile
-  while the blockhash is still valid finds nothing and KEEPS `signing` (never releases early);
-  (4) restart mid-`signing` — the attempt survives on disk and reconcile behaves identically;
-  plus the earlier set: two operators creating batches concurrently (only one reserves a given
-  credit), a lost response after a send (row reconciles to paid from the chain, never resent),
-  cancellation during confirmation (refused), late confirmation after a restart (row flips to
-  paid on reconcile), and restart mid-batch (reservation survives).
+- **Every attempt is identified by its own transaction signature BEFORE broadcast (rev 4).**
+  States: `pending → signing → submitted → paid | failed`. The payout page never uses
+  `signAndSendTransaction`; it uses `signTransaction` (Wallet Standard: sign only, the wallet
+  does not broadcast) and WE broadcast, so nothing can land that the server has not recorded:
+  1. `POST …/rows/:id/attempt` registers `{ attemptId (client random), recentBlockhash,
+     lastValidBlockHeight, startedAt }` and moves the row to `signing`; the transaction is built
+     with exactly that blockhash. A row with a live attempt refuses a second `attempt`.
+  2. The wallet signs. The client reads the signature off the signed transaction (it is
+     deterministic for the signed bytes) and `POST …/rows/:id/attempt/:attemptId/signature`
+     records it. **Only a 2xx from that call permits `sendRawTransaction`.** A tab lost before
+     this call means nothing was ever broadcast — the wallet did not send it and neither did we.
+  3. The client broadcasts and the row is `submitted`. A tab lost here is the case the finding
+     names, and it is closed: the server holds the exact signature.
+  Reconcile is by **that signature only** — `getSignatureStatuses([sig],
+  {searchTransactionHistory:true})` then `getTransaction(sig)` to verify the transfer against
+  the row (token program, mint, source = fundingWallet, destination owner, raw amount) before
+  consuming it under the global identity. No matching by payer/recipient/mint/amount, ever:
+  a shared funding wallet or a second project paying the same person the same amount can never
+  be mistaken for this attempt. A row in `signing` or `submitted` **cannot be cancelled and its
+  reservation cannot be released.** A `signing` row with no signature recorded returns to
+  `pending` only when the blockhash has provably expired (finalized block height >
+  `lastValidBlockHeight`) — a signed-but-unregistered transaction can no longer land — and a
+  `submitted` row returns to `pending` only when ALL of: the blockhash has provably expired, the
+  status lookup returned a complete "not found" (an RPC error, timeout, `unavailable` or a node
+  that is behind keeps the row and the reservation exactly as they are), and two consecutive
+  reconciles at least 60 s apart agreed. A rebuild is only possible from `pending`. Wallets that
+  do not expose `signTransaction` are refused on the payout page with the reason. Residual,
+  stated: a non-conforming wallet that broadcasts on `signTransaction` combined with a tab loss
+  inside the blockhash window could land a transfer the server has no signature for; the
+  reconcile for that case is the operator's "unmatched transfers" view (every outgoing transfer
+  from `fundingWallet` in the reward asset that matches no row), which blocks the next batch for
+  that wallet until resolved. Tests: (1) tab lost immediately after broadcast, before any
+  callback — the row is `submitted` with its signature, cancel is refused, reconcile finds the
+  transaction, the row is `paid`, a rebuild is refused; (2) tab lost after the wallet signed but
+  before the signature was registered — nothing was broadcast; after blockhash expiry the row
+  returns to `pending` and a rebuild is allowed; (3) reconcile while the blockhash is still valid
+  finds nothing and KEEPS the state (never releases early); (4) restart mid-`signing` /
+  mid-`submitted` — the attempt and signature survive on disk and reconcile behaves identically;
+  (5) RPC unavailable or returning an error during reconcile — state and reservation untouched;
+  (6) two projects sharing a funding wallet pay the same recipient the same amount in the same
+  minute — each row resolves only by its own signature and neither can claim the other's
+  transfer; plus the earlier set: two operators creating batches concurrently (only one reserves
+  a given credit), a lost response after a send (row reconciles to paid from its signature,
+  never resent), cancellation during confirmation (refused), late confirmation after a restart
+  (row flips to paid on reconcile), and restart mid-batch (reservation survives).
 - **Who signs:** the project's `fundingWallet`, from the project's own payout page, in its own
   wallet. We hold no key. The server builds nothing that moves funds; it verifies signatures
   after the fact, exactly as today.
@@ -242,10 +266,16 @@ is paid for the camera.
    rows to `available` and its sent rows stay `paid`. Overpayment cases, explicit: a verified
    transfer LARGER than the row records `paid` = the row amount and `overpaidRaw` = the excess
    on the row and the wallet (shown on the receipt and the funding status, never floored to
-   zero, never credited as future accrual); a transfer SMALLER than the row marks the row
-   `failed` with `shortRaw`, returns the row's amount to `available`, and records the transfer
-   as an unmatched payment for the operator to resolve — it is consumed under the global
-   identity so it cannot later satisfy another row; a manual send outside the system that puts
+   zero, never credited as future accrual); a transfer SMALLER than the row (rev 4) marks
+   the row `partial` with `paidRaw` = what arrived and `remainingRaw` = the rest: the transfer
+   is consumed under the global identity and counted as `paid`, the remainder STAYS reserved on
+   the same row, nothing returns to `available`, and the only action the row accepts is a new
+   attempt for exactly `remainingRaw` (a second partial narrows it again). Test: a 100-token row
+   receives 40 → the next attempt for that row can only be built for 60, never 100; then 40
+   more → 20; `paid` for the wallet never exceeds `accrued`, and the partition invariant holds
+   at every step. The owner (not an operator) may instead mark the remainder `waived`, which is
+   an explicit, logged decision that releases it to `available` — it is still owed, the next
+   batch draws it; a manual send outside the system that puts
    `paid > accrued` for a wallet shows `overpaidRaw` and draws nothing in the next batch.
 6. Funding: obligations, reserved and observed balance are three different fields; the UI
    cannot show a green "funded" from an observed balance alone.
