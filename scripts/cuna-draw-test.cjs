@@ -16,6 +16,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const A = "2nAYWqxLN9P5HKRxgbcPVKrboWZiTNncfvUhPNYXzWtv";   // 44 chars
 const A43 = "So11111111111111111111111111111111111111112";  // 43 chars, valid (wrapped SOL mint)
 const B = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+const C = "3BqWphsCZhmbzKfLubZfjQ3pgLWRC7HY4AXB5tk1wKCF";   // a third real wallet
 
 function fakeStore({ persistent = true } = {}) { const m = new Map(); return { get: (k, d) => (m.has(k) ? m.get(k) : d), set: (k, v) => m.set(k, v), isPersistent: () => persistent }; }
 
@@ -28,6 +29,30 @@ console.log("address validation — decode to exactly 32 bytes, canonical form s
   ok("wrong alphabet (0, O, I, l) is rejected", ["0" + A.slice(1), "O" + A.slice(1), "I" + A.slice(1), "l" + A.slice(1)].every((s) => draw.canonicalAddress(s) === null));
   ok("surrounding whitespace is trimmed", draw.canonicalAddress("  " + A + "\n") === A);
   ok("non-strings, empty, and junk are rejected", [null, undefined, 42, {}, [], "", "hello", "x".repeat(44)].every((v) => draw.canonicalAddress(v) === null));
+}
+
+console.log("not-a-wallet addresses are refused at entry (programs, mints, PDAs)");
+{
+  const w = { open: 0, close: 1e15 }, store = fakeStore();
+  ok("the System Program (32 zero bytes — the site session's production test row) → 400", draw.enter({ store, address: "11111111111111111111111111111111", now: 1, window: w }).status === 400);
+  ok("the Token Program → 400", draw.enter({ store, address: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", now: 1, window: w }).status === 400);
+  ok("the CUNA mint and wrapped SOL → 400", draw.enter({ store, address: "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc", now: 1, window: w }).status === 400 && draw.enter({ store, address: A43, now: 1, window: w }).status === 400);
+  ok("a PDA (the Meteora vault authority, off-curve) → 400 with the off-curve reason", /off-curve/.test(draw.enter({ store, address: "HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC", now: 1, window: w }).error));
+  ok("an Orca pool address (off-curve) → 400", draw.enter({ store, address: "2pxxjL96USyv6WPbrF2xkoKt16UdueyTuzr3CLwwTb1G", now: 1, window: w }).status === 400);
+  ok("nothing was stored by any of those", draw.exportRows(store).length === 0);
+  ok("a real wallet still enters", draw.enter({ store, address: A, now: 1, window: w }).recorded === true);
+  ok("check does not apply the wallet rule (it reports what is stored, nothing more)", draw.check({ store, address: "11111111111111111111111111111111" }).status === 200);
+}
+
+console.log("delete");
+{
+  const w = { open: 0, close: 1e15 }, store = fakeStore();
+  draw.enter({ store, address: A, now: 5, window: w }); draw.enter({ store, address: B, now: 6, window: w });
+  const d = draw.deleteEntry({ store, address: " " + A + " " });
+  ok("removes exactly that row and reports what it was", d.ok && d.removed === true && d.was && d.was.at === 5 && draw.exportRows(store).length === 1 && draw.exportRows(store)[0].address === B, d);
+  ok("deleting again → removed:false, nothing else touched", draw.deleteEntry({ store, address: A }).removed === false && draw.exportRows(store).length === 1);
+  ok("bad address → 400", draw.deleteEntry({ store, address: "nope" }).status === 400);
+  ok("the address can re-enter afterwards with a fresh created_at", draw.enter({ store, address: A, now: 9, window: w }).recorded === true && draw.check({ store, address: A }).at === 9);
 }
 
 console.log("window enforced server-side");
@@ -117,8 +142,10 @@ const ORIGIN = "https://cunatoken.com";
     ok("…with the CORS header on the actual response", e1.headers.get("access-control-allow-origin") === ORIGIN);
     const e2 = await req(s1.base, "/api/cuna-draw/enter", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: A }) });
     ok("second POST → 200 no-op (recorded:false, found:true)", e2.status === 200 && e2.json.recorded === false && e2.json.found === true, e2.json);
-    const e3 = await req(s1.base, "/api/cuna-draw/enter", { method: "POST", headers: { "content-type": "text/plain" }, body: A43 });
-    ok("POST /enter with a text/plain body (no preflight) → 200 recorded", e3.status === 200 && e3.json.recorded === true && e3.json.address === A43, e3.json);
+    const e3 = await req(s1.base, "/api/cuna-draw/enter", { method: "POST", headers: { "content-type": "text/plain" }, body: C });
+    ok("POST /enter with a text/plain body (no preflight) → 200 recorded", e3.status === 200 && e3.json.recorded === true && e3.json.address === C, e3.json);
+    const sys = await req(s1.base, "/api/cuna-draw/enter", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: "11111111111111111111111111111111" }) });
+    ok("the System Program address → 400 (the production test row can never come back)", sys.status === 400 && /program or mint/.test(sys.json.error), sys.json);
     const e4 = await req(s1.base, "/api/cuna-draw/enter", { method: "POST", headers: { "content-type": "text/plain" }, body: JSON.stringify({ address: B }) });
     ok("POST /enter with JSON sent as text/plain → 200 recorded", e4.status === 200 && e4.json.recorded === true && e4.json.address === B, e4.json);
     const bad = await req(s1.base, "/api/cuna-draw/enter", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: A.slice(0, 43) }) });
@@ -130,7 +157,7 @@ const ORIGIN = "https://cunatoken.com";
 
     const c1 = await req(s1.base, "/api/cuna-draw/check?address=" + A, { headers: { origin: ORIGIN } });
     ok("GET /check → { ok:true, found:true } with CORS", c1.status === 200 && c1.json.ok === true && c1.json.found === true && c1.headers.get("access-control-allow-origin") === ORIGIN, c1.json);
-    const c2 = await req(s1.base, "/api/cuna-draw/check?address=" + "3BqWphsCZhmbzKfLubZfjQ3pgLWRC7HY4AXB5tk1wKCF");
+    const c2 = await req(s1.base, "/api/cuna-draw/check?address=" + "HiahJYkBMSYzckeb8XeZ7dvxVeWTsq8jQQ2wq4Jo4SDZ");
     ok("GET /check for an unknown address → found:false", c2.status === 200 && c2.json.found === false);
     ok("GET /check with a bad address → 400", (await req(s1.base, "/api/cuna-draw/check?address=nope")).status === 400);
 
@@ -147,6 +174,15 @@ const ORIGIN = "https://cunatoken.com";
     ok("the admin key also opens the export", x3.status === 200 && x3.json.count === 3);
     const csv = await req(s1.base, "/api/cuna-draw/export?format=csv", { headers: { "x-draw-token": TOKEN } });
     ok("CSV export: header + three lines", csv.status === 200 && csv.text.split("\n").filter(Boolean).length === 4 && csv.text.startsWith("address,created_at"));
+
+    const d0 = await req(s1.base, "/api/cuna-draw/entry?address=" + C, { method: "DELETE" });
+    ok("DELETE /entry without a token → 404, row still there", d0.status === 404 && (await req(s1.base, "/api/cuna-draw/check?address=" + C)).json.found === true);
+    const d1 = await req(s1.base, "/api/cuna-draw/entry?address=" + C, { method: "DELETE", headers: { "x-draw-token": TOKEN } });
+    ok("DELETE /entry with the token → removed:true", d1.status === 200 && d1.json.removed === true && d1.json.address === C, d1.json);
+    ok("…and /check no longer finds it; export count is 2", (await req(s1.base, "/api/cuna-draw/check?address=" + C)).json.found === false && (await req(s1.base, "/api/cuna-draw/export", { headers: { "x-draw-token": TOKEN } })).json.count === 2);
+    const d2 = await req(s1.base, "/api/cuna-draw/entry?address=" + C, { method: "DELETE", headers: { "x-premium-key": KEY } });
+    ok("DELETE again (admin key) → removed:false", d2.status === 200 && d2.json.removed === false);
+    ok("GET on /entry is not a route (a pasted link cannot delete)", (await req(s1.base, "/api/cuna-draw/entry?address=" + A, { headers: { "x-draw-token": TOKEN } })).status === 404);
 
     // Rate limit: 10/min on /enter per IP. We have used 6 so far in this window.
     let limited = false;
@@ -175,6 +211,8 @@ const ORIGIN = "https://cunatoken.com";
     ok("GET /check passes → found:true", c.status === 200 && c.json.found === true);
     const x = await req(s3.base, "/api/cuna-draw/export", { headers: { ...H, "x-draw-token": TOKEN } });
     ok("export is NOT reachable through the lock host even with the token → 403", x.status === 403, x.status);
+    const dl = await req(s3.base, "/api/cuna-draw/entry?address=" + A, { method: "DELETE", headers: { ...H, "x-draw-token": TOKEN } });
+    ok("DELETE /entry is NOT reachable through the lock host either → 403", dl.status === 403, dl.status);
     const direct = await req(s3.base, "/api/cuna-draw/enter", { method: "POST", headers: { host: "clucknorris.app", "content-type": "application/json" }, body: JSON.stringify({ address: B }) });
     ok("a direct-to-origin request on the main host without the edge header is still 403", direct.status === 403, direct.status);
   } finally { s3.stop(); }
