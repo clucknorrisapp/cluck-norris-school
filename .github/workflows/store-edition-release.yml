@@ -1,0 +1,53 @@
+# Publishes the STORE edition (the education-only bundle the Google Play / iOS wrapper ships
+# inside the app) as a GitHub Release asset, on a tag. The wrapper repo pins
+# { version, url, sha256, sourceCommit } from that release (docs/STORE_EDITION.md).
+#
+#   git tag store-google-v1.0.0 && git push origin store-google-v1.0.0
+#
+# The tag's version must equal store-edition/store-edition.json → version, or the job stops
+# before publishing: the pinned digest must never describe a bundle built from a different
+# version than the one in the file name.
+name: store-edition-release
+on:
+  push:
+    tags:
+      - "store-google-v*"
+      - "store-ios-v*"
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Resolve variant + version from the tag
+        id: tag
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VARIANT="${TAG#store-}"; VARIANT="${VARIANT%%-v*}"
+          VERSION="${TAG##*-v}"
+          FILEV=$(node -p "require('./store-edition/store-edition.json').version")
+          if [ "$VERSION" != "$FILEV" ]; then echo "tag version $VERSION != store-edition.json version $FILEV"; exit 1; fi
+          echo "variant=$VARIANT" >> "$GITHUB_OUTPUT"; echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Build + verify the store edition
+        run: node scripts/build-store-edition.mjs "${{ steps.tag.outputs.variant }}"
+      - name: Independent re-check of the published bundle
+        run: node scripts/store-edition-test.cjs --no-server "${{ steps.tag.outputs.variant }}"
+      - name: Release notes
+        id: notes
+        run: |
+          M=release/store-edition-${{ steps.tag.outputs.variant }}-${{ steps.tag.outputs.version }}.json
+          { echo "body<<EOF"; echo "Store edition \`${{ steps.tag.outputs.variant }}\` v${{ steps.tag.outputs.version }} — the education-only bundle for the app wrapper."; echo; echo '```json'; cat "$M"; echo '```'; echo; echo "Pin in the wrapper's store-edition.lock: version, url of the .tgz below, sha256, sourceCommit. Extract with \`tar -xzf <file> -C dist --strip-components=1\`."; echo "EOF"; } >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: "Store edition ${{ steps.tag.outputs.variant }} v${{ steps.tag.outputs.version }}"
+          body: ${{ steps.notes.outputs.body }}
+          files: |
+            release/store-edition-${{ steps.tag.outputs.variant }}-${{ steps.tag.outputs.version }}.tgz
+            release/store-edition-${{ steps.tag.outputs.variant }}-${{ steps.tag.outputs.version }}.tgz.sha256
+            release/store-edition-${{ steps.tag.outputs.variant }}-${{ steps.tag.outputs.version }}.json

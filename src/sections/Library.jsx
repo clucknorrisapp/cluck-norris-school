@@ -1,6 +1,7 @@
 // The Library (deep dives, liquidity, glossary, resources) — lazy-loaded section.
 import { useState } from "react";
 import { LOGO_B64, COL, AskCluck } from "../shared.jsx";
+import { STORE } from "../edition.js";
 
 // ── THE LIBRARY — DEEP DIVES ──
 const LIBRARY_TOPICS = [
@@ -954,7 +955,7 @@ EXIT THE TOOL IF:
 
 If anything is off — REJECT. There's no penalty for rejecting. There's no recovery from approving the wrong thing.`
       },
-      {
+      ...(STORE ? [] : [{   // the airdropper is a wallet + pass tool the store edition does not carry
         heading: "Our Airdropper Specifically",
         body: `The Cluck Norris airdropper at clucknorris.app/airdrop:
 
@@ -966,7 +967,7 @@ If anything is off — REJECT. There's no penalty for rejecting. There's no reco
 • Never holds custody — every batch is signed by YOUR wallet, broadcast directly to Solana
 
 The 100 CLKN unlock fee is for TOOL ACCESS — it has nothing to do with the tokens you're airdropping. Those leave your wallet only when you approve each batch in your wallet popup.`
-      }
+      }])
     ],
     cluckVerdict: "An airdropper is a power tool. Used right, it sends rewards to your community in a minute. Used wrong, it sends your treasury to dead addresses. Read the popup. Verify the list. Never approve in a hurry."
   }
@@ -1117,7 +1118,7 @@ const LIBRARY_RESOURCES = [
     links: [
       { name: "Solscan", url: "https://solscan.io", desc: "Solana block explorer — verify transactions" },
       { name: "Birdeye", url: "https://birdeye.so", desc: "Solana token analytics & wallet tracking" },
-      { name: "Jup Locker Room", url: "/locker-room", desc: "Lock tokens free & verify any project's locks — our locker on the Jupiter Lock program" },
+      ...(STORE ? [] : [{ name: "Jup Locker Room", url: "/locker-room", desc: "Lock tokens free & verify any project's locks — our locker on the Jupiter Lock program" }]),
       { name: "Rugcheck", url: "https://rugcheck.xyz", desc: "Token safety checker — spot red flags" },
       { name: "Bubblemaps", url: "https://bubblemaps.io", desc: "Visualize token holder distribution" },
     ]
