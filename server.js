@@ -7894,11 +7894,22 @@ const SOL_UNLOCK_MIN_LAMPORTS = 50_000_000;
 // /api/token-overview, cached 60s in memory and last-known-good in kv — if pricing is down we
 // publish clknNeeded:null and the client fails OPEN (an outage on our side never locks users
 // out). TOOLGATE_OFF=1 kills the whole gate without a deploy.
+const TOOLGATE_TERMS = require("./lib/tool-pass-terms");
 const TOOLGATE = {
   usd: Number(process.env.TOOLGATE_USD) || 50,
-  lamports: parseInt(process.env.TOOLGATE_LAMPORTS, 10) || SOL_UNLOCK_MIN_LAMPORTS,
-  days: parseInt(process.env.TOOLGATE_DAYS, 10) || 7,
+  // days + lamports come from the immutable terms schedule (lib/tool-pass-terms.js), NOT env,
+  // since 2026-09-11: a payment's terms are fixed at payment time and resolve from that schedule,
+  // so the offer the page advertises must be the schedule's current entry by construction. To
+  // change the offer, append an entry with an effective-from instant. TOOLGATE_DAYS /
+  // TOOLGATE_LAMPORTS in the environment are ignored, with a loud line below.
+  lamports: TOOLGATE_TERMS.current().lamports,
+  days: TOOLGATE_TERMS.current().days,
 };
+for (const k of ["TOOLGATE_LAMPORTS", "TOOLGATE_DAYS"]) {
+  if (process.env[k] && String(process.env[k]) !== String(k === "TOOLGATE_DAYS" ? TOOLGATE.days : TOOLGATE.lamports)) {
+    console.error(`[tool-pass] ${k}=${process.env[k]} in the environment is IGNORED — the paid pass terms live in lib/tool-pass-terms.js (current: ${TOOLGATE.lamports} lamports → ${TOOLGATE.days} days). Append a schedule entry to change the offer.`);
+  }
+}
 // Seeded from the volume at declaration (2026-08-18 review): the kv fallback used to live only
 // inside the refresh branch, so every request racing a cold-start refresh read usd=0 and the
 // paywall failed open for the whole first-fetch window after each deploy.
@@ -8079,16 +8090,19 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
   if (paySig) {
     if (paySig.length < 80 || paySig.length > 100) return res.status(400).json({ success: false, error: "bad payment signature" });
     let v;
-    try { v = await verifySolPaymentTx(paySig, TOOLGATE.lamports); } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+    // Minimum 1 lamport here: the real minimum is the one in force WHEN THE PAYMENT LANDED, and
+    // redeemPaidPass checks it against the terms schedule at the transaction's block time.
+    try { v = await verifySolPaymentTx(paySig, 1); } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
     // Redemption + recovery are one pure function (lib/tool-pass-redeem.js, unit-tested with fault
-    // injection): the pass belongs to the verified PAYER and runs TOOLGATE.days from the payment's
-    // block time, so the only durable write is the sig-store consumption. The same payer presenting
+    // injection): the pass belongs to the verified PAYER and runs for the term in force at the
+    // payment's block time (lib/tool-pass-terms.js), so the only durable write is the sig-store
+    // consumption and no later config change can move a bought pass. The same payer presenting
     // the same signature again — lost response, closed tab, another device — gets the same pass
     // with the same expiry (`recovered: true`); a different wallet is refused before anything is
     // consumed; a store that cannot record durably answers 503 and consumes nothing.
-    const r = redeemPaidPass({ paySig, wallet, verified: v, days: TOOLGATE.days, sigStore, kv });
-    if (!r.ok) return res.status(r.status || 200).json({ success: false, error: r.error, lamports: r.lamports });
-    return res.status(200).json({ success: true, via: "paid", recovered: r.recovered, lamports: r.lamports, pass: "t:" + issueToolPass(wallet, "paid", r.ttlMs), days: r.days });
+    const r = redeemPaidPass({ paySig, wallet, verified: v, sigStore, kv });
+    if (!r.ok) return res.status(r.status || 200).json({ success: false, error: r.error, retry: !!r.retry, lamports: r.lamports, needed: r.needed });
+    return res.status(200).json({ success: true, via: "paid", recovered: r.recovered, lamports: r.lamports, termDays: r.termDays, pass: "t:" + issueToolPass(wallet, "paid", r.ttlMs), days: r.days });
   }
   const q = await toolPassQualify(wallet);
   if (!q.ok) { const { ok, ...deny } = q; return res.status(200).json({ success: false, ...deny, payIntent: issuePayIntent(wallet) }); }

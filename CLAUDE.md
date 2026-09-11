@@ -302,7 +302,10 @@ in one click, or sign a message where the gate is *ownership* rather than paymen
 - **The unified tools pass** (X-Ray, Holders, Trace, airdropper, Buy Special): hold **$50 worth
   of CLKN** → all free; else **0.05 SOL = 7-day pass to all of them**. ONE localStorage pass
   (`clkn_tools_unlock`), one client (`cluck-gate.js`), config at `/api/tool-gate/config`
-  ($-amount → CLKN computed from the live price; env knobs `TOOLGATE_USD/LAMPORTS/DAYS/OFF`).
+  ($-amount → CLKN computed from the live price; env knobs `TOOLGATE_USD` and `TOOLGATE_OFF`;
+  **the paid terms — lamports and days — are an append-only schedule in `lib/tool-pass-terms.js`
+  resolved at the payment's block time**, so a bought pass never moves when the offer changes;
+  `TOOLGATE_LAMPORTS`/`TOOLGATE_DAYS` env are ignored with a boot error since 2026-09-11).
   Pages preview free — the gate fires on RUN/SEND. Fail-open when pricing is down. The old
   per-tool thresholds (50k airdropper / 100k Buy Special) are RETIRED by this.
 - premium forensics — holder-gated at 2M, re-checked live on every run (NOT part of the pass)
