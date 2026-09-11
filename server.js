@@ -16022,6 +16022,16 @@ app.get("/privacy", (req, res) => {
 app.get("/terms", (req, res) => {
   res.sendFile(join(__dirname, "public", "terms.html"));
 });
+// STORE-edition legal pages (docs/STORE_EDITION.md): the Google Play / App Store build is a
+// separately built, education-only edition with no wallet, no payments and no address collection,
+// so its privacy policy and terms describe THAT app, not the full site. The store listing and the
+// in-app footer link here; both must load without login. Not in the sitemap on purpose.
+app.get("/privacy/store", (req, res) => {
+  res.sendFile(join(__dirname, "public", "privacy-store.html"));
+});
+app.get("/terms/store", (req, res) => {
+  res.sendFile(join(__dirname, "public", "terms-store.html"));
+});
 
 // Buy-Competition operator portal (hidden, unadvertised; actions are key-gated server-side).
 app.get("/buycomp-admin", (req, res) => {

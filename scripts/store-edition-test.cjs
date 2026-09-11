@@ -127,6 +127,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok("lower-case id verifies too", (await req(s2.base, "/api/certificate/" + a.json.certificate.id.toLowerCase())).status === 200);
     ok("an unknown id → 404", (await req(s2.base, "/api/certificate/CDEADBEEF00")).status === 404);
     const page = await req(s2.base, "/certificate/" + a.json.certificate.id);
+    // The store edition's own legal pages: direct HTTPS URLs for the Play listing + the in-app
+    // footer. They must describe the stripped app — no token payments, no address collection.
+    for (const [route, must] of [["/privacy/store", "no wallet address"], ["/terms/store", "no token requirement"]]) {
+      const lp = await req(s2.base, route);
+      const bad = ["CLKN token", "Google Sheets", "airdrop list", "premium", "transcript", "wallet-connect"].filter((w) => lp.text.includes(w));
+      ok(`${route} loads and describes the stripped app`, lp.status === 200 && /text\/html/.test(lp.h("content-type") || "") && lp.text.includes(must) && lp.text.includes("CLKN Productions") && bad.length === 0, { status: lp.status, bad });
+    }
     ok("the human page renders the id and says it is genuine", page.status === 200 && page.text.includes(a.json.certificate.id) && /genuine/i.test(page.text) && /<title>Certificate/.test(page.text));
     ok("the human page 404s an unknown id without echoing markup", (await req(s2.base, "/certificate/%3Cscript%3E")).status === 404);
   } finally { s2.stop(); }

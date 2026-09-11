@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="/theme.css">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex"/>
+  <title>Privacy Policy (Store Edition) — Cluck Norris</title>
+  <meta name="description" content="Privacy policy for the Cluck Norris store edition (Google Play / App Store): a free crypto school plus two read-only safety tools. No account, no wallet, no payments."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <style>
+  /* palette + type scale come from theme.css — the page-local :root that shadowed it was removed 2026-09-02 */
+  :root{color-scheme:dark;}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    
+    color: var(--text); font-family: var(--body); min-height: 100vh;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 28px 18px 80px; }
+  .back { display: inline-block; font-family: var(--disp); font-size: 11px; letter-spacing: 2px;
+    color: var(--orange); text-decoration: none; margin-bottom: 18px; }
+  .back:hover { color: var(--accent); }
+  .header { text-align: center; margin-bottom: 6px; }
+  .header .icon { font-size: 42px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family: var(--disp); font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-top: 8px; font-weight: 700; }
+  .header h1 {
+    font-family: var(--disp); font-size: 34px; font-weight: 900; letter-spacing: 3px;
+    background: #FCD34D;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    line-height: 1.05; margin: 2px 0;
+  }
+  .updated { text-align: center; font-family: var(--disp); font-size: 11px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 22px; }
+  .tldr { background: var(--card); border: 1px solid rgba(252,211,77,0.35); border-radius: 12px; padding: 16px 18px; margin-bottom: 26px; }
+  .tldr strong { color: var(--accent); font-family: var(--disp); letter-spacing: 1px; }
+  h2 { font-family: var(--disp); font-size: 18px; font-weight: 700; letter-spacing: 1px; color: var(--accent); margin: 26px 0 8px; }
+  p, li { font-size: 14px; line-height: 1.75; color: #D1D5DB; }
+  ul { margin: 6px 0 6px 22px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--orange); }
+  .foot { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--subtext); text-align: center; }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="https://clucknorris.app/">&larr; CLUCKNORRIS.APP</a>
+  <div class="header">
+    <div class="icon">&#128274;</div>
+    <div class="brand-mini">CLUCK NORRIS &middot; SCHOOL OF CRYPTO HARD KNOCKS &middot; STORE EDITION</div>
+    <h1>PRIVACY POLICY</h1>
+  </div>
+  <div class="updated">EFFECTIVE: SEPTEMBER 11, 2026</div>
+  <div class="tldr">
+    <strong>The short version:</strong> This is the Cluck Norris app as distributed on Google Play and the
+    App Store &mdash; a free crypto school plus two read-only safety tools. No account, no email, no wallet
+    connection, no wallet address, no payments. We never ask for a seed phrase or private key and never take
+    custody of anything. The website at clucknorris.app carries more features and has its own, fuller policy
+    at <a href="https://clucknorris.app/privacy">clucknorris.app/privacy</a>.
+  </div>
+  <p>This policy applies to the <strong>store edition</strong> of Cluck Norris (the app installed from Google
+  Play or the App Store), published by CLKN Productions LLC. The app is a separately built, education-only
+  edition: the features described below are the only ones it contains.</p>
+
+  <h2>What the app is</h2>
+  <p>A free crypto school (lessons, quizzes, the Incubator, the LP Lab, the Library, an AI tutor called
+  &ldquo;Ask Cluck&rdquo;, read-aloud, seven languages) plus two read-only research tools: the Wallet Safety
+  Checkup (scan only) and the Listing Checkup. It has no accounts, no purchases, no wallet connection and no
+  on-chain transactions.</p>
+
+  <h2>Information we collect</h2>
+  <ul>
+    <li><strong>Lesson progress with an anonymous session id.</strong> When you complete a lesson, the app sends
+    the lesson id together with a random identifier it generated on first launch (stored on your device, not
+    tied to your name, email, phone, device serial or advertising id). We keep this so we can issue your
+    certificate of completion against a real record. Sessions idle for 120 days are deleted. The app also sends
+    a small set of feature-usage events (for example &ldquo;lesson opened&rdquo;) that we only ever count in
+    aggregate. There is no advertising SDK and no third-party analytics SDK in the app.</li>
+    <li><strong>Your certificate of completion.</strong> When the school&rsquo;s record shows you finished the
+    curriculum, we issue a certificate: a random certificate id, the issue date, the number of lessons and
+    coursework items completed, and a one-way hash of your session id. Anyone with the id can confirm at
+    clucknorris.app/certificate/&lt;id&gt; that a certificate with that id is genuine and when it was issued.
+    The name you type on the certificate stays <strong>on your device only</strong> &mdash; it is never sent to us.</li>
+    <li><strong>Addresses you paste into the research tools.</strong> The public Solana wallet address or token
+    you enter into the Wallet Safety Checkup or the Listing Checkup is sent to our server, which queries
+    public blockchain and market data to build the report. These are public blockchain identifiers, sent only
+    when you run a lookup, and not linked to your session id.</li>
+    <li><strong>Questions you ask Ask Cluck.</strong> The text you send to the AI tutor (with the lesson you are
+    on, for context) goes to our server and on to our AI provider to generate an answer. Please do not include
+    personal information in a question. If you <strong>report an answer</strong>, the question, the answer and the
+    reason you pick are stored for our review, without any identifier.</li>
+    <li><strong>Read-aloud.</strong> When you tap play, the lesson text is sent to our text-to-speech provider to
+    produce audio. No user data is involved beyond the lesson text itself.</li>
+    <li><strong>Language mode.</strong> Choosing a language may send interface text to our AI provider for
+    translation. That is our own copy, not your data.</li>
+    <li><strong>On your device only.</strong> Lesson progress, bookmarks, language, read-aloud settings and the
+    certificate name live in the app&rsquo;s local storage. Clearing the app&rsquo;s storage removes them.</li>
+  </ul>
+
+  <h2>What we do not collect</h2>
+  <ul>
+    <li>No name, email address, phone number or account.</li>
+    <li>No wallet connection and <strong>no wallet address</strong> &mdash; this edition has no connect, no
+    holder check, no airdrop and no on-chain transactions.</li>
+    <li>No location, contacts, photos, files or device identifiers.</li>
+    <li>No payment or financial-account information &mdash; there are no in-app purchases.</li>
+    <li>No seed phrases or private keys &mdash; ever.</li>
+  </ul>
+
+  <h2>Who we share data with</h2>
+  <p>Only what a feature needs, and only with providers that run it:</p>
+  <ul>
+    <li><strong>Our AI provider (Anthropic)</strong> &mdash; the Ask Cluck question and lesson context;
+    interface text for translation.</li>
+    <li><strong>Our text-to-speech provider (ElevenLabs)</strong> &mdash; lesson text for read-aloud, when the
+    service is configured; otherwise the device&rsquo;s own voice is used and nothing is sent.</li>
+    <li><strong>Blockchain and market-data providers</strong> &mdash; the address or token you paste, sent to a
+    Solana RPC provider (Helius) for the Wallet Safety Checkup and to public market-data APIs (for example
+    DexScreener, GeckoTerminal, CoinGecko, Solscan, Jupiter&rsquo;s token list, RugCheck) for the Listing Checkup.</li>
+  </ul>
+  <p>We do not sell data, and we do not share it for advertising.</p>
+
+  <h2>Security and retention</h2>
+  <p>All traffic between the app and our server is encrypted (HTTPS). Lesson-progress sessions are deleted after
+  120 days of inactivity. Certificate records are kept so that certificates stay verifiable. Answer reports are
+  kept for review and capped in number. Because the app has no accounts and collects no wallet address, most of
+  what it stores is on your device.</p>
+
+  <h2>Your choices</h2>
+  <p>Clearing the app&rsquo;s storage removes your progress, bookmarks and certificate name from the device. To
+  ask us to delete the server-side lesson record or certificate linked to your session id, or for any other
+  request, email <a href="mailto:clucknorrisapp@gmail.com">clucknorrisapp@gmail.com</a> and include your
+  certificate id if you have one.</p>
+
+  <h2>Children</h2>
+  <p>The app is not directed to children under 13. Its crypto-related educational content is intended for users of
+  legal age in their jurisdiction.</p>
+
+  <h2>Changes</h2>
+  <p>We may update this policy. The effective date above changes when we do.</p>
+
+  <h2>Contact</h2>
+  <p>CLKN Productions LLC &mdash; <a href="mailto:clucknorrisapp@gmail.com">clucknorrisapp@gmail.com</a></p>
+
+  <div class="foot">&#128020; Cluck Norris &mdash; the school is free, your keys are yours.</div>
+</div>
+</body>
+</html>

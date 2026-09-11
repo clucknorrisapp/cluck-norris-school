@@ -85,6 +85,15 @@ Bumping the lock is the only way the installed app's frontend changes.
 - **Back-compat policy:** a pinned frontend keeps calling these endpoints; do not rename them or
   change their response shapes without a new store release.
 
+## Legal pages for the store listing
+
+`/privacy/store` and `/terms/store` (`public/privacy-store.html`, `public/terms-store.html`) describe
+the stripped app, not the full site: no wallet address, no payments, no token, the anonymous lesson
+session id (120-day idle expiry), the certificate record, Ask Cluck + report, read-aloud, and the
+providers each feature actually calls. The Play listing's privacy-policy URL and the in-app footer
+point here; both load without login and are `noindex`. The live `/privacy` and `/terms` still describe
+the website. `scripts/store-edition-test.cjs` checks both pages load and carry no full-site phrases.
+
 ## Remotes the bundle uses
 
 `https://clucknorris.app` (API), `https://fonts.googleapis.com` + `https://fonts.gstatic.com`
