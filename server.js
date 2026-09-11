@@ -3479,6 +3479,10 @@ const CUNA_STAKE_PATH = new RegExp([
   "^/robots\\.txt$", "^/sitemap\\.xml$",     // launch checklist 9: same as the game host
   "^/$", "^/cuna-staking$",
   "^/api/cuna-stake/(config|wallet)$",
+  // The CUNA drawing's entry registry (2026-09-11): cunatoken.com is static and calls these two
+  // from the browser. Public by design (no secrets, rate-limited, idempotent). NOT the export —
+  // that carries the whole list and is reachable only through clucknorris.app, behind a token.
+  "^/api/cuna-draw/(enter|check)$",
   "^/api/lock/create-tx$",              // builds the UNSIGNED lock tx; the wallet still signs it
   // The page cannot work without these two. /api/helius-rpc is the balance read AND the send path
   // (fresh blockhash, then sendTransaction) — it is already public and method-allowlisted, so this
@@ -3690,6 +3694,42 @@ setInterval(() => {
   }
 }, 120000).unref();
 
+// ── STORE edition (Google Play / iOS bundle) — CORS + defense-in-depth ─────────────────────────
+// Mounted BEFORE the rate limiters and the sub-routers (hatchery, security-coop, whirlpool, swap):
+// a 429 to the app must still carry CORS headers or the webview reads it as a network error, and
+// the UA refusal below must see the router paths too — a router mounted earlier would answer first.
+// The store edition is the school bundled INTO the app (docs/STORE_EDITION.md), so its requests
+// arrive from a webview origin, not from clucknorris.app: capacitor://localhost (iOS),
+// https://localhost (Android, Capacitor 5/6), http://localhost (older webviews). Without CORS on
+// exactly the endpoints the edition calls, every request fails ONLY inside the installed app —
+// green in a browser, red in store review. The allow-list is exact: nothing that pays, signs,
+// mints, locks or sends is reachable this way, and the Origin header grants nothing by itself
+// (every endpoint keeps its own rules; this only lets the browser read the answer).
+const STORE_APP_ORIGINS = new Set(String(process.env.STORE_APP_ORIGINS || "capacitor://localhost,https://localhost,http://localhost,ionic://localhost").split(",").map((o) => o.trim()).filter(Boolean));
+const STORE_API_RE = /^\/api\/(ask-cluck(\/report)?|track|claim\/certificate|certificate\/[A-Za-z0-9]{6,32}|i18n\/translate|tts|helius-rpc|wallet-checkup|listing-checkup\/(config|run|report))$/;
+app.use((req, res, next) => {
+  const origin = String(req.get("origin") || "");
+  if (!origin || !STORE_APP_ORIGINS.has(origin) || !STORE_API_RE.test(req.path)) return next();
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Max-Age", "600");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
+// The wrapper appends a User-Agent marker (ClucknorrisPlay / ClucknorrisIOS). It is a HINT, never
+// an authorisation: a request carrying it is refused on every endpoint the store edition must not
+// reach (payments, passes, mint/burn/lock/send, the wallet claim, competitions). Spoofing the
+// marker only ever LOSES access, so nothing security-sensitive rests on it — the excluded flows are
+// absent from the bundle and every endpoint enforces its own rules regardless of UA.
+const STORE_UA_RE = /Clucknorris(Play|IOS)/;
+const STORE_DENY_RE = /^\/api\/(tool-gate|hatchery|airdrop|buyspecial|buycomp|lock\b|firepit|burn|project-burn|lp-rescue|wallet-xray|trace|snapshot|holders|owners-snapshot\/start|security-coop\/revoke|swap|premium|verify-sol-payment|claim$|classroom\/graduate-claim|cuna-stake|cuna-draw|whirlpool|rose|jvp|nq\/|normie)/;
+app.use((req, res, next) => {
+  if (!STORE_UA_RE.test(String(req.get("user-agent") || ""))) return next();
+  if (!STORE_DENY_RE.test(req.path)) return next();
+  return res.status(403).json({ success: false, error: "not_available_in_this_edition", detail: "This feature is not part of the store edition. Use it at clucknorris.app." });
+});
 // Generous global cap on the whole API surface — a real user's tool makes only
 // a handful of calls per action, so 150/min/IP never bites legitimately but
 // stops a scripted hammer. A tighter cap guards the AI endpoint (most costly
@@ -8969,52 +9009,15 @@ const buyBotSendAttempts = new Map();
 const BUYBOT_MAX_SEND_ATTEMPTS = 5;
 const BUYBOT_SEEN_MAX = 600;
 
-// Generalized roseDetectBuyFromRaw: mint + optional pool hint are parameters.
-const BUYBOT_JUP_MINT = "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN";
+// Detection lives in lib/buybot-detect.js since 2026-09-11 (CUNA's second CUNA/SOL pool on
+// Meteora DAMM v2): every liquidity source in the transaction is summed, so a Jupiter route
+// split across pools posts the whole amount paid, and Meteora's program-wide vault authority
+// is part of the pool set so the arb filter can see it. scripts/buybot-detect-test.cjs drives
+// it with two real mainnet transactions from that pool's first hour.
+const buybotDetect = require("./lib/buybot-detect");
+const BUYBOT_JUP_MINT = buybotDetect.JUP_MINT;
 function detectBuyGeneric(tx, mint, tokUsd, solUsd, poolHint, knownPools, jupUsd) {
-  const meta = tx && tx.meta; if (!meta || meta.err) return null;
-  const delta = {}, post = {};
-  for (const b of (meta.preTokenBalances || [])) if (b.mint === mint && b.owner) delta[b.owner] = (delta[b.owner] || 0) - Number(b.uiTokenAmount.uiAmount || 0);
-  for (const b of (meta.postTokenBalances || [])) if (b.mint === mint && b.owner) { delta[b.owner] = (delta[b.owner] || 0) + Number(b.uiTokenAmount.uiAmount || 0); post[b.owner] = Number(b.uiTokenAmount.uiAmount || 0); }
-  const owners = Object.keys(delta); if (!owners.length) return null;
-  let pool = (poolHint && owners.includes(poolHint)) ? poolHint : null;
-  if (!pool) { let mx = -1; for (const o of owners) { const r = post[o] || 0; if (r > mx) { mx = r; pool = o; } } }
-  if (!pool || (delta[pool] || 0) >= 0) return null; // pool didn't release token → sell/LP/non-buy
-  // The buyer is the biggest net GAINER of the token — but never one of the project's own
-  // pools. A Jupiter route that arbs between our pools makes another pool the biggest
-  // gainer, and posting a pool address as the "maker" is exactly the wrong-maker bug the
-  // owner saw once all four pools went on the watch list (2026-08-25). The signer is the
-  // human when the route's shared accounts hide the recipient, so fall back to it.
-  const poolSet = new Set([pool, ...(Array.isArray(knownPools) ? knownPools : [])]);
-  let buyer = null, gain = 0;
-  for (const o of owners) { if (poolSet.has(o)) continue; const d = delta[o]; if (d > gain) { gain = d; buyer = o; } }
-  const totalPoolOut = -owners.filter(o => poolSet.has(o)).reduce((s, o) => s + Math.min(0, delta[o] || 0), 0);
-  // ARB FILTER (owner call 2026-08-26, superseding the 08-25 attribute-to-signer fix):
-  // arbs must not post at all. A real buy only TAKES tokens from pools; an inter-pool
-  // arb moves tokens BETWEEN them — some watched pool GAINS while another loses, in the
-  // same tx. Skip those entirely (1% -of-flow epsilon so vault-side dust can't trip it).
-  const poolInflow = owners.filter(o => poolSet.has(o)).reduce((s, o) => s + Math.max(0, delta[o] || 0), 0);
-  if (poolInflow > totalPoolOut * 0.01) return null;
-  // Every gainer was one of our pools and nothing left the pool set → nothing to post.
-  if (!buyer || gain <= 0) return null;
-  let wsol = 0, stable = 0, jup = 0;
-  const addQ = (b, sign) => {
-    if (b.owner !== pool) return;
-    const v = sign * Number(b.uiTokenAmount.uiAmount || 0);
-    const k = BUYBOT_QUOTES[b.mint];
-    if (k === "sol") wsol += v; else if (k) stable += v;
-    else if (b.mint === BUYBOT_JUP_MINT) jup += v;    // CUNA/JUP pool buys pay in JUP
-  };
-  for (const b of (meta.preTokenBalances || [])) addQ(b, -1);
-  for (const b of (meta.postTokenBalances || [])) addQ(b, +1);
-  if (wsol + stable + jup <= 0) return null; // pool took in no quote → not a buy
-  // Value the buy by what was ACTUALLY PAID into the pool — the poll-time token price
-  // lags badly in fast markets (the ±47% day showed buys valued at the wrong price).
-  const quoteUsd = wsol * (solUsd || 0) + stable + jup * (jupUsd || 0);
-  const usd = quoteUsd > 0 ? quoteUsd : (tokUsd > 0 ? gain * tokUsd : null);
-  const sig = (tx.transaction && tx.transaction.signatures && tx.transaction.signatures[0]) || null;
-  const ts = tx.blockTime ? tx.blockTime * 1000 : Date.now();
-  return { wallet: buyer, tokenAmt: gain, usd, sig, ts };
+  return buybotDetect.detectBuy(tx, { mint, tokUsd, solUsd, jupUsd, poolHint, knownPools, quotes: BUYBOT_QUOTES });
 }
 
 function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
@@ -10966,6 +10969,68 @@ async function cunaLocks({ force = false } = {}) {
 }
 
 // Everything the page renders from. No amount is ever hardcoded client-side.
+// ── CUNA drawing — entry registry (owner brief, 2026-09-11) ──────────────────
+// Logic (validation, window, idempotency, cap, durability) is lib/cuna-draw.js; this block is HTTP.
+// Called cross-origin from https://cunatoken.com: the JSON POST triggers a preflight, so OPTIONS
+// answers 204 with the exact CORS triple below — without it every entry fails silently in the
+// browser. A text/plain body is also accepted (a "simple request", no preflight) as the fallback
+// the site session asked for. Export is admin-only (token in CUNA_DRAW_EXPORT_TOKEN, header only,
+// or the usual x-premium-key) and is deliberately NOT on the lock host's lockdown allowlist.
+const cunaDraw = require("./lib/cuna-draw");
+const CUNA_DRAW_ORIGINS = new Set(String(process.env.CUNA_DRAW_ORIGINS || "https://cunatoken.com,https://www.cunatoken.com").split(",").map((o) => o.trim()).filter(Boolean));
+function cunaDrawCors(req, res) {
+  const origin = String(req.get("origin") || "");
+  if (CUNA_DRAW_ORIGINS.has(origin)) { res.setHeader("Access-Control-Allow-Origin", origin); res.setHeader("Vary", "Origin"); }
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Max-Age", "600");
+  res.setHeader("Cache-Control", "no-store");
+}
+const cunaDrawIpHash = (req) => createHmac("sha256", String(process.env.CUNA_DRAW_EXPORT_TOKEN || process.env.PREMIUM_ACCESS_KEY || "cuna-draw")).update(clientIp(req) || "").digest("hex").slice(0, 16);
+app.options(["/api/cuna-draw/enter", "/api/cuna-draw/check"], (req, res) => { cunaDrawCors(req, res); res.status(204).end(); });
+app.post("/api/cuna-draw/enter", rateLimit("cuna-draw", { windowMs: 60000, max: 10 }), express.text({ type: "text/plain", limit: "1kb" }), (req, res) => {
+  cunaDrawCors(req, res);
+  // Body cap: a few hundred bytes is all an address needs. (express.json's default 100kb is far too generous here.)
+  if (Number(req.get("content-length") || 0) > 512) return res.status(413).json({ ok: false, error: "body too large" });
+  let body = req.body;
+  if (typeof body === "string") { try { body = JSON.parse(body); } catch (_) { body = { address: body.trim() }; } }
+  const r = cunaDraw.enter({ store: kv, address: body && body.address, window: cunaDraw.windowFromEnv(), ipHash: cunaDrawIpHash(req) });
+  const { status, ...rest } = r;
+  return res.status(status).json(rest);
+});
+app.get("/api/cuna-draw/check", rateLimit("cuna-draw-check", { windowMs: 60000, max: 60 }), (req, res) => {
+  cunaDrawCors(req, res);
+  const { status, ...rest } = cunaDraw.check({ store: kv, address: req.query.address });
+  return res.status(status).json(rest);
+});
+// Owner-only: the export token (header) or the admin key. Never reachable on the lock host.
+function cunaDrawAdminOK(req) {
+  const tok = String(req.get("x-draw-token") || "");
+  const okTok = process.env.CUNA_DRAW_EXPORT_TOKEN ? secretEqual(tok, String(process.env.CUNA_DRAW_EXPORT_TOKEN)) : false;
+  return okTok || adminAuthOK(req);
+}
+// DELETE /api/cuna-draw/entry?address= — remove one row (a test write, a duplicate, a bad one).
+// Added 2026-09-11 after the site session's production test left the System Program address in
+// the list with no way to take it out. A DELETE, never a GET flag, so a pasted link cannot fire it.
+app.delete("/api/cuna-draw/entry", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!cunaDrawAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const { status, ...rest } = cunaDraw.deleteEntry({ store: kv, address: req.query.address });
+  if (rest.removed) console.log(`[cuna-draw] entry removed by operator: ${rest.address} (was at ${new Date((rest.was && rest.was.at) || 0).toISOString()})`);
+  return res.status(status).json(rest);
+});
+app.get("/api/cuna-draw/export", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!cunaDrawAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const rows = cunaDraw.exportRows(kv);
+  const w = cunaDraw.windowFromEnv();
+  if (req.query.format === "csv") {
+    res.type("text/csv");
+    return res.send("address,created_at\n" + rows.map((r) => `${r.address},${r.created_at}`).join("\n") + "\n");
+  }
+  return res.json({ ok: true, count: rows.length, persistent: kv.isPersistent(), window: { open: new Date(w.open).toISOString(), close: new Date(w.close).toISOString(), state: cunaDraw.windowState(Date.now(), w) }, entries: rows });
+});
+
 app.get("/api/cuna-stake/config", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   try {
@@ -12302,6 +12367,83 @@ function gradGateMode() {
   return Date.now() >= GRAD_GATE_AUTO_ENFORCE ? "enforce" : "monitor";
 }
 
+// ── Certificate of completion (STORE edition) ──────────────────────────────────────────────────
+// The store edition has no wallet, so graduation there is a certificate with a verification code,
+// not a minted transcript. Same gate as the wallet claim: the server-side progression ledger
+// (lib/school-progress, fed by /api/track) has to show the curriculum was actually walked. One
+// certificate per learner session; re-asking returns the same one. Nothing is collected beyond
+// the anonymous sid the school already uses; the learner's display name stays on their device.
+const CERT_KEY = "storeCertificates", CERT_BY_SID_KEY = "storeCertificateBySid";
+app.post("/api/claim/certificate", rateLimit("certificate", { windowMs: 3600000, max: 20 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const sid = String((req.body && req.body.sid) || "").toLowerCase().slice(0, 64);
+  if (!/^[a-z0-9-]{8,64}$/.test(sid)) return res.status(400).json({ ok: false, error: "need sid" });
+  const gateMode = gradGateMode();
+  if (gateMode !== "off") {
+    const gate = schoolProgress.evaluate(sid, null, {
+      requiredLessons: kv.get("gradGateLessons", 12),
+      minAgeMs: (kv.get("gradGateMinAgeMin", 15) || 0) * 60000,
+      minSpreadBuckets: kv.get("gradGateSpreadBuckets", 3),
+    });
+    if (!gate.ok && gateMode === "enforce") {
+      console.warn(`[CERT] blocked ${gate.code} sid=${sid.slice(0, 8)}…`);
+      return res.status(403).json({ ok: false, error: "not_yet", code: gate.code, detail: "The school's record does not show the full curriculum for this device yet. Finish every class here, then try again." });
+    }
+  }
+  if (!kv.isPersistent()) return res.status(503).json({ ok: false, error: "certificates are not durable right now — try again in a moment" });
+  const bySid = kv.get(CERT_BY_SID_KEY, {}) || {};
+  const all = kv.get(CERT_KEY, {}) || {};
+  const existingId = bySid[sid];
+  if (existingId && all[existingId]) {
+    const c = all[existingId];
+    return res.status(200).json({ ok: true, certificate: { id: c.id, issuedAt: c.issuedAt, lessons: c.lessons, coursework: c.coursework, verifyUrl: `https://clucknorris.app/certificate/${c.id}` } });
+  }
+  const cw = (req.body && req.body.coursework) || {};
+  const coursework = { lpLab: Math.max(0, Math.min(200, parseInt(cw.lpLab, 10) || 0)), incubator: Math.max(0, Math.min(200, parseInt(cw.incubator, 10) || 0)) };
+  const status = schoolProgress.statusFor(sid);
+  const id = "C" + randomBytes(5).toString("hex").toUpperCase();
+  const rec = { id, issuedAt: Date.now(), lessons: (status && status.lessons) || 0, coursework, sidHash: createHash("sha256").update(sid).digest("hex").slice(0, 16) };
+  all[id] = rec; bySid[sid] = id;
+  kv.set(CERT_KEY, all); kv.set(CERT_BY_SID_KEY, bySid);
+  return res.status(200).json({ ok: true, certificate: { id, issuedAt: rec.issuedAt, lessons: rec.lessons, coursework, verifyUrl: `https://clucknorris.app/certificate/${id}` } });
+});
+// Public verification: no PII, just what was completed and when.
+app.get("/api/certificate/:id", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const id = String(req.params.id || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 32);
+  const c = (kv.get(CERT_KEY, {}) || {})[id];
+  if (!c) return res.status(404).json({ ok: false, error: "no such certificate" });
+  return res.status(200).json({ ok: true, id: c.id, issuedAt: new Date(c.issuedAt).toISOString(), lessons: c.lessons, coursework: c.coursework, school: "Cluck Norris — School of Crypto Hard Knocks" });
+});
+app.get("/certificate/:id", (req, res) => {
+  const id = String(req.params.id || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 32);
+  const c = (kv.get(CERT_KEY, {}) || {})[id];
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.type("html");
+  if (!c) return res.status(404).send(`<!doctype html><meta charset="utf-8"><title>Certificate not found</title><link rel="stylesheet" href="/theme.css"><body style="padding:40px;font-family:var(--body)"><h1 style="font-family:var(--disp)">No certificate ${escHtml(id)}</h1><p>Nothing was issued under that code.</p>`);
+  return res.send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Certificate ${escHtml(c.id)} — Cluck Norris</title><link rel="stylesheet" href="/theme.css"><body style="padding:40px 20px;font-family:var(--body);max-width:640px;margin:0 auto"><div style="font-family:var(--disp);letter-spacing:3px;color:#9CA3AF;font-size:12px">CLUCK NORRIS · SCHOOL OF CRYPTO HARD KNOCKS</div><h1 style="font-family:var(--disp);color:#FFB627;margin:8px 0">Certificate of Completion</h1><p>Certificate <code>${escHtml(c.id)}</code> is genuine. The holder completed the ${c.lessons}-class curriculum${c.coursework && c.coursework.lpLab ? ` and ${c.coursework.lpLab} LP Lab lessons` : ""}, issued ${new Date(c.issuedAt).toUTCString()}.</p><p style="color:#9CA3AF;font-size:13px">The school records completion by an anonymous learner session; the name shown on a certificate is chosen by its holder and is not verified here.</p><p><a href="/school" style="color:#FF7A18">Take the school yourself →</a></p>`);
+});
+// ── Ask Cluck: report an AI answer (store edition; Google Play generative-AI policy) ───────────
+// A report is a plain record for the owner to read — no identity, no device id. Capped so a loop
+// cannot fill the store.
+app.post("/api/ask-cluck/report", rateLimit("askreport", { windowMs: 60000, max: 5 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const b = req.body || {};
+  const reason = ["inaccurate", "harmful", "offensive", "other"].includes(String(b.reason)) ? String(b.reason) : "other";
+  const question = String(b.question || "").slice(0, 500), answer = String(b.answer || "").slice(0, 2000);
+  if (!question && !answer) return res.status(400).json({ ok: false, error: "nothing to report" });
+  const list = kv.get("askCluckReports", []) || [];
+  list.push({ at: Date.now(), reason, question, answer, edition: STORE_UA_RE.test(String(req.get("user-agent") || "")) ? "store" : "web" });
+  kv.set("askCluckReports", list.slice(-500));
+  return res.status(200).json({ ok: true });
+});
+app.get("/api/ask-cluck/reports", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const list = kv.get("askCluckReports", []) || [];
+  return res.status(200).json({ ok: true, count: list.length, reports: list.slice().reverse() });
+});
 app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { wallet, coursework } = req.body;
@@ -16058,6 +16200,16 @@ app.get("/privacy", (req, res) => {
 
 app.get("/terms", (req, res) => {
   res.sendFile(join(__dirname, "public", "terms.html"));
+});
+// STORE-edition legal pages (docs/STORE_EDITION.md): the Google Play / App Store build is a
+// separately built, education-only edition with no wallet, no payments and no address collection,
+// so its privacy policy and terms describe THAT app, not the full site. The store listing and the
+// in-app footer link here; both must load without login. Not in the sitemap on purpose.
+app.get("/privacy/store", (req, res) => {
+  res.sendFile(join(__dirname, "public", "privacy-store.html"));
+});
+app.get("/terms/store", (req, res) => {
+  res.sendFile(join(__dirname, "public", "terms-store.html"));
 });
 
 // Buy-Competition operator portal (hidden, unadvertised; actions are key-gated server-side).

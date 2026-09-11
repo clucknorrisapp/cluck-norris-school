@@ -62,6 +62,13 @@ does not tell you how to write software; use your judgement for that.
 > hackathon-scope work done right (the quiz-free `/curriculum` came back this way); it is a record
 > of what failed and why, so the rebuild does not repeat the failure. Second reviewer: **Codex**
 > reads `docs/CODEX_REVIEWER_BRIEF.md` and comments on PRs; findings, not rewrites.
+> ⛔ **PUBLISH NOTHING UNTIL THE HACKATHON WINDOW OPENS (owner, 2026-09-10: "publish nothing til
+> we are in hackathon").** Until 2026-09-14 00:00 UTC: no merge to `main`, no promotion, no
+> public post about hackathon work, no submission, and PR #282 (dashboard, Lock of Fame, syllabus,
+> navigation) stays OPEN. Only fixes may land on `develop` (staging). Colosseum scores work done
+> inside the window and requires disclosure of what came before; the tag `pre-colosseum-2026-09-14`
+> is that line. From Sep 14: merge #282 first, then build the Project Hub + verifiable program
+> terms and receipts as the in-window centerpiece.
 > ⚠️ **The tools pass is a SIGNED SESSION** (reworked 2026-09-10 after Codex found that a pasted
 > holder address and a public payment signature were both bearer passes): the wallet signs a
 > one-line nonce message, `POST /api/tool-gate/session` verifies it and issues an HMAC token, and
@@ -69,6 +76,19 @@ does not tell you how to write software; use your judgement for that.
 > signature is evidence, bound to its payer, consumed once — never the credential. RPC outage is
 > `unavailable`, never a zero balance, never cached as a denial. `scripts/tool-pass-gate-test.cjs`
 > drives the whole flow with a real ed25519 keypair.
+
+> 📱 **The Google Play app is a PINNED, education-only bundle — read `docs/STORE_EDITION.md`
+> before touching any endpoint it calls.** Shipped 2026-09-11 as release `store-google-v1.0.0`
+> (built from main `dc8652a`; the wrapper repo `clucknorrisapp/CLKN-SEEKER` pins the tarball by
+> sha256). A website deploy never changes the installed app, so **the endpoints in `STORE_API_RE`
+> (`server.js`) are a versioned contract**: `/api/ask-cluck` + `/report`, `/api/track`,
+> `/api/claim/certificate`, `/api/certificate/:id`, `/api/i18n/translate`, `/api/tts`,
+> `/api/helius-rpc`, `/api/wallet-checkup`, `/api/listing-checkup/*` — don't rename them or change
+> their response shapes without cutting a new `store-google-v*` release (the workflow has a manual
+> run; a cloud session cannot push tags). The store's legal pages are `/privacy/store` and
+> `/terms/store` and must stay true to that bundle (no wallet, no payments, no address). The
+> `ClucknorrisPlay` / `ClucknorrisIOS` user-agent marker is refused on excluded endpoints as
+> defense-in-depth only — never treat it as authorisation.
 
 > 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
 > `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts

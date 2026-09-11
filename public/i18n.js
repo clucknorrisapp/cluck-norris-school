@@ -78,7 +78,7 @@
     document.addEventListener("click", function () { menu.style.display = "none"; });
     wrap.appendChild(menu); wrap.appendChild(btn);
     document.body.appendChild(wrap);
-    // lift above any bottom-anchored composer (helper lives in cluck-nav.js, which loaded us)
+    // lift above any bottom-anchored composer (helper lives in the nav script, which loaded us)
     if (window.__clknDockFloat) window.__clknDockFloat(wrap);
   }
   function onReady(fn) {
@@ -237,7 +237,7 @@
   // strings that were already professionally translated in <lang>.school.json.
   var _p = (location.pathname || "");
   if (_p.indexOf("/school") === 0 || _p.indexOf("/lp-lab") === 0 || _p.indexOf("/lplab") === 0) jobs.push(loadDict(lang + ".school"));
-  if ((location.pathname || "").indexOf("/locker-room") === 0) jobs.push(loadDict(lang + ".locker"));
+  /* STORE:OUT */ if ((location.pathname || "").indexOf("/locker-room") === 0) jobs.push(loadDict(lang + ".locker")); /* /STORE:OUT */
   Promise.all(jobs)
     .then(function (parts) {
       DICT = {};
