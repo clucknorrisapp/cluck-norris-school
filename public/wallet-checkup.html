@@ -58,7 +58,7 @@ html{background:var(--bg-grad);background-attachment:fixed;}
 body{background:transparent;font-family:var(--body);}
 
   /* ── ported from security-coop.html when the two tools merged; the picker is now
-        rendered from CluckWallet.available(), so the per-wallet brand colors went with
+        rendered from the wallet registry's available() list, so the per-wallet brand colors went with
         the hardcoded button list (phantom/solflare stay for the mobile deep links) ── */
   .wallet-picker { display: flex; gap: 8px; flex-wrap: wrap; }
   .wallet-btn { flex: 1; min-width: 130px; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(255,255,255,.06); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
@@ -112,6 +112,7 @@ body{background:transparent;font-family:var(--body);}
   <!-- Connect is OPTIONAL and deliberately BELOW the read-only scan: the safe path is
        pasting an address, and a wallet connect is only needed for the one action that
        actually signs — revoking an approval. Hidden until a scan finds approvals. -->
+  <!-- STORE:OUT — the revoke flow signs a transaction; the store edition ships the SCAN only -->
   <div class="card" id="revokeCard" style="display:none">
     <div class="sec-title" style="color:#FCA5A5">🔑 REVOKE THESE APPROVALS</div>
     <div style="font-size:12.5px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">
@@ -140,6 +141,7 @@ body{background:transparent;font-family:var(--body);}
 </div>
 <script src="/vendor/solana-web3.iife.min.js"></script>
 <script src="/cluck-wallet.js?v=2"></script>
+<!-- /STORE:OUT -->
 <script src="/cluck-util.js"></script>
 <script>
 // esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
@@ -242,7 +244,8 @@ function render(d){
     });
     // The hand-off button that used to live here is gone — revoking happens on this
     // page now. The revoke card below is shown by syncRevokeUi() whenever approvals exist.
-    html+='<div style="font-family:var(--mono);font-size:13px;color:#FCD34D;margin-top:10px;line-height:1.6">↓ Revoke these below — connect the wallet and sign it yourself.</div>';
+    /* STORE:OUT */ html+='<div style="font-family:var(--mono);font-size:13px;color:#FCD34D;margin-top:10px;line-height:1.6">↓ Revoke these below — connect the wallet and sign it yourself.</div>'; /* /STORE:OUT */
+    /* STORE:IN html+='<div style="font-family:var(--mono);font-size:13px;color:#FCD34D;margin-top:10px;line-height:1.6">To revoke these, open clucknorris.app/wallet-checkup in your wallet browser — this edition scans only, it never signs.</div>'; /STORE:IN */
     html+='</div>';
   }
 
@@ -256,8 +259,10 @@ function render(d){
         +'<div class="mono"><b>'+esc(t.symbol||shortAddr(t.mint))+'</b>'+(t.valueUsd>0?' <span style="color:#F59E0B">'+fmtUsd(t.valueUsd)+'</span>':'')+' <a class="copy" data-copy="'+esc(t.mint)+'">copy</a> · holding '+fmtNum(t.amount)+'</div>'
         +t.issues.map(i=>'<div class="issue'+(t.severity<2?' lo':'')+'">• '+esc(i)+'</div>').join('')
         +'<div class="links">'
+          /* STORE:OUT — links to live-site tools the store edition does not carry */
           +'<a class="lk-autopsy" href="/autopsy?mint='+esc(t.mint)+'" target="_blank" rel="noreferrer">🔬 AUTOPSY</a>'
           +'<a class="lk-trace" href="/trace?wallet='+esc(d.wallet)+'&mint='+esc(t.mint)+'" target="_blank" rel="noreferrer">🔍 TRACE</a>'
+          /* /STORE:OUT */
         +'</div>'
         +'</div>';
     });
@@ -272,6 +277,7 @@ function render(d){
 const _w=new URLSearchParams(location.search).get('wallet');
 if(_w){ document.getElementById('addr').value=_w.trim(); run(); }
 </script>
+<!-- STORE:OUT — wallet connect + revoke: a signed transaction, never in the store edition -->
 <script>
 
 // ── REVOKE (merged in from the old Security Coop page, 2026-07-29) ────────────
@@ -518,6 +524,7 @@ function revokeAllFound(){
 }
 
 </script>
-<script defer src="/cluck-nav.js"></script>
+<!-- /STORE:OUT -->
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
 </body>
 </html>

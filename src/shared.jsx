@@ -1,5 +1,6 @@
 // Shared primitives extracted from App.jsx so lazy-loaded sections can reuse them
 // without importing the whole app (which would defeat code-splitting). Keep this
+import { STORE, api } from "./edition.js";
 // module dependency-light: constants + small presentational components only.
 import { useState, useEffect, useRef } from "react";
 
@@ -156,7 +157,7 @@ export function AskCluck({ context, compact }) {
     setLoading(true);
     setAnswer(null);
     try {
-      const res = await fetch("/api/ask-cluck", {
+      const res = await fetch(api("/api/ask-cluck"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, context, lang: (function(){ try { if (window.CLKN_I18N && window.CLKN_I18N.lang) return window.CLKN_I18N.lang; var s = localStorage.getItem("clkn_lang"); if (s) return s; } catch(e){} var _l=(navigator.language||"").toLowerCase().slice(0,2); return ["zh","es","hi","it","pt","vi"].indexOf(_l)!==-1?_l:"en"; })() })
@@ -254,10 +255,35 @@ export function AskCluck({ context, compact }) {
           </p>
           </div>
           <button onClick={()=>{setAnswer(null);setQuestion("");}} style={{marginTop:8,background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:1,cursor:"pointer"}}>
+          {STORE && <ReportAnswer question={question} answer={answer}/>}
             ASK ANOTHER →
           </button>
         </div>
       )}
     </div>
   );
+}
+
+
+// STORE edition only: report an AI-generated answer (Google Play's generative-AI policy asks for
+// in-app reporting). Sends the question, the answer and a reason to /api/ask-cluck/report — no
+// identity, no device id; the owner reads reports with the admin key.
+function ReportAnswer({ question, answer }) {
+  const [state, setState] = useState("idle");   // idle | pick | sent | failed
+  const REASONS = [["inaccurate","Inaccurate or misleading"],["harmful","Harmful or unsafe advice"],["offensive","Offensive"],["other","Something else"]];
+  async function send(reason) {
+    setState("sending");
+    try {
+      const r = await fetch(api("/api/ask-cluck/report"), { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ question, answer, reason }) });
+      setState(r.ok ? "sent" : "failed");
+    } catch (e) { setState("failed"); }
+  }
+  if (state === "sent") return <div style={{marginTop:8,fontSize:12,color:"#6EE7B7"}}>Thanks — reported. AI answers can be wrong; the curriculum is the source of truth.</div>;
+  if (state === "failed") return <div style={{marginTop:8,fontSize:12,color:"#FCD34D"}}>Could not send the report — try again later.</div>;
+  if (state === "pick" || state === "sending") return (
+    <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:6}}>
+      {REASONS.map(([k,label]) => <button key={k} disabled={state==="sending"} onClick={()=>send(k)} style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:6,padding:"5px 9px",color:"#D1D5DB",fontSize:12,cursor:"pointer"}}>{label}</button>)}
+    </div>
+  );
+  return <button onClick={()=>setState("pick")} style={{marginTop:8,marginLeft:12,background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:1,cursor:"pointer"}}>⚑ REPORT THIS ANSWER</button>;
 }
