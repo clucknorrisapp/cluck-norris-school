@@ -110,10 +110,21 @@ jobs:
       # handler's own req.cluckDirect guard runs before the key comparison.
       - name: CUNA staking domain lockdown allowlist
         run: node scripts/cuna-stake-routing-test.cjs
+      # The CUNA drawing's entry registry on the lock host: address must decode to exactly 32 bytes,
+      # window enforced server-side, idempotent by address, CORS preflight answers 204 for
+      # cunatoken.com, export is token-only and NOT on the lock host's lockdown allowlist.
+      - name: CUNA draw — entry registry (validation, window, CORS, export, lockdown)
+        run: node scripts/cuna-draw-test.cjs
       - name: Buy-comp entries (every $N buy = horses)
         run: node scripts/buycomp-entries-test.cjs
       - name: Buy comp — a sell into ANY pool vault disqualifies (hold check)
         run: node scripts/buycomp-sell-detect-test.cjs
+      # The project buy bots' detection, on two real mainnet transactions: a Jupiter buy split
+      # across the Orca and Meteora CUNA/SOL pools must post the WHOLE amount paid (one leg
+      # under-reported by 15% on 2026-09-11), and an arb between those pools must post nothing.
+      # Meteora DAMM v2 vaults belong to a program-wide authority, not the pool address.
+      - name: Buy bot — split routes summed, pool authorities, arbs silent
+        run: node scripts/buybot-detect-test.cjs
       # The decisions in front of an irreversible action. Burning cannot be undone and cannot be
       # partially retried, so every case here is a way the burner could fire when it should not or
       # for the wrong amount: a truthy (not true) armed flag, a missing signing key, a short
