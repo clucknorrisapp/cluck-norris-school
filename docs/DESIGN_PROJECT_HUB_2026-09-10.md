@@ -1,7 +1,10 @@
 # Design: the Project Hub, program record and verifiable receipts
 
 Status: **design only, no code** (owner rule 2026-09-10: publish nothing until the window opens;
-build from 2026-09-14). Written for a second-reviewer pass (Codex) before implementation. Every
+build from 2026-09-14). Written for a second-reviewer pass (Codex) before implementation.
+Revision 3 (2026-09-11, Codex re-review): transfer identity is chain-global with project as
+metadata; a pre-broadcast `signing` state with server-side reconcile closes the
+broadcast-before-recording gap; acceptance test 5 states the partition and the overpayment cases. Every
 acceptance test at the end is meant to become a CI script the way `scripts/cuna-payout-test.cjs`
 and `scripts/tool-pass-gate-test.cjs` already are.
 
@@ -126,19 +129,42 @@ is refused.
 - `owedNow = credits − paid − reserved`, never negative; a batch reserves atomically; a
   timed-out send is reconciled from the chain before any retry (the 2026-09-09 payout's
   `remainingLines` + `&sent=` flow, generalised).
-- **Transfer identity is global, not per batch.** A consumed transfer is keyed
-  `<projectId>:<rewardMint>:<sig>:<instructionIndex>[:<innerIndex>]` and stored in one
-  project-wide consumed set; the same on-chain transfer can never satisfy two batches, two rows,
-  or two projects. `recordSent` verifies the specific transfer (token program, mint, source =
-  fundingWallet, destination owner, raw amount) and consumes that identity; "one tx = one row"
-  is never assumed.
-- **Batch rows carry a `submitted` state.** `pending → submitted (sig known, unconfirmed) →
-  paid | failed`. A batch with any `submitted` row cannot be cancelled and its reservation cannot
-  be released until every submitted row resolves from the chain (confirmed, or expired blockhash
-  with no confirmation). Tests: two operators creating batches concurrently (only one reserves a
-  given credit), a lost response after a send (row reconciles to paid from the chain, never
-  resent), cancellation during confirmation (refused), late confirmation after a restart (row
-  flips to paid on reconcile), and restart mid-batch (reservation survives).
+- **Transfer identity is global — not per batch and not per project (rev 3).** A consumed
+  transfer is keyed `xfer:<sig>:<instructionIndex>[:<innerIndex>]` — the chain's own identity of
+  the transfer and nothing else — and stored in ONE consumed set shared by every project (the
+  sig store the tools pass already uses, under its own `xfer:` namespace). Project id, reward
+  mint, batch id and row id are recorded as **metadata on the consumed entry, never as part of
+  the key**, so projects A and B that share a reward asset and a funding wallet cannot each
+  consume the same transfer. `recordSent` verifies the specific transfer (token program, mint,
+  source = fundingWallet, destination owner, raw amount) against the row and only then consumes
+  the identity; "one tx = one row" is never assumed. Test: two projects with distinct project
+  mints, the same reward mint, the same funding wallet, the same recipient and the same amount —
+  one transfer settles exactly one row in one project; the other project's `recordSent` with the
+  same `sig:index` is refused with `transfer_already_consumed` naming the owning project and row.
+- **Batch rows are registered BEFORE the wallet is asked to sign (rev 3).** States:
+  `pending → signing → submitted → paid | failed`. The client never asks the wallet to sign a
+  row the server does not already hold in `signing`: before the transaction is built,
+  `POST …/rows/:id/attempt` records `{ attemptId (client random), recentBlockhash,
+  lastValidBlockHeight, startedAt }` on the row and moves it to `signing`; the transaction is
+  built with exactly that blockhash. A row in `signing` or `submitted` **cannot be cancelled and
+  its reservation cannot be released**, so "the wallet broadcast and the tab closed before any
+  callback reached the server" leaves a row the server refuses to rebuild or cancel. A `signing`
+  row resolves only by (a) the client reporting the signature (→ `submitted`), or (b) the
+  server's reconcile: once `lastValidBlockHeight` has passed it scans the funding wallet's
+  signatures since `startedAt` for a transfer matching the row (token program, mint, source,
+  destination owner, raw amount); a match → `paid` (consumed under the global identity above);
+  no match after the blockhash has expired → back to `pending` (that attempt can never land).
+  `attempt` is refused on a row that still has a live attempt, and a rebuild is only possible
+  from `pending`. Tests: (1) tab lost immediately after broadcast, before any callback — the row
+  is `signing`, cancel is refused, reconcile finds the transfer, the row is `paid`, a rebuild is
+  refused; (2) tab lost after signing but the wallet never broadcast — after blockhash expiry,
+  reconcile finds nothing, the row returns to `pending`, a rebuild is allowed; (3) reconcile
+  while the blockhash is still valid finds nothing and KEEPS `signing` (never releases early);
+  (4) restart mid-`signing` — the attempt survives on disk and reconcile behaves identically;
+  plus the earlier set: two operators creating batches concurrently (only one reserves a given
+  credit), a lost response after a send (row reconciles to paid from the chain, never resent),
+  cancellation during confirmation (refused), late confirmation after a restart (row flips to
+  paid on reconcile), and restart mid-batch (reservation survives).
 - **Who signs:** the project's `fundingWallet`, from the project's own payout page, in its own
   wallet. We hold no key. The server builds nothing that moves funds; it verifies signatures
   after the fact, exactly as today.
@@ -209,8 +235,18 @@ is paid for the camera.
    keep v1; the record page for v1 is byte-stable.
 4. Eligibility reasons: every `disqualify()` branch surfaces a code; the wallet page shows the
    numbers that decided it.
-5. Balance states: `estimated` never persists; `accrued + reserved + paid` reconcile to the
-   ledger; a cancelled batch returns its unsent rows to owed and its sent rows stay paid.
+5. Balance states (rev 3 — the partition, not a sum): `estimated` never persists; the
+   invariant **`accrued = available + reserved + paid`** holds after every ledger operation
+   (accrue, reserve, attempt, send, confirm, cancel, reconcile, migrate) and is asserted by a CI
+   check over the whole ledger, per wallet and per project; a cancelled batch returns its unsent
+   rows to `available` and its sent rows stay `paid`. Overpayment cases, explicit: a verified
+   transfer LARGER than the row records `paid` = the row amount and `overpaidRaw` = the excess
+   on the row and the wallet (shown on the receipt and the funding status, never floored to
+   zero, never credited as future accrual); a transfer SMALLER than the row marks the row
+   `failed` with `shortRaw`, returns the row's amount to `available`, and records the transfer
+   as an unmatched payment for the operator to resolve — it is consumed under the global
+   identity so it cannot later satisfy another row; a manual send outside the system that puts
+   `paid > accrued` for a wallet shows `overpaidRaw` and draws nothing in the next batch.
 6. Funding: obligations, reserved and observed balance are three different fields; the UI
    cannot show a green "funded" from an observed balance alone.
 7. Receipts: the amount equals the verified transfer; a multi-transfer transaction verifies the
