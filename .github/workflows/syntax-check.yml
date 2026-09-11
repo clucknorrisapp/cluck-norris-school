@@ -114,6 +114,12 @@ jobs:
         run: node scripts/buycomp-entries-test.cjs
       - name: Buy comp — a sell into ANY pool vault disqualifies (hold check)
         run: node scripts/buycomp-sell-detect-test.cjs
+      # The project buy bots' detection, on two real mainnet transactions: a Jupiter buy split
+      # across the Orca and Meteora CUNA/SOL pools must post the WHOLE amount paid (one leg
+      # under-reported by 15% on 2026-09-11), and an arb between those pools must post nothing.
+      # Meteora DAMM v2 vaults belong to a program-wide authority, not the pool address.
+      - name: Buy bot — split routes summed, pool authorities, arbs silent
+        run: node scripts/buybot-detect-test.cjs
       # The decisions in front of an irreversible action. Burning cannot be undone and cannot be
       # partially retried, so every case here is a way the burner could fire when it should not or
       # for the wrong amount: a truthy (not true) armed flag, a missing signing key, a short

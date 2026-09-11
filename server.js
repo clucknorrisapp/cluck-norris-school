@@ -8810,52 +8810,15 @@ const buyBotSendAttempts = new Map();
 const BUYBOT_MAX_SEND_ATTEMPTS = 5;
 const BUYBOT_SEEN_MAX = 600;
 
-// Generalized roseDetectBuyFromRaw: mint + optional pool hint are parameters.
-const BUYBOT_JUP_MINT = "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN";
+// Detection lives in lib/buybot-detect.js since 2026-09-11 (CUNA's second CUNA/SOL pool on
+// Meteora DAMM v2): every liquidity source in the transaction is summed, so a Jupiter route
+// split across pools posts the whole amount paid, and Meteora's program-wide vault authority
+// is part of the pool set so the arb filter can see it. scripts/buybot-detect-test.cjs drives
+// it with two real mainnet transactions from that pool's first hour.
+const buybotDetect = require("./lib/buybot-detect");
+const BUYBOT_JUP_MINT = buybotDetect.JUP_MINT;
 function detectBuyGeneric(tx, mint, tokUsd, solUsd, poolHint, knownPools, jupUsd) {
-  const meta = tx && tx.meta; if (!meta || meta.err) return null;
-  const delta = {}, post = {};
-  for (const b of (meta.preTokenBalances || [])) if (b.mint === mint && b.owner) delta[b.owner] = (delta[b.owner] || 0) - Number(b.uiTokenAmount.uiAmount || 0);
-  for (const b of (meta.postTokenBalances || [])) if (b.mint === mint && b.owner) { delta[b.owner] = (delta[b.owner] || 0) + Number(b.uiTokenAmount.uiAmount || 0); post[b.owner] = Number(b.uiTokenAmount.uiAmount || 0); }
-  const owners = Object.keys(delta); if (!owners.length) return null;
-  let pool = (poolHint && owners.includes(poolHint)) ? poolHint : null;
-  if (!pool) { let mx = -1; for (const o of owners) { const r = post[o] || 0; if (r > mx) { mx = r; pool = o; } } }
-  if (!pool || (delta[pool] || 0) >= 0) return null; // pool didn't release token → sell/LP/non-buy
-  // The buyer is the biggest net GAINER of the token — but never one of the project's own
-  // pools. A Jupiter route that arbs between our pools makes another pool the biggest
-  // gainer, and posting a pool address as the "maker" is exactly the wrong-maker bug the
-  // owner saw once all four pools went on the watch list (2026-08-25). The signer is the
-  // human when the route's shared accounts hide the recipient, so fall back to it.
-  const poolSet = new Set([pool, ...(Array.isArray(knownPools) ? knownPools : [])]);
-  let buyer = null, gain = 0;
-  for (const o of owners) { if (poolSet.has(o)) continue; const d = delta[o]; if (d > gain) { gain = d; buyer = o; } }
-  const totalPoolOut = -owners.filter(o => poolSet.has(o)).reduce((s, o) => s + Math.min(0, delta[o] || 0), 0);
-  // ARB FILTER (owner call 2026-08-26, superseding the 08-25 attribute-to-signer fix):
-  // arbs must not post at all. A real buy only TAKES tokens from pools; an inter-pool
-  // arb moves tokens BETWEEN them — some watched pool GAINS while another loses, in the
-  // same tx. Skip those entirely (1% -of-flow epsilon so vault-side dust can't trip it).
-  const poolInflow = owners.filter(o => poolSet.has(o)).reduce((s, o) => s + Math.max(0, delta[o] || 0), 0);
-  if (poolInflow > totalPoolOut * 0.01) return null;
-  // Every gainer was one of our pools and nothing left the pool set → nothing to post.
-  if (!buyer || gain <= 0) return null;
-  let wsol = 0, stable = 0, jup = 0;
-  const addQ = (b, sign) => {
-    if (b.owner !== pool) return;
-    const v = sign * Number(b.uiTokenAmount.uiAmount || 0);
-    const k = BUYBOT_QUOTES[b.mint];
-    if (k === "sol") wsol += v; else if (k) stable += v;
-    else if (b.mint === BUYBOT_JUP_MINT) jup += v;    // CUNA/JUP pool buys pay in JUP
-  };
-  for (const b of (meta.preTokenBalances || [])) addQ(b, -1);
-  for (const b of (meta.postTokenBalances || [])) addQ(b, +1);
-  if (wsol + stable + jup <= 0) return null; // pool took in no quote → not a buy
-  // Value the buy by what was ACTUALLY PAID into the pool — the poll-time token price
-  // lags badly in fast markets (the ±47% day showed buys valued at the wrong price).
-  const quoteUsd = wsol * (solUsd || 0) + stable + jup * (jupUsd || 0);
-  const usd = quoteUsd > 0 ? quoteUsd : (tokUsd > 0 ? gain * tokUsd : null);
-  const sig = (tx.transaction && tx.transaction.signatures && tx.transaction.signatures[0]) || null;
-  const ts = tx.blockTime ? tx.blockTime * 1000 : Date.now();
-  return { wallet: buyer, tokenAmt: gain, usd, sig, ts };
+  return buybotDetect.detectBuy(tx, { mint, tokUsd, solUsd, jupUsd, poolHint, knownPools, quotes: BUYBOT_QUOTES });
 }
 
 function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
