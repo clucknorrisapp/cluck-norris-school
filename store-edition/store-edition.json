@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "variants": ["google", "ios"],
+  "apiBase": "https://clucknorris.app",
+  "pages": ["wallet-checkup.html", "listing-checkup.html"],
+  "files": ["theme.css", "cluck-util.js", "i18n.js", "read-aloud.js", "cluck-norris-logo.jpg", "cluck-norris.png", "icon.svg"],
+  "dirs": ["i18n"],
+  "remotes": ["https://clucknorris.app", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+  "forbidden": [
+    "cluck-gate.js", "cluck-wallet.js", "cluck-nav.js", "solana-web3", "signAndSendTransaction", "signTransaction(",
+    "plugin.jup.ag", "googletagmanager", "jup.ag/tokens", "bags.fm/", "coinbase.com",
+    "/hatchery", "/firepit", "/locker-room", "/lp-rescue", "/buyspecial", "/airdrop", "/investors", "/project-burn", "/token-lock",
+    "href=\"/tools\"", "/transcript/", "DexScreener · Helius", "BUY CLKN", "TRADE CLKN", "unified tools pass", "CluckGate", "CluckWallet",
+    "/api/claim\"", "/api/tool-gate", "/api/security-coop/revoke"
+  ]
+}

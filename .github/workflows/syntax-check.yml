@@ -115,6 +115,8 @@ jobs:
       # cunatoken.com, export is token-only and NOT on the lock host's lockdown allowlist.
       - name: CUNA draw — entry registry (validation, window, CORS, export, lockdown)
         run: node scripts/cuna-draw-test.cjs
+      - name: Store edition — bundle compiled clean (no wallet, no pass, absolute API) + CORS, UA defense, certificate, report
+        run: node scripts/store-edition-test.cjs google
       - name: Buy-comp entries (every $N buy = horses)
         run: node scripts/buycomp-entries-test.cjs
       - name: Buy comp — a sell into ANY pool vault disqualifies (hold check)

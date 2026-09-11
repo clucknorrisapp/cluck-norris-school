@@ -61,7 +61,7 @@
 </head>
 <body>
 <div class="wrap">
-  <a class="back-home" href="/tools"><img src="/cluck-norris-logo.jpg" alt=""/> ← ALL TOOLS</a>
+  <!-- STORE:OUT --><a class="back-home" href="/tools"><img src="/cluck-norris-logo.jpg" alt=""/> ← ALL TOOLS</a><!-- /STORE:OUT --><!-- STORE:IN <a class="back-home" href="./index.html"><img src="/cluck-norris-logo.jpg" alt=""/> ← SCHOOL</a> /STORE:IN -->
   <div class="header">
     <h1>🔎 LISTING CHECKUP</h1>
     <p>EVERY PLACE YOUR TOKEN IS LISTED · CHECKED AGAINST YOUR OWN RECORD</p>
@@ -86,19 +86,23 @@
       <button class="run-btn alt" id="previewBtn" onclick="runPreview()">FREE PREVIEW · 5 SOURCES</button>
       <button class="run-btn" id="fullBtn" onclick="runFull()">FULL SWEEP · ALL SOURCES</button>
     </div>
-    <div class="hint" id="gateHint">The preview reads the on-chain record, CoinGecko, GeckoTerminal, DexScreener and Jupiter, free. The full sweep adds every other source, compares logos by bytes, and gives you a shareable report page — it runs on the unified tools pass, same as the other heavy tools.</div>
+    <!-- STORE:OUT --><div class="hint" id="gateHint">The preview reads the on-chain record, CoinGecko, GeckoTerminal, DexScreener and Jupiter, free. The full sweep adds every other source, compares logos by bytes, and gives you a shareable report page — it runs on the unified tools pass, same as the other heavy tools.</div><!-- /STORE:OUT --><!-- STORE:IN <div class="hint" id="gateHint">The preview reads the on-chain record, CoinGecko, GeckoTerminal, DexScreener and Jupiter. The full sweep adds every other source, compares logos by bytes, and gives you a shareable report page. Free in this edition.</div> /STORE:IN -->
     <div class="err" id="err"></div>
   </div>
 
   <div class="status" id="status">READING WHAT EVERY SITE SHOWS…</div>
   <div id="out"></div>
 
-  <div class="footer">SAY WHAT IS SHOWN · NEVER WHY · <a href="/tools" style="color:var(--gold)">MORE TOOLS</a></div>
+  <div class="footer">SAY WHAT IS SHOWN · NEVER WHY · <!-- STORE:OUT --><a href="/tools" style="color:var(--gold)">MORE TOOLS</a><!-- /STORE:OUT --><!-- STORE:IN <a href="./index.html" style="color:var(--gold)">BACK TO THE SCHOOL</a> /STORE:IN --></div>
 </div>
 
+<!-- STORE:OUT — no wallet and no pass in the store edition: the full sweep is free there -->
 <script src="/cluck-wallet.js?v=2"></script>
+<!-- /STORE:OUT -->
 <script src="/cluck-util.js"></script>
+<!-- STORE:OUT -->
 <script src="/cluck-gate.js"></script>
+<!-- /STORE:OUT -->
 <script>
 // esc lives in /cluck-util.js — never a private copy (CLAUDE.md: the private copies drifted).
 var esc = CluckUtil.esc;
@@ -122,14 +126,15 @@ async function run(tier) {
     var d = await r.json();
     if (!d || !d.ok) { showErr((d && (d.detail || d.error)) || 'The checkup could not run just now.'); return; }
     render(d.report, d.shareUrl);
-    try { history.replaceState(null, '', '/listing-checkup?mint=' + encodeURIComponent(body.mint)); } catch (e) {}
+    /* STORE:OUT */ try { history.replaceState(null, '', '/listing-checkup?mint=' + encodeURIComponent(body.mint)); } catch (e) {} /* /STORE:OUT */
   } catch (e) { showErr('Network error — try again in a moment.'); }
   finally { busy(false); }
 }
 function runPreview() { run('preview'); }
 function runFull() { run('full'); }
-// Unified tools pass (owner, 2026-09-06): the preview is free; the FULL sweep runs behind the pass.
-runFull = CluckGate.guard(runFull, { tool: 'Listing Checkup', anchor: '#fullBtn' });
+/* STORE:OUT — the store edition runs the full sweep with no gate (this gate was client-side only)
+// Unified tools pass (owner, 2026-09-06): the preview is free; the FULL sweep runs behind the pass. */
+runFull = CluckGate.guard(runFull, { tool: 'Listing Checkup', anchor: '#fullBtn' }); /* /STORE:OUT */
 
 function render(rep, shareUrl) {
   var s = rep.summary;
@@ -138,7 +143,7 @@ function render(rep, shareUrl) {
   var h = '<div class="card">'
     + '<div class="sum"><div><b>' + s.correct + '</b><span>CORRECT</span></div><div><b>' + s.incorrect + '</b><span>NEED A FIX</span></div><div><b>' + s['not-found'] + '</b><span>NOT FOUND</span></div><div><b>' + s.unread + '</b><span>UNREAD</span></div></div>';
   if (rep.fixFirst && rep.fixFirst.length) {
-    h += '<div class="card warn"><b>Fix this first.</b> Your on-chain metadata differs from your record on: <b>' + rep.fixFirst.map(esc).join(', ') + '</b>. Most sites copy the on-chain record, so fixing it there fixes the copies over time. <a href="/hatchery#metadata" style="color:var(--gold)">Update on-chain metadata →</a></div>';
+    h += '<div class="card warn"><b>Fix this first.</b> Your on-chain metadata differs from your record on: <b>' + rep.fixFirst.map(esc).join(', ') + '</b>. Most sites copy the on-chain record, so fixing it there fixes the copies over time. ' + /* STORE:OUT */ '<a href="/hatchery#metadata" style="color:var(--gold)">Update on-chain metadata →</a>' + /* /STORE:OUT */ /* STORE:IN 'Use the Token Metadata tool on clucknorris.app.' + /STORE:IN */ '</div>';
   }
   h += renderChecks(rep.checks || {});
   var order = [['incorrect', 'NEEDS A FIX'], ['not-found', 'NOT FOUND THERE'], ['correct', 'LISTED CORRECTLY'], ['unread', 'COULD NOT READ']];
@@ -184,7 +189,7 @@ function renderChecks(c) {
     h += '<div class="sec" style="margin-top:14px">POSSIBLE IMPERSONATORS · ' + im.matches.length + (im.total > im.matches.length ? ' of ' + im.total : '') + '</div>';
     if (!im.matches.length) h += '<div class="muted">No other Solana mint using this name or symbol was found on Jupiter or DexScreener.</div>';
     im.matches.forEach(function (m) {
-      h += '<div class="frow imp"><span class="mono">' + esc(m.mint) + '</span><span>' + esc(m.name || '') + ' <b>$' + esc(m.symbol || '') + '</b> · same ' + esc(m.matchOn.join(' + ')) + '</span><span>' + (m.liquidityUsd ? '$' + esc(Math.round(m.liquidityUsd).toLocaleString('en-US')) + ' liq' : 'no liquidity') + (m.holders ? ' · ' + esc(String(m.holders)) + ' holders' : '') + (m.verified ? ' · <b>Jupiter-verified</b>' : '') + ' · <a href="/wallet-xray?q=' + encodeURIComponent(m.mint) + '" target="_blank" rel="noopener noreferrer" style="color:var(--gold)">x-ray</a></span></div>';
+      h += '<div class="frow imp"><span class="mono">' + esc(m.mint) + '</span><span>' + esc(m.name || '') + ' <b>$' + esc(m.symbol || '') + '</b> · same ' + esc(m.matchOn.join(' + ')) + '</span><span>' + (m.liquidityUsd ? '$' + esc(Math.round(m.liquidityUsd).toLocaleString('en-US')) + ' liq' : 'no liquidity') + (m.holders ? ' · ' + esc(String(m.holders)) + ' holders' : '') + (m.verified ? ' · <b>Jupiter-verified</b>' : '') + ' · ' + /* STORE:OUT — links to a live-site tool the store edition does not carry */ '<a href="/wallet-xray?q=' + encodeURIComponent(m.mint) + '" target="_blank" rel="noopener noreferrer" style="color:var(--gold)">x-ray</a>' + /* /STORE:OUT */ '</span></div>';
     });
     h += '<div class="muted">' + esc(im.note) + (im.partial ? ' One search source did not answer, so this list may be short.' : '') + ' Jupiter\'s most common reason for refusing verification is a duplicate name or symbol.</div>';
   } else if (im && im.status === 'unread') h += '<div class="sec" style="margin-top:14px">POSSIBLE IMPERSONATORS</div><div class="muted">Could not read the search sources: ' + esc(im.error || '') + '</div>';

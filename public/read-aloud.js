@@ -8,7 +8,7 @@
       503 (no key / over daily budget) or errors.
    A floating "Listen" button (bottom-left) reads the page's main content in the
    current language (en/zh/es), with pause/resume/stop. Loaded globally via
-   cluck-nav.js. Skips nav/buttons/code and our own injected UI. */
+   the nav script. Skips nav/buttons/code and our own injected UI. */
 (function () {
   if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance === "undefined") return;
   var synth = window.speechSynthesis;
@@ -251,7 +251,7 @@
     bar.appendChild(btn); bar.appendChild(stopBtn);
     document.body.appendChild(bar);
     render();
-    // lift above any bottom-anchored composer (helper lives in cluck-nav.js, which loaded us)
+    // lift above any bottom-anchored composer (helper lives in the nav script, which loaded us)
     if (window.__clknDockFloat) window.__clknDockFloat(bar);
   }
   // voices load async on some browsers — harmless to register

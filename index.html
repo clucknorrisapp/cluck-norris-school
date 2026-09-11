@@ -6,7 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Cluck Norris: School of Crypto Hard Knocks — learn crypto from your first wallet to advanced strategy, without losing your shirt. Powered by CLKN on Solana." />
     <!-- PWA / mobile (Seeker dApp Store + add-to-home-screen) -->
+    <!-- STORE:OUT — the web manifest points at /school, which the bundle does not have -->
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- /STORE:OUT -->
     <meta name="theme-color" content="#0c0c0c" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -24,6 +26,7 @@
     <meta name="twitter:description" content="Learn crypto, beginner to advanced — from your first wallet to advanced strategy. Free, on Solana. Powered by CLKN." />
     <meta name="twitter:image" content="https://clucknorris.app/cluck-norris.png" />
     <title>Cluck Norris: School of Crypto Hard Knocks</title>
+    <!-- STORE:OUT — analytics and the swap widget are not part of the store edition -->
     <!-- Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-994PEREKFY"></script>
     <script>
@@ -34,11 +37,14 @@
     </script>
     <!-- Jupiter Plugin -->
     <script src="https://plugin.jup.ag/plugin-v1.js" data-preload defer></script>
+    <!-- /STORE:OUT -->
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- STORE:OUT — the site-wide nav pill links to pages the store edition does not carry -->
     <!-- Global "Ask Cluck" entry-point pill (same one used across all tool pages) -->
     <script defer src="/cluck-nav.js"></script>
+    <!-- /STORE:OUT -->
   </body>
 </html>

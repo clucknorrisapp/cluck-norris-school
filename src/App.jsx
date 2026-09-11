@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { CLKN_MINT, CLKN_TRADE_LINK, JUPITER_TRADE_LINK, LOGO_B64, COL, READ, MintAddress, JupiterSwapButton, AskCluck, LP_LESSONS_COUNT, RootCrakBadge, ROOTCRAK } from "./shared.jsx";
+import { STORE, api, STORE_PAGES } from "./edition.js";
 const Library = lazy(() => import("./sections/Library.jsx"));
 const LPLab = lazy(() => import("./sections/LPLab.jsx"));
 const SOL_MINT = "So11111111111111111111111111111111111111112";
@@ -24,7 +25,7 @@ function sessionId(){
 function track(event,extra){
   try{
     var ev=String(event||"").toLowerCase().replace(/[^a-z0-9_:-]/g,"").slice(0,64);
-    if(ev) fetch("/api/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({event:ev,sid:sessionId()},extra||{})),keepalive:true}).catch(function(){});
+    if(ev) fetch(api("/api/track"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({event:ev,sid:sessionId()},extra||{})),keepalive:true}).catch(function(){});
   }catch(_){}
 }
 const trackId=(prefix,id)=>track(prefix+":"+String(id).toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,48));
@@ -689,7 +690,7 @@ function ReinvestmentFeed() {
   const [claims, setClaims] = useState(null);
   const [claimCount, setClaimCount] = useState(0);
   useEffect(() => {
-    fetch("/api/reinvestment")
+    fetch(api("/api/reinvestment"))
       .then(r => r.json())
       .then(d => {
         if (d && d.success && Array.isArray(d.claims) && d.claims.length) {
@@ -751,17 +752,17 @@ function CLKNWidget() {
 
   async function fetchHelius() {
     try {
-      const holdersRes = await fetch(`/api/holders?mint=${CLKN_MINT}`);
+      const holdersRes = await fetch(api(`/api/holders?mint=${CLKN_MINT}`));
       const holdersData = await holdersRes.json();
       if (holdersData.success) setHolderCount(holdersData.holderCount);
     } catch (e) { console.log("Holders error:", e.message); }
     try {
-      const feesRes = await fetch(`/api/fees`);
+      const feesRes = await fetch(api(`/api/fees`));
       const feesData = await feesRes.json();
       if (feesData.success) setFees(feesData.response);
     } catch (e) { console.log("Fees error:", e.message); }
     try {
-      const supplyRes = await fetch(`/api/supply`);
+      const supplyRes = await fetch(api(`/api/supply`));
       const supplyData = await supplyRes.json();
       if (Number.isFinite(supplyData?.circulatingSupply)) setSupply(supplyData.circulatingSupply);
     } catch (e) { console.log("Supply error:", e.message); }
@@ -1056,7 +1057,7 @@ function Landing({onStart,onIncubator,onStartHere,onClaim,completed}){
         {completed.length===0?`🏫 Start the ${LESSONS.length}-Class Course`:"📚 Continue Class"}
       </button>
       <p style={{marginTop:12,fontSize:13.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>{LESSONS.length} CLASSES • {QUIZ_QUESTION_COUNT} EXAMS • NO EXTRA CREDIT</p>
-      <a href="/classroom" style={{display:"inline-block",marginTop:2,fontFamily:"'Anton',sans-serif",fontSize:13.5,letterSpacing:1,color:"#FF7A18",textDecoration:"none"}}>🎓 Prefer a live teacher? Take it in the Classroom →</a>
+      {!STORE && (<a href="/classroom" style={{display:"inline-block",marginTop:2,fontFamily:"'Anton',sans-serif",fontSize:13.5,letterSpacing:1,color:"#FF7A18",textDecoration:"none"}}>🎓 Prefer a live teacher? Take it in the Classroom →</a>)}
 
       {/* YOUR PROGRESS — transcript (always shown so newcomers see where they're headed) */}
       <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:10,padding:"14px 16px",marginTop:18,marginBottom:12,textAlign:"left"}}>
@@ -1105,13 +1106,19 @@ function Landing({onStart,onIncubator,onStartHere,onClaim,completed}){
           and paying fake wallets dilutes real holders. State it plainly rather than deleting
           silently — honesty is the brand. Don't re-add a token reward without the owner asking. */}
       <div style={{background:"rgba(255,182,39,0.12)",border:"1px solid rgba(255,182,39,0.45)",borderRadius:12,padding:"16px 18px",marginBottom:14,textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE NFT + TRANSCRIPT</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,letterSpacing:1,color:"#FFB627",marginBottom:6}}>{STORE ? "🎓 CERTIFICATE OF COMPLETION" : "🎓 GRADUATE NFT + TRANSCRIPT"}</div>
+        {STORE ? (
+        <p style={{fontFamily:"system-ui,sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.6,margin:0}}>
+          Finish all {LESSONS.length} classes to earn a <b style={{color:"#FFB627"}}>certificate of completion</b> with a verification code — free, no wallet, no sign-up, nothing to buy.
+        </p>
+        ) : (<>
         <p style={{fontFamily:"system-ui,sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
           Finish all {LESSONS.length} classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b> and a permanent, shareable transcript — free, minted to any Solana address you drop.
         </p>
         <p style={{fontFamily:"system-ui,sans-serif",fontSize:13,color:"#9CA3AF",lineHeight:1.6,margin:0}}>
           The CLKN airdrop reward was taken down due to farming efforts — fake wallets were claiming it, and paying them would dilute real holders. The education stays free for everyone.
         </p>
+        </>)}
       </div>
 
       {/* Incubator — beginners */}
@@ -1120,6 +1127,7 @@ function Landing({onStart,onIncubator,onStartHere,onClaim,completed}){
       </button>
       <p style={{marginTop:2,fontSize:13,color:"#4B5563",fontFamily:"'Anton',sans-serif",letterSpacing:1}}>{INCUBATOR_LESSONS.length} BEGINNER LESSONS · WALLETS, TOKENS &amp; SAFETY</p>
 
+      {!STORE && (<>
       {/* Transcript lookup */}
       <div style={{marginTop:22,paddingTop:18,borderTop:"1px solid rgba(255,122,24,0.09)"}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:3,marginBottom:10}}>🎓 LOOK UP ANY TRANSCRIPT</div>
@@ -1128,6 +1136,7 @@ function Landing({onStart,onIncubator,onStartHere,onClaim,completed}){
           <button onClick={()=>{ if(lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }} disabled={lookupAddr.trim().length<32} style={{background:lookupAddr.trim().length>=32?"rgba(16,185,129,0.18)":"rgba(255,122,24,0.07)",border:"1px solid rgba(16,185,129,0.4)",borderRadius:8,padding:"9px 14px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:lookupAddr.trim().length>=32?"#6EE7B7":"#4B5563",letterSpacing:1,cursor:lookupAddr.trim().length>=32?"pointer":"default"}}>VIEW</button>
         </div>
       </div>
+      </>)}
     </div>
   );
 }
@@ -1275,7 +1284,67 @@ function Lesson({lesson:l,onComplete,onBack}){
   );
 }
 
-function Complete({onRestart}){
+// The graduation screen. STORE: a certificate of completion with a verification code — the
+// server checks the same progression ledger the wallet claim uses (lib/school-progress), issues
+// one certificate per learner session, and never asks for a wallet. FULL: the wallet claim below.
+function Complete(props){
+  if (STORE) return <StoreCertificate onRestart={props.onRestart}/>;
+  return <CompleteFull onRestart={props.onRestart}/>;
+}
+function StoreCertificate({onRestart}){
+  const [cert, setCert] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [name, setName] = useState(()=>{ try { return localStorage.getItem("clkn_cert_name") || ""; } catch(e){ return ""; } });
+  async function issue(){
+    setBusy(true); setErr("");
+    try {
+      const res = await fetch(api("/api/claim/certificate"), { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sid: sessionId(), coursework: readCoursework() }) });
+      const d = await res.json().catch(()=>null);
+      if (d && d.ok && d.certificate) { setCert(d.certificate); track("certificate_issued"); }
+      else setErr((d && (d.detail || d.error)) || "The certificate could not be issued just now — try again in a moment.");
+    } catch(e) { setErr("Network error — try again in a moment."); }
+    setBusy(false);
+  }
+  useEffect(()=>{ issue(); },[]);
+  const saveName=(v)=>{ setName(v); try { localStorage.setItem("clkn_cert_name", v); } catch(e){} };
+  const share=async()=>{
+    if(!cert) return;
+    const text=`I completed the School of Crypto Hard Knocks — all ${LESSONS.length} classes. Certificate ${cert.id}: ${cert.verifyUrl}`;
+    try { if (navigator.share) { await navigator.share({ title:"Certificate of Completion", text, url: cert.verifyUrl }); return; } } catch(e){}
+    try { await navigator.clipboard.writeText(text); setErr("Copied to clipboard."); } catch(e){}
+  };
+  return(
+    <div style={{maxWidth:COL,margin:"0 auto",padding:"0 18px 48px",textAlign:"center"}}>
+      <div style={{fontSize:44,marginBottom:6}}>🎓</div>
+      <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,letterSpacing:1,margin:"0 0 6px",color:"#FFB627"}}>YOU GRADUATED</h2>
+      <p style={{color:"#9CA3AF",fontSize:15,lineHeight:1.6,margin:"0 0 18px"}}>All {LESSONS.length} classes of the School of Crypto Hard Knocks. Free, no wallet, no sign-up — and nothing to buy.</p>
+      <div style={{background:"rgba(212,175,55,0.08)",border:"1px solid rgba(212,175,55,0.35)",borderRadius:12,padding:18,marginBottom:14,textAlign:"left"}}>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,color:"#FFB627",marginBottom:8}}>CERTIFICATE OF COMPLETION</div>
+        <label style={{display:"block",fontSize:12.5,color:"#9CA3AF",marginBottom:4}}>Name on the certificate (stays on this device — never sent anywhere)</label>
+        <input value={name} onChange={e=>saveName(e.target.value.slice(0,60))} placeholder="Your name (optional)" style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:8,padding:"9px 12px",color:"#F9FAFB",fontSize:15,marginBottom:12}}/>
+        {cert ? (
+          <div style={{background:"#0f0a05",border:"1px solid rgba(255,182,39,0.35)",borderRadius:10,padding:"16px 14px"}}>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,letterSpacing:3,color:"#6B7280",marginBottom:6}}>CLUCK NORRIS · SCHOOL OF CRYPTO HARD KNOCKS</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:22,color:"#F9FAFB",marginBottom:4}}>{name.trim() || "A Hard Knocks graduate"}</div>
+            <div style={{fontSize:14,color:"#D1D5DB",lineHeight:1.6}}>completed the {LESSONS.length}-class curriculum{cert.coursework && cert.coursework.lpLab ? ` and ${cert.coursework.lpLab} LP Lab lessons` : ""}.</div>
+            <div style={{fontSize:12.5,color:"#9CA3AF",marginTop:8}}>Issued {new Date(cert.issuedAt).toLocaleDateString()} · Certificate ID <code style={{color:"#FFB627"}}>{cert.id}</code></div>
+            <div style={{fontSize:12,color:"#6B7280",marginTop:4,wordBreak:"break-all"}}>Verify: {cert.verifyUrl}</div>
+          </div>
+        ) : (
+          <div style={{fontSize:14,color:"#9CA3AF"}}>{busy ? "Issuing your certificate…" : "Your certificate is not issued yet."}</div>
+        )}
+        {err && <div style={{marginTop:10,fontSize:13,color:"#FCD34D",lineHeight:1.5}}>{err}</div>}
+        <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+          {cert ? <button onClick={share} style={{flex:1,background:"#FF7A18",border:"none",borderRadius:8,padding:"10px 14px",fontFamily:"'Anton',sans-serif",fontSize:14,color:"#fff",letterSpacing:1,cursor:"pointer"}}>SHARE</button>
+                : <button onClick={issue} disabled={busy} style={{flex:1,background:"#FF7A18",border:"none",borderRadius:8,padding:"10px 14px",fontFamily:"'Anton',sans-serif",fontSize:14,color:"#fff",letterSpacing:1,cursor:"pointer",opacity:busy?0.6:1}}>{busy?"…":"TRY AGAIN"}</button>}
+        </div>
+      </div>
+      <button onClick={onRestart} style={{width:"100%",background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,color:"#D1D5DB",cursor:"pointer"}}>🔄 REPEAT THE YEAR</button>
+    </div>
+  );
+}
+function CompleteFull({onRestart}){
   const [wallet, setWallet] = useState("");
   const [claimed, setClaimed] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -1294,7 +1363,7 @@ function Complete({onRestart}){
     setClaiming(true);
     setClaimError("");
     try {
-      const res = await fetch("/api/claim", {
+      const res = await fetch(api("/api/claim"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ wallet: addr, source: "GRADUATION", coursework: readCoursework(), sid: sessionId() })
@@ -1439,7 +1508,9 @@ function Complete({onRestart}){
 // that route into the right part of the app, plus the app-aware Ask Cluck box.
 function StartHere({ onGo }){
   const [open,setOpen]=useState("new");
-  const goIn=(url)=>()=>{ window.location.href=url; };            // same-site tool pages
+  // Same-site tool pages. In the store edition only the pages carried in the bundle exist, as
+  // files beside index.html (see STORE_PAGES); everything else is compiled out below.
+  const goIn=(url)=>()=>{ window.location.href = STORE ? (STORE_PAGES[url] || "./") : url; };
   const goExt=(url)=>()=>{ window.open(url,"_blank","noopener"); }; // external (Jupiter)
   const txt={color:"#D1D5DB",fontSize:13.5,lineHeight:1.7,margin:"0 0 10px"};
   const Act=({label,onClick,color="#FFB627",bg="rgba(255,182,39,0.08)",bd="rgba(255,182,39,0.3)"})=>(
@@ -1451,7 +1522,7 @@ function StartHere({ onGo }){
         <Act label="🥚 Open the Incubator" onClick={()=>onGo("incubator")} color="#5B8DD6" bg="rgba(91,141,214,0.1)" bd="rgba(91,141,214,0.4)"/>
         <Act label="📚 The 12-lesson course" onClick={()=>onGo("select")}/>
       </>)},
-    { key:"coins", icon:"🧠", title:"Learn about a specific coin or chain", tag:"BTC · ETH · SOL · XRP · XLM & more", body:()=>(<>
+    ...(STORE ? [] : [{ key:"coins", icon:"🧠", title:"Learn about a specific coin or chain", tag:"BTC · ETH · SOL · XRP · XLM & more", body:()=>(<>
         <p style={txt}>Plain-English deep-dives on the majors — how each one works, what its team is building right now, and the honest risks. Diversifying your understanding is discipline, not distraction. No hype, no shilling.</p>
         <Act label="₿ Bitcoin" onClick={goIn("/learn/btc")}/>
         <Act label="Ξ Ethereum" onClick={goIn("/learn/eth")}/>
@@ -1459,7 +1530,7 @@ function StartHere({ onGo }){
         <Act label="✕ XRP" onClick={goIn("/learn/xrp")}/>
         <Act label="✦ Stellar" onClick={goIn("/learn/xlm")}/>
         <Act label="🧭 Every chain" onClick={goIn("/learn")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
-      </>)},
+      </>)}]),
     { key:"basics", icon:"📚", title:"I know the basics", tag:"Level up", body:()=>(<>
         <p style={txt}>Finish the 12-lesson course and earn a permanent, shareable transcript. Want depth on liquidity? The LP Lab has {LP_LESSONS_COUNT} advanced lessons.</p>
         <Act label="📚 12-lesson course" onClick={()=>onGo("select")}/>
@@ -1471,20 +1542,21 @@ function StartHere({ onGo }){
       </>)},
     { key:"research", icon:"🔬", title:"Token research & CLKN tools", tag:"Vet anything on-chain", body:()=>(<>
         <p style={txt}>Free tools to check a token before you trust it. The chain shows <em>what</em>, never <em>why</em> — always DYOR.</p>
-        <Act label="🔍 Trace" onClick={goIn("/trace")}/>
+        {!STORE && <Act label="🔍 Trace" onClick={goIn("/trace")}/>}
         <Act label="🔒 Wallet Checkup" onClick={goIn("/wallet-checkup")}/>
-        <Act label="🎒 Bags feed" onClick={goIn("/bags")}/>
-        <Act label="🛠 All tools" onClick={goIn("/tools")}/>
+        {STORE && <Act label="📋 Listing Checkup" onClick={goIn("/listing-checkup")}/>}
+        {!STORE && <Act label="🎒 Bags feed" onClick={goIn("/bags")}/>}
+        {!STORE && <Act label="🛠 All tools" onClick={goIn("/tools")}/>}
       </>)},
-    { key:"about", icon:"🐔", title:"About Cluck Norris & CLKN", tag:"The story + where to buy", body:()=>(<>
+    ...(STORE ? [] : [{ key:"about", icon:"🐔", title:"About Cluck Norris & CLKN", tag:"The story + where to buy", body:()=>(<>
         <p style={txt}>Cluck Norris is the free School of Crypto Hard Knocks + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility. CLKN unlocks premium tools — hold it and they're free. The school itself is always free.</p>
         <Act label="💸 Buy CLKN on Jupiter" onClick={goExt(JUPITER_TRADE_LINK)} color="#34D399" bg="rgba(16,185,129,0.14)" bd="rgba(16,185,129,0.5)"/>
         <Act label="📊 Token data & chart" onClick={()=>onGo("clkn")}/>
         <Act label="📜 About the project" onClick={goIn("/about")}/>
-      </>)},
+      </>)}]),
     { key:"explore", icon:"🧭", title:"Just exploring", tag:"The lay of the land", body:()=>(<>
         <p style={txt}>Poke around — here's everything in one place.</p>
-        <Act label="🛠 All tools" onClick={goIn("/tools")}/>
+        {!STORE && <Act label="🛠 All tools" onClick={goIn("/tools")}/>}
         <Act label="📖 The Library" onClick={()=>onGo("library")}/>
         <Act label="🏫 The school" onClick={()=>onGo("landing")}/>
       </>)},
@@ -1526,7 +1598,7 @@ function StartHere({ onGo }){
 export default function App(){
   const [screen,setScreen]=useState(()=>{
     try {
-      const SCREENS=["library","incubator","lplab","clkn","select","start"];
+      const SCREENS=STORE?["library","incubator","lplab","select","start"]:["library","incubator","lplab","clkn","select","start"];
       // Shareable deep-link PATHS, so a section can be sent as a clean URL instead of a #hash.
       // A hash is invisible to the server, which means it can't be given its own link-preview card
       // and gets dropped by anything that rewrites URLs. The server routes these paths to the SPA
@@ -1604,7 +1676,7 @@ export default function App(){
         {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} onClaim={()=>setScreen("complete")} completed={completed}/>}
         {screen==="start"&&<StartHere onGo={(s)=>setScreen(s)}/>}
         {screen==="incubator"&&<Incubator onComplete={()=>{track("incubator_complete");setScreen("select");}} onBack={()=>setScreen("landing")}/>}
-        {screen==="clkn"&&<CLKNWidget/>}
+        {screen==="clkn"&&!STORE&&<CLKNWidget/>}
         {screen==="lplab"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><LPLab/></Suspense>}
         {screen==="library"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><Library/></Suspense>}
         {screen==="select"&&<Select onSelect={id=>{trackId("lesson_start",id);setLessonId(id);setScreen("lesson");}} completed={completed}/>}

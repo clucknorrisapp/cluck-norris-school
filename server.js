@@ -3693,6 +3693,42 @@ setInterval(() => {
   }
 }, 120000).unref();
 
+// ── STORE edition (Google Play / iOS bundle) — CORS + defense-in-depth ─────────────────────────
+// Mounted BEFORE the rate limiters and the sub-routers (hatchery, security-coop, whirlpool, swap):
+// a 429 to the app must still carry CORS headers or the webview reads it as a network error, and
+// the UA refusal below must see the router paths too — a router mounted earlier would answer first.
+// The store edition is the school bundled INTO the app (docs/STORE_EDITION.md), so its requests
+// arrive from a webview origin, not from clucknorris.app: capacitor://localhost (iOS),
+// https://localhost (Android, Capacitor 5/6), http://localhost (older webviews). Without CORS on
+// exactly the endpoints the edition calls, every request fails ONLY inside the installed app —
+// green in a browser, red in store review. The allow-list is exact: nothing that pays, signs,
+// mints, locks or sends is reachable this way, and the Origin header grants nothing by itself
+// (every endpoint keeps its own rules; this only lets the browser read the answer).
+const STORE_APP_ORIGINS = new Set(String(process.env.STORE_APP_ORIGINS || "capacitor://localhost,https://localhost,http://localhost,ionic://localhost").split(",").map((o) => o.trim()).filter(Boolean));
+const STORE_API_RE = /^\/api\/(ask-cluck(\/report)?|track|claim\/certificate|certificate\/[A-Za-z0-9]{6,32}|i18n\/translate|tts|helius-rpc|wallet-checkup|listing-checkup\/(config|run|report))$/;
+app.use((req, res, next) => {
+  const origin = String(req.get("origin") || "");
+  if (!origin || !STORE_APP_ORIGINS.has(origin) || !STORE_API_RE.test(req.path)) return next();
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Max-Age", "600");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
+// The wrapper appends a User-Agent marker (ClucknorrisPlay / ClucknorrisIOS). It is a HINT, never
+// an authorisation: a request carrying it is refused on every endpoint the store edition must not
+// reach (payments, passes, mint/burn/lock/send, the wallet claim, competitions). Spoofing the
+// marker only ever LOSES access, so nothing security-sensitive rests on it — the excluded flows are
+// absent from the bundle and every endpoint enforces its own rules regardless of UA.
+const STORE_UA_RE = /Clucknorris(Play|IOS)/;
+const STORE_DENY_RE = /^\/api\/(tool-gate|hatchery|airdrop|buyspecial|buycomp|lock\b|firepit|burn|project-burn|lp-rescue|wallet-xray|trace|snapshot|holders|owners-snapshot\/start|security-coop\/revoke|swap|premium|verify-sol-payment|claim$|classroom\/graduate-claim|cuna-stake|cuna-draw|whirlpool|rose|jvp|nq\/|normie)/;
+app.use((req, res, next) => {
+  if (!STORE_UA_RE.test(String(req.get("user-agent") || ""))) return next();
+  if (!STORE_DENY_RE.test(req.path)) return next();
+  return res.status(403).json({ success: false, error: "not_available_in_this_edition", detail: "This feature is not part of the store edition. Use it at clucknorris.app." });
+});
 // Generous global cap on the whole API surface — a real user's tool makes only
 // a handful of calls per action, so 150/min/IP never bites legitimately but
 // stops a scripted hammer. A tighter cap guards the AI endpoint (most costly
@@ -12303,6 +12339,83 @@ function gradGateMode() {
   return Date.now() >= GRAD_GATE_AUTO_ENFORCE ? "enforce" : "monitor";
 }
 
+// ── Certificate of completion (STORE edition) ──────────────────────────────────────────────────
+// The store edition has no wallet, so graduation there is a certificate with a verification code,
+// not a minted transcript. Same gate as the wallet claim: the server-side progression ledger
+// (lib/school-progress, fed by /api/track) has to show the curriculum was actually walked. One
+// certificate per learner session; re-asking returns the same one. Nothing is collected beyond
+// the anonymous sid the school already uses; the learner's display name stays on their device.
+const CERT_KEY = "storeCertificates", CERT_BY_SID_KEY = "storeCertificateBySid";
+app.post("/api/claim/certificate", rateLimit("certificate", { windowMs: 3600000, max: 20 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const sid = String((req.body && req.body.sid) || "").toLowerCase().slice(0, 64);
+  if (!/^[a-z0-9-]{8,64}$/.test(sid)) return res.status(400).json({ ok: false, error: "need sid" });
+  const gateMode = gradGateMode();
+  if (gateMode !== "off") {
+    const gate = schoolProgress.evaluate(sid, null, {
+      requiredLessons: kv.get("gradGateLessons", 12),
+      minAgeMs: (kv.get("gradGateMinAgeMin", 15) || 0) * 60000,
+      minSpreadBuckets: kv.get("gradGateSpreadBuckets", 3),
+    });
+    if (!gate.ok && gateMode === "enforce") {
+      console.warn(`[CERT] blocked ${gate.code} sid=${sid.slice(0, 8)}…`);
+      return res.status(403).json({ ok: false, error: "not_yet", code: gate.code, detail: "The school's record does not show the full curriculum for this device yet. Finish every class here, then try again." });
+    }
+  }
+  if (!kv.isPersistent()) return res.status(503).json({ ok: false, error: "certificates are not durable right now — try again in a moment" });
+  const bySid = kv.get(CERT_BY_SID_KEY, {}) || {};
+  const all = kv.get(CERT_KEY, {}) || {};
+  const existingId = bySid[sid];
+  if (existingId && all[existingId]) {
+    const c = all[existingId];
+    return res.status(200).json({ ok: true, certificate: { id: c.id, issuedAt: c.issuedAt, lessons: c.lessons, coursework: c.coursework, verifyUrl: `https://clucknorris.app/certificate/${c.id}` } });
+  }
+  const cw = (req.body && req.body.coursework) || {};
+  const coursework = { lpLab: Math.max(0, Math.min(200, parseInt(cw.lpLab, 10) || 0)), incubator: Math.max(0, Math.min(200, parseInt(cw.incubator, 10) || 0)) };
+  const status = schoolProgress.statusFor(sid);
+  const id = "C" + randomBytes(5).toString("hex").toUpperCase();
+  const rec = { id, issuedAt: Date.now(), lessons: (status && status.lessons) || 0, coursework, sidHash: createHash("sha256").update(sid).digest("hex").slice(0, 16) };
+  all[id] = rec; bySid[sid] = id;
+  kv.set(CERT_KEY, all); kv.set(CERT_BY_SID_KEY, bySid);
+  return res.status(200).json({ ok: true, certificate: { id, issuedAt: rec.issuedAt, lessons: rec.lessons, coursework, verifyUrl: `https://clucknorris.app/certificate/${id}` } });
+});
+// Public verification: no PII, just what was completed and when.
+app.get("/api/certificate/:id", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const id = String(req.params.id || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 32);
+  const c = (kv.get(CERT_KEY, {}) || {})[id];
+  if (!c) return res.status(404).json({ ok: false, error: "no such certificate" });
+  return res.status(200).json({ ok: true, id: c.id, issuedAt: new Date(c.issuedAt).toISOString(), lessons: c.lessons, coursework: c.coursework, school: "Cluck Norris — School of Crypto Hard Knocks" });
+});
+app.get("/certificate/:id", (req, res) => {
+  const id = String(req.params.id || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 32);
+  const c = (kv.get(CERT_KEY, {}) || {})[id];
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.type("html");
+  if (!c) return res.status(404).send(`<!doctype html><meta charset="utf-8"><title>Certificate not found</title><link rel="stylesheet" href="/theme.css"><body style="padding:40px;font-family:var(--body)"><h1 style="font-family:var(--disp)">No certificate ${escHtml(id)}</h1><p>Nothing was issued under that code.</p>`);
+  return res.send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Certificate ${escHtml(c.id)} — Cluck Norris</title><link rel="stylesheet" href="/theme.css"><body style="padding:40px 20px;font-family:var(--body);max-width:640px;margin:0 auto"><div style="font-family:var(--disp);letter-spacing:3px;color:#9CA3AF;font-size:12px">CLUCK NORRIS · SCHOOL OF CRYPTO HARD KNOCKS</div><h1 style="font-family:var(--disp);color:#FFB627;margin:8px 0">Certificate of Completion</h1><p>Certificate <code>${escHtml(c.id)}</code> is genuine. The holder completed the ${c.lessons}-class curriculum${c.coursework && c.coursework.lpLab ? ` and ${c.coursework.lpLab} LP Lab lessons` : ""}, issued ${new Date(c.issuedAt).toUTCString()}.</p><p style="color:#9CA3AF;font-size:13px">The school records completion by an anonymous learner session; the name shown on a certificate is chosen by its holder and is not verified here.</p><p><a href="/school" style="color:#FF7A18">Take the school yourself →</a></p>`);
+});
+// ── Ask Cluck: report an AI answer (store edition; Google Play generative-AI policy) ───────────
+// A report is a plain record for the owner to read — no identity, no device id. Capped so a loop
+// cannot fill the store.
+app.post("/api/ask-cluck/report", rateLimit("askreport", { windowMs: 60000, max: 5 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const b = req.body || {};
+  const reason = ["inaccurate", "harmful", "offensive", "other"].includes(String(b.reason)) ? String(b.reason) : "other";
+  const question = String(b.question || "").slice(0, 500), answer = String(b.answer || "").slice(0, 2000);
+  if (!question && !answer) return res.status(400).json({ ok: false, error: "nothing to report" });
+  const list = kv.get("askCluckReports", []) || [];
+  list.push({ at: Date.now(), reason, question, answer, edition: STORE_UA_RE.test(String(req.get("user-agent") || "")) ? "store" : "web" });
+  kv.set("askCluckReports", list.slice(-500));
+  return res.status(200).json({ ok: true });
+});
+app.get("/api/ask-cluck/reports", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const list = kv.get("askCluckReports", []) || [];
+  return res.status(200).json({ ok: true, count: list.length, reports: list.slice().reverse() });
+});
 app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { wallet, coursework } = req.body;
