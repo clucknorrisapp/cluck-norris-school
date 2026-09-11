@@ -10805,11 +10805,25 @@ app.get("/api/cuna-draw/check", rateLimit("cuna-draw-check", { windowMs: 60000, 
   const { status, ...rest } = cunaDraw.check({ store: kv, address: req.query.address });
   return res.status(status).json(rest);
 });
-app.get("/api/cuna-draw/export", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+// Owner-only: the export token (header) or the admin key. Never reachable on the lock host.
+function cunaDrawAdminOK(req) {
   const tok = String(req.get("x-draw-token") || "");
   const okTok = process.env.CUNA_DRAW_EXPORT_TOKEN ? secretEqual(tok, String(process.env.CUNA_DRAW_EXPORT_TOKEN)) : false;
-  if (!okTok && !adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  return okTok || adminAuthOK(req);
+}
+// DELETE /api/cuna-draw/entry?address= — remove one row (a test write, a duplicate, a bad one).
+// Added 2026-09-11 after the site session's production test left the System Program address in
+// the list with no way to take it out. A DELETE, never a GET flag, so a pasted link cannot fire it.
+app.delete("/api/cuna-draw/entry", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!cunaDrawAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const { status, ...rest } = cunaDraw.deleteEntry({ store: kv, address: req.query.address });
+  if (rest.removed) console.log(`[cuna-draw] entry removed by operator: ${rest.address} (was at ${new Date((rest.was && rest.was.at) || 0).toISOString()})`);
+  return res.status(status).json(rest);
+});
+app.get("/api/cuna-draw/export", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!cunaDrawAdminOK(req)) return res.status(404).json({ error: "not_found" });
   const rows = cunaDraw.exportRows(kv);
   const w = cunaDraw.windowFromEnv();
   if (req.query.format === "csv") {
