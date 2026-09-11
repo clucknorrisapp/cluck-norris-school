@@ -110,6 +110,11 @@ jobs:
       # handler's own req.cluckDirect guard runs before the key comparison.
       - name: CUNA staking domain lockdown allowlist
         run: node scripts/cuna-stake-routing-test.cjs
+      # The CUNA drawing's entry registry on the lock host: address must decode to exactly 32 bytes,
+      # window enforced server-side, idempotent by address, CORS preflight answers 204 for
+      # cunatoken.com, export is token-only and NOT on the lock host's lockdown allowlist.
+      - name: CUNA draw — entry registry (validation, window, CORS, export, lockdown)
+        run: node scripts/cuna-draw-test.cjs
       - name: Buy-comp entries (every $N buy = horses)
         run: node scripts/buycomp-entries-test.cjs
       - name: Buy comp — a sell into ANY pool vault disqualifies (hold check)
