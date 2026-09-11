@@ -77,6 +77,19 @@ does not tell you how to write software; use your judgement for that.
 > `unavailable`, never a zero balance, never cached as a denial. `scripts/tool-pass-gate-test.cjs`
 > drives the whole flow with a real ed25519 keypair.
 
+> 📱 **The Google Play app is a PINNED, education-only bundle — read `docs/STORE_EDITION.md`
+> before touching any endpoint it calls.** Shipped 2026-09-11 as release `store-google-v1.0.0`
+> (built from main `dc8652a`; the wrapper repo `clucknorrisapp/CLKN-SEEKER` pins the tarball by
+> sha256). A website deploy never changes the installed app, so **the endpoints in `STORE_API_RE`
+> (`server.js`) are a versioned contract**: `/api/ask-cluck` + `/report`, `/api/track`,
+> `/api/claim/certificate`, `/api/certificate/:id`, `/api/i18n/translate`, `/api/tts`,
+> `/api/helius-rpc`, `/api/wallet-checkup`, `/api/listing-checkup/*` — don't rename them or change
+> their response shapes without cutting a new `store-google-v*` release (the workflow has a manual
+> run; a cloud session cannot push tags). The store's legal pages are `/privacy/store` and
+> `/terms/store` and must stay true to that bundle (no wallet, no payments, no address). The
+> `ClucknorrisPlay` / `ClucknorrisIOS` user-agent marker is refused on excluded endpoints as
+> defense-in-depth only — never treat it as authorisation.
+
 > 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
 > `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts
 > had no feet — NOT a position or resolution bug (that finding cost ~24h).
