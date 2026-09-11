@@ -4,15 +4,32 @@
 #
 #   git tag store-google-v1.0.0 && git push origin store-google-v1.0.0
 #
-# The tag's version must equal store-edition/store-edition.json → version, or the job stops
-# before publishing: the pinned digest must never describe a bundle built from a different
-# version than the one in the file name.
+# or, when the publisher cannot push tags (a cloud session's credential is branch-scoped), run it
+# by hand (Actions → store-edition-release → Run workflow) with the variant, the version and the
+# exact main commit to build: the release step then creates the tag at that commit itself.
+#
+# The version must equal store-edition/store-edition.json → version, or the job stops before
+# publishing: the pinned digest must never describe a bundle built from a different version than
+# the one in the file name. A manual run also refuses a ref that is not on main.
 name: store-edition-release
 on:
   push:
     tags:
       - "store-google-v*"
       - "store-ios-v*"
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "store variant"
+        type: choice
+        options: [google, ios]
+        required: true
+      version:
+        description: "version (must equal store-edition.json)"
+        required: true
+      ref:
+        description: "the main commit to build (full sha)"
+        required: true
 permissions:
   contents: write
 jobs:
@@ -20,20 +37,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Resolve variant + version from the tag
+      - name: Resolve variant + version (from the tag, or the manual inputs)
         id: tag
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          VARIANT="${TAG#store-}"; VARIANT="${VARIANT%%-v*}"
-          VERSION="${TAG##*-v}"
+          if [ -n "${{ inputs.version }}" ]; then
+            VARIANT="${{ inputs.variant }}"; VERSION="${{ inputs.version }}"
+            git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/main || { echo "ref is not on main"; exit 1; }
+          else
+            TAG="${GITHUB_REF_NAME}"
+            VARIANT="${TAG#store-}"; VARIANT="${VARIANT%%-v*}"
+            VERSION="${TAG##*-v}"
+          fi
           FILEV=$(node -p "require('./store-edition/store-edition.json').version")
-          if [ "$VERSION" != "$FILEV" ]; then echo "tag version $VERSION != store-edition.json version $FILEV"; exit 1; fi
+          if [ "$VERSION" != "$FILEV" ]; then echo "version $VERSION != store-edition.json version $FILEV"; exit 1; fi
           echo "variant=$VARIANT" >> "$GITHUB_OUTPUT"; echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=store-$VARIANT-v$VERSION" >> "$GITHUB_OUTPUT"; echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Build + verify the store edition
         run: node scripts/build-store-edition.mjs "${{ steps.tag.outputs.variant }}"
       - name: Independent re-check of the published bundle
@@ -45,6 +71,8 @@ jobs:
           { echo "body<<EOF"; echo "Store edition \`${{ steps.tag.outputs.variant }}\` v${{ steps.tag.outputs.version }} — the education-only bundle for the app wrapper."; echo; echo '```json'; cat "$M"; echo '```'; echo; echo "Pin in the wrapper's store-edition.lock: version, url of the .tgz below, sha256, sourceCommit. Extract with \`tar -xzf <file> -C dist --strip-components=1\`."; echo "EOF"; } >> "$GITHUB_OUTPUT"
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ steps.tag.outputs.sha }}
           name: "Store edition ${{ steps.tag.outputs.variant }} v${{ steps.tag.outputs.version }}"
           body: ${{ steps.notes.outputs.body }}
           files: |
