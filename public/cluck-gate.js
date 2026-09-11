@@ -115,6 +115,7 @@
       + '<button class="ckg-btn ckg-ghost" data-ckg="pay" style="display:none">⚡ PAY ' + (c.lamports / 1e9) + ' SOL · ' + c.days + ' DAYS</button>'
       + '<a class="ckg-btn ckg-ghost" href="/clkn" style="text-decoration:none">🐔 GET CLKN</a>'
       + '<button class="ckg-btn ckg-ghost" data-ckg="disconnect" style="display:none">DISCONNECT</button>'
+      + '<button class="ckg-btn ckg-ghost" data-ckg="newpay" style="display:none" title="Only if you are sure the earlier payment never went through — this sends a NEW transfer">START A NEW PAYMENT (charges again)</button>'
       + '</div>'
       + '<div class="ckg-wallets" style="display:none"></div>'
       + '<div class="ckg-status"></div>'
@@ -126,6 +127,13 @@
       if (b.dataset.ckg === 'connect') connect(c);
       else if (b.dataset.ckg === 'pay') payWith(c, b);
       else if (b.dataset.ckg === 'disconnect') disconnect();
+      else if (b.dataset.ckg === 'newpay') {
+        // The explicit, separate decision to abandon an unresolved payment and send a new one.
+        // Nothing else in this file can start a second transfer while one is pending.
+        if (!global.confirm('Start a NEW payment? This sends another ' + (c.lamports / 1e9) + ' SOL. Only do this if you are sure the earlier payment never went through.')) return;
+        state.abandonPay = true; forgetPay(); b.style.display = 'none';
+        payWith(c, state.card.querySelector('[data-ckg="pay"]'));
+      }
     });
     return card;
   }
@@ -259,17 +267,30 @@
       // A previous payment from this wallet that never turned into a pass? Recover it first —
       // the server re-issues the pass to the same payer with its original expiry.
       var prev = pendingPay();
-      if (prev) {
+      if (prev && !state.abandonPay) {
         say('Checking a previous payment from this wallet…');
+        var settled = false;
         for (var k = 0; k < 6; k++) {
           try {
             var pv = await openSession(prev.sig);
             if (pv.success && pv.pass) { forgetPay(); grant(pv.days || c.days, 'paid', pv.pass); say('✓ Your earlier payment was found — every heavy tool is unlocked for ' + (pv.days || c.days) + ' days.', true); return finish(); }
-            if (/different wallet|not addressed|amount too low|already redeemed/.test(pv.error || '')) { forgetPay(); break; }
+            // Only a VERDICT about the payment itself releases it: the wrong wallet, the wrong
+            // destination, too little, or a pass that has already run its course. Everything else
+            // ("not found yet", a 5xx, a network error) is "still unresolved", never "start over".
+            if (/different wallet|not addressed|amount too low|already expired/.test(pv.error || '')) { forgetPay(); settled = true; say('Your earlier payment could not be applied: ' + pv.error); break; }
           } catch (e) {}
           await new Promise(function (r2) { setTimeout(r2, 2000); });
         }
+        if (!settled) {
+          // UNRESOLVED ≠ ABANDONED (second reviewer, 2026-09-11): an outage here used to fall
+          // through to a brand-new transfer, so a service hiccup could charge twice. Stay in
+          // "payment pending — retry verification"; a NEW payment needs its own explicit decision.
+          say('Your earlier payment is still being verified — nothing new was charged. Tap PAY again to retry; it picks up that same payment. Only start a new payment if you are sure the first one never went through.');
+          var np = state.card.querySelector('[data-ckg="newpay"]'); if (np) np.style.display = '';
+          btn.disabled = false; state.paying = false; return;
+        }
       }
+      state.abandonPay = false;
       say('Loading payment libraries…');
       await ensurePayLibs();
       var bh = await CluckUtil.rpc('getLatestBlockhash', [{ commitment: 'finalized' }]);

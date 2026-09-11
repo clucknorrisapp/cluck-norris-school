@@ -49,6 +49,7 @@ const solanaTracker = require("./lib/solana-tracker");
 const premiumForensics = require("./lib/premium-forensics");
 const sigStore = require("./lib/sigstore");
 const kv = require("./lib/kvstore");
+const { redeemPaidPass } = require("./lib/tool-pass-redeem");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
 const credentials = require("./lib/credentials");
@@ -8035,7 +8036,9 @@ async function verifySolPaymentTx(sig, min) {
   if (idx < 0) return { ok: false, error: "payment not addressed to the unlock wallet" };
   const delta = ((tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0));
   if (delta < min) return { ok: false, error: "amount too low", lamports: delta };
-  return { ok: true, lamports: delta, payer: keys[0] || null };
+  // blockTimeMs: the pass a payment buys runs from the moment the payment landed (see
+  // lib/tool-pass-redeem.js — that is what makes recovery need no second durable write).
+  return { ok: true, lamports: delta, payer: keys[0] || null, blockTimeMs: tx.blockTime ? tx.blockTime * 1000 : 0 };
 }
 // GET /api/tool-gate/challenge?wallet= — the message the wallet must sign. Single use, 10 min.
 app.get("/api/tool-gate/challenge", rateLimit("pay", { windowMs: 60000, max: 30 }), (req, res) => {
@@ -8077,23 +8080,15 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
     if (paySig.length < 80 || paySig.length > 100) return res.status(400).json({ success: false, error: "bad payment signature" });
     let v;
     try { v = await verifySolPaymentTx(paySig, TOOLGATE.lamports); } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
-    if (!v.ok) return res.status(200).json({ success: false, error: v.error, lamports: v.lamports });
-    // Bound to the PAYER: a signature seen on an explorer is worthless to anyone but the wallet
-    // that paid, and that wallet just proved itself above.
-    if (v.payer !== wallet) return res.status(403).json({ success: false, error: "payment was made by a different wallet" });
-    const expiresAt = Date.now() + TOOLGATE.days * dayMs;
-    if (!sigStore.add("sol:" + paySig)) {
-      // RECOVERY (second reviewer): a lost response after a successful redemption must not strand
-      // the payer. The entitlement is persisted wallet-bound; the SAME authenticated payer gets the
-      // pass back with its ORIGINAL expiry. Anyone else gets nothing.
-      const rec = kv.get("toolPassPaid:" + paySig, null);
-      if (rec && rec.wallet === wallet && Number(rec.expiresAt) > Date.now()) {
-        return res.status(200).json({ success: true, via: "paid", recovered: true, lamports: rec.lamports, pass: "t:" + issueToolPass(wallet, "paid", Number(rec.expiresAt) - Date.now()), days: Math.max(1, Math.round((Number(rec.expiresAt) - Date.now()) / dayMs)) });
-      }
-      return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
-    }
-    kv.set("toolPassPaid:" + paySig, { wallet, expiresAt, lamports: v.lamports, at: Date.now() });
-    return res.status(200).json({ success: true, via: "paid", lamports: v.lamports, pass: "t:" + issueToolPass(wallet, "paid", TOOLGATE.days * dayMs), days: TOOLGATE.days });
+    // Redemption + recovery are one pure function (lib/tool-pass-redeem.js, unit-tested with fault
+    // injection): the pass belongs to the verified PAYER and runs TOOLGATE.days from the payment's
+    // block time, so the only durable write is the sig-store consumption. The same payer presenting
+    // the same signature again — lost response, closed tab, another device — gets the same pass
+    // with the same expiry (`recovered: true`); a different wallet is refused before anything is
+    // consumed; a store that cannot record durably answers 503 and consumes nothing.
+    const r = redeemPaidPass({ paySig, wallet, verified: v, days: TOOLGATE.days, sigStore, kv });
+    if (!r.ok) return res.status(r.status || 200).json({ success: false, error: r.error, lamports: r.lamports });
+    return res.status(200).json({ success: true, via: "paid", recovered: r.recovered, lamports: r.lamports, pass: "t:" + issueToolPass(wallet, "paid", r.ttlMs), days: r.days });
   }
   const q = await toolPassQualify(wallet);
   if (!q.ok) { const { ok, ...deny } = q; return res.status(200).json({ success: false, ...deny, payIntent: issuePayIntent(wallet) }); }
