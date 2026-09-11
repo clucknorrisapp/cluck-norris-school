@@ -3478,6 +3478,10 @@ const CUNA_STAKE_PATH = new RegExp([
   "^/robots\\.txt$", "^/sitemap\\.xml$",     // launch checklist 9: same as the game host
   "^/$", "^/cuna-staking$",
   "^/api/cuna-stake/(config|wallet)$",
+  // The CUNA drawing's entry registry (2026-09-11): cunatoken.com is static and calls these two
+  // from the browser. Public by design (no secrets, rate-limited, idempotent). NOT the export —
+  // that carries the whole list and is reachable only through clucknorris.app, behind a token.
+  "^/api/cuna-draw/(enter|check)$",
   "^/api/lock/create-tx$",              // builds the UNSIGNED lock tx; the wallet still signs it
   // The page cannot work without these two. /api/helius-rpc is the balance read AND the send path
   // (fresh blockhash, then sendTransaction) — it is already public and method-allowlisted, so this
@@ -10804,6 +10808,54 @@ async function cunaLocks({ force = false } = {}) {
 }
 
 // Everything the page renders from. No amount is ever hardcoded client-side.
+// ── CUNA drawing — entry registry (owner brief, 2026-09-11) ──────────────────
+// Logic (validation, window, idempotency, cap, durability) is lib/cuna-draw.js; this block is HTTP.
+// Called cross-origin from https://cunatoken.com: the JSON POST triggers a preflight, so OPTIONS
+// answers 204 with the exact CORS triple below — without it every entry fails silently in the
+// browser. A text/plain body is also accepted (a "simple request", no preflight) as the fallback
+// the site session asked for. Export is admin-only (token in CUNA_DRAW_EXPORT_TOKEN, header only,
+// or the usual x-premium-key) and is deliberately NOT on the lock host's lockdown allowlist.
+const cunaDraw = require("./lib/cuna-draw");
+const CUNA_DRAW_ORIGINS = new Set(String(process.env.CUNA_DRAW_ORIGINS || "https://cunatoken.com,https://www.cunatoken.com").split(",").map((o) => o.trim()).filter(Boolean));
+function cunaDrawCors(req, res) {
+  const origin = String(req.get("origin") || "");
+  if (CUNA_DRAW_ORIGINS.has(origin)) { res.setHeader("Access-Control-Allow-Origin", origin); res.setHeader("Vary", "Origin"); }
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Max-Age", "600");
+  res.setHeader("Cache-Control", "no-store");
+}
+const cunaDrawIpHash = (req) => createHmac("sha256", String(process.env.CUNA_DRAW_EXPORT_TOKEN || process.env.PREMIUM_ACCESS_KEY || "cuna-draw")).update(clientIp(req) || "").digest("hex").slice(0, 16);
+app.options(["/api/cuna-draw/enter", "/api/cuna-draw/check"], (req, res) => { cunaDrawCors(req, res); res.status(204).end(); });
+app.post("/api/cuna-draw/enter", rateLimit("cuna-draw", { windowMs: 60000, max: 10 }), express.text({ type: "text/plain", limit: "1kb" }), (req, res) => {
+  cunaDrawCors(req, res);
+  // Body cap: a few hundred bytes is all an address needs. (express.json's default 100kb is far too generous here.)
+  if (Number(req.get("content-length") || 0) > 512) return res.status(413).json({ ok: false, error: "body too large" });
+  let body = req.body;
+  if (typeof body === "string") { try { body = JSON.parse(body); } catch (_) { body = { address: body.trim() }; } }
+  const r = cunaDraw.enter({ store: kv, address: body && body.address, window: cunaDraw.windowFromEnv(), ipHash: cunaDrawIpHash(req) });
+  const { status, ...rest } = r;
+  return res.status(status).json(rest);
+});
+app.get("/api/cuna-draw/check", rateLimit("cuna-draw-check", { windowMs: 60000, max: 60 }), (req, res) => {
+  cunaDrawCors(req, res);
+  const { status, ...rest } = cunaDraw.check({ store: kv, address: req.query.address });
+  return res.status(status).json(rest);
+});
+app.get("/api/cuna-draw/export", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const tok = String(req.get("x-draw-token") || "");
+  const okTok = process.env.CUNA_DRAW_EXPORT_TOKEN ? secretEqual(tok, String(process.env.CUNA_DRAW_EXPORT_TOKEN)) : false;
+  if (!okTok && !adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const rows = cunaDraw.exportRows(kv);
+  const w = cunaDraw.windowFromEnv();
+  if (req.query.format === "csv") {
+    res.type("text/csv");
+    return res.send("address,created_at\n" + rows.map((r) => `${r.address},${r.created_at}`).join("\n") + "\n");
+  }
+  return res.json({ ok: true, count: rows.length, persistent: kv.isPersistent(), window: { open: new Date(w.open).toISOString(), close: new Date(w.close).toISOString(), state: cunaDraw.windowState(Date.now(), w) }, entries: rows });
+});
+
 app.get("/api/cuna-stake/config", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   try {
