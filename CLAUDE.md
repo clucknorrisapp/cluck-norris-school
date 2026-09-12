@@ -62,14 +62,18 @@ does not tell you how to write software; use your judgement for that.
 > hackathon-scope work done right (the quiz-free `/curriculum` came back this way); it is a record
 > of what failed and why, so the rebuild does not repeat the failure. Second reviewer: **Codex**
 > reads `docs/CODEX_REVIEWER_BRIEF.md` and comments on PRs; findings, not rewrites.
-> ⛔ **PUBLISH NOTHING UNTIL THE HACKATHON WINDOW OPENS (owner, 2026-09-10: "publish nothing til
-> we are in hackathon").** The window opens **2026-09-14 04:00 PDT = 11:00 UTC** (Colosseum's
-> registration confirmation, owner-pasted 2026-09-12 — not midnight UTC). Until then: no merge to `main`, no promotion, no
-> public post about hackathon work, no submission, and PR #282 (dashboard, Lock of Fame, syllabus,
-> navigation) stays OPEN. Only fixes may land on `develop` (staging). Colosseum scores work done
-> inside the window and requires disclosure of what came before; the tag `pre-colosseum-2026-09-14`
-> is that line. From Sep 14: merge #282 first, then build the Project Hub + verifiable program
-> terms and receipts as the in-window centerpiece.
+> 🗓️ **Hackathon window: 2026-09-14 04:00 PDT = 11:00 UTC → 2026-10-12.** Colosseum's live rules
+> (quoted in `docs/COLOSSEUM_THINK_TANK_2026-09-10.md`): *"Teams may begin development before the
+> hackathon, but products are judged only on the work completed between the competition's start and
+> end dates"* and *"Builders may use pre-existing code, but teams must disclose all relevant past
+> development work."* So the owner's 2026-09-10 "publish nothing" freeze was relaxed on 2026-09-12
+> (owner asked for the call): **build and ship normally; the disclosure line is the snapshot taken
+> at 09:00 UTC on Sep 14** (`snapshot/pre-colosseum-2026-09-14-*` branches, owner pushes the real
+> tags — a cloud session cannot push tags) and `docs/PRE_EVENT_STATE.md` is the disclosure. PR #282
+> (dashboard, Lock of Fame, syllabus, navigation) merged to `develop` on 2026-09-12 as pre-window
+> work; promotion to `main` is still the owner's explicit go. What must read as in-window: the
+> Project Hub + verifiable program terms and receipts, started only after 11:00 UTC Sep 14. No public
+> post about hackathon work before kickoff (owner's preference, nothing gained by earlier posts).
 > ⚠️ **The tools pass is a SIGNED SESSION** (reworked 2026-09-10 after Codex found that a pasted
 > holder address and a public payment signature were both bearer passes): the wallet signs a
 > one-line nonce message, `POST /api/tool-gate/session` verifies it and issues an HMAC token, and
