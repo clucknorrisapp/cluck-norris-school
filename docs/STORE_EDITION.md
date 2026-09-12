@@ -73,6 +73,16 @@ for the mint, `CLKN trade`, `wallet-btn`, `syncRevokeUi`, `connectWallet`, `revo
 test pins the exact v1.0.0 leaks by name. Lesson: an allow-list of PAGES is not an allow-list of
 LINKS — every outbound `href` in an allowed page needs the same scrutiny as a page.
 
+## v1.0.2 (2026-09-12) — the dictionaries are pruned, not copied
+
+The wrapper's guard caught the CLKN mint in six `*.school.json` files: an orphaned Survival-Simulator
+line ("The official CLKN contract is …") whose English text no longer exists anywhere in `src/`,
+so it never rendered — but it shipped. The v1.0.1 verifier exempted `.json` from the forbidden
+scan on the theory that dictionaries are inert; that exemption is gone. The build now drops any
+dictionary entry whose key or value trips a forbidden string or pattern (logged as a count), then
+scans the copied JSON with the same rules as code. A pruned entry can only cost a translation
+falling back to English. The six stale entries were also deleted at the source.
+
 ## Publishing
 
 ```

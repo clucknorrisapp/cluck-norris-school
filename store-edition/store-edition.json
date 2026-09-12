@@ -1,5 +1,5 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "variants": [
     "google",
     "ios"
@@ -70,7 +70,9 @@
     "syncRevokeUi",
     "connectWallet",
     "disconnectWallet",
-    "revokeCard"
+    "revokeCard",
+    "YOU EARNED YOUR SPOT IN THE FLOCK",
+    "Submit your Solana wallet"
   ],
   "forbiddenPatterns": [
     "jup\\.ag",
