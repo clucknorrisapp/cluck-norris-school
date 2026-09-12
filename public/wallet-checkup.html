@@ -60,6 +60,7 @@ body{background:transparent;font-family:var(--body);}
   /* ── ported from security-coop.html when the two tools merged; the picker is now
         rendered from the wallet registry's available() list, so the per-wallet brand colors went with
         the hardcoded button list (phantom/solflare stay for the mobile deep links) ── */
+  /* STORE:OUT — styles for the connect picker + revoke card, which the store edition compiles out */
   .wallet-picker { display: flex; gap: 8px; flex-wrap: wrap; }
   .wallet-btn { flex: 1; min-width: 130px; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(255,255,255,.06); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
   .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; border-color: var(--orange); }
@@ -68,6 +69,7 @@ body{background:transparent;font-family:var(--body);}
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .wallet-info.show { display: flex; }
   .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
+  /* /STORE:OUT */
   .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: var(--disp); font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
   .progress { display: none; margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--accent); text-align: center; }
   .progress.show { display: block; }
@@ -109,10 +111,10 @@ body{background:transparent;font-family:var(--body);}
 
   <div id="results"></div>
 
-  <!-- Connect is OPTIONAL and deliberately BELOW the read-only scan: the safe path is
+  <!-- STORE:OUT — the revoke flow signs a transaction; the store edition ships the SCAN only.
+       Connect is OPTIONAL and deliberately BELOW the read-only scan: the safe path is
        pasting an address, and a wallet connect is only needed for the one action that
        actually signs — revoking an approval. Hidden until a scan finds approvals. -->
-  <!-- STORE:OUT — the revoke flow signs a transaction; the store edition ships the SCAN only -->
   <div class="card" id="revokeCard" style="display:none">
     <div class="sec-title" style="color:#FCA5A5">🔑 REVOKE THESE APPROVALS</div>
     <div style="font-size:12.5px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">
@@ -182,7 +184,7 @@ async function run(){
 function fmtUsd(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(1)+'K':'$'+n.toFixed(2);}
 function render(d){
   const approvals=d.approvals||[], risky=d.riskyHoldings||[], holdings=(d.holdings||[]).filter(h=>h.valueUsd>0);
-  try { syncRevokeUi(approvals, d.wallet || lastScanAddr); } catch(e) {}
+  /* STORE:OUT */ try { syncRevokeUi(approvals, d.wallet || lastScanAddr); } catch(e) {} /* /STORE:OUT */
   let html='';
   // Summary — now leads with live portfolio value
   html+='<div class="summary">'
@@ -243,7 +245,7 @@ function render(d){
         +'</div>';
     });
     // The hand-off button that used to live here is gone — revoking happens on this
-    // page now. The revoke card below is shown by syncRevokeUi() whenever approvals exist.
+    // page now (full site). The revoke card below appears whenever approvals exist.
     /* STORE:OUT */ html+='<div style="font-family:var(--mono);font-size:13px;color:#FCD34D;margin-top:10px;line-height:1.6">↓ Revoke these below — connect the wallet and sign it yourself.</div>'; /* /STORE:OUT */
     /* STORE:IN html+='<div style="font-family:var(--mono);font-size:13px;color:#FCD34D;margin-top:10px;line-height:1.6">To revoke these, open clucknorris.app/wallet-checkup in your wallet browser — this edition scans only, it never signs.</div>'; /STORE:IN */
     html+='</div>';
