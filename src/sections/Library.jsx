@@ -120,7 +120,7 @@ WHAT TO CHECK ON DEXSCREENER:
 • 24H volume relative to liquidity — low volume with high liquidity means little interest
 • Age of the liquidity pool — very new pools carry more risk
 
-CLKN EXAMPLE: CLKN graduated from the Bags.fm bonding curve to Meteora DAMM V2. The graduation process locks the liquidity pool permanently — so the LP itself can't be pulled. That closes the most common rug vector, but it does not remove every risk: holder concentration and large insider allocations are separate things you still have to check on any token.`
+${STORE ? "EXAMPLE: When a token graduates from a Bags.fm bonding curve to Meteora DAMM V2, the graduation process locks the liquidity pool permanently" : "CLKN EXAMPLE: CLKN graduated from the Bags.fm bonding curve to Meteora DAMM V2. The graduation process locks the liquidity pool permanently"} — so the LP itself can't be pulled. That closes the most common rug vector, but it does not remove every risk: holder concentration and large insider allocations are separate things you still have to check on any token.`
       },
       {
         heading: "Step 3 — Team and Transparency",
@@ -1008,7 +1008,7 @@ const LIBRARY_LIQUIDITY = [
     title: "Dynamic Bonding Curves",
     icon: "📈",
     summary: "A price mechanism that automatically increases price as more tokens are bought.",
-    content: "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\nCLKN completed this journey — it launched on a Bags.fm bonding curve and graduated to Meteora DAMM V2. This is why the liquidity pool itself is permanent and cannot be pulled by the creator. That closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
+    content: "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\n" + (STORE ? "A token that completes this journey — launching on a Bags.fm bonding curve and graduating to Meteora DAMM V2 — ends up with a liquidity pool that is permanent and cannot be pulled by the creator." : "CLKN completed this journey — it launched on a Bags.fm bonding curve and graduated to Meteora DAMM V2. This is why the liquidity pool itself is permanent and cannot be pulled by the creator.") + " That closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
   },
   {
     id: "meteora-damm",
@@ -1077,7 +1077,7 @@ const LIBRARY_GLOSSARY = [
   { term: "LP", def: "Liquidity Provider. Someone who deposits tokens into a liquidity pool to earn trading fees." },
   { term: "Market Cap", def: "Price × circulating supply. The total current value of all tokens in circulation." },
   { term: "MEV", def: "Maximal Extractable Value. Profit extracted by validators or bots by reordering transactions (includes sandwich attacks)." },
-  { term: "Meteora", def: "A leading Solana DEX and liquidity protocol. CLKN graduated to a Meteora DAMM V2 pool." },
+  { term: "Meteora", def: "A leading Solana DEX and liquidity protocol." + (STORE ? "" : " CLKN graduated to a Meteora DAMM V2 pool.") },
   { term: "Mint Address", def: "The unique identifier for a token on Solana. Used to verify you're buying the correct token." },
   { term: "Mint Authority", def: "The right to create new tokens. Revoking mint authority means supply is permanently fixed." },
   { term: "Multisig", def: "A wallet requiring multiple private key signatures to authorize transactions. Used for security." },

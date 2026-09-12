@@ -45,12 +45,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
   const files = walk(tmp), text = files.filter((f) => /\.(html|js|css|json)$/.test(f)).map((f) => [path.relative(tmp, f), fs.readFileSync(f, "utf8")]);
   const all = text.map(([, t]) => t).join("\n");
-  // The i18n dictionaries are the whole site's translation tables: keys for copy the store build
-  // compiles out are dead data there (never rendered — the JSX that would read them is gone), so
-  // the forbidden-string and compiled-out checks look at code and markup, not the dictionaries.
-  const code = text.filter(([f]) => !f.endsWith(".json")).map(([, t]) => t).join("\n");
-  for (const bad of cfg.forbidden) ok(`bundle code never contains "${bad}"`, !code.includes(bad), text.filter(([f, t]) => !f.endsWith(".json") && t.includes(bad)).map(([f]) => f));
-  for (const pat of cfg.forbiddenPatterns || []) { const re = new RegExp(pat); ok(`bundle code never matches /${pat}/`, !re.test(code), text.filter(([f, t]) => !f.endsWith(".json") && re.test(t)).map(([f, t]) => `${f}: ${(t.match(re) || [""])[0].slice(0, 60)}`)); }
+  // Since 1.0.2 the dictionaries are pruned at build time, so the checks cover EVERY text file —
+  // the v1.0.1 residual (the CLKN mint inside an orphaned dictionary entry) is exactly what a
+  // json exemption let through.
+  const code = all;
+  for (const bad of cfg.forbidden) ok(`bundle never contains "${bad}"`, !code.includes(bad), text.filter(([, t]) => t.includes(bad)).map(([f]) => f));
+  for (const pat of cfg.forbiddenPatterns || []) { const re = new RegExp(pat); ok(`bundle code never matches /${pat}/`, !re.test(code), text.filter(([, t]) => re.test(t)).map(([f, t]) => `${f}: ${(t.match(re) || [""])[0].slice(0, 60)}`)); }
   // The v1.0.0 leaks (owner found them on-device 2026-09-12): a Jupiter swap link + the CLKN mint in
   // the LP Lab, Meteora/Bags/Jupiter venue + referral links in the Library, connect/revoke residue in
   // the wallet checkup. Pinned here so a regression is named, not just counted.
@@ -59,6 +59,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok("no relative /api reference anywhere", !/["'`]\/api\/[a-zA-Z]/.test(all));
   ok("every API call points at the live backend", all.includes(`${cfg.apiBase}/api/ask-cluck`) && all.includes(`${cfg.apiBase}/api/track`) && all.includes(`${cfg.apiBase}/api/claim/certificate`) && all.includes(`${cfg.apiBase}/api/wallet-checkup`) && all.includes(`${cfg.apiBase}/api/listing-checkup/run`));
   ok("the store-only surfaces are present (certificate, report, listing link)", all.includes("CERTIFICATE OF COMPLETION") && all.includes("REPORT THIS ANSWER") && all.includes("listing-checkup.html"));
+  ok("every outbound host in every file is on the allow-list", (() => { const bad = new Set(); for (const [, t] of text) for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9.-]+)/g)) if (!cfg.allowedHosts.includes(m[1])) bad.add(m[1]); return bad.size === 0; })());
+  ok("the footer links the store's own privacy policy and terms", all.includes("https://clucknorris.app/privacy/store") && all.includes("https://clucknorris.app/terms/store"));
+  ok("the RootCrak credit carries no referral parameter", !all.includes("rootcrak.com/?ref"));
+  ok("the listing checkup gates backend-provided links through a host allow-list at render time", (() => { const t = text.find(([f]) => f === "listing-checkup.html")[1]; return t.includes("STORE_HOSTS") && t.includes("safeUrl(src.pageUrl)") && t.includes("safeUrl(shareUrl)"); })());
   ok("the full edition's wallet claim and trade links are compiled out", !code.includes("YOU EARNED YOUR SPOT IN THE FLOCK") && !code.includes("Submit your Solana wallet"));
   ok("no leftover STORE markers", !/STORE:(OUT|IN)/.test(all));
   ok("no page in the bundle that is not allow-listed", files.filter((f) => f.endsWith(".html")).map((f) => path.relative(tmp, f)).sort().join(",") === ["index.html", ...cfg.pages].sort().join(","), files.filter((f) => f.endsWith(".html")).map((f) => path.relative(tmp, f)));
