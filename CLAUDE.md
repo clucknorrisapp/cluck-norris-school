@@ -63,7 +63,8 @@ does not tell you how to write software; use your judgement for that.
 > of what failed and why, so the rebuild does not repeat the failure. Second reviewer: **Codex**
 > reads `docs/CODEX_REVIEWER_BRIEF.md` and comments on PRs; findings, not rewrites.
 > ⛔ **PUBLISH NOTHING UNTIL THE HACKATHON WINDOW OPENS (owner, 2026-09-10: "publish nothing til
-> we are in hackathon").** Until 2026-09-14 00:00 UTC: no merge to `main`, no promotion, no
+> we are in hackathon").** The window opens **2026-09-14 04:00 PDT = 11:00 UTC** (Colosseum's
+> registration confirmation, owner-pasted 2026-09-12 — not midnight UTC). Until then: no merge to `main`, no promotion, no
 > public post about hackathon work, no submission, and PR #282 (dashboard, Lock of Fame, syllabus,
 > navigation) stays OPEN. Only fixes may land on `develop` (staging). Colosseum scores work done
 > inside the window and requires disclosure of what came before; the tag `pre-colosseum-2026-09-14`
