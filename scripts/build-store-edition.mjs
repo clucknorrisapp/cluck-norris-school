@@ -79,7 +79,12 @@ for (const f of textFiles) {
   const t = fs.readFileSync(f, "utf8"), rel = path.relative(OUT, f);
   // Translation dictionaries are inert text (site-wide strings); they are checked for API refs and
   // markers like everything else, but not for page paths a translated label may mention.
-  if (!rel.endsWith(".json")) for (const bad of cfg.forbidden) if (t.includes(bad)) problems.push(`${rel}: forbidden "${bad}"`);
+  if (!rel.endsWith(".json")) {
+    for (const bad of cfg.forbidden) if (t.includes(bad)) problems.push(`${rel}: forbidden "${bad}"`);
+    // Regexes for the shapes a plain string can miss: any jup.ag route, any referral parameter on
+    // any URL (RootCrak's ?ref=clucknorris is the one allowed credit), the trade venues.
+    for (const pat of cfg.forbiddenPatterns || []) { const m = t.match(new RegExp(pat)); if (m) problems.push(`${rel}: forbidden pattern /${pat}/ → "${m[0].slice(0, 80)}"`); }
+  }
   const relApi = t.match(/["'`]\/api\/[a-zA-Z]/g); if (relApi) problems.push(`${rel}: relative /api reference (${relApi.length})`);
   if (/STORE:(OUT|IN)/.test(t)) problems.push(`${rel}: unprocessed STORE marker`);
   if (rel.endsWith(".html")) {
