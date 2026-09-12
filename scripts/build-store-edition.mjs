@@ -62,7 +62,24 @@ for (const f of fs.readdirSync(path.join(OUT, "assets"))) if (/\.js$/.test(f)) {
 }
 for (const p of cfg.pages) copy(p, true);
 for (const f of cfg.files) copy(f, /\.(js|css)$/.test(f));
-for (const d of cfg.dirs) for (const f of fs.readdirSync(path.join(ROOT, "public", d))) if (!/\.locker\.json$/.test(f)) copy(path.join(d, f), false);   // the Locker Room dictionary belongs to a page the bundle does not carry
+// Translation dictionaries are the whole site's tables, so they are PRUNED, not copied: any entry
+// whose key or value carries a forbidden string or matches a forbidden pattern is dropped (v1.0.1
+// shipped the CLKN mint inside an orphaned Survival-Simulator line in six dictionaries — the
+// English text no longer existed, the translations did). A pruned entry only ever costs a
+// translation falling back to English; it can never leak. The verifier below then scans the
+// copied JSON with the same rules as code.
+const forbiddenHit = (t) => cfg.forbidden.some((b) => t.includes(b)) || (cfg.forbiddenPatterns || []).some((p) => new RegExp(p).test(t));
+let pruned = 0;
+for (const d of cfg.dirs) for (const f of fs.readdirSync(path.join(ROOT, "public", d))) {
+  if (/\.locker\.json$/.test(f)) continue;   // the Locker Room dictionary belongs to a page the bundle does not carry
+  const src = path.join(ROOT, "public", d, f), dst = path.join(OUT, d, f);
+  fs.mkdirSync(path.dirname(dst), { recursive: true });
+  if (!f.endsWith(".json")) { fs.copyFileSync(src, dst); continue; }
+  const dict = JSON.parse(fs.readFileSync(src, "utf8")); const out = {};
+  for (const [k, v] of Object.entries(dict)) { if (forbiddenHit(k) || (typeof v === "string" && forbiddenHit(v))) { pruned++; continue; } out[k] = v; }
+  fs.writeFileSync(dst, JSON.stringify(out));
+}
+log(`dictionaries: pruned ${pruned} entries that carried forbidden content`);
 // A tiny back link so a tool page always has a way home inside the app.
 for (const p of cfg.pages) {
   const f = path.join(OUT, p); let t = fs.readFileSync(f, "utf8");
@@ -77,13 +94,15 @@ const textFiles = files.filter((f) => /\.(html|js|css|json|webmanifest)$/.test(f
 const problems = [];
 for (const f of textFiles) {
   const t = fs.readFileSync(f, "utf8"), rel = path.relative(OUT, f);
-  // Translation dictionaries are inert text (site-wide strings); they are checked for API refs and
-  // markers like everything else, but not for page paths a translated label may mention.
-  if (!rel.endsWith(".json")) {
+  {   // every text file, the pruned dictionaries included: default-deny, no exemptions
     for (const bad of cfg.forbidden) if (t.includes(bad)) problems.push(`${rel}: forbidden "${bad}"`);
     // Regexes for the shapes a plain string can miss: any jup.ag route, any referral parameter on
     // any URL (RootCrak's ?ref=clucknorris is the one allowed credit), the trade venues.
     for (const pat of cfg.forbiddenPatterns || []) { const m = t.match(new RegExp(pat)); if (m) problems.push(`${rel}: forbidden pattern /${pat}/ → "${m[0].slice(0, 80)}"`); }
+    // ALLOW-list of outbound hosts (Codex, 2026-09-12): a deny-list can only name what it already
+    // knows. Every http(s) URL in every copied file — JS, HTML, CSS, JSON — must point at a host on
+    // the list, or the build fails and the new host is a deliberate, reviewed addition.
+    for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9.-]+)/g)) if (!cfg.allowedHosts.includes(m[1])) problems.push(`${rel}: host not allow-listed: ${m[1]}`);
   }
   const relApi = t.match(/["'`]\/api\/[a-zA-Z]/g); if (relApi) problems.push(`${rel}: relative /api reference (${relApi.length})`);
   if (/STORE:(OUT|IN)/.test(t)) problems.push(`${rel}: unprocessed STORE marker`);

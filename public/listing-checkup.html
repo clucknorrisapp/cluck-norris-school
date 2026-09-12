@@ -136,6 +136,18 @@ function runFull() { run('full'); }
 // Unified tools pass (owner, 2026-09-06): the preview is free; the FULL sweep runs behind the pass. */
 runFull = CluckGate.guard(runFull, { tool: 'Listing Checkup', anchor: '#fullBtn' }); /* /STORE:OUT */
 
+/* STORE:OUT */ function safeUrl(u) { return u ? String(u) : ''; } /* /STORE:OUT */
+/* STORE:IN
+// Store edition: links the BACKEND provides (listing pages, where-to-fix, how-to-list, the share URL)
+// render only when their host is on this allow-list — a static verifier cannot see dynamic links,
+// so the page enforces the policy at render time. Anything else is plain text, never a link.
+var STORE_HOSTS = ['clucknorris.app', 'dexscreener.com', 'geckoterminal.com', 'coingecko.com', 'coinmarketcap.com', 'solscan.io', 'birdeye.so', 'rugcheck.xyz'];
+function safeUrl(u) {
+  try { var x = new URL(String(u || '')); var h = x.hostname.replace(/^www\./, '');
+    return (x.protocol === 'https:' && STORE_HOSTS.some(function (d) { return h === d || h.slice(-(d.length + 1)) === '.' + d; })) ? x.href : '';
+  } catch (e) { return ''; }
+}
+/STORE:IN */
 function render(rep, shareUrl) {
   var s = rep.summary;
   var groups = { incorrect: [], 'not-found': [], correct: [], unread: [] };
@@ -160,13 +172,13 @@ function render(rep, shareUrl) {
       });
       if (src.status === 'not-found' && src.howToList) h += '<div class="muted">To be listed there: ' + esc(src.howToList.needs) + '.</div>';
       if (src.error) h += '<div class="muted">' + esc(src.error) + '</div>';
-      h += '<div class="links">' + (src.pageUrl ? '<a href="' + esc(src.pageUrl) + '" target="_blank" rel="noopener noreferrer">view listing</a>' : '')
-        + (src.status === 'incorrect' && src.fixUrl ? '<a href="' + esc(src.fixUrl) + '" target="_blank" rel="noopener noreferrer">where to fix it →</a>' : '')
-        + (src.status === 'not-found' ? '<a href="' + esc((src.howToList && src.howToList.url) || src.fixUrl || '#') + '" target="_blank" rel="noopener noreferrer">how to get listed →</a>' : '') + '</div></div>';
+      h += '<div class="links">' + (safeUrl(src.pageUrl) ? '<a href="' + esc(safeUrl(src.pageUrl)) + '" target="_blank" rel="noopener noreferrer">view listing</a>' : '')
+        + (src.status === 'incorrect' && safeUrl(src.fixUrl) ? '<a href="' + esc(safeUrl(src.fixUrl)) + '" target="_blank" rel="noopener noreferrer">where to fix it →</a>' : '')
+        + (src.status === 'not-found' && safeUrl((src.howToList && src.howToList.url) || src.fixUrl) ? '<a href="' + esc(safeUrl((src.howToList && src.howToList.url) || src.fixUrl)) + '" target="_blank" rel="noopener noreferrer">how to get listed →</a>' : '') + '</div></div>';
     });
   });
   h += '<div class="muted" style="margin-top:12px">Checked ' + rep.checked + ' sources (' + esc(rep.tier) + ' tier). "Not found" means the site answered with no record for this mint; "unread" means we could not read it — never a pass.</div>';
-  if (rep.tier === 'full' && shareUrl) h += '<div class="share">Share this report: <code>' + esc(shareUrl) + '</code> <a href="' + esc(shareUrl) + '" style="color:var(--gold)">open →</a></div>';
+  if (rep.tier === 'full' && safeUrl(shareUrl)) h += '<div class="share">Share this report: <code>' + esc(safeUrl(shareUrl)) + '</code> <a href="' + esc(safeUrl(shareUrl)) + '" style="color:var(--gold)">open →</a></div>';
   h += '</div>';
   document.getElementById('out').innerHTML = h;
 }

@@ -1696,6 +1696,12 @@ export default function App(){
         <RootCrakBadge/>
         <a href={ROOTCRAK.verifyUrl} target="_blank" rel="noopener noreferrer" style={{fontFamily:"'Anton',sans-serif",fontSize:10.5,letterSpacing:1,color:"#6B7280",textDecoration:"none"}}>SECURITY VERIFIED · {ROOTCRAK.grade} · {ROOTCRAK.score}/100 — VIEW REPORT →</a>
         <a href={ROOTCRAK.referral} target="_blank" rel="noopener noreferrer" style={{fontFamily:"var(--body)",fontSize:11,color:"#6B7280",textDecoration:"none"}}>Security scans by RootCrak</a>
+        {STORE && (   /* the store edition's own legal pages; the website's live in the nav pill, which the store strips */
+          <div style={{display:"flex",gap:16,marginTop:4}}>
+            <a href="https://clucknorris.app/privacy/store" target="_blank" rel="noopener noreferrer" style={{fontFamily:"var(--body)",fontSize:11,color:"#6B7280",textDecoration:"underline"}}>Privacy policy</a>
+            <a href="https://clucknorris.app/terms/store" target="_blank" rel="noopener noreferrer" style={{fontFamily:"var(--body)",fontSize:11,color:"#6B7280",textDecoration:"underline"}}>Terms of use</a>
+          </div>
+        )}
       </div>
     </div>
   );
