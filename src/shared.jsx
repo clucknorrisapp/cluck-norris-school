@@ -23,7 +23,9 @@ export const ROOTCRAK = {
   grade: "A+",
   score: 99,
   verifyUrl: "https://rootcrak.com/verify/clucknorris.app",
-  referral: "https://rootcrak.com/?ref=clucknorris",
+  // The store edition credits the partner without a referral parameter (education-only app, no
+  // monetisation funnels); the website keeps the standing referral ask.
+  referral: STORE ? "https://rootcrak.com/" : "https://rootcrak.com/?ref=clucknorris",
   handle: "@ro0TCr4k",
   handleUrl: "https://x.com/ro0TCr4k",
 };
@@ -254,10 +256,12 @@ export function AskCluck({ context, compact }) {
             {answer.replace(/\*\*([^*]+)\*\*/g, (_,t)=>t).replace(/\*([^*]+)\*/g, (_,t)=>t)}
           </p>
           </div>
-          <button onClick={()=>{setAnswer(null);setQuestion("");}} style={{marginTop:8,background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:1,cursor:"pointer"}}>
-          {STORE && <ReportAnswer question={question} answer={answer}/>}
-            ASK ANOTHER →
-          </button>
+          <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:4}}>
+            <button onClick={()=>{setAnswer(null);setQuestion("");}} style={{marginTop:8,background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:1,cursor:"pointer"}}>
+              ASK ANOTHER →
+            </button>
+            {STORE && <ReportAnswer question={question} answer={answer}/>}   {/* a SIBLING, never inside the button */}
+          </div>
         </div>
       )}
     </div>

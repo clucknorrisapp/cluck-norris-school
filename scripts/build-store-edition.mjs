@@ -99,6 +99,10 @@ for (const f of textFiles) {
     // Regexes for the shapes a plain string can miss: any jup.ag route, any referral parameter on
     // any URL (RootCrak's ?ref=clucknorris is the one allowed credit), the trade venues.
     for (const pat of cfg.forbiddenPatterns || []) { const m = t.match(new RegExp(pat)); if (m) problems.push(`${rel}: forbidden pattern /${pat}/ → "${m[0].slice(0, 80)}"`); }
+    // ALLOW-list of outbound hosts (Codex, 2026-09-12): a deny-list can only name what it already
+    // knows. Every http(s) URL in every copied file — JS, HTML, CSS, JSON — must point at a host on
+    // the list, or the build fails and the new host is a deliberate, reviewed addition.
+    for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9.-]+)/g)) if (!cfg.allowedHosts.includes(m[1])) problems.push(`${rel}: host not allow-listed: ${m[1]}`);
   }
   const relApi = t.match(/["'`]\/api\/[a-zA-Z]/g); if (relApi) problems.push(`${rel}: relative /api reference (${relApi.length})`);
   if (/STORE:(OUT|IN)/.test(t)) problems.push(`${rel}: unprocessed STORE marker`);

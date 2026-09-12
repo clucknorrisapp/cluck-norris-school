@@ -83,6 +83,20 @@ dictionary entry whose key or value trips a forbidden string or pattern (logged 
 scans the copied JSON with the same rules as code. A pruned entry can only cost a translation
 falling back to English. The six stale entries were also deleted at the source.
 
+Also in 1.0.2, from Codex's audit of the published 1.0.1 tarball (owner's third reviewer):
+- **The Ask Cluck report control was broken on-device**: it was rendered INSIDE the "ASK ANOTHER"
+  button, whose click clears the answer. It is a sibling control now.
+- The Library's worked examples that named CLKN ("CLKN EXAMPLE…", "CLKN graduated to…", "CLKN
+  completed this journey…") read as neutral examples in the store variant.
+- The footer links `/privacy/store` and `/terms/store` (the website's legal links live in the nav
+  pill, which the store strips), and the RootCrak credit carries no referral parameter in the store.
+- **Backend-provided links pass a render-time host allow-list** in the store's Listing Checkup
+  (`STORE_HOSTS` + `safeUrl()`, revealed by `STORE:IN`): a static verifier cannot see dynamic
+  links, so the page enforces the same policy when it renders. Off-list URLs show as text.
+- **The verifier is an ALLOW-list of outbound hosts now** (`allowedHosts` in `store-edition.json`,
+  checked in every copied file, JS/HTML/CSS/JSON): a new host fails the build until it is added
+  deliberately. The deny-list strings and patterns stay as a second layer.
+
 ## Publishing
 
 ```

@@ -72,12 +72,37 @@
     "disconnectWallet",
     "revokeCard",
     "YOU EARNED YOUR SPOT IN THE FLOCK",
-    "Submit your Solana wallet"
+    "Submit your Solana wallet",
+    "CLKN EXAMPLE",
+    "CLKN graduated",
+    "CLKN completed this journey"
   ],
   "forbiddenPatterns": [
     "jup\\.ag",
-    "https?://[^\\s\"'`)]*[?&](ref|r|referral|aff)=(?!clucknorris)",
+    "https?://[^\\s\"'`)]*[?&](ref|r|referral|aff)=",
     "app\\.meteora\\.ag",
     "https?://bags\\.fm"
+  ],
+  "allowedHosts": [
+    "clucknorris.app",
+    "www.w3.org",
+    "rootcrak.com",
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
+    "solscan.io",
+    "solflare.com",
+    "solana.com",
+    "rugcheck.xyz",
+    "reactjs.org",
+    "phantom.app",
+    "geckoterminal.com",
+    "docs.meteora.ag",
+    "docs.bags.fm",
+    "dexscreener.com",
+    "bubblemaps.io",
+    "birdeye.so",
+    "backpack.app",
+    "coingecko.com",
+    "coinmarketcap.com"
   ]
 }
