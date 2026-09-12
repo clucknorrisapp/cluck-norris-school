@@ -360,6 +360,8 @@ jobs:
         run: node scripts/mutating-get-guard-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
+      - name: JVP dashboard data layer (sanitisation, decisions, slimming)
+        run: node scripts/jvp-dashboard-test.cjs
       # Listing Checkup routes: validation, the offline run → cache → share page with every
       # attacker-controlled string escaped, the unknown-mint page. LISTING_CHECKUP_OFFLINE=1 keeps
       # CI off the aggregators' APIs.
