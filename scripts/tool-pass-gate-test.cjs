@@ -20,7 +20,9 @@ function makeWallet() {
   const raw = Buffer.from(publicKey.export({ format: "jwk" }).x, "base64url");
   return { pub: new PublicKey(raw).toBase58(), sign: (msg) => crypto.sign(null, Buffer.from(msg, "utf8"), privateKey).toString("base64") };
 }
-function passMsg(wallet, nonce) { return `Cluck Norris — unlock the tools pass\nwallet: ${wallet}\nnonce: ${nonce || Date.now()}\nThis only proves you own this wallet.`; }
+// The message must come from the server: GET /api/tool-gate/challenge issues a single-use nonce.
+async function challenge(base, wallet) { const r = await fetch(`${base}/api/tool-gate/challenge?wallet=${wallet}`); const j = await r.json(); return j.message; }
+function fakeMsg(wallet, nonce) { return `Cluck Norris — unlock the tools pass\nwallet: ${wallet}\nnonce: ${nonce}\nThis only proves you own this wallet. It is NOT a transaction and grants no spending approval.`; }
 function forgeToken(payload, key) {
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return body + "." + crypto.createHmac("sha256", key).update("tools." + body).digest("base64url");
@@ -85,28 +87,38 @@ async function get(base, p, headers) {
     ok("trace: no proof → 402 pass_required", r.status === 402 && r.body && r.body.error === "pass_required", JSON.stringify(r.body));
     ok("?pass= query form is honoured too", (await get(A.base, `/api/trace?wallet=${W}&mint=${MINT}&pass=t:abc.def`)).status === 403);
 
-    console.log("\nSession issuance — the wallet must prove itself\n");
+    console.log("\nSession issuance — the wallet must prove itself, once per challenge\n");
     const wal = makeWallet(), other = makeWallet();
-    let s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: passMsg(wal.pub), signature: other.sign(passMsg(wal.pub)) });
-    ok("signature from a different key → 401", s.status === 401, JSON.stringify(s.body));
-    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: passMsg(other.pub), signature: wal.sign(passMsg(other.pub)) });
-    ok("message naming another wallet → 400", s.status === 400, JSON.stringify(s.body));
-    const stale = passMsg(wal.pub, Date.now() - 20 * 60 * 1000);
-    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: stale, signature: wal.sign(stale) });
-    ok("stale nonce → 400", s.status === 400, JSON.stringify(s.body));
+    let msg = await challenge(A.base, wal.pub);
+    ok("challenge carries the wallet and a 32-hex nonce", /wallet: /.test(msg) && /nonce: [0-9a-f]{32}\n/.test(msg));
+    let s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: msg, signature: other.sign(msg) });
+    ok("signature from a different key → 401 (and the challenge is spent)", s.status === 401, JSON.stringify(s.body));
+    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: msg, signature: wal.sign(msg) });
+    ok("the same challenge cannot be reused after a failed attempt", s.status === 400 && /already used|missing|expired/.test(s.body && s.body.error || ""), JSON.stringify(s.body));
+    msg = await challenge(A.base, other.pub);
+    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: msg, signature: wal.sign(msg) });
+    ok("a challenge issued to another wallet → 400", s.status === 400, JSON.stringify(s.body));
+    const forged = fakeMsg(wal.pub, "00112233445566778899aabbccddeeff");
+    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: forged, signature: wal.sign(forged) });
+    ok("a client-invented nonce → 400", s.status === 400, JSON.stringify(s.body));
     const premiumMsg = "Cluck Norris — verify wallet for premium access\nwallet: " + wal.pub + "\nnonce: " + Date.now() + "\n";
     s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: premiumMsg, signature: wal.sign(premiumMsg) });
     ok("a premium-purpose signature is not accepted here", s.status === 400, JSON.stringify(s.body));
-    const good = passMsg(wal.pub);
+    const good = await challenge(A.base, wal.pub);
     s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: good, signature: wal.sign(good) });
     // No CLKN price is loaded in this environment → the outage policy issues a short grace pass.
     ok("valid signature, no price → grace pass issued", s.status === 200 && s.body && s.body.success && /^t:/.test(s.body.pass) && /grace/.test(s.body.via), JSON.stringify(s.body));
     const tok = s.body && s.body.pass;
+    const replay = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: good, signature: wal.sign(good) });
+    ok("REPLAY of the same signed message issues nothing (single-use challenge)", replay.status === 400 && !(replay.body && replay.body.success), JSON.stringify(replay.body));
     let g = await get(A.base, `/api/wallet-xray?wallet=${W}`, { "x-clkn-pass": tok });
     ok("that pass opens the gate (reaches the tool: 500 here, no Helius key)", g.status !== 402 && g.status !== 403, "status " + g.status);
     g = await get(A.base, `/api/wallet-xray?wallet=${W}`, { "x-clkn-pass": tok + "x" });
     ok("a tampered pass is refused", g.status === 403, "status " + g.status);
-    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: good, signature: wal.sign(good), paySig: "5Kd3NBzz8aYCMcgHrZfYDaKXfF1x2yv1rM4xQe9v7pQnQhY3wA8u2LxgC2DqYFBHwXk1mZ9cN5b6T8K7pR4sV3wJ" });
+    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, payIntent: "bogus.token", paySig: "5Kd3NBzz8aYCMcgHrZfYDaKXfF1x2yv1rM4xQe9v7pQnQhY3wA8u2LxgC2DqYFBHwXk1mZ9cN5b6T8K7pR4sV3wJ" });
+    ok("a forged pay intent → 401", s.status === 401, JSON.stringify(s.body));
+    const good2 = await challenge(A.base, wal.pub);
+    s = await post(A.base, "/api/tool-gate/session", { wallet: wal.pub, message: good2, signature: wal.sign(good2), paySig: "5Kd3NBzz8aYCMcgHrZfYDaKXfF1x2yv1rM4xQe9v7pQnQhY3wA8u2LxgC2DqYFBHwXk1mZ9cN5b6T8K7pR4sV3wJ" });
     ok("paid path with an unverifiable signature does not issue a pass", !(s.body && s.body.success), JSON.stringify(s.body));
     const wc = await get(A.base, `/api/wallet-checkup?wallet=${W}`);
     ok("Wallet Checkup stays free (no gate)", wc.status !== 402 && wc.status !== 403, "status " + wc.status);

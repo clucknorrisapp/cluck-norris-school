@@ -49,6 +49,7 @@ const solanaTracker = require("./lib/solana-tracker");
 const premiumForensics = require("./lib/premium-forensics");
 const sigStore = require("./lib/sigstore");
 const kv = require("./lib/kvstore");
+const { redeemPaidPass } = require("./lib/tool-pass-redeem");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
 const credentials = require("./lib/credentials");
@@ -7958,11 +7959,22 @@ const SOL_UNLOCK_MIN_LAMPORTS = 50_000_000;
 // /api/token-overview, cached 60s in memory and last-known-good in kv — if pricing is down we
 // publish clknNeeded:null and the client fails OPEN (an outage on our side never locks users
 // out). TOOLGATE_OFF=1 kills the whole gate without a deploy.
+const TOOLGATE_TERMS = require("./lib/tool-pass-terms");
 const TOOLGATE = {
   usd: Number(process.env.TOOLGATE_USD) || 50,
-  lamports: parseInt(process.env.TOOLGATE_LAMPORTS, 10) || SOL_UNLOCK_MIN_LAMPORTS,
-  days: parseInt(process.env.TOOLGATE_DAYS, 10) || 7,
+  // days + lamports come from the immutable terms schedule (lib/tool-pass-terms.js), NOT env,
+  // since 2026-09-11: a payment's terms are fixed at payment time and resolve from that schedule,
+  // so the offer the page advertises must be the schedule's current entry by construction. To
+  // change the offer, append an entry with an effective-from instant. TOOLGATE_DAYS /
+  // TOOLGATE_LAMPORTS in the environment are ignored, with a loud line below.
+  lamports: TOOLGATE_TERMS.current().lamports,
+  days: TOOLGATE_TERMS.current().days,
 };
+for (const k of ["TOOLGATE_LAMPORTS", "TOOLGATE_DAYS"]) {
+  if (process.env[k] && String(process.env[k]) !== String(k === "TOOLGATE_DAYS" ? TOOLGATE.days : TOOLGATE.lamports)) {
+    console.error(`[tool-pass] ${k}=${process.env[k]} in the environment is IGNORED — the paid pass terms live in lib/tool-pass-terms.js (current: ${TOOLGATE.lamports} lamports → ${TOOLGATE.days} days). Append a schedule entry to change the offer.`);
+  }
+}
 // Seeded from the volume at declaration (2026-08-18 review): the kv fallback used to live only
 // inside the refresh branch, so every request racing a cold-start refresh read usd=0 and the
 // paywall failed open for the whole first-fetch window after each deploy.
@@ -7990,7 +8002,46 @@ let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: 
 // Fail-open rule, unchanged in spirit: no usable CLKN price, or an RPC read that FAILS (as
 // opposed to a verified zero balance), never punishes a user for our outage — and an outage
 // is never cached as a denial. TOOLGATE_OFF=1 disables it everywhere, as before.
-const TOOL_PASS_MSG_RE = /^Cluck Norris — unlock the tools pass\nwallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nnonce: (\d{10,16})\n/;
+// Server-issued, single-use, expiring challenges (second reviewer, 2026-09-10: a client-chosen
+// timestamp nonce let the same signed message mint more than one session). One nonce per signing,
+// bound to the wallet and to this purpose, consumed on first use whether or not it verifies.
+const TOOL_PASS_MSG_RE = /^Cluck Norris — unlock the tools pass\nwallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nnonce: ([0-9a-f]{32})\n/;
+const toolPassChallenges = new Map();   // nonce -> { wallet, exp }
+const TOOL_PASS_CHALLENGE_TTL = 10 * 60e3;
+function toolPassMessage(wallet, nonce) {
+  return `Cluck Norris — unlock the tools pass\nwallet: ${wallet}\nnonce: ${nonce}\nThis only proves you own this wallet. It is NOT a transaction and grants no spending approval.`;
+}
+function issueToolPassChallenge(wallet) {
+  const now = Date.now();
+  for (const [n, c] of toolPassChallenges) if (c.exp < now) toolPassChallenges.delete(n);
+  if (toolPassChallenges.size > 5000) throw new Error("too many open challenges — try again in a minute");
+  const nonce = randomBytes(16).toString("hex");
+  toolPassChallenges.set(nonce, { wallet, exp: now + TOOL_PASS_CHALLENGE_TTL });
+  return { nonce, message: toolPassMessage(wallet, nonce), expiresAt: now + TOOL_PASS_CHALLENGE_TTL };
+}
+// Consumes the nonce on ANY attempt; returns true only when it exists, matches the wallet and is unexpired.
+function consumeToolPassChallenge(nonce, wallet) {
+  const c = toolPassChallenges.get(nonce);
+  if (c) toolPassChallenges.delete(nonce);
+  return !!(c && c.wallet === wallet && c.exp >= Date.now());
+}
+// A short-lived, wallet-bound credential handed to a wallet that just proved itself but did not
+// qualify, so the PAY path can redeem its payment without a second signature prompt.
+function issuePayIntent(wallet) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  if (!secret) return null;
+  const body = Buffer.from(JSON.stringify({ t: "tools-pay", w: wallet, exp: Date.now() + 15 * 60e3 })).toString("base64url");
+  return body + "." + createHmac("sha256", secret).update("tools-pay." + body).digest("base64url");
+}
+function verifyPayIntent(token, wallet) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  if (!secret || !token) return false;
+  const [body, sig] = String(token).split(".");
+  if (!body || !sig) return false;
+  if (!secretEqual(sig, createHmac("sha256", secret).update("tools-pay." + body).digest("base64url"))) return false;
+  let p; try { p = JSON.parse(Buffer.from(body, "base64url").toString("utf8")); } catch (_) { return false; }
+  return !!(p && p.t === "tools-pay" && p.w === wallet && p.exp > Date.now());
+}
 function issueToolPass(wallet, via, ttlMs) {
   const secret = process.env.PREMIUM_ACCESS_KEY;
   if (!secret || !wallet) return null;
@@ -8061,21 +8112,41 @@ async function verifySolPaymentTx(sig, min) {
   if (idx < 0) return { ok: false, error: "payment not addressed to the unlock wallet" };
   const delta = ((tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0));
   if (delta < min) return { ok: false, error: "amount too low", lamports: delta };
-  return { ok: true, lamports: delta, payer: keys[0] || null };
+  // blockTimeMs: the pass a payment buys runs from the moment the payment landed (see
+  // lib/tool-pass-redeem.js — that is what makes recovery need no second durable write).
+  return { ok: true, lamports: delta, payer: keys[0] || null, blockTimeMs: tx.blockTime ? tx.blockTime * 1000 : 0 };
 }
+// GET /api/tool-gate/challenge?wallet= — the message the wallet must sign. Single use, 10 min.
+app.get("/api/tool-gate/challenge", rateLimit("pay", { windowMs: 60000, max: 30 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "need wallet" });
+  try { return res.status(200).json({ success: true, ...issueToolPassChallenge(wallet) }); }
+  catch (e) { return res.status(503).json({ success: false, error: e.message }); }
+});
 // POST /api/tool-gate/session — the only issuer of tools-pass tokens (see the block above).
-// Body: { wallet, message, signature (base64), paySig? }.
+// Body: { wallet, message, signature (base64), paySig? }  — or  { wallet, payIntent, paySig }.
 app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }), async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const b = req.body || {};
   const wallet = String(b.wallet || "").trim(), message = String(b.message || ""), signature = String(b.signature || "");
-  if (!SOL_ADDR_RE.test(wallet) || !message || !signature) return res.status(400).json({ success: false, error: "need wallet, message, signature" });
-  const mm = TOOL_PASS_MSG_RE.exec(message);
-  if (!mm || mm[1] !== wallet) return res.status(400).json({ success: false, error: "message does not match wallet" });
-  const ts = parseInt(mm[2], 10);
-  if (!ts || Math.abs(Date.now() - ts) > 10 * 60 * 1000) return res.status(400).json({ success: false, error: "Stale or missing nonce — try again" });
-  if (!verifySolanaSignature(message, signature, wallet)) return res.status(401).json({ success: false, error: "Signature did not verify" });
+  const payIntent = String(b.payIntent || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "need wallet" });
   if (!process.env.PREMIUM_ACCESS_KEY) return res.status(503).json({ success: false, error: "pass issuer not configured" });
+  if (payIntent) {
+    // Second leg of a pay flow: the wallet proved itself minutes ago and was told to pay.
+    if (!verifyPayIntent(payIntent, wallet)) return res.status(401).json({ success: false, error: "pay intent expired — connect again" });
+    if (!String(b.paySig || "").trim()) return res.status(400).json({ success: false, error: "pay intent needs a payment signature" });
+  } else {
+    if (!message || !signature) return res.status(400).json({ success: false, error: "need wallet, message, signature" });
+    const mm = TOOL_PASS_MSG_RE.exec(message);
+    if (!mm || mm[1] !== wallet) return res.status(400).json({ success: false, error: "message does not match wallet" });
+    // The challenge is consumed on this attempt no matter what follows: a signed message is
+    // good for exactly one session request.
+    if (!consumeToolPassChallenge(mm[2], wallet)) return res.status(400).json({ success: false, error: "challenge missing, expired or already used — request a new one" });
+    if (message !== toolPassMessage(wallet, mm[2])) return res.status(400).json({ success: false, error: "message does not match the issued challenge" });
+    if (!verifySolanaSignature(message, signature, wallet)) return res.status(401).json({ success: false, error: "Signature did not verify" });
+  }
   const dayMs = 24 * 3600e3;
   if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) {
     return res.status(200).json({ success: true, via: "gate-off", pass: "t:" + issueToolPass(wallet, "gate-off", TOOLGATE.days * dayMs), days: TOOLGATE.days });
@@ -8084,16 +8155,22 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
   if (paySig) {
     if (paySig.length < 80 || paySig.length > 100) return res.status(400).json({ success: false, error: "bad payment signature" });
     let v;
-    try { v = await verifySolPaymentTx(paySig, TOOLGATE.lamports); } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
-    if (!v.ok) return res.status(200).json({ success: false, error: v.error, lamports: v.lamports });
-    // Bound to the PAYER: a signature seen on an explorer is worthless to anyone but the wallet
-    // that paid, and that wallet just proved itself above.
-    if (v.payer !== wallet) return res.status(403).json({ success: false, error: "payment was made by a different wallet" });
-    if (!sigStore.add("sol:" + paySig)) return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
-    return res.status(200).json({ success: true, via: "paid", lamports: v.lamports, pass: "t:" + issueToolPass(wallet, "paid", TOOLGATE.days * dayMs), days: TOOLGATE.days });
+    // Minimum 1 lamport here: the real minimum is the one in force WHEN THE PAYMENT LANDED, and
+    // redeemPaidPass checks it against the terms schedule at the transaction's block time.
+    try { v = await verifySolPaymentTx(paySig, 1); } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+    // Redemption + recovery are one pure function (lib/tool-pass-redeem.js, unit-tested with fault
+    // injection): the pass belongs to the verified PAYER and runs for the term in force at the
+    // payment's block time (lib/tool-pass-terms.js), so the only durable write is the sig-store
+    // consumption and no later config change can move a bought pass. The same payer presenting
+    // the same signature again — lost response, closed tab, another device — gets the same pass
+    // with the same expiry (`recovered: true`); a different wallet is refused before anything is
+    // consumed; a store that cannot record durably answers 503 and consumes nothing.
+    const r = redeemPaidPass({ paySig, wallet, verified: v, sigStore, kv });
+    if (!r.ok) return res.status(r.status || 200).json({ success: false, error: r.error, retry: !!r.retry, lamports: r.lamports, needed: r.needed });
+    return res.status(200).json({ success: true, via: "paid", recovered: r.recovered, lamports: r.lamports, termDays: r.termDays, pass: "t:" + issueToolPass(wallet, "paid", r.ttlMs), days: r.days });
   }
   const q = await toolPassQualify(wallet);
-  if (!q.ok) { const { ok, ...deny } = q; return res.status(200).json({ success: false, ...deny }); }
+  if (!q.ok) { const { ok, ...deny } = q; return res.status(200).json({ success: false, ...deny, payIntent: issuePayIntent(wallet) }); }
   const ttl = q.via === "comp" ? 30 * dayMs : q.via === "holder" ? TOOLGATE.days * dayMs : 1 * dayMs;   // grace = 1 day, like the client's old grace grant
   return res.status(200).json({ success: true, via: q.via, balance: q.balance, needed: q.needed, pass: "t:" + issueToolPass(wallet, q.via, ttl), days: Math.round(ttl / dayMs) });
 });

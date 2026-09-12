@@ -119,6 +119,14 @@ jobs:
         run: node scripts/store-edition-test.cjs google
       - name: Buy-comp entries (every $N buy = horses)
         run: node scripts/buycomp-entries-test.cjs
+      # The paid tools pass: consuming the payment signature is the ONLY durable write, and the
+      # pass is derived from the chain (payer + block time), so a lost response, a closed tab, a
+      # crash between writes or a kv persist failure can never strand a payer who paid 0.05 SOL.
+      # Pins: same payer recovers with the SAME expiry; a different wallet consumes nothing; a
+      # store that cannot record durably answers 503 and consumes nothing; the audit write
+      # throwing changes nothing.
+      - name: Tools pass — paid redemption + recovery (fault injection)
+        run: node scripts/tool-pass-redeem-test.cjs
       - name: Buy comp — a sell into ANY pool vault disqualifies (hold check)
         run: node scripts/buycomp-sell-detect-test.cjs
       # The project buy bots' detection, on two real mainnet transactions: a Jupiter buy split
