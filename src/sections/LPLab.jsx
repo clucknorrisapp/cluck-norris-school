@@ -1,6 +1,7 @@
 // LP Lab — lessons + calculators (~2,800 lines) — lazy-loaded section.
 import { useState, useMemo, Component } from "react";
 import { LOGO_B64, COLW, READ, AskCluck } from "../shared.jsx";
+import { STORE } from "../edition.js";
 
 // Every calculator below is wrapped in this. It was referenced in twelve places before it was ever
 // written, which is a runtime-only ReferenceError — `npm run build` compiles a free variable
@@ -2766,7 +2767,9 @@ function AMMCalculator() {
       )}
       <div style={{marginTop:10,fontFamily:"'Anton',sans-serif",fontSize:11.5,color:"#9CA3AF",lineHeight:1.65,letterSpacing:0.3}}>
         📍 This is the textbook <b>full‑range</b> x*y=k model — the universal concept, the same on every chain. <b>Real concentrated‑liquidity pools</b> (Orca, Meteora) pack their depth into a tight band, so once a buy eats through that band the price moves <b>steeper</b> than this. Treat this number as a floor, not a promise.{" "}
-        <a href="https://jup.ag/swap/SOL-DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" target="_blank" rel="noreferrer" style={{color:"#5B8DD6",fontWeight:700,textDecoration:"none"}}>See CLKN's live price impact on Jupiter →</a>
+        {!STORE && (   /* a swap link is a buy funnel — never in the store edition */
+          <a href="https://jup.ag/swap/SOL-DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" target="_blank" rel="noreferrer" style={{color:"#5B8DD6",fontWeight:700,textDecoration:"none"}}>See CLKN's live price impact on Jupiter →</a>
+        )}
       </div>
     </div>
   );

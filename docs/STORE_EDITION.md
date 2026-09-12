@@ -58,6 +58,21 @@ Markers in shared pages: `<!-- STORE:OUT … --> … <!-- /STORE:OUT -->` and `/
 /* /STORE:OUT */` are removed from the store build; `<!-- STORE:IN … /STORE:IN -->` and
 `/* STORE:IN … /STORE:IN */` are revealed. On the live site they are comments.
 
+## v1.0.1 (2026-09-12) — the leaks the owner found on-device
+
+v1.0.0 passed its verifier and still carried three things the manifest forbids, all INSIDE allowed
+pages: the LP Lab's "See CLKN's live price impact on Jupiter" link (a `jup.ag/swap/…` buy funnel
+carrying the CLKN mint), the Library's Meteora / Bags.fm (referral) / Jupiter venue links plus
+three sentences naming CLKN's pool and creator fee, and inert residue of the wallet checkup's
+connect/revoke flow (CSS rules, a comment, a try/catch call to a compiled-out function — no
+signing code shipped; `signAndSend` was absent). All are now compiled out for the store
+(`STORE ? … : …` in the JSX, `STORE:OUT` in the page). The verifier gained
+`forbiddenPatterns` (regexes): any `jup.ag` route, any referral parameter on any URL except
+RootCrak's `?ref=clucknorris` credit, `app.meteora.ag`, `https://bags.fm`; plus the plain strings
+for the mint, `CLKN trade`, `wallet-btn`, `syncRevokeUi`, `connectWallet`, `revokeCard`. The CI
+test pins the exact v1.0.0 leaks by name. Lesson: an allow-list of PAGES is not an allow-list of
+LINKS — every outbound `href` in an allowed page needs the same scrutiny as a page.
+
 ## Publishing
 
 ```

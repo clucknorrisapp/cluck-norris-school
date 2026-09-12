@@ -50,6 +50,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // the forbidden-string and compiled-out checks look at code and markup, not the dictionaries.
   const code = text.filter(([f]) => !f.endsWith(".json")).map(([, t]) => t).join("\n");
   for (const bad of cfg.forbidden) ok(`bundle code never contains "${bad}"`, !code.includes(bad), text.filter(([f, t]) => !f.endsWith(".json") && t.includes(bad)).map(([f]) => f));
+  for (const pat of cfg.forbiddenPatterns || []) { const re = new RegExp(pat); ok(`bundle code never matches /${pat}/`, !re.test(code), text.filter(([f, t]) => !f.endsWith(".json") && re.test(t)).map(([f, t]) => `${f}: ${(t.match(re) || [""])[0].slice(0, 60)}`)); }
+  // The v1.0.0 leaks (owner found them on-device 2026-09-12): a Jupiter swap link + the CLKN mint in
+  // the LP Lab, Meteora/Bags/Jupiter venue + referral links in the Library, connect/revoke residue in
+  // the wallet checkup. Pinned here so a regression is named, not just counted.
+  ok("no swap/venue/referral leak (jup.ag/swap, CLKN mint, app.meteora.ag, bags.fm referral)", !code.includes("jup.ag/swap") && !code.includes("DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS") && !code.includes("app.meteora.ag") && !/bags\.fm\?ref/.test(code));
+  ok("wallet checkup carries no connect/revoke residue (wallet-btn, syncRevokeUi, connectWallet)", (() => { const t = text.find(([f]) => f === "wallet-checkup.html")[1]; return !t.includes("wallet-btn") && !t.includes("syncRevokeUi") && !t.includes("connectWallet") && !t.includes("revokeCard"); })());
   ok("no relative /api reference anywhere", !/["'`]\/api\/[a-zA-Z]/.test(all));
   ok("every API call points at the live backend", all.includes(`${cfg.apiBase}/api/ask-cluck`) && all.includes(`${cfg.apiBase}/api/track`) && all.includes(`${cfg.apiBase}/api/claim/certificate`) && all.includes(`${cfg.apiBase}/api/wallet-checkup`) && all.includes(`${cfg.apiBase}/api/listing-checkup/run`));
   ok("the store-only surfaces are present (certificate, report, listing link)", all.includes("CERTIFICATE OF COMPLETION") && all.includes("REPORT THIS ANSWER") && all.includes("listing-checkup.html"));
