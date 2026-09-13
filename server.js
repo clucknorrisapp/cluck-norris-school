@@ -2227,9 +2227,11 @@ function buyCompPrizeMint(c) {
   return c.mint; // native (the competition token)
 }
 // VERIFY (after the hold period): for the top candidates, check each still holds
-// what they bought. Any market sell → DQ. Holds 0 with no sell → transferred out →
-// FLAG_MANUAL (operator traces to the runner wallet). Otherwise qualified. DQs
-// promote the next eligible wallet up. Uses the ST position (sells + balance).
+// what they bought. Any market sell → DQ. Any TRANSFER OUT → DQ too (owner, 2026-09-13,
+// after the ROSE horse race's biggest buyer hopped its bag through three wallets in three
+// minutes mid-hold: "if they sent tokens out they are not eligible, period"). Holding 0
+// with no sell and no transfer seen is the same thing by another route → DQ. "manual" is
+// now ONLY for no-data / lookup-failed. DQs promote the next eligible wallet up.
 async function buyCompVerify(c) {
   const standings = await buyCompStandings(c);
   const key = buyCompMetricKey(c);
@@ -2245,18 +2247,31 @@ async function buyCompVerify(c) {
       const pos = await walletPositionMulti(s.wallet, c.mint, { fromMs: c.startTs });
       if (!pos) { status = "manual"; note = "no position data — verify by hand (Trace)"; }
       else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold on-chain (${pos.sells} sell${pos.sells > 1 ? "s" : ""})`; }
-      else if ((pos.transfersOut || 0) > 0) { status = "manual"; note = `no market sells but moved the bag out (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""}) — trace to runner wallet before paying`; }
-      else if ((pos.balance || 0) <= 0) { status = "manual"; note = "no sells but holds 0 — transferred out; trace to runner wallet"; }
+      else if ((pos.transfersOut || 0) > 0) { status = "dq"; note = `moved the bag out during the hold (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""} out) — not eligible`; }
+      else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0 but the scan saw no sell and no transfer — coverage gap or RPC miss; verify by hand (a confirmed transfer out = not eligible)"; }
       else { status = "qualified"; note = `holds ${Math.round(pos.balance).toLocaleString()}, no sells`; }
     } catch (e) { status = "manual"; note = "lookup failed — verify by hand"; }
-    results.push({ wallet: s.wallet, value: s[key] || 0, status, note });
+    results.push({ wallet: s.wallet, value: s[key] || 0, tokensBought: Number(s.tokensBought) || 0, status, note });
   }
-  // Auto-pay ONLY affirmatively-qualified holders. "manual" (transferred-out / no-data /
-  // lookup-failed) wallets are surfaced in verifyResults for the operator to trace + award by
-  // hand — never auto-included in the payout list (that paid launderers who moved the bag out).
-  // A "dq" or "manual" candidate promotes the next qualified wallet into the money.
+  // Auto-pay ONLY affirmatively-qualified holders. "manual" (no-data / lookup-failed) wallets
+  // are surfaced in verifyResults for the operator to check by hand — never auto-included in
+  // the payout list. A "dq" or "manual" candidate promotes the next qualified wallet into the
+  // money.
+  // A percentage prize is a share of the TOKENS the wallet bought (owner, 2026-09-13: "it would
+  // be percentage of ROSE that they bought, not a rated ROSE"), so the amount is in the comp
+  // token and pastes straight into the airdropper. The Helius scan carries tokensBought; the
+  // GeckoTerminal / Solana Tracker fallbacks only carry SOL volume, in which case the amount
+  // is still SOL-terms and amountUnit says so — never silently mix the two.
   const eligible = results.filter(r => r.status === "qualified");
-  c.verified = eligible.slice(0, c.places.length).map((r, i) => ({ rank: i + 1, wallet: r.wallet, amount: c.pctPrize ? +((r.value || 0) * c.places[i].amount / 100).toFixed(4) : c.places[i].amount, ...(c.pctPrize ? { amountNote: `${c.places[i].amount}% of ${(r.value || 0).toFixed(2)} SOL bought (SOL terms — operator converts/pays manually)` } : {}), status: r.status, note: r.note }));
+  c.verified = eligible.slice(0, c.places.length).map((r, i) => {
+    const pct = c.places[i].amount;
+    const tok = r.tokensBought > 0;
+    const amount = !c.pctPrize ? pct : tok ? +((r.tokensBought * pct) / 100).toFixed(2) : +((r.value || 0) * pct / 100).toFixed(4);
+    const extra = !c.pctPrize ? {} : tok
+      ? { amountUnit: "token", amountNote: `${pct}% of ${Math.round(r.tokensBought).toLocaleString()} ${c.ticker || "tokens"} bought` }
+      : { amountUnit: "sol", amountNote: `${pct}% of ${(r.value || 0).toFixed(2)} SOL bought (SOL terms — the buy source had no token amounts; operator converts/pays manually)` };
+    return { rank: i + 1, wallet: r.wallet, amount, ...extra, status: r.status, note: r.note };
+  });
   c.verifyResults = results;
   c.verifiedAt = Date.now();
   if (!c.payoutToken) c.payoutToken = randomBytes(8).toString("hex");
@@ -7758,8 +7773,9 @@ app.post("/api/buyspecial/draw", async (req, res) => {
         const pos = await walletPositionMulti(b.wallet, mint, { fromMs: fromTs });
         if (!pos) { status = "manual"; note = "no position data — verify by hand"; }
         else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold (${pos.sells} sell${pos.sells > 1 ? "s" : ""}) — did not hold`; }
-        else if ((pos.transfersOut || 0) > 0) { status = "manual"; note = `moved the bag out (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""}) — verify by hand before paying`; }
-        else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0, no sells — transferred out; verify by hand"; }
+        // Transfer out = DQ, same as a sell (owner rule 2026-09-13 — see buyCompVerify).
+        else if ((pos.transfersOut || 0) > 0) { status = "dq"; note = `moved the bag out during the hold (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""} out) — not eligible`; }
+        else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0 but the scan saw no sell and no transfer — coverage gap or RPC miss; verify by hand (a confirmed transfer out = not eligible)"; }
         else { status = "eligible"; note = `holds ${Math.round(pos.balance).toLocaleString()}, ${b.buyCount} buy${b.buyCount > 1 ? "s" : ""}, no sells`; }
       } catch (e) { status = "manual"; note = "lookup failed — verify by hand"; }
       await new Promise(r => setTimeout(r, 120));   // pace ST so we don't trip the quota
@@ -9731,7 +9747,9 @@ app.post("/api/buyspecial/verify", async (req, res) => {
         const pos = await walletPositionMulti(o.wallet, c.mint, { fromMs: c.from });
         if (!pos) { status = "manual"; note = "no position data — verify by hand"; }
         else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold (${pos.sells} sell${pos.sells > 1 ? "s" : ""}) — did not hold`; }
-        else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0 now — transferred out; verify by hand"; }
+        // Transfer out = DQ, same as a sell (owner rule 2026-09-13 — see buyCompVerify).
+        else if ((pos.transfersOut || 0) > 0) { status = "dq"; note = `moved the bag out during the hold (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""} out) — not eligible`; }
+        else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0 but the scan saw no sell and no transfer — coverage gap or RPC miss; verify by hand (a confirmed transfer out = not eligible)"; }
         else { status = "eligible"; note = `holds ${Math.round(pos.balance).toLocaleString()}, no sells`; }
       } catch (e) { status = "manual"; note = "hold lookup failed — verify by hand"; }
       await new Promise((r) => setTimeout(r, 120));   // pace the buyer-data sources
