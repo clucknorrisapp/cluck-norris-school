@@ -559,7 +559,10 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
   the **Normie Quest visual-regression gate** (`nq-visual.cjs` — pixel-diffs the game's title, HUD,
   characters, and gravemite against committed baselines; catches the render-broke-but-built-clean
   class the smoke test can't see). **Each exists because something got past the previous set — don't
-  remove them casually.**
+  remove them casually.** But they are DIFF-GATED, on pushes to `main`/`develop` as well as on PRs
+  (owner, 2026-09-13: "if we don't touch the Normie game we don't need all the crazy checks"): the
+  render and game jobs read the changed paths (and the server.js hunks) and skip when nothing can
+  reach a page or the game; syntax + unit checks always run. Don't restore an unconditional full run.
 - Cloud session recovery (containers reset mid-session):
   `git fetch origin --prune && git reset --hard origin/<branch> && npm install`. GitHub is truth.
 
