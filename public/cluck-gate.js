@@ -61,8 +61,8 @@
     }
     return r;
   }
-  async function config() {
-    if (cfg && Date.now() - cfgAt < 60000) return cfg;
+  async function config(force) {
+    if (!force && cfg && Date.now() - cfgAt < 60000) return cfg;
     try {
       var r = await fetch('/api/tool-gate/config');
       var d = await r.json();
@@ -213,9 +213,57 @@
   // A payment we sent but never got a pass for (closed tab, lost response) is remembered so the
   // same wallet can recover it instead of paying twice.
   var PAYKEY = 'clkn_tools_paysig';
-  function rememberPay(sig) { try { localStorage.setItem(PAYKEY, JSON.stringify({ sig: sig, wallet: state.pubkey, at: Date.now() })); } catch (e) {} }
+  // The record is {sig, wallet, at, bh}. `sig` is null while an attempt is UNRESOLVED: it is written
+  // BEFORE the wallet can broadcast (second reviewer, round 4 — a wallet that broadcast but whose
+  // callback rejected, or a tab that died mid-call, used to leave nothing behind, so the next tap
+  // built a second transfer with no confirmation). `at` is kept across the null→sig transition so
+  // the on-chain search below knows how far back the attempt could have landed.
+  function rememberPay(sig, bh) {
+    try {
+      var cur = pendingPay();
+      var keepAt = cur && !cur.sig && cur.wallet === state.pubkey;
+      localStorage.setItem(PAYKEY, JSON.stringify({ sig: sig || null, wallet: state.pubkey, at: keepAt ? cur.at : Date.now(), bh: bh || (cur && cur.bh) || null }));
+    } catch (e) {}
+  }
   function forgetPay() { try { localStorage.removeItem(PAYKEY); } catch (e) {} }
   function pendingPay() { try { var d = JSON.parse(localStorage.getItem(PAYKEY) || 'null'); return d && d.wallet === state.pubkey && Date.now() - d.at < 8 * 24 * 3600 * 1000 ? d : null; } catch (e) { return null; } }
+  function showNewPay() { var np = state.card && state.card.querySelector('[data-ckg="newpay"]'); if (np) np.style.display = ''; }
+  var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function b58enc(bytes) { var n = 0n; for (var i = 0; i < bytes.length; i++) n = n * 256n + BigInt(bytes[i]); var s = ''; while (n > 0n) { s = B58[Number(n % 58n)] + s; n /= 58n; } for (var j = 0; j < bytes.length && bytes[j] === 0; j++) s = '1' + s; return s; }
+  function bytesToB64(u8) { var b = ''; for (var i = 0; i < u8.length; i++) b += String.fromCharCode(u8[i]); return btoa(b); }
+  // Does this parsed transaction pay OUR receiver from THIS wallet? (top-level + inner instructions)
+  function isPaymentTx(tx, c) {
+    try {
+      var ins = (tx.transaction.message.instructions || []).slice();
+      ((tx.meta && tx.meta.innerInstructions) || []).forEach(function (g) { ins = ins.concat(g.instructions || []); });
+      for (var i = 0; i < ins.length; i++) {
+        var p = ins[i].parsed;
+        if (p && p.type === 'transfer' && p.info && p.info.source === state.pubkey && p.info.destination === c.receiver) return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+  // An attempt whose signature we never learned: ask the chain. Returns {sig} when the wallet's
+  // recent history shows a payment to us since the attempt, {dead:true} ONLY when the read covered
+  // the whole window and the attempt's blockhash has long expired (nothing signed then can land
+  // now), and {unknown:true} for everything else — an RPC error, a full page of newer history, or
+  // an attempt still young enough to be in flight. Unknown never charges again.
+  async function findAttemptOnChain(prev, c) {
+    try {
+      var sigs = await CluckUtil.rpc('getSignaturesForAddress', [state.pubkey, { limit: 25, commitment: 'confirmed' }]);
+      if (!Array.isArray(sigs)) return { unknown: true };
+      var since = Math.floor((prev.at - 120000) / 1000);
+      var recent = sigs.filter(function (s) { return !s.blockTime || s.blockTime >= since; });
+      for (var i = 0; i < Math.min(recent.length, 10); i++) {
+        if (recent[i].err) continue;
+        var tx = await CluckUtil.rpc('getTransaction', [recent[i].signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]);
+        if (tx && isPaymentTx(tx, c)) return { sig: recent[i].signature };
+      }
+      var covered = sigs.length < 25 || recent.length < sigs.length;
+      if (covered && Date.now() - prev.at > 180000) return { dead: true };
+      return { unknown: true };
+    } catch (e) { return { unknown: true }; }
+  }
 
   async function checkHolder(c, walletName) {
     // Comped wallets, holders and the price-outage grace are all decided SERVER-SIDE now — the
@@ -267,6 +315,18 @@
       // A previous payment from this wallet that never turned into a pass? Recover it first —
       // the server re-issues the pass to the same payer with its original expiry.
       var prev = pendingPay();
+      if (prev && !state.abandonPay && !prev.sig) {
+        // The attempt was recorded before the wallet could broadcast, and its signature never came
+        // back. Ask the chain; only a read that PROVES it could not have landed releases it.
+        say('Checking whether your wallet sent the earlier payment…');
+        var found = await findAttemptOnChain(prev, c);
+        if (found.sig) { prev.sig = found.sig; rememberPay(found.sig); }
+        else if (found.dead) { forgetPay(); prev = null; }
+        else {
+          say('Could not confirm yet whether the earlier payment went through — nothing new was charged. Tap PAY again in a minute; it re-checks the chain. Only start a new payment if you are sure the first one never went through.');
+          showNewPay(); btn.disabled = false; state.paying = false; return;
+        }
+      }
       if (prev && !state.abandonPay) {
         say('Checking a previous payment from this wallet…');
         var settled = false;
@@ -286,13 +346,18 @@
           // through to a brand-new transfer, so a service hiccup could charge twice. Stay in
           // "payment pending — retry verification"; a NEW payment needs its own explicit decision.
           say('Your earlier payment is still being verified — nothing new was charged. Tap PAY again to retry; it picks up that same payment. Only start a new payment if you are sure the first one never went through.');
-          var np = state.card.querySelector('[data-ckg="newpay"]'); if (np) np.style.display = '';
+          showNewPay();
           btn.disabled = false; state.paying = false; return;
         }
       }
       state.abandonPay = false;
       say('Loading payment libraries…');
       await ensurePayLibs();
+      // The offer is resolved from the terms schedule PER REQUEST server-side (second reviewer,
+      // round 4), so re-read it right before building the transfer: a schedule boundary that
+      // passed while this card sat open must not send the old amount and get "amount too low".
+      var fresh = await config(true);
+      if (fresh && fresh.enabled !== false && fresh.lamports && fresh.receiver) c = fresh;
       var bh = await CluckUtil.rpc('getLatestBlockhash', [{ commitment: 'finalized' }]);
       var Transaction = solanaWeb3.Transaction, PublicKey = solanaWeb3.PublicKey;
       // Hand-built System transfer via the shared engine — SystemProgram.transfer()
@@ -301,10 +366,35 @@
       tx.add(splToken.createSolTransferInstruction(new PublicKey(state.pubkey), new PublicKey(c.receiver), c.lamports));
       tx.feePayer = new PublicKey(state.pubkey); tx.recentBlockhash = bh.value.blockhash;
       say('Approve the ' + (c.lamports / 1e9) + ' SOL payment in your wallet…');
-      var res = await state.provider.signAndSendTransaction(tx);
-      var sig = (res && res.signature) || (typeof res === 'string' ? res : null);
-      if (!sig) throw new Error('wallet returned no signature');
-      rememberPay(sig);
+      // SIGN FIRST, SEND OURSELVES (second reviewer, round 4): the signature exists the moment the
+      // wallet signs, so it is persisted BEFORE anything can broadcast. signAndSendTransaction only
+      // ever told us the signature after the fact, and a wallet that broadcast but whose callback
+      // rejected left nothing behind — the next tap then built a second transfer.
+      var sig = null, signed = null;
+      if (typeof state.provider.signTransaction === 'function') {
+        try { signed = await state.provider.signTransaction(tx); }
+        catch (e) { if (!/cannot sign a transaction/i.test((e && e.message) || '')) throw e; signed = null; }   // the shim's answer for a send-only wallet
+      }
+      if (signed) {
+        if (global.CluckWallet && CluckWallet.asTransaction) signed = CluckWallet.asTransaction(signed, tx);
+        var sb = signed.signatures && signed.signatures[0] && signed.signatures[0].signature;
+        if (!sb || !sb.length) throw new Error('wallet returned no signature');
+        sig = b58enc(sb);
+        rememberPay(sig, bh.value.blockhash);   // durable BEFORE the send
+        say('Sending payment…');
+        // verifySignatures:false — the chain verifies; web3's local check rejects a Transaction that
+        // another web3 copy signed (the shim's foreign-prototype case), which is not a failed payment.
+        await CluckUtil.rpc('sendTransaction', [bytesToB64(signed.serialize({ requireAllSignatures: true, verifySignatures: false })), { encoding: 'base64', skipPreflight: true, preflightCommitment: 'confirmed', maxRetries: 5 }]);
+      } else {
+        // A wallet that can only sign-and-send: record the attempt (signature unknown) BEFORE the
+        // call. A lost callback then leaves an unresolved attempt the next tap must resolve on
+        // the chain (findAttemptOnChain) instead of charging again.
+        rememberPay(null, bh.value.blockhash);
+        var res = await state.provider.signAndSendTransaction(tx);
+        sig = (res && res.signature) || (typeof res === 'string' ? res : null);
+        if (!sig) throw new Error('wallet returned no signature');
+        rememberPay(sig);
+      }
       say('Confirming payment on-chain…');
       // The pass is issued to the PAYER only: the payIntent from the connect step (or a fresh
       // signed challenge) proves this wallet, and the server checks the transaction's fee payer
@@ -317,7 +407,15 @@
       if (ok) { forgetPay(); grant(ok.days || c.days, 'paid', ok.pass); say('✓ Paid — every heavy tool is unlocked for ' + (ok.days || c.days) + ' days.', true); return finish(); }
       say(/different wallet|already redeemed/.test(lastErr) ? ('Payment could not be applied: ' + lastErr) : 'Payment sent but not confirmed yet — tap PAY again in a moment; it will pick up this same payment, not charge you twice.');
       btn.disabled = false; state.paying = false;
-    } catch (e) { say('Payment failed: ' + (e.message || e)); btn.disabled = false; state.paying = false; }
+    } catch (e) {
+      // Whatever failed, the attempt record (if one was written) stays: the next tap resolves it,
+      // and only the explicit START A NEW PAYMENT control can send again.
+      var att = pendingPay();
+      if (att && !att.sig) { say('Payment failed: ' + (e.message || e) + ' — but your wallet may still have sent it. Tap PAY to check the chain; nothing new is charged unless you choose START A NEW PAYMENT.'); showNewPay(); }
+      else if (att && att.sig) { say('Payment failed: ' + (e.message || e) + ' — tap PAY to retry verification of that same payment; nothing new is charged.'); showNewPay(); }
+      else say('Payment failed: ' + (e.message || e));
+      btn.disabled = false; state.paying = false;
+    }
   }
 
   function finish() {

@@ -7902,8 +7902,14 @@ const TOOLGATE = {
   // so the offer the page advertises must be the schedule's current entry by construction. To
   // change the offer, append an entry with an effective-from instant. TOOLGATE_DAYS /
   // TOOLGATE_LAMPORTS in the environment are ignored, with a loud line below.
-  lamports: TOOLGATE_TERMS.current().lamports,
-  days: TOOLGATE_TERMS.current().days,
+  // Read PER REQUEST, never snapshotted at boot (second reviewer, round 4): a server booted before
+  // a scheduled boundary kept advertising the old amount after it and then refused that exact
+  // payment as "amount too low". Getters resolve the schedule every time they are read, so the
+  // offer in /api/tool-gate/config is the one redeemPaidPass will accept for a payment made now.
+  // A quote a page displayed BEFORE a boundary and pays AFTER it is refused with nothing consumed;
+  // cluck-gate.js re-reads the config right before it builds the transfer for that reason.
+  get lamports() { return TOOLGATE_TERMS.current().lamports; },
+  get days() { return TOOLGATE_TERMS.current().days; },
 };
 for (const k of ["TOOLGATE_LAMPORTS", "TOOLGATE_DAYS"]) {
   if (process.env[k] && String(process.env[k]) !== String(k === "TOOLGATE_DAYS" ? TOOLGATE.days : TOOLGATE.lamports)) {

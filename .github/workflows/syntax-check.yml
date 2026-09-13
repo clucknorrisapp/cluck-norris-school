@@ -381,6 +381,14 @@ jobs:
       - name: wallet standard discovery
         if: steps.gate.outputs.run == 'true'
         run: node scripts/wallet-standard-test.cjs
+      # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
+      # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
+      # before anything can broadcast (sign-first path persists the signature before the send; the
+      # send-only path records an unresolved attempt and resolves it on-chain). Fake Wallet Standard
+      # wallet + mocked RPC, real server, real cluck-gate.js on a real tool page.
+      - name: tools pass client — a lost wallet callback never charges twice
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/tool-pass-client-test.cjs
       # GRAB $NORMIE on the between-level beat opened the wallet panel while the beat's auto-advance
       # kept running underneath, so the next level started behind the panel — music, dead taps
       # (owner, 2026-09-05). This drives the lab hooks: panel open → the beat holds; Escape closes;
