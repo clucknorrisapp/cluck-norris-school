@@ -97,6 +97,29 @@ Also in 1.0.2, from Codex's audit of the published 1.0.1 tarball (owner's third 
   checked in every copied file, JS/HTML/CSS/JSON): a new host fails the build until it is added
   deliberately. The deny-list strings and patterns stay as a second layer.
 
+## v1.0.3 (2026-09-13) — the AI-correct edition: Concierge as the landing, Ask Cluck first
+
+Owner's call, relayed through the wrapper session on 2026-09-13: build it right, submit once.
+Scope for this submission is "AI done right + graceful web pointers"; Token Autopsy (read-only,
+not pass-gated) is the next update; Wallet X-Ray / Holders / Trace stay out (pass-gated
+server-side, no honest store-only bypass — the owner leans "no" on freeing them for the store);
+Cluck Score never (retired, CLAUDE.md "Removed").
+
+- **The Concierge is the landing screen** (`screen` defaults to `start` in the store build; the
+  website keeps the school landing). It is the "Where do I start?" panel: journey cards that
+  route into the app plus the app-aware Ask Cluck box — the same thing the Telegram bot's `/start`
+  opens. Not a separate bot.
+- **Ask Cluck is first**: expanded at the top of the Concierge under "ASK CLUCK — YOUR AI TUTOR";
+  a permanent **🐔 ASK** tab in the header on every screen; a prominent Ask Cluck door on the
+  school screen. Every answer carries the Report control (`ReportAnswer`, store only).
+- **Excluded tools get a pointer, never a dead end**: the research and explore cards and a new
+  "More on the web" card carry ONE outbound anchor, `https://clucknorris.app` — the site ROOT,
+  never a deep link into a tool the edition does not carry (Apple 3.1.1 / Google review line) —
+  with neutral wording ("the full toolkit lives on clucknorris.app"). The research card is titled
+  "Token research tools" in the store (no token name in a title).
+- Concierge cards still route only to `STORE_PAGES` surfaces; policy unchanged: no wallet, no
+  address, no referral, no CLKN promotion; `scripts/store-edition-test.cjs` unchanged and passing.
+
 ## Publishing
 
 ```

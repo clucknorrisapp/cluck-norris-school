@@ -1058,6 +1058,16 @@ function Landing({onStart,onIncubator,onStartHere,onClaim,completed}){
       </button>
       <p style={{marginTop:12,fontSize:13.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>{LESSONS.length} CLASSES • {QUIZ_QUESTION_COUNT} EXAMS • NO EXTRA CREDIT</p>
       {!STORE && (<a href="/classroom" style={{display:"inline-block",marginTop:2,fontFamily:"'Anton',sans-serif",fontSize:13.5,letterSpacing:1,color:"#FF7A18",textDecoration:"none"}}>🎓 Prefer a live teacher? Take it in the Classroom →</a>)}
+      {STORE && (
+        <button onClick={onStartHere} style={{width:"100%",boxSizing:"border-box",marginTop:14,background:"rgba(255,182,39,0.10)",border:"2px solid rgba(255,182,39,0.5)",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
+          <img src={LOGO_B64} alt="Cluck Norris" style={{width:40,height:40,borderRadius:"50%",objectFit:"cover",border:"2px solid #FFB627",flexShrink:0}}/>
+          <span style={{flex:1}}>
+            <span style={{display:"block",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FFB627",letterSpacing:1}}>🐔 ASK CLUCK — YOUR AI TUTOR</span>
+            <span style={{display:"block",fontFamily:"system-ui,sans-serif",fontSize:13.5,color:"#D1D5DB",lineHeight:1.5}}>Not sure where to start? Ask anything about crypto, or let the concierge point you to the right lesson.</span>
+          </span>
+          <span style={{color:"#FFB627",fontSize:18}}>›</span>
+        </button>
+      )}
 
       {/* YOUR PROGRESS — transcript (always shown so newcomers see where they're headed) */}
       <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:10,padding:"14px 16px",marginTop:18,marginBottom:12,textAlign:"left"}}>
@@ -1506,6 +1516,14 @@ function CompleteFull({onRestart}){
 
 // ── "Where do I start?" concierge — mirrors the Telegram one: journey cards
 // that route into the right part of the app, plus the app-aware Ask Cluck box.
+// STORE edition: the one outbound pointer. Site ROOT only — never a deep link into a tool the
+// edition does not carry — with neutral wording. Rendered as a real anchor so the wrapper can
+// hand it to the system browser.
+function WebPointer(){
+  return (
+    <a href="https://clucknorris.app" target="_blank" rel="noopener noreferrer" style={{display:"inline-block",background:"rgba(255,182,39,0.08)",border:"1px solid rgba(255,182,39,0.3)",borderRadius:8,padding:"9px 14px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#FFB627",letterSpacing:0.5,textDecoration:"none",margin:"0 6px 6px 0"}}>🌐 The full toolkit lives on clucknorris.app →</a>
+  );
+}
 function StartHere({ onGo }){
   const [open,setOpen]=useState("new");
   // Same-site tool pages. In the store edition only the pages carried in the bundle exist, as
@@ -1540,13 +1558,15 @@ function StartHere({ onGo }){
         <p style={txt}>The LP Lab is a {LP_LESSONS_COUNT}-lesson deep dive: AMMs, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).</p>
         <Act label="⚗️ Open the LP Lab" onClick={()=>onGo("lplab")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
       </>)},
-    { key:"research", icon:"🔬", title:"Token research & CLKN tools", tag:"Vet anything on-chain", body:()=>(<>
+    { key:"research", icon:"🔬", title:STORE?"Token research tools":"Token research & CLKN tools", tag:"Vet anything on-chain", body:()=>(<>
         <p style={txt}>Free tools to check a token before you trust it. The chain shows <em>what</em>, never <em>why</em> — always DYOR.</p>
+        {STORE && <p style={txt}>This edition carries the two read-only checkups below. The full research toolkit lives on the web.</p>}
         {!STORE && <Act label="🔍 Trace" onClick={goIn("/trace")}/>}
         <Act label="🔒 Wallet Checkup" onClick={goIn("/wallet-checkup")}/>
         {STORE && <Act label="📋 Listing Checkup" onClick={goIn("/listing-checkup")}/>}
         {!STORE && <Act label="🎒 Bags feed" onClick={goIn("/bags")}/>}
         {!STORE && <Act label="🛠 All tools" onClick={goIn("/tools")}/>}
+        {STORE && <WebPointer/>}
       </>)},
     ...(STORE ? [] : [{ key:"about", icon:"🐔", title:"About Cluck Norris & CLKN", tag:"The story + where to buy", body:()=>(<>
         <p style={txt}>Cluck Norris is the free School of Crypto Hard Knocks + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility. CLKN unlocks premium tools — hold it and they're free. The school itself is always free.</p>
@@ -1559,7 +1579,15 @@ function StartHere({ onGo }){
         {!STORE && <Act label="🛠 All tools" onClick={goIn("/tools")}/>}
         <Act label="📖 The Library" onClick={()=>onGo("library")}/>
         <Act label="🏫 The school" onClick={()=>onGo("landing")}/>
+        {STORE && <WebPointer/>}
       </>)},
+    // STORE only: a graceful pointer instead of an absence. Neutral wording and the site ROOT as
+    // the destination (never a deep link into a tool the store edition does not carry) — that is
+    // the store-review line, and the build verifier's allow-list pins the host.
+    ...(STORE ? [{ key:"web", icon:"🌐", title:"More on the web", tag:"The full site", body:()=>(<>
+        <p style={txt}>This app is the school: the lessons, the Library, the LP Lab, the two read-only checkups and Ask Cluck. The rest of Cluck Norris — the wider research toolkit and the guides to specific coins and chains — lives on the website.</p>
+        <WebPointer/>
+      </>)}] : []),
   ];
   return(
     <div style={{maxWidth:COL,margin:"0 auto",padding:"0 18px 48px"}}>
@@ -1568,6 +1596,12 @@ function StartHere({ onGo }){
         <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,letterSpacing:1,margin:"0 0 4px",background:"#FFB627",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>WHERE DO I START?</h2>
         <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.6,margin:0}}>The coop is a free crypto school + real token-research tools. Tell me where you're at and I'll point you the right way.</p>
       </div>
+      {STORE && (
+        <div style={{marginBottom:22}}>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,color:"#FFB627",textAlign:"center",marginBottom:2}}>🐔 ASK CLUCK — YOUR AI TUTOR</div>
+          <AskCluck context="Where do I start — app navigation and crypto basics"/>
+        </div>
+      )}
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,color:"#FF7A18",textAlign:"center",marginBottom:10}}>WHERE ARE YOU ON YOUR CRYPTO JOURNEY?</div>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {PATHS.map(p=>{
@@ -1587,10 +1621,12 @@ function StartHere({ onGo }){
           );
         })}
       </div>
+      {!STORE && (
       <div style={{marginTop:22,borderTop:"1px solid rgba(255,122,24,0.16)",paddingTop:16}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,color:"#FF7A18",textAlign:"center",marginBottom:8}}>🐔 STILL NOT SURE? ASK CLUCK ANYTHING</div>
         <AskCluck context="Where do I start — app navigation and crypto basics" compact={true}/>
       </div>
+      )}
     </div>
   );
 }
@@ -1607,9 +1643,12 @@ export default function App(){
       const path=(window.location.pathname||"").replace(/\/+$/,"").toLowerCase();
       if(PATHS[path]) return PATHS[path];
       const h=(window.location.hash||"").replace(/^#/,"");
-      return SCREENS.includes(h)?h:"landing";
+      // STORE edition (1.0.3, "AI-correct"): the Concierge — journey cards + Ask Cluck — is the
+      // landing surface, so the AI tutor is the first thing a new user meets. The website keeps
+      // the school landing (its concierge lives on the homepage).
+      return SCREENS.includes(h)?h:(STORE?"start":"landing");
     }
-    catch(e){ return "landing"; }
+    catch(e){ return STORE?"start":"landing"; }
   });
   const [lessonId,setLessonId]=useState(null);
   const [completed,setCompleted]=useState(()=>{
@@ -1665,6 +1704,7 @@ export default function App(){
         </div>
         {/* Nav tabs — school sections only (top-level routing lives on the homepage) */}
         <div style={{display:"flex",gap:5}}>
+          {STORE && <button onClick={()=>setScreen("start")} style={{flex:1,background:screen==="start"?"rgba(255,182,39,0.25)":"rgba(255,182,39,0.07)",border:`1px solid ${screen==="start"?"rgba(255,182,39,0.65)":"rgba(255,182,39,0.22)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#FFB627",letterSpacing:0.5,cursor:"pointer"}}>🐔 ASK</button>}
           <button onClick={()=>setScreen("landing")} style={{flex:1,background:screen==="landing"?"rgba(255,122,24,0.22)":"rgba(255,122,24,0.06)",border:`1px solid ${screen==="landing"?"rgba(255,255,255,0.25)":"rgba(255,122,24,0.18)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:screen==="landing"?"#F9FAFB":"#6B7280",letterSpacing:0.5,cursor:"pointer"}}>🏫 SCHOOL</button>
           <button onClick={()=>setScreen("incubator")} style={{flex:1,background:screen==="incubator"?"rgba(91,141,214,0.25)":"rgba(91,141,214,0.06)",border:`1px solid ${screen==="incubator"?"rgba(91,141,214,0.6)":"rgba(91,141,214,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#5B8DD6",letterSpacing:0.5,cursor:"pointer"}}>🥚 INCUBATOR</button>
           <button onClick={()=>setScreen(screen==="library"?"landing":"library")} style={{flex:1,background:screen==="library"?"rgba(255,122,24,0.25)":"rgba(255,122,24,0.06)",border:`1px solid ${screen==="library"?"rgba(255,122,24,0.6)":"rgba(255,122,24,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#FF7A18",letterSpacing:0.5,cursor:"pointer"}}>📚 LIBRARY</button>
