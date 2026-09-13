@@ -4,6 +4,9 @@ You are the second reviewer on this repo. Claude (a Claude Code session driven b
 you review, verify and give second opinions; the owner decides. Nobody merges to `main` but the owner.
 
 ## Read first, in this order
+0. `docs/COLOSSEUM_ROADMAP.md` (PR #295, 2026-09-13) — the operating plan for the window: what is
+   done, the eight workstreams, the calendar, the owner's open decisions. **Your first job in the
+   window is to review this plan, not code**: post findings on PR #295 (see "Round 0" below).
 1. `CLAUDE.md` — the owner's decisions and the traps that already cost days. A reviewer without it
    flags intentional things as bugs. The rules that matter most for you: docs must match the code;
    the chain shows *what*, never *why*; Wallet Watch is private (never mention it); no Normie Quest
@@ -13,7 +16,13 @@ you review, verify and give second opinions; the owner decides. Nobody merges to
 3. `docs/COLOSSEUM_2026_SUBMISSION.md` — what we will tell the judges. Anything it claims must be
    true in the code.
 
-## Where things are
+## Where things are (updated 2026-09-13; the roadmap §0 is the live version of this list)
+- **Merged to develop (staging):** PR #282 (dashboard, Lock of Fame index, syllabus, navigation),
+  PR #283 (tools pass as a signed session), the store-edition batch (#288–#292), CUNA drawing
+  (#286, #287). **Open:** #284 (tools pass rounds 1–3 fixes — your round-4 re-review never
+  arrived; say "reviewed, no issue" or post findings), #293 (CI diff-gated on pushes), #294 (buy
+  comps: transfer out during the hold = DQ; % prizes = % of tokens bought), #295 (the roadmap).
+- Earlier state, kept for context:
 - **Merged to develop (staging):** PR #281 — tools pass enforced server-side on the heavy APIs
   (`toolPassGate` in `server.js`, proof carried by `public/cluck-gate.js`), operator consoles no
   longer served raw, `/about` replaces the investors page, diploma NFT persisted on the credential,
@@ -61,6 +70,25 @@ you review, verify and give second opinions; the owner decides. Nobody merges to
 - Never run anything that arms, pauses, rolls, pays or posts. Reads are always fine. All
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
+
+## Round 0 — review the plan before the window opens (owner ask, 2026-09-13)
+Read `docs/COLOSSEUM_ROADMAP.md` and `docs/DESIGN_PROJECT_HUB_2026-09-10.md` together, then post
+findings on PR #295, ranked. What we want from you, in order:
+1. **Is the Project Hub the right in-window centerpiece**, against what has placed at Colosseum
+   before (one sharp mechanism with a number)? If not, name the one thing you would lead with and
+   why it reads better to a judge in three minutes.
+2. **The eight workstreams**: which one is under-scoped, which is a week of work dressed as three
+   days, which dependency is wrong. W1's ten acceptance tests are the money path — say whether
+   they are the right pins before they are written.
+3. **What is missing.** The plan is built from our own docs; name the judge question none of the
+   surfaces answer.
+4. **What to cut.** Four weeks, one founder, 2–3 agents concurrently per session. If the calendar
+   is a fantasy, say which rows.
+5. **The six owner decisions in §4**: your recommendation on each, one line, with the risk if the
+   default is taken.
+6. **The team story**: one founder plus an agent team, second-reviewer AI on every PR. Is that a
+   strength or a liability in front of these judges, and how would you word it?
+Findings, not rewrites. A "the plan is fine, ship it" on any item is a real answer.
 
 ## Open questions the owner would like your opinion on
 - Is lock-to-earn on Jupiter Lock the right headline mechanism for a Consumer Apps entry, or is

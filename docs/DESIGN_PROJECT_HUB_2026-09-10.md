@@ -378,3 +378,100 @@ state), survives interruption (partial run → rerun completes with no duplicate
 key shapes exist the old `/api/cuna-stake/*` routes and the new `/api/program/cuna/*` routes read
 one ledger — neither can accrue or reserve the same obligation twice (a reservation made through
 one is visible to the other).
+
+## Addendum B — Settlement protocol, overpayment accounting, multi-transfer receipts (Codex Round 0, 2026-09-13; adopted)
+
+Three P1 findings on revision 4, each a contradiction an implementer could not satisfy. This
+addendum **supersedes** §2's "Overpayment is surfaced, not floored away" bullet, the `paid >
+accrued` sentence in test 5, and the single-transfer receipt shape in §2; everything else stands.
+
+### B1. One idempotent settlement event, owned by the row
+§4 consumed a transfer's identity in the global sig store while the row's `paid` state lived in
+per-project kv, with no commit protocol between the two writes. Failing sequence: the transfer
+verifies → the identity is durably consumed → crash before the row is marked paid; a retry either
+refuses the consumed transfer forever or risks applying it twice, and reversing the writes
+reopens cross-project reuse.
+
+Rule: **settlement is ONE durable write.** A settlement journal keyed by the chain identity
+(`settle:<sig>:<instructionIndex>[:<innerIndex>]`) holds
+`{ xferKey, projectId, batchId, rowId, wallet, amountRaw, appliedRaw, excessRaw, slot, at,
+verifiedBy }`, written once, in a single kv put, AFTER verification and BEFORE anything else.
+Both "this identity is consumed" and "this row received this transfer" are *read from* the
+journal; the global consumed set and the row's `paid` projection are **derived indexes**,
+rebuilt from the journal at boot and re-derived by `reconcile`.
+- Crash before the journal write: nothing is consumed; the retry re-verifies and writes.
+- Crash after the journal write, before a projection update: boot or the next reconcile replays
+  the journal and the projections converge; the retry finds the entry and returns the same result.
+- `recordSent` retry with the same identity: if the journal entry names this row → idempotent
+  success (same receipt); if it names another row or project → `transfer_already_consumed`
+  naming the owner. There is no "unconsume".
+- CI: fault injection before and after the journal write and before and after each projection
+  update, for `recordSent`, `confirm`, `cancel`, `reconcile` and `migrate`; two projects sharing a
+  reward mint, a funding wallet, a recipient and an amount (the §4 case) on top of every
+  injection point.
+
+### B2. Overpayment accounting — three numbers, never netted across wallets
+Test 5 required `paid ≤ accrued` and the partition after every operation, then allowed a manual
+send to make `paid > accrued`; with accrued=100 and a verified 110 the partition needs
+available=−10. Two wallets made it worse: subtracting one wallet's excess project-wide erased
+another wallet's unpaid 10.
+
+Rule: per wallet per project,
+- `paidTotalRaw` — the sum of every verified transfer settled to this wallet (journal entries);
+- `paidAppliedRaw` — the part of `paidTotalRaw` applied against this wallet's accrual,
+  `min(paidTotalRaw, accruedRaw)`; **this and only this** is the `paid` term of the partition
+  `accrued = available + reserved + paidApplied`;
+- `excessRaw = paidTotalRaw − paidAppliedRaw` — never negative, never credited as accrual, never
+  reduces any other wallet's obligation, never reduces the project's obligations except through
+  this wallet's own future accrual.
+Future accrual for a wallet with `excessRaw > 0` is applied against the excess first: each new
+credit raises `paidApplied` and lowers `excess` one-for-one until the excess is consumed, and
+`available` stays 0 meanwhile. Obligations are `Σ(accruedRaw − paidAppliedRaw)` over wallets —
+a per-wallet sum, so wallet A's excess can never hide wallet B's unpaid amount. Receipts, the
+funding status and the operator console show all three numbers. The `owedNow` zero floor stays;
+it is `available`, already non-negative by construction.
+- CI (test 5 restated): the partition holds after every ledger operation; accrued=100, manual
+  110 → applied 100, excess 10, available 0, obligations 0 for that wallet; the next 10 of
+  accrual → applied 110, excess 0, available 0; a second wallet with accrued=100 and paid=90 keeps
+  obligations 10 regardless of the first wallet's excess; a partial 40 of a 100 row keeps 60
+  reserved on that row (rev 4 unchanged), and `waived` remains an owner-only, logged release.
+
+### B3. Receipts carry every transfer, append-only
+§2's receipt had one `amountRaw / transferId / sig` per batch-wallet, while test 5 allowed 100
+owed to be paid as 40 + 40 + 20 and test 7 required "the receipt amount equals the verified
+transfer" and "the export reruns to the same raw". No single signature proves the 100 and the
+accrued amount is not any one 40.
+
+Rule: a receipt is an **aggregate per (batch, wallet)** with
+`totals: { owedRaw, appliedRaw, excessRaw, remainingRaw }` and an append-only
+`settlements[]`, one immutable entry per journal event
+`{ xferKey, sig, instructionIndex, innerIndex, slot, at, amountRaw, appliedRaw, excessRaw }`.
+Earlier entries are never overwritten by later ones. Test 7 restated: each settlement entry's
+`amountRaw` equals its verified transfer; `Σ appliedRaw = totals.appliedRaw`; the reproduce
+export reruns to `totals.owedRaw` (the calculation), which is shown as a distinct claim from
+"payment verified" (the transfers). The 40/40/20 sequence and an overpayment (a 120 transfer on a
+100 row → applied 100, excess 20) are pinned in the receipt tests. The receipt URL
+`/receipt/<batchId>/<wallet>` is unchanged; a per-settlement anchor `#s=<xferKey>` links one
+entry.
+
+### B4. Test ownership (every promised test assigned or deferred)
+| Test | Owner | Gate |
+|---|---|---|
+| 1 isolation, 2 decimals, 3 versioning, 4 reasons, 5 (B2), 6 funding fields, 7 (B3), 10 migration (+ Addendum A's extension), B1 fault injection | W1 | W1 pure gate |
+| 8 signing, 9 access, §4 signing/reconcile fault cases, the dry-run second project on staging | W1 + W3 | **integration gate** |
+| 14 no "safe" badge anywhere | W2 | W2 |
+| 11 checklist states + freshness, 12 reward-budget planner, 13 existing token from Declare | W9 (Launch Readiness) — starts only if the integration gate is green by Sep 26; otherwise the first post-hackathon item | deferred |
+
+Schemas in §2 as amended here are **frozen on 2026-09-16**; fixture work in W2 starts on the
+frozen shapes; a later schema change is a PR to this document first.
+
+### B5. An independent witness for the program record
+A hash served by the same server that computes the payout lets a reader rerun the arithmetic
+over server-supplied observations; it does not establish that the server omitted no qualifying
+escrow, and it is not an independently witnessed commitment. Two cheap steps in the window:
+(1) at publish, the funding wallet signs a memo transaction carrying `program:<projectId>:v<n>:
+<sha256>` — an on-chain, dated, third-party-observable commitment by the party that pays; (2)
+the canonical JSON of every published version is mirrored under `programs/` in this repository.
+Until both exist for a version, the public wording is "the calculation is reproducible from the
+published inputs", never "independently verified". Completeness (no omitted escrow) remains a
+separate claim that only an independent scan of the lock program can support; it is not made.
