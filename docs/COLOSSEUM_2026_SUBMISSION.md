@@ -32,6 +32,14 @@ This is what was entered on colosseum.com. **Everything else in this document mu
 consistent with it.** If a line below changes, this section is the source of truth and the rest of
 the package follows it, not the other way round.
 
+The four long-form answers below are the merged final (2026-09-14): the session's drafts were
+reworded independently by Codex and by a second reviewer after the owner rejected the drafts'
+register ("liquidity maths is a calculator you can move", "about to get hurt"), and the best
+sentences of each were combined. Every fact was re-checked against the code after the merge;
+nothing on the must-survive list was lost. The RootCrak credit stays without the referral URL —
+a `?ref=` link on a judged technology list reads as promotional; the URL belongs on the site and
+in social posts, per CLAUDE.md.
+
 **Project name**
 
 ```
@@ -65,34 +73,34 @@ models and ZK / crypto research do not apply.
 **Teammates:** none — §7 limits each person to one team, so an invite would spend that person's
 only entry.
 
-**What are you building, and who is it for?** (cap 1000; this is 940)
+**What are you building, and who is it for?** (cap 1000; this is 933)
 
 ```
-Cluck Norris (clucknorris.app) is a live Solana platform serving two audiences.
+Cluck Norris (clucknorris.app) is a live Solana platform for two audiences.
 
-The first is the individual learning crypto. They get a free school — courses from absolute beginner to belt-ranked, a hands-on LP Lab where liquidity maths is a calculator you can move rather than a lecture, a reference library, live token data, and an AI tutor inside every lesson. Multiple languages, read-aloud, no signup and no wallet. Finish it and you earn a transcript and an on-chain graduation NFT that a server-side lesson ledger has to agree you earned.
+Individuals learning crypto get a free school: courses from absolute beginner through a belt-ranked core, a hands-on LP Lab with interactive calculators, a reference library, live token data, and an AI tutor in every lesson. Multiple languages, read-aloud audio, no signup, no wallet. Graduates receive a transcript page and an on-chain graduation NFT; a server-side lesson ledger checks completion before the claim is approved.
 
-The second is the small project that survived its launch and needs to grow. They get the operator tools: wallet and token forensics, holder analysis that separates real wallets from pools and program accounts, approval checkups with in-place revoke, batch airdrops, buy competitions paid on what each wallet actually bought, and free non-custodial token locking any project can run and prove.
+Small projects growing beyond launch get the operator tools: wallet and token forensics; holder analysis that separates wallets from pools, escrows and program accounts; delegate-approval checks with in-place revocation; batch airdrops; buy competitions paid on verified on-chain buys; and free, non-custodial token locking on the open-source Jupiter Lock program, with Token-2022 support and publicly verifiable lock records.
 ```
 
-**Why did you decide to build this, and why build it now?** (cap 1000; this is 995)
+**Why did you decide to build this, and why build it now?** (cap 1000; this is 981)
 
 ```
-Because people lose money in crypto for a boring reason: nobody told them the truth plainly, in time, in a language they read. Every explanation is either a sales pitch or a whitepaper. So the first thing we built was a school that assumes you know nothing and never assumes you are stupid — and we put the guardrails in front of the power, so a first-timer is warned before making an irreversible decision.
+People lose money in crypto because nobody explained how it works plainly, early, and in a language they read. Most explanations are a sales pitch or a whitepaper. Cluck Norris (clucknorris.app) started as a school that assumes no prior knowledge, with warnings in front of irreversible actions so a first-timer sees the risk before they sign.
 
-The tools came from watching what happened next. People asked us to look at a wallet, a holder list, a pool. Each answer was forensic work nobody could do alone, so we turned it into something anyone can run.
+The operator tools came from work we were already doing. People asked us to look at a wallet, a holder list, or a pool. Each request was forensic work one person could not do alone, so we turned those answers into tools anyone can run.
 
-Why now: minting a token is solved and free, and the gap moved downstream to everything after. A project that survives its launch has real communities to keep and no map. Meanwhile the parts that used to require trusting an operator — locks, burns, reward programs — can now be stated as terms and settled on-chain, where the holder checks the outcome instead of believing us.
+Why now: creating a token is solved and free, and launching one does not give a team what it needs to support a community. The gap is everything after launch: understanding holders, managing distributions, and making commitments transparent. Locks, burns, and reward programs can be written as explicit terms and settled on-chain, so a holder can verify the outcome instead of trusting the operator.
 ```
 
-**How does your product use these chains?** (cap 500; this is 494)
+**How does your product use these chains?** (cap 500; this is 492)
 
 ```
-Solana only, mainnet.
+Solana mainnet only.
 
-Reads: RPC and DAS for balances, transfer history, holders and pools, across both the SPL Token and Token-2022 programs. We parse transactions rather than infer from price feeds, which is what makes the forensics and buy competitions defensible.
+Reads: RPC and DAS for balances, transfer history, holders and pools across SPL Token and Token-2022. Transactions are parsed directly rather than inferred from price feeds, so forensics and buy competitions stay defensible.
 
-Writes: anything touching a user's funds is non-custodial — built unsigned server-side, signed by their wallet, never by us. Locks use the open-source Jupiter Lock program. The only transaction we sign is the graduation NFT.
+Writes touching user funds are non-custodial: built unsigned on the server, signed in the user's wallet. Locks use the open-source Jupiter Lock program. The platform signs only the graduation NFT, paid from the treasury so learners need no SOL.
 ```
 
 ⚠️ That last line is load-bearing and was checked against the code, not assumed. `lib/diploma-nft.js`
@@ -100,18 +108,18 @@ signs the graduation mint with the treasury wallet (`MM_OPERATOR_SECRET_TREASURY
 needs no SOL. An earlier draft said "we never hold a key", which is false. Every other write path
 is genuinely wallet-signed.
 
-**What technologies are you using or integrating with?**
+**What technologies are you using or integrating with?** (no cap)
 
 ```
-Chain: Solana web3.js, SPL Token and Token-2022, Anchor, Metaplex (Token Metadata, Bubblegum for compressed NFTs), and the open-source Jupiter Lock program for all locking. AMM SDKs for position and pool reads: Orca Whirlpools, Raydium v2, Meteora DLMM / CP-AMM / Dynamic Bonding Curve. Wallets connect through both Wallet Standard discovery and legacy injection, so in-app wallet browsers work.
+Chain: Solana web3.js, SPL Token and Token-2022, Anchor, and Metaplex (Token Metadata and Bubblegum for compressed NFTs). All locking uses the open-source Jupiter Lock program. Pool and position reads use the Orca Whirlpools, Raydium v2, and Meteora DLMM, CP-AMM and Dynamic Bonding Curve SDKs. Wallets connect through Wallet Standard discovery and legacy injection, so in-app wallet browsers work.
 
 Data: Helius RPC and DAS as primary, with failover, plus GeckoTerminal, Solana Tracker, Jupiter and Solscan for pricing and cross-checks.
 
-App: Node and Express, React 18 with Vite, Tailwind, Zustand; the game runs on Phaser 3. Hosted on Railway behind Cloudflare WAF with origin lockdown. Security scanning by RootCrak.
+Application and infrastructure: Node.js and Express, React 18 with Vite, Tailwind and Zustand. The game runs on Phaser 3. Hosted on Railway behind Cloudflare WAF with origin lockdown. Security scanning by RootCrak.
 
-AI: Anthropic Claude — Sonnet 5 for the in-lesson tutor and long-form generation, Haiku 4.5 for cheap classification — and ElevenLabs for read-aloud, with a browser-voice fallback. Claude Code is our main development tool and wrote a large share of this codebase alongside the founder.
+AI and development: Anthropic Claude — Sonnet 5 for the in-lesson tutor and long-form generation, Haiku 4.5 for classification — and ElevenLabs for read-aloud audio, with browser speech as a fallback. Claude Code is the primary development tool and has produced a substantial share of the codebase alongside the founder.
 
-Testing: GitHub Actions CI with Playwright-driven visual regression on the game, an engine decision simulator that replays real incidents, and a seven-language i18n audit.
+Testing: GitHub Actions CI with Playwright visual-regression tests on the game, an engine decision simulator that replays real incidents, and a multilingual translation audit.
 ```
 
 **Is your project a mobile-focused dApp?** — **unchecked.** The web app is mobile-responsive and a
