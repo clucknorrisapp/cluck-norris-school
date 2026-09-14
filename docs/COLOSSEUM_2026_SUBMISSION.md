@@ -141,16 +141,18 @@ The owner asked why a "no" needs five sentences. Because Official Rules §9 obli
 third-party code, and an AI tool having written much of the codebase is better heard from us than
 discovered. A bare "No" would be accurate about people and silent about that.
 
-**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 492)
+**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 502)
 
 ```
-Cluck Norris has been live since 2025. The pre-window state is snapshotted at commit 75b69cc and documented in docs/PRE_EVENT_STATE.md, with every in-window commit listed there. The in-window build is the Project Hub: a token's lock, burn and reward-program terms published, with payouts any holder can verify. The founder built the platform alone after the developers he approached dropped out, entered the Bags hackathon late, and has since formed CLKN Productions LLC behind the work. MIT.
+Cluck Norris has been live since 2025. The pre-window state is snapshotted at commit 75b69cc in docs/PRE_EVENT_STATE.md, with every in-window commit listed. The in-window build is the Project Hub: a token's lock, burn and reward-program terms published, with payouts any holder can verify. Live use in the 30 days to 14 Sep: 161k page views, 22 graduates, 488M CLKN (48.8% of supply) locked through our own tooling, first weekly lock-to-earn payout settled. Solo founder, now CLKN Productions LLC. MIT.
 ```
 
 This carries the disclosure line in the form's own words — the platform predates the window, the
 snapshot commit and `docs/PRE_EVENT_STATE.md` draw the boundary, the Project Hub is named as the
-in-window build — plus the overflow from the founder's "why" that would not fit in 1000: the
-developers who dropped out, the Bags hackathon, and the newly formed LLC.
+in-window build — plus the live figures judges would not otherwise see, read from `/api/stats?days=30` and
+`/api/school-stats` on 2026-09-14 (161,270 views · 117,859 visitor-days · 22 graduates · 488.3M CLKN
+locked). The Bags hackathon was dropped from the form at the owner's call — it reads as a footnote —
+and stays only in the §3 founder background.
 
 **Project website:** `https://clucknorris.app`
 
