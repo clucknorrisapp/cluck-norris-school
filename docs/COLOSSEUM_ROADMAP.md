@@ -1,4 +1,4 @@
-# Colosseum window roadmap — 2026-09-14 11:00 UTC → 2026-10-12 (revision 2)
+# Colosseum window roadmap — 2026-09-14 11:00 UTC → 2026-10-12 (revision 3)
 
 The operating plan for the four weeks. One founder, no cofounder, an agent team: every
 workstream below is a separately scoped session with a definition of done, and the founder is
@@ -14,6 +14,33 @@ test is assigned or explicitly deferred; W4 and W5 are cut to what the Hub integ
 needs; the demo target is the Hub story, not the pre-window tour; a validation deliverable is
 added; the concurrency claim is corrected; a feature freeze and a phone rehearsal precede the
 recording slot.
+
+**Revision 3 (2026-09-14 13:30 UTC, in-window).** Written after the judging criteria were
+**read directly from colosseum.com/hackathon** rather than from memory or a summary. All seven
+criteria confirmed: Founder + Market Fit, Insight, Product + Execution, Potential Market Size,
+Founder Communication, Viability, **Traction** ("does the product demonstrate existing demand or
+revenue"). Also confirmed: a 2–3 minute presentation video and a **separate** demo video of at
+most 3 minutes; pre-existing code allowed but all prior development must be disclosed, with
+misrepresentation carrying **disqualification, future bans and prize revocation**; one product
+per builder; weekly ~1-minute updates strongly recommended.
+
+Revisions 1 and 2 optimised for Insight and Product + Execution and were close to silent on
+Traction, which is a seventh of the score. Revision 3 fixes four gaps:
+
+1. **Traction was measured, not made.** Revision 2 had "traction refreshed" in the final three
+   days and a table to reorder. There was no plan to *create* any, and `lib/analytics.js`
+   counts page views and tool hits, not product outcomes. → new **W9**, and §4 item 1 is
+   promoted from a decision to a **dated blocker**.
+2. **Weekly updates were absent entirely.** → new **W10**, on the calendar.
+3. **The GitHub repo is a graded artifact and ours is misdescribed** — the description still
+   says "built for the Bags Hackathon" and advertises Cluck Score, a feature retired for giving
+   good scores to tokens that then rugged. → added to W6, first 48 hours.
+4. **Nothing has been verified end to end with a real wallet** and the first attempt was
+   scheduled for the Sep 28 rehearsal, one day after feature freeze. → a real-wallet smoke is
+   pulled forward to the Sep 17–21 block.
+
+Nothing in revisions 1–2 is reversed. The thesis, the schema freeze, the workstreams and the
+money rules stand.
 
 Owner, 2026-09-13: *"I don't think we need another cofounder, we have all the skills, ideas,
 resources — cofounders don't understand what we have been building; we can do virtual agents
@@ -38,6 +65,7 @@ drawing registry.
 | F4 | Six translated school bundles lack the `seedphrase` and `inheritance` lessons | **Open** — `grep -c seedphrase public/i18n/<lang>.school.json` = 0 in all six. "Seven languages" is false until this ships. |
 | F2 | Submission §3 team + founder story | **Open** — placeholders. Framing in §6 below; the incident itself is the owner's to supply. |
 | F12 | Traction table leads with self-locks and a $12 payout | **Open** — reorder to learners → visitors → partner tokens → mechanism proof. |
+| repo | GitHub description says "built for the Bags Hackathon", advertises retired Cluck Score | **Open (found 2026-09-14)** — the repo link is a required submission field and a judge opens it first. |
 | §8 checklist | Colosseum registration, `[OWNER]` placeholders, logo export, demo captures, pitch video | **Registered 2026-09-12.** Rest open. |
 | #284 | Tools pass fixes (Codex rounds 1–4) | Round-4 findings fixed 2026-09-13 (attempt durable before broadcast; offer read per request; client test). Green. Owner's "merge 284" lands it in staging. |
 
@@ -69,6 +97,14 @@ over *server-supplied* observations; it is not proof that the server omitted no 
 escrow. Until an independent commitment exists (Addendum B §B5: the hash committed in a memo
 transaction signed by the funding wallet at publish, and mirrored in the repo), the public claim
 is "the calculation is reproducible from the published inputs", not "independently verified".
+
+**One product, and Normie Quest is not it.** Colosseum allows one product per builder, so the
+entry is the Hub. That decision stands and is not reopened. But Normie Quest is our strongest
+*evidence* — a shipped, gated, played product — and the Hub will have few users by Oct 12.
+Excluding it from the entry does not mean hiding it: it belongs in the **traction and team**
+sections as evidence of founder–market fit and of our ability to ship and attract users, clearly
+labelled as a separate product and never as the submission. Same for the school's learners.
+Claiming it as the entry would be misrepresentation; citing it as evidence is simply true.
 
 Two rules that override everything: nothing arms an engine, and nothing is paid for the camera.
 
@@ -151,8 +187,11 @@ started to satisfy any check, and `engine-sim-test` passes unchanged.
 
 ### W6 — Credibility and truth pass (first 48 hours, then continuous)
 Branch `truth/window-1`. F4 translations (two lessons × six languages, then extend the i18n
-audit to lesson ids so it cannot recur), F12 traction table reorder, README and `/about` kept
-true to the code as W1–W5 land, `PRE_EVENT_STATE.md` "built inside the window" filled in per
+audit to lesson ids so it cannot recur), F12 traction table reorder, **the GitHub repo
+description and README** (the repo is a graded submission artifact; the description still reads
+"built for the Bags Hackathon" and advertises Cluck Score, retired for giving good scores to
+tokens that then rugged), the `/about` and `/investors` surfaces stating the Colosseum entry,
+README and `/about` kept true to the code as W1–W5 land, `PRE_EVENT_STATE.md` "built inside the window" filled in per
 merged PR with the PR link, Colosseum §8 checklist driven to done, and the narrowed
 reproducibility wording from §1 everywhere the old wording appears.
 **Done when:** every claim in README, `/about` and the submission survives a two-minute check
@@ -186,6 +225,39 @@ Not a build session. Runs the tests, the visual gate, the security review skill 
 the adversarial pass on money paths, and reports at each phase boundary with the agent count and
 ETA. Codex remains the second reviewer on every PR; findings, not rewrites.
 
+### W9 — Traction: measure the outcomes, then create some (week 1, then continuous)
+Branch `traction/instrument`. Traction is a seventh of the score and we currently cannot answer
+it with a number a judge would accept.
+
+**Part 1 — instrument the outcomes (Sep 15–17).** `lib/analytics.js` records views, tool hits and
+funnel strings. None of those is a product outcome. Add first-class counters, each one derived
+from something already durable so it can be recomputed rather than trusted: **wallets connected**,
+**programs created**, **program versions published**, **receipts issued**, **receipts opened by a
+holder**, **batches signed**, **repeat operators** (an operator returning in a later period), and
+**revenue** (tools-pass purchases and Hatchery fees, priced at the payment's block time). Expose
+them on an owner-only endpoint, and keep the raw events so every figure is reproducible. Same
+honesty rule as the receipts: report the period and the denominator, never a target as an
+achievement.
+
+**Part 2 — create some (Sep 15 → Oct 1).** Instrumentation with no usage is still zero. The
+sources of real usage available inside the window, cheapest first: the **dry-run project running a
+real program** (§4 item 1 — the long pole), the existing partner tokens invited to open a Hub
+page, the school's existing learners pointed at the front door, and the buy competitions already
+running, whose receipts become Hub receipts once W1 lands.
+
+**Done when:** `docs/TRACTION_2026-09.md` exists, every number in it is reproducible from stored
+events by a script in `scripts/`, the submission's traction section cites it, and each figure is
+labelled founder-operated / dry run / independent — the three columns W6b already requires.
+Model: Sonnet builds; no verifier tier needed (this path moves no money).
+
+### W10 — Weekly updates (every Sunday, 5 minutes of the founder's time)
+Not a build session. Colosseum strongly recommends a ~1-minute video each week on what shipped
+and what was hard. Four of them across the window, on **Sep 20, Sep 27, Oct 4, Oct 11**. The
+agent side prepares the shipped-list from that week's merged PRs and a three-bullet script the
+night before; the founder records on a phone and posts. This is the cheapest scoring item in the
+whole plan and revision 2 omitted it.
+**Done when:** four updates are posted, each naming what shipped with a link.
+
 ### Deferred, explicitly (start only if the integration gate is green by Sep 26)
 - **Launch Readiness** (design Addendum A): the checklist page, the reward-budget planner,
   signed declarations, wallet-bound lesson evidence — acceptance tests **11, 12, 13**. Owned by
@@ -205,14 +277,15 @@ engine restarts of any kind.
 
 | Dates | Ships | Owner touchpoints |
 |---|---|---|
-| **Sep 13 (tonight)** | "merge 284", "merge 293", "merge 294", "merge 295"; the snapshot routine at 09:00 UTC Sep 14 pushes the `snapshot/pre-colosseum-2026-09-14-*` branches; the owner pushes the real tags from the Mac. | Decide §4 items 1–3 so W1 can start at 11:00 UTC. |
-| **Sep 14–16** | W6 credibility fixes; W4 (2 days); W1 libs + pure tests start; W5 hygiene lands. **Sep 16: schema freeze.** | Eyeball W4 on staging; answer §4 item 4; W6b interview script approved. |
-| **Sep 17–21** | W1 pure gate done; W2 on fixtures then on W1's libs; W3 starts; first Hub demo captures. **Review slot Sep 19:** Codex on W1. | "promote" the first in-window batch to `main`; first two operator interviews. |
-| **Sep 22–26** | W3 done; **integration gate** on staging with the owner's wallet; W2 done; W5 evidence pages. **Review slot Sep 24:** Codex on W3. | Pick and run the dry-run project; eyeball the hub flow end to end on a phone; pilot operator consented. |
-| **Sep 27** | **Feature freeze.** Only fixes from here. | — |
-| **Sep 28** | **Rehearsal:** the owner walks the demo on a phone with a real wallet, on staging. | The rehearsal. |
-| **Sep 29 – Oct 1** | Demo cut, pitch recorded, traction refreshed, validation doc final, submission filed. | Record the pitch; file. |
-| **Oct 2–12** | Arena presence, reviewer comments, fixes; deferred items only if the gate was green by Sep 26. | Respond to reviewers. |
+| **Sep 13–14 (done)** | #284/#293/#294/#295 merged; the 09:00 UTC snapshot recorded — `snapshot/pre-colosseum-2026-09-14-main` at `75b69cc`, `…-develop` at `41d0a6a`, `PRE_EVENT_STATE.md` finalised (`c1f267d`). Tags could not be pushed from a cloud session; the branches pin the same commits. | Push the real tags from the Mac (one-liner in the disclosure file). **Decide §4 item 1 — now a dated blocker.** |
+| **Sep 14–16** | W6 credibility fixes **including the GitHub repo description**; W4 (2 days); W1 libs + pure tests start; W5 hygiene lands; **W9 part 1 — outcome counters**. **Sep 16: schema freeze.** | Eyeball W4 on staging; answer §4 item 4; W6b interview script approved. |
+| **Sep 17–21** | W1 pure gate done; W2 on fixtures then on W1's libs; W3 starts; first Hub demo captures; **a real-wallet smoke on staging — one lock, one connect-and-sign, one rendered report — pulled forward out of the rehearsal**. **Review slot Sep 19:** Codex on W1. | "promote" the first in-window batch to `main`; first two operator interviews; **the real-wallet smoke is the owner's hands, nobody else can do it**. |
+| **Sep 20** | — | **W10 weekly update #1.** |
+| **Sep 22–26** | W3 done; **integration gate** on staging with the owner's wallet; W2 done; W5 evidence pages; **the dry-run project's real program is live and accruing** (W9 part 2). | Eyeball the hub flow end to end on a phone; pilot operator consented. |
+| **Sep 27** | **Feature freeze.** Only fixes from here. | **W10 weekly update #2.** |
+| **Sep 28** | **Rehearsal:** the owner walks the demo on a phone with a real wallet, on staging. Because the Sep 17–21 smoke already proved the primitives, this is a rehearsal, not a first attempt. | The rehearsal. |
+| **Sep 29 – Oct 1** | Demo cut, **pitch recorded (separate video, 2–3 min; the demo is its own ≤3 min)**, `TRACTION_2026-09.md` final, validation doc final, submission filed. | Record both videos; file. |
+| **Oct 2–12** | Arena presence, reviewer comments, fixes; deferred items only if the gate was green by Sep 26. | Respond to reviewers. **W10 updates #3 (Oct 4) and #4 (Oct 11).** |
 
 ---
 
@@ -220,9 +293,14 @@ engine restarts of any kind.
 
 Each line: the question · our default · Codex's recommendation · the risk of taking the default.
 
-1. **Which second project runs the hub dry run.** Default ROSE (richest comp history). Codex:
-   ROSE, *if its operator agrees*, as a labelled dry run. Risk: rich history is not independent
-   adoption; do not present the dry run as a live program.
+1. ⏰ **Which second project runs the hub dry run — DECIDE BY Sep 17.** Default ROSE (richest
+   comp history). Codex: ROSE, *if its operator agrees*, as a labelled dry run. Risk: rich
+   history is not independent adoption; do not present the dry run as a live program.
+   **Revision 3 promotes this from a decision to a dated blocker.** It is no longer a demo
+   detail — it is the traction decision and the longest pole in the plan. A real program needs
+   an operator who agrees, a funded wallet, a published version and then *elapsed time* before
+   there are receipts worth showing. Decided Sep 17, there is time for real usage. Decided in
+   the Sep 22–26 block as revision 2 had it, the entry ships with a dry run and no users.
 2. **Program funding rule.** Default: shortfall shown, not required. Codex: **require a fresh
    funding check for the next period before initial arming**, plus explicit shortfall and
    outage behaviour. Risk of the default: obligations grow with no demonstrated ability to pay.

@@ -4,6 +4,7 @@
 [![Built on Solana](https://img.shields.io/badge/Built%20on-Solana-9945FF)](https://solana.com)
 [![Powered by Bags.fm](https://img.shields.io/badge/Powered%20by-Bags.fm-orange)](https://bags.fm)
 [![Live App](https://img.shields.io/badge/Live-clucknorris.app-green)](https://clucknorris.app)
+[![Colosseum Crypto World's Fair](https://img.shields.io/badge/Colosseum-Crypto%20World's%20Fair%202026-C9A227)](https://www.colosseum.com/worldsfair)
 [![Auto-deployed on Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet)](https://railway.app)
 
 > *"We took the hard knocks so you don't have to."*
@@ -13,6 +14,32 @@
 Everything that teaches is free. No signup, no wallet connect to learn, no subscription. The heavy tools (X-Ray, Holders, Trace, the airdropper, Buy Special) cost real money to run — hold about $50 worth of CLKN and they are all free; otherwise 0.05 SOL unlocks the lot for 7 days. The safety basics — Wallet Checkup, Firepit, the Locker Room — stay free for everyone.
 
 Live at **[clucknorris.app](https://clucknorris.app)**.
+
+---
+
+## 🏛️ Colosseum Crypto World's Fair — competing now
+
+**Window: 2026-09-14 11:00 UTC → 2026-10-12.** We're building in it with this product and this
+repo.
+
+Colosseum judges only the work completed inside that window, and requires all prior development
+to be disclosed. So the baseline is declared up front rather than blurred:
+
+| | |
+|---|---|
+| **Pre-event disclosure** | [`docs/PRE_EVENT_STATE.md`](docs/PRE_EVENT_STATE.md) — what existed before the window, itemised |
+| **Snapshot commits** | `main` at `75b69cc`, `develop` at `41d0a6a`, taken 2026-09-14 09:00 UTC |
+| **Durable markers** | branches `snapshot/pre-colosseum-2026-09-14-main` and `…-develop` |
+| **The scored delta** | `git log 75b69cc..main` — everything after the snapshot |
+| **The plan** | [`docs/COLOSSEUM_ROADMAP.md`](docs/COLOSSEUM_ROADMAP.md) |
+
+**What we're entering: the Project Hub** — a project-owned rewards program whose terms,
+eligibility and payments a holder can check *without trusting us*. Versioned program records,
+per-recipient receipts, and a calculation anyone can reproduce from published inputs. The school
+is the front door; the rest of the tools below are the same stack, already live.
+
+No prizes are claimed and no result is predicted here. Everything on this page that predates
+2026-09-14 is disclosed as such.
 
 ---
 
