@@ -475,3 +475,111 @@ the canonical JSON of every published version is mirrored under `programs/` in t
 Until both exist for a version, the public wording is "the calculation is reproducible from the
 published inputs", never "independently verified". Completeness (no omitted escrow) remains a
 separate claim that only an independent scan of the lock program can support; it is not made.
+
+---
+
+## Addendum C — Teach the button before you offer it (Codex, 2026-09-14; adopted)
+
+**Headline for the impatient: this addendum requires NO schema change.** Everything it specifies
+is derived from entities already in §2, plus one server-side constant. The Sep 16 freeze holds.
+
+### C1. The principle
+
+CLAUDE.md: *guardrails before power — first-timers get warned before they can hurt themselves.*
+The Hub asks a holder to immobilise their tokens for three to eighteen months. That is the single
+most consequential button anywhere in the product, and a generic locking service shows them a
+term sheet and a Confirm.
+
+We have 35 lessons, a Library, an LP Lab and an AI tutor already live. The differentiator is not
+that we lock tokens. It is that **we explain what the holder is agreeing to, in the flow, before
+they agree** — and that the explanation is generated from *this* program's real terms, not from
+marketing copy.
+
+> Don't just give someone a button. Teach them what the button does.
+
+This is also where the company theme lands on one surface: **Educate** answers the questions,
+**Build** is the campaign, **Earn** is the receipt. Judges score Insight; a feature list does not
+earn it, and this does.
+
+### C2. The six questions, and where each answer comes from
+
+Every answer is computed from §2 entities. None is authored per project. The lesson link is
+context, never the answer.
+
+| Question | Answer derived from | Lesson link |
+|---|---|---|
+| **What happens to my tokens?** | Eligibility record `escrow`, `amountRaw`, `termDays`, `firstSeenAt`; program `minTermDays`/`maxTermDays`. Names the escrow address and the exact unlock date. | locking basics |
+| **Can I sell during the lock?** | Program `cancelableAllowed:false` plus the escrow. The answer is a flat **no**, with the date, and the explicit line that **nobody can move them early, including us**. | custody + escrow |
+| **Where does the reward come from?** | The **Funding status** object: `obligationsRaw`, `reservedRaw`, `observedBalanceRaw`, `shortfallRaw`, and `fundingResponsibility: fundingWallet`. Says which of the three it is showing, per §2. | who pays rewards |
+| **How much will I get?** | `estimated` (preview only, never stored) plus the weight rule. See C3 — this is the dangerous one. | pool share + dilution |
+| **What are the risks?** | Derived: term length, live `shortfallRaw` state, and whether `rewardMint` differs from the locked mint. | risk of locking |
+| **Why lock at all?** | Generic. No project-specific claim. | why projects lock |
+
+**The reward-asset risk is mandatory and derived**: when `rewardMint !== mint`, the block says in
+plain words that the holder is locking one asset and being paid in another, and that the reward
+asset's value can move independently. This falls straight out of §2's pinned reward asset.
+
+### C3. We do not show APR. Ever.
+
+An APR implies a rate we control and guarantee. We control neither. The pool is shared
+(`poolDailyRaw` split by weight), so any individual's rate **falls when other people lock** — and
+a number that moves against the holder after they commit, having been shown as a headline before
+they committed, is the exact pattern this project exists to warn people about.
+
+What the block shows instead:
+
+- today's `estimated` slice, labelled an estimate and never stored;
+- the sentence that makes it honest: **"this is today's share. It goes down when more tokens are
+  locked and up when locks end. It is not a rate anyone promised you."**;
+- the weight rule in words: amount multiplied by committed term.
+
+A future version may show a modelled range with its assumptions stated. It may not show a single
+APR figure. **Test 17 pins the absence.**
+
+### C4. The lesson map is a constant, not schema
+
+A server-side table maps each of the six concept keys to a lesson id already in the curriculum.
+It lives beside the curriculum, not on the program record, because it is identical for every
+project and an operator has no business choosing which lesson a holder reads.
+
+The existing i18n audit already fails CI on a lesson id that does not resolve, so a renamed or
+deleted lesson breaks the build rather than shipping a dead link. Copy goes through the seven-
+language dictionary pattern like every other surface.
+
+### C5. Placement and behaviour
+
+- Renders on `/p/<id>` and `/p/<id>/program/<v>`, **above** the lock action, not behind a tab.
+- The risk line and the "can I sell" answer are **always visible**, never collapsed and never a
+  dismissible modal. The rest may be collapsed with the questions readable.
+- The block reads correctly for a visitor with **no wallet connected** — all six answers work
+  from the program version alone; connecting a wallet only personalises the estimate.
+- Phone first. This is the surface most likely to be read on a phone at the moment of decision.
+
+### C6. What it must never become
+
+- Not a **"safe project"** badge, or anything a reader could mistake for our endorsement of the
+  project, the token or the reward. §5's existing ban on safety badges covers this block too.
+- Not a place for **operator free text** in the first release. A project-authored blurb on a page
+  we render is an endorsement risk and an injection surface, and the codebase has already been
+  bitten by unescaped third-party strings. Additive later if wanted; out now.
+- Not a **claim of independent verification.** Per Round 0, the wording is "the calculation is
+  reproducible from the published inputs" until B5's independent witness exists.
+
+### C7. Schema impact: none
+
+Stated explicitly so the freeze is not reopened. No new field on Project, Program version,
+Period, Eligibility record, Balance states, Batch, Receipt or Funding status. Addendum C is a
+**surface** (§5), a **server-side constant** (C4) and three **acceptance tests** (C8).
+
+### C8. Acceptance tests (continuing the numbering from §7 and B4)
+
+15. **Every answer is derived.** For a fixture program, all six answers render with no
+    project-authored content; the escrow, unlock date and funding state in the copy match the
+    entities exactly.
+16. **The reward-asset warning is mandatory.** With `rewardMint !== mint` the differing-asset
+    risk line is present; with `rewardMint === mint` it is absent. Neither is operator-controlled.
+17. **No APR anywhere.** No route, template or dictionary string in the Hub surfaces renders
+    "APR", "APY" or a percentage-per-year figure. Extends test 14's pattern (the "safe badge"
+    guard) to rate language.
+
+Owned by W2; they gate W2's definition of done alongside test 14.

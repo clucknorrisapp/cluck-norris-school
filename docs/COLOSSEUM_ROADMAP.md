@@ -125,7 +125,8 @@ Nothing merges to `main` without the owner's "promote".
 
 **Schema freeze: Sep 16, end of day.** The entities in design §2 as amended by Addendum B are
 frozen before any fixture work in W2 starts; a schema change after that is a PR to the design doc
-first.
+first. **Addendum C (the education block, adopted 2026-09-14) adds no entities** — it is a
+surface, a server-side lesson map and three tests — so it does not touch the freeze.
 
 ### W1 — Project Hub: the settlement protocol and money rules (weeks 1–2)
 Branch `hub/core`. The pure libs: project record, program versions with hashes, the ledger with
@@ -149,9 +150,16 @@ Branch `hub/pages`. `/p/<id>`, `/p/<id>/program/<v>`, `/p/<id>/eligibility?walle
 three funding numbers labelled, lessons linked at the moment of action. Seven languages via the
 dictionary pattern. Starts on frozen-schema fixtures from Sep 17, switches to W1's libs as they
 land.
+Also W2: **the Addendum C education block** — the six questions a holder should have answered
+before they immobilise tokens for months, every answer *derived* from the program's own entities
+rather than authored, rendered above the lock action and readable with no wallet connected. This
+is where the theme lands on one surface: Educate answers, Build is the campaign, Earn is the
+receipt. It is also the thing a generic locking service does not do.
 **Done when:** every page renders in the smoke test, the i18n audit passes, a receipt for an
 unrecorded row 404s, **test 14** (no route or copy renders a "safe" / "verified project" badge)
-passes, and the owner has eyeballed it on staging on desktop and a phone.
+and **tests 15, 16 and 17** (every answer derived; the differing-reward-asset warning is
+mandatory and not operator-controlled; no APR, APY or per-year rate anywhere) pass, and the owner
+has eyeballed it on staging on desktop and a phone.
 
 ### W3 — Project Hub: operator console and funding-wallet payout (weeks 2–3)
 Branch `hub/operate`. Signed-nonce operator login (its own HMAC purpose, never the tools pass),
