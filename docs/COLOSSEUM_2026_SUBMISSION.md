@@ -73,14 +73,14 @@ models and ZK / crypto research do not apply.
 **Teammates:** none — §7 limits each person to one team, so an invite would spend that person's
 only entry.
 
-**What are you building, and who is it for?** (cap 1000; this is 956)
+**What are you building, and who is it for?** (cap 1000; this is 926)
 
 ```
 Cluck Norris (clucknorris.app) is a live Solana platform for two audiences.
 
 Individuals learning crypto get a free school: courses from beginner through a belt-ranked core, a hands-on LP Lab, a reference library, live token data and an AI tutor in every lesson. Multiple languages, read-aloud, no signup, no wallet. Graduates receive a transcript and an on-chain graduation NFT gated by a server-side lesson ledger.
 
-Projects past launch get operator tools: Wallet X-Ray, Trace and Token Autopsy for forensics; Holders and Owners Snapshot to separate real wallets from pools and program accounts; Wallet Checkup with in-place revoke; Listing Checkup; LP Scanner and LP Rescue for lost liquidity; Firepit to burn junk tokens and reclaim rent; Project Burn with on-chain proof; a batch airdropper; buy competitions paid on verified buys; a guided token creator; and free non-custodial locking on Jupiter Lock with public Lock of Fame pages and lock-to-earn.
+Projects past launch get operator tools: Wallet X-Ray and Trace for forensics; Holders and Owners Snapshot to separate real wallets from pools and program accounts; Wallet Checkup with in-place revoke; Listing Checkup; LP Rescue for lost liquidity; Firepit to burn junk tokens and reclaim rent; Project Burn with on-chain proof; a batch airdropper; buy competitions paid on verified buys; a guided token creator; and free non-custodial locking on Jupiter Lock with public Lock of Fame pages and lock-to-earn.
 ```
 
 **Why did you decide to build this, and why build it now?** (cap 1000; this is 991)
@@ -161,6 +161,12 @@ how Colosseum reaches us about prize distribution and accelerator interviews, so
 that gets read.
 
 ### Why the copy reads the way it does
+
+- **A tool is named only if it is on the tools index or the homepage.** A route answering 200 is
+  not the test — `/autopsy` and `/lp-scanner` both answer and both are retired from the product
+  surface (owner, 2026-09-14: "we don't use token autopsy anymore"). Check `public/tools.html` and
+  `public/home.html`, not the route table.
+
 
 - **The three words are the aim, not the architecture.** "What we're working toward" — the owner's
   correction. Saying the platform is *built on* educate, build, earn would claim the goal as the
