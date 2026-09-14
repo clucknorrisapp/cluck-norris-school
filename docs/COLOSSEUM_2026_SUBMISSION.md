@@ -83,14 +83,14 @@ Individuals learning crypto get a free school: courses from absolute beginner th
 Small projects growing beyond launch get the operator tools: wallet and token forensics; holder analysis that separates wallets from pools, escrows and program accounts; delegate-approval checks with in-place revocation; batch airdrops; buy competitions paid on verified on-chain buys; and free, non-custodial token locking on the open-source Jupiter Lock program, with Token-2022 support and publicly verifiable lock records.
 ```
 
-**Why did you decide to build this, and why build it now?** (cap 1000; this is 983)
+**Why did you decide to build this, and why build it now?** (cap 1000; this is 991)
 
 ```
-Four or five years ago, not understanding wallets, contracts, liquidity and how price actually moves cost me real money in projects I believed were safe. I also did damage as a newcomer: I sold out of small projects without understanding what that did to them. Later I was part of a project with a six-figure presale. People around it did not act in good faith and it never found traction. We refunded every presale holder the BNB they put in, but BNB had lost more than half its value by then. I left the space.
+Four or five years ago, not understanding wallets, contracts, liquidity and how price actually moves cost me real money in projects I believed were safe. As a newcomer I also sold out of small projects without understanding what that did to them. Later I was part of a project with a six-figure presale. People around it did not act in good faith and it never found traction. We refunded every presale holder the BNB they put in, but BNB had lost more than half its value by then. I left the space.
 
-When I came back, I decided the only way I would trust a project to do the right thing was to run it myself. I asked several developers to build the school; every one dropped out, so I built it, and over the last nine months I have learned to build properly.
+When I came back, I decided the only way I would trust a project to do the right thing was to run it myself. I asked several developers to build the school; every one dropped out, so I built it.
 
-Why now: the school is live at clucknorris.app and I am moving to advanced features and to tools other projects can use — liquidity, buy competitions, lock-to-earn. Colosseum is the right moment to build that.
+Why now: the school is live at clucknorris.app, I have formed CLKN Productions LLC to put a legal structure behind it, and I am moving to the tools other projects can use — liquidity, buy competitions, lock-to-earn. I have done the groundwork to know this is what I want to build and that I can.
 ```
 
 **How does your product use these chains?** (cap 500; this is 492)
@@ -141,15 +141,16 @@ The owner asked why a "no" needs five sentences. Because Official Rules §9 obli
 third-party code, and an AI tool having written much of the codebase is better heard from us than
 discovered. A bare "No" would be accurate about people and silent about that.
 
-**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 480)
+**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 492)
 
 ```
-Cluck Norris has been live at clucknorris.app since 2025, so most of the platform predates the hackathon, and we draw that line exactly: the pre-window state is snapshotted at commit 75b69cc and documented in docs/PRE_EVENT_STATE.md, with every in-window commit listed there. The hackathon build is the multi-project layer: a Project Hub where a token's lock, burn and reward-program terms are published and every payout can be verified by any holder. The whole repository is MIT.
+Cluck Norris has been live since 2025. The pre-window state is snapshotted at commit 75b69cc and documented in docs/PRE_EVENT_STATE.md, with every in-window commit listed there. The in-window build is the Project Hub: a token's lock, burn and reward-program terms published, with payouts any holder can verify. The founder built the platform alone after the developers he approached dropped out, entered the Bags hackathon late, and has since formed CLKN Productions LLC behind the work. MIT.
 ```
 
-This is the disclosure line in the form's own words: the platform predates the window, the
-snapshot commit and `docs/PRE_EVENT_STATE.md` draw the boundary, and the Project Hub is named as
-the in-window build so the judges know what to score.
+This carries the disclosure line in the form's own words — the platform predates the window, the
+snapshot commit and `docs/PRE_EVENT_STATE.md` draw the boundary, the Project Hub is named as the
+in-window build — plus the overflow from the founder's "why" that would not fit in 1000: the
+developers who dropped out, the Bags hackathon, and the newly formed LLC.
 
 **Project website:** `https://clucknorris.app`
 
@@ -265,8 +266,9 @@ since, without a team, paid promotion, or a raise.
 The larger vision is an ecosystem where the tools he wished he had as a project owner — liquidity
 management, buy competitions, lock-to-earn, holder analysis — are available to other projects, on the
 belief that projects working together find and build stronger communities than projects competing
-alone. He expects to bring people on as the brand grows, but wants the base product and its traction
-to be earned first.
+alone. He recently formed CLKN Productions LLC to put a legal structure behind the work — the groundwork,
+in his words, to know this is what he wants to do and that it can be done. He expects to bring
+people on as the brand grows, but wants the base product and its traction to be earned first.
 
 **How to use it.** The form's "why" field carries the compressed version (§0). The pitch video's
 "why us" beat is the second paragraph. `/about` gets the whole thing. Keep the two dollar figures
