@@ -82,7 +82,15 @@ code, not the creation of new work, and it is not claimed as in-window.
 
 ## Built inside the window (filled in as it ships; each line links a PR merged after Sep 14)
 
-- (empty until Sep 14 11:00 UTC)
+- **Buy-comp hold check: a lock is not a sell** — a Jupiter Lock escrow is a PDA and therefore
+  off-curve, so the hold check scored every lock as a pool sale and would have disqualified any
+  entrant who locked their bag during a competition window. Destinations are now resolved to
+  their owning program and classified three ways. PR #298.
+- **Colosseum roadmap revision 3, and the entry stated publicly** — judging criteria read
+  directly from Colosseum rather than from a summary; traction (W9) and weekly updates (W10)
+  added as workstreams; the dry-run project decision promoted to a dated blocker; a real-wallet
+  smoke pulled forward out of the rehearsal; README and `/about` updated to state the entry and
+  link this disclosure.
 
 ## How to read the delta
 

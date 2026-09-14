@@ -7,7 +7,10 @@ you review, verify and give second opinions; the owner decides. Nobody merges to
 0. `docs/COLOSSEUM_ROADMAP.md` (PR #295, 2026-09-13) — the operating plan for the window: what is
    done, the eight workstreams, the calendar, the owner's open decisions. **Your first job in the
    window is to review this plan, not code**: post findings on PR #295 (see "Round 0" below).
-1. `CLAUDE.md` — the owner's decisions and the traps that already cost days. A reviewer without it
+1. `CLAUDE.md` — the owner's decisions and the traps that already cost days. **New 2026-09-14:
+   the company theme, Educate → Build → Earn**, in the mission section, with the rule that "Earn"
+   describes capability and never a promise. The school does not pause for the hackathon; the Hub
+   sits on top of a live school. A reviewer without it
    flags intentional things as bugs. The rules that matter most for you: docs must match the code;
    the chain shows *what*, never *why*; Wallet Watch is private (never mention it); no Normie Quest
    reward promises; admin routes that act are POST-only; `develop` is staging, `main` is production.
@@ -71,24 +74,49 @@ you review, verify and give second opinions; the owner decides. Nobody merges to
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
-## Round 0 — review the plan before the window opens (owner ask, 2026-09-13)
-Read `docs/COLOSSEUM_ROADMAP.md` and `docs/DESIGN_PROJECT_HUB_2026-09-10.md` together, then post
-findings on PR #295, ranked. What we want from you, in order:
-1. **Is the Project Hub the right in-window centerpiece**, against what has placed at Colosseum
-   before (one sharp mechanism with a number)? If not, name the one thing you would lead with and
-   why it reads better to a judge in three minutes.
-2. **The eight workstreams**: which one is under-scoped, which is a week of work dressed as three
-   days, which dependency is wrong. W1's ten acceptance tests are the money path — say whether
-   they are the right pins before they are written.
-3. **What is missing.** The plan is built from our own docs; name the judge question none of the
-   surfaces answer.
-4. **What to cut.** Four weeks, one founder, 2–3 agents concurrently per session. If the calendar
-   is a fantasy, say which rows.
-5. **The six owner decisions in §4**: your recommendation on each, one line, with the risk if the
-   default is taken.
-6. **The team story**: one founder plus an agent team, second-reviewer AI on every PR. Is that a
-   strength or a liability in front of these judges, and how would you word it?
-Findings, not rewrites. A "the plan is fine, ship it" on any item is a real answer.
+## Round 0 — DELIVERED (2026-09-13). Folded into roadmap revision 2.
+
+Your Round 0 findings were adopted: the centerpiece confirmed, settlement rules tightened into
+Addendum B, every promised test assigned or deferred, W4/W5 cut, the demo retargeted at the Hub
+story, a validation deliverable added, the concurrency claim corrected, and a feature freeze plus
+a phone rehearsal put before the recording slot. Two of your corrections are now load-bearing:
+prior multi-tool entries *have* placed, so the single-mechanism lead is a positioning judgement
+rather than a law; and a program hash served by the same server that computes the payout is
+reproducible, not independently verified, so the public wording stays "reproducible from the
+published inputs" until Addendum B §B5's witness exists.
+
+## Round 1 — the window is open (from 2026-09-14 11:00 UTC)
+
+**State as of 2026-09-14.** The window opened; the pre-event snapshot is recorded (`main` at
+`75b69cc`, `develop` at `41d0a6a`, marker branches `snapshot/pre-colosseum-2026-09-14-*`) and
+`docs/PRE_EVENT_STATE.md` is the disclosure. Open PRs:
+
+- **#298 — buy-comp hold check: a lock is not a sell.** CI green. A Jupiter Lock escrow is a PDA
+  and therefore off-curve, so the hold check scored every lock as a pool sale and would have
+  disqualified anyone who locked during a competition window. Destinations are now resolved to
+  their owning program and split three ways.
+- **#299 — roadmap revision 3, the company theme, and Hub design Addendum C.**
+
+**What we want reviewed now, ranked:**
+
+1. **#298 is a money path** — it decides who is eligible for a prize. Is the three-way
+   classification right? The conservative fallback treats an *unresolved* off-curve destination as
+   a pool sale; is that the correct default, or does it hide a different false positive? Is one
+   batched `getMultipleAccounts` per call the right cost/correctness trade?
+2. **Addendum C (design doc).** The claim is that it needs **no schema change** a day before the
+   Sep 16 freeze. Check that: is every one of the six answers genuinely derivable from §2
+   entities, or does one of them smuggle in a field? The APR refusal in C3 is deliberate — argue
+   it if you disagree.
+3. **Roadmap revision 3's four gaps** — traction (W9), weekly updates (W10), the dry-run project
+   promoted to a dated blocker, and the real-wallet smoke pulled forward. Is W9 part 2
+   ("create some usage") realistic in the time, or is it a wish?
+4. **The traction instrumentation itself.** Personal earn (fewer losses because you learned) is
+   not honestly measurable; program earn (receipts) is. Is that split right, and is there a
+   defensible metric for the first that we are missing?
+5. **Anything in `PRE_EVENT_STATE.md` that reads as a claim on pre-window work.** This is the
+   failure mode with the worst penalty. Be pedantic here.
+
+Findings, not rewrites. "Reviewed, no issue" on a money path is a real answer.
 
 ## Open questions the owner would like your opinion on
 - Is lock-to-earn on Jupiter Lock the right headline mechanism for a Consumer Apps entry, or is
