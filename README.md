@@ -19,7 +19,7 @@ Live at **[clucknorris.app](https://clucknorris.app)**.
 
 ## 🏛️ Colosseum Crypto World's Fair — competing now
 
-**Window: 2026-09-14 11:00 UTC → 2026-10-12.** We're building in it with this product and this
+**Window: 2026-09-14 13:00 UTC (06:00 PT) → 2026-10-13 06:59 UTC (2026-10-12 23:59 PT).** We're building in it with this product and this
 repo.
 
 Colosseum judges only the work completed inside that window, and requires all prior development

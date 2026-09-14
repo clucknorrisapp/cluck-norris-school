@@ -3,8 +3,8 @@
 Colosseum's rule: pre-existing code is allowed, all prior development must be disclosed, and only
 work completed between 2026-09-14 and 2026-10-12 is judged. This file is that disclosure.
 
-**Finalised 2026-09-14 09:00 UTC**, two hours before the window opens at 11:00 UTC
-(04:00 PDT). Everything reachable from the two commits below predates the window and is **not**
+**Finalised 2026-09-14 09:00 UTC**, four hours before the Contest Period opens at **13:00 UTC**
+(06:00 PT, per §5 of the Official Rules). Everything reachable from the two commits below predates the window and is **not**
 claimed as hackathon work.
 
 ## The snapshot commits
@@ -77,7 +77,7 @@ On `develop`, merged before the window and **not yet promoted to `main`**:
 - Docs: Colosseum window roadmap revision 2, Project Hub design Addendum B: #295.
 
 **On #282 specifically.** It was merged to `develop` on 2026-09-12 as pre-window work and is
-disclosed as such here. Promoting it to `main` after 11:00 UTC is a deployment of pre-window
+disclosed as such here. Promoting it to `main` after 13:00 UTC is a deployment of pre-window
 code, not the creation of new work, and it is not claimed as in-window.
 
 ## Built inside the window (filled in as it ships; each line links a PR merged after Sep 14)
