@@ -81,7 +81,9 @@ receipts. The three-minute question is *"can a holder independently check what t
 what actually arrived?"* Show one holder, one program version, a funding coverage/shortfall
 state, a historical payment and its calculation export, then a clearly labelled second-project
 dry run. The school is the front door; every other tool is a labelled "also live, same stack"
-wall. Learn → Build → **Prove** → Earn. It must read as in-window work, started after 11:00 UTC
+wall. The company theme is the owner's: **Educate → Build → Earn** (CLAUDE.md, the mission).
+**Prove** is not a fourth pillar, it is what makes Earn believable, and it is the leg this entry
+is built on — a holder who can check what they were owed and what arrived. It must read as in-window work, started after 11:00 UTC
 Sep 14, with the design doc as the disclosed prior art.
 
 **The number.** *Reproducible receipts ÷ total receipts*, with the period and the denominator

@@ -125,6 +125,30 @@ basics stay free for everyone. Live at **clucknorris.app**.
 The point is that people lose money in crypto because nobody told them the truth plainly, and
 this teaches them before they get hurt. Design calls should serve that:
 
+### The theme: Educate → Build → Earn (owner, 2026-09-14)
+
+The owner's own framing for everything we ship. Use it when deciding what to build and when
+writing anything public.
+
+- **Educate.** The basics, the more advanced topics, and tools people can learn with on their own
+  time — which is what the school already is. **The school keeps getting better, easier to use and
+  more accessible**; that work never stops being a priority just because something newer is in
+  flight. Free, no wallet, no signup.
+- **Build.** Two halves, and the second is easy to forget: the project and user tools, *and*
+  building communities together and strengthening other communities. The Locker Room, Normie Quest
+  for the NORMIE community, the partner-token work — we build with other projects, not only for
+  ourselves.
+- **Earn.** Four honest senses, in this order: people making **better crypto choices** because of
+  the education and the tools; **good projects getting more exposure** and building each other up;
+  **earn potential for the communities we help**, through the tools and Lock to Earn; and **earn
+  potential for individuals** as they learn how liquidity actually works.
+
+⚠️ **How to say "Earn" honestly.** It describes capability and opportunity, never a promise. Never
+a yield figure we do not pay, never a guaranteed return, never a suggestion that holding CLKN is an
+investment, and nothing about Normie Quest reward terms (still unagreed). "Earn potential" is the
+ceiling of the claim. The strongest version of Earn is the one we can prove: a holder who can check
+what they were owed and what arrived.
+
 - **Learning and safety stay genuinely free.** The school, the AI tutor, Wallet Checkup,
   Firepit, the Locker Room — no wallet, no signup, no catch. The **heavy tools** (X-Ray,
   Holders, Trace, Airdrop, Buy Special) moved behind the **unified tools pass on 2026-08-18**
