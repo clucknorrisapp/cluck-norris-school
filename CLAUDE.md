@@ -51,6 +51,50 @@ does not tell you how to write software; use your judgement for that.
 > init script (60 fps, same logic; the state and beat tests do) and drive the target scene with a
 > lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`); the visual gate stays on WebGL.
 
+> 🏛️ **Colosseum Crypto World's Fair (Sep 14 – Oct 12, 2026) — we are ENTERED (owner, 2026-09-10).**
+> The submission package is `docs/COLOSSEUM_2026_SUBMISSION.md` (product description, GTM, demo
+> script, pitch outline, competitive landscape). The **Colosseum Copilot** research skill is
+> installed (`.agents/skills/colosseum-copilot`, `/colosseum-copilot`); it needs the owner's
+> personal access token in the env var `COLOSSEUM_COPILOT_PAT` (read-only, regenerate at
+> colosseum.com/arena/copilot, expires 2026-12-09) — **never commit it**. Anything the pitch
+> claims must be true in the code. **Owner, 2026-09-10: "we can rebuild anything needed for the
+> hackathon — make this the best that it can be."** The "Removed" list below is not a wall for
+> hackathon-scope work done right (the quiz-free `/curriculum` came back this way); it is a record
+> of what failed and why, so the rebuild does not repeat the failure. Second reviewer: **Codex**
+> reads `docs/CODEX_REVIEWER_BRIEF.md` and comments on PRs; findings, not rewrites.
+> 🗓️ **Hackathon window: 2026-09-14 04:00 PDT = 11:00 UTC → 2026-10-12.** Colosseum's live rules
+> (quoted in `docs/COLOSSEUM_THINK_TANK_2026-09-10.md`): *"Teams may begin development before the
+> hackathon, but products are judged only on the work completed between the competition's start and
+> end dates"* and *"Builders may use pre-existing code, but teams must disclose all relevant past
+> development work."* So the owner's 2026-09-10 "publish nothing" freeze was relaxed on 2026-09-12
+> (owner asked for the call): **build and ship normally; the disclosure line is the snapshot taken
+> at 09:00 UTC on Sep 14** (`snapshot/pre-colosseum-2026-09-14-*` branches, owner pushes the real
+> tags — a cloud session cannot push tags) and `docs/PRE_EVENT_STATE.md` is the disclosure. PR #282
+> (dashboard, Lock of Fame, syllabus, navigation) merged to `develop` on 2026-09-12 as pre-window
+> work; promotion to `main` is still the owner's explicit go. What must read as in-window: the
+> Project Hub + verifiable program terms and receipts, started only after 11:00 UTC Sep 14. No public
+> post about hackathon work before kickoff (owner's preference, nothing gained by earlier posts).
+> ⚠️ **The tools pass is a SIGNED SESSION** (reworked 2026-09-10 after Codex found that a pasted
+> holder address and a public payment signature were both bearer passes): the wallet signs a
+> one-line nonce message, `POST /api/tool-gate/session` verifies it and issues an HMAC token, and
+> `x-clkn-pass: t:<token>` is what the heavy APIs check (`toolPassGate` in `server.js`). A payment
+> signature is evidence, bound to its payer, consumed once — never the credential. RPC outage is
+> `unavailable`, never a zero balance, never cached as a denial. `scripts/tool-pass-gate-test.cjs`
+> drives the whole flow with a real ed25519 keypair.
+
+> 📱 **The Google Play app is a PINNED, education-only bundle — read `docs/STORE_EDITION.md`
+> before touching any endpoint it calls.** Shipped 2026-09-11 as release `store-google-v1.0.0`
+> (built from main `dc8652a`; the wrapper repo `clucknorrisapp/CLKN-SEEKER` pins the tarball by
+> sha256). A website deploy never changes the installed app, so **the endpoints in `STORE_API_RE`
+> (`server.js`) are a versioned contract**: `/api/ask-cluck` + `/report`, `/api/track`,
+> `/api/claim/certificate`, `/api/certificate/:id`, `/api/i18n/translate`, `/api/tts`,
+> `/api/helius-rpc`, `/api/wallet-checkup`, `/api/listing-checkup/*` — don't rename them or change
+> their response shapes without cutting a new `store-google-v*` release (the workflow has a manual
+> run; a cloud session cannot push tags). The store's legal pages are `/privacy/store` and
+> `/terms/store` and must stay true to that bundle (no wallet, no payments, no address). The
+> `ClucknorrisPlay` / `ClucknorrisIOS` user-agent marker is refused on excluded endpoints as
+> defense-in-depth only — never treat it as authorisation.
+
 > 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
 > `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts
 > had no feet — NOT a position or resolution bug (that finding cost ~24h).
@@ -80,6 +124,30 @@ basics stay free for everyone. Live at **clucknorris.app**.
 
 The point is that people lose money in crypto because nobody told them the truth plainly, and
 this teaches them before they get hurt. Design calls should serve that:
+
+### The theme: Educate → Build → Earn (owner, 2026-09-14)
+
+The owner's own framing for everything we ship. Use it when deciding what to build and when
+writing anything public.
+
+- **Educate.** The basics, the more advanced topics, and tools people can learn with on their own
+  time — which is what the school already is. **The school keeps getting better, easier to use and
+  more accessible**; that work never stops being a priority just because something newer is in
+  flight. Free, no wallet, no signup.
+- **Build.** Two halves, and the second is easy to forget: the project and user tools, *and*
+  building communities together and strengthening other communities. The Locker Room, Normie Quest
+  for the NORMIE community, the partner-token work — we build with other projects, not only for
+  ourselves.
+- **Earn.** Four honest senses, in this order: people making **better crypto choices** because of
+  the education and the tools; **good projects getting more exposure** and building each other up;
+  **earn potential for the communities we help**, through the tools and Lock to Earn; and **earn
+  potential for individuals** as they learn how liquidity actually works.
+
+⚠️ **How to say "Earn" honestly.** It describes capability and opportunity, never a promise. Never
+a yield figure we do not pay, never a guaranteed return, never a suggestion that holding CLKN is an
+investment, and nothing about Normie Quest reward terms (still unagreed). "Earn potential" is the
+ceiling of the claim. The strongest version of Earn is the one we can prove: a holder who can check
+what they were owed and what arrived.
 
 - **Learning and safety stay genuinely free.** The school, the AI tutor, Wallet Checkup,
   Firepit, the Locker Room — no wallet, no signup, no catch. The **heavy tools** (X-Ray,
@@ -276,7 +344,10 @@ in one click, or sign a message where the gate is *ownership* rather than paymen
 - **The unified tools pass** (X-Ray, Holders, Trace, airdropper, Buy Special): hold **$50 worth
   of CLKN** → all free; else **0.05 SOL = 7-day pass to all of them**. ONE localStorage pass
   (`clkn_tools_unlock`), one client (`cluck-gate.js`), config at `/api/tool-gate/config`
-  ($-amount → CLKN computed from the live price; env knobs `TOOLGATE_USD/LAMPORTS/DAYS/OFF`).
+  ($-amount → CLKN computed from the live price; env knobs `TOOLGATE_USD` and `TOOLGATE_OFF`;
+  **the paid terms — lamports and days — are an append-only schedule in `lib/tool-pass-terms.js`
+  resolved at the payment's block time**, so a bought pass never moves when the offer changes;
+  `TOOLGATE_LAMPORTS`/`TOOLGATE_DAYS` env are ignored with a boot error since 2026-09-11).
   Pages preview free — the gate fires on RUN/SEND. Fail-open when pricing is down. The old
   per-tool thresholds (50k airdropper / 100k Buy Special) are RETIRED by this.
 - premium forensics — holder-gated at 2M, re-checked live on every run (NOT part of the pass)
@@ -512,7 +583,10 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
   the **Normie Quest visual-regression gate** (`nq-visual.cjs` — pixel-diffs the game's title, HUD,
   characters, and gravemite against committed baselines; catches the render-broke-but-built-clean
   class the smoke test can't see). **Each exists because something got past the previous set — don't
-  remove them casually.**
+  remove them casually.** But they are DIFF-GATED, on pushes to `main`/`develop` as well as on PRs
+  (owner, 2026-09-13: "if we don't touch the Normie game we don't need all the crazy checks"): the
+  render and game jobs read the changed paths (and the server.js hunks) and skip when nothing can
+  reach a page or the game; syntax + unit checks always run. Don't restore an unconditional full run.
 - Cloud session recovery (containers reset mid-session):
   `git fetch origin --prune && git reset --hard origin/<branch> && npm install`. GitHub is truth.
 
