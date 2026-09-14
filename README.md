@@ -1,4 +1,4 @@
-# 🐔 Cluck Norris: School of Crypto Hard Knocks
+# 🐔 Cluck Norris
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Built on Solana](https://img.shields.io/badge/Built%20on-Solana-9945FF)](https://solana.com)
@@ -9,7 +9,13 @@
 
 > *"We took the hard knocks so you don't have to."*
 
-**A free crypto school for Solana, wrapped around research and operator tools for any Solana wallet or token. The heavy tools stay free while you hold ~$50 of CLKN (or a small SOL pass) — the token is the key that unlocks them, not a play for its own sake.**
+**Cluck Norris ([clucknorris.app](https://clucknorris.app)) is a live Solana platform. What we're working toward: educate, build, earn.**
+
+- **Educate** — a free crypto school, the *School of Crypto Hard Knocks*: courses, a hands-on LP Lab, a reference library, live token data and an AI tutor, in multiple languages, no signup.
+- **Build** — forensics, holder analysis, non-custodial locking and campaign tools that projects use to strengthen their communities.
+- **Earn** — reward programs whose terms and payouts any holder can verify without trusting us.
+
+Open source, live on mainnet. The heavy tools stay free while you hold ~$50 of CLKN (or a small SOL pass) — the token is the key that unlocks them, not a play for its own sake.
 
 Everything that teaches is free. No signup, no wallet connect to learn, no subscription. The heavy tools (X-Ray, Holders, Trace, the airdropper, Buy Special) cost real money to run — hold about $50 worth of CLKN and they are all free; otherwise 0.05 SOL unlocks the lot for 7 days. The safety basics — Wallet Checkup, Firepit, the Locker Room — stay free for everyone.
 
@@ -19,7 +25,7 @@ Live at **[clucknorris.app](https://clucknorris.app)**.
 
 ## 🏛️ Colosseum Crypto World's Fair — competing now
 
-**Window: 2026-09-14 11:00 UTC → 2026-10-12.** We're building in it with this product and this
+**Window: 2026-09-14 13:00 UTC (06:00 PT) → 2026-10-13 06:59 UTC (2026-10-12 23:59 PT).** We're building in it with this product and this
 repo.
 
 Colosseum judges only the work completed inside that window, and requires all prior development
@@ -45,7 +51,7 @@ No prizes are claimed and no result is predicted here. Everything on this page t
 
 ## 🆓 The school
 
-Three tracks, all free, in **seven languages** (English · Español · हिन्दी · Italiano · Português · Tiếng Việt · 中文), with read-aloud audio on every lesson.
+Three tracks, all free, in **multiple languages** — today English · Español · हिन्दी · Italiano · Português · Tiếng Việt · 中文, with more being added — and read-aloud audio on every lesson.
 
 | Track | Size | For |
 |---|---|---|
@@ -84,7 +90,7 @@ No wallet connect, no account.
 - **🛡 [Wallet Checkup](https://clucknorris.app/wallet-checkup)** — read-only scan for the things that actually drain people: lingering delegate approvals, honeypot / can't-sell holdings, and tokens whose dev can still mint or freeze. Find an approval on your own wallet and you can **revoke it right there**, signing yourself. (The old Security Coop merged into this page; `/security-coop` still resolves here.)
 - **🎒 [Bags Hub](https://clucknorris.app/bags)** — live launches, near-graduation and recently-graduated feeds, backed by our own 48h graduation tracker.
 
-The forensic rule holds across all of them: **the chain shows what happened, never why.** Every signal is on-chain evidence, not a verdict — and we only call a wallet "creator" or "team" when a launchpad API confirms it.
+The rule across all of them: **a claim has to be backed by something you can open yourself** — a transaction, an account, a launchpad API. Every signal is on-chain evidence, not a verdict, and we label a wallet "creator" or "team" only when a launchpad confirms it, never on inference.
 
 ---
 

@@ -1,4 +1,4 @@
-# Colosseum window roadmap — 2026-09-14 11:00 UTC → 2026-10-12 (revision 3)
+# Colosseum window roadmap — 2026-09-14 13:00 UTC → 2026-10-13 06:59 UTC (revision 3)
 
 The operating plan for the four weeks. One founder, no cofounder, an agent team: every
 workstream below is a separately scoped session with a definition of done, and the founder is
