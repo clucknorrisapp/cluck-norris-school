@@ -238,11 +238,11 @@ otherwise 0.05 SOL buys a 7-day pass to all of them. The whole thing is open sou
 ## 3. Team and location
 
 - **Team:** solo founder, operating as CLKN Productions LLC. No co-developers by design (see
-  below). 
-- **Location:** 
-- **Logo:** the Cluck Norris mark used on the site header ( icons) — export a 1024×1024 PNG.
+  below). `[OWNER — name as it should appear, and whether to state the LLC on the form.]`
+- **Location:** `[OWNER — country of residence, as the form asks.]`
+- **Logo:** the Cluck Norris mark used on the site header (`public/` icons) — export a 1024×1024 PNG.
 
-### Founder background (owner's own account, 2026-09-14; paste-ready for the form's team section, the pitch video's "why us" beat, and )
+### Founder background (owner's own account, 2026-09-14; paste-ready for the form's team section, the pitch video's "why us" beat, and `/about`)
 
 Four or five years ago the founder lost real money in projects he believed were safe, for the
 reason the school now exists: nobody had explained wallets, contracts, liquidity, liquidity
@@ -269,7 +269,7 @@ alone. He expects to bring people on as the brand grows, but wants the base prod
 to be earned first.
 
 **How to use it.** The form's "why" field carries the compressed version (§0). The pitch video's
-"why us" beat is the second paragraph.  gets the whole thing. Keep the two dollar figures
+"why us" beat is the second paragraph. `/about` gets the whole thing. Keep the two dollar figures
 vague — "six-figure", "more than half" — the owner's numbers are close but approximate, and nothing
 here should be disputable.
 
