@@ -65,6 +65,66 @@ models and ZK / crypto research do not apply.
 **Teammates:** none — §7 limits each person to one team, so an invite would spend that person's
 only entry.
 
+**What are you building, and who is it for?** (cap 1000; this is 940)
+
+```
+Cluck Norris (clucknorris.app) is a live Solana platform serving two audiences.
+
+The first is the individual learning crypto. They get a free school — courses from absolute beginner to belt-ranked, a hands-on LP Lab where liquidity maths is a calculator you can move rather than a lecture, a reference library, live token data, and an AI tutor inside every lesson. Multiple languages, read-aloud, no signup and no wallet. Finish it and you earn a transcript and an on-chain graduation NFT that a server-side lesson ledger has to agree you earned.
+
+The second is the small project that survived its launch and needs to grow. They get the operator tools: wallet and token forensics, holder analysis that separates real wallets from pools and program accounts, approval checkups with in-place revoke, batch airdrops, buy competitions paid on what each wallet actually bought, and free non-custodial token locking any project can run and prove.
+```
+
+**Why did you decide to build this, and why build it now?** (cap 1000; this is 995)
+
+```
+Because people lose money in crypto for a boring reason: nobody told them the truth plainly, in time, in a language they read. Every explanation is either a sales pitch or a whitepaper. So the first thing we built was a school that assumes you know nothing and never assumes you are stupid — and we put the guardrails in front of the power, so a first-timer is warned before making an irreversible decision.
+
+The tools came from watching what happened next. People asked us to look at a wallet, a holder list, a pool. Each answer was forensic work nobody could do alone, so we turned it into something anyone can run.
+
+Why now: minting a token is solved and free, and the gap moved downstream to everything after. A project that survives its launch has real communities to keep and no map. Meanwhile the parts that used to require trusting an operator — locks, burns, reward programs — can now be stated as terms and settled on-chain, where the holder checks the outcome instead of believing us.
+```
+
+**How does your product use these chains?** (cap 500; this is 494)
+
+```
+Solana only, mainnet.
+
+Reads: RPC and DAS for balances, transfer history, holders and pools, across both the SPL Token and Token-2022 programs. We parse transactions rather than infer from price feeds, which is what makes the forensics and buy competitions defensible.
+
+Writes: anything touching a user's funds is non-custodial — built unsigned server-side, signed by their wallet, never by us. Locks use the open-source Jupiter Lock program. The only transaction we sign is the graduation NFT.
+```
+
+⚠️ That last line is load-bearing and was checked against the code, not assumed. `lib/diploma-nft.js`
+signs the graduation mint with the treasury wallet (`MM_OPERATOR_SECRET_TREASURY`) so a learner
+needs no SOL. An earlier draft said "we never hold a key", which is false. Every other write path
+is genuinely wallet-signed.
+
+**What technologies are you using or integrating with?**
+
+```
+Chain: Solana web3.js, SPL Token and Token-2022, Anchor, Metaplex (Token Metadata, Bubblegum for compressed NFTs), and the open-source Jupiter Lock program for all locking. AMM SDKs for position and pool reads: Orca Whirlpools, Raydium v2, Meteora DLMM / CP-AMM / Dynamic Bonding Curve. Wallets connect through both Wallet Standard discovery and legacy injection, so in-app wallet browsers work.
+
+Data: Helius RPC and DAS as primary, with failover, plus GeckoTerminal, Solana Tracker, Jupiter and Solscan for pricing and cross-checks.
+
+App: Node and Express, React 18 with Vite, Tailwind, Zustand; the game runs on Phaser 3. Hosted on Railway behind Cloudflare WAF with origin lockdown. Security scanning by RootCrak.
+
+AI: Anthropic Claude — Sonnet 5 for the in-lesson tutor and long-form generation, Haiku 4.5 for cheap classification — and ElevenLabs for read-aloud, with a browser-voice fallback. Claude Code is our main development tool and wrote a large share of this codebase alongside the founder.
+
+Testing: GitHub Actions CI with Playwright-driven visual regression on the game, an engine decision simulator that replays real incidents, and a seven-language i18n audit.
+```
+
+**Is your project a mobile-focused dApp?** — **unchecked.** The web app is mobile-responsive and a
+Google Play build shipped 2026-09-11, but that bundle is education-only by design: no wallet, no
+payments, no address (`docs/STORE_EDITION.md`). Ticking the box would claim the Play app is the
+dApp, and it deliberately is not.
+
+**Project website:** `https://clucknorris.app`
+
+**Still owner-only on the form:** country of residence, and a team Telegram contact — that field is
+how Colosseum reaches us about prize distribution and accelerator interviews, so it must be one
+that gets read.
+
 ### Why the copy reads the way it does
 
 - **The three words are the aim, not the architecture.** "What we're working toward" — the owner's
@@ -72,6 +132,8 @@ only entry.
   foundation. Each of the three then shows what already exists under it, which keeps the ambition
   and the evidence visibly separate.
 - **"Multiple languages", not a number.** More ship during the window; a count would go stale.
+  This applies to paste-ready public copy only — the internal evidence tables below still cite
+  today's seven, where being exact is the point.
 - **No lesson count.** The school is courses, the LP Lab, the Library and live token data, and a
   lesson tally undersells it.
 - **No partner names.** The multi-project layer is the in-window build. Naming partner programs
@@ -85,17 +147,18 @@ only entry.
 
 ## 1. Product description (paste-ready, ~250 words)
 
-**School of Crypto Hard Knocks** is a free Solana crypto school wrapped around real research and
-operator tools, live at clucknorris.app.
+**Cluck Norris** (clucknorris.app) is a free Solana crypto school wrapped around real research and
+operator tools. What we are working toward: educate, build, earn.
 
 People lose money in crypto because nobody told them the truth plainly. The school fixes that
-first: 35 lessons across three tracks (a beginner Incubator, the core belt-ranked course, and an LP
-Lab with interactive calculators), in **seven languages** with read-aloud audio, plus an AI tutor
-embedded in every lesson. No signup, no wallet, no catch. Finish the curriculum and you earn a
-permanent transcript page and an on-chain graduation NFT, gated by a server-side lesson ledger so
-the credential means something.
+first: courses from absolute beginner through a belt-ranked core, a hands-on LP Lab where
+liquidity maths is a calculator you can move rather than a lecture, a reference library and live
+token data — in multiple languages, with read-aloud audio and an AI tutor embedded in every
+lesson. No signup, no wallet, no catch. Finish the curriculum and you earn a permanent transcript
+page and an on-chain graduation NFT, gated by a server-side lesson ledger so the credential means
+something.
 
-Around the school sit the tools people actually need once they are in: **Wallet X-Ray** (any
+Around the school sit the tools projects need once they are past launch: **Wallet X-Ray** (any
 address's observed history, funding origin traced back through recorded transfers), **Holders**
 (wallet addresses separated from pools, escrows and program accounts — address classification,
 not personhood), **Trace** (wallet × token history
@@ -105,15 +168,16 @@ each wallet actually bought, a **guided token creator** that deliberately stops 
 and the **Jup Locker Room**: free, non-custodial token locking for any Solana project, built
 directly on the open-source Jupiter Lock program, Token-2022 included.
 
-The forensic rule across every tool: the chain shows *what* happened, never *why*. We only call a
-wallet "creator" or "team" when a launchpad API confirms it.
+The rule across every tool: a claim has to be backed by something you can open yourself — a
+transaction, an account, a launchpad API. We label a wallet "creator" or "team" only when a
+launchpad confirms it, never on inference.
 
 The business model is a token that does work instead of begging you to buy it. Learning and safety
 stay free for everyone. The heavy tools are free to anyone holding about $50 of CLKN (live-priced),
 otherwise 0.05 SOL buys a 7-day pass to all of them. The whole thing is open source under MIT.
 
 ### One-liner
-> A free crypto school disciplined enough to be useful, wrapped around forensic tools that tell you what's on-chain and refuse to tell you why.
+> A free crypto school in multiple languages, wrapped around the forensic and operator tools a Solana project needs after launch.
 
 ---
 
@@ -130,9 +194,11 @@ otherwise 0.05 SOL buys a 7-day pass to all of them. The whole thing is open sou
 - **Storage:** Arweave for permanent token metadata.
 - **AI:** Anthropic Claude — the tutor, daily lessons, forensic narration.
 - **Stack:** React + Vite (school), vanilla HTML tool pages, Node.js + Express on Railway, Cloudflare
-  WAF/CDN in front, Capacitor wrapper live in the Solana Seeker dApp Store.
+  WAF/CDN in front, Capacitor wrapper in the Solana Seeker dApp Store, plus an education-only
+  Google Play build (no wallet, no payments — `docs/STORE_EDITION.md`).
 - **Wallets:** Phantom, Solflare, Backpack, OKX, Jupiter Mobile and more via legacy injection AND
-  Wallet Standard discovery — all non-custodial; keys never touch the server.
+  Wallet Standard discovery — all non-custodial; a user's keys never touch the server. (The one
+  transaction we sign ourselves is the graduation NFT, paid by the treasury so learners need no SOL.)
 - **Repo:** https://github.com/clucknorrisapp/cluck-norris-school (MIT).
 
 ---
@@ -157,8 +223,8 @@ Judges weight traction and revenue. These are all verifiable on-chain or on the 
 | Partner tokens on our infrastructure | 4 — POKE, CUNA, DNC, ROSE: locking, verification, buy comps, and (paused) liquidity engine service | JVP runbook, `docs/CLKN_JUP_VERIFICATION_PROTOCOL.md` |
 | Lock-to-earn — mechanism proof | First weekly payout landed 2026-09-09: 13 wallets, one transaction (proves the mechanism runs end-to-end; not a dollar claim) | tx `37hhsCCh…Z2bVkiP` |
 | CLKN locks — our own supply, via our own tooling | 73 locks, 48.8% of supply (488M CLKN) | `/api/locks?mint=DW6DF2…BAGS` |
-| Live product, public | clucknorris.app, since 2025; Seeker dApp Store listing live | site |
-| Curriculum | 35 lessons, 7 languages, read-aloud | `/`, `/lp-lab` |
+| Live product, public | clucknorris.app, since 2025; Seeker dApp Store listing; education-only Google Play build shipped 2026-09-11 | site |
+| Curriculum | 35 lessons, 7 languages, read-aloud, plus the LP Lab and reference Library | `/`, `/lp-lab` |
 | Services model | verification, lock-to-earn, buy comps, engine — priced per project `[OWNER]` | this doc §5 |
 | Community | `[OWNER — Telegram members, X followers]` | |
 | Security | Cloudflare WAF cutover + origin lockdown live since 2026-08-04, from findings by our scan partner RootCrak (@ro0TCr4k, https://rootcrak.com/?ref=clucknorris) | README |
@@ -220,10 +286,10 @@ resolves "free" on camera. **Do not open Normie Quest prize pages and do not men
 | t | Shot | Voiceover |
 |---|---|---|
 | 0:00–0:15 | Landing page, slow scroll. "Where do I start?" concierge visible. | "Cluck Norris is a free crypto school on Solana, wrapped around the tools people actually need once they're in. Nothing that teaches costs anything." |
-| 0:15–0:45 | Open a lesson. Switch language to Español, then हिन्दी. Tap read-aloud. Ask Cluck a question in the lesson. | "Thirty-five lessons, seven languages, read aloud, with an AI tutor in every lesson. No signup, no wallet." |
+| 0:15–0:45 | Open a lesson. Switch language to Español, then हिन्दी. Tap read-aloud. Ask Cluck a question in the lesson. | "Courses from your first day through advanced, in multiple languages, read aloud, with an AI tutor in every lesson. No signup, no wallet." |
 | 0:45–1:05 | `/transcript` page of a graduate; the on-chain NFT on an explorer. | "Finish the course, drop an address, and you get a permanent transcript and an on-chain graduation NFT. A server-side ledger gates it, so the credential is earned, not clicked." |
 | 1:05–1:30 | `/wallet-checkup`: paste a wallet with a lingering delegate approval. Show the revoke button. | "Wallet Checkup finds what actually drains people: delegate approvals, honeypots, tokens the dev can still mint or freeze. Find one on your own wallet and revoke it right there. Free, read-only, no account." |
-| 1:30–1:55 | `/wallet-xray`: paste an address. Show the funding origin trace and the behaviour read. | "X-Ray tells any wallet's whole story, traced back to its first transaction. The chain shows what happened. We never claim to know why." |
+| 1:30–1:55 | `/wallet-xray`: paste an address. Show the funding origin trace and the behaviour read. | "X-Ray tells any wallet's whole story, traced back to its first transaction — and every line of it is a transaction you can open yourself." |
 | 1:55–2:20 | `/holders`: a token. Toggle humans-only concentration. Export a slice to the airdropper. `/airdrop` with the CSV loaded, pre-flight shown. | "Holders separates humans from pools and escrows and hands any slice straight to the airdropper, with a wallet pre-flight so you check the numbers before your wallet asks." |
 | 2:20–2:45 | `/locker-room`: start a lock. Show the plain-English field explanations. Cut to a Lock of Fame page and the lock celebration post on X. | "The Locker Room locks any Solana token on Jupiter Lock, free, non-custodial, Token-2022 included, every field explained before you sign. Each lock gets a public page and announces itself." |
 | 2:45–3:00 | Phone insert: `/cuna-payout` receipt or the lock-to-earn page; then the GitHub repo. | "On top of locks, lock-to-earn pays holders weekly for keeping supply locked. First payout landed this week. All of it open source, MIT." |
@@ -243,7 +309,7 @@ this is the video where the owner talks, not the product.
    "We took the hard knocks so you don't have to."
 2. **0:20–0:45 — The problem.** People lose money because nobody told them the truth plainly.
    Education is either a shill or a textbook. Tools assume you already know what you're doing.
-3. **0:45–1:15 — The product.** A free school in seven languages with an AI tutor, wrapped around
+3. **0:45–1:15 — The product.** A free school in multiple languages with an AI tutor, wrapped around
    forensic tools that say what is on-chain and never why, and a free lock room any project can
    use to prove it can't dump. Guardrails before power: first-timers get warned before they can
    hurt themselves.
