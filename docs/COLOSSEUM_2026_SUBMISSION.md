@@ -131,6 +131,26 @@ Google Play build shipped 2026-09-11, but that bundle is education-only by desig
 payments, no address (`docs/STORE_EDITION.md`). Ticking the box would claim the Play app is the
 dApp, and it deliberately is not.
 
+**Notes for judges — Did anyone not listed on the team here do meaningful work on this project?** (cap 600; this is 560)
+
+```
+No other people. Cluck Norris is a solo-founder project. A substantial share of the code was written with Claude Code (Anthropic) under the founder's direction, and Codex reviews pull requests; both are tools, not contributors. RootCrak performed external security scanning and we fixed what it found. Everything else is open-source dependencies listed in package.json, and open-source on-chain programs (Jupiter Lock, SPL Token, Metaplex) called as published. Pre-hackathon work and third-party code are disclosed in docs/PRE_EVENT_STATE.md in the repository.
+```
+
+The owner asked why a "no" needs five sentences. Because Official Rules §9 obliges us to disclose
+third-party code, and an AI tool having written much of the codebase is better heard from us than
+discovered. A bare "No" would be accurate about people and silent about that.
+
+**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 480)
+
+```
+Cluck Norris has been live at clucknorris.app since 2025, so most of the platform predates the hackathon, and we draw that line exactly: the pre-window state is snapshotted at commit 75b69cc and documented in docs/PRE_EVENT_STATE.md, with every in-window commit listed there. The hackathon build is the multi-project layer: a Project Hub where a token's lock, burn and reward-program terms are published and every payout can be verified by any holder. The whole repository is MIT.
+```
+
+This is the disclosure line in the form's own words: the platform predates the window, the
+snapshot commit and `docs/PRE_EVENT_STATE.md` draw the boundary, and the Project Hub is named as
+the in-window build so the judges know what to score.
+
 **Project website:** `https://clucknorris.app`
 
 **Still owner-only on the form:** country of residence, and a team Telegram contact — that field is
