@@ -83,14 +83,14 @@ Individuals learning crypto get a free school: courses from absolute beginner th
 Small projects growing beyond launch get the operator tools: wallet and token forensics; holder analysis that separates wallets from pools, escrows and program accounts; delegate-approval checks with in-place revocation; batch airdrops; buy competitions paid on verified on-chain buys; and free, non-custodial token locking on the open-source Jupiter Lock program, with Token-2022 support and publicly verifiable lock records.
 ```
 
-**Why did you decide to build this, and why build it now?** (cap 1000; this is 981)
+**Why did you decide to build this, and why build it now?** (cap 1000; this is 983)
 
 ```
-People lose money in crypto because nobody explained how it works plainly, early, and in a language they read. Most explanations are a sales pitch or a whitepaper. Cluck Norris (clucknorris.app) started as a school that assumes no prior knowledge, with warnings in front of irreversible actions so a first-timer sees the risk before they sign.
+Four or five years ago, not understanding wallets, contracts, liquidity and how price actually moves cost me real money in projects I believed were safe. I also did damage as a newcomer: I sold out of small projects without understanding what that did to them. Later I was part of a project with a six-figure presale. People around it did not act in good faith and it never found traction. We refunded every presale holder the BNB they put in, but BNB had lost more than half its value by then. I left the space.
 
-The operator tools came from work we were already doing. People asked us to look at a wallet, a holder list, or a pool. Each request was forensic work one person could not do alone, so we turned those answers into tools anyone can run.
+When I came back, I decided the only way I would trust a project to do the right thing was to run it myself. I asked several developers to build the school; every one dropped out, so I built it, and over the last nine months I have learned to build properly.
 
-Why now: creating a token is solved and free, and launching one does not give a team what it needs to support a community. The gap is everything after launch: understanding holders, managing distributions, and making commitments transparent. Locks, burns, and reward programs can be written as explicit terms and settled on-chain, so a holder can verify the outcome instead of trusting the operator.
+Why now: the school is live at clucknorris.app and I am moving to advanced features and to tools other projects can use — liquidity, buy competitions, lock-to-earn. Colosseum is the right moment to build that.
 ```
 
 **How does your product use these chains?** (cap 500; this is 492)
@@ -235,13 +235,43 @@ otherwise 0.05 SOL buys a 7-day pass to all of them. The whole thing is open sou
 
 ---
 
-## 3. Team and location `[OWNER]`
+## 3. Team and location
 
-- **Team:** `[OWNER — names, roles, one line each. CLKN Productions LLC.]`
-- **Founder background:** `[OWNER — the "hard knocks" origin: what you lost, what you learned, why a
-  school. Judges score founder–market alignment; the personal story is the evidence.]`
-- **Location:** `[OWNER]`
-- **Logo:** the Cluck Norris mark used on the site header (`public/` icons) — export a 1024×1024 PNG.
+- **Team:** solo founder, operating as CLKN Productions LLC. No co-developers by design (see
+  below). 
+- **Location:** 
+- **Logo:** the Cluck Norris mark used on the site header ( icons) — export a 1024×1024 PNG.
+
+### Founder background (owner's own account, 2026-09-14; paste-ready for the form's team section, the pitch video's "why us" beat, and )
+
+Four or five years ago the founder lost real money in projects he believed were safe, for the
+reason the school now exists: nobody had explained wallets, contracts, liquidity, liquidity
+percentages, or how price movement actually happens. He also did what newcomers do — held when he
+should have taken profit, and sold out of small projects without understanding what a single exit
+does to a thin pool or a young community. He was later part of a project with a six-figure presale
+that never found traction after people around it failed to act in good faith. The team refunded
+every presale holder the BNB they had put in; by the time the refunds landed, BNB had lost more than
+half its value. He left the space.
+
+He came back about a year to eighteen months later with one rule: he would not trust anyone else
+to do the right thing with a project, so he would run one himself and be the only person
+accountable for it. That is why there are no co-developers. He launched Fire Chicken, started
+planning a school, and approached several developers to build it; every one dropped out. He built it
+himself, and over the following six to nine months learned to build properly — the right tools, no
+shortcuts. The project rebranded to Cluck Norris and entered the Bags hackathon as a late entry, which
+went nowhere but proved the product could ship. The school at clucknorris.app has grown organically
+since, without a team, paid promotion, or a raise.
+
+The larger vision is an ecosystem where the tools he wished he had as a project owner — liquidity
+management, buy competitions, lock-to-earn, holder analysis — are available to other projects, on the
+belief that projects working together find and build stronger communities than projects competing
+alone. He expects to bring people on as the brand grows, but wants the base product and its traction
+to be earned first.
+
+**How to use it.** The form's "why" field carries the compressed version (§0). The pitch video's
+"why us" beat is the second paragraph.  gets the whole thing. Keep the two dollar figures
+vague — "six-figure", "more than half" — the owner's numbers are close but approximate, and nothing
+here should be disputable.
 
 ---
 
