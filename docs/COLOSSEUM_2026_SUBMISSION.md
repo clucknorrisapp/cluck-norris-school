@@ -44,8 +44,26 @@ Cluck Norris
 Cluck Norris (clucknorris.app) is a live Solana platform. What we're working toward: educate, build, earn. Educate: a free crypto school — courses, a hands-on LP Lab, a reference library, live token data and an AI tutor, in multiple languages, no signup. Build: forensics, holder analysis, non-custodial locking and campaign tools projects use to strengthen their communities. Earn: reward programs whose terms and payouts any holder can verify without trusting us. Open source, live on mainnet.
 ```
 
-**Category:** the single option the form offered. **Teammates:** none — §7 limits each person to
-one team, so an invite would spend that person's only entry.
+**Category**
+
+```
+Consumer apps
+```
+
+The dropdown also offered AI platform / agent, Token launch / tokenomics, ZK / crypto research and
+AI / ML models, among others. Consumer apps is the honest fit: the product is a live consumer
+surface — a free school anyone opens with no signup, plus tools a person points at their own
+wallet — and two of the six criteria §8 actually scores, Potential Impact and UX for downstream
+users, read naturally in that bracket. The runner-up was **Token launch / tokenomics**, which would
+have put the Locker Room, lock-to-earn and the in-window Project Hub in front of judges who care
+about lock mechanics; it was not chosen because the guided token creator deliberately stops before
+liquidity, so that bracket invites a launchpad comparison we lose on purpose, and because it
+describes one slice of a school-first platform. AI platform / agent was declined for the same class
+of reason — the tutor is a feature of the school, not the product. We train no models, so AI / ML
+models and ZK / crypto research do not apply.
+
+**Teammates:** none — §7 limits each person to one team, so an invite would spend that person's
+only entry.
 
 ### Why the copy reads the way it does
 
