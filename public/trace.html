@@ -406,7 +406,7 @@ async function runMultiHop() {
       + `<div class="hop-status" id="hop-${i}">received <b>${fmtNum(t.outflow, d.decimals)}</b> from this wallet · tracing… (${i+1}/${targets.length})</div>`;
     results.appendChild(card);
     try {
-      const res = await fetch(`/api/trace?wallet=${encodeURIComponent(t.address)}&mint=${encodeURIComponent(d.mint)}`);
+      const res = await CluckGate.fetch(`/api/trace?wallet=${encodeURIComponent(t.address)}&mint=${encodeURIComponent(d.mint)}`);
       const hop = await res.json();
       const st = document.getElementById('hop-' + i);
       if (!hop.success || !hop.summary) {
@@ -512,7 +512,7 @@ async function runTrace() {
   const mint = mintInput.value.trim();
   if (window.renderMarketHeader) renderMarketHeader(mint, 'marketHeader'); // live market strip (parallel)
   try {
-    const res = await fetch(`/api/trace?wallet=${encodeURIComponent(wallet)}&mint=${encodeURIComponent(mint)}`);
+    const res = await CluckGate.fetch(`/api/trace?wallet=${encodeURIComponent(wallet)}&mint=${encodeURIComponent(mint)}`);
     const data = await res.json();
     stopLoading();
     runBtn.disabled = false; updateRunBtn();

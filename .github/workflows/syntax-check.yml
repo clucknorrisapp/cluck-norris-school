@@ -119,7 +119,15 @@ jobs:
         run: node scripts/store-edition-test.cjs google
       - name: Buy-comp entries (every $N buy = horses)
         run: node scripts/buycomp-entries-test.cjs
-      - name: Buy comp — a sell into ANY pool vault disqualifies (hold check)
+      # The paid tools pass: consuming the payment signature is the ONLY durable write, and the
+      # pass is derived from the chain (payer + block time), so a lost response, a closed tab, a
+      # crash between writes or a kv persist failure can never strand a payer who paid 0.05 SOL.
+      # Pins: same payer recovers with the SAME expiry; a different wallet consumes nothing; a
+      # store that cannot record durably answers 503 and consumes nothing; the audit write
+      # throwing changes nothing.
+      - name: Tools pass — paid redemption + recovery (fault injection)
+        run: node scripts/tool-pass-redeem-test.cjs
+      - name: Buy comp — pool sale vs transfer vs LOCK (hold check; a lock is not a sell)
         run: node scripts/buycomp-sell-detect-test.cjs
       # The project buy bots' detection, on two real mainnet transactions: a Jupiter buy split
       # across the Orca and Meteora CUNA/SOL pools must post the WHOLE amount paid (one leg
@@ -254,8 +262,20 @@ jobs:
             git fetch origin main --quiet 2>/dev/null || true
             BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
             if [ -z "$BASE" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: dispatch with no resolvable base — full run"; exit 0; fi
+          elif [ "$EVENT" = "push" ]; then
+            # A push to main/develop used to be an unconditional full run (a "production
+            # tripwire"). Owner, 2026-09-13: that re-ran the render suite on every squash-merge
+            # of a change CI had already cleared on its PR — fifteen times in two days for
+            # store-edition, CUNA and Telegram work that cannot reach a page. The push range
+            # (before..after) IS the merged PR's content, so gate it the same way. A range that
+            # cannot be resolved (new branch, force-push) still runs in full.
+            BASE="${{ github.event.before }}"
+            case "$BASE" in 0000000000000000000000000000000000000000) BASE="";; esac
+            if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+              echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: push with no resolvable range — full run"; exit 0
+            fi
           else
-            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: push to main/develop — full run (production tripwire)"; exit 0
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: unknown event — full run"; exit 0
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
@@ -358,6 +378,10 @@ jobs:
       # throwaway key and no secrets.
       - name: admin mutation discipline (405 on GET, explicit project, pool allowlist)
         run: node scripts/mutating-get-guard-test.cjs
+      - name: Tools pass server-side gate + raw console guard (2026-09-10)
+        run: node scripts/tool-pass-gate-test.cjs
+      - name: JVP dashboard data layer (sanitisation, decisions, slimming)
+        run: node scripts/jvp-dashboard-test.cjs
       # Listing Checkup routes: validation, the offline run → cache → share page with every
       # attacker-controlled string escaped, the unknown-mint page. LISTING_CHECKUP_OFFLINE=1 keeps
       # CI off the aggregators' APIs.
@@ -384,6 +408,14 @@ jobs:
       - name: wallet standard discovery
         if: steps.gate.outputs.run == 'true'
         run: node scripts/wallet-standard-test.cjs
+      # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
+      # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
+      # before anything can broadcast (sign-first path persists the signature before the send; the
+      # send-only path records an unresolved attempt and resolves it on-chain). Fake Wallet Standard
+      # wallet + mocked RPC, real server, real cluck-gate.js on a real tool page.
+      - name: tools pass client — a lost wallet callback never charges twice
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/tool-pass-client-test.cjs
       # GRAB $NORMIE on the between-level beat opened the wallet panel while the beat's auto-advance
       # kept running underneath, so the next level started behind the panel — music, dead taps
       # (owner, 2026-09-05). This drives the lab hooks: panel open → the beat holds; Escape closes;
@@ -461,13 +493,26 @@ jobs:
             git fetch origin main --quiet 2>/dev/null || true
             BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
             if [ -z "$BASE" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: dispatch with no resolvable base — full run"; exit 0; fi
+          elif [ "$EVENT" = "push" ]; then
+            # Same push gate as the smoke job (owner, 2026-09-13): the push range is the merged
+            # PR's content, so a store/CUNA/Telegram merge no longer pays for the 13-minute game
+            # render it already skipped on the PR. Unresolvable range → full run.
+            BASE="${{ github.event.before }}"
+            case "$BASE" in 0000000000000000000000000000000000000000) BASE="";; esac
+            if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+              echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: push with no resolvable range — full run"; exit 0
+            fi
           else
-            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: push to main/develop — full run (production tripwire)"; exit 0
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: unknown event — full run"; exit 0
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(normie-quest/|package(-lock)?\.json$|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(normie-quest/|package(-lock)?\.json$)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: game-relevant change — full run"
+          elif echo "$CHANGED" | grep -qE '^\.github/workflows/' && git diff "$BASE"...HEAD -- .github/workflows | grep -qiE 'nq-|normie|visual|playwright|game_logic'; then
+            # Editing THIS file only matters to the render when the edit touches the render or
+            # game jobs. Adding a unit-test step to node-check (PR #284) used to cost 13 minutes.
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: workflow edit touches the render/game jobs — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$'; then
             # server.js is ~11k lines covering the WHOLE app, so "server.js changed" fired the
             # 13-minute render gate for Telegram routes, liquidity endpoints and admin params

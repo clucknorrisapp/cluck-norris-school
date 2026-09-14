@@ -331,7 +331,7 @@ async function run(deep){
   const mint=(document.getElementById('mintInput').value||'').trim();
   if(mint){ location.href='/trace?wallet='+encodeURIComponent(wallet)+'&mint='+encodeURIComponent(mint); return; }
   try{
-    const r=await fetch('/api/wallet-xray?wallet='+encodeURIComponent(wallet)+(deep?'&deep=1':''));
+    const r=await CluckGate.fetch('/api/wallet-xray?wallet='+encodeURIComponent(wallet)+(deep?'&deep=1':''));
     const d=await r.json();
     stopLoading();runBtn.disabled=false;
     if(!d.success){showErr(d.error||'Deep dive failed');return;}

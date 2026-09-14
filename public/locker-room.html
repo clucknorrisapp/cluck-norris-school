@@ -32,6 +32,13 @@
   .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;}
   .chip{background:rgba(245,179,1,.10);border:1px solid rgba(245,179,1,.35);color:#f5b301;border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;}
   .chip.g{background:rgba(16,185,129,.10);border-color:rgba(16,185,129,.4);color:#34d399;}
+  /* Above-the-fold callout straight to Create a Lock, for project teams who already
+     know why they're here (owner positioning, 2026-09-10). */
+  .createcta{display:block;text-align:center;margin:14px auto 0;max-width:520px;background:rgba(217,119,6,.12);
+    border:1px solid rgba(217,119,6,.4);border-radius:12px;padding:10px 16px;font-family:var(--body,inherit);
+    font-size:13px;font-weight:600;color:#FFD9A0;text-decoration:none;transition:border-color .12s,background .12s;}
+  .createcta b{color:#FFB627;}
+  .createcta:hover{border-color:#D97706;background:rgba(217,119,6,.2);}
   /* recently-locked strip */
   .recent{margin:16px 0 2px;}
   .recent-h{font-family:var(--disp);font-size:13px;letter-spacing:.8px;color:#9a9aa8;text-transform:uppercase;margin-bottom:9px;text-align:center;}
@@ -206,6 +213,8 @@
       <span class="chip">Powered by Jupiter Lock</span>
     </div>
   </div>
+
+  <a class="createcta" href="#create" id="createCtaLink">Locking your own tokens? → <b>Create a Lock</b></a>
 
   <div class="recent" id="recentWrap" style="display:none">
     <div class="recent-h">🔒 Recently locked <span class="recent-sub">· made right here</span></div>
@@ -452,6 +461,16 @@
     if(k==='fame' && !window.__fameLoaded){ loadFame($('#fameMint').value.trim()||CLKN); }
     if(k==='claim' && connected && $('#clWallet').style.display==='none'){ claimConnected(); }
   }); });
+
+  // ---- deep link: /locker-room#create (the above-the-fold callout, or any external
+  // link) opens straight to the Create a Lock tab ----
+  function openTabByHash(){
+    if((location.hash||'').replace(/^#/,'')==='create'){
+      var ct=document.querySelector('.tab[data-tab="create"]'); if(ct && !ct.classList.contains('on')) ct.click();
+    }
+  }
+  openTabByHash();
+  window.addEventListener('hashchange', openTabByHash);
 
   // ---- Lock of Fame ----
   function pill(label){ var l=String(label||'').toLowerCase(); if(l.indexOf('jupiter')>=0) return '<span class="pill jup">Jupiter Lock</span>'; if(l.indexOf('stream')>=0) return '<span class="pill strm">Other Lock</span>'; return '<span class="pill self">'+esc(label||'Lock')+'</span>'; }

@@ -1568,11 +1568,17 @@ function StartHere({ onGo }){
         {!STORE && <Act label="🛠 All tools" onClick={goIn("/tools")}/>}
         {STORE && <WebPointer/>}
       </>)},
+    ...(STORE ? [] : [{ key:"team", icon:"🚀", title:"I run a project or community", tag:"Locks, buy competitions, airdrops, listings", body:()=>(<>
+        <p style={txt}>Lock tokens, run a buy competition, airdrop holders, or get listed right — the project-team toolkit, free or unlocked by holding CLKN.</p>
+        <Act label="🔒 Lock tokens" onClick={goIn("/locker-room#create")} color="#34D399" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
+        <Act label="🎯 Run a buy competition" onClick={goIn("/buyspecial")}/>
+        <Act label="🛠 All project tools" onClick={goIn("/tools#for-projects")}/>
+      </>)}]),
     ...(STORE ? [] : [{ key:"about", icon:"🐔", title:"About Cluck Norris & CLKN", tag:"The story + where to buy", body:()=>(<>
         <p style={txt}>Cluck Norris is the free School of Crypto Hard Knocks + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility. CLKN unlocks premium tools — hold it and they're free. The school itself is always free.</p>
         <Act label="💸 Buy CLKN on Jupiter" onClick={goExt(JUPITER_TRADE_LINK)} color="#34D399" bg="rgba(16,185,129,0.14)" bd="rgba(16,185,129,0.5)"/>
         <Act label="📊 Token data & chart" onClick={()=>onGo("clkn")}/>
-        <Act label="📜 The story & investors" onClick={goIn("/investors")}/>
+        <Act label="📜 About the project" onClick={goIn("/about")}/>
       </>)}]),
     { key:"explore", icon:"🧭", title:"Just exploring", tag:"The lay of the land", body:()=>(<>
         <p style={txt}>Poke around — here's everything in one place.</p>

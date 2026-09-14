@@ -137,6 +137,18 @@ body{background:transparent;font-family:var(--body);}
       );
     }
 
+    if (t.nft && t.nft.sig) {
+      parts.push(
+        '<div class="badge grad">' +
+          '<div class="label">🎓 ON-CHAIN GRADUATION NFT</div>' +
+          '<div class="detail"><span class="verified">✅ minted on Solana</span> · ' +
+            '<a href="https://solscan.io/tx/' + encodeURIComponent(t.nft.sig) + '" target="_blank" rel="noopener noreferrer">view the mint on Solscan ↗</a>' +
+            (t.nft.at ? ' · ' + esc(fmtDate(t.nft.at)) : '') +
+          '</div>' +
+        '</div>'
+      );
+    }
+
     if (t.graduation && t.graduation.completed) {
       parts.push(
         '<div class="badge grad">' +

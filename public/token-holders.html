@@ -488,7 +488,7 @@ async function runSnapshot() {
   try {
     // excludeNonHuman=0 ALWAYS — we need the classified full set to filter locally.
     const url = `/api/snapshot?mint=${encodeURIComponent(mint)}&excludeNonHuman=0&excludeBagsTeam=${excludeBagsTeam}&minBalance=${encodeURIComponent(minBalance)}`;
-    const res = await fetch(url);
+    const res = await CluckGate.fetch(url);
     const data = await res.json();
     stopLoading();
     runBtn.disabled = false;

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🏆 Lock of Fame — Tokens Locked Through the Locker Room</title>
+<meta name="description" content="Every token lock made through the Cluck Norris Locker Room, verified on-chain and grouped by project — honest about which are our own token and which are community adoption."/>
+<link rel="canonical" href="https://clucknorris.app/lock-of-fame"/>
+<meta property="og:title" content="🏆 Lock of Fame — Cluck Norris Locker Room"/>
+<meta property="og:description" content="Real projects that locked tokens through our free Locker Room, verified on-chain — self-locks never counted as adoption."/>
+<meta property="og:image" content="https://clucknorris.app/cluck-norris.png"/>
+<meta property="og:url" content="https://clucknorris.app/lock-of-fame"/>
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:image" content="https://clucknorris.app/cluck-norris.png">
+<meta name="theme-color" content="#0b0c10">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html{background:var(--bg-grad);background-attachment:fixed;}
+  body { background: transparent; color: var(--text); font-family: var(--body); min-height: 100vh; }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 24px 16px 80px; }
+  @media (min-width: 1040px) { .wrap { max-width: 1040px; } }
+
+  .back-home { display:inline-flex; align-items:center; gap:6px; font-family:var(--disp); font-size:12px; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
+  .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid #D97706; }
+
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family: var(--disp); font-size: 11px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; }
+  .header h1 { font-family: var(--disp); font-size: 27px; font-weight: 900; letter-spacing: 2.5px; background: linear-gradient(135deg, var(--gold), var(--orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: var(--body); font-weight: 500; font-size: 12.5px; color: var(--sub); letter-spacing: .3px; margin-top: 7px; }
+
+  .hero { background: rgba(217,119,6,0.06); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+  .hero-tag { font-family: var(--disp); font-size: 10px; color: var(--accent); letter-spacing: 3px; margin-bottom: 6px; }
+  .hero-title { font-family: var(--disp); font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: 1px; margin-bottom: 4px; }
+  .hero-sub { font-family: var(--body); font-weight: 500; font-size: 13.5px; color: var(--body-text); line-height: 1.7; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .stat-cell { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat-cell .lbl { font-family: var(--disp); font-size: 10.5px; color: var(--sub); letter-spacing: 1.5px; margin-bottom: 6px; }
+  .stat-cell .val { font-family: var(--mono); font-size: 20px; color: var(--text); font-weight: 700; line-height: 1.2; }
+  .stat-cell.accent .val { color: var(--accent); }
+  .stat-cell.green .val { color: var(--green); }
+
+  .view-chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .view-chip { padding:7px 13px; border-radius:999px; border:1px solid rgba(255,122,24,0.28); background:rgba(255,122,24,0.06);
+    color:var(--sub); font-family:var(--mono); font-size:11.5px; letter-spacing:.5px; cursor:pointer; white-space:nowrap; }
+  .view-chip:hover { border-color:rgba(255,122,24,0.55); }
+  .view-chip.on { background:rgba(255,122,24,0.22); border-color:#FF7A18; color:var(--text); font-weight:700; }
+  .view-chip .n { opacity:.65; margin-left:5px; }
+
+  .loading { display:none; text-align:center; padding:36px 20px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; }
+  .loading.show { display:block; }
+  .loading-spinner { font-size: 40px; animation: bobble 1.4s ease-in-out infinite; margin-bottom: 12px; display: inline-block; }
+  @keyframes bobble { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+  .loading-title { font-family: var(--disp); font-size: 13px; color: var(--accent); letter-spacing: 2.5px; }
+
+  .err { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 12px 14px; font-size: 13px; color: #FCA5A5; margin-bottom: 16px; display: none; line-height:1.6; }
+  .err.show { display: block; }
+
+  .empty { display:none; text-align:center; padding: 34px 18px; background: rgba(255,255,255,0.03); border: 1px dashed var(--border); border-radius: 12px; margin-bottom: 16px; color: var(--subtext); font-size: 13.5px; line-height:1.7; }
+  .empty.show { display:block; }
+
+  #cards { display:flex; flex-direction:column; gap:12px; margin-bottom: 18px; }
+
+  .lof-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .lof-top { display:flex; align-items:flex-start; gap: 12px; }
+  .lof-avatar { position:relative; width:44px; height:44px; border-radius:50%; background:#1c1d24; border:1px solid var(--border); flex:0 0 auto;
+    display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-size:16px; color:var(--accent); overflow:hidden; }
+  .lof-avatar img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .lof-id { min-width:0; flex:1; }
+  .lof-name { font-family: var(--disp); font-size: 15px; font-weight:700; color: var(--text); letter-spacing:.5px; overflow-wrap:anywhere; }
+  .lof-sym { font-family: var(--mono); font-size: 11.5px; color: var(--subtext); margin-top:2px; }
+  .lof-badge { display:inline-block; font-family: var(--disp); font-size: 9.5px; letter-spacing: 1.4px; font-weight:700; padding: 3px 8px; border-radius: 5px; margin-top: 6px; }
+  .lof-badge.community { background: rgba(123,226,107,0.12); border: 1px solid rgba(123,226,107,0.35); color: var(--green); }
+  .lof-badge.ours { background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--muted); }
+
+  .lof-stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(110px,1fr)); gap:8px; margin-top:14px; }
+  .lof-stat { background: rgba(255,255,255,0.03); border: 1px solid var(--border-soft); border-radius: 8px; padding: 8px 10px; }
+  .lof-stat .k { font-family: var(--disp); font-size: 9.5px; color: var(--sub); letter-spacing: 1.2px; margin-bottom: 3px; }
+  .lof-stat .v { font-family: var(--mono); font-size: 13px; color: var(--text); font-weight:700; word-break: break-all; }
+
+  .lof-links { display:flex; flex-wrap:wrap; gap: 10px; margin-top: 14px; }
+  .lof-link { font-family: var(--disp); font-size: 11px; letter-spacing: 1.4px; color: var(--accent); text-decoration:none; padding: 8px 12px; border: 1px solid rgba(252,211,77,0.35); background: rgba(252,211,77,0.06); border-radius: 7px; }
+  .lof-link:hover { opacity: .82; }
+  .lof-link.alt { color: var(--blue); border-color: rgba(96,165,250,0.35); background: rgba(96,165,250,0.06); }
+
+  .honesty { background: rgba(255,255,255,0.03); border: 1px dashed var(--border); border-radius: 10px; padding: 14px 16px; margin: 8px 0 20px; font-family: var(--body); font-size: 12.5px; line-height: 1.75; color: var(--subtext); }
+  .honesty b { color: var(--sub); }
+
+  .cta-row { text-align:center; }
+  .cta-btn { display:inline-block; padding: 14px 26px; background: linear-gradient(135deg, var(--orange), var(--red)); border: none; border-radius: 12px; font-family: var(--disp); font-size: 14px; color: #fff; letter-spacing: 2px; text-decoration:none; box-shadow: 0 6px 18px rgba(232,30,14,.35); }
+  .cta-btn:hover { opacity: .92; }
+
+  .foot-note { font-family: var(--mono); font-size: 11px; color: var(--subtext); text-align:center; margin-top: 18px; line-height: 1.7; }
+  .foot-note a { color: var(--sub); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back-home"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS HOME</a>
+
+  <div class="header">
+    <div class="header-icon">🏆</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS</div>
+      <h1>LOCK OF FAME</h1>
+      <p>TOKENS LOCKED THROUGH THE LOCKER ROOM</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">VERIFIED ON-CHAIN · GROUPED BY PROJECT</div>
+    <div class="hero-title">Every lock that carries our memo, honestly labelled</div>
+    <div class="hero-sub">The Locker Room lets any project lock tokens on the audited, non-custodial Jupiter Lock program and stamp the transaction with an on-chain memo. This page is the index of everyone who did — grouped by token, sorted by the most recent lock, with our own token marked separately so it is never mistaken for outside adoption.</div>
+  </div>
+
+  <div class="stats-grid" id="statsGrid" style="display:none">
+    <div class="stat-cell accent"><div class="lbl">DISTINCT TOKENS</div><div class="val" id="statMints">—</div></div>
+    <div class="stat-cell"><div class="lbl">TOTAL LOCKS</div><div class="val" id="statLocks">—</div></div>
+    <div class="stat-cell green"><div class="lbl">LAST 30 DAYS</div><div class="val" id="stat30d">—</div></div>
+    <div class="stat-cell"><div class="lbl">CREATOR WALLETS</div><div class="val" id="statWallets">—</div></div>
+  </div>
+
+  <div class="view-chips" id="viewChips" style="display:none"></div>
+
+  <div class="loading show" id="loading">
+    <div class="loading-spinner">🔒</div>
+    <div class="loading-title">READING ON-CHAIN LOCKS…</div>
+  </div>
+
+  <div class="err" id="err"></div>
+  <div class="empty" id="empty">No locks carrying our on-chain memo have landed yet. Be the first — <a href="/locker-room" style="color:var(--accent)">lock in the Locker Room</a>.</div>
+
+  <div id="cards"></div>
+
+  <div class="honesty">
+    <b>Only locks that carry our on-chain memo are listed</b> — a lock made elsewhere is not counted, and a lock listed here proves the tokens went into the audited Jupiter Lock escrow, never through us.
+  </div>
+
+  <div class="cta-row">
+    <a href="/locker-room" class="cta-btn">🔒 LOCK YOUR OWN — FREE</a>
+  </div>
+
+  <div class="foot-note">Locker Room · non-custodial, powered by <a href="https://lock.jup.ag/" target="_blank" rel="noopener">Jupiter Lock</a> · data via <a href="/api/lock/recent">/api/lock/recent</a></div>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script defer src="/cluck-nav.js"></script>
+<script>
+(function () {
+  "use strict";
+  var CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+  var MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+  var SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{60,100}$/;
+  var esc = CluckUtil.esc, fmt = CluckUtil.fmt, shortAddr = CluckUtil.shortAddr;
+
+  var groups = [];       // one entry per mint, built from the flat lock list
+  var overallCreators = {};
+  var overallLocks = 0, overall30d = 0;
+  var currentFilter = "all";
+
+  function $(s) { return document.querySelector(s); }
+
+  function fmtDate(ts) {
+    if (!ts) return "—";
+    try { return new Date(ts).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); }
+    catch (e) { return "—"; }
+  }
+
+  function avatarHtml(mint, name, symbol, icon) {
+    var initial = esc(String(symbol || name || "?").slice(0, 1).toUpperCase());
+    var img = "";
+    if (MINT_RE.test(mint || "")) {
+      var altAttr = icon ? " data-alt=\"" + esc(icon) + "\" onerror=\"if(this.dataset.t){this.remove()}else{this.dataset.t=1;this.src=this.dataset.alt}\"" : " onerror=\"this.remove()\"";
+      img = "<img src=\"/api/token-icon?mint=" + encodeURIComponent(mint) + "\" alt=\"\"" + altAttr + "/>";
+    }
+    return "<div class=\"lof-avatar\">" + initial + img + "</div>";
+  }
+
+  function buildGroups(locks) {
+    var map = {};
+    overallCreators = {};
+    overall30d = 0;
+    var cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    locks.forEach(function (l) {
+      var mint = l && l.mint;
+      if (!mint || typeof mint !== "string") return;
+      var ts = Number(l.ts) || 0;
+      if (ts >= cutoff) overall30d++;
+      if (l.creator) overallCreators[l.creator] = 1;
+      if (!map[mint]) {
+        map[mint] = { mint: mint, name: null, symbol: null, icon: null, total: 0, count: 0, creators: {}, first: ts, last: ts, lastSig: l.sig || null };
+      }
+      var g = map[mint];
+      g.total += Number(l.amount) || 0;
+      g.count += 1;
+      if (l.creator) g.creators[l.creator] = 1;
+      if (!g.first || ts < g.first) g.first = ts;
+      if (ts >= g.last) {
+        g.last = ts;
+        if (l.sig) g.lastSig = l.sig;
+        // prefer identity fields from whichever lock is most recent, fall back to any lock that has them
+        if (l.name) g.name = l.name;
+        if (l.symbol) g.symbol = l.symbol;
+        if (l.icon) g.icon = l.icon;
+      }
+      if (!g.name && l.name) g.name = l.name;
+      if (!g.symbol && l.symbol) g.symbol = l.symbol;
+      if (!g.icon && l.icon) g.icon = l.icon;
+    });
+    return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return (b.last || 0) - (a.last || 0); });
+  }
+
+  function renderStats(totalLockCount) {
+    $("#statMints").textContent = groups.length.toLocaleString();
+    $("#statLocks").textContent = totalLockCount.toLocaleString();
+    $("#stat30d").textContent = overall30d.toLocaleString();
+    $("#statWallets").textContent = Object.keys(overallCreators).length.toLocaleString();
+    $("#statsGrid").style.display = "";
+  }
+
+  function chipHtml(key, label, n) {
+    return "<div class=\"view-chip" + (key === currentFilter ? " on" : "") + "\" data-k=\"" + key + "\">" + esc(label) + "<span class=\"n\">" + n.toLocaleString() + "</span></div>";
+  }
+
+  function renderChips() {
+    var nAll = groups.length;
+    var nOurs = groups.filter(function (g) { return g.mint === CLKN_MINT; }).length;
+    var nCommunity = nAll - nOurs;
+    var chips = $("#viewChips");
+    chips.innerHTML = chipHtml("all", "ALL", nAll) + chipHtml("community", "COMMUNITY", nCommunity) + chipHtml("ours", "OURS", nOurs);
+    chips.style.display = "flex";
+    chips.querySelectorAll(".view-chip").forEach(function (el) {
+      el.addEventListener("click", function () { currentFilter = el.getAttribute("data-k"); renderChips(); renderCards(); });
+    });
+  }
+
+  function cardHtml(g) {
+    var isOurs = g.mint === CLKN_MINT;
+    var name = g.name || (g.symbol ? g.symbol : shortAddr(g.mint));
+    var badge = isOurs
+      ? "<span class=\"lof-badge ours\">OUR OWN TOKEN</span>"
+      : "<span class=\"lof-badge community\">COMMUNITY PROJECT</span>";
+    var wallets = Object.keys(g.creators).length;
+    var lockHref = MINT_RE.test(g.mint) ? "/lock/" + encodeURIComponent(g.mint) : null;
+    var solscanHref = (g.lastSig && SIG_RE.test(g.lastSig)) ? "https://solscan.io/tx/" + encodeURIComponent(g.lastSig) : null;
+    var links = "";
+    if (lockHref) links += "<a class=\"lof-link\" href=\"" + esc(lockHref) + "\">📊 View lock page</a>";
+    if (solscanHref) links += "<a class=\"lof-link alt\" href=\"" + esc(solscanHref) + "\" target=\"_blank\" rel=\"noopener\">↗ Verify latest on Solscan</a>";
+    return "" +
+      "<div class=\"lof-card\">" +
+        "<div class=\"lof-top\">" +
+          avatarHtml(g.mint, g.name, g.symbol, g.icon) +
+          "<div class=\"lof-id\">" +
+            "<div class=\"lof-name\">" + esc(name) + (g.symbol ? " <span style=\"color:var(--subtext);font-weight:400\">$" + esc(g.symbol) + "</span>" : "") + "</div>" +
+            "<div class=\"lof-sym\">" + esc(shortAddr(g.mint)) + "</div>" +
+            badge +
+          "</div>" +
+        "</div>" +
+        "<div class=\"lof-stats\">" +
+          "<div class=\"lof-stat\"><div class=\"k\">LOCKED VIA US</div><div class=\"v\">" + fmt(g.total) + (g.symbol ? " " + esc(g.symbol) : "") + "</div></div>" +
+          "<div class=\"lof-stat\"><div class=\"k\">LOCKS</div><div class=\"v\">" + g.count.toLocaleString() + "</div></div>" +
+          "<div class=\"lof-stat\"><div class=\"k\">WALLETS</div><div class=\"v\">" + wallets.toLocaleString() + "</div></div>" +
+          "<div class=\"lof-stat\"><div class=\"k\">FIRST LOCK</div><div class=\"v\">" + fmtDate(g.first) + "</div></div>" +
+          "<div class=\"lof-stat\"><div class=\"k\">LATEST LOCK</div><div class=\"v\">" + fmtDate(g.last) + "</div></div>" +
+        "</div>" +
+        "<div class=\"lof-links\">" + links + "</div>" +
+      "</div>";
+  }
+
+  function renderCards() {
+    var filtered = groups.filter(function (g) {
+      if (currentFilter === "ours") return g.mint === CLKN_MINT;
+      if (currentFilter === "community") return g.mint !== CLKN_MINT;
+      return true;
+    });
+    var el = $("#cards");
+    if (!filtered.length) {
+      el.innerHTML = "<div class=\"empty show\">Nothing in this view yet.</div>";
+      return;
+    }
+    el.innerHTML = filtered.map(cardHtml).join("");
+  }
+
+  function showError(msg) {
+    $("#loading").classList.remove("show");
+    var e = $("#err");
+    e.textContent = "Couldn't load the lock feed — " + (msg || "please try again shortly") + ".";
+    e.classList.add("show");
+  }
+
+  function boot() {
+    fetch("/api/lock/recent").then(function (r) { return r.json(); }).then(function (d) {
+      $("#loading").classList.remove("show");
+      if (!d || d.ok === false) { showError((d && d.error) || "server error"); return; }
+      var locks = Array.isArray(d.locks) ? d.locks : [];
+      overallLocks = locks.length;
+      if (!locks.length) { $("#empty").classList.add("show"); return; }
+      groups = buildGroups(locks);
+      renderStats(overallLocks);
+      renderChips();
+      renderCards();
+    }).catch(function () { showError("network error"); });
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
