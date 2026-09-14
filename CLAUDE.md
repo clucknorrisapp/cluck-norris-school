@@ -62,7 +62,10 @@ does not tell you how to write software; use your judgement for that.
 > hackathon-scope work done right (the quiz-free `/curriculum` came back this way); it is a record
 > of what failed and why, so the rebuild does not repeat the failure. Second reviewer: **Codex**
 > reads `docs/CODEX_REVIEWER_BRIEF.md` and comments on PRs; findings, not rewrites.
-> 🗓️ **Hackathon window: 2026-09-14 04:00 PDT = 11:00 UTC → 2026-10-12.** Colosseum's live rules
+> 🗓️ **Hackathon window (CORRECTED 2026-09-14 from the Official Rules PDF): 2026-09-14 06:00 PT =
+> 13:00 UTC → 2026-10-12 23:59 PT = 2026-10-13 06:59 UTC.** §5 Timing. Earlier docs said 04:00 PDT /
+> 11:00 UTC and were wrong by two hours; the 09:00 UTC snapshot is still safely pre-window and every
+> commit we labelled in-window lands after 13:00 UTC. Colosseum's live rules
 > (quoted in `docs/COLOSSEUM_THINK_TANK_2026-09-10.md`): *"Teams may begin development before the
 > hackathon, but products are judged only on the work completed between the competition's start and
 > end dates"* and *"Builders may use pre-existing code, but teams must disclose all relevant past
@@ -72,7 +75,7 @@ does not tell you how to write software; use your judgement for that.
 > tags — a cloud session cannot push tags) and `docs/PRE_EVENT_STATE.md` is the disclosure. PR #282
 > (dashboard, Lock of Fame, syllabus, navigation) merged to `develop` on 2026-09-12 as pre-window
 > work; promotion to `main` is still the owner's explicit go. What must read as in-window: the
-> Project Hub + verifiable program terms and receipts, started only after 11:00 UTC Sep 14. No public
+> Project Hub + verifiable program terms and receipts, started only after 13:00 UTC Sep 14. No public
 > post about hackathon work before kickoff (owner's preference, nothing gained by earlier posts).
 > ⚠️ **The tools pass is a SIGNED SESSION** (reworked 2026-09-10 after Codex found that a pasted
 > holder address and a public payment signature were both bearer passes): the wallet signs a

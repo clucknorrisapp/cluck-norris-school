@@ -85,7 +85,7 @@ rather than a law; and a program hash served by the same server that computes th
 reproducible, not independently verified, so the public wording stays "reproducible from the
 published inputs" until Addendum B §B5's witness exists.
 
-## Round 1 — the window is open (from 2026-09-14 11:00 UTC)
+## Round 1 — the window is open (from 2026-09-14 13:00 UTC, 06:00 PT — Official Rules §5)
 
 **State as of 2026-09-14.** The window opened; the pre-event snapshot is recorded (`main` at
 `75b69cc`, `develop` at `41d0a6a`, marker branches `snapshot/pre-colosseum-2026-09-14-*`) and
