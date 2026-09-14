@@ -1,20 +1,67 @@
 # Colosseum "Crypto World's Fair" 2026 — submission package
 
-**Event:** Colosseum "Crypto World's Fair", **September 14 – October 12, 2026**. Registration is
-open at colosseum.com; the owner registers the team before Sep 14. **Rules that shape this
-document (verified 2026-09-10):** products are judged only on work completed between the start
-and end dates; pre-existing code is allowed but all prior development must be disclosed
-(misrepresentation = disqualification); prize tracks are by ecosystem — we enter the **Solana**
-track. The disclosure is `docs/PRE_EVENT_STATE.md`; the pitch must lead with what was built
-inside the window and present everything older as the platform it was built on. Everything below is drafted from
-what is LIVE on clucknorris.app on 2026-09-10 — nothing here promises a feature that does not exist.
+**Event:** Colosseum "Crypto World's Fair". **Contest Period: 2026-09-14 06:00 PT (13:00 UTC) →
+2026-10-12 23:59 PT (2026-10-13 06:59 UTC)**, per §5 of the Official Rules PDF. Registered
+2026-09-12; project draft created 2026-09-14. The disclosure is `docs/PRE_EVENT_STATE.md`; the
+pitch leads with what was built inside the window and presents everything older as the platform it
+was built on. Nothing here promises a feature that does not exist.
+
+⚠️ **Read `docs/COLOSSEUM_OFFICIAL_RULES_NOTES.md` before writing submission copy.** The Official
+Rules are the contract and the website is guidance, and they do not list the same judging criteria.
+**§8 judges on: Functionality (including code quality) · Potential Impact · Novelty · UX for
+downstream users · Open-source and composability · Business Plan.** Open-source, composability and
+code quality are scored and were being claimed nowhere; traction and founder communication are
+website language, not named criteria in the contract. Also §9: we must inform the Administrator of
+the status and ownership of any open-source or third-party code, which needs a dependency and
+licence inventory before submission.
 
 **Submission form asks for:** product description · chain and tools used · team backgrounds ·
 location · logo · GitHub repo · 2–3 minute pitch video · 3-minute product demo · go-to-market.
-**Judged on:** founder–market alignment · insight · product quality and positioning · market size ·
-founder communication · business viability · traction and revenue.
+**Judged on (Official Rules §8):** functionality and code quality · potential impact · novelty ·
+UX for downstream users · open-source and composability · business plan. (The website's seven —
+founder–market fit, insight, product, market size, founder communication, viability, traction —
+are guidance; target the union, lead with the six.)
 
 Sections marked `[OWNER]` need a fact only the owner has. Everything else is ready to paste.
+
+---
+
+## 0. AS SUBMITTED — the exact project record (2026-09-14)
+
+This is what was entered on colosseum.com. **Everything else in this document must stay
+consistent with it.** If a line below changes, this section is the source of truth and the rest of
+the package follows it, not the other way round.
+
+**Project name**
+
+```
+Cluck Norris
+```
+
+**Brief description** (the form caps this at 500 characters; this is 497)
+
+```
+Cluck Norris (clucknorris.app) is a live Solana platform. What we're working toward: educate, build, earn. Educate: a free crypto school — courses, a hands-on LP Lab, a reference library, live token data and an AI tutor, in multiple languages, no signup. Build: forensics, holder analysis, non-custodial locking and campaign tools projects use to strengthen their communities. Earn: reward programs whose terms and payouts any holder can verify without trusting us. Open source, live on mainnet.
+```
+
+**Category:** the single option the form offered. **Teammates:** none — §7 limits each person to
+one team, so an invite would spend that person's only entry.
+
+### Why the copy reads the way it does
+
+- **The three words are the aim, not the architecture.** "What we're working toward" — the owner's
+  correction. Saying the platform is *built on* educate, build, earn would claim the goal as the
+  foundation. Each of the three then shows what already exists under it, which keeps the ambition
+  and the evidence visibly separate.
+- **"Multiple languages", not a number.** More ship during the window; a count would go stale.
+- **No lesson count.** The school is courses, the LP Lab, the Library and live token data, and a
+  lesson tally undersells it.
+- **No partner names.** The multi-project layer is the in-window build. Naming partner programs
+  now would blur the pre-window line for no gain.
+- **Open source and composability are stated on purpose** — both are scored under §8(e) and we
+  were claiming neither.
+- **"Verify without trusting us"** carries Novelty §8(c) without a yield figure, a rate, or any
+  claim that a token is safe. Per CLAUDE.md, Earn describes capability, never a promise.
 
 ---
 
