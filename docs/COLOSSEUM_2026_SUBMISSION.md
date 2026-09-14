@@ -111,15 +111,19 @@ is genuinely wallet-signed.
 **What technologies are you using or integrating with?** (no cap)
 
 ```
-Chain: Solana web3.js, SPL Token and Token-2022, Anchor, and Metaplex (Token Metadata and Bubblegum for compressed NFTs). All locking uses the open-source Jupiter Lock program. Pool and position reads use the Orca Whirlpools, Raydium v2, and Meteora DLMM, CP-AMM and Dynamic Bonding Curve SDKs. Wallets connect through Wallet Standard discovery and legacy injection, so in-app wallet browsers work.
+Chain: Solana web3.js, SPL Token and Token-2022, Anchor, and Metaplex (Token Metadata and Bubblegum for compressed NFTs). All locking uses the open-source Jupiter Lock program. Pool and position reads use the Orca Whirlpools, Raydium v2, and Meteora DLMM, CP-AMM and Dynamic Bonding Curve SDKs, plus the Raydium and Meteora public APIs. Jupiter price and quote APIs, the Jupiter Verified token list, and the embedded Jupiter Terminal plugin for on-site swaps. Wallets connect through Wallet Standard discovery and legacy injection, so in-app wallet browsers work.
 
-Data: Helius RPC and DAS as primary, with failover, plus GeckoTerminal, Solana Tracker, Jupiter and Solscan for pricing and cross-checks.
+Data and risk: Helius RPC and DAS as primary, with failover to public RPC. DexScreener, GeckoTerminal, Birdeye, Solana Tracker, Solscan, CoinGecko and CoinMarketCap for pricing, listings and cross-checks; Rugcheck and DD.xyz (by Webacy) as independent risk signals; pump.fun and Bags.fm launchpad APIs to confirm creator wallets rather than infer them.
 
-Application and infrastructure: Node.js and Express, React 18 with Vite, Tailwind and Zustand. The game runs on Phaser 3. Hosted on Railway behind Cloudflare WAF with origin lockdown. Security scanning by RootCrak.
+Storage: Arweave via ArDrive for permanent token metadata, with Solana-signed upload bundles; IPFS gateway reads; a file-backed key-value store with atomic writes on a persistent volume for consumed payment signatures, the lesson ledger and scheduler state.
 
-AI and development: Anthropic Claude — Sonnet 5 for the in-lesson tutor and long-form generation, Haiku 4.5 for classification — and ElevenLabs for read-aloud audio, with browser speech as a fallback. Claude Code is the primary development tool and has produced a substantial share of the codebase alongside the founder.
+Application and infrastructure: Node.js and Express, React 18 with Vite, Tailwind and Zustand; vanilla HTML tool pages; the game runs on Phaser 3. Hosted on Railway behind Cloudflare WAF with origin lockdown. Capacitor wraps the site for the Solana Seeker dApp Store and an education-only Google Play build. Security scanning by RootCrak.
 
-Testing: GitHub Actions CI with Playwright visual-regression tests on the game, an engine decision simulator that replays real incidents, and a multilingual translation audit.
+Automation and distribution: Telegram Bot API for a command bot, daily lessons, buy alerts and lock and burn announcements; X API with media upload for automated lesson posts and lock announcements; Google Sheets API for the graduate roster; Google Analytics. Server-side media through node-canvas, gifenc and sharp for share cards and live GIFs, QuickChart for chart images, and Higgsfield for generated artwork.
+
+AI and development: Anthropic Claude — Sonnet 5 for the in-lesson tutor and long-form generation, Haiku 4.5 for classification and live translation — and ElevenLabs for read-aloud audio, with browser speech as a fallback. Claude Code is the primary development tool and has produced a substantial share of the codebase alongside the founder; Codex reviews pull requests.
+
+Testing: GitHub Actions CI with Playwright visual-regression tests on the game, an engine decision simulator that replays real incidents, a multilingual translation audit, and a money-path test battery covering payment verification, hold checks and mutating-route guards.
 ```
 
 **Is your project a mobile-focused dApp?** — **unchecked.** The web app is mobile-responsive and a
