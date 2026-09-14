@@ -2,17 +2,44 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Built on Solana](https://img.shields.io/badge/Built%20on-Solana-9945FF)](https://solana.com)
-[![Powered by Bags.fm](https://img.shields.io/badge/Powered%20by-Bags.fm-orange)](https://bags.fm?ref=firechicken007)
+[![Powered by Bags.fm](https://img.shields.io/badge/Powered%20by-Bags.fm-orange)](https://bags.fm)
 [![Live App](https://img.shields.io/badge/Live-clucknorris.app-green)](https://clucknorris.app)
+[![Colosseum Crypto World's Fair](https://img.shields.io/badge/Colosseum-Crypto%20World's%20Fair%202026-C9A227)](https://www.colosseum.com/worldsfair)
 [![Auto-deployed on Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet)](https://railway.app)
 
 > *"We took the hard knocks so you don't have to."*
 
-**A free crypto school for Solana, wrapped around research and operator tools that are free while you hold ~$50 of CLKN (or a small SOL pass) — funded by a token that does real work instead of begging you to buy it.**
+**A free crypto school for Solana, wrapped around research and operator tools for any Solana wallet or token. The heavy tools stay free while you hold ~$50 of CLKN (or a small SOL pass) — the token is the key that unlocks them, not a play for its own sake.**
 
 Everything that teaches is free. No signup, no wallet connect to learn, no subscription. The heavy tools (X-Ray, Holders, Trace, the airdropper, Buy Special) cost real money to run — hold about $50 worth of CLKN and they are all free; otherwise 0.05 SOL unlocks the lot for 7 days. The safety basics — Wallet Checkup, Firepit, the Locker Room — stay free for everyone.
 
 Live at **[clucknorris.app](https://clucknorris.app)**.
+
+---
+
+## 🏛️ Colosseum Crypto World's Fair — competing now
+
+**Window: 2026-09-14 11:00 UTC → 2026-10-12.** We're building in it with this product and this
+repo.
+
+Colosseum judges only the work completed inside that window, and requires all prior development
+to be disclosed. So the baseline is declared up front rather than blurred:
+
+| | |
+|---|---|
+| **Pre-event disclosure** | [`docs/PRE_EVENT_STATE.md`](docs/PRE_EVENT_STATE.md) — what existed before the window, itemised |
+| **Snapshot commits** | `main` at `75b69cc`, `develop` at `41d0a6a`, taken 2026-09-14 09:00 UTC |
+| **Durable markers** | branches `snapshot/pre-colosseum-2026-09-14-main` and `…-develop` |
+| **The scored delta** | `git log 75b69cc..main` — everything after the snapshot |
+| **The plan** | [`docs/COLOSSEUM_ROADMAP.md`](docs/COLOSSEUM_ROADMAP.md) |
+
+**What we're entering: the Project Hub** — a project-owned rewards program whose terms,
+eligibility and payments a holder can check *without trusting us*. Versioned program records,
+per-recipient receipts, and a calculation anyone can reproduce from published inputs. The school
+is the front door; the rest of the tools below are the same stack, already live.
+
+No prizes are claimed and no result is predicted here. Everything on this page that predates
+2026-09-14 is disclosed as such.
 
 ---
 
@@ -28,7 +55,7 @@ Three tracks, all free, in **seven languages** (English · Español · हिन
 
 Plus **📚 the Library** (glossary + deep dives across Survival / Research / Concepts) and **🤖 Ask Cluck**, a Claude-powered tutor embedded in every lesson, live in the Telegram group, and standalone at [`/ask-cluck`](https://clucknorris.app/ask-cluck).
 
-Finish the full curriculum, drop a Solana address, and you get a permanent, shareable **[`/transcript`](https://clucknorris.app)** page plus an on-chain graduation NFT. Learning itself stays walletless — the address is only for the transcript and the NFT. (A CLKN graduate airdrop existed briefly; it was taken down after wallet-farming abuse.)
+Finish the full curriculum, drop a Solana address, and you get a permanent, shareable **[`/transcript`](https://clucknorris.app/transcript)** page (`/transcript/<your-slug>` once issued) plus an on-chain graduation NFT. Learning itself stays walletless — the address is only for the transcript and the NFT. (A CLKN graduate airdrop existed briefly; it was taken down after wallet-farming abuse.)
 
 A **"where do I start?"** concierge meets newcomers on the landing page and in the Telegram group, so a feature-rich app doesn't overwhelm a first-timer.
 
@@ -51,8 +78,8 @@ First-timers are the target user. The guardrails are the point, not decoration.
 
 No wallet connect, no account.
 
-- **🩻 [Wallet X-Ray](https://clucknorris.app/wallet-xray)** — paste any Solana address and get its whole story: the **true funding origin** traced to its first transaction (dust filtered, exchange hot-wallets identified), every buy/sell/transfer across **every** token, and a behavior read — bot cadence, fast-flip dumping, CEX cash-out, LP, or diamond hands. Searchable timeline, charts, a deep-scan mode for heavy wallets, and a built-in AI you can ask about any single transaction.
-- **👥 [Holders](https://clucknorris.app/holders)** — who *really* holds a token. Separates true human holders from LP pools, lock escrows and program accounts; measures supply concentration **on humans only** (a raw top-10 counts pool vaults as whales — they aren't); and exports any slice as an airdrop-ready CSV. Filter to any group and hand it straight to the airdropper.
+- **🩻 [Wallet X-Ray](https://clucknorris.app/wallet-xray)** — paste any Solana address and get its whole story: the **funding origin as far as observed transfers show** — traced back to its first transaction (dust filtered, exchange hot-wallets identified); it shows transfers, not ultimate ownership or intent, every buy/sell/transfer across **every** token, and a behavior read — bot cadence, fast-flip dumping, CEX cash-out, LP, or diamond hands. Searchable timeline, charts, a deep-scan mode for heavy wallets, and a built-in AI you can ask about any single transaction.
+- **👥 [Holders](https://clucknorris.app/holders)** — who *really* holds a token. Separates wallet addresses from LP pools, lock escrows and program accounts (address classification, not personhood — one person can hold many wallets); measures supply concentration **on classified wallets only** (a raw top-10 counts pool vaults as whales — they aren't); and exports any slice as an airdrop-ready CSV. Filter to any group and hand it straight to the airdropper.
 - **🔍 [Trace](https://clucknorris.app/trace)** — wallet × token history: every transaction between one wallet and one mint in order, with running balance, counterparty flow map, and one-hop follow-the-money.
 - **🛡 [Wallet Checkup](https://clucknorris.app/wallet-checkup)** — read-only scan for the things that actually drain people: lingering delegate approvals, honeypot / can't-sell holdings, and tokens whose dev can still mint or freeze. Find an approval on your own wallet and you can **revoke it right there**, signing yourself. (The old Security Coop merged into this page; `/security-coop` still resolves here.)
 - **🎒 [Bags Hub](https://clucknorris.app/bags)** — live launches, near-graduation and recently-graduated feeds, backed by our own 48h graduation tracker.
@@ -89,7 +116,7 @@ and nothing to wait for.
 Extra AI tutoring used to be a paid unlock too. It isn't any more — Ask Cluck has a
 free daily allowance and that's the whole offer.
 
-**Buy Special** runs a full contest cycle: it discovers pools **on-chain** (a token's own AMM vaults, so it never goes blind when an indexer hasn't listed something), pays on what each wallet **actually bought in the window** rather than its balance, disqualifies wallets that sold inside the window, and traces one hop to whoever still holds when a buyer moved their tokens. Winners hand off to the airdropper in one click. It has moved real money.
+**Buy Special** runs a full contest cycle: it discovers pools **on-chain** (a token's own AMM vaults, so it never goes blind when an indexer hasn't listed something), pays on what each wallet **actually bought in the window** rather than its balance, disqualifies wallets that sold inside the window, and traces one hop to whoever still holds when a buyer moved their tokens. Winners hand off to the airdropper in one click. It has paid out real competitions for four partner tokens.
 
 **Premium Forensics** adds recipient-dump tracing, money-flow and cash-out mapping, a creator "rap sheet", wallet P&L, and a neutral shared-funding cluster map. Nothing is fabricated when a source is unavailable — every report states what it could and couldn't compute.
 
@@ -142,15 +169,17 @@ you connect — not from a receipt, and not from anything you can hand us.
 
 ---
 
-## 💧 The Liquidity Engine — in testing, not offered yet
+## 💧 The Liquidity Engine — paused since 2026-09-05
+
+**An operator-run concentrated-liquidity service we have run for four partner tokens (POKE, CUNA, DNC, ROSE); paused by the owner since 2026-09-05 while the public dashboard is built; not self-serve.**
 
 Most "volume bots" wash-trade: the operator buys and sells their own token through wallets they control to fake activity. This is the opposite — a concentrated-liquidity market maker that puts **real two-sided depth** into a token's pools, so real buyers and sellers get tighter spreads and less price impact, and fees come from genuine trades.
 
-Two layers: **non-custodial position builders** (the server builds unsigned open/close/collect transactions, the operator signs them) and an **autonomous vault** funded from a dedicated hot wallet whose key lives only in the server environment — unset means the whole thing is off, a safe no-op. Guardrails throughout: anti-thrash intervals, daily action caps, slippage and price-impact ceilings, an anomaly guard, and a one-flag kill switch.
+Two layers: **non-custodial position builders** (the server builds unsigned open/close/collect transactions, the operator signs them) and an **autonomous vault** funded from a dedicated hot wallet whose key lives only in the server environment — unset means the whole thing is off, a safe no-op, and the code default is off besides. Guardrails throughout: anti-thrash intervals, daily action caps, slippage and price-impact ceilings, an anomaly guard, and a one-flag kill switch.
 
 The idea under test is **multi-quote**: pairing a token against several quote assets (USDC + SOL + JUP) means each quote's *own* volatility dislocates the token's price across pools, and third-party arbitrageurs trade it back into line — producing genuine two-way volume the project never generated itself.
 
-**Status, honestly:** it runs on CLKN's own pools, hands-on managed, while we learn what it really does. It is **not offered to other projects**. Impermanent loss is real and the big-sell scenario is real; we'd rather under-promise and let the on-chain record speak. Runs on Orca Whirlpools, with Raydium CLMM and Meteora DLMM adapters built to the same interface.
+**Status, honestly:** every engine is paused today, so the multi-quote pools' on-chain volume reads zero — that's the paused state, not a failed idea. The recorded history from when it was running will show on the dashboard at `/liquidity-engine` once it ships. Impermanent loss is real and the big-sell scenario is real; we'd rather under-promise and let the on-chain record speak. Runs on Orca Whirlpools, with Raydium CLMM and Meteora DLMM adapters built to the same interface.
 
 ---
 
@@ -188,7 +217,7 @@ Two of the hardening items above shipped as fixes to findings from our security-
 Cloudflare WAF/CDN cutover and a `CF_ORIGIN_SECRET` origin lockdown that 403s any request that
 didn't traverse the WAF. Both are live since 2026-08-04.
 
-**Public API:** `/api/wallet-xray` · `/api/snapshot` (the holder engine) · `/api/trace` · `/api/wallet-checkup` · `/api/token-overview` · `/api/ask-cluck` · `/api/verify-sol-payment` · `/api/premium-verify-sig` · `/api/hatchery/*` · `/api/security-coop/*` · `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply` · `/api/bags-*` · `/api/helius-rpc`, `/api/helius-tx` (keys hidden server-side) · `/api/credential/:slug`, `/api/school-stats`
+**Public API:** `/api/wallet-xray` · `/api/snapshot` (the holder engine) · `/api/trace` · `/api/wallet-checkup` · `/api/token-overview` · `/api/ask-cluck` · `/api/verify-sol-payment` · `/api/premium-verify-sig` · `/api/hatchery/*` · `/api/security-coop/*` · `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply` · `/api/bags-*` · `/api/helius-rpc`, `/api/helius-tx` (keys hidden server-side) · `/api/credential/:slug`, `/api/school-stats` — `/api/wallet-xray`, `/api/snapshot` and `/api/trace` require the unified tools pass server-side; the page's free preview stays free, RUN needs the pass.
 
 ### CI
 
@@ -209,16 +238,16 @@ didn't traverse the WAF. Both are live since 2026-08-04.
 **Cluck Norris (CLKN)** — Solana SPL, partnered to the FireChicken community.
 
 - **Mint:** `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
-- **Trade:** [bags.fm](https://bags.fm/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS?ref=firechicken007) · [Jupiter](https://jup.ag/tokens/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS)
+- **Trade:** [bags.fm](https://bags.fm/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS) · [Jupiter](https://jup.ag/tokens/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS)
 - **Project fee:** ~1% of every CLKN trade — real SOL revenue, 100% reinvested into buying CLKN on the chart
-- **Liquidity:** Meteora DAMM V2 (`64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd`, the canonical chart), plus project-run Orca depth across a multi-quote layout (CLKN/USDC · CLKN/SOL · CLKN/JUP)
+- **Liquidity:** Meteora DAMM V2 (`64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd`, the canonical chart), plus project-run Orca pools across a multi-quote layout (CLKN/USDC · CLKN/SOL · CLKN/JUP), paused since 2026-09-05
 - **Mint and freeze authority are renounced.** A meaningful share of supply is locked across Jupiter Lock and other locks — verifiable by anyone, and every new lock is announced with the on-chain numbers
 
 ---
 
 ## 🤝 Ecosystem
 
-- **🎮 Normie Quest** — a complete crypto-education platformer (original pixel art, 21 worlds, boss fights themed on real market lessons, leaderboards, playtest telemetry) built under Cluck Norris production for the **NORMIE** community — a separate project with its own token. It's the proof the stack white-labels beyond our own. **Public since 2026-08-22** at [/normie-quest-x7](https://clucknorris.app/normie-quest-x7): worlds 1-3 are free, the rest unlock at live-priced NORMIE holder tiers rendered from `/api/nq/wallet/config` (never a fixed dollar figure quoted here). Reward/prize terms with the NORMIE team remain unagreed, so nothing about those is promised.
+- **🎮 Normie Quest** — a complete crypto-education platformer (original pixel art, 12 worlds, boss fights themed on real market lessons, leaderboards, playtest telemetry) built under Cluck Norris production for the **NORMIE** community — a separate project with its own token. It's the proof the stack white-labels beyond our own. **Public since 2026-08-22** at [/normie-quest-x7](https://clucknorris.app/normie-quest-x7): worlds 1-3 are free, the rest unlock at live-priced NORMIE holder tiers rendered from `/api/nq/wallet/config` (never a fixed dollar figure quoted here). Reward/prize terms with the NORMIE team remain unagreed, so nothing about those is promised.
 - **🔒 The Locker Room as shared infrastructure** — any project locks free, gets a public Lock of Fame page, and can broadcast the receipt. The on-chain memo makes the relationship verifiable rather than claimed.
 - **Building through the bear.** The tools, the school, the game and the lock infrastructure are being hardened now, so they're standing when the cycle turns.
 
