@@ -127,7 +127,7 @@ jobs:
       # throwing changes nothing.
       - name: Tools pass — paid redemption + recovery (fault injection)
         run: node scripts/tool-pass-redeem-test.cjs
-      - name: Buy comp — a sell into ANY pool vault disqualifies (hold check)
+      - name: Buy comp — pool sale vs transfer vs LOCK (hold check; a lock is not a sell)
         run: node scripts/buycomp-sell-detect-test.cjs
       # The project buy bots' detection, on two real mainnet transactions: a Jupiter buy split
       # across the Orca and Meteora CUNA/SOL pools must post the WHOLE amount paid (one leg
