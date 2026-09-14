@@ -38,7 +38,7 @@ the package follows it, not the other way round.
 Cluck Norris
 ```
 
-**Brief description** (the form caps this at 500 characters; this is 497)
+**Brief description** (the form caps this at 500 characters; this is 495 — count characters, not bytes: `awk length` reports 497 because the em dash is three bytes in UTF-8)
 
 ```
 Cluck Norris (clucknorris.app) is a live Solana platform. What we're working toward: educate, build, earn. Educate: a free crypto school — courses, a hands-on LP Lab, a reference library, live token data and an AI tutor, in multiple languages, no signup. Build: forensics, holder analysis, non-custodial locking and campaign tools projects use to strengthen their communities. Earn: reward programs whose terms and payouts any holder can verify without trusting us. Open source, live on mainnet.
