@@ -73,14 +73,14 @@ models and ZK / crypto research do not apply.
 **Teammates:** none — §7 limits each person to one team, so an invite would spend that person's
 only entry.
 
-**What are you building, and who is it for?** (cap 1000; this is 933)
+**What are you building, and who is it for?** (cap 1000; this is 956)
 
 ```
 Cluck Norris (clucknorris.app) is a live Solana platform for two audiences.
 
-Individuals learning crypto get a free school: courses from absolute beginner through a belt-ranked core, a hands-on LP Lab with interactive calculators, a reference library, live token data, and an AI tutor in every lesson. Multiple languages, read-aloud audio, no signup, no wallet. Graduates receive a transcript page and an on-chain graduation NFT; a server-side lesson ledger checks completion before the claim is approved.
+Individuals learning crypto get a free school: courses from beginner through a belt-ranked core, a hands-on LP Lab, a reference library, live token data and an AI tutor in every lesson. Multiple languages, read-aloud, no signup, no wallet. Graduates receive a transcript and an on-chain graduation NFT gated by a server-side lesson ledger.
 
-Small projects growing beyond launch get the operator tools: wallet and token forensics; holder analysis that separates wallets from pools, escrows and program accounts; delegate-approval checks with in-place revocation; batch airdrops; buy competitions paid on verified on-chain buys; and free, non-custodial token locking on the open-source Jupiter Lock program, with Token-2022 support and publicly verifiable lock records.
+Projects past launch get operator tools: Wallet X-Ray, Trace and Token Autopsy for forensics; Holders and Owners Snapshot to separate real wallets from pools and program accounts; Wallet Checkup with in-place revoke; Listing Checkup; LP Scanner and LP Rescue for lost liquidity; Firepit to burn junk tokens and reclaim rent; Project Burn with on-chain proof; a batch airdropper; buy competitions paid on verified buys; a guided token creator; and free non-custodial locking on Jupiter Lock with public Lock of Fame pages and lock-to-earn.
 ```
 
 **Why did you decide to build this, and why build it now?** (cap 1000; this is 991)
@@ -141,10 +141,10 @@ The owner asked why a "no" needs five sentences. Because Official Rules §9 obli
 third-party code, and an AI tool having written much of the codebase is better heard from us than
 discovered. A bare "No" would be accurate about people and silent about that.
 
-**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 502)
+**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 496)
 
 ```
-Cluck Norris has been live since 2025. The pre-window state is snapshotted at commit 75b69cc in docs/PRE_EVENT_STATE.md, with every in-window commit listed. The in-window build is the Project Hub: a token's lock, burn and reward-program terms published, with payouts any holder can verify. Live use in the 30 days to 14 Sep: 161k page views, 22 graduates, 488M CLKN (48.8% of supply) locked through our own tooling, first weekly lock-to-earn payout settled. Solo founder, now CLKN Productions LLC. MIT.
+Cluck Norris has been live since 2025. The pre-window state is snapshotted at commit 75b69cc in docs/PRE_EVENT_STATE.md, with every in-window commit listed. The in-window build is the Project Hub: a token's lock, burn and reward-program terms published, with payouts any holder can verify. Live use, 30 days to 14 Sep: 161k page views, 22 graduates, 488M CLKN (48.8% of supply) locked through our own tooling, first weekly lock-to-earn payout settled. Solo founder, now CLKN Productions LLC. MIT.
 ```
 
 This carries the disclosure line in the form's own words — the platform predates the window, the
