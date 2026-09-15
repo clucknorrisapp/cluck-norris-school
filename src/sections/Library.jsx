@@ -1143,9 +1143,13 @@ const LIBRARY_RESOURCES = [
   },
 ];
 
-function Library() {
-  const [tab, setTab] = useState("deepdives");
-  const [openTopic, setOpenTopic] = useState(null);
+// initialTopic: a topic id to open on mount (the /school#library=<id> deep link a lesson's report
+// card uses). Unknown ids fall through to the normal closed state.
+function Library({ initialTopic = null } = {}) {
+  const startLiquidity = !!initialTopic && LIBRARY_LIQUIDITY.some(t => t.id === initialTopic);
+  const startTopic = initialTopic && (startLiquidity || LIBRARY_TOPICS.some(t => t.id === initialTopic)) ? initialTopic : null;
+  const [tab, setTab] = useState(startLiquidity ? "liquidity" : "deepdives");
+  const [openTopic, setOpenTopic] = useState(startTopic);
   const [expanded, setExpanded] = useState(null);
   const [search, setSearch] = useState("");
 

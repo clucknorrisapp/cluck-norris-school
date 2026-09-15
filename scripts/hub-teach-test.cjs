@@ -28,7 +28,7 @@ t("all six answers render from a program version alone (no wallet), each with a 
   assert.deepStrictEqual(b.answers.map((a) => a.key), ["what_happens", "can_i_sell", "where_reward", "how_much", "risks", "why_lock"]);
   for (const a of b.answers) {
     assert.ok(a.text.length > 40, a.key);
-    assert.ok(a.lesson && a.lesson.id && a.lesson.href.startsWith("/#lesson="), a.key);
+    assert.ok(a.lesson && a.lesson.id && a.lesson.href.startsWith("/school#lesson="), a.key);
     assert.ok(Array.isArray(a.derivedFrom), a.key);
   }
   assert.strictEqual(b.programHash, v.hash);
