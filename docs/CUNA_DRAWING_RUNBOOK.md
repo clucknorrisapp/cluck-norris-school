@@ -67,24 +67,27 @@ post the winner + the tx signature under the pinned post. Nothing in this repo s
 ## The 2026-09-15 draw (owner's call: draw first, X check after)
 
 Owner, 2026-09-15: *"pick a winner from what we have, I will then go make sure they are on the
-X thread and payout, if not we will pick again."* So the draw ran over all 38 site entries with
-`--x-check-after`, and the X reply is verified on the winner afterwards; if it is missing, the
-next alternate takes the prize under the same seed and list. Full record:
-`docs/CUNA_DRAWING_RESULT_2026-09-15.json` (seed = finalized blockhash at slot 447119456, 38
-entries, 52 chances, 14 wallets over $1 at $0.00001041).
+X thread and payout, if not we will pick again."* So the draw runs over the site entries with
+`--x-check-after`; the winner's reply under the pinned post is verified afterwards, and if it is
+missing the next alternate takes the prize under the same seed and list.
+
+**Draw 1 was VOIDED and redrawn.** Its first pick was a friend of the team; rather than skip a
+pick after the fact, the owner had the whole draw run again with that address excluded UP FRONT
+(`--exclude`), so the rule "friends and anyone connected to the team are not eligible" is
+applied before the seed is taken, not after. Draw 1 is kept for the record as
+`docs/CUNA_DRAWING_RESULT_2026-09-15_draw1_voided.json`; nothing was paid on it.
+
+**Draw 2 (the one that counts):** `docs/CUNA_DRAWING_RESULT_2026-09-15.json` — 37 entries
+(`GCL4YcNn…jMnrPD` excluded), 50 chances, 13 wallets over $1 at $0.00001036, seed = finalized
+blockhash `4PTLTWfY4JjnktcdUKjXXa847wCFVfjewtrbiypTDHfh` at slot 447120174.
 
 | Order | Address |
 |---|---|
-| Winner | `GCL4YcNn6ZTteD2rn71iC7gjB3LWeT4zY7LT9xjMnrPD` |
-| Alternate 1 | `Ar7PxNjrQGpfBUrQL8YrUoEd2bSfuu7A6EoNkN45FUMU` |
-| Alternate 2 | `J2ivigMN2uJrcoY7iW9FrEww93ZwqmeJ7umifrQk1weP` |
-| Alternate 3 | `AgWXzUfLKc2MtUeyj871Co4V3Afhdit1QaE36E3sDv8D` |
-| Alternate 4 | `Db26PLvdfXviNBgMvbSE3EjQdR3SJaJxgKJZo4aihhAX` |
-| Alternate 5 | `CpvPPV8C83rDpKRLKWD6tjYu4eGw6HEDAeuSVoGYM5WJ` |
+| Winner | `BFRNi9rQ77CKax7SAQBYRiFDb5cN69kkFKr1mutbSnnD` |
+| Alternate 1 | `Hihe7JZ5X8Kx7q9JVfRgGTKWRqUAmJyWP3Yu3pJRRprF` |
+| Alternate 2 | `8V3e5KZ5UUSvKcmn5GCroHxf8WjSCf2qSe9cYx1EUjYC` |
+| Alternate 3 | `z34bpAMoDZF3tvwP4rWogsDBqRQUWnRM2W2PT9VTT4o` |
+| Alternate 4 | `9EURgiCG6GUAmm66TfLF9kQPkCjjxnWGTZwbgoiVWZFt` |
+| Alternate 5 | `AgWXzUfLKc2MtUeyj871Co4V3Afhdit1QaE36E3sDv8D` |
 
-**Exclusion, 2026-09-15 (owner):** the first pick is a friend of the team and was excluded on
-the rule "friends and anyone connected to the team are not eligible" — stated in the
-announcement, not applied quietly, because the published seed and list show that address
-winning. The prize goes to **alternate 1, `Ar7PxNjrQGpfBUrQL8YrUoEd2bSfuu7A6EoNkN45FUMU`**,
-pending the X-reply check; alternate 2 next if that fails. Recorded in the result JSON under
-`exclusions` / `prizeGoesTo`.
+Announce it with the exclusion stated, the seed, and the slot; publish the JSON.

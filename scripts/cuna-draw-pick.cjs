@@ -24,6 +24,8 @@
 //                          reply AFTER the draw; if it is missing the next alternate takes the prize,
 //                          same seed, same list — the result says so
 //   --seed auto|<string>   auto (default) = the latest FINALIZED Solana blockhash, slot recorded
+//   --exclude a,b,c        addresses taken OUT of the list before the draw (team, friends of the team) —
+//                          recorded in the result so the exclusion is applied up front, never after
 //   --alternates N         how many runners-up to list after the winner (default 3)
 //   --min-usd N            the second-entry threshold (default 1)
 //   --out <file>           where the JSON result goes (default: cuna-draw-result-<ts>.json in cwd)
@@ -133,8 +135,10 @@ async function cunaPrice() {
     for (const e of registry) console.log(`  ${e.enteredAt}  ${e.address}`);
     process.exit(2);
   }
-  const eligible = !verified ? registry.slice() : registry.filter((e) => verified.has(e.address));
-  const dropped = registry.filter((e) => !eligible.includes(e));
+  const excluded = new Set(String(opt("--exclude", "")).split(",").map((a) => draw.canonicalAddress(a)).filter(Boolean));
+  const eligible = (!verified ? registry.slice() : registry.filter((e) => verified.has(e.address))).filter((e) => !excluded.has(e.address));
+  const dropped = registry.filter((e) => !eligible.includes(e) && !excluded.has(e.address));
+  if (excluded.size) console.log(`excluded up front (team / friends of the team): ${[...excluded].join(", ")}`);
   console.log(`eligible: ${eligible.length}${!verified ? (PREVIEW ? " (PREVIEW — every entry treated as verified)" : " (every site entry — X reply verified AFTER the draw, alternates in order)") : " after the X check"}, dropped ${dropped.length}`);
 
   // 3. The second entry: > $MIN_USD of CUNA at the time of the drawing, read on-chain now.
@@ -174,6 +178,7 @@ async function cunaPrice() {
     price, seed, seedSource, entriesHash: draw.entriesHash(entries), totalChances,
     winner: picks[0] ? picks[0].address : null, alternates: picks.slice(1).map((p) => p.address), picks,
     entries, droppedByXCheck: dropped.map((d) => d.address),
+    excludedUpFront: [...excluded].map((address) => ({ address, reason: "connected to the team — not eligible (owner rule)" })),
     algorithm: "sort entries by address; pool = each address repeated `chances` times; pick k = pool[ SHA256(seed + ':' + k) mod pool.length ]; remove the picked address's block; repeat (lib/cuna-draw.js drawFromSeed)",
   };
   const out = opt("--out", path.join(process.cwd(), `cuna-draw-result-${checkedAt.replace(/[:.]/g, "-")}.json`));
