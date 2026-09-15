@@ -29,6 +29,67 @@ function track(event,extra){
   }catch(_){}
 }
 const trackId=(prefix,id)=>track(prefix+":"+String(id).toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,48));
+// #key=value out of the URL hash, or null. Deep links into one screen: #lesson=<id>, #library=<id>.
+function hashParam(key){
+  try{ const h=(window.location.hash||"").replace(/^#/,""); return h.startsWith(key+"=")?decodeURIComponent(h.slice(key.length+1)).slice(0,48):null; }
+  catch(e){ return null; }
+}
+
+// "Now go look at a real one." Every core lesson points at the tool that shows its concept live
+// and the Library piece that goes deeper. This is the bridge from Educate to Build in one line
+// per lesson; the funnel showed a third of lesson-1 passers never opened lesson 2, and the
+// report card offered nothing but a button. Tool links are hidden in the STORE edition (no
+// wallet, no tools there). Library links open the topic directly via #library=<id>.
+// Tool links live behind the build-time STORE constant so the store bundle never carries the
+// excluded pages' paths — the store-edition verifier scans the built assets for them (the
+// runtime `!STORE` check alone left "/locker-room" in the Google Play bundle, CI 2026-09-15).
+const LESSON_TOOLS = STORE ? {} : {
+  lp:          {href:"/lp-lab",          label:"Go deeper in the LP Lab"},
+  rugs:        {href:"/wallet-checkup",  label:"Check a wallet for the traps you just learned"},
+  wallets:     {href:"/wallet-checkup",  label:"Scan your own wallet for lingering approvals"},
+  slippage:    {href:"/lp-lab",          label:"See price impact on a real pool"},
+  tokenomics:  {href:"/holders",         label:"See a real token's holders, pools and locks"},
+  marketcap:   {href:"/holders",         label:"Check supply and holders on a live token"},
+  dex:         {href:"/lp-lab",          label:"How the pools behind a DEX work"},
+  onchain:     {href:"/wallet-xray",     label:"Run X-Ray on any wallet"},
+  staking:     {href:"/locker-room",     label:"See real locks on Jupiter Lock"},
+  bags:        {href:"/bags",            label:"Watch live launches and graduations"},
+  memecoins:   {href:"/listing-checkup", label:"Check a meme token's listings against the chain"},
+};
+// Library pieces ship in every edition (the Library is part of the school).
+const LESSON_READ={
+  lp:          {id:"impermanent-loss",      label:"Impermanent loss, with the numbers"},
+  rugs:        {id:"token-research",        label:"How to research a token"},
+  volatility:  {id:"psychology",            label:"Trading psychology"},
+  wallets:     {id:"wallet-security",       label:"Wallet security deep dive"},
+  slippage:    {id:"price-impact",          label:"Price impact & slippage"},
+  tokenomics:  {id:"token-research",        label:"How to research a token"},
+  marketcap:   {id:"token-research",        label:"How to research a token"},
+  dex:         {id:"amm",                   label:"How AMMs work"},
+  onchain:     {id:"solscan",               label:"Reading Solscan like a pro"},
+  staking:     {id:"fee-sharing",           label:"Fee sharing & LP earnings"},
+  bags:        {id:"dynamic-bonding-curve", label:"Dynamic bonding curves"},
+  memecoins:   {id:"psychology",            label:"Trading psychology"},
+  seedphrase:  {id:"wallet-security",       label:"Wallet security deep dive"},
+  inheritance: {id:"wallet-security",       label:"Wallet security deep dive"},
+};
+function LessonLinks({lesson:l}){
+  const tool=LESSON_TOOLS[l.id], read=LESSON_READ[l.id];
+  const items=[];
+  if(tool) items.push({href:tool.href,label:"🔧 "+tool.label,kind:"tool"});
+  if(read) items.push({href:(STORE?"./":"/school")+"#library="+read.id,label:"📚 "+read.label,kind:"read"});
+  if(!items.length) return null;
+  return(
+    <div style={{background:"rgba(255,182,39,0.06)",border:"1px solid rgba(255,182,39,0.22)",borderRadius:12,padding:"12px 14px",margin:"0 0 14px",textAlign:"left"}}>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,color:"#FFB627",marginBottom:8}}>NOW GO LOOK AT A REAL ONE</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {items.map(it=>(
+          <a key={it.kind} href={it.href} onClick={()=>trackId("lesson_link_"+it.kind,l.id)} style={{display:"block",color:"#FFEFE0",textDecoration:"none",fontSize:14.5,lineHeight:1.5,padding:"8px 10px",background:"rgba(0,0,0,0.25)",borderRadius:8,border:"1px solid rgba(255,182,39,0.14)"}}>{it.label} →</a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 
 
@@ -1227,7 +1288,7 @@ function Lesson({lesson:l,onComplete,onBack}){
           </div>
         ))}
       </div>
-      <button onClick={()=>setPhase("quiz")} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:`0 0 20px ${l.glow}`}}>
+      <button onClick={()=>{trackId("quiz_start",l.id);setPhase("quiz");}} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:`0 0 20px ${l.glow}`}}>
         📝 TAKE THE EXAM
       </button>
     </div>
@@ -1284,6 +1345,7 @@ function Lesson({lesson:l,onComplete,onBack}){
           {passed?`"${l.quote} Now you know why."`:`"This school has no participation trophies. Hit the books. Try again."`}
         </p>
       </div>
+      <LessonLinks lesson={l}/>
       <div style={{display:"flex",gap:10}}>
         {!passed&&<button onClick={retry} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,color:"#D1D5DB",cursor:"pointer",letterSpacing:2}}>↩ RETAKE</button>}
         <button onClick={()=>onComplete(l.id,passed)} style={{flex:2,background:passed?`#FF7A18`:"rgba(239,68,68,0.2)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:2,boxShadow:passed?`0 0 20px ${l.glow}`:"none"}}>
@@ -1649,6 +1711,11 @@ export default function App(){
       const path=(window.location.pathname||"").replace(/\/+$/,"").toLowerCase();
       if(PATHS[path]) return PATHS[path];
       const h=(window.location.hash||"").replace(/^#/,"");
+      // #lesson=<id> opens one lesson directly. The Project Hub links a holder to the lesson that
+      // explains the button they are about to press (Addendum C); an unknown id falls through to
+      // the normal landing rather than an empty lesson screen.
+      if(h.startsWith("lesson=")&&LESSONS.some(l=>l.id===h.slice(7))) return "lesson";
+      if(h.startsWith("library=")) return "library";
       // STORE edition (1.0.3, "AI-correct"): the Concierge — journey cards + Ask Cluck — is the
       // landing surface, so the AI tutor is the first thing a new user meets. The website keeps
       // the school landing (its concierge lives on the homepage).
@@ -1656,7 +1723,10 @@ export default function App(){
     }
     catch(e){ return STORE?"start":"landing"; }
   });
-  const [lessonId,setLessonId]=useState(null);
+  const [lessonId,setLessonId]=useState(()=>{
+    try { const h=(window.location.hash||"").replace(/^#/,""); if(h.startsWith("lesson=")&&LESSONS.some(l=>l.id===h.slice(7))) return h.slice(7); } catch(e){}
+    return null;
+  });
   const [completed,setCompleted]=useState(()=>{
     try {
       const s=localStorage.getItem("clkn_completed");
@@ -1724,7 +1794,7 @@ export default function App(){
         {screen==="incubator"&&<Incubator onComplete={()=>{track("incubator_complete");setScreen("select");}} onBack={()=>setScreen("landing")}/>}
         {screen==="clkn"&&!STORE&&<CLKNWidget/>}
         {screen==="lplab"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><LPLab/></Suspense>}
-        {screen==="library"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><Library/></Suspense>}
+        {screen==="library"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><Library initialTopic={hashParam("library")}/></Suspense>}
         {screen==="select"&&<Select onSelect={id=>{trackId("lesson_start",id);setLessonId(id);setScreen("lesson");}} completed={completed}/>}
         {screen==="lesson"&&lesson&&<Lesson lesson={lesson} onComplete={finish} onBack={()=>setScreen("select")}/>}
         {screen==="complete"&&<Complete onRestart={()=>{setCompleted([]);setScreen("landing");}}/>}

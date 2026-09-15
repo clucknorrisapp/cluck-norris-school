@@ -7729,6 +7729,100 @@ app.get("/api/buycomp/payout", (req, res) => {
   const recipients = (c.verified || []).map(v => `${v.wallet}, ${v.amount}`).join("\n");
   return res.status(200).json({ ok: true, mint: buyCompPrizeMint(c), tokenName: c.ticker, source: "Cluck Norris Buy Comp", recipients });
 });
+// ── Server-signed buy-comp payout (owner, 2026-09-15: "part of the buy specials in future will be
+// automated options for me and projects"). The sealed list on the comp is paid by the SERVER,
+// signing with the payer project's operator key (Railway env — the same key and the same vault
+// call as the CUNA giveaway payout above). Same discipline as that route and /api/cuna-stake/payout:
+//   - GET = read: what is owed, what is journaled, and the vault's dry run (balance, caps, mint guard);
+//   - anything that changes state is POST-only (run / sweep / unpay / set) → 405 on a GET, checked
+//     BEFORE the comp lookup so a pasted link is refused before it touches anything;
+//   - recipients come ONLY from c.verified — the send call cannot name an address. POST &set=
+//     replaces the sealed list by hand (audited, previous list kept on the comp) for the case verify
+//     cannot see: a wallet whose bag sits in a Jupiter lock scans as balance 0 and lands in "manual";
+//   - every transfer is journaled on the comp at SUBMIT time (pending:true), read back before it
+//     counts, and a journal write that does not persist throws — payoutSpl stops the batch on that,
+//     because an unmounted volume is exactly when a payout gets retried;
+//   - caps are the sealed list's own max and sum (never more than verify sealed), tightened by
+//     BUYCOMP_MAX_PRIZE / BUYCOMP_MAX_PAYOUT if set. The vault refuses to sign with the token's
+//     mint authority and refuses an unfunded payer.
+// Payer: &from=treasury (default — the prize supply sits there) or any vault project id.
+// Pure half + tests: lib/buycomp-payout.js, scripts/buycomp-payout-test.cjs. Runbook:
+// docs/BUYCOMP_SERVER_PAYOUT.md.
+app.all("/api/buycomp/send", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (req.cluckDirect) return res.status(404).json({ ok: false, error: "not_found" });
+  if (!buyCompAdminOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+  const bp = require("./lib/buycomp-payout");
+  const q = { ...(req.query || {}), ...(req.body || {}) };
+  const mutating = q.run === "1" || q.sweep === "1" || q.unpay || q.set != null;
+  if (mutating && req.method !== "POST") return res.status(405).json({ ok: false, error: "this changes payout state — send it as a POST" });
+  const id = String(q.id || "");
+  const c = buyCompsAll()[id];
+  if (!c) return res.status(404).json({ ok: false, error: "no such competition" });
+  const out = { ok: true, id, ticker: c.ticker || null, mint: buyCompPrizeMint(c), status: c.status || null };
+  try {
+    if (q.set != null) {
+      let rows;
+      try { rows = bp.parseRecipientLines(q.set); } catch (e) { return res.status(400).json({ ...out, ok: false, error: "set: " + e.message }); }
+      bp.setVerified(c, rows, { by: "operator", note: q.note });
+      buyCompSave(c);
+      out.set = { count: rows.length, total: +rows.reduce((t, r) => t + r.amount, 0).toFixed(9) };
+      console.log(`[buycomp-send] ${id}: sealed list SET by operator — ${rows.length} wallets, ${out.set.total} ${c.ticker || ""}`);
+    }
+    if (q.unpay) {
+      out.unpay = bp.unpay(c, String(q.unpay), String(q.sig || ""));
+      if (out.unpay.ok) { buyCompSave(c); console.log(`[buycomp-send] ${id}: journal row for ${q.unpay} cleared by operator`); }
+    }
+    if (q.sweep === "1") {
+      const rows = bp.pendingRows(c);
+      if (!rows.length) out.sweep = { ok: true, checked: 0 };
+      else {
+        try {
+          const { connection } = require("./lib/rpc");
+          const st = await connection("confirmed").getSignatureStatuses(rows.map((r) => r.rec.sig), { searchTransactionHistory: true });
+          out.sweep = { ok: true, checked: rows.length, ...bp.sweepPending(c, rows, (st && st.value) || []) };
+          buyCompSave(c);
+        } catch (e) { out.sweep = { ok: false, error: "could not read signature statuses — nothing changed: " + publicErrMsg(e) }; }
+      }
+    }
+    const owed = bp.owedNow(c);
+    out.owed = owed;
+    if (!owed.ok) return res.status(200).json(out);
+    if (!owed.owed.length) {
+      out.payout = owed.pending.length
+        ? { action: "none", reason: `nothing left to send, but ${owed.pending.length} transfer(s) are SENT AND UNCONFIRMED — check them on-chain, then POST &sweep=1` }
+        : { action: "none", reason: "every sealed winner is already paid" };
+      return res.status(200).json(out);
+    }
+    const payer = String(q.from || "treasury");
+    const envCap = (name) => { const v = Number(process.env[name]); return Number.isFinite(v) && v > 0 ? v : null; };
+    const perMax = Math.min(owed.maxOwed, envCap("BUYCOMP_MAX_PRIZE") || Infinity);
+    const totalMax = Math.min(owed.totalOwed, envCap("BUYCOMP_MAX_PAYOUT") || Infinity);
+    const run = q.run === "1";
+    const onPaid = (row) => {
+      bp.recordPayout(c, [row]);
+      buyCompSave(c);
+      const back = buyCompsAll()[id];
+      const rec = back && back.payouts && back.payouts[row.wallet];
+      if (!kv.isPersistent() || !rec || rec.sig !== row.sig) throw new Error("payout journal did not persist — check DATA_DIR before sending more");
+    };
+    const lock = run ? bp.lockAcquire(kv, id) : { ok: true, token: null };
+    if (!lock.ok) {
+      return res.status(409).json({ ...out, payout: { ok: false, error: "payout_in_flight", lock,
+        detail: "a payout is already running (or crashed mid-run) — wait, then re-check. A stale lock clears itself after 10 minutes." } });
+    }
+    let r;
+    try {
+      r = await whirlpoolMM.vault.payoutSpl({
+        projectId: payer, mintAddr: buyCompPrizeMint(c), recipients: owed.owed,
+        perRecipientMaxUi: perMax, totalMaxUi: totalMax, dryRun: !run, onPaid,
+      });
+    } finally { if (lock.token) bp.lockRelease(kv, lock.token); }
+    out.payout = { ...r, payer, ran: run, caps: { perRecipientMaxUi: perMax, totalMaxUi: totalMax } };
+    if (run) console.log(`[buycomp-send] ${id}: ${r.action} — paid ${(r.paid || []).length}, pending ${(r.pending || []).length}, failed ${(r.failed || []).length}`);
+    return res.status(200).json(out);
+  } catch (e) { return res.status(500).json({ ...out, ok: false, error: publicErrMsg(e) }); }
+});
 
 // ── Buy Special RANDOM DRAW (the "N random buys win X CLKN" raffle) ───────────
 // Distinct from the ranked buy COMPETITION above. Here every qualifying BUY is a
@@ -16809,7 +16903,7 @@ app.post("/api/track", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try {
     const b = req.body || {};
-    if (b.event) analytics.trackFunnel(b.event);
+    if (b.event) analytics.trackFunnel(b.event, req);
     // Graduation-gate ledger: lesson completions also carry an anonymous per-browser
     // session id so /api/claim can verify the curriculum was actually walked (see
     // lib/school-progress). bf=1 marks a one-time replay of pre-gate localStorage

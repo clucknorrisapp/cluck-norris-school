@@ -264,3 +264,28 @@ mail claiming to be from us." The wildcard DKIM with an empty key revokes all DK
 tell the world nobody can spoof `@clucknorris.app`, and they clear the three DNS findings. **Skip
 these if you ever plan to send email from the domain** (newsletters, transactional) — then you'd
 publish real SPF/DKIM for your mail provider instead.
+
+## ⚠️ A Cloudflare response-header rule is overriding the origin's CSP (found 2026-09-15)
+
+RootCrak's 2026-09-15 scan scored Web Security 78/100 with one critical/high finding. The cause is
+not in the code. `server.js` scopes `'unsafe-eval'` to the Normie Quest shell only and dropped
+`cdnjs.cloudflare.com` / `unpkg.com` from `script-src` on 2026-09-07 (#254; `scripts/csp-scope-test.cjs`
+boots the real server and pins it). The origin, hit directly on its Railway hostname, serves exactly
+that tight policy. The same page through clucknorris.app serves the **August 2026 policy** —
+`script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://plugin.jup.ag
+https://unpkg.com https://www.googletagmanager.com` — on every path, `/healthz` included. That value
+matches the CSP first shipped on 2026-08-01, so a **Cloudflare Transform Rule → Modify Response
+Header → set static `Content-Security-Policy`** was created then and never updated. This runbook only
+documents the *request*-header rule (`X-Cluck-Edge-Auth`); the response rule was never written down.
+
+**Fix (owner, Cloudflare dashboard — the repo cannot do this):** Rules → Transform Rules → *Modify
+Response Header*. Find the rule that sets `Content-Security-Policy` and **delete it** (do not
+"update" it — the origin already sends the right header per page, and a static edge value can never
+express the per-route scoping). Verify afterwards with
+`curl -sI https://clucknorris.app/about | grep -i content-security-policy` — `script-src` must have
+no `'unsafe-eval'`, no `cdnjs`, no `unpkg`; and `curl -sI https://clucknorris.app/normie-quest-x7`
+must still carry `'unsafe-eval'` (the game breaks without it). Then re-run the RootCrak scan.
+
+**Lesson:** every header the edge sets must be listed in this runbook, because the code's tests
+prove the origin and cannot see the edge. Until an edge-vs-origin drift check exists, a header change
+in `server.js` is not live until someone curls production.

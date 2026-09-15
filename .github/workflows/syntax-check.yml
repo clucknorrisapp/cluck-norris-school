@@ -50,7 +50,7 @@ jobs:
       - name: node --check every backend entrypoint and lib
         run: |
           set -e
-          for f in server.js hatchery.js securitycoop.js whirlpool-mm.js swap.js lib/*.js lib/lp-rescue/*.js normie-quest/*.js; do
+          for f in server.js hatchery.js securitycoop.js whirlpool-mm.js swap.js lib/*.js lib/hub/*.js lib/lp-rescue/*.js normie-quest/*.js; do
             echo "checking $f"
             node --check "$f"
           done
@@ -102,6 +102,32 @@ jobs:
       # already accrued is refused so a redeploy mid-run cannot pay it twice.
       - name: CUNA programme arm gate + config
         run: node scripts/cuna-programme-test.cjs
+      # Project Hub W1 pure gate (docs/DESIGN_PROJECT_HUB_2026-09-10.md §7 + Addendum B): isolation
+      # by explicit projectId, decimals from the mint read, immutable program versions with a
+      # verifiable hash, eligibility reason codes, the balance partition
+      # accrued = available + reserved + paidApplied with overpayment and partial rows, funding as
+      # three fields, append-only receipts, and the one-write settlement journal under fault
+      # injection. Every case is a way to pay someone twice, or not at all.
+      - name: Project Hub — W1 pure gate
+        run: node scripts/hub-core-test.cjs
+      # The §4 payout attempt state machine (rev 4): every send identified by its own signature
+      # before broadcast; reconcile by that signature only; a live row cannot be cancelled; a
+      # reservation is released only after blockhash expiry plus two agreeing reconciles; an RPC
+      # outage changes nothing. The six fault cases and the earlier concurrency set.
+      - name: Project Hub — payout attempts and reconcile fault cases
+        run: node scripts/hub-attempts-test.cjs
+      # Addendum C: the six answers a holder gets before locking are DERIVED from the program's
+      # entities (15), the differing-reward-asset warning is mandatory and not operator-controlled
+      # (16), no string anywhere in the block carries APR / APY / per-year language (17), and every
+      # lesson the block links to still exists in src/App.jsx LESSONS (C4).
+      - name: Project Hub — teach the button (Addendum C, tests 15–17)
+        run: node scripts/hub-teach-test.cjs
+      # Analytics: a visitor counts as ENGAGED only after a second page or a funnel event, and
+      # views are keyed by the real Host header. Since 2026-08-16 the site records ~4,500
+      # one-page, no-referrer "visitors" a day that BOT_RE cannot see; this is what stops that
+      # number being quoted as people.
+      - name: Analytics — engaged visitors and host split
+        run: node scripts/analytics-engaged-test.cjs
       # The staking domain's origin-lockdown exemption, read out of server.js itself. That
       # exemption is the one place a request can skip the WAF, so the allowlist must stay
       # exhaustive and anchored at both ends — a single "^/api/" entry would be a hole through to
@@ -151,6 +177,10 @@ jobs:
       # somebody actually receives.
       - name: CUNA payout double-pay guards
         run: node scripts/cuna-payout-test.cjs
+      # The server-signed buy-comp payout pays ONLY the sealed list, journals each transfer at
+      # submit time, sweeps dropped sigs only past expiry, and locks the run across processes.
+      - name: Buy-comp server payout guards
+        run: node scripts/buycomp-payout-test.cjs
       - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
         run: node scripts/cuna-announce-test.cjs
       # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC
