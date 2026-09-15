@@ -44,6 +44,17 @@ console.log("\nBuy-comp server payout — pure guards\n");
   ok("a duplicate wallet refuses the whole list", dup.ok === false && dup.error === "duplicate_wallet" && dup.wallet === A);
 }
 
+// ── the cap is the vault's own raw sum, never a rounded one ────────────────────────────────────
+{
+  const rows = [["4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs", 13722.42], ["5WKKoF7LcDRsSfTYxccSEj7hejh9U5ZqcX74C7E5X7HG", 5301.74],
+    ["5EjuMxEyxbmja7Nn664CqF5CD47udkqR4dppqNTtDprQ", 4158.04], ["5AXZPsqsQvXaWk3Mjwn4TfisFbTyvmFaodiFLcoaHS2B", 1920.20], ["4tjf9BB9yEaTDcwewGf78WWz1KvvXY7wpU6AHp7SwSzS", 954.88]];
+  const c = { verified: rows.map(([wallet, amount], i) => ({ rank: i + 1, wallet, amount, amountUnit: "token" })) };
+  const o = bp.owedNow(c);
+  const vaultSum = o.owed.reduce((t, r) => t + r.amountUi, 0);   // exactly what payoutSpl computes
+  ok("the real ROSE list does not sum to a clean float (the trap is real)", vaultSum > +vaultSum.toFixed(9), String(vaultSum));
+  ok("totalOwed is bitwise the vault's own sum, so total > totalMax can never trip on rounding", o.totalOwed === vaultSum && !(vaultSum > o.totalOwed));
+}
+
 // ── recordPayout ───────────────────────────────────────────────────────────────────────────────
 {
   const c = { verified: [{ wallet: A, amount: 1 }] };
