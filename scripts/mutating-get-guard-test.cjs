@@ -96,6 +96,19 @@ function raw(method, p, headers) {
   r = await call("GET", "/api/rose-buybot?arm=1");
   ok("GET /api/rose-buybot?arm=1 is refused with 405", r.status === 405);
 
+  // ── buy-comp server payout: run / sweep / unpay / set on a GET → 405, decided BEFORE the comp
+  // lookup so a pasted link is refused before it touches anything; the flag-less GET is the read.
+  r = await call("GET", "/api/buycomp/send?id=nope&run=1");
+  ok("GET /api/buycomp/send?run=1 is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/buycomp/send?id=nope&set=x");
+  ok("GET /api/buycomp/send?set= is refused with 405", r.status === 405);
+  r = await call("GET", "/api/buycomp/send?id=nope&sweep=1");
+  ok("GET /api/buycomp/send?sweep=1 is refused with 405", r.status === 405);
+  r = await call("GET", "/api/buycomp/send?id=nope");
+  ok("flag-less GET /api/buycomp/send is the read (404 for an unknown comp, not 405)", r.status === 404 && !!r.body && /no such competition/.test(String(r.body.error)), JSON.stringify(r.body));
+  r = await call("GET", "/api/buycomp/send?id=nope&run=1", false);
+  ok("/api/buycomp/send without the key is 404 like every admin route", r.status === 404);
+
   // ── #9 telegram test routes: 404 (not 403) without the key; post=1 needs POST
   r = await call("GET", "/api/bags-radar-test", false);
   ok("GET /api/bags-radar-test without key → 404 (was 403)", r.status === 404, String(r.status));
