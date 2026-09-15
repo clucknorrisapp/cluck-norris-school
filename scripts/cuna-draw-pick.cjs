@@ -20,6 +20,9 @@
 //   --x-post <tweet id>    …or ask the app to read the replies itself (/api/cuna-draw/x-replies, same key;
 //                          X recent search reaches back 7 days only)
 //   --preview              no X check yet: run the draw over EVERY entry, clearly labelled PREVIEW
+//   --x-check-after        owner's call (2026-09-15): draw over EVERY site entry and verify the winner's X
+//                          reply AFTER the draw; if it is missing the next alternate takes the prize,
+//                          same seed, same list — the result says so
 //   --seed auto|<string>   auto (default) = the latest FINALIZED Solana blockhash, slot recorded
 //   --alternates N         how many runners-up to list after the winner (default 3)
 //   --min-usd N            the second-entry threshold (default 1)
@@ -48,6 +51,7 @@ const RPC = opt("--rpc", process.env.RPC_URL || (process.env.HELIUS_API_KEY ? `h
 const MIN_USD = Number(opt("--min-usd", "1"));
 const ALTS = Math.max(0, Number(opt("--alternates", "3")) || 0);
 const PREVIEW = flag("--preview");
+const X_AFTER = flag("--x-check-after");
 const adminHeaders = () => {
   const h = {};
   if (process.env.CUNA_DRAW_EXPORT_TOKEN) h["x-draw-token"] = process.env.CUNA_DRAW_EXPORT_TOKEN;
@@ -120,7 +124,7 @@ async function cunaPrice() {
     verified = new Set(j.matched.map((m) => m.address));
     xInfo = { source: "x-api", post: j.post, replies: j.replies, addressesInReplies: j.addressesInReplies, unmatchedReplies: j.unmatchedReplies };
   }
-  if (!verified && !PREVIEW) {
+  if (!verified && !PREVIEW && !X_AFTER) {
     console.log("\nNo X verification given. Either:");
     console.log("  --verified <file>   one address per line, or the pasted reply thread (addresses are extracted)");
     console.log("  --x-post <id>       let the app read the replies with its X keys (7-day search window)");
@@ -129,9 +133,9 @@ async function cunaPrice() {
     for (const e of registry) console.log(`  ${e.enteredAt}  ${e.address}`);
     process.exit(2);
   }
-  const eligible = PREVIEW && !verified ? registry.slice() : registry.filter((e) => verified.has(e.address));
+  const eligible = !verified ? registry.slice() : registry.filter((e) => verified.has(e.address));
   const dropped = registry.filter((e) => !eligible.includes(e));
-  console.log(`eligible after the X check: ${eligible.length}${PREVIEW && !verified ? " (PREVIEW — every entry treated as verified)" : ""}, dropped ${dropped.length}`);
+  console.log(`eligible: ${eligible.length}${!verified ? (PREVIEW ? " (PREVIEW — every entry treated as verified)" : " (every site entry — X reply verified AFTER the draw, alternates in order)") : " after the X check"}, dropped ${dropped.length}`);
 
   // 3. The second entry: > $MIN_USD of CUNA at the time of the drawing, read on-chain now.
   const price = await cunaPrice();
@@ -163,7 +167,9 @@ async function cunaPrice() {
   const totalChances = entries.reduce((n, e) => n + e.chances, 0);
   const result = {
     kind: PREVIEW && !verified ? "PREVIEW — not a result" : "CUNA drawing result",
-    prize: "0.25 SOL", drawnAt: checkedAt, rules: { xReplyRequired: !(PREVIEW && !verified), secondEntryOverUsd: MIN_USD },
+    prize: "0.25 SOL", drawnAt: checkedAt,
+    rules: { xReplyRequired: true, xReplyCheckedBeforeDraw: !!verified, secondEntryOverUsd: MIN_USD,
+      ...(X_AFTER && !verified ? { note: "drawn over every site entry; the winner's reply under the pinned post is verified after the draw — if it is missing, the next alternate takes the prize (same seed, same list)" } : {}) },
     registry: { count: registry.length, window: exp.window || null }, xVerification: xInfo,
     price, seed, seedSource, entriesHash: draw.entriesHash(entries), totalChances,
     winner: picks[0] ? picks[0].address : null, alternates: picks.slice(1).map((p) => p.address), picks,

@@ -1,0 +1,351 @@
+{
+  "kind": "CUNA drawing result",
+  "prize": "0.25 SOL",
+  "drawnAt": "2026-09-15T01:01:16.334Z",
+  "rules": {
+    "xReplyRequired": true,
+    "xReplyCheckedBeforeDraw": false,
+    "secondEntryOverUsd": 1,
+    "note": "drawn over every site entry; the winner's reply under the pinned post is verified after the draw — if it is missing, the next alternate takes the prize (same seed, same list)"
+  },
+  "registry": {
+    "count": 38,
+    "window": {
+      "open": "2026-09-11T15:30:00.000Z",
+      "close": "2026-09-13T18:00:00.000Z",
+      "state": "closed"
+    }
+  },
+  "xVerification": null,
+  "price": {
+    "priceUsd": 0.00001041,
+    "pair": "2pxxjL96USyv6WPbrF2xkoKt16UdueyTuzr3CLwwTb1G",
+    "dex": "orca",
+    "liquidityUsd": 6144.18
+  },
+  "seed": "CpU7tbY5bBAnTai8smMhSMQoks7ck2dqR4sdPy7KHKa",
+  "seedSource": {
+    "kind": "solana-blockhash",
+    "slot": 447119456,
+    "commitment": "finalized",
+    "verify": "getBlock(447119456).blockhash === \"CpU7tbY5bBAnTai8smMhSMQoks7ck2dqR4sdPy7KHKa\""
+  },
+  "entriesHash": "f9f10d5c3a141b1affba7d8fdab874e3d90af271a563381c29bb306c66ead3db",
+  "totalChances": 52,
+  "winner": "GCL4YcNn6ZTteD2rn71iC7gjB3LWeT4zY7LT9xjMnrPD",
+  "alternates": [
+    "Ar7PxNjrQGpfBUrQL8YrUoEd2bSfuu7A6EoNkN45FUMU",
+    "J2ivigMN2uJrcoY7iW9FrEww93ZwqmeJ7umifrQk1weP",
+    "AgWXzUfLKc2MtUeyj871Co4V3Afhdit1QaE36E3sDv8D",
+    "Db26PLvdfXviNBgMvbSE3EjQdR3SJaJxgKJZo4aihhAX",
+    "CpvPPV8C83rDpKRLKWD6tjYu4eGw6HEDAeuSVoGYM5WJ"
+  ],
+  "picks": [
+    {
+      "address": "GCL4YcNn6ZTteD2rn71iC7gjB3LWeT4zY7LT9xjMnrPD",
+      "round": 0,
+      "slot": 42,
+      "of": 52
+    },
+    {
+      "address": "Ar7PxNjrQGpfBUrQL8YrUoEd2bSfuu7A6EoNkN45FUMU",
+      "round": 1,
+      "slot": 24,
+      "of": 50
+    },
+    {
+      "address": "J2ivigMN2uJrcoY7iW9FrEww93ZwqmeJ7umifrQk1weP",
+      "round": 2,
+      "slot": 42,
+      "of": 48
+    },
+    {
+      "address": "AgWXzUfLKc2MtUeyj871Co4V3Afhdit1QaE36E3sDv8D",
+      "round": 3,
+      "slot": 23,
+      "of": 46
+    },
+    {
+      "address": "Db26PLvdfXviNBgMvbSE3EjQdR3SJaJxgKJZo4aihhAX",
+      "round": 4,
+      "slot": 30,
+      "of": 45
+    },
+    {
+      "address": "CpvPPV8C83rDpKRLKWD6tjYu4eGw6HEDAeuSVoGYM5WJ",
+      "round": 5,
+      "slot": 25,
+      "of": 43
+    }
+  ],
+  "entries": [
+    {
+      "address": "Db26PLvdfXviNBgMvbSE3EjQdR3SJaJxgKJZo4aihhAX",
+      "enteredAt": "2026-09-11T16:56:02.868Z",
+      "balance": 145188.267525517,
+      "usd": 1.5114,
+      "chances": 2
+    },
+    {
+      "address": "m9YFWTcCWftheGkfz8SYxXpY1Zi5DGrLo9H3tKLFaVj",
+      "enteredAt": "2026-09-11T17:31:03.811Z",
+      "balance": 200378.887420187,
+      "usd": 2.0859,
+      "chances": 2
+    },
+    {
+      "address": "8EwCPYYTiXMjNisj2fx5QBuidH3xsB3RyTT2WFfxFDNZ",
+      "enteredAt": "2026-09-11T17:33:23.498Z",
+      "balance": 1143724.758669127,
+      "usd": 11.9062,
+      "chances": 2
+    },
+    {
+      "address": "CpvPPV8C83rDpKRLKWD6tjYu4eGw6HEDAeuSVoGYM5WJ",
+      "enteredAt": "2026-09-11T17:38:50.062Z",
+      "balance": 696969,
+      "usd": 7.2554,
+      "chances": 2
+    },
+    {
+      "address": "8Bv9HFbUudqTrjLaa7s8H56BFUYhhswqfKMjL6nbpyhe",
+      "enteredAt": "2026-09-11T17:40:44.838Z",
+      "balance": 696969,
+      "usd": 7.2554,
+      "chances": 2
+    },
+    {
+      "address": "Ar7PxNjrQGpfBUrQL8YrUoEd2bSfuu7A6EoNkN45FUMU",
+      "enteredAt": "2026-09-11T17:41:46.675Z",
+      "balance": 696969,
+      "usd": 7.2554,
+      "chances": 2
+    },
+    {
+      "address": "9AhawSdRhRTajQCY8TLYPmRUPBN8B8nPBPjL15yFXNZx",
+      "enteredAt": "2026-09-11T17:44:01.023Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "AgWXzUfLKc2MtUeyj871Co4V3Afhdit1QaE36E3sDv8D",
+      "enteredAt": "2026-09-11T17:44:26.037Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "CUo2f9sPYvvcSiMFceZ6eBweRVZJh6HwbnRqvSD7qPsV",
+      "enteredAt": "2026-09-11T17:50:28.441Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "8vFFW1bP5977mgTtbzoErAHoVa8Fon7nCniY1d1Vfucg",
+      "enteredAt": "2026-09-11T17:53:31.013Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "F64YGdwrRzhFwoMxwTntLyMNMT1zk9dbBMCBGHuKsLXp",
+      "enteredAt": "2026-09-11T17:54:23.311Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "3LcNBRpTQihrUzGsCyXqNgdTR3anhB82EdqZ4XYQnXS4",
+      "enteredAt": "2026-09-11T18:00:24.795Z",
+      "balance": 696969,
+      "usd": 7.2554,
+      "chances": 2
+    },
+    {
+      "address": "J2ivigMN2uJrcoY7iW9FrEww93ZwqmeJ7umifrQk1weP",
+      "enteredAt": "2026-09-11T18:04:13.567Z",
+      "balance": 696969,
+      "usd": 7.2554,
+      "chances": 2
+    },
+    {
+      "address": "9EURgiCG6GUAmm66TfLF9kQPkCjjxnWGTZwbgoiVWZFt",
+      "enteredAt": "2026-09-11T18:06:26.088Z",
+      "balance": 107400,
+      "usd": 1.118,
+      "chances": 2
+    },
+    {
+      "address": "z34bpAMoDZF3tvwP4rWogsDBqRQUWnRM2W2PT9VTT4o",
+      "enteredAt": "2026-09-11T18:08:03.260Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "Rs8nfxDdUgBpu3SNFWhBjgvnqdJxCoSpD5tMCGas1BE",
+      "enteredAt": "2026-09-11T18:09:17.313Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "7QvN7yqvL3TfYDn6mW9tD5pP3Yy3AdXWShoNGGFUzUce",
+      "enteredAt": "2026-09-11T18:10:23.864Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "G8bYircNRnWAJ1upCgp4tcappCGpm8gjPXxLHUXjHdL2",
+      "enteredAt": "2026-09-11T18:11:52.777Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "Hihe7JZ5X8Kx7q9JVfRgGTKWRqUAmJyWP3Yu3pJRRprF",
+      "enteredAt": "2026-09-11T18:12:23.616Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "9dA4jo2LphU6yRw9iC1o7Uh3obGMf5qZJHZs76RHX95k",
+      "enteredAt": "2026-09-11T18:14:57.583Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "Hh4MvPCsQZiHA6xadAcHrAAECLhkip35E1WJ7nTFnBVH",
+      "enteredAt": "2026-09-11T19:05:49.098Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "8uQA6MEzrQkeBVj6uaqpTZK65h9zHi6snC3dqWddKcFS",
+      "enteredAt": "2026-09-11T19:14:49.436Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "9jSRcv5D6NKYRVoVu8vT9vKLNwcJXneVwsHw2R1nkXHf",
+      "enteredAt": "2026-09-11T19:17:32.201Z",
+      "balance": 5999899.421723307,
+      "usd": 62.459,
+      "chances": 2
+    },
+    {
+      "address": "9Qu8A997VWnKmnuSotdA1X4ih9W6KtCCoHu93wujkLYa",
+      "enteredAt": "2026-09-11T19:47:46.482Z",
+      "balance": 1104996.524386377,
+      "usd": 11.503,
+      "chances": 2
+    },
+    {
+      "address": "9XPu7A1VRacphxwBG4qCHWi4yG897qv7hpupLuHY9Pav",
+      "enteredAt": "2026-09-11T20:07:31.175Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "HVYrbkpRKD7SferC9YujG42hfRLSp3dhDeaNMwwd6Md9",
+      "enteredAt": "2026-09-11T20:37:36.423Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "GCL4YcNn6ZTteD2rn71iC7gjB3LWeT4zY7LT9xjMnrPD",
+      "enteredAt": "2026-09-11T20:39:26.854Z",
+      "balance": 3292164.331096105,
+      "usd": 34.2714,
+      "chances": 2
+    },
+    {
+      "address": "8V3e5KZ5UUSvKcmn5GCroHxf8WjSCf2qSe9cYx1EUjYC",
+      "enteredAt": "2026-09-11T20:39:53.490Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "DRDMW6YeW8DkcZvzWwWxZ3WuFxmiKmjEA7KRQQNvos8F",
+      "enteredAt": "2026-09-11T23:30:58.403Z",
+      "balance": 101395.419656565,
+      "usd": 1.0555,
+      "chances": 2
+    },
+    {
+      "address": "4xQmnc9NL6H74YZHoSzvDnjfDWvm8mKeM45PmxNcKzRU",
+      "enteredAt": "2026-09-12T01:16:58.397Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "CQJPne2FrVwdFNKemiDbGvtUJw4BK2Ux6mZVgFrzaBMa",
+      "enteredAt": "2026-09-12T01:45:37.217Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "9dsfSFsucWeUZwGNnAffne3A3vspXUtgKtXcS7Ye3SaR",
+      "enteredAt": "2026-09-12T07:37:40.913Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "FVP2bv7xcfVMdhi74ghJJFxyBr6Xa7NH5Cihdabvkgpx",
+      "enteredAt": "2026-09-12T12:16:42.083Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "DpZkxcCsRnFE6D27NSzV6fFMQFzfmd4RbEwqYDGy5KGR",
+      "enteredAt": "2026-09-12T15:04:17.645Z",
+      "balance": 66733008.379384026,
+      "usd": 694.6906,
+      "chances": 2
+    },
+    {
+      "address": "BFRNi9rQ77CKax7SAQBYRiFDb5cN69kkFKr1mutbSnnD",
+      "enteredAt": "2026-09-12T15:29:49.560Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "BYwZAHbD38RvEihmJgy7E95CMKJ3mLXy3tEEs48cPaQx",
+      "enteredAt": "2026-09-12T20:49:57.751Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "26ePQaFJZPbRajB1fKgDhPHnngeARPtX7Mnjnn45Zrvo",
+      "enteredAt": "2026-09-12T20:53:01.782Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    },
+    {
+      "address": "3ezbNQXNAHGj76BxCgV5GxJjUupuUVRmiMs1LcxZYybn",
+      "enteredAt": "2026-09-13T00:42:59.724Z",
+      "balance": 0,
+      "usd": 0,
+      "chances": 1
+    }
+  ],
+  "droppedByXCheck": [],
+  "algorithm": "sort entries by address; pool = each address repeated `chances` times; pick k = pool[ SHA256(seed + ':' + k) mod pool.length ]; remove the picked address's block; repeat (lib/cuna-draw.js drawFromSeed)"
+}

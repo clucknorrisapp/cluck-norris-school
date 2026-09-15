@@ -63,3 +63,21 @@ post the winner + the tx signature under the pinned post. Nothing in this repo s
 - The window is env-overridable (`CUNA_DRAW_OPEN` / `CUNA_DRAW_CLOSE`) for the next drawing;
   the registry key is `cunaDrawEntries` in kv — reset it before reusing the page for another run.
 - `scripts/cuna-draw-test.cjs` (CI) pins the registry rules and the draw algorithm.
+
+## The 2026-09-15 draw (owner's call: draw first, X check after)
+
+Owner, 2026-09-15: *"pick a winner from what we have, I will then go make sure they are on the
+X thread and payout, if not we will pick again."* So the draw ran over all 38 site entries with
+`--x-check-after`, and the X reply is verified on the winner afterwards; if it is missing, the
+next alternate takes the prize under the same seed and list. Full record:
+`docs/CUNA_DRAWING_RESULT_2026-09-15.json` (seed = finalized blockhash at slot 447119456, 38
+entries, 52 chances, 14 wallets over $1 at $0.00001041).
+
+| Order | Address |
+|---|---|
+| Winner | `GCL4YcNn6ZTteD2rn71iC7gjB3LWeT4zY7LT9xjMnrPD` |
+| Alternate 1 | `Ar7PxNjrQGpfBUrQL8YrUoEd2bSfuu7A6EoNkN45FUMU` |
+| Alternate 2 | `J2ivigMN2uJrcoY7iW9FrEww93ZwqmeJ7umifrQk1weP` |
+| Alternate 3 | `AgWXzUfLKc2MtUeyj871Co4V3Afhdit1QaE36E3sDv8D` |
+| Alternate 4 | `Db26PLvdfXviNBgMvbSE3EjQdR3SJaJxgKJZo4aihhAX` |
+| Alternate 5 | `CpvPPV8C83rDpKRLKWD6tjYu4eGw6HEDAeuSVoGYM5WJ` |
