@@ -50,7 +50,7 @@ jobs:
       - name: node --check every backend entrypoint and lib
         run: |
           set -e
-          for f in server.js hatchery.js securitycoop.js whirlpool-mm.js swap.js lib/*.js lib/lp-rescue/*.js normie-quest/*.js; do
+          for f in server.js hatchery.js securitycoop.js whirlpool-mm.js swap.js lib/*.js lib/hub/*.js lib/lp-rescue/*.js normie-quest/*.js; do
             echo "checking $f"
             node --check "$f"
           done
@@ -102,6 +102,14 @@ jobs:
       # already accrued is refused so a redeploy mid-run cannot pay it twice.
       - name: CUNA programme arm gate + config
         run: node scripts/cuna-programme-test.cjs
+      # Project Hub W1 pure gate (docs/DESIGN_PROJECT_HUB_2026-09-10.md §7 + Addendum B): isolation
+      # by explicit projectId, decimals from the mint read, immutable program versions with a
+      # verifiable hash, eligibility reason codes, the balance partition
+      # accrued = available + reserved + paidApplied with overpayment and partial rows, funding as
+      # three fields, append-only receipts, and the one-write settlement journal under fault
+      # injection. Every case is a way to pay someone twice, or not at all.
+      - name: Project Hub — W1 pure gate
+        run: node scripts/hub-core-test.cjs
       # The staking domain's origin-lockdown exemption, read out of server.js itself. That
       # exemption is the one place a request can skip the WAF, so the allowlist must stay
       # exhaustive and anchored at both ends — a single "^/api/" entry would be a hole through to
