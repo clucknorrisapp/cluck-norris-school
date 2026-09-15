@@ -81,3 +81,10 @@ entries, 52 chances, 14 wallets over $1 at $0.00001041).
 | Alternate 3 | `AgWXzUfLKc2MtUeyj871Co4V3Afhdit1QaE36E3sDv8D` |
 | Alternate 4 | `Db26PLvdfXviNBgMvbSE3EjQdR3SJaJxgKJZo4aihhAX` |
 | Alternate 5 | `CpvPPV8C83rDpKRLKWD6tjYu4eGw6HEDAeuSVoGYM5WJ` |
+
+**Exclusion, 2026-09-15 (owner):** the first pick is a friend of the team and was excluded on
+the rule "friends and anyone connected to the team are not eligible" — stated in the
+announcement, not applied quietly, because the published seed and list show that address
+winning. The prize goes to **alternate 1, `Ar7PxNjrQGpfBUrQL8YrUoEd2bSfuu7A6EoNkN45FUMU`**,
+pending the X-reply check; alternate 2 next if that fails. Recorded in the result JSON under
+`exclusions` / `prizeGoesTo`.

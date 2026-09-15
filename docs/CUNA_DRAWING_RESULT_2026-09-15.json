@@ -347,5 +347,15 @@
     }
   ],
   "droppedByXCheck": [],
-  "algorithm": "sort entries by address; pool = each address repeated `chances` times; pick k = pool[ SHA256(seed + ':' + k) mod pool.length ]; remove the picked address's block; repeat (lib/cuna-draw.js drawFromSeed)"
+  "algorithm": "sort entries by address; pool = each address repeated `chances` times; pick k = pool[ SHA256(seed + ':' + k) mod pool.length ]; remove the picked address's block; repeat (lib/cuna-draw.js drawFromSeed)",
+  "exclusions": [
+    {
+      "address": "GCL4YcNn6ZTteD2rn71iC7gjB3LWeT4zY7LT9xjMnrPD",
+      "pick": "winner (round 0)",
+      "reason": "connected to the team — owner rule stated at announcement: friends and anyone connected to the team are not eligible; excluded after the draw, disclosed",
+      "decidedAt": "2026-09-15T01:04:39.549Z"
+    }
+  ],
+  "prizeGoesTo": "Ar7PxNjrQGpfBUrQL8YrUoEd2bSfuu7A6EoNkN45FUMU",
+  "prizeGoesToNote": "alternate 1 — the first eligible pick after the disclosed exclusion; same seed, same list"
 }
