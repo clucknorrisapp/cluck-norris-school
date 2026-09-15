@@ -141,17 +141,19 @@ The owner asked why a "no" needs five sentences. Because Official Rules §9 obli
 third-party code, and an AI tool having written much of the codebase is better heard from us than
 discovered. A bare "No" would be accurate about people and silent about that.
 
-**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 491)
+**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 508)
 
 ```
-Beyond the tools above, clucknorris.app also ships Firepit (burn junk tokens, reclaim rent), Project Burn with on-chain proof, Listing Checkup, LP Rescue, Owners Snapshot, Trace, a guided token creator and public Lock of Fame pages. Live since 2025; the pre-window snapshot is commit 75b69cc in docs/PRE_EVENT_STATE.md and the in-window build is the Project Hub. 30 days to 14 Sep: 161k page views, 22 graduates, 488M CLKN locked through our tooling. Solo founder, CLKN Productions LLC. MIT.
+Beyond the tools above, clucknorris.app also ships Firepit (burn junk tokens, reclaim rent), Project Burn with on-chain proof, Listing Checkup, LP Rescue, Owners Snapshot, Trace, a guided token creator and public Lock of Fame pages. Live since 2025; the pre-window snapshot is commit 75b69cc in docs/PRE_EVENT_STATE.md and the in-window build is the Project Hub. On-chain today: 22 graduates, 488M CLKN locked through our tooling, weekly lock-to-earn payouts settled. Solo founder, CLKN Productions LLC. MIT.
 ```
 
 This carries the disclosure line in the form's own words — the platform predates the window, the
 snapshot commit and `docs/PRE_EVENT_STATE.md` draw the boundary, the Project Hub is named as the
-in-window build — plus the live figures judges would not otherwise see, read from `/api/stats?days=30` and
-`/api/school-stats` on 2026-09-14 (161,270 views · 117,859 visitor-days · 22 graduates · 488.3M CLKN
-locked). The Bags hackathon was dropped from the form at the owner's call — it reads as a footnote —
+in-window build — plus the verifiable figures judges would not otherwise see. **The page-view figure was removed on
+2026-09-15**: the server analytics count every non-API GET across every host and, since 2026-08-16,
+record ~4,500 one-page "visitors" a day with no referrer — automated traffic, not learners (see
+`docs/SCHOOL_DEEP_DIVE_2026-09-15.md` §0.3). Only on-chain numbers are claimed now. **The form field
+still carries the old text and needs the same edit (owner).** The Bags hackathon was dropped from the form at the owner's call — it reads as a footnote —
 and stays only in the §3 founder background.
 
 **Project website:** `https://clucknorris.app`
@@ -291,7 +293,7 @@ Judges weight traction and revenue. These are all verifiable on-chain or on the 
 
 | Signal | Today (2026-09-10) | Where to re-read it |
 |---|---|---|
-| Learners and visitors | 140,462 page views · 105,185 visitor-days in the 30 days to 2026-09-10 (server analytics retain 90 days; visitor-days = unique daily visitors summed, not unique people) · ~5k visitors/day this month · 22 graduates | server analytics; `/api/school-stats` |
+| Learners | 22 graduates with on-chain transcripts; 90-day funnel: 270 school starts → 87 through lesson 1 → 19 graduations (`/api/stats` funnel). **Do not cite page views**: since 2026-08-16 the analytics record ~4,500 one-page, no-referrer "visitors" a day across every host — automated traffic (`docs/SCHOOL_DEEP_DIVE_2026-09-15.md` §0.3) | `/api/school-stats`; `/api/stats` funnel |
 | Partner tokens on our infrastructure | 4 — POKE, CUNA, DNC, ROSE: locking, verification, buy comps, and (paused) liquidity engine service | JVP runbook, `docs/CLKN_JUP_VERIFICATION_PROTOCOL.md` |
 | Lock-to-earn — mechanism proof | First weekly payout landed 2026-09-09: 13 wallets, one transaction (proves the mechanism runs end-to-end; not a dollar claim) | tx `37hhsCCh…Z2bVkiP` |
 | CLKN locks — our own supply, via our own tooling | 73 locks, 48.8% of supply (488M CLKN) | `/api/locks?mint=DW6DF2…BAGS` |
