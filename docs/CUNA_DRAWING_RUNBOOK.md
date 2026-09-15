@@ -91,3 +91,11 @@ blockhash `4PTLTWfY4JjnktcdUKjXXa847wCFVfjewtrbiypTDHfh` at slot 447120174.
 | Alternate 5 | `AgWXzUfLKc2MtUeyj871Co4V3Afhdit1QaE36E3sDv8D` |
 
 Announce it with the exclusion stated, the seed, and the slot; publish the JSON.
+
+**Closed 2026-09-15 01:07 UTC.** Owner confirmed the winner on the X thread and paid 0.25 SOL
+from the treasury wallet: tx `zMcUGwv5eFoErdPvxAZMqyGzHEyNEU4FgbVL9qgDnJjrFWDTF6qHqSZNELppomVBiZDKqmXCd6aJRq5DJiMuM5M`
+(verified on-chain: system transfer of 250,000,000 lamports to the winner). Announced on the CLKN
+X account (post `2099666914339398087`, via `/api/x-post-test&force=1`, owner ask) and in the
+CUNA Cummunity room (message 10443, silent). ⚠️ X refused the first attempt with "Posts are
+limited to a maximum of one cashtag" — `$CUNA` twice in one post is a 403, write the second as
+plain CUNA.
