@@ -1989,6 +1989,8 @@ const BUYCOMP_KEY = "buyComps";
 let buyCompRunning = false;
 function buyCompsAll() { return kv.get(BUYCOMP_KEY, {}); }
 function buyCompSave(c) { const all = buyCompsAll(); all[c.id] = c; kv.set(BUYCOMP_KEY, all); }
+// The save a MONEY PATH uses: true only when the comp (and so its payout journal) is on disk.
+function buyCompSaveVerified(c) { const all = buyCompsAll(); all[c.id] = c; return kv.setVerified(BUYCOMP_KEY, all); }
 function buyCompByChat(chatId) {
   return Object.values(buyCompsAll())
     .filter(c => String(c.chatId) === String(chatId) && (c.status === "live" || c.status === "closed"))
@@ -7761,17 +7763,24 @@ app.all("/api/buycomp/send", async (req, res) => {
   if (!c) return res.status(404).json({ ok: false, error: "no such competition" });
   const out = { ok: true, id, ticker: c.ticker || null, mint: buyCompPrizeMint(c), status: c.status || null };
   try {
+    // Every write that touches the sealed list or the journal goes through the DISK-VERIFIED save:
+    // kv.set swallows a failed persist and kv.get answers from memory, so a plain save-then-read
+    // "proves" a row that lives only in RAM (second reviewer, 2026-09-15).
+    const notPersisted = (what) => res.status(500).json({ ...out, ok: false, error: `${what} did not reach the volume — nothing is trusted; check DATA_DIR before doing anything else` });
     if (q.set != null) {
       let rows;
       try { rows = bp.parseRecipientLines(q.set); } catch (e) { return res.status(400).json({ ...out, ok: false, error: "set: " + e.message }); }
       bp.setVerified(c, rows, { by: "operator", note: q.note });
-      buyCompSave(c);
+      if (!buyCompSaveVerified(c)) return notPersisted("the sealed list");
       out.set = { count: rows.length, total: +rows.reduce((t, r) => t + r.amount, 0).toFixed(9) };
       console.log(`[buycomp-send] ${id}: sealed list SET by operator — ${rows.length} wallets, ${out.set.total} ${c.ticker || ""}`);
     }
     if (q.unpay) {
       out.unpay = bp.unpay(c, String(q.unpay), String(q.sig || ""));
-      if (out.unpay.ok) { buyCompSave(c); console.log(`[buycomp-send] ${id}: journal row for ${q.unpay} cleared by operator`); }
+      if (out.unpay.ok) {
+        if (!buyCompSaveVerified(c)) return notPersisted("the journal (unpay)");
+        console.log(`[buycomp-send] ${id}: journal row for ${q.unpay} cleared by operator`);
+      }
     }
     if (q.sweep === "1") {
       const rows = bp.pendingRows(c);
@@ -7781,7 +7790,7 @@ app.all("/api/buycomp/send", async (req, res) => {
           const { connection } = require("./lib/rpc");
           const st = await connection("confirmed").getSignatureStatuses(rows.map((r) => r.rec.sig), { searchTransactionHistory: true });
           out.sweep = { ok: true, checked: rows.length, ...bp.sweepPending(c, rows, (st && st.value) || []) };
-          buyCompSave(c);
+          if (!buyCompSaveVerified(c)) return notPersisted("the journal (sweep)");
         } catch (e) { out.sweep = { ok: false, error: "could not read signature statuses — nothing changed: " + publicErrMsg(e) }; }
       }
     }
@@ -7790,7 +7799,7 @@ app.all("/api/buycomp/send", async (req, res) => {
     if (!owed.ok) return res.status(200).json(out);
     if (!owed.owed.length) {
       out.payout = owed.pending.length
-        ? { action: "none", reason: `nothing left to send, but ${owed.pending.length} transfer(s) are SENT AND UNCONFIRMED — check them on-chain, then POST &sweep=1` }
+        ? { action: "none", reason: `nothing left to send, but ${owed.pending.length} transfer(s) are journaled and UNCONFIRMED — POST &sweep=1 to settle the ones the chain knows; one it does not know stays pending until you check it on an explorer and, only if it truly never landed, POST &unpay=<wallet>&sig=<sig>` }
         : { action: "none", reason: "every sealed winner is already paid" };
       return res.status(200).json(out);
     }
@@ -7799,12 +7808,12 @@ app.all("/api/buycomp/send", async (req, res) => {
     const perMax = Math.min(owed.maxOwed, envCap("BUYCOMP_MAX_PRIZE") || Infinity);
     const totalMax = Math.min(owed.totalOwed, envCap("BUYCOMP_MAX_PAYOUT") || Infinity);
     const run = q.run === "1";
+    // The journal row is written BEFORE the broadcast (the vault's prepareOne ordering) and only
+    // counts if it is on DISK: a throw here stops the batch before that recipient's transfer is
+    // sent. A kv.get read-back would answer from memory and prove nothing.
     const onPaid = (row) => {
       bp.recordPayout(c, [row]);
-      buyCompSave(c);
-      const back = buyCompsAll()[id];
-      const rec = back && back.payouts && back.payouts[row.wallet];
-      if (!kv.isPersistent() || !rec || rec.sig !== row.sig) throw new Error("payout journal did not persist — check DATA_DIR before sending more");
+      if (!buyCompSaveVerified(c)) throw new Error("payout journal did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — STOP; check DATA_DIR before sending more");
     };
     const lock = run ? bp.lockAcquire(kv, id) : { ok: true, token: null };
     if (!lock.ok) {
