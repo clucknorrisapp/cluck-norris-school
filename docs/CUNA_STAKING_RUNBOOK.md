@@ -395,6 +395,24 @@ chat pointing at `/api/cuna-stake/admin` — the hourly tick keeps retrying rega
 chain read is failing, nobody earns until someone fixes it, so this is the tripwire that says so
 instead of it going unnoticed for days.
 
+**The lock scan walks Helius `getProgramAccountsV2` first, legacy `getProgramAccounts` second
+(2026-09-15).** At 01:05 UTC that day the accrual skipped an hour with *"Request deprioritized due
+to number of accounts requested. Please use getProgramAccountsV2 with pagination"* — Helius now
+refuses a plain gPA on the Jupiter Lock program once its account set is large, and the refusal is
+an HTTP 200 carrying a JSON-RPC error, so `lib/rpc`'s status-based failover never rolled it; every
+10-minute retry hit the same node. The 10-minute retry did recover that hour, but on a bad night
+every hour would skip. `scanEscrowsByMint` in `lib/cuna-lock-scan.js` now pages
+`getProgramAccountsV2` (same two memcmp filters, `limit` 5000) on every Helius endpoint in
+`rpcEndpoints()`, rolling to the next endpoint on any JSON-RPC error, and only then falls back to
+the legacy call. A page walk that ends anywhere but `paginationKey: null` throws — through to the
+accrual guard, which leaves the day unwritten and retries — rather than returning a partial set,
+because a partial set would be a *written* day with lockers missing, and a written day is never
+redone. Both paths return the same shape from the same Anchor coder; `scripts/cuna-lock-scan-test.cjs`
+pins the walk, the endpoint roll, the fallback and the never-partial rule, and the V2 decode was
+checked byte-for-byte against `program.account.vestingEscrow.fetch` on a live escrow before shipping.
+If the alert ever shows the deprioritized text again, it means every Helius endpoint refused V2 too
+— check `HELIUS_API_KEY_2` is set so there is a second endpoint to roll to.
+
 **The CUNA staking hosts are exempt from the origin lockdown** for ten exact paths, anchored at
 both ends. The hosts come from `CUNA_STAKE_HOSTS` (comma-separated; default
 `staking.cunatoken.com,www.staking.cunatoken.com,lock.cunatoken.com,www.lock.cunatoken.com`) and are

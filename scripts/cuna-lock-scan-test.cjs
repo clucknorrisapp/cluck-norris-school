@@ -255,6 +255,108 @@ t("backdating is BOUNDED: never past the cap, never before the token existed", (
   assert.strictEqual(r3.ledger.E1.firstSeenAt, NOW - 5 * DAY);
 });
 
+section("the network half — getProgramAccountsV2 first, legacy getProgramAccounts as the fallback");
+
+// A stand-in for an Anchor Program: enough surface for scanEscrowsByMint and nothing more.
+// decode() parses JSON so a stubbed page can carry any account shape; memcmp() is the
+// discriminator filter Anchor's own .all() adds at offset 0.
+const fakeProgram = (legacyImpl) => ({
+  programId: { toBase58: () => "LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn" },
+  idl: { accounts: [{ name: "VestingEscrowMetadata" }, { name: "VestingEscrow" }] },
+  coder: { accounts: {
+    memcmp: (name) => { assert.strictEqual(name, "VestingEscrow"); return { offset: 0, bytes: "DISC" }; },
+    decode: (name, buf) => { assert.strictEqual(name, "VestingEscrow"); return JSON.parse(buf.toString("utf8")); },
+  } },
+  account: { vestingEscrow: { all: legacyImpl || (async () => { throw new Error("legacy should not run"); }) } },
+});
+const page = (rows, paginationKey) => ({ result: { accounts: rows.map(([k, obj]) => ({ pubkey: k, account: { data: [Buffer.from(JSON.stringify(obj)).toString("base64"), "base64"] } })), paginationKey } });
+const jacct = (over = {}) => ({ recipient: "Alice", tokenMint: "CUNA", creator: "Creator", cancelMode: 0, ...over }); // JSON-safe: the stubbed page is JSON-encoded, and acct() carries BigInts
+const HEL = ["https://mainnet.helius-rpc.com/?api-key=one", "https://mainnet.helius-rpc.com/?api-key=two"];
+
+t("IDL account name resolves whether the IDL spells it VestingEscrow or vesting_escrow", () => {
+  assert.strictEqual(scan.escrowIdlName({ idl: { accounts: [{ name: "VestingEscrow" }] } }), "VestingEscrow");
+  assert.strictEqual(scan.escrowIdlName({ idl: { accounts: [{ name: "vesting_escrow" }] } }), "vesting_escrow");
+  assert.strictEqual(scan.escrowIdlName({ idl: { accounts: [{ name: "Other" }] } }), null);
+});
+
+t("V2 walk: both memcmp filters, base64, pages followed until paginationKey is null, same {escrow, account} shape", async () => {
+  const calls = [];
+  const fetchJson = async (url, method, params) => {
+    calls.push({ url, method, params });
+    const cfg = params[1];
+    if (!cfg.paginationKey) return page([["E1", jacct({ recipient: "A" })], ["E2", jacct({ recipient: "B" })]], "K1");
+    if (cfg.paginationKey === "K1") return page([["E3", jacct({ recipient: "C" })]], null);
+    throw new Error("unexpected key " + cfg.paginationKey);
+  };
+  const out = await scan.scanEscrowsByMint(fakeProgram(), "CUNA", { endpoints: HEL, fetchJson });
+  assert.deepStrictEqual(out.map((r) => r.escrow), ["E1", "E2", "E3"]);
+  assert.strictEqual(out[2].account.recipient, "C");
+  assert.strictEqual(calls.length, 2);
+  assert.strictEqual(calls[0].method, "getProgramAccountsV2");
+  assert.strictEqual(calls[0].params[0], "LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn");
+  const cfg = calls[0].params[1];
+  assert.strictEqual(cfg.encoding, "base64");
+  assert.deepStrictEqual(cfg.filters, [
+    { memcmp: { offset: 0, bytes: "DISC" } },
+    { memcmp: { offset: scan.TOKEN_MINT_OFFSET, bytes: "CUNA" } },
+  ]);
+  assert.strictEqual(cfg.limit, scan.V2_PAGE_LIMIT);
+  assert.strictEqual(calls[1].params[1].paginationKey, "K1");
+  assert.strictEqual(calls[0].url, HEL[0]);
+});
+
+t("V2 walk accepts the withContext shape (result.value.accounts)", async () => {
+  const fetchJson = async () => ({ result: { context: { slot: 1 }, value: page([["E9", jacct()]], null).result } });
+  const out = await scan.scanEscrowsByMint(fakeProgram(), "CUNA", { endpoints: HEL, fetchJson });
+  assert.deepStrictEqual(out.map((r) => r.escrow), ["E9"]);
+});
+
+t("a deprioritized JSON-RPC error on the first Helius endpoint rolls to the second — not to the same node", async () => {
+  const seen = [];
+  const fetchJson = async (url) => {
+    seen.push(url);
+    if (url === HEL[0]) return { error: { code: -32005, message: "Request deprioritized due to number of accounts requested. Please use getProgramAccountsV2 with pagination" } };
+    return page([["E1", jacct()]], null);
+  };
+  const out = await scan.scanEscrowsByMint(fakeProgram(), "CUNA", { endpoints: HEL, fetchJson });
+  assert.deepStrictEqual(out.map((r) => r.escrow), ["E1"]);
+  assert.deepStrictEqual(seen, [HEL[0], HEL[1]]);
+});
+
+t("every Helius endpoint failing falls back to the legacy getProgramAccounts call, same shape", async () => {
+  const fetchJson = async () => { throw new Error("RPC 503"); };
+  const legacy = async (filters) => {
+    assert.deepStrictEqual(filters, [{ memcmp: { offset: scan.TOKEN_MINT_OFFSET, bytes: "CUNA" } }]);
+    return [{ publicKey: { toBase58: () => "L1" }, account: acct({ recipient: "Legacy" }) }];
+  };
+  const out = await scan.scanEscrowsByMint(fakeProgram(legacy), "CUNA", { endpoints: HEL, fetchJson });
+  assert.deepStrictEqual(out, [{ escrow: "L1", account: acct({ recipient: "Legacy" }) }]);
+});
+
+t("no Helius endpoint configured → legacy path directly, V2 never attempted", async () => {
+  const fetchJson = async () => { throw new Error("must not be called"); };
+  const legacy = async () => [{ publicKey: { toBase58: () => "L1" }, account: acct() }];
+  const out = await scan.scanEscrowsByMint(fakeProgram(legacy), "CUNA", { endpoints: [], fetchJson });
+  assert.deepStrictEqual(out.map((r) => r.escrow), ["L1"]);
+});
+
+t("a walk that never reaches paginationKey null is NEVER returned as a partial set — it throws through to the caller", async () => {
+  // The accrual guard turns a throw into "day stays unwritten, retry"; a partial set would be a
+  // written day with lockers missing from it, and a written day is never redone.
+  const fetchJson = async () => page([["E1", jacct()]], "FOREVER");
+  const legacy = async () => { throw new Error("legacy down too"); };
+  await assert.rejects(
+    () => scan.scanEscrowsByMint(fakeProgram(legacy), "CUNA", { endpoints: [HEL[0]], fetchJson, maxPages: 3 }),
+    /legacy down too/,
+  );
+});
+
+t("an account arriving without base64 data fails the walk rather than being skipped", async () => {
+  const fetchJson = async () => ({ result: { accounts: [{ pubkey: "E1", account: { data: null } }], paginationKey: null } });
+  const legacy = async () => { throw new Error("legacy down"); };
+  await assert.rejects(() => scan.scanEscrowsByMint(fakeProgram(legacy), "CUNA", { endpoints: [HEL[0]], fetchJson }), /legacy down/);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
