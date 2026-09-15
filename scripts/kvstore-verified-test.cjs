@@ -1,0 +1,52 @@
+#!/usr/bin/env node
+"use strict";
+// kv.setVerified — the only kv write a money path may trust (second reviewer, 2026-09-15).
+// set() swallows the persist error, get() answers from memory, isPersistent() only says the
+// directory existed at boot. So the "set, read it back, check isPersistent()" pattern passed with
+// the volume broken, and a payout journal row could be reported recorded while living only in
+// RAM — one restart from being paid again. This reproduces that with a broken write target and
+// asserts setVerified is the one call that tells the truth.
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+let failures = 0;
+const ok = (name, cond, detail) => { if (cond) console.log("  ✓ " + name); else { failures++; console.log("  ✗ " + name + (detail ? "\n      " + detail : "")); } };
+
+const DIR = fs.mkdtempSync(path.join(os.tmpdir(), "kv-verified-"));
+process.env.DATA_DIR = DIR;
+const kv = require("../lib/kvstore");
+const FILE = path.join(DIR, "app-state.json");
+const onDisk = () => { try { return JSON.parse(fs.readFileSync(FILE, "utf8")); } catch (_) { return null; } };
+
+console.log("\nkv store — disk-verified writes\n");
+
+ok("a normal write is verified on disk", kv.setVerified("a", { x: 1 }) === true && onDisk() && onDisk().a.x === 1);
+ok("lastPersistError is null after a write that landed", kv.lastPersistError() === null);
+
+// Break the target: a DIRECTORY where the file should be, so the atomic rename fails. Works for
+// root and non-root alike (chmod tricks do not stop root).
+fs.rmSync(FILE);
+fs.mkdirSync(FILE);
+const r = kv.setVerified("b", { y: 2 });
+ok("a write that cannot reach the volume returns false", r === false);
+ok("…while the plain in-memory read STILL returns it (the trap: a read-back proves nothing)", !!kv.get("b") && kv.get("b").y === 2);
+ok("…and isPersistent() STILL says true (the other half of the trap)", kv.isPersistent() === true);
+ok("lastPersistError names the failure", /EISDIR|ENOTEMPTY|EEXIST|EPERM|EACCES|rename|directory/i.test(String(kv.lastPersistError() || "")), String(kv.lastPersistError()));
+ok("the value is genuinely NOT on disk", onDisk() === null);
+
+// Volume back: the next verified write lands and carries the key that was only in memory.
+fs.rmdirSync(FILE);
+ok("after the volume is back, the next verified write lands and includes the earlier key", kv.setVerified("c", 3) === true && onDisk().b.y === 2 && onDisk().c === 3);
+ok("lastPersistError clears again", kv.lastPersistError() === null);
+
+// The plain set() path is unchanged for everything that is not money: it still never throws.
+let threw = false;
+fs.rmSync(FILE); fs.mkdirSync(FILE);
+try { kv.set("z", 1); } catch (_) { threw = true; }
+ok("plain set() still swallows a failed persist (non-money callers are unchanged)", threw === false && kv.get("z") === 1);
+fs.rmdirSync(FILE);
+
+try { fs.rmSync(DIR, { recursive: true, force: true }); } catch (_) {}
+console.log(failures ? `\n${failures} FAILED\n` : "\nall passed\n");
+process.exit(failures ? 1 : 0);

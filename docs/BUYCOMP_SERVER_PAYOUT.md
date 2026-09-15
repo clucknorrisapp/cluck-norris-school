@@ -16,10 +16,14 @@ Pure half + tests: `lib/buycomp-payout.js`, `scripts/buycomp-payout-test.cjs` (C
    replaced by hand with `POST …&set=` (audited — the replaced list is kept on the comp in
    `verifiedHistory`). `set` exists for the case verify cannot see: a wallet whose bag sits in a
    Jupiter lock scans as balance 0 and lands in "manual" (the ROSE horse race, 2026-09-14).
-2. **Every transfer is journaled on the comp at SUBMIT time** (`c.payouts[wallet] = {sig, amountUi,
-   at, pending}`), read back from the store before it counts, and a write that does not persist
-   throws — the vault's loop stops the batch on that. A pending (sent, unconfirmed) row blocks a
-   retry exactly like a confirmed one: it may already have landed.
+2. **Every transfer is journaled on the comp BEFORE it is broadcast** (`c.payouts[wallet] = {sig,
+   amountUi, at, pending}`). The vault signs first, learns the signature from the signed bytes,
+   the row is written and **verified on disk** (`kv.setVerified` re-reads the file — a plain
+   read-back answers from memory), and only then is the transaction sent. A write that does not
+   reach the volume throws and the batch stops with nothing broadcast for that recipient. A
+   broadcast that errors AFTER the row (an RPC that accepted the transaction but timed out the
+   response) leaves a pending row, never a retryable blank. A pending row blocks a retry exactly
+   like a confirmed one: it may already have landed. (All three rules: second reviewer, 2026-09-15.)
 3. **Caps are the sealed list's own max and sum** — the vault can never send more than verify (or
    the operator) sealed — tightened by `BUYCOMP_MAX_PRIZE` / `BUYCOMP_MAX_PAYOUT` env if set. A list
    over an env cap is refused outright, not trimmed.
@@ -55,11 +59,15 @@ EOF
 #    prize supply sits there); any vault project id works.
 curl -sS -X POST -H "$K" "$B&run=1&from=treasury"
 
-# 4. If anything came back `pending` (sent, confirm timed out): resolve it against the chain.
-#    Landed → settled. Unknown and >5 min old → voided and owed again. Younger → left alone.
+# 4. If anything came back `pending` (confirm timed out, or the broadcast errored): resolve it
+#    against the chain. Landed → settled. Landed with an error → voided, owed again (the chain
+#    holds a definitive record that no tokens moved). NOT FOUND → stays pending, however old: a
+#    lagging node or one with a history gap answers null for a transfer that DID land, and
+#    clearing it would pay that winner twice.
 curl -sS -X POST -H "$K" "$B&sweep=1"
 
-# 5. Manual lever for a row the sweep cannot decide. The exact recorded signature is required.
+# 5. The ONLY way a not-found row is cleared: you check the signature on an explorer yourself, and
+#    only if it truly never landed, clear it with the exact recorded signature.
 curl -sS -X POST -H "$K" "$B&unpay=<wallet>&sig=<recorded sig>"
 ```
 
