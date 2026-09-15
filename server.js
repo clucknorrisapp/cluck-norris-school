@@ -11132,6 +11132,59 @@ app.get("/api/cuna-draw/export", (req, res) => {
   return res.json({ ok: true, count: rows.length, persistent: kv.isPersistent(), window: { open: new Date(w.open).toISOString(), close: new Date(w.close).toISOString(), state: cunaDraw.windowState(Date.now(), w) }, entries: rows });
 });
 
+// GET /api/cuna-draw/x-replies?post=<tweet id> — owner-only. Reads every reply in the pinned
+// post's conversation through X's recent search (the app's own OAuth 1.0a keys; Railway has
+// them, a cloud session does not), pulls every wallet-shaped address out of the reply text, and
+// intersects with the registry. This is the "replied under the pinned post" half of the rules,
+// which the brief left to be done by hand. Read-only; X's recent search only reaches back SEVEN
+// DAYS, so a reply older than that is invisible here and the by-hand check (or a pasted thread
+// through scripts/cuna-draw-pick.cjs --x-replies-file) is the fallback. An X error comes back
+// verbatim so an API tier that has no search says so in one call instead of reading as "no replies".
+app.get("/api/cuna-draw/x-replies", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!cunaDrawAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const post = String(req.query.post || "").replace(/\D/g, "");
+  if (!post) return res.status(400).json({ ok: false, error: "post=<tweet id> required" });
+  if (!xConfigured()) return res.status(503).json({ ok: false, error: "x_not_configured" });
+  const replies = [];
+  const users = {};
+  let nextToken = null, pages = 0, xError = null;
+  try {
+    do {
+      const params = { query: `conversation_id:${post}`, max_results: "100", "tweet.fields": "author_id,created_at,in_reply_to_user_id", expansions: "author_id", "user.fields": "username" };
+      if (nextToken) params.next_token = nextToken;
+      const base = "https://api.x.com/2/tweets/search/recent";
+      const qs = Object.keys(params).sort().map((k) => `${xPercentEncode(k)}=${xPercentEncode(params[k])}`).join("&");
+      const r = await fetch(`${base}?${qs}`, { headers: { Authorization: xOAuthHeader("GET", base, params) } });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { xError = { status: r.status, body: JSON.stringify(j).slice(0, 400) }; break; }
+      for (const u of ((j.includes && j.includes.users) || [])) users[u.id] = u.username;
+      for (const t of (j.data || [])) replies.push({ id: t.id, author_id: t.author_id, created_at: t.created_at, text: t.text });
+      nextToken = (j.meta && j.meta.next_token) || null;
+      pages++;
+    } while (nextToken && pages < 30);
+  } catch (e) { xError = { status: 0, body: e.message }; }
+  const registry = cunaDraw.exportRows(kv);
+  const entered = new Map(registry.map((r) => [r.address, r]));
+  const byAddress = new Map();   // address → [{ tweet, username, created_at }]
+  for (const t of replies) {
+    for (const a of cunaDraw.extractAddresses(t.text)) {
+      if (!byAddress.has(a)) byAddress.set(a, []);
+      byAddress.get(a).push({ tweet: t.id, username: users[t.author_id] || null, created_at: t.created_at });
+    }
+  }
+  const matched = [], unmatchedReplies = [];
+  for (const [address, hits] of byAddress) {
+    const row = entered.get(address);
+    if (row) matched.push({ address, enteredAt: row.created_at, replies: hits });
+    else unmatchedReplies.push({ address, replies: hits });
+  }
+  const unmatchedEntries = registry.filter((r) => !byAddress.has(r.address)).map((r) => ({ address: r.address, enteredAt: r.created_at }));
+  return res.json({ ok: !xError, post, xError, pages, replies: replies.length, addressesInReplies: byAddress.size, registry: registry.length,
+    matched: matched.sort((a, b) => a.address.localeCompare(b.address)), unmatchedEntries, unmatchedReplies,
+    note: "matched = on the website list AND replied with the same address. X recent search covers 7 days only; older replies need the by-hand check." });
+});
+
 app.get("/api/cuna-stake/config", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   try {
