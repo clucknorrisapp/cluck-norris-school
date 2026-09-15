@@ -422,6 +422,9 @@ served the React shell at 200.
 - **The CLKN X account has X Premium (owner, 2026-09-05), so brand posts may run past 280
   characters** — don't trim an owner-initiated announcement to fit the classic limit. The 280
   counter on the lock-and-earn page's announce card is for LOCKERS' own accounts and stays.
+- **X allows ONE cashtag per post.** A second `$SYMBOL` in the same post is a 403 ("Posts are
+  limited to a maximum of one cashtag") — the CUNA drawing announcement bounced on it 2026-09-15.
+  Write the repeat as plain text.
 - **A Telegram post with an image gets 1024 characters, not 4096** — and our own code silently
   truncates at 1024 while returning success. Count the caption; put load-bearing lines (the X
   link, a CTA) where truncation can't eat them. Recover with `&replaceMsg=<oldId>`.

@@ -20,6 +20,32 @@ const C = "3BqWphsCZhmbzKfLubZfjQ3pgLWRC7HY4AXB5tk1wKCF";   // a third real wall
 
 function fakeStore({ persistent = true } = {}) { const m = new Map(); return { get: (k, d) => (m.has(k) ? m.get(k) : d), set: (k, v) => m.set(k, v), isPersistent: () => persistent }; }
 
+console.log("the draw — extraction from pasted text, deterministic weighted pick, list hash");
+{
+  const thread = `@user1 gm ${A} 🙏\n@user2 mine: ${B}\nsystem lol 11111111111111111111111111111111\n@user1 again ${A}\ntruncated ${A.slice(0, 43)} nope\n${C}`;
+  const found = draw.extractAddresses(thread);
+  ok("every wallet-shaped address is pulled out of free text, deduped, first-seen order", JSON.stringify(found) === JSON.stringify([A, B, C]), found);
+  ok("a program address in the text is ignored", !found.includes("11111111111111111111111111111111"));
+  ok("empty / non-string input → []", draw.extractAddresses("").length === 0 && draw.extractAddresses(null).length === 0);
+  const entries = [{ address: B, chances: 1 }, { address: A, chances: 2 }, { address: C, chances: 1 }];
+  const p1 = draw.drawFromSeed(entries, "seed-1", 3);
+  const p2 = draw.drawFromSeed(entries.slice().reverse(), "seed-1", 3);
+  ok("same seed + same list → same picks, whatever the input order", JSON.stringify(p1.map((p) => p.address)) === JSON.stringify(p2.map((p) => p.address)), [p1, p2]);
+  ok("three picks, nobody twice", p1.length === 3 && new Set(p1.map((p) => p.address)).size === 3, p1);
+  ok("first pick walks a pool of 4 slots (1+2+1)", p1[0].of === 4 && p1[0].round === 0, p1[0]);
+  ok("the pool shrinks by the winner's whole block", p1[1].of === 4 - entries.find((e) => e.address === p1[0].address).chances, p1[1]);
+  ok("a different seed can change the winner (over 64 seeds, at least two distinct winners)", new Set(Array.from({ length: 64 }, (_, i) => draw.drawFromSeed(entries, "s" + i, 1)[0].address)).size >= 2);
+  ok("zero-chance entries can never win", draw.drawFromSeed([{ address: A, chances: 0 }, { address: B, chances: 1 }], "x", 2).map((p) => p.address).join() === B);
+  ok("more picks than entries stops at the entries", draw.drawFromSeed(entries, "x", 10).length === 3);
+  // The published algorithm, spelled out: pick 0 = pool[ SHA256("seed:0") mod 4 ].
+  const { createHash } = require("crypto");
+  const pool = entries.slice().sort((x, y) => x.address.localeCompare(y.address)).flatMap((e) => Array(e.chances).fill(e.address));   // address-sorted, each repeated `chances` times
+  const idx = Number(BigInt("0x" + createHash("sha256").update("seed-1:0").digest("hex")) % 4n);
+  ok("the winner is exactly SHA256(seed:0) mod slots into the sorted pool (anyone can re-run it)", p1[0].address === pool[idx] && p1[0].slot === idx, { idx, pick: p1[0] });
+  ok("entriesHash is order-independent and changes when a chance count changes",
+    draw.entriesHash(entries) === draw.entriesHash(entries.slice().reverse()) && draw.entriesHash(entries) !== draw.entriesHash([{ address: B, chances: 2 }, { address: A, chances: 2 }, { address: C, chances: 1 }]));
+}
+
 console.log("address validation — decode to exactly 32 bytes, canonical form stored");
 {
   ok("a 44-char address is accepted", draw.canonicalAddress(A) === A);
@@ -172,6 +198,11 @@ const ORIGIN = "https://cunatoken.com";
     ok("rows carry address + ISO created_at + an ipHash, never the raw IP", x2.json.entries.every((r) => r.address && /^\d{4}-\d{2}-\d{2}T/.test(r.created_at) && typeof r.ipHash === "string" && r.ipHash.length === 16 && !/127\.0\.0\.1/.test(JSON.stringify(r))));
     const x3 = await req(s1.base, "/api/cuna-draw/export", { headers: { "x-premium-key": KEY } });
     ok("the admin key also opens the export", x3.status === 200 && x3.json.count === 3);
+    // The X-reply reader: same gate as export, and without X keys it says so (503) rather than "no replies".
+    ok("x-replies without a token → 404", (await req(s1.base, "/api/cuna-draw/x-replies?post=1")).status === 404);
+    ok("x-replies with the token but no post id → 400", (await req(s1.base, "/api/cuna-draw/x-replies", { headers: { "x-draw-token": TOKEN } })).status === 400);
+    const xnx = await req(s1.base, "/api/cuna-draw/x-replies?post=1", { headers: { "x-draw-token": TOKEN } });
+    ok("x-replies with no X keys configured → 503 x_not_configured, never an empty match list", xnx.status === 503 && xnx.json.error === "x_not_configured", xnx.json);
     const csv = await req(s1.base, "/api/cuna-draw/export?format=csv", { headers: { "x-draw-token": TOKEN } });
     ok("CSV export: header + three lines", csv.status === 200 && csv.text.split("\n").filter(Boolean).length === 4 && csv.text.startsWith("address,created_at"));
 
@@ -213,6 +244,8 @@ const ORIGIN = "https://cunatoken.com";
     ok("export is NOT reachable through the lock host even with the token → 403", x.status === 403, x.status);
     const dl = await req(s3.base, "/api/cuna-draw/entry?address=" + A, { method: "DELETE", headers: { ...H, "x-draw-token": TOKEN } });
     ok("DELETE /entry is NOT reachable through the lock host either → 403", dl.status === 403, dl.status);
+    const xr = await req(s3.base, "/api/cuna-draw/x-replies?post=1", { headers: { ...H, "x-draw-token": TOKEN } });
+    ok("GET /x-replies is NOT reachable through the lock host either → 403", xr.status === 403, xr.status);
     const direct = await req(s3.base, "/api/cuna-draw/enter", { method: "POST", headers: { host: "clucknorris.app", "content-type": "application/json" }, body: JSON.stringify({ address: B }) });
     ok("a direct-to-origin request on the main host without the edge header is still 403", direct.status === 403, direct.status);
   } finally { s3.stop(); }
