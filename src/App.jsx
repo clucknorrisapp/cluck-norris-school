@@ -1649,6 +1649,10 @@ export default function App(){
       const path=(window.location.pathname||"").replace(/\/+$/,"").toLowerCase();
       if(PATHS[path]) return PATHS[path];
       const h=(window.location.hash||"").replace(/^#/,"");
+      // #lesson=<id> opens one lesson directly. The Project Hub links a holder to the lesson that
+      // explains the button they are about to press (Addendum C); an unknown id falls through to
+      // the normal landing rather than an empty lesson screen.
+      if(h.startsWith("lesson=")&&LESSONS.some(l=>l.id===h.slice(7))) return "lesson";
       // STORE edition (1.0.3, "AI-correct"): the Concierge — journey cards + Ask Cluck — is the
       // landing surface, so the AI tutor is the first thing a new user meets. The website keeps
       // the school landing (its concierge lives on the homepage).
@@ -1656,7 +1660,10 @@ export default function App(){
     }
     catch(e){ return STORE?"start":"landing"; }
   });
-  const [lessonId,setLessonId]=useState(null);
+  const [lessonId,setLessonId]=useState(()=>{
+    try { const h=(window.location.hash||"").replace(/^#/,""); if(h.startsWith("lesson=")&&LESSONS.some(l=>l.id===h.slice(7))) return h.slice(7); } catch(e){}
+    return null;
+  });
   const [completed,setCompleted]=useState(()=>{
     try {
       const s=localStorage.getItem("clkn_completed");
