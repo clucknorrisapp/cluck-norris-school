@@ -274,10 +274,18 @@ const gw = require(path.join(__dirname, '..', 'lib', 'cuna-giveaway.js'));
     ok('a pending record blocks a retry while it is unresolved', gw.payoutOwed().owed.length === 0);
     ok('the pending transfer is surfaced with its signature, not hidden',
        (gw.payoutOwed().pending || []).some((r) => r.sig === 'DROPPED_SIG'));
-    sigStatus = [null];                       // the chain has never heard of it
+    sigStatus = [null];                       // THIS RPC has never heard of it — which is not proof
     const sw = await gw.payoutSweepPending({ rpcUrl: 'http://stub' });
-    ok('the sweep clears a transaction the chain never saw', sw.ok && sw.cleared.length === 1, JSON.stringify(sw));
-    ok('and that winner becomes payable again', gw.payoutOwed().owed.length === 1, JSON.stringify(gw.payoutOwed().owed));
+    // Second reviewer, 2026-09-15: the old rule cleared a not-found row after five minutes and put
+    // the winner back in owed — a lagging node or one with a history gap answers null for a
+    // transfer that DID land. Not found now stays pending, however old, until a human checks it.
+    ok('the sweep does NOT clear a transaction this RPC cannot find — it stays pending, however old',
+       sw.ok && sw.cleared.length === 0 && sw.stillPending.length === 1 && /unpay/.test(sw.stillPending[0].note || ''), JSON.stringify(sw));
+    ok('and that winner is NOT payable again on the strength of a null', gw.payoutOwed().owed.length === 0, JSON.stringify(gw.payoutOwed().owed));
+    // The operator, having checked the explorer, clears it with the exact signature — the only path.
+    const un = gw.payoutUnpay(W1, 'DROPPED_SIG');
+    ok('the operator clears it with the exact recorded signature', un.ok === true, JSON.stringify(un));
+    ok('only then is the winner payable again', gw.payoutOwed().owed.length === 1, JSON.stringify(gw.payoutOwed().owed));
     ok('the cleared record is archived, not silently dropped',
        (JSON.parse(fs.readFileSync(file, 'utf8')).payoutsVoid || []).some((v) => v.sig === 'DROPPED_SIG'));
 
@@ -418,6 +426,54 @@ const gw = require(path.join(__dirname, '..', 'lib', 'cuna-giveaway.js'));
       ok('and it says so loudly, naming who was NOT paid',
          r.recordFailed === true && r.unsent.length === 1 && r.unsent[0].wallet === W.exact,
          JSON.stringify({ recordFailed: r.recordFailed, unsent: r.unsent }));
+    }
+
+    // JOURNAL BEFORE BROADCAST (second reviewer, 2026-09-15). With prepareOne the signature is
+    // known from the signed bytes, so it is recorded pending BEFORE submit() — an RPC that accepts
+    // the transaction but times out the response can no longer produce a retryable blank.
+    {
+      const events = [];
+      await runPayoutLoop({
+        list: [R[0]],
+        prepareOne: async (r) => ({ sig: "PRE_" + r.wallet.slice(0, 4), submit: async () => { events.push("submit"); } }),
+        confirmOne: async () => { events.push("confirm"); },
+        onPaid: (row) => { events.push("record:" + (row.pending ? "pending" : "final")); },
+      });
+      ok("prepareOne: the pending record lands BEFORE the broadcast",
+         events.indexOf("record:pending") !== -1 && events.indexOf("record:pending") < events.indexOf("submit"), events.join(" -> "));
+    }
+    {
+      const recorded = [];
+      const r = await runPayoutLoop({
+        list: [R[0]],
+        prepareOne: async () => ({ sig: "PRE_TIMEOUT", submit: async () => { throw new Error("socket hang up"); } }),
+        confirmOne: async () => {},
+        onPaid: (row) => recorded.push(row),
+      });
+      ok("prepareOne: a broadcast that throws stays PENDING with its signature — never a clean failed (the accepted-but-timed-out double-pay)",
+         r.pending.length === 1 && r.pending[0].sig === "PRE_TIMEOUT" && r.failed.length === 0 && recorded.length === 1 && recorded[0].sig === "PRE_TIMEOUT",
+         JSON.stringify({ pending: r.pending, failed: r.failed, recorded }));
+    }
+    {
+      const recorded = [];
+      const r = await runPayoutLoop({
+        list: [R[0]],
+        prepareOne: async () => { throw new Error("blockhash fetch failed"); },
+        confirmOne: async () => {},
+        onPaid: (row) => recorded.push(row),
+      });
+      ok("prepareOne: a failure before signing is a clean failed, nothing recorded", r.failed.length === 1 && r.failed[0].sig === null && recorded.length === 0, JSON.stringify(r.failed));
+    }
+    {
+      let submitted = 0;
+      const r = await runPayoutLoop({
+        list: R,
+        prepareOne: async (r2) => ({ sig: "PRE_" + r2.wallet.slice(0, 4), submit: async () => { submitted++; } }),
+        confirmOne: async () => {},
+        onPaid: () => { throw new Error("EROFS: read-only file system"); },
+      });
+      ok("prepareOne: an unwritable ledger stops the batch BEFORE anything is broadcast",
+         submitted === 0 && r.recordFailed === true && r.unsent.length === 1 && r.unsent[0].wallet === W.exact, JSON.stringify({ submitted, unsent: r.unsent, failed: r.failed }));
     }
     }
   }
