@@ -141,10 +141,10 @@ The owner asked why a "no" needs five sentences. Because Official Rules §9 obli
 third-party code, and an AI tool having written much of the codebase is better heard from us than
 discovered. A bare "No" would be accurate about people and silent about that.
 
-**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 508)
+**Notes for judges — Is there anything else judges should know about your project that isn't captured above?** (cap 500; this is 500)
 
 ```
-Beyond the tools above, clucknorris.app also ships Firepit (burn junk tokens, reclaim rent), Project Burn with on-chain proof, Listing Checkup, LP Rescue, Owners Snapshot, Trace, a guided token creator and public Lock of Fame pages. Live since 2025; the pre-window snapshot is commit 75b69cc in docs/PRE_EVENT_STATE.md and the in-window build is the Project Hub. On-chain today: 22 graduates, 488M CLKN locked through our tooling, weekly lock-to-earn payouts settled. Solo founder, CLKN Productions LLC. MIT.
+Beyond the tools above, clucknorris.app also ships Firepit (burn junk tokens, reclaim rent), Project Burn with on-chain proof, Listing Checkup, LP Rescue, Owners Snapshot, Trace, a guided token creator and public Lock of Fame pages. Live since 2025; the pre-window snapshot is commit 75b69cc in docs/PRE_EVENT_STATE.md and the in-window build is the Project Hub. On-chain today: 22 graduates, 488M CLKN locked through our tooling, weekly lock-to-earn payouts. Solo founder, CLKN Productions LLC. MIT.
 ```
 
 This carries the disclosure line in the form's own words — the platform predates the window, the
