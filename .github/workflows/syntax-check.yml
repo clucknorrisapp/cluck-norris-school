@@ -122,6 +122,12 @@ jobs:
       # lesson the block links to still exists in src/App.jsx LESSONS (C4).
       - name: Project Hub — teach the button (Addendum C, tests 15–17)
         run: node scripts/hub-teach-test.cjs
+      # Analytics: a visitor counts as ENGAGED only after a second page or a funnel event, and
+      # views are keyed by the real Host header. Since 2026-08-16 the site records ~4,500
+      # one-page, no-referrer "visitors" a day that BOT_RE cannot see; this is what stops that
+      # number being quoted as people.
+      - name: Analytics — engaged visitors and host split
+        run: node scripts/analytics-engaged-test.cjs
       # The staking domain's origin-lockdown exemption, read out of server.js itself. That
       # exemption is the one place a request can skip the WAF, so the allowlist must stay
       # exhaustive and anchored at both ends — a single "^/api/" entry would be a hole through to

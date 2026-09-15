@@ -16809,7 +16809,7 @@ app.post("/api/track", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try {
     const b = req.body || {};
-    if (b.event) analytics.trackFunnel(b.event);
+    if (b.event) analytics.trackFunnel(b.event, req);
     // Graduation-gate ledger: lesson completions also carry an anonymous per-browser
     // session id so /api/claim can verify the curriculum was actually walked (see
     // lib/school-progress). bf=1 marks a one-time replay of pre-gate localStorage
