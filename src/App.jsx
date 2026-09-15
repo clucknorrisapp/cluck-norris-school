@@ -40,27 +40,44 @@ function hashParam(key){
 // per lesson; the funnel showed a third of lesson-1 passers never opened lesson 2, and the
 // report card offered nothing but a button. Tool links are hidden in the STORE edition (no
 // wallet, no tools there). Library links open the topic directly via #library=<id>.
-const LESSON_LINKS={
-  lp:          { tool:{href:"/lp-lab",          label:"Go deeper in the LP Lab"},                read:{id:"impermanent-loss",  label:"Impermanent loss, with the numbers"} },
-  rugs:        { tool:{href:"/wallet-checkup",  label:"Check a wallet for the traps you just learned"}, read:{id:"token-research",   label:"How to research a token"} },
-  volatility:  { tool:null,                                                                        read:{id:"psychology",       label:"Trading psychology"} },
-  wallets:     { tool:{href:"/wallet-checkup",  label:"Scan your own wallet for lingering approvals"}, read:{id:"wallet-security",  label:"Wallet security deep dive"} },
-  slippage:    { tool:{href:"/lp-lab",          label:"See price impact on a real pool"},          read:{id:"price-impact",      label:"Price impact & slippage"} },
-  tokenomics:  { tool:{href:"/holders",         label:"See a real token's holders, pools and locks"}, read:{id:"token-research",   label:"How to research a token"} },
-  marketcap:   { tool:{href:"/holders",         label:"Check supply and holders on a live token"},  read:{id:"token-research",   label:"How to research a token"} },
-  dex:         { tool:{href:"/lp-lab",          label:"How the pools behind a DEX work"},           read:{id:"amm",              label:"How AMMs work"} },
-  onchain:     { tool:{href:"/wallet-xray",     label:"Run X-Ray on any wallet"},                   read:{id:"solscan",          label:"Reading Solscan like a pro"} },
-  staking:     { tool:{href:"/locker-room",     label:"See real locks on Jupiter Lock"},            read:{id:"fee-sharing",       label:"Fee sharing & LP earnings"} },
-  bags:        { tool:{href:"/bags",            label:"Watch live launches and graduations"},       read:{id:"dynamic-bonding-curve", label:"Dynamic bonding curves"} },
-  memecoins:   { tool:{href:"/listing-checkup", label:"Check a meme token's listings against the chain"}, read:{id:"psychology",   label:"Trading psychology"} },
-  seedphrase:  { tool:null,                                                                        read:{id:"wallet-security",  label:"Wallet security deep dive"} },
-  inheritance: { tool:null,                                                                        read:{id:"wallet-security",  label:"Wallet security deep dive"} },
+// Tool links live behind the build-time STORE constant so the store bundle never carries the
+// excluded pages' paths — the store-edition verifier scans the built assets for them (the
+// runtime `!STORE` check alone left "/locker-room" in the Google Play bundle, CI 2026-09-15).
+const LESSON_TOOLS = STORE ? {} : {
+  lp:          {href:"/lp-lab",          label:"Go deeper in the LP Lab"},
+  rugs:        {href:"/wallet-checkup",  label:"Check a wallet for the traps you just learned"},
+  wallets:     {href:"/wallet-checkup",  label:"Scan your own wallet for lingering approvals"},
+  slippage:    {href:"/lp-lab",          label:"See price impact on a real pool"},
+  tokenomics:  {href:"/holders",         label:"See a real token's holders, pools and locks"},
+  marketcap:   {href:"/holders",         label:"Check supply and holders on a live token"},
+  dex:         {href:"/lp-lab",          label:"How the pools behind a DEX work"},
+  onchain:     {href:"/wallet-xray",     label:"Run X-Ray on any wallet"},
+  staking:     {href:"/locker-room",     label:"See real locks on Jupiter Lock"},
+  bags:        {href:"/bags",            label:"Watch live launches and graduations"},
+  memecoins:   {href:"/listing-checkup", label:"Check a meme token's listings against the chain"},
+};
+// Library pieces ship in every edition (the Library is part of the school).
+const LESSON_READ={
+  lp:          {id:"impermanent-loss",      label:"Impermanent loss, with the numbers"},
+  rugs:        {id:"token-research",        label:"How to research a token"},
+  volatility:  {id:"psychology",            label:"Trading psychology"},
+  wallets:     {id:"wallet-security",       label:"Wallet security deep dive"},
+  slippage:    {id:"price-impact",          label:"Price impact & slippage"},
+  tokenomics:  {id:"token-research",        label:"How to research a token"},
+  marketcap:   {id:"token-research",        label:"How to research a token"},
+  dex:         {id:"amm",                   label:"How AMMs work"},
+  onchain:     {id:"solscan",               label:"Reading Solscan like a pro"},
+  staking:     {id:"fee-sharing",           label:"Fee sharing & LP earnings"},
+  bags:        {id:"dynamic-bonding-curve", label:"Dynamic bonding curves"},
+  memecoins:   {id:"psychology",            label:"Trading psychology"},
+  seedphrase:  {id:"wallet-security",       label:"Wallet security deep dive"},
+  inheritance: {id:"wallet-security",       label:"Wallet security deep dive"},
 };
 function LessonLinks({lesson:l}){
-  const links=LESSON_LINKS[l.id]; if(!links) return null;
+  const tool=LESSON_TOOLS[l.id], read=LESSON_READ[l.id];
   const items=[];
-  if(links.tool&&!STORE) items.push({href:links.tool.href,label:"🔧 "+links.tool.label,kind:"tool"});
-  if(links.read) items.push({href:"/school#library="+links.read.id,label:"📚 "+links.read.label,kind:"read"});
+  if(tool) items.push({href:tool.href,label:"🔧 "+tool.label,kind:"tool"});
+  if(read) items.push({href:(STORE?"./":"/school")+"#library="+read.id,label:"📚 "+read.label,kind:"read"});
   if(!items.length) return null;
   return(
     <div style={{background:"rgba(255,182,39,0.06)",border:"1px solid rgba(255,182,39,0.22)",borderRadius:12,padding:"12px 14px",margin:"0 0 14px",textAlign:"left"}}>
