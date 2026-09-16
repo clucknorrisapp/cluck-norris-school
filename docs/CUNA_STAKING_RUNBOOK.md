@@ -449,7 +449,7 @@ batches first then paid), caps are the batch's own numbers, one run at a time, a
 ```bash
 K='x-premium-key: <admin key>'; B='https://clucknorris.app/api/cuna-stake/payout'
 curl -sS -X POST -H "$K" "$B?export=1"                       # 1. build the batch → created.id
-curl -sS -H "$K" "$B?send=<id>"                              # 2. dry run: payer balance, caps, would-pay rows (GET)
+curl -sS -X POST -H "$K" "$B?send=<id>"                      # 2. dry run: payer balance, caps, would-pay rows (POST without run=1; a GET with send= is 405)
 curl -sS -X POST -H "$K" "$B?send=<id>&run=1&from=treasury"  # 3. send — Railway signs; sendReport has every signature
 curl -sS -X POST -H "$K" "$B?sweep=1&batch=<id>"             # 4. if anything is pending: settle what the chain knows
 curl -sS -X POST -H "$K" "$B?void=<wallet>&sig=<sig>&batch=<id>"  # 5. only after YOU checked an explorer: void a row that never landed
