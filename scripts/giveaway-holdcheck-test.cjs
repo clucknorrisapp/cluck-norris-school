@@ -428,6 +428,16 @@ const gw = require(path.join(__dirname, '..', 'lib', 'cuna-giveaway.js'));
          JSON.stringify({ recordFailed: r.recordFailed, unsent: r.unsent }));
     }
 
+    // A dry run echoes the recipient list; amountRaw is a BigInt internally and JSON.stringify
+    // throws on BigInt — the first lock-to-earn dry run died on exactly that (2026-09-16).
+    {
+      let ser = null;
+      try { ({ serializableRecipients: ser } = require(path.join(__dirname, '..', 'lib', 'whirlpool-vault.js'))); } catch (_) {}
+      let json = null, threw = false;
+      try { json = JSON.stringify(ser([{ wallet: W.held, amountUi: 1.5, amountRaw: 1500000000n }, { wallet: W.exact, amountUi: 2 }])); } catch (_) { threw = true; }
+      ok('a recipient list with raw amounts serialises to JSON (BigInt out as a string)',
+         !threw && !!json && json.includes('"amountRaw":"1500000000"') && (json.match(/amountRaw/g) || []).length === 1, String(json));
+    }
     // JOURNAL BEFORE BROADCAST (second reviewer, 2026-09-15). With prepareOne the signature is
     // known from the signed bytes, so it is recorded pending BEFORE submit() — an RPC that accepts
     // the transaction but times out the response can no longer produce a retryable blank.
