@@ -7911,6 +7911,7 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
 // Explicit routes so the page works on a no-build boot (CI) and gets normal cache headers.
 app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
 app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
+app.get("/hub/:project/desk", (req, res) => { res.sendFile(join(__dirname, "public", "hub-desk.html")); });
 app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:program", "/hub/:project/r/:sig"], (req, res) => {
   res.sendFile(join(__dirname, "public", "hub.html"));
 });
@@ -7939,6 +7940,7 @@ hubRoutes.mount(app, {
   // moment of payment). SOL lands where the tools pass collects it, CLKN where the Hatchery
   // does; both are lazy because those constants are declared further down this file.
   sigStore, rateLimit, clknMint: CLKN_MINT, clknDecimals: 9,
+  secret: () => process.env.PREMIUM_ACCESS_KEY, verifySignature: (m, sig, w) => verifySolanaSignature(m, sig, w),
   clknPriceInSol: () => hatchery.clknPriceInSol(),
   payTo: () => ({ sol: process.env.HUB_PAY_SOL_WALLET || SOL_UNLOCK_WALLET, clkn: process.env.HUB_PAY_CLKN_WALLET || TREASURY_WALLET }),
   getTx: async (sig) => {
