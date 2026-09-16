@@ -64,8 +64,21 @@ chain, computes and pays, and every holder can verify every payout.**
    cannot ARM or change terms (402 on the admin route); a comped or active one can. The engine
    never stops accruing for holders already in a running programme because the project fell
    behind — that would punish the wrong people.** The tier is set on `/api/hub-registry` with
-   `tier=standard|small|comped` (+ `accessNote=`); the payment intake (SOL or CLKN to the treasury,
-   verified on-chain, priced at the block) ships with onboarding (Phase 3).
+   `tier=standard|small|comped` (+ `accessNote=`).
+
+   **Payment intake (`lib/hub/access-pay.js`, route `/api/hub/:project/access`):** `GET` answers
+   the access status and a fresh **quote** — the SOL price, and the CLKN amount computed from the
+   live CLKN/SOL price (two indexers, the Hatchery's reader) *at that instant*, good for 30
+   minutes, with the two pay-to addresses (SOL where the tools pass collects, CLKN where the
+   Hatchery collects; `HUB_PAY_SOL_WALLET` / `HUB_PAY_CLKN_WALLET` override). `POST ?sig=&quote=`
+   reads the transaction on-chain, takes the platform wallet's lamport gain or the treasury's CLKN
+   gain, and checks it against **that quote** — amount (2% slack) and block time inside the
+   quote's window (2 min early, 10 min late grace) — never against today's price. A covering
+   payment extends the paid period by 30 days; the registry row is the source of truth and the
+   signature also goes into the sig store so it can never double as a tools-pass payment. Same
+   signature again = the period it already bought (`recovered`). No block time yet = retry, nothing
+   consumed. Anyone may pay for a project; the payment credits the project. No CLKN price = a
+   SOL-only quote, never a guessed number.
 3. **Approval.** The design already says a project is whitelisted by the owner. Keep it: self-serve *application*, one-click **approve** by you in the desk (mint checked on-chain: decimals, token program, no transfer-fee/hook extensions — the payout verifier cannot account for those yet).
 
 ## Phases (each a PR, each demoable; window ends Oct 12)
@@ -115,7 +128,13 @@ directory of live programs, the seven languages on the desk.
   builds no chain client until one is registered. `HUB_ENGINE_OFF=1` kills it.
 - **2026-09-16 — access tiers (`lib/hub/access.js`).** standard 0.5 SOL, small 0.25 SOL, comped
   free (owner-set at approval, note required for comped); the CLKN alternative priced at the
-  payment instant; unpaid/expired cannot arm. Payment intake is Phase 3.
+  payment instant; unpaid/expired cannot arm.
+- **2026-09-16 — payment intake (`lib/hub/access-pay.js`, `/api/hub/:project/access`).** Quote
+  priced at the instant it is issued (30 min), on-chain verification of the SOL or CLKN transfer
+  against that quote, 30 days per covering payment, signature consumed. Verified on a local boot:
+  approve as `small`, public quote 0.25 SOL / the CLKN equivalent at the live price, arm refused
+  402 while unpaid, unknown quote refused. What is left of Phase 3 is the page: connect → pick
+  mint → tier → pay in the wallet → submit.
 
 ## What it must never become
 
