@@ -79,6 +79,38 @@ t("a Token-2022 mint with a transfer-fee or transfer-hook extension is refused a
   assert.strictEqual(ok.tokenProgram, T22);
 });
 
+section("2b. terms: payout cadence and vesting shape (owner, 2026-09-16: weekly / monthly / at the end of a lock; vesting vs no vesting)");
+
+t("cadence defaults to weekly and accepts daily, monthly, at-unlock and manual; anything else is refused", () => {
+  const A = mkProject("alpha", W.MINT1);
+  const base = { poolDailyRaw: "1000", fundedBy: [W.FUND] };
+  assert.strictEqual(proj.validateTerms(base, A).payoutSchedule, "weekly");
+  for (const s of ["daily", "weekly", "monthly", "at-unlock", "manual"]) assert.strictEqual(proj.validateTerms({ ...base, payoutSchedule: s }, A).payoutSchedule, s);
+  assert.throws(() => proj.validateTerms({ ...base, payoutSchedule: "yearly" }, A), /payoutSchedule must be/);
+  assert.throws(() => proj.validateTerms({ ...base, payoutSchedule: "at_unlock" }, A), /payoutSchedule must be/);
+});
+
+t("vesting shape defaults to any and accepts cliff-only / vesting-only; anything else is refused", () => {
+  const A = mkProject("alpha", W.MINT1);
+  const base = { poolDailyRaw: "1000", fundedBy: [W.FUND] };
+  assert.strictEqual(proj.validateTerms(base, A).vesting, "any");
+  assert.strictEqual(proj.validateTerms({ ...base, vesting: "cliff-only" }, A).vesting, "cliff-only");
+  assert.strictEqual(proj.validateTerms({ ...base, vesting: "vesting-only" }, A).vesting, "vesting-only");
+  assert.throws(() => proj.validateTerms({ ...base, vesting: "sometimes" }, A), /vesting must be/);
+});
+
+t("cadence and vesting shape are part of the hashed terms — changing either is a new version with a new hash", () => {
+  const A = mkProject("alpha", W.MINT1);
+  const s1 = proj.createVersion({}, A, { poolDailyRaw: "1000", fundedBy: [W.FUND] }, { effectiveFrom: "2026-09-17", todayKey: "2026-09-17" });
+  const s2 = proj.createVersion(s1, A, { poolDailyRaw: "1000", fundedBy: [W.FUND], payoutSchedule: "monthly" }, { effectiveFrom: "2026-09-20", todayKey: "2026-09-18" });
+  const s3 = proj.createVersion(s2, A, { poolDailyRaw: "1000", fundedBy: [W.FUND], payoutSchedule: "monthly", vesting: "cliff-only" }, { effectiveFrom: "2026-09-25", todayKey: "2026-09-21" });
+  const h = s3.versions.map((v) => v.hash);
+  assert.strictEqual(new Set(h).size, 3);
+  assert.strictEqual(s3.versions[1].terms.payoutSchedule, "monthly");
+  assert.strictEqual(s3.versions[2].terms.vesting, "cliff-only");
+  assert.ok(s3.versions.every((v) => proj.verifyVersionHash(v)));
+});
+
 section("3. program versioning");
 
 t("editing terms creates v2 with a new hash; v1 keeps its hash and gains effectiveTo; periods under v1 keep v1", () => {
