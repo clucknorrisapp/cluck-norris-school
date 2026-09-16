@@ -7913,6 +7913,29 @@ app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:pr
   res.sendFile(join(__dirname, "public", "hub.html"));
 });
 
+// ── Lock to Earn for ANY project — the per-project routes + scheduler (Phase 1a-ii, owner
+// 2026-09-16 "keep going on the platform"). lib/hub/routes.js on lib/hub/engine.js; CUNA stays on
+// its own code until Phase 1b (the scheduler skips it). The chain client is built lazily and only
+// once a project is actually registered, so a box with an empty registry never touches an RPC.
+const hubRoutes = require("./lib/hub/routes");
+const hubScanDeps = (() => {
+  let programPromise = null;
+  const getProgram = () => { if (!programPromise) programPromise = require("./lib/jup-lock").program().catch((e) => { programPromise = null; throw e; }); return programPromise; };
+  const scanLib = require("./lib/cuna-lock-scan");
+  return {
+    scanLib,
+    scan: async (mint) => scanLib.scanEscrowsByMint(await getProgram(), mint),
+    creationTimes: async (escrows) => scanLib.creationTimes((await getProgram()).provider.connection, escrows),
+  };
+})();
+const hubAlert = (m) => { console.warn("[hub] " + m); try { cunaOpsAlert(`⚠️ Hub: ${m}`, "hub:" + String(m).slice(0, 40)).catch(() => {}); } catch (_) {} };
+hubRoutes.mount(app, {
+  kv, adminAuthOK, publicErrMsg, vault: whirlpoolMM.vault,
+  connection: () => require("./lib/rpc").connection("confirmed"),
+  scanDeps: async () => hubScanDeps, alert: hubAlert,
+});
+hubRoutes.startScheduler({ kv, scanDeps: async () => hubScanDeps, alert: hubAlert });
+
 // ── Buy Special RANDOM DRAW (the "N random buys win X CLKN" raffle) ───────────
 // Distinct from the ranked buy COMPETITION above. Here every qualifying BUY is a
 // raffle entry — more buys = more chances — and N DISTINCT wallets win. Eligibility

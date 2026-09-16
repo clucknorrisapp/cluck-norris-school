@@ -47,7 +47,7 @@ chain, computes and pays, and every holder can verify every payout.**
 1. **Who signs the rewards.** Two modes, both should exist:
    - **Self-sign (non-custodial, default for onboarded projects):** the batch is built by us, the project's wallet signs it in their browser (the airdropper path — live today). We never hold their reward tokens.
    - **Managed:** a payer wallet we hold the key for, funded by the project (how CUNA and ROSE run today via Railway operator keys). Fully automatic. Needs a per-project key we custody — a real responsibility; fine for projects we run, not the default for strangers.
-2. **The gate.** Hold **$N of CLKN** in an operator wallet (live-priced, `/api/tool-gate/config` pattern — never hardcoded) **or** pay **X SOL per month**. Amounts are yours; my placeholder is $500 / 0.5 SOL·month until you say otherwise.
+2. **The gate — DECIDED (owner, 2026-09-16): 0.5 SOL per month, or 0.5 SOL worth of CLKN per month, priced at the moment they pay.** *"If they bought CLKN early, as price goes up it actually saves them money"* — the CLKN amount is computed from the live CLKN/SOL price when the month is paid, never fixed in tokens (the tools-pass pattern: an append-only terms schedule resolved at the payment's block time, never hardcoded). Paid in CLKN or SOL to the CLKN treasury; the receipt is the payment signature. Built with onboarding (Phase 3).
 3. **Approval.** The design already says a project is whitelisted by the owner. Keep it: self-serve *application*, one-click **approve** by you in the desk (mint checked on-chain: decimals, token program, no transfer-fee/hook extensions — the payout verifier cannot account for those yet).
 
 ## Phases (each a PR, each demoable; window ends Oct 12)
@@ -84,7 +84,17 @@ directory of live programs, the seven languages on the desk.
   shape (defaults = CUNA's behaviour, its 68 rule tests unchanged). One product rule decided in
   code: a **fixed daily pool with no vesting stream is honoured as-is** — CUNA's stream cap only
   applies when the funding wallet has a stream — and the funding status is the guard.
-  Not yet: routes (admin / wallet / payout per project), the desk, onboarding.
+  Not yet: the desk, onboarding.
+- **2026-09-16 — Phase 1a-ii, the routes (`lib/hub/routes.js`).** `/api/hub-registry` (owner:
+  approve a project — mint read on-chain, Token-2022 extensions refused — or suspend one),
+  `/api/hub/:project/admin` (status; `terms=1` + fields → a new hashed version from today /
+  tomorrow; `arm=1&confirm=go-live`; `off=1`; `accrue=1`; `rescan=1`), the public
+  `/api/hub/:project/holder?address=`, and `/api/hub/:project/payout` (owed; `export=1` builds a
+  batch for the project to sign in its own wallet; `sent=` records signed rows after an on-chain
+  check; `send=<batch>&run=1&from=<vault project>` is the managed payer; `sweep` / `void` /
+  `confirm` / `cancel`). All mutations POST-only, refused before the project lookup; money parts
+  through the disk-verified write. The scheduler runs every 10 minutes over armed projects and
+  builds no chain client until one is registered. `HUB_ENGINE_OFF=1` kills it.
 
 ## What it must never become
 
