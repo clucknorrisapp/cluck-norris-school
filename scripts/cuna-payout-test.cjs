@@ -238,6 +238,72 @@ t("a row that confirmed AFTER the batch was closed is still recorded — money m
   assert.strictEqual(owed.B, 200n);
 });
 
+section("server-signed send: journal before broadcast (owner 2026-09-16, second reviewer 2026-09-15)");
+
+t("a PENDING row blocks a re-send and counts as paid; the confirm resolves it without counting twice", () => {
+  const days = { d: day({ A: CUNA(100), B: CUNA(50) }) };
+  const b = pay.buildBatch({ owed: pay.owedNow({ days, paid: {}, pending: {} }), batchId: "cb_s", nowUnix: 1 });
+  const r1 = pay.recordSent({ batch: b, paid: {}, results: [{ wallet: "A", sig: SIG, pending: true }], nowUnix: 2 });
+  assert.strictEqual(r1.batch.sent.A.pending, true);
+  assert.strictEqual(r1.paid.A, CUNA(100));
+  assert.deepStrictEqual(Object.keys(pay.remainingOf(r1.batch)), ["B"]);        // A cannot be sent again
+  assert.strictEqual(pay.owedNow({ days, paid: r1.paid, pending: { cb_s: r1.batch } }).A, 0n);
+  const r2 = pay.recordSent({ batch: r1.batch, paid: r1.paid, results: [{ wallet: "A", sig: SIG }], nowUnix: 3 });
+  assert.strictEqual(r2.batch.sent.A.pending, false);
+  assert.strictEqual(r2.batch.sent.A.confirmedAt, 3);
+  assert.strictEqual(r2.paid.A, CUNA(100));                                     // not summed twice
+  assert.deepStrictEqual(r2.recorded, ["A"]);
+  const r3 = pay.recordSent({ batch: r2.batch, paid: r2.paid, results: [{ wallet: "A", sig: SIG }], nowUnix: 4 });
+  assert.strictEqual(r3.ignored[0].why, "already recorded");
+});
+
+t("a confirm with a DIFFERENT signature does not resolve the pending row", () => {
+  const b = pay.buildBatch({ owed: { A: CUNA(1) }, batchId: "cb_d", nowUnix: 1 });
+  const r1 = pay.recordSent({ batch: b, paid: {}, results: [{ wallet: "A", sig: SIG, pending: true }], nowUnix: 2 });
+  const r2 = pay.recordSent({ batch: r1.batch, paid: r1.paid, results: [{ wallet: "A", sig: "6" + "b".repeat(70) }], nowUnix: 3 });
+  assert.strictEqual(r2.ignored[0].why, "already recorded");
+  assert.strictEqual(r2.batch.sent.A.pending, true);
+});
+
+t("voidSent needs the exact signature, takes the amount off paid, and reopens a completed batch for a re-send", () => {
+  const days = { d: day({ A: CUNA(100) }) };
+  const b = pay.buildBatch({ owed: pay.owedNow({ days, paid: {}, pending: {} }), batchId: "cb_v", nowUnix: 1 });
+  const r1 = pay.recordSent({ batch: b, paid: {}, results: [{ wallet: "A", sig: SIG, pending: true }], nowUnix: 2 });
+  assert.strictEqual(r1.batch.state, "sent");                                     // completed itself
+  assert.strictEqual(pay.voidSent({ batch: r1.batch, paid: r1.paid, wallet: "A", sig: "wrong", nowUnix: 5 }).error, "sig_mismatch");
+  assert.strictEqual(pay.voidSent({ batch: r1.batch, paid: r1.paid, wallet: "B", sig: SIG, nowUnix: 5 }).error, "no_record");
+  assert.strictEqual(r1.paid.A, CUNA(100));                                     // a refused void changes nothing
+  const v = pay.voidSent({ batch: r1.batch, paid: r1.paid, wallet: "A", sig: SIG, nowUnix: 5 });
+  assert.ok(v.ok);
+  assert.strictEqual(v.batch.state, "pending");
+  assert.strictEqual(v.paid.A, "0");
+  assert.strictEqual(v.batch.voided.length, 1);
+  assert.deepStrictEqual(Object.keys(pay.remainingOf(v.batch)), ["A"]);          // the re-send sends exactly this row
+  // Held by the reopened batch — owed reads 0 because the batch itself is what re-sends it, and a
+  // fresh export must not offer the same money a second time.
+  assert.strictEqual(pay.owedNow({ days, paid: v.paid, pending: { cb_v: v.batch } }).A, 0n);
+});
+
+t("resolveSent: landed clears the flag, an on-chain error voids, NOT FOUND stays pending however old", () => {
+  const SA = "1" + "a".repeat(70), SB = "2" + "b".repeat(70), SC = "3" + "c".repeat(70);
+  const b = pay.buildBatch({ owed: { A: CUNA(1), B: CUNA(2), C: CUNA(3) }, batchId: "cb_r", nowUnix: 1 });
+  const r = pay.recordSent({ batch: b, paid: {}, results: [{ wallet: "A", sig: SA, pending: true }, { wallet: "B", sig: SB, pending: true }, { wallet: "C", sig: SC, pending: true }], nowUnix: 2 });
+  const rs = pay.resolveSent({ batch: r.batch, paid: r.paid, nowUnix: 9, rows: [
+    { wallet: "A", sig: SA, status: { confirmationStatus: "finalized", err: null } },
+    { wallet: "B", sig: SB, status: { confirmationStatus: "confirmed", err: { InstructionError: [0, "x"] } } },
+    { wallet: "C", sig: SC, status: null },
+  ] });
+  assert.strictEqual(rs.batch.sent.A.pending, false);
+  assert.strictEqual(rs.confirmed.length, 1);
+  assert.strictEqual(rs.batch.sent.B, undefined);
+  assert.strictEqual(rs.paid.B, "0");
+  assert.strictEqual(rs.voided[0].reason, "tx_error");
+  assert.strictEqual(rs.batch.sent.C.pending, true);
+  assert.ok(/void/.test(rs.stillPending[0].note));
+  assert.strictEqual(rs.batch.state, "pending");                                  // B's void reopened it
+  assert.deepStrictEqual(Object.keys(pay.remainingOf(rs.batch)), ["B"]);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }

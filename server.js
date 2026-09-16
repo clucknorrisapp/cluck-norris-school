@@ -7833,6 +7833,86 @@ app.all("/api/buycomp/send", async (req, res) => {
   } catch (e) { return res.status(500).json({ ...out, ok: false, error: publicErrMsg(e) }); }
 });
 
+// ── Project Hub — the PUBLIC read side (Colosseum in-window centrepiece; owner 2026-09-15: build
+// the "Earn we can prove" page). One JSON per project, built by lib/hub/public.js from the stores
+// the routes above already keep: every field is WHITELISTED there, so a comp's payout token, its
+// Telegram chat id or a board message id cannot reach this surface. No wallet, no key, cacheable.
+// The page at /hub/:project renders it and re-checks every signature against the chain in the
+// browser — the page proves itself rather than asking to be believed.
+const hubStore = require("./lib/hub/store");
+const hubPublic = require("./lib/hub/public");
+function hubProjects() {
+  const built = {
+    clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9 },
+    cuna: { id: "cuna", label: "CUNA", symbol: "CUNA", mint: SUPPLY_FEEDS.cuna.mint, decimals: 9 },
+    rose: { id: "rose", label: "OnlyRose", symbol: "ROSE", mint: SUPPLY_FEEDS.rose.mint, decimals: 9 },
+  };
+  let reg = {}; try { reg = hubStore.readRegistry(kv) || {}; } catch (_) { /* registry absent = built-ins only */ }
+  for (const [id, p] of Object.entries(reg)) {
+    if (!p || !p.mint || !/^[a-z0-9][a-z0-9-]{1,31}$/.test(id)) continue;
+    built[id] = { id, label: String(p.label || id).slice(0, 64), symbol: String(p.symbol || id.toUpperCase()).slice(0, 12), mint: String(p.mint), decimals: Number.isInteger(p.decimals) ? p.decimals : null };
+  }
+  return built;
+}
+function hubProjectView(project) {
+  const comps = Object.values(buyCompsAll()).filter((c) => c && c.mint === project.mint);
+  const draws = Object.values(bsDrawsAll()).filter((d) => d && d.mint === project.mint);
+  let stake = null, giveaway = null;
+  try {
+    const days = hubStore.read(kv, project.id, "days", null);
+    if (days && Object.keys(days).length) {
+      stake = hubPublic.stakeView({ days, paid: hubStore.read(kv, project.id, "paid", {}), batches: hubStore.read(kv, project.id, "batches", {}), decimals: project.decimals || 9 });
+    }
+  } catch (_) { /* a project without a programme store is not an error */ }
+  if (project.id === "cuna") {
+    try {
+      const st = cunaGiveaway.standings(1);   // carries the sealed draw
+      giveaway = hubPublic.giveawayView({ draw: st && st.draw, payouts: cunaGiveaway.payoutState(), cfg: cunaGiveaway.config() });
+    } catch (_) { /* no draw = no giveaway card */ }
+  }
+  return hubPublic.projectView({ project, comps, draws, stake, giveaway });
+}
+app.get("/api/hub", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  try {
+    const projects = Object.values(hubProjects()).map((p) => {
+      const v = hubProjectView(p);
+      return { id: p.id, label: p.label, symbol: p.symbol, mint: p.mint, programs: v.totals.programs, receipts: v.totals.receipts };
+    });
+    return res.status(200).json({ ok: true, projects });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/hub/:project", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=30");
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try { return res.status(200).json({ ok: true, project: hubProjectView(p) }); }
+  catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/hub/:project/wallet/:wallet", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const r = hubPublic.walletLookup(hubProjectView(p), String(req.params.wallet || ""));
+    return res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/hub/:project/r/:sig", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const r = hubPublic.findReceipt(hubProjectView(p), String(req.params.sig || ""));
+    if (!r) return res.status(404).json({ ok: false, error: "no receipt with that signature" });
+    return res.status(200).json({ ok: true, ...r });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// Explicit routes so the page works on a no-build boot (CI) and gets normal cache headers.
+app.get(["/hub", "/hub/:project", "/hub/:project/r/:sig"], (req, res) => {
+  res.sendFile(join(__dirname, "public", "hub.html"));
+});
+
 // ── Buy Special RANDOM DRAW (the "N random buys win X CLKN" raffle) ───────────
 // Distinct from the ranked buy COMPETITION above. Here every qualifying BUY is a
 // raffle entry — more buys = more chances — and N DISTINCT wallets win. Eligibility
@@ -12136,7 +12216,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
     // running — link-preview bots fetch URLs in chats, browsers prerender history entries — which
     // is why the POKE pause route is POST-only too. Reads stay on GET so the runbook's
     // "open this URL" checks keep working.
-    const mutating = q.confirm || q.cancel || q.sent || String(q.export || "") === "1";
+    const mutating = q.confirm || q.cancel || q.sent || q.send || q.void || String(q.sweep || "") === "1" || String(q.export || "") === "1";
     if (mutating && req.method !== "POST") {
       return res.status(405).json({ ok: false, error: "this changes payout state — send it as a POST" });
     }
@@ -12207,6 +12287,77 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       console.log(`[cuna-payout] batch ${id} CANCELLED — its amounts are owed again`);
     }
 
+    // ── SERVER-SIGNED SEND (owner, 2026-09-16: "build batch and send to show we can fully
+    // automate this"). Same discipline as /api/buycomp/send: the vault signs on Railway with the
+    // payer's operator key, every row is journaled PENDING before it is broadcast and verified on
+    // disk, caps are the batch's own numbers, one run at a time. Amounts move in RAW units straight
+    // from the batch — no float round trip. Without &run=1 it is the vault's dry run.
+    let sendReport = null, voidReport = null, sweepReport = null;
+    if (q.send) {
+      const id = String(q.send);
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
+      if (b.state !== "pending") return res.status(400).json({ ok: false, error: `batch is ${b.state}, not pending` });
+      const bp = require("./lib/buycomp-payout");
+      const hubPublic = require("./lib/hub/public");
+      const dec = 9;   // CUNA — the same constant this route's toAirdropLines calls use
+      const recipients = Object.entries(pay.remainingOf(b)).map(([wallet, raw]) => ({ wallet, amountUi: Number(hubPublic.rawToUi(raw, dec)), amountRaw: String(raw) }));
+      if (!recipients.length) {
+        sendReport = { action: "none", reason: "every row in this batch is already recorded as sent" };
+      } else {
+        const run = q.run === "1";
+        const payer = q.from === "cuna" ? "cuna" : "treasury";
+        const totalUi = recipients.reduce((t, r) => t + r.amountUi, 0);
+        const perMax = recipients.reduce((m, r) => Math.max(m, r.amountUi), 0);
+        const onPaid = (row) => {
+          const r = pay.recordSent({ batch: batches[id], paid, results: [{ wallet: row.wallet, sig: row.sig, pending: !!row.pending }], nowUnix: Math.floor(Date.now() / 1000) });
+          paid = r.paid; batches = { ...batches, [id]: r.batch };
+          // Batches first (remainingOf is what stops a re-send), then paid. One kv persist writes
+          // the whole store, so the second write carries the first. A false stops the batch.
+          if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) {
+            throw new Error("payout journal did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — STOP; do not export another batch until this one is reconciled");
+          }
+        };
+        const lock = run ? bp.lockAcquire(kv, "cuna-stake:" + id) : { ok: true, token: null };
+        if (!lock.ok) return res.status(409).json({ ok: false, error: "payout_in_flight", lock, detail: "a payout is already running (or crashed mid-run) — wait, then re-check. A stale lock clears itself after 10 minutes." });
+        let r;
+        try {
+          r = await whirlpoolMM.vault.payoutSpl({ projectId: payer, mintAddr: SUPPLY_FEEDS.cuna.mint, recipients, perRecipientMaxUi: perMax, totalMaxUi: totalUi, dryRun: !run, onPaid });
+        } finally { if (lock.token) bp.lockRelease(kv, lock.token); }
+        sendReport = { ...r, batch: id, payer, ran: run, caps: { perRecipientMaxUi: perMax, totalMaxUi: totalUi } };
+        if (run) console.log(`[cuna-payout] batch ${id} SERVER-SENT from ${payer}: ${r.action} — paid ${(r.paid || []).length}, pending ${(r.pending || []).length}, failed ${(r.failed || []).length}`);
+      }
+    }
+    if (q.void) {
+      const id = String(q.batch || "");
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch (pass &batch=)" });
+      voidReport = pay.voidSent({ batch: b, paid, wallet: String(q.void), sig: String(q.sig || ""), nowUnix });
+      if (voidReport.ok) {
+        paid = voidReport.paid; batches = { ...batches, [id]: voidReport.batch };
+        if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) return res.status(500).json({ ok: false, error: "void did not reach the volume — check DATA_DIR" });
+        console.log(`[cuna-payout] batch ${id}: row for ${q.void} VOIDED by operator — owed again`);
+      }
+    }
+    if (String(q.sweep || "") === "1") {
+      const id = String(q.batch || "");
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch (pass &batch=)" });
+      const rows = Object.entries(b.sent || {}).filter(([, s]) => s && s.pending && s.sig).map(([wallet, s]) => ({ wallet, sig: s.sig }));
+      if (!rows.length) sweepReport = { ok: true, checked: 0 };
+      else {
+        try {
+          const { connection } = require("./lib/rpc");
+          const st = await connection("confirmed").getSignatureStatuses(rows.map((x) => x.sig), { searchTransactionHistory: true });
+          const vals = (st && st.value) || [];
+          const rs = pay.resolveSent({ batch: b, paid, rows: rows.map((x, i) => ({ ...x, status: vals[i] || null })), nowUnix });
+          paid = rs.paid; batches = { ...batches, [id]: rs.batch };
+          if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) return res.status(500).json({ ok: false, error: "sweep did not reach the volume — check DATA_DIR" });
+          sweepReport = { ok: true, checked: rows.length, confirmed: rs.confirmed, voided: rs.voided, stillPending: rs.stillPending };
+        } catch (e) { sweepReport = { ok: false, error: "could not read signature statuses — nothing changed: " + publicErrMsg(e) }; }
+      }
+    }
+
     const owed = pay.owedNow({ days, paid, pending: batches });
 
     let created = null, note = null;
@@ -12236,6 +12387,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       ok: true,
       created,
       note,
+      sendReport, voidReport, sweepReport,
       owed: fmtOwed(owed),
       owedTotalRaw: Object.values(owed).reduce((a, v) => a + v, 0n).toString(),
       // A preview of the file, so the owner can eyeball it before creating a batch that holds funds.
