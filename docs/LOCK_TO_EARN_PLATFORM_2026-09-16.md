@@ -97,10 +97,11 @@ Accrued-to-date, funding status (three numbers, never one "funded" boolean), nex
 Payout desk: build batch → **Sign in my wallet** or **Send from managed wallet** → receipts appear
 on the public page. Teach block on every screen; no rate language can render.
 
-**Phase 3 — self-serve onboarding (`/hub/apply`).** Connect wallet → pick the mint (on-chain read
-fills decimals/program/extensions) → gate check (hold or pay) → funding wallet + operator wallets →
-draft terms with the teach block → submit → owner approves → live. The application itself becomes
-the project's first program version.
+**Phase 3 — self-serve onboarding (`/hub/apply`).** Pick the mint (on-chain read fills
+decimals/program/extensions) → funding wallet + operator wallets (connect to fill) → draft terms
+with the teach block preview → choose standard or small → submit → owner approves (sets the tier,
+comps if wanted) → the project pays its first month at `/hub/:project/pay` → arm. The application
+itself becomes the project's first program version. **Shipped 2026-09-16 — see Status.**
 
 **Later:** managed-wallet custody done properly (per-project keys encrypted at rest), a public
 directory of live programs, the seven languages on the desk.
@@ -133,8 +134,22 @@ directory of live programs, the seven languages on the desk.
   priced at the instant it is issued (30 min), on-chain verification of the SOL or CLKN transfer
   against that quote, 30 days per covering payment, signature consumed. Verified on a local boot:
   approve as `small`, public quote 0.25 SOL / the CLKN equivalent at the live price, arm refused
-  402 while unpaid, unknown quote refused. What is left of Phase 3 is the page: connect → pick
-  mint → tier → pay in the wallet → submit.
+  402 while unpaid, unknown quote refused.
+- **2026-09-16 — Phase 3, self-serve onboarding (`lib/hub/apply.js`, `/hub/apply`, `/hub/:project/pay`).**
+  `GET /api/hub-apply?mint=` reads a mint on-chain for the form (decimals, program, extensions,
+  already-registered). `POST /api/hub-apply` validates the application exactly as approval does
+  (project record + a full terms draft through `validateTerms`; a broken draft is refused at apply)
+  and answers the v1 hash and the **teach block the holders would read**; `preview=1` does the same
+  without storing. **An application grants nothing.** The book (`hub:applications`, disk-verified)
+  holds one pending per mint and per id, capped at 200; the ops chat is alerted. Owner:
+  `GET /api/hub-registry?applications=1` lists; `POST ?approve=<id>&tier=&accessNote=` re-reads the
+  mint, registers the project with the OWNER's tier (an applicant may ask for standard or small,
+  never comped), writes the draft as terms v1 effective tomorrow, and points at the pay page;
+  `POST ?reject=<id>&reason=`. The pay page (`/hub/:project/pay`) shows the quote, pays SOL or CLKN
+  from the connected wallet (sign first, remember the signature in localStorage, then send — a
+  reload retries the same payment before anything new is built), or takes a pasted signature.
+  Verified on a local boot end to end: mint check → preview → submit → duplicate refused → list →
+  approve as comped → admin shows v1 (monthly) → access reads comped → public `/api/hub` lists it.
 
 ## What it must never become
 
