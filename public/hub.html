@@ -90,9 +90,12 @@
 (function () {
   var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr, rpc = CluckUtil.rpc;
   var app = document.getElementById('app');
-  var path = location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);   // ["hub", project?, "r"?, sig?]
+  // /hub · /hub/:project (lock-to-earn only) · /hub/:project/programs (index) · /hub/:project/p/:program · /hub/:project/r/:sig
+  var path = location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
   var projectId = path[1] ? String(path[1]).toLowerCase() : null;
   var receiptSig = path[2] === 'r' && path[3] ? path[3] : null;
+  var programId = path[2] === 'p' && path[3] ? decodeURIComponent(path[3]) : null;
+  var programsIndex = path[2] === 'programs';
 
   // ── formatting ───────────────────────────────────────────────────────────────────────────
   function ts(ms) { if (ms == null) return '—'; var d = new Date(Number(ms)); if (isNaN(d)) return '—'; return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'; }
@@ -101,8 +104,9 @@
   function acct(a) { return '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/account/' + encodeURIComponent(a) + '">' + esc(shortAddr(a, 5, 4)) + '</a>'; }
   function txLink(sig) { return sig ? '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(sig) + '">' + esc(shortAddr(sig, 6, 6)) + '</a>' : '<span class="small">—</span>'; }
   function pill(state) {
-    var m = { settled: 'ok', paid: 'ok', qualified: 'ok', eligible: 'ok', confirmed: 'ok', submitted: 'warn', manual: 'warn', owed: 'warn', pending: 'warn', dq: 'bad', cancelled: 'bad' };
-    return '<span class="pill ' + (m[state] || '') + '">' + esc(state || '') + '</span>';
+    var m = { settled: 'ok', paid: 'ok', qualified: 'ok', eligible: 'ok', confirmed: 'ok', submitted: 'warn', manual: 'warn', pending: 'warn', dq: 'bad', cancelled: 'bad' };
+    var label = { 'no-receipt': 'no receipt on file', 'confirmed-manually': 'confirmed by hand', dq: 'disqualified', manual: 'reviewed by hand' }[state] || String(state || '').replace(/-/g, ' ');
+    return '<span class="pill ' + (m[state] || '') + '">' + esc(label) + '</span>';
   }
   function verifyCell(sig) { return sig ? '<span class="verify" data-sig="' + esc(sig) + '"><span class="small">not checked</span></span>' : '<span class="small">—</span>'; }
 
@@ -149,13 +153,16 @@
   function compCard(p, sym) {
     var t = p.terms || {}, tot = p.totals || {};
     var prizes = t.pctPrize ? (t.places || []).map(function (x) { return x.amount + '%'; }).join(' / ') + ' of each winner\'s own buys' : (t.places || []).map(function (x) { return amt(x.amount); }).join(' / ') + ' ' + esc(sym);
-    var winners = (p.results || []).map(function (r) { var pay = (p.payouts || []).filter(function (x) { return x.wallet === r.wallet; })[0]; return { rank: r.rank, wallet: r.wallet, amountUi: r.amount, state: pay ? pay.state : (r.amountUnit === 'sol' ? 'manual' : 'owed'), sig: pay ? pay.sig : null }; });
+    // A winner without a journal row is "no receipt on file" — never "owed" (a comp settled before
+    // the Hub journaled signatures has winners and no rows).
+    var winners = (p.results || []).map(function (r) { var pay = (p.payouts || []).filter(function (x) { return x.wallet === r.wallet; })[0]; return { rank: r.rank, wallet: r.wallet, amountUi: r.amount, state: pay ? pay.state : 'no-receipt', sig: pay ? pay.sig : null }; });
     return '<div class="card" id="p-' + esc(p.id) + '">' +
       '<div class="prog-head"><h2>' + esc(p.label || 'Buy competition') + '</h2><div class="chips"><span class="chip kind">buy competition</span><span class="chip ' + (p.status === 'verified' || p.status === 'closed' ? 'ok' : '') + '">' + esc(p.status) + '</span>' + (p.verifiedBy === 'operator' ? '<span class="chip warn">list set by operator</span>' : '') + '</div></div>' +
       timeline(p) +
       '<div class="terms"><div><b>Metric</b> ' + esc(t.metric === 'single' ? 'largest single buy' : 'cumulative buys') + '</div><div><b>Prizes</b> ' + prizes + '</div><div><b>Hold</b> ' + esc(t.holdHours) + ' h after close</div>' + (t.minVolSol ? '<div><b>Min volume</b> ' + esc(t.minVolSol) + ' SOL</div>' : '') + (t.exclude && t.exclude.length ? '<div><b>Excluded wallets</b> ' + t.exclude.length + '</div>' : '') +
       '<div><b>Terms hash</b> <span class="mono" title="sha256 of the terms this competition ran under — recompute it from the JSON at /api/hub/' + esc(projectId) + '">' + esc(String(p.termsHash || '').slice(0, 16)) + '…</span></div></div>' +
-      statTiles([['Owed', amt(tot.owedUi)], ['Paid', amt(tot.paidUi)], ['Settled', tot.settled], ['Submitted', tot.submitted || null], ['Winners', tot.winners], ['Disqualified', tot.disqualified], ['Needs a look', tot.manual || null]]) +
+      statTiles([['Sealed total', amt(tot.sealedUi)], ['Receipted', amt(tot.paidUi)], ['Settled', tot.settled], ['Submitted', tot.submitted || null], ['Winners', tot.winners], ['Disqualified', tot.disqualified]]) +
+      (p.payoutNote ? '<div class="fact" style="margin-bottom:8px">' + esc(p.payoutNote) + '</div>' : '') +
       (p.listHistory && p.listHistory.length ? '<div class="fact" style="margin-bottom:8px">The sealed list was replaced by the operator ' + p.listHistory.length + ' time' + (p.listHistory.length > 1 ? 's' : '') + ': <b>' + esc(p.listHistory[p.listHistory.length - 1].note || 'no note') + '</b> (' + ts(p.listHistory[p.listHistory.length - 1].at) + ').</div>' : '') +
       '<div class="sec-title">Winners and receipts</div>' + (winners.length ? payoutTable(winners, sym, true) : '<div class="fact">Not verified yet — the hold period runs ' + esc(t.holdHours) + ' hours past the close.</div>') +
       reviewList(p.review) +
@@ -177,11 +184,11 @@
   }
   function giveawayCard(p, sym) {
     var tot = p.totals || {};
-    var rows = (p.winners || []).filter(function (w) { return !w.alternate; }).map(function (w) { var pay = (p.payouts || []).filter(function (x) { return x.wallet === w.wallet; })[0]; return { rank: w.rank, wallet: w.wallet, amountUi: w.prizeUi, state: pay ? pay.state : 'owed', sig: pay ? pay.sig : null }; });
+    var rows = (p.winners || []).filter(function (w) { return !w.alternate; }).map(function (w) { var pay = (p.payouts || []).filter(function (x) { return x.wallet === w.wallet; })[0]; return { rank: w.rank, wallet: w.wallet, amountUi: w.prizeUi, state: pay ? pay.state : 'no-receipt', sig: pay ? pay.sig : null }; });
     return '<div class="card" id="p-' + esc(p.id) + '">' +
       '<div class="prog-head"><h2>' + esc(p.label || 'Holder giveaway') + '</h2><div class="chips"><span class="chip kind">giveaway</span><span class="chip ' + (p.status === 'paid' ? 'ok' : '') + '">' + esc(p.status) + '</span>' + (p.reproducible ? '<span class="chip ok">sealed draw</span>' : '') + '</div></div>' +
       timeline(p) +
-      statTiles([['Owed', amt(tot.owedUi)], ['Paid', amt(tot.paidUi)], ['Settled', tot.settled], ['Submitted', tot.submitted || null], ['Unpaid', tot.unpaid || null]]) +
+      statTiles([['Sealed total', amt(tot.sealedUi)], ['Receipted', amt(tot.paidUi)], ['Settled', tot.settled], ['Submitted', tot.submitted || null]]) +
       (p.seedHash ? '<div class="fact"><b>Seed hash</b> <span class="mono">' + esc(p.seedHash) + '</span>' + (p.seedSlot ? ' · slot ' + esc(p.seedSlot) : '') + '</div>' : '') +
       '<div class="sec-title">Winners and receipts</div>' + payoutTable(rows, sym, true) + '</div>';
   }
@@ -189,9 +196,17 @@
     var tot = p.totals || {}, a = p.accrual || {};
     return '<div class="card" id="p-' + esc(p.id) + '">' +
       '<div class="prog-head"><h2>' + esc(p.label || 'Lock to Earn') + '</h2><div class="chips"><span class="chip kind">lock to earn</span><span class="chip ' + (p.status === 'accruing' ? 'ok' : '') + '">' + esc(p.status) + '</span></div></div>' +
-      '<div class="terms"><div><b>Accruing since</b> ' + esc(a.firstDay || '—') + '</div><div><b>Last accrual day</b> ' + esc(a.lastDay || '—') + '</div><div><b>Days</b> ' + esc(a.days) + '</div><div><b>Wallets</b> ' + esc(a.wallets) + '</div></div>' +
-      statTiles([['Accrued', amt(tot.accruedUi)], ['Paid', amt(tot.paidUi)], ['Still owed', amt(tot.owedUi)], ['Batches', tot.batches], ['Receipts', tot.settled]]) +
-      (p.batches || []).map(function (b) { return '<details' + (b.state === 'pending' ? ' open' : '') + '><summary>Batch ' + esc(b.id) + ' · ' + esc(b.state) + ' · ' + esc(b.count) + ' wallets · ' + amt(b.totalUi, sym) + ' · ' + tsUnix(b.at) + '</summary>' + payoutTable(b.rows, sym, false) + '</details>'; }).join('') +
+      '<div class="fact" style="margin-bottom:8px">Rewards for wallets holding a ' + esc(sym) + ' lock on Jupiter Lock. Rewards accrue hourly while the lock is active, computed from the on-chain ledger, and are paid in batches — each payment below is a transaction you can open.</div>' +
+      '<div class="terms"><div><b>Accruing since</b> ' + esc(a.firstDay || '—') + '</div><div><b>Last accrual</b> ' + esc(a.lastDay || '—') + '</div><div><b>Days</b> ' + esc(a.days) + '</div><div><b>Hourly slices</b> ' + esc(a.slices) + '</div><div><b>Wallets</b> ' + esc(a.wallets) + '</div></div>' +
+      statTiles([['Accrued to date', amt(tot.accruedUi)], ['Paid', amt(tot.paidUi)], ['Accrued since last payout', amt(tot.sincePayoutUi)], ['Payouts', tot.batches], ['Receipts', tot.settled]]) +
+      // Only RECEIPTS are listed per wallet. A batch that is built but not sent is one line, no
+      // wallets — nothing on a public page reads "owed" next to an address.
+      (p.batches || []).map(function (b) {
+        if (b.state === 'pending') return '<div class="fact" style="margin-top:8px">A payout of ' + amt(b.totalUi, sym) + ' to ' + esc(b.count) + ' wallets is being prepared (built ' + tsUnix(b.at) + ').</div>';
+        var rows = (b.rows || []).filter(function (r) { return r.sig; });
+        if (!rows.length) return '';
+        return '<details><summary>Payout ' + tsUnix(b.at) + ' · ' + esc(rows.length) + ' wallet' + (rows.length === 1 ? '' : 's') + ' · ' + amt(b.totalUi, sym) + '</summary>' + payoutTable(rows, sym, false) + '</details>';
+      }).join('') +
       '</div>';
   }
   function programCard(p, sym) {
@@ -232,7 +247,7 @@
   }
 
   // ── check my wallet ───────────────────────────────────────────────────────────────────────
-  async function lookup(wallet) {
+  async function lookup(wallet, onlyProgram) {
     var out = document.getElementById('walletOut');
     var w = String(wallet || '').trim();
     if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) { out.innerHTML = '<div class="err">That is not a Solana address.</div>'; return; }
@@ -240,7 +255,8 @@
     try {
       var r = await fetch('/api/hub/' + encodeURIComponent(projectId) + '/wallet/' + encodeURIComponent(w)).then(function (x) { return x.json(); });
       if (!r.ok) { out.innerHTML = '<div class="err">' + esc(r.error || 'lookup failed') + '</div>'; return; }
-      if (!r.entries.length) { out.innerHTML = '<div class="fact" style="margin-top:10px">' + acct(w) + ' does not appear in any program on this page — not as a winner, a payout, or a reviewed wallet.</div>'; return; }
+      if (onlyProgram) r.entries = r.entries.filter(function (e) { return e.program === onlyProgram; });   // this page's program only
+      if (!r.entries.length) { out.innerHTML = '<div class="fact" style="margin-top:10px">' + acct(w) + ' does not appear in this program — not as a winner, a payout, or a reviewed wallet.</div>'; return; }
       out.innerHTML = '<ul class="facts" style="margin-top:8px">' + r.entries.map(function (e) {
         return '<li><div class="row-flex"><b class="small" style="color:var(--text)">' + esc(e.label || e.kind) + '</b> ' + pill(e.role) + (e.amountUi != null ? '<span class="mono">' + amt(e.amountUi, e.ticker) + '</span>' : '') + (e.sig ? ' ' + txLink(e.sig) : '') + (e.rank ? '<span class="small">#' + esc(e.rank) + '</span>' : '') + '</div>' + (e.fact ? '<div class="fact">' + esc(e.fact) + '</div>' : '') + (e.note ? '<div class="fact">' + esc(e.note) + '</div>' : '') + '</li>';
       }).join('') + '</ul>';
@@ -254,24 +270,41 @@
     app.innerHTML = '<div class="card"><div class="intro">Every project here has a public record: <b>what it promised its holders, who qualified, and the transaction that paid each one</b>. Nothing on these pages needs a wallet, and every signature can be re-checked against Solana from the page itself.</div></div>' +
       r.projects.map(function (p) { return '<a class="card proj-link" href="/hub/' + esc(p.id) + '"><div class="prog-head"><h2>' + esc(p.label) + ' <span class="small">' + esc(p.symbol) + '</span></h2><div class="chips"><span class="chip">' + p.programs + ' program' + (p.programs === 1 ? '' : 's') + '</span><span class="chip ' + (p.receipts ? 'ok' : '') + '">' + p.receipts + ' receipt' + (p.receipts === 1 ? '' : 's') + '</span></div></div><div class="mono">' + esc(p.mint) + '</div></a>'; }).join('');
   }
+  // One program per page (owner, 2026-09-16: a lock-to-earn link must show lock-to-earn and nothing
+  // else). /hub/:project is the lock-to-earn page when the project runs one; every other program
+  // lives at /hub/:project/p/:program, listed at /hub/:project/programs.
   async function renderProject() {
     var r = await fetch('/api/hub/' + encodeURIComponent(projectId)).then(function (x) { return x.json(); });
     if (!r.ok) throw new Error(r.error || 'could not load');
     var v = r.project, sym = v.symbol;
-    document.getElementById('title').textContent = v.label;
-    document.title = v.label + ' — Project Hub · receipts you can verify';
+    var lte = v.programs.filter(function (p) { return p.kind === 'lock-to-earn'; })[0] || null;
+    var one = programId ? (v.programs.filter(function (p) { return p.id === programId; })[0] || null) : (programsIndex ? null : lte);
+    if (programId && !one) throw new Error('no such program');
+    var receipts = one ? (one.payouts || []).filter(function (x) { return x.sig; }).length : 0;
+    document.getElementById('title').textContent = one ? (one.kind === 'lock-to-earn' ? v.label + ' · Lock to Earn' : one.label) : v.label;
+    document.getElementById('subtitle').textContent = one ? (one.kind === 'lock-to-earn' ? 'REWARDS FOR LOCKED WALLETS · RECEIPTS YOU CAN VERIFY' : 'RECEIPTS YOU CAN VERIFY · NO WALLET NEEDED') : 'PROGRAMS ON RECORD';
+    document.title = (one ? (one.kind === 'lock-to-earn' ? v.label + ' Lock to Earn' : one.label) : v.label) + ' — receipts you can verify';
+    var tokenLine = '<div class="row-flex" style="margin-top:10px"><span class="small">Token</span> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(v.mint) + '">' + esc(v.mint) + '</a></div>';
+    if (!one) {
+      // Program index — names and counts only; the details live on each program's own page.
+      app.innerHTML = '<div class="card"><div class="intro">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + tokenLine + '</div>' +
+        (v.programs.length ? v.programs.map(function (p) { var n = (p.payouts || []).filter(function (x) { return x.sig; }).length; return '<a class="card proj-link" href="/hub/' + esc(v.id) + '/p/' + encodeURIComponent(p.id) + '"><div class="prog-head"><h2>' + esc(p.label || p.kind) + '</h2><div class="chips"><span class="chip kind">' + esc(String(p.kind).replace(/-/g, ' ')) + '</span><span class="chip ' + (n ? 'ok' : '') + '">' + n + ' receipt' + (n === 1 ? '' : 's') + '</span></div></div></a>'; }).join('') : '<div class="card"><div class="fact">No programs on record for this project yet.</div></div>');
+      return;
+    }
+    var intro = one.kind === 'lock-to-earn'
+      ? 'Lock to Earn for <b>' + esc(v.label) + '</b>: rewards for wallets holding a ' + esc(sym) + ' lock on Jupiter Lock — the tokens stay in the lock, nobody holds them. Nothing here needs a wallet; every payment is a transaction you can open.'
+      : 'What <b>' + esc(v.label) + '</b> promised its holders in this program, who qualified, and the transaction that paid each one. Nothing here needs a wallet. Disqualifications show the <b>observed on-chain fact</b>, never a motive.';
     app.innerHTML =
-      '<div class="card"><div class="intro">What <b>' + esc(v.label) + '</b> promised its holders, who qualified, and the transaction that paid each one. Nothing here needs a wallet. Disqualifications show the <b>observed on-chain fact</b>, never a motive.</div>' +
-      '<div class="row-flex" style="margin-top:10px"><span class="small">Token</span> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(v.mint) + '">' + esc(v.mint) + '</a></div>' +
-      '<div class="verify-bar"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote">' + v.totals.receipts + ' receipt' + (v.totals.receipts === 1 ? '' : 's') + ' on this page. Press to re-check every signature against Solana, from your browser.</span></div></div>' +
-      '<div class="card"><div class="sec-title" style="margin-top:0">Check a wallet</div><div class="fact">Paste any address: every program it took part in, what it was owed, what arrived, and — if it was disqualified — the fact that decided it.</div><div class="input-row"><input class="addr-input" id="walletIn" placeholder="Solana wallet address" autocomplete="off" spellcheck="false"/><button class="btn ghost" id="walletBtn">CHECK</button></div><div id="walletOut"></div></div>' +
-      (v.programs.length ? v.programs.map(function (p) { return programCard(p, sym); }).join('') : '<div class="card"><div class="fact">No programs on record for this project yet.</div></div>') +
-      lessons(v.programs.some(function (p) { return p.kind === 'lock-to-earn'; }) ? 'lock-to-earn' : '') +
+      '<div class="card"><div class="intro">' + intro + '</div>' + tokenLine +
+      '<div class="verify-bar"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote">' + receipts + ' receipt' + (receipts === 1 ? '' : 's') + ' on this page. Press to re-check every signature against Solana, from your browser.</span></div></div>' +
+      '<div class="card"><div class="sec-title" style="margin-top:0">Check a wallet</div><div class="fact">Paste any address to see what it received in this program, with the transaction' + (one.kind === 'lock-to-earn' ? '' : ' — and, if it was disqualified, the fact that decided it') + '.</div><div class="input-row"><input class="addr-input" id="walletIn" placeholder="Solana wallet address" autocomplete="off" spellcheck="false"/><button class="btn ghost" id="walletBtn">CHECK</button></div><div id="walletOut"></div></div>' +
+      programCard(one, sym) +
+      lessons(one.kind === 'lock-to-earn' ? 'lock-to-earn' : '') +
       '<div class="small" style="text-align:center">Raw data: <a class="mono" href="/api/hub/' + esc(v.id) + '">/api/hub/' + esc(v.id) + '</a> · generated ' + ts(v.generatedAt) + '</div>';
     document.getElementById('verifyBtn').addEventListener('click', verifyAll);
-    document.getElementById('walletBtn').addEventListener('click', function () { lookup(document.getElementById('walletIn').value); });
-    document.getElementById('walletIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') lookup(e.target.value); });
-    var pre = new URLSearchParams(location.search).get('wallet'); if (pre) { document.getElementById('walletIn').value = pre; lookup(pre); }
+    document.getElementById('walletBtn').addEventListener('click', function () { lookup(document.getElementById('walletIn').value, one.id); });
+    document.getElementById('walletIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') lookup(e.target.value, one.id); });
+    var pre = new URLSearchParams(location.search).get('wallet'); if (pre) { document.getElementById('walletIn').value = pre; lookup(pre, one.id); }
   }
   async function renderReceipt() {
     var r = await fetch('/api/hub/' + encodeURIComponent(projectId) + '/r/' + encodeURIComponent(receiptSig)).then(function (x) { return x.json(); });

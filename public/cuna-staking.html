@@ -688,6 +688,15 @@
               toTokens(sp.totalRaw || l.amountRaw) + " CUNA</b></div>" +
               '<div class="row"><span>Cliff</span><b>' + dateOf(l.cliffTime) + "</b></div>" +
               '<div class="row"><span>Fully unlocked</span><b>' + dateOf(l.fullyVestedAt) + "</b></div>" +
+              // How much longer, in plain days (owner, 2026-09-16: "can show how much longer they're locked").
+              '<div class="row"><span>Time left</span><b>' + (function () {
+                var t = Number(l.fullyVestedAt || 0); if (!t) return "—";
+                var s = t - now; if (s <= 0) return "Unlocked";
+                var dd = Math.ceil(s / 86400);
+                var c = Number(l.cliffTime || 0);
+                var cliffPart = c && now < c ? Math.ceil((c - now) / 86400) + " day" + (Math.ceil((c - now) / 86400) === 1 ? "" : "s") + " to the cliff, " : "";
+                return cliffPart + dd + " day" + (dd === 1 ? "" : "s") + (cliffPart ? " to fully unlocked" : " left");
+              })() + "</b></div>" +
               '<div class="row"><span>Lock</span><b>' + esc(shortAddr(l.escrow)) + "</b></div>" +
               why + claimNote(l) + "</div>";
           }).join("");
@@ -721,10 +730,24 @@
              toTokens(d.accruedRaw) + " CUNA</b></div>";
         h += '<div class="row"><span class="muted">Sent to you</span><b class="muted">' +
              toTokens(d.paidRaw || "0") + " CUNA</b></div>";
-        h += '<div class="row"><span>Waiting to be sent</span><b>' + toTokens(d.owedRaw) + " CUNA</b></div>";
+        h += '<div class="row"><span>Earned since the last payout</span><b>' + toTokens(d.owedRaw) + " CUNA</b></div>";
         if (d.pendingRaw && d.pendingRaw !== "0") {
           h += '<p class="muted" style="margin-top:6px">' + esc(toTokens(d.pendingRaw)) +
                " CUNA of that is in the next batch.</p>";
+        }
+        // Every payment to this wallet, with its transaction (owner, 2026-09-16: "people can check
+        // what they've gotten"). Newest first. A row without a signature was confirmed by hand.
+        var pays = d.payouts || [];
+        h += '<div style="margin-top:14px"><b>Payments to you</b></div>';
+        if (!pays.length) {
+          h += '<p class="muted" style="margin-top:4px">' + (d.armed ? "None yet — rewards are paid weekly." : "None yet.") + "</p>";
+        } else {
+          h += pays.map(function (p) {
+            var tx = p.sig
+              ? '<a href="https://solscan.io/tx/' + encodeURIComponent(p.sig) + '" target="_blank" rel="noopener">' + esc(shortAddr(p.sig)) + "</a>" + (p.confirmed ? "" : ' <span class="muted">(confirming)</span>')
+              : '<span class="muted">confirmed by hand</span>';
+            return '<div class="row"><span>' + esc(dateOf(p.at)) + ' <span class="muted">' + tx + "</span></span><b>" + toTokens(p.amountRaw) + " CUNA</b></div>";
+          }).join("");
         }
         if (!d.armed) {
           h += '<p class="muted" style="margin-top:10px">The program hasn’t started, so nothing has been earned yet.</p>';
