@@ -120,6 +120,12 @@ function raw(method, p, headers) {
   ok("GET /api/hub/:project/admin?terms=1 is refused with 405", r.status === 405);
   r = await call("GET", "/api/hub/nope/admin");
   ok("flag-less GET /api/hub/:project/admin is the read (404 for an unknown project)", r.status === 404 && !!r.body && /no such project/.test(String(r.body.error)), JSON.stringify(r.body));
+  r = await call("GET", "/api/hub-registry?approve=app_x");
+  ok("GET /api/hub-registry?approve= is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/hub-registry?reject=app_x");
+  ok("GET /api/hub-registry?reject= is refused with 405", r.status === 405);
+  r = await call("GET", "/api/hub-apply", false);
+  ok("GET /api/hub-apply without ?mint= is 400 (submitting is a POST)", r.status === 400 && /POST/.test(String(r.body && r.body.error)), JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/access?sig=x&quote=y", false);
   ok("GET /api/hub/:project/access?sig= is refused with 405 (before the project lookup)", r.status === 405, JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/access", false);

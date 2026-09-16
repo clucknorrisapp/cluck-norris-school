@@ -197,6 +197,10 @@ jobs:
       # the CLKN alternative priced at that block, comped needs a reason, unpaid cannot arm.
       - name: Hub access tiers (0.5 / 0.25 SOL a month, comped)
         run: node scripts/hub-access-test.cjs
+      # Self-serve onboarding: an application grants nothing, is validated like approval, and
+      # becomes a registry project with v1 only on the owner's approve.
+      - name: Hub applications (self-serve onboarding)
+        run: node scripts/hub-apply-test.cjs
       - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
         run: node scripts/cuna-announce-test.cjs
       # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC

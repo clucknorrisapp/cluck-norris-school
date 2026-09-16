@@ -7909,6 +7909,8 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // Explicit routes so the page works on a no-build boot (CI) and gets normal cache headers.
+app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
+app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
 app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:program", "/hub/:project/r/:sig"], (req, res) => {
   res.sendFile(join(__dirname, "public", "hub.html"));
 });
