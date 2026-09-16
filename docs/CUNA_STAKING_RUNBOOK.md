@@ -436,3 +436,26 @@ hole through the WAF to every money endpoint for anyone who points a DNS record 
   that URL before they reach the main domain. This is separate from `staging.clucknorris.app` in
   `docs/STAGING_WORKFLOW.md`, which is a different (still not set up) environment for the rest of
   the app — don't assume "no staging exists" for CUNA work just because that one doesn't exist yet.
+
+### Server-signed send (2026-09-16) — the batch pays itself
+
+Owner ask (2026-09-16): *"build batch and send to show we can fully automate this."* The export
+step is unchanged; the airdropper step is now optional. Same discipline as `/api/buycomp/send`
+(`docs/BUYCOMP_SERVER_PAYOUT.md`): the vault signs on Railway with the payer's operator key,
+**every row is journaled PENDING before it is broadcast** and verified on disk (`kv.setVerified`,
+batches first then paid), caps are the batch's own numbers, one run at a time, and amounts move in
+**raw units straight from the batch** — no float round trip. All flags are POST-only.
+
+```bash
+K='x-premium-key: <admin key>'; B='https://clucknorris.app/api/cuna-stake/payout'
+curl -sS -X POST -H "$K" "$B?export=1"                       # 1. build the batch → created.id
+curl -sS -H "$K" "$B?send=<id>"                              # 2. dry run: payer balance, caps, would-pay rows (GET)
+curl -sS -X POST -H "$K" "$B?send=<id>&run=1&from=treasury"  # 3. send — Railway signs; sendReport has every signature
+curl -sS -X POST -H "$K" "$B?sweep=1&batch=<id>"             # 4. if anything is pending: settle what the chain knows
+curl -sS -X POST -H "$K" "$B?void=<wallet>&sig=<sig>&batch=<id>"  # 5. only after YOU checked an explorer: void a row that never landed
+```
+
+Re-running step 3 sends only the rows without a journal entry. A pending row (sent, unconfirmed)
+blocks a re-send like a confirmed one; the sweep never clears a not-found row on its own — a
+lagging RPC says that about real transfers too. `lib/cuna-payout.js` `recordSent` (pending flag),
+`resolveSent`, `voidSent`; `scripts/cuna-payout-test.cjs` pins all three.

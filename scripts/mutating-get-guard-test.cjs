@@ -108,6 +108,11 @@ function raw(method, p, headers) {
   ok("flag-less GET /api/buycomp/send is the read (404 for an unknown comp, not 405)", r.status === 404 && !!r.body && /no such competition/.test(String(r.body.error)), JSON.stringify(r.body));
   r = await call("GET", "/api/buycomp/send?id=nope&run=1", false);
   ok("/api/buycomp/send without the key is 404 like every admin route", r.status === 404);
+  // ── lock-to-earn server send: send / sweep / void on a GET → 405 like confirm / cancel / export
+  r = await call("GET", "/api/cuna-stake/payout?send=nope&run=1");
+  ok("GET /api/cuna-stake/payout?send= is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/cuna-stake/payout?void=x&sig=y");
+  ok("GET /api/cuna-stake/payout?void= is refused with 405", r.status === 405);
 
   // ── #9 telegram test routes: 404 (not 403) without the key; post=1 needs POST
   r = await call("GET", "/api/bags-radar-test", false);

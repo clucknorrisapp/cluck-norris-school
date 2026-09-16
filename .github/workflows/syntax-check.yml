@@ -185,6 +185,10 @@ jobs:
       # "proves" a payout row that lives only in RAM. Money paths use setVerified (re-reads the file).
       - name: kv store disk-verified writes
         run: node scripts/kvstore-verified-test.cjs
+      # The public Hub views whitelist their fields — a comp's payout token or chat id must never
+      # reach /api/hub — and hash the terms a program ran under.
+      - name: Hub public views (no private fields, stable terms hash, honest totals)
+        run: node scripts/hub-public-test.cjs
       - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
         run: node scripts/cuna-announce-test.cjs
       # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC
