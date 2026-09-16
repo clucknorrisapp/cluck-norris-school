@@ -11435,6 +11435,15 @@ app.get("/api/cuna-stake/wallet", async (req, res) => {
       paidRaw: paidRaw.toString(),
       pendingRaw: pendingRaw.toString(),
       owedRaw: owedRaw.toString(),
+      // Every payment to THIS wallet, with its transaction (owner, 2026-09-16: on the lock site a
+      // holder checks what they have gotten, what they are owed, that they are locked, and for how
+      // much longer). Rows come from the batches' sent records; a row without a signature was
+      // confirmed by hand from the airdropper flow and is still listed, marked so.
+      payouts: Object.values(batchMap)
+        .filter((b) => b && b.amounts && b.amounts[addr] && b.sent && b.sent[addr])
+        .map((b) => ({ batch: b.id, at: Number(b.sent[addr].at) || Number(b.at) || 0, amountRaw: String(b.amounts[addr]),
+          sig: b.sent[addr].sig || null, confirmed: !b.sent[addr].pending, manual: !!b.sent[addr].manual }))
+        .sort((x, y) => y.at - x.at),
       scanAgeSec: Math.round((Date.now() - snap.at) / 1000),
       scanError: snap.err || null,
       // What the rewards are actually computed on, versus what a naive "total locked" would say.
