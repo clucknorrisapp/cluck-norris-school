@@ -193,6 +193,10 @@ jobs:
       # one hour of accrual, the tick over the project's own keys, the holder view.
       - name: Hub engine (Lock to Earn for any project)
         run: node scripts/hub-engine-test.cjs
+      # Platform access tiers: standard / small / comped, price resolved at the payment instant,
+      # the CLKN alternative priced at that block, comped needs a reason, unpaid cannot arm.
+      - name: Hub access tiers (0.5 / 0.25 SOL a month, comped)
+        run: node scripts/hub-access-test.cjs
       - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
         run: node scripts/cuna-announce-test.cjs
       # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC

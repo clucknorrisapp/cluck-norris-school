@@ -47,7 +47,25 @@ chain, computes and pays, and every holder can verify every payout.**
 1. **Who signs the rewards.** Two modes, both should exist:
    - **Self-sign (non-custodial, default for onboarded projects):** the batch is built by us, the project's wallet signs it in their browser (the airdropper path — live today). We never hold their reward tokens.
    - **Managed:** a payer wallet we hold the key for, funded by the project (how CUNA and ROSE run today via Railway operator keys). Fully automatic. Needs a per-project key we custody — a real responsibility; fine for projects we run, not the default for strangers.
-2. **The gate — DECIDED (owner, 2026-09-16): 0.5 SOL per month, or 0.5 SOL worth of CLKN per month, priced at the moment they pay.** *"If they bought CLKN early, as price goes up it actually saves them money"* — the CLKN amount is computed from the live CLKN/SOL price when the month is paid, never fixed in tokens (the tools-pass pattern: an append-only terms schedule resolved at the payment's block time, never hardcoded). Paid in CLKN or SOL to the CLKN treasury; the receipt is the payment signature. Built with onboarding (Phase 3).
+2. **The gate — DECIDED (owner, 2026-09-16), three tiers, the tier is the owner's call at approval,
+   never self-declared:**
+   - **standard — 0.5 SOL per month**, or 0.5 SOL worth of CLKN priced at the moment the month is
+     paid. *"If they bought CLKN early, as price goes up it actually saves them money"* — the CLKN
+     amount is computed from the live CLKN/SOL price at the payment block, never fixed in tokens.
+   - **small — 0.25 SOL per month** (or the CLKN equivalent) for small-cap / young projects, where
+     the standard price *"could be expensive on a young project"*.
+   - **comped — free** for projects we like or are using for promotion. Needs a note on the record
+     saying why, so "why is this one free" is always answered.
+
+   Built as `lib/hub/access.js` (pure; `scripts/hub-access-test.cjs`): the price is an append-only
+   schedule resolved at the payment instant (the tools-pass pattern — a month bought under an old
+   price is never re-priced), a month is 30 days and stacks on the end of the paid period, a
+   payment signature is the receipt and is refused twice. **Rule: an unpaid or expired project
+   cannot ARM or change terms (402 on the admin route); a comped or active one can. The engine
+   never stops accruing for holders already in a running programme because the project fell
+   behind — that would punish the wrong people.** The tier is set on `/api/hub-registry` with
+   `tier=standard|small|comped` (+ `accessNote=`); the payment intake (SOL or CLKN to the treasury,
+   verified on-chain, priced at the block) ships with onboarding (Phase 3).
 3. **Approval.** The design already says a project is whitelisted by the owner. Keep it: self-serve *application*, one-click **approve** by you in the desk (mint checked on-chain: decimals, token program, no transfer-fee/hook extensions — the payout verifier cannot account for those yet).
 
 ## Phases (each a PR, each demoable; window ends Oct 12)
@@ -95,6 +113,9 @@ directory of live programs, the seven languages on the desk.
   `confirm` / `cancel`). All mutations POST-only, refused before the project lookup; money parts
   through the disk-verified write. The scheduler runs every 10 minutes over armed projects and
   builds no chain client until one is registered. `HUB_ENGINE_OFF=1` kills it.
+- **2026-09-16 — access tiers (`lib/hub/access.js`).** standard 0.5 SOL, small 0.25 SOL, comped
+  free (owner-set at approval, note required for comped); the CLKN alternative priced at the
+  payment instant; unpaid/expired cannot arm. Payment intake is Phase 3.
 
 ## What it must never become
 
