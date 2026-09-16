@@ -7833,6 +7833,86 @@ app.all("/api/buycomp/send", async (req, res) => {
   } catch (e) { return res.status(500).json({ ...out, ok: false, error: publicErrMsg(e) }); }
 });
 
+// ── Project Hub — the PUBLIC read side (Colosseum in-window centrepiece; owner 2026-09-15: build
+// the "Earn we can prove" page). One JSON per project, built by lib/hub/public.js from the stores
+// the routes above already keep: every field is WHITELISTED there, so a comp's payout token, its
+// Telegram chat id or a board message id cannot reach this surface. No wallet, no key, cacheable.
+// The page at /hub/:project renders it and re-checks every signature against the chain in the
+// browser — the page proves itself rather than asking to be believed.
+const hubStore = require("./lib/hub/store");
+const hubPublic = require("./lib/hub/public");
+function hubProjects() {
+  const built = {
+    clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9 },
+    cuna: { id: "cuna", label: "CUNA", symbol: "CUNA", mint: SUPPLY_FEEDS.cuna.mint, decimals: 9 },
+    rose: { id: "rose", label: "OnlyRose", symbol: "ROSE", mint: SUPPLY_FEEDS.rose.mint, decimals: 9 },
+  };
+  let reg = {}; try { reg = hubStore.readRegistry(kv) || {}; } catch (_) { /* registry absent = built-ins only */ }
+  for (const [id, p] of Object.entries(reg)) {
+    if (!p || !p.mint || !/^[a-z0-9][a-z0-9-]{1,31}$/.test(id)) continue;
+    built[id] = { id, label: String(p.label || id).slice(0, 64), symbol: String(p.symbol || id.toUpperCase()).slice(0, 12), mint: String(p.mint), decimals: Number.isInteger(p.decimals) ? p.decimals : null };
+  }
+  return built;
+}
+function hubProjectView(project) {
+  const comps = Object.values(buyCompsAll()).filter((c) => c && c.mint === project.mint);
+  const draws = Object.values(bsDrawsAll()).filter((d) => d && d.mint === project.mint);
+  let stake = null, giveaway = null;
+  try {
+    const days = hubStore.read(kv, project.id, "days", null);
+    if (days && Object.keys(days).length) {
+      stake = hubPublic.stakeView({ days, paid: hubStore.read(kv, project.id, "paid", {}), batches: hubStore.read(kv, project.id, "batches", {}), decimals: project.decimals || 9 });
+    }
+  } catch (_) { /* a project without a programme store is not an error */ }
+  if (project.id === "cuna") {
+    try {
+      const st = cunaGiveaway.standings(1);   // carries the sealed draw
+      giveaway = hubPublic.giveawayView({ draw: st && st.draw, payouts: cunaGiveaway.payoutState(), cfg: cunaGiveaway.config() });
+    } catch (_) { /* no draw = no giveaway card */ }
+  }
+  return hubPublic.projectView({ project, comps, draws, stake, giveaway });
+}
+app.get("/api/hub", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  try {
+    const projects = Object.values(hubProjects()).map((p) => {
+      const v = hubProjectView(p);
+      return { id: p.id, label: p.label, symbol: p.symbol, mint: p.mint, programs: v.totals.programs, receipts: v.totals.receipts };
+    });
+    return res.status(200).json({ ok: true, projects });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/hub/:project", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=30");
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try { return res.status(200).json({ ok: true, project: hubProjectView(p) }); }
+  catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/hub/:project/wallet/:wallet", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const r = hubPublic.walletLookup(hubProjectView(p), String(req.params.wallet || ""));
+    return res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/hub/:project/r/:sig", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const r = hubPublic.findReceipt(hubProjectView(p), String(req.params.sig || ""));
+    if (!r) return res.status(404).json({ ok: false, error: "no receipt with that signature" });
+    return res.status(200).json({ ok: true, ...r });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// Explicit routes so the page works on a no-build boot (CI) and gets normal cache headers.
+app.get(["/hub", "/hub/:project", "/hub/:project/r/:sig"], (req, res) => {
+  res.sendFile(join(__dirname, "public", "hub.html"));
+});
+
 // ── Buy Special RANDOM DRAW (the "N random buys win X CLKN" raffle) ───────────
 // Distinct from the ranked buy COMPETITION above. Here every qualifying BUY is a
 // raffle entry — more buys = more chances — and N DISTINCT wallets win. Eligibility
