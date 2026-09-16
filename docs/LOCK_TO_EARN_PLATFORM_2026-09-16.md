@@ -83,6 +83,12 @@ chain, computes and pays, and every holder can verify every payout.**
 
 ## Phases (each a PR, each demoable; window ends Oct 12)
 
+> ⛔ **Phase 1b (moving CUNA onto the generic engine) is HELD — owner, 2026-09-16: "hold on migrating
+> CUNA for right now, I don't want to mess up anything and CUNA is mine."** CUNA lock-to-earn keeps
+> running on its own loop (`cunaProgramme` / `cunaAccrualTick` in `server.js`, paid from
+> `/cuna-payout`); the hub scheduler skips `cuna` so nothing double-counts. Do not migrate it, alias
+> it, or "clean up" the legacy loop without the owner's explicit go in the moment.
+
 **Phase 1 — the engine works for any project (backend).** Per-project programme store, scan by the
 project's mint, accrual scheduler over every armed project, eligibility from the project's terms,
 payout batches per project with server send (`from=<payer>`) or self-sign export; cadences
@@ -102,6 +108,8 @@ decimals/program/extensions) → funding wallet + operator wallets (connect to f
 with the teach block preview → choose standard or small → submit → owner approves (sets the tier,
 comps if wanted) → the project pays its first month at `/hub/:project/pay` → arm. The application
 itself becomes the project's first program version. **Shipped 2026-09-16 — see Status.**
+
+**Phase 1b — CUNA onto the engine: HELD by the owner (see the note above).**
 
 **Later:** managed-wallet custody done properly (per-project keys encrypted at rest), a public
 directory of live programs, the seven languages on the desk.
