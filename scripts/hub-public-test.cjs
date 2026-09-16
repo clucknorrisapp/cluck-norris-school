@@ -55,9 +55,15 @@ const comp = {
 // ── totals and facts ──────────────────────────────────────────────────────────────────────────
 {
   const v = pub.compView(comp);
-  ok("owed = the sealed token-terms rows", v.totals.owedUi === 15373.67 && v.totals.winners === 2);
+  ok("sealed total = the sealed token-terms rows", v.totals.sealedUi === 15373.67 && v.totals.winners === 2);
   ok("paid counts only settled rows; submitted is separate", v.totals.paidUi === 13722.42 && v.totals.submittedUi === 1651.25 && v.totals.settled === 1 && v.totals.submitted === 1);
-  ok("unpaid = sealed winners with no journal row", v.totals.unpaid === 0);
+  ok("noReceipt = sealed winners with no journal row", v.totals.noReceipt === 0 && v.payoutNote === null);
+  // THE OWNER'S CASE (2026-09-16): a comp settled through the airdropper before the Hub journaled
+  // signatures has winners and no rows. That is "no receipt on file" — never "owed".
+  const pre = pub.compView({ ...comp, payouts: {} });
+  ok("a verified comp with no journal rows says 'no receipts on file' and never uses the word owed",
+     pre.totals.noReceipt === 2 && /No transaction receipts are on file/.test(pre.payoutNote) && !JSON.stringify(pre.totals).includes("owed") && !("owedUi" in pre.totals) && !("unpaid" in pre.totals));
+  ok("a live comp (not yet verified) carries no such note", pub.compView({ ...comp, payouts: {}, status: "live" }).payoutNote === null);
   ok("the DQ and the manual case are surfaced as observed facts", v.totals.disqualified === 1 && v.totals.manual === 1 && v.review.find((r) => r.wallet === D).fact.includes("moved the bag out"));
   ok("hold end is derived from the terms", v.timeline.holdEndsTs === comp.endTs + 48 * 3600000);
   ok("the operator's list replacement is on the record", v.verifiedBy === "operator" && v.listHistory.length === 1 && v.listHistory[0].replacedCount === 1);
@@ -76,20 +82,21 @@ const comp = {
 
 // ── lock-to-earn ──────────────────────────────────────────────────────────────────────────────
 {
-  const days = { "2026-09-06": { distributed: "3000000000", credits: { [A]: "2000000000", [B]: "1000000000" } }, "2026-09-07": { distributed: "3000000000", credits: { [A]: "1500000000", [B]: "1500000000" } } };
+  const days = { "2026-09-06T20": { distributed: "3000000000", credits: { [A]: "2000000000", [B]: "1000000000" } }, "2026-09-06T21": { distributed: "0", credits: {} }, "2026-09-07T03": { distributed: "3000000000", credits: { [A]: "1500000000", [B]: "1500000000" } } };
   const paid = { [A]: "3500000000" };
   const batches = { cb_1: { id: "cb_1", state: "confirmed", at: 1757990000, count: 2, totalRaw: "6000000000", amounts: { [A]: "3500000000", [B]: "2500000000" }, sent: { [A]: { sig: SIG, at: 1757990100 } } } };
   const v = pub.stakeView({ days, paid, batches, decimals: 9 });
-  ok("accrued is summed across days by string arithmetic", v.totals.accruedUi === "6" && v.accrual.days === 2 && v.accrual.wallets === 2);
-  ok("paid and owed follow", v.totals.paidUi === "3.5" && v.totals.owedUi === "2.5");
-  ok("a batch row with a signature is a receipt; one without is still owed", v.payouts.length === 1 && v.payouts[0].wallet === A && v.batches[0].rows.find((r) => r.wallet === B).state === "owed");
+  ok("accrued is summed across slices by string arithmetic; slices and DAYS are counted apart", v.totals.accruedUi === "6" && v.accrual.slices === 3 && v.accrual.days === 2 && v.accrual.firstDay === "2026-09-06" && v.accrual.wallets === 2);
+  ok("paid and accrued-since-payout follow", v.totals.paidUi === "3.5" && v.totals.sincePayoutUi === "2.5");
+  ok("a batch row with a signature is a receipt; an unsent row is NOT public (no 'owed' next to an address)", v.payouts.length === 1 && v.payouts[0].wallet === A && !v.batches[0].rows.some((r) => r.wallet === B) && v.batches[0].count === 2);
+  ok("the word 'owed' appears nowhere in the lock-to-earn view", !/owed/i.test(JSON.stringify(v)));
 }
 
 // ── giveaway and draw ─────────────────────────────────────────────────────────────────────────
 {
   const g = pub.giveawayView({ draw: { at: 1757900000000, seedSlot: 1, seedHash: "abc123def456ghi", mint: "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc", winners: [{ rank: 1, wallet: A, prize: 4000000 }, { rank: 2, wallet: B, prize: 3000000 }, { rank: 5, wallet: C, prize: 0, alternate: true }] },
     payouts: { abc123def456ghi: { [A]: { amountUi: 4000000, sig: SIG, at: 1, pending: false } } }, cfg: { mint: "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc", symbol: "CUNA" } });
-  ok("giveaway: alternates are not owed; one paid, one unpaid", g.totals.winners === 2 && g.totals.owedUi === 7000000 && g.totals.paidUi === 4000000 && g.totals.unpaid === 1 && g.reproducible === true);
+  ok("giveaway: alternates are not counted; one receipted, one without a receipt", g.totals.winners === 2 && g.totals.sealedUi === 7000000 && g.totals.paidUi === 4000000 && g.totals.noReceipt === 1 && g.reproducible === true && !("owedUi" in g.totals));
   ok("giveaway: null without a draw", pub.giveawayView({ draw: null }) === null);
   const d = pub.drawView({ id: "bsd_1", mint: "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", from: 1, to: 2, holdHours: 24, requireHold: true, winnersCount: 2, prize: 100000, seed: "s", method: "m", payoutToken: "SECRET-TOKEN-VALUE",
     eligible: [{ wallet: A, chances: 2 }], totalEntries: 2, buyersTotal: 3, reviewed: [{ wallet: B, status: "dq", note: "sold (1 sell) — did not hold", buyCount: 1 }], winners: [{ rank: 1, wallet: A, prize: 100000, chances: 2 }], drawnAt: 3 });
