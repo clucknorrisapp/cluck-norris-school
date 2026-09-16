@@ -120,6 +120,10 @@ function raw(method, p, headers) {
   ok("GET /api/hub/:project/admin?terms=1 is refused with 405", r.status === 405);
   r = await call("GET", "/api/hub/nope/admin");
   ok("flag-less GET /api/hub/:project/admin is the read (404 for an unknown project)", r.status === 404 && !!r.body && /no such project/.test(String(r.body.error)), JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/access?sig=x&quote=y", false);
+  ok("GET /api/hub/:project/access?sig= is refused with 405 (before the project lookup)", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/access", false);
+  ok("flag-less GET /api/hub/:project/access is the quote read (404 for an unknown project)", r.status === 404, JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/payout?export=1");
   ok("GET /api/hub/:project/payout?export=1 is refused with 405", r.status === 405);
   r = await call("GET", "/api/hub/nope/payout?send=x&run=1");

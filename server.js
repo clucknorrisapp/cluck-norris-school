@@ -7933,6 +7933,16 @@ hubRoutes.mount(app, {
   kv, adminAuthOK, publicErrMsg, vault: whirlpoolMM.vault,
   connection: () => require("./lib/rpc").connection("confirmed"),
   scanDeps: async () => hubScanDeps, alert: hubAlert,
+  // Platform access payments (0.5 / 0.25 SOL a month, or the CLKN equivalent quoted at the
+  // moment of payment). SOL lands where the tools pass collects it, CLKN where the Hatchery
+  // does; both are lazy because those constants are declared further down this file.
+  sigStore, rateLimit, clknMint: CLKN_MINT, clknDecimals: 9,
+  clknPriceInSol: () => hatchery.clknPriceInSol(),
+  payTo: () => ({ sol: process.env.HUB_PAY_SOL_WALLET || SOL_UNLOCK_WALLET, clkn: process.env.HUB_PAY_CLKN_WALLET || TREASURY_WALLET }),
+  getTx: async (sig) => {
+    const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
+    return r && r.result;
+  },
 });
 hubRoutes.startScheduler({ kv, scanDeps: async () => hubScanDeps, alert: hubAlert });
 
