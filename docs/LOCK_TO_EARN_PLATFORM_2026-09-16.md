@@ -74,6 +74,18 @@ the project's first program version.
 **Later:** managed-wallet custody done properly (per-project keys encrypted at rest), a public
 directory of live programs, the seven languages on the desk.
 
+## Status
+
+- **2026-09-16 — Phase 1a, the engine module (`lib/hub/engine.js`, `scripts/hub-engine-test.cjs`).**
+  Per-project: config from the version in force, arm/disarm (start date never slides), the hourly
+  gate, one hour of accrual (pure), missed slices, the lock scan with the firstSeenAt ledger, the
+  tick over the project's own keys, `runAll` over the registry (skipping `cuna` while its legacy
+  loop runs), and the holder view. The rules engine gained `cancelableAllowed` and the `vesting`
+  shape (defaults = CUNA's behaviour, its 68 rule tests unchanged). One product rule decided in
+  code: a **fixed daily pool with no vesting stream is honoured as-is** — CUNA's stream cap only
+  applies when the funding wallet has a stream — and the funding status is the guard.
+  Not yet: routes (admin / wallet / payout per project), the desk, onboarding.
+
 ## What it must never become
 
 No APR/APY anywhere (the teach guard already refuses it). No claim a lock "earns" anything beyond
