@@ -252,6 +252,43 @@ t("walletView: locked / how long / earned / paid with signatures / owed", () => 
   assert.strictEqual(stranger.locks.length, 0); assert.strictEqual(stranger.accruedRaw, "0"); assert.strictEqual(stranger.payouts.length, 0);
 });
 
+section("6. the routes' pure helpers (lib/hub/routes.js)");
+
+t("mintInfoFromParsed reads decimals, the token program and Token-2022 extensions from a parsed mint account; refuses anything else", () => {
+  const routes = require("../lib/hub/routes");
+  const v = { owner: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", data: { parsed: { type: "mint", info: { decimals: 6, extensions: [{ extension: "transferFeeConfig", state: {} }, { extension: "metadataPointer" }] } } } };
+  assert.deepStrictEqual(routes.mintInfoFromParsed(v), { decimals: 6, tokenProgram: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", extensions: ["transferFeeConfig", "metadataPointer"] });
+  assert.throws(() => proj.validateProject({ id: "fee", label: "Fee", symbol: "FEE", mint: W.MINT, fundingWallet: W.FUND, operatorWallets: [] }, routes.mintInfoFromParsed(v)), /transferFeeConfig/);
+  assert.deepStrictEqual(routes.mintInfoFromParsed({ owner: TOK, data: { parsed: { type: "mint", info: { decimals: 9 } } } }), { decimals: 9, tokenProgram: TOK, extensions: [] });
+  assert.throws(() => routes.mintInfoFromParsed({ owner: TOK, data: { parsed: { type: "account", info: {} } } }), /did not parse as a mint/);
+  assert.throws(() => routes.mintInfoFromParsed(null), /did not parse as a mint/);
+});
+
+t("defaultEffectiveFrom: the first version starts today, an edit starts tomorrow; termsPatchFromQuery parses lists and the boolean", () => {
+  const routes = require("../lib/hub/routes");
+  const P = mkProject();
+  assert.strictEqual(routes.defaultEffectiveFrom({}, NOW), "2026-09-17");
+  assert.strictEqual(routes.defaultEffectiveFrom(mkState(P), NOW), "2026-09-18");
+  const patch = routes.termsPatchFromQuery({ poolDailyRaw: "5", vesting: "cliff-only", cancelableAllowed: "1", fundedBy: `${W.FUND}, ${W.OP}`, excludeWallets: [W.A], ignored: "x", minLockRaw: "" });
+  assert.deepStrictEqual(patch, { poolDailyRaw: "5", vesting: "cliff-only", cancelableAllowed: true, fundedBy: [W.FUND, W.OP], excludeWallets: [W.A] });
+  assert.strictEqual(routes.termsPatchFromQuery({ cancelableAllowed: "0" }).cancelableAllowed, false);
+  // An edit merges over the version in force and creates the next version with a new hash.
+  const s1 = mkState(P);
+  const merged = { ...s1.versions[0].terms, ...routes.termsPatchFromQuery({ payoutSchedule: "monthly" }) };
+  const s2 = proj.createVersion(s1, P, merged, { effectiveFrom: routes.defaultEffectiveFrom(s1, NOW), todayKey: "2026-09-17" });
+  assert.strictEqual(s2.versions.length, 2);
+  assert.strictEqual(s2.versions[1].terms.payoutSchedule, "monthly");
+  assert.strictEqual(s2.versions[1].terms.minLockRaw, s1.versions[0].terms.minLockRaw, "untouched fields carry over");
+});
+
+t("publicProject never carries anything but the public record", () => {
+  const routes = require("../lib/hub/routes");
+  const p = { ...mkProject(), status: "approved", approvedAt: 1, secretNote: "x", rewardMintInfo: { decimals: 9 } };
+  const out = routes.publicProject(p);
+  assert.ok(!("secretNote" in out) && !("rewardMintInfo" in out));
+  assert.strictEqual(out.id, "rose"); assert.strictEqual(out.status, "approved");
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
