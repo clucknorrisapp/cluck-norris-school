@@ -201,6 +201,10 @@ jobs:
       # becomes a registry project with v1 only on the owner's approve.
       - name: Hub applications (self-serve onboarding)
         run: node scripts/hub-apply-test.cjs
+      # Project desk operator sessions: single-use challenge, HMAC token bound to project + wallet,
+      # revoked the moment the wallet leaves the operator list.
+      - name: Hub operator sessions (project desk)
+        run: node scripts/hub-operator-test.cjs
       - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
         run: node scripts/cuna-announce-test.cjs
       # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC

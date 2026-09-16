@@ -94,8 +94,8 @@ per-project store.
 `operatorWallets` entry signs the nonce — nothing typed, no key). The terms form → a new hashed
 version. Live lockers table with eligibility reason codes and the numbers that decided them.
 Accrued-to-date, funding status (three numbers, never one "funded" boolean), next-payout preview.
-Payout desk: build batch → **Sign in my wallet** or **Send from managed wallet** → receipts appear
-on the public page. Teach block on every screen; no rate language can render.
+Payout desk: build batch → **Sign in my wallet** (the managed payer stays owner-only) → receipts
+appear on the public page. **Shipped 2026-09-16 — see Status.**
 
 **Phase 3 — self-serve onboarding (`/hub/apply`).** Pick the mint (on-chain read fills
 decimals/program/extensions) → funding wallet + operator wallets (connect to fill) → draft terms
@@ -150,6 +150,23 @@ directory of live programs, the seven languages on the desk.
   reload retries the same payment before anything new is built), or takes a pasted signature.
   Verified on a local boot end to end: mint check → preview → submit → duplicate refused → list →
   approve as comped → admin shows v1 (monthly) → access reads comped → public `/api/hub` lists it.
+- **2026-09-16 — Phase 2, the project desk (`lib/hub/operator.js`, `/hub/:project/desk`).** An
+  operator wallet on the project record signs a one-line nonce (`GET …/desk/challenge?wallet=`,
+  single-use, 10 min) and `POST …/desk/session` verifies the ed25519 signature and answers a
+  12-hour HMAC token bound to that project and wallet. The admin and payout routes accept it in
+  `x-clkn-operator`, re-checking on every request that the wallet is STILL on the operator list
+  (editing the record revokes the desk). The managed payer (`send=`) stays owner-only — 403 for an
+  operator. `GET …/desk` is the operator's view: every escrow with its eligibility record and
+  weight, owed, pending batches, accrual counts, the funding wallet's three numbers (owed +
+  reserved, observed balance, shortfall), access, versions. The page: connect → sign → state,
+  funding, batch (create → sign in the wallet through the airdropper, rows recorded on the server
+  after an on-chain check, the SENT-NOT-RECORDED recovery kept from the CUNA console), lockers
+  table, terms form (new version from tomorrow), arm/disarm/accrue/rescan, a link to the pay page.
+  Owner key still works as a fallback. Walked on a local boot with a real ed25519 keypair: a
+  non-operator wallet is refused a challenge, a wrong key's signature is refused and consumes the
+  nonce, a forged project in the message is refused, the good session reads the desk, cannot read
+  another project's desk, cannot use the managed payer, can arm/disarm a comped project, and loses
+  the desk the moment the wallet leaves the operator list.
 
 ## What it must never become
 
