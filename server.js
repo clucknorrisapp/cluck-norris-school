@@ -9649,81 +9649,80 @@ app.get("/api/cuna-giveaway", (req, res) => {
 //   ?trace=1    → follow outbound transfers, 2 hops (run at the end; heavy)
 //   ?draw=1     → close it out and pick 3 winners from a Solana block hash
 //   ?reset=1    → wipe counted results, keep the config
-// CUNA engine on/off — the runtime lever, no Railway edit and no redeploy.
-//   ?on=1   arm    ?off=1  disarm    (no arg = report state)
-// Arming REFUSES when no operator key is loaded. Without a signer the engine cannot trade
-// anyway, so an "armed" that silently does nothing is worse than an error — it reads as running
-// when it is not, and that is exactly the state you would stop watching.
-// DNC engine on/off — the runtime lever for the private partner project, no Railway edit
-// and no redeploy. Arming REFUSES without a loaded operator key: an "armed" that cannot sign
-// reads as running when it is not, which is exactly the state you stop watching.
-//   ?on=1   arm    ?off=1  disarm    (no arg = report state)
-app.all("/api/dnc-engine", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
-  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
-  try {
-    const operator = whirlpoolMM.vault.operatorPubkey("dnc");
-    if (req.query.on === "1") {
-      if (dncHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "DNC_ENGINE_OFF=1 is set in Railway — clear it first." });
-      if (!operator) return res.json({ ok: false, error: "no_operator", detail: "MM_OPERATOR_SECRET_DNC is not loaded — nothing can sign." });
-      dncSetArmed(true);
-    } else if (req.query.off === "1") {
-      dncSetArmed(false);
-    }
-    const cfg = whirlpoolMM.vault.getConfig("dnc") || {};
-    res.json({
-      ok: true, armed: dncArmed(), hardKilled: dncHardKilled(), operator: operator || null,
+// CUNA / DNC / ROSE engine on/off — the runtime lever for each project's liquidity engine, no
+// Railway edit and no redeploy. ?on=1 arms, ?off=1 disarms, no arg reports state. Arming REFUSES
+// when no operator key is loaded: without a signer the engine cannot trade anyway, so an "armed"
+// that silently does nothing is worse than an error — it reads as running when it is not, which
+// is exactly the state you would stop watching. The three routes are near-identical; one factory
+// (`registerEngineArmRoute`) drives them off a small table so the response shape, error codes and
+// arm-check ordering below stay exactly what each route already returned.
+//   - ROSE signs with the CUNA operator key and its project config drifts, so its `beforeArm`
+//     runs the ratchet BEFORE the operator check: checking the key first would validate whatever
+//     stale env the project was last bound to. This ordering is load-bearing — keep it.
+//   - error codes and extra fields differ per project on purpose (kept, not "fixed"): CUNA's
+//     no-operator code is `no_operator_key` (DNC/ROSE use `no_operator`), and only CUNA's response
+//     carries `paused`.
+const ENGINE_ARM_TABLE = [
+  {
+    id: "dnc", route: "/api/dnc-engine", armed: dncArmed, setArmed: dncSetArmed, hardKilled: dncHardKilled,
+    offEnv: "DNC_ENGINE_OFF", beforeArm: null,
+    noOperatorError: "no_operator", noOperatorDetail: "MM_OPERATOR_SECRET_DNC is not loaded — nothing can sign.",
+    cfgFallbackEmpty: true,
+    fields: (cfg) => ({
       pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct,
       feeTierPct: cfg.feeTierPct, maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol,
-      note: "armed state is persisted in the KV store; DNC_ENGINE_OFF=1 overrides it",
-    });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-app.all("/api/rose-engine", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
-  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
-  try {
-    if (req.query.on === "1") {
-      if (roseEngineHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "ROSE_ENGINE_OFF=1 is set in Railway — clear it first." });
-      // Ratchet FIRST: it rebinds the project onto the CUNA operator env, so checking the
-      // key before it would validate whatever stale env the project was last bound to.
-      roseEngineConfigRatchet();   // shape asserted BEFORE the first armed tick can deploy
-      if (!whirlpoolMM.vault.operatorPubkey("rose")) return res.json({ ok: false, error: "no_operator", detail: "the CUNA engine wallet key (MM_OPERATOR_SECRET_CUNA) is not loaded — nothing can sign." });
-      roseEngineSetArmed(true);
-    } else if (req.query.off === "1") {
-      roseEngineSetArmed(false);
-    }
-    const operator = whirlpoolMM.vault.operatorPubkey("rose");
-    const cfg = whirlpoolMM.vault.getConfig("rose") || {};
-    res.json({
-      ok: true, armed: roseEngineArmed(), hardKilled: roseEngineHardKilled(), operator: operator || null,
+    }),
+    catchShape: (e) => ({ ok: false, error: e.message }),
+  },
+  {
+    id: "rose", route: "/api/rose-engine", armed: roseEngineArmed, setArmed: roseEngineSetArmed, hardKilled: roseEngineHardKilled,
+    offEnv: "ROSE_ENGINE_OFF", beforeArm: roseEngineConfigRatchet,
+    noOperatorError: "no_operator", noOperatorDetail: "the CUNA engine wallet key (MM_OPERATOR_SECRET_CUNA) is not loaded — nothing can sign.",
+    cfgFallbackEmpty: true,
+    fields: (cfg) => ({
       pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct, jupWidthPct: cfg.jupWidthPct,
       feeTierPct: cfg.feeTierPct, jupEnabled: cfg.jupEnabled,
       maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol, jupMaxJup: cfg.jupMaxJup,
       buybackEnabled: cfg.buybackEnabled,
-      note: "armed state is persisted in the KV store; ROSE_ENGINE_OFF=1 overrides it",
-    });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-app.all("/api/cuna-engine", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
-  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
-  try {
-    const operator = whirlpoolMM.vault.operatorPubkey("cuna");
-    if (req.query.on === "1") {
-      if (cunaHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "CUNA_ENGINE_OFF=1 is set in Railway — clear it first." });
-      if (!operator) return res.json({ ok: false, error: "no_operator_key", detail: "MM_OPERATOR_SECRET_CUNA is not set or failed to parse. Arming would be a no-op." });
-      cunaSetArmed(true);
-    } else if (req.query.off === "1") {
-      cunaSetArmed(false);
-    }
-    const cfg = whirlpoolMM.vault.getConfig("cuna");
-    res.json({
-      ok: true, armed: cunaArmed(), hardKilled: cunaHardKilled(), operator: operator || null,
+    }),
+    catchShape: (e) => ({ ok: false, error: e.message }),
+  },
+  {
+    id: "cuna", route: "/api/cuna-engine", armed: cunaArmed, setArmed: cunaSetArmed, hardKilled: cunaHardKilled,
+    offEnv: "CUNA_ENGINE_OFF", beforeArm: null,
+    noOperatorError: "no_operator_key", noOperatorDetail: "MM_OPERATOR_SECRET_CUNA is not set or failed to parse. Arming would be a no-op.",
+    cfgFallbackEmpty: false,
+    fields: (cfg) => ({
       paused: whirlpoolMM.vault.isPaused ? !!whirlpoolMM.vault.isPaused("cuna") : undefined,
       pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct, feeTierPct: cfg.feeTierPct,
       maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol,
-      note: "armed state is persisted in the KV store; CUNA_ENGINE_OFF=1 overrides it",
-    });
-  } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
-});
+    }),
+    catchShape: (e) => ({ ok: false, error: "server_error", detail: e.message }),
+  },
+];
+function registerEngineArmRoute(entry) {
+  app.all(entry.route, adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
+    if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
+    try {
+      if (req.query.on === "1") {
+        if (entry.hardKilled()) return res.json({ ok: false, error: "hard_killed", detail: `${entry.offEnv}=1 is set in Railway — clear it first.` });
+        if (entry.beforeArm) entry.beforeArm();   // ROSE's ratchet: shape asserted BEFORE the first armed tick can deploy
+        if (!whirlpoolMM.vault.operatorPubkey(entry.id)) return res.json({ ok: false, error: entry.noOperatorError, detail: entry.noOperatorDetail });
+        entry.setArmed(true);
+      } else if (req.query.off === "1") {
+        entry.setArmed(false);
+      }
+      const operator = whirlpoolMM.vault.operatorPubkey(entry.id);
+      const cfg = entry.cfgFallbackEmpty ? (whirlpoolMM.vault.getConfig(entry.id) || {}) : whirlpoolMM.vault.getConfig(entry.id);
+      res.json({
+        ok: true, armed: entry.armed(), hardKilled: entry.hardKilled(), operator: operator || null,
+        ...entry.fields(cfg),
+        note: `armed state is persisted in the KV store; ${entry.offEnv}=1 overrides it`,
+      });
+    } catch (e) { res.status(500).json(entry.catchShape(e)); }
+  });
+}
+for (const entry of ENGINE_ARM_TABLE) registerEngineArmRoute(entry);
 
 app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // Deep dive 2026-09-17 P0-002: this was the one CUNA admin route the 2026-09-05 mutating-GET
