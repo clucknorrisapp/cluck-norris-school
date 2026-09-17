@@ -394,8 +394,9 @@ jobs:
       # binaries into the production image. PINNED: the visual gate below diffs against committed
       # baselines, so an unpinned install would let a Chromium bump move the baseline with no repo
       # change. Bump the version deliberately, together with a `--update` baseline refresh.
+      # Not gated: the tools-pass client and LP Lab tests below run on every push (P1-021) and
+      # need the browser (Codex 2026-09-17, finding 8 — they had been un-gated without it).
       - name: install playwright + chromium
-        if: steps.gate.outputs.run == 'true'
         run: |
           npm i --no-save playwright@1.62.1
           npx playwright install --with-deps chromium

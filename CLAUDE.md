@@ -492,6 +492,10 @@ served the React shell at 200.
   later, signing with the treasury operator key). Verifying a stop via `lastTickTs` is invalid:
   `tick()` returns on `paused` before writing it, so a registered scheduler no-oping every 2 min
   is indistinguishable from an unregistered one. Only `paused` + the env/code gate tell you anything.
+  ⚠️ **A money journal that spans two kv keys (a batch's sent rows + the paid totals) is written with
+  `kv.setManyVerified` / `hubStore.writeManyVerified` — ONE persist.** Two `setVerified` calls in a row
+  left a crash window where a row was recorded sent with nothing in paid, and `owedNow` offered that
+  money again (Codex, 2026-09-17). `owedNow` also treats a recorded sent row as settled on its own.
 - **Escape anything from an API, URL or chain metadata before `innerHTML`** — token names and
   symbols are attacker-controlled. Use `CluckUtil.esc`; five hand-rolled copies were missing the
   single-quote escape.

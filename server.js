@@ -584,7 +584,9 @@ async function lockWatchTick() {
   // The pending stays (announced:true) so a later session can still add the image: it
   // threads the X art under the fallback post and replaces the TG text with the photo.
   const pendingNow = kv.get("lockCelebrationPending", null);
-  if (pendingNow && !pendingNow.announced && pendingNow.tgText && Date.now() - (pendingNow.at || 0) > LOCK_ANNOUNCE_FALLBACK_MS) {
+  // `gaveUpAt` is the stop: six failed sends leave the pending for a human, and this block must
+  // not fire again every tick (Codex 2026-09-17, finding 9 — the limit never actually stopped).
+  if (pendingNow && !pendingNow.announced && !pendingNow.gaveUpAt && pendingNow.tgText && Date.now() - (pendingNow.at || 0) > LOCK_ANNOUNCE_FALLBACK_MS) {
     const tgMsgId = await tgSend(process.env.TELEGRAM_CHAT_ID, pendingNow.tgText);
     let xr = null;
     try { xr = pendingNow.xText ? await postToX(pendingNow.xText, { force: true }) : null; }
@@ -8470,7 +8472,10 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
     // the same signature again — lost response, closed tab, another device — gets the same pass
     // with the same expiry (`recovered: true`); a different wallet is refused before anything is
     // consumed; a store that cannot record durably answers 503 and consumes nothing.
-    const r = redeemPaidPass({ paySig, wallet, verified: v, sigStore, kv });
+    // A payment already recorded as a Lock-to-Earn month lives in the hub REGISTRY (its durable
+    // truth); the signature store is best-effort, so it alone cannot be the cross-product guard
+    // (Codex 2026-09-17, finding 2 — reproduced with a store that could not record).
+    const r = redeemPaidPass({ paySig, wallet, verified: v, sigStore, kv, usedElsewhere: (s) => !!require("./lib/hub/access").sigUsedInRegistry(hubStore.readRegistry(kv) || {}, s) });
     if (!r.ok) return res.status(r.status || 200).json({ success: false, error: r.error, retry: !!r.retry, lamports: r.lamports, needed: r.needed });
     return res.status(200).json({ success: true, via: "paid", recovered: r.recovered, lamports: r.lamports, termDays: r.termDays, pass: "t:" + issueToolPass(wallet, "paid", r.ttlMs), days: r.days });
   }
@@ -8882,7 +8887,7 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     // loses too. Namespaced 'sol:' so a signature can never be spent once here and once there.
     // A payment already claimed as a Lock-to-Earn platform month lands in this same wallet
     // (deep dive P1-051, the sibling of the tools-pass check in lib/tool-pass-redeem.js).
-    if (sigStore.has("hub-access:" + sig)) return res.status(200).json({ success: false, error: "This payment was already used for a platform-access month." });
+    if (sigStore.has("hub-access:" + sig) || require("./lib/hub/access").sigUsedInRegistry(hubStore.readRegistry(kv) || {}, sig)) return res.status(200).json({ success: false, error: "This payment was already used for a platform-access month." });
     if (!sigStore.add("sol:" + sig)) {
       return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
     }
@@ -12394,8 +12399,14 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       }
       const verdictOf = (r) => {
         const sg = String((r && r.sig) || "").trim();
+        const w = String((r && r.wallet) || "");
         if (!txBySig.has(sg)) return { ok: false, why: "no transaction signature" };
-        return payoutVerify.rowPaidBy(txBySig.get(sg), { mint: SUPPLY_FEEDS.cuna.mint, wallet: String((r && r.wallet) || ""), minRaw: (b.amounts || {})[String((r && r.wallet) || "")] });
+        // A signature that already settled this wallet in an EARLIER batch is not a new payment
+        // (Codex 2026-09-17, finding 3), and a transfer that landed before this batch existed
+        // cannot be its payment either.
+        const prior = payoutVerify.sigAlreadyUsed(batches, w, sg, id);
+        if (prior) return { ok: false, why: "this signature already paid " + w.slice(0, 6) + "… in batch " + prior };
+        return payoutVerify.rowPaidBy(txBySig.get(sg), { mint: SUPPLY_FEEDS.cuna.mint, wallet: w, minRaw: (b.amounts || {})[w], notBefore: b.at });
       };
       const rejected = results.filter((r) => !verdictOf(r).ok).map((r) => ({ wallet: r && r.wallet, sig: r && r.sig, why: verdictOf(r).why }));
       results = results.filter((r) => verdictOf(r).ok);
@@ -12407,7 +12418,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       // Batches first (remainingOf is what stops a re-send), then paid. setVerified re-reads the
       // FILE — the old "set, read back from memory, check isPersistent()" passed with the volume
       // gone (deep dive P0-006), and a row that is only in RAM is paid again after the next restart.
-      if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) {
+      if (!kv.setManyVerified({ [CUNA_BATCH_KV]: batches, [CUNA_PAID_KV]: paid })) {
         return res.status(500).json({ ok: false, error: "payout record did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — STOP and check DATA_DIR before sending more; the page keeps its signatures for a retry" });
       }
       sentReport = { recorded: r.recorded, ignored: r.ignored, remaining: Object.keys(r.remaining).length, state: r.batch.state };
@@ -12419,7 +12430,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       const r = pay.confirmBatch({ batch: b, paid, nowUnix });
       paid = r.paid;
       batches = { ...batches, [id]: { ...r.batch, confirmedAt: nowUnix, note: String(q.note || "").slice(0, 200) } };
-      if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) return res.status(500).json({ ok: false, error: "confirm did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — check DATA_DIR; the batch is still pending" });
+      if (!kv.setManyVerified({ [CUNA_BATCH_KV]: batches, [CUNA_PAID_KV]: paid })) return res.status(500).json({ ok: false, error: "confirm did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — check DATA_DIR; the batch is still pending" });
       console.log(`[cuna-payout] batch ${id} CONFIRMED — ${b.count} wallets, ${(Number(b.totalRaw) / 1e9).toLocaleString()} CUNA`);
     } else if (q.cancel) {
       const id = String(q.cancel);
@@ -12457,7 +12468,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
           paid = r.paid; batches = { ...batches, [id]: r.batch };
           // Batches first (remainingOf is what stops a re-send), then paid. One kv persist writes
           // the whole store, so the second write carries the first. A false stops the batch.
-          if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) {
+          if (!kv.setManyVerified({ [CUNA_BATCH_KV]: batches, [CUNA_PAID_KV]: paid })) {
             throw new Error("payout journal did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — STOP; do not export another batch until this one is reconciled");
           }
         };
@@ -12478,7 +12489,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       voidReport = pay.voidSent({ batch: b, paid, wallet: String(q.void), sig: String(q.sig || ""), nowUnix });
       if (voidReport.ok) {
         paid = voidReport.paid; batches = { ...batches, [id]: voidReport.batch };
-        if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) return res.status(500).json({ ok: false, error: "void did not reach the volume — check DATA_DIR" });
+        if (!kv.setManyVerified({ [CUNA_BATCH_KV]: batches, [CUNA_PAID_KV]: paid })) return res.status(500).json({ ok: false, error: "void did not reach the volume — check DATA_DIR" });
         console.log(`[cuna-payout] batch ${id}: row for ${q.void} VOIDED by operator — owed again`);
       }
     }
@@ -12495,7 +12506,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
           const vals = (st && st.value) || [];
           const rs = pay.resolveSent({ batch: b, paid, rows: rows.map((x, i) => ({ ...x, status: vals[i] || null })), nowUnix });
           paid = rs.paid; batches = { ...batches, [id]: rs.batch };
-          if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) return res.status(500).json({ ok: false, error: "sweep did not reach the volume — check DATA_DIR" });
+          if (!kv.setManyVerified({ [CUNA_BATCH_KV]: batches, [CUNA_PAID_KV]: paid })) return res.status(500).json({ ok: false, error: "sweep did not reach the volume — check DATA_DIR" });
           sweepReport = { ok: true, checked: rows.length, confirmed: rs.confirmed, voided: rs.voided, stillPending: rs.stillPending };
         } catch (e) { sweepReport = { ok: false, error: "could not read signature statuses — nothing changed: " + publicErrMsg(e) }; }
       }

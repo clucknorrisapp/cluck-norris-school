@@ -19,10 +19,33 @@ t("tokenDeltas: per-owner net delta for the mint, new accounts counted, payer ne
   assert.strictEqual(d.get(A), 3_500_000_000n); assert.strictEqual(d.get(B), 1_000_000_000n); assert.strictEqual(d.get(PAYER), -4_500_000_000n);
   assert.strictEqual(V.tokenDeltas(batchTx, OTHER).size, 0, "another mint shows nothing");
 });
-t("rowPaidBy: the exact amount, and up to 0.1% under, is paid", () => {
+t("rowPaidBy: the exact amount (or more) is paid; even 1 raw unit short is not (Codex: no slack)", () => {
   assert.strictEqual(V.rowPaidBy(batchTx, { mint: MINT, wallet: A, minRaw: "3500000000" }).ok, true);
-  assert.strictEqual(V.rowPaidBy(batchTx, { mint: MINT, wallet: A, minRaw: "3503000000" }).ok, true, "0.086% under the owed amount still settles");
+  assert.strictEqual(V.rowPaidBy(batchTx, { mint: MINT, wallet: A, minRaw: "3400000000" }).ok, true, "overpaid still settles the row");
+  assert.strictEqual(V.rowPaidBy(batchTx, { mint: MINT, wallet: A, minRaw: "3500000001" }).ok, false, "one raw unit short stays owed");
   assert.strictEqual(V.rowPaidBy(batchTx, { mint: MINT, wallet: B, minRaw: "1000000000" }).ok, true, "the second wallet in the same transaction");
+});
+t("rowPaidBy: an unparsable ledger amount is refused, never waved through (Codex: invalid ledger)", () => {
+  for (const bad of ["abc", "1.5", "", NaN, {}]) {
+    const r = V.rowPaidBy(batchTx, { mint: MINT, wallet: A, minRaw: bad });
+    assert.strictEqual(r.ok, false, "minRaw=" + String(bad)); assert.match(r.why, /ledger needs repair/);
+  }
+});
+t("rowPaidBy: a transaction older than the batch cannot be its payment (Codex finding 3, batch-age half)", () => {
+  const old = { ...batchTx, blockTime: 1_700_000_000 };
+  assert.match(V.rowPaidBy(old, { mint: MINT, wallet: A, minRaw: "1", notBefore: 1_700_100_000 }).why, /before the batch was exported/);
+  assert.strictEqual(V.rowPaidBy(old, { mint: MINT, wallet: A, minRaw: "1", notBefore: 1_700_000_000 + 300 }).ok, true, "inside the clock-skew allowance");
+  assert.strictEqual(V.rowPaidBy(old, { mint: MINT, wallet: A, minRaw: "1", notBefore: 1_699_000_000 }).ok, true, "landed after the batch");
+  assert.match(V.rowPaidBy(batchTx, { mint: MINT, wallet: A, minRaw: "1", notBefore: 1_699_000_000 }).why, /not timestamped/, "no blockTime yet → retry, never a guess");
+});
+t("sigAlreadyUsed: a (wallet, signature) pair recorded in another batch is refused; the current batch and other wallets are not", () => {
+  const S = "5".repeat(88);
+  const batches = { b1: { sent: { [A]: { sig: S, at: 1 } } }, b2: { sent: {} }, b3: null };
+  assert.strictEqual(V.sigAlreadyUsed(batches, A, S, "b2"), "b1", "an earlier batch's signature cannot settle this one");
+  assert.strictEqual(V.sigAlreadyUsed(batches, A, S, "b1"), null, "the batch that holds it may re-report its own row");
+  assert.strictEqual(V.sigAlreadyUsed(batches, B, S, "b2"), null, "one batch transaction pays several wallets");
+  assert.strictEqual(V.sigAlreadyUsed(batches, A, "6".repeat(88), "b2"), null);
+  assert.strictEqual(V.sigAlreadyUsed(null, A, S, "b2"), null);
 });
 t("rowPaidBy: a shortfall is refused so an underpaid wallet stays owed", () => {
   const r = V.rowPaidBy(batchTx, { mint: MINT, wallet: A, minRaw: "4000000000" });
