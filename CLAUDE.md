@@ -470,14 +470,22 @@ served the React shell at 200.
   `recenter`, and `config` writes), `/api/clkn-blitz`, the three `*-engine?on=1|off=1` arms,
   `/api/diploma-mint …&run=1` and `/api/school-airdrop` writes. Same rule: the flag-less GET is still
   the read or dry run. Buy Special's three data endpoints (`/api/buyspecial-crosscheck`,
-  `-holdcheck`, `-trace`) check the tools pass server-side now — the page's gate was theatre before. **The burn celebration also has a value floor now**: a verified burn Jupiter
+  `-holdcheck`, `-trace`) check the tools pass server-side now — the page's gate was theatre before.
+  **P1 batch (same day):** `/api/x-announce?post=1`, `/api/x-post-test?post=1` and
+  `/api/classroom/graduates?action=` joined the list (dry runs and the list stay GETs). ⚠️ The hourly
+  lock-celebration routine posts through `x-announce?post=1` — its prompt was switched to
+  `curl -X POST` with this change; if you ever recreate that routine, keep it a POST. `/api/tg-test`
+  still sends on a GET (the meme and lock routines depend on it) — the next candidate, same
+  routine-update-first sequencing. **The burn celebration also has a value floor now**: a verified burn Jupiter
   prices under `BURN_BROADCAST_MIN_USD` (default $10; unpriced = skipped) gets its receipt page
   but no auto-post — a stranger's one-unit mint could otherwise force a brand tweet.
 - ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`
   defaults to `{}` (`lib/whirlpool-vault.js` ~358), so a missing kv key reads as *not paused*; and
   `lib/kvstore.js` `mkdirSync`s `DATA_DIR` and reports persistent even when the volume is not the
   real one, so a bad mount looks healthy while every flag silently resets. cuna/dnc/rose arming
-  falls back to `<X>_ENGINE_ON` env on kv loss the same way. A durable stop is therefore an ENV
+  used to fall back to `<X>_ENGINE_ON` env on kv loss the same way — **closed 2026-09-17 (deep dive
+  P1-032): the kv arm key is the ONLY switch for cuna/dnc/rose, an absent key is OFF, and
+  `<X>_ENGINE_ON=1` is inert (boot logs a warning if it is set)**. A durable stop is therefore an ENV
   VAR (`POKE_ENGINE_OFF=1`, `<X>_ENGINE_OFF=1`) or a code default, never a kv flag — which is why
   POKE's code default was flipped to off on 2026-09-05 (verified read-only by an adversarial pass
   that day: with the old default, a boot with an empty kv would have started POKE trading 20 s

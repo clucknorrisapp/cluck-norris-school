@@ -467,8 +467,10 @@ jobs:
       # before anything can broadcast (sign-first path persists the signature before the send; the
       # send-only path records an unresolved attempt and resolves it on-chain). Fake Wallet Standard
       # wallet + mocked RPC, real server, real cluck-gate.js on a real tool page.
+      # Not diff-gated (deep dive P1-021): this is a money test, and the render gate skipped it
+      # whenever a change did not touch a page — which is exactly when a server-side gate change
+      # breaks the client flow.
       - name: tools pass client — a lost wallet callback never charges twice
-        if: steps.gate.outputs.run == 'true'
         run: node scripts/tool-pass-client-test.cjs
       # GRAB $NORMIE on the between-level beat opened the wallet panel while the beat's auto-advance
       # kept running underneath, so the next level started behind the panel — music, dead taps
@@ -484,7 +486,6 @@ jobs:
       # silently moved every learner's ticks onto different lessons. Nothing errors when that
       # happens, which is exactly why it needs a test that looks at the rendered tiles.
       - name: LP Lab progress survives a lesson insert
-        if: steps.gate.outputs.run == 'true'
         run: |
           PORT=3111 node server.js & echo $! > /tmp/lp-srv.pid
           for i in $(seq 1 40); do curl -sf http://127.0.0.1:3111/healthz >/dev/null && break; sleep 1; done

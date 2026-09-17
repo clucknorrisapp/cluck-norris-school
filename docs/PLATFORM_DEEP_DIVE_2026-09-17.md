@@ -105,6 +105,8 @@ Elliptic vulnerabilities: GHSA-vjh7-7g9h-fjfh (private key extraction in ECDSA),
 
 **Verification (2026-09-17, workflow `wf_3fac089a-376`, 79 agents in 84 min):** 15 fix-checks on the PR #329 head (Sonnet), 13 money/auth/engine findings × 3 Opus lenses (correctness, reproduce, impact — consensus by majority, severity from the impact lens), 25 single Sonnet verifiers. One agent (P1-031) errored on output format and was hand-verified. Tally of the 52 agent verdicts: 41 confirmed as a real mechanism (most downgraded below P1 on impact), 10 already fixed by #329, 1 refuted (P1-025). Three surviving forms found by the fix-checks (P1-051, P1-053, P1-065) were fixed in #329's third commit.
 
+**P1 fix PR (branch `claude/p1-fixes`, stacked on #329):** all eleven below plus P1-019, P1-047, P1-054, P1-058 and the airdrop half of P1-066 are fixed there — see the PR body for the two product calls (terms edits gated behind a paid month for operators, the owner exempt; the investors-page holders wording).
+
 **Still P1 after verification (11):** P1-018, P1-021, P1-030, P1-032, P1-034, P1-035, P1-036, P1-044, P1-048, P1-056, P1-064. Everything else confirmed as real but P2/P3 on impact — see the table.
 
 | ID | verdict | severity | lens votes | finding | verifier note | fix |

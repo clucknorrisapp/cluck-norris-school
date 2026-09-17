@@ -49,6 +49,7 @@ const solanaTracker = require("./lib/solana-tracker");
 const premiumForensics = require("./lib/premium-forensics");
 const sigStore = require("./lib/sigstore");
 const kv = require("./lib/kvstore");
+const payoutVerify = require("./lib/payout-verify");
 const { redeemPaidPass } = require("./lib/tool-pass-redeem");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
@@ -588,11 +589,25 @@ async function lockWatchTick() {
     let xr = null;
     try { xr = pendingNow.xText ? await postToX(pendingNow.xText, { force: true }) : null; }
     catch (e) { console.warn("[LOCK→X] fallback failed:", e.message); }
-    kv.set("lockCelebrationPending", {
-      ...pendingNow, announced: true, xPostId: (xr && xr.id) || pendingNow.xPostId || null,
-      tgMessageIds: [...(Array.isArray(pendingNow.tgMessageIds) ? pendingNow.tgMessageIds : []), ...(tgMsgId ? [tgMsgId] : [])],
-    });
-    console.log("[LOCK-WATCH] fallback text-only announcement posted (no session took the celebration)");
+    // tgSend and postToX never throw — they return null / {ok:false}. Marking `announced` on a
+    // send that did not land retired the celebration with nobody told (deep dive P1-018, the
+    // same silent-loss shape as the three schedulers fixed on 2026-09-04). Only a landed send
+    // advances the state; otherwise the pending stays and the next tick retries, with a bounded
+    // count so a dead bot does not retry forever.
+    const landed = !!tgMsgId || !!(xr && xr.ok);
+    const tries = (Number(pendingNow.fallbackTries) || 0) + 1;
+    if (landed || tries >= 6) {
+      kv.set("lockCelebrationPending", {
+        ...pendingNow, announced: landed, fallbackTries: tries, gaveUpAt: landed ? undefined : Date.now(),
+        xPostId: (xr && xr.id) || pendingNow.xPostId || null,
+        tgMessageIds: [...(Array.isArray(pendingNow.tgMessageIds) ? pendingNow.tgMessageIds : []), ...(tgMsgId ? [tgMsgId] : [])],
+      });
+      if (landed) console.log("[LOCK-WATCH] fallback text-only announcement posted (no session took the celebration)");
+      else { console.error("[LOCK-WATCH] fallback announcement FAILED " + tries + " times — giving up; the pending stays for a session to post by hand"); try { cunaOpsAlert("⚠️ Lock celebration: the text-only fallback failed to post " + tries + " times (Telegram and X). The pending payload is still at /api/lock-celebration.", "lockwatch:fallback").catch(() => {}); } catch (_) {} }
+    } else {
+      kv.set("lockCelebrationPending", { ...pendingNow, fallbackTries: tries });
+      console.warn("[LOCK-WATCH] fallback announcement did not land (Telegram " + (tgMsgId ? "ok" : "FAILED") + ", X " + (xr && xr.ok ? "ok" : "FAILED") + ") — will retry next tick (" + tries + "/6)");
+    }
   }
   const built = await buildLockReport().catch(() => null);
   if (!built || !built.ok) return;
@@ -931,9 +946,11 @@ const CUNA_ARM_KEY = "cunaEngineArmed";
 function cunaHardKilled() { return process.env.CUNA_ENGINE_OFF === "1"; }
 function cunaArmed() {
   if (cunaHardKilled()) return false;
-  const v = kv.get(CUNA_ARM_KEY, null);
-  if (v === null || v === undefined) return process.env.CUNA_ENGINE_ON === "1";
-  return v === true;
+  // The kv key is the ONLY arm switch; an absent key is OFF. It used to fall back to
+  // CUNA_ENGINE_ON=1 when the key was missing, so a kv loss (bad mount, blank volume) silently
+  // re-armed an engine the owner had stopped (deep dive 2026-09-17 P1-032, reproduced with three
+  // boots). A stop must survive a blank store; arming is the admin POST, never an env var.
+  return kv.get(CUNA_ARM_KEY, null) === true;
 }
 function cunaSetArmed(on) { kv.set(CUNA_ARM_KEY, !!on); return cunaArmed(); }
 const CUNA_MINT = "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc";
@@ -1131,9 +1148,11 @@ const DNC_ARM_KEY = "dncEngineArmed";
 function dncHardKilled() { return process.env.DNC_ENGINE_OFF === "1"; }
 function dncArmed() {
   if (dncHardKilled()) return false;
-  const v = kv.get(DNC_ARM_KEY, null);
-  if (v === null || v === undefined) return process.env.DNC_ENGINE_ON === "1";
-  return v === true;
+  // The kv key is the ONLY arm switch; an absent key is OFF. It used to fall back to
+  // DNC_ENGINE_ON=1 when the key was missing, so a kv loss (bad mount, blank volume) silently
+  // re-armed an engine the owner had stopped (deep dive 2026-09-17 P1-032, reproduced with three
+  // boots). A stop must survive a blank store; arming is the admin POST, never an env var.
+  return kv.get(DNC_ARM_KEY, null) === true;
 }
 function dncSetArmed(on) { kv.set(DNC_ARM_KEY, !!on); return dncArmed(); }
 const DNC_MINT = "42HsffEQoHqWoeiffksYayC75fQDxaoUdMBzmeXdpump";
@@ -1300,11 +1319,18 @@ const ROSE_ARM_KEY = "roseEngineArmed";
 function roseEngineHardKilled() { return process.env.ROSE_ENGINE_OFF === "1"; }
 function roseEngineArmed() {
   if (roseEngineHardKilled()) return false;
-  const v = kv.get(ROSE_ARM_KEY, null);
-  if (v === null || v === undefined) return process.env.ROSE_ENGINE_ON === "1";
-  return v === true;
+  // The kv key is the ONLY arm switch; an absent key is OFF. It used to fall back to
+  // ROSE_ENGINE_ON=1 when the key was missing, so a kv loss (bad mount, blank volume) silently
+  // re-armed an engine the owner had stopped (deep dive 2026-09-17 P1-032, reproduced with three
+  // boots). A stop must survive a blank store; arming is the admin POST, never an env var.
+  return kv.get(ROSE_ARM_KEY, null) === true;
 }
 function roseEngineSetArmed(on) { kv.set(ROSE_ARM_KEY, !!on); return roseEngineArmed(); }
+// The env arm flags are inert now (P1-032). Say so at boot so a stale Railway variable is not
+// mistaken for a running engine.
+for (const envName of ["CUNA_ENGINE_ON", "DNC_ENGINE_ON", "ROSE_ENGINE_ON"]) {
+  if (process.env[envName] === "1") console.warn(`[engine] ${envName}=1 is IGNORED since 2026-09-17 — arm with POST /api/${envName.split("_")[0].toLowerCase()}-engine?on=1 (kv is the only switch; an absent key is OFF)`);
+}
 // Volume shape asserted on EVERY boot (the ratchet CUNA needed after deploys silently
 // reverted its widths). Only stamps the keys that are wrong, so live tuning through
 // /api/whirlpool/vault/config?project=rose&durable=1 sticks on every field not named here —
@@ -3790,7 +3816,7 @@ if (AI_DAILY_MAX > 0) {
           ` — if this is a real learner, raise ASK_CLUCK_DAILY or set AI_DAILY_OFF=1`);
       } catch (_) {}
     } });
-  for (const route of ["/api/ask-cluck", "/api/lecture", "/api/lp-ask"]) app.use(route, aiDaily);
+  for (const route of ["/api/ask-cluck", "/api/lecture", "/api/lp-ask", "/api/wallet-xray/ask"]) app.use(route, aiDaily);
 }
 app.use("/api/track", rateLimit("track", { windowMs: 60000, max: 120 })); // learning-funnel events (many per session)
 app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
@@ -5271,8 +5297,9 @@ app.post("/api/classroom/graduate-claim", async (req, res) => {
 
 // Admin — review/manage the graduate reward queue. ?action=approve|paid|reject&wallet=… to set status;
 // no action = list. Approved/paid wallets are what you batch into the Airdropper.
-app.get("/api/classroom/graduates", (req, res) => {
+app.all("/api/classroom/graduates", (req, res) => {
   if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  if (mutatingGetRefused(req, res, ["action"])) return;   // deep dive P1-058: approve/paid/reject delete or flip a record — the list stays a GET
   const grads = kv.get("classroomGraduates", {}) || {};
   const action = req.query.action, w = String(req.query.wallet || "").trim();
   if (action && w && grads[w]) {
@@ -5801,9 +5828,10 @@ app.get("/api/chain-spotlight-test", async (req, res) => {
 
 // &post=1 posts a tweet (uses &text=... or a default) so you can verify posting
 // works the moment the keys are added in Railway.
-app.get("/api/x-post-test", async (req, res) => {
+app.all("/api/x-post-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["post"])) return;   // deep dive P1-019: a brand post is never a link unfurl away
   if (!xConfigured()) return res.status(200).json({ configured: false, message: "Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in Railway." });
   if (req.query.post === "1") {
     const text = req.query.text ? String(req.query.text) : "🐔 Cluck Norris is online. Crypto lessons incoming. clucknorris.app";
@@ -6968,9 +6996,12 @@ app.get("/api/lock-report-test", async (req, res) => {
 // Operator X announcement — post arbitrary text to X, bypassing the master X pause for
 // THIS manual, key-gated call only (the X counterpart to /api/tg-test). Auto-posting stays
 // off; this is a deliberate operator lever. Dry-run unless &post=1.
-app.get("/api/x-announce", async (req, res) => {
+app.all("/api/x-announce", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // deep dive P1-019: &post=1 is POST-only (the dry run stays a GET). The hourly lock-celebration
+  // routine and the skill send it as a POST — keep them in step with this line.
+  if (mutatingGetRefused(req, res, ["post"])) return;
   const text = String(req.query.text || "").slice(0, 24000);
   const image = req.query.image ? String(req.query.image) : null;  // optional image URL to attach
   const video = req.query.video ? String(req.query.video) : null;  // optional video URL to attach (chunked upload)
@@ -7852,14 +7883,18 @@ const hubStore = require("./lib/hub/store");
 const hubPublic = require("./lib/hub/public");
 function hubProjects() {
   const built = {
-    clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9 },
-    cuna: { id: "cuna", label: "CUNA", symbol: "CUNA", mint: SUPPLY_FEEDS.cuna.mint, decimals: 9 },
-    rose: { id: "rose", label: "OnlyRose", symbol: "ROSE", mint: SUPPLY_FEEDS.rose.mint, decimals: 9 },
+    clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9, rewardMint: CLKN_MINT, rewardDecimals: 9 },
+    cuna: { id: "cuna", label: "CUNA", symbol: "CUNA", mint: SUPPLY_FEEDS.cuna.mint, decimals: 9, rewardMint: SUPPLY_FEEDS.cuna.mint, rewardDecimals: 9 },
+    rose: { id: "rose", label: "OnlyRose", symbol: "ROSE", mint: SUPPLY_FEEDS.rose.mint, decimals: 9, rewardMint: SUPPLY_FEEDS.rose.mint, rewardDecimals: 9 },
   };
   let reg = {}; try { reg = hubStore.readRegistry(kv) || {}; } catch (_) { /* registry absent = built-ins only */ }
   for (const [id, p] of Object.entries(reg)) {
     if (!p || !p.mint || !/^[a-z0-9][a-z0-9-]{1,31}$/.test(id)) continue;
-    built[id] = { id, label: String(p.label || id).slice(0, 64), symbol: String(p.symbol || id.toUpperCase()).slice(0, 12), mint: String(p.mint), decimals: Number.isInteger(p.decimals) ? p.decimals : null };
+    const decimals = Number.isInteger(p.decimals) ? p.decimals : null;
+    // The reward asset can differ from the locked token (a project may pay in another mint);
+    // its decimals are what the public totals must be formatted with (deep dive P1-036).
+    built[id] = { id, label: String(p.label || id).slice(0, 64), symbol: String(p.symbol || id.toUpperCase()).slice(0, 12), mint: String(p.mint), decimals,
+      rewardMint: String(p.rewardMint || p.mint), rewardDecimals: Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : decimals };
   }
   return built;
 }
@@ -7870,7 +7905,8 @@ function hubProjectView(project) {
   try {
     const days = hubStore.read(kv, project.id, "days", null);
     if (days && Object.keys(days).length) {
-      stake = hubPublic.stakeView({ days, paid: hubStore.read(kv, project.id, "paid", {}), batches: hubStore.read(kv, project.id, "batches", {}), decimals: project.decimals || 9 });
+      stake = hubPublic.stakeView({ days, paid: hubStore.read(kv, project.id, "paid", {}), batches: hubStore.read(kv, project.id, "batches", {}),
+        decimals: Number.isInteger(project.rewardDecimals) ? project.rewardDecimals : (project.decimals || 9) });   // reward-asset decimals, not the locked token's (P1-036)
     }
   } catch (_) { /* a project without a programme store is not an error */ }
   if (project.id === "cuna") {
@@ -7958,6 +7994,10 @@ hubRoutes.mount(app, {
   secret: () => process.env.PREMIUM_ACCESS_KEY, verifySignature: (m, sig, w) => verifySolanaSignature(m, sig, w),
   clknPriceInSol: () => hatchery.clknPriceInSol(),
   payTo: () => ({ sol: process.env.HUB_PAY_SOL_WALLET || SOL_UNLOCK_WALLET, clkn: process.env.HUB_PAY_CLKN_WALLET || TREASURY_WALLET }),
+  // The built-in programmes are not registry rows, so the duplicate-mint guard could not see them:
+  // a second project was approvable on CUNA's live mint (deep dive P1-030). Lazy — SUPPLY_FEEDS is
+  // declared further down.
+  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint }),
   getTx: async (sig) => {
     const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     return r && r.result;
@@ -12334,21 +12374,32 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       const wellFormed = (x) => { try { return /^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(x) && bs58v.decode(x).length === 64; } catch (_) { return false; } };
       const sigs = [...new Set(results.map((r) => String((r && r.sig) || "").trim()).filter(wellFormed))];
       let landed = new Set();
+      // Confirmed is not paid. A signature status says the transaction landed, not that it moved
+      // CUNA to THIS wallet for THIS amount — one unrelated confirmed signature used to mark every
+      // row in a batch paid (deep dive P1-048). Read each transaction once and check the wallet's
+      // own token delta (lib/payout-verify.js).
+      const txBySig = new Map();
       if (sigs.length) {
         try {
-          const { connection } = require("./lib/rpc");
-          const st = await connection("confirmed").getSignatureStatuses(sigs, { searchTransactionHistory: true });
-          (st && st.value || []).forEach((v, i) => {
-            if (v && !v.err && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")) landed.add(sigs[i]);
-          });
+          const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
+          for (const sg of sigs) {
+            const r = await rpcCall("cuna-payout-sent", "getTransaction", [sg, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+            txBySig.set(sg, (r && r.result) || null);
+          }
         } catch (e) {
           // Cannot verify -> record nothing, say so plainly. The page keeps the signatures locally
           // and offers the row buttons again.
           return res.status(503).json({ ok: false, error: "could not verify signatures on chain right now — nothing recorded, try again: " + publicErrMsg(e) });
         }
       }
-      const rejected = results.filter((r) => !landed.has(String((r && r.sig) || "").trim())).map((r) => ({ wallet: r && r.wallet, sig: r && r.sig, why: "signature not confirmed on chain" }));
-      results = results.filter((r) => landed.has(String((r && r.sig) || "").trim()));
+      const verdictOf = (r) => {
+        const sg = String((r && r.sig) || "").trim();
+        if (!txBySig.has(sg)) return { ok: false, why: "no transaction signature" };
+        return payoutVerify.rowPaidBy(txBySig.get(sg), { mint: SUPPLY_FEEDS.cuna.mint, wallet: String((r && r.wallet) || ""), minRaw: (b.amounts || {})[String((r && r.wallet) || "")] });
+      };
+      const rejected = results.filter((r) => !verdictOf(r).ok).map((r) => ({ wallet: r && r.wallet, sig: r && r.sig, why: verdictOf(r).why }));
+      results = results.filter((r) => verdictOf(r).ok);
+      for (const sg of sigs) landed.add(sg);   // kept for the log line below
       const r = pay.recordSent({ batch: b, paid, results, nowUnix });
       r.ignored = [...r.ignored, ...rejected];
       paid = r.paid;
@@ -15222,6 +15273,10 @@ app.post("/api/wallet-xray/ask", async (req, res) => {
   const w = String(wallet || "").trim();
   const q = String(question || "").slice(0, 600);
   if (!q) return res.status(400).json({ success: false, error: "Ask a question" });
+  // Same pass as the scan it explains (deep dive P1-064: an unauthenticated POST reached Anthropic
+  // while the sibling GET /api/wallet-xray answered 402). After the cheap input check, before the
+  // paid call.
+  if (await requireToolPass(req, res)) return;
   const hist = Array.isArray(history) ? history.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content).slice(-8).map((m) => ({ role: m.role, content: String(m.content).slice(0, 1200) })) : [];
 
   // Ground the answer: if a signature is given, fetch + describe that exact tx.
