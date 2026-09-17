@@ -419,6 +419,18 @@ served the React shell at 200.
   **attacker-supplied token metadata** to the brand channels, so it hard-sanitizes the symbol to
   `[A-Za-z0-9]` (never the free-form name) and rate-limits itself (per-wallet/mint cooldown + hourly
   cap) so a griefer can't spam our X into a suspension. Don't loosen either without thinking it through.
+- ⛔ **The Cluck bot posts NOTHING in the OnlyRose room (owner, 2026-09-17: "make sure it is not
+  posting anything in rose").** Enforced in code, not by call-site discipline: `lib/telegram-rooms.js`
+  is consulted by `tgApi()` (the one send choke point since the 09-17 consolidation) and by the
+  three direct senders (`/api/tg-test`, the meme uploaders, the vault and swap-desk notifiers); a
+  send whose chat is the OnlyRose room is refused and logged (`[TG] refused: …`). The only
+  allows: the ROSE bot's own `roseTgSend*` path (it is disarmed; arming it is the owner's act),
+  an operator naming the room outright on `/api/tg-test` (`chat=` / `project=`), and a buy comp
+  the owner configured for that room. Everything else — welcomes, `/price`-style command replies,
+  burn celebrations, vault alerts, spotlights — is refused there. Deletes and button acks are not
+  posts and still work. `scripts/telegram-rooms-test.cjs` pins the policy and that no direct
+  Telegram send exists outside the audited functions. History: CLKN welcomes leaked in (09-02),
+  vault alerts (08-31), a replayed window of buy alerts (09-17, `docs/INCIDENT_2026-09-17_ROSE_BUYBOT_REPLAY.md`).
 - **The CLKN X account has X Premium (owner, 2026-09-05), so brand posts may run past 280
   characters** — don't trim an owner-initiated announcement to fit the classic limit. The 280
   counter on the lock-and-earn page's announce card is for LOCKERS' own accounts and stays.

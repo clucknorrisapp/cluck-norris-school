@@ -50,6 +50,7 @@ const premiumForensics = require("./lib/premium-forensics");
 const sigStore = require("./lib/sigstore");
 const kv = require("./lib/kvstore");
 const { freshSince } = require("./lib/sig-cursor"); // shared "fresh sigs since the durable cursor" walk — see the ROSE/generic buy bots + burn watcher below
+const tgRooms = require("./lib/telegram-rooms"); // room policy: the Cluck bot never posts in the OnlyRose room (owner, 2026-09-17) — enforced in tgApi and the direct senders
 const payoutVerify = require("./lib/payout-verify");
 const engineRatchet = require("./lib/engine-ratchet"); // pure merge/diff shared by the four liquidity-engine config ratchets below
 const { redeemPaidPass } = require("./lib/tool-pass-redeem");
@@ -2305,7 +2306,9 @@ async function buyCompUpdate(c) {
   // as a "comp is live" reminder), then delete the previous one — one board at a
   // time, no clutter. Silent so it bumps the feed without an hourly ping.
   const prev = c.boardMsgId;
-  const mid = await tgSend(c.chatId, text, null, { silent: true });
+  // roseRoomOk: a comp's chat is set by the owner when the comp is created — an explicit choice,
+  // which is the one way a comp board may land in the OnlyRose room (lib/telegram-rooms).
+  const mid = await tgSend(c.chatId, text, null, { silent: true, roseRoomOk: true });
   if (mid) { c.boardMsgId = mid; if (prev && prev !== mid) tgDelete(c.chatId, prev); }
   c.lastUpdateTs = Date.now();
   buyCompSave(c);
@@ -2320,7 +2323,7 @@ async function buyCompTick() {
       if (now >= c.endTs) {
         await buyCompUpdate(c);                 // final provisional board
         c.status = "closed"; buyCompSave(c);
-        await tgSend(c.chatId, `🏁 <b>$${tgEsc(c.ticker)} buy comp — window closed!</b>\n\nThe board above is the PROVISIONAL standing. Winners must hold their buys for <b>${c.holdHours}h</b> (no sells, no transfers) — official winners are confirmed by the Rose scan after the hold. 🌹`);
+        await tgSend(c.chatId, `🏁 <b>$${tgEsc(c.ticker)} buy comp — window closed!</b>\n\nThe board above is the PROVISIONAL standing. Winners must hold their buys for <b>${c.holdHours}h</b> (no sells, no transfers) — official winners are confirmed by the Rose scan after the hold. 🌹`, null, { roseRoomOk: true });
         continue;
       }
       if (now >= c.startTs && (!c.lastUpdateTs || now - c.lastUpdateTs >= c.updateMins * 60000)) {
@@ -2352,7 +2355,7 @@ async function buyLeadersReply(c, chatId, replyTo) {
   // Deliberately NOT tracked as c.boardMsgId and never deletes prior posts: only the
   // BOT's OWN scheduled reposts self-clean (see buyCompUpdate), so "ours" never stacks
   // while member-requested boards stay put. Silent so the bump doesn't ping the room.
-  tgSend(chatId, buyCompRender(c, standings), replyTo, { silent: true });
+  tgSend(chatId, buyCompRender(c, standings), replyTo, { silent: true, roseRoomOk: true });   // a member asked for a comp the owner configured for this room
 }
 
 // ── Interactive slash commands ─────────────────────────────────────────────
@@ -2383,8 +2386,14 @@ const TG_WEBHOOK_SECRET = process.env.TELEGRAM_BOT_TOKEN
 // diagnostics still log at the call site, same as before. `token` defaults to
 // the main bot but can be overridden — the ROSE buy/burn bots optionally speak
 // through their own `ROSE_TG_BOT_TOKEN` (see roseTgSend/roseTgSendPhoto).
-async function tgApi(method, payload = {}, token = process.env.TELEGRAM_BOT_TOKEN) {
+async function tgApi(method, payload = {}, token = process.env.TELEGRAM_BOT_TOKEN, opts = {}) {
   if (!token) return null;
+  // Room policy (owner, 2026-09-17: "make sure it is not posting anything in rose"): a send aimed
+  // at the OnlyRose room is refused here, at the one choke point, unless the caller passed
+  // `roseRoomOk` — which only the ROSE bot's own path, an explicit tg-test chat=, and a buy comp
+  // configured for that room do. Logged so a refused post is visible, never silent.
+  const refused = tgRooms.refusal(payload && payload.chat_id, method, opts);
+  if (refused) { console.warn(`[TG] refused: ${refused}`); return null; }
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -2407,12 +2416,12 @@ async function tgSend(chatId, text, replyTo, opts = {}) {
     ...(opts.silent ? { disable_notification: true } : {}),
     // Still send even if the user's command message was deleted meanwhile.
     ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
-  });
+  }, undefined, { roseRoomOk: opts.roseRoomOk === true });
   return result ? result.message_id : null; // for thread tracking
 }
 
 // Like tgSend, but with an optional inline keyboard (array of button rows).
-async function tgSendKb(chatId, text, keyboard, replyTo) {
+async function tgSendKb(chatId, text, keyboard, replyTo, opts = {}) {
   if (!chatId) return null;
   // FIX (2026-09-17 tgSend consolidation): this had drifted from tgSend by never adding the
   // STAGING marker below, even though it posts to the same real, shared chat ids — including
@@ -2425,7 +2434,7 @@ async function tgSendKb(chatId, text, keyboard, replyTo) {
     chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
     ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
     ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-  });
+  }, undefined, { roseRoomOk: opts.roseRoomOk === true });
   return result ? result.message_id : null;
 }
 
@@ -2443,13 +2452,13 @@ async function tgDelete(chatId, messageId) {
 // Send a photo + caption + optional inline keyboard to a SPECIFIC chat. Silent
 // by default (owner rule). Returns the message_id, or null on failure. Used by
 // the Content Engine to DM an approval card with Approve/Skip buttons.
-async function tgSendPhotoKb(chatId, photoUrl, caption, keyboard) {
+async function tgSendPhotoKb(chatId, photoUrl, caption, keyboard, opts = {}) {
   if (!chatId) return null;
   const result = await tgApi("sendPhoto", {
     chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024),
     parse_mode: "HTML", disable_notification: true,
     ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-  });
+  }, undefined, { roseRoomOk: opts.roseRoomOk === true });
   return result ? result.message_id : null;
 }
 
@@ -3055,6 +3064,7 @@ async function hfGenerateMeme(desc) {
 }
 async function tgUploadPhotoFromUrl(chatId, srcUrl, caption) {
   const token = process.env.TELEGRAM_BOT_TOKEN; if (!token) return false;
+  const refused = tgRooms.refusal(chatId, "sendPhoto"); if (refused) { console.warn(`[MEME-GEN] ${refused}`); return false; }
   const ir = await fetch(srcUrl, { signal: AbortSignal.timeout(30000), redirect: "follow" });
   if (!ir.ok) return false;
   const buf = Buffer.from(await ir.arrayBuffer());
@@ -3071,6 +3081,7 @@ async function tgUploadPhotoFromUrl(chatId, srcUrl, caption) {
 async function tgUploadAnimationFromBuffer(chatId, buf, caption) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || !Buffer.isBuffer(buf) || buf.length > 11.5 * 1024 * 1024) return false;
+  const refused = tgRooms.refusal(chatId, "sendAnimation"); if (refused) { console.warn(`[MEME-GEN] ${refused}`); return false; }
   const fd = new FormData();
   fd.append("chat_id", String(chatId));
   if (caption) fd.append("caption", String(caption).slice(0, 1024));
@@ -7019,6 +7030,13 @@ async function tgTestQuerySend(req, res) {
   else if (req.query.project) {
     try { const p = whirlpoolMM.vault.getProject(String(req.query.project)); if (p && p.telegramChatId) chatId = p.telegramChatId; } catch (_) {}
   }
+  // Room policy: the OnlyRose room is reachable from here ONLY by an operator naming it outright
+  // (chat= or project=) — that is an explicit act behind the admin key. Any other resolution that
+  // lands on it is refused (the ROSE bot's own alerts never come through this route).
+  {
+    const refused = tgRooms.refusal(chatId, "sendMessage", { roseRoomOk: !!(req.query.chat || req.query.project) });
+    if (refused) return res.status(403).json({ success: false, error: refused });
+  }
   const photo = req.query.photo ? String(req.query.photo) : null;  // optional image URL -> sendPhoto with caption
   const video = req.query.video ? String(req.query.video) : null;  // optional video URL -> sendVideo with caption (Telegram URL limit ~20MB — send a compressed encode)
   // &upload=1 with &photo=: fetch the image server-side and multipart-upload the BYTES to
@@ -7123,6 +7141,10 @@ async function tgTestRawUpload(req, res, buf) {
   if (!process.env.TELEGRAM_BOT_TOKEN) return res.status(200).json({ success: false, error: "Telegram not configured" });
   const chatId = req.query.chat ? String(req.query.chat) : process.env.TELEGRAM_CHAT_ID;
   if (!chatId) return res.status(200).json({ success: false, error: "no chat target" });
+  {
+    const refused = tgRooms.refusal(chatId, "sendAnimation", { roseRoomOk: !!req.query.chat });   // room policy — explicit chat= only
+    if (refused) return res.status(403).json({ success: false, error: refused });
+  }
   const kind = ["animation", "document", "photo", "video"].includes(String(req.query.kind)) ? String(req.query.kind) : "animation";
   const name = String(req.query.name || (kind === "animation" ? "cuna.gif" : "file.bin")).replace(/[^\w.-]/g, "_").slice(0, 64);
   const silent = req.query.loud !== "1";
@@ -7409,10 +7431,10 @@ app.post("/api/buycomp/stop", async (req, res) => {
   // Alert the group either way (emergency stop should never be silent).
   try {
     if (cancel) {
-      await tgSend(c.chatId, `🛑 <b>$${tgEsc(c.ticker)} BUY COMPETITION — STOPPED</b>\n\nThis competition has been cancelled by the organizers${reason ? `:\n<i>${tgEsc(reason)}</i>` : "."}\n\nNo winners will be drawn from this round. Questions? Reach the team. 🌹`);
+      await tgSend(c.chatId, `🛑 <b>$${tgEsc(c.ticker)} BUY COMPETITION — STOPPED</b>\n\nThis competition has been cancelled by the organizers${reason ? `:\n<i>${tgEsc(reason)}</i>` : "."}\n\nNo winners will be drawn from this round. Questions? Reach the team. 🌹`, null, { roseRoomOk: true });
     } else {
       await buyCompUpdate(c).catch(() => {});   // post the final provisional board (status now closed → won't re-tick)
-      await tgSend(c.chatId, `🏁 <b>$${tgEsc(c.ticker)} buy comp — closed early.</b>\n\nThe board above is the PROVISIONAL standing. Winners must hold their buys for <b>${c.holdHours}h</b> (no sells, no transfers) — official winners are confirmed by the Rose scan after the hold. 🌹`);
+      await tgSend(c.chatId, `🏁 <b>$${tgEsc(c.ticker)} buy comp — closed early.</b>\n\nThe board above is the PROVISIONAL standing. Winners must hold their buys for <b>${c.holdHours}h</b> (no sells, no transfers) — official winners are confirmed by the Rose scan after the hold. 🌹`, null, { roseRoomOk: true });
     }
   } catch (_) {}
   return res.status(200).json({ ok: true, competition: c });
@@ -9072,13 +9094,16 @@ async function roseMarket() {
   return out || _roseMktCache.data;
 }
 
+// The ROSE bot's OWN send path is the one legitimate way into the OnlyRose room (it passes
+// roseRoomOk). It only runs when the ROSE bot is armed or an operator fires an explicit POST
+// lever on /api/rose-buybot; the generic per-project bot shares it, aimed at its own project room.
 async function roseTgSend(token, chatId, text, opts = {}) {
-  const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: opts.silent !== false }, token);
+  const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: opts.silent !== false }, token, { roseRoomOk: true });
   if (!result) { console.warn("[ROSE-BUY] sendMessage failed"); return false; }
   return true;
 }
 async function roseTgSendPhoto(token, chatId, photoUrl, caption, opts = {}) {
-  const result = await tgApi("sendPhoto", { chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML", disable_notification: opts.silent !== false }, token);
+  const result = await tgApi("sendPhoto", { chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML", disable_notification: opts.silent !== false }, token, { roseRoomOk: true });
   if (result) return true;
   // Photo failed (bad URL / TG couldn't fetch it) — fall back to text so the buy still posts.
   console.warn("[ROSE-BUY] sendPhoto failed, falling back to text");
@@ -20140,6 +20165,13 @@ app.listen(PORT, () => {
         // PROJECT_ROOM_CMDS. Add it explicitly so the "/" menu matches what actually works.
         if (CUNA_PUBLIC_ROOM && String(CUNA_PUBLIC_ROOM) !== mainRoom) projectRoomChatIds.add(String(CUNA_PUBLIC_ROOM));
         for (const cid of projectRoomChatIds) {
+          // Room policy (owner, 2026-09-17): the Cluck bot posts NOTHING in the OnlyRose room, so a
+          // command menu there would advertise replies that are now refused. Drop the scoped menu
+          // instead of registering one (deleteMyCommands is not a post).
+          if (tgRooms.isRoseRoom(cid)) {
+            try { await fetch(`https://api.telegram.org/bot${token}/deleteMyCommands`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: { type: "chat", chat_id: /^-?\d+$/.test(cid) ? Number(cid) : cid } }) }); } catch (_) {}
+            continue;
+          }
           try {
             await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
               method: "POST", headers: { "Content-Type": "application/json" },

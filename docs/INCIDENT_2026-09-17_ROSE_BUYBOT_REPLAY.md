@@ -45,3 +45,16 @@ there ended up being a whole bunch of messages posted in ROSE, and there should 
 - The burn watcher keeps its hourly cap and supply-drop trigger; it was not involved.
 - The room messages already posted were not deleted from here (deleting needs the message ids;
   `/api/tg-test?editText=` / `replaceMsg=` can remove them if the owner wants that done).
+
+## Follow-up the same evening — the room is closed to the Cluck bot by policy, not by call sites
+
+Owner: "make sure it is not posting anything in rose." Rather than patching the next leak at its
+call site (the third such patch this month), `lib/telegram-rooms.js` now holds the rule and every
+Telegram sender consults it: `tgApi()` (all of server.js's sends since the 09-17 consolidation),
+the `/api/tg-test` query and raw-upload paths, the meme-art uploaders, and the two library
+notifiers (`lib/whirlpool-vault.js`, `lib/swap-desk.js`). A send to the OnlyRose room is refused
+and logged unless the caller passes the explicit allow, which only the ROSE bot's own path, an
+operator's explicit `chat=`/`project=` on tg-test, and an owner-configured buy comp do. The bot's
+scoped command menu in that room is deleted at boot so it no longer advertises replies that will
+not come. `scripts/telegram-rooms-test.cjs` pins the policy and fails on any new direct send
+outside the audited functions.
