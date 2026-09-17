@@ -516,7 +516,7 @@ async function runTrace() {
     const data = await res.json();
     stopLoading();
     runBtn.disabled = false; updateRunBtn();
-    if (!data.success) { showErr(data.error || "Trace failed"); return; }
+    if (!data.success) { showErr(CluckGate.message(data)); if (CluckGate.denied(data)) runTrace(); return; }
     if (data.error && (!data.transactions || !data.transactions.length)) { showErr(data.error); return; }
     lastTrace = data;
     render(data);

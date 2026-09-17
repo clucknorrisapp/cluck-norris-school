@@ -98,6 +98,18 @@ function raw(method, p, headers) {
   ok("GET /api/buybot?list=1 still lists", r.status === 200 && r.body && Array.isArray(r.body.bots));
   r = await call("GET", "/api/rose-buybot?arm=1");
   ok("GET /api/rose-buybot?arm=1 is refused with 405", r.status === 405);
+  // /api/tg-test is POST-only since 2026-09-17 (owner: "convert tg-test too, routine first"): every
+  // form of it sends, so the whole GET method is refused — after the key check, which stays 404.
+  r = await call("GET", "/api/tg-test?text=hello"); ok("GET /api/tg-test?text= is refused with 405 (POST-only since 2026-09-17)", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/tg-test"); ok("flag-less GET /api/tg-test is refused too (it would post the default heads-up)", r.status === 405);
+  r = await call("GET", "/api/tg-test?text=hello", false); ok("GET /api/tg-test without the key stays 404", r.status === 404);
+  r = await call("POST", "/api/tg-test?text=hello"); ok("POST /api/tg-test reaches the query send path (no token here → 'not configured', not a 400)", r.status === 200 && r.body && r.body.success === false && /not configured/.test(String(r.body.error)), JSON.stringify(r.body));
+  {
+    const bytes = Buffer.alloc(512, 1);
+    const up = await fetch(BASE + "/api/tg-test?kind=animation", { method: "POST", headers: { "x-premium-key": KEY, "Content-Type": "image/gif" }, body: bytes });
+    const ub = await up.json().catch(() => null);
+    ok("POST /api/tg-test with file bytes reaches the raw-upload path (no token here → 'not configured')", up.status === 200 && ub && ub.success === false && /not configured/.test(String(ub.error)), up.status + " " + JSON.stringify(ub));
+  }
 
   // ── buy-comp server payout: run / sweep / unpay / set on a GET → 405, decided BEFORE the comp
   // lookup so a pasted link is refused before it touches anything; the flag-less GET is the read.
@@ -311,6 +323,25 @@ function raw(method, p, headers) {
   r = await call("GET", "/api/x-announce?text=hello"); ok("GET /api/x-announce without post=1 stays the dry run", r.status === 200 && r.body && r.body.dryRun === true, JSON.stringify(r.body));
   r = await call("GET", "/api/classroom/graduates?action=paid&wallet=" + PK); ok("GET /api/classroom/graduates?action= is refused with 405 (P1-058)", r.status === 405, String(r.status));
   r = await call("GET", "/api/classroom/graduates"); ok("GET /api/classroom/graduates still lists", r.status === 200 && r.body && r.body.success === true, JSON.stringify(r.body).slice(0, 120));
+  // P2-113 (2026-09-17): the graduation gate's mode/threshold writes are POST-only; the read stays.
+  r = await call("GET", "/api/school/grad-gate?mode=off"); ok("GET /api/school/grad-gate?mode= is refused with 405 (P2-113)", r.status === 405, String(r.status));
+  r = await call("GET", "/api/school/grad-gate?lessons=1"); ok("GET /api/school/grad-gate?lessons= is refused with 405", r.status === 405, String(r.status));
+  r = await call("GET", "/api/school/grad-gate"); ok("GET /api/school/grad-gate still reads (mode + recentBlocks journal)", r.status === 200 && r.body && typeof r.body.mode === "string" && Array.isArray(r.body.recentBlocks), JSON.stringify(r.body).slice(0, 160));
+  r = await call("POST", "/api/school/grad-gate?mode=monitor"); ok("POST /api/school/grad-gate?mode= writes", r.status === 200 && r.body && r.body.mode === "monitor", JSON.stringify(r.body).slice(0, 120));
+  r = await call("POST", "/api/school/grad-gate?mode="); ok("…and mode= (empty) returns it to auto", r.status === 200 && r.body && r.body.modePinned === null, JSON.stringify(r.body).slice(0, 120));
+  r = await call("GET", "/api/school/grad-gate?mode=off", false); ok("grad-gate stays 404 without the key", r.status === 404);
+  // A blocked claim is journalled (2026-09-17): the store-edition certificate route runs the same
+  // gate as /api/claim, so a fresh sid with no progress is refused AND shows up in recentBlocks.
+  {
+    const sid = "guardtest-" + Math.random().toString(36).slice(2, 10);
+    const c = await fetch(BASE + "/api/claim/certificate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid }) });
+    const cb = await c.json().catch(() => null);
+    ok("POST /api/claim/certificate with no progress is refused 403 not_yet", c.status === 403 && cb && cb.error === "not_yet" && cb.code === "no-progress", c.status + " " + JSON.stringify(cb).slice(0, 120));
+    r = await call("GET", "/api/school/grad-gate");
+    const entry = (r.body && r.body.recentBlocks || []).find((e) => e && e.sid === sid.slice(0, 8));
+    ok("…and the block is journalled in recentBlocks (route, code, truncated sid)", !!entry && entry.route === "certificate" && entry.code === "no-progress" && entry.lessons === 0, JSON.stringify(r.body && r.body.recentBlocks).slice(0, 200));
+    ok("…and the counter moved with it", r.body && r.body.blockedOrWouldBlock >= 1);
+  }
   r = await call("GET", "/api/cuna-engine"); ok("CUNA_ENGINE_ON=1 in the environment does NOT arm the engine — kv is the only switch (P1-032)", r.status === 200 && r.body && r.body.armed === false, JSON.stringify(r.body).slice(0, 160));
   {
     const pr = await fetch(BASE + "/api/wallet-xray/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: "what is this wallet" }) });

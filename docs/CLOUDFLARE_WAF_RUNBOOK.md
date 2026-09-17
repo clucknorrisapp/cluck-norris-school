@@ -73,8 +73,8 @@ curl -sI https://clucknorris.app/ | grep -iE 'server:|cf-ray'
 #   → expect  server: cloudflare  AND a  cf-ray:  header  (currently: server: railway-hikari, no cf-ray)
 ```
 
-- **Telegram bot:** send a test post (`curl -H "x-premium-key: $PREMIUM_ACCESS_KEY"
-  "https://clucknorris.app/api/tg-test?text=cf%20cutover%20ok"`) and confirm the webhook still
+- **Telegram bot:** send a test post (`curl -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY"
+  "https://clucknorris.app/api/tg-test?text=cf%20cutover%20ok"` — POST-only since 2026-09-17) and confirm the webhook still
   receives updates (`/api/tg-webhook-info`, same header, shows a recent delivery, 0 queued). This
   is the check that catches the Bot-Fight-Mode trap.
 - **Wallet reads:** open `/wallet-checkup` or `/locker-room`, connect, confirm a balance loads
@@ -179,7 +179,7 @@ curl -s -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/tg-
 #    expect: webhook url registered, pending/queued 0, a recent last-delivery time, no last_error
 
 # 3) Bot can still post out:
-curl -s -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/tg-test?text=cf%20cutover%20ok"
+curl -s -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/tg-test?text=cf%20cutover%20ok"
 
 # 4) RPC proxy works (wallet balance path): open /wallet-checkup or /locker-room, connect, read a balance.
 # 5) Game loads: open /normie-quest-x7.

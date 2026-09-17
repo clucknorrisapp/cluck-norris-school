@@ -18,7 +18,7 @@ d) Poll mcp__higgsfield__job_display with the job id until status is "completed"
 e) POST X FIRST (Bash; use curl -G with --data-urlencode for every param; header x-premium-key: $PREMIUM_ACCESS_KEY):
    - If pending.announced is false/absent (NORMAL): POST (curl -X POST — a GET with post=1 is refused with 405 since 2026-09-17) "https://clucknorris.app/api/x-announce" with post=1, image=<rawUrl>, text=<pending.xText VERBATIM — do not rewrite it>. NO replyTo. Note the returned tweet id.
    - If pending.announced is true (a 24h text-only fallback already posted): POST x-announce with post=1, image=<rawUrl>, replyTo=<pending.xPostId>, text= a SHORT punchline only (e.g. "Cluck made the delivery. 🐔🔥 @JupiterExchange @BagsApp") — NEVER restate the numbers in a reply.
-f) THEN Telegram (SILENT — never pass loud=1): GET "https://clucknorris.app/api/tg-test" with photo=<rawUrl> and:
+f) THEN Telegram (SILENT — never pass loud=1): POST (curl -X POST — the route is POST-only since 2026-09-17, a GET is refused with 405) "https://clucknorris.app/api/tg-test" with photo=<rawUrl> and:
    - Normal case: text=<pending.tgText VERBATIM> + append "\n\n🐦 On X — like & repost:\nhttps://x.com/FireChicken007/status/<tweet id>"
    - Fallback case (announced true): a self-sufficient caption (numbers + https://lock.jup.ag/token/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS + the X link line) AND replaceMsg=<pending.tgMessageIds comma-joined> so the photo replaces the fallback text(s).
 g) ONLY after BOTH posts succeeded: curl -sS -X POST "https://clucknorris.app/api/lock-celebration?clear=1" -H "x-premium-key: $PREMIUM_ACCESS_KEY" then report probe=ok-posted-x<tweet id>.

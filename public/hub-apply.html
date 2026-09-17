@@ -65,7 +65,7 @@
 
   <div class="card">
     <p class="intro">Reward the holders who <b>lock your token on Jupiter Lock</b>. Nobody holds their tokens — not you, not us: the escrow is Jupiter's own program. You set the rules below. Our engine reads the chain every hour, works out who qualifies and what they have earned, and pays from <b>your</b> funding wallet on the schedule you choose. Every payout has a transaction any holder can check on the public page.</p>
-    <p class="intro" style="margin-top:10px">This is <b>staking rewards without a staking contract</b> — no contract to audit, no tokens to custody, no risk of a drain. What it costs: <b>0.5 SOL a month</b> (or 0.25 SOL for a small-cap project), payable in SOL or in CLKN priced at the moment you pay. The reward tokens are yours and stay in your wallet until they are paid out.</p>
+    <p class="intro" style="margin-top:10px">This is <b>staking rewards without a staking contract</b> — no contract to audit, no tokens to custody, no risk of a drain. What it costs: <b id="priceStandardIntro">0.5 SOL a month</b> (or <b id="priceSmallIntro">0.25 SOL</b> for a small-cap project), payable in SOL or in CLKN priced at the moment you pay. The reward tokens are yours and stay in your wallet until they are paid out.</p>
   </div>
 
   <form id="f" autocomplete="off">
@@ -130,8 +130,8 @@
   <div class="card">
     <div class="step">STEP 4 — THE PLAN</div>
     <div class="tier">
-      <label><input type="radio" name="tier" value="standard" checked/><b>STANDARD</b>0.5 SOL a month, or the same value in CLKN priced when you pay.</label>
-      <label><input type="radio" name="tier" value="small"/><b>SMALL CAP</b>0.25 SOL a month for a young or small project. The owner confirms the tier.</label>
+      <label><input type="radio" name="tier" value="standard" checked/><b>STANDARD</b><span id="priceStandardTier">0.5 SOL</span> a month, or the same value in CLKN priced when you pay.</label>
+      <label><input type="radio" name="tier" value="small"/><b>SMALL CAP</b><span id="priceSmallTier">0.25 SOL</span> a month for a young or small project. The owner confirms the tier.</label>
     </div>
     <p class="hint" style="margin-top:10px">Nothing is charged now. Once the owner approves, you pay the first month from your wallet and the program is armed. A project we already work with may be comped — that is the owner's call, not a box to tick.</p>
     <div class="checkline"><input type="checkbox" id="agree"/><label for="agree" style="margin:0">I understand the rewards come from my funding wallet, the terms are public, and nothing here is a return anyone is promised.</label></div>
@@ -150,6 +150,19 @@
 (function () {
   var esc = CluckUtil.esc, $ = function (id) { return document.getElementById(id); };
   var DECIMALS = null, REWARD_DECIMALS = null, MINT_OK = false, WALLET = null;
+
+  // Live pricing (never hardcode — lib/hub/access.js's schedule is append-only and meant to change).
+  (async function loadPricing() {
+    try {
+      var r = await fetch("/api/hub-pricing").then(function (x) { return x.json(); });
+      if (!r.ok) return;
+      var std = esc(String(r.standardSol)) + " SOL", small = esc(String(r.smallSol)) + " SOL";
+      if ($("priceStandardIntro")) $("priceStandardIntro").textContent = std + " a month";
+      if ($("priceSmallIntro")) $("priceSmallIntro").textContent = small;
+      if ($("priceStandardTier")) $("priceStandardTier").textContent = std;
+      if ($("priceSmallTier")) $("priceSmallTier").textContent = small;
+    } catch (e) { /* keep the static fallback text on a pricing-fetch failure */ }
+  })();
 
   function toRaw(whole, dec) {
     // whole → base units without floats: split on the dot, pad the fraction.
