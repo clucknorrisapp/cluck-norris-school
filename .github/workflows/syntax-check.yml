@@ -225,6 +225,13 @@ jobs:
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
       - name: liquidity-engine decision simulator
         run: node scripts/engine-sim-test.cjs
+      # Deep dive 2026-09-17 P0-001 / P2-071: boots the real server three times with no secrets —
+      # an empty store plus every *_ENGINE_ON=1 arms nothing (env is inert), *_ENGINE_OFF=1 beats a
+      # kv arm key, POKE never registers without its flag, and each ratchet merges its durable
+      # ratchetOverrides:<project> table over the code defaults (the merge that silently dropped
+      # writes for two projects until a manual audit found it).
+      - name: Engine arm gates + ratchet durable overrides
+        run: node scripts/engine-arm-gate-test.cjs
       # The check that gates whether a giveaway winner gets PAID. It false-positived on every
       # winner on 2026-09-04 because it judged a hold in dollars and the price cache was cold.
       - name: giveaway hold-check (token-based, survives a cold price feed)

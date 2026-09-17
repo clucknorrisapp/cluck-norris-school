@@ -9062,9 +9062,11 @@ app.get("/api/rosehorses", async (req, res) => {
 // a late-indexed buy is caught on a later pass and never double-posted, and a redeploy
 // resumes from the durable cursor instead of replaying or missing.
 const ROSE_BOT_MINT = ROSEHORSES_MINT; // RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF
-// Minimum buy (USD) that fires an alert. ⚠️ TEMPORARILY $10 (normal floor is $1.75) while
-// the owner tests narrow-range LPs that throw off small-arb volume we don't want spamming
-// the room (2026-08-13). Revert this default to 1.75 when that test ends. Precedence:
+// Minimum buy (USD) that fires an alert. Was raised from the normal $1.75 floor to $10 on
+// 2026-08-13 for a narrow-range LP test. ⚠️ The bot itself is DISARMED (owner, 2026-09-17: "we
+// only use the rose buy bot when needed … it can be disarmed completely for now"; kv roseBuyArmed
+// is false on production and nothing at boot re-arms it — the kv key is the only switch). The
+// floor is moot while it is off; whoever re-arms it picks the floor in that moment. Precedence:
 // live kv override (roseMinBuyUsd, set via /api/rose-buybot?setmin=…) → env ROSE_MIN_BUY_USD
 // → this default — so the floor can be tuned or reverted mid-test WITHOUT a redeploy.
 const ROSE_MIN_BUY_USD_DEFAULT = parseFloat(process.env.ROSE_MIN_BUY_USD || "10");
@@ -12871,6 +12873,48 @@ function gradGateMode() {
   if (m === "off" || m === "monitor" || m === "enforce") return m;
   return Date.now() >= GRAD_GATE_AUTO_ENFORCE ? "enforce" : "monitor";
 }
+// Every block (or would-block) is journalled, bounded, so a real learner caught by the gate can
+// be diagnosed after the fact. Until 2026-09-17 the only trace was a counter and a Railway log
+// line — one claim had tripped the gate since arming and nobody could say whether it was a
+// learner or a script (owner: "do whatever is best for people taking the course"). Truncated ids
+// only: the sid is an anonymous browser id, the wallet is public, but neither needs to sit whole
+// in the store.
+const GRAD_GATE_BLOCK_LOG_MAX = 50;
+function gradGateLogBlock({ mode, route, sid, wallet, gate }) {
+  try {
+    kv.set("gradGateBlocks", (kv.get("gradGateBlocks", 0) || 0) + 1);
+    const status = sid ? schoolProgress.statusFor(sid) : null;
+    const log = (kv.get("gradGateBlockLog", []) || []).slice(-(GRAD_GATE_BLOCK_LOG_MAX - 1));
+    log.push({
+      t: Date.now(), mode, route, code: gate.code, detail: gate.detail,
+      sid: sid ? sid.slice(0, 8) : null, wallet: wallet ? wallet.slice(0, 6) + "…" : null,
+      lessons: status ? status.lessons : 0, backfilled: status ? status.backfilled : 0,
+      sessionAgeMin: status ? Math.round((Date.now() - status.createdAt) / 60000) : null,
+    });
+    kv.set("gradGateBlockLog", log);
+  } catch (_) {}
+}
+// What the learner is told when the mint is withheld — per gate code, and always with the next
+// step they can actually take. The old copy ("give it a few minutes and try again") was the same
+// for every cause, including the ones a wait never fixes.
+function gradGateLearnerMessage(gate, requiredLessons) {
+  const code = gate && gate.code;
+  const m = /(\d+)\/(\d+) lessons/.exec(String(gate && gate.detail || ""));
+  const have = m ? Number(m[1]) : null;
+  if (code === "incomplete" || code === "no-progress" || code === "no-sid") {
+    return `Diploma mint pending — the school's own record shows ${have == null ? "no" : have + " of " + requiredLessons} finished classes from this browser (a dropped connection can lose a mark). We have just re-sent your progress from this device — wait a moment and tap Try again. If it still will not go through, re-open a lesson you finished and pass its quiz again so the record catches up. Your transcript is saved either way.`;
+  }
+  if (code === "too-fresh") {
+    return `Diploma mint pending — this browser's course record is only a few minutes old. Give it ${(/(needs \d+m)/.exec(String(gate.detail || "")) || ["", "about 15m"])[1].replace("needs ", "")} from your first class and tap Try again. Your transcript is saved.`;
+  }
+  if (code === "burst") {
+    return "Diploma mint pending — the classes need to have been finished across a few separate sittings from this browser, not all in one go. Revisit two or three lessons a few minutes apart, pass their quizzes, then tap Try again. Your transcript is saved.";
+  }
+  if (code === "sid-used") {
+    return "Diploma mint pending — this browser already graduated a different wallet, and each course record mints one diploma. Use the wallet that graduated here, or finish the course again in a fresh browser profile. Your transcript is saved.";
+  }
+  return "Diploma mint pending — we couldn't verify your course progress from this browser yet. Your transcript is saved. Give it a few more minutes (or revisit a lesson) and try again.";
+}
 
 // ── Certificate of completion (STORE edition) ──────────────────────────────────────────────────
 // The store edition has no wallet, so graduation there is a certificate with a verification code,
@@ -12891,6 +12935,7 @@ app.post("/api/claim/certificate", rateLimit("certificate", { windowMs: 3600000,
       minSpreadBuckets: kv.get("gradGateSpreadBuckets", 3),
     });
     if (!gate.ok && gateMode === "enforce") {
+      gradGateLogBlock({ mode: gateMode, route: "certificate", sid, wallet: null, gate });
       console.warn(`[CERT] blocked ${gate.code} sid=${sid.slice(0, 8)}…`);
       return res.status(403).json({ ok: false, error: "not_yet", code: gate.code, detail: "The school's record does not show the full curriculum for this device yet. Finish every class here, then try again." });
     }
@@ -12971,7 +13016,7 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
         minSpreadBuckets: kv.get("gradGateSpreadBuckets", 3),
       });
       if (!gate.ok) {
-        kv.set("gradGateBlocks", (kv.get("gradGateBlocks", 0) || 0) + 1);
+        gradGateLogBlock({ mode: gateMode, route: "claim", sid, wallet, gate });
         console.warn(`[GRAD-GATE] ${gateMode}${gateMode === "monitor" ? " (would block)" : ""} ${gate.code} sid=${sid ? sid.slice(0, 8) + "…" : "none"} wallet=${wallet.slice(0, 6)}… — ${gate.detail}`);
       }
     }
@@ -13050,7 +13095,7 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     // wallet don't count.
     let nft = null;
     if (gateBlocked) {
-      nft = { ok: false, reason: "Diploma mint pending — we couldn't verify your course progress from this browser yet. Your transcript is saved. Give it a few more minutes (or revisit a lesson) and try again." };
+      nft = { ok: false, reason: gradGateLearnerMessage(gate, kv.get("gradGateLessons", 12)) };
     }
     if (kind === "graduation") {
       const already = (kv.get(diplomaNft.MINTED_KV, {}) || {})[wallet];
@@ -13089,6 +13134,9 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     return res.status(200).json({
       success: true, isHolder, balance, verified,
       slug: rec.slug, transcript: `/transcript/${rec.slug}`, alreadyOnList: exists, nft,
+      // Why the mint was withheld, so the client can act (re-send its local lesson marks when the
+      // record is short) instead of only showing a sentence. Absent when nothing was withheld.
+      ...(gateBlocked ? { gate: { code: gate.code, detail: gate.detail } } : {}),
     });
   } catch(err) {
     console.error("Claim error:", err.message);
@@ -13100,8 +13148,11 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
 // pins the mode (mode= empty string clears the pin back to auto: monitor until the
 // auto-enforce date, then enforce). ?lessons= / ?minAge= (minutes) / ?buckets= tune the
 // thresholds. ?sid=<id> inspects one session's ledger.
-app.get("/api/school/grad-gate", (req, res) => {
+app.all("/api/school/grad-gate", (req, res) => {
   if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  // Deep dive P2-113: mode/threshold writes are POST-only like every other admin lever; the
+  // flag-less GET (and ?sid= inspection) stays a read.
+  if (mutatingGetRefused(req, res, ["mode", "lessons", "minAge", "buckets"])) return;
   const q = req.query;
   if (q.mode !== undefined) {
     const m = String(q.mode);
@@ -13125,6 +13176,10 @@ app.get("/api/school/grad-gate", (req, res) => {
     minAgeMin: kv.get("gradGateMinAgeMin", 15),
     spreadBuckets: kv.get("gradGateSpreadBuckets", 3),
     blockedOrWouldBlock: kv.get("gradGateBlocks", 0),
+    // Newest last, bounded (GRAD_GATE_BLOCK_LOG_MAX). Truncated sid/wallet, the gate code and
+    // detail, and what the ledger held for that session at the time — enough to tell a learner
+    // with a dropped mark from a script.
+    recentBlocks: kv.get("gradGateBlockLog", []) || [],
     ...schoolProgress.summary(),
   };
   if (q.sid) out.sid = schoolProgress.statusFor(String(q.sid)) || { error: "no such session" };

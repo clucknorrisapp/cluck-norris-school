@@ -22,10 +22,42 @@ function sessionId(){
     return s;
   }catch(_){ return ""; }
 }
+// Lesson-completion beacons are the ONLY thing that tells the server's graduation ledger a class
+// was passed. They used to be fire-and-forget: a dropped mobile connection, a blocker, or a tab
+// closing right after the last quiz lost that mark for good, and the graduation gate then blocked
+// a real learner with nothing they could do about it (deep dive 2026-09-17). A failed durable
+// beacon is now queued in localStorage and re-sent on the next load, when the network comes back,
+// and before a claim. The server keeps the FIRST sighting of a lesson, so a re-send never rewrites
+// a genuine mark, and the ledger's anti-farm timing checks are unaffected.
+var TRACK_QUEUE_KEY="clkn_track_q";
+function readTrackQueue(){ try{ var q=JSON.parse(localStorage.getItem(TRACK_QUEUE_KEY)||"[]"); return Array.isArray(q)?q:[]; }catch(_){ return []; } }
+function writeTrackQueue(q){ try{ localStorage.setItem(TRACK_QUEUE_KEY,JSON.stringify(q.slice(-60))); }catch(_){} }
+function queueTrack(payload){ var q=readTrackQueue(); if(!q.some(function(x){return x&&x.event===payload.event;})) q.push(payload); writeTrackQueue(q); }
+function sendTrack(payload){
+  return fetch(api("/api/track"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true})
+    .then(function(r){ if(!r.ok) throw new Error("track "+r.status); });
+}
 function track(event,extra){
   try{
     var ev=String(event||"").toLowerCase().replace(/[^a-z0-9_:-]/g,"").slice(0,64);
-    if(ev) fetch(api("/api/track"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({event:ev,sid:sessionId()},extra||{})),keepalive:true}).catch(function(){});
+    if(!ev) return;
+    var payload=Object.assign({event:ev,sid:sessionId()},extra||{});
+    var durable=/^lesson_complete:/.test(ev);
+    sendTrack(payload).catch(function(){ if(durable) queueTrack(payload); });
+  }catch(_){}
+}
+// Re-send every queued beacon. Resolves when the attempt is over (never rejects); anything that
+// fails again goes back on the queue.
+function flushTrackQueue(){
+  var q=readTrackQueue();
+  if(!q.length) return Promise.resolve();
+  writeTrackQueue([]);
+  return Promise.all(q.map(function(p){ return sendTrack(p).catch(function(){ queueTrack(p); }); })).then(function(){});
+}
+if(typeof window!=="undefined"){
+  try{
+    window.addEventListener("online",function(){ flushTrackQueue(); });
+    setTimeout(flushTrackQueue,1500);
   }catch(_){}
 }
 const trackId=(prefix,id)=>track(prefix+":"+String(id).toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,48));
@@ -1435,6 +1467,7 @@ function CompleteFull({onRestart}){
     setClaiming(true);
     setClaimError("");
     try {
+      await flushTrackQueue();   // any lesson mark that never reached the ledger goes first
       const res = await fetch(api("/api/claim"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1450,6 +1483,16 @@ function CompleteFull({onRestart}){
         return;
       }
       track("claim_submit:graduation");
+      // The mint was withheld because the server's ledger is short of this browser's own record
+      // (a beacon that never landed). Re-send every lesson this device finished, live — the server
+      // keeps the first sighting per lesson, so nothing genuine is rewritten — and the learner's
+      // "try again" then has something to find.
+      if (data.gate && /^(incomplete|no-progress|no-sid)$/.test(String(data.gate.code || ""))) {
+        try {
+          const done = JSON.parse(localStorage.getItem("clkn_completed") || "[]");
+          if (Array.isArray(done)) done.forEach(id => trackId("lesson_complete", id));
+        } catch(_) {}
+      }
       setClaimed(true);
       setIsHolder(data.isHolder || false);
       setHolderBalance(data.balance || 0);
