@@ -115,6 +115,14 @@ function raw(method, p, headers) {
     const sb = await short.json().catch(() => null);
     ok("POST /api/tg-test with a 50-byte body is refused 400 (not routed to the text send)", short.status === 400 && sb && /too short/.test(String(sb.error)), short.status + " " + JSON.stringify(sb));
   }
+  // /api/meme-queue (owner, 2026-09-17: "convert meme-queue done to POST too, routine first"):
+  // done= / art= / clear=1 write → POST-only; the list, history=1 and all=1 stay reads.
+  r = await call("GET", "/api/meme-queue?done=abc"); ok("GET /api/meme-queue?done= is refused with 405", r.status === 405, String(r.status));
+  r = await call("GET", "/api/meme-queue?clear=1"); ok("GET /api/meme-queue?clear=1 is refused with 405", r.status === 405, String(r.status));
+  r = await call("GET", "/api/meme-queue"); ok("GET /api/meme-queue still lists pending", r.status === 200 && r.body && r.body.ok === true && Array.isArray(r.body.pending), JSON.stringify(r.body).slice(0, 120));
+  r = await call("GET", "/api/meme-queue?history=1"); ok("GET /api/meme-queue?history=1 still reads the art ledger", r.status === 200 && r.body && Array.isArray(r.body.art), JSON.stringify(r.body).slice(0, 120));
+  r = await call("POST", "/api/meme-queue?done=abc&art=%7B%22image%22%3A%22x%22%7D"); ok("POST /api/meme-queue?done=&art= goes through", r.status === 200 && r.body && r.body.ok === true, JSON.stringify(r.body).slice(0, 120));
+  r = await call("GET", "/api/meme-queue?done=abc", false); ok("meme-queue stays 404 without the key", r.status === 404);
 
   // ── buy-comp server payout: run / sweep / unpay / set on a GET → 405, decided BEFORE the comp
   // lookup so a pasted link is refused before it touches anything; the flag-less GET is the read.

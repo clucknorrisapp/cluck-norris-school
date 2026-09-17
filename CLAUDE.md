@@ -481,8 +481,11 @@ served the React shell at 200.
   the text send (Codex on #333). The meme routine and the lock-celebration watcher were switched
   to `curl -X POST` BEFORE the server change, carried a transition GET fallback while the old build
   was live, and had it **removed on 2026-09-17 once #335 was verified on production** — both prompts
-  now say "never fall back to a GET". Next candidate, same routine-first sequencing:
-  `/api/meme-queue` `&done=`/`&art=` still write on a GET (the route is GET-only). **The burn celebration also has a value floor now**: a verified burn Jupiter
+  now say "never fall back to a GET". **`/api/meme-queue` `&done=`/`&art=`/`&clear=1` are POST-only
+  too (owner, 2026-09-17, same routine-first sequencing)** — the meme routine POSTs its `done=`
+  write and carries a transition fallback (resend as a GET only on the OLD build's exact 404, the
+  API catch-all's answer to a POST on the GET-only route) that must be **removed from the prompt
+  once this is promoted to `main`**; the list, `history=1` and `all=1` stay GETs. **The burn celebration also has a value floor now**: a verified burn Jupiter
   prices under `BURN_BROADCAST_MIN_USD` (default $10; unpriced = skipped) gets its receipt page
   but no auto-post — a stranger's one-unit mint could otherwise force a brand tweet.
 - ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`

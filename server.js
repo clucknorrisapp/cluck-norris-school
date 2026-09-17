@@ -9945,9 +9945,13 @@ app.all("/api/buybot", adminGuarded(ADMIN_404, { noStore: true }), async (req, r
 });
 
 // Meme-request queue — fed by the project-room persona ([PIC: …] asks), drained by
-// the recurring image routine. GET lists pending; &done=<id> removes one after the
-// routine posts it; &clear=1 empties the queue.
-app.get("/api/meme-queue", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
+// the recurring image routine. GET lists pending (&history=1, &all=1 are reads too);
+// &done=<id> (with its &art= ledger companion) removes one after the routine posts it and
+// &clear=1 empties the queue — those WRITE, so they are POST-only (owner, 2026-09-17:
+// "convert meme-queue done to POST too, routine first"; the meme routine was switched to
+// `curl -X POST` before this shipped, with a transition fallback for the old build's 404).
+app.all("/api/meme-queue", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
+  if (mutatingGetRefused(req, res, ["done", "art", "clear"])) return;
   let list = kv.get("memeRequests", []) || [];
   // Art ledger (owner ask 2026-08-24: "keep track of all of the art made"). &history=1
   // lists every piece the routine has posted, newest first; the routine records one by

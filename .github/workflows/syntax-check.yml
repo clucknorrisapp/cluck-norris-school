@@ -508,8 +508,12 @@ jobs:
       # LP Lab progress used to be keyed by ARRAY INDEX, so inserting or reordering a lesson
       # silently moved every learner's ticks onto different lessons. Nothing errors when that
       # happens, which is exactly why it needs a test that looks at the rendered tiles.
+      # Not diff-gated (deep dive P1-021), but the React build above IS — so on a server-only diff
+      # this step booted a server with no dist/index.html and every page render failed (PR #336,
+      # 2026-09-17). It builds the shell itself when the gated step did not.
       - name: LP Lab progress survives a lesson insert
         run: |
+          test -f dist/index.html || npm run build
           PORT=3111 node server.js & echo $! > /tmp/lp-srv.pid
           for i in $(seq 1 40); do curl -sf http://127.0.0.1:3111/healthz >/dev/null && break; sleep 1; done
           node scripts/lplab-progress-test.cjs http://127.0.0.1:3111
