@@ -105,6 +105,24 @@ Elliptic vulnerabilities: GHSA-vjh7-7g9h-fjfh (private key extraction in ECDSA),
 
 **Verification (2026-09-17, workflow `wf_3fac089a-376`, 79 agents in 84 min):** 15 fix-checks on the PR #329 head (Sonnet), 13 money/auth/engine findings × 3 Opus lenses (correctness, reproduce, impact — consensus by majority, severity from the impact lens), 25 single Sonnet verifiers. One agent (P1-031) errored on output format and was hand-verified. Tally of the 52 agent verdicts: 41 confirmed as a real mechanism (most downgraded below P1 on impact), 10 already fixed by #329, 1 refuted (P1-025). Three surviving forms found by the fix-checks (P1-051, P1-053, P1-065) were fixed in #329's third commit.
 
+**P1 fix PR (branch `claude/p1-fixes`, stacked on #329):** all eleven below plus P1-019, P1-047, P1-054, P1-058 and the airdrop half of P1-066 are fixed there — see the PR body for the two product calls (terms edits gated behind a paid month for operators, the owner exempt; the investors-page holders wording).
+
+**Codex round 1 (2026-09-17, on #329 + #330 together) — nine actionable findings, all fixed on `claude/p1-fixes`:**
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | Payout recovery re-offered paid rewards if the server stopped between the batch write and the paid write | `kv.setManyVerified` / `hubStore.writeManyVerified`: both money keys land in ONE persist (every CUNA and hub payout site); and `owedNow` treats a recorded SENT row as settled even when `paid` lags (max of the two) |
+| 2 | One payment could still unlock a Hub month AND a tools pass (reproduced: the sig store failed to record) | the tools pass (`redeemPaidPass` `usedElsewhere`) and `/api/verify-sol-payment` consult the hub REGISTRY, the durable truth; a sig-store write the store cannot take alerts the ops room |
+| 3 | An earlier payout signature settled a later batch without a new transfer (reproduced through the handler) | `payout-verify.sigAlreadyUsed` — a (wallet, signature) pair recorded in another batch is refused; `notBefore` — a transaction older than the batch cannot be its payment |
+| 4 | Refreshing the pay page evicted a quote a landed payment still needed | quotes survive their TTL plus the late grace; the cap (now 1000) evicts oldest only under abuse |
+| 5 | Hatchery showed "failed" and re-enabled HATCH after a confirmation-network error | RPC errors while polling are unknown, not failures; a lost connection or 5xx on submit is ambiguous with the mint address; the button stays off |
+| 6 | Shortfalls marked fully paid (0.1% slack) | exact raw amounts, no slack |
+| 7 | Invalid ledger amounts waved through | an unparsable batch amount (empty, decimal, garbage) is refused as "ledger needs repair" |
+| 8 | CI browser tests un-gated without their browser | the Playwright install step is unconditional in the smoke-test job |
+| 9 | The lock-watch fallback's retry limit never stopped | `gaveUpAt` gates the block; six failures leave the pending for a human and stop |
+
+Tests: kvstore many-write (+3), payout-verify (10, +3 incl. batch-age and cross-batch reuse), cuna-payout owedNow recovery (+2), tool-pass-redeem registry check (+3). Not reproduced here: the reviewer's own scenarios (their harness is not in this repo) — the mechanisms are covered by the unit cases above.
+
 **Still P1 after verification (11):** P1-018, P1-021, P1-030, P1-032, P1-034, P1-035, P1-036, P1-044, P1-048, P1-056, P1-064. Everything else confirmed as real but P2/P3 on impact — see the table.
 
 | ID | verdict | severity | lens votes | finding | verifier note | fix |

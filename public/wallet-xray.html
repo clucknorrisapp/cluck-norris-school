@@ -636,11 +636,12 @@ async function sendChat(){
   document.getElementById('suggests').innerHTML='';
   const typing=pushBub('cluck','🐔 …');
   try{
-    const r=await fetch('/api/wallet-xray/ask',{method:'POST',headers:{'Content-Type':'application/json'},
+    // Same pass as the scan (deep dive P1-064): the proof rides along, and a refused pass re-opens the card.
+    const r=await CluckGate.fetch('/api/wallet-xray/ask',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({wallet:(DATA&&DATA.wallet)||wi.value.trim()||null,question:q,signature:askSig,profile:compactProfile(),history:chatHist.slice(0,-1)})});
     const d=await r.json();
     typing.remove();
-    if(!d.success){pushBub('sys',d.error||'Cluck went quiet — try again.');return;}
+    if(!d.success){pushBub('sys',d.detail||d.error||'Cluck went quiet — try again.');return;}
     pushBub('cluck',d.reply);chatHist.push({role:'assistant',content:d.reply});
   }catch(e){typing.remove();pushBub('sys','Network error — try again.');}
 }
@@ -653,6 +654,8 @@ document.getElementById('askFab').classList.add('show');
 // Unified tools pass (owner, 2026-08-18): the page previews free — RUN needs the pass
 // (hold $50 of CLKN = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
 run = CluckGate.guard(run, { tool: 'Wallet X-Ray', anchor: '#runBtn' });
+// Ask Cluck answers with a paid model call, so it sits behind the same pass as the scan (P1-064).
+sendChat = CluckGate.guard(sendChat, { tool: 'Wallet X-Ray', anchor: '#runBtn' });
 // ?wallet= auto-run goes through the SAME guarded run — it used to fire one line above the wrap,
 // so a pasted URL ran the paid tool with the gate card never rendering (audit 2026-09-05 #2).
 if(qp.get('wallet'))run();

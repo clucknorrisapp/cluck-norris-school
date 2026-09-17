@@ -54,7 +54,7 @@ edit the default in `scripts/lockbar.py` AND this line, and commit — a runtime
 decision that sticks.
 
 ## 3. Post — X FIRST, then Telegram (if `announced:false`)
-1. X: `GET /api/x-announce?key=…&post=1&text={pending.xText}&image={rawUrl}` → capture post id.
+1. X: `POST /api/x-announce?post=1&text={pending.xText}&image={rawUrl}` (`curl -X POST -H "x-premium-key: …"`; since 2026-09-17 a GET with `post=1` is refused with 405 — the dry run without `post=1` stays a GET) → capture post id.
 2. Telegram (SILENT — never loud): `GET /api/tg-test?key=…&photo={rawUrl}&text={pending.tgText}%0A%0A🐦 On X — like %26 repost: https://x.com/FireChicken007/status/{id}`
 3. Clear: `curl -X POST -H "x-premium-key: $PREMIUM_ACCESS_KEY" "https://clucknorris.app/api/lock-celebration?clear=1"` — **POST only** since audit 2026-09-05 #8 (a GET with `clear=1` is refused with 405; the read without flags stays a GET).
 

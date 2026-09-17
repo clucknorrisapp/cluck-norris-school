@@ -94,5 +94,24 @@ t("listView is newest first and carries what the owner needs to decide", () => {
   assert.strictEqual(v[0].projectId, "beta"); assert.strictEqual(v[1].contact, "@alpha_tg"); assert.ok(v[0].terms && v[0].tierRequested);
 });
 
+console.log("reserved built-in programmes (deep dive 2026-09-17 P1-030)");
+{
+  const proj = require("../lib/hub/project");
+  const CUNA = "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc", RESERVED = { cuna: CUNA, clkn: "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" };
+  const TOK = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", FUND = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+  const mk = (id, mint) => proj.validateProject({ id, label: id, symbol: id.toUpperCase(), mint, fundingWallet: FUND, accessTier: "standard" }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  t("approveProject refuses a second project on a built-in programme's mint", () => {
+    assert.throws(() => proj.approveProject({}, mk("cunav2", CUNA), { nowUnix: 1, reserved: RESERVED }), /built-in "cuna" programme/);
+  });
+  t("approveProject refuses a built-in id under any mint", () => {
+    assert.throws(() => proj.approveProject({}, mk("cuna", "So11111111111111111111111111111111111111112"), { nowUnix: 1, reserved: RESERVED }), /built-in programme id/);
+  });
+  t("…and still approves an unrelated mint; without a reserved table nothing changes", () => {
+    const r = proj.approveProject({}, mk("fresh", "So11111111111111111111111111111111111111112"), { nowUnix: 1, reserved: RESERVED });
+    assert.strictEqual(r.fresh.status, "approved");
+    assert.strictEqual(proj.approveProject({}, mk("cunav2", CUNA), { nowUnix: 1 })["cunav2"].status, "approved", "legacy call shape unchanged");
+  });
+}
+
 console.log(`\n${fail ? "FAILED" : "all passed"} (${pass} passed${fail ? `, ${fail} failed` : ""})`);
 process.exit(fail ? 1 : 0);
