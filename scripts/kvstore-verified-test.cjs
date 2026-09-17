@@ -47,6 +47,38 @@ try { kv.set("z", 1); } catch (_) { threw = true; }
 ok("plain set() still swallows a failed persist (non-money callers are unchanged)", threw === false && kv.get("z") === 1);
 fs.rmdirSync(FILE);
 
+// Codex 2026-09-17 finding 1: the two money keys of a payout journal must land in ONE persist.
+console.log("\nsetManyVerified — several keys, one persist\n");
+ok("two keys land together and both verify on disk", kv.setManyVerified({ m1: { a: 1 }, m2: [1, 2] }) === true && onDisk().m1.a === 1 && onDisk().m2.length === 2);
+fs.rmSync(FILE); fs.mkdirSync(FILE);
+ok("with the volume broken neither key is reported as landed", kv.setManyVerified({ m3: 1, m4: 2 }) === false && onDisk() === null);
+fs.rmdirSync(FILE);
+ok("after recovery the next many-write carries the earlier keys", kv.setManyVerified({ m5: 5 }) === true && onDisk().m3 === 1 && onDisk().m5 === 5);
+
+// Deep dive 2026-09-17 P0-005: a file that EXISTS but does not parse used to boot as a healthy,
+// persistent, EMPTY store — the next set() overwrote the only copy of every ledger. It must boot
+// in-memory, preserve the file, and make setVerified refuse. Fresh process: the store is a singleton.
+console.log("\ncorrupt app-state.json at boot\n");
+const { execFileSync } = require("child_process");
+const CDIR = fs.mkdtempSync(path.join(os.tmpdir(), "kv-corrupt-"));
+fs.writeFileSync(path.join(CDIR, "app-state.json"), '{"ledger":{"a":1}, TRUNCATED');
+let boot = null;
+try {
+  const raw = execFileSync(process.execPath, ["-e", `
+    const kv = require(${JSON.stringify(path.join(__dirname, "..", "lib", "kvstore.js"))});
+    const verified = kv.setVerified("k", 1);
+    console.log(JSON.stringify({ persistent: kv.isPersistent(), loadError: kv.loadError(), verified, mem: kv.get("k") }));
+  `], { env: { ...process.env, DATA_DIR: CDIR }, stdio: ["ignore", "pipe", "ignore"] }).toString().trim().split("\n").pop();
+  boot = JSON.parse(raw);
+} catch (e) { boot = { error: String(e && e.message || e) }; }
+ok("a corrupt file boots the store NOT persistent", boot && boot.persistent === false, JSON.stringify(boot));
+ok("loadError names the file and the reason", boot && /not valid JSON/.test(String(boot.loadError || "")), String(boot && boot.loadError));
+ok("setVerified refuses while in-memory (a money path stops)", boot && boot.verified === false && boot.mem === 1);
+const kept = fs.readdirSync(CDIR).filter((f) => /^app-state\.json\.corrupt-/.test(f));
+ok("the corrupt file is preserved under a dated name", kept.length === 1 && fs.readFileSync(path.join(CDIR, kept[0]), "utf8").includes("TRUNCATED"), kept.join(","));
+ok("the original is NOT overwritten by a blank store", fs.readFileSync(path.join(CDIR, "app-state.json"), "utf8").includes("TRUNCATED"));
+try { fs.rmSync(CDIR, { recursive: true, force: true }); } catch (_) {}
+
 try { fs.rmSync(DIR, { recursive: true, force: true }); } catch (_) {}
 console.log(failures ? `\n${failures} FAILED\n` : "\nall passed\n");
 process.exit(failures ? 1 : 0);

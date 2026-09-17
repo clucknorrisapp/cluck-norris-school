@@ -167,5 +167,29 @@ t("quote book prunes entries a day past expiry", () => {
   assert.deepStrictEqual(Object.keys(P.pruneQuotes(book, T0 + 24 * 3600e3 + 1)), ["b"]);
 });
 
+console.log("who may claim a payment (deep dive 2026-09-17 P0-007)");
+t("payerAllowed: only an operator wallet of THAT project", () => {
+  const p = mk({ operatorWallets: [FUND] });
+  assert.strictEqual(A.payerAllowed(p, FUND), true);
+  assert.strictEqual(A.payerAllowed(p, MINT), false, "a stranger's payment is refused");
+  assert.strictEqual(A.payerAllowed(p, null), false);
+  assert.strictEqual(A.payerAllowed(p, ""), false);
+  assert.strictEqual(A.payerAllowed(mk(), FUND), false, "no operator wallets → nobody may pay (the owner comps instead)");
+  assert.strictEqual(A.payerAllowed(null, FUND), false);
+});
+t("sigUsedInRegistry: a signature on ANY project's ledger is found; a fresh one is not", () => {
+  const sig = "5".repeat(88);
+  const reg = {
+    a: { access: A.applyPayment(A.normalizeAccess({ tier: "small" }), { sig, atUnix: NOW, kind: "sol", lamports: 250_000_000 }) },
+    b: { access: A.normalizeAccess({ tier: "standard" }) },
+    c: null,
+    d: { access: { payments: null } },
+  };
+  assert.strictEqual(A.sigUsedInRegistry(reg, sig), "a");
+  assert.strictEqual(A.sigUsedInRegistry(reg, "6".repeat(88)), null);
+  assert.strictEqual(A.sigUsedInRegistry(reg, ""), null);
+  assert.strictEqual(A.sigUsedInRegistry(null, sig), null);
+});
+
 console.log(`\n${fail ? "FAILED" : "all passed"} (${pass} passed${fail ? `, ${fail} failed` : ""})`);
 process.exit(fail ? 1 : 0);

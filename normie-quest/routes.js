@@ -318,12 +318,18 @@ router.post('/api/nq/score', async (req, res) => {
           tierBlocked = { tier: grant.tier, worlds: grant.worlds, claimedWorld: Number(b.world) };
         }
       } catch (_) { /* RPC down — never turn a read failure into a refusal on someone's run */ }
+    } else if (!wallet.gate.allowsWorld(wallet.gate.freeWorlds(), b.world)) {
+      // No wallet at all used to mean no tier check at all (deep dive P1-044): a wallet-less
+      // submission claiming world 15 sailed past the gate the tiers exist to enforce. An anonymous
+      // run is bounded by what a wallet-less player can actually reach. Flagged, not rejected —
+      // same reasoning as above.
+      tierBlocked = { tier: 0, worlds: wallet.gate.freeWorlds(), claimedWorld: Number(b.world) };
     }
 
     const r = await leaderboard.add(
       { name: b.name, world: b.world, level: b.level, score: b.score, lives: b.lives,
         wallet: b.wallet, walletVerified, mode: b.mode, ua: req.get('user-agent'),
-        forceSuspect: tierBlocked ? 'world_above_wallet_tier' : null },
+        forceSuspect: tierBlocked ? (walletVerified ? 'world_above_wallet_tier' : 'world_above_free_tier') : null },
       b.token || null,
     );
     if (tierBlocked) r.tierBlocked = tierBlocked;

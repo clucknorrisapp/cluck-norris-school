@@ -310,8 +310,7 @@
   // missed by the 2026-07-30 consolidation and still found only Phantom, Solflare
   // and Backpack, so an OKX/Coinbase/Exodus/Bitget/Glow/Brave/Jupiter/Trust
   // operator was told no wallet was found on the lock-distribution page.
-  function detectWallets(){
-    return CluckWallet.available().map(function(w){ return { name:w.name, p:w.provider }; }); }
+  function detectWallets(){ return CluckWallet.list(); }
   $('#opWallet').addEventListener('click',function(){
     var w=detectWallets(); if(!w.length){ $('#distMsg').className='msg err'; $('#distMsg').textContent='No Solana wallet found. Install one, or open this page in your wallet\u2019s own browser.'; return; }
     var x=w[0];
@@ -334,7 +333,15 @@
     if(!window.solanaWeb3){ $('#distMsg').className='msg err'; $('#distMsg').textContent='Solana library still loading — try again.'; return; }
     var rows=eligibleRows().filter(function(tr){ return (parseFloat(tr.querySelector('.bonusIn').value)||0)>0; });
     if(!rows.length){ $('#distMsg').className='msg err'; $('#distMsg').textContent='No eligible winners with a bonus > 0.'; return; }
-    if(!confirm('Create '+rows.length+' vesting lock'+(rows.length===1?'':'s')+' from '+shortAddr(opPubkey)+'? You will approve each one.')) return;
+    // Two clicks, in-page: a native confirm() is blocked or auto-dismissed inside some wallet
+    // browsers (deep dive P1-065 — same treatment as Buy Special's SEND PRIZES).
+    if(Date.now()-(window._distArmedAt||0)>15000){
+      window._distArmedAt=Date.now();
+      $('#doDistribute').textContent='⚠️ CONFIRM: CREATE '+rows.length+' VESTED LOCK'+(rows.length===1?'':'S')+' FROM '+shortAddr(opPubkey);
+      $('#distMsg').className='msg'; $('#distMsg').textContent='Click again within 15 seconds to create them — you will approve each one in your wallet.';
+      return;
+    }
+    window._distArmedAt=0; $('#doDistribute').textContent='🔒 Create vested locks';
     $('#doDistribute').disabled=true; $('#dVerify').disabled=true;
     var v=curCampaign.vest||{months:12,interval:'month',cliffDays:0,cancelable:false};
     var cliffUnix=Math.floor(Date.now()/1000)+Math.max(0,(v.cliffDays||0))*86400;

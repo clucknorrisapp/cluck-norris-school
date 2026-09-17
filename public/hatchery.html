@@ -472,12 +472,12 @@ let activeWallet = null;       // { id, provider }
 let logoData = null;           // { base64, mime }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function showError(msg) {
+function showError(msg, sticky) {
   const el = document.getElementById('errorBox');
   el.textContent = msg;
   el.classList.add('show');
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  setTimeout(() => el.classList.remove('show'), 9000);
+  if (!sticky) setTimeout(() => el.classList.remove('show'), 9000);
 }
 function setProgress(msg) {
   const el = document.getElementById('progress');
@@ -618,7 +618,10 @@ function onLogoPick(input) {
 // ── Confirm a submitted transaction ──────────────────────────────────────────
 async function confirmTx(signature) {
   for (let i = 0; i < 40; i++) {
-    const st = await rpc('getSignatureStatuses', [[signature]]);
+    let st = null;
+    // A network blip while polling is UNKNOWN, not a failure: keep polling, and if the window
+    // runs out the caller treats it as ambiguous (Codex 2026-09-17, finding 5).
+    try { st = await rpc('getSignatureStatuses', [[signature]]); } catch (e) { st = null; }
     const s = st?.value?.[0];
     if (s) {
       if (s.err) throw new Error('Transaction failed on-chain');
@@ -626,7 +629,11 @@ async function confirmTx(signature) {
     }
     await new Promise(r => setTimeout(r, 1500));
   }
-  throw new Error('Timed out waiting for confirmation — check Solscan');
+  // NOT a failure: the transaction was submitted and may still land. Callers must treat this as
+  // "unknown" and never retry blindly — a second hatch mints a second token and pays the fee twice.
+  const e = new Error('Timed out waiting for confirmation');
+  e.ambiguous = true; e.signature = signature;
+  throw e;
 }
 
 // ── Hatch ────────────────────────────────────────────────────────────────────
@@ -784,6 +791,8 @@ async function doHatch() {
 
   const btn = document.getElementById('hatchBtn');
   btn.disabled = true;
+  let ambiguous = false;   // a submitted-but-unconfirmed mint keeps the button OFF (deep dive P0-012)
+  let built = null;        // hoisted so an ambiguous submit can still name the mint
   try {
     setProgress('Uploading logo + metadata to Arweave…');
     const buildRes = await fetch('/api/hatchery/build', {
@@ -795,7 +804,7 @@ async function doHatch() {
         revokeMint, revokeFreeze, cluster: 'mainnet-beta', payWith: payMethod,
       }),
     });
-    const built = await buildRes.json();
+    built = await buildRes.json();
     if (!buildRes.ok) throw new Error(built.error || 'Build failed');
 
     setProgress('Approve the transaction in your wallet…');
@@ -810,13 +819,23 @@ async function doHatch() {
     const signedB64 = btoa(String.fromCharCode(...signedTx.serialize({ requireAllSignatures: false, verifySignatures: false })));
 
     setProgress('Finalizing your mint…');
-    const submitRes = await fetch('/api/hatchery/submit', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mintAddress: built.mintAddress, signedTxBase64: signedB64 }),
-    });
-    const submitted = await submitRes.json();
-    if (!submitRes.ok) throw new Error(submitted.error || 'Submit failed');
+    // Once the wallet has signed, the server may broadcast before we hear back. A lost
+    // connection or a 5xx here is UNKNOWN — the mint may exist — never a clean failure that
+    // invites a second hatch (Codex 2026-09-17, finding 5). A 4xx with a reason is a real refusal.
+    let submitRes = null;
+    try {
+      submitRes = await fetch('/api/hatchery/submit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mintAddress: built.mintAddress, signedTxBase64: signedB64 }),
+      });
+    } catch (e) { const a = new Error('Lost the connection after signing'); a.ambiguous = true; a.mintAddress = built.mintAddress; throw a; }
+    let submitted = null; try { submitted = await submitRes.json(); } catch (e) { submitted = null; }
+    if (!submitRes.ok) {
+      if (submitRes.status >= 500 || !submitted) { const a = new Error('The server did not confirm the submit'); a.ambiguous = true; a.mintAddress = built.mintAddress; throw a; }
+      throw new Error(submitted.error || 'Submit failed');
+    }
     const signature = submitted.signature;
+    if (!signature) { const a = new Error('No signature came back'); a.ambiguous = true; a.mintAddress = built.mintAddress; throw a; }
 
     setProgress('Confirming on-chain…');
     await confirmTx(signature);
@@ -837,9 +856,17 @@ async function doHatch() {
     document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
     setProgress('');
+    if (e && e.ambiguous && (e.signature || e.mintAddress)) {
+      ambiguous = true;
+      const link = e.signature ? 'https://solscan.io/tx/' + e.signature : 'https://solscan.io/token/' + e.mintAddress;
+      showError('Your mint may already exist: ' + (e.message || 'unknown outcome') + '. Check it on Solscan before doing anything else — hatching again now could mint a second token and pay the fee twice. ' + link, true);
+      const rTx = document.getElementById('rTx'); if (rTx) rTx.href = link;
+      btn.textContent = 'CHECK SOLSCAN, THEN RELOAD TO HATCH AGAIN';
+      return;
+    }
     showError('Hatch failed: ' + (e.message || e));
   } finally {
-    btn.disabled = false;
+    if (!ambiguous) btn.disabled = false;
   }
 }
 

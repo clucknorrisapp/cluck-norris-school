@@ -44,7 +44,10 @@ function raw(method, p, headers) {
 }
 
 (async () => {
-  const env = { ...process.env, PORT: String(PORT), DATA_DIR: DIR, PREMIUM_ACCESS_KEY: KEY,
+  // CUNA_ENGINE_ON=1 is deliberately set: since 2026-09-17 (P1-032) an env arm flag must NOT arm
+  // anything — the kv key is the only switch and an absent key is OFF. ANTHROPIC_API_KEY is a
+  // dummy so the X-Ray chat route reaches its pass check instead of the "AI not configured" 500.
+  const env = { ...process.env, PORT: String(PORT), DATA_DIR: DIR, PREMIUM_ACCESS_KEY: KEY, CUNA_ENGINE_ON: "1", ANTHROPIC_API_KEY: "test-not-a-key",
     TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", HELIUS_API_KEY: "", MM_OPERATOR_SECRET: "", MM_OPERATOR_SECRET_TREASURY: "",
     FALLBACK_RPC_URL: "http://127.0.0.1:9" };
   const srv = spawn(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env, stdio: "ignore" });
@@ -250,6 +253,72 @@ function raw(method, p, headers) {
   // future "make every admin route POST" pass does not quietly take it away.
   r = await call("GET", "/api/nq/gate?" + NQK + "&cap=0");
   ok("/api/nq/gate?cap= stays a working GET (owner's phone panic lever — deliberate exception)", r.status === 200 && r.body && r.body.changed === true, JSON.stringify(r.body));
+
+  // ── Deep dive 2026-09-17 P0-002 / P0-008: the admin routes the 09-05 audit missed ──
+  console.log("\nDeep dive 2026-09-17 — the routes the first audit missed\n");
+  r = await call("GET", "/api/cuna-giveaway/admin?draw=1");
+  ok("GET /api/cuna-giveaway/admin?draw=1 is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/cuna-giveaway/admin?payout=1&run=1");
+  ok("GET /api/cuna-giveaway/admin?payout=1&run=1 (SENDS prizes) is refused with 405", r.status === 405);
+  r = await call("GET", "/api/cuna-giveaway/admin?scan=1");
+  ok("GET /api/cuna-giveaway/admin?scan=1 (ledger write) is refused with 405", r.status === 405);
+  r = await call("GET", "/api/cuna-giveaway/admin?reset=1");
+  ok("GET /api/cuna-giveaway/admin?reset=1 is refused with 405", r.status === 405);
+  r = await call("GET", "/api/cuna-giveaway/admin");
+  ok("GET /api/cuna-giveaway/admin flag-less still reports config", r.status === 200 && r.body && r.body.ok === true && ("config" in r.body), JSON.stringify(r.body).slice(0, 200));
+  r = await call("GET", "/api/cuna-giveaway/admin?payout=1");
+  ok("GET /api/cuna-giveaway/admin?payout=1 (preview, no run) is still a read", r.status !== 405 && r.status !== 404, String(r.status));
+  r = await call("GET", "/api/cuna-giveaway/admin?draw=1&key=wrong", false);
+  ok("…and a wrong key is still an indistinguishable 404", r.status === 404);
+  for (const p of ["remove-liquidity?run=1", "add-liquidity?run=1", "open-position?run=1", "unwrap?run=1", "rebalance-inplace?run=1", "recenter?run=1", "config?autoRecenter=1", "config?which=jup&enabled=0", "config?ledgerSol=1"]) {
+    r = await call("GET", "/api/meteora/" + p);
+    ok(`GET /api/meteora/${p} is refused with 405`, r.status === 405, String(r.status));
+  }
+  r = await call("GET", "/api/meteora/config");
+  ok("GET /api/meteora/config still reads", r.status === 200 && r.body && !!r.body.config, String(r.status));
+  r = await call("GET", "/api/clkn-blitz?run=1"); ok("GET /api/clkn-blitz?run=1 is refused with 405", r.status === 405);
+  r = await call("GET", "/api/clkn-blitz?abort=1"); ok("GET /api/clkn-blitz?abort=1 is refused with 405", r.status === 405);
+  for (const e of ["dnc", "rose", "cuna"]) {
+    r = await call("GET", `/api/${e}-engine?on=1`); ok(`GET /api/${e}-engine?on=1 is refused with 405`, r.status === 405, String(r.status));
+    r = await call("GET", `/api/${e}-engine?off=1`); ok(`GET /api/${e}-engine?off=1 is refused with 405`, r.status === 405, String(r.status));
+    r = await call("GET", `/api/${e}-engine`); ok(`GET /api/${e}-engine still reports state (not armed)`, r.status === 200 && r.body && r.body.ok === true && r.body.armed === false, JSON.stringify(r.body).slice(0, 160));
+  }
+  r = await call("GET", "/api/diploma-mint?action=create-tree&run=1"); ok("GET /api/diploma-mint?action=create-tree&run=1 is refused with 405", r.status === 405);
+  r = await call("GET", "/api/diploma-mint?action=backfill&run=1"); ok("GET /api/diploma-mint?action=backfill&run=1 is refused with 405", r.status === 405);
+  r = await call("GET", "/api/diploma-mint?action=create-tree"); ok("GET /api/diploma-mint?action=create-tree stays the dry run", r.status === 200 && r.body && r.body.dryRun === true, JSON.stringify(r.body));
+  r = await call("GET", "/api/school-airdrop?max=5"); ok("GET /api/school-airdrop?max=5 is refused with 405", r.status === 405);
+  r = await call("GET", "/api/school-airdrop?wallet=" + PK + "&amount=1&run=1"); ok("GET /api/school-airdrop?wallet=&amount=&run=1 is refused with 405", r.status === 405);
+  r = await call("GET", "/api/school-airdrop"); ok("GET /api/school-airdrop still reports status", r.status === 200 && r.body && r.body.success === true, JSON.stringify(r.body).slice(0, 160));
+
+  // ── P0-009/010: Buy Special's data endpoints check the tools pass SERVER-side ──
+  const BS = "/api/buyspecial-crosscheck?mint=" + PK + "&from=1700000000&to=1700003600";
+  r = await call("GET", BS, false);
+  ok("GET /api/buyspecial-crosscheck without a pass is 402 pass_required", r.status === 402 && r.body && r.body.error === "pass_required", JSON.stringify(r.body).slice(0, 160));
+  r = await raw("GET", BS, { "x-clkn-pass": "t:garbage.token" });
+  ok("…a forged pass is 403", r.status === 403, String(r.status));
+  r = await call("GET", "/api/buyspecial-holdcheck?mint=" + PK + "&from=1700000000&to=1700003600&wallets=" + PK, false);
+  ok("GET /api/buyspecial-holdcheck without a pass is 402", r.status === 402, String(r.status));
+  r = await call("GET", "/api/buyspecial-trace?mint=" + PK + "&wallet=" + PK + "&from=1700000000&to=1700003600", false);
+  ok("GET /api/buyspecial-trace without a pass is 402", r.status === 402, String(r.status));
+  r = await call("GET", BS);
+  ok("…the operator console (admin key header) passes the gate", r.status !== 402 && r.status !== 403 && r.status !== 404, String(r.status));
+
+  // ── Deep dive 2026-09-17 P1 batch ──
+  console.log("\nDeep dive 2026-09-17 — P1 batch\n");
+  r = await call("GET", "/api/x-post-test?post=1&text=hello"); ok("GET /api/x-post-test?post=1 is refused with 405 (P1-019)", r.status === 405, String(r.status));
+  r = await call("GET", "/api/x-post-test"); ok("GET /api/x-post-test flag-less still answers", r.status === 200, String(r.status));
+  r = await call("GET", "/api/x-announce?post=1&text=hello"); ok("GET /api/x-announce?post=1 is refused with 405 (P1-019)", r.status === 405, String(r.status));
+  r = await call("GET", "/api/x-announce?text=hello"); ok("GET /api/x-announce without post=1 stays the dry run", r.status === 200 && r.body && r.body.dryRun === true, JSON.stringify(r.body));
+  r = await call("GET", "/api/classroom/graduates?action=paid&wallet=" + PK); ok("GET /api/classroom/graduates?action= is refused with 405 (P1-058)", r.status === 405, String(r.status));
+  r = await call("GET", "/api/classroom/graduates"); ok("GET /api/classroom/graduates still lists", r.status === 200 && r.body && r.body.success === true, JSON.stringify(r.body).slice(0, 120));
+  r = await call("GET", "/api/cuna-engine"); ok("CUNA_ENGINE_ON=1 in the environment does NOT arm the engine — kv is the only switch (P1-032)", r.status === 200 && r.body && r.body.armed === false, JSON.stringify(r.body).slice(0, 160));
+  {
+    const pr = await fetch(BASE + "/api/wallet-xray/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: "what is this wallet" }) });
+    let pb = null; try { pb = await pr.json(); } catch (_) {}
+    ok("POST /api/wallet-xray/ask without a pass is 402 pass_required (P1-064)", pr.status === 402 && pb && pb.error === "pass_required", pr.status + " " + JSON.stringify(pb).slice(0, 120));
+    const pr2 = await fetch(BASE + "/api/wallet-xray/ask", { method: "POST", headers: { "Content-Type": "application/json", "x-clkn-pass": "t:garbage.token" }, body: JSON.stringify({ question: "hi" }) });
+    ok("…a forged pass is 403", pr2.status === 403, String(pr2.status));
+  }
 
   done();
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");

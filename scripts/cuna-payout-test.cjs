@@ -304,6 +304,26 @@ t("resolveSent: landed clears the flag, an on-chain error voids, NOT FOUND stays
   assert.deepStrictEqual(Object.keys(pay.remainingOf(rs.batch)), ["B"]);
 });
 
+section("owedNow recovers a paid ledger that lags its own sent rows (Codex 2026-09-17, finding 1)");
+t("a row recorded SENT counts as settled even when `paid` never got the second write", () => {
+  const W = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+  const days = { "2026-09-10": day({ [W]: CUNA(10) }) };
+  const batches = { b1: { id: "b1", state: "sent", at: 1, amounts: { [W]: CUNA(10) }, sent: { [W]: { sig: SIG, at: 2 } } } };
+  assert.strictEqual(p.owedNow({ days, paid: {}, pending: batches })[W], 0n, "nothing re-offered");
+  assert.strictEqual(p.owedNow({ days, paid: { [W]: CUNA(10) }, pending: batches })[W], 0n, "consistent ledgers agree");
+  assert.strictEqual(p.owedNow({ days, paid: { [W]: CUNA(4) }, pending: batches })[W], 0n, "a partially lagging paid ledger is still not re-offered");
+});
+t("an unsent row of a pending batch is held; a sent row in a pending batch is settled, not held twice", () => {
+  const W = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", X = "2nAYWqxLN9P5HKRxgbcPVKrboWZiTNncfvUhPNYXzWtv";
+  const days = { "2026-09-10": day({ [W]: CUNA(10), [X]: CUNA(6) }) };
+  const batches = { b1: { id: "b1", state: "pending", at: 1, amounts: { [W]: CUNA(10), [X]: CUNA(6) }, sent: { [W]: { sig: SIG, at: 2 } } } };
+  const o = p.owedNow({ days, paid: { [W]: CUNA(10) }, pending: batches });
+  assert.strictEqual(o[W], 0n); assert.strictEqual(o[X], 0n, "held while the batch is pending");
+  const o2 = p.owedNow({ days: { "2026-09-10": day({ [W]: CUNA(14) }) }, paid: { [W]: CUNA(10) }, pending: batches });
+  assert.strictEqual(o2[W], BigInt(CUNA(4)), "new credits beyond the settled row are owed");
+});
+
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }

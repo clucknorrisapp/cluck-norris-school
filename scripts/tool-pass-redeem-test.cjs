@@ -38,6 +38,25 @@ console.log("the schedule itself");
   ok("termsAt picks the last entry at or before the instant", TERMS.termsAt(999, sched).days === 7 && TERMS.termsAt(1000, sched).days === 14 && TERMS.termsAt(5000, sched).days === 14);
 }
 
+console.log("a platform-access month can never double as a tools pass (deep dive 2026-09-17 P0-007)");
+{
+  const sigStore = fakeSigStore();
+  sigStore.add("hub-access:" + SIG);   // lib/hub/routes.js consumed it for a Lock-to-Earn month
+  const r = run({ sigStore });
+  ok("refused with 409 and nothing consumed", r.ok === false && r.status === 409 && sigStore.size() === 1, r);
+}
+
+console.log("the hub REGISTRY is consulted too — the signature store alone is not the guard (Codex 2026-09-17 finding 2)");
+{
+  const sigStore = fakeSigStore();
+  const r = run({ sigStore, usedElsewhere: (s) => s === SIG });
+  ok("a signature the hub registry holds is refused with 409 and nothing consumed", r.ok === false && r.status === 409 && sigStore.size() === 0, r);
+  const r2 = run({ sigStore, usedElsewhere: () => { throw new Error("kv down"); } });
+  ok("a check that throws refuses with a retryable 503, never grants", r2.ok === false && r2.status === 503 && r2.retry === true && sigStore.size() === 0, r2);
+  const r3 = run({ sigStore, usedElsewhere: () => false });
+  ok("a clean check lets the redemption through", r3.ok === true, r3);
+}
+
 console.log("first redemption, then recovery by the same payer");
 {
   const sigStore = fakeSigStore(), kv = fakeKv();

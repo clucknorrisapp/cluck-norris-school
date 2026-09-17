@@ -49,6 +49,7 @@ const solanaTracker = require("./lib/solana-tracker");
 const premiumForensics = require("./lib/premium-forensics");
 const sigStore = require("./lib/sigstore");
 const kv = require("./lib/kvstore");
+const payoutVerify = require("./lib/payout-verify");
 const { redeemPaidPass } = require("./lib/tool-pass-redeem");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
@@ -202,10 +203,7 @@ async function notifyToolsReminder() {
   try {
     if (lastToolsReminderMsgId) {
       // Drop the previous reminder so repeats never pile up in the chat.
-      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, message_id: lastToolsReminderMsgId }),
-      }).catch(() => {});
+      await tgDelete(chatId, lastToolsReminderMsgId);
       lastToolsReminderMsgId = null; kv.set("toolsReminderMsgId", null);
     }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -299,10 +297,7 @@ async function notifyBagsLaunches() {
     if (!text) return;
     // Delete the previous Radar first so only the latest stays (no pile-up).
     if (lastBagsRadarMsgId) {
-      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, message_id: lastBagsRadarMsgId }),
-      }).catch(() => {});
+      await tgDelete(chatId, lastBagsRadarMsgId);
       lastBagsRadarMsgId = null; kv.set("bagsRadarMsgId", null);
     }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -367,10 +362,7 @@ async function notifyMarketCheck() {
     // Delete the previous Market Check first so the chat only ever shows the
     // latest one (no hourly pile-up). Bots can delete their own msgs <48h old.
     if (lastMarketCheckMsgId) {
-      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, message_id: lastMarketCheckMsgId }),
-      }).catch(() => {});
+      await tgDelete(chatId, lastMarketCheckMsgId);
       lastMarketCheckMsgId = null; kv.set("marketCheckMsgId", null);
     }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -433,10 +425,7 @@ async function notifyRecap() {
   try {
     const text = buildRecapText();
     if (lastRecapMsgId) {
-      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, message_id: lastRecapMsgId }),
-      }).catch(() => {});
+      await tgDelete(chatId, lastRecapMsgId);
       lastRecapMsgId = null; kv.set("recapMsgId", null);
     }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -583,16 +572,32 @@ async function lockWatchTick() {
   // The pending stays (announced:true) so a later session can still add the image: it
   // threads the X art under the fallback post and replaces the TG text with the photo.
   const pendingNow = kv.get("lockCelebrationPending", null);
-  if (pendingNow && !pendingNow.announced && pendingNow.tgText && Date.now() - (pendingNow.at || 0) > LOCK_ANNOUNCE_FALLBACK_MS) {
+  // `gaveUpAt` is the stop: six failed sends leave the pending for a human, and this block must
+  // not fire again every tick (Codex 2026-09-17, finding 9 — the limit never actually stopped).
+  if (pendingNow && !pendingNow.announced && !pendingNow.gaveUpAt && pendingNow.tgText && Date.now() - (pendingNow.at || 0) > LOCK_ANNOUNCE_FALLBACK_MS) {
     const tgMsgId = await tgSend(process.env.TELEGRAM_CHAT_ID, pendingNow.tgText);
     let xr = null;
     try { xr = pendingNow.xText ? await postToX(pendingNow.xText, { force: true }) : null; }
     catch (e) { console.warn("[LOCK→X] fallback failed:", e.message); }
-    kv.set("lockCelebrationPending", {
-      ...pendingNow, announced: true, xPostId: (xr && xr.id) || pendingNow.xPostId || null,
-      tgMessageIds: [...(Array.isArray(pendingNow.tgMessageIds) ? pendingNow.tgMessageIds : []), ...(tgMsgId ? [tgMsgId] : [])],
-    });
-    console.log("[LOCK-WATCH] fallback text-only announcement posted (no session took the celebration)");
+    // tgSend and postToX never throw — they return null / {ok:false}. Marking `announced` on a
+    // send that did not land retired the celebration with nobody told (deep dive P1-018, the
+    // same silent-loss shape as the three schedulers fixed on 2026-09-04). Only a landed send
+    // advances the state; otherwise the pending stays and the next tick retries, with a bounded
+    // count so a dead bot does not retry forever.
+    const landed = !!tgMsgId || !!(xr && xr.ok);
+    const tries = (Number(pendingNow.fallbackTries) || 0) + 1;
+    if (landed || tries >= 6) {
+      kv.set("lockCelebrationPending", {
+        ...pendingNow, announced: landed, fallbackTries: tries, gaveUpAt: landed ? undefined : Date.now(),
+        xPostId: (xr && xr.id) || pendingNow.xPostId || null,
+        tgMessageIds: [...(Array.isArray(pendingNow.tgMessageIds) ? pendingNow.tgMessageIds : []), ...(tgMsgId ? [tgMsgId] : [])],
+      });
+      if (landed) console.log("[LOCK-WATCH] fallback text-only announcement posted (no session took the celebration)");
+      else { console.error("[LOCK-WATCH] fallback announcement FAILED " + tries + " times — giving up; the pending stays for a session to post by hand"); try { cunaOpsAlert("⚠️ Lock celebration: the text-only fallback failed to post " + tries + " times (Telegram and X). The pending payload is still at /api/lock-celebration.", "lockwatch:fallback").catch(() => {}); } catch (_) {} }
+    } else {
+      kv.set("lockCelebrationPending", { ...pendingNow, fallbackTries: tries });
+      console.warn("[LOCK-WATCH] fallback announcement did not land (Telegram " + (tgMsgId ? "ok" : "FAILED") + ", X " + (xr && xr.ok ? "ok" : "FAILED") + ") — will retry next tick (" + tries + "/6)");
+    }
   }
   const built = await buildLockReport().catch(() => null);
   if (!built || !built.ok) return;
@@ -931,9 +936,11 @@ const CUNA_ARM_KEY = "cunaEngineArmed";
 function cunaHardKilled() { return process.env.CUNA_ENGINE_OFF === "1"; }
 function cunaArmed() {
   if (cunaHardKilled()) return false;
-  const v = kv.get(CUNA_ARM_KEY, null);
-  if (v === null || v === undefined) return process.env.CUNA_ENGINE_ON === "1";
-  return v === true;
+  // The kv key is the ONLY arm switch; an absent key is OFF. It used to fall back to
+  // CUNA_ENGINE_ON=1 when the key was missing, so a kv loss (bad mount, blank volume) silently
+  // re-armed an engine the owner had stopped (deep dive 2026-09-17 P1-032, reproduced with three
+  // boots). A stop must survive a blank store; arming is the admin POST, never an env var.
+  return kv.get(CUNA_ARM_KEY, null) === true;
 }
 function cunaSetArmed(on) { kv.set(CUNA_ARM_KEY, !!on); return cunaArmed(); }
 const CUNA_MINT = "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc";
@@ -1131,9 +1138,11 @@ const DNC_ARM_KEY = "dncEngineArmed";
 function dncHardKilled() { return process.env.DNC_ENGINE_OFF === "1"; }
 function dncArmed() {
   if (dncHardKilled()) return false;
-  const v = kv.get(DNC_ARM_KEY, null);
-  if (v === null || v === undefined) return process.env.DNC_ENGINE_ON === "1";
-  return v === true;
+  // The kv key is the ONLY arm switch; an absent key is OFF. It used to fall back to
+  // DNC_ENGINE_ON=1 when the key was missing, so a kv loss (bad mount, blank volume) silently
+  // re-armed an engine the owner had stopped (deep dive 2026-09-17 P1-032, reproduced with three
+  // boots). A stop must survive a blank store; arming is the admin POST, never an env var.
+  return kv.get(DNC_ARM_KEY, null) === true;
 }
 function dncSetArmed(on) { kv.set(DNC_ARM_KEY, !!on); return dncArmed(); }
 const DNC_MINT = "42HsffEQoHqWoeiffksYayC75fQDxaoUdMBzmeXdpump";
@@ -1300,11 +1309,18 @@ const ROSE_ARM_KEY = "roseEngineArmed";
 function roseEngineHardKilled() { return process.env.ROSE_ENGINE_OFF === "1"; }
 function roseEngineArmed() {
   if (roseEngineHardKilled()) return false;
-  const v = kv.get(ROSE_ARM_KEY, null);
-  if (v === null || v === undefined) return process.env.ROSE_ENGINE_ON === "1";
-  return v === true;
+  // The kv key is the ONLY arm switch; an absent key is OFF. It used to fall back to
+  // ROSE_ENGINE_ON=1 when the key was missing, so a kv loss (bad mount, blank volume) silently
+  // re-armed an engine the owner had stopped (deep dive 2026-09-17 P1-032, reproduced with three
+  // boots). A stop must survive a blank store; arming is the admin POST, never an env var.
+  return kv.get(ROSE_ARM_KEY, null) === true;
 }
 function roseEngineSetArmed(on) { kv.set(ROSE_ARM_KEY, !!on); return roseEngineArmed(); }
+// The env arm flags are inert now (P1-032). Say so at boot so a stale Railway variable is not
+// mistaken for a running engine.
+for (const envName of ["CUNA_ENGINE_ON", "DNC_ENGINE_ON", "ROSE_ENGINE_ON"]) {
+  if (process.env[envName] === "1") console.warn(`[engine] ${envName}=1 is IGNORED since 2026-09-17 — arm with POST /api/${envName.split("_")[0].toLowerCase()}-engine?on=1 (kv is the only switch; an absent key is OFF)`);
+}
 // Volume shape asserted on EVERY boot (the ratchet CUNA needed after deploys silently
 // reverted its widths). Only stamps the keys that are wrong, so live tuning through
 // /api/whirlpool/vault/config?project=rose&durable=1 sticks on every field not named here —
@@ -3790,7 +3806,7 @@ if (AI_DAILY_MAX > 0) {
           ` — if this is a real learner, raise ASK_CLUCK_DAILY or set AI_DAILY_OFF=1`);
       } catch (_) {}
     } });
-  for (const route of ["/api/ask-cluck", "/api/lecture", "/api/lp-ask"]) app.use(route, aiDaily);
+  for (const route of ["/api/ask-cluck", "/api/lecture", "/api/lp-ask", "/api/wallet-xray/ask"]) app.use(route, aiDaily);
 }
 app.use("/api/track", rateLimit("track", { windowMs: 60000, max: 120 })); // learning-funnel events (many per session)
 app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
@@ -5271,8 +5287,9 @@ app.post("/api/classroom/graduate-claim", async (req, res) => {
 
 // Admin — review/manage the graduate reward queue. ?action=approve|paid|reject&wallet=… to set status;
 // no action = list. Approved/paid wallets are what you batch into the Airdropper.
-app.get("/api/classroom/graduates", (req, res) => {
+app.all("/api/classroom/graduates", (req, res) => {
   if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  if (mutatingGetRefused(req, res, ["action"])) return;   // deep dive P1-058: approve/paid/reject delete or flip a record — the list stays a GET
   const grads = kv.get("classroomGraduates", {}) || {};
   const action = req.query.action, w = String(req.query.wallet || "").trim();
   if (action && w && grads[w]) {
@@ -5434,7 +5451,7 @@ async function getBagsGraduated() {
 function tgEsc(s) { return String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
 // Escape for server-rendered HTML pages/attributes (OG tags, /lock, /burn, the LP Lab shell).
 // ONE copy — five private ones drifted before, and one of them was missing the quote escape.
-function escHtml(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+const { escHtml } = require("./lib/html-escape");   // shared with lib/learn-pages.js and lib/cuna-announce.js
 
 // The Recently-Graduated BOARD = our own tracked 48h record (reliable for Bags,
 // unaffected by pump.fun flooding ST's global feed) merged with any Bags-suffix
@@ -5447,9 +5464,11 @@ async function getBagsGraduatedBoard() {
   if (GRAD_BOARD_CACHE.list && now - GRAD_BOARD_CACHE.ts < GRADUATED_TTL) return { tokens: GRAD_BOARD_CACHE.list, cached: true };
   const seen = new Set();
   const tokens = [];
-  for (const g of gradTracker.listGraduated()) {       // newest-first, last 48h
-    if (seen.has(g.mint)) continue; seen.add(g.mint);
-    let snap = null; try { snap = await getBagsTokenSnapshot(g.mint); } catch (_) {}
+  const grads = gradTracker.listGraduated().filter((g) => { if (seen.has(g.mint)) return false; seen.add(g.mint); return true; });   // newest-first, last 48h
+  // Independent per-token reads — they used to run one after another inside a user-facing request.
+  const snaps = await Promise.all(grads.map((g) => getBagsTokenSnapshot(g.mint).catch(() => null)));
+  grads.forEach((g, i) => {
+    const snap = snaps[i];
     tokens.push({
       tokenMint: g.mint, name: g.name, symbol: g.symbol, image: g.image, twitter: g.twitter,
       priceUsd: snap?.priceUsd ?? g.priceUsd ?? null,
@@ -5459,7 +5478,7 @@ async function getBagsGraduatedBoard() {
       createdAt: g.graduatedAt,
       source: "tracked",
     });
-  }
+  });
   try {                                                 // additive supplement from ST
     const st = await getBagsGraduated();
     for (const t of (st.tokens || [])) { if (!seen.has(t.tokenMint)) { seen.add(t.tokenMint); tokens.push(t); } }
@@ -5801,9 +5820,10 @@ app.get("/api/chain-spotlight-test", async (req, res) => {
 
 // &post=1 posts a tweet (uses &text=... or a default) so you can verify posting
 // works the moment the keys are added in Railway.
-app.get("/api/x-post-test", async (req, res) => {
+app.all("/api/x-post-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["post"])) return;   // deep dive P1-019: a brand post is never a link unfurl away
   if (!xConfigured()) return res.status(200).json({ configured: false, message: "Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in Railway." });
   if (req.query.post === "1") {
     const text = req.query.text ? String(req.query.text) : "🐔 Cluck Norris is online. Crypto lessons incoming. clucknorris.app";
@@ -6105,18 +6125,20 @@ app.get("/api/meteora/status", async (req, res) => {
 
 // Meteora DLMM — pull liquidity (gated). ?pct=0.05 withdraws 5% to the wallet (no
 // close). DRY RUN unless &run=1. Optional &position=<pubkey> (defaults to the only one).
-app.get("/api/meteora/remove-liquidity", async (req, res) => {
+app.all("/api/meteora/remove-liquidity", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.removeLiquidity({ positionPubkey: req.query.position || null, pct: req.query.pct, close: req.query.close === "1", dryRun: req.query.run !== "1" }));
   } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // Meteora DLMM — add liquidity back (gated). ?cbbtc=&sol= amounts. DRY RUN unless &run=1.
-app.get("/api/meteora/add-liquidity", async (req, res) => {
+app.all("/api/meteora/add-liquidity", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.addLiquidity({ positionPubkey: req.query.position || null, cbbtcUi: req.query.cbbtc, solUi: req.query.sol, dryRun: req.query.run !== "1" }));
   } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
@@ -6124,9 +6146,10 @@ app.get("/api/meteora/add-liquidity", async (req, res) => {
 
 // Meteora DLMM — open a fresh centered position (gated). ?cbbtc=&sol=&half=0.6&dist=spot|curve|bidask
 // Centers on current price, ±half%. DRY RUN unless &run=1 (dry shows bin math + #positions).
-app.get("/api/meteora/open-position", async (req, res) => {
+app.all("/api/meteora/open-position", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.openPosition({
       cbbtcUi: req.query.cbbtc, solUi: req.query.sol,
@@ -6144,9 +6167,10 @@ app.get("/api/meteora/open-position", async (req, res) => {
 // Meteora DLMM — unwrap stranded wSOL back to native lamports (gated). Closes/swaps can
 // leave the operator's SOL wrapped, which starves position-rent payments even when the
 // float looks funded. open/add now auto-unwrap, this is the manual lever. DRY unless &run=1.
-app.get("/api/meteora/unwrap", async (req, res) => {
+app.all("/api/meteora/unwrap", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     const { connection } = require("./lib/rpc");
     return res.status(200).json(await meteora.unwrapWsol(connection(), { dryRun: req.query.run !== "1" }));
@@ -6547,18 +6571,20 @@ async function jupUsdcRebalanceInPlace({ dryRun = false } = {}) {
   return { ...base, action: "rebalanced-inplace", sigs: r.sigs, residual: { jup: Number(resJup.toFixed(4)), usdc: Number(resUsdc.toFixed(2)), usd: Number(residualUsd.toFixed(2)) } };
 }
 // In-place rebalance endpoint (gated, BACKGROUND tool). DRY RUN unless &run=1.
-app.get("/api/meteora/rebalance-inplace", async (req, res) => {
+app.all("/api/meteora/rebalance-inplace", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try { return res.status(200).json(await jupUsdcRebalanceInPlace({ dryRun: req.query.run !== "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // Meteora re-center (gated). DRY RUN unless &run=1. &force=1 ignores edge/anti-thrash checks.
 // &which=jup targets the JUP/USDC earner instead of the cbBTC/SOL chaser.
-app.get("/api/meteora/recenter", async (req, res) => {
+app.all("/api/meteora/recenter", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     const fn = req.query.which === "jup" ? jupUsdcRecenter : meteoraRecenter;
     return res.status(200).json(await fn({ dryRun: req.query.run !== "1", force: req.query.force === "1" }));
@@ -6567,9 +6593,11 @@ app.get("/api/meteora/recenter", async (req, res) => {
 });
 
 // Meteora config (gated). GET returns config; query params set it (e.g. ?autoRecenter=1&half=0.6&dist=curve).
-app.get("/api/meteora/config", (req, res) => {
+app.all("/api/meteora/config", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // deep dive P0-008: a config write (autoRecenter, widths, the fee ledger) is a POST; the read stays a GET
+  if (mutatingGetRefused(req, res, ["halfWidthPct", "distribution", "edgeFrac", "minRecenterSec", "minRecenterSecOor", "maxImpactPct", "enabled", "autoRecenter", "ledgerCbbtc", "ledgerSol"])) return;
   try {
     // &which=jup patches the JUP/USDC earner's kv config instead of the cbBTC chaser's.
     if (req.query.which === "jup") {
@@ -6736,9 +6764,10 @@ app.get("/api/treasury-heavy", async (req, res) => {
 });
 
 // CLKN Blitz control (gated). &run=1 starts; &abort=1 reverts now; no flag = status/plan.
-app.get("/api/clkn-blitz", async (req, res) => {
+app.all("/api/clkn-blitz", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["abort", "run"])) return;   // deep dive P0-008: both close and redeploy CLKN liquidity
   try {
     if (req.query.abort === "1") return res.status(200).json(await clknBlitzRevert("manual abort"));
     const width = req.query.width != null ? Number(req.query.width) : 0.77;
@@ -6959,9 +6988,12 @@ app.get("/api/lock-report-test", async (req, res) => {
 // Operator X announcement — post arbitrary text to X, bypassing the master X pause for
 // THIS manual, key-gated call only (the X counterpart to /api/tg-test). Auto-posting stays
 // off; this is a deliberate operator lever. Dry-run unless &post=1.
-app.get("/api/x-announce", async (req, res) => {
+app.all("/api/x-announce", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // deep dive P1-019: &post=1 is POST-only (the dry run stays a GET). The hourly lock-celebration
+  // routine and the skill send it as a POST — keep them in step with this line.
+  if (mutatingGetRefused(req, res, ["post"])) return;
   const text = String(req.query.text || "").slice(0, 24000);
   const image = req.query.image ? String(req.query.image) : null;  // optional image URL to attach
   const video = req.query.video ? String(req.query.video) : null;  // optional video URL to attach (chunked upload)
@@ -7534,7 +7566,7 @@ function airdropCompList() { const a = kv.get("airdropCompWallets", []); return 
 // (airdropCompWallets) never silently gain premium access. Master-key-only via /api/tool-comp.
 function toolCompList() { const a = kv.get("toolCompWallets", []); return Array.isArray(a) ? a : []; }
 function isToolComped(w) { w = String(w || ""); return !!w && toolCompList().indexOf(w) !== -1; }
-const AD_B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const AD_B58 = SOL_ADDR_RE;   // the shared shape from lib/solana-addr
 app.get("/api/airdrop-comp/check", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const w = String((req.query && req.query.wallet) || "").trim();
@@ -7843,14 +7875,18 @@ const hubStore = require("./lib/hub/store");
 const hubPublic = require("./lib/hub/public");
 function hubProjects() {
   const built = {
-    clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9 },
-    cuna: { id: "cuna", label: "CUNA", symbol: "CUNA", mint: SUPPLY_FEEDS.cuna.mint, decimals: 9 },
-    rose: { id: "rose", label: "OnlyRose", symbol: "ROSE", mint: SUPPLY_FEEDS.rose.mint, decimals: 9 },
+    clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9, rewardMint: CLKN_MINT, rewardDecimals: 9 },
+    cuna: { id: "cuna", label: "CUNA", symbol: "CUNA", mint: SUPPLY_FEEDS.cuna.mint, decimals: 9, rewardMint: SUPPLY_FEEDS.cuna.mint, rewardDecimals: 9 },
+    rose: { id: "rose", label: "OnlyRose", symbol: "ROSE", mint: SUPPLY_FEEDS.rose.mint, decimals: 9, rewardMint: SUPPLY_FEEDS.rose.mint, rewardDecimals: 9 },
   };
   let reg = {}; try { reg = hubStore.readRegistry(kv) || {}; } catch (_) { /* registry absent = built-ins only */ }
   for (const [id, p] of Object.entries(reg)) {
     if (!p || !p.mint || !/^[a-z0-9][a-z0-9-]{1,31}$/.test(id)) continue;
-    built[id] = { id, label: String(p.label || id).slice(0, 64), symbol: String(p.symbol || id.toUpperCase()).slice(0, 12), mint: String(p.mint), decimals: Number.isInteger(p.decimals) ? p.decimals : null };
+    const decimals = Number.isInteger(p.decimals) ? p.decimals : null;
+    // The reward asset can differ from the locked token (a project may pay in another mint);
+    // its decimals are what the public totals must be formatted with (deep dive P1-036).
+    built[id] = { id, label: String(p.label || id).slice(0, 64), symbol: String(p.symbol || id.toUpperCase()).slice(0, 12), mint: String(p.mint), decimals,
+      rewardMint: String(p.rewardMint || p.mint), rewardDecimals: Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : decimals };
   }
   return built;
 }
@@ -7861,7 +7897,8 @@ function hubProjectView(project) {
   try {
     const days = hubStore.read(kv, project.id, "days", null);
     if (days && Object.keys(days).length) {
-      stake = hubPublic.stakeView({ days, paid: hubStore.read(kv, project.id, "paid", {}), batches: hubStore.read(kv, project.id, "batches", {}), decimals: project.decimals || 9 });
+      stake = hubPublic.stakeView({ days, paid: hubStore.read(kv, project.id, "paid", {}), batches: hubStore.read(kv, project.id, "batches", {}),
+        decimals: Number.isInteger(project.rewardDecimals) ? project.rewardDecimals : (project.decimals || 9) });   // reward-asset decimals, not the locked token's (P1-036)
     }
   } catch (_) { /* a project without a programme store is not an error */ }
   if (project.id === "cuna") {
@@ -7932,6 +7969,12 @@ const hubScanDeps = (() => {
   };
 })();
 const hubAlert = (m) => { console.warn("[hub] " + m); try { cunaOpsAlert(`⚠️ Hub: ${m}`, "hub:" + String(m).slice(0, 40)).catch(() => {}); } catch (_) {} };
+// A corrupt app-state.json boots the kv store IN-MEMORY with the file preserved (lib/kvstore.js,
+// deep dive P0-005): every verified write refuses until an operator restores it. That must be
+// seen, not found three payouts later. Delayed so the Telegram config is loaded.
+if (typeof kv.loadError === "function" && kv.loadError()) {
+  setTimeout(() => { try { cunaOpsAlert(`🛑 kv store: ${kv.loadError()}`, "kvstore:load").catch(() => {}); } catch (_) {} }, 20000);
+}
 hubRoutes.mount(app, {
   kv, adminAuthOK, publicErrMsg, vault: whirlpoolMM.vault,
   connection: () => require("./lib/rpc").connection("confirmed"),
@@ -7943,6 +7986,10 @@ hubRoutes.mount(app, {
   secret: () => process.env.PREMIUM_ACCESS_KEY, verifySignature: (m, sig, w) => verifySolanaSignature(m, sig, w),
   clknPriceInSol: () => hatchery.clknPriceInSol(),
   payTo: () => ({ sol: process.env.HUB_PAY_SOL_WALLET || SOL_UNLOCK_WALLET, clkn: process.env.HUB_PAY_CLKN_WALLET || TREASURY_WALLET }),
+  // The built-in programmes are not registry rows, so the duplicate-mint guard could not see them:
+  // a second project was approvable on CUNA's live mint (deep dive P1-030). Lazy — SUPPLY_FEEDS is
+  // declared further down.
+  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint }),
   getTx: async (sig) => {
     const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     return r && r.result;
@@ -8104,6 +8151,10 @@ app.get("/api/buyspecial/draw/payout", (req, res) => {
 app.get("/api/buyspecial-crosscheck", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
+  // Deep dive 2026-09-17 P0-009/010: the pass was client-side only here — a bare curl skipped the
+  // paywall. Same server check as X-Ray / Holders / Trace; the operator console (admin key) is
+  // the one exemption, matching the page's own operator mode.
+  if (!adminAuthOK(req) && await requireToolPass(req, res)) return;
   const mint = (req.query.mint || "").trim();
   const from = parseInt(req.query.from, 10);
   const to = parseInt(req.query.to, 10);
@@ -8138,6 +8189,10 @@ app.get("/api/buyspecial-crosscheck", async (req, res) => {
 app.get("/api/buyspecial-holdcheck", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
+  // Deep dive 2026-09-17 P0-009/010: the pass was client-side only here — a bare curl skipped the
+  // paywall. Same server check as X-Ray / Holders / Trace; the operator console (admin key) is
+  // the one exemption, matching the page's own operator mode.
+  if (!adminAuthOK(req) && await requireToolPass(req, res)) return;
   const mint = (req.query.mint || "").trim();
   const from = parseInt(req.query.from, 10);
   const to = parseInt(req.query.to, 10);
@@ -8305,6 +8360,16 @@ function verifyToolPass(token) {
 // Live qualification of a wallet for the free tier. `unavailable` means the balance could not
 // be read (RPC down) — callers apply the outage policy instead of treating it as zero.
 const toolPassHolderCache = new Map();   // wallet -> { ok, at, deny } — one balance read per wallet per 5 min
+// Bounded like toolPassChallenges above: every distinct wallet that ever ran a gated tool used to
+// stay in this map for the life of the process (simplifier pass, 2026-09-17).
+function rememberHolder(wallet, entry) {
+  toolPassHolderCache.set(wallet, entry);
+  if (toolPassHolderCache.size <= 5000) return;
+  const cutoff = Date.now() - 5 * 60e3;
+  for (const [w, c] of toolPassHolderCache) if (!c || c.at < cutoff) toolPassHolderCache.delete(w);
+  let drop = toolPassHolderCache.size - 5000;
+  for (const w of toolPassHolderCache.keys()) { if (drop-- <= 0) break; toolPassHolderCache.delete(w); }
+}
 async function toolPassQualify(wallet) {
   if (isToolComped(wallet)) return { ok: true, via: "comp" };
   const cached = toolPassHolderCache.get(wallet);
@@ -8316,10 +8381,10 @@ async function toolPassQualify(wallet) {
   if (!h || h.unavailable) { console.warn("[tool-pass] balance read unavailable, failing open:", (h && h.error) || "no result"); return { ok: true, via: "grace-rpc" }; }
   const needed = Math.ceil(TOOLGATE.usd / priceUsd);
   const bal = Number(h.balance) || 0;
-  if (bal >= needed) { toolPassHolderCache.set(wallet, { ok: true, at: Date.now() }); return { ok: true, via: "holder", balance: bal, needed }; }
+  if (bal >= needed) { rememberHolder(wallet, { ok: true, at: Date.now() }); return { ok: true, via: "holder", balance: bal, needed }; }
   const deny = { error: "insufficient_holdings", balance: bal, needed, holdUsd: TOOLGATE.usd, priceUsd,
     detail: `The free tier needs about $${TOOLGATE.usd} of CLKN (~${needed.toLocaleString()} at the current price); that wallet holds ${Math.round(bal).toLocaleString()}. ${TOOLGATE.lamports / 1e9} SOL unlocks every heavy tool for ${TOOLGATE.days} days.` };
-  toolPassHolderCache.set(wallet, { ok: false, at: Date.now(), deny });
+  rememberHolder(wallet, { ok: false, at: Date.now(), deny });
   return { ok: false, ...deny };
 }
 async function toolPassGate(req) {
@@ -8407,7 +8472,10 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
     // the same signature again — lost response, closed tab, another device — gets the same pass
     // with the same expiry (`recovered: true`); a different wallet is refused before anything is
     // consumed; a store that cannot record durably answers 503 and consumes nothing.
-    const r = redeemPaidPass({ paySig, wallet, verified: v, sigStore, kv });
+    // A payment already recorded as a Lock-to-Earn month lives in the hub REGISTRY (its durable
+    // truth); the signature store is best-effort, so it alone cannot be the cross-product guard
+    // (Codex 2026-09-17, finding 2 — reproduced with a store that could not record).
+    const r = redeemPaidPass({ paySig, wallet, verified: v, sigStore, kv, usedElsewhere: (s) => !!require("./lib/hub/access").sigUsedInRegistry(hubStore.readRegistry(kv) || {}, s) });
     if (!r.ok) return res.status(r.status || 200).json({ success: false, error: r.error, retry: !!r.retry, lamports: r.lamports, needed: r.needed });
     return res.status(200).json({ success: true, via: "paid", recovered: r.recovered, lamports: r.lamports, termDays: r.termDays, pass: "t:" + issueToolPass(wallet, "paid", r.ttlMs), days: r.days });
   }
@@ -8445,7 +8513,7 @@ app.get("/api/token-metadata/read", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try {
     const mint = String((req.query && req.query.mint) || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
     const tm = require("./lib/token-metadata");
     const { Connection, PublicKey } = require("@solana/web3.js");
     const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
@@ -8497,7 +8565,7 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
   try {
     const b = req.body || {};
     const mint = String(b.mint || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
     const tm = require("./lib/token-metadata");
     const { Connection } = require("@solana/web3.js");
     const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
@@ -8603,7 +8671,7 @@ app.post("/api/token-metadata/prepare", async (req, res) => {
   try {
     const b = req.body || {};
     const mint = String(b.mint || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
     const tm = require("./lib/token-metadata");
     const { Connection } = require("@solana/web3.js");
     const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
@@ -8652,7 +8720,7 @@ app.post("/api/token-authority/prepare", async (req, res) => {
   try {
     const b = req.body || {};
     const mint = String(b.mint || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
     const type = Number(b.authorityType);
     if (type !== 0 && type !== 1) return res.status(400).json({ ok: false, error: "bad_authority_type",
       detail: "0 = mint authority, 1 = freeze authority. Nothing else is revocable here." });
@@ -8817,6 +8885,9 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     // the paying wallet. One real payment was a master key to the whole paid tool.
     // add() is the same atomic test-and-set the CLKN path uses, so a concurrent double-submit
     // loses too. Namespaced 'sol:' so a signature can never be spent once here and once there.
+    // A payment already claimed as a Lock-to-Earn platform month lands in this same wallet
+    // (deep dive P1-051, the sibling of the tools-pass check in lib/tool-pass-redeem.js).
+    if (sigStore.has("hub-access:" + sig) || require("./lib/hub/access").sigUsedInRegistry(hubStore.readRegistry(kv) || {}, sig)) return res.status(200).json({ success: false, error: "This payment was already used for a platform-access month." });
     if (!sigStore.add("sol:" + sig)) {
       return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
     }
@@ -8837,6 +8908,10 @@ app.get("/api/verify-sol-payment", async (req, res) => {
 app.get("/api/buyspecial-trace", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
+  // Deep dive 2026-09-17 P0-009/010: the pass was client-side only here — a bare curl skipped the
+  // paywall. Same server check as X-Ray / Holders / Trace; the operator console (admin key) is
+  // the one exemption, matching the page's own operator mode.
+  if (!adminAuthOK(req) && await requireToolPass(req, res)) return;
   const mint = (req.query.mint || "").trim(), wallet = (req.query.wallet || "").trim();
   const from = parseInt(req.query.from, 10), to = parseInt(req.query.to, 10);
   if (!SOL_ADDR_RE.test(mint) || !SOL_ADDR_RE.test(wallet) || !from || !to || to <= from) {
@@ -9634,9 +9709,10 @@ app.get("/api/cuna-giveaway", (req, res) => {
 // and no redeploy. Arming REFUSES without a loaded operator key: an "armed" that cannot sign
 // reads as running when it is not, which is exactly the state you stop watching.
 //   ?on=1   arm    ?off=1  disarm    (no arg = report state)
-app.get("/api/dnc-engine", (req, res) => {
+app.all("/api/dnc-engine", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
   try {
     const operator = whirlpoolMM.vault.operatorPubkey("dnc");
     if (req.query.on === "1") {
@@ -9655,9 +9731,10 @@ app.get("/api/dnc-engine", (req, res) => {
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get("/api/rose-engine", (req, res) => {
+app.all("/api/rose-engine", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
   try {
     if (req.query.on === "1") {
       if (roseEngineHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "ROSE_ENGINE_OFF=1 is set in Railway — clear it first." });
@@ -9681,9 +9758,10 @@ app.get("/api/rose-engine", (req, res) => {
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get("/api/cuna-engine", (req, res) => {
+app.all("/api/cuna-engine", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
   try {
     const operator = whirlpoolMM.vault.operatorPubkey("cuna");
     if (req.query.on === "1") {
@@ -9704,9 +9782,17 @@ app.get("/api/cuna-engine", (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
 });
 
-app.get("/api/cuna-giveaway/admin", async (req, res) => {
+app.all("/api/cuna-giveaway/admin", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // Deep dive 2026-09-17 P0-002: this was the one CUNA admin route the 2026-09-05 mutating-GET
+  // audit missed — &draw=1 spun the wheel and &payout=1&run=1 SENT PRIZE TOKENS on a pasted link.
+  // Every flag that configures, scans, posts, draws, pays or reconciles now needs a POST; the
+  // flag-less GET, &holdcheck=1, &trace=1, &boardpreview=1, &payout=1 (preview) and &payoutstate=1
+  // stay reads.
+  if (mutatingGetRefused(req, res, ["reset", "mint", "pool", "symbol", "chat", "min", "display", "exclude", "start", "end", "holdend",
+    "mode", "bonus", "entrymode", "dq", "undq", "scan", "every", "replaceon", "replaceoff", "pinon", "pinoff", "board", "boardoff", "boardon",
+    "draw", "run", "sweep", "unpay"])) return;
   const q = req.query;
   const deps = { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched };
   const ms = (v) => { if (v == null || v === "") return undefined; const n = Number(v); return Number.isFinite(n) && n > 1e11 ? n : Date.parse(String(v)) || undefined; };
@@ -10843,7 +10929,7 @@ async function renderLockCard(d) {
 app.get("/api/lock-card", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const mint = String(req.query.mint || "").trim();
-  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).end();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).end();
   try {
     const d = await lockPageData(mint);
     if (!d || !d.success) return res.status(404).end();
@@ -10862,7 +10948,7 @@ app.get("/api/lock-card", async (req, res) => {
 // from /api/locks. Everything token-supplied is escaped (names are attacker-controlled).
 app.get("/lock/:mint", async (req, res) => {
   const mint = String(req.params.mint || "").trim();
-  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(404).send("Not found");
+  if (!SOL_ADDR_RE.test(mint)) return res.status(404).send("Not found");
   const escH = escHtml;
   let title = "Token Lock Report", sub = "";
   try {   // best-effort identity for the OG text — never block the page on it
@@ -10915,7 +11001,7 @@ a{color:#FCD34D}
 <script>
 (function(){
   var MINT=${JSON.stringify(mint)};
-  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
   function fmt(n){if(n==null||!isFinite(n))return'—';var a=Math.abs(n);if(a>=1e9)return(n/1e9).toFixed(2)+'B';if(a>=1e6)return(n/1e6).toFixed(2)+'M';if(a>=1e3)return(n/1e3).toFixed(1)+'K';return String(Math.round(n));}
   fetch('/api/locks?mint='+encodeURIComponent(MINT)).then(function(r){return r.json();}).then(function(d){
     var el=document.getElementById('body');
@@ -10995,7 +11081,7 @@ const _tokenIconMiss = new Map();   // mint -> ts of last failed fetch (10-min n
 app.get("/api/token-icon", async (req, res) => {
   try {
     const mint = String((req.query && req.query.mint) || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).end();
+    if (!SOL_ADDR_RE.test(mint)) return res.status(400).end();
     fs.mkdirSync(TOKEN_ICON_DIR, { recursive: true });
     const metaPath = path.join(TOKEN_ICON_DIR, mint + ".json");
     const binPath = path.join(TOKEN_ICON_DIR, mint + ".img");
@@ -11406,7 +11492,7 @@ app.get("/api/cuna-stake/wallet", async (req, res) => {
   try {
     const s = require("./lib/cuna-staking");
     const addr = String(req.query.address || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) {
+    if (!SOL_ADDR_RE.test(addr)) {
       return res.status(400).json({ ok: false, error: "Connect a wallet first." });
     }
     const p = cunaProgramme();
@@ -11702,7 +11788,13 @@ async function cunaAccrualTick(reason) {
     scanned: locks.length,
     credits: Object.fromEntries(Object.entries(day.credits).map(([k, v]) => [k, v.toString()])),
   };
-  kv.set(CUNA_STAKE_DAYS_KV, days);
+  // The accrual ledger is money: a slice credited only in RAM vanishes on the next restart, and the
+  // gate then re-runs the hour against different locks (deep dive P1). Verified write, loud failure.
+  if (!kv.setVerified(CUNA_STAKE_DAYS_KV, days)) {
+    const why = kv.lastPersistError() || "read-back mismatch";
+    console.error(`[cuna-accrual] ${gate.day}: credited in memory but the ledger did NOT reach the volume (${why}) — a restart loses this hour`);
+    try { cunaOpsAlert(`⚠️ CUNA accrual ${gate.day}: ledger write did not reach the volume (${why}). Check DATA_DIR before the next payout.`, "cuna-accrual:persist").catch(() => {}); } catch (_) {}
+  }
 
   const missed = prog.missedSlices({ programme: stored, paidDays: days, nowUnix });
   const line = `${gate.day} (${reason}): ${day.eligible} earning, ` +
@@ -12287,32 +12379,41 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       const wellFormed = (x) => { try { return /^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(x) && bs58v.decode(x).length === 64; } catch (_) { return false; } };
       const sigs = [...new Set(results.map((r) => String((r && r.sig) || "").trim()).filter(wellFormed))];
       let landed = new Set();
+      // Confirmed is not paid. A signature status says the transaction landed, not that it moved
+      // CUNA to THIS wallet for THIS amount — one unrelated confirmed signature used to mark every
+      // row in a batch paid (deep dive P1-048). Read each transaction once and check the wallet's
+      // own token delta (lib/payout-verify.js).
+      const txBySig = new Map();
       if (sigs.length) {
         try {
-          const { connection } = require("./lib/rpc");
-          const st = await connection("confirmed").getSignatureStatuses(sigs, { searchTransactionHistory: true });
-          (st && st.value || []).forEach((v, i) => {
-            if (v && !v.err && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")) landed.add(sigs[i]);
-          });
+          const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
+          for (const sg of sigs) {
+            const r = await rpcCall("cuna-payout-sent", "getTransaction", [sg, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+            txBySig.set(sg, (r && r.result) || null);
+          }
         } catch (e) {
           // Cannot verify -> record nothing, say so plainly. The page keeps the signatures locally
           // and offers the row buttons again.
           return res.status(503).json({ ok: false, error: "could not verify signatures on chain right now — nothing recorded, try again: " + publicErrMsg(e) });
         }
       }
-      const rejected = results.filter((r) => !landed.has(String((r && r.sig) || "").trim())).map((r) => ({ wallet: r && r.wallet, sig: r && r.sig, why: "signature not confirmed on chain" }));
-      results = results.filter((r) => landed.has(String((r && r.sig) || "").trim()));
+      // The same row verification the hub payout runs (lib/payout-verify.verifyBatchRows): the
+      // transaction must have moved the batch's token to that wallet for the amount owed, landed
+      // after the batch was exported, and not already settled that wallet in another batch.
+      const vr = payoutVerify.verifyBatchRows({ results, txBySig, batches, batchId: id, mint: SUPPLY_FEEDS.cuna.mint, amounts: b.amounts, notBefore: b.at });
+      const rejected = vr.rejected;
+      results = vr.accepted;
+      for (const sg of sigs) landed.add(sg);   // kept for the log line below
       const r = pay.recordSent({ batch: b, paid, results, nowUnix });
       r.ignored = [...r.ignored, ...rejected];
       paid = r.paid;
       batches = { ...batches, [id]: r.batch };
-      kv.set(CUNA_PAID_KV, paid); kv.set(CUNA_BATCH_KV, batches);
-      // Read back before telling the page anything is paid: a kv write that failed (full or
-      // unmounted volume) must not be reported as recorded, or the page retries nothing and the
-      // next batch offers the same money again.
-      const check = kv.get(CUNA_BATCH_KV, {}) || {};
-      const persisted = kv.isPersistent() && check[id] && check[id].sent && r.recorded.every((w) => check[id].sent[w]);
-      if (!persisted) return res.status(500).json({ ok: false, error: "recorded in memory but the volume is not persistent — STOP and check DATA_DIR before sending more" });
+      // Batches first (remainingOf is what stops a re-send), then paid. setVerified re-reads the
+      // FILE — the old "set, read back from memory, check isPersistent()" passed with the volume
+      // gone (deep dive P0-006), and a row that is only in RAM is paid again after the next restart.
+      if (!kv.setManyVerified({ [CUNA_BATCH_KV]: batches, [CUNA_PAID_KV]: paid })) {
+        return res.status(500).json({ ok: false, error: "payout record did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — STOP and check DATA_DIR before sending more; the page keeps its signatures for a retry" });
+      }
       sentReport = { recorded: r.recorded, ignored: r.ignored, remaining: Object.keys(r.remaining).length, state: r.batch.state };
       console.log(`[cuna-payout] batch ${id}: ${r.recorded.length} rows recorded sent, ${Object.keys(r.remaining).length} remaining, state ${r.batch.state}`);
     } else if (q.confirm) {
@@ -12322,14 +12423,14 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       const r = pay.confirmBatch({ batch: b, paid, nowUnix });
       paid = r.paid;
       batches = { ...batches, [id]: { ...r.batch, confirmedAt: nowUnix, note: String(q.note || "").slice(0, 200) } };
-      kv.set(CUNA_PAID_KV, paid); kv.set(CUNA_BATCH_KV, batches);
+      if (!kv.setManyVerified({ [CUNA_BATCH_KV]: batches, [CUNA_PAID_KV]: paid })) return res.status(500).json({ ok: false, error: "confirm did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — check DATA_DIR; the batch is still pending" });
       console.log(`[cuna-payout] batch ${id} CONFIRMED — ${b.count} wallets, ${(Number(b.totalRaw) / 1e9).toLocaleString()} CUNA`);
     } else if (q.cancel) {
       const id = String(q.cancel);
       const b = batches[id];
       if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
       batches = { ...batches, [id]: { ...pay.cancelBatch({ batch: b }), cancelledAt: nowUnix } };
-      kv.set(CUNA_BATCH_KV, batches);
+      if (!kv.setVerified(CUNA_BATCH_KV, batches)) return res.status(500).json({ ok: false, error: "cancel did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — check DATA_DIR; the batch is still pending" });
       console.log(`[cuna-payout] batch ${id} CANCELLED — its amounts are owed again`);
     }
 
@@ -12360,7 +12461,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
           paid = r.paid; batches = { ...batches, [id]: r.batch };
           // Batches first (remainingOf is what stops a re-send), then paid. One kv persist writes
           // the whole store, so the second write carries the first. A false stops the batch.
-          if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) {
+          if (!kv.setManyVerified({ [CUNA_BATCH_KV]: batches, [CUNA_PAID_KV]: paid })) {
             throw new Error("payout journal did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — STOP; do not export another batch until this one is reconciled");
           }
         };
@@ -12381,7 +12482,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       voidReport = pay.voidSent({ batch: b, paid, wallet: String(q.void), sig: String(q.sig || ""), nowUnix });
       if (voidReport.ok) {
         paid = voidReport.paid; batches = { ...batches, [id]: voidReport.batch };
-        if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) return res.status(500).json({ ok: false, error: "void did not reach the volume — check DATA_DIR" });
+        if (!kv.setManyVerified({ [CUNA_BATCH_KV]: batches, [CUNA_PAID_KV]: paid })) return res.status(500).json({ ok: false, error: "void did not reach the volume — check DATA_DIR" });
         console.log(`[cuna-payout] batch ${id}: row for ${q.void} VOIDED by operator — owed again`);
       }
     }
@@ -12398,7 +12499,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
           const vals = (st && st.value) || [];
           const rs = pay.resolveSent({ batch: b, paid, rows: rows.map((x, i) => ({ ...x, status: vals[i] || null })), nowUnix });
           paid = rs.paid; batches = { ...batches, [id]: rs.batch };
-          if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) return res.status(500).json({ ok: false, error: "sweep did not reach the volume — check DATA_DIR" });
+          if (!kv.setManyVerified({ [CUNA_BATCH_KV]: batches, [CUNA_PAID_KV]: paid })) return res.status(500).json({ ok: false, error: "sweep did not reach the volume — check DATA_DIR" });
           sweepReport = { ok: true, checked: rows.length, confirmed: rs.confirmed, voided: rs.voided, stillPending: rs.stillPending };
         } catch (e) { sweepReport = { ok: false, error: "could not read signature statuses — nothing changed: " + publicErrMsg(e) }; }
       }
@@ -12420,7 +12521,9 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
         note = "nothing to pay right now — everything owed is either below the floor or already in a pending batch";
       } else {
         batches = { ...batches, [id]: batch };
-        kv.set(CUNA_BATCH_KV, batches);
+        // A batch that exists only in memory is offered AGAIN after a restart while the first copy
+        // may already have been paid from the airdrop lines (deep dive P0-006).
+        if (!kv.setVerified(CUNA_BATCH_KV, batches)) return res.status(500).json({ ok: false, error: "batch did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — nothing exported; check DATA_DIR before paying anyone" });
         created = { ...batch, airdropLines: pay.toAirdropLines(batch.amounts, 9) };
         console.log(`[cuna-payout] batch ${id} created — ${batch.count} wallets, ${(Number(batch.totalRaw) / 1e9).toLocaleString()} CUNA PENDING`);
       }
@@ -15174,6 +15277,10 @@ app.post("/api/wallet-xray/ask", async (req, res) => {
   const w = String(wallet || "").trim();
   const q = String(question || "").slice(0, 600);
   if (!q) return res.status(400).json({ success: false, error: "Ask a question" });
+  // Same pass as the scan it explains (deep dive P1-064: an unauthenticated POST reached Anthropic
+  // while the sibling GET /api/wallet-xray answered 402). After the cheap input check, before the
+  // paid call.
+  if (await requireToolPass(req, res)) return;
   const hist = Array.isArray(history) ? history.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content).slice(-8).map((m) => ({ role: m.role, content: String(m.content).slice(0, 1200) })) : [];
 
   // Ground the answer: if a signature is given, fetch + describe that exact tx.
@@ -15507,9 +15614,10 @@ app.get("/api/diploma-collection", (req, res) => {
 // Diploma NFT admin (gated, 404 without key). ?action=status | create-tree | create-collection | test | backfill.
 // Mutating actions need &run=1. create-tree is one-time (~0.3 SOL); backfill mints to every
 // graduate who left a wallet (idempotent — won't double-mint).
-app.get("/api/diploma-mint", async (req, res) => {
+app.all("/api/diploma-mint", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: create-tree / backfill / test mint only on a POST
   const action = String(req.query.action || "status");
   try {
     if (action === "status") return res.status(200).json({ success: true, ...diplomaNft.status() });
@@ -15552,9 +15660,10 @@ app.get("/api/diploma-mint", async (req, res) => {
 //  (no action)         → status: enabled?, wallet pubkey, CLKN/SOL balance, per-send max
 //  ?max=NN              → set the per-send max guard (kv schoolAirdropMax)
 //  ?wallet=…&amount=NN&run=1 → manually airdrop to one wallet (same idempotent path as the reply flow)
-app.get("/api/school-airdrop", async (req, res) => {
+app.all("/api/school-airdrop", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["max", "run"])) return;   // deep dive P0-008: the cap write and the send are POST-only
   try {
     if (req.query.max != null) {
       const m = Math.max(1, parseInt(req.query.max, 10) || 0);
@@ -15676,7 +15785,7 @@ app.get("/api/token-card", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
   const mint = String(req.query.mint || "").trim();
-  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ success: false, error: "Invalid mint" });
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "Invalid mint" });
   try {
     let body = null;
     const hit = AUTOPSY_CACHE.get(mint);
@@ -18490,7 +18599,7 @@ function composeBrandPost(body) {
 async function contentEngineRun({ send = false } = {}) {
   if (!process.env.HELIUS_API_KEY) return { skipped: "no helius key" };
   let board = null; try { board = await getBagsGraduatedBoard(); } catch (_) {}
-  const cands = ((board && board.tokens) || []).filter((t) => t && t.tokenMint && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(t.tokenMint));
+  const cands = ((board && board.tokens) || []).filter((t) => t && t.tokenMint && SOL_ADDR_RE.test(t.tokenMint));
   if (!cands.length) return { skipped: "no graduated candidates" };
 
   // Quality bar (kv-tunable). We'd rather post NOTHING than feature a dud — the
@@ -20122,10 +20231,13 @@ app.listen(PORT, () => {
   // this generic 10-min loop must NOT also tick that project — two unlocked schedulers
   // rolling the same position race setState and manufacture orphaned positions (the $355
   // incident). A DISARMED dedicated engine falls back to generic management as before.
+  // The canonical predicates (hard-kill env beats the kv arm key; an absent key is OFF) — this
+  // table used to re-derive that precedence by hand, so the 2026-09-17 P1-032 change would have
+  // left it disagreeing with the loops it gates (simplifier pass).
   const dedicatedActive = {
-    rose: () => process.env.ROSE_ENGINE_OFF !== "1" && !!kv.get("roseEngineArmed", false),
-    cuna: () => process.env.CUNA_ENGINE_OFF !== "1" && !!kv.get("cunaEngineArmed", false),
-    dnc: () => process.env.DNC_ENGINE_OFF !== "1" && !!kv.get("dncEngineArmed", false),
+    rose: roseEngineArmed,
+    cuna: cunaArmed,
+    dnc: dncArmed,
     poke: () => process.env.POKE_ENGINE_ON === "1" && process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING, // OFF by default (owner, 2026-09-05), never on staging
   };
   const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {
