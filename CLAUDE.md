@@ -477,11 +477,12 @@ served the React shell at 200.
   `curl -X POST` with this change; if you ever recreate that routine, keep it a POST. **`/api/tg-test`
   is POST-only too (owner, 2026-09-17: "convert tg-test too, routine first")** — every form of it
   sends, so the whole GET method answers 405 after the key's 404; the query send and the raw
-  file-body upload share one dispatcher. The meme routine and the lock-celebration watcher were
-  switched to `curl -X POST` BEFORE the server change; both carry a transition fallback (resend as a
-  GET only on the OLD build's exact "empty body" 400) that must be **removed from both prompts once
-  this is promoted to `main`**. Next candidate, same routine-first sequencing: `/api/meme-queue`
-  `&done=`/`&art=` still write on a GET (the route is GET-only). **The burn celebration also has a value floor now**: a verified burn Jupiter
+  file-body upload share one dispatcher; a body under 100 bytes is refused rather than re-read as
+  the text send (Codex on #333). The meme routine and the lock-celebration watcher were switched
+  to `curl -X POST` BEFORE the server change, carried a transition GET fallback while the old build
+  was live, and had it **removed on 2026-09-17 once #335 was verified on production** — both prompts
+  now say "never fall back to a GET". Next candidate, same routine-first sequencing:
+  `/api/meme-queue` `&done=`/`&art=` still write on a GET (the route is GET-only). **The burn celebration also has a value floor now**: a verified burn Jupiter
   prices under `BURN_BROADCAST_MIN_USD` (default $10; unpriced = skipped) gets its receipt page
   but no auto-post — a stranger's one-unit mint could otherwise force a brand tweet.
 - ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`
