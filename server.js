@@ -180,27 +180,10 @@ try {
 // Railway env vars — they NEVER touch the repo. If env isn't set, notifications
 // just no-op silently so local dev works fine.
 async function notifyTelegram(text) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!token || !chatId) return;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn("[TELEGRAM] sendMessage failed:", res.status, body.slice(0, 200));
-    }
-  } catch (e) {
-    console.warn("[TELEGRAM] notify error:", e.message);
-  }
+  if (!chatId) return;
+  const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+  if (!result) console.warn("[TELEGRAM] sendMessage failed");
 }
 
 // Toolkit reminder for the community chat. It posts SILENTLY and deletes its
@@ -234,16 +217,9 @@ async function notifyToolsReminder() {
       await tgDelete(chatId, lastToolsReminderMsgId);
       lastToolsReminderMsgId = null; kv.set("toolsReminderMsgId", null);
     }
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId, text, parse_mode: "HTML",
-        disable_web_page_preview: true, disable_notification: true,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (data && data.ok && data.result) { lastToolsReminderMsgId = data.result.message_id; kv.set("toolsReminderMsgId", lastToolsReminderMsgId); }
-    else console.warn("[TELEGRAM] tools reminder not ok:", JSON.stringify(data).slice(0, 200));
+    const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: true });
+    if (result) { lastToolsReminderMsgId = result.message_id; kv.set("toolsReminderMsgId", lastToolsReminderMsgId); }
+    else console.warn("[TELEGRAM] tools reminder not ok");
   } catch (e) {
     console.warn("[TELEGRAM] tools reminder failed:", e.message);
   }
@@ -328,12 +304,8 @@ async function notifyBagsLaunches() {
       await tgDelete(chatId, lastBagsRadarMsgId);
       lastBagsRadarMsgId = null; kv.set("bagsRadarMsgId", null);
     }
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (data && data.ok && data.result) { lastBagsRadarMsgId = data.result.message_id; kv.set("bagsRadarMsgId", lastBagsRadarMsgId); }
+    const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+    if (result) { lastBagsRadarMsgId = result.message_id; kv.set("bagsRadarMsgId", lastBagsRadarMsgId); }
   } catch (e) { console.warn("[TELEGRAM] bags radar failed:", e.message); }
 }
 // 2×/day (14 & 22 UTC = 10am & 6pm ET), staggered onto hours no other scheduled
@@ -393,12 +365,8 @@ async function notifyMarketCheck() {
       await tgDelete(chatId, lastMarketCheckMsgId);
       lastMarketCheckMsgId = null; kv.set("marketCheckMsgId", null);
     }
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (data && data.ok && data.result) { lastMarketCheckMsgId = data.result.message_id; kv.set("marketCheckMsgId", lastMarketCheckMsgId); }
+    const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+    if (result) { lastMarketCheckMsgId = result.message_id; kv.set("marketCheckMsgId", lastMarketCheckMsgId); }
   } catch (e) { console.warn("[TELEGRAM] market check failed:", e.message); }
 }
 // Fires every 2h near the top of an even hour (UTC). Minute-gated so it does NOT
@@ -456,16 +424,12 @@ async function notifyRecap() {
       await tgDelete(chatId, lastRecapMsgId);
       lastRecapMsgId = null; kv.set("recapMsgId", null);
     }
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (data && data.ok && data.result) {
-      lastRecapMsgId = data.result.message_id; kv.set("recapMsgId", lastRecapMsgId);
+    const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+    if (result) {
+      lastRecapMsgId = result.message_id; kv.set("recapMsgId", lastRecapMsgId);
       recap.reset(); // start a fresh window only after a successful post
     } else {
-      console.warn("[TELEGRAM] recap not ok:", JSON.stringify(data).slice(0, 200));
+      console.warn("[TELEGRAM] recap not ok");
     }
   } catch (e) { console.warn("[TELEGRAM] recap failed:", e.message); }
 }
@@ -1827,10 +1791,7 @@ async function broadcastBurnCelebration(receipt) {
         `🔥 <b>${amt} $${tgEsc(sym)} burned forever</b>${pct ? ` — <b>${pct}</b> of supply` : ""}\n` +
         `${usd ? usd + " destroyed · " : ""}verified on-chain. 🐔\n\n` +
         `🧾 Receipt → ${url}${xLink}`;
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chat, text: tgText, parse_mode: "HTML", disable_web_page_preview: false }),
-      }).catch(() => {});
+      await tgApi("sendMessage", { chat_id: chat, text: tgText, parse_mode: "HTML", disable_web_page_preview: false });
     }
     // Per the house rule: if the X carve-out failed for a real reason (not the pause), alert
     // the operator chat rather than failing silently.
@@ -1905,13 +1866,9 @@ async function notifyEduPost() {
   const xLine = xTweetId ? `\n🐦 <b>Boost today's lesson on X — like &amp; repost 👇</b>\nhttps://x.com/FireChicken007/status/${xTweetId}\n` : "";
   const text = `🎓 <b>CLUCK'S LESSON</b>\n\n${tgEsc(body)}\n\n${toolLine}${xLine}💬 <i>Reply to this lesson with a question and Cluck will answer.</i>\n📚 The full course is in session → clucknorris.app`;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: true }),
-    });
-    const data = await res.json().catch(() => null);
+    const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: true });
     // Remember this post is a LESSON so the reply-bot only answers lesson replies.
-    if (data && data.ok && data.result) registerLessonMessage(data.result.message_id, body);
+    if (result) registerLessonMessage(result.message_id, body);
   } catch (e) { console.warn("[EDU] post failed:", e.message); }
 }
 let lastEduStamp = kv.get("eduStamp", "");
@@ -2399,87 +2356,90 @@ const TG_WEBHOOK_SECRET = process.env.TELEGRAM_BOT_TOKEN
   ? createHash("sha256").update("tg-webhook:" + process.env.TELEGRAM_BOT_TOKEN).digest("hex").slice(0, 40)
   : "";
 
+// ── The ONE low-level Telegram Bot API call ─────────────────────────────────
+// Every send/edit/delete/answer site in this file used to hand-roll its own
+// `fetch(".../bot<token>/<method>")` — each re-implementing the token check, the
+// JSON body, the error swallowing, and the result extraction, and drifting from
+// each other in small ways (see tgSendKb's fix below). This is the one place
+// that owns all of it: token check (no token → null, no request made), the POST,
+// the JSON parse, and the "never throw" contract every caller here relies on
+// (CLAUDE.md: a Telegram send swallows its own errors — callers must check the
+// return value and never advance durable state on a send that did not land).
+// Returns `data.result` on a Telegram-confirmed success (an object for
+// sendMessage/sendPhoto/…, or the bare `true` Telegram sends back for
+// deleteMessage/answerCallbackQuery/pinChatMessage/…), or null on ANY failure —
+// no token, a network error, a non-JSON body, or `ok:false`. Callers that want
+// diagnostics still log at the call site, same as before. `token` defaults to
+// the main bot but can be overridden — the ROSE buy/burn bots optionally speak
+// through their own `ROSE_TG_BOT_TOKEN` (see roseTgSend/roseTgSendPhoto).
+async function tgApi(method, payload = {}, token = process.env.TELEGRAM_BOT_TOKEN) {
+  if (!token) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => null);
+    if (!data || !data.ok) return null;
+    return data.result !== undefined ? data.result : true;
+  } catch (_) { return null; }
+}
+
 async function tgSend(chatId, text, replyTo, opts = {}) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId) return null;
+  if (!chatId) return null;
   // Marked, not blocked: a staging box pointed at a test room SHOULD be able to post — that is the
   // point of having one. But if it is ever pointed at the real community room by a copied env var,
   // the message has to be obviously a test rather than an announcement people act on.
   if (IS_STAGING) text = "🚧 <b>[STAGING]</b> — test post, ignore\n\n" + text;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
-        ...(opts.silent ? { disable_notification: true } : {}),
-        // Still send even if the user's command message was deleted meanwhile.
-        ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
-      }),
-    });
-    const data = await res.json().catch(() => null);
-    return data && data.ok && data.result ? data.result.message_id : null; // for thread tracking
-  } catch (_) { return null; }
+  const result = await tgApi("sendMessage", {
+    chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
+    ...(opts.silent ? { disable_notification: true } : {}),
+    // Still send even if the user's command message was deleted meanwhile.
+    ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
+  });
+  return result ? result.message_id : null; // for thread tracking
 }
 
 // Like tgSend, but with an optional inline keyboard (array of button rows).
 async function tgSendKb(chatId, text, keyboard, replyTo) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId) return null;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
-        ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
-        ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-      }),
-    });
-    const data = await res.json().catch(() => null);
-    return data && data.ok && data.result ? data.result.message_id : null;
-  } catch (_) { return null; }
+  if (!chatId) return null;
+  // FIX (2026-09-17 tgSend consolidation): this had drifted from tgSend by never adding the
+  // STAGING marker below, even though it posts to the same real, shared chat ids — including
+  // the public new-member welcome (welcomeNewMembers) and the guide-button reply, both fired
+  // straight off a live Telegram webhook. A staging box that ever shares the production bot
+  // token (the exact "copied env var" scenario tgSend's own comment warns about) would have
+  // posted an unmarked welcome message into the real community room.
+  if (IS_STAGING) text = "🚧 <b>[STAGING]</b> — test post, ignore\n\n" + text;
+  const result = await tgApi("sendMessage", {
+    chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
+    ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
+    ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+  });
+  return result ? result.message_id : null;
 }
 
 // Acknowledge a button tap so Telegram stops the loading spinner.
 async function tgAnswerCallback(id, text) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !id) return;
-  try {
-    await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ callback_query_id: id, ...(text ? { text } : {}) }),
-    });
-  } catch (_) {}
+  if (!id) return;
+  await tgApi("answerCallbackQuery", { callback_query_id: id, ...(text ? { text } : {}) });
 }
 
 // Delete a message (for self-cleaning reposts).
 async function tgDelete(chatId, messageId) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId || !messageId) return;
-  try {
-    await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
-    });
-  } catch (_) {}
+  if (!chatId || !messageId) return;
+  await tgApi("deleteMessage", { chat_id: chatId, message_id: messageId });
 }
 // Send a photo + caption + optional inline keyboard to a SPECIFIC chat. Silent
 // by default (owner rule). Returns the message_id, or null on failure. Used by
 // the Content Engine to DM an approval card with Approve/Skip buttons.
 async function tgSendPhotoKb(chatId, photoUrl, caption, keyboard) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId) return null;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024),
-        parse_mode: "HTML", disable_notification: true,
-        ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-      }),
-    });
-    const data = await res.json().catch(() => null);
-    return data && data.ok && data.result ? data.result.message_id : null;
-  } catch (_) { return null; }
+  if (!chatId) return null;
+  const result = await tgApi("sendPhoto", {
+    chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024),
+    parse_mode: "HTML", disable_notification: true,
+    ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+  });
+  return result ? result.message_id : null;
 }
 
 // ms → "2d 3h 14m" / "3h 14m" / "14m"
@@ -3325,19 +3285,9 @@ async function notifyTelegramPhoto(photoUrl, caption) {
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        photo: photoUrl,
-        caption,
-        parse_mode: "HTML",
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn("[TELEGRAM] sendPhoto failed, falling back to text:", res.status, body.slice(0, 200));
+    const result = await tgApi("sendPhoto", { chat_id: chatId, photo: photoUrl, caption, parse_mode: "HTML" });
+    if (!result) {
+      console.warn("[TELEGRAM] sendPhoto failed, falling back to text");
       // Fallback so we never miss a buy alert just because the image link broke
       await notifyTelegram(caption);
     }
@@ -5573,10 +5523,7 @@ async function notifyNearBonding(t) {
   if (token && chatId) {
     const text = `⚡ <b>CLOSE TO BONDING</b>\n\n🎒 <b>${tgEsc(t.name || "?")}</b> (${tgEsc(t.symbol || "?")})\n${cp.toFixed(0)}% to graduation · ~${toGrad} SOL to go\n\n📡 Watch it live → clucknorris.app/bags`;
     try {
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-      });
+      await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
     } catch (e) { console.warn("[TELEGRAM] near-bonding alert failed:", e.message); }
   }
   if (xConfigured()) {
@@ -5591,10 +5538,7 @@ async function notifyGraduated(rec) {
   if (GRAD_TG_ANNOUNCE && token && chatId) {
     const text = `🎓 <b>GRADUATED!</b>\n\n🎒 <b>${tgEsc(rec.name || "?")}</b> (${tgEsc(rec.symbol || "?")}) just bonded off the Bags curve onto its Meteora pool.\n\n📊 Chart → https://dexscreener.com/solana/${rec.mint}\n🔒 Team: lock your supply free (even fresh Token-2022 mints) → clucknorris.app/locker-room`;
     try {
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-      });
+      await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
     } catch (e) { console.warn("[TELEGRAM] graduated alert failed:", e.message); }
   }
   if (xConfigured()) {
@@ -6039,10 +5983,7 @@ async function sendTreasuryRecap({ send = true, reset = false } = {}) {
 
   if (!send) return { sent: false, preview: text, valueBtc, valueUsd };
   if (tgtok) {
-    await fetch(`https://api.telegram.org/bot${tgtok}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: proj.telegramChatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-    });
+    await tgApi("sendMessage", { chat_id: proj.telegramChatId, text, parse_mode: "HTML", disable_web_page_preview: true });
   }
   kv.set(storeKey, { baseline, prev: snap, history: [...((store.history) || []).slice(-29), { ts: snap.ts, valueBtc, totalSol, totalBase, feesUsd }] });
   return { sent: !!tgtok, text, valueBtc, valueUsd };
@@ -6175,8 +6116,8 @@ app.all("/api/meteora/unwrap", adminGuarded(ADMIN_404, { noStore: true }), async
 // both the Meteora primitives and the treasury vault's Jupiter swap.
 function meteoraDM(text) {
   try {
-    const tg = process.env.TELEGRAM_BOT_TOKEN, proj = whirlpoolMM.vault.getProject("treasury");
-    if (tg && proj && proj.telegramChatId) fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text }) }).catch(() => {});
+    const proj = whirlpoolMM.vault.getProject("treasury");
+    if (proj && proj.telegramChatId) tgApi("sendMessage", { chat_id: proj.telegramChatId, parse_mode: "HTML", text }).catch(() => {});
   } catch (_) {}
 }
 // ── JUP/USDC earner recap → PRIVATE treasury DM (operator only, NOT community) ──
@@ -6616,8 +6557,8 @@ app.all("/api/meteora/config", adminGuarded(ADMIN_404, { noStore: true }), (req,
 // boot, so a redeploy mid-blitz still reverts on time. Restores the captured widths.
 function blitzDM(text) {
   try {
-    const tg = process.env.TELEGRAM_BOT_TOKEN, proj = whirlpoolMM.vault.getProject("treasury");
-    if (tg && proj && proj.telegramChatId) fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text }) }).catch(() => {});
+    const proj = whirlpoolMM.vault.getProject("treasury");
+    if (proj && proj.telegramChatId) tgApi("sendMessage", { chat_id: proj.telegramChatId, parse_mode: "HTML", text }).catch(() => {});
   } catch (_) {}
 }
 async function clknForceRedeploy() {
@@ -9080,26 +9021,16 @@ async function roseMarket() {
 }
 
 async function roseTgSend(token, chatId, text, opts = {}) {
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: opts.silent !== false }),
-    });
-    if (!res.ok) { const b = await res.text().catch(() => ""); console.warn("[ROSE-BUY] sendMessage failed:", res.status, b.slice(0, 160)); return false; }
-    return true;
-  } catch (e) { console.warn("[ROSE-BUY] sendMessage error:", e.message); return false; }
+  const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: opts.silent !== false }, token);
+  if (!result) { console.warn("[ROSE-BUY] sendMessage failed"); return false; }
+  return true;
 }
 async function roseTgSendPhoto(token, chatId, photoUrl, caption, opts = {}) {
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML", disable_notification: opts.silent !== false }),
-    });
-    if (res.ok) return true;
-    // Photo failed (bad URL / TG couldn't fetch it) — fall back to text so the buy still posts.
-    const b = await res.text().catch(() => ""); console.warn("[ROSE-BUY] sendPhoto failed, falling back to text:", res.status, b.slice(0, 160));
-    return await roseTgSend(token, chatId, caption, opts);
-  } catch (e) { console.warn("[ROSE-BUY] sendPhoto error:", e.message); return await roseTgSend(token, chatId, caption, opts); }
+  const result = await tgApi("sendPhoto", { chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML", disable_notification: opts.silent !== false }, token);
+  if (result) return true;
+  // Photo failed (bad URL / TG couldn't fetch it) — fall back to text so the buy still posts.
+  console.warn("[ROSE-BUY] sendPhoto failed, falling back to text");
+  return await roseTgSend(token, chatId, caption, opts);
 }
 
 function roseBuyCaption(b, roseUsd, mkt) {
@@ -18412,14 +18343,9 @@ async function sendOps12hReport({ send = true } = {}) {
 
   let ok = false;
   if (chartUrl) {
-    try {
-      const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chat, photo: chartUrl, caption: caption.slice(0, 1024), parse_mode: "HTML", disable_notification: true }),
-      });
-      ok = r.ok;
-      if (!ok) console.warn("[ops-report] sendPhoto failed:", r.status, (await r.text().catch(() => "")).slice(0, 160));
-    } catch (e) { console.warn("[ops-report] sendPhoto error:", e.message); }
+    const result = await tgApi("sendPhoto", { chat_id: chat, photo: chartUrl, caption: caption.slice(0, 1024), parse_mode: "HTML", disable_notification: true });
+    ok = !!result;
+    if (!ok) console.warn("[ops-report] sendPhoto failed");
   }
   // The text fallback used to force ok = true right after the call, inside a try/catch that could
   // never fire — tgSend catches everything internally and returns null rather than throwing. So a
@@ -18667,10 +18593,7 @@ async function maybeFireOrganicReminder(entry) {
   const baseTxt = base ? ` (was ${base.score} at arm time)` : "";
   const text = `⏰🐔 <b>Organic-score recovery check</b>\n\nCLKN Jupiter organic score is now <b>${score}</b>${baseTxt}.\nBlitz has been off ~12h. If it climbed back toward ~30, the recovery thesis held — run steady/deep, not spiky.\n\nReply in your session: "pull the organic recovery" for the full curve.`;
   try {
-    await fetch(`https://api.telegram.org/bot${tok}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: false }),
-    });
+    await tgApi("sendMessage", { chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: false });
   } catch (e) { console.warn("[organic-reminder] send failed:", e.message); }
 }
 
@@ -19624,10 +19547,7 @@ app.listen(PORT, () => {
           `<b>Fees earned (lifetime):</b> $${earned.toFixed(4)} <i>(Meteora $${metFees.toFixed(4)}: pending $${metPending.toFixed(4)} + claimed/closed $${(metFees - metPending).toFixed(4)})</i>\n` +
           `<b>Fees spent (moves):</b> $${spent.toFixed(4)} <i>(${(cost.lifetime && cost.lifetime.txCount) || 0} txs)</i>\n` +
           `<b>Net:</b> $${net.toFixed(4)}`;
-        await fetch(`https://api.telegram.org/bot${tok}/sendMessage`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: proj.telegramChatId, text: msg, parse_mode: "HTML", disable_web_page_preview: true }),
-        });
+        await tgApi("sendMessage", { chat_id: proj.telegramChatId, text: msg, parse_mode: "HTML", disable_web_page_preview: true });
       } catch (e) { console.warn("[treasury-report] failed:", e.message); }
     }
     function treasuryReportTick() {
@@ -19664,10 +19584,7 @@ app.listen(PORT, () => {
       return `Open Meteora → <b>Rebalance</b> tab → <b>Curve</b> → <b>Rebalance</b> → approve.${link ? `\n${link}` : ""}`;
     };
     async function metDM(text) {
-      await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }),
-      });
+      await tgApi("sendMessage", { chat_id: proj.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text });
     }
     async function meteoraOorTick() {
       tg = process.env.TELEGRAM_BOT_TOKEN; proj = whirlpoolMM.vault.getProject("treasury");
@@ -19736,10 +19653,7 @@ app.listen(PORT, () => {
       const wpr = whirlpoolMM.vault.getProject("treasury");
       if (!wtg || !wpr || !wpr.telegramChatId) return;
       async function wpDM(text) {
-        await fetch(`https://api.telegram.org/bot${wtg}/sendMessage`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }),
-        });
+        await tgApi("sendMessage", { chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text });
       }
       try {
         const r = await whirlpoolMM.vault.publicPositions("treasury");
@@ -19798,10 +19712,7 @@ app.listen(PORT, () => {
           if (dm) {
             _wallHarvState[key] = { lastUsd: usd, above };
             kv.set("wallHarvestState", _wallHarvState);
-            await fetch(`https://api.telegram.org/bot${wtg}/sendMessage`, {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text: dm }),
-            });
+            await tgApi("sendMessage", { chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text: dm });
           } else if (!above && prev.above) {
             _wallHarvState[key] = { lastUsd: usd, above: false }; kv.set("wallHarvestState", _wallHarvState); // price fell back below the top — re-arm the full-walk alert
           }
@@ -19829,7 +19740,7 @@ app.listen(PORT, () => {
       const wtg = process.env.TELEGRAM_BOT_TOKEN;
       const wpr = whirlpoolMM.vault.getProject("treasury");
       if (!wpr) return;
-      const dm = async (text) => { if (!wtg || !wpr.telegramChatId) return; try { await fetch(`https://api.telegram.org/bot${wtg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }) }); } catch (_) {} };
+      const dm = async (text) => { if (!wtg || !wpr.telegramChatId) return; await tgApi("sendMessage", { chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }); };
       _wallRatchetBusy = true;
       try {
         const r = await whirlpoolMM.vault.publicPositions("treasury");
