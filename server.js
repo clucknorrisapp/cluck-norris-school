@@ -50,6 +50,7 @@ const premiumForensics = require("./lib/premium-forensics");
 const sigStore = require("./lib/sigstore");
 const kv = require("./lib/kvstore");
 const payoutVerify = require("./lib/payout-verify");
+const engineRatchet = require("./lib/engine-ratchet"); // pure merge/diff shared by the four liquidity-engine config ratchets below
 const { redeemPaidPass } = require("./lib/tool-pass-redeem");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
@@ -830,8 +831,11 @@ function pokeConfigRatchet() {
   // override wins over both the live value and any bump this block would have made.
   const overrides = kv.get("ratchetOverrides:poke", {}) || {};
   if (Object.keys(overrides).length) console.log("[poke] ratchet overrides active:", JSON.stringify(overrides));
-  for (const k of Object.keys(overrides)) { if (c[k] !== overrides[k] || k in patch) patch[k] = overrides[k]; }
-  if (Object.keys(patch).length) whirlpoolMM.vault.setConfig(patch, "poke");
+  // The bumps above already computed exactly the keys/values poke's config needs to move to —
+  // feed that as `want` into the shared merge/diff so an override still wins on any key it
+  // shares with a bump (same "override always wins" contract the other three ratchets keep).
+  const { patch: mergedPatch } = engineRatchet.ratchetPatch({ current: c, want: patch, overrides });
+  if (Object.keys(mergedPatch).length) whirlpoolMM.vault.setConfig(mergedPatch, "poke");
   // Alerts must NEVER hit the public community chat (the TELEGRAM_CHAT_ID fallback —
   // on 2026-08-20 one ops overview briefly landed there and had to be deleted). Bind
   // poke to the treasury project's PRIVATE ops room, then turn per-roll notifications
@@ -1034,22 +1038,25 @@ function cunaConfigRatchet() {
   // mechanism was built for. Same merge dnc and rose have had since then.
   const overrides = kv.get("ratchetOverrides:cuna", {}) || {};
   if (Object.keys(overrides).length) console.log("[cuna] ratchet overrides active:", JSON.stringify(overrides));
-  const target = { ...want, ...overrides };
-  const patch = {};
-  for (const k of Object.keys(target)) if (c[k] !== target[k]) patch[k] = target[k];
   // Caps and tuning knobs are floors/ceilings, not fixed values — only correct them while they
   // still hold a vault default, so the owner can raise a cap without it being stamped back down.
+  const { patch } = engineRatchet.ratchetPatch({
+    current: c, want, overrides,
+    floor: {
+      when: (cc) => cc.feeTierPct === 0.3 || cc.widthPct === 10,
+      values: {
+        edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 400, minRebalanceIntervalSec: 300,
+        maxActionsPerDay: 96, priceGapGuardPct: 10, slippageBps: 250, baseDeployThresholdUsd: 25,
+        solMaxSol: 4.2, solGasReserve: 0.25, solDeployThreshold: 0.2,
+        jupMaxJup: 99999, jupDeployThreshold: 1,
+        poolBalanceTolPct: 10, maxSwapUsdPerCycle: 75, minSwapUsd: 10, usdcFloor: 5,
+        swapSolFloor: 0.3, maxSwapSolPerCycle: 1, swapSlippageBps: 150, maxSwapsPerDay: 24,
+        buybackReserveUsd: 0, maxBuybackUsdPerCycle: 50, minBuybackUsd: 10, maxBuybacksPerDay: 12,
+        buybackMinIntervalSec: 900, buybackSlippageBps: 300,
+      },
+    },
+  });
   if (c.feeTierPct === 0.3 || c.widthPct === 10) {
-    Object.assign(patch, {
-      edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 400, minRebalanceIntervalSec: 300,
-      maxActionsPerDay: 96, priceGapGuardPct: 10, slippageBps: 250, baseDeployThresholdUsd: 25,
-      solMaxSol: 4.2, solGasReserve: 0.25, solDeployThreshold: 0.2,
-      jupMaxJup: 99999, jupDeployThreshold: 1,
-      poolBalanceTolPct: 10, maxSwapUsdPerCycle: 75, minSwapUsd: 10, usdcFloor: 5,
-      swapSolFloor: 0.3, maxSwapSolPerCycle: 1, swapSlippageBps: 150, maxSwapsPerDay: 24,
-      buybackReserveUsd: 0, maxBuybackUsdPerCycle: 50, minBuybackUsd: 10, maxBuybacksPerDay: 12,
-      buybackMinIntervalSec: 900, buybackSlippageBps: 300,
-    });
     for (const k of Object.keys(overrides)) if (k in patch) patch[k] = overrides[k];   // a durable override beats the default table too
   }
   if (Object.keys(patch).length) {
@@ -1203,10 +1210,8 @@ function dncConfigRatchet() {
     // &durable=1. Overrides are logged so drift is always visible in the boot log.
     const overrides = kv.get("ratchetOverrides:dnc", {}) || {};
     if (Object.keys(overrides).length) console.log("[dnc] ratchet overrides active:", JSON.stringify(overrides));
-    const target = { ...want, ...overrides };
     const cur = whirlpoolMM.vault.getConfig("dnc") || {};
-    const patch = {};
-    for (const k of Object.keys(target)) if (cur[k] !== target[k]) patch[k] = target[k];
+    const { patch } = engineRatchet.ratchetPatch({ current: cur, want, overrides });
     if (Object.keys(patch).length) {
       whirlpoolMM.vault.setConfig(patch, "dnc");
       console.log("[dnc] config ratchet applied:", JSON.stringify(patch));
@@ -1376,26 +1381,31 @@ function roseEngineConfigRatchet() {
   // ratchetOverrides:rose kv table — merge it OVER the code defaults so a durable owner
   // tune is never silently stamped back by this ratchet (the exact config-revert trap
   // CLAUDE.md warns about; it re-bit on the band widths, 2026-08-31).
-  Object.assign(want, kv.get("ratchetOverrides:rose", {}) || {});
-  const patch = {};
-  for (const k of Object.keys(want)) if (c[k] !== want[k]) patch[k] = want[k];
+  const overrides = kv.get("ratchetOverrides:rose", {}) || {};
   // Caps/tuning seeded only while the vault defaults still hold, so later owner raises stick.
   // SMALL-START posture (owner, 2026-08-31: "start with very small amounts"): ~$60 a pool
   // while the fresh pools prove the price holds, then raise live with &durable=1.
-  if (c.feeTierPct === 0.3 || c.widthPct === 15 || c.widthPct === 10) {
-    Object.assign(patch, {
-      edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 60, minRebalanceIntervalSec: 300,
-      maxActionsPerDay: 96, baseDeployThresholdUsd: 10,
-      solMaxSol: 0.3, solGasReserve: 0.25, solDeployThreshold: 0.05,
-      jupMaxJup: 150, jupDeployThreshold: 25,
-      swapEnabled: true, poolBalanceTolPct: 10, maxSwapUsdPerCycle: 40, minSwapUsd: 5,
-      usdcFloor: 5, swapSolFloor: 0.3, maxSwapSolPerCycle: 0.5, swapSlippageBps: 150, maxSwapsPerDay: 24,
-      buybackReserveUsd: 0, maxBuybackUsdPerCycle: 25, minBuybackUsd: 10, maxBuybacksPerDay: 24,
-      buybackMinIntervalSec: 900, buybackSlippageBps: 300,
-      askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
-      notifyRolls: false,   // public room bound — see the ALERTS warning above
-    });
-  }
+  const { patch } = engineRatchet.ratchetPatch({
+    current: c, want, overrides,
+    floor: {
+      when: (cc) => cc.feeTierPct === 0.3 || cc.widthPct === 15 || cc.widthPct === 10,
+      values: {
+        edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 60, minRebalanceIntervalSec: 300,
+        maxActionsPerDay: 96, baseDeployThresholdUsd: 10,
+        solMaxSol: 0.3, solGasReserve: 0.25, solDeployThreshold: 0.05,
+        jupMaxJup: 150, jupDeployThreshold: 25,
+        swapEnabled: true, poolBalanceTolPct: 10, maxSwapUsdPerCycle: 40, minSwapUsd: 5,
+        usdcFloor: 5, swapSolFloor: 0.3, maxSwapSolPerCycle: 0.5, swapSlippageBps: 150, maxSwapsPerDay: 24,
+        buybackReserveUsd: 0, maxBuybackUsdPerCycle: 25, minBuybackUsd: 10, maxBuybacksPerDay: 24,
+        buybackMinIntervalSec: 900, buybackSlippageBps: 300,
+        askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
+        notifyRolls: false,   // public room bound — see the ALERTS warning above
+      },
+    },
+  });
+  // Note: unlike cunaConfigRatchet, there is no override-re-apply step here — if the floor above
+  // fires it can still overwrite an override on the same key. That gap is pre-existing (rose
+  // never had the re-apply cuna does); this refactor preserves it rather than fixing it.
   if (Object.keys(patch).length) {
     whirlpoolMM.vault.setConfig(patch, "rose");
     console.log("[rose-engine] config ratchet corrected:", Object.keys(patch).join(", "));

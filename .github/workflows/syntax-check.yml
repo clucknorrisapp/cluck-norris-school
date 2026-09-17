@@ -232,6 +232,10 @@ jobs:
       # writes for two projects until a manual audit found it).
       - name: Engine arm gates + ratchet durable overrides
         run: node scripts/engine-arm-gate-test.cjs
+      # The pure merge/diff (want+overrides → diff → optional floor) shared by the four
+      # liquidity-engine boot ratchets above — lib/engine-ratchet.js, unit-tested in isolation.
+      - name: Config-ratchet pure merge/diff (want/overrides/floor)
+        run: node scripts/engine-ratchet-test.cjs
       # The check that gates whether a giveaway winner gets PAID. It false-positived on every
       # winner on 2026-09-04 because it judged a hold in dollars and the price cache was cold.
       - name: giveaway hold-check (token-based, survives a cold price feed)
