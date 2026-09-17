@@ -6,7 +6,7 @@
    Usage on a gated page (after cluck-util.js + cluck-wallet.js):
      run = CluckGate.guard(run, { tool: 'Wallet X-Ray', anchor: '#runBtn' });
    The tool renders normally — the gate appears at the moment of RUN ("preview everything,
-   unlock to run"). Buy Special drives its own gate UI off CluckGate.config()/CluckGate.grant().
+   unlock to run"). Buy Special mounts the same card up front (its whole tool is the gated run).
 
    Server truth: /api/tool-gate/config publishes the live numbers (the CLKN amount is derived
    from the live price — NEVER hardcode it); POST /api/tool-gate/session verifies the signed nonce + the payment
@@ -434,10 +434,13 @@
     opts = opts || {};
     return async function () {
       var args = arguments, self = this;
-      if (pass()) return fn.apply(self, args);
+      // A pass counts only with its server-issued token: the heavy APIs check the token, so a
+      // token-less local grant (a pre-2026-09-10 pass, or Buy Special's retired private flow —
+      // deep dive 2026-09-17 P1-066) would only 402; re-open the card and issue a real one.
+      if (proof()) return fn.apply(self, args);
       var c = await config();
       if (!c || c.enabled === false) return fn.apply(self, args);   // gate off / config down → fail open
-      if (pass()) return fn.apply(self, args);                       // re-check after the await
+      if (proof()) return fn.apply(self, args);                      // re-check after the await
       state.onUnlock = function () { fn.apply(self, args); };
       if (state.card) { state.card.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
       state.card = buildCard(c, opts.tool || 'This tool');

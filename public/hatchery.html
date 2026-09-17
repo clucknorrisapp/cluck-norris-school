@@ -472,12 +472,12 @@ let activeWallet = null;       // { id, provider }
 let logoData = null;           // { base64, mime }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function showError(msg) {
+function showError(msg, sticky) {
   const el = document.getElementById('errorBox');
   el.textContent = msg;
   el.classList.add('show');
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  setTimeout(() => el.classList.remove('show'), 9000);
+  if (!sticky) setTimeout(() => el.classList.remove('show'), 9000);
 }
 function setProgress(msg) {
   const el = document.getElementById('progress');
@@ -626,7 +626,11 @@ async function confirmTx(signature) {
     }
     await new Promise(r => setTimeout(r, 1500));
   }
-  throw new Error('Timed out waiting for confirmation — check Solscan');
+  // NOT a failure: the transaction was submitted and may still land. Callers must treat this as
+  // "unknown" and never retry blindly — a second hatch mints a second token and pays the fee twice.
+  const e = new Error('Timed out waiting for confirmation');
+  e.ambiguous = true; e.signature = signature;
+  throw e;
 }
 
 // ── Hatch ────────────────────────────────────────────────────────────────────
@@ -784,6 +788,7 @@ async function doHatch() {
 
   const btn = document.getElementById('hatchBtn');
   btn.disabled = true;
+  let ambiguous = false;   // a submitted-but-unconfirmed mint keeps the button OFF (deep dive P0-012)
   try {
     setProgress('Uploading logo + metadata to Arweave…');
     const buildRes = await fetch('/api/hatchery/build', {
@@ -837,9 +842,17 @@ async function doHatch() {
     document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
     setProgress('');
+    if (e && e.ambiguous && e.signature) {
+      ambiguous = true;
+      const link = 'https://solscan.io/tx/' + e.signature;
+      showError('Your mint was SUBMITTED but has not confirmed yet. Check it on Solscan before doing anything else — hatching again now would mint a second token and pay the fee twice. ' + link, true);
+      const rTx = document.getElementById('rTx'); if (rTx) rTx.href = link;
+      btn.textContent = 'CHECK SOLSCAN, THEN RELOAD TO HATCH AGAIN';
+      return;
+    }
     showError('Hatch failed: ' + (e.message || e));
   } finally {
-    btn.disabled = false;
+    if (!ambiguous) btn.disabled = false;
   }
 }
 

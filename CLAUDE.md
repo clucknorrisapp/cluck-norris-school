@@ -463,7 +463,14 @@ served the React shell at 200.
   `project=` is refused with 400 rather than defaulting to `clkn`, and every vault response
   echoes `project` + `operator`. The hourly lock-celebration routine, the two skills and the
   runbooks were switched to POST in the same change; `scripts/mutating-get-guard-test.cjs` (CI)
-  pins all of it. **The burn celebration also has a value floor now**: a verified burn Jupiter
+  pins all of it. **Extended 2026-09-17 (platform deep dive P0-002 / P0-008 — the routes the first
+  audit missed):** `/api/cuna-giveaway/admin` (every configuring, scanning, drawing, paying or
+  reconciling flag — `&draw=1` and `&payout=1&run=1` sent real prize tokens on a GET), the Meteora
+  levers (`remove-liquidity`, `add-liquidity`, `open-position`, `unwrap`, `rebalance-inplace`,
+  `recenter`, and `config` writes), `/api/clkn-blitz`, the three `*-engine?on=1|off=1` arms,
+  `/api/diploma-mint …&run=1` and `/api/school-airdrop` writes. Same rule: the flag-less GET is still
+  the read or dry run. Buy Special's three data endpoints (`/api/buyspecial-crosscheck`,
+  `-holdcheck`, `-trace`) check the tools pass server-side now — the page's gate was theatre before. **The burn celebration also has a value floor now**: a verified burn Jupiter
   prices under `BURN_BROADCAST_MIN_USD` (default $10; unpriced = skipped) gets its receipt page
   but no auto-post — a stranger's one-unit mint could otherwise force a brand tweet.
 - ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`
@@ -616,7 +623,10 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
 - ✅ **Graduation gate shipped 2026-08-19** (was: pure client assertion → treasury-paid cNFT).
   `/api/claim` now checks a server-side lesson ledger (`lib/school-progress`, fed by `/api/track`
   with an anonymous per-browser sid). Ran in **monitor** (log-only) until **2026-09-02** and has
-  been **ENFORCING since**; pre-gate learners are grandfathered via localStorage backfill until 2026-09-19.
+  been **ENFORCING since**. The localStorage-backfill grandfathering (backfilled marks waiving the
+  live-spread check) was **closed on 2026-09-17, two days before its published 09-19 sunset** (deep dive
+  P0-004: the `bf` flag had no legitimacy check, so a script could skip the only anti-farm control in
+  front of a treasury-signed mint). Backfilled marks still count toward the lesson total.
   Owner controls: `/api/school/grad-gate?key=…` (mode/thresholds/inspection), `GRAD_GATE_OFF=1`
   kill. A blocked claim still saves the transcript — it withholds the badge, sheet row, and mint.
   ⚠️ Live read 2026-09-05 23:50 UTC: `mode: enforce`, `blockedOrWouldBlock: 1` — one claim has

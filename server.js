@@ -6105,18 +6105,20 @@ app.get("/api/meteora/status", async (req, res) => {
 
 // Meteora DLMM — pull liquidity (gated). ?pct=0.05 withdraws 5% to the wallet (no
 // close). DRY RUN unless &run=1. Optional &position=<pubkey> (defaults to the only one).
-app.get("/api/meteora/remove-liquidity", async (req, res) => {
+app.all("/api/meteora/remove-liquidity", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.removeLiquidity({ positionPubkey: req.query.position || null, pct: req.query.pct, close: req.query.close === "1", dryRun: req.query.run !== "1" }));
   } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // Meteora DLMM — add liquidity back (gated). ?cbbtc=&sol= amounts. DRY RUN unless &run=1.
-app.get("/api/meteora/add-liquidity", async (req, res) => {
+app.all("/api/meteora/add-liquidity", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.addLiquidity({ positionPubkey: req.query.position || null, cbbtcUi: req.query.cbbtc, solUi: req.query.sol, dryRun: req.query.run !== "1" }));
   } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
@@ -6124,9 +6126,10 @@ app.get("/api/meteora/add-liquidity", async (req, res) => {
 
 // Meteora DLMM — open a fresh centered position (gated). ?cbbtc=&sol=&half=0.6&dist=spot|curve|bidask
 // Centers on current price, ±half%. DRY RUN unless &run=1 (dry shows bin math + #positions).
-app.get("/api/meteora/open-position", async (req, res) => {
+app.all("/api/meteora/open-position", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.openPosition({
       cbbtcUi: req.query.cbbtc, solUi: req.query.sol,
@@ -6144,9 +6147,10 @@ app.get("/api/meteora/open-position", async (req, res) => {
 // Meteora DLMM — unwrap stranded wSOL back to native lamports (gated). Closes/swaps can
 // leave the operator's SOL wrapped, which starves position-rent payments even when the
 // float looks funded. open/add now auto-unwrap, this is the manual lever. DRY unless &run=1.
-app.get("/api/meteora/unwrap", async (req, res) => {
+app.all("/api/meteora/unwrap", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     const { connection } = require("./lib/rpc");
     return res.status(200).json(await meteora.unwrapWsol(connection(), { dryRun: req.query.run !== "1" }));
@@ -6547,18 +6551,20 @@ async function jupUsdcRebalanceInPlace({ dryRun = false } = {}) {
   return { ...base, action: "rebalanced-inplace", sigs: r.sigs, residual: { jup: Number(resJup.toFixed(4)), usdc: Number(resUsdc.toFixed(2)), usd: Number(residualUsd.toFixed(2)) } };
 }
 // In-place rebalance endpoint (gated, BACKGROUND tool). DRY RUN unless &run=1.
-app.get("/api/meteora/rebalance-inplace", async (req, res) => {
+app.all("/api/meteora/rebalance-inplace", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try { return res.status(200).json(await jupUsdcRebalanceInPlace({ dryRun: req.query.run !== "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // Meteora re-center (gated). DRY RUN unless &run=1. &force=1 ignores edge/anti-thrash checks.
 // &which=jup targets the JUP/USDC earner instead of the cbBTC/SOL chaser.
-app.get("/api/meteora/recenter", async (req, res) => {
+app.all("/api/meteora/recenter", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     const fn = req.query.which === "jup" ? jupUsdcRecenter : meteoraRecenter;
     return res.status(200).json(await fn({ dryRun: req.query.run !== "1", force: req.query.force === "1" }));
@@ -6567,9 +6573,11 @@ app.get("/api/meteora/recenter", async (req, res) => {
 });
 
 // Meteora config (gated). GET returns config; query params set it (e.g. ?autoRecenter=1&half=0.6&dist=curve).
-app.get("/api/meteora/config", (req, res) => {
+app.all("/api/meteora/config", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // deep dive P0-008: a config write (autoRecenter, widths, the fee ledger) is a POST; the read stays a GET
+  if (mutatingGetRefused(req, res, ["halfWidthPct", "distribution", "edgeFrac", "minRecenterSec", "minRecenterSecOor", "maxImpactPct", "enabled", "autoRecenter", "ledgerCbbtc", "ledgerSol"])) return;
   try {
     // &which=jup patches the JUP/USDC earner's kv config instead of the cbBTC chaser's.
     if (req.query.which === "jup") {
@@ -6736,9 +6744,10 @@ app.get("/api/treasury-heavy", async (req, res) => {
 });
 
 // CLKN Blitz control (gated). &run=1 starts; &abort=1 reverts now; no flag = status/plan.
-app.get("/api/clkn-blitz", async (req, res) => {
+app.all("/api/clkn-blitz", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["abort", "run"])) return;   // deep dive P0-008: both close and redeploy CLKN liquidity
   try {
     if (req.query.abort === "1") return res.status(200).json(await clknBlitzRevert("manual abort"));
     const width = req.query.width != null ? Number(req.query.width) : 0.77;
@@ -7932,6 +7941,12 @@ const hubScanDeps = (() => {
   };
 })();
 const hubAlert = (m) => { console.warn("[hub] " + m); try { cunaOpsAlert(`⚠️ Hub: ${m}`, "hub:" + String(m).slice(0, 40)).catch(() => {}); } catch (_) {} };
+// A corrupt app-state.json boots the kv store IN-MEMORY with the file preserved (lib/kvstore.js,
+// deep dive P0-005): every verified write refuses until an operator restores it. That must be
+// seen, not found three payouts later. Delayed so the Telegram config is loaded.
+if (typeof kv.loadError === "function" && kv.loadError()) {
+  setTimeout(() => { try { cunaOpsAlert(`🛑 kv store: ${kv.loadError()}`, "kvstore:load").catch(() => {}); } catch (_) {} }, 20000);
+}
 hubRoutes.mount(app, {
   kv, adminAuthOK, publicErrMsg, vault: whirlpoolMM.vault,
   connection: () => require("./lib/rpc").connection("confirmed"),
@@ -8104,6 +8119,10 @@ app.get("/api/buyspecial/draw/payout", (req, res) => {
 app.get("/api/buyspecial-crosscheck", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
+  // Deep dive 2026-09-17 P0-009/010: the pass was client-side only here — a bare curl skipped the
+  // paywall. Same server check as X-Ray / Holders / Trace; the operator console (admin key) is
+  // the one exemption, matching the page's own operator mode.
+  if (!adminAuthOK(req) && await requireToolPass(req, res)) return;
   const mint = (req.query.mint || "").trim();
   const from = parseInt(req.query.from, 10);
   const to = parseInt(req.query.to, 10);
@@ -8138,6 +8157,10 @@ app.get("/api/buyspecial-crosscheck", async (req, res) => {
 app.get("/api/buyspecial-holdcheck", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
+  // Deep dive 2026-09-17 P0-009/010: the pass was client-side only here — a bare curl skipped the
+  // paywall. Same server check as X-Ray / Holders / Trace; the operator console (admin key) is
+  // the one exemption, matching the page's own operator mode.
+  if (!adminAuthOK(req) && await requireToolPass(req, res)) return;
   const mint = (req.query.mint || "").trim();
   const from = parseInt(req.query.from, 10);
   const to = parseInt(req.query.to, 10);
@@ -8817,6 +8840,9 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     // the paying wallet. One real payment was a master key to the whole paid tool.
     // add() is the same atomic test-and-set the CLKN path uses, so a concurrent double-submit
     // loses too. Namespaced 'sol:' so a signature can never be spent once here and once there.
+    // A payment already claimed as a Lock-to-Earn platform month lands in this same wallet
+    // (deep dive P1-051, the sibling of the tools-pass check in lib/tool-pass-redeem.js).
+    if (sigStore.has("hub-access:" + sig)) return res.status(200).json({ success: false, error: "This payment was already used for a platform-access month." });
     if (!sigStore.add("sol:" + sig)) {
       return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
     }
@@ -8837,6 +8863,10 @@ app.get("/api/verify-sol-payment", async (req, res) => {
 app.get("/api/buyspecial-trace", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
+  // Deep dive 2026-09-17 P0-009/010: the pass was client-side only here — a bare curl skipped the
+  // paywall. Same server check as X-Ray / Holders / Trace; the operator console (admin key) is
+  // the one exemption, matching the page's own operator mode.
+  if (!adminAuthOK(req) && await requireToolPass(req, res)) return;
   const mint = (req.query.mint || "").trim(), wallet = (req.query.wallet || "").trim();
   const from = parseInt(req.query.from, 10), to = parseInt(req.query.to, 10);
   if (!SOL_ADDR_RE.test(mint) || !SOL_ADDR_RE.test(wallet) || !from || !to || to <= from) {
@@ -9634,9 +9664,10 @@ app.get("/api/cuna-giveaway", (req, res) => {
 // and no redeploy. Arming REFUSES without a loaded operator key: an "armed" that cannot sign
 // reads as running when it is not, which is exactly the state you stop watching.
 //   ?on=1   arm    ?off=1  disarm    (no arg = report state)
-app.get("/api/dnc-engine", (req, res) => {
+app.all("/api/dnc-engine", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
   try {
     const operator = whirlpoolMM.vault.operatorPubkey("dnc");
     if (req.query.on === "1") {
@@ -9655,9 +9686,10 @@ app.get("/api/dnc-engine", (req, res) => {
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get("/api/rose-engine", (req, res) => {
+app.all("/api/rose-engine", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
   try {
     if (req.query.on === "1") {
       if (roseEngineHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "ROSE_ENGINE_OFF=1 is set in Railway — clear it first." });
@@ -9681,9 +9713,10 @@ app.get("/api/rose-engine", (req, res) => {
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.get("/api/cuna-engine", (req, res) => {
+app.all("/api/cuna-engine", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
   try {
     const operator = whirlpoolMM.vault.operatorPubkey("cuna");
     if (req.query.on === "1") {
@@ -9704,9 +9737,17 @@ app.get("/api/cuna-engine", (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
 });
 
-app.get("/api/cuna-giveaway/admin", async (req, res) => {
+app.all("/api/cuna-giveaway/admin", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // Deep dive 2026-09-17 P0-002: this was the one CUNA admin route the 2026-09-05 mutating-GET
+  // audit missed — &draw=1 spun the wheel and &payout=1&run=1 SENT PRIZE TOKENS on a pasted link.
+  // Every flag that configures, scans, posts, draws, pays or reconciles now needs a POST; the
+  // flag-less GET, &holdcheck=1, &trace=1, &boardpreview=1, &payout=1 (preview) and &payoutstate=1
+  // stay reads.
+  if (mutatingGetRefused(req, res, ["reset", "mint", "pool", "symbol", "chat", "min", "display", "exclude", "start", "end", "holdend",
+    "mode", "bonus", "entrymode", "dq", "undq", "scan", "every", "replaceon", "replaceoff", "pinon", "pinoff", "board", "boardoff", "boardon",
+    "draw", "run", "sweep", "unpay"])) return;
   const q = req.query;
   const deps = { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched };
   const ms = (v) => { if (v == null || v === "") return undefined; const n = Number(v); return Number.isFinite(n) && n > 1e11 ? n : Date.parse(String(v)) || undefined; };
@@ -11702,7 +11743,13 @@ async function cunaAccrualTick(reason) {
     scanned: locks.length,
     credits: Object.fromEntries(Object.entries(day.credits).map(([k, v]) => [k, v.toString()])),
   };
-  kv.set(CUNA_STAKE_DAYS_KV, days);
+  // The accrual ledger is money: a slice credited only in RAM vanishes on the next restart, and the
+  // gate then re-runs the hour against different locks (deep dive P1). Verified write, loud failure.
+  if (!kv.setVerified(CUNA_STAKE_DAYS_KV, days)) {
+    const why = kv.lastPersistError() || "read-back mismatch";
+    console.error(`[cuna-accrual] ${gate.day}: credited in memory but the ledger did NOT reach the volume (${why}) — a restart loses this hour`);
+    try { cunaOpsAlert(`⚠️ CUNA accrual ${gate.day}: ledger write did not reach the volume (${why}). Check DATA_DIR before the next payout.`, "cuna-accrual:persist").catch(() => {}); } catch (_) {}
+  }
 
   const missed = prog.missedSlices({ programme: stored, paidDays: days, nowUnix });
   const line = `${gate.day} (${reason}): ${day.eligible} earning, ` +
@@ -12306,13 +12353,12 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       r.ignored = [...r.ignored, ...rejected];
       paid = r.paid;
       batches = { ...batches, [id]: r.batch };
-      kv.set(CUNA_PAID_KV, paid); kv.set(CUNA_BATCH_KV, batches);
-      // Read back before telling the page anything is paid: a kv write that failed (full or
-      // unmounted volume) must not be reported as recorded, or the page retries nothing and the
-      // next batch offers the same money again.
-      const check = kv.get(CUNA_BATCH_KV, {}) || {};
-      const persisted = kv.isPersistent() && check[id] && check[id].sent && r.recorded.every((w) => check[id].sent[w]);
-      if (!persisted) return res.status(500).json({ ok: false, error: "recorded in memory but the volume is not persistent — STOP and check DATA_DIR before sending more" });
+      // Batches first (remainingOf is what stops a re-send), then paid. setVerified re-reads the
+      // FILE — the old "set, read back from memory, check isPersistent()" passed with the volume
+      // gone (deep dive P0-006), and a row that is only in RAM is paid again after the next restart.
+      if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) {
+        return res.status(500).json({ ok: false, error: "payout record did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — STOP and check DATA_DIR before sending more; the page keeps its signatures for a retry" });
+      }
       sentReport = { recorded: r.recorded, ignored: r.ignored, remaining: Object.keys(r.remaining).length, state: r.batch.state };
       console.log(`[cuna-payout] batch ${id}: ${r.recorded.length} rows recorded sent, ${Object.keys(r.remaining).length} remaining, state ${r.batch.state}`);
     } else if (q.confirm) {
@@ -12322,14 +12368,14 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       const r = pay.confirmBatch({ batch: b, paid, nowUnix });
       paid = r.paid;
       batches = { ...batches, [id]: { ...r.batch, confirmedAt: nowUnix, note: String(q.note || "").slice(0, 200) } };
-      kv.set(CUNA_PAID_KV, paid); kv.set(CUNA_BATCH_KV, batches);
+      if (!kv.setVerified(CUNA_BATCH_KV, batches) || !kv.setVerified(CUNA_PAID_KV, paid)) return res.status(500).json({ ok: false, error: "confirm did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — check DATA_DIR; the batch is still pending" });
       console.log(`[cuna-payout] batch ${id} CONFIRMED — ${b.count} wallets, ${(Number(b.totalRaw) / 1e9).toLocaleString()} CUNA`);
     } else if (q.cancel) {
       const id = String(q.cancel);
       const b = batches[id];
       if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
       batches = { ...batches, [id]: { ...pay.cancelBatch({ batch: b }), cancelledAt: nowUnix } };
-      kv.set(CUNA_BATCH_KV, batches);
+      if (!kv.setVerified(CUNA_BATCH_KV, batches)) return res.status(500).json({ ok: false, error: "cancel did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — check DATA_DIR; the batch is still pending" });
       console.log(`[cuna-payout] batch ${id} CANCELLED — its amounts are owed again`);
     }
 
@@ -12420,7 +12466,9 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
         note = "nothing to pay right now — everything owed is either below the floor or already in a pending batch";
       } else {
         batches = { ...batches, [id]: batch };
-        kv.set(CUNA_BATCH_KV, batches);
+        // A batch that exists only in memory is offered AGAIN after a restart while the first copy
+        // may already have been paid from the airdrop lines (deep dive P0-006).
+        if (!kv.setVerified(CUNA_BATCH_KV, batches)) return res.status(500).json({ ok: false, error: "batch did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — nothing exported; check DATA_DIR before paying anyone" });
         created = { ...batch, airdropLines: pay.toAirdropLines(batch.amounts, 9) };
         console.log(`[cuna-payout] batch ${id} created — ${batch.count} wallets, ${(Number(batch.totalRaw) / 1e9).toLocaleString()} CUNA PENDING`);
       }
@@ -15507,9 +15555,10 @@ app.get("/api/diploma-collection", (req, res) => {
 // Diploma NFT admin (gated, 404 without key). ?action=status | create-tree | create-collection | test | backfill.
 // Mutating actions need &run=1. create-tree is one-time (~0.3 SOL); backfill mints to every
 // graduate who left a wallet (idempotent — won't double-mint).
-app.get("/api/diploma-mint", async (req, res) => {
+app.all("/api/diploma-mint", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: create-tree / backfill / test mint only on a POST
   const action = String(req.query.action || "status");
   try {
     if (action === "status") return res.status(200).json({ success: true, ...diplomaNft.status() });
@@ -15552,9 +15601,10 @@ app.get("/api/diploma-mint", async (req, res) => {
 //  (no action)         → status: enabled?, wallet pubkey, CLKN/SOL balance, per-send max
 //  ?max=NN              → set the per-send max guard (kv schoolAirdropMax)
 //  ?wallet=…&amount=NN&run=1 → manually airdrop to one wallet (same idempotent path as the reply flow)
-app.get("/api/school-airdrop", async (req, res) => {
+app.all("/api/school-airdrop", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (mutatingGetRefused(req, res, ["max", "run"])) return;   // deep dive P0-008: the cap write and the send are POST-only
   try {
     if (req.query.max != null) {
       const m = Math.max(1, parseInt(req.query.max, 10) || 0);
