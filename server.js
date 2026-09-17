@@ -79,6 +79,34 @@ function adminAuthOK(req) {
   const provided = req.headers["x-premium-key"] || req.query.key;
   return secretEqual(String(provided || ""), String(KEY || ""));
 }
+// The ~75 admin routes below all opened with the same line — `if (!adminAuthOK(req))
+// return res.status(404).json(<body>)` — but the body drifted across sites (four
+// different spellings) and tests/callers may pin the exact one a given route uses, so
+// this does NOT unify the body: adminGuarded(shape) is middleware that 404s with
+// EXACTLY the shape it's given, named for the shape it already was at each call site.
+// { noStore: true } is for the handlers that used to call
+// res.setHeader("Cache-Control", "no-store") before the guard — that header applied to
+// BOTH the 404 and the success response, so it's set here unconditionally (before the
+// key check) rather than inside the handler, to keep that identical.
+// Left alone (not converted — see the commit message for the full list): guards that
+// aren't the handler's first statement (something else runs first), guards preceded by
+// a header other than Cache-Control, and the `!adminAuthOK(req) && await
+// requireToolPass(...)` mid-handler exemption used by a few Buy Special routes — those
+// keep calling adminAuthOK(req) directly.
+const ADMIN_404 = { error: "not_found" };
+const ADMIN_404_SUCCESS = { success: false, error: "not found" };
+const ADMIN_404_OK = { ok: false, error: "not found" };
+const ADMIN_404_OK_US = { ok: false, error: "not_found" };
+const ADMIN_404_CAP = { error: "Not found" };
+const ADMIN_404_FALSE = { ok: false };
+function adminGuarded(shape, opts) {
+  const noStore = !!(opts && opts.noStore);
+  return function (req, res, next) {
+    if (noStore) res.setHeader("Cache-Control", "no-store");
+    if (!adminAuthOK(req)) return res.status(404).json(shape);
+    next();
+  };
+}
 // A GET that MUTATES is one pasted link away from running: link-preview bots fetch URLs in chats,
 // browsers prerender history, a stray click re-fires it. The CUNA admin route had this rule first
 // (audit 2026-09-05 #7/#8 found ~15 more admin routes that arm, post, delete or run on a GET flag).
@@ -4708,8 +4736,7 @@ async function getBagsNearGrad() {
 // Given a PAIR (?a=<symbol|mint>&b=<symbol|mint>), find every open pool for it across
 // every Solana DEX (GeckoTerminal), ranked by turnover. Public read — it's a tool.
 // Informational only, NOT financial advice. No Solana Tracker dependency.
-app.get("/api/lp-scan", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-scan", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;
@@ -4726,8 +4753,7 @@ app.get("/api/lp-scan", async (req, res) => {
 });
 
 // LP Scanner token search (autocomplete) — ?q=. Public read.
-app.get("/api/lp-token-search", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-token-search", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
   try { return res.status(200).json({ success: true, tokens: await lpScanner.searchTokens(String(req.query.q || "")) }); }
@@ -4736,8 +4762,7 @@ app.get("/api/lp-token-search", async (req, res) => {
 
 // Probe what the CoinGecko Analyst key unlocks on the AGGREGATED (non-onchain) API — so we
 // know which endpoints to build on. Gated (admin); 404 when the key is wrong/absent.
-app.get("/api/cg-agg-test", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+app.get("/api/cg-agg-test", adminGuarded(ADMIN_404_SUCCESS), async (req, res) => {
   const out = { keySet: !!process.env.COINGECKO_API_KEY };
   try { out.key = await lpScanner.cgPro("/key"); } catch (e) { out.keyErr = e.message; }
   try { out.price = await lpScanner.cgPro("/simple/price?ids=solana,bitcoin&vs_currencies=usd&include_24hr_change=true&include_market_cap=true"); } catch (e) { out.priceErr = e.message; }
@@ -4749,8 +4774,7 @@ app.get("/api/cg-agg-test", async (req, res) => {
 
 // LP Scanner TOP POOLS — busiest Solana pools across all DEXs, hourly TTL cache (computed on
 // the first cold call — the boot warmer was removed 2026-07-04, see below).
-app.get("/api/lp-top", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-top", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=600");
   try { return res.status(200).json({ success: true, ...(await lpScanner.topPools({ kind: req.query.kind, force: req.query.refresh === "1" })) }); }
@@ -4814,8 +4838,7 @@ app.get("/api/token-overview", async (req, res) => {
 
 // LP Scanner single-token mode — ?token=<symbol|mint>, optional &amount=<usd>. Returns EVERY
 // pair/pool this token trades in across all Solana DEXs with volume + real fee yield. Public.
-app.get("/api/lp-token", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-token", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const T = req.query.token || req.query.t;
@@ -4828,8 +4851,7 @@ app.get("/api/lp-token", async (req, res) => {
 // LP Scanner pool deep-dive + range/earnings simulator — ?pool=<address>, optional
 // &amount=<usd>&width=<halfWidthPct>. Models the concentrated-liquidity tradeoff against
 // the pool's real 7d volatility. Public read. Informational only, NOT financial advice.
-app.get("/api/lp-pool", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-pool", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const pool = req.query.pool || req.query.address;
@@ -4842,8 +4864,7 @@ app.get("/api/lp-pool", async (req, res) => {
 
 // Ask Cluck about pools — pool-aware AI. Scans the pair LIVE, then has Cluck analyze the
 // REAL numbers (grounded, not generic). Informational only; turnover≠yield; IL flagged.
-app.post("/api/lp-ask", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.post("/api/lp-ask", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { question, a, b, amount } = req.body || {};
   if (!question || String(question).trim().length < 3) return res.status(400).json({ success: false, error: "Question too short" });
@@ -5016,8 +5037,7 @@ app.get("/api/alpha", async (req, res) => {
 
 // Admin — force-build the brief; &post=1 fires it to Telegram (silent) + X; &xonly=1 X only;
 // &markposted=1 marks today already-posted (so the daily auto-poster skips it) without sending.
-app.get("/api/alpha-test", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+app.get("/api/alpha-test", adminGuarded(ADMIN_404_SUCCESS), async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   if (req.query.markposted === "1") { kv.set("dailyAlphaPostedDate", today); return res.status(200).json({ success: true, marked: today }); }
   try {
@@ -5287,8 +5307,7 @@ app.post("/api/classroom/graduate-claim", async (req, res) => {
 
 // Admin — review/manage the graduate reward queue. ?action=approve|paid|reject&wallet=… to set status;
 // no action = list. Approved/paid wallets are what you batch into the Airdropper.
-app.all("/api/classroom/graduates", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+app.all("/api/classroom/graduates", adminGuarded(ADMIN_404_SUCCESS), (req, res) => {
   if (mutatingGetRefused(req, res, ["action"])) return;   // deep dive P1-058: approve/paid/reject delete or flip a record — the list stays a GET
   const grads = kv.get("classroomGraduates", {}) || {};
   const action = req.query.action, w = String(req.query.wallet || "").trim();
@@ -5674,9 +5693,7 @@ async function postOutreach(kind) {
   const r = await tgSend(chat, deck[i], null, { silent: true });
   return { ok: true, kind, index: i, telegram: r };
 }
-app.get("/api/outreach-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/outreach-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const kind = req.query.kind === "learners" ? "learners" : "projects";
   if (req.query.post === "1") { const r = await postOutreach(kind); return res.status(200).json({ posted: true, ...r }); }
   const deck = kind === "learners" ? OUTREACH_LEARNERS : OUTREACH_PROJECTS;
@@ -5738,9 +5755,7 @@ async function postToolSpotlight() {
   try { out.x = await postToX(t.x + "\n\n@BagsApp @JupiterExchange"); } catch (e) { out.xErr = e.message; }
   return out;
 }
-app.get("/api/tool-spotlight-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/tool-spotlight-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (req.query.post === "1") { const r = await postToolSpotlight(); return res.status(200).json({ posted: true, ...r }); }
   const i = (Number(kv.get("toolSpotPos", 0)) || 0) % TOOL_SPOTLIGHTS.length;
   return res.status(200).json({ count: TOOL_SPOTLIGHTS.length, next: TOOL_SPOTLIGHTS[i], hint: "add &post=1 to send (X + Telegram)" });
@@ -5802,9 +5817,7 @@ async function postChainSpotlight() {
   if (!rec.xOk) { try { await tgSend(operatorChatId() || OPERATOR_DM_FALLBACK, `⚠️ <b>Chain Spotlight failed to post</b> (${a.name}): <code>${rec.xErr || "unknown"}</code>`, null, { silent: true }); } catch (_) {} }
   return out;
 }
-app.get("/api/chain-spotlight-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/chain-spotlight-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (req.query.enable != null) kv.set("chainSpotEnabled", req.query.enable === "1" ? "1" : "0"); // &enable=0 pauses the twice-daily poster (owner: no traction, focus on the locker — 2026-07-19)
   if (req.query.reset === "1") kv.set("chainSpotPos", 0); // restart the asset rotation at BTC
   if (req.query.post === "1") {
@@ -5820,9 +5833,7 @@ app.get("/api/chain-spotlight-test", async (req, res) => {
 
 // &post=1 posts a tweet (uses &text=... or a default) so you can verify posting
 // works the moment the keys are added in Railway.
-app.all("/api/x-post-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/x-post-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["post"])) return;   // deep dive P1-019: a brand post is never a link unfurl away
   if (!xConfigured()) return res.status(200).json({ configured: false, message: "Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in Railway." });
   if (req.query.post === "1") {
@@ -5839,9 +5850,7 @@ app.all("/api/x-post-test", async (req, res) => {
 
 // X hackathon blitz control — ?start=1 begins it (and posts the first immediately),
 // ?stop=1 halts it, no param = status. Gated.
-app.get("/api/x-blitz", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/x-blitz", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (req.query.stop === "1") { const st = kv.get("xBlitz", {}) || {}; st.active = false; kv.set("xBlitz", st); return res.status(200).json({ active: false, stopped: true, pos: st.pos || 0, total: X_BLITZ_DECK.length }); }
   if (req.query.start === "1") {
     kv.set("xBlitz", { active: true, pos: 0, today: 0, day: "", lastAt: 0 });
@@ -5921,9 +5930,7 @@ app.get("/api/pool-depth", async (req, res) => {
 // Cluck's Lesson — dry-run/preview (gated). Returns a freshly generated lesson
 // for the NEXT topic in rotation without advancing it; &post=1 advances the
 // rotation and actually posts to the group. &topic=<text> overrides the topic.
-app.get("/api/edu-post-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/edu-post-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     if (req.query.post === "1") { await notifyEduPost(); return res.status(200).json({ success: true, posted: true }); }
     const deck = kv.get("eduDeckV2", []); const pos = kv.get("eduDeckPosV2", 0);
@@ -6043,16 +6050,12 @@ async function sendTreasuryRecap({ send = true, reset = false } = {}) {
 
 // Treasury daily recap — preview (gated). Default returns the composed recap WITHOUT sending
 // or writing a snapshot; &send=1 actually DMs it (and records the snapshot/baseline).
-app.get("/api/treasury-recap-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/treasury-recap-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try { return res.status(200).json(await sendTreasuryRecap({ send: req.query.send === "1", reset: req.query.reset === "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 // JUP/USDC private recap — preview by default; &send=1 DMs it; &reset=1 rebaselines the delta.
-app.get("/api/jup-recap-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/jup-recap-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try { return res.status(200).json(await sendJupUsdcRecap({ send: req.query.send === "1", reset: req.query.reset === "1", rebaselineClaimedUsd: req.query.rebaselineClaimed != null ? Number(req.query.rebaselineClaimed) : null })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
@@ -6060,9 +6063,7 @@ app.get("/api/jup-recap-test", async (req, res) => {
 // Pool Monitor — live close-watch of the JUP/USDC earner (gated). Position + fee pace + peak
 // $/min & $/hr bursts (from poolMonitorTick) + live pool volume + edge proximity, so the owner
 // can watch closely and adjust. Powers the /pool-monitor dashboard.
-app.get("/api/pool-monitor", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+app.get("/api/pool-monitor", adminGuarded(ADMIN_404_SUCCESS, { noStore: true }), async (req, res) => {
   try {
     let jupUsd = 0; try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
     const m = await meteora.status({ jupUsd });
@@ -6112,9 +6113,7 @@ app.get("/api/pool-monitor", async (req, res) => {
 // Meteora positions (range, amounts, pending fees, in-range) so the cbBTC/SOL
 // position on Meteora can be tracked alongside the Orca vault. Values use the
 // treasury vault's current SOL/cbBTC prices.
-app.get("/api/meteora/status", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/meteora/status", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     let solUsd = 0, btcUsd = 0, jupUsd = 0;
     try { const st = await whirlpoolMM.vault.status("treasury"); const px = (st.earnings || {}).prices || {}; solUsd = px.solUsd || 0; btcUsd = px.clknUsd || 0; } catch (_) {}
@@ -6125,9 +6124,7 @@ app.get("/api/meteora/status", async (req, res) => {
 
 // Meteora DLMM — pull liquidity (gated). ?pct=0.05 withdraws 5% to the wallet (no
 // close). DRY RUN unless &run=1. Optional &position=<pubkey> (defaults to the only one).
-app.all("/api/meteora/remove-liquidity", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/remove-liquidity", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.removeLiquidity({ positionPubkey: req.query.position || null, pct: req.query.pct, close: req.query.close === "1", dryRun: req.query.run !== "1" }));
@@ -6135,9 +6132,7 @@ app.all("/api/meteora/remove-liquidity", async (req, res) => {
 });
 
 // Meteora DLMM — add liquidity back (gated). ?cbbtc=&sol= amounts. DRY RUN unless &run=1.
-app.all("/api/meteora/add-liquidity", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/add-liquidity", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.addLiquidity({ positionPubkey: req.query.position || null, cbbtcUi: req.query.cbbtc, solUi: req.query.sol, dryRun: req.query.run !== "1" }));
@@ -6146,9 +6141,7 @@ app.all("/api/meteora/add-liquidity", async (req, res) => {
 
 // Meteora DLMM — open a fresh centered position (gated). ?cbbtc=&sol=&half=0.6&dist=spot|curve|bidask
 // Centers on current price, ±half%. DRY RUN unless &run=1 (dry shows bin math + #positions).
-app.all("/api/meteora/open-position", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/open-position", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.openPosition({
@@ -6167,9 +6160,7 @@ app.all("/api/meteora/open-position", async (req, res) => {
 // Meteora DLMM — unwrap stranded wSOL back to native lamports (gated). Closes/swaps can
 // leave the operator's SOL wrapped, which starves position-rent payments even when the
 // float looks funded. open/add now auto-unwrap, this is the manual lever. DRY unless &run=1.
-app.all("/api/meteora/unwrap", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/unwrap", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     const { connection } = require("./lib/rpc");
@@ -6571,9 +6562,7 @@ async function jupUsdcRebalanceInPlace({ dryRun = false } = {}) {
   return { ...base, action: "rebalanced-inplace", sigs: r.sigs, residual: { jup: Number(resJup.toFixed(4)), usdc: Number(resUsdc.toFixed(2)), usd: Number(residualUsd.toFixed(2)) } };
 }
 // In-place rebalance endpoint (gated, BACKGROUND tool). DRY RUN unless &run=1.
-app.all("/api/meteora/rebalance-inplace", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/rebalance-inplace", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try { return res.status(200).json(await jupUsdcRebalanceInPlace({ dryRun: req.query.run !== "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
@@ -6581,9 +6570,7 @@ app.all("/api/meteora/rebalance-inplace", async (req, res) => {
 
 // Meteora re-center (gated). DRY RUN unless &run=1. &force=1 ignores edge/anti-thrash checks.
 // &which=jup targets the JUP/USDC earner instead of the cbBTC/SOL chaser.
-app.all("/api/meteora/recenter", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/recenter", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     const fn = req.query.which === "jup" ? jupUsdcRecenter : meteoraRecenter;
@@ -6593,9 +6580,7 @@ app.all("/api/meteora/recenter", async (req, res) => {
 });
 
 // Meteora config (gated). GET returns config; query params set it (e.g. ?autoRecenter=1&half=0.6&dist=curve).
-app.all("/api/meteora/config", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/config", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   // deep dive P0-008: a config write (autoRecenter, widths, the fee ledger) is a POST; the read stays a GET
   if (mutatingGetRefused(req, res, ["halfWidthPct", "distribution", "edgeFrac", "minRecenterSec", "minRecenterSecOor", "maxImpactPct", "enabled", "autoRecenter", "ledgerCbbtc", "ledgerSol"])) return;
   try {
@@ -6749,9 +6734,7 @@ function treasuryHeavyCheck() {
 }
 // Treasury heavy-window control (gated). &run=1&hours=6 arms the auto-revert timer (assumes the
 // heavy caps are ALREADY set + deployed by the operator); &abort=1 reverts now; no flag = status.
-app.get("/api/treasury-heavy", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/treasury-heavy", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     if (req.query.abort === "1") return res.status(200).json(await treasuryHeavyRevert("manual abort"));
     const until0 = kv.get("treasuryHeavyUntil", 0);
@@ -6764,9 +6747,7 @@ app.get("/api/treasury-heavy", async (req, res) => {
 });
 
 // CLKN Blitz control (gated). &run=1 starts; &abort=1 reverts now; no flag = status/plan.
-app.all("/api/clkn-blitz", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/clkn-blitz", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["abort", "run"])) return;   // deep dive P0-008: both close and redeploy CLKN liquidity
   try {
     if (req.query.abort === "1") return res.status(200).json(await clknBlitzRevert("manual abort"));
@@ -6779,9 +6760,7 @@ app.all("/api/clkn-blitz", async (req, res) => {
 });
 
 // Organic-score log + Blitz-effect summary (gated). &snap=1 records a snapshot now.
-app.get("/api/clkn-organic-log", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/clkn-organic-log", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     // Arm the one-shot recovery reminder: &remindIn=<hours>[&remindChat=<id>]. Fires
     // from the hourly logger on Railway, DMs the operator bot room. &remindIn=0 disarms.
@@ -6821,9 +6800,7 @@ app.get("/api/clkn-organic-log", async (req, res) => {
 // Dry-run / fire the 12h operator ops report (private chat). Gated. Without &send=1
 // it returns the composed caption (no send); &send=1 actually DMs the operator chat
 // and resets the 12h timer. Use this to verify formatting + the QuickChart image.
-app.get("/api/ops-report-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/ops-report-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try { return res.status(200).json(await sendOps12hReport({ send: req.query.send === "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
@@ -6832,9 +6809,7 @@ app.get("/api/ops-report-test", async (req, res) => {
 // (X text + TG caption + card URL) WITHOUT sending. &post=1 queues it for operator
 // approval (DMs the treasury chat with the card + Approve/Skip buttons). It never
 // posts publicly directly — public posting only happens on an operator approval tap.
-app.get("/api/content-engine-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/content-engine-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try { return res.status(200).json(await contentEngineRun({ send: req.query.post === "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
@@ -6893,9 +6868,7 @@ app.get("/api/engine-proof", async (req, res) => {
 // Graduation-watcher status (gated). Shows the current watchlist + our 48h
 // graduated record; ?run=1 triggers one watcher cycle now (alerts fire if a
 // token actually crosses 85% / graduates).
-app.get("/api/grad-watch-status", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/grad-watch-status", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (req.query.run === "1") { try { await gradWatcherTick(); } catch (_) {} }
   const watched = {}; for (const m of gradTracker.watchedMints()) watched[m] = gradTracker.getWatch(m);
   return res.status(200).json({
@@ -6909,9 +6882,7 @@ app.get("/api/grad-watch-status", async (req, res) => {
 // for seeding the Recently-Graduated board with a real graduate the watcher
 // didn't catch live. Validates the bags suffix + pulls live snapshot for the
 // display fields. Stamps graduatedAt = now so it shows + persists the full 48h.
-app.get("/api/grad-watch-add", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/grad-watch-add", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const mint = String(req.query.mint || "").trim();
   if (!mint.toLowerCase().endsWith("bags")) return res.status(400).json({ error: "not_a_bags_mint" });
   let snap = null; try { snap = await getBagsTokenSnapshot(mint); } catch (_) {}
@@ -6932,9 +6903,7 @@ app.get("/api/grad-watch-add", async (req, res) => {
 // Bags Launch Radar — manual/dry-run trigger for the 2-hourly Telegram post.
 // Gated by PREMIUM_ACCESS_KEY. Without ?post=1 it just RETURNS the composed
 // text (verify the format, no spam); ?post=1 actually fires the Telegram post.
-app.all("/api/bags-radar-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });   // 404 like every sibling admin route (audit #9: these two answered 403 and advertised themselves)
+app.all("/api/bags-radar-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => { // 404 like every sibling admin route (audit #9: these two answered 403 and advertised themselves)
   if (mutatingGetRefused(req, res, ["post"])) return;
   try {
     const text = await buildBagsRadarText();
@@ -6944,9 +6913,7 @@ app.all("/api/bags-radar-test", async (req, res) => {
 });
 
 // Market Check — manual/dry-run trigger (gated). ?post=1 fires the Telegram post.
-app.all("/api/market-check-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/market-check-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["post"])) return;
   try {
     const text = await buildMarketCheckText();
@@ -6988,9 +6955,7 @@ app.get("/api/lock-report-test", async (req, res) => {
 // Operator X announcement — post arbitrary text to X, bypassing the master X pause for
 // THIS manual, key-gated call only (the X counterpart to /api/tg-test). Auto-posting stays
 // off; this is a deliberate operator lever. Dry-run unless &post=1.
-app.all("/api/x-announce", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/x-announce", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // deep dive P1-019: &post=1 is POST-only (the dry run stays a GET). The hourly lock-celebration
   // routine and the skill send it as a POST — keep them in step with this line.
   if (mutatingGetRefused(req, res, ["post"])) return;
@@ -7026,9 +6991,7 @@ app.all("/api/x-announce", async (req, res) => {
 });
 
 // Delete a tweet by id (owner-gated). Dry-run unless &run=1. Use to pull a post we're not happy with.
-app.all("/api/x-delete", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/x-delete", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deleting a tweet is irreversible — never on a GET
   const id = String(req.query.id || "").replace(/[^0-9]/g, "");
   if (!id) return res.status(400).json({ error: "missing id" });
@@ -7041,9 +7004,7 @@ app.all("/api/x-delete", async (req, res) => {
 // On elapse, a 5-min checker pauses the treasury vault back to watch-only (positions untouched).
 // POST-only to arm or disarm (audit #8: a bare GET with no params used to arm a 48h window — a link
 // preview could start the clock). GET reports the window.
-app.all("/api/treasury-engine-window", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/treasury-engine-window", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   if (req.method !== "POST") {
     const at = Number(kv.get("treasuryEnginePauseAt", 0)) || 0;
     return res.status(200).json({ ok: true, armed: at > Date.now(), pauseAt: at > 0 ? new Date(at).toISOString() : null, note: "POST with ?hours=N to arm, ?off=1 to disarm" });
@@ -7057,9 +7018,7 @@ app.all("/api/treasury-engine-window", (req, res) => {
 
 // Manual Meteora keepalive — dry-run (route check only) by default; &run=1 fires a real
 // ~$10 SOL→CLKN buy FORCED through 64WXkH. &usd= to size. Same path the auto-keepalive uses.
-app.get("/api/meteora-keepalive", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/meteora-keepalive", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     const usd = Math.max(1, parseFloat(req.query.usd || "10") || 10);
     const r = await whirlpoolMM.vault.meteoraKeepalive({ projectId: "treasury", usd, dryRun: req.query.run !== "1" });
@@ -7227,9 +7186,7 @@ app.post("/api/tg-test", express.raw({ type: () => true, limit: "12mb" }), async
 //  GET            → { pending } (null when nothing to celebrate) + { probe } (last run's Higgsfield status)
 //  ?clear=1       → celebration handled, clear the flag
 //  ?probe=STATUS  → the scheduled run reports whether Higgsfield tools were reachable (observability)
-app.all("/api/lock-celebration", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/lock-celebration", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // clear / run / probe write state → POST (the hourly watcher and .claude/skills/lock-celebration send POST)
   if (mutatingGetRefused(req, res, ["clear", "run", "probe"])) return;
   if (req.query.clear === "1") { kv.set("lockCelebrationPending", null); return res.status(200).json({ ok: true, cleared: true }); }
@@ -7254,9 +7211,7 @@ app.all("/api/lock-celebration", async (req, res) => {
 // the post is identical to an organic one (graphic, rank, market cap, route). Gated;
 // DRY RUN unless &run=1 (dry run returns what it WOULD post). On a real fire it
 // remembers the sig so the poller won't double-post if it later catches up.
-app.get("/api/buy-replay", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/buy-replay", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(200).json({ success: false, error: "HELIUS_API_KEY unset on this server" });
   // Solana signatures are base58, ~87–88 chars. Validate shape so a junk param
@@ -7311,9 +7266,7 @@ app.get("/api/buy-replay", async (req, res) => {
 // Reconciliation backstop — preview/run the sweep that recovers buys/sells the live
 // poller dropped. DRY by default (lists what it WOULD recover, posts nothing); add
 // &run=1 to actually recover+post. Same sweep the 12-min scheduler runs.
-app.get("/api/reconcile-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/reconcile-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     const r = await reconcileMissedTrades({ dry: req.query.run !== "1" });
     return res.status(200).json({ success: true, ran: req.query.run === "1", ...r });
@@ -7322,9 +7275,7 @@ app.get("/api/reconcile-test", async (req, res) => {
 
 // Data-source health (gated). Live status of Solana Tracker / Helius / Bags /
 // Telegram. Dry by default; &run=1 also DMs the operator chat (forced summary).
-app.get("/api/health-check", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/health-check", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     if (req.query.run === "1") {
       const r = await sourceHealthTick({ force: true });
@@ -7582,8 +7533,7 @@ app.get("/api/tool-comp/check", (req, res) => {
   res.json({ ok: true, comped: isToolComped(w) });
 });
 // Admin: &add=<wallet> / &remove=<wallet> ; bare call lists the allowlist. 404 without the master key.
-app.get("/api/airdrop-comp", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/airdrop-comp", adminGuarded(ADMIN_404), (req, res) => {
   let list = airdropCompList();
   const add = String((req.query && req.query.add) || "").trim();
   const rem = String((req.query && req.query.remove) || "").trim();
@@ -7593,8 +7543,7 @@ app.get("/api/airdrop-comp", (req, res) => {
 });
 // Admin: ALL-TOOLS free-access comp list. &add=<wallet> / &remove=<wallet> ; bare call lists it.
 // A wallet here is treated as a full CLKN holder everywhere (see checkCLKNHolder). 404 without the master key.
-app.get("/api/tool-comp", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/tool-comp", adminGuarded(ADMIN_404), (req, res) => {
   let list = toolCompList();
   const add = String((req.query && req.query.add) || "").trim();
   const rem = String((req.query && req.query.remove) || "").trim();
@@ -8228,9 +8177,7 @@ app.get("/api/buyspecial-holdcheck", async (req, res) => {
 // GET /api/admin-check?key= — validates the operator key so an operator page can waive its
 // public paywall for the owner. Returns {ok:true} (200) when the key matches, 404 otherwise
 // (never reveals whether a key exists). Read-only, no side effects.
-app.get("/api/admin-check", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ ok: false });
+app.get("/api/admin-check", adminGuarded(ADMIN_404_FALSE, { noStore: true }), (req, res) => {
   return res.status(200).json({ ok: true });
 });
 
@@ -9711,9 +9658,7 @@ app.get("/api/cuna-giveaway", (req, res) => {
 // and no redeploy. Arming REFUSES without a loaded operator key: an "armed" that cannot sign
 // reads as running when it is not, which is exactly the state you stop watching.
 //   ?on=1   arm    ?off=1  disarm    (no arg = report state)
-app.all("/api/dnc-engine", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/dnc-engine", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
   try {
     const operator = whirlpoolMM.vault.operatorPubkey("dnc");
@@ -9733,9 +9678,7 @@ app.all("/api/dnc-engine", (req, res) => {
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.all("/api/rose-engine", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/rose-engine", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
   try {
     if (req.query.on === "1") {
@@ -9760,9 +9703,7 @@ app.all("/api/rose-engine", (req, res) => {
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.all("/api/cuna-engine", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/cuna-engine", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
   try {
     const operator = whirlpoolMM.vault.operatorPubkey("cuna");
@@ -9784,9 +9725,7 @@ app.all("/api/cuna-engine", (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
 });
 
-app.all("/api/cuna-giveaway/admin", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // Deep dive 2026-09-17 P0-002: this was the one CUNA admin route the 2026-09-05 mutating-GET
   // audit missed — &draw=1 spun the wheel and &payout=1&run=1 SENT PRIZE TOKENS on a pasted link.
   // Every flag that configures, scans, posts, draws, pays or reconciles now needs a POST; the
@@ -9987,9 +9926,7 @@ setInterval(() => {
 //   ?project=cuna&run=1  → run one real poll cycle now (even while disarmed)
 //   ?project=cuna&status=1 (or no action) → read-back the config
 //   ?list=1              → list all configured buy bots
-app.all("/api/buybot", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/buybot", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // Everything below except ?list=1 / ?status=1 / a bare ?project= WRITES the bot config or fires a
   // post — POST only (audit #8). GET stays the read-back.
   if (mutatingGetRefused(req, res, ["mint", "pool", "symbol", "chat", "chatId", "min", "emoji", "image", "arm", "disarm", "burns", "burntarget", "pools", "dev", "persona", "test", "burntest", "run"])) return;
@@ -10040,9 +9977,7 @@ app.all("/api/buybot", async (req, res) => {
 // Meme-request queue — fed by the project-room persona ([PIC: …] asks), drained by
 // the recurring image routine. GET lists pending; &done=<id> removes one after the
 // routine posts it; &clear=1 empties the queue.
-app.get("/api/meme-queue", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/meme-queue", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   let list = kv.get("memeRequests", []) || [];
   // Art ledger (owner ask 2026-08-24: "keep track of all of the art made"). &history=1
   // lists every piece the routine has posted, newest first; the routine records one by
@@ -10082,8 +10017,7 @@ app.get("/api/meme-queue", (req, res) => {
 //   ?test=1    → fire a sample buy alert (verify chat + image wiring)
 //   ?announce=1→ post the one-off "buy bot warming up" announcement
 //   ?loud=1    → make THIS post notify (announce/test only; silent otherwise per owner rule)
-app.all("/api/rose-buybot", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not found" });
+app.all("/api/rose-buybot", adminGuarded(ADMIN_404_OK), async (req, res) => {
   if (mutatingGetRefused(req, res, ["arm", "disarm", "setmin", "test", "announce", "backfill"])) return;   // audit #8; the flag-less poll stays a GET
   try {
     if (req.query.arm === "1") kv.set("roseBuyArmed", true);
@@ -10517,9 +10451,7 @@ function heliusRpcCall(HELIUS_URL) {
 // spot (Jupiter limit orders now; AMM depth + CLOBs next). Core lives in
 // lib/orderbook-scanner.js. GATED (404 without the premium key) — it does NOT
 // touch the public site/UX; the public page ships once the engine is complete.
-app.get("/api/order-scan", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/order-scan", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const mint = String(req.query.mint || CLKN_MINT_ADDR);
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
   try {
@@ -10573,9 +10505,7 @@ async function recordOrderbookSnapshot(mint) {
   return { at, spotUsd: m.spotUsd, asks: asks.length, bids: bids.length, diff };
 }
 // Day-to-day view (gated): current resting orders + recent history + last change.
-app.get("/api/order-watch", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/order-watch", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // Register your LP wallet(s) so the monitor never alerts on your own positions.
   if (req.query.setOwners != null) {
     const list = String(req.query.setOwners).split(",").map(s => s.trim()).filter(w => SOL_ADDR_RE.test(w));
@@ -10670,9 +10600,7 @@ async function recordClknStructureSnapshot() {
   return snap;
   } catch (e) { console.warn("[clkn-structure] snapshot failed:", e.message); return null; }
 }
-app.get("/api/order-watch/structure", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/order-watch/structure", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     if (req.query.run === "1") await recordClknStructureSnapshot();
     const hist = kv.get("clknStructureLog", []) || [];
@@ -10686,9 +10614,7 @@ app.get("/api/order-watch/structure", async (req, res) => {
 // pools, summarize buy/sell flow, and flag a sell firing within seconds of a buy
 // — the off-chain trading-bot pattern (BonkBot/Trojan/etc.) that has no on-chain
 // resting order to find. This is what catches the "2-second sell after my buy".
-app.get("/api/order-flow", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/order-flow", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const mint = String(req.query.mint || CLKN_MINT_ADDR);
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
   const mins = Math.min(360, Math.max(5, parseInt(req.query.mins || "60", 10) || 60));
@@ -12988,9 +12914,7 @@ app.post("/api/ask-cluck/report", rateLimit("askreport", { windowMs: 60000, max:
   kv.set("askCluckReports", list.slice(-500));
   return res.status(200).json({ ok: true });
 });
-app.get("/api/ask-cluck/reports", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/ask-cluck/reports", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   const list = kv.get("askCluckReports", []) || [];
   return res.status(200).json({ ok: true, count: list.length, reports: list.slice().reverse() });
 });
@@ -13148,8 +13072,7 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
 // pins the mode (mode= empty string clears the pin back to auto: monitor until the
 // auto-enforce date, then enforce). ?lessons= / ?minAge= (minutes) / ?buckets= tune the
 // thresholds. ?sid=<id> inspects one session's ledger.
-app.all("/api/school/grad-gate", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+app.all("/api/school/grad-gate", adminGuarded(ADMIN_404_SUCCESS), (req, res) => {
   // Deep dive P2-113: mode/threshold writes are POST-only like every other admin lever; the
   // flag-less GET (and ?sid= inspection) stays a read.
   if (mutatingGetRefused(req, res, ["mode", "lessons", "minAge", "buckets"])) return;
@@ -13567,9 +13490,7 @@ function noteTradeForArb(addr, action, tsMs) {
   if (changed) kv.set("arbBotWallets", bots);
 })();
 // View / manually add / remove flagged arb bots (gated). ?add=<wallet> / ?remove=<wallet>.
-app.get("/api/arb-bots", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/arb-bots", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   if (req.query.add && SOL_ADDR_RE.test(String(req.query.add))) flagArbBot(String(req.query.add), "manual");
   if (req.query.remove) { const b = getArbBots(); delete b[String(req.query.remove)]; kv.set("arbBotWallets", b); }
   const bots = getArbBots();
@@ -13579,9 +13500,7 @@ app.get("/api/arb-bots", (req, res) => {
 // ── Wall ratchet control (owner protect mode, 2026-07-10). ?enabled=0/1 flips the
 //    auto pull-and-reopen; numeric params patch tunables (trigFrac 0-1, usd, lowPct,
 //    upPct, minSec, maxPerDay). Always returns cfg + state + recent log. Gated.
-app.get("/api/wall-ratchet", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/wall-ratchet", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   const cur = kv.get("wallRatchetCfg", {});
   const patch = {};
   if (req.query.enabled != null) patch.enabled = req.query.enabled === "1";
@@ -13814,9 +13733,7 @@ async function walletWatchReport(day, cfg) {
   }
   await wwOperatorDM(lines.join("\n"));
 }
-app.get("/api/wallet-watch", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/wallet-watch", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const cfg = wwCfg();
   if (req.query.add && SOL_ADDR_RE.test(String(req.query.add))) {
     if (!cfg.wallets.some((w) => w.addr === req.query.add)) cfg.wallets.push({ addr: String(req.query.add), label: String(req.query.label || "") });
@@ -13833,9 +13750,7 @@ app.get("/api/wallet-watch", async (req, res) => {
 });
 // Whale Panel data (PRIVATE — same product test): top-holder roster + flows + today's
 // activity, one JSON for the gated /whale-panel page. &refresh=1 re-runs discovery.
-app.get("/api/whale-watch", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/whale-watch", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   let refreshed = null;
   if (req.query.refresh === "1" || !kv.get("whaleWatch", null)) refreshed = await whaleRefresh().catch((e) => ({ error: e.message }));
   const ww = kv.get("whaleWatch", null) || { whales: [] };
@@ -15502,8 +15417,7 @@ async function renderLpCard(scan) {
   return canvas.toBuffer("image/png");
 }
 
-app.get("/api/lp-card", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-card", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
   const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;
@@ -15669,9 +15583,7 @@ app.get("/api/diploma-collection", (req, res) => {
 // Diploma NFT admin (gated, 404 without key). ?action=status | create-tree | create-collection | test | backfill.
 // Mutating actions need &run=1. create-tree is one-time (~0.3 SOL); backfill mints to every
 // graduate who left a wallet (idempotent — won't double-mint).
-app.all("/api/diploma-mint", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/diploma-mint", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: create-tree / backfill / test mint only on a POST
   const action = String(req.query.action || "status");
   try {
@@ -15715,9 +15627,7 @@ app.all("/api/diploma-mint", async (req, res) => {
 //  (no action)         → status: enabled?, wallet pubkey, CLKN/SOL balance, per-send max
 //  ?max=NN              → set the per-send max guard (kv schoolAirdropMax)
 //  ?wallet=…&amount=NN&run=1 → manually airdrop to one wallet (same idempotent path as the reply flow)
-app.all("/api/school-airdrop", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/school-airdrop", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["max", "run"])) return;   // deep dive P0-008: the cap write and the send are POST-only
   try {
     if (req.query.max != null) {
@@ -16353,20 +16263,17 @@ app.get("/api/jupverify/status", rateLimit("jvp-st", { windowMs: 60000, max: 30 
 });
 
 // ── Admin (owner) ── all 404 on bad key, header preferred over ?key=.
-app.get("/api/jupverify/admin/list", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+app.get("/api/jupverify/admin/list", adminGuarded(ADMIN_404_CAP), (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json({ success: true, submissions: jvpIntake.list() });
 });
-app.get("/api/jupverify/admin/entry", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+app.get("/api/jupverify/admin/entry", adminGuarded(ADMIN_404_CAP), (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const rec = jvpIntake.get(String(req.query.id || ""));
   if (!rec) return res.status(404).json({ success: false, error: "not found" });
   res.json({ success: true, submission: rec });
 });
-app.post("/api/jupverify/admin/entry", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+app.post("/api/jupverify/admin/entry", adminGuarded(ADMIN_404_CAP), (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const b = req.body || {};
   const r = jvpIntake.adminUpdate(String(req.query.id || b.id || ""), { status: b.status, ownerNotes: b.ownerNotes, clientMessage: b.clientMessage });
@@ -16377,8 +16284,7 @@ app.post("/api/jupverify/admin/entry", (req, res) => {
 // (holders ≥~250, registered liquidity ≥~$25k — the DNC verified profile), plus
 // whether one of our engines is already running this mint. Separate from /entry
 // because it fans out to external APIs.
-app.get("/api/jupverify/admin/scorecard", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+app.get("/api/jupverify/admin/scorecard", adminGuarded(ADMIN_404_CAP), async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const mint = String(req.query.mint || "").trim();
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "bad mint" });
@@ -17220,9 +17126,7 @@ app.get("/api/owners-snapshot/history", (req, res) => {
   res.json({ ok: true, ...ownersSnapshot.history({ mint }) });
 });
 // Owner-only: queue view + cancel.
-app.get("/api/owners-snapshot/admin", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/owners-snapshot/admin", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   if (req.query.cancel) return res.json({ ok: true, cancelled: ownersSnapshot.cancel(String(req.query.cancel)) });
   res.json({ ok: true, running: ownersSnapshot.running, queueLength: ownersSnapshot.queueLength, recent: ownersSnapshot.listRecent(30) });
 });
@@ -17247,11 +17151,7 @@ app.get("/autopsy", (req, res) => {
 app.get("/stats", (req, res) => {
   res.sendFile(join(__dirname, "public", "stats.html"));
 });
-app.get("/api/stats", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) {
-    return res.status(404).json({ error: "not_found" });
-  }
+app.get("/api/stats", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   const n = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 30));
   return res.status(200).json({ success: true, ...analytics.summary(n) });
 });
@@ -17261,9 +17161,7 @@ app.get("/api/stats", (req, res) => {
 // farming our API": topCallers names our subsystems (caller 'sdk' = the liquidity
 // engine's Orca/Meteora reads); proxy.topIps names external callers of the public
 // raw proxies + Wallet X-Ray, which is where scraping shows up.
-app.get("/api/helius-usage", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/helius-usage", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   const n = Math.max(1, Math.min(14, parseInt(req.query.days, 10) || 7));
   return res.status(200).json({ success: true, ...heliusUsage.summary(n) });
 });
@@ -17401,8 +17299,7 @@ app.use("/vendor", express.static(join(__dirname, "public", "vendor"), { maxAge:
 // -- Homepage: a lightweight front door at / (learn + build + token story). The
 // Preview/fire the school credential watcher manually: /api/grad-alert-test?key=…[&run=1].
 // MUST be before the catch-all below. schoolGradTick is a hoisted fn declared later.
-app.get("/api/grad-alert-test", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/grad-alert-test", adminGuarded(ADMIN_404), async (req, res) => {
   try { res.json(await schoolGradTick({ dryRun: req.query.run !== "1" })); }
   catch (e) { res.status(500).json({ error: publicErrMsg(e) }); }
 });
@@ -17524,8 +17421,7 @@ app.use(nqRouter);
 // Gated dry-run / manual-fire of the Normie Quest playtest digest (the twice-daily auto-DM).
 // Dry by default (returns the preview it WOULD send); &send=1 actually DMs the operator chat;
 // &reset=1 re-baselines the "since" watermark to now (skip already-seen comments).
-app.get("/api/nq-digest-test", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+app.get("/api/nq-digest-test", adminGuarded(ADMIN_404_OK_US), async (req, res) => {
   try {
     const r = await nqDigest.run({ send: req.query.send === "1" || req.query.send === "true", reset: req.query.reset === "1", notify: nqNotify });
     res.json({ ok: true, ...r });
