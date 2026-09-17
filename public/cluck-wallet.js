@@ -606,7 +606,12 @@
 
   // Export only what pages call (WALLETS, available, connect, disconnect, isMobile, mobileLinksHTML,
   // watch). deeplinks stays for a QR/hand-off surface; shortAddr lives in /cluck-util.js.
+  // The {name, p} shape two operator pages build from available() — one copy here, not one per
+  // page (simplifier pass, 2026-09-17).
+  function list() { return available().map(function (w) { return { name: w.name, p: w.provider }; }); }
+
   global.CluckWallet = {
+    list: list,
     diagnostics: diagnostics,
     asTransaction: asTransaction,
     WALLETS: WALLETS,

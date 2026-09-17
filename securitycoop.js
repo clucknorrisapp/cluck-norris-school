@@ -11,8 +11,7 @@ const {
 
 // Mainnet RPC — resilient with automatic failover (lib/rpc.js): a primary 429 /
 // outage rolls to a backup RPC and the public node instead of failing the call.
-const { connection: rpcConnection, primaryRpcUrl } = require("./lib/rpc");
-function rpcUrl() { return primaryRpcUrl(); }
+const { connection: rpcConnection } = require("./lib/rpc");
 
 // One Revoke instruction per token account stays small; this many comfortably
 // fit inside Solana's single-transaction size limit.

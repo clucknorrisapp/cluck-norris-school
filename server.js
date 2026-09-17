@@ -203,10 +203,7 @@ async function notifyToolsReminder() {
   try {
     if (lastToolsReminderMsgId) {
       // Drop the previous reminder so repeats never pile up in the chat.
-      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, message_id: lastToolsReminderMsgId }),
-      }).catch(() => {});
+      await tgDelete(chatId, lastToolsReminderMsgId);
       lastToolsReminderMsgId = null; kv.set("toolsReminderMsgId", null);
     }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -300,10 +297,7 @@ async function notifyBagsLaunches() {
     if (!text) return;
     // Delete the previous Radar first so only the latest stays (no pile-up).
     if (lastBagsRadarMsgId) {
-      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, message_id: lastBagsRadarMsgId }),
-      }).catch(() => {});
+      await tgDelete(chatId, lastBagsRadarMsgId);
       lastBagsRadarMsgId = null; kv.set("bagsRadarMsgId", null);
     }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -368,10 +362,7 @@ async function notifyMarketCheck() {
     // Delete the previous Market Check first so the chat only ever shows the
     // latest one (no hourly pile-up). Bots can delete their own msgs <48h old.
     if (lastMarketCheckMsgId) {
-      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, message_id: lastMarketCheckMsgId }),
-      }).catch(() => {});
+      await tgDelete(chatId, lastMarketCheckMsgId);
       lastMarketCheckMsgId = null; kv.set("marketCheckMsgId", null);
     }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -434,10 +425,7 @@ async function notifyRecap() {
   try {
     const text = buildRecapText();
     if (lastRecapMsgId) {
-      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, message_id: lastRecapMsgId }),
-      }).catch(() => {});
+      await tgDelete(chatId, lastRecapMsgId);
       lastRecapMsgId = null; kv.set("recapMsgId", null);
     }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -5463,7 +5451,7 @@ async function getBagsGraduated() {
 function tgEsc(s) { return String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
 // Escape for server-rendered HTML pages/attributes (OG tags, /lock, /burn, the LP Lab shell).
 // ONE copy — five private ones drifted before, and one of them was missing the quote escape.
-function escHtml(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+const { escHtml } = require("./lib/html-escape");   // shared with lib/learn-pages.js and lib/cuna-announce.js
 
 // The Recently-Graduated BOARD = our own tracked 48h record (reliable for Bags,
 // unaffected by pump.fun flooding ST's global feed) merged with any Bags-suffix
@@ -5476,9 +5464,11 @@ async function getBagsGraduatedBoard() {
   if (GRAD_BOARD_CACHE.list && now - GRAD_BOARD_CACHE.ts < GRADUATED_TTL) return { tokens: GRAD_BOARD_CACHE.list, cached: true };
   const seen = new Set();
   const tokens = [];
-  for (const g of gradTracker.listGraduated()) {       // newest-first, last 48h
-    if (seen.has(g.mint)) continue; seen.add(g.mint);
-    let snap = null; try { snap = await getBagsTokenSnapshot(g.mint); } catch (_) {}
+  const grads = gradTracker.listGraduated().filter((g) => { if (seen.has(g.mint)) return false; seen.add(g.mint); return true; });   // newest-first, last 48h
+  // Independent per-token reads — they used to run one after another inside a user-facing request.
+  const snaps = await Promise.all(grads.map((g) => getBagsTokenSnapshot(g.mint).catch(() => null)));
+  grads.forEach((g, i) => {
+    const snap = snaps[i];
     tokens.push({
       tokenMint: g.mint, name: g.name, symbol: g.symbol, image: g.image, twitter: g.twitter,
       priceUsd: snap?.priceUsd ?? g.priceUsd ?? null,
@@ -5488,7 +5478,7 @@ async function getBagsGraduatedBoard() {
       createdAt: g.graduatedAt,
       source: "tracked",
     });
-  }
+  });
   try {                                                 // additive supplement from ST
     const st = await getBagsGraduated();
     for (const t of (st.tokens || [])) { if (!seen.has(t.tokenMint)) { seen.add(t.tokenMint); tokens.push(t); } }
@@ -7576,7 +7566,7 @@ function airdropCompList() { const a = kv.get("airdropCompWallets", []); return 
 // (airdropCompWallets) never silently gain premium access. Master-key-only via /api/tool-comp.
 function toolCompList() { const a = kv.get("toolCompWallets", []); return Array.isArray(a) ? a : []; }
 function isToolComped(w) { w = String(w || ""); return !!w && toolCompList().indexOf(w) !== -1; }
-const AD_B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const AD_B58 = SOL_ADDR_RE;   // the shared shape from lib/solana-addr
 app.get("/api/airdrop-comp/check", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const w = String((req.query && req.query.wallet) || "").trim();
@@ -8370,6 +8360,16 @@ function verifyToolPass(token) {
 // Live qualification of a wallet for the free tier. `unavailable` means the balance could not
 // be read (RPC down) — callers apply the outage policy instead of treating it as zero.
 const toolPassHolderCache = new Map();   // wallet -> { ok, at, deny } — one balance read per wallet per 5 min
+// Bounded like toolPassChallenges above: every distinct wallet that ever ran a gated tool used to
+// stay in this map for the life of the process (simplifier pass, 2026-09-17).
+function rememberHolder(wallet, entry) {
+  toolPassHolderCache.set(wallet, entry);
+  if (toolPassHolderCache.size <= 5000) return;
+  const cutoff = Date.now() - 5 * 60e3;
+  for (const [w, c] of toolPassHolderCache) if (!c || c.at < cutoff) toolPassHolderCache.delete(w);
+  let drop = toolPassHolderCache.size - 5000;
+  for (const w of toolPassHolderCache.keys()) { if (drop-- <= 0) break; toolPassHolderCache.delete(w); }
+}
 async function toolPassQualify(wallet) {
   if (isToolComped(wallet)) return { ok: true, via: "comp" };
   const cached = toolPassHolderCache.get(wallet);
@@ -8381,10 +8381,10 @@ async function toolPassQualify(wallet) {
   if (!h || h.unavailable) { console.warn("[tool-pass] balance read unavailable, failing open:", (h && h.error) || "no result"); return { ok: true, via: "grace-rpc" }; }
   const needed = Math.ceil(TOOLGATE.usd / priceUsd);
   const bal = Number(h.balance) || 0;
-  if (bal >= needed) { toolPassHolderCache.set(wallet, { ok: true, at: Date.now() }); return { ok: true, via: "holder", balance: bal, needed }; }
+  if (bal >= needed) { rememberHolder(wallet, { ok: true, at: Date.now() }); return { ok: true, via: "holder", balance: bal, needed }; }
   const deny = { error: "insufficient_holdings", balance: bal, needed, holdUsd: TOOLGATE.usd, priceUsd,
     detail: `The free tier needs about $${TOOLGATE.usd} of CLKN (~${needed.toLocaleString()} at the current price); that wallet holds ${Math.round(bal).toLocaleString()}. ${TOOLGATE.lamports / 1e9} SOL unlocks every heavy tool for ${TOOLGATE.days} days.` };
-  toolPassHolderCache.set(wallet, { ok: false, at: Date.now(), deny });
+  rememberHolder(wallet, { ok: false, at: Date.now(), deny });
   return { ok: false, ...deny };
 }
 async function toolPassGate(req) {
@@ -8513,7 +8513,7 @@ app.get("/api/token-metadata/read", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try {
     const mint = String((req.query && req.query.mint) || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
     const tm = require("./lib/token-metadata");
     const { Connection, PublicKey } = require("@solana/web3.js");
     const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
@@ -8565,7 +8565,7 @@ app.post("/api/token-metadata/rebuild-json", async (req, res) => {
   try {
     const b = req.body || {};
     const mint = String(b.mint || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
     const tm = require("./lib/token-metadata");
     const { Connection } = require("@solana/web3.js");
     const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
@@ -8671,7 +8671,7 @@ app.post("/api/token-metadata/prepare", async (req, res) => {
   try {
     const b = req.body || {};
     const mint = String(b.mint || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
     const tm = require("./lib/token-metadata");
     const { Connection } = require("@solana/web3.js");
     const conn = new Connection(tokenMetaRpcUrl(), "confirmed");
@@ -8720,7 +8720,7 @@ app.post("/api/token-authority/prepare", async (req, res) => {
   try {
     const b = req.body || {};
     const mint = String(b.mint || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
+    if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad_mint" });
     const type = Number(b.authorityType);
     if (type !== 0 && type !== 1) return res.status(400).json({ ok: false, error: "bad_authority_type",
       detail: "0 = mint authority, 1 = freeze authority. Nothing else is revocable here." });
@@ -10929,7 +10929,7 @@ async function renderLockCard(d) {
 app.get("/api/lock-card", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const mint = String(req.query.mint || "").trim();
-  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).end();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).end();
   try {
     const d = await lockPageData(mint);
     if (!d || !d.success) return res.status(404).end();
@@ -10948,7 +10948,7 @@ app.get("/api/lock-card", async (req, res) => {
 // from /api/locks. Everything token-supplied is escaped (names are attacker-controlled).
 app.get("/lock/:mint", async (req, res) => {
   const mint = String(req.params.mint || "").trim();
-  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(404).send("Not found");
+  if (!SOL_ADDR_RE.test(mint)) return res.status(404).send("Not found");
   const escH = escHtml;
   let title = "Token Lock Report", sub = "";
   try {   // best-effort identity for the OG text — never block the page on it
@@ -11001,7 +11001,7 @@ a{color:#FCD34D}
 <script>
 (function(){
   var MINT=${JSON.stringify(mint)};
-  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
   function fmt(n){if(n==null||!isFinite(n))return'—';var a=Math.abs(n);if(a>=1e9)return(n/1e9).toFixed(2)+'B';if(a>=1e6)return(n/1e6).toFixed(2)+'M';if(a>=1e3)return(n/1e3).toFixed(1)+'K';return String(Math.round(n));}
   fetch('/api/locks?mint='+encodeURIComponent(MINT)).then(function(r){return r.json();}).then(function(d){
     var el=document.getElementById('body');
@@ -11081,7 +11081,7 @@ const _tokenIconMiss = new Map();   // mint -> ts of last failed fetch (10-min n
 app.get("/api/token-icon", async (req, res) => {
   try {
     const mint = String((req.query && req.query.mint) || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).end();
+    if (!SOL_ADDR_RE.test(mint)) return res.status(400).end();
     fs.mkdirSync(TOKEN_ICON_DIR, { recursive: true });
     const metaPath = path.join(TOKEN_ICON_DIR, mint + ".json");
     const binPath = path.join(TOKEN_ICON_DIR, mint + ".img");
@@ -11492,7 +11492,7 @@ app.get("/api/cuna-stake/wallet", async (req, res) => {
   try {
     const s = require("./lib/cuna-staking");
     const addr = String(req.query.address || "").trim();
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) {
+    if (!SOL_ADDR_RE.test(addr)) {
       return res.status(400).json({ ok: false, error: "Connect a wallet first." });
     }
     const p = cunaProgramme();
@@ -12397,19 +12397,12 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
           return res.status(503).json({ ok: false, error: "could not verify signatures on chain right now — nothing recorded, try again: " + publicErrMsg(e) });
         }
       }
-      const verdictOf = (r) => {
-        const sg = String((r && r.sig) || "").trim();
-        const w = String((r && r.wallet) || "");
-        if (!txBySig.has(sg)) return { ok: false, why: "no transaction signature" };
-        // A signature that already settled this wallet in an EARLIER batch is not a new payment
-        // (Codex 2026-09-17, finding 3), and a transfer that landed before this batch existed
-        // cannot be its payment either.
-        const prior = payoutVerify.sigAlreadyUsed(batches, w, sg, id);
-        if (prior) return { ok: false, why: "this signature already paid " + w.slice(0, 6) + "… in batch " + prior };
-        return payoutVerify.rowPaidBy(txBySig.get(sg), { mint: SUPPLY_FEEDS.cuna.mint, wallet: w, minRaw: (b.amounts || {})[w], notBefore: b.at });
-      };
-      const rejected = results.filter((r) => !verdictOf(r).ok).map((r) => ({ wallet: r && r.wallet, sig: r && r.sig, why: verdictOf(r).why }));
-      results = results.filter((r) => verdictOf(r).ok);
+      // The same row verification the hub payout runs (lib/payout-verify.verifyBatchRows): the
+      // transaction must have moved the batch's token to that wallet for the amount owed, landed
+      // after the batch was exported, and not already settled that wallet in another batch.
+      const vr = payoutVerify.verifyBatchRows({ results, txBySig, batches, batchId: id, mint: SUPPLY_FEEDS.cuna.mint, amounts: b.amounts, notBefore: b.at });
+      const rejected = vr.rejected;
+      results = vr.accepted;
       for (const sg of sigs) landed.add(sg);   // kept for the log line below
       const r = pay.recordSent({ batch: b, paid, results, nowUnix });
       r.ignored = [...r.ignored, ...rejected];
@@ -15792,7 +15785,7 @@ app.get("/api/token-card", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
   const mint = String(req.query.mint || "").trim();
-  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ success: false, error: "Invalid mint" });
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "Invalid mint" });
   try {
     let body = null;
     const hit = AUTOPSY_CACHE.get(mint);
@@ -18606,7 +18599,7 @@ function composeBrandPost(body) {
 async function contentEngineRun({ send = false } = {}) {
   if (!process.env.HELIUS_API_KEY) return { skipped: "no helius key" };
   let board = null; try { board = await getBagsGraduatedBoard(); } catch (_) {}
-  const cands = ((board && board.tokens) || []).filter((t) => t && t.tokenMint && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(t.tokenMint));
+  const cands = ((board && board.tokens) || []).filter((t) => t && t.tokenMint && SOL_ADDR_RE.test(t.tokenMint));
   if (!cands.length) return { skipped: "no graduated candidates" };
 
   // Quality bar (kv-tunable). We'd rather post NOTHING than feature a dud — the
@@ -20238,10 +20231,13 @@ app.listen(PORT, () => {
   // this generic 10-min loop must NOT also tick that project — two unlocked schedulers
   // rolling the same position race setState and manufacture orphaned positions (the $355
   // incident). A DISARMED dedicated engine falls back to generic management as before.
+  // The canonical predicates (hard-kill env beats the kv arm key; an absent key is OFF) — this
+  // table used to re-derive that precedence by hand, so the 2026-09-17 P1-032 change would have
+  // left it disagreeing with the loops it gates (simplifier pass).
   const dedicatedActive = {
-    rose: () => process.env.ROSE_ENGINE_OFF !== "1" && !!kv.get("roseEngineArmed", false),
-    cuna: () => process.env.CUNA_ENGINE_OFF !== "1" && !!kv.get("cunaEngineArmed", false),
-    dnc: () => process.env.DNC_ENGINE_OFF !== "1" && !!kv.get("dncEngineArmed", false),
+    rose: roseEngineArmed,
+    cuna: cunaArmed,
+    dnc: dncArmed,
     poke: () => process.env.POKE_ENGINE_ON === "1" && process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING, // OFF by default (owner, 2026-09-05), never on staging
   };
   const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {

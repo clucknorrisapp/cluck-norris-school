@@ -1410,7 +1410,7 @@ function render(data) {
         }
       }
       const addr = h.authority || h.tokenAccount;
-      const shortAddr = addr ? addr.slice(0, 6) + "…" + addr.slice(-4) : "—";
+      const shortAddr = addr ? CluckUtil.shortAddr(addr, 6, 4) : "—";
       const pct = ((h.share || 0) * 100).toFixed(2);
       // Source line: show actual source link for genuine wallet-to-wallet
       // transfers; for CEX withdrawals / pool routing / lock unlocks just show
