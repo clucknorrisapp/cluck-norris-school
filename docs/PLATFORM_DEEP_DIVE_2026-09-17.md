@@ -21,6 +21,7 @@ Owner ask (2026-09-17): *"do everything, the whole platform, multiple agents dee
 | P0-009 / P0-010 | **confirmed** (duplicates) | `requireToolPass` on `/api/buyspecial-crosscheck`, `-holdcheck`, `-trace` (admin key exempt for the operator console); the page calls them through `CluckGate.fetch` |
 | P0-011 | **confirmed** | SEND PRIZES excludes wallets already sent / unconfirmed for the current list; the native `confirm()` is replaced by an in-page two-click confirm |
 | P0-012 | **confirmed** | Hatchery treats a confirmation timeout as AMBIGUOUS: shows the signature + Solscan, keeps the button off until reload |
+| P1-066 | **confirmed — pulled forward, it interacts with P0-009/010** | Buy Special's private gate granted a LOCAL pass with no server token; once the server checked the pass, every unlock made there 402'd in a loop. The private connect/pay flow is deleted and the page mounts the shared card (`CluckGate.guard`); `guard()` itself now requires a server-issued token, so a stale token-less pass re-opens the card on every heavy tool |
 
 
 ## P0 — 12

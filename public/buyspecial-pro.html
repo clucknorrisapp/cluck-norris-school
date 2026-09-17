@@ -103,14 +103,12 @@
     <h2>🔒 BUY SPECIAL</h2>
     <div class="sub">UNLOCK TO RUN COMPETITIONS</div>
 
-    <button class="btn ghost" id="gConnect" style="width:100%">🔗 Connect wallet</button>
-    <div class="gblurb" style="margin:10px 0 0">Hold <b style="color:var(--gold)">$50 worth of CLKN</b> and every heavy tool is free while you hold. If you don't, one click pays <b style="color:var(--gold)">0.05 SOL</b> for 7 days of <b>all of them</b> — Buy Special, Airdrop, X-Ray, Holders, Trace.</div>
-    <div class="wchip hidden" id="gWallet"><span class="dot"></span><span class="addr" id="gWalletAddr">—</span><span class="bal" id="gWalletBal"></span><button class="dc" id="gDisconnect" type="button">Disconnect</button></div>
-    <div class="gstatus hidden" id="gWalletStatus" style="margin-top:10px"></div>
-    <button class="btn a hidden" id="gPaySol" style="width:100%;margin-top:10px">◎ Pay 0.05 SOL — unlock 7 days</button>
-    <!-- The manual "send exactly 5,850.xyz CLKN" door was retired 2026-07-30
-         (owner's call — the send-and-wait flow complicated every gated tool for no
-         real uptake). Both remaining doors resolve through the connected wallet. -->
+    <div class="gblurb" style="margin:10px 0 0">One pass for every heavy tool — Buy Special, Airdrop, X-Ray, Holders, Trace. Connect below: a holder is unlocked free, anyone else pays a small SOL fee for a week. The live numbers are on the card.</div>
+    <!-- The gate card itself is the SHARED one from /cluck-gate.js and mounts right after this
+         block (deep dive 2026-09-17 P1-066: this page used to run its own connect/pay flow that
+         granted a local pass with NO server token, so once the server checked the pass every
+         unlock made here 402'd in a loop). The manual "send exactly N CLKN" door was retired
+         2026-07-30 (owner's call). -->
   </div>
 
   <div id="tool" class="hidden">
@@ -657,99 +655,28 @@ const OP_FLAG='clkn_buyspecial_operator';
 // so the data calls can present it as a header — the server now checks the tools pass on every
 // Buy Special endpoint (deep dive P0-009/010) and the admin key is the one exemption.
 const OP_KEY='clkn_buyspecial_opkey';
-function toolFetch(url){ let k=null; try{ k=sessionStorage.getItem(OP_KEY); }catch(_){} if(k) return fetch(url,{headers:{'x-premium-key':k}}); return CluckGate.fetch(url); }
-const RECV='7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
+async function toolFetch(url){ let k=null; try{ k=sessionStorage.getItem(OP_KEY); }catch(_){} if(k) return fetch(url,{headers:{'x-premium-key':k}});
+  const r=await CluckGate.fetch(url); if((r.status===402||r.status===403)&&!CluckGate.pass()) showGate(); return r; }
 // Unified tools pass (owner, 2026-08-18): ONE pass across every heavy tool — hold $50 worth
 // of CLKN (live-priced via /api/tool-gate/config) = free, else 0.05 SOL for 7 days of
 // EVERYTHING. This page keeps its own gate UI but reads/writes the shared pass through
 // CluckGate, so unlocking here unlocks X-Ray/Holders/Trace/Airdrop too (and vice versa).
 // CluckGate.pass() also honors the old clkn_buyspecial_unlock key until it expires.
-function isUnlocked(){ if(localStorage.getItem(OP_FLAG)==='1') return true; return !!CluckGate.pass(); }
+// A pass counts only with its server-issued token (proof): the heavy APIs check that token, and a
+// token-less local grant (the old flow here, or a pre-2026-09-10 pass) would only 402.
+function isUnlocked(){ if(localStorage.getItem(OP_FLAG)==='1') return true; return !!CluckGate.proof(); }
 function showTool(){ $('gate').classList.add('hidden'); $('tool').classList.remove('hidden'); }
-function showGate(){ $('gate').classList.remove('hidden'); $('gate').scrollIntoView({behavior:'smooth',block:'center'}); }
-let GATE_CFG=null;   // live numbers from /api/tool-gate/config (fallbacks below if it's down)
-const SOL_LAMPORTS=50000000;
-let wProvider=null, wPubkey=null;
+// The shared gate card: connect → sign a server nonce → the server issues the pass (holder,
+// comped, or after the SOL payment it verifies and consumes). Mounted after #gate; on unlock the
+// tool is shown. Same code path as X-Ray / Holders / Trace / Airdrop — no private copy.
+const openGate=CluckGate.guard(function(){ showTool(); },{ tool:'Buy Special', anchor:'#gate .sub' });
+function showGate(){ $('gate').classList.remove('hidden'); $('tool').classList.add('hidden'); openGate(); }
+// Wallet detection lives in /cluck-wallet.js — this page used to look for Phantom and Solflare
+// only; Backpack/OKX/Coinbase/Exodus/Bitget/Glow/Brave/Jupiter users were told no wallet was found.
 const rpcCall = CluckUtil.rpc;   // shared helper — see /cluck-util.js
 window.addEventListener('load', function () { try { if (window.CluckAirdrop && CluckAirdrop.refreshRent) CluckAirdrop.refreshRent(rpcCall); } catch (e) {} });   // live per-ATA rent for the payout cost estimate (Agave 4.2 lowers rent from 2026-09-10)
-// Wallet detection lives in /cluck-wallet.js — this page used to look for Phantom
-// and Solflare only, behind a bare window.solana fallback, so Backpack/OKX/Coinbase/
-// Exodus/Bitget/Glow/Brave/Jupiter users were told no wallet was found.
 function detectProvider(){ const l=CluckWallet.available(); return l.length?l[0].provider:null; }
-function gWalletMsg(t,ok){ const e=$('gWalletStatus'); e.classList.remove('hidden'); e.className='gstatus'+(ok?' ok':''); e.textContent=t; }
-function unlockNow(days,why){ CluckGate.grant(days,why||'paid'); setTimeout(showTool,1300); }
 const shortAddr=a=>a?a.slice(0,4)+'…'+a.slice(-4):'—';
-// Show WHICH wallet is connected, and always offer a way out. A page that can
-// connect must be able to disconnect — otherwise the only way to switch wallets
-// is to clear site data, which is not a thing to ask of anyone.
-function gShowWallet(bal){
-  $('gWallet').classList.remove('hidden');
-  $('gWalletAddr').textContent=shortAddr(wPubkey);
-  $('gWalletBal').textContent=(bal==null?'':'· '+fmt(bal)+' CLKN');
-  $('gConnect').classList.add('hidden');
-}
-function gDisconnectWallet(){
-  // Best-effort: not every injected provider implements disconnect(), so the
-  // local state reset is what actually matters — never leave the UI showing a
-  // wallet we've stopped using.
-  try{ wProvider && wProvider.disconnect && wProvider.disconnect(); }catch(_){}
-  wProvider=null; wPubkey=null;
-  $('gWallet').classList.add('hidden');
-  $('gPaySol').classList.add('hidden');
-  $('gWalletStatus').classList.add('hidden');
-  $('gConnect').classList.remove('hidden');
-}
-async function gConnectWallet(){
-  const p=detectProvider(); if(!p){ gWalletMsg('No Solana wallet found. Install one, or open this page inside your wallet\u2019s own browser, then refresh.'); return; }
-  try{ const resp=await p.connect(); wPubkey=((resp&&resp.publicKey)||p.publicKey).toString(); wProvider=p; gShowWallet(null); gWalletMsg('Checking your CLKN balance…'); await gCheckHolder(); }
-  catch(e){ gWalletMsg('Connect failed: '+(e.message||e)); }
-}
-async function gCheckHolder(){
-  try{
-    const r=await rpcCall('getTokenAccountsByOwner',[wPubkey,{mint:CLKN},{encoding:'jsonParsed'}]);
-    // uiAmountString, not uiAmount: the float uiAmount is null for large balances, so a whale
-    // would read 0 and be denied the free holder tier they qualify for.
-    let bal=0; for(const a of ((r&&r.value)||[])){ const ta=a.account&&a.account.data&&a.account.data.parsed&&a.account.data.parsed.info.tokenAmount; bal+=Number(ta&&(ta.uiAmountString||ta.uiAmount))||0; }
-    gShowWallet(bal);
-    // Operator comp: a wallet on the all-tools free-access list is unlocked free regardless of its
-    // on-chain CLKN. The balance read above is on-chain (browser); the comp lives server-side, so a
-    // comped wallet holding 0 CLKN would otherwise be told to pay. Checked yes/no for THIS wallet.
-    let comped=false; try{ const c=await fetch('/api/tool-comp/check?wallet='+encodeURIComponent(wPubkey)).then(r=>r.json()); comped=!!(c&&c.comped); }catch(_){}
-    if(comped){ gWalletMsg('✓ Comped wallet — unlocked free.',true); unlockNow(3650,'comp'); }
-    else {
-      // $-denominated holder tier: threshold comes from the live config, never hardcoded.
-      if(!GATE_CFG){ try{ GATE_CFG=await CluckGate.config(); }catch(_){} }
-      const need=(GATE_CFG&&GATE_CFG.clknNeeded)||null, days=(GATE_CFG&&GATE_CFG.days)||7, usd=(GATE_CFG&&GATE_CFG.holdUsd)||50;
-      if(GATE_CFG&&GATE_CFG.enabled===false){ gWalletMsg('✓ Unlocked.',true); unlockNow(days,'gate-off'); }
-      else if(need&&bal>=need){ gWalletMsg('✓ Holder — every heavy tool unlocked free.',true); unlockNow(days,'holder'); }
-      else if(!need){ gWalletMsg('✓ Unlocked (price check unavailable right now).',true); unlockNow(1,'grace'); }
-      else { gWalletMsg('The free tier needs ≈'+fmt(need)+' CLKN ($'+usd+' worth) — this wallet holds '+fmt(bal)+'. Pay 0.05 SOL for '+days+' days of ALL tools instead:'); $('gPaySol').classList.remove('hidden'); }
-    }
-  }catch(e){ gWalletMsg('Balance check failed: '+e.message); }
-}
-async function gPaySolFn(){
-  if(!wProvider||!wPubkey){ return gConnectWallet(); }
-  if(typeof solanaWeb3==='undefined'){ gWalletMsg('Wallet library still loading — try again in a second.'); return; }
-  $('gPaySol').disabled=true;
-  try{
-    gWalletMsg('Preparing payment…');
-    const bh=await rpcCall('getLatestBlockhash',[{commitment:'finalized'}]);
-    const {Transaction,PublicKey}=solanaWeb3;
-    // Hand-built System transfer via the shared engine — SystemProgram.transfer()
-    // throws "Buffer is not defined" in the browser (see airdrop-engine.js).
-    const tx=new Transaction(); tx.add(splToken.createSolTransferInstruction(new PublicKey(wPubkey),new PublicKey(RECV),SOL_LAMPORTS));
-    tx.feePayer=new PublicKey(wPubkey); tx.recentBlockhash=bh.value.blockhash;
-    gWalletMsg('Approve the 0.05 SOL payment in your wallet…');
-    const res=await wProvider.signAndSendTransaction(tx); const sig=res.signature||res;
-    gWalletMsg('Confirming payment on-chain…');
-    let ok=false; for(let i=0;i<24;i++){ try{ const v=await fetch('/api/verify-sol-payment?sig='+sig+'&min='+SOL_LAMPORTS).then(r=>r.json()); if(v.success){ok=true;break;} }catch(e){} await new Promise(r=>setTimeout(r,2500)); }
-    if(ok){ const d=(GATE_CFG&&GATE_CFG.days)||7; gWalletMsg('✓ Paid — every heavy tool unlocked for '+d+' days.',true); unlockNow(d,'paid'); }
-    else { gWalletMsg('Payment sent but not confirmed yet — tap “Pay” again in a moment to re-check.'); $('gPaySol').disabled=false; }
-  }catch(e){ gWalletMsg('Payment failed: '+(e.message||e)); $('gPaySol').disabled=false; }
-}
-$('gConnect').addEventListener('click',gConnectWallet);
-$('gDisconnect').addEventListener('click',gDisconnectWallet);
-$('gPaySol').addEventListener('click',gPaySolFn);
 
 // ── Live/recent comp shortcuts ───────────────────────────────────────────────
 // Chips come from the buy-comp store, so starting a comp with the bot
