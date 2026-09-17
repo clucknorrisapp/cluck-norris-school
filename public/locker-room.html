@@ -711,9 +711,7 @@
   // Detection lives in /cluck-wallet.js — this page used to find Phantom, Solflare
   // and Backpack only, so an OKX/Coinbase/Exodus/Bitget/Glow/Brave/Jupiter/Trust
   // user was told no wallet was found on the flagship locking tool.
-  function detectWallets(){
-    return CluckWallet.available().map(function(w){ return { name:w.name, p:w.provider }; });
-  }
+  function detectWallets(){ return CluckWallet.list(); }
   var picker=document.createElement('div'); picker.id='cWalletPicker';
   picker.style.cssText='display:none;flex-direction:column;gap:8px;margin-top:10px';
   $('#cConnect').parentNode.insertBefore(picker, $('#cConnect').nextSibling);

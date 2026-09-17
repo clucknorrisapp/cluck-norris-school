@@ -185,6 +185,8 @@ jobs:
       # "proves" a payout row that lives only in RAM. Money paths use setVerified (re-reads the file).
       - name: kv store disk-verified writes
         run: node scripts/kvstore-verified-test.cjs
+      - name: payout row verification (a sent row needs a real transfer, after the batch, unused elsewhere)
+        run: node scripts/payout-verify-test.cjs
       # The public Hub views whitelist their fields — a comp's payout token or chat id must never
       # reach /api/hub — and hash the terms a program ran under.
       - name: Hub public views (no private fields, stable terms hash, honest totals)

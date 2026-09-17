@@ -310,8 +310,7 @@
   // missed by the 2026-07-30 consolidation and still found only Phantom, Solflare
   // and Backpack, so an OKX/Coinbase/Exodus/Bitget/Glow/Brave/Jupiter/Trust
   // operator was told no wallet was found on the lock-distribution page.
-  function detectWallets(){
-    return CluckWallet.available().map(function(w){ return { name:w.name, p:w.provider }; }); }
+  function detectWallets(){ return CluckWallet.list(); }
   $('#opWallet').addEventListener('click',function(){
     var w=detectWallets(); if(!w.length){ $('#distMsg').className='msg err'; $('#distMsg').textContent='No Solana wallet found. Install one, or open this page in your wallet\u2019s own browser.'; return; }
     var x=w[0];

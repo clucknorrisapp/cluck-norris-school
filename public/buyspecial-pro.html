@@ -676,7 +676,7 @@ function showGate(){ $('gate').classList.remove('hidden'); $('tool').classList.a
 const rpcCall = CluckUtil.rpc;   // shared helper — see /cluck-util.js
 window.addEventListener('load', function () { try { if (window.CluckAirdrop && CluckAirdrop.refreshRent) CluckAirdrop.refreshRent(rpcCall); } catch (e) {} });   // live per-ATA rent for the payout cost estimate (Agave 4.2 lowers rent from 2026-09-10)
 function detectProvider(){ const l=CluckWallet.available(); return l.length?l[0].provider:null; }
-const shortAddr=a=>a?a.slice(0,4)+'…'+a.slice(-4):'—';
+const shortAddr=a=>a?CluckUtil.shortAddr(a,4,4):'—';   // shared helper, 4/4 for this page's tighter chips
 
 // ── Live/recent comp shortcuts ───────────────────────────────────────────────
 // Chips come from the buy-comp store, so starting a comp with the bot

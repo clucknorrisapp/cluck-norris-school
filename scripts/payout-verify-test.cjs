@@ -68,5 +68,18 @@ t("rowPaidBy: a transfer that moved the token OUT of the wallet is not a payment
 t("rowPaidBy: no minimum → any positive delta of the mint counts", () => {
   assert.strictEqual(V.rowPaidBy(batchTx, { mint: MINT, wallet: B }).ok, true);
 });
+t("verifyBatchRows: the whole desk check in one place — unknown sig, prior batch, wrong wallet, good row", () => {
+  const S = "5".repeat(88), tx = { ...batchTx, blockTime: 1_700_100_000 };
+  const txBySig = new Map([[S, tx]]);
+  const batches = { b0: { sent: { [B]: { sig: S, at: 1 } } }, b1: { at: 1_700_099_000, amounts: { [A]: "3500000000", [B]: "1000000000", [PAYER]: "5" } } };
+  const r = V.verifyBatchRows({ results: [{ wallet: A, sig: S }, { wallet: B, sig: S }, { wallet: PAYER, sig: S }, { wallet: A, sig: "6".repeat(88) }], txBySig, batches, batchId: "b1", mint: MINT, amounts: batches.b1.amounts, notBefore: batches.b1.at });
+  assert.deepStrictEqual(r.accepted.map((x) => x.wallet), [A], "only the row the transaction really paid, in this batch, for the first time");
+  assert.strictEqual(r.rejected.length, 3);
+  assert.match(r.rejected.find((x) => x.wallet === B).why, /already paid .* in batch b0/);
+  assert.match(r.rejected.find((x) => x.wallet === PAYER).why, /reached this wallet/);
+  assert.match(r.rejected.find((x) => x.sig === "6".repeat(88)).why, /no transaction signature/);
+  assert.deepStrictEqual(V.verifyBatchRows({ results: [], txBySig, batches, batchId: "b1", mint: MINT }), { accepted: [], rejected: [] });
+});
+
 console.log(`\n${fail ? "FAILED" : "all passed"} (${pass} passed${fail ? `, ${fail} failed` : ""})`);
 process.exit(fail ? 1 : 0);
