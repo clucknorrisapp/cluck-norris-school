@@ -5,7 +5,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🩻 Wallet X-Ray — Full Wallet Deep Dive</title>
-<meta name="description" content="Full-wallet deep dive for any Solana address — true funding origin traced to genesis, every trade across every token, bot/dumper/cash-out signals, and a built-in AI to ask about any transaction."/>
+<meta name="description" content="Full-wallet deep dive for any Solana address — true funding origin traced back as far as the chain allows (to genesis for most wallets), every trade across every token, bot/dumper/cash-out signals, and a built-in AI to ask about any transaction."/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
@@ -334,7 +334,7 @@ async function run(deep){
     const r=await CluckGate.fetch('/api/wallet-xray?wallet='+encodeURIComponent(wallet)+(deep?'&deep=1':''));
     const d=await r.json();
     stopLoading();runBtn.disabled=false;
-    if(!d.success){showErr(d.error||'Deep dive failed');return;}
+    if(!d.success){showErr(CluckGate.message(d));if(CluckGate.denied(d))run(deep);return;}
     DATA=d;renderAll();
   }catch(e){stopLoading();runBtn.disabled=false;showErr(deep?'The deep dig timed out — the wallet is very large. The standard scan still has the recent history.':'Network error: '+e.message);}
 }

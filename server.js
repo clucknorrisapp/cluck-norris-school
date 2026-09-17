@@ -7858,6 +7858,18 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
     return res.status(200).json({ ok: true, ...r });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// Live platform-access pricing for the pre-registration apply page (hub-apply.html) — the
+// per-project quote at /api/hub/:project/access needs an already-registered project, but a
+// prospective applicant has none yet. This reads the same append-only schedule
+// (lib/hub/access.js) so the two pages can never drift (P2-085).
+app.get("/api/hub-pricing", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try {
+    const hubAccess = require("./lib/hub/access");
+    const now = Date.now();
+    return res.status(200).json({ ok: true, standardSol: hubAccess.priceLamports("standard", now) / 1e9, smallSol: hubAccess.priceLamports("small", now) / 1e9 });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 // Explicit routes so the page works on a no-build boot (CI) and gets normal cache headers.
 app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
 app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
@@ -13848,9 +13860,9 @@ WHAT NOT TO PROMISE:
   Talk about what exists today; if asked what's next, say honestly that you don't announce dates.
 
 CLKN TOKEN UTILITY:
-- 10 free AI questions per day with Ask Cluck Norris. That daily allowance is the whole
-  offer -- there is NO paid top-up any more (the old send-CLKN-to-unlock flow was retired
-  2026-07-30). If someone is out of questions, tell them it resets at midnight UTC.
+- ${AI_DAILY_MAX} free AI questions per day (per IP address) with Ask Cluck Norris. That daily
+  allowance is the whole offer -- there is NO paid top-up any more (the old send-CLKN-to-unlock
+  flow was retired 2026-07-30). If someone is out of questions, tell them it resets at midnight UTC.
 - HOLD CLKN to unlock the heavy tools free: hold about $50 worth of CLKN (priced live -- the
   exact CLKN figure shows on the tool page, so never quote a fixed token amount) and X-Ray,
   Holders, Trace, the airdropper and Buy Special are all free. Not holding? A small one-click

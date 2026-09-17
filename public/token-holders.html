@@ -493,7 +493,7 @@ async function runSnapshot() {
     stopLoading();
     runBtn.disabled = false;
     updateRunBtn();
-    if (!data.success) { showErr(data.error || "Analysis failed"); return; }
+    if (!data.success) { showErr(CluckGate.message(data)); if (CluckGate.denied(data)) runSnapshot(); return; }
     lastSnapshot = data;
     allHolders = (data.holders || []).map(h => ({
       ...h,

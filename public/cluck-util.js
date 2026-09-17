@@ -72,6 +72,39 @@
     return "$" + n.toPrecision(3).replace(/e[-+]\d+$/i, "");
   }
 
+  // BigInt-safe amount formatting. `Number(rawString)` silently loses precision the moment a raw
+  // on-chain amount (a lock weight, a large token balance) passes Number.MAX_SAFE_INTEGER — this
+  // does the base-units → decimal conversion and thousands-grouping with string/BigInt math only,
+  // exact at any size, matching the "string surgery, never division" rule lib/hub/public.js's
+  // rawToUi already follows server-side.
+  function rawAmount(raw, decimals, maxFrac) {
+    decimals = decimals > 0 ? decimals : 0;
+    maxFrac = maxFrac == null ? 2 : maxFrac;
+    var s = String(raw == null ? "0" : raw).trim();
+    var neg = s.charAt(0) === "-"; if (neg) s = s.slice(1);
+    s = s.replace(/[^0-9]/g, "") || "0";
+    var w, f;
+    if (decimals <= 0) { w = s; f = ""; }
+    else {
+      if (s.length <= decimals) s = new Array(decimals - s.length + 2).join("0") + s;
+      w = s.slice(0, s.length - decimals); f = s.slice(s.length - decimals);
+    }
+    if (f.length > maxFrac) {
+      var keep = f.slice(0, maxFrac);
+      if (f.charAt(maxFrac) >= "5") {
+        var bumped = (BigInt(w || "0") * (maxFrac > 0 ? BigInt("1" + new Array(maxFrac + 1).join("0")) : 1n) + BigInt(keep || "0") + 1n).toString();
+        if (maxFrac > 0) {
+          while (bumped.length <= maxFrac) bumped = "0" + bumped;
+          w = bumped.slice(0, bumped.length - maxFrac); keep = bumped.slice(bumped.length - maxFrac);
+        } else { w = bumped; keep = ""; }
+      }
+      f = keep;
+    }
+    f = f.replace(/0+$/, "");
+    w = w.replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return (neg && (w !== "0" || f) ? "-" : "") + w + (f ? "." + f : "");
+  }
+
   // Clipboard with the execCommand fallback — navigator.clipboard is unavailable
   // on insecure origins and inside some wallet webviews.
   function copyText(text) {
@@ -111,5 +144,5 @@
     return /^https?:\/\//i.test(t) ? esc(t) : "#";
   }
 
-  global.CluckUtil = { esc: esc, safeUrl: safeUrl, rpc: rpc, shortAddr: shortAddr, fmt: fmt, fmtUsd: fmtUsd, copyText: copyText };
+  global.CluckUtil = { esc: esc, safeUrl: safeUrl, rpc: rpc, shortAddr: shortAddr, fmt: fmt, fmtUsd: fmtUsd, rawAmount: rawAmount, copyText: copyText };
 })(typeof globalThis !== "undefined" ? globalThis : window);

@@ -44,9 +44,21 @@
   function proof() { var d = pass(); return (d && d.proof) || null; }
   function clear() { try { localStorage.removeItem(KEY); } catch (e) {} }
   // fetch() for a gated API: sends the proof, and when the server refuses the pass (expired,
-  // never redeemed, balance fell under the threshold) drops the local grant so the next RUN
-  // re-opens the gate card instead of failing silently forever.
+  // never redeemed, balance fell under the threshold) drops the local grant so a RUN guarded by
+  // guard() re-opens the gate card. That only happens if the caller actually re-invokes its
+  // guarded run function on a denial (denied() below says when) — printing data.error and
+  // stopping, without calling denied()/message(), leaves the raw code on screen and the card
+  // closed until the user clicks RUN again by hand (P2-118).
   var PASS_ERRORS = { pass_required: 1, pass_expired: 1, bad_pass: 1, insufficient_holdings: 1 };
+  // True when a {success:false,...} response from CluckGate.fetch() is a pass denial (as opposed
+  // to an unrelated tool error) — the local pass has already been cleared by gatedFetch by the
+  // time this is checked, so calling the page's own guard()-wrapped run function again re-shows
+  // the gate card instead of the tool silently re-running with no credential.
+  function denied(data) { return !!(data && PASS_ERRORS[data.error]); }
+  // The server's deny payload carries a human-readable `detail` ("This wallet holds X CLKN
+  // (~$Y) — the free tier needs ≈Z…") alongside the internal `error` code — prefer it so a page
+  // never shows a bare string like "insufficient_holdings" to a person.
+  function message(data) { return (data && (data.detail || data.error)) || 'Something went wrong — try again.'; }
   async function gatedFetch(url, opts) {
     opts = opts || {};
     var h = new Headers(opts.headers || {});
@@ -452,5 +464,5 @@
     };
   }
 
-  global.CluckGate = { guard: guard, config: config, pass: pass, grant: grant, proof: proof, fetch: gatedFetch, clear: clear };
+  global.CluckGate = { guard: guard, config: config, pass: pass, grant: grant, proof: proof, fetch: gatedFetch, clear: clear, denied: denied, message: message };
 })(window);

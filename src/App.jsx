@@ -6,6 +6,12 @@ const LPLab = lazy(() => import("./sections/LPLab.jsx"));
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 const LAMPORTS_PER_SOL = 1_000_000_000;
 
+// Read-aloud (public/read-aloud.js) has no page-navigation hook of its own — it only listens for
+// beforeunload, which never fires on an in-SPA screen change. Call this on every screen/lesson/
+// quiz transition so it doesn't keep reading a screen the learner has already left (P2-106).
+// Guarded: CLKN_READ may not exist yet, or at all on non-school pages.
+function stopRead(){ try{ if(typeof window!=="undefined"&&window.CLKN_READ&&window.CLKN_READ.stop) window.CLKN_READ.stop(); }catch(e){} }
+
 // Fire-and-forget learning-funnel event (no PII) — see /api/track + lib/analytics.
 // Lets us see where learners drop off (per-lesson start/complete, school/incubator/
 // challenge/graduation). Never throws, never blocks the UI.
@@ -132,7 +138,7 @@ const LESSONS = [
     id: "lp", belt: "FRESHMAN", icon: "💧", title: "Liquidity Pools",
     quote: "Cluck Norris doesn't chase liquidity… he BECOMES it.",
     color: "#3B82F6", glow: "rgba(59,130,246,0.4)",
-    intro: "Every trade on a DEX pulls from a Liquidity Pool — a smart contract holding two tokens. LP providers earn fees from every swap. No order books. No middlemen. Just math and the market.",
+    intro: "Most Solana DEXs (Jupiter routes, Raydium, Orca) are AMMs: every trade pulls from a Liquidity Pool — a smart contract holding two tokens — instead of matching an order book. LP providers earn fees from every swap. A few on-chain DEXs (OpenBook, Phoenix) still use order books, but you keep your own keys either way.",
     concepts: [
       { term: "Liquidity Pool", def: "A smart contract holding two tokens (e.g. SOL/USDC) that traders swap against." },
       { term: "LP Provider", def: "Someone who deposits tokens into a pool and earns a share of every trading fee." },
@@ -143,7 +149,7 @@ const LESSONS = [
     questions: [
       { q: "What do liquidity providers earn?", options: ["Free NFT airdrops", "A share of trading fees", "Tokens from the dev wallet", "Nothing — it's charity"], correct: 1, explanation: "LP providers earn a cut of every swap fee. The more volume through the pool, the more you earn." },
       { q: "What is Impermanent Loss?", options: ["Losing your wallet password to a phishing attack", "A rug pull executed by the project developers", "Value loss when token prices diverge vs. just holding", "Gas fees gradually eating your LP profits over time"], correct: 2, explanation: "IL happens when the price ratio of your pooled tokens changes. It's 'impermanent' because it can reverse if prices converge." },
-      { q: "What does a Liquidity Pool replace?", options: ["A bank account", "A traditional order book", "Your hardware wallet", "A CEX listing"], correct: 1, explanation: "DEXs use AMMs with liquidity pools instead of traditional order books used by CEXs." },
+      { q: "What does a Liquidity Pool replace?", options: ["A bank account", "A traditional order book", "Your hardware wallet", "A CEX listing"], correct: 1, explanation: "AMM-style DEXs (most of them) use liquidity pools instead of a traditional order book — though a few on-chain DEXs like OpenBook and Phoenix still run one." },
       { q: "What is an AMM?", options: ["A type of hardware wallet built for DeFi power users", "An algorithm that prices trades based on pool ratios", "A centralized exchange's automatic matching feature", "A token burning mechanism"], correct: 1, explanation: "AMM stands for Automated Market Maker. It uses a mathematical formula to price trades based on the ratio of tokens in the pool." },
       { q: "If a pool has equal value of SOL and USDC, and SOL price doubles, what happens to an LP provider?", options: ["They double their money since both tokens went up", "They experience impermanent loss vs just holding the two tokens", "Nothing changes — they still hold the same tokens", "They earn double the fees from increased volume"], correct: 1, explanation: "When prices diverge, the AMM rebalances the pool automatically. You end up with less of the token that went up and more of the one that didn't — impermanent loss." },
     ],
@@ -286,7 +292,7 @@ const LESSONS = [
       { term: "CEX", def: "Centralized Exchange (Coinbase, Binance). Requires ID. Holds your keys. Regulated." },
       { term: "DEX", def: "Decentralized Exchange (Jupiter, Raydium). No ID. You keep your keys. No central operator who can freeze you out." },
       { term: "KYC", def: "Know Your Customer — identity verification required by CEXs." },
-      { term: "Order Book", def: "A CEX feature matching buyers and sellers at specific prices." },
+      { term: "Order Book", def: "Matches buyers and sellers at specific prices. Standard on CEXs; a few on-chain Solana DEXs (OpenBook, Phoenix) use one too." },
       { term: "Self-Custody", def: "You control your own keys. No third party can freeze or seize your funds." },
     ],
     questions: [
@@ -397,7 +403,7 @@ const LESSONS = [
   // it survives you, and what your family can do if you are not there to use it. Nobody teaches
   // the second one, and it is where a real share of all lost crypto has gone.
   {
-    id: "seedphrase", belt: "POST-GRAD", icon: "📝", title: "Seed Phrase Survival",
+    id: "seedphrase", belt: "LAUREATE", icon: "📝", title: "Seed Phrase Survival",
     quote: "Cluck Norris memorised his seed phrase. Then he wrote it down anyway, because he isn't an idiot.",
     color: "#F59E0B", glow: "rgba(245,158,11,0.4)",
     intro: "Your seed phrase is not a password. A password can be reset by someone who can prove who you are. A seed phrase cannot. It is the wallet itself, written down — anyone holding those words owns everything in it, from anywhere, forever, and there is nobody to appeal to. Far more crypto has been lost to bad backups than to hackers.",
@@ -454,8 +460,8 @@ function shuffleOptions(question) {
   return { ...question, options: newOptions, correct: newCorrect };
 }
 
-const BELT_BG   = { "FRESHMAN":"#F0F0F0","SOPHOMORE":"#FFB627","JUNIOR":"#FF7A18","SENIOR":"#10B981","GRADUATE":"#06B6D4","POST-GRAD":"#92400E","TENURED":"#DC2626","HEADMASTER":"#1a0f08","PROFESSOR":"#14B8A6","DEAN":"#84CC16","CHANCELLOR":"#FF7A18","EMERITUS":"#A855F7","LEGACY":"#7C3AED" };
-const BELT_TEXT = { "FRESHMAN":"#1a0f08","SOPHOMORE":"#1a0f08","JUNIOR":"#fff","SENIOR":"#fff","GRADUATE":"#fff","POST-GRAD":"#fff","TENURED":"#fff","HEADMASTER":"#FFB627","PROFESSOR":"#fff","DEAN":"#1a0f08","CHANCELLOR":"#fff","EMERITUS":"#fff","LEGACY":"#fff" };
+const BELT_BG   = { "FRESHMAN":"#F0F0F0","SOPHOMORE":"#FFB627","JUNIOR":"#FF7A18","SENIOR":"#10B981","GRADUATE":"#06B6D4","POST-GRAD":"#92400E","TENURED":"#DC2626","HEADMASTER":"#1a0f08","PROFESSOR":"#14B8A6","DEAN":"#84CC16","CHANCELLOR":"#FF7A18","EMERITUS":"#A855F7","LAUREATE":"#C026D3","LEGACY":"#7C3AED" };
+const BELT_TEXT = { "FRESHMAN":"#1a0f08","SOPHOMORE":"#1a0f08","JUNIOR":"#fff","SENIOR":"#fff","GRADUATE":"#fff","POST-GRAD":"#fff","TENURED":"#fff","HEADMASTER":"#FFB627","PROFESSOR":"#fff","DEAN":"#1a0f08","CHANCELLOR":"#fff","EMERITUS":"#fff","LAUREATE":"#fff","LEGACY":"#fff" };
 function Belt({belt,small}){return(<span data-read-skip="1" style={{display:"inline-block",background:BELT_BG[belt],color:BELT_TEXT[belt],fontFamily:"'Anton',sans-serif",fontSize:small?9:10,fontWeight:700,letterSpacing:1.5,padding:small?"2px 6px":"3px 10px",borderRadius:3,border:"none",textTransform:"uppercase"}}>{belt}</span>);}
 
 
@@ -478,7 +484,7 @@ const INCUBATOR_LESSONS = [
       { term: "Public Key", def: "Like your home address — you can share it with anyone so they can send you crypto. It's safe to show." },
       { term: "Private Key / Seed Phrase", def: "Like the key to your front door. NEVER share this with anyone. Whoever has it owns your crypto." },
       { term: "Non-Custodial Wallet", def: "A wallet where YOU control the keys. Examples: Phantom, MetaMask. You are your own bank." },
-      { term: "Custodial Wallet", def: "A wallet controlled by a company (like Coinbase). They hold your keys — if they go down, you could lose access." },
+      { term: "Custodial Wallet", def: "A wallet controlled by a company (like a Coinbase exchange account). They hold your keys — if they go down, you could lose access." },
     ],
     questions: [
       { q: "Your public key is like your home address — safe to share so people can send you crypto.", options: ["True", "False"], correct: 0, explanation: "Correct! Your public key is safe to share. It's how others send crypto to you. Never confuse it with your private key or seed phrase." },
@@ -606,7 +612,15 @@ function Incubator({ onComplete, onBack }) {
       return next === -1 ? 0 : next;
     } catch(e) { return 0; }
   });
-  const [phase, setPhase] = useState("intro"); // intro | quiz
+  const [phase, setPhase] = useState(() => {
+    // A returning learner who already finished every lesson (findIndex above returns -1) goes
+    // straight to the completion screen instead of being silently restarted at Lesson 1 (P2-107).
+    try {
+      const saved = JSON.parse(localStorage.getItem("incubator_progress") || "{}");
+      const comp = Array.isArray(saved?.completed) ? saved.completed : [];
+      return INCUBATOR_LESSONS.every(l => comp.includes(l.id)) ? "complete" : "intro";
+    } catch(e) { return "intro"; }
+  }); // intro | quiz | complete
   const [qi, setQi] = useState(0);
   const [sel, setSel] = useState(null);
   const [showExp, setShowExp] = useState(false);
@@ -620,6 +634,7 @@ function Incubator({ onComplete, onBack }) {
   const lesson = INCUBATOR_LESSONS[lessonIdx];
   const shuffledIncubatorQs = useMemo(() => lesson ? lesson.questions.map(shuffleOptions) : [], [lessonIdx]);
   const q = shuffledIncubatorQs[qi];
+  useEffect(()=>{stopRead();},[phase,qi,lessonIdx]);
 
   function pick(i) {
     if (sel !== null) return;
@@ -1259,7 +1274,10 @@ function Select({onSelect,completed}){
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {LESSONS.map((l,i)=>{
           const done=completed.includes(l.id);
-          const locked=i>0&&!completed.includes(LESSONS[i-1].id);
+          // Full-prefix check, not just the immediately preceding lesson — a #lesson=<id> deep
+          // link (Project Hub) can open and pass a lesson out of order without unlocking the
+          // ones before it (P2-105).
+          const locked=i>0&&!LESSONS.slice(0,i).every(pl=>completed.includes(pl.id));
           return(
             <button key={l.id} onClick={()=>!locked&&onSelect(l.id)} style={{background:"#1d110a",border:`1px solid ${done?l.color:locked?"rgba(255,122,24,0.12)":"rgba(255,122,24,0.28)"}`,borderRadius:14,padding:"15px 18px",cursor:locked?"not-allowed":"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:14,opacity:locked?0.5:1,boxShadow:done?`0 0 16px ${l.glow}`:"0 6px 18px rgba(0,0,0,.35)"}}>
               <div style={{fontSize:24,minWidth:36,textAlign:"center"}}>{done?"✅":locked?"🔒":l.icon}</div>
@@ -1289,6 +1307,7 @@ function Lesson({lesson:l,onComplete,onBack}){
   const [sessionId,setSessionId]=useState(0);
   const shuffledQuestions = useMemo(() => l.questions.map(shuffleOptions), [l.id, sessionId]);
   const q=shuffledQuestions[qi];
+  useEffect(()=>{stopRead();},[phase,qi,l.id]);
   function pick(i){if(sel!==null)return;setSel(i);setShowExp(true);}
   function next(){
     const a=[...answers,sel===q.correct];
@@ -1298,7 +1317,10 @@ function Lesson({lesson:l,onComplete,onBack}){
   }
   function retry(){setSessionId(s=>s+1);setPhase("intro");setQi(0);setSel(null);setAnswers([]);setFinalScore(0);setShowExp(false);}
   const score=phase==="result"?finalScore:answers.filter(Boolean).length;
-  const passed=score>=2;
+  // Proportional pass mark (P2-108): a flat "score>=2" let a 7-question exam pass at ~29% while
+  // a 5-question one needed 40%. ~67% (2 of 3) either way now — ceil() so a shorter quiz never
+  // needs fewer than the 2-of-3 baseline, and a longer one needs the same bar or a hair stricter.
+  const passed=score>=Math.ceil(l.questions.length*2/3);
 
   if(phase==="intro") return(
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
@@ -1779,6 +1801,10 @@ export default function App(){
     } catch(e){ return []; }
   });
   const lesson=LESSONS.find(l=>l.id===lessonId);
+
+  // Stop any in-progress read-aloud on every top-level screen change (P2-106) — covers
+  // setScreen/finish() everywhere they're called, without hunting down every call site.
+  useEffect(()=>{stopRead();},[screen,lessonId]);
 
   useEffect(()=>{
     try { localStorage.setItem("clkn_completed",JSON.stringify(completed)); }
