@@ -49,6 +49,7 @@ const solanaTracker = require("./lib/solana-tracker");
 const premiumForensics = require("./lib/premium-forensics");
 const sigStore = require("./lib/sigstore");
 const kv = require("./lib/kvstore");
+const { freshSince } = require("./lib/sig-cursor"); // shared "fresh sigs since the durable cursor" walk — see the ROSE/generic buy bots + burn watcher below
 const payoutVerify = require("./lib/payout-verify");
 const engineRatchet = require("./lib/engine-ratchet"); // pure merge/diff shared by the four liquidity-engine config ratchets below
 const { redeemPaidPass } = require("./lib/tool-pass-redeem");
@@ -9227,9 +9228,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   const lastSig = kv.get("roseBuyLastSig", null);
   if (!lastSig) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, firstRun: true, note: "pool head recorded; history skipped" }; }
 
-  const fresh = []; // newest→oldest until the cursor, then flip to oldest→newest
-  let cursorFound = false;
-  for (const s of sigs) { if (s.signature === lastSig) { cursorFound = true; break; } if (s.err) continue; fresh.push(s.signature); }
+  const { fresh, cursorFound } = freshSince(sigs, lastSig); // newest→oldest until the cursor, then flipped to oldest→newest
   // Cursor off the end of the window ⇒ more than SIG_LIMIT txns landed since last poll: buys
   // older than the oldest fetched sig are unrecoverable. Surface it LOUDLY (kv marker + log +
   // status field) — never skip silently. Fix by raising ROSE_SIG_LIMIT or lowering ROSE_POLL_MS.
@@ -9238,7 +9237,6 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
     kv.set("roseBuyGapCount", (kv.get("roseBuyGapCount", 0) || 0) + 1);
     console.warn(`[ROSE-BUY] cursor fell outside a ${sigs.length}-sig window — possible missed buys; raise ROSE_SIG_LIMIT or lower ROSE_POLL_MS`);
   }
-  fresh.reverse();
   if (!fresh.length) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, scanned: 0, posted: 0 }; }
 
   const seen = new Set(kv.get("roseBuySeen", []));
@@ -9388,10 +9386,8 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
     if (!sigs.length) continue;
     const lastSig = kv.get(lastKey, null);
     if (!lastSig) { kv.set(lastKey, sigs[0].signature); continue; }
-    const fresh = []; let cursorFound = false;
-    for (const s of sigs) { if (s.signature === lastSig) { cursorFound = true; break; } if (s.err) continue; fresh.push(s.signature); }
+    const { fresh, cursorFound } = freshSince(sigs, lastSig);
     if (!cursorFound) { gap = true; console.warn(`[BUYBOT ${cfg.id}] cursor outside ${sigs.length}-sig window on ${poolAddr.slice(0, 8)} — possible missed buys`); }
-    fresh.reverse();
     if (!fresh.length) { kv.set(lastKey, sigs[0].signature); continue; }
     const seen = new Set(kv.get(seenKey, []));
     let advanceTo = lastSig;
@@ -9512,9 +9508,7 @@ async function projectBurnPollOnce(cfg, { testPost = false } = {}) {
   const tokUsd = await orderbook.getUsdPrice(cfg.mint).catch(() => 0);
   const lastSig = kv.get(sigKey, null);
   const sigs = await roseHeliusRpc(key, "getSignaturesForAddress", [cfg.mint, { limit: 50 }]).catch(() => []);
-  const fresh = [];
-  for (const s of (Array.isArray(sigs) ? sigs : [])) { if (s.signature === lastSig) break; if (!s.err) fresh.push(s.signature); }
-  fresh.reverse();
+  const { fresh } = freshSince(sigs, lastSig);
   const hr = Math.floor(Date.now() / 3600000);
   let h = burnWatchHourly.get(cfg.id); if (!h || h.hour !== hr) { h = { hour: hr, count: 0 }; burnWatchHourly.set(cfg.id, h); }
   let posted = 0, foundAny = false, sendFails = 0;

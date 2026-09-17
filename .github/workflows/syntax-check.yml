@@ -187,6 +187,10 @@ jobs:
         run: node scripts/kvstore-verified-test.cjs
       - name: payout row verification (a sent row needs a real transfer, after the batch, unused elsewhere)
         run: node scripts/payout-verify-test.cjs
+      # Shared "fresh sigs since the durable cursor" walk used by the ROSE/generic buy bots and
+      # the burn watcher (lib/sig-cursor.js) — pure, so this runs standalone with no server boot.
+      - name: signature cursor walk (buy/burn watchers' shared fresh-since-cursor logic)
+        run: node scripts/sig-cursor-test.cjs
       # The public Hub views whitelist their fields — a comp's payout token or chat id must never
       # reach /api/hub — and hash the terms a program ran under.
       - name: Hub public views (no private fields, stable terms hash, honest totals)
