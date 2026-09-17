@@ -39,6 +39,50 @@ you review, verify and give second opinions; the owner decides. Nobody merges to
   the lock-to-earn intake form, the airdrop receipt page, the dashboard's P1 timeline and
   simulator replay, and multi-mint lock-to-earn (design below).
 
+## 2026-09-17 — the platform deep-dive PRs: review these FIRST, in this order
+
+Two stacked PRs from a 32-finder / 79-verifier audit (`docs/PLATFORM_DEEP_DIVE_2026-09-17.md` — every
+finding, the lens votes, and which PR fixed what). Both are green and waiting on the owner. Findings,
+not rewrites; cite file:line; say "reviewed, no issue" when that is the answer.
+
+**PR #329 (P0 batch, `claude/hub-public-page` → `develop`)**
+1. `lib/kvstore.js` `load()` — a corrupt `app-state.json` now boots in-memory with the file preserved.
+   Is there any path where a bad volume still reads as persistent? Is `setVerified` still honest?
+2. `lib/hub/routes.js` `/api/hub/:project/access` POST — payer bound to `operatorWallets`
+   (`access.payerAllowed`), registry-wide sig dedupe, `hub-access:` namespace checked against the
+   tools-pass `sol:` namespace both ways, a store-backed per-signature lock across the chain read.
+   Can one payment still buy two things, or two projects, or nothing (a stranded payment)?
+3. `server.js` `/api/cuna-stake/payout` — every ledger write is `kv.setVerified` with a 500 on
+   failure. Is any write site left on plain `kv.set`? (Grep `CUNA_BATCH_KV` / `CUNA_PAID_KV`.)
+4. `public/cluck-gate.js` `guard()` now requires a server-issued token (`proof()`), and
+   `public/buyspecial-pro.html` mounts the shared card instead of its private connect/pay flow.
+   Does any tool page still grant a local pass without a token? Any page that breaks because
+   `guard()` got stricter?
+5. `mutatingGetRefused` coverage — `scripts/mutating-get-guard-test.cjs` pins 125 routes/flags. Name
+   an admin route that still acts on a GET.
+6. `lib/school-progress.js` — the backfill waiver closed two days early. Does anything else depend
+   on `BACKFILL_SUNSET`?
+
+**PR #330 (P1 batch, `claude/p1-fixes`, stacked on #329)**
+1. `lib/payout-verify.js` + both `sent=` paths (`server.js` CUNA payout, `lib/hub/routes.js` hub
+   payout) — a row is recorded only when the transaction's per-owner token delta for the batch mint
+   covers the amount owed (0.1% slack). Attack it: a transaction that pays the wallet in a different
+   mint, a Token-2022 transfer fee, a wallet paid through a non-ATA account, a batch transaction
+   that pays several rows, a self-transfer. Is the slack right?
+2. `server.js` `cunaArmed` / `dncArmed` / `roseEngineArmed` — the env fallback is gone; an absent kv
+   key is OFF. Is there any other reader of `*_ENGINE_ON` that still arms something?
+3. `/api/wallet-xray/ask` behind `requireToolPass` + the AI daily cap. Any other paid-model route
+   without the pass? (`/api/ask-cluck` is deliberately free — the school.)
+4. `lib/hub/project.js` `approveProject` reserved mints/ids, `lib/hub/routes.js` intake checks —
+   can a second programme still land on CUNA / CLKN / ROSE by any route?
+5. `/api/hub/:project/payout` `confirm=` owner-only; `/api/hub/:project/admin` `terms=` gated by
+   `access.mayOperate` unless owner. Is any other operator-reachable action missing the same gate?
+6. The lock-watch fallback (`server.js`, search `fallbackTries`) — `announced` only on a landed
+   send, six retries, then an ops alert. Is the retry bounded correctly across restarts?
+7. Sequencing trap to confirm, not fix: `/api/x-announce?post=1` is POST-only in #330; the hourly
+   lock-celebration routine still GETs it and is switched to POST at promotion time. Say if you see
+   another caller.
+
 ## What to review first (ranked)
 1. **The server-side tools pass (PR #281, money path).** `toolPassGate` / `requireToolPass` in
    `server.js`; the proof format `w:<wallet>` (live CLKN balance at the tool-gate price, or a
