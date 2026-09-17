@@ -58,7 +58,7 @@
             },
             {
               "q": "If a pool has equal value of SOL and USDC, and SOL price doubles, what happens to an LP provider?",
-              "answer": "They experience impermanent loss vs just holding SOL",
+              "answer": "They experience impermanent loss vs just holding the two tokens",
               "why": "When prices diverge, the AMM rebalances the pool automatically. You end up with less of the token that went up and more of the one that didn't — impermanent loss."
             }
           ]
@@ -282,8 +282,8 @@
             },
             {
               "q": "On Solana, MEV is:",
-              "answer": "Less severe than Ethereum but still occurs on high-volume DEXs",
-              "why": "Solana's speed reduces but doesn't eliminate MEV. High-volume pools on Jupiter and Raydium still see bot activity, especially during high-profile launches."
+              "answer": "Very real — sandwich bots pay validators for ordering instead of watching a public mempool",
+              "why": "Solana has no public mempool, so bots cannot watch pending trades the Ethereum way — but they pay validators for transaction ordering (Jito bundles), and sandwich attacks on Jupiter and Raydium routes are common, especially during launches. Speed does not remove MEV. Tight slippage is your defence."
             }
           ]
         },
@@ -334,7 +334,7 @@
             {
               "q": "What does a burn mechanism do?",
               "answer": "Permanently removes tokens from circulation reducing supply",
-              "why": "Burning tokens reduces supply over time. If demand stays the same and supply decreases, price pressure is upward. Bitcoin's halving is a similar concept."
+              "why": "Burning tokens reduces supply over time. If demand stays the same and supply decreases, price pressure is upward. A burn on a token nobody wants changes nothing — demand still has to be there."
             },
             {
               "q": "A token has 5% team allocation with a 4-year vesting schedule. Is this good or bad?",
@@ -649,7 +649,7 @@
             {
               "q": "What is Meteora DAMM V2?",
               "answer": "A graduated liquidity pool providing deeper, more stable trading",
-              "why": "Meteora DAMM V2 is where Bags.fm tokens go after graduation. It's a more sophisticated AMM with concentrated liquidity, tighter spreads, and better trading conditions than the initial bonding curve."
+              "why": "Meteora DAMM V2 is where Bags.fm tokens go after graduation. It is Meteora's dynamic AMM — a constant-product style pool with configurable, dynamic fees (not concentrated liquidity; that is Meteora's DLMM). It gives the token a real two-sided pool with deeper liquidity and better trading conditions than the bonding curve."
             },
             {
               "q": "If a Bags.fm token never graduates, what happens?",
