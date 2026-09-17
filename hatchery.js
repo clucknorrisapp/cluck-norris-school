@@ -744,4 +744,4 @@ async function uploadPublicFile(buffer, contentType) {
   return { url, txid: url.split("/").pop() };
 }
 
-module.exports = { uploadBytesToArweave, uploadJsonToArweave, router, uploadMetadata, buildMintTransaction, uploadPublicFile };
+module.exports = { uploadBytesToArweave, uploadJsonToArweave, router, uploadMetadata, buildMintTransaction, uploadPublicFile, clknPriceInSol };

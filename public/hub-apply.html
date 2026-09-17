@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Run Lock to Earn for your token — Cluck Norris</title>
+<meta name="description" content="Reward the holders who lock your token on Jupiter Lock. You set the rules, the engine reads the chain and pays, every holder can verify every payout. No staking contract."/>
+<meta property="og:title" content="Run Lock to Earn for your token — Cluck Norris"/>
+<meta property="og:description" content="Staking rewards without a staking contract. Your rules, Jupiter Lock escrows, receipts anyone can check."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:30px; letter-spacing:1px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .card h2 { font-family:var(--disp); font-size:19px; letter-spacing:1px; color:var(--gold); font-weight:400; margin-bottom:8px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .intro b { color:var(--text); }
+  .step { font-family:var(--disp); font-size:11px; letter-spacing:2px; color:var(--sub); margin-bottom:4px; }
+  label { display:block; font-size:12.5px; color:var(--sub); letter-spacing:1px; margin:12px 0 5px; }
+  label b { color:var(--text); letter-spacing:0; }
+  .hint { font-size:12.5px; color:var(--subtext, #9CA3AF); line-height:1.55; margin-top:4px; }
+  input[type=text], input[type=number], select, textarea { width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:11px 13px; color:var(--text); font-family:var(--mono); font-size:13px; outline:none; }
+  input:focus, select:focus, textarea:focus { border-color:var(--accent); }
+  select { font-family:var(--body); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:520px) { .grid2 { grid-template-columns:1fr; } }
+  .btn { background:var(--orange); border:none; border-radius:8px; padding:12px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#000; cursor:pointer; font-family:var(--body); }
+  .btn.ghost { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); }
+  .btn:disabled { background:var(--grey, #4B5563); color:var(--muted); cursor:not-allowed; }
+  .row-flex { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:14px; }
+  .mono { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; word-break:break-all; }
+  .chip { display:inline-block; font-family:var(--disp); font-size:11px; letter-spacing:1.5px; padding:4px 9px; border-radius:999px; border:1px solid var(--border); color:var(--sub); margin:4px 4px 0 0; }
+  .chip.ok { color:var(--green); border-color:rgba(16,185,129,.35); }
+  .chip.bad { color:#FCA5A5; border-color:rgba(239,68,68,.4); }
+  .chip.gold { color:var(--gold); border-color:rgba(252,211,77,.35); }
+  .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
+  .ok-box { background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.3); border-radius:8px; padding:12px 14px; font-size:13px; color:var(--text); margin-top:12px; line-height:1.6; }
+  .teach li { list-style:none; padding:10px 0; border-bottom:1px solid var(--border-soft, rgba(255,255,255,.06)); font-size:13px; line-height:1.6; color:var(--subtext, #9CA3AF); }
+  .teach li b { display:block; color:var(--text); margin-bottom:3px; }
+  .tier { display:flex; gap:10px; flex-wrap:wrap; }
+  .tier label { flex:1; min-width:180px; margin:0; padding:12px; border:1px solid var(--border); border-radius:10px; cursor:pointer; letter-spacing:0; }
+  .tier label b { display:block; font-family:var(--disp); font-size:15px; letter-spacing:1px; color:var(--gold); margin-bottom:4px; }
+  .tier input { margin-right:6px; }
+  .small { font-size:12px; color:var(--sub); }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:12px 0; }
+  .checkline { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px; }
+  .checkline input { width:auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-home" href="/hub">← PROJECT HUB</a>
+  <div class="header">
+    <h1>Run Lock to Earn for your token</h1>
+    <p>YOUR RULES · JUPITER LOCK · RECEIPTS ANYONE CAN CHECK</p>
+  </div>
+
+  <div class="card">
+    <p class="intro">Reward the holders who <b>lock your token on Jupiter Lock</b>. Nobody holds their tokens — not you, not us: the escrow is Jupiter's own program. You set the rules below. Our engine reads the chain every hour, works out who qualifies and what they have earned, and pays from <b>your</b> funding wallet on the schedule you choose. Every payout has a transaction any holder can check on the public page.</p>
+    <p class="intro" style="margin-top:10px">This is <b>staking rewards without a staking contract</b> — no contract to audit, no tokens to custody, no risk of a drain. What it costs: <b>0.5 SOL a month</b> (or 0.25 SOL for a small-cap project), payable in SOL or in CLKN priced at the moment you pay. The reward tokens are yours and stay in your wallet until they are paid out.</p>
+  </div>
+
+  <form id="f" autocomplete="off">
+  <div class="card">
+    <div class="step">STEP 1 — YOUR TOKEN</div>
+    <label for="mint"><b>Token mint address</b></label>
+    <div class="row-flex" style="margin-top:0">
+      <input type="text" id="mint" placeholder="the mint of the token holders will lock" style="flex:1;min-width:0"/>
+      <button type="button" class="btn ghost" id="checkMint">CHECK</button>
+    </div>
+    <div id="mintOut"></div>
+    <div class="grid2">
+      <div><label for="symbol"><b>Symbol</b></label><input type="text" id="symbol" maxlength="12" placeholder="e.g. CUNA"/></div>
+      <div><label for="label"><b>Project name</b></label><input type="text" id="label" maxlength="64" placeholder="e.g. CUNA Token"/></div>
+    </div>
+    <label for="pid"><b>Page id</b> — your public page will be <span class="mono">/hub/&lt;id&gt;</span></label>
+    <input type="text" id="pid" maxlength="32" placeholder="lowercase letters, digits, dashes"/>
+  </div>
+
+  <div class="card">
+    <div class="step">STEP 2 — WHO PAYS AND WHO MAY CHANGE THE RULES</div>
+    <label for="funding"><b>Funding wallet</b> — where the rewards are paid FROM</label>
+    <input type="text" id="funding" placeholder="a wallet your project controls"/>
+    <p class="hint">Rewards leave this wallet only when a payout batch is signed. Its balance is shown publicly next to what the program owes, so holders can see whether the rewards are covered. Locks from this wallet never earn.</p>
+    <label for="ops"><b>Operator wallets</b> — may sign payouts and change the rules (comma-separated)</label>
+    <input type="text" id="ops" placeholder="your wallet address, optionally more"/>
+    <div id="walletBox" class="row-flex"><button type="button" class="btn ghost" id="connect">CONNECT WALLET TO FILL THIS IN</button></div>
+    <label for="contact"><b>How the owner reaches you</b></label>
+    <input type="text" id="contact" maxlength="80" placeholder="Telegram or X handle, or an email"/>
+  </div>
+
+  <div class="card">
+    <div class="step">STEP 3 — THE RULES</div>
+    <p class="hint">Every rule becomes part of a versioned, hashed program the holders can read. Changing a rule later creates a new version; periods already accrued keep the old one.</p>
+    <div class="grid2">
+      <div><label for="minDays"><b>Minimum lock</b> (days)</label><input type="number" id="minDays" min="1" max="3650" value="30"/></div>
+      <div><label for="maxDays"><b>Top tier at</b> (days)</label><input type="number" id="maxDays" min="1" max="3650" value="365"/></div>
+    </div>
+    <p class="hint">A lock shorter than the minimum does not qualify. A longer commitment weighs more, from 1× at the minimum up to the top tier — locks longer than the top tier count as the top tier.</p>
+    <label for="minLock"><b>Minimum amount</b> (whole tokens, 0 = none)</label>
+    <input type="number" id="minLock" min="0" step="any" value="0"/>
+    <div class="grid2">
+      <div><label for="cancelable"><b>Cancelable locks</b></label>
+        <select id="cancelable"><option value="0">Do not qualify (recommended)</option><option value="1">Qualify</option></select>
+        <p class="hint">A cancelable lock can be taken back early by its creator, so it is not the commitment a fixed lock is.</p></div>
+      <div><label for="vesting"><b>Lock shape</b></label>
+        <select id="vesting"><option value="any">Any (cliff or vesting)</option><option value="cliff-only">Cliff only — one release at the end</option><option value="vesting-only">Vesting only — periodic releases</option></select>
+        <p class="hint">Whatever the shape, only what is still locked earns.</p></div>
+    </div>
+    <label for="schedule"><b>Payout schedule</b></label>
+    <select id="schedule"><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="daily">Daily</option><option value="at-unlock">When each lock ends</option><option value="manual">When I trigger it</option></select>
+    <label for="pool"><b>Daily reward pool</b> (whole reward tokens per day)</label>
+    <input type="number" id="pool" min="0" step="any" placeholder="e.g. 10000"/>
+    <p class="hint">Split every hour between everyone who qualifies, by locked amount × term weight. This is what the program owes per day and what the funding wallet must cover — never a rate promised to anyone.</p>
+    <label for="capPct"><b>Cap per wallet</b> (% of the pool, 0 = no cap)</label>
+    <input type="number" id="capPct" min="0" max="99" step="any" value="0"/>
+    <label for="exclude"><b>Wallets that never earn</b> (comma-separated, optional)</label>
+    <input type="text" id="exclude" placeholder="team, treasury, market makers…"/>
+    <p class="hint">The funding wallet is always excluded. Add treasury and team wallets so their locks do not take from the community's pool.</p>
+  </div>
+
+  <div class="card">
+    <div class="step">STEP 4 — THE PLAN</div>
+    <div class="tier">
+      <label><input type="radio" name="tier" value="standard" checked/><b>STANDARD</b>0.5 SOL a month, or the same value in CLKN priced when you pay.</label>
+      <label><input type="radio" name="tier" value="small"/><b>SMALL CAP</b>0.25 SOL a month for a young or small project. The owner confirms the tier.</label>
+    </div>
+    <p class="hint" style="margin-top:10px">Nothing is charged now. Once the owner approves, you pay the first month from your wallet and the program is armed. A project we already work with may be comped — that is the owner's call, not a box to tick.</p>
+    <div class="checkline"><input type="checkbox" id="agree"/><label for="agree" style="margin:0">I understand the rewards come from my funding wallet, the terms are public, and nothing here is a return anyone is promised.</label></div>
+    <div class="row-flex">
+      <button type="button" class="btn ghost" id="preview">PREVIEW WHAT HOLDERS WILL READ</button>
+      <button type="submit" class="btn" id="submit" disabled>SUBMIT APPLICATION</button>
+    </div>
+    <div id="out"></div>
+  </div>
+  </form>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc, $ = function (id) { return document.getElementById(id); };
+  var DECIMALS = null, REWARD_DECIMALS = null, MINT_OK = false, WALLET = null;
+
+  function toRaw(whole, dec) {
+    // whole → base units without floats: split on the dot, pad the fraction.
+    var s = String(whole || "0").trim(); if (!/^\d*(\.\d*)?$/.test(s)) throw new Error("not a number: " + s);
+    var parts = s.split("."), ip = parts[0] || "0", fp = (parts[1] || "").slice(0, dec);
+    while (fp.length < dec) fp += "0";
+    return (ip + fp).replace(/^0+(?=\d)/, "") || "0";
+  }
+  function terms() {
+    var dec = DECIMALS == null ? 9 : DECIMALS, rdec = REWARD_DECIMALS == null ? dec : REWARD_DECIMALS;
+    return {
+      poolDailyRaw: toRaw($("pool").value, rdec), minDurationDays: $("minDays").value, maxTermDays: $("maxDays").value,
+      minLockRaw: toRaw($("minLock").value, dec), cancelableAllowed: $("cancelable").value, vesting: $("vesting").value,
+      payoutSchedule: $("schedule").value, maxWalletSharePct: $("capPct").value,
+      excludeWallets: $("exclude").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean),
+    };
+  }
+  function payload() {
+    return {
+      id: $("pid").value.trim().toLowerCase(), label: $("label").value.trim(), symbol: $("symbol").value.trim(), mint: $("mint").value.trim(),
+      fundingWallet: $("funding").value.trim(), operatorWallets: $("ops").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean),
+      contact: $("contact").value.trim(), tierRequested: (document.querySelector('input[name=tier]:checked') || {}).value || "standard",
+      applicantWallet: WALLET || undefined, terms: terms(),
+    };
+  }
+  function gate() { $("submit").disabled = !($("agree").checked && MINT_OK); }
+  $("agree").addEventListener("change", gate);
+
+  $("checkMint").addEventListener("click", async function () {
+    var m = $("mint").value.trim(); MINT_OK = false; gate();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(m)) { $("mintOut").innerHTML = '<div class="err">That is not a Solana address.</div>'; return; }
+    $("mintOut").innerHTML = '<div class="status">READING THE MINT ON-CHAIN…</div>';
+    try {
+      var r = await fetch("/api/hub-apply?mint=" + encodeURIComponent(m)).then(function (x) { return x.json(); });
+      if (!r.ok) throw new Error(r.error || "could not read the mint");
+      DECIMALS = r.decimals; REWARD_DECIMALS = r.decimals;
+      var chips = '<span class="chip ok">DECIMALS ' + esc(String(r.decimals)) + '</span><span class="chip">' + (r.tokenProgram === "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb" ? "TOKEN-2022" : "SPL TOKEN") + '</span>';
+      (r.extensions || []).forEach(function (e) { chips += '<span class="chip ' + ((r.unsupportedExtensions || []).indexOf(e) >= 0 ? "bad" : "") + '">' + esc(e) + '</span>'; });
+      if (r.alreadyRegistered) chips += '<span class="chip bad">ALREADY RUNS A PROGRAM: ' + esc(r.alreadyRegistered) + '</span>';
+      var note = r.supported && !r.alreadyRegistered ? '<div class="ok-box">This mint can run a program. Amounts below are in whole tokens; the engine stores base units.</div>'
+        : '<div class="err">' + (r.alreadyRegistered ? 'This mint already has a program here — ask its operators, or reach the owner.' : 'This mint carries Token-2022 extensions the payout path cannot account for yet (transfer fee / hook). Not supported for now.') + '</div>';
+      $("mintOut").innerHTML = '<div style="margin-top:8px">' + chips + '</div>' + note;
+      MINT_OK = !!r.supported && !r.alreadyRegistered; gate();
+    } catch (e) { $("mintOut").innerHTML = '<div class="err">' + esc(e.message || String(e)) + '</div>'; }
+  });
+
+  // Wallet — only to fill the operator field with a real address (and to record who applied).
+  function afterConnect(r) {
+    if (!r || !r.pubkey) throw new Error("That wallet did not return an address.");
+    WALLET = r.pubkey;
+    var cur = $("ops").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+    if (cur.indexOf(WALLET) < 0) cur.unshift(WALLET);
+    $("ops").value = cur.join(", ");
+    $("walletBox").innerHTML = '<span class="small">Connected ' + esc(r.name || "wallet") + ' · <span class="mono">' + esc(CluckUtil.shortAddr(WALLET)) + '</span></span> <button type="button" class="btn ghost" id="disconnect">DISCONNECT</button>';
+    $("disconnect").addEventListener("click", function () {
+      try { CluckWallet.disconnect(); } catch (e) {}
+      WALLET = null; $("walletBox").innerHTML = '<button type="button" class="btn ghost" id="connect">CONNECT WALLET TO FILL THIS IN</button>'; $("connect").addEventListener("click", onConnect);
+    });
+  }
+  function doConnect(id) { CluckWallet.connect(id).then(afterConnect).catch(function (e) { $("walletBox").insertAdjacentHTML("beforeend", '<span class="err">' + esc((e && e.message) || "could not connect") + '</span>'); }); }
+  function onConnect() {
+    var list = CluckWallet.available();
+    if (!list.length) {
+      if (CluckWallet.isMobile()) { $("walletBox").innerHTML = CluckWallet.mobileLinksHTML({ hintClass: "small", btnStyle: "display:inline-block;margin:0 8px 8px 0;padding:11px 16px;border-radius:10px;border:1px solid var(--border);color:var(--text);font-family:var(--body);letter-spacing:1px;font-size:13px;" }); return; }
+      $("walletBox").insertAdjacentHTML("beforeend", '<span class="err">No Solana wallet found — you can also type the address.</span>'); return;
+    }
+    if (list.length > 1) {
+      $("walletBox").innerHTML = list.map(function (w) { return '<button type="button" class="btn ghost" data-wid="' + esc(w.id) + '">' + (w.icon ? esc(w.icon) + " " : "") + esc(w.name) + '</button>'; }).join("");
+      Array.prototype.forEach.call($("walletBox").querySelectorAll("[data-wid]"), function (b) { b.addEventListener("click", function () { doConnect(b.getAttribute("data-wid")); }); });
+      return;
+    }
+    doConnect(list[0].id);
+  }
+  $("connect").addEventListener("click", onConnect);
+
+  function renderPreview(r, submitted) {
+    var h = "";
+    if (submitted) h += '<div class="ok-box"><b>Application ' + esc(r.application.id) + ' received.</b><br/>' + esc(r.next) + '</div>';
+    h += '<div style="margin-top:12px"><span class="chip gold">TERMS v' + esc(String(r.version.version)) + ' FROM ' + esc(r.version.effectiveFrom) + '</span><span class="chip">' + esc(r.tierRequested.toUpperCase()) + '</span></div>';
+    h += '<p class="small" style="margin-top:8px">Terms hash <span class="mono">' + esc(r.version.hash) + '</span> — this is what your holders will see, and what a later version is compared against.</p>';
+    h += '<h2 style="margin-top:14px;font-family:var(--disp);font-size:17px;letter-spacing:1px;color:var(--gold);font-weight:400">What your holders will read</h2><ul class="teach">';
+    (r.teach.answers || []).forEach(function (a) { h += '<li><b>' + esc(a.question) + '</b>' + esc(a.text) + '</li>'; });
+    h += '</ul>';
+    $("out").innerHTML = h;
+  }
+  async function send(preview) {
+    var btn = preview ? $("preview") : $("submit"); btn.disabled = true;
+    $("out").innerHTML = '<div class="status">' + (preview ? "CHECKING THE RULES…" : "SUBMITTING…") + '</div>';
+    try {
+      var p = payload(); if (preview) p.preview = "1";
+      var r = await fetch("/api/hub-apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).then(function (x) { return x.json(); });
+      if (!r.ok) throw new Error(r.error || "refused");
+      renderPreview(r, !preview);
+      if (!preview) { $("submit").textContent = "SUBMITTED"; return; }
+    } catch (e) { $("out").innerHTML = '<div class="err">' + esc(e.message || String(e)) + '</div>'; }
+    btn.disabled = false; gate();
+  }
+  $("preview").addEventListener("click", function () { send(true); });
+  $("f").addEventListener("submit", function (ev) { ev.preventDefault(); send(false); });
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

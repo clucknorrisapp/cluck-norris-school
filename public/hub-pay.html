@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pay for your Lock to Earn month — Cluck Norris</title>
+<meta name="description" content="Pay a project's platform month in SOL or in CLKN priced at the moment you pay. The payment is verified on-chain against the quote you saw."/>
+<meta name="robots" content="noindex"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:640px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:28px; letter-spacing:1px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .intro b { color:var(--text); }
+  .mono { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; word-break:break-all; }
+  .chip { display:inline-block; font-family:var(--disp); font-size:11px; letter-spacing:1.5px; padding:4px 9px; border-radius:999px; border:1px solid var(--border); color:var(--sub); margin:4px 4px 0 0; }
+  .chip.ok { color:var(--green); border-color:rgba(16,185,129,.35); }
+  .chip.warn { color:var(--amber, #F59E0B); border-color:rgba(245,158,11,.4); }
+  .chip.gold { color:var(--gold); border-color:rgba(252,211,77,.35); }
+  .big { font-family:var(--disp); font-size:26px; letter-spacing:1px; color:var(--text); }
+  .row-flex { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:14px; }
+  .btn { background:var(--orange); border:none; border-radius:8px; padding:12px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#000; cursor:pointer; font-family:var(--body); }
+  .btn.ghost { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); }
+  .btn:disabled { background:var(--grey, #4B5563); color:var(--muted); cursor:not-allowed; }
+  .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
+  .ok-box { background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.3); border-radius:8px; padding:12px 14px; font-size:13px; color:var(--text); margin-top:12px; line-height:1.6; }
+  .small { font-size:12px; color:var(--sub); line-height:1.55; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:12px 0; }
+  .opt { border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:10px; }
+  .opt b { font-family:var(--disp); font-size:15px; letter-spacing:1px; color:var(--gold); }
+  a { color:var(--cyan, #67E8F9); text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-home" id="back" href="/hub">← PROJECT HUB</a>
+  <div class="header">
+    <h1 id="title">Pay for a month</h1>
+    <p id="subtitle">PLATFORM ACCESS · VERIFIED ON-CHAIN</p>
+  </div>
+  <div id="app"><div class="status">LOADING…</div></div>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc, $ = function (id) { return document.getElementById(id); };
+  var m = location.pathname.match(/^\/hub\/([a-z0-9][a-z0-9-]{1,31})\/pay\/?$/);
+  var PID = m && m[1];
+  var app = $("app");
+  var WALLET = null, PROVIDER = null, QUOTE = null, PAYTO = null, PROJECT = null;
+  var KEY = "hubpay:" + PID;
+
+  if (!PID) { app.innerHTML = '<div class="card"><div class="err">No project in the address. Use /hub/&lt;project&gt;/pay.</div></div>'; return; }
+  $("back").href = "/hub/" + PID;
+
+  function remember(o) { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} }
+  function pending() { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { return null; } }
+  function forget() { try { localStorage.removeItem(KEY); } catch (e) {} }
+  function b58enc(bytes) {
+    var A = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz", d = [0], i, j, c;
+    for (i = 0; i < bytes.length; i++) { c = bytes[i]; for (j = 0; j < d.length; j++) { c += d[j] << 8; d[j] = c % 58; c = (c / 58) | 0; } while (c) { d.push(c % 58); c = (c / 58) | 0; } }
+    var s = ""; for (i = 0; i < bytes.length && bytes[i] === 0; i++) s += "1";
+    for (i = d.length - 1; i >= 0; i--) s += A[d[i]];
+    return s;
+  }
+  function bytesToB64(u8) { var b = ""; for (var i = 0; i < u8.length; i++) b += String.fromCharCode(u8[i]); return btoa(b); }
+  function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = function () { rej(new Error("failed to load " + src)); }; document.head.appendChild(s); }); }
+  async function ensureLibs() {
+    if (typeof window.solanaWeb3 === "undefined") await loadScript("/vendor/solana-web3-1.95.8.iife.min.js");
+    if (!(window.splToken && window.splToken.createSolTransferInstruction)) await loadScript("/airdrop-engine.js");
+  }
+  function statusLine(a) {
+    if (a.state === "comped") return '<span class="chip ok">COMPED</span> <span class="small">This project is comped — nothing to pay.</span>';
+    if (a.state === "active") return '<span class="chip ok">ACTIVE · ' + esc(String(a.daysLeft)) + ' DAYS LEFT</span> <span class="small">Paid through ' + esc(new Date(a.paidThroughUnix * 1000).toISOString().slice(0, 10)) + '. Paying again adds 30 days on the end.</span>';
+    if (a.state === "expired") return '<span class="chip warn">EXPIRED</span> <span class="small">The program keeps accruing for holders already in; it cannot be re-armed or re-termed until a month is paid.</span>';
+    return '<span class="chip warn">UNPAID</span> <span class="small">Pay the first month to arm the program.</span>';
+  }
+
+  async function load() {
+    var r = await fetch("/api/hub/" + encodeURIComponent(PID) + "/access").then(function (x) { return x.json(); });
+    if (!r.ok) throw new Error(r.error || "could not load");
+    PROJECT = r.project; QUOTE = r.quote; PAYTO = r.payTo;
+    $("title").textContent = "Pay for a month — " + PROJECT.symbol;
+    var h = '<div class="card"><div>' + statusLine(r.access) + '</div>';
+    h += '<p class="small" style="margin-top:10px">Plan: <span class="chip gold">' + esc(String(r.access.tier).toUpperCase()) + '</span></p></div>';
+    if (!QUOTE) { app.innerHTML = h; return; }
+    h += '<div class="card"><p class="intro">One month is <b>' + esc(String(QUOTE.sol)) + ' SOL</b>' + (QUOTE.clknRaw ? ' or <b>' + esc(QUOTE.clknUi) + ' CLKN</b> at this moment’s price' : '') + '. The quote is good for ' + esc(String(QUOTE.validForMin)) + ' minutes; the payment is checked against it, not against a later price.</p>';
+    h += '<div id="walletBox" class="row-flex"><button class="btn" id="connect">CONNECT WALLET</button></div>';
+    h += '<div id="pay" hidden><div class="opt"><b>PAY ' + esc(String(QUOTE.sol)) + ' SOL</b><div class="row-flex" style="margin-top:8px"><button class="btn" id="paySol">PAY IN SOL</button></div></div>';
+    if (QUOTE.clknRaw) h += '<div class="opt"><b>PAY ' + esc(QUOTE.clknUi) + ' CLKN</b><div class="small" style="margin-top:4px">Priced at ' + esc(String(QUOTE.solPerClkn)) + ' SOL per CLKN right now — if you bought CLKN early, this is where it pays off.</div><div class="row-flex" style="margin-top:8px"><button class="btn" id="payClkn">PAY IN CLKN</button></div></div>';
+    else h += '<div class="small" style="margin-top:8px">CLKN pricing is unavailable right now, so only SOL is offered for this quote.</div>';
+    h += '</div><div id="out"></div></div>';
+    h += '<div class="card"><p class="small">Or pay by hand: send ' + esc(String(QUOTE.sol)) + ' SOL to <span class="mono">' + esc(PAYTO.sol) + '</span>' + (QUOTE.clknRaw ? ' or ' + esc(QUOTE.clknUi) + ' CLKN to <span class="mono">' + esc(PAYTO.clkn) + '</span>' : '') + ' within the quote window, then submit the signature below.</p>';
+    h += '<div class="row-flex"><input type="text" id="sigIn" class="mono" placeholder="transaction signature" style="flex:1;min-width:0;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text)"/><button class="btn ghost" id="sigGo">SUBMIT</button></div><div id="out2"></div></div>';
+    app.innerHTML = h;
+    $("connect").addEventListener("click", onConnect);
+    $("paySol").addEventListener("click", function () { pay("sol"); });
+    if ($("payClkn")) $("payClkn").addEventListener("click", function () { pay("clkn"); });
+    $("sigGo").addEventListener("click", function () { submit($("sigIn").value.trim(), QUOTE.id, $("out2")); });
+    var p = pending();
+    if (p && p.sig) { $("out").innerHTML = '<div class="status">A PAYMENT FROM THIS BROWSER IS STILL BEING VERIFIED…</div>'; submit(p.sig, p.quote, $("out")); }
+  }
+
+  async function submit(sig, quoteId, out) {
+    if (!sig) { out.innerHTML = '<div class="err">Paste the transaction signature.</div>'; return; }
+    out.innerHTML = '<div class="status">VERIFYING ON-CHAIN…</div>';
+    for (var k = 0; k < 8; k++) {
+      var r; try { r = await fetch("/api/hub/" + encodeURIComponent(PID) + "/access?sig=" + encodeURIComponent(sig) + "&quote=" + encodeURIComponent(quoteId), { method: "POST" }).then(function (x) { return x.json(); }); } catch (e) { r = { ok: false, retry: true, error: "network" }; }
+      if (r.ok) {
+        forget();
+        out.innerHTML = '<div class="ok-box"><b>' + (r.recovered ? "Already applied." : "Paid.") + '</b> ' + esc(PROJECT.symbol) + ' is ' + esc(r.access.state) + ' through ' + esc(new Date(r.access.paidThroughUnix * 1000).toISOString().slice(0, 10)) + '.<br/><a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener">View the payment on Solscan</a></div>';
+        return;
+      }
+      if (!r.retry) { out.innerHTML = '<div class="err">' + esc(r.error || "refused") + (r.detail && r.detail.reason === "outside_quote_window" ? " Reload for a fresh quote." : "") + '</div>'; if (/already used|does not cover|outside/.test(r.error || "")) forget(); return; }
+      await new Promise(function (res) { setTimeout(res, 3000); });
+    }
+    out.innerHTML = '<div class="err">Still not final — nothing was charged twice. Reload this page in a minute; it picks the same payment up again.</div>';
+  }
+
+  async function pay(kind) {
+    var out = $("out"); var btn = kind === "sol" ? $("paySol") : $("payClkn");
+    if (pending() && pending().sig) { out.innerHTML = '<div class="err">A payment from this browser is still being verified — it is retried first. Reload if it has settled.</div>'; return; }
+    btn.disabled = true;
+    try {
+      out.innerHTML = '<div class="status">LOADING…</div>';
+      await ensureLibs();
+      var bh = await CluckUtil.rpc("getLatestBlockhash", [{ commitment: "finalized" }]);
+      var PublicKey = solanaWeb3.PublicKey, tx = new solanaWeb3.Transaction();
+      var me = new PublicKey(WALLET);
+      if (kind === "sol") {
+        tx.add(splToken.createSolTransferInstruction(me, new PublicKey(PAYTO.sol), QUOTE.lamports));
+      } else {
+        var mint = new PublicKey(PAYTO.clknMint), TOK = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+        var src = splToken.getAssociatedTokenAddressSync(mint, me, TOK), dst = splToken.getAssociatedTokenAddressSync(mint, new PublicKey(PAYTO.clkn), TOK);
+        tx.add(splToken.createAssociatedTokenAccountIdempotentInstruction(me, dst, new PublicKey(PAYTO.clkn), mint, TOK));
+        tx.add(splToken.createTransferCheckedInstruction(src, mint, dst, me, BigInt(QUOTE.clknRaw), QUOTE.clknDecimals, TOK));
+      }
+      tx.feePayer = me; tx.recentBlockhash = bh.value.blockhash;
+      out.innerHTML = '<div class="status">APPROVE IN YOUR WALLET…</div>';
+      var sig = null, signed = null;
+      if (typeof PROVIDER.signTransaction === "function") {
+        try { signed = await PROVIDER.signTransaction(tx); } catch (e) { if (!/cannot sign a transaction/i.test((e && e.message) || "")) throw e; signed = null; }
+      }
+      if (signed) {
+        signed = CluckWallet.asTransaction(signed, tx);
+        var sb = signed.signatures && signed.signatures[0] && signed.signatures[0].signature;
+        if (!sb || !sb.length) throw new Error("wallet returned no signature");
+        sig = b58enc(sb);
+        remember({ sig: sig, quote: QUOTE.id });   // durable BEFORE the send
+        out.innerHTML = '<div class="status">SENDING…</div>';
+        await CluckUtil.rpc("sendTransaction", [bytesToB64(signed.serialize({ requireAllSignatures: true, verifySignatures: false })), { encoding: "base64", skipPreflight: true, preflightCommitment: "confirmed", maxRetries: 5 }]);
+      } else {
+        var res = await PROVIDER.signAndSendTransaction(tx);
+        sig = (res && res.signature) || (typeof res === "string" ? res : null);
+        if (!sig) throw new Error("wallet returned no signature");
+        remember({ sig: sig, quote: QUOTE.id });
+      }
+      await submit(sig, QUOTE.id, out);
+    } catch (e) { out.innerHTML = '<div class="err">' + esc((e && e.message) || String(e)) + '</div>'; }
+    btn.disabled = false;
+  }
+
+  function afterConnect(r) {
+    if (!r || !r.pubkey) throw new Error("That wallet did not return an address.");
+    WALLET = r.pubkey; PROVIDER = r.provider;
+    $("walletBox").innerHTML = '<span class="small">Connected ' + esc(r.name || "wallet") + ' · <span class="mono">' + esc(CluckUtil.shortAddr(WALLET)) + '</span></span> <button class="btn ghost" id="disconnect">DISCONNECT</button>';
+    $("disconnect").addEventListener("click", function () { try { CluckWallet.disconnect(); } catch (e) {} WALLET = null; PROVIDER = null; $("pay").hidden = true; $("walletBox").innerHTML = '<button class="btn" id="connect">CONNECT WALLET</button>'; $("connect").addEventListener("click", onConnect); });
+    $("pay").hidden = false;
+  }
+  function doConnect(id) { CluckWallet.connect(id).then(afterConnect).catch(function (e) { $("walletBox").insertAdjacentHTML("beforeend", '<span class="err">' + esc((e && e.message) || "could not connect") + '</span>'); }); }
+  function onConnect() {
+    var list = CluckWallet.available();
+    if (!list.length) {
+      if (CluckWallet.isMobile()) { $("walletBox").innerHTML = CluckWallet.mobileLinksHTML({ hintClass: "small", btnStyle: "display:inline-block;margin:0 8px 8px 0;padding:11px 16px;border-radius:10px;border:1px solid var(--border);color:var(--text);font-family:var(--body);letter-spacing:1px;font-size:13px;" }); return; }
+      $("walletBox").insertAdjacentHTML("beforeend", '<span class="err">No Solana wallet found — pay by hand below.</span>'); return;
+    }
+    if (list.length > 1) {
+      $("walletBox").innerHTML = list.map(function (w) { return '<button class="btn ghost" data-wid="' + esc(w.id) + '">' + (w.icon ? esc(w.icon) + " " : "") + esc(w.name) + '</button>'; }).join("");
+      Array.prototype.forEach.call($("walletBox").querySelectorAll("[data-wid]"), function (b) { b.addEventListener("click", function () { doConnect(b.getAttribute("data-wid")); }); });
+      return;
+    }
+    doConnect(list[0].id);
+  }
+
+  load().catch(function (e) { app.innerHTML = '<div class="card"><div class="err">' + esc(e.message || String(e)) + '</div></div>'; });
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

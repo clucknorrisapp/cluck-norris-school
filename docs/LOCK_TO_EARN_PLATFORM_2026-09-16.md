@@ -47,10 +47,47 @@ chain, computes and pays, and every holder can verify every payout.**
 1. **Who signs the rewards.** Two modes, both should exist:
    - **Self-sign (non-custodial, default for onboarded projects):** the batch is built by us, the project's wallet signs it in their browser (the airdropper path — live today). We never hold their reward tokens.
    - **Managed:** a payer wallet we hold the key for, funded by the project (how CUNA and ROSE run today via Railway operator keys). Fully automatic. Needs a per-project key we custody — a real responsibility; fine for projects we run, not the default for strangers.
-2. **The gate.** Hold **$N of CLKN** in an operator wallet (live-priced, `/api/tool-gate/config` pattern — never hardcoded) **or** pay **X SOL per month**. Amounts are yours; my placeholder is $500 / 0.5 SOL·month until you say otherwise.
+2. **The gate — DECIDED (owner, 2026-09-16), three tiers, the tier is the owner's call at approval,
+   never self-declared:**
+   - **standard — 0.5 SOL per month**, or 0.5 SOL worth of CLKN priced at the moment the month is
+     paid. *"If they bought CLKN early, as price goes up it actually saves them money"* — the CLKN
+     amount is computed from the live CLKN/SOL price at the payment block, never fixed in tokens.
+   - **small — 0.25 SOL per month** (or the CLKN equivalent) for small-cap / young projects, where
+     the standard price *"could be expensive on a young project"*.
+   - **comped — free** for projects we like or are using for promotion. Needs a note on the record
+     saying why, so "why is this one free" is always answered.
+
+   Built as `lib/hub/access.js` (pure; `scripts/hub-access-test.cjs`): the price is an append-only
+   schedule resolved at the payment instant (the tools-pass pattern — a month bought under an old
+   price is never re-priced), a month is 30 days and stacks on the end of the paid period, a
+   payment signature is the receipt and is refused twice. **Rule: an unpaid or expired project
+   cannot ARM or change terms (402 on the admin route); a comped or active one can. The engine
+   never stops accruing for holders already in a running programme because the project fell
+   behind — that would punish the wrong people.** The tier is set on `/api/hub-registry` with
+   `tier=standard|small|comped` (+ `accessNote=`).
+
+   **Payment intake (`lib/hub/access-pay.js`, route `/api/hub/:project/access`):** `GET` answers
+   the access status and a fresh **quote** — the SOL price, and the CLKN amount computed from the
+   live CLKN/SOL price (two indexers, the Hatchery's reader) *at that instant*, good for 30
+   minutes, with the two pay-to addresses (SOL where the tools pass collects, CLKN where the
+   Hatchery collects; `HUB_PAY_SOL_WALLET` / `HUB_PAY_CLKN_WALLET` override). `POST ?sig=&quote=`
+   reads the transaction on-chain, takes the platform wallet's lamport gain or the treasury's CLKN
+   gain, and checks it against **that quote** — amount (2% slack) and block time inside the
+   quote's window (2 min early, 10 min late grace) — never against today's price. A covering
+   payment extends the paid period by 30 days; the registry row is the source of truth and the
+   signature also goes into the sig store so it can never double as a tools-pass payment. Same
+   signature again = the period it already bought (`recovered`). No block time yet = retry, nothing
+   consumed. Anyone may pay for a project; the payment credits the project. No CLKN price = a
+   SOL-only quote, never a guessed number.
 3. **Approval.** The design already says a project is whitelisted by the owner. Keep it: self-serve *application*, one-click **approve** by you in the desk (mint checked on-chain: decimals, token program, no transfer-fee/hook extensions — the payout verifier cannot account for those yet).
 
 ## Phases (each a PR, each demoable; window ends Oct 12)
+
+> ⛔ **Phase 1b (moving CUNA onto the generic engine) is HELD — owner, 2026-09-16: "hold on migrating
+> CUNA for right now, I don't want to mess up anything and CUNA is mine."** CUNA lock-to-earn keeps
+> running on its own loop (`cunaProgramme` / `cunaAccrualTick` in `server.js`, paid from
+> `/cuna-payout`); the hub scheduler skips `cuna` so nothing double-counts. Do not migrate it, alias
+> it, or "clean up" the legacy loop without the owner's explicit go in the moment.
 
 **Phase 1 — the engine works for any project (backend).** Per-project programme store, scan by the
 project's mint, accrual scheduler over every armed project, eligibility from the project's terms,
@@ -63,16 +100,81 @@ per-project store.
 `operatorWallets` entry signs the nonce — nothing typed, no key). The terms form → a new hashed
 version. Live lockers table with eligibility reason codes and the numbers that decided them.
 Accrued-to-date, funding status (three numbers, never one "funded" boolean), next-payout preview.
-Payout desk: build batch → **Sign in my wallet** or **Send from managed wallet** → receipts appear
-on the public page. Teach block on every screen; no rate language can render.
+Payout desk: build batch → **Sign in my wallet** (the managed payer stays owner-only) → receipts
+appear on the public page. **Shipped 2026-09-16 — see Status.**
 
-**Phase 3 — self-serve onboarding (`/hub/apply`).** Connect wallet → pick the mint (on-chain read
-fills decimals/program/extensions) → gate check (hold or pay) → funding wallet + operator wallets →
-draft terms with the teach block → submit → owner approves → live. The application itself becomes
-the project's first program version.
+**Phase 3 — self-serve onboarding (`/hub/apply`).** Pick the mint (on-chain read fills
+decimals/program/extensions) → funding wallet + operator wallets (connect to fill) → draft terms
+with the teach block preview → choose standard or small → submit → owner approves (sets the tier,
+comps if wanted) → the project pays its first month at `/hub/:project/pay` → arm. The application
+itself becomes the project's first program version. **Shipped 2026-09-16 — see Status.**
+
+**Phase 1b — CUNA onto the engine: HELD by the owner (see the note above).**
 
 **Later:** managed-wallet custody done properly (per-project keys encrypted at rest), a public
 directory of live programs, the seven languages on the desk.
+
+## Status
+
+- **2026-09-16 — Phase 1a, the engine module (`lib/hub/engine.js`, `scripts/hub-engine-test.cjs`).**
+  Per-project: config from the version in force, arm/disarm (start date never slides), the hourly
+  gate, one hour of accrual (pure), missed slices, the lock scan with the firstSeenAt ledger, the
+  tick over the project's own keys, `runAll` over the registry (skipping `cuna` while its legacy
+  loop runs), and the holder view. The rules engine gained `cancelableAllowed` and the `vesting`
+  shape (defaults = CUNA's behaviour, its 68 rule tests unchanged). One product rule decided in
+  code: a **fixed daily pool with no vesting stream is honoured as-is** — CUNA's stream cap only
+  applies when the funding wallet has a stream — and the funding status is the guard.
+  Not yet: the desk, onboarding.
+- **2026-09-16 — Phase 1a-ii, the routes (`lib/hub/routes.js`).** `/api/hub-registry` (owner:
+  approve a project — mint read on-chain, Token-2022 extensions refused — or suspend one),
+  `/api/hub/:project/admin` (status; `terms=1` + fields → a new hashed version from today /
+  tomorrow; `arm=1&confirm=go-live`; `off=1`; `accrue=1`; `rescan=1`), the public
+  `/api/hub/:project/holder?address=`, and `/api/hub/:project/payout` (owed; `export=1` builds a
+  batch for the project to sign in its own wallet; `sent=` records signed rows after an on-chain
+  check; `send=<batch>&run=1&from=<vault project>` is the managed payer; `sweep` / `void` /
+  `confirm` / `cancel`). All mutations POST-only, refused before the project lookup; money parts
+  through the disk-verified write. The scheduler runs every 10 minutes over armed projects and
+  builds no chain client until one is registered. `HUB_ENGINE_OFF=1` kills it.
+- **2026-09-16 — access tiers (`lib/hub/access.js`).** standard 0.5 SOL, small 0.25 SOL, comped
+  free (owner-set at approval, note required for comped); the CLKN alternative priced at the
+  payment instant; unpaid/expired cannot arm.
+- **2026-09-16 — payment intake (`lib/hub/access-pay.js`, `/api/hub/:project/access`).** Quote
+  priced at the instant it is issued (30 min), on-chain verification of the SOL or CLKN transfer
+  against that quote, 30 days per covering payment, signature consumed. Verified on a local boot:
+  approve as `small`, public quote 0.25 SOL / the CLKN equivalent at the live price, arm refused
+  402 while unpaid, unknown quote refused.
+- **2026-09-16 — Phase 3, self-serve onboarding (`lib/hub/apply.js`, `/hub/apply`, `/hub/:project/pay`).**
+  `GET /api/hub-apply?mint=` reads a mint on-chain for the form (decimals, program, extensions,
+  already-registered). `POST /api/hub-apply` validates the application exactly as approval does
+  (project record + a full terms draft through `validateTerms`; a broken draft is refused at apply)
+  and answers the v1 hash and the **teach block the holders would read**; `preview=1` does the same
+  without storing. **An application grants nothing.** The book (`hub:applications`, disk-verified)
+  holds one pending per mint and per id, capped at 200; the ops chat is alerted. Owner:
+  `GET /api/hub-registry?applications=1` lists; `POST ?approve=<id>&tier=&accessNote=` re-reads the
+  mint, registers the project with the OWNER's tier (an applicant may ask for standard or small,
+  never comped), writes the draft as terms v1 effective tomorrow, and points at the pay page;
+  `POST ?reject=<id>&reason=`. The pay page (`/hub/:project/pay`) shows the quote, pays SOL or CLKN
+  from the connected wallet (sign first, remember the signature in localStorage, then send — a
+  reload retries the same payment before anything new is built), or takes a pasted signature.
+  Verified on a local boot end to end: mint check → preview → submit → duplicate refused → list →
+  approve as comped → admin shows v1 (monthly) → access reads comped → public `/api/hub` lists it.
+- **2026-09-16 — Phase 2, the project desk (`lib/hub/operator.js`, `/hub/:project/desk`).** An
+  operator wallet on the project record signs a one-line nonce (`GET …/desk/challenge?wallet=`,
+  single-use, 10 min) and `POST …/desk/session` verifies the ed25519 signature and answers a
+  12-hour HMAC token bound to that project and wallet. The admin and payout routes accept it in
+  `x-clkn-operator`, re-checking on every request that the wallet is STILL on the operator list
+  (editing the record revokes the desk). The managed payer (`send=`) stays owner-only — 403 for an
+  operator. `GET …/desk` is the operator's view: every escrow with its eligibility record and
+  weight, owed, pending batches, accrual counts, the funding wallet's three numbers (owed +
+  reserved, observed balance, shortfall), access, versions. The page: connect → sign → state,
+  funding, batch (create → sign in the wallet through the airdropper, rows recorded on the server
+  after an on-chain check, the SENT-NOT-RECORDED recovery kept from the CUNA console), lockers
+  table, terms form (new version from tomorrow), arm/disarm/accrue/rescan, a link to the pay page.
+  Owner key still works as a fallback. Walked on a local boot with a real ed25519 keypair: a
+  non-operator wallet is refused a challenge, a wrong key's signature is refused and consumes the
+  nonce, a forged project in the message is refused, the good session reads the desk, cannot read
+  another project's desk, cannot use the managed payer, can arm/disarm a comped project, and loses
+  the desk the moment the wallet leaves the operator list.
 
 ## What it must never become
 

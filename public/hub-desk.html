@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>Lock to Earn desk — Cluck Norris</title>
+<meta name="description" content="The project's own desk: who is locked and why they qualify, what is owed, the funding wallet's numbers, and the payout batch you sign in your own wallet."/>
+<link rel="stylesheet" href="/theme.css"/>
+<style>
+  /* Operator desk. Deliberately plain: every number here is money, so nothing decorative competes
+     with it. The ONLY token this page can send is the project's reward mint the server reports —
+     there is no mint selector and never will be. Tokens come from theme.css; none redefined here. */
+  body{background:var(--bg);color:var(--text);font-family:var(--body);margin:0;padding:22px 16px 60px;}
+  .wrap{max-width:960px;margin:0 auto;}
+  h1{font-family:var(--disp);font-size:28px;margin:0 0 4px;letter-spacing:.5px;color:var(--gold);font-weight:400;}
+  .sub{color:var(--sub);font-size:14px;margin-bottom:18px;line-height:1.5;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:0 0 14px;}
+  .k{font-family:var(--disp);font-size:13px;letter-spacing:1.5px;color:var(--gold);margin-bottom:10px;}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:14px;}
+  .row:last-child{border-bottom:none}
+  .row b{font-family:var(--mono);font-weight:400;text-align:right;word-break:break-all;}
+  .muted{color:var(--sub);font-size:13px;line-height:1.5;}
+  .ok{color:var(--green)}.bad{color:#FCA5A5}.warn{color:var(--amber,#F59E0B)}
+  button{font-family:var(--body);font-size:12.5px;font-weight:700;letter-spacing:1.5px;padding:11px 18px;border-radius:9px;border:none;cursor:pointer;background:var(--orange);color:#000;}
+  button:disabled{background:var(--grey,#4B5563);color:var(--muted);cursor:not-allowed;}
+  button.ghost{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text);}
+  input[type=password],input[type=text],input[type=number],select{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,.3);color:var(--text);font-family:var(--mono);font-size:13px;}
+  select{font-family:var(--body);}
+  label{display:block;font-size:12px;color:var(--sub);letter-spacing:1px;margin:10px 0 4px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:7px 6px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;}
+  th{color:var(--sub);font-weight:400;font-size:12px;letter-spacing:.5px;}
+  td.num{font-family:var(--mono);text-align:right;white-space:nowrap;}
+  td.mono{font-family:var(--mono);font-size:12px;word-break:break-all;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;letter-spacing:.5px;font-family:var(--disp);}
+  .pill.sent{background:rgba(16,185,129,.15);color:var(--green)}.pill.owed{background:rgba(245,158,11,.15);color:var(--amber,#F59E0B)}.pill.fail{background:rgba(239,68,68,.15);color:#FCA5A5}.pill.unc{background:rgba(103,232,249,.12);color:var(--cyan,#67E8F9)}
+  .pill.yes{background:rgba(16,185,129,.15);color:var(--green)}.pill.no{background:rgba(239,68,68,.12);color:#FCA5A5}
+  .progress{height:8px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin:10px 0 6px;}
+  .progress i{display:block;height:100%;background:var(--orange);width:0;transition:width .3s;}
+  a{color:var(--cyan,#67E8F9);text-decoration:none;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (max-width:640px){.grid2{grid-template-columns:1fr}}
+  .btns{margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;}
+  .small{font-size:12px;color:var(--sub);}
+  .mono{font-family:var(--mono);font-size:12px;word-break:break-all;}
+  details summary{cursor:pointer;font-size:12.5px;color:var(--sub);letter-spacing:1px;margin:8px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">LOCK TO EARN DESK</h1>
+  <div class="sub" id="subtitle">Your project's desk. Connect an operator wallet and sign a one-line message — nothing typed, no key. Every payout is signed in your own wallet; nothing here can move your tokens without you.</div>
+
+  <div class="card" id="authCard">
+    <div class="k">OPERATOR</div>
+    <div id="walletBox"><button id="connect">CONNECT OPERATOR WALLET</button></div>
+    <div class="muted" id="authNote" style="margin-top:8px">The wallet must be one of the project's operator wallets. The signed message proves you hold it and is not a transaction.</div>
+    <details style="margin-top:8px"><summary>OWNER KEY INSTEAD</summary>
+      <input type="password" id="key" placeholder="PREMIUM_ACCESS_KEY" autocomplete="off"/>
+      <div style="margin-top:8px"><button class="ghost" id="loadKey">LOAD WITH KEY</button></div>
+    </details>
+  </div>
+
+  <div id="app" hidden>
+    <div class="card">
+      <div class="k">STATE <span class="small" id="asWho"></span></div>
+      <div class="grid2">
+        <div>
+          <div class="row"><span>Program</span><b id="stArmed">—</b></div>
+          <div class="row"><span>Platform access</span><b id="stAccess">—</b></div>
+          <div class="row"><span>Terms in force</span><b id="stVersion">—</b></div>
+          <div class="row"><span>Hours accrued</span><b id="stDays">—</b></div>
+        </div>
+        <div>
+          <div class="row"><span>Ever credited</span><b id="stCredited">—</b></div>
+          <div class="row"><span>Ever paid</span><b id="stPaid">—</b></div>
+          <div class="row"><span>Owed right now</span><b id="stOwed">—</b></div>
+          <div class="row"><span>Locks scanned · qualifying</span><b id="stScan">—</b></div>
+        </div>
+      </div>
+      <div class="btns">
+        <button id="arm">ARM — start accruing</button>
+        <button class="ghost" id="disarm">DISARM</button>
+        <button class="ghost" id="accrue">ACCRUE THIS HOUR NOW</button>
+        <button class="ghost" id="rescan">RESCAN CHAIN</button>
+        <a class="ghost" id="payLink" href="#" style="padding:11px 18px;border-radius:9px;border:1px solid var(--border);font-size:12.5px;font-weight:700;letter-spacing:1.5px;color:var(--text)">PAY A MONTH</a>
+      </div>
+      <div class="muted" id="ctNote" style="margin-top:8px">Arming writes the lock ledger and accrues the current hour immediately. Each UTC hour credits 1/24 of the daily pool to whoever qualifies at that hour. No tokens move until you sign a payout.</div>
+    </div>
+
+    <div class="card">
+      <div class="k">FUNDING — three numbers, never one "funded" flag</div>
+      <div class="grid2">
+        <div>
+          <div class="row"><span>Funding wallet</span><b id="fWallet">—</b></div>
+          <div class="row"><span>Owed + reserved in batches</span><b id="fObl">—</b></div>
+        </div>
+        <div>
+          <div class="row"><span>Wallet holds (last read)</span><b id="fObs">—</b></div>
+          <div class="row"><span>Shortfall</span><b id="fShort">—</b></div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:8px">An observed balance is not reserved funding — it can be spent on anything. Holders see these same numbers on the public page.</div>
+    </div>
+
+    <div class="card" id="noBatch" hidden>
+      <div class="k">NO BATCH PENDING</div>
+      <p class="muted">Creating a batch holds every owed amount aside from that moment, so exporting twice can never offer the same money twice. Preview of what it would contain:</p>
+      <pre id="preview" class="mono" style="white-space:pre-wrap;max-height:220px;overflow:auto"></pre>
+      <button id="create">CREATE BATCH</button>
+    </div>
+
+    <div id="batchWrap" hidden>
+      <div class="card">
+        <div class="k">BATCH <span class="mono" id="bId"></span></div>
+        <div class="grid2">
+          <div>
+            <div class="row"><span>State</span><b id="bState">—</b></div>
+            <div class="row"><span>Rows</span><b id="bRows">—</b></div>
+            <div class="row"><span>Total</span><b id="bTotal">—</b></div>
+          </div>
+          <div>
+            <div class="row"><span>Sent so far</span><b id="bSent">—</b></div>
+            <div class="row"><span>Still to send</span><b id="bRemain">—</b></div>
+            <div class="row"><span>Sending wallet holds</span><b id="bWalletBal">—</b></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="k">SEND — signed in your wallet</div>
+        <p class="muted">The connected operator wallet pays. Each transaction that confirms is recorded on the server immediately, row by row, with its signature, after the server checks it on-chain. If anything fails part-way, the rows that landed are paid and the rest stay owed — press SEND again to send only what is left.</p>
+        <div id="walletChecks" style="margin-top:8px"></div>
+        <div class="progress"><i id="bar"></i></div>
+        <div class="muted" id="progressText">&nbsp;</div>
+        <div class="btns">
+          <button id="send" disabled>SEND REMAINING ROWS</button>
+          <button class="ghost" id="reload">RELOAD</button>
+          <button class="ghost" id="close">CLOSE BATCH — return unsent rows to owed</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="k">ROWS</div>
+        <div style="overflow-x:auto"><table id="rows"><thead><tr><th>wallet</th><th class="num" id="symHead">amount</th><th>status</th><th>tx</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="k">LOCKERS — every escrow of your mint, and why it does or does not qualify</div>
+      <div style="overflow-x:auto"><table id="lockers"><thead><tr><th>holder</th><th class="num">locked</th><th class="num">weight</th><th>ends in</th><th>verdict</th></tr></thead><tbody></tbody></table></div>
+      <div class="muted" style="margin-top:8px" id="lockNote"></div>
+    </div>
+
+    <div class="card">
+      <div class="k">TERMS — a change creates a new version; periods already accrued keep the old one</div>
+      <div class="grid2">
+        <div><label>Daily pool (whole reward tokens)</label><input type="number" id="tPool" min="0" step="any"/></div>
+        <div><label>Minimum amount (whole tokens)</label><input type="number" id="tMin" min="0" step="any"/></div>
+        <div><label>Minimum lock (days)</label><input type="number" id="tMinDays" min="1" max="3650"/></div>
+        <div><label>Top tier at (days)</label><input type="number" id="tMaxDays" min="1" max="3650"/></div>
+        <div><label>Cancelable locks</label><select id="tCancel"><option value="0">Do not qualify</option><option value="1">Qualify</option></select></div>
+        <div><label>Lock shape</label><select id="tVesting"><option value="any">Any</option><option value="cliff-only">Cliff only</option><option value="vesting-only">Vesting only</option></select></div>
+        <div><label>Payout schedule</label><select id="tSched"><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="daily">Daily</option><option value="at-unlock">When each lock ends</option><option value="manual">Manual</option></select></div>
+        <div><label>Cap per wallet (% of pool, 0 = none)</label><input type="number" id="tCap" min="0" max="99" step="any"/></div>
+      </div>
+      <label>Wallets that never earn (comma-separated; the funding wallet is always excluded)</label>
+      <input type="text" id="tExclude"/>
+      <div class="btns"><button class="ghost" id="saveTerms">SAVE AS A NEW VERSION (from tomorrow)</button></div>
+      <div class="muted" id="termsNote" style="margin-top:8px"></div>
+      <details><summary>VERSION HISTORY</summary><pre id="versions" class="mono" style="white-space:pre-wrap;max-height:220px;overflow:auto"></pre></details>
+    </div>
+  </div>
+</div>
+
+<script src="/vendor/solana-web3.iife.min.js"></script>
+<script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
+<script src="/airdrop-engine.js"></script>
+<script>
+(function () {
+  "use strict";
+  var esc = CluckUtil.esc, $ = function (id) { return document.getElementById(id); };
+  var m = location.pathname.match(/^\/hub\/([a-z0-9][a-z0-9-]{1,31})\/desk\/?$/);
+  var PID = m && m[1];
+  if (!PID) { document.body.innerHTML = '<div class="wrap"><div class="card bad">No project in the address. Use /hub/&lt;project&gt;/desk.</div></div>'; return; }
+  var API = "/api/hub/" + encodeURIComponent(PID);
+  var KEY = null, TOKEN = null, DESK = null, BATCH = null, MINT = null, DEC = 9, SYM = "";
+  var WALLET = null, PROVIDER = null, WALLET_BAL = null;
+  var SENDING = false, ABORT = false;
+  var ROW_STATUS = {};
+  function statusKey() { return "hub_desk_rows_" + PID + "_" + (BATCH && BATCH.id); }
+  function saveStatus() { try { localStorage.setItem(statusKey(), JSON.stringify(ROW_STATUS)); } catch (_) {} }
+  function loadStatus() { try { ROW_STATUS = JSON.parse(localStorage.getItem(statusKey()) || "{}") || {}; } catch (_) { ROW_STATUS = {}; } }
+  function tokKey() { return "hub_desk_tok_" + PID; }
+  $("payLink").href = "/hub/" + PID + "/pay";
+
+  var amt = function (raw) { return (Number(raw) / Math.pow(10, DEC)).toLocaleString(undefined, { maximumFractionDigits: 2 }) + " " + SYM; };
+  function authHeaders() { var h = {}; if (KEY) h["x-premium-key"] = KEY; else if (TOKEN) h["x-clkn-operator"] = TOKEN; return h; }
+  async function call(path, params, method) {
+    var url = API + path, opts = { method: method || "GET", headers: authHeaders() };
+    if (method === "POST") { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(params || {}); }
+    else if (params) { var qs = Object.keys(params).map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); }).join("&"); if (qs) url += "?" + qs; }
+    var r = await fetch(url, opts); var j = null; try { j = await r.json(); } catch (_) {}
+    if (!j) throw new Error("server returned " + r.status + " with no JSON");
+    if (r.status === 404 && j.error === "not_found") throw new Error("not signed in (session expired, or this wallet is no longer an operator) — connect again");
+    if (!j.ok) throw new Error(j.error || ("server returned " + r.status));
+    return j;
+  }
+  var admin = function (p, m) { return call("/admin", p, m); };
+  var payout = function (p, m) { return call("/payout", p, m); };
+  async function rpc(method, params) {
+    var r = await fetch("/api/helius-rpc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: method, params: params }) });
+    var j = await r.json(); if (j.error) throw new Error(j.error.message || "rpc error"); return j.result;
+  }
+
+  // ── session ───────────────────────────────────────────────────────────────────────────────
+  function b64(u8) { var s = ""; for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); }
+  async function signIn() {
+    $("authNote").textContent = "asking the server for a message to sign…";
+    var c = await (await fetch(API + "/desk/challenge?wallet=" + encodeURIComponent(WALLET))).json();
+    if (!c.ok) throw new Error(c.error || "could not get a challenge");
+    if (typeof PROVIDER.signMessage !== "function") throw new Error("this wallet cannot sign messages — try Phantom, Solflare, Backpack or Jupiter");
+    $("authNote").textContent = "sign the message in your wallet — it is not a transaction";
+    var res = await PROVIDER.signMessage(new TextEncoder().encode(c.message), "utf8");
+    var sigBytes = res && res.signature ? res.signature : res;
+    if (!(sigBytes && sigBytes.length)) throw new Error("wallet returned no signature");
+    var s = await (await fetch(API + "/desk/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ wallet: WALLET, message: c.message, signature: b64(sigBytes) }) })).json();
+    if (!s.ok) throw new Error(s.error || "sign-in refused");
+    TOKEN = s.token; try { sessionStorage.setItem(tokKey(), JSON.stringify({ token: TOKEN, wallet: WALLET, exp: s.expiresAt })); } catch (_) {}
+    $("authNote").innerHTML = '<span class="ok">Signed in as operator ' + esc(CluckUtil.shortAddr(WALLET)) + ' until ' + esc(new Date(s.expiresAt).toISOString().slice(11, 16)) + ' UTC.</span>';
+  }
+  function afterConnect(r) {
+    if (!r || !r.pubkey) throw new Error("That wallet did not return an address.");
+    WALLET = r.pubkey; PROVIDER = r.provider;
+    $("walletBox").innerHTML = '<span class="small">Connected ' + esc(r.name || "wallet") + ' · <span class="mono">' + esc(CluckUtil.shortAddr(WALLET)) + '</span></span> <button class="ghost" id="disconnect">DISCONNECT</button>';
+    $("disconnect").addEventListener("click", function () {
+      try { CluckWallet.disconnect(); } catch (e) {}
+      WALLET = null; PROVIDER = null; TOKEN = null; WALLET_BAL = null; try { sessionStorage.removeItem(tokKey()); } catch (_) {}
+      $("app").hidden = true; $("walletBox").innerHTML = '<button id="connect">CONNECT OPERATOR WALLET</button>'; $("connect").addEventListener("click", onConnect);
+      $("authNote").textContent = "Disconnected.";
+    });
+    var saved = null; try { saved = JSON.parse(sessionStorage.getItem(tokKey()) || "null"); } catch (_) {}
+    var p = (saved && saved.wallet === WALLET && saved.exp > Date.now() + 60e3) ? Promise.resolve(TOKEN = saved.token) : (KEY ? Promise.resolve() : signIn());
+    p.then(load).then(function () { return readWalletBal().then(refreshSendButton); }).catch(function (e) { $("authNote").innerHTML = '<span class="bad">' + esc(e.message || String(e)) + '</span>'; });
+  }
+  function doConnect(id) { CluckWallet.connect(id).then(afterConnect).catch(function (e) { $("walletBox").insertAdjacentHTML("beforeend", '<div class="bad">' + esc((e && e.message) || "could not connect") + '</div>'); }); }
+  function onConnect() {
+    var list = CluckWallet.available();
+    if (!list.length) {
+      if (CluckWallet.isMobile()) { $("walletBox").innerHTML = CluckWallet.mobileLinksHTML({ hintClass: "small", btnStyle: "display:inline-block;margin:0 8px 8px 0;padding:11px 16px;border-radius:10px;border:1px solid var(--border);color:var(--text);font-family:var(--body);letter-spacing:1px;font-size:13px;" }); return; }
+      $("walletBox").insertAdjacentHTML("beforeend", '<div class="bad">No Solana wallet found. Install one, or open this page inside your wallet’s browser.</div>'); return;
+    }
+    if (list.length > 1) {
+      $("walletBox").innerHTML = list.map(function (w) { return '<button class="ghost" data-wid="' + esc(w.id) + '" style="margin:0 8px 8px 0">' + (w.icon ? esc(w.icon) + " " : "") + esc(w.name) + '</button>'; }).join("");
+      Array.prototype.forEach.call($("walletBox").querySelectorAll("[data-wid]"), function (b) { b.addEventListener("click", function () { doConnect(b.getAttribute("data-wid")); }); });
+      return;
+    }
+    doConnect(list[0].id);
+  }
+  $("connect").addEventListener("click", onConnect);
+  $("loadKey").addEventListener("click", function () { KEY = $("key").value.trim(); if (!KEY) return; load().catch(function (e) { $("authNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; }); });
+
+  // ── load + render ─────────────────────────────────────────────────────────────────────────
+  var dt = function (u) { return u ? new Date(u * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC" : "—"; };
+  async function load() {
+    DESK = await call("/desk");
+    var p = DESK.project; MINT = DESK.rewardMint; DEC = DESK.decimals; SYM = p.symbol;
+    $("title").textContent = "LOCK TO EARN DESK — " + p.symbol;
+    $("symHead").textContent = p.symbol; $("asWho").textContent = "· signed in as " + (DESK.as === "owner" ? "owner" : "operator " + CluckUtil.shortAddr(DESK.as));
+    $("stArmed").innerHTML = DESK.armed ? '<span class="ok">ARMED</span> since ' + esc(dt(DESK.startedAt)) : "disarmed";
+    var a = DESK.access || {};
+    $("stAccess").innerHTML = a.state === "comped" ? '<span class="ok">COMPED</span>' : a.state === "active" ? '<span class="ok">ACTIVE</span> · ' + esc(String(a.daysLeft)) + " days left" : '<span class="warn">' + esc(String(a.state).toUpperCase()) + '</span> · pay a month to arm';
+    var cfg = DESK.configInForce;
+    $("stVersion").textContent = cfg ? "v" + cfg.programVersion + " · " + String(cfg.programHash || "").slice(0, 10) + "…" : "none yet";
+    $("stDays").textContent = DESK.accrual.slices + " (" + DESK.accrual.days + " days)" + (DESK.accrual.missed ? " · " + DESK.accrual.missed + " missed" : "");
+    $("stCredited").textContent = amt(DESK.accrual.creditedRaw); $("stPaid").textContent = amt(DESK.accrual.paidRaw);
+    $("stOwed").textContent = amt(DESK.owedTotalRaw) + " · " + Object.keys(DESK.owed || {}).length + " wallets";
+    $("stScan").textContent = DESK.scan.locks + " · " + DESK.scan.eligibleNow + (DESK.scan.err ? " · scan error" : DESK.scan.ageSec != null ? " · " + DESK.scan.ageSec + "s ago" : "");
+    $("arm").disabled = !!DESK.armed; $("disarm").disabled = !DESK.armed; $("accrue").disabled = !DESK.armed;
+    var f = DESK.funding || {};
+    $("fWallet").textContent = f.wallet || "—"; $("fObl").textContent = amt(f.obligationsRaw || "0");
+    $("fObs").textContent = f.observedBalanceRaw == null ? "could not read" : amt(f.observedBalanceRaw);
+    $("fShort").innerHTML = f.shortfallRaw == null ? "—" : Number(f.shortfallRaw) > 0 ? '<span class="bad">' + esc(amt(f.shortfallRaw)) + ' SHORT</span>' : '<span class="ok">none</span>';
+    renderLockers(); renderTermsForm();
+    $("authCard").hidden = true; $("app").hidden = false;
+    var pending = (DESK.pendingBatches || [])[0];
+    if (pending) { await loadBatch(pending.id); }
+    else {
+      var d = await payout();
+      $("batchWrap").hidden = true; $("noBatch").hidden = false; $("preview").textContent = d.previewLines || "(nothing owed)"; $("create").disabled = !d.previewLines;
+    }
+  }
+  function renderLockers() {
+    var tb = $("lockers").querySelector("tbody");
+    tb.innerHTML = (DESK.lockers || []).map(function (l) {
+      var why = l.qualifies ? '<span class="pill yes">QUALIFIES</span>' : '<span class="pill no">NO</span> <span class="small">' + esc((l.reasons || []).map(function (r) { return r.text || r.code; }).join("; ")) + "</span>";
+      return '<tr><td class="mono">' + esc(l.owner || "?") + '<br/><a class="small" href="https://solscan.io/account/' + encodeURIComponent(l.escrow || "") + '" target="_blank" rel="noopener">escrow</a></td><td class="num">' + esc(amt(l.amountRaw)) + '</td><td class="num">' + esc(Number(l.weight).toLocaleString()) + '</td><td>' + (l.daysLeft == null ? "—" : esc(String(l.daysLeft)) + " d") + '</td><td>' + why + '</td></tr>';
+    }).join("") || '<tr><td colspan="5" class="muted">no locks of this mint seen yet</td></tr>';
+    $("lockNote").textContent = "Weight = locked amount × days committed (from the day the program first saw the lock). Reason codes are the same ones holders see.";
+  }
+  function whole(raw, dec) { var s = String(raw || "0"); while (s.length <= dec) s = "0" + s; var ip = s.slice(0, s.length - dec), fp = s.slice(s.length - dec).replace(/0+$/, ""); return fp ? ip + "." + fp : ip; }
+  function toRaw(v, dec) { var s = String(v || "0").trim(); if (!/^\d*(\.\d*)?$/.test(s)) throw new Error("not a number: " + s); var parts = s.split("."), ip = parts[0] || "0", fp = (parts[1] || "").slice(0, dec); while (fp.length < dec) fp += "0"; return (ip + fp).replace(/^0+(?=\d)/, "") || "0"; }
+  function renderTermsForm() {
+    var v = (DESK.versions || [])[DESK.versions.length - 1]; var t = v ? v.terms : {};
+    $("tPool").value = t.poolDailyRaw != null ? whole(t.poolDailyRaw, DEC) : ""; $("tMin").value = t.minLockRaw != null ? whole(t.minLockRaw, DESK.project.decimals) : "0";
+    $("tMinDays").value = t.minDurationDays || 30; $("tMaxDays").value = t.maxTermDays || 365;
+    $("tCancel").value = t.cancelableAllowed ? "1" : "0"; $("tVesting").value = t.vesting || "any"; $("tSched").value = t.payoutSchedule || "weekly"; $("tCap").value = t.maxWalletSharePct || 0;
+    $("tExclude").value = (t.excludeWallets || []).filter(function (w) { return w !== DESK.project.fundingWallet; }).join(", ");
+    $("versions").textContent = (DESK.versions || []).map(function (x) { return "v" + x.version + "  " + x.effectiveFrom + (x.effectiveTo ? " → " + x.effectiveTo : " → now") + "  " + x.hash; }).join("\n") || "(no versions)";
+  }
+  $("saveTerms").addEventListener("click", function () {
+    askConfirm("Save these terms as a new version effective tomorrow? Hours already accrued keep the old version.", $("saveTerms")).then(function (yes) {
+      if (!yes) return;
+      var body;
+      try {
+        body = { terms: "1", poolDailyRaw: toRaw($("tPool").value, DEC), minLockRaw: toRaw($("tMin").value, DESK.project.decimals), minDurationDays: $("tMinDays").value, maxTermDays: $("tMaxDays").value,
+          cancelableAllowed: $("tCancel").value, vesting: $("tVesting").value, payoutSchedule: $("tSched").value, maxWalletSharePct: $("tCap").value,
+          excludeWallets: $("tExclude").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean) };
+      } catch (e) { $("termsNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; return; }
+      admin(body, "POST").then(function () { $("termsNote").innerHTML = '<span class="ok">Saved.</span>'; return load(); }).catch(function (e) { $("termsNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; });
+    });
+  });
+
+  // ── batch ─────────────────────────────────────────────────────────────────────────────────
+  async function loadBatch(id) {
+    var d = await payout({ batch: id });
+    BATCH = d.batch; loadStatus();
+    BATCH.rows.forEach(function (r) { if (r.sent) delete ROW_STATUS[r.wallet]; }); saveStatus();
+    $("noBatch").hidden = true; $("batchWrap").hidden = false;
+    $("bId").textContent = BATCH.id; $("bState").textContent = String(BATCH.state).toUpperCase(); $("bRows").textContent = BATCH.count;
+    $("bTotal").textContent = amt(BATCH.totalRaw); $("bSent").textContent = BATCH.rows.filter(function (r) { return r.sent; }).length + " rows";
+    $("bRemain").textContent = BATCH.remainingCount + " rows · " + amt(BATCH.remainingRaw);
+    renderRows(); refreshSendButton();
+  }
+  function txLink(sig) { return '<a href="https://solscan.io/tx/' + encodeURIComponent(sig) + '" target="_blank" rel="noopener" class="mono">' + esc(String(sig).slice(0, 10)) + '…</a>'; }
+  function renderRows() {
+    var tb = $("rows").querySelector("tbody");
+    tb.innerHTML = BATCH.rows.map(function (r) {
+      var live = ROW_STATUS[r.wallet], pill, tx = "";
+      var recordBtn = function (sig) { return ' <button class="ghost" data-mark="' + esc(r.wallet) + '" data-sig="' + esc(sig) + '" style="padding:3px 8px;font-size:11px">record on server</button>'; };
+      if (r.sent) { pill = '<span class="pill sent">PAID' + (r.pending ? " (confirming)" : "") + '</span>'; tx = r.sig ? txLink(r.sig) : "manual"; }
+      else if (live && live.status === "sent" && live.sig) { pill = '<span class="pill unc">SENT — NOT RECORDED</span>'; tx = txLink(live.sig) + recordBtn(live.sig); }
+      else if (live && live.status === "failed") { pill = '<span class="pill fail">FAILED</span> <span class="small">' + esc(live.error || "") + "</span>"; }
+      else if (live && live.status === "unconfirmed") { pill = '<span class="pill unc">UNCONFIRMED</span>'; tx = txLink(live.sig) + recordBtn(live.sig); }
+      else pill = '<span class="pill owed">TO SEND</span>';
+      return '<tr><td class="mono">' + esc(r.wallet) + '</td><td class="num">' + esc(amt(r.raw)) + '</td><td>' + pill + '</td><td>' + tx + '</td></tr>';
+    }).join("");
+    Array.prototype.forEach.call(tb.querySelectorAll("button[data-mark]"), function (b) {
+      b.addEventListener("click", function () {
+        recordRows([{ wallet: b.getAttribute("data-mark"), sig: b.getAttribute("data-sig") }]).then(function (rep) {
+          if (rep && rep.ignored && rep.ignored.length) $("progressText").innerHTML = '<span class="warn">Not recorded: ' + esc(rep.ignored.map(function (x) { return x.why; }).join("; ")) + "</span>";
+          return loadBatch(BATCH.id);
+        }).catch(fail);
+      });
+    });
+  }
+  function askConfirm(msg, anchor) {
+    // In-page confirmation: some wallet WebViews implement window.confirm() as "return false".
+    return new Promise(function (resolve) {
+      var old = document.getElementById("confirmBar"); if (old) old.remove();
+      var bar = document.createElement("div"); bar.id = "confirmBar";
+      bar.style.cssText = "margin-top:10px;padding:10px 12px;border:1px solid var(--amber,#F59E0B);border-radius:8px;background:rgba(245,158,11,.08)";
+      bar.innerHTML = '<div class="warn" style="margin-bottom:8px"></div><button id="confirmYes">CONFIRM</button> <button class="ghost" id="confirmNo">CANCEL</button>';
+      bar.firstChild.textContent = msg;
+      ((anchor && anchor.parentNode) || document.body).appendChild(bar);
+      var done = function (v) { bar.remove(); resolve(v); };
+      bar.querySelector("#confirmYes").addEventListener("click", function () { done(true); });
+      bar.querySelector("#confirmNo").addEventListener("click", function () { done(false); });
+      try { bar.scrollIntoView({ block: "nearest" }); } catch (_) {}
+    });
+  }
+  function refreshSendButton() {
+    var need = BATCH ? Number(BATCH.remainingRaw) / Math.pow(10, DEC) : 0;
+    var ok = !SENDING && BATCH && BATCH.state === "pending" && BATCH.remainingCount > 0 && WALLET && PROVIDER && WALLET_BAL != null && WALLET_BAL >= need;
+    $("send").disabled = !ok; $("close").disabled = SENDING || !BATCH || BATCH.state !== "pending";
+    $("bWalletBal").textContent = WALLET ? (WALLET_BAL == null ? "could not read" : WALLET_BAL.toLocaleString() + " " + SYM) : "no wallet";
+    var why = [];
+    if (BATCH && BATCH.state !== "pending") why.push("batch is " + BATCH.state); else if (BATCH && !BATCH.remainingCount) why.push("nothing left to send");
+    if (!WALLET) why.push("no wallet connected (the owner key can read, only a wallet can sign)");
+    else if (WALLET_BAL == null) why.push("could not read the wallet's " + SYM + " balance"); else if (BATCH && WALLET_BAL < need) why.push("wallet holds less " + SYM + " than the remaining total");
+    $("walletChecks").innerHTML = why.length ? '<div class="warn">Send is off: ' + esc(why.join("; ")) + "</div>" : '<div class="ok">Ready to send.</div>';
+  }
+  async function readWalletBal() {
+    WALLET_BAL = null; if (!WALLET || !MINT) return;
+    var res = await rpc("getTokenAccountsByOwner", [WALLET, { mint: MINT }, { encoding: "jsonParsed" }]).then(function (r) { return { ok: true, v: r }; }).catch(function () { return { ok: false }; });
+    if (!res.ok) return;
+    var total = 0; ((res.v && res.v.value) || []).forEach(function (a) { total += Number(a.account.data.parsed.info.tokenAmount.uiAmount || 0); });
+    WALLET_BAL = total;
+  }
+  async function recordRows(rows) {
+    if (!rows.length) return null;
+    var r = await payout({ batch: BATCH.id, sent: rows }, "POST");
+    ((r.sent && r.sent.recorded) || []).forEach(function (w) { delete ROW_STATUS[w]; }); saveStatus();
+    return r.sent;
+  }
+  function unrecordedSent() { return (BATCH ? BATCH.rows : []).filter(function (r) { var l = ROW_STATUS[r.wallet]; return !r.sent && l && l.status === "sent" && l.sig; }); }
+  async function send() {
+    if ($("send").disabled) return;
+    if (unrecordedSent().length) { $("progressText").innerHTML = '<span class="bad">Record the SENT — NOT RECORDED rows first (buttons in the table). Sending again would pay them twice.</span>'; return; }
+    SENDING = true; ABORT = false; refreshSendButton();
+    BATCH.rows.forEach(function (r) { if (!r.sent && !(ROW_STATUS[r.wallet] && ROW_STATUS[r.wallet].status === "sent")) delete ROW_STATUS[r.wallet]; }); saveStatus();
+    var recipients = String(BATCH.remainingLines || "").split("\n").filter(Boolean).map(function (l) { var p = l.split(","); return { addr: p[0].trim(), amount: p[1].trim() }; });
+    var queue = [], flushing = null;
+    var flush = function () {
+      if (flushing || !queue.length) return flushing || Promise.resolve();
+      var batch = queue.splice(0, queue.length);
+      flushing = recordRows(batch).then(function (rep) {
+        if (rep && rep.ignored && rep.ignored.length) $("progressText").innerHTML = '<span class="warn">Server did not record ' + rep.ignored.length + " row(s): " + esc(rep.ignored.map(function (x) { return x.why; }).join("; ")) + "</span>";
+      }).catch(function (e) {
+        ABORT = true;
+        $("progressText").innerHTML = '<span class="bad">STOPPED — ' + esc(e.message) + ". Rows that landed are on chain and kept in this browser; use the row buttons to record them before sending anything else.</span>";
+        throw e;
+      }).then(function () { flushing = null; if (queue.length) return flush(); });
+      return flushing;
+    };
+    try {
+      await CluckAirdrop.send({
+        rpc: rpc, mint: MINT, recipients: recipients, walletPubkey: WALLET, provider: PROVIDER, memo: SYM + " lock-to-earn rewards " + BATCH.id,
+        onProgress: function (msg, pct) { $("progressText").textContent = msg; $("bar").style.width = Math.max(0, Math.min(100, pct)) + "%"; },
+        shouldContinue: function () { return !ABORT; },
+        onResult: function (r) { ROW_STATUS[r.addr] = { status: r.status, sig: r.sig, error: r.error }; saveStatus(); if (r.status === "sent") { queue.push({ wallet: r.addr, sig: r.sig }); flush(); } renderRows(); },
+      });
+      await flush();
+    } catch (e) { fail(e); }
+    SENDING = false;
+    await loadBatch(BATCH.id).catch(fail);
+    readWalletBal().then(refreshSendButton);
+  }
+  function fail(e) { $("progressText").innerHTML = '<span class="bad">' + esc((e && e.message) || String(e)) + "</span>"; SENDING = false; refreshSendButton(); }
+
+  $("create").addEventListener("click", function () {
+    askConfirm("Create a batch for everything owed? Its amounts are held aside from this moment.", $("create")).then(function (yes) {
+      if (!yes) return; $("create").disabled = true;
+      payout({ export: "1" }, "POST").then(function () { return load(); }).catch(fail);
+    });
+  });
+  $("reload").addEventListener("click", function () { load().then(function () { return readWalletBal().then(refreshSendButton); }).catch(fail); });
+  $("send").addEventListener("click", function () { askConfirm("Send " + BATCH.remainingCount + " rows, " + amt(BATCH.remainingRaw) + ", from " + CluckUtil.shortAddr(WALLET) + "?", $("send")).then(function (yes) { if (yes) send(); }); });
+  $("close").addEventListener("click", function () {
+    if (!BATCH) return;
+    if (unrecordedSent().length) { $("progressText").innerHTML = '<span class="bad">Record the SENT — NOT RECORDED rows first. Closing now would return them to owed and pay them twice.</span>'; return; }
+    askConfirm("Close batch " + BATCH.id + "? Rows already sent stay paid. Unsent rows go back to owed.", $("close")).then(function (yes) {
+      if (!yes) return; payout({ cancel: BATCH.id }, "POST").then(function () { BATCH = null; return load(); }).catch(fail);
+    });
+  });
+  $("arm").addEventListener("click", function () {
+    askConfirm("ARM the program? The lock ledger is written and this hour is accrued immediately. Every qualifying lock starts earning from now. No tokens move.", $("arm")).then(function (yes) {
+      if (!yes) return; $("ctNote").textContent = "arming — the first scan reads every escrow's creation time, this can take a minute…";
+      admin({ arm: "1", confirm: "go-live" }, "POST").then(function () { $("ctNote").textContent = "ARMED."; return load(); }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+    });
+  });
+  $("disarm").addEventListener("click", function () {
+    askConfirm("DISARM? Accrual stops. The start date and everything earned so far are kept.", $("disarm")).then(function (yes) {
+      if (!yes) return; admin({ off: "1" }, "POST").then(function () { $("ctNote").textContent = "Disarmed."; return load(); }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; });
+    });
+  });
+  $("accrue").addEventListener("click", function () { admin({ accrue: "1" }, "POST").then(function (a) { var r = a.ran || {}; $("ctNote").textContent = r.ok ? "Accrued " + r.slice + ": " + r.eligible + " earning." : "Accrual: " + (r.reason || r.error || "nothing to do"); return load(); }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; }); });
+  $("rescan").addEventListener("click", function () { $("ctNote").textContent = "rescanning…"; call("/desk", { rescan: "1" }).then(function () { return load(); }).then(function () { $("ctNote").textContent = "Rescanned."; }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; }); });
+})();
+</script>
+</body>
+</html>

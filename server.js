@@ -7909,9 +7909,46 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // Explicit routes so the page works on a no-build boot (CI) and gets normal cache headers.
+app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
+app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
+app.get("/hub/:project/desk", (req, res) => { res.sendFile(join(__dirname, "public", "hub-desk.html")); });
 app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:program", "/hub/:project/r/:sig"], (req, res) => {
   res.sendFile(join(__dirname, "public", "hub.html"));
 });
+
+// ── Lock to Earn for ANY project — the per-project routes + scheduler (Phase 1a-ii, owner
+// 2026-09-16 "keep going on the platform"). lib/hub/routes.js on lib/hub/engine.js; CUNA stays on
+// its own code until Phase 1b (the scheduler skips it). The chain client is built lazily and only
+// once a project is actually registered, so a box with an empty registry never touches an RPC.
+const hubRoutes = require("./lib/hub/routes");
+const hubScanDeps = (() => {
+  let programPromise = null;
+  const getProgram = () => { if (!programPromise) programPromise = require("./lib/jup-lock").program().catch((e) => { programPromise = null; throw e; }); return programPromise; };
+  const scanLib = require("./lib/cuna-lock-scan");
+  return {
+    scanLib,
+    scan: async (mint) => scanLib.scanEscrowsByMint(await getProgram(), mint),
+    creationTimes: async (escrows) => scanLib.creationTimes((await getProgram()).provider.connection, escrows),
+  };
+})();
+const hubAlert = (m) => { console.warn("[hub] " + m); try { cunaOpsAlert(`⚠️ Hub: ${m}`, "hub:" + String(m).slice(0, 40)).catch(() => {}); } catch (_) {} };
+hubRoutes.mount(app, {
+  kv, adminAuthOK, publicErrMsg, vault: whirlpoolMM.vault,
+  connection: () => require("./lib/rpc").connection("confirmed"),
+  scanDeps: async () => hubScanDeps, alert: hubAlert,
+  // Platform access payments (0.5 / 0.25 SOL a month, or the CLKN equivalent quoted at the
+  // moment of payment). SOL lands where the tools pass collects it, CLKN where the Hatchery
+  // does; both are lazy because those constants are declared further down this file.
+  sigStore, rateLimit, clknMint: CLKN_MINT, clknDecimals: 9,
+  secret: () => process.env.PREMIUM_ACCESS_KEY, verifySignature: (m, sig, w) => verifySolanaSignature(m, sig, w),
+  clknPriceInSol: () => hatchery.clknPriceInSol(),
+  payTo: () => ({ sol: process.env.HUB_PAY_SOL_WALLET || SOL_UNLOCK_WALLET, clkn: process.env.HUB_PAY_CLKN_WALLET || TREASURY_WALLET }),
+  getTx: async (sig) => {
+    const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
+    return r && r.result;
+  },
+});
+hubRoutes.startScheduler({ kv, scanDeps: async () => hubScanDeps, alert: hubAlert });
 
 // ── Buy Special RANDOM DRAW (the "N random buys win X CLKN" raffle) ───────────
 // Distinct from the ranked buy COMPETITION above. Here every qualifying BUY is a

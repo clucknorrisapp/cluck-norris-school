@@ -108,6 +108,43 @@ function raw(method, p, headers) {
   ok("flag-less GET /api/buycomp/send is the read (404 for an unknown comp, not 405)", r.status === 404 && !!r.body && /no such competition/.test(String(r.body.error)), JSON.stringify(r.body));
   r = await call("GET", "/api/buycomp/send?id=nope&run=1", false);
   ok("/api/buycomp/send without the key is 404 like every admin route", r.status === 404);
+  // ── the per-project Lock to Earn routes: every mutation is POST-only and refused BEFORE the
+  // project lookup; the registry and admin/payout routes are 404 without the key
+  r = await call("GET", "/api/hub-registry?id=x&mint=y");
+  ok("GET /api/hub-registry?id= is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/hub-registry", false);
+  ok("/api/hub-registry without the key is 404", r.status === 404);
+  r = await call("GET", "/api/hub/nope/admin?arm=1&confirm=go-live");
+  ok("GET /api/hub/:project/admin?arm=1 is refused with 405 (before the project lookup)", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/admin?terms=1");
+  ok("GET /api/hub/:project/admin?terms=1 is refused with 405", r.status === 405);
+  r = await call("GET", "/api/hub/nope/admin");
+  ok("flag-less GET /api/hub/:project/admin is the read (404 for an unknown project)", r.status === 404 && !!r.body && /no such project/.test(String(r.body.error)), JSON.stringify(r.body));
+  r = await call("GET", "/api/hub-registry?approve=app_x");
+  ok("GET /api/hub-registry?approve= is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/hub-registry?reject=app_x");
+  ok("GET /api/hub-registry?reject= is refused with 405", r.status === 405);
+  r = await call("GET", "/api/hub-apply", false);
+  ok("GET /api/hub-apply without ?mint= is 400 (submitting is a POST)", r.status === 400 && /POST/.test(String(r.body && r.body.error)), JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/desk/session?wallet=x", false);
+  ok("GET /api/hub/:project/desk/session is refused with 405 (POST-only)", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/desk", false);
+  ok("/api/hub/:project/desk without a key or operator token is 404", r.status === 404);
+  r = await call("GET", "/api/hub/nope/admin", false);
+  ok("/api/hub/:project/admin without a key or operator token is 404 (no project-exists hint)", r.status === 404 && !(r.body && /no such project/.test(String(r.body.error))), JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/access?sig=x&quote=y", false);
+  ok("GET /api/hub/:project/access?sig= is refused with 405 (before the project lookup)", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/access", false);
+  ok("flag-less GET /api/hub/:project/access is the quote read (404 for an unknown project)", r.status === 404, JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/payout?export=1");
+  ok("GET /api/hub/:project/payout?export=1 is refused with 405", r.status === 405);
+  r = await call("GET", "/api/hub/nope/payout?send=x&run=1");
+  ok("GET /api/hub/:project/payout?send= is refused with 405", r.status === 405);
+  r = await call("GET", "/api/hub/nope/payout", false);
+  ok("/api/hub/:project/payout without the key is 404", r.status === 404);
+  r = await call("GET", "/api/hub/nope/holder?address=4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs", false);
+  ok("the public holder view answers 404 for an unknown project (no key needed)", r.status === 404 && !!r.body && /no such project/.test(String(r.body.error)));
+
   // ── lock-to-earn server send: send / sweep / void on a GET → 405 like confirm / cancel / export
   r = await call("GET", "/api/cuna-stake/payout?send=nope&run=1");
   ok("GET /api/cuna-stake/payout?send= is refused with 405", r.status === 405, JSON.stringify(r.body));
