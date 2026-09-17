@@ -463,7 +463,7 @@ RAYDIUM:
 ORCA WHIRLPOOLS:
 • 0.01% / 0.02% / 0.04% / 0.05% / 0.16% / 0.3% / 0.65% / 1% / 2%
 • Similar logic — stable pairs use low tiers, volatile pairs use high tiers
-• The 0.02% tier is the one CLKN's own Orca pools run on
+• The 0.02% tier is the one CLKN's own CLKN/SOL Orca pool runs on — its CLKN/BTC and CLKN/JUP pools run on 0.30%
 
 METEORA:
 • DAMM: Dynamic fees that adjust automatically to market volatility
@@ -701,9 +701,9 @@ This is why Lesson 3 is the foundation of the whole lab. Concentrated liquidity 
       },
       {
         q: "What is the main difference between tick-based (Raydium CLMM, Orca) and bin-based (Meteora DLMM) concentrated liquidity?",
-        options: ["Tick-based always earns significantly more fees than bin-based systems across all market conditions", "Bins divide range into discrete buckets — only active bin earns. Ticks apply liquidity uniformly.", "There is no meaningful operational difference between the two approaches for practical LP purposes", "Bin-based systems require substantially more capital to achieve equivalent liquidity depth in a given range"],
+        options: ["Tick-based always earns significantly more fees than bin-based systems across all market conditions", "Bins are discrete price buckets you can shape (spot, curve, bid-ask) with zero slippage inside a bin. A tick range is one uniform block.", "There is no meaningful operational difference between the two approaches for practical LP purposes", "Bin-based systems require substantially more capital to achieve equivalent liquidity depth in a given range"],
         correct: 1,
-        explanation: "Tick-based systems apply your liquidity uniformly across your chosen price range. Bin-based systems like Meteora DLMM divide the range into discrete bins where only the active bin (current price) earns fees. Bin-based gives more granular control and can concentrate fee capture even further, but requires more active management."
+        explanation: "Both only earn while the current price is inside your liquidity. In a tick-based pool (Orca, Raydium CLMM) your range is one uniform block that earns whenever price is anywhere inside it. In Meteora DLMM the same range is cut into discrete bins: only the active bin earns at any moment, there is zero slippage inside a bin, and you choose how much liquidity sits in each bin (spot, curve, bid-ask). The difference is granularity and shape — not that one earns and the other does not."
       },
       {
         q: "For a new LP using concentrated liquidity for the first time with SOL/USDC, what range approach makes the most sense?",
@@ -719,9 +719,9 @@ This is why Lesson 3 is the foundation of the whole lab. Concentrated liquidity 
       },
       {
         q: "What is the main advantage of Meteora's DLMM bin system compared to traditional tick-based concentrated liquidity?",
-        options: ["DLMM always earns more fees than tick-based systems", "Bins allow more granular fee control and the active bin captures 100% of fees at the current price — making fee capture more precise than uniform liquidity across a tick range", "DLMM requires less monitoring than tick-based systems", "DLMM has lower IL than tick-based concentrated liquidity"],
+        options: ["DLMM always earns more fees than tick-based systems", "Bins let you shape where your liquidity sits (spot, curve, bid-ask) and trade with zero slippage inside a bin — a tick range is one uniform block you cannot shape", "DLMM requires less monitoring than tick-based systems", "DLMM has lower IL than tick-based concentrated liquidity"],
         correct: 1,
-        explanation: "In tick-based systems, liquidity is spread uniformly across your entire range — all ticks earn proportionally. In DLMM, liquidity is concentrated in discrete bins where only the active bin (current price) earns fees. This means fee capture is extremely precise — all your liquidity in the active bin is working. The tradeoff is more complexity and the need to understand bin positioning. When managed well, DLMM can be more capital efficient than tick-based systems."
+        explanation: "In a tick-based pool your liquidity is spread uniformly across your range and earns whenever the price is inside it — you cannot put more of it near the current price. In DLMM the range is cut into bins: only the active bin earns at any moment, there is zero slippage inside a bin, and you decide how much liquidity each bin holds. That shaping is the real advantage. The trade-off is more to understand and more to manage — a shape that does not match how price moves earns less, not more."
       },
       {
         q: "A trader is comparing two LP strategies for the same SOL/USDC pool: Strategy A deploys $5,000 in a ±10% concentrated range. Strategy B deploys $100,000 in full range. Under normal market conditions with SOL trading within the ±10% range, which strategy earns more fees?",
@@ -754,7 +754,7 @@ TICK SPACING per fee tier:
 Higher fee tier = coarser spacing = wider minimum range. The exact numbers are set per pool and DIFFER by protocol — do not memorise one table and assume it travels.
 
 Uniswap v3: 0.01% → 1 · 0.05% → 10 · 0.3% → 60 · 1% → 200
-Raydium CLMM: 0.01% → 1 · 0.05% → 1 · 0.25% → 60 · 1% → 120
+Raydium CLMM: 0.01% → 1 · 0.05% → 10 · 0.25% → 60 · 1% → 120
 Orca: 0.01% → 1 · 0.02% → 2 · 0.04% → 4 · 0.05% → 8 · 0.3% → 64
 
 Lower fee tiers allow finer price ranges. When you set a range, you define a lower and upper tick. Your liquidity distributes uniformly across every tick in between — all earning fees proportionally when price passes through them.`
@@ -781,7 +781,7 @@ Because only the active bin earns, all trading volume at the current price flows
         heading: "Ticks vs Bins — Direct Comparison",
         body: `TICK-BASED (Raydium CLMM, Orca, Uniswap v3):
 • Liquidity distributed uniformly across entire range
-• All ticks earn fees proportionally
+• The whole range earns while price is inside it — nothing earns once price leaves
 • Price moving within your range changes earnings gradually
 • More forgiving for volatile assets
 • Simpler to understand and manage
@@ -845,13 +845,13 @@ READING THE UI:
         q: "In Meteora DLMM, how many bins are earning fees at any given moment?",
         options: ["All bins within your selected range earn proportional fees based on their distance from center", "All bins within 10% of the current price share fees based on proximity to the active price level", "Only the active bin", "Fees split equally across every bin regardless of whether price has ever touched them"],
         correct: 2,
-        explanation: "Only the active bin earns fees in DLMM. This is the core difference from tick-based systems. All fee income concentrates at one precise price point — powerful when price is stable, zero earnings the moment price moves to the next bin."
+        explanation: "Only the active bin earns swap fees in DLMM. A tick-based position also earns only while price is inside its range — the difference is that DLMM shows you, and lets you shape, exactly which bins hold your liquidity. All fee income concentrates at one bin: powerful when price is stable, zero the moment price steps to the next bin."
       },
       {
         q: "A 0.3% fee pool has tick spacing 60. A 0.01% fee pool has tick spacing 1. What does this mean?",
-        options: ["0.25% always earns more", "0.25% forces wider minimum ranges — positions cannot be narrower than 50 ticks. 0.01% allows much finer positioning", "Tick spacing has no effect on range width", "Low fee tiers cannot be used for volatile tokens"],
+        options: ["0.3% always earns more", "0.3% forces wider minimum ranges — positions cannot be narrower than 60 ticks. 0.01% allows much finer positioning", "Tick spacing has no effect on range width", "Low fee tiers cannot be used for volatile tokens"],
         correct: 1,
-        explanation: "Tick spacing defines minimum range granularity. With spacing 50, your bounds must be multiples of 50 — you cannot set very tight ranges. This is why stable pairs use 0.01% fee tiers — they need tight ranges requiring fine tick spacing."
+        explanation: "Tick spacing defines minimum range granularity. With spacing 60, your bounds must sit on multiples of 60 ticks — you cannot set very tight ranges. This is why stable pairs use 0.01% fee tiers — they need tight ranges, which need fine tick spacing."
       },
       {
         q: "Price has been in your DLMM active bin for 3 hours. Volume spikes and price moves 3 bins above you. What happens to your fees?",
@@ -869,7 +869,7 @@ READING THE UI:
         q: "For a USDC/USDT pair that rarely moves more than 0.1%, which is likely better — Orca Whirlpools or Meteora DLMM?",
         options: ["Orca Whirlpools — tick-based concentrated liquidity is universally superior for all stablecoin and pegged asset pairs", "Meteora DLMM — active bin captures 100% of fees at the stable price point", "Performance is completely identical for stable pairs — protocol choice makes zero difference", "Neither protocol — stablecoins should only ever use traditional full-range AMMs like Curve for safety reasons"],
         correct: 1,
-        explanation: "DLMM excels for stable pairs. With USDC/USDT barely moving, your active bin stays active — earning maximum concentration with minimal rebalancing. Tick-based systems spread liquidity across a range even when price barely moves."
+        explanation: "DLMM suits stable pairs: with USDC/USDT barely moving, your active bin stays active and earns with minimal rebalancing. A tick-based pool with fine tick spacing can be set just as tight, so this is a preference many stable-pair LPs share rather than a law — the active-bin model simply maps neatly onto a price that does not move."
       },
       {
         q: "Rebalancing costs $0.01 on Solana vs $50 on Ethereum. How does this change LP strategy?",
@@ -2098,7 +2098,7 @@ function StrategyMatcher() {
     strategy = "SEMI-ACTIVE";
     color = "#FFB627";
     details = "Moderate concentrated ranges on major pairs. Weekly check-ins. Rebalance when price breaks out significantly. Use alerts to know when to act.";
-    protocols = "Raydium CLMM wide range • Orca Whirlpools moderate range • Meteora DAMM V2";
+    protocols = "Raydium CLMM wide range • Orca Whirlpools moderate range • Meteora DLMM wide bins";
   } else if (band === 2) {
     strategy = "ACTIVE";
     color = "#EF4444";
