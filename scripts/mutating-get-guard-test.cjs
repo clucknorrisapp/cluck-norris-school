@@ -98,6 +98,18 @@ function raw(method, p, headers) {
   ok("GET /api/buybot?list=1 still lists", r.status === 200 && r.body && Array.isArray(r.body.bots));
   r = await call("GET", "/api/rose-buybot?arm=1");
   ok("GET /api/rose-buybot?arm=1 is refused with 405", r.status === 405);
+  // /api/tg-test is POST-only since 2026-09-17 (owner: "convert tg-test too, routine first"): every
+  // form of it sends, so the whole GET method is refused — after the key check, which stays 404.
+  r = await call("GET", "/api/tg-test?text=hello"); ok("GET /api/tg-test?text= is refused with 405 (POST-only since 2026-09-17)", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/tg-test"); ok("flag-less GET /api/tg-test is refused too (it would post the default heads-up)", r.status === 405);
+  r = await call("GET", "/api/tg-test?text=hello", false); ok("GET /api/tg-test without the key stays 404", r.status === 404);
+  r = await call("POST", "/api/tg-test?text=hello"); ok("POST /api/tg-test reaches the query send path (no token here → 'not configured', not a 400)", r.status === 200 && r.body && r.body.success === false && /not configured/.test(String(r.body.error)), JSON.stringify(r.body));
+  {
+    const bytes = Buffer.alloc(512, 1);
+    const up = await fetch(BASE + "/api/tg-test?kind=animation", { method: "POST", headers: { "x-premium-key": KEY, "Content-Type": "image/gif" }, body: bytes });
+    const ub = await up.json().catch(() => null);
+    ok("POST /api/tg-test with file bytes reaches the raw-upload path (no token here → 'not configured')", up.status === 200 && ub && ub.success === false && /not configured/.test(String(ub.error)), up.status + " " + JSON.stringify(ub));
+  }
 
   // ── buy-comp server payout: run / sweep / unpay / set on a GET → 405, decided BEFORE the comp
   // lookup so a pasted link is refused before it touches anything; the flag-less GET is the read.

@@ -6979,11 +6979,14 @@ app.get("/api/meteora-keepalive", adminGuarded(ADMIN_404, { noStore: true }), as
 // ?text=... overrides the default; posts silently unless &loud=1. Plain text is
 // safest — raw < & > can trip Telegram's HTML parser (the JSON response below
 // surfaces any such error so you can see exactly what Telegram said).
-app.get("/api/tg-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  const KEY = process.env.PREMIUM_ACCESS_KEY;
-  const provided = req.query.key || req.headers["x-premium-key"];
-  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(404).json({ error: "not_found" });
+// POST-ONLY since 2026-09-17 (owner: "convert tg-test too, routine first"). It was the last
+// brand-channel poster that still SENT on a GET — a pasted admin link in a chat, a browser
+// prerender or a stray click could post to the community room. One dispatcher below: the admin
+// key answers 404 first (like every admin route), then any non-POST is refused with 405, then a
+// request carrying file bytes takes the raw-upload path and everything else the query path.
+// The meme and lock-celebration routines were switched to `curl -X POST` BEFORE this shipped
+// (they carry a transition fallback for the old build's "empty body" 400 until this is promoted).
+async function tgTestQuerySend(req, res) {
   if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
     return res.status(200).json({ success: false, error: "Telegram not configured (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID unset on this server)" });
   }
@@ -7090,20 +7093,15 @@ app.get("/api/tg-test", async (req, res) => {
   } catch (e) {
     return res.status(500).json({ success: false, error: publicErrMsg(e) });
   }
-});
+}
 
-// POST /api/tg-test — raw file-body upload (the GET route only fetches URLs, which locks the
-// meme routine out of posting anything it builds locally, like the free PIL-animated GIFs).
-// Body = the file bytes; query carries the same key/chat/text/loud knobs as the GET, plus
-// &kind=animation|document|photo (default animation: a GIF posted as animation autoplays in
-// the room — Telegram converts it to a looping mp4) and &name= for the filename Telegram shows.
-app.post("/api/tg-test", express.raw({ type: () => true, limit: "12mb" }), async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  const provided = req.query.key || req.headers["x-premium-key"];
-  if (!secretEqual(String(provided || ""), String(process.env.PREMIUM_ACCESS_KEY || ""))) return res.status(404).json({ error: "not_found" });
+// Raw file-body upload (the query path only fetches URLs, which locks the meme routine out of
+// posting anything it builds locally, like the free PIL-animated GIFs). Body = the file bytes;
+// query carries the same key/chat/text/loud knobs, plus &kind=animation|document|photo (default
+// animation: a GIF posted as animation autoplays in the room — Telegram converts it to a looping
+// mp4) and &name= for the filename Telegram shows.
+async function tgTestRawUpload(req, res, buf) {
   if (!process.env.TELEGRAM_BOT_TOKEN) return res.status(200).json({ success: false, error: "Telegram not configured" });
-  const buf = req.body;
-  if (!Buffer.isBuffer(buf) || buf.length < 100) return res.status(400).json({ success: false, error: "empty body — send the file bytes as the POST body" });
   const chatId = req.query.chat ? String(req.query.chat) : process.env.TELEGRAM_CHAT_ID;
   if (!chatId) return res.status(200).json({ success: false, error: "no chat target" });
   const kind = ["animation", "document", "photo", "video"].includes(String(req.query.kind)) ? String(req.query.kind) : "animation";
@@ -7121,6 +7119,20 @@ app.post("/api/tg-test", express.raw({ type: () => true, limit: "12mb" }), async
     const data = await r.json().catch(() => ({}));
     return res.json({ success: !!data.ok, messageId: data?.result?.message_id ?? null, kind, bytes: buf.length, telegram: data.ok ? undefined : data });
   } catch (e) { return res.status(200).json({ success: false, error: publicErrMsg(e) }); }
+}
+
+app.all("/api/tg-test", express.raw({ type: () => true, limit: "12mb" }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!secretEqual(String(provided || ""), String(process.env.PREMIUM_ACCESS_KEY || ""))) return res.status(404).json({ error: "not_found" });
+  if (req.method !== "POST") {
+    // Every form of this route sends (even the flag-less call posts the default heads-up), so
+    // there is no read to keep: refuse the whole method, not just the flags.
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ ok: false, success: false, error: "this route sends to Telegram — send it as a POST (a GET here posts nothing since 2026-09-17)" });
+  }
+  const buf = Buffer.isBuffer(req.body) && req.body.length >= 100 ? req.body : null;
+  return buf ? tgTestRawUpload(req, res, buf) : tgTestQuerySend(req, res);
 });
 
 // Lock-celebration handoff (gated). The scheduled Claude image run polls this:
