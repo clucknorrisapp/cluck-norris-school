@@ -8840,6 +8840,9 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     // the paying wallet. One real payment was a master key to the whole paid tool.
     // add() is the same atomic test-and-set the CLKN path uses, so a concurrent double-submit
     // loses too. Namespaced 'sol:' so a signature can never be spent once here and once there.
+    // A payment already claimed as a Lock-to-Earn platform month lands in this same wallet
+    // (deep dive P1-051, the sibling of the tools-pass check in lib/tool-pass-redeem.js).
+    if (sigStore.has("hub-access:" + sig)) return res.status(200).json({ success: false, error: "This payment was already used for a platform-access month." });
     if (!sigStore.add("sol:" + sig)) {
       return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
     }
