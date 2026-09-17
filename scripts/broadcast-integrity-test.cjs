@@ -54,6 +54,20 @@ ok('the ops report no longer forces ok = true after the fallback send',
 ok('the ops report only starts its 12h clock on an accepted send',
    /if \(ok\) kv\.set\("opsReportAt"/.test(server));
 
+// Treasury daily recap (Codex on #333): the send result decides whether the `prev` snapshot moves.
+// Positive shape assertion — `landed` is checked BEFORE the store write, inside sendTreasuryRecap.
+{
+  const start = server.indexOf('async function sendTreasuryRecap(');
+  const end = server.indexOf('\n}\n', start);
+  const fn = start >= 0 ? server.slice(start, end) : '';
+  const iLanded = fn.indexOf('const landed = await tgApi("sendMessage"');
+  const iGuard = fn.indexOf('if (!landed)');
+  const iWrite = fn.indexOf('kv.set(storeKey, { baseline, prev: snap');
+  ok('treasury recap: the Telegram result is captured', iLanded >= 0);
+  ok('treasury recap: a failed send returns before the snapshot write', iGuard > iLanded && iWrite > iGuard, `landed@${iLanded} guard@${iGuard} write@${iWrite}`);
+  ok('treasury recap: sent:true is only ever returned after the write', /sent: true, text, valueBtc, valueUsd/.test(fn) && !/sent: !!tgtok/.test(fn));
+}
+
 console.log('\nB. an announcement must be about a mint that exists\n');
 
 const minted = hatchery.slice(hatchery.indexOf('router.post("/minted"'), hatchery.indexOf('router.post("/minted"') + 3500);

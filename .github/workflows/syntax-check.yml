@@ -262,6 +262,11 @@ jobs:
       # processes; it is the only honest way to test this.
       - name: school stores survive a second process
         run: node scripts/store-multiprocess-test.cjs
+      # Graduation ledger (Codex on #333): a live re-pass of a lesson counts toward the timing
+      # spread, so a learner whose marks were replayed together can recover by doing lessons a few
+      # minutes apart; the first sighting is never rewritten and a backfill replay never counts.
+      - name: school-progress re-pass rule
+        run: node scripts/school-progress-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # WORLD_ART integrity (deep dive 9.5): a level's bgArt is loaded LAZILY by key, so a typo in
