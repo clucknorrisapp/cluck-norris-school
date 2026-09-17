@@ -666,9 +666,15 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
   truncated ids, with what the ledger held for that session), the learner is told the actual
   cause and next step per gate code, the school queues a lesson mark whose beacon failed and
   re-sends it on load / online / before a claim, and a claim withheld for a short ledger re-sends
-  the device's own marks so "try again" has something to find. Check `recentBlocks` before
-  assuming a block was a script. `GRAD_GATE_OFF=1` is still the kill if it blocks real people.
-  The grad-gate route's mode/threshold writes are POST-only since the same day (P2-113).
+  the device's own marks so "try again" has something to find. ⚠️ Replayed marks all land in ONE
+  five-minute window, so on their own they can never satisfy the live-spread check — which is why
+  (Codex on #333) a live RE-PASS of a lesson is recorded (`r` beside the untouched first sighting
+  `t`, `lib/school-progress.js` `mark`) and counts toward the spread, and the school reports
+  every pass, not only the first. A learner recovers by doing real lessons a few minutes apart; a
+  script gains nothing it could not do by sending first sightings later.
+  `scripts/school-progress-test.cjs` pins it. Check `recentBlocks` before assuming a block was a
+  script. `GRAD_GATE_OFF=1` is still the kill if it blocks real people. The grad-gate route's
+  mode/threshold writes are POST-only since the same day (P2-113).
 - **Never verified end-to-end:** no rendered autopsy report, no real lock, and no connect-and-sign
   with a real wallet has ever been exercised by a session — they need keys a cloud container
   doesn't have. They're also where the worst bugs have hidden.

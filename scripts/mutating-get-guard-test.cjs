@@ -109,6 +109,11 @@ function raw(method, p, headers) {
     const up = await fetch(BASE + "/api/tg-test?kind=animation", { method: "POST", headers: { "x-premium-key": KEY, "Content-Type": "image/gif" }, body: bytes });
     const ub = await up.json().catch(() => null);
     ok("POST /api/tg-test with file bytes reaches the raw-upload path (no token here → 'not configured')", up.status === 200 && ub && ub.success === false && /not configured/.test(String(ub.error)), up.status + " " + JSON.stringify(ub));
+    // Codex on #333: a short body must be REFUSED, never re-read as the bodiless query send (which
+    // would post the default heads-up text to the room).
+    const short = await fetch(BASE + "/api/tg-test?kind=animation", { method: "POST", headers: { "x-premium-key": KEY, "Content-Type": "image/gif" }, body: Buffer.alloc(50, 1) });
+    const sb = await short.json().catch(() => null);
+    ok("POST /api/tg-test with a 50-byte body is refused 400 (not routed to the text send)", short.status === 400 && sb && /too short/.test(String(sb.error)), short.status + " " + JSON.stringify(sb));
   }
 
   // ── buy-comp server payout: run / sweep / unpay / set on a GET → 405, decided BEFORE the comp

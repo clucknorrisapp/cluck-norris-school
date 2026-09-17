@@ -5993,11 +5993,19 @@ async function sendTreasuryRecap({ send = true, reset = false } = {}) {
   const text = L.join("\n");
 
   if (!send) return { sent: false, preview: text, valueBtc, valueUsd };
-  if (tgtok) {
-    await tgApi("sendMessage", { chat_id: proj.telegramChatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+  // The snapshot advances ONLY on a landed send (CLAUDE.md: never advance durable state on a send
+  // that did not land — tgApi swallows its own errors and answers null). Codex on #333 caught this
+  // site reporting sent:true and moving `prev` on a failed post, which would have made the next
+  // recap's 24h deltas read against a day nobody saw. No token configured = nothing was announced,
+  // so nothing advances either.
+  if (!tgtok) return { sent: false, error: "telegram not configured — snapshot not advanced", text, valueBtc, valueUsd };
+  const landed = await tgApi("sendMessage", { chat_id: proj.telegramChatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+  if (!landed) {
+    console.warn("[treasury-recap] Telegram send did not land — snapshot NOT advanced");
+    return { sent: false, error: "telegram send failed — snapshot not advanced", text, valueBtc, valueUsd };
   }
   kv.set(storeKey, { baseline, prev: snap, history: [...((store.history) || []).slice(-29), { ts: snap.ts, valueBtc, totalSol, totalBase, feesUsd }] });
-  return { sent: !!tgtok, text, valueBtc, valueUsd };
+  return { sent: true, text, valueBtc, valueUsd };
 }
 
 // Treasury daily recap — preview (gated). Default returns the composed recap WITHOUT sending
@@ -7142,8 +7150,12 @@ app.all("/api/tg-test", express.raw({ type: () => true, limit: "12mb" }), async 
     res.setHeader("Allow", "POST");
     return res.status(405).json({ ok: false, success: false, error: "this route sends to Telegram — send it as a POST (a GET here posts nothing since 2026-09-17)" });
   }
-  const buf = Buffer.isBuffer(req.body) && req.body.length >= 100 ? req.body : null;
-  return buf ? tgTestRawUpload(req, res, buf) : tgTestQuerySend(req, res);
+  // ANY request body means "upload these bytes" — a short one is refused, never quietly re-read
+  // as the query send (Codex on #333: a 50-byte file used to post the default heads-up text to
+  // the room instead of failing). The query send is the bodiless POST.
+  const body = Buffer.isBuffer(req.body) && req.body.length > 0 ? req.body : null;
+  if (body && body.length < 100) return res.status(400).json({ success: false, error: `body too short to be a file (${body.length} bytes) — send the file bytes as the POST body, or send no body for a text/URL post` });
+  return body ? tgTestRawUpload(req, res, body) : tgTestQuerySend(req, res);
 });
 
 // Lock-celebration handoff (gated). The scheduled Claude image run polls this:

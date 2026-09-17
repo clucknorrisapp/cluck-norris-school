@@ -54,11 +54,15 @@ function track(event,extra){
 }
 // Re-send every queued beacon. Resolves when the attempt is over (never rejects); anything that
 // fails again goes back on the queue.
+// An entry leaves the queue only AFTER its send resolved OK (Codex on #333: clearing the queue up
+// front and re-queueing on failure lost every entry if the tab closed mid-flight). A duplicate
+// delivery is harmless — the server keeps the first sighting per lesson — so overlapping flushes
+// (load + online + claim) are allowed rather than guarded.
+function dropFromTrackQueue(event){ writeTrackQueue(readTrackQueue().filter(function(x){ return !(x&&x.event===event); })); }
 function flushTrackQueue(){
   var q=readTrackQueue();
   if(!q.length) return Promise.resolve();
-  writeTrackQueue([]);
-  return Promise.all(q.map(function(p){ return sendTrack(p).catch(function(){ queueTrack(p); }); })).then(function(){});
+  return Promise.all(q.map(function(p){ return sendTrack(p).then(function(){ dropFromTrackQueue(p.event); }).catch(function(){}); })).then(function(){});
 }
 if(typeof window!=="undefined"){
   try{
@@ -1824,8 +1828,11 @@ export default function App(){
   },[]);
 
   function finish(id,passed){
+    // Every pass reports to the ledger, not only the first: a re-pass is how a learner whose
+    // marks were replayed together (see flushTrackQueue) spreads their live record over real
+    // minutes again. The server keeps the first sighting and records the re-pass separately.
+    if(passed) trackId("lesson_complete",id);
     if(passed&&!completed.includes(id)){
-      trackId("lesson_complete",id);
       const next=[...completed,id];
       setCompleted(next);
       if(next.length===LESSONS.length){track("graduation");setScreen("complete");return;}
