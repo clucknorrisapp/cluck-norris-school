@@ -6,6 +6,22 @@ Owner ask (2026-09-17): *"do everything, the whole platform, multiple agents dee
 
 **Status of this list:** UNVERIFIED finder output, written the moment the find phase ended (budget rule 4). Verification of P0/P1 follows in a second workflow; P2/P3 are never verified by agents. Treat every row as a claim until a verdict is recorded.
 
+**P0 verdicts (hand-verified against source, 2026-09-17) and the fix PR (`claude/hub-public-page` → `develop`):**
+
+| ID | Verdict | Fix |
+|---|---|---|
+| P0-001 | reclassified **P2** — a test gap, not a live exposure | later |
+| P0-002 | **confirmed** | `/api/cuna-giveaway/admin` is `app.all` + `mutatingGetRefused` on every configuring / scanning / drawing / paying flag; guard test pins it |
+| P0-003 | reclassified **P1** — `elliptic` reaches us only through `arbundles`; the fix is the `@dha-team/arbundles` 1.x major | later, needs a build check |
+| P0-004 | **confirmed** | the backfill spread-waiver is closed (`BACKFILL_SUNSET` = 2026-09-17, was 09-19; backfilled marks still count toward the total). **Owner: this is two days earlier than the published grandfathering date** |
+| P0-005 | **confirmed** | `lib/kvstore.js` boots a corrupt `app-state.json` IN-MEMORY, preserves it as `app-state.json.corrupt-<ts>`, `loadError()` exposed, server alerts the ops room; `setVerified` refuses meanwhile |
+| P0-006 | **confirmed** | CUNA payout `sent=` / `confirm=` / `cancel=` / `export=1` go through `kv.setVerified` with a 500 on a write that did not land; the accrual ledger write too (alerts on failure) |
+| P0-007 | **confirmed** (+ P1-051/053) | payer must be one of the project's operator wallets (`access.payerAllowed`); registry-wide signature dedupe (`access.sigUsedInRegistry`); sig store namespaced `hub-access:` and checked against `sol:` both ways (`lib/tool-pass-redeem.js` refuses a hub sig); quote book capped at 100 per project |
+| P0-008 | **confirmed** | Meteora `remove-liquidity` / `add-liquidity` / `open-position` / `unwrap` / `rebalance-inplace` / `recenter` / `config` writes, `/api/clkn-blitz`, `/api/{dnc,rose,cuna}-engine?on|off`, `/api/diploma-mint …&run=1`, `/api/school-airdrop` writes — all `app.all` + `mutatingGetRefused`; the flag-less GET stays the read / dry run |
+| P0-009 / P0-010 | **confirmed** (duplicates) | `requireToolPass` on `/api/buyspecial-crosscheck`, `-holdcheck`, `-trace` (admin key exempt for the operator console); the page calls them through `CluckGate.fetch` |
+| P0-011 | **confirmed** | SEND PRIZES excludes wallets already sent / unconfirmed for the current list; the native `confirm()` is replaced by an in-page two-click confirm |
+| P0-012 | **confirmed** | Hatchery treats a confirmation timeout as AMBIGUOUS: shows the signature + Solscan, keeps the button off until reload |
+
 
 ## P0 — 12
 

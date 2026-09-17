@@ -38,6 +38,14 @@ console.log("the schedule itself");
   ok("termsAt picks the last entry at or before the instant", TERMS.termsAt(999, sched).days === 7 && TERMS.termsAt(1000, sched).days === 14 && TERMS.termsAt(5000, sched).days === 14);
 }
 
+console.log("a platform-access month can never double as a tools pass (deep dive 2026-09-17 P0-007)");
+{
+  const sigStore = fakeSigStore();
+  sigStore.add("hub-access:" + SIG);   // lib/hub/routes.js consumed it for a Lock-to-Earn month
+  const r = run({ sigStore });
+  ok("refused with 409 and nothing consumed", r.ok === false && r.status === 409 && sigStore.size() === 1, r);
+}
+
 console.log("first redemption, then recovery by the same payer");
 {
   const sigStore = fakeSigStore(), kv = fakeKv();

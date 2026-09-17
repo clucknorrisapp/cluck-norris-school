@@ -398,7 +398,7 @@ $('scanBtn').addEventListener('click', async ()=>{
   $('scanBtn').disabled=true; setStatus('Scanning on-chain buys in the window…');
   $('buysCard').classList.add('hidden'); $('resCard').classList.add('hidden');
   try{
-    const r=await fetch('/api/buyspecial-crosscheck?mint='+encodeURIComponent(mint)+'&from='+winFrom+'&to='+winTo);
+    const r=await toolFetch('/api/buyspecial-crosscheck?mint='+encodeURIComponent(mint)+'&from='+winFrom+'&to='+winTo);
     const d=await r.json();
     if(!d||!d.success||!Array.isArray(d.buyers)){ setStatus('No buyer data returned — try again in a moment.'); $('scanBtn').disabled=false; return; }
     buyers=d.buyers.slice(); source=d.source||'on-chain'; renderBuys();
@@ -445,7 +445,7 @@ $('computeBtn').addEventListener('click', async ()=>{
     setStatus(holdHours>0 ? ('Verifying holds through +'+holdHours+'h after the window…') : 'Verifying holds — no sells through now…');
     try{
       const wl=active.map(b=>b.wallet).join(',');
-      const r=await fetch('/api/buyspecial-holdcheck?mint='+encodeURIComponent(mint)+'&from='+winFrom+'&to='+checkTo+'&wallets='+encodeURIComponent(wl));
+      const r=await toolFetch('/api/buyspecial-holdcheck?mint='+encodeURIComponent(mint)+'&from='+winFrom+'&to='+checkTo+'&wallets='+encodeURIComponent(wl));
       const d=await r.json(); if(d&&d.success) for(const x of d.results) holdMap[x.wallet]=x;
     }catch(e){ setStatus('Hold check failed: '+e.message); $('computeBtn').disabled=false; return; }
   }
@@ -531,7 +531,7 @@ async function traceMoved(w, btn){
   btn.disabled=true; btn.textContent='tracing…';
   try{
     const now=Math.floor(Date.now()/1000);
-    const r=await fetch('/api/buyspecial-trace?mint='+encodeURIComponent(mint)+'&wallet='+encodeURIComponent(w)+'&from='+winFrom+'&to='+now);
+    const r=await toolFetch('/api/buyspecial-trace?mint='+encodeURIComponent(mint)+'&wallet='+encodeURIComponent(w)+'&from='+winFrom+'&to='+now);
     const d=await r.json();
     if(!d||!d.success){ btn.textContent='trace failed'; btn.disabled=false; return; }
     if(d.resolved==='held'){
@@ -561,11 +561,17 @@ $('csvBtn').addEventListener('click',()=>{
 // silently failing inside Phantom's in-app browser. There is no hand-off any more:
 // the shared airdrop engine (/airdrop-engine.js — the same code the standalone
 // airdropper runs) sends straight from this page.
-let sendProvider=null, sendPubkey=null, sendPlan=[];
+let sendProvider=null, sendPubkey=null, sendPlan=[], sendPlanKey='', sendArmedAt=0;
+// Wallets this page has already SENT to (or submitted and not seen confirm) for the current list.
+// A second click used to resend the whole list — a retry after a partial failure paid every
+// already-paid winner again (deep dive P0-011). Cleared only when the list itself changes.
+const sentDone=new Map();
 function refreshSendCard(){
   if(!results.length){ $('sendCard').classList.add('hidden'); return; }
   $('sendCard').classList.remove('hidden');
   sendPlan=results.map(r=>({addr:r.wallet, amount:r.payout}));
+  const key=sendPlan.map(r=>r.addr+':'+r.amount).join('|');
+  if(key!==sendPlanKey){ sendPlanKey=key; sentDone.clear(); sendArmedAt=0; $('sdSend').textContent='🚀 SEND PRIZES'; }
   const total=results.reduce((s,r)=>s+r.payout,0);
   $('sdCount').textContent=results.length;
   $('sdTotal').textContent=fmtAmt(total)+' '+rewardName;
@@ -604,17 +610,30 @@ $('sdSend').addEventListener('click',async()=>{
   if(!sendProvider||!sendPubkey){ sdStatus('Connect a wallet first.'); return; }
   if(!sendPlan.length){ sdStatus('Nothing to send.'); return; }
   if(!rewardIsNative&&(!rewardMint||rewardMint.length<32)){ sdStatus('Pick a valid reward token first.'); return; }
-  if(!confirm('Send '+fmtAmt(sendPlan.reduce((s,r)=>s+r.amount,0))+' '+rewardName+' to '+sendPlan.length+' wallets?')) return;
+  const plan=sendPlan.filter(r=>!sentDone.has(r.addr));
+  const skipped=sendPlan.length-plan.length;
+  if(!plan.length){ sdStatus('Every wallet in this list has already been sent to (or is unconfirmed — check Solscan first). Re-run the comp to start a new list.'); return; }
+  // Two clicks, in-page: a native confirm() is blocked or auto-dismissed inside some wallet
+  // browsers, and a dismissed dialog reads as "cancelled" while a blocked one reads as "confirmed".
+  const total=plan.reduce((s,r)=>s+r.amount,0);
+  if(Date.now()-sendArmedAt>15000){
+    sendArmedAt=Date.now();
+    $('sdSend').textContent='⚠️ CONFIRM: SEND '+fmtAmt(total)+' '+rewardName+' TO '+plan.length+' WALLETS';
+    sdStatus('Click again within 15 seconds to send'+(skipped?' — '+skipped+' already-sent wallet(s) are excluded':'')+'.');
+    return;
+  }
+  sendArmedAt=0; $('sdSend').textContent='🚀 SEND PRIZES';
   $('sdSend').disabled=true; $('sdConnect').disabled=true;
   $('sdLogWrap').classList.remove('hidden');
   $('sdLog').innerHTML='<thead><tr><th>WALLET</th><th class="r">AMOUNT</th><th>STATUS</th></tr></thead><tbody id="sdLogBody"></tbody>';
   try{
     const out=await CluckAirdrop.send({
       provider:sendProvider, walletPubkey:sendPubkey, rpc:rpcCall,
-      recipients:sendPlan, mint:rewardIsNative?'':rewardMint, native:rewardIsNative,
+      recipients:plan, mint:rewardIsNative?'':rewardMint, native:rewardIsNative,
       decimals:rewardDecimals, memo:'clucknorris.app buy special — '+(tokenName||'comp'),
       onProgress:(m)=>sdStatus(m),
-      onResult:(r)=>{ const b=$('sdLogBody'); if(!b) return; const tr=document.createElement('tr');
+      onResult:(r)=>{ if(r.status==='sent'||r.status==='unconfirmed') sentDone.set(r.addr,r.status);
+        const b=$('sdLogBody'); if(!b) return; const tr=document.createElement('tr');
         // THREE outcomes, not two: 'unconfirmed' means the batch was SUBMITTED with a real
         // signature but didn't confirm in 30s — rendering it FAILED invites a resend that
         // double-pays. Show it as its own state with the Solscan check-first instruction.
@@ -624,8 +643,8 @@ $('sdSend').addEventListener('click',async()=>{
         tr.innerHTML='<td>'+esc(r.addr)+'</td><td class="r">'+fmtAmt(r.amount)+'</td><td>'+cell+'</td>';
         b.appendChild(tr); },
     });
-    sdStatus(out.sent+' paid'+(out.failed?', '+out.failed+' failed — fix and re-send just those':'')
-      +(out.unconfirmed?', '+out.unconfirmed+' unconfirmed — verify on Solscan before resending':'')+'.');
+    sdStatus(out.sent+' paid'+(out.failed?', '+out.failed+' failed — SEND again pays only those':'')
+      +(out.unconfirmed?', '+out.unconfirmed+' unconfirmed — verify on Solscan; they are held out of a re-send':'')+'.');
   }catch(e){ sdStatus('Send failed: '+(e.message||e)); }
   $('sdSend').disabled=false; $('sdConnect').disabled=false;
 });
@@ -634,6 +653,11 @@ function copy(text,btn,label){ const done=()=>{ btn.textContent='✓ COPIED'; se
   navigator.clipboard.writeText(text).then(done,()=>{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');done();}catch(e){} document.body.removeChild(ta); }); }
 
 const OP_FLAG='clkn_buyspecial_operator';
+// The operator console arrives with ?key= once; the key is kept for THIS TAB only (sessionStorage)
+// so the data calls can present it as a header — the server now checks the tools pass on every
+// Buy Special endpoint (deep dive P0-009/010) and the admin key is the one exemption.
+const OP_KEY='clkn_buyspecial_opkey';
+function toolFetch(url){ let k=null; try{ k=sessionStorage.getItem(OP_KEY); }catch(_){} if(k) return fetch(url,{headers:{'x-premium-key':k}}); return CluckGate.fetch(url); }
 const RECV='7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
 // Unified tools pass (owner, 2026-08-18): ONE pass across every heavy tool — hold $50 worth
 // of CLKN (live-priced via /api/tool-gate/config) = free, else 0.05 SOL for 7 days of
@@ -760,7 +784,7 @@ async function loadCompPresets(){
 (async function init(){
   const q=new URLSearchParams(location.search), key=q.get('key');
   if(localStorage.getItem(OP_FLAG)==='1'){ $('opBanner').classList.remove('hidden'); showTool(); }
-  if(key){ try{ const r=await fetch('/api/admin-check?key='+encodeURIComponent(key)); if(r.ok){ localStorage.setItem(OP_FLAG,'1'); $('opBanner').classList.remove('hidden'); showTool(); } }catch(e){} }
+  if(key){ try{ const r=await fetch('/api/admin-check?key='+encodeURIComponent(key)); if(r.ok){ localStorage.setItem(OP_FLAG,'1'); try{ sessionStorage.setItem(OP_KEY,key); }catch(_){} $('opBanner').classList.remove('hidden'); showTool(); } }catch(e){} }
   if(isUnlocked()){ showTool(); } else if(localStorage.getItem(OP_FLAG)!=='1'){ showGate(); }
   renderEligExample();
   await loadCompPresets();

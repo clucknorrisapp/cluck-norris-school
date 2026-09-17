@@ -96,6 +96,7 @@
     h += '<p class="small" style="margin-top:10px">Plan: <span class="chip gold">' + esc(String(r.access.tier).toUpperCase()) + '</span></p></div>';
     if (!QUOTE) { app.innerHTML = h; return; }
     h += '<div class="card"><p class="intro">One month is <b>' + esc(String(QUOTE.sol)) + ' SOL</b>' + (QUOTE.clknRaw ? ' or <b>' + esc(QUOTE.clknUi) + ' CLKN</b> at this moment’s price' : '') + '. The quote is good for ' + esc(String(QUOTE.validForMin)) + ' minutes; the payment is checked against it, not against a later price.</p>';
+    h += '<p class="small">Pay from one of the project’s <b>operator wallets</b>. The payment is matched to the wallet that sent it — a payment from any other wallet is refused and stays with that wallet.</p>';
     h += '<div id="walletBox" class="row-flex"><button class="btn" id="connect">CONNECT WALLET</button></div>';
     h += '<div id="pay" hidden><div class="opt"><b>PAY ' + esc(String(QUOTE.sol)) + ' SOL</b><div class="row-flex" style="margin-top:8px"><button class="btn" id="paySol">PAY IN SOL</button></div></div>';
     if (QUOTE.clknRaw) h += '<div class="opt"><b>PAY ' + esc(QUOTE.clknUi) + ' CLKN</b><div class="small" style="margin-top:4px">Priced at ' + esc(String(QUOTE.solPerClkn)) + ' SOL per CLKN right now — if you bought CLKN early, this is where it pays off.</div><div class="row-flex" style="margin-top:8px"><button class="btn" id="payClkn">PAY IN CLKN</button></div></div>';
