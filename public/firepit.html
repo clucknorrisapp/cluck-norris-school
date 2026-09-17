@@ -402,7 +402,7 @@ function burnable(a){ return !a.frozen && !a.isNft; }
 function rowHtml(a, compact){
   var canBurn = burnable(a);
   var sym = a.symbol ? esc(a.symbol) : "Unknown";
-  var nm = a.name ? esc(a.name) : "";
+  var nm = a.name || "";   // escaped once, at insertion below — pre-escaping here double-escaped it (P2-120)
   var logo = a.logo ? '<img src="'+esc(a.logo)+'" alt="" onerror="this.style.display=\'none\'"/>' : '<span class="noimg">🪙</span>';
   // A non-empty token whose mint GeckoTerminal never priced (a.priceKnown === false) has UNKNOWN
   // value, not $0 — the two must not look alike, or a valuable-but-unindexed bag reads as junk.

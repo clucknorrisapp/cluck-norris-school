@@ -49,7 +49,9 @@ const solanaTracker = require("./lib/solana-tracker");
 const premiumForensics = require("./lib/premium-forensics");
 const sigStore = require("./lib/sigstore");
 const kv = require("./lib/kvstore");
+const { freshSince } = require("./lib/sig-cursor"); // shared "fresh sigs since the durable cursor" walk — see the ROSE/generic buy bots + burn watcher below
 const payoutVerify = require("./lib/payout-verify");
+const engineRatchet = require("./lib/engine-ratchet"); // pure merge/diff shared by the four liquidity-engine config ratchets below
 const { redeemPaidPass } = require("./lib/tool-pass-redeem");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
@@ -78,6 +80,34 @@ function adminAuthOK(req) {
   const KEY = process.env.PREMIUM_ACCESS_KEY;
   const provided = req.headers["x-premium-key"] || req.query.key;
   return secretEqual(String(provided || ""), String(KEY || ""));
+}
+// The ~75 admin routes below all opened with the same line — `if (!adminAuthOK(req))
+// return res.status(404).json(<body>)` — but the body drifted across sites (four
+// different spellings) and tests/callers may pin the exact one a given route uses, so
+// this does NOT unify the body: adminGuarded(shape) is middleware that 404s with
+// EXACTLY the shape it's given, named for the shape it already was at each call site.
+// { noStore: true } is for the handlers that used to call
+// res.setHeader("Cache-Control", "no-store") before the guard — that header applied to
+// BOTH the 404 and the success response, so it's set here unconditionally (before the
+// key check) rather than inside the handler, to keep that identical.
+// Left alone (not converted — see the commit message for the full list): guards that
+// aren't the handler's first statement (something else runs first), guards preceded by
+// a header other than Cache-Control, and the `!adminAuthOK(req) && await
+// requireToolPass(...)` mid-handler exemption used by a few Buy Special routes — those
+// keep calling adminAuthOK(req) directly.
+const ADMIN_404 = { error: "not_found" };
+const ADMIN_404_SUCCESS = { success: false, error: "not found" };
+const ADMIN_404_OK = { ok: false, error: "not found" };
+const ADMIN_404_OK_US = { ok: false, error: "not_found" };
+const ADMIN_404_CAP = { error: "Not found" };
+const ADMIN_404_FALSE = { ok: false };
+function adminGuarded(shape, opts) {
+  const noStore = !!(opts && opts.noStore);
+  return function (req, res, next) {
+    if (noStore) res.setHeader("Cache-Control", "no-store");
+    if (!adminAuthOK(req)) return res.status(404).json(shape);
+    next();
+  };
 }
 // A GET that MUTATES is one pasted link away from running: link-preview bots fetch URLs in chats,
 // browsers prerender history, a stray click re-fires it. The CUNA admin route had this rule first
@@ -152,27 +182,10 @@ try {
 // Railway env vars — they NEVER touch the repo. If env isn't set, notifications
 // just no-op silently so local dev works fine.
 async function notifyTelegram(text) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!token || !chatId) return;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn("[TELEGRAM] sendMessage failed:", res.status, body.slice(0, 200));
-    }
-  } catch (e) {
-    console.warn("[TELEGRAM] notify error:", e.message);
-  }
+  if (!chatId) return;
+  const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+  if (!result) console.warn("[TELEGRAM] sendMessage failed");
 }
 
 // Toolkit reminder for the community chat. It posts SILENTLY and deletes its
@@ -206,16 +219,9 @@ async function notifyToolsReminder() {
       await tgDelete(chatId, lastToolsReminderMsgId);
       lastToolsReminderMsgId = null; kv.set("toolsReminderMsgId", null);
     }
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId, text, parse_mode: "HTML",
-        disable_web_page_preview: true, disable_notification: true,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (data && data.ok && data.result) { lastToolsReminderMsgId = data.result.message_id; kv.set("toolsReminderMsgId", lastToolsReminderMsgId); }
-    else console.warn("[TELEGRAM] tools reminder not ok:", JSON.stringify(data).slice(0, 200));
+    const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: true });
+    if (result) { lastToolsReminderMsgId = result.message_id; kv.set("toolsReminderMsgId", lastToolsReminderMsgId); }
+    else console.warn("[TELEGRAM] tools reminder not ok");
   } catch (e) {
     console.warn("[TELEGRAM] tools reminder failed:", e.message);
   }
@@ -300,12 +306,8 @@ async function notifyBagsLaunches() {
       await tgDelete(chatId, lastBagsRadarMsgId);
       lastBagsRadarMsgId = null; kv.set("bagsRadarMsgId", null);
     }
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (data && data.ok && data.result) { lastBagsRadarMsgId = data.result.message_id; kv.set("bagsRadarMsgId", lastBagsRadarMsgId); }
+    const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+    if (result) { lastBagsRadarMsgId = result.message_id; kv.set("bagsRadarMsgId", lastBagsRadarMsgId); }
   } catch (e) { console.warn("[TELEGRAM] bags radar failed:", e.message); }
 }
 // 2×/day (14 & 22 UTC = 10am & 6pm ET), staggered onto hours no other scheduled
@@ -365,12 +367,8 @@ async function notifyMarketCheck() {
       await tgDelete(chatId, lastMarketCheckMsgId);
       lastMarketCheckMsgId = null; kv.set("marketCheckMsgId", null);
     }
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (data && data.ok && data.result) { lastMarketCheckMsgId = data.result.message_id; kv.set("marketCheckMsgId", lastMarketCheckMsgId); }
+    const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+    if (result) { lastMarketCheckMsgId = result.message_id; kv.set("marketCheckMsgId", lastMarketCheckMsgId); }
   } catch (e) { console.warn("[TELEGRAM] market check failed:", e.message); }
 }
 // Fires every 2h near the top of an even hour (UTC). Minute-gated so it does NOT
@@ -428,16 +426,12 @@ async function notifyRecap() {
       await tgDelete(chatId, lastRecapMsgId);
       lastRecapMsgId = null; kv.set("recapMsgId", null);
     }
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (data && data.ok && data.result) {
-      lastRecapMsgId = data.result.message_id; kv.set("recapMsgId", lastRecapMsgId);
+    const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+    if (result) {
+      lastRecapMsgId = result.message_id; kv.set("recapMsgId", lastRecapMsgId);
       recap.reset(); // start a fresh window only after a successful post
     } else {
-      console.warn("[TELEGRAM] recap not ok:", JSON.stringify(data).slice(0, 200));
+      console.warn("[TELEGRAM] recap not ok");
     }
   } catch (e) { console.warn("[TELEGRAM] recap failed:", e.message); }
 }
@@ -838,8 +832,11 @@ function pokeConfigRatchet() {
   // override wins over both the live value and any bump this block would have made.
   const overrides = kv.get("ratchetOverrides:poke", {}) || {};
   if (Object.keys(overrides).length) console.log("[poke] ratchet overrides active:", JSON.stringify(overrides));
-  for (const k of Object.keys(overrides)) { if (c[k] !== overrides[k] || k in patch) patch[k] = overrides[k]; }
-  if (Object.keys(patch).length) whirlpoolMM.vault.setConfig(patch, "poke");
+  // The bumps above already computed exactly the keys/values poke's config needs to move to —
+  // feed that as `want` into the shared merge/diff so an override still wins on any key it
+  // shares with a bump (same "override always wins" contract the other three ratchets keep).
+  const { patch: mergedPatch } = engineRatchet.ratchetPatch({ current: c, want: patch, overrides });
+  if (Object.keys(mergedPatch).length) whirlpoolMM.vault.setConfig(mergedPatch, "poke");
   // Alerts must NEVER hit the public community chat (the TELEGRAM_CHAT_ID fallback —
   // on 2026-08-20 one ops overview briefly landed there and had to be deleted). Bind
   // poke to the treasury project's PRIVATE ops room, then turn per-roll notifications
@@ -1042,22 +1039,25 @@ function cunaConfigRatchet() {
   // mechanism was built for. Same merge dnc and rose have had since then.
   const overrides = kv.get("ratchetOverrides:cuna", {}) || {};
   if (Object.keys(overrides).length) console.log("[cuna] ratchet overrides active:", JSON.stringify(overrides));
-  const target = { ...want, ...overrides };
-  const patch = {};
-  for (const k of Object.keys(target)) if (c[k] !== target[k]) patch[k] = target[k];
   // Caps and tuning knobs are floors/ceilings, not fixed values — only correct them while they
   // still hold a vault default, so the owner can raise a cap without it being stamped back down.
+  const { patch } = engineRatchet.ratchetPatch({
+    current: c, want, overrides,
+    floor: {
+      when: (cc) => cc.feeTierPct === 0.3 || cc.widthPct === 10,
+      values: {
+        edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 400, minRebalanceIntervalSec: 300,
+        maxActionsPerDay: 96, priceGapGuardPct: 10, slippageBps: 250, baseDeployThresholdUsd: 25,
+        solMaxSol: 4.2, solGasReserve: 0.25, solDeployThreshold: 0.2,
+        jupMaxJup: 99999, jupDeployThreshold: 1,
+        poolBalanceTolPct: 10, maxSwapUsdPerCycle: 75, minSwapUsd: 10, usdcFloor: 5,
+        swapSolFloor: 0.3, maxSwapSolPerCycle: 1, swapSlippageBps: 150, maxSwapsPerDay: 24,
+        buybackReserveUsd: 0, maxBuybackUsdPerCycle: 50, minBuybackUsd: 10, maxBuybacksPerDay: 12,
+        buybackMinIntervalSec: 900, buybackSlippageBps: 300,
+      },
+    },
+  });
   if (c.feeTierPct === 0.3 || c.widthPct === 10) {
-    Object.assign(patch, {
-      edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 400, minRebalanceIntervalSec: 300,
-      maxActionsPerDay: 96, priceGapGuardPct: 10, slippageBps: 250, baseDeployThresholdUsd: 25,
-      solMaxSol: 4.2, solGasReserve: 0.25, solDeployThreshold: 0.2,
-      jupMaxJup: 99999, jupDeployThreshold: 1,
-      poolBalanceTolPct: 10, maxSwapUsdPerCycle: 75, minSwapUsd: 10, usdcFloor: 5,
-      swapSolFloor: 0.3, maxSwapSolPerCycle: 1, swapSlippageBps: 150, maxSwapsPerDay: 24,
-      buybackReserveUsd: 0, maxBuybackUsdPerCycle: 50, minBuybackUsd: 10, maxBuybacksPerDay: 12,
-      buybackMinIntervalSec: 900, buybackSlippageBps: 300,
-    });
     for (const k of Object.keys(overrides)) if (k in patch) patch[k] = overrides[k];   // a durable override beats the default table too
   }
   if (Object.keys(patch).length) {
@@ -1211,10 +1211,8 @@ function dncConfigRatchet() {
     // &durable=1. Overrides are logged so drift is always visible in the boot log.
     const overrides = kv.get("ratchetOverrides:dnc", {}) || {};
     if (Object.keys(overrides).length) console.log("[dnc] ratchet overrides active:", JSON.stringify(overrides));
-    const target = { ...want, ...overrides };
     const cur = whirlpoolMM.vault.getConfig("dnc") || {};
-    const patch = {};
-    for (const k of Object.keys(target)) if (cur[k] !== target[k]) patch[k] = target[k];
+    const { patch } = engineRatchet.ratchetPatch({ current: cur, want, overrides });
     if (Object.keys(patch).length) {
       whirlpoolMM.vault.setConfig(patch, "dnc");
       console.log("[dnc] config ratchet applied:", JSON.stringify(patch));
@@ -1384,26 +1382,31 @@ function roseEngineConfigRatchet() {
   // ratchetOverrides:rose kv table — merge it OVER the code defaults so a durable owner
   // tune is never silently stamped back by this ratchet (the exact config-revert trap
   // CLAUDE.md warns about; it re-bit on the band widths, 2026-08-31).
-  Object.assign(want, kv.get("ratchetOverrides:rose", {}) || {});
-  const patch = {};
-  for (const k of Object.keys(want)) if (c[k] !== want[k]) patch[k] = want[k];
+  const overrides = kv.get("ratchetOverrides:rose", {}) || {};
   // Caps/tuning seeded only while the vault defaults still hold, so later owner raises stick.
   // SMALL-START posture (owner, 2026-08-31: "start with very small amounts"): ~$60 a pool
   // while the fresh pools prove the price holds, then raise live with &durable=1.
-  if (c.feeTierPct === 0.3 || c.widthPct === 15 || c.widthPct === 10) {
-    Object.assign(patch, {
-      edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 60, minRebalanceIntervalSec: 300,
-      maxActionsPerDay: 96, baseDeployThresholdUsd: 10,
-      solMaxSol: 0.3, solGasReserve: 0.25, solDeployThreshold: 0.05,
-      jupMaxJup: 150, jupDeployThreshold: 25,
-      swapEnabled: true, poolBalanceTolPct: 10, maxSwapUsdPerCycle: 40, minSwapUsd: 5,
-      usdcFloor: 5, swapSolFloor: 0.3, maxSwapSolPerCycle: 0.5, swapSlippageBps: 150, maxSwapsPerDay: 24,
-      buybackReserveUsd: 0, maxBuybackUsdPerCycle: 25, minBuybackUsd: 10, maxBuybacksPerDay: 24,
-      buybackMinIntervalSec: 900, buybackSlippageBps: 300,
-      askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
-      notifyRolls: false,   // public room bound — see the ALERTS warning above
-    });
-  }
+  const { patch } = engineRatchet.ratchetPatch({
+    current: c, want, overrides,
+    floor: {
+      when: (cc) => cc.feeTierPct === 0.3 || cc.widthPct === 15 || cc.widthPct === 10,
+      values: {
+        edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 60, minRebalanceIntervalSec: 300,
+        maxActionsPerDay: 96, baseDeployThresholdUsd: 10,
+        solMaxSol: 0.3, solGasReserve: 0.25, solDeployThreshold: 0.05,
+        jupMaxJup: 150, jupDeployThreshold: 25,
+        swapEnabled: true, poolBalanceTolPct: 10, maxSwapUsdPerCycle: 40, minSwapUsd: 5,
+        usdcFloor: 5, swapSolFloor: 0.3, maxSwapSolPerCycle: 0.5, swapSlippageBps: 150, maxSwapsPerDay: 24,
+        buybackReserveUsd: 0, maxBuybackUsdPerCycle: 25, minBuybackUsd: 10, maxBuybacksPerDay: 24,
+        buybackMinIntervalSec: 900, buybackSlippageBps: 300,
+        askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
+        notifyRolls: false,   // public room bound — see the ALERTS warning above
+      },
+    },
+  });
+  // Note: unlike cunaConfigRatchet, there is no override-re-apply step here — if the floor above
+  // fires it can still overwrite an override on the same key. That gap is pre-existing (rose
+  // never had the re-apply cuna does); this refactor preserves it rather than fixing it.
   if (Object.keys(patch).length) {
     whirlpoolMM.vault.setConfig(patch, "rose");
     console.log("[rose-engine] config ratchet corrected:", Object.keys(patch).join(", "));
@@ -1799,10 +1802,7 @@ async function broadcastBurnCelebration(receipt) {
         `🔥 <b>${amt} $${tgEsc(sym)} burned forever</b>${pct ? ` — <b>${pct}</b> of supply` : ""}\n` +
         `${usd ? usd + " destroyed · " : ""}verified on-chain. 🐔\n\n` +
         `🧾 Receipt → ${url}${xLink}`;
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chat, text: tgText, parse_mode: "HTML", disable_web_page_preview: false }),
-      }).catch(() => {});
+      await tgApi("sendMessage", { chat_id: chat, text: tgText, parse_mode: "HTML", disable_web_page_preview: false });
     }
     // Per the house rule: if the X carve-out failed for a real reason (not the pause), alert
     // the operator chat rather than failing silently.
@@ -1877,13 +1877,9 @@ async function notifyEduPost() {
   const xLine = xTweetId ? `\n🐦 <b>Boost today's lesson on X — like &amp; repost 👇</b>\nhttps://x.com/FireChicken007/status/${xTweetId}\n` : "";
   const text = `🎓 <b>CLUCK'S LESSON</b>\n\n${tgEsc(body)}\n\n${toolLine}${xLine}💬 <i>Reply to this lesson with a question and Cluck will answer.</i>\n📚 The full course is in session → clucknorris.app`;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: true }),
-    });
-    const data = await res.json().catch(() => null);
+    const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: true });
     // Remember this post is a LESSON so the reply-bot only answers lesson replies.
-    if (data && data.ok && data.result) registerLessonMessage(data.result.message_id, body);
+    if (result) registerLessonMessage(result.message_id, body);
   } catch (e) { console.warn("[EDU] post failed:", e.message); }
 }
 let lastEduStamp = kv.get("eduStamp", "");
@@ -2371,87 +2367,90 @@ const TG_WEBHOOK_SECRET = process.env.TELEGRAM_BOT_TOKEN
   ? createHash("sha256").update("tg-webhook:" + process.env.TELEGRAM_BOT_TOKEN).digest("hex").slice(0, 40)
   : "";
 
+// ── The ONE low-level Telegram Bot API call ─────────────────────────────────
+// Every send/edit/delete/answer site in this file used to hand-roll its own
+// `fetch(".../bot<token>/<method>")` — each re-implementing the token check, the
+// JSON body, the error swallowing, and the result extraction, and drifting from
+// each other in small ways (see tgSendKb's fix below). This is the one place
+// that owns all of it: token check (no token → null, no request made), the POST,
+// the JSON parse, and the "never throw" contract every caller here relies on
+// (CLAUDE.md: a Telegram send swallows its own errors — callers must check the
+// return value and never advance durable state on a send that did not land).
+// Returns `data.result` on a Telegram-confirmed success (an object for
+// sendMessage/sendPhoto/…, or the bare `true` Telegram sends back for
+// deleteMessage/answerCallbackQuery/pinChatMessage/…), or null on ANY failure —
+// no token, a network error, a non-JSON body, or `ok:false`. Callers that want
+// diagnostics still log at the call site, same as before. `token` defaults to
+// the main bot but can be overridden — the ROSE buy/burn bots optionally speak
+// through their own `ROSE_TG_BOT_TOKEN` (see roseTgSend/roseTgSendPhoto).
+async function tgApi(method, payload = {}, token = process.env.TELEGRAM_BOT_TOKEN) {
+  if (!token) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => null);
+    if (!data || !data.ok) return null;
+    return data.result !== undefined ? data.result : true;
+  } catch (_) { return null; }
+}
+
 async function tgSend(chatId, text, replyTo, opts = {}) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId) return null;
+  if (!chatId) return null;
   // Marked, not blocked: a staging box pointed at a test room SHOULD be able to post — that is the
   // point of having one. But if it is ever pointed at the real community room by a copied env var,
   // the message has to be obviously a test rather than an announcement people act on.
   if (IS_STAGING) text = "🚧 <b>[STAGING]</b> — test post, ignore\n\n" + text;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
-        ...(opts.silent ? { disable_notification: true } : {}),
-        // Still send even if the user's command message was deleted meanwhile.
-        ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
-      }),
-    });
-    const data = await res.json().catch(() => null);
-    return data && data.ok && data.result ? data.result.message_id : null; // for thread tracking
-  } catch (_) { return null; }
+  const result = await tgApi("sendMessage", {
+    chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
+    ...(opts.silent ? { disable_notification: true } : {}),
+    // Still send even if the user's command message was deleted meanwhile.
+    ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
+  });
+  return result ? result.message_id : null; // for thread tracking
 }
 
 // Like tgSend, but with an optional inline keyboard (array of button rows).
 async function tgSendKb(chatId, text, keyboard, replyTo) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId) return null;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
-        ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
-        ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-      }),
-    });
-    const data = await res.json().catch(() => null);
-    return data && data.ok && data.result ? data.result.message_id : null;
-  } catch (_) { return null; }
+  if (!chatId) return null;
+  // FIX (2026-09-17 tgSend consolidation): this had drifted from tgSend by never adding the
+  // STAGING marker below, even though it posts to the same real, shared chat ids — including
+  // the public new-member welcome (welcomeNewMembers) and the guide-button reply, both fired
+  // straight off a live Telegram webhook. A staging box that ever shares the production bot
+  // token (the exact "copied env var" scenario tgSend's own comment warns about) would have
+  // posted an unmarked welcome message into the real community room.
+  if (IS_STAGING) text = "🚧 <b>[STAGING]</b> — test post, ignore\n\n" + text;
+  const result = await tgApi("sendMessage", {
+    chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
+    ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
+    ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+  });
+  return result ? result.message_id : null;
 }
 
 // Acknowledge a button tap so Telegram stops the loading spinner.
 async function tgAnswerCallback(id, text) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !id) return;
-  try {
-    await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ callback_query_id: id, ...(text ? { text } : {}) }),
-    });
-  } catch (_) {}
+  if (!id) return;
+  await tgApi("answerCallbackQuery", { callback_query_id: id, ...(text ? { text } : {}) });
 }
 
 // Delete a message (for self-cleaning reposts).
 async function tgDelete(chatId, messageId) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId || !messageId) return;
-  try {
-    await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
-    });
-  } catch (_) {}
+  if (!chatId || !messageId) return;
+  await tgApi("deleteMessage", { chat_id: chatId, message_id: messageId });
 }
 // Send a photo + caption + optional inline keyboard to a SPECIFIC chat. Silent
 // by default (owner rule). Returns the message_id, or null on failure. Used by
 // the Content Engine to DM an approval card with Approve/Skip buttons.
 async function tgSendPhotoKb(chatId, photoUrl, caption, keyboard) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId) return null;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024),
-        parse_mode: "HTML", disable_notification: true,
-        ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-      }),
-    });
-    const data = await res.json().catch(() => null);
-    return data && data.ok && data.result ? data.result.message_id : null;
-  } catch (_) { return null; }
+  if (!chatId) return null;
+  const result = await tgApi("sendPhoto", {
+    chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024),
+    parse_mode: "HTML", disable_notification: true,
+    ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+  });
+  return result ? result.message_id : null;
 }
 
 // ms → "2d 3h 14m" / "3h 14m" / "14m"
@@ -3297,19 +3296,9 @@ async function notifyTelegramPhoto(photoUrl, caption) {
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        photo: photoUrl,
-        caption,
-        parse_mode: "HTML",
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn("[TELEGRAM] sendPhoto failed, falling back to text:", res.status, body.slice(0, 200));
+    const result = await tgApi("sendPhoto", { chat_id: chatId, photo: photoUrl, caption, parse_mode: "HTML" });
+    if (!result) {
+      console.warn("[TELEGRAM] sendPhoto failed, falling back to text");
       // Fallback so we never miss a buy alert just because the image link broke
       await notifyTelegram(caption);
     }
@@ -4708,8 +4697,7 @@ async function getBagsNearGrad() {
 // Given a PAIR (?a=<symbol|mint>&b=<symbol|mint>), find every open pool for it across
 // every Solana DEX (GeckoTerminal), ranked by turnover. Public read — it's a tool.
 // Informational only, NOT financial advice. No Solana Tracker dependency.
-app.get("/api/lp-scan", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-scan", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;
@@ -4726,8 +4714,7 @@ app.get("/api/lp-scan", async (req, res) => {
 });
 
 // LP Scanner token search (autocomplete) — ?q=. Public read.
-app.get("/api/lp-token-search", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-token-search", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
   try { return res.status(200).json({ success: true, tokens: await lpScanner.searchTokens(String(req.query.q || "")) }); }
@@ -4736,8 +4723,7 @@ app.get("/api/lp-token-search", async (req, res) => {
 
 // Probe what the CoinGecko Analyst key unlocks on the AGGREGATED (non-onchain) API — so we
 // know which endpoints to build on. Gated (admin); 404 when the key is wrong/absent.
-app.get("/api/cg-agg-test", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+app.get("/api/cg-agg-test", adminGuarded(ADMIN_404_SUCCESS), async (req, res) => {
   const out = { keySet: !!process.env.COINGECKO_API_KEY };
   try { out.key = await lpScanner.cgPro("/key"); } catch (e) { out.keyErr = e.message; }
   try { out.price = await lpScanner.cgPro("/simple/price?ids=solana,bitcoin&vs_currencies=usd&include_24hr_change=true&include_market_cap=true"); } catch (e) { out.priceErr = e.message; }
@@ -4749,8 +4735,7 @@ app.get("/api/cg-agg-test", async (req, res) => {
 
 // LP Scanner TOP POOLS — busiest Solana pools across all DEXs, hourly TTL cache (computed on
 // the first cold call — the boot warmer was removed 2026-07-04, see below).
-app.get("/api/lp-top", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-top", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=600");
   try { return res.status(200).json({ success: true, ...(await lpScanner.topPools({ kind: req.query.kind, force: req.query.refresh === "1" })) }); }
@@ -4814,8 +4799,7 @@ app.get("/api/token-overview", async (req, res) => {
 
 // LP Scanner single-token mode — ?token=<symbol|mint>, optional &amount=<usd>. Returns EVERY
 // pair/pool this token trades in across all Solana DEXs with volume + real fee yield. Public.
-app.get("/api/lp-token", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-token", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const T = req.query.token || req.query.t;
@@ -4828,8 +4812,7 @@ app.get("/api/lp-token", async (req, res) => {
 // LP Scanner pool deep-dive + range/earnings simulator — ?pool=<address>, optional
 // &amount=<usd>&width=<halfWidthPct>. Models the concentrated-liquidity tradeoff against
 // the pool's real 7d volatility. Public read. Informational only, NOT financial advice.
-app.get("/api/lp-pool", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-pool", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const pool = req.query.pool || req.query.address;
@@ -4842,8 +4825,7 @@ app.get("/api/lp-pool", async (req, res) => {
 
 // Ask Cluck about pools — pool-aware AI. Scans the pair LIVE, then has Cluck analyze the
 // REAL numbers (grounded, not generic). Informational only; turnover≠yield; IL flagged.
-app.post("/api/lp-ask", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.post("/api/lp-ask", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { question, a, b, amount } = req.body || {};
   if (!question || String(question).trim().length < 3) return res.status(400).json({ success: false, error: "Question too short" });
@@ -5016,8 +4998,7 @@ app.get("/api/alpha", async (req, res) => {
 
 // Admin — force-build the brief; &post=1 fires it to Telegram (silent) + X; &xonly=1 X only;
 // &markposted=1 marks today already-posted (so the daily auto-poster skips it) without sending.
-app.get("/api/alpha-test", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+app.get("/api/alpha-test", adminGuarded(ADMIN_404_SUCCESS), async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   if (req.query.markposted === "1") { kv.set("dailyAlphaPostedDate", today); return res.status(200).json({ success: true, marked: today }); }
   try {
@@ -5287,8 +5268,7 @@ app.post("/api/classroom/graduate-claim", async (req, res) => {
 
 // Admin — review/manage the graduate reward queue. ?action=approve|paid|reject&wallet=… to set status;
 // no action = list. Approved/paid wallets are what you batch into the Airdropper.
-app.all("/api/classroom/graduates", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+app.all("/api/classroom/graduates", adminGuarded(ADMIN_404_SUCCESS), (req, res) => {
   if (mutatingGetRefused(req, res, ["action"])) return;   // deep dive P1-058: approve/paid/reject delete or flip a record — the list stays a GET
   const grads = kv.get("classroomGraduates", {}) || {};
   const action = req.query.action, w = String(req.query.wallet || "").trim();
@@ -5554,10 +5534,7 @@ async function notifyNearBonding(t) {
   if (token && chatId) {
     const text = `⚡ <b>CLOSE TO BONDING</b>\n\n🎒 <b>${tgEsc(t.name || "?")}</b> (${tgEsc(t.symbol || "?")})\n${cp.toFixed(0)}% to graduation · ~${toGrad} SOL to go\n\n📡 Watch it live → clucknorris.app/bags`;
     try {
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-      });
+      await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
     } catch (e) { console.warn("[TELEGRAM] near-bonding alert failed:", e.message); }
   }
   if (xConfigured()) {
@@ -5572,10 +5549,7 @@ async function notifyGraduated(rec) {
   if (GRAD_TG_ANNOUNCE && token && chatId) {
     const text = `🎓 <b>GRADUATED!</b>\n\n🎒 <b>${tgEsc(rec.name || "?")}</b> (${tgEsc(rec.symbol || "?")}) just bonded off the Bags curve onto its Meteora pool.\n\n📊 Chart → https://dexscreener.com/solana/${rec.mint}\n🔒 Team: lock your supply free (even fresh Token-2022 mints) → clucknorris.app/locker-room`;
     try {
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-      });
+      await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true });
     } catch (e) { console.warn("[TELEGRAM] graduated alert failed:", e.message); }
   }
   if (xConfigured()) {
@@ -5674,9 +5648,7 @@ async function postOutreach(kind) {
   const r = await tgSend(chat, deck[i], null, { silent: true });
   return { ok: true, kind, index: i, telegram: r };
 }
-app.get("/api/outreach-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/outreach-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const kind = req.query.kind === "learners" ? "learners" : "projects";
   if (req.query.post === "1") { const r = await postOutreach(kind); return res.status(200).json({ posted: true, ...r }); }
   const deck = kind === "learners" ? OUTREACH_LEARNERS : OUTREACH_PROJECTS;
@@ -5738,9 +5710,7 @@ async function postToolSpotlight() {
   try { out.x = await postToX(t.x + "\n\n@BagsApp @JupiterExchange"); } catch (e) { out.xErr = e.message; }
   return out;
 }
-app.get("/api/tool-spotlight-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/tool-spotlight-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (req.query.post === "1") { const r = await postToolSpotlight(); return res.status(200).json({ posted: true, ...r }); }
   const i = (Number(kv.get("toolSpotPos", 0)) || 0) % TOOL_SPOTLIGHTS.length;
   return res.status(200).json({ count: TOOL_SPOTLIGHTS.length, next: TOOL_SPOTLIGHTS[i], hint: "add &post=1 to send (X + Telegram)" });
@@ -5802,9 +5772,7 @@ async function postChainSpotlight() {
   if (!rec.xOk) { try { await tgSend(operatorChatId() || OPERATOR_DM_FALLBACK, `⚠️ <b>Chain Spotlight failed to post</b> (${a.name}): <code>${rec.xErr || "unknown"}</code>`, null, { silent: true }); } catch (_) {} }
   return out;
 }
-app.get("/api/chain-spotlight-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/chain-spotlight-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (req.query.enable != null) kv.set("chainSpotEnabled", req.query.enable === "1" ? "1" : "0"); // &enable=0 pauses the twice-daily poster (owner: no traction, focus on the locker — 2026-07-19)
   if (req.query.reset === "1") kv.set("chainSpotPos", 0); // restart the asset rotation at BTC
   if (req.query.post === "1") {
@@ -5820,9 +5788,7 @@ app.get("/api/chain-spotlight-test", async (req, res) => {
 
 // &post=1 posts a tweet (uses &text=... or a default) so you can verify posting
 // works the moment the keys are added in Railway.
-app.all("/api/x-post-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/x-post-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["post"])) return;   // deep dive P1-019: a brand post is never a link unfurl away
   if (!xConfigured()) return res.status(200).json({ configured: false, message: "Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in Railway." });
   if (req.query.post === "1") {
@@ -5839,9 +5805,7 @@ app.all("/api/x-post-test", async (req, res) => {
 
 // X hackathon blitz control — ?start=1 begins it (and posts the first immediately),
 // ?stop=1 halts it, no param = status. Gated.
-app.get("/api/x-blitz", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/x-blitz", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (req.query.stop === "1") { const st = kv.get("xBlitz", {}) || {}; st.active = false; kv.set("xBlitz", st); return res.status(200).json({ active: false, stopped: true, pos: st.pos || 0, total: X_BLITZ_DECK.length }); }
   if (req.query.start === "1") {
     kv.set("xBlitz", { active: true, pos: 0, today: 0, day: "", lastAt: 0 });
@@ -5921,9 +5885,7 @@ app.get("/api/pool-depth", async (req, res) => {
 // Cluck's Lesson — dry-run/preview (gated). Returns a freshly generated lesson
 // for the NEXT topic in rotation without advancing it; &post=1 advances the
 // rotation and actually posts to the group. &topic=<text> overrides the topic.
-app.get("/api/edu-post-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/edu-post-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     if (req.query.post === "1") { await notifyEduPost(); return res.status(200).json({ success: true, posted: true }); }
     const deck = kv.get("eduDeckV2", []); const pos = kv.get("eduDeckPosV2", 0);
@@ -6031,28 +5993,29 @@ async function sendTreasuryRecap({ send = true, reset = false } = {}) {
   const text = L.join("\n");
 
   if (!send) return { sent: false, preview: text, valueBtc, valueUsd };
-  if (tgtok) {
-    await fetch(`https://api.telegram.org/bot${tgtok}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: proj.telegramChatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-    });
+  // The snapshot advances ONLY on a landed send (CLAUDE.md: never advance durable state on a send
+  // that did not land — tgApi swallows its own errors and answers null). Codex on #333 caught this
+  // site reporting sent:true and moving `prev` on a failed post, which would have made the next
+  // recap's 24h deltas read against a day nobody saw. No token configured = nothing was announced,
+  // so nothing advances either.
+  if (!tgtok) return { sent: false, error: "telegram not configured — snapshot not advanced", text, valueBtc, valueUsd };
+  const landed = await tgApi("sendMessage", { chat_id: proj.telegramChatId, text, parse_mode: "HTML", disable_web_page_preview: true });
+  if (!landed) {
+    console.warn("[treasury-recap] Telegram send did not land — snapshot NOT advanced");
+    return { sent: false, error: "telegram send failed — snapshot not advanced", text, valueBtc, valueUsd };
   }
   kv.set(storeKey, { baseline, prev: snap, history: [...((store.history) || []).slice(-29), { ts: snap.ts, valueBtc, totalSol, totalBase, feesUsd }] });
-  return { sent: !!tgtok, text, valueBtc, valueUsd };
+  return { sent: true, text, valueBtc, valueUsd };
 }
 
 // Treasury daily recap — preview (gated). Default returns the composed recap WITHOUT sending
 // or writing a snapshot; &send=1 actually DMs it (and records the snapshot/baseline).
-app.get("/api/treasury-recap-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/treasury-recap-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try { return res.status(200).json(await sendTreasuryRecap({ send: req.query.send === "1", reset: req.query.reset === "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 // JUP/USDC private recap — preview by default; &send=1 DMs it; &reset=1 rebaselines the delta.
-app.get("/api/jup-recap-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/jup-recap-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try { return res.status(200).json(await sendJupUsdcRecap({ send: req.query.send === "1", reset: req.query.reset === "1", rebaselineClaimedUsd: req.query.rebaselineClaimed != null ? Number(req.query.rebaselineClaimed) : null })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
@@ -6060,9 +6023,7 @@ app.get("/api/jup-recap-test", async (req, res) => {
 // Pool Monitor — live close-watch of the JUP/USDC earner (gated). Position + fee pace + peak
 // $/min & $/hr bursts (from poolMonitorTick) + live pool volume + edge proximity, so the owner
 // can watch closely and adjust. Powers the /pool-monitor dashboard.
-app.get("/api/pool-monitor", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+app.get("/api/pool-monitor", adminGuarded(ADMIN_404_SUCCESS, { noStore: true }), async (req, res) => {
   try {
     let jupUsd = 0; try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
     const m = await meteora.status({ jupUsd });
@@ -6112,9 +6073,7 @@ app.get("/api/pool-monitor", async (req, res) => {
 // Meteora positions (range, amounts, pending fees, in-range) so the cbBTC/SOL
 // position on Meteora can be tracked alongside the Orca vault. Values use the
 // treasury vault's current SOL/cbBTC prices.
-app.get("/api/meteora/status", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/meteora/status", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     let solUsd = 0, btcUsd = 0, jupUsd = 0;
     try { const st = await whirlpoolMM.vault.status("treasury"); const px = (st.earnings || {}).prices || {}; solUsd = px.solUsd || 0; btcUsd = px.clknUsd || 0; } catch (_) {}
@@ -6125,9 +6084,7 @@ app.get("/api/meteora/status", async (req, res) => {
 
 // Meteora DLMM — pull liquidity (gated). ?pct=0.05 withdraws 5% to the wallet (no
 // close). DRY RUN unless &run=1. Optional &position=<pubkey> (defaults to the only one).
-app.all("/api/meteora/remove-liquidity", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/remove-liquidity", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.removeLiquidity({ positionPubkey: req.query.position || null, pct: req.query.pct, close: req.query.close === "1", dryRun: req.query.run !== "1" }));
@@ -6135,9 +6092,7 @@ app.all("/api/meteora/remove-liquidity", async (req, res) => {
 });
 
 // Meteora DLMM — add liquidity back (gated). ?cbbtc=&sol= amounts. DRY RUN unless &run=1.
-app.all("/api/meteora/add-liquidity", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/add-liquidity", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.addLiquidity({ positionPubkey: req.query.position || null, cbbtcUi: req.query.cbbtc, solUi: req.query.sol, dryRun: req.query.run !== "1" }));
@@ -6146,9 +6101,7 @@ app.all("/api/meteora/add-liquidity", async (req, res) => {
 
 // Meteora DLMM — open a fresh centered position (gated). ?cbbtc=&sol=&half=0.6&dist=spot|curve|bidask
 // Centers on current price, ±half%. DRY RUN unless &run=1 (dry shows bin math + #positions).
-app.all("/api/meteora/open-position", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/open-position", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     return res.status(200).json(await meteora.openPosition({
@@ -6167,9 +6120,7 @@ app.all("/api/meteora/open-position", async (req, res) => {
 // Meteora DLMM — unwrap stranded wSOL back to native lamports (gated). Closes/swaps can
 // leave the operator's SOL wrapped, which starves position-rent payments even when the
 // float looks funded. open/add now auto-unwrap, this is the manual lever. DRY unless &run=1.
-app.all("/api/meteora/unwrap", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/unwrap", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     const { connection } = require("./lib/rpc");
@@ -6184,8 +6135,8 @@ app.all("/api/meteora/unwrap", async (req, res) => {
 // both the Meteora primitives and the treasury vault's Jupiter swap.
 function meteoraDM(text) {
   try {
-    const tg = process.env.TELEGRAM_BOT_TOKEN, proj = whirlpoolMM.vault.getProject("treasury");
-    if (tg && proj && proj.telegramChatId) fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text }) }).catch(() => {});
+    const proj = whirlpoolMM.vault.getProject("treasury");
+    if (proj && proj.telegramChatId) tgApi("sendMessage", { chat_id: proj.telegramChatId, parse_mode: "HTML", text }).catch(() => {});
   } catch (_) {}
 }
 // ── JUP/USDC earner recap → PRIVATE treasury DM (operator only, NOT community) ──
@@ -6571,9 +6522,7 @@ async function jupUsdcRebalanceInPlace({ dryRun = false } = {}) {
   return { ...base, action: "rebalanced-inplace", sigs: r.sigs, residual: { jup: Number(resJup.toFixed(4)), usdc: Number(resUsdc.toFixed(2)), usd: Number(residualUsd.toFixed(2)) } };
 }
 // In-place rebalance endpoint (gated, BACKGROUND tool). DRY RUN unless &run=1.
-app.all("/api/meteora/rebalance-inplace", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/rebalance-inplace", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try { return res.status(200).json(await jupUsdcRebalanceInPlace({ dryRun: req.query.run !== "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
@@ -6581,9 +6530,7 @@ app.all("/api/meteora/rebalance-inplace", async (req, res) => {
 
 // Meteora re-center (gated). DRY RUN unless &run=1. &force=1 ignores edge/anti-thrash checks.
 // &which=jup targets the JUP/USDC earner instead of the cbBTC/SOL chaser.
-app.all("/api/meteora/recenter", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/recenter", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: the dry run stays a GET, &run=1 moves funds
   try {
     const fn = req.query.which === "jup" ? jupUsdcRecenter : meteoraRecenter;
@@ -6593,9 +6540,7 @@ app.all("/api/meteora/recenter", async (req, res) => {
 });
 
 // Meteora config (gated). GET returns config; query params set it (e.g. ?autoRecenter=1&half=0.6&dist=curve).
-app.all("/api/meteora/config", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/meteora/config", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   // deep dive P0-008: a config write (autoRecenter, widths, the fee ledger) is a POST; the read stays a GET
   if (mutatingGetRefused(req, res, ["halfWidthPct", "distribution", "edgeFrac", "minRecenterSec", "minRecenterSecOor", "maxImpactPct", "enabled", "autoRecenter", "ledgerCbbtc", "ledgerSol"])) return;
   try {
@@ -6631,8 +6576,8 @@ app.all("/api/meteora/config", (req, res) => {
 // boot, so a redeploy mid-blitz still reverts on time. Restores the captured widths.
 function blitzDM(text) {
   try {
-    const tg = process.env.TELEGRAM_BOT_TOKEN, proj = whirlpoolMM.vault.getProject("treasury");
-    if (tg && proj && proj.telegramChatId) fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text }) }).catch(() => {});
+    const proj = whirlpoolMM.vault.getProject("treasury");
+    if (proj && proj.telegramChatId) tgApi("sendMessage", { chat_id: proj.telegramChatId, parse_mode: "HTML", text }).catch(() => {});
   } catch (_) {}
 }
 async function clknForceRedeploy() {
@@ -6749,9 +6694,7 @@ function treasuryHeavyCheck() {
 }
 // Treasury heavy-window control (gated). &run=1&hours=6 arms the auto-revert timer (assumes the
 // heavy caps are ALREADY set + deployed by the operator); &abort=1 reverts now; no flag = status.
-app.get("/api/treasury-heavy", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/treasury-heavy", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     if (req.query.abort === "1") return res.status(200).json(await treasuryHeavyRevert("manual abort"));
     const until0 = kv.get("treasuryHeavyUntil", 0);
@@ -6764,9 +6707,7 @@ app.get("/api/treasury-heavy", async (req, res) => {
 });
 
 // CLKN Blitz control (gated). &run=1 starts; &abort=1 reverts now; no flag = status/plan.
-app.all("/api/clkn-blitz", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/clkn-blitz", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["abort", "run"])) return;   // deep dive P0-008: both close and redeploy CLKN liquidity
   try {
     if (req.query.abort === "1") return res.status(200).json(await clknBlitzRevert("manual abort"));
@@ -6779,9 +6720,7 @@ app.all("/api/clkn-blitz", async (req, res) => {
 });
 
 // Organic-score log + Blitz-effect summary (gated). &snap=1 records a snapshot now.
-app.get("/api/clkn-organic-log", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/clkn-organic-log", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     // Arm the one-shot recovery reminder: &remindIn=<hours>[&remindChat=<id>]. Fires
     // from the hourly logger on Railway, DMs the operator bot room. &remindIn=0 disarms.
@@ -6821,9 +6760,7 @@ app.get("/api/clkn-organic-log", async (req, res) => {
 // Dry-run / fire the 12h operator ops report (private chat). Gated. Without &send=1
 // it returns the composed caption (no send); &send=1 actually DMs the operator chat
 // and resets the 12h timer. Use this to verify formatting + the QuickChart image.
-app.get("/api/ops-report-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/ops-report-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try { return res.status(200).json(await sendOps12hReport({ send: req.query.send === "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
@@ -6832,9 +6769,7 @@ app.get("/api/ops-report-test", async (req, res) => {
 // (X text + TG caption + card URL) WITHOUT sending. &post=1 queues it for operator
 // approval (DMs the treasury chat with the card + Approve/Skip buttons). It never
 // posts publicly directly — public posting only happens on an operator approval tap.
-app.get("/api/content-engine-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/content-engine-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try { return res.status(200).json(await contentEngineRun({ send: req.query.post === "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
@@ -6893,9 +6828,7 @@ app.get("/api/engine-proof", async (req, res) => {
 // Graduation-watcher status (gated). Shows the current watchlist + our 48h
 // graduated record; ?run=1 triggers one watcher cycle now (alerts fire if a
 // token actually crosses 85% / graduates).
-app.get("/api/grad-watch-status", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/grad-watch-status", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (req.query.run === "1") { try { await gradWatcherTick(); } catch (_) {} }
   const watched = {}; for (const m of gradTracker.watchedMints()) watched[m] = gradTracker.getWatch(m);
   return res.status(200).json({
@@ -6909,9 +6842,7 @@ app.get("/api/grad-watch-status", async (req, res) => {
 // for seeding the Recently-Graduated board with a real graduate the watcher
 // didn't catch live. Validates the bags suffix + pulls live snapshot for the
 // display fields. Stamps graduatedAt = now so it shows + persists the full 48h.
-app.get("/api/grad-watch-add", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/grad-watch-add", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const mint = String(req.query.mint || "").trim();
   if (!mint.toLowerCase().endsWith("bags")) return res.status(400).json({ error: "not_a_bags_mint" });
   let snap = null; try { snap = await getBagsTokenSnapshot(mint); } catch (_) {}
@@ -6932,9 +6863,7 @@ app.get("/api/grad-watch-add", async (req, res) => {
 // Bags Launch Radar — manual/dry-run trigger for the 2-hourly Telegram post.
 // Gated by PREMIUM_ACCESS_KEY. Without ?post=1 it just RETURNS the composed
 // text (verify the format, no spam); ?post=1 actually fires the Telegram post.
-app.all("/api/bags-radar-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });   // 404 like every sibling admin route (audit #9: these two answered 403 and advertised themselves)
+app.all("/api/bags-radar-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => { // 404 like every sibling admin route (audit #9: these two answered 403 and advertised themselves)
   if (mutatingGetRefused(req, res, ["post"])) return;
   try {
     const text = await buildBagsRadarText();
@@ -6944,9 +6873,7 @@ app.all("/api/bags-radar-test", async (req, res) => {
 });
 
 // Market Check — manual/dry-run trigger (gated). ?post=1 fires the Telegram post.
-app.all("/api/market-check-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/market-check-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["post"])) return;
   try {
     const text = await buildMarketCheckText();
@@ -6988,9 +6915,7 @@ app.get("/api/lock-report-test", async (req, res) => {
 // Operator X announcement — post arbitrary text to X, bypassing the master X pause for
 // THIS manual, key-gated call only (the X counterpart to /api/tg-test). Auto-posting stays
 // off; this is a deliberate operator lever. Dry-run unless &post=1.
-app.all("/api/x-announce", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/x-announce", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // deep dive P1-019: &post=1 is POST-only (the dry run stays a GET). The hourly lock-celebration
   // routine and the skill send it as a POST — keep them in step with this line.
   if (mutatingGetRefused(req, res, ["post"])) return;
@@ -7026,9 +6951,7 @@ app.all("/api/x-announce", async (req, res) => {
 });
 
 // Delete a tweet by id (owner-gated). Dry-run unless &run=1. Use to pull a post we're not happy with.
-app.all("/api/x-delete", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/x-delete", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deleting a tweet is irreversible — never on a GET
   const id = String(req.query.id || "").replace(/[^0-9]/g, "");
   if (!id) return res.status(400).json({ error: "missing id" });
@@ -7041,9 +6964,7 @@ app.all("/api/x-delete", async (req, res) => {
 // On elapse, a 5-min checker pauses the treasury vault back to watch-only (positions untouched).
 // POST-only to arm or disarm (audit #8: a bare GET with no params used to arm a 48h window — a link
 // preview could start the clock). GET reports the window.
-app.all("/api/treasury-engine-window", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/treasury-engine-window", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   if (req.method !== "POST") {
     const at = Number(kv.get("treasuryEnginePauseAt", 0)) || 0;
     return res.status(200).json({ ok: true, armed: at > Date.now(), pauseAt: at > 0 ? new Date(at).toISOString() : null, note: "POST with ?hours=N to arm, ?off=1 to disarm" });
@@ -7057,9 +6978,7 @@ app.all("/api/treasury-engine-window", (req, res) => {
 
 // Manual Meteora keepalive — dry-run (route check only) by default; &run=1 fires a real
 // ~$10 SOL→CLKN buy FORCED through 64WXkH. &usd= to size. Same path the auto-keepalive uses.
-app.get("/api/meteora-keepalive", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/meteora-keepalive", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     const usd = Math.max(1, parseFloat(req.query.usd || "10") || 10);
     const r = await whirlpoolMM.vault.meteoraKeepalive({ projectId: "treasury", usd, dryRun: req.query.run !== "1" });
@@ -7079,11 +6998,14 @@ app.get("/api/meteora-keepalive", async (req, res) => {
 // ?text=... overrides the default; posts silently unless &loud=1. Plain text is
 // safest — raw < & > can trip Telegram's HTML parser (the JSON response below
 // surfaces any such error so you can see exactly what Telegram said).
-app.get("/api/tg-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  const KEY = process.env.PREMIUM_ACCESS_KEY;
-  const provided = req.query.key || req.headers["x-premium-key"];
-  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(404).json({ error: "not_found" });
+// POST-ONLY since 2026-09-17 (owner: "convert tg-test too, routine first"). It was the last
+// brand-channel poster that still SENT on a GET — a pasted admin link in a chat, a browser
+// prerender or a stray click could post to the community room. One dispatcher below: the admin
+// key answers 404 first (like every admin route), then any non-POST is refused with 405, then a
+// request carrying file bytes takes the raw-upload path and everything else the query path.
+// The meme and lock-celebration routines were switched to `curl -X POST` BEFORE this shipped
+// (they carry a transition fallback for the old build's "empty body" 400 until this is promoted).
+async function tgTestQuerySend(req, res) {
   if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
     return res.status(200).json({ success: false, error: "Telegram not configured (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID unset on this server)" });
   }
@@ -7190,20 +7112,15 @@ app.get("/api/tg-test", async (req, res) => {
   } catch (e) {
     return res.status(500).json({ success: false, error: publicErrMsg(e) });
   }
-});
+}
 
-// POST /api/tg-test — raw file-body upload (the GET route only fetches URLs, which locks the
-// meme routine out of posting anything it builds locally, like the free PIL-animated GIFs).
-// Body = the file bytes; query carries the same key/chat/text/loud knobs as the GET, plus
-// &kind=animation|document|photo (default animation: a GIF posted as animation autoplays in
-// the room — Telegram converts it to a looping mp4) and &name= for the filename Telegram shows.
-app.post("/api/tg-test", express.raw({ type: () => true, limit: "12mb" }), async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  const provided = req.query.key || req.headers["x-premium-key"];
-  if (!secretEqual(String(provided || ""), String(process.env.PREMIUM_ACCESS_KEY || ""))) return res.status(404).json({ error: "not_found" });
+// Raw file-body upload (the query path only fetches URLs, which locks the meme routine out of
+// posting anything it builds locally, like the free PIL-animated GIFs). Body = the file bytes;
+// query carries the same key/chat/text/loud knobs, plus &kind=animation|document|photo (default
+// animation: a GIF posted as animation autoplays in the room — Telegram converts it to a looping
+// mp4) and &name= for the filename Telegram shows.
+async function tgTestRawUpload(req, res, buf) {
   if (!process.env.TELEGRAM_BOT_TOKEN) return res.status(200).json({ success: false, error: "Telegram not configured" });
-  const buf = req.body;
-  if (!Buffer.isBuffer(buf) || buf.length < 100) return res.status(400).json({ success: false, error: "empty body — send the file bytes as the POST body" });
   const chatId = req.query.chat ? String(req.query.chat) : process.env.TELEGRAM_CHAT_ID;
   if (!chatId) return res.status(200).json({ success: false, error: "no chat target" });
   const kind = ["animation", "document", "photo", "video"].includes(String(req.query.kind)) ? String(req.query.kind) : "animation";
@@ -7221,15 +7138,31 @@ app.post("/api/tg-test", express.raw({ type: () => true, limit: "12mb" }), async
     const data = await r.json().catch(() => ({}));
     return res.json({ success: !!data.ok, messageId: data?.result?.message_id ?? null, kind, bytes: buf.length, telegram: data.ok ? undefined : data });
   } catch (e) { return res.status(200).json({ success: false, error: publicErrMsg(e) }); }
+}
+
+app.all("/api/tg-test", express.raw({ type: () => true, limit: "12mb" }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!secretEqual(String(provided || ""), String(process.env.PREMIUM_ACCESS_KEY || ""))) return res.status(404).json({ error: "not_found" });
+  if (req.method !== "POST") {
+    // Every form of this route sends (even the flag-less call posts the default heads-up), so
+    // there is no read to keep: refuse the whole method, not just the flags.
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ ok: false, success: false, error: "this route sends to Telegram — send it as a POST (a GET here posts nothing since 2026-09-17)" });
+  }
+  // ANY request body means "upload these bytes" — a short one is refused, never quietly re-read
+  // as the query send (Codex on #333: a 50-byte file used to post the default heads-up text to
+  // the room instead of failing). The query send is the bodiless POST.
+  const body = Buffer.isBuffer(req.body) && req.body.length > 0 ? req.body : null;
+  if (body && body.length < 100) return res.status(400).json({ success: false, error: `body too short to be a file (${body.length} bytes) — send the file bytes as the POST body, or send no body for a text/URL post` });
+  return body ? tgTestRawUpload(req, res, body) : tgTestQuerySend(req, res);
 });
 
 // Lock-celebration handoff (gated). The scheduled Claude image run polls this:
 //  GET            → { pending } (null when nothing to celebrate) + { probe } (last run's Higgsfield status)
 //  ?clear=1       → celebration handled, clear the flag
 //  ?probe=STATUS  → the scheduled run reports whether Higgsfield tools were reachable (observability)
-app.all("/api/lock-celebration", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/lock-celebration", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // clear / run / probe write state → POST (the hourly watcher and .claude/skills/lock-celebration send POST)
   if (mutatingGetRefused(req, res, ["clear", "run", "probe"])) return;
   if (req.query.clear === "1") { kv.set("lockCelebrationPending", null); return res.status(200).json({ ok: true, cleared: true }); }
@@ -7254,9 +7187,7 @@ app.all("/api/lock-celebration", async (req, res) => {
 // the post is identical to an organic one (graphic, rank, market cap, route). Gated;
 // DRY RUN unless &run=1 (dry run returns what it WOULD post). On a real fire it
 // remembers the sig so the poller won't double-post if it later catches up.
-app.get("/api/buy-replay", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/buy-replay", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(200).json({ success: false, error: "HELIUS_API_KEY unset on this server" });
   // Solana signatures are base58, ~87–88 chars. Validate shape so a junk param
@@ -7311,9 +7242,7 @@ app.get("/api/buy-replay", async (req, res) => {
 // Reconciliation backstop — preview/run the sweep that recovers buys/sells the live
 // poller dropped. DRY by default (lists what it WOULD recover, posts nothing); add
 // &run=1 to actually recover+post. Same sweep the 12-min scheduler runs.
-app.get("/api/reconcile-test", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/reconcile-test", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     const r = await reconcileMissedTrades({ dry: req.query.run !== "1" });
     return res.status(200).json({ success: true, ran: req.query.run === "1", ...r });
@@ -7322,9 +7251,7 @@ app.get("/api/reconcile-test", async (req, res) => {
 
 // Data-source health (gated). Live status of Solana Tracker / Helius / Bags /
 // Telegram. Dry by default; &run=1 also DMs the operator chat (forced summary).
-app.get("/api/health-check", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/health-check", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     if (req.query.run === "1") {
       const r = await sourceHealthTick({ force: true });
@@ -7582,8 +7509,7 @@ app.get("/api/tool-comp/check", (req, res) => {
   res.json({ ok: true, comped: isToolComped(w) });
 });
 // Admin: &add=<wallet> / &remove=<wallet> ; bare call lists the allowlist. 404 without the master key.
-app.get("/api/airdrop-comp", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/airdrop-comp", adminGuarded(ADMIN_404), (req, res) => {
   let list = airdropCompList();
   const add = String((req.query && req.query.add) || "").trim();
   const rem = String((req.query && req.query.remove) || "").trim();
@@ -7593,8 +7519,7 @@ app.get("/api/airdrop-comp", (req, res) => {
 });
 // Admin: ALL-TOOLS free-access comp list. &add=<wallet> / &remove=<wallet> ; bare call lists it.
 // A wallet here is treated as a full CLKN holder everywhere (see checkCLKNHolder). 404 without the master key.
-app.get("/api/tool-comp", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/tool-comp", adminGuarded(ADMIN_404), (req, res) => {
   let list = toolCompList();
   const add = String((req.query && req.query.add) || "").trim();
   const rem = String((req.query && req.query.remove) || "").trim();
@@ -7945,6 +7870,18 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
     return res.status(200).json({ ok: true, ...r });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// Live platform-access pricing for the pre-registration apply page (hub-apply.html) — the
+// per-project quote at /api/hub/:project/access needs an already-registered project, but a
+// prospective applicant has none yet. This reads the same append-only schedule
+// (lib/hub/access.js) so the two pages can never drift (P2-085).
+app.get("/api/hub-pricing", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try {
+    const hubAccess = require("./lib/hub/access");
+    const now = Date.now();
+    return res.status(200).json({ ok: true, standardSol: hubAccess.priceLamports("standard", now) / 1e9, smallSol: hubAccess.priceLamports("small", now) / 1e9 });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 // Explicit routes so the page works on a no-build boot (CI) and gets normal cache headers.
 app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
 app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
@@ -8228,9 +8165,7 @@ app.get("/api/buyspecial-holdcheck", async (req, res) => {
 // GET /api/admin-check?key= — validates the operator key so an operator page can waive its
 // public paywall for the owner. Returns {ok:true} (200) when the key matches, 404 otherwise
 // (never reveals whether a key exists). Read-only, no side effects.
-app.get("/api/admin-check", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ ok: false });
+app.get("/api/admin-check", adminGuarded(ADMIN_404_FALSE, { noStore: true }), (req, res) => {
   return res.status(200).json({ ok: true });
 });
 
@@ -9062,9 +8997,11 @@ app.get("/api/rosehorses", async (req, res) => {
 // a late-indexed buy is caught on a later pass and never double-posted, and a redeploy
 // resumes from the durable cursor instead of replaying or missing.
 const ROSE_BOT_MINT = ROSEHORSES_MINT; // RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF
-// Minimum buy (USD) that fires an alert. ⚠️ TEMPORARILY $10 (normal floor is $1.75) while
-// the owner tests narrow-range LPs that throw off small-arb volume we don't want spamming
-// the room (2026-08-13). Revert this default to 1.75 when that test ends. Precedence:
+// Minimum buy (USD) that fires an alert. Was raised from the normal $1.75 floor to $10 on
+// 2026-08-13 for a narrow-range LP test. ⚠️ The bot itself is DISARMED (owner, 2026-09-17: "we
+// only use the rose buy bot when needed … it can be disarmed completely for now"; kv roseBuyArmed
+// is false on production and nothing at boot re-arms it — the kv key is the only switch). The
+// floor is moot while it is off; whoever re-arms it picks the floor in that moment. Precedence:
 // live kv override (roseMinBuyUsd, set via /api/rose-buybot?setmin=…) → env ROSE_MIN_BUY_USD
 // → this default — so the floor can be tuned or reverted mid-test WITHOUT a redeploy.
 const ROSE_MIN_BUY_USD_DEFAULT = parseFloat(process.env.ROSE_MIN_BUY_USD || "10");
@@ -9131,26 +9068,16 @@ async function roseMarket() {
 }
 
 async function roseTgSend(token, chatId, text, opts = {}) {
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: opts.silent !== false }),
-    });
-    if (!res.ok) { const b = await res.text().catch(() => ""); console.warn("[ROSE-BUY] sendMessage failed:", res.status, b.slice(0, 160)); return false; }
-    return true;
-  } catch (e) { console.warn("[ROSE-BUY] sendMessage error:", e.message); return false; }
+  const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: opts.silent !== false }, token);
+  if (!result) { console.warn("[ROSE-BUY] sendMessage failed"); return false; }
+  return true;
 }
 async function roseTgSendPhoto(token, chatId, photoUrl, caption, opts = {}) {
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML", disable_notification: opts.silent !== false }),
-    });
-    if (res.ok) return true;
-    // Photo failed (bad URL / TG couldn't fetch it) — fall back to text so the buy still posts.
-    const b = await res.text().catch(() => ""); console.warn("[ROSE-BUY] sendPhoto failed, falling back to text:", res.status, b.slice(0, 160));
-    return await roseTgSend(token, chatId, caption, opts);
-  } catch (e) { console.warn("[ROSE-BUY] sendPhoto error:", e.message); return await roseTgSend(token, chatId, caption, opts); }
+  const result = await tgApi("sendPhoto", { chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML", disable_notification: opts.silent !== false }, token);
+  if (result) return true;
+  // Photo failed (bad URL / TG couldn't fetch it) — fall back to text so the buy still posts.
+  console.warn("[ROSE-BUY] sendPhoto failed, falling back to text");
+  return await roseTgSend(token, chatId, caption, opts);
 }
 
 function roseBuyCaption(b, roseUsd, mkt) {
@@ -9325,9 +9252,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   const lastSig = kv.get("roseBuyLastSig", null);
   if (!lastSig) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, firstRun: true, note: "pool head recorded; history skipped" }; }
 
-  const fresh = []; // newest→oldest until the cursor, then flip to oldest→newest
-  let cursorFound = false;
-  for (const s of sigs) { if (s.signature === lastSig) { cursorFound = true; break; } if (s.err) continue; fresh.push(s.signature); }
+  const { fresh, cursorFound } = freshSince(sigs, lastSig); // newest→oldest until the cursor, then flipped to oldest→newest
   // Cursor off the end of the window ⇒ more than SIG_LIMIT txns landed since last poll: buys
   // older than the oldest fetched sig are unrecoverable. Surface it LOUDLY (kv marker + log +
   // status field) — never skip silently. Fix by raising ROSE_SIG_LIMIT or lowering ROSE_POLL_MS.
@@ -9336,7 +9261,6 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
     kv.set("roseBuyGapCount", (kv.get("roseBuyGapCount", 0) || 0) + 1);
     console.warn(`[ROSE-BUY] cursor fell outside a ${sigs.length}-sig window — possible missed buys; raise ROSE_SIG_LIMIT or lower ROSE_POLL_MS`);
   }
-  fresh.reverse();
   if (!fresh.length) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, scanned: 0, posted: 0 }; }
 
   const seen = new Set(kv.get("roseBuySeen", []));
@@ -9486,10 +9410,8 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
     if (!sigs.length) continue;
     const lastSig = kv.get(lastKey, null);
     if (!lastSig) { kv.set(lastKey, sigs[0].signature); continue; }
-    const fresh = []; let cursorFound = false;
-    for (const s of sigs) { if (s.signature === lastSig) { cursorFound = true; break; } if (s.err) continue; fresh.push(s.signature); }
+    const { fresh, cursorFound } = freshSince(sigs, lastSig);
     if (!cursorFound) { gap = true; console.warn(`[BUYBOT ${cfg.id}] cursor outside ${sigs.length}-sig window on ${poolAddr.slice(0, 8)} — possible missed buys`); }
-    fresh.reverse();
     if (!fresh.length) { kv.set(lastKey, sigs[0].signature); continue; }
     const seen = new Set(kv.get(seenKey, []));
     let advanceTo = lastSig;
@@ -9610,9 +9532,7 @@ async function projectBurnPollOnce(cfg, { testPost = false } = {}) {
   const tokUsd = await orderbook.getUsdPrice(cfg.mint).catch(() => 0);
   const lastSig = kv.get(sigKey, null);
   const sigs = await roseHeliusRpc(key, "getSignaturesForAddress", [cfg.mint, { limit: 50 }]).catch(() => []);
-  const fresh = [];
-  for (const s of (Array.isArray(sigs) ? sigs : [])) { if (s.signature === lastSig) break; if (!s.err) fresh.push(s.signature); }
-  fresh.reverse();
+  const { fresh } = freshSince(sigs, lastSig);
   const hr = Math.floor(Date.now() / 3600000);
   let h = burnWatchHourly.get(cfg.id); if (!h || h.hour !== hr) { h = { hour: hr, count: 0 }; burnWatchHourly.set(cfg.id, h); }
   let posted = 0, foundAny = false, sendFails = 0;
@@ -9700,91 +9620,82 @@ app.get("/api/cuna-giveaway", (req, res) => {
 //   ?trace=1    → follow outbound transfers, 2 hops (run at the end; heavy)
 //   ?draw=1     → close it out and pick 3 winners from a Solana block hash
 //   ?reset=1    → wipe counted results, keep the config
-// CUNA engine on/off — the runtime lever, no Railway edit and no redeploy.
-//   ?on=1   arm    ?off=1  disarm    (no arg = report state)
-// Arming REFUSES when no operator key is loaded. Without a signer the engine cannot trade
-// anyway, so an "armed" that silently does nothing is worse than an error — it reads as running
-// when it is not, and that is exactly the state you would stop watching.
-// DNC engine on/off — the runtime lever for the private partner project, no Railway edit
-// and no redeploy. Arming REFUSES without a loaded operator key: an "armed" that cannot sign
-// reads as running when it is not, which is exactly the state you stop watching.
-//   ?on=1   arm    ?off=1  disarm    (no arg = report state)
-app.all("/api/dnc-engine", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
-  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
-  try {
-    const operator = whirlpoolMM.vault.operatorPubkey("dnc");
-    if (req.query.on === "1") {
-      if (dncHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "DNC_ENGINE_OFF=1 is set in Railway — clear it first." });
-      if (!operator) return res.json({ ok: false, error: "no_operator", detail: "MM_OPERATOR_SECRET_DNC is not loaded — nothing can sign." });
-      dncSetArmed(true);
-    } else if (req.query.off === "1") {
-      dncSetArmed(false);
-    }
-    const cfg = whirlpoolMM.vault.getConfig("dnc") || {};
-    res.json({
-      ok: true, armed: dncArmed(), hardKilled: dncHardKilled(), operator: operator || null,
+// CUNA / DNC / ROSE engine on/off — the runtime lever for each project's liquidity engine, no
+// Railway edit and no redeploy. ?on=1 arms, ?off=1 disarms, no arg reports state. Arming REFUSES
+// when no operator key is loaded: without a signer the engine cannot trade anyway, so an "armed"
+// that silently does nothing is worse than an error — it reads as running when it is not, which
+// is exactly the state you would stop watching. The three routes are near-identical; one factory
+// (`registerEngineArmRoute`) drives them off a small table so the response shape, error codes and
+// arm-check ordering below stay exactly what each route already returned.
+//   - ROSE signs with the CUNA operator key and its project config drifts, so its `beforeArm`
+//     runs the ratchet BEFORE the operator check: checking the key first would validate whatever
+//     stale env the project was last bound to. This ordering is load-bearing — keep it.
+//   - error codes and extra fields differ per project on purpose (kept, not "fixed"): CUNA's
+//     no-operator code is `no_operator_key` (DNC/ROSE use `no_operator`), and only CUNA's response
+//     carries `paused`.
+const ENGINE_ARM_TABLE = [
+  {
+    id: "dnc", route: "/api/dnc-engine", armed: dncArmed, setArmed: dncSetArmed, hardKilled: dncHardKilled,
+    offEnv: "DNC_ENGINE_OFF", beforeArm: null,
+    noOperatorError: "no_operator", noOperatorDetail: "MM_OPERATOR_SECRET_DNC is not loaded — nothing can sign.",
+    cfgFallbackEmpty: true,
+    fields: (cfg) => ({
       pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct,
       feeTierPct: cfg.feeTierPct, maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol,
-      note: "armed state is persisted in the KV store; DNC_ENGINE_OFF=1 overrides it",
-    });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-app.all("/api/rose-engine", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
-  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
-  try {
-    if (req.query.on === "1") {
-      if (roseEngineHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "ROSE_ENGINE_OFF=1 is set in Railway — clear it first." });
-      // Ratchet FIRST: it rebinds the project onto the CUNA operator env, so checking the
-      // key before it would validate whatever stale env the project was last bound to.
-      roseEngineConfigRatchet();   // shape asserted BEFORE the first armed tick can deploy
-      if (!whirlpoolMM.vault.operatorPubkey("rose")) return res.json({ ok: false, error: "no_operator", detail: "the CUNA engine wallet key (MM_OPERATOR_SECRET_CUNA) is not loaded — nothing can sign." });
-      roseEngineSetArmed(true);
-    } else if (req.query.off === "1") {
-      roseEngineSetArmed(false);
-    }
-    const operator = whirlpoolMM.vault.operatorPubkey("rose");
-    const cfg = whirlpoolMM.vault.getConfig("rose") || {};
-    res.json({
-      ok: true, armed: roseEngineArmed(), hardKilled: roseEngineHardKilled(), operator: operator || null,
+    }),
+    catchShape: (e) => ({ ok: false, error: e.message }),
+  },
+  {
+    id: "rose", route: "/api/rose-engine", armed: roseEngineArmed, setArmed: roseEngineSetArmed, hardKilled: roseEngineHardKilled,
+    offEnv: "ROSE_ENGINE_OFF", beforeArm: roseEngineConfigRatchet,
+    noOperatorError: "no_operator", noOperatorDetail: "the CUNA engine wallet key (MM_OPERATOR_SECRET_CUNA) is not loaded — nothing can sign.",
+    cfgFallbackEmpty: true,
+    fields: (cfg) => ({
       pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct, jupWidthPct: cfg.jupWidthPct,
       feeTierPct: cfg.feeTierPct, jupEnabled: cfg.jupEnabled,
       maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol, jupMaxJup: cfg.jupMaxJup,
       buybackEnabled: cfg.buybackEnabled,
-      note: "armed state is persisted in the KV store; ROSE_ENGINE_OFF=1 overrides it",
-    });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-app.all("/api/cuna-engine", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
-  if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
-  try {
-    const operator = whirlpoolMM.vault.operatorPubkey("cuna");
-    if (req.query.on === "1") {
-      if (cunaHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "CUNA_ENGINE_OFF=1 is set in Railway — clear it first." });
-      if (!operator) return res.json({ ok: false, error: "no_operator_key", detail: "MM_OPERATOR_SECRET_CUNA is not set or failed to parse. Arming would be a no-op." });
-      cunaSetArmed(true);
-    } else if (req.query.off === "1") {
-      cunaSetArmed(false);
-    }
-    const cfg = whirlpoolMM.vault.getConfig("cuna");
-    res.json({
-      ok: true, armed: cunaArmed(), hardKilled: cunaHardKilled(), operator: operator || null,
+    }),
+    catchShape: (e) => ({ ok: false, error: e.message }),
+  },
+  {
+    id: "cuna", route: "/api/cuna-engine", armed: cunaArmed, setArmed: cunaSetArmed, hardKilled: cunaHardKilled,
+    offEnv: "CUNA_ENGINE_OFF", beforeArm: null,
+    noOperatorError: "no_operator_key", noOperatorDetail: "MM_OPERATOR_SECRET_CUNA is not set or failed to parse. Arming would be a no-op.",
+    cfgFallbackEmpty: false,
+    fields: (cfg) => ({
       paused: whirlpoolMM.vault.isPaused ? !!whirlpoolMM.vault.isPaused("cuna") : undefined,
       pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct, feeTierPct: cfg.feeTierPct,
       maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol,
-      note: "armed state is persisted in the KV store; CUNA_ENGINE_OFF=1 overrides it",
-    });
-  } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
-});
+    }),
+    catchShape: (e) => ({ ok: false, error: "server_error", detail: e.message }),
+  },
+];
+function registerEngineArmRoute(entry) {
+  app.all(entry.route, adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
+    if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
+    try {
+      if (req.query.on === "1") {
+        if (entry.hardKilled()) return res.json({ ok: false, error: "hard_killed", detail: `${entry.offEnv}=1 is set in Railway — clear it first.` });
+        if (entry.beforeArm) entry.beforeArm();   // ROSE's ratchet: shape asserted BEFORE the first armed tick can deploy
+        if (!whirlpoolMM.vault.operatorPubkey(entry.id)) return res.json({ ok: false, error: entry.noOperatorError, detail: entry.noOperatorDetail });
+        entry.setArmed(true);
+      } else if (req.query.off === "1") {
+        entry.setArmed(false);
+      }
+      const operator = whirlpoolMM.vault.operatorPubkey(entry.id);
+      const cfg = entry.cfgFallbackEmpty ? (whirlpoolMM.vault.getConfig(entry.id) || {}) : whirlpoolMM.vault.getConfig(entry.id);
+      res.json({
+        ok: true, armed: entry.armed(), hardKilled: entry.hardKilled(), operator: operator || null,
+        ...entry.fields(cfg),
+        note: `armed state is persisted in the KV store; ${entry.offEnv}=1 overrides it`,
+      });
+    } catch (e) { res.status(500).json(entry.catchShape(e)); }
+  });
+}
+for (const entry of ENGINE_ARM_TABLE) registerEngineArmRoute(entry);
 
-app.all("/api/cuna-giveaway/admin", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // Deep dive 2026-09-17 P0-002: this was the one CUNA admin route the 2026-09-05 mutating-GET
   // audit missed — &draw=1 spun the wheel and &payout=1&run=1 SENT PRIZE TOKENS on a pasted link.
   // Every flag that configures, scans, posts, draws, pays or reconciles now needs a POST; the
@@ -9985,9 +9896,7 @@ setInterval(() => {
 //   ?project=cuna&run=1  → run one real poll cycle now (even while disarmed)
 //   ?project=cuna&status=1 (or no action) → read-back the config
 //   ?list=1              → list all configured buy bots
-app.all("/api/buybot", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/buybot", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // Everything below except ?list=1 / ?status=1 / a bare ?project= WRITES the bot config or fires a
   // post — POST only (audit #8). GET stays the read-back.
   if (mutatingGetRefused(req, res, ["mint", "pool", "symbol", "chat", "chatId", "min", "emoji", "image", "arm", "disarm", "burns", "burntarget", "pools", "dev", "persona", "test", "burntest", "run"])) return;
@@ -10038,9 +9947,7 @@ app.all("/api/buybot", async (req, res) => {
 // Meme-request queue — fed by the project-room persona ([PIC: …] asks), drained by
 // the recurring image routine. GET lists pending; &done=<id> removes one after the
 // routine posts it; &clear=1 empties the queue.
-app.get("/api/meme-queue", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/meme-queue", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   let list = kv.get("memeRequests", []) || [];
   // Art ledger (owner ask 2026-08-24: "keep track of all of the art made"). &history=1
   // lists every piece the routine has posted, newest first; the routine records one by
@@ -10080,8 +9987,7 @@ app.get("/api/meme-queue", (req, res) => {
 //   ?test=1    → fire a sample buy alert (verify chat + image wiring)
 //   ?announce=1→ post the one-off "buy bot warming up" announcement
 //   ?loud=1    → make THIS post notify (announce/test only; silent otherwise per owner rule)
-app.all("/api/rose-buybot", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not found" });
+app.all("/api/rose-buybot", adminGuarded(ADMIN_404_OK), async (req, res) => {
   if (mutatingGetRefused(req, res, ["arm", "disarm", "setmin", "test", "announce", "backfill"])) return;   // audit #8; the flag-less poll stays a GET
   try {
     if (req.query.arm === "1") kv.set("roseBuyArmed", true);
@@ -10515,9 +10421,7 @@ function heliusRpcCall(HELIUS_URL) {
 // spot (Jupiter limit orders now; AMM depth + CLOBs next). Core lives in
 // lib/orderbook-scanner.js. GATED (404 without the premium key) — it does NOT
 // touch the public site/UX; the public page ships once the engine is complete.
-app.get("/api/order-scan", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/order-scan", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const mint = String(req.query.mint || CLKN_MINT_ADDR);
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
   try {
@@ -10571,9 +10475,7 @@ async function recordOrderbookSnapshot(mint) {
   return { at, spotUsd: m.spotUsd, asks: asks.length, bids: bids.length, diff };
 }
 // Day-to-day view (gated): current resting orders + recent history + last change.
-app.get("/api/order-watch", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/order-watch", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // Register your LP wallet(s) so the monitor never alerts on your own positions.
   if (req.query.setOwners != null) {
     const list = String(req.query.setOwners).split(",").map(s => s.trim()).filter(w => SOL_ADDR_RE.test(w));
@@ -10668,9 +10570,7 @@ async function recordClknStructureSnapshot() {
   return snap;
   } catch (e) { console.warn("[clkn-structure] snapshot failed:", e.message); return null; }
 }
-app.get("/api/order-watch/structure", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/order-watch/structure", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   try {
     if (req.query.run === "1") await recordClknStructureSnapshot();
     const hist = kv.get("clknStructureLog", []) || [];
@@ -10684,9 +10584,7 @@ app.get("/api/order-watch/structure", async (req, res) => {
 // pools, summarize buy/sell flow, and flag a sell firing within seconds of a buy
 // — the off-chain trading-bot pattern (BonkBot/Trojan/etc.) that has no on-chain
 // resting order to find. This is what catches the "2-second sell after my buy".
-app.get("/api/order-flow", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/order-flow", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const mint = String(req.query.mint || CLKN_MINT_ADDR);
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
   const mins = Math.min(360, Math.max(5, parseInt(req.query.mins || "60", 10) || 60));
@@ -12871,6 +12769,48 @@ function gradGateMode() {
   if (m === "off" || m === "monitor" || m === "enforce") return m;
   return Date.now() >= GRAD_GATE_AUTO_ENFORCE ? "enforce" : "monitor";
 }
+// Every block (or would-block) is journalled, bounded, so a real learner caught by the gate can
+// be diagnosed after the fact. Until 2026-09-17 the only trace was a counter and a Railway log
+// line — one claim had tripped the gate since arming and nobody could say whether it was a
+// learner or a script (owner: "do whatever is best for people taking the course"). Truncated ids
+// only: the sid is an anonymous browser id, the wallet is public, but neither needs to sit whole
+// in the store.
+const GRAD_GATE_BLOCK_LOG_MAX = 50;
+function gradGateLogBlock({ mode, route, sid, wallet, gate }) {
+  try {
+    kv.set("gradGateBlocks", (kv.get("gradGateBlocks", 0) || 0) + 1);
+    const status = sid ? schoolProgress.statusFor(sid) : null;
+    const log = (kv.get("gradGateBlockLog", []) || []).slice(-(GRAD_GATE_BLOCK_LOG_MAX - 1));
+    log.push({
+      t: Date.now(), mode, route, code: gate.code, detail: gate.detail,
+      sid: sid ? sid.slice(0, 8) : null, wallet: wallet ? wallet.slice(0, 6) + "…" : null,
+      lessons: status ? status.lessons : 0, backfilled: status ? status.backfilled : 0,
+      sessionAgeMin: status ? Math.round((Date.now() - status.createdAt) / 60000) : null,
+    });
+    kv.set("gradGateBlockLog", log);
+  } catch (_) {}
+}
+// What the learner is told when the mint is withheld — per gate code, and always with the next
+// step they can actually take. The old copy ("give it a few minutes and try again") was the same
+// for every cause, including the ones a wait never fixes.
+function gradGateLearnerMessage(gate, requiredLessons) {
+  const code = gate && gate.code;
+  const m = /(\d+)\/(\d+) lessons/.exec(String(gate && gate.detail || ""));
+  const have = m ? Number(m[1]) : null;
+  if (code === "incomplete" || code === "no-progress" || code === "no-sid") {
+    return `Diploma mint pending — the school's own record shows ${have == null ? "no" : have + " of " + requiredLessons} finished classes from this browser (a dropped connection can lose a mark). We have just re-sent your progress from this device — wait a moment and tap Try again. If it still will not go through, re-open a lesson you finished and pass its quiz again so the record catches up. Your transcript is saved either way.`;
+  }
+  if (code === "too-fresh") {
+    return `Diploma mint pending — this browser's course record is only a few minutes old. Give it ${(/(needs \d+m)/.exec(String(gate.detail || "")) || ["", "about 15m"])[1].replace("needs ", "")} from your first class and tap Try again. Your transcript is saved.`;
+  }
+  if (code === "burst") {
+    return "Diploma mint pending — the classes need to have been finished across a few separate sittings from this browser, not all in one go. Revisit two or three lessons a few minutes apart, pass their quizzes, then tap Try again. Your transcript is saved.";
+  }
+  if (code === "sid-used") {
+    return "Diploma mint pending — this browser already graduated a different wallet, and each course record mints one diploma. Use the wallet that graduated here, or finish the course again in a fresh browser profile. Your transcript is saved.";
+  }
+  return "Diploma mint pending — we couldn't verify your course progress from this browser yet. Your transcript is saved. Give it a few more minutes (or revisit a lesson) and try again.";
+}
 
 // ── Certificate of completion (STORE edition) ──────────────────────────────────────────────────
 // The store edition has no wallet, so graduation there is a certificate with a verification code,
@@ -12891,6 +12831,7 @@ app.post("/api/claim/certificate", rateLimit("certificate", { windowMs: 3600000,
       minSpreadBuckets: kv.get("gradGateSpreadBuckets", 3),
     });
     if (!gate.ok && gateMode === "enforce") {
+      gradGateLogBlock({ mode: gateMode, route: "certificate", sid, wallet: null, gate });
       console.warn(`[CERT] blocked ${gate.code} sid=${sid.slice(0, 8)}…`);
       return res.status(403).json({ ok: false, error: "not_yet", code: gate.code, detail: "The school's record does not show the full curriculum for this device yet. Finish every class here, then try again." });
     }
@@ -12943,9 +12884,7 @@ app.post("/api/ask-cluck/report", rateLimit("askreport", { windowMs: 60000, max:
   kv.set("askCluckReports", list.slice(-500));
   return res.status(200).json({ ok: true });
 });
-app.get("/api/ask-cluck/reports", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/ask-cluck/reports", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   const list = kv.get("askCluckReports", []) || [];
   return res.status(200).json({ ok: true, count: list.length, reports: list.slice().reverse() });
 });
@@ -12971,7 +12910,7 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
         minSpreadBuckets: kv.get("gradGateSpreadBuckets", 3),
       });
       if (!gate.ok) {
-        kv.set("gradGateBlocks", (kv.get("gradGateBlocks", 0) || 0) + 1);
+        gradGateLogBlock({ mode: gateMode, route: "claim", sid, wallet, gate });
         console.warn(`[GRAD-GATE] ${gateMode}${gateMode === "monitor" ? " (would block)" : ""} ${gate.code} sid=${sid ? sid.slice(0, 8) + "…" : "none"} wallet=${wallet.slice(0, 6)}… — ${gate.detail}`);
       }
     }
@@ -13050,7 +12989,7 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     // wallet don't count.
     let nft = null;
     if (gateBlocked) {
-      nft = { ok: false, reason: "Diploma mint pending — we couldn't verify your course progress from this browser yet. Your transcript is saved. Give it a few more minutes (or revisit a lesson) and try again." };
+      nft = { ok: false, reason: gradGateLearnerMessage(gate, kv.get("gradGateLessons", 12)) };
     }
     if (kind === "graduation") {
       const already = (kv.get(diplomaNft.MINTED_KV, {}) || {})[wallet];
@@ -13089,6 +13028,9 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     return res.status(200).json({
       success: true, isHolder, balance, verified,
       slug: rec.slug, transcript: `/transcript/${rec.slug}`, alreadyOnList: exists, nft,
+      // Why the mint was withheld, so the client can act (re-send its local lesson marks when the
+      // record is short) instead of only showing a sentence. Absent when nothing was withheld.
+      ...(gateBlocked ? { gate: { code: gate.code, detail: gate.detail } } : {}),
     });
   } catch(err) {
     console.error("Claim error:", err.message);
@@ -13100,8 +13042,10 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
 // pins the mode (mode= empty string clears the pin back to auto: monitor until the
 // auto-enforce date, then enforce). ?lessons= / ?minAge= (minutes) / ?buckets= tune the
 // thresholds. ?sid=<id> inspects one session's ledger.
-app.get("/api/school/grad-gate", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+app.all("/api/school/grad-gate", adminGuarded(ADMIN_404_SUCCESS), (req, res) => {
+  // Deep dive P2-113: mode/threshold writes are POST-only like every other admin lever; the
+  // flag-less GET (and ?sid= inspection) stays a read.
+  if (mutatingGetRefused(req, res, ["mode", "lessons", "minAge", "buckets"])) return;
   const q = req.query;
   if (q.mode !== undefined) {
     const m = String(q.mode);
@@ -13125,6 +13069,10 @@ app.get("/api/school/grad-gate", (req, res) => {
     minAgeMin: kv.get("gradGateMinAgeMin", 15),
     spreadBuckets: kv.get("gradGateSpreadBuckets", 3),
     blockedOrWouldBlock: kv.get("gradGateBlocks", 0),
+    // Newest last, bounded (GRAD_GATE_BLOCK_LOG_MAX). Truncated sid/wallet, the gate code and
+    // detail, and what the ledger held for that session at the time — enough to tell a learner
+    // with a dropped mark from a script.
+    recentBlocks: kv.get("gradGateBlockLog", []) || [],
     ...schoolProgress.summary(),
   };
   if (q.sid) out.sid = schoolProgress.statusFor(String(q.sid)) || { error: "no such session" };
@@ -13512,9 +13460,7 @@ function noteTradeForArb(addr, action, tsMs) {
   if (changed) kv.set("arbBotWallets", bots);
 })();
 // View / manually add / remove flagged arb bots (gated). ?add=<wallet> / ?remove=<wallet>.
-app.get("/api/arb-bots", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/arb-bots", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   if (req.query.add && SOL_ADDR_RE.test(String(req.query.add))) flagArbBot(String(req.query.add), "manual");
   if (req.query.remove) { const b = getArbBots(); delete b[String(req.query.remove)]; kv.set("arbBotWallets", b); }
   const bots = getArbBots();
@@ -13524,9 +13470,7 @@ app.get("/api/arb-bots", (req, res) => {
 // ── Wall ratchet control (owner protect mode, 2026-07-10). ?enabled=0/1 flips the
 //    auto pull-and-reopen; numeric params patch tunables (trigFrac 0-1, usd, lowPct,
 //    upPct, minSec, maxPerDay). Always returns cfg + state + recent log. Gated.
-app.get("/api/wall-ratchet", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/wall-ratchet", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   const cur = kv.get("wallRatchetCfg", {});
   const patch = {};
   if (req.query.enabled != null) patch.enabled = req.query.enabled === "1";
@@ -13759,9 +13703,7 @@ async function walletWatchReport(day, cfg) {
   }
   await wwOperatorDM(lines.join("\n"));
 }
-app.get("/api/wallet-watch", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/wallet-watch", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   const cfg = wwCfg();
   if (req.query.add && SOL_ADDR_RE.test(String(req.query.add))) {
     if (!cfg.wallets.some((w) => w.addr === req.query.add)) cfg.wallets.push({ addr: String(req.query.add), label: String(req.query.label || "") });
@@ -13778,9 +13720,7 @@ app.get("/api/wallet-watch", async (req, res) => {
 });
 // Whale Panel data (PRIVATE — same product test): top-holder roster + flows + today's
 // activity, one JSON for the gated /whale-panel page. &refresh=1 re-runs discovery.
-app.get("/api/whale-watch", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/whale-watch", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   let refreshed = null;
   if (req.query.refresh === "1" || !kv.get("whaleWatch", null)) refreshed = await whaleRefresh().catch((e) => ({ error: e.message }));
   const ww = kv.get("whaleWatch", null) || { whales: [] };
@@ -13932,9 +13872,9 @@ WHAT NOT TO PROMISE:
   Talk about what exists today; if asked what's next, say honestly that you don't announce dates.
 
 CLKN TOKEN UTILITY:
-- 10 free AI questions per day with Ask Cluck Norris. That daily allowance is the whole
-  offer -- there is NO paid top-up any more (the old send-CLKN-to-unlock flow was retired
-  2026-07-30). If someone is out of questions, tell them it resets at midnight UTC.
+- ${AI_DAILY_MAX} free AI questions per day (per IP address) with Ask Cluck Norris. That daily
+  allowance is the whole offer -- there is NO paid top-up any more (the old send-CLKN-to-unlock
+  flow was retired 2026-07-30). If someone is out of questions, tell them it resets at midnight UTC.
 - HOLD CLKN to unlock the heavy tools free: hold about $50 worth of CLKN (priced live -- the
   exact CLKN figure shows on the tool page, so never quote a fixed token amount) and X-Ray,
   Holders, Trace, the airdropper and Buy Special are all free. Not holding? A small one-click
@@ -15447,8 +15387,7 @@ async function renderLpCard(scan) {
   return canvas.toBuffer("image/png");
 }
 
-app.get("/api/lp-card", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
+app.get("/api/lp-card", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
   const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;
@@ -15614,9 +15553,7 @@ app.get("/api/diploma-collection", (req, res) => {
 // Diploma NFT admin (gated, 404 without key). ?action=status | create-tree | create-collection | test | backfill.
 // Mutating actions need &run=1. create-tree is one-time (~0.3 SOL); backfill mints to every
 // graduate who left a wallet (idempotent — won't double-mint).
-app.all("/api/diploma-mint", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/diploma-mint", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["run"])) return;   // deep dive P0-008: create-tree / backfill / test mint only on a POST
   const action = String(req.query.action || "status");
   try {
@@ -15660,9 +15597,7 @@ app.all("/api/diploma-mint", async (req, res) => {
 //  (no action)         → status: enabled?, wallet pubkey, CLKN/SOL balance, per-send max
 //  ?max=NN              → set the per-send max guard (kv schoolAirdropMax)
 //  ?wallet=…&amount=NN&run=1 → manually airdrop to one wallet (same idempotent path as the reply flow)
-app.all("/api/school-airdrop", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.all("/api/school-airdrop", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   if (mutatingGetRefused(req, res, ["max", "run"])) return;   // deep dive P0-008: the cap write and the send are POST-only
   try {
     if (req.query.max != null) {
@@ -16298,20 +16233,17 @@ app.get("/api/jupverify/status", rateLimit("jvp-st", { windowMs: 60000, max: 30 
 });
 
 // ── Admin (owner) ── all 404 on bad key, header preferred over ?key=.
-app.get("/api/jupverify/admin/list", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+app.get("/api/jupverify/admin/list", adminGuarded(ADMIN_404_CAP), (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json({ success: true, submissions: jvpIntake.list() });
 });
-app.get("/api/jupverify/admin/entry", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+app.get("/api/jupverify/admin/entry", adminGuarded(ADMIN_404_CAP), (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const rec = jvpIntake.get(String(req.query.id || ""));
   if (!rec) return res.status(404).json({ success: false, error: "not found" });
   res.json({ success: true, submission: rec });
 });
-app.post("/api/jupverify/admin/entry", (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+app.post("/api/jupverify/admin/entry", adminGuarded(ADMIN_404_CAP), (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const b = req.body || {};
   const r = jvpIntake.adminUpdate(String(req.query.id || b.id || ""), { status: b.status, ownerNotes: b.ownerNotes, clientMessage: b.clientMessage });
@@ -16322,8 +16254,7 @@ app.post("/api/jupverify/admin/entry", (req, res) => {
 // (holders ≥~250, registered liquidity ≥~$25k — the DNC verified profile), plus
 // whether one of our engines is already running this mint. Separate from /entry
 // because it fans out to external APIs.
-app.get("/api/jupverify/admin/scorecard", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "Not found" });
+app.get("/api/jupverify/admin/scorecard", adminGuarded(ADMIN_404_CAP), async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const mint = String(req.query.mint || "").trim();
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "bad mint" });
@@ -17165,9 +17096,7 @@ app.get("/api/owners-snapshot/history", (req, res) => {
   res.json({ ok: true, ...ownersSnapshot.history({ mint }) });
 });
 // Owner-only: queue view + cancel.
-app.get("/api/owners-snapshot/admin", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/owners-snapshot/admin", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   if (req.query.cancel) return res.json({ ok: true, cancelled: ownersSnapshot.cancel(String(req.query.cancel)) });
   res.json({ ok: true, running: ownersSnapshot.running, queueLength: ownersSnapshot.queueLength, recent: ownersSnapshot.listRecent(30) });
 });
@@ -17192,11 +17121,7 @@ app.get("/autopsy", (req, res) => {
 app.get("/stats", (req, res) => {
   res.sendFile(join(__dirname, "public", "stats.html"));
 });
-app.get("/api/stats", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) {
-    return res.status(404).json({ error: "not_found" });
-  }
+app.get("/api/stats", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   const n = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 30));
   return res.status(200).json({ success: true, ...analytics.summary(n) });
 });
@@ -17206,9 +17131,7 @@ app.get("/api/stats", (req, res) => {
 // farming our API": topCallers names our subsystems (caller 'sdk' = the liquidity
 // engine's Orca/Meteora reads); proxy.topIps names external callers of the public
 // raw proxies + Wallet X-Ray, which is where scraping shows up.
-app.get("/api/helius-usage", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/helius-usage", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   const n = Math.max(1, Math.min(14, parseInt(req.query.days, 10) || 7));
   return res.status(200).json({ success: true, ...heliusUsage.summary(n) });
 });
@@ -17346,8 +17269,7 @@ app.use("/vendor", express.static(join(__dirname, "public", "vendor"), { maxAge:
 // -- Homepage: a lightweight front door at / (learn + build + token story). The
 // Preview/fire the school credential watcher manually: /api/grad-alert-test?key=…[&run=1].
 // MUST be before the catch-all below. schoolGradTick is a hoisted fn declared later.
-app.get("/api/grad-alert-test", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+app.get("/api/grad-alert-test", adminGuarded(ADMIN_404), async (req, res) => {
   try { res.json(await schoolGradTick({ dryRun: req.query.run !== "1" })); }
   catch (e) { res.status(500).json({ error: publicErrMsg(e) }); }
 });
@@ -17469,8 +17391,7 @@ app.use(nqRouter);
 // Gated dry-run / manual-fire of the Normie Quest playtest digest (the twice-daily auto-DM).
 // Dry by default (returns the preview it WOULD send); &send=1 actually DMs the operator chat;
 // &reset=1 re-baselines the "since" watermark to now (skip already-seen comments).
-app.get("/api/nq-digest-test", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+app.get("/api/nq-digest-test", adminGuarded(ADMIN_404_OK_US), async (req, res) => {
   try {
     const r = await nqDigest.run({ send: req.query.send === "1" || req.query.send === "true", reset: req.query.reset === "1", notify: nqNotify });
     res.json({ ok: true, ...r });
@@ -18462,14 +18383,9 @@ async function sendOps12hReport({ send = true } = {}) {
 
   let ok = false;
   if (chartUrl) {
-    try {
-      const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chat, photo: chartUrl, caption: caption.slice(0, 1024), parse_mode: "HTML", disable_notification: true }),
-      });
-      ok = r.ok;
-      if (!ok) console.warn("[ops-report] sendPhoto failed:", r.status, (await r.text().catch(() => "")).slice(0, 160));
-    } catch (e) { console.warn("[ops-report] sendPhoto error:", e.message); }
+    const result = await tgApi("sendPhoto", { chat_id: chat, photo: chartUrl, caption: caption.slice(0, 1024), parse_mode: "HTML", disable_notification: true });
+    ok = !!result;
+    if (!ok) console.warn("[ops-report] sendPhoto failed");
   }
   // The text fallback used to force ok = true right after the call, inside a try/catch that could
   // never fire — tgSend catches everything internally and returns null rather than throwing. So a
@@ -18717,10 +18633,7 @@ async function maybeFireOrganicReminder(entry) {
   const baseTxt = base ? ` (was ${base.score} at arm time)` : "";
   const text = `⏰🐔 <b>Organic-score recovery check</b>\n\nCLKN Jupiter organic score is now <b>${score}</b>${baseTxt}.\nBlitz has been off ~12h. If it climbed back toward ~30, the recovery thesis held — run steady/deep, not spiky.\n\nReply in your session: "pull the organic recovery" for the full curve.`;
   try {
-    await fetch(`https://api.telegram.org/bot${tok}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: false }),
-    });
+    await tgApi("sendMessage", { chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: false });
   } catch (e) { console.warn("[organic-reminder] send failed:", e.message); }
 }
 
@@ -19674,10 +19587,7 @@ app.listen(PORT, () => {
           `<b>Fees earned (lifetime):</b> $${earned.toFixed(4)} <i>(Meteora $${metFees.toFixed(4)}: pending $${metPending.toFixed(4)} + claimed/closed $${(metFees - metPending).toFixed(4)})</i>\n` +
           `<b>Fees spent (moves):</b> $${spent.toFixed(4)} <i>(${(cost.lifetime && cost.lifetime.txCount) || 0} txs)</i>\n` +
           `<b>Net:</b> $${net.toFixed(4)}`;
-        await fetch(`https://api.telegram.org/bot${tok}/sendMessage`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: proj.telegramChatId, text: msg, parse_mode: "HTML", disable_web_page_preview: true }),
-        });
+        await tgApi("sendMessage", { chat_id: proj.telegramChatId, text: msg, parse_mode: "HTML", disable_web_page_preview: true });
       } catch (e) { console.warn("[treasury-report] failed:", e.message); }
     }
     function treasuryReportTick() {
@@ -19714,10 +19624,7 @@ app.listen(PORT, () => {
       return `Open Meteora → <b>Rebalance</b> tab → <b>Curve</b> → <b>Rebalance</b> → approve.${link ? `\n${link}` : ""}`;
     };
     async function metDM(text) {
-      await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }),
-      });
+      await tgApi("sendMessage", { chat_id: proj.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text });
     }
     async function meteoraOorTick() {
       tg = process.env.TELEGRAM_BOT_TOKEN; proj = whirlpoolMM.vault.getProject("treasury");
@@ -19786,10 +19693,7 @@ app.listen(PORT, () => {
       const wpr = whirlpoolMM.vault.getProject("treasury");
       if (!wtg || !wpr || !wpr.telegramChatId) return;
       async function wpDM(text) {
-        await fetch(`https://api.telegram.org/bot${wtg}/sendMessage`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }),
-        });
+        await tgApi("sendMessage", { chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text });
       }
       try {
         const r = await whirlpoolMM.vault.publicPositions("treasury");
@@ -19848,10 +19752,7 @@ app.listen(PORT, () => {
           if (dm) {
             _wallHarvState[key] = { lastUsd: usd, above };
             kv.set("wallHarvestState", _wallHarvState);
-            await fetch(`https://api.telegram.org/bot${wtg}/sendMessage`, {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text: dm }),
-            });
+            await tgApi("sendMessage", { chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text: dm });
           } else if (!above && prev.above) {
             _wallHarvState[key] = { lastUsd: usd, above: false }; kv.set("wallHarvestState", _wallHarvState); // price fell back below the top — re-arm the full-walk alert
           }
@@ -19879,7 +19780,7 @@ app.listen(PORT, () => {
       const wtg = process.env.TELEGRAM_BOT_TOKEN;
       const wpr = whirlpoolMM.vault.getProject("treasury");
       if (!wpr) return;
-      const dm = async (text) => { if (!wtg || !wpr.telegramChatId) return; try { await fetch(`https://api.telegram.org/bot${wtg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }) }); } catch (_) {} };
+      const dm = async (text) => { if (!wtg || !wpr.telegramChatId) return; await tgApi("sendMessage", { chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }); };
       _wallRatchetBusy = true;
       try {
         const r = await whirlpoolMM.vault.publicPositions("treasury");

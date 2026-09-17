@@ -42,8 +42,11 @@ you review, verify and give second opinions; the owner decides. Nobody merges to
 ## 2026-09-17 — the platform deep-dive PRs: review these FIRST, in this order
 
 Two stacked PRs from a 32-finder / 79-verifier audit (`docs/PLATFORM_DEEP_DIVE_2026-09-17.md` — every
-finding, the lens votes, and which PR fixed what). Both are green and waiting on the owner. Findings,
-not rewrites; cite file:line; say "reviewed, no issue" when that is the answer.
+finding, the lens votes, and which PR fixed what). **Both merged and promoted to `main` on
+2026-09-17 (#332), with your round-1 findings folded in.** A third PR, #333, followed the same
+day and is **merged to `develop`, NOT yet promoted — the owner asked for your review of it after
+the merge** (below, after the #330 list). Findings, not rewrites; cite file:line; say "reviewed,
+no issue" when that is the answer.
 
 **PR #329 (P0 batch, `claude/hub-public-page` → `develop`)**
 1. `lib/kvstore.js` `load()` — a corrupt `app-state.json` now boots in-memory with the file preserved.
@@ -82,6 +85,45 @@ not rewrites; cite file:line; say "reviewed, no issue" when that is the answer.
 7. Sequencing trap to confirm, not fix: `/api/x-announce?post=1` is POST-only in #330; the hourly
    lock-celebration routine still GETs it and is switched to POST at promotion time. Say if you see
    another caller.
+
+**PR #333 (owner decisions batch, squash `1c4220f` on `develop` — review the merged diff)**
+1. `server.js` graduation gate — `gradGateLogBlock` journals every block to kv `gradGateBlockLog`
+   (bounded 50); `gradGateLearnerMessage` picks copy per gate code; `/api/claim` returns
+   `gate {code, detail}` when the mint is withheld. `src/App.jsx` — failed `lesson_complete`
+   beacons are queued in localStorage (`clkn_track_q`) and re-sent on load / `online` / before a
+   claim; a claim withheld for a short ledger re-sends every locally completed lesson. The server
+   keeps the FIRST sighting per lesson (`lib/school-progress.js` `mark`). Attack it: can the
+   re-send path, or a crafted `clkn_track_q`, weaken the anti-farm timing checks (min age, live
+   marks across three 5-minute windows)? Can the journal leak anything a learner did not consent to?
+2. `/api/tg-test` — one `app.all` dispatcher: key → 404, non-POST → 405, ≥100 body bytes → raw
+   upload else query send. The meme routine and lock-celebration watcher POST it with a transition
+   fallback (GET only on the OLD build's exact "empty body" 400). Is there any caller still GETting
+   it, and can the dispatcher misroute a query send that happens to carry a body?
+3. `adminGuarded(shape, { noStore })` middleware over 75 routes, six named 404 bodies. Did any route
+   change its 404 body, lose a `Cache-Control: no-store`, or gain the guard on a path that used to
+   run something before the key check? The seven sites left alone are listed in commit `ebe8a96`.
+4. `ENGINE_ARM_TABLE` / `registerEngineArmRoute` (cuna/dnc/rose). `operatorPubkey` is now read
+   after the arm branch rather than before — the agent argues the memo cache makes that identical;
+   check `lib/whirlpool-vault.js` `_operators` eviction in `registerProject` (ROSE's ratchet
+   re-registers before the operator check).
+5. `tgApi()` — 27 hand-rolled Telegram sends collapsed onto one never-throw helper; `tgSendKb` gained
+   the staging prefix it always lacked. Two sites (`notifyTelegramPhoto`, the ops-report chart) now
+   treat a Telegram-level `ok:false` as failure where they only checked HTTP before. Any caller whose
+   return-type contract changed (message_id vs boolean vs result)?
+6. `lib/engine-ratchet.js` `ratchetPatch` + `lib/sig-cursor.js` `freshSince` — pure extractions
+   with tests written first. The ratchet report documents that cuna re-applies overrides over its
+   floor while rose does not (pre-existing, preserved). Is that rose gap worth fixing, and did the
+   POKE rewiring (its monotonic bumps fed in as `want`) change anything observable?
+7. `scripts/engine-arm-gate-test.cjs` — three real boots. Does scenario A's "every *_ENGINE_ON=1
+   arms nothing" actually exercise the code path you would attack, or is there an arm reader it
+   misses (`dedicatedActive`, the vault router's own `ARMED_FLAGS`)?
+8. Page pass: quiz pass mark is now `ceil(questions × 2/3)` (`src/App.jsx`); deep-link unlock order;
+   `CluckUtil.rawAmount` BigInt formatting on the hub desk; `CluckGate.denied/message` re-opening the
+   gate card on `token-holders`, `wallet-xray`, `trace`; new `GET /api/hub-pricing`. Anything that
+   regresses a learner or a paying operator?
+9. `package.json` `overrides`: `elliptic` 6.6.1, `secp256k1` 5.0.2 under `@dha-team/arbundles`
+   (its newest release is 1.0.4). Does the Hatchery's Arweave upload path (`hatchery.js`
+   `SolanaSigner`) touch either override at runtime?
 
 ## What to review first (ranked)
 1. **The server-side tools pass (PR #281, money path).** `toolPassGate` / `requireToolPass` in

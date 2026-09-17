@@ -194,7 +194,9 @@
   function tokKey() { return "hub_desk_tok_" + PID; }
   $("payLink").href = "/hub/" + PID + "/pay";
 
-  var amt = function (raw) { return (Number(raw) / Math.pow(10, DEC)).toLocaleString(undefined, { maximumFractionDigits: 2 }) + " " + SYM; };
+  // BigInt-safe: Number(raw)/10**DEC silently loses precision past Number.MAX_SAFE_INTEGER,
+  // which real lock weights and large balances exceed (P2-086).
+  var amt = function (raw) { return CluckUtil.rawAmount(raw, DEC, 2) + " " + SYM; };
   function authHeaders() { var h = {}; if (KEY) h["x-premium-key"] = KEY; else if (TOKEN) h["x-clkn-operator"] = TOKEN; return h; }
   async function call(path, params, method) {
     var url = API + path, opts = { method: method || "GET", headers: authHeaders() };
@@ -294,7 +296,7 @@
     var tb = $("lockers").querySelector("tbody");
     tb.innerHTML = (DESK.lockers || []).map(function (l) {
       var why = l.qualifies ? '<span class="pill yes">QUALIFIES</span>' : '<span class="pill no">NO</span> <span class="small">' + esc((l.reasons || []).map(function (r) { return r.text || r.code; }).join("; ")) + "</span>";
-      return '<tr><td class="mono">' + esc(l.owner || "?") + '<br/><a class="small" href="https://solscan.io/account/' + encodeURIComponent(l.escrow || "") + '" target="_blank" rel="noopener">escrow</a></td><td class="num">' + esc(amt(l.amountRaw)) + '</td><td class="num">' + esc(Number(l.weight).toLocaleString()) + '</td><td>' + (l.daysLeft == null ? "—" : esc(String(l.daysLeft)) + " d") + '</td><td>' + why + '</td></tr>';
+      return '<tr><td class="mono">' + esc(l.owner || "?") + '<br/><a class="small" href="https://solscan.io/account/' + encodeURIComponent(l.escrow || "") + '" target="_blank" rel="noopener">escrow</a></td><td class="num">' + esc(amt(l.amountRaw)) + '</td><td class="num">' + esc(CluckUtil.rawAmount(l.weight, 0)) + '</td><td>' + (l.daysLeft == null ? "—" : esc(String(l.daysLeft)) + " d") + '</td><td>' + why + '</td></tr>';
     }).join("") || '<tr><td colspan="5" class="muted">no locks of this mint seen yet</td></tr>';
     $("lockNote").textContent = "Weight = locked amount × days committed (from the day the program first saw the lock). Reason codes are the same ones holders see.";
   }

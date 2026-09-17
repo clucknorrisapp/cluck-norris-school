@@ -474,9 +474,14 @@ served the React shell at 200.
   **P1 batch (same day):** `/api/x-announce?post=1`, `/api/x-post-test?post=1` and
   `/api/classroom/graduates?action=` joined the list (dry runs and the list stay GETs). ⚠️ The hourly
   lock-celebration routine posts through `x-announce?post=1` — its prompt was switched to
-  `curl -X POST` with this change; if you ever recreate that routine, keep it a POST. `/api/tg-test`
-  still sends on a GET (the meme and lock routines depend on it) — the next candidate, same
-  routine-update-first sequencing. **The burn celebration also has a value floor now**: a verified burn Jupiter
+  `curl -X POST` with this change; if you ever recreate that routine, keep it a POST. **`/api/tg-test`
+  is POST-only too (owner, 2026-09-17: "convert tg-test too, routine first")** — every form of it
+  sends, so the whole GET method answers 405 after the key's 404; the query send and the raw
+  file-body upload share one dispatcher. The meme routine and the lock-celebration watcher were
+  switched to `curl -X POST` BEFORE the server change; both carry a transition fallback (resend as a
+  GET only on the OLD build's exact "empty body" 400) that must be **removed from both prompts once
+  this is promoted to `main`**. Next candidate, same routine-first sequencing: `/api/meme-queue`
+  `&done=`/`&art=` still write on a GET (the route is GET-only). **The burn celebration also has a value floor now**: a verified burn Jupiter
   prices under `BURN_BROADCAST_MIN_USD` (default $10; unpriced = skipped) gets its receipt page
   but no auto-post — a stranger's one-unit mint could otherwise force a brand tweet.
 - ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`
@@ -619,9 +624,23 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
 - **Buy Special lost its CLKN price.** Retiring send-to-unlock removed the 5,850-CLKN door priced
   on 2026-07-24 to be ~25% cheaper than SOL. Paying in CLKN is no longer possible there, only
   holding. That reversed a deliberate decision — re-raise it rather than assuming it's settled.
-- **Nomadz — reopened.** Their CEO replied about featuring their Solana hotel-booking product.
-  **Build nothing until the owner says what was agreed** — a reply is not a scope. Then treat it
-  as an education section, not an endorsement.
+- **Nomadz — CLOSED (owner, 2026-09-17: "cancel the nomadz deal off completely, they never
+  answered").** Nothing was ever built or published for it; don't build an education section,
+  a feature, or a mention premised on it. Reopen only on a fresh owner ask.
+- **ROSE buy-bot — DISARMED (owner, 2026-09-17).** "We only use the rose buy bot when needed …
+  it can be disarmed completely for now"; the other buy bots cover it and the ROSE bot is for
+  giveaways and announcements. kv `roseBuyArmed` is false on production and nothing at boot
+  re-arms it (the kv key is the only switch). The $10 alert floor in `server.js` is moot while
+  it is off — whoever re-arms it picks the floor in that moment; don't "revert to $1.75" as
+  housekeeping.
+- **Hub access when a project lapses — FROZEN (owner, 2026-09-17).** An unpaid or lapsed
+  project's operator cannot change terms or arm anything; only the owner can. Operators may
+  prepay: each payment adds a month on the END of `paidThroughUnix` (`lib/hub/access.js`
+  `applyPayment`, and the pay page says so), so paying twice buys two months. Don't loosen the
+  terms gate for lapsed projects.
+- **CUNA on the Hub — HELD (owner, 2026-09-17: "do not duplicate cuna yet, we will get there").**
+  The dedicated CUNA lock-to-earn payout handler in `server.js` stays; retiring it in favour of
+  a Hub project is Phase 1b and needs an owner go.
 - **Solana Foundation — CLOSED.** Denied again (owner, 2026-07-31), and every mention has been
   stripped: the `@SolanaFndn` tag on the daily lesson tweet and on the 4pm bump, "grant info" in
   the bot's About card, and the two application docs under `docs/`. Don't reapply, don't re-add the
@@ -641,9 +660,21 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
   front of a treasury-signed mint). Backfilled marks still count toward the lesson total.
   Owner controls: `/api/school/grad-gate?key=…` (mode/thresholds/inspection), `GRAD_GATE_OFF=1`
   kill. A blocked claim still saves the transcript — it withholds the badge, sheet row, and mint.
-  ⚠️ Live read 2026-09-05 23:50 UTC: `mode: enforce`, `blockedOrWouldBlock: 1` — one claim has
-  tripped it since arming and nobody has checked whether that was a legit learner. The audit's
-  live-data check owns that question; `GRAD_GATE_OFF=1` is the kill if it is blocking real people.
+  ⚠️ One claim tripped the gate between arming and 2026-09-17 and it could never be diagnosed —
+  the only trace was a counter. Since 2026-09-17 (owner: "do whatever is best for people taking
+  the course") every block is journalled (`recentBlocks` on the grad-gate route, bounded at 50,
+  truncated ids, with what the ledger held for that session), the learner is told the actual
+  cause and next step per gate code, the school queues a lesson mark whose beacon failed and
+  re-sends it on load / online / before a claim, and a claim withheld for a short ledger re-sends
+  the device's own marks so "try again" has something to find. ⚠️ Replayed marks all land in ONE
+  five-minute window, so on their own they can never satisfy the live-spread check — which is why
+  (Codex on #333) a live RE-PASS of a lesson is recorded (`r` beside the untouched first sighting
+  `t`, `lib/school-progress.js` `mark`) and counts toward the spread, and the school reports
+  every pass, not only the first. A learner recovers by doing real lessons a few minutes apart; a
+  script gains nothing it could not do by sending first sightings later.
+  `scripts/school-progress-test.cjs` pins it. Check `recentBlocks` before assuming a block was a
+  script. `GRAD_GATE_OFF=1` is still the kill if it blocks real people. The grad-gate route's
+  mode/threshold writes are POST-only since the same day (P2-113).
 - **Never verified end-to-end:** no rendered autopsy report, no real lock, and no connect-and-sign
   with a real wallet has ever been exercised by a session — they need keys a cloud container
   doesn't have. They're also where the worst bugs have hidden.

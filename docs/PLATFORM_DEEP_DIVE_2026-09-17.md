@@ -123,6 +123,17 @@ Elliptic vulnerabilities: GHSA-vjh7-7g9h-fjfh (private key extraction in ECDSA),
 
 Tests: kvstore many-write (+3), payout-verify (10, +3 incl. batch-age and cross-batch reuse), cuna-payout owedNow recovery (+2), tool-pass-redeem registry check (+3). Not reproduced here: the reviewer's own scenarios (their harness is not in this repo) — the mechanisms are covered by the unit cases above.
 
+**Codex round 2 (2026-09-17, on #333 at `1c4220f`, reviewed after the merge to `develop`) — four actionable findings, all reproduced offline by the reviewer and fixed before promotion:**
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | Graduation recovery left real learners stuck: replayed marks all land in one five-minute window, and retaking a quiz could not repair the spread check because the ledger kept only the first sighting and the school only reported a first pass | a live re-pass records `r` beside the untouched first sighting `t` (`lib/school-progress.js` `mark`); `evaluate` counts both toward the live windows; `finish()` reports every pass. `scripts/school-progress-test.cjs` (9 cases, incl. "instant re-passes add no windows") |
+| 2 | The beacon retry queue was cleared before delivery succeeded, so closing the tab mid-resend lost queued progress | an entry leaves `clkn_track_q` only after its own send resolved OK; failures leave it in place; overlapping flushes are allowed (the server dedupes by lesson) |
+| 3 | A failed Telegram treasury recap reported `sent:true` and advanced its `prev` snapshot | `sendTreasuryRecap` captures the `tgApi` result; a null send returns `sent:false` with an error and the snapshot does not move; no token configured advances nothing either. `broadcast-integrity-test` pins the shape |
+| 4 | `/api/tg-test`: a body under 100 bytes fell through to the query path and posted the default announcement | any non-empty body is an upload; under 100 bytes is refused 400. Guard test pins it |
+
+The reviewer's admin-guard comparison found no response or header regressions, and both extracted helper suites passed on their side. Not seen here: the full findings file (it was on the reviewer's machine); the four summaries were verified directly against the code before fixing.
+
 **Still P1 after verification (11):** P1-018, P1-021, P1-030, P1-032, P1-034, P1-035, P1-036, P1-044, P1-048, P1-056, P1-064. Everything else confirmed as real but P2/P3 on impact — see the table.
 
 | ID | verdict | severity | lens votes | finding | verifier note | fix |
