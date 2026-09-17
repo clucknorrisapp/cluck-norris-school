@@ -486,7 +486,15 @@ served the React shell at 200.
   day)** — the meme routine POSTs its `done=` write, carried a transition GET fallback while the old
   build was live, and had it removed once #337 was verified; the list, `history=1` and `all=1`
   stay GETs. With this, **no admin route on the surface writes or sends on a GET** — the guard test
-  is the inventory; add a new admin flag there before you add it to a route. **The burn celebration also has a value floor now**: a verified burn Jupiter
+  is the inventory; add a new admin flag there before you add it to a route. ⚠️ **The one that got
+  through (incident, 2026-09-17 16:11 UTC): `/api/rose-buybot`'s FLAG-LESS GET ran a full poll
+  "even while disarmed"** — the 09-05 audit read it as the harmless read. A status check on a bot
+  disarmed for days walked its whole 100-signature window and posted every buy above the floor
+  into the OnlyRose room, in a row. Fixed the same day: the plain GET is the status read, the poll
+  is `POST ?run=1`, and BOTH buy bots step over anything older than `BUYBOT_REPLAY_MAX_AGE_S`
+  (default 15 min) after any pause — a resume never narrates history. **A "read" that calls the
+  poller is not a read; check what the flag-less path actually does before calling an admin
+  route on production.** **The burn celebration also has a value floor now**: a verified burn Jupiter
   prices under `BURN_BROADCAST_MIN_USD` (default $10; unpriced = skipped) gets its receipt page
   but no auto-post — a stranger's one-unit mint could otherwise force a brand tweet.
 - ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`

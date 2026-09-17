@@ -9009,6 +9009,11 @@ function roseMinBuyUsd() {
   const o = Number(kv.get("roseMinBuyUsd", NaN));
   return Number.isFinite(o) && o > 0 ? o : ROSE_MIN_BUY_USD_DEFAULT;
 }
+// Replay horizon for BOTH buy bots (ROSE + generic): a transaction older than this when the poll
+// sees it is history, not a buy to announce. Incident 2026-09-17: the ROSE bot resumed after days
+// disarmed and posted every buy in its 100-signature window into the OnlyRose room in one go.
+// 15 min is far longer than any poll interval or indexing lag, and far shorter than any pause.
+const BUYBOT_REPLAY_MAX_AGE_S = Math.max(60, parseInt(process.env.BUYBOT_REPLAY_MAX_AGE_S || "900", 10) || 900);
 const ROSE_BUY_OVERLAP_MS = 150 * 1000;        // re-scan the trailing 2.5 min for lagged enrichment
 const ROSE_BUY_LOOKBACK_CAP_MS = 15 * 60 * 1000; // never scan more than 15 min back (redeploy/gap guard)
 const ROSE_BUY_SEEN_MAX = 600;                 // bound the durable dedup set
@@ -9252,7 +9257,10 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   const lastSig = kv.get("roseBuyLastSig", null);
   if (!lastSig) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, firstRun: true, note: "pool head recorded; history skipped" }; }
 
-  const { fresh, cursorFound } = freshSince(sigs, lastSig); // newest→oldest until the cursor, then flipped to oldest→newest
+  // Replay horizon (incident 2026-09-17): after a pause the cursor sits far behind the head, and
+  // the whole window would otherwise be posted into the room as if it just happened. Anything
+  // older than BUYBOT_REPLAY_MAX_AGE_S is stepped over (marked seen, cursor advanced) and logged.
+  const { fresh, stale, cursorFound } = freshSince(sigs, lastSig, { maxAgeS: BUYBOT_REPLAY_MAX_AGE_S }); // newest→oldest until the cursor, then flipped to oldest→newest
   // Cursor off the end of the window ⇒ more than SIG_LIMIT txns landed since last poll: buys
   // older than the oldest fetched sig are unrecoverable. Surface it LOUDLY (kv marker + log +
   // status field) — never skip silently. Fix by raising ROSE_SIG_LIMIT or lowering ROSE_POLL_MS.
@@ -9261,10 +9269,18 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
     kv.set("roseBuyGapCount", (kv.get("roseBuyGapCount", 0) || 0) + 1);
     console.warn(`[ROSE-BUY] cursor fell outside a ${sigs.length}-sig window — possible missed buys; raise ROSE_SIG_LIMIT or lower ROSE_POLL_MS`);
   }
-  if (!fresh.length) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, scanned: 0, posted: 0 }; }
-
   const seen = new Set(kv.get("roseBuySeen", []));
-  let posted = 0, scanned = 0, buysSeen = 0, advanceTo = lastSig;
+  if (stale.length) {
+    for (const sig of stale) seen.add(sig);
+    console.warn(`[ROSE-BUY] resume after a pause: ${stale.length} txns older than ${BUYBOT_REPLAY_MAX_AGE_S}s stepped over, not posted`);
+  }
+  if (!fresh.length) {
+    kv.set("roseBuyLastSig", sigs[0].signature);
+    if (stale.length) kv.set("roseBuySeen", [...seen].slice(-ROSE_BUY_SEEN_MAX));
+    return { ok: true, scanned: 0, posted: 0, skippedStale: stale.length };
+  }
+
+  let posted = 0, scanned = 0, buysSeen = 0, advanceTo = stale.length ? stale[stale.length - 1] : lastSig;
   for (const sig of fresh) {
     if (seen.has(sig)) { advanceTo = sig; continue; }
     const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
@@ -9291,7 +9307,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   }
   kv.set("roseBuyLastSig", advanceTo);
   kv.set("roseBuySeen", [...seen].slice(-ROSE_BUY_SEEN_MAX));
-  return { ok: true, scanned, buys: buysSeen, posted, floorUsd: roseMinBuyUsd(), gap: !cursorFound, image: !!img };
+  return { ok: true, scanned, buys: buysSeen, posted, skippedStale: stale.length, floorUsd: roseMinBuyUsd(), gap: !cursorFound, image: !!img };
 }
 
 // Auto-posting is OFF until explicitly armed (kv roseBuyArmed), so resolving the chat
@@ -9402,7 +9418,7 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
   const SIG_LIMIT = 100;
   const poolList = [cfg.pool, ...(Array.isArray(cfg.extraPools) ? cfg.extraPools.filter(p => p && p !== cfg.pool) : [])];
   const seenKey = `buyBotSeen:${cfg.id}`;
-  let posted = 0, scanned = 0, gap = false;
+  let posted = 0, scanned = 0, gap = false, skippedStale = 0;
   for (const poolAddr of poolList) {
     const lastKey = `buyBotLastSig:${cfg.id}` + (poolAddr === cfg.pool ? "" : `:${poolAddr.slice(0, 8)}`);
     const sigsRes = await roseHeliusRpc(key, "getSignaturesForAddress", [poolAddr, { limit: SIG_LIMIT }]).catch(() => null);
@@ -9410,11 +9426,22 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
     if (!sigs.length) continue;
     const lastSig = kv.get(lastKey, null);
     if (!lastSig) { kv.set(lastKey, sigs[0].signature); continue; }
-    const { fresh, cursorFound } = freshSince(sigs, lastSig);
+    // Replay horizon (incident 2026-09-17, see the ROSE bot): a resume after a pause never posts
+    // history — txns older than BUYBOT_REPLAY_MAX_AGE_S are stepped over and marked seen.
+    const { fresh, stale, cursorFound } = freshSince(sigs, lastSig, { maxAgeS: BUYBOT_REPLAY_MAX_AGE_S });
     if (!cursorFound) { gap = true; console.warn(`[BUYBOT ${cfg.id}] cursor outside ${sigs.length}-sig window on ${poolAddr.slice(0, 8)} — possible missed buys`); }
-    if (!fresh.length) { kv.set(lastKey, sigs[0].signature); continue; }
     const seen = new Set(kv.get(seenKey, []));
-    let advanceTo = lastSig;
+    if (stale.length) {
+      for (const sig of stale) seen.add(sig);
+      skippedStale += stale.length;
+      console.warn(`[BUYBOT ${cfg.id}] resume after a pause: ${stale.length} txns older than ${BUYBOT_REPLAY_MAX_AGE_S}s stepped over on ${poolAddr.slice(0, 8)}, not posted`);
+    }
+    if (!fresh.length) {
+      kv.set(lastKey, sigs[0].signature);
+      if (stale.length) kv.set(seenKey, [...seen].slice(-BUYBOT_SEEN_MAX));
+      continue;
+    }
+    let advanceTo = stale.length ? stale[stale.length - 1] : lastSig;
     for (const sig of fresh) {
       if (seen.has(sig)) { advanceTo = sig; continue; }
       const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
@@ -9442,7 +9469,7 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
     kv.set(lastKey, advanceTo);
     kv.set(seenKey, [...seen].slice(-BUYBOT_SEEN_MAX));
   }
-  return { ok: true, scanned, posted, floorUsd: Number(cfg.minUsd) || 0, gap, pools: poolList.length };
+  return { ok: true, scanned, posted, skippedStale, floorUsd: Number(cfg.minUsd) || 0, gap, pools: poolList.length };
 }
 
 // ── Project BURN watcher ("feel the burn") ──────────────────────────────────
@@ -9983,28 +10010,32 @@ app.all("/api/meme-queue", adminGuarded(ADMIN_404, { noStore: true }), (req, res
 });
 
 // Admin lever (PREMIUM_ACCESS_KEY-gated):
-//   ?status=1  → read-only wiring probe (never posts)
+//   default    → read-only wiring/status probe (never posts, never polls) — same as ?status=1
 //   ?arm=1     → turn ON automatic buy posting; ?disarm=1 → turn it OFF
 //   ?setmin=N  → set the min-buy USD floor live (e.g. 10). ?setmin=0 clears the override
 //                back to the code/env default. Survives redeploys (kv-durable).
-//   default    → run one poll cycle now (manual; works even while disarmed)
+//   ?run=1     → run one poll cycle now (manual; works even while disarmed) — POST only
 //   ?test=1    → fire a sample buy alert (verify chat + image wiring)
 //   ?announce=1→ post the one-off "buy bot warming up" announcement
 //   ?loud=1    → make THIS post notify (announce/test only; silent otherwise per owner rule)
+// ⚠️ Incident 2026-09-17: the flag-less GET used to RUN A POLL "even while disarmed". A status
+// check on a bot that had been disarmed for days walked its whole 100-signature window and posted
+// every buy above the floor into the OnlyRose room, in a row. A plain GET is a read now; the poll
+// is an explicit POST ?run=1, and both bots step over anything older than the replay horizon.
 app.all("/api/rose-buybot", adminGuarded(ADMIN_404_OK), async (req, res) => {
-  if (mutatingGetRefused(req, res, ["arm", "disarm", "setmin", "test", "announce", "backfill"])) return;   // audit #8; the flag-less poll stays a GET
+  if (mutatingGetRefused(req, res, ["arm", "disarm", "setmin", "test", "announce", "backfill", "run"])) return;   // audit #8 + incident 2026-09-17; the flag-less GET is the status read
   try {
     if (req.query.arm === "1") kv.set("roseBuyArmed", true);
     if (req.query.disarm === "1") kv.set("roseBuyArmed", false);
     // Live min-buy floor: setmin=0 (or negative/NaN) clears the override → back to default.
-    let minChanged = false;
     if (req.query.setmin != null) {
       const v = Number(req.query.setmin);
       if (Number.isFinite(v) && v > 0) kv.set("roseMinBuyUsd", v); else kv.set("roseMinBuyUsd", null);
-      minChanged = true;
     }
-    // arm/disarm/setmin are clean toggles — report status, don't also fire a poll.
-    const wantStatus = req.query.status === "1" || req.query.arm === "1" || req.query.disarm === "1" || minChanged;
+    // Everything that is not an explicit action (run / test / announce / backfill) is the status
+    // read — arm/disarm/setmin toggles included. A poll only ever runs on POST ?run=1.
+    const isAction = req.query.run === "1" || req.query.test === "1" || req.query.announce === "1" || !!req.query.backfill;
+    const wantStatus = !isAction;
     const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1", announce: req.query.announce === "1", loud: req.query.loud === "1", status: wantStatus, backfill: req.query.backfill || null });
     return res.status(200).json({ configured: !!roseResolveChatId(), armed: roseBuyArmed(), imageSet: !!process.env.ROSE_BUY_IMAGE_URL, ...out });
   } catch (e) {

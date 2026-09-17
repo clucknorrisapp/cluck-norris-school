@@ -18,7 +18,7 @@ const SIGS = [s("e5"), s("d4"), s("c3", { InstructionError: [0, "x"] }), s("b2")
 
 t("empty list: nothing fresh, cursor not found, no head", () => {
   const r = freshSince([], "anything");
-  assert.deepStrictEqual(r, { fresh: [], cursorFound: false, head: null });
+  assert.deepStrictEqual(r, { fresh: [], stale: [], cursorFound: false, head: null });
 });
 
 t("no cursor (null lastSig): all non-err sigs, oldest-last→ no, oldest-FIRST order, cursorFound false, head is sigs[0]", () => {
@@ -67,7 +67,7 @@ t("cursor entry itself is never included even when older entries exist", () => {
 
 t("a single-item list with the cursor at that item: nothing fresh", () => {
   const r = freshSince([s("only")], "only");
-  assert.deepStrictEqual(r, { fresh: [], cursorFound: true, head: "only" });
+  assert.deepStrictEqual(r, { fresh: [], stale: [], cursorFound: true, head: "only" });
 });
 
 t("head is always sigs[0].signature regardless of the cursor position", () => {
@@ -77,8 +77,52 @@ t("head is always sigs[0].signature regardless of the cursor position", () => {
 });
 
 t("non-array input is treated as empty, not a throw", () => {
-  assert.deepStrictEqual(freshSince(null, "x"), { fresh: [], cursorFound: false, head: null });
-  assert.deepStrictEqual(freshSince(undefined, "x"), { fresh: [], cursorFound: false, head: null });
+  assert.deepStrictEqual(freshSince(null, "x"), { fresh: [], stale: [], cursorFound: false, head: null });
+  assert.deepStrictEqual(freshSince(undefined, "x"), { fresh: [], stale: [], cursorFound: false, head: null });
+});
+
+// ── Replay horizon (incident 2026-09-17): a resume after a pause must never narrate history ──
+const bt = (signature, blockTime, err = null) => ({ signature, blockTime, err });
+const NOW = 1_000_000;
+// newest → oldest: two fresh (1 min, 5 min old), one err'd, two stale (1 h, 2 h old), then the cursor
+const AGED = [bt("f1", NOW - 60), bt("f2", NOW - 300), bt("x", NOW - 400, { err: 1 }), bt("s1", NOW - 3600), bt("s2", NOW - 7200), bt("cur", NOW - 9000)];
+
+t("horizon: sigs older than maxAgeS go to stale (oldest-first), the rest to fresh (oldest-first)", () => {
+  const r = freshSince(AGED, "cur", { maxAgeS: 900, nowS: NOW });
+  assert.deepStrictEqual(r.fresh, ["f2", "f1"]);
+  assert.deepStrictEqual(r.stale, ["s2", "s1"]);
+  assert.strictEqual(r.cursorFound, true);
+});
+
+t("horizon: the err'd entry is dropped from both lists", () => {
+  const r = freshSince(AGED, "cur", { maxAgeS: 900, nowS: NOW });
+  assert.ok(!r.fresh.includes("x") && !r.stale.includes("x"));
+});
+
+t("horizon: a whole window of old history (cursor far behind) is ALL stale — nothing to post", () => {
+  const old = [bt("o1", NOW - 90000), bt("o2", NOW - 90060), bt("o3", NOW - 90120)];
+  const r = freshSince(old, "long-gone", { maxAgeS: 900, nowS: NOW });
+  assert.deepStrictEqual(r.fresh, []);
+  assert.deepStrictEqual(r.stale, ["o3", "o2", "o1"]);
+  assert.strictEqual(r.cursorFound, false);
+});
+
+t("horizon: a sig with no blockTime is treated as fresh (never silently dropped)", () => {
+  const r = freshSince([{ signature: "nobt", err: null }, bt("cur", NOW - 10)], "cur", { maxAgeS: 900, nowS: NOW });
+  assert.deepStrictEqual(r.fresh, ["nobt"]);
+  assert.deepStrictEqual(r.stale, []);
+});
+
+t("no horizon given: behaviour unchanged, stale is empty even for old sigs", () => {
+  const r = freshSince(AGED, "cur");
+  assert.deepStrictEqual(r.fresh, ["s2", "s1", "f2", "f1"]);
+  assert.deepStrictEqual(r.stale, []);
+});
+
+t("horizon: exactly at the boundary is still fresh; one second past is stale", () => {
+  const r = freshSince([bt("edge", NOW - 900), bt("past", NOW - 901), bt("cur", NOW - 5000)], "cur", { maxAgeS: 900, nowS: NOW });
+  assert.deepStrictEqual(r.fresh, ["edge"]);
+  assert.deepStrictEqual(r.stale, ["past"]);
 });
 
 console.log(`\n${fail ? "FAILED" : "all passed"} (${pass} passed${fail ? `, ${fail} failed` : ""})`);
