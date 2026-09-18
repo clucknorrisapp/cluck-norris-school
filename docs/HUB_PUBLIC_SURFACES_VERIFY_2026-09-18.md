@@ -89,6 +89,9 @@ payment that never happened inverts exactly that.
 staging host, from a constant), and show the host it fetched from beside the verdict for anything
 that is not this origin.
 
+**Fixed:** `c9956f9` — `scripts/hub-verify-page-test.cjs` §4c (Playwright route interception:
+zero requests to a cross-origin host, plain refusal renders instead of a verdict).
+
 ### P1-02 · `/hub/verify` prints the published and reproduced amounts in raw base units
 
 `public/hub-verify.html:279` (URL + files tabs, `renderVerdict`) and `public/hub-verify.html:486`
@@ -121,6 +124,9 @@ means base units for lock-to-earn and whole tokens for a buy competition.
 **Fix:** run both values through the existing `fmtAmount(raw, decimals)` with the decimals the
 page already has in hand (`inputsBody.decimals`, already passed to `stepsForLockToEarn`), and
 normalise the buy-comp branches onto the same unit.
+
+**Fixed:** `c98ec35` — `scripts/hub-verify-page-test.cjs` (9- and 6-decimal fixtures both render
+UI units at the headline, e.g. "1.5 HVT"/"1.234567 SIX", never the raw base-unit string).
 
 ### P1-03 · The heaviest Hub reads are the ones with no rate limiter; ten concurrent hits stall the whole server
 
@@ -160,6 +166,12 @@ so today's live CUNA ledger is far smaller than the fixture and the present-day 
 memoise `hubProjectView(p)` per project for a few seconds the way `HUB_REPRO_CACHE` already does
 for the reproducibility computation.
 
+**Fixed:** `00edf11` — `scripts/public-route-hygiene-test.cjs` (the three API routes now share the
+heavy bucket and 429 on the same burst; heavy-route count 11→14) and `scripts/hub-wallet-test.cjs`
+(60s wallet cache, hit/miss asserted via an `x-hub-wallet-cache` debug header under
+`NODE_ENV=test`). The `/hub/:project` share page was cached (`hubOgForCached`), not rate-limited,
+so a person clicking a shared link is never 429'd — confirmed unaffected in the same hygiene test.
+
 ### P1-04 · `POST /api/track` lets anyone mint unbounded `hub_lesson_read` project keys and move the traction number
 
 `server.js:18333` (route, no rate limiter), `server.js:18350`
@@ -193,6 +205,13 @@ That is precisely the honesty claim the traction report exists to make.
 
 **Fix:** drop a `hub_lesson_read:<id>` whose id is not a registered Hub project (the same check
 `lesson`/`from`/`to` already get), prune by day on write, and rate-limit `/api/track`.
+
+**Fixed:** `3751454` — `scripts/traction-test.cjs` (60 made-up ids create zero keys; a real id and
+each built-in id still count; all four counters — `hub_lesson_reads_v1`,
+`hub_lesson_reads_by_lesson_v1`, `hub_door_clicks_v1`, `hub_bridge_clicks_v1` — prune a day older
+than `KEEP_DAYS` on the next write). The third part of this fix (rate-limit `/api/track`) turned
+out to already exist in code (`app.use("/api/track", rateLimit("track", {windowMs:60000,max:120}))`,
+server.js ~3936, confirmed live with a real boot) — a report inaccuracy, not left unaddressed.
 
 ---
 
@@ -276,6 +295,14 @@ under 0.5 tokens hashes as `0`, and sub-token differences are invisible to it.
 `decimals` on the snapshot record so the panel does not depend on a gated crawl), and rename the
 diff's `*Raw` fields to say what they hold.
 
+**Fixed:** `fcc807c` — renamed to `amountUi`/`fromUi`/`toUi`/`deltaUi` (confirmed: `top[].amount` is
+UI-scale, per `appendSnapshot`'s own inputs — `lib/owners-snapshot.js` writes `p.balance`);
+`decimals` added to `appendSnapshot` and carried on `diffSnapshots`' from/to heads; the page
+converts `supplyDelta` with raw-string surgery using the snapshot's own decimals, falling back to
+a live crawl's `lastSnapshot`, and says "N base units (decimals unknown)" when neither is
+available. Tests: `scripts/holders-snapshot-diff-test.cjs` (renamed fields + decimals coverage),
+`scripts/hub-a11y-test.cjs` seeding updated.
+
 ### P2-07 · The generated judge page has no URL-scheme allowlist
 
 `scripts/build-judge-page.cjs:51` —
@@ -300,6 +327,13 @@ A paren-free payload (`[go](javascript:location='https://…')`) survives intact
 **Fix:** in `renderInline`, keep the link only when the URL starts with `/`, `#`, `https://` or
 `mailto:`; otherwise render the text and drop the anchor.
 
+**Fixed:** `0882953` — implemented as: `https:` always, `http:` only to this site's own host
+(`clucknorris.app`), a root-relative path (rejecting `//host/…`, which resolves as
+protocol-relative to a DIFFERENT host), or a `#` fragment; anything else renders as plain text.
+`scripts/hub-judge-doc-test.cjs` §7 (the five repro payloads all render with no `<a href>`; https,
+same-host http, a root-relative path and a fragment all still link). `public/hub-judge.html`
+regenerates byte-identical (the doc carries no links yet).
+
 ---
 
 ## P3
@@ -313,6 +347,10 @@ nothing is exploitable today. But a shared renderer whose default is "do not esc
 forgetful call site away from an SVG injection, and the file's own header says it exists so the
 render logic lives in exactly one place. **Fix:** make the fallback escape, or throw when `opts.esc`
 is missing.
+
+**Fixed:** `5bbfb66` — throws when `opts.esc` is missing or not a function, naming `opts.esc`.
+New test `scripts/hub-sparkline-test.cjs` (none existed before): no-esc/omitted-opts/non-function
+esc all throw; a real esc function still renders and is actually invoked.
 
 ### P3-09 · Bidi control characters survive into `<title>`, OG meta and rendered text
 
@@ -334,6 +372,13 @@ and `/hub/wallet/:wallet`. The label is owner-approved, but the character is inv
 approval UI, so the string the owner reads is not the string a share card renders. **Fix:** strip
 `[‪-‮⁦-⁩‎‏]` in `validateProject`'s label (and `brand.tagline`).
 
+**Fixed:** `72772de` — `brandLib.stripBidiControls()` (U+200B–U+200F, U+202A–U+202E, U+2066–U+2069,
+U+FEFF), applied to `label` in `validateProject` and to `tagline` in `brand.js`, before the
+length/emptiness checks — a label of only bidi characters is now refused as empty. `symbol` was
+already safe (its `[A-Za-z0-9]{1,12}` regex structurally excludes non-ASCII). Tests:
+`scripts/hub-core-test.cjs` §1b and `scripts/hub-brand-test.cjs` (leading, mid-string, and
+all-bidi cases for label and tagline respectively).
+
 ### P3-10 · The `/receipt` cooldown map is unbounded, and each lookup does the P1-03 walk
 
 `lib/hub/receipt-command.js:159` — `handleReceiptCommand._defaultCooldown` is a process-lifetime
@@ -343,6 +388,12 @@ forever. More materially, `findHubReceiptBySig` (line 63) calls `hubProjectView(
 ~1.0 s per project in P1-03 — behind only a 10-second per-chat cooldown, so N rooms give N/10
 walks per second. **Fix:** bound the map (or key the cooldown off a small LRU), and reuse the same
 memoised project view P1-03's fix introduces.
+
+**Fixed:** `95dfb3b` — age-based prune (10 min) on every call plus a hard cap (1000, oldest evicted
+first) enforced right after each write; `hubProjectViewCached` (60s TTL) added beside
+`hubProjectView`'s definition in server.js and wired into `receiptCommandReply`. Test:
+`scripts/telegram-receipt-command-test.cjs` §5b/5c (age/cap eviction math worked out exactly —
+1050 chats, 50 oldest evicted; a source check that the cached wrapper is wired in).
 
 Everything else asked for on this surface held: the reply escapes `project.label` and `symbol`
 with the shared `escHtml`, the module passes no `roseRoomOk` so an OnlyRose reply is refused at
