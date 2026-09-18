@@ -43,6 +43,7 @@ const schoolProgress = require("./lib/school-progress"); // Server-side lesson l
 const orderbook = require("./lib/orderbook-scanner"); // Cluck Order Book — multi-venue resting-order/wall scanner
 const { fetchBagsContext } = require("./lib/bags-context");
 const analytics = require("./lib/analytics");
+const traction = require("./lib/traction"); // Colosseum W9: product OUTCOME counters, derived from durable stores — see the file header
 const heliusUsage = require("./lib/helius-usage"); // Helius call attribution (which subsystem/IP burns credits)
 const solscan = require("./lib/solscan");
 const solanaTracker = require("./lib/solana-tracker");
@@ -7887,8 +7888,12 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
   try {
-    const r = hubPublic.findReceipt(hubProjectView(p), String(req.params.sig || ""));
+    const sig = String(req.params.sig || "");
+    const r = hubPublic.findReceipt(hubProjectView(p), sig);
     if (!r) return res.status(404).json({ ok: false, error: "no receipt with that signature" });
+    // Traction "receipts opened by a holder" (lib/traction.js) — this route recorded nothing
+    // durable before this change.
+    try { traction.recordReceiptOpen(kv, { project: p.id, sig }); } catch (_) { /* counter only */ }
     return res.status(200).json({ ok: true, ...r });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
@@ -7980,6 +7985,16 @@ hubRoutes.mount(app, {
   },
 });
 hubRoutes.startScheduler({ kv, scanDeps: async () => hubScanDeps, alert: hubAlert });
+
+// ── Traction (Colosseum W9 part 1) — owner-only READ of the product OUTCOME counters ──────────
+// Everything here is derived from durable stores by lib/traction.js; this route reads, it never
+// writes. Same admin-key pattern as every other operator-only GET (adminGuarded, 404 on failure).
+app.get("/api/traction", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
+  try {
+    const out = traction.compute({ kv, from: req.query.from, to: req.query.to });
+    return res.status(200).json({ ok: true, ...out });
+  } catch (e) { return res.status(400).json({ ok: false, error: publicErrMsg(e) }); }
+});
 
 // ── Buy Special RANDOM DRAW (the "N random buys win X CLKN" raffle) ───────────
 // Distinct from the ranked buy COMPETITION above. Here every qualifying BUY is a
@@ -8436,6 +8451,10 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
     if (message !== toolPassMessage(wallet, mm[2])) return res.status(400).json({ success: false, error: "message does not match the issued challenge" });
     if (!verifySolanaSignature(message, signature, wallet)) return res.status(401).json({ success: false, error: "Signature did not verify" });
   }
+  // The wallet just cryptographically proved itself (signMessage above, or a payIntent minted from
+  // an earlier proof) — this is the choke point for the traction "wallets connected" counter
+  // (lib/traction.js), which nothing durably recorded before this change (see that file's header).
+  try { traction.recordWalletConnect(kv, { source: "toolpass", wallet }); } catch (_) { /* counter only, never blocks the pass */ }
   const dayMs = 24 * 3600e3;
   if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) {
     return res.status(200).json({ success: true, via: "gate-off", pass: "t:" + issueToolPass(wallet, "gate-off", TOOLGATE.days * dayMs), days: TOOLGATE.days });
