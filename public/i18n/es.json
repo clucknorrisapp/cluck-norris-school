@@ -1613,5 +1613,17 @@
   "More than one observed transfer could equal this row's exact remaining amount. Only one is ever accepted as the settlement; the rest are refused under this code rather than guessed between.": "Más de una transferencia observada podía igualar exactamente la cantidad restante de esta fila. Solo una se acepta jamás como la liquidación; el resto se rechaza bajo este código en lugar de adivinar entre ellas.",
   "This page only reproduces receipts served by clucknorris.app — for another host, save the files and use the offline tab.": "Esta página solo reproduce recibos servidos por clucknorris.app — para otro servidor, guarda los archivos y usa la pestaña sin conexión.",
   "This page only fetches from its own origin and from": "Esta página solo hace peticiones a su propio origen y a",
-  "raw: {raw}": "bruto: {raw}"
+  "raw: {raw}": "bruto: {raw}",
+  "PREVIEW WHO THIS WOULD PAY TODAY": "VISTA PREVIA DE A QUIÉN PAGARÍA ESTO HOY",
+  "PREVIEW — WHO THIS DRAFT WOULD PAY TODAY": "VISTA PREVIA — A QUIÉN PAGARÍA ESTE BORRADOR HOY",
+  "An estimate from today's locks — never a promise.": "Una estimación a partir de los bloqueos de hoy — nunca una promesa.",
+  "Publishing is a separate step; nothing was saved by this preview.": "Publicar es un paso aparte; esta vista previa no guardó nada.",
+  "Qualify today": "Califican hoy",
+  "Today's pool": "Pool de hoy",
+  "reason": "motivo",
+  "would earn today": "ganaría hoy",
+  "share of pool": "parte del pool",
+  "no locks yet": "aún no hay bloqueos",
+  "Estimate ready.": "Estimación lista.",
+  "previewing…": "generando vista previa…"
 }

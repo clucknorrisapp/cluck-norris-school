@@ -376,6 +376,13 @@ jobs:
       # public body carrying no readiness data, and the desk section's rate/badge-language guard.
       - name: Hub launch readiness (checklist + reward-budget planner)
         run: node scripts/hub-readiness-test.cjs
+      # Colosseum roadmap EE1: "who would this pay today?" for DRAFT terms — a read (nothing
+      # written, armed or sent). Proves the preview reproduces planBudget's own next-day
+      # obligation byte for byte, a wider draft flips exclusions and the hash, an invalid draft
+      # throws the same error a real publish would, app-state.json is untouched by ten previews,
+      # and the lapsed-project / auth / GET-405 gates match the terms write exactly.
+      - name: Hub preview before publish (draft terms, no writes)
+        run: node scripts/hub-preview-test.cjs
       - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
         run: node scripts/cuna-announce-test.cjs
       # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC

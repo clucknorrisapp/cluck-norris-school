@@ -1613,5 +1613,17 @@
   "More than one observed transfer could equal this row's exact remaining amount. Only one is ever accepted as the settlement; the rest are refused under this code rather than guessed between.": "有不止一笔观测到的转账金额恰好等于该行的剩余应付金额。其中只有一笔会被接受为结算款；其余的都会以此代码被拒绝，而不是靠猜测在它们之间做选择。",
   "This page only reproduces receipts served by clucknorris.app — for another host, save the files and use the offline tab.": "此页面仅能复现由 clucknorris.app 提供的收据 —— 如需其他主机，请保存文件并使用离线选项卡。",
   "This page only fetches from its own origin and from": "此页面仅从自身来源和",
-  "raw: {raw}": "原始值：{raw}"
+  "raw: {raw}": "原始值：{raw}",
+  "PREVIEW WHO THIS WOULD PAY TODAY": "预览今天将支付给谁",
+  "PREVIEW — WHO THIS DRAFT WOULD PAY TODAY": "预览 —— 这份草案今天会支付给谁",
+  "An estimate from today's locks — never a promise.": "根据今天的锁仓情况得出的估算 —— 绝非承诺。",
+  "Publishing is a separate step; nothing was saved by this preview.": "发布是另一个独立的步骤;此预览未保存任何内容。",
+  "Qualify today": "今日符合资格",
+  "Today's pool": "今日奖池",
+  "reason": "原因",
+  "would earn today": "今日预计收益",
+  "share of pool": "占奖池比例",
+  "no locks yet": "尚无锁仓",
+  "Estimate ready.": "估算已完成。",
+  "previewing…": "正在预览……"
 }
