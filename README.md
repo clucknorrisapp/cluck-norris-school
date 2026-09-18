@@ -6,6 +6,7 @@
 [![Live App](https://img.shields.io/badge/Live-clucknorris.app-green)](https://clucknorris.app)
 [![Colosseum Crypto World's Fair](https://img.shields.io/badge/Colosseum-Crypto%20World's%20Fair%202026-C9A227)](https://www.colosseum.com/worldsfair)
 [![Auto-deployed on Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet)](https://railway.app)
+[![Receipts reproducible](https://clucknorris.app/hub/badge.svg)](https://clucknorris.app/hub/status)
 
 > *"We took the hard knocks so you don't have to."*
 
@@ -67,6 +68,10 @@ below works with no wallet connected:
   project team: lock → apply for lock-to-earn → buy competition → airdrop → listing checkup →
   owners snapshot → burn receipt, in the order teams actually use them, plus a per-mint checklist
   of what a token has already done.
+- The **"Receipts reproducible" badge** above is computed live from the public record every time
+  it renders — `GET /api/hub/badge.json` sums `lib/hub/reproduce.js`'s `projectReproducibility`
+  over every registered, non-demo project, the exact same function [`/hub/status`](https://clucknorris.app/hub/status)
+  calls, so the number on this README is never typed by hand.
 - **Seven languages, kept honest** — the two lessons that shipped with zero translated strings
   (Seed Phrase Survival, Inheritance) were translated into all six non-English school dictionaries
   during this window, and the i18n audit now checks lesson coverage by id so the gap can't recur

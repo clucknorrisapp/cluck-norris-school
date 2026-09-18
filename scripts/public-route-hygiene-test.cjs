@@ -58,6 +58,8 @@ const ROUTES = [
   { name: "airdrop recipient row", path: `/api/airdrop/r/nope/${GOOD_WALLET}`, cache: "public, max-age=60" },
   { name: "jvp project timeline", path: `/api/jvp/project/clkn/timeline`, cache: "public, max-age=60" },
   { name: "hub schema (program-version)", path: `/hub/schema/program-version.json`, cache: "public, max-age=3600" },
+  { name: "hub badge.json", path: `/api/hub/badge.json`, cache: "public, max-age=300" },
+  { name: "hub badge.svg", path: `/hub/badge.svg`, cache: "public, max-age=300" },
   { name: "hub-demo overview", path: `/api/hub-demo`, cache: "public, max-age=60" },
   { name: "hub-demo project", path: `/api/hub-demo/demo`, cache: "public, max-age=60" },
 ];
@@ -188,7 +190,7 @@ const ROUTES = [
     ok("STORE_API_RE is still findable in server.js (keep this test in sync if it moves)", !!storeMatch);
     const STORE_API_RE = storeMatch ? eval(storeMatch[1]) : /$^/;   // eslint-disable-line no-eval -- test-only, source-scanned right above
     const heavyPaths = [...src.matchAll(/app\.get\("([^"]+)",\s*rateLimit\("hubheavy"/g)].map((m) => m[1]);
-    ok("found the 5 heavy routes wired to the dedicated limiter", heavyPaths.length === 5, JSON.stringify(heavyPaths));
+    ok("found the 7 heavy routes wired to the dedicated limiter", heavyPaths.length === 7, JSON.stringify(heavyPaths));
     for (const p of heavyPaths) ok(`${p} is not a store-edition contract route`, !STORE_API_RE.test(p), p);
 
     // Live confirmation for one representative store-edition route: a burst well under its own

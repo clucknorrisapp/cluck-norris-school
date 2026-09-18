@@ -8135,6 +8135,23 @@ app.get("/api/hub/wallet/:wallet", (req, res) => {
     return res.status(200).json({ ok: true, wallet, projects, seenIn: projects.length, generatedAt: Date.now() });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// BB3 (Colosseum roadmap §12) — shields.io "endpoint badge" schema exactly
+// (https://shields.io/badges/endpoint-badge). Registered here, before the generic
+// /api/hub/:project below, for the same reason /api/hub/wallet/:wallet is — "badge.json" is a
+// 3-segment path that the :project pattern would otherwise swallow as a (nonexistent) project id.
+// hubBadgeCompute/hubBadgeColor are defined further down next to the reproducibility route they
+// share a cache with; being function/const declarations evaluated once at module load (long
+// before any request reaches this handler), where they're defined in the file makes no
+// difference to what this closure sees at call time.
+app.get("/api/hub/badge.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try {
+    const projectId = req.query.project ? String(req.query.project) : null;
+    const b = hubBadgeCompute(projectId);
+    if (projectId && !b) return res.status(404).json({ ok: false, error: "no such project" });
+    return res.status(200).json({ schemaVersion: 1, label: "receipts reproducible", message: b.message, color: b.color, cacheSeconds: 300 });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 app.get("/api/hub/:project", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=30");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
@@ -8286,22 +8303,107 @@ app.get("/api/hub/:project/batch/:batchId/inputs", rateLimit("hubheavy", { windo
 // header, same pattern as the other Hub read routes.
 const HUB_REPRO_CACHE = new Map();   // projectId -> { at, data }
 const HUB_REPRO_CACHE_MS = 5 * 60 * 1000;
+// Shared by the route below AND /api/hub/badge.json (BB3, Colosseum roadmap §12): pulled out so
+// the badge sums the SAME per-project computation — and hits the SAME 5-minute cache — that a
+// direct call to /api/hub/:project/reproducibility would, rather than growing a second code path
+// that could quietly drift from what the route publishes.
+function hubReproducibilityFor(id, p) {
+  const cached = HUB_REPRO_CACHE.get(id);
+  if (cached && Date.now() - cached.at < HUB_REPRO_CACHE_MS) return cached.data;
+  const batches = hubStore.read(kv, id, "batches", {}) || {};
+  const days = hubStore.read(kv, id, "days", {}) || {};
+  const otherPrograms = hubProjectView(p).programs.filter((pr) => pr.kind !== "lock-to-earn");
+  const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms });
+  const data = { ok: true, project: id, batches: rep.batches, overall: rep.overall };
+  HUB_REPRO_CACHE.set(id, { at: Date.now(), data });
+  return data;
+}
 app.get("/api/hub/:project/reproducibility", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300");
   const id = String(req.params.project || "").toLowerCase();
   const p = hubProjects()[id];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
   try {
-    const cached = HUB_REPRO_CACHE.get(id);
-    if (cached && Date.now() - cached.at < HUB_REPRO_CACHE_MS) return res.status(200).json(cached.data);
-    const batches = hubStore.read(kv, id, "batches", {}) || {};
-    const days = hubStore.read(kv, id, "days", {}) || {};
-    const otherPrograms = hubProjectView(p).programs.filter((pr) => pr.kind !== "lock-to-earn");
-    const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms });
-    const data = { ok: true, project: id, batches: rep.batches, overall: rep.overall };
-    HUB_REPRO_CACHE.set(id, { at: Date.now(), data });
-    return res.status(200).json(data);
+    return res.status(200).json(hubReproducibilityFor(id, p));
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── BB3 (Colosseum roadmap §12): a reproducibility badge that is COMPUTED, not typed. Both
+// routes below sum hubReproducibilityFor() over every registered, non-demo project — the exact
+// same set /api/hub lists and hub-status.html walks (hubProjects() never contains "demo"/"demo-b";
+// those live only in lib/hub/demo-fixture.js and are never registered in the real kv registry —
+// see the reservedMints comment above). `?project=<id>` narrows to one project's own ratio; an
+// unknown or demo id 404s (a demo id can never resolve through hubProjects() either, since it was
+// never registered there). The message is built ONLY from integers this file computed and a
+// small set of fixed words — never a project's label, symbol or any other attacker-influenced
+// field — so nothing user-controlled can ever reach the badge text. Keep it that way.
+const HUB_BADGE_COLORS = { green: "#3fb950", yellow: "#d4a72c", lightgrey: "#9aa0a6" };
+function hubBadgeColor(reproduced, total) {
+  if (!total) return "lightgrey";
+  return reproduced === total ? "green" : "yellow";
+}
+// Returns null when `projectId` is set but doesn't resolve to a registered, non-demo project —
+// the caller 404s. With no projectId, sums across every registered project. `K` in the aggregate
+// message counts only projects that actually contributed a row to the ratio (total > 0) — a
+// project with a Hub page but zero settled receipts (the poke dry-run carve-out registers this
+// way at boot, and any freshly-onboarded project starts this way too) has nothing to "reproduce"
+// yet and would otherwise inflate K with projects the ratio never touched.
+function hubBadgeCompute(projectId) {
+  const projects = hubProjects();
+  if (projectId) {
+    const id = String(projectId).toLowerCase();
+    const p = projects[id];
+    if (!p) return null;
+    const data = hubReproducibilityFor(id, p);
+    const n = data.overall.reproduced, m = data.overall.total;
+    return { message: m ? `${n} of ${m}` : "no receipts yet", color: hubBadgeColor(n, m) };
+  }
+  let totalAll = 0, reproducedAll = 0, k = 0;
+  for (const [id, p] of Object.entries(projects)) {
+    const data = hubReproducibilityFor(id, p);
+    if (data.overall.total > 0) k++;
+    totalAll += data.overall.total;
+    reproducedAll += data.overall.reproduced;
+  }
+  const message = totalAll ? `${reproducedAll} of ${totalAll} across ${k} project${k === 1 ? "" : "s"}` : "no receipts yet";
+  return { message, color: hubBadgeColor(reproducedAll, totalAll) };
+}
+// The route for this is registered ABOVE, next to /api/hub/wallet/:wallet — a 3-segment path
+// collides with the generic /api/hub/:project pattern the same way "wallet" does (see the AA1
+// comment there), so it must be registered before it or Express reads "badge.json" as a project
+// id and 404s "no such project" (this bit once, before the reorder).
+//
+// A small server-rendered flat badge, same numbers as the JSON above, for README/markdown
+// embeds that want an <img> rather than a shields.io round-trip. Width is a fixed per-character
+// estimate (no font metrics available server-side) — close enough for a two-box flat badge, and
+// every text node is escHtml'd even though (see the comment above) nothing user-controlled can
+// ever reach it.
+function hubBadgeCharWidth(s) { return Math.round(String(s).length * 6.2) + 10; }
+function renderHubBadgeSvg(label, message, colorName) {
+  const color = HUB_BADGE_COLORS[colorName] || HUB_BADGE_COLORS.lightgrey;
+  const labelW = hubBadgeCharWidth(label);
+  const msgW = hubBadgeCharWidth(message);
+  const w = labelW + msgW, h = 20;
+  const labelText = escHtml(label), msgText = escHtml(message);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" role="img" aria-label="${labelText}: ${msgText}">` +
+    `<clipPath id="hbr"><rect width="${w}" height="${h}" rx="3" fill="#fff"/></clipPath>` +
+    `<g clip-path="url(#hbr)">` +
+    `<rect width="${labelW}" height="${h}" fill="#555"/>` +
+    `<rect x="${labelW}" width="${msgW}" height="${h}" fill="${color}"/>` +
+    `</g>` +
+    `<g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">` +
+    `<text x="${labelW / 2}" y="14">${labelText}</text>` +
+    `<text x="${labelW + msgW / 2}" y="14">${msgText}</text>` +
+    `</g></svg>`;
+}
+app.get("/hub/badge.svg", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try {
+    const projectId = req.query.project ? String(req.query.project) : null;
+    const b = hubBadgeCompute(projectId);
+    if (projectId && !b) return res.status(404).type("text/plain").send("not found");
+    res.type("image/svg+xml");
+    return res.status(200).send(renderHubBadgeSvg("receipts reproducible", b.message, b.color));
+  } catch (e) { return res.status(500).type("text/plain").send("error rendering badge"); }
 });
 // Live platform-access pricing for the pre-registration apply page (hub-apply.html) — the
 // per-project quote at /api/hub/:project/access needs an already-registered project, but a
