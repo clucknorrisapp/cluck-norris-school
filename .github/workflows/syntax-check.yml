@@ -235,6 +235,12 @@ jobs:
       # reach /api/hub — and hash the terms a program ran under.
       - name: Hub public views (no private fields, stable terms hash, honest totals)
         run: node scripts/hub-public-test.cjs
+      # Colosseum roadmap §8 X7: holder snapshot history is append-only (a second run adds, never
+      # edits), the 90-per-mint cap drops the oldest first, the hash recomputes from a holder list
+      # and changes on a one-unit change, the dated series carries no wallets, and the Hub
+      # project view's holders fact line appears only when a snapshot exists.
+      - name: Holder snapshot history (append-only, hashed, read-only)
+        run: node scripts/holders-snapshot-test.cjs
       # E1 (docs/COLOSSEUM_ROADMAP.md §1 "the number"): a receipt's amount re-derived from the
       # batch's own published inputs (periods, prior paid, prior reserved), reconstructed purely
       # from durable timestamps — MATCH, a tampered MISMATCH, and an honest MISSING_INPUTS naming

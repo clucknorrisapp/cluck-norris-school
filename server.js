@@ -7981,7 +7981,12 @@ function hubProjectView(project) {
   }
   let lessonReads = null;
   try { lessonReads = traction.lessonReadsForProject(kv, project.id); } catch (_) { /* the line just doesn't render */ }
-  return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads });
+  // X7 (Colosseum roadmap §8): the latest owners-snapshot holder-count record for this project's
+  // mint, if one has ever been crawled. Read-only lookup; a project that's never been snapshotted
+  // just has no holders fact line.
+  let holderSnapshot = null;
+  try { holderSnapshot = require("./lib/holders-snapshot").latest(kv, project.mint); } catch (_) { /* no snapshot yet */ }
+  return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads, holderSnapshot });
 }
 app.get("/api/hub", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
@@ -17527,6 +17532,32 @@ app.get("/api/owners-snapshot/history", (req, res) => {
 app.get("/api/owners-snapshot/admin", adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
   if (req.query.cancel) return res.json({ ok: true, cancelled: ownersSnapshot.cancel(String(req.query.cancel)) });
   res.json({ ok: true, running: ownersSnapshot.running, queueLength: ownersSnapshot.queueLength, recent: ownersSnapshot.listRecent(30) });
+});
+
+// ── Holder snapshot history (Colosseum roadmap §8 X7) ────────────────────────────────────────
+// A dated, hashed record of each finished owners-snapshot run (lib/holders-snapshot.js), so a
+// project can show holder-count history and a reader can recompute the hash from the published
+// list. Read-only history of a public on-chain fact — NO tools-pass gate here (the crawl that
+// produced it is already holder-gated; this just serves what was recorded). Never wallets on
+// the series endpoint; the single-snapshot endpoint carries the capped top list only.
+const holdersSnapshot = require("./lib/holders-snapshot");
+app.get("/api/holders/snapshots", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const mint = String(req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  try { return res.json({ ok: true, mint, snapshots: holdersSnapshot.series(kv, mint) }); }
+  catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/holders/snapshots/:id", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const mint = String(req.query.mint || "").trim();
+  const id = String(req.params.id || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  try {
+    const snap = holdersSnapshot.getSnapshot(kv, mint, id);
+    if (!snap) return res.status(404).json({ ok: false, error: "no_such_snapshot" });
+    return res.json({ ok: true, snapshot: snap });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 
 app.get("/trace", (req, res) => {
