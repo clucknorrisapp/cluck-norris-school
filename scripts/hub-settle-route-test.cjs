@@ -1532,6 +1532,40 @@ t("&waive= is owner-only, journals its own entry kind with a sanitised reason, a
   assert.strictEqual(String(owed[W.A] || 0n), "0", "owed reads 0 once the remainder is either settled or waived — " + owed[W.A]);
 });
 
+section("34. N-1 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 4) — the payout-summary alerts carry a stable dedupe discriminator");
+
+t("the sent-refusal, sweep and send summary alerts each carry { projectId, batchId, kind } as their alert() meta", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "theta", W.MINT1); store.write(kv, "theta", "days", days({ [W.A]: "1000000000" }));
+  const metas = [];
+  const app = fakeApp();
+  routes.mount(app, {
+    kv, adminAuthOK: () => true, publicErrMsg: (e) => (e && e.message) || String(e), secret: "s",
+    vault: fakeVault(), connection: () => ({ getSignatureStatuses: async () => ({ value: [] }), getParsedTokenAccountsByOwner: async () => ({ value: [] }), getParsedAccountInfo: async () => ({ value: { owner: TOK, data: { parsed: { type: "mint", info: { decimals: 9, extensions: [] } } } } }) }),
+    scanDeps: async () => ({ scan: async () => [] }),
+    getTx: async () => txSingle({ wallet: W.A, amountRaw: "50000000000", sourceOwner: W.STRANGER }),
+    alert: (m, meta) => metas.push({ m, meta }), nowUnix: () => NOW,
+  });
+  let r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "theta" }, query: { export: "1" } });
+  const id = r.body.created.id;
+  await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "theta" }, query: { batch: id, sent: JSON.stringify([{ wallet: W.A, sig: SIG(420) }]) } });
+  const summary = metas.find((x) => /settlement REFUSED/.test(x.m));
+  assert.ok(summary, JSON.stringify(metas));
+  assert.deepStrictEqual(summary.meta, { projectId: "theta", batchId: id, kind: "sent" }, JSON.stringify(summary.meta));
+});
+
+t("lib/hub/alert-key.js hubAlertKey: a stable per-(project,batch,kind) hash, never a text-length-dependent slice", () => {
+  const { hubAlertKey } = require("../lib/hub/alert-key");
+  const longId = "a".repeat(32);
+  const k1 = hubAlertKey(`${longId}: batch hb_1111111111 — 1 settlement REFUSED`, { projectId: longId, batchId: "hb_1111111111", kind: "sent" });
+  const k2 = hubAlertKey(`${longId}: batch hb_2222222222 — 1 settlement REFUSED`, { projectId: longId, batchId: "hb_2222222222", kind: "sent" });
+  const k3 = hubAlertKey(`${longId}: batch hb_1111111111 — 1 sweep issue`, { projectId: longId, batchId: "hb_1111111111", kind: "sweep" });
+  assert.notStrictEqual(k1, k2, "two different batches of the same (long) project id must never collapse");
+  assert.notStrictEqual(k1, k3, "two different kinds of the same batch must never collapse");
+  assert.strictEqual(k1, hubAlertKey("anything — the message text is irrelevant once meta is present", { projectId: longId, batchId: "hb_1111111111", kind: "sent" }), "the key is a pure function of meta, not the message text");
+  assert.strictEqual(hubAlertKey("short message"), "hub:short message", "a message-only call (no meta) keeps the old 40-char-of-text shape");
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
