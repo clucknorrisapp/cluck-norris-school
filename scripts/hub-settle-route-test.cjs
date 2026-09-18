@@ -1469,6 +1469,69 @@ t("N-2: …and is allowed once the id's store is completely empty", async () => 
   assert.strictEqual(store.readRegistry(kv).epsilon.mint, MINT_B);
 });
 
+section("33. N-3 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 4) — a partial row can be settled by its remainder, or waived by the owner");
+
+t("an exact-remainder transfer settles a pre-existing partial row; a full-amount transfer on the SAME row is still amount_mismatch", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "zeta", W.MINT1); store.write(kv, "zeta", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, getTx: async (s) => (s === SIG(401) ? txSingle({ wallet: W.A, amountRaw: "400000000", slot: 21 }) : s === SIG(402) ? txSingle({ wallet: W.A, amountRaw: "600000000", slot: 22 }) : txSingle({ wallet: W.A, amountRaw: "1000000000", slot: 23 })) });
+  let r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "zeta" }, query: { export: "1" } });
+  const id = r.body.created.id;
+  // Hand-write a pre-existing PARTIAL journal entry — applied 400 of 1000 — exactly as N-3 says can
+  // only exist today from a pre-exactOnly or backfilled entry, never the live path itself.
+  const pre = { xferKey: "settle:" + SIG(401) + ":0", sig: SIG(401), instructionIndex: 0, innerIndex: null, projectId: "zeta", batchId: id, rowId: W.A, wallet: W.A, amountRaw: "400000000", appliedRaw: "400000000", excessRaw: "0", sourceWallet: W.FUND, slot: 21, at: NOW, verifiedBy: "getTransaction" };
+  kv.set(store.journalEntryKey(pre.xferKey), pre);
+  // BEFORE this fix, minRaw at the legacy check was the row's FULL original amount (1000000000), so
+  // a transfer of exactly the 600000000 remainder was rejected here as "transfer smaller than the
+  // amount owed" before PASS 1 (which already compares against remaining) ever ran.
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "zeta" }, query: { batch: id, sent: JSON.stringify([{ wallet: W.A, sig: SIG(402) }]) } });
+  assert.strictEqual((r.body.sent.recorded || []).length, 1, JSON.stringify(r.body.sent));
+  const j = store.readJournal(kv);
+  assert.strictEqual(Object.keys(j).length, 2, JSON.stringify(j));
+  assert.ok(Object.values(j).every((e) => e.excessRaw === "0"), "no excess arithmetic — both entries are exact");
+  // The row is now fully settled (400 + 600 = 1000); a FULL-amount (1000000000) transfer on it must
+  // still be refused as amount_mismatch, never journaled as a second, overlapping settlement.
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "zeta" }, query: { batch: id, sent: JSON.stringify([{ wallet: W.A, sig: SIG(403) }]) } });
+  assert.strictEqual((r.body.sent.recorded || []).length, 0, JSON.stringify(r.body.sent));
+  assert.ok(r.body.sent.ignored.some((x) => x.why === "amount_mismatch"), JSON.stringify(r.body.sent.ignored));
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 2, "no third entry was journaled");
+});
+
+t("&waive= is owner-only, journals its own entry kind with a sanitised reason, and owedNow reads 0 afterward", async () => {
+  const kv = store.memoryKv();
+  const secret = "s3cr3t-33";
+  seedProject(kv, "eta", W.MINT1);
+  let reg = store.readRegistry(kv); reg.eta = { ...reg.eta, access: access.normalizeAccess({ tier: "comped", note: "test" }) }; store.writeRegistry(kv, reg);
+  store.write(kv, "eta", "days", days({ [W.A]: "1000000000" }));
+  const token = operator.issueToken(secret, { projectId: "eta", wallet: W.A });
+  const appOp = mountFor({ kv, secret, adminAuthOK: () => false });
+  let r = await call(appOp, "/api/hub/:project/payout", { method: "POST", params: { project: "eta" }, query: { export: "1" }, headers: { "x-clkn-operator": token } });
+  const id = r.body.created.id;
+  const pre = { xferKey: "settle:" + SIG(410) + ":0", sig: SIG(410), instructionIndex: 0, innerIndex: null, projectId: "eta", batchId: id, rowId: W.A, wallet: W.A, amountRaw: "400000000", appliedRaw: "400000000", excessRaw: "0", sourceWallet: W.FUND, slot: 31, at: NOW, verifiedBy: "getTransaction" };
+  kv.set(store.journalEntryKey(pre.xferKey), pre);
+  // An operator token may never waive — only the owner writes off money the project never sent.
+  r = await call(appOp, "/api/hub/:project/payout", { method: "POST", params: { project: "eta" }, query: { batch: id, waive: W.A, reason: "test" }, headers: { "x-clkn-operator": token } });
+  assert.strictEqual(r.statusCode, 403, JSON.stringify(r.body));
+  const appOwner = mountFor({ kv, adminAuthOK: () => true });
+  // GET is refused (mutating-GET guard) even for the owner.
+  r = await call(appOwner, "/api/hub/:project/payout", { method: "GET", params: { project: "eta" }, query: { batch: id, waive: W.A } });
+  assert.strictEqual(r.statusCode, 405, JSON.stringify(r.body));
+  const nasty = "line one\nline two\r\nline three".padEnd(260, "x");
+  r = await call(appOwner, "/api/hub/:project/payout", { method: "POST", params: { project: "eta" }, query: { batch: id, waive: W.A, reason: nasty } });
+  assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
+  assert.strictEqual(r.body.waive.ok, true, JSON.stringify(r.body.waive));
+  assert.ok(!/\n/.test(r.body.waive.reason) && r.body.waive.reason.length <= 200, JSON.stringify(r.body.waive.reason));
+  assert.strictEqual(r.body.waive.amountRaw, "600000000", "the waived amount is the REMAINDER, not the full row");
+  const raw = kv.dump();
+  const waiveKey = Object.keys(raw).find((k) => k.startsWith("hub:waive:eta:"));
+  assert.ok(waiveKey, "the waiver is journaled under its own kv prefix, distinct from hub:settle:");
+  assert.strictEqual(raw[waiveKey].kind, "waive");
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1, "the settlement journal itself is untouched by a waive — readJournal ignores the waive-prefixed key");
+  const st = { batches: store.read(kv, "eta", "batches", {}), paid: store.read(kv, "eta", "paid", {}), days: store.read(kv, "eta", "days", {}) };
+  const owed = pay.owedNow({ days: st.days, paid: st.paid, pending: st.batches, journal: store.readJournal(kv), projectId: "eta" });
+  assert.strictEqual(String(owed[W.A] || 0n), "0", "owed reads 0 once the remainder is either settled or waived — " + owed[W.A]);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
