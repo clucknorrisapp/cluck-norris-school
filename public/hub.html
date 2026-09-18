@@ -163,6 +163,23 @@
   var programId = path[2] === 'p' && path[3] ? decodeURIComponent(path[3]) : null;
   var programsIndex = path[2] === 'programs';
 
+  // ── i18n for the ONE string this script's program-index view adds (GG3 fix 3) ──────────────
+  // Everything else this page builds already gets machine-translated live (i18n.js's DOM walker,
+  // loaded sitewide by cluck-nav.js, watches #app for added nodes — it carries no
+  // data-i18n-skip). The "program" vs "program version" clarifier below is worth a professional,
+  // curated translation rather than a live MT call, so it goes through the same small page-local
+  // `t()` public/hub-verify.html and public/hub-glossary.html use (the curated dictionaries
+  // i18n.js already loaded, `window.CLKN_I18N.dict`; English literal on a miss).
+  // scripts/i18n-audit.cjs's Hub-pages gate already scans this file's <script> block for every
+  // literal passed to t()/tf() and requires it in all six dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+
   // ── formatting ───────────────────────────────────────────────────────────────────────────
   function ts(ms) { if (ms == null) return '—'; var d = new Date(Number(ms)); if (isNaN(d)) return '—'; return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'; }
   function tsUnix(s) { return s == null ? '—' : ts(Number(s) * 1000); }
@@ -488,8 +505,14 @@
       // CC1: "what changed in the rules" — only once there is something to diff (2+ versions).
       var compareLine = (v.versions && v.versions.length >= 2)
         ? '<div class="small" data-clkn-avoid="1" style="margin-top:10px"><a href="/hub/' + esc(v.id) + '/programs/compare">What changed between versions? →</a></div>' : '';
+      // GG3 fix 3 (docs/POKEAHOE_REHEARSAL_2026-09.md §4): "program" and "program version" are
+      // two different nouns in this codebase, and this page never spelled out the difference — a
+      // project with a published version but no completed payout program reads, from "No programs
+      // on record for this project yet" alone, like no terms have been set at all. One line, said
+      // plainly, in this card that always renders here (with programs or without).
+      var progVsVersion = '<div class="small" data-i18n-skip="1" style="margin-top:8px">' + esc(t("A published version is this project's terms; a program is a version that has actually run and paid its holders.")) + '</div>';
       app.innerHTML = heroBlock(v) +
-        '<div class="card"><div class="intro" data-clkn-avoid="1">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + tokenLine + holdersLine + followLine + compareLine + '</div>' +
+        '<div class="card"><div class="intro" data-clkn-avoid="1">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + progVsVersion + tokenLine + holdersLine + followLine + compareLine + '</div>' +
         (v.programs.length ? v.programs.map(function (p) { var n = (p.payouts || []).filter(function (x) { return x.sig; }).length; return '<a class="card proj-link" href="/hub/' + esc(v.id) + '/p/' + encodeURIComponent(p.id) + '"><div class="prog-head" data-clkn-avoid-kids="1"><h2>' + esc(p.label || p.kind) + '</h2><div class="chips"><span class="chip kind">' + esc(String(p.kind).replace(/-/g, ' ')) + '</span><span class="chip ' + (n ? 'ok' : '') + '">' + n + ' receipt' + (n === 1 ? '' : 's') + '</span></div></div></a>'; }).join('') : '<div class="card"><div class="fact">No programs on record for this project yet.' + (v.dryRun ? ' This is a dry run — see the note above.' : '') + '</div></div>');
       return;
     }
