@@ -211,6 +211,12 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 15** — roadmap Extension 10 (the rehearsal before anyone real is on the other
+  side); docs drift round 4 (the Codex brief through #350–#352 and the journal's rounds 3–5; the
+  reviewer's path in `docs/HUB_VERIFY.md` names every public surface since batch 9; the trust page
+  and the verify doc corrected: the settlement journal IS the live path for Hub payouts since #342,
+  while CUNA's own payouts still run on the older dedicated handler); storyboard Part 4 with
+  fourteen real captures and an inventory test in CI. PR #353.
 - **Colosseum batch 14** — the four P1s from the public-surfaces lens closed with regression tests
   (`/hub/verify` refuses receipt URLs from any origin but our own; amounts in token units; the
   heaviest Hub reads rate-limited with a bounded wallet-lookup cache; `/api/track` no longer mints
