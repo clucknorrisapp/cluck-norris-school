@@ -104,7 +104,7 @@
 <script src="/cluck-util.js"></script>
 <script>
 (function () {
-  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr, rpc = CluckUtil.rpc;
+  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr, rpc = CluckUtil.rpc, rawAmount = CluckUtil.rawAmount;
   var app = document.getElementById('app');
   // /hub · /hub/:project (lock-to-earn only) · /hub/:project/programs (index) · /hub/:project/p/:program · /hub/:project/r/:sig
   var path = location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
@@ -424,15 +424,35 @@
   async function renderReceipt() {
     var r = await fetch('/api/hub/' + encodeURIComponent(projectId) + '/r/' + encodeURIComponent(receiptSig)).then(function (x) { return x.json(); });
     if (!r.ok) throw new Error(r.error || 'no such receipt');
-    var p = r.program, x = r.receipt, sym = p.ticker || r.symbol;
+    var p = r.program, raw = r.receipt, sym = p.ticker || r.symbol;
+    // adv P1-4 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): a journal-backed receipt (Addendum B3)
+    // carries settlements[] + totals — not a single amountUi/sig/at/state — so it is normalized
+    // into the same small view `x` the legacy shape already provided, once, here. Everything below
+    // this point reads `x`, never `raw`, and never has to branch on which shape it got.
+    var isJournal = Array.isArray(raw.settlements);
+    var settlements = isJournal ? raw.settlements.slice().sort(function (a, b) { return (a.at || 0) - (b.at || 0); }) : [];
+    var last = settlements.length ? settlements[settlements.length - 1] : null;
+    var x = isJournal ? {
+      wallet: raw.wallet, state: raw.state,
+      amountUi: rawAmount(raw.totals.appliedRaw, raw.rewardDecimals, 9),
+      sig: last ? last.sig : null, at: last ? last.at * 1000 : null,
+    } : raw;
     if (r.brand && r.brand.accent) document.querySelector('.wrap').style.setProperty('--proj-accent', r.brand.accent);
     document.getElementById('title').textContent = 'Receipt';
     document.getElementById('subtitle').textContent = (p.label || p.kind).toUpperCase() + ' · ' + String(r.projectId).toUpperCase();
     var proof = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getSignatureStatuses', params: [[x.sig], { searchTransactionHistory: true }] }, null, 2);
+    // A row paid as several settlements (Addendum B3: e.g. 40 + 40 + 20) lists every one, each
+    // with its own transaction — the top tile still shows the row's TOTAL applied amount.
+    var settlementsBlock = (isJournal && settlements.length > 1)
+      ? '<div class="sec-title" data-clkn-avoid="1">Every settlement (' + settlements.length + ')</div><ul class="facts">' + settlements.map(function (s) {
+          return '<li><div class="fact">' + txLink(s.sig) + ' — ' + amt(rawAmount(s.appliedRaw, raw.rewardDecimals, 9), sym) + ' · ' + ts(s.at * 1000) + '</div></li>';
+        }).join('') + '</ul>'
+      : '';
     app.innerHTML = (r.dryRun ? '<div class="card">' + dryRunBadge() + '</div>' : '') +
       '<div class="card">' + statTiles([['Amount', amt(x.amountUi, sym)], ['State', esc(x.state)], ['Submitted', ts(x.at)]]) +
       '<div class="terms" data-clkn-avoid-kids="1"><div><b>To</b> ' + acct(x.wallet) + '</div><div><b>Token</b> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(p.prizeMint || p.mint) + '">' + esc(shortAddr(p.prizeMint || p.mint, 6, 4)) + '</a></div><div><b>Program</b> ' + esc(p.label || p.kind) + '</div>' + (p.termsHash ? '<div><b>Terms hash</b> <span class="mono">' + esc(p.termsHash.slice(0, 16)) + '…</span></div>' : '') + '</div>' +
       '<div class="sec-title" data-clkn-avoid="1">Transaction</div><div class="mono"><a target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(x.sig) + '">' + esc(x.sig) + '</a></div>' +
+      settlementsBlock +
       '<div class="verify-bar" data-clkn-avoid="1"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote"><span class="verify" data-sig="' + esc(x.sig) + '"><span class="small">not checked</span></span></span></div>' +
       '<div class="sec-title" data-clkn-avoid="1">Verify it yourself</div><div class="fact">Send this to any Solana RPC. A <span class="mono">confirmationStatus</span> of <span class="mono">confirmed</span> or <span class="mono">finalized</span> with no <span class="mono">err</span> means the transfer is on the chain.</div><pre class="proof">' + esc(proof) + '</pre>' +
       explainBlock(x) +
