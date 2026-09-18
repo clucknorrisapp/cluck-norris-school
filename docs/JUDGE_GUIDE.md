@@ -73,6 +73,12 @@ being true.
    share. Pinned by `scripts/hub-verify-page-test.cjs`.
 4. `/hub/demo-b` — a second fixture project proves data never leaks between projects: the same
    library, fully isolated. Pinned by `scripts/hub-demo-fixture-test.cjs`.
+5. `npx @clkn/hub-verify <receipt-url>` — the reproduction script packaged as a standalone command
+   (`packages/hub-verify`), no clone and no build required. Built from, and byte-checked in CI
+   against, the same repo script and browser bundle above — one verifier, shipped three ways, not
+   three that could quietly drift apart. Publishing to the npm registry is pending the project
+   owner's own go; until then it runs the same way from a git ref. Pinned by
+   `scripts/hub-verify-package-test.cjs`.
 
 ## Business Plan
 

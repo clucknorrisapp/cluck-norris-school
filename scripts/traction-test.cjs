@@ -478,6 +478,144 @@ t("pageViewsInPeriod is null (never a guessed zero) when analytics_v1 has no buc
   assert.strictEqual(traction.pageViewsInPeriod(kv, "/school", "2026-09-14", "2026-09-18"), null);
 });
 
+section("BB5 — hub_lesson_read per-lesson breakdown, bounded to the known lock-lesson ids");
+
+t("a known lesson id (e.g. \"receipt\") is recorded in BOTH the per-project total and the per-lesson breakdown", () => {
+  const kv = store.memoryKv();
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "receipt", nowMs: dayMs("2026-09-16") });
+  const byProject = traction.readHubLessonReads(kv);
+  const byLesson = traction.readHubLessonReadsByLesson(kv);
+  assert.strictEqual(byProject["2026-09-16"].acme.length, 1);
+  assert.strictEqual(byLesson["2026-09-16"].receipt.length, 1);
+});
+t("an unknown lesson id is rejected from the per-lesson breakdown, but the per-project total still counts (old rows / callers with no lesson field keep working)", () => {
+  const kv = store.memoryKv();
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "made-up-lesson", nowMs: dayMs("2026-09-16") });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-2", nowMs: dayMs("2026-09-16") }); // no lesson field at all
+  const byProject = traction.readHubLessonReads(kv);
+  const byLesson = traction.readHubLessonReadsByLesson(kv);
+  assert.strictEqual(byProject["2026-09-16"].acme.length, 2, "both still count toward the total");
+  assert.deepStrictEqual(byLesson, {}, "nothing outside KNOWN_LOCK_LESSON_IDS is ever stored");
+});
+t("every one of the seven ids the school can actually send is accepted; nothing else is", () => {
+  const kv = store.memoryKv();
+  let i = 0;
+  for (const id of traction.KNOWN_LOCK_LESSON_IDS) traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-" + (i++), lesson: id, nowMs: dayMs("2026-09-16") });
+  const byLesson = traction.readHubLessonReadsByLesson(kv);
+  assert.strictEqual(Object.keys(byLesson["2026-09-16"]).length, traction.KNOWN_LOCK_LESSON_IDS.size);
+  for (const id of traction.KNOWN_LOCK_LESSON_IDS) assert.strictEqual(byLesson["2026-09-16"][id].length, 1);
+});
+t("dedups per (day, lesson, sid); a different sid or a different day counts again", () => {
+  const kv = store.memoryKv();
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "receipt", nowMs: dayMs("2026-09-16") });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "receipt", nowMs: dayMs("2026-09-16") + 1000 });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-2", lesson: "receipt", nowMs: dayMs("2026-09-16") });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "receipt", nowMs: dayMs("2026-09-17") });
+  const byLesson = traction.readHubLessonReadsByLesson(kv);
+  assert.strictEqual(byLesson["2026-09-16"].receipt.length, 2);
+  assert.strictEqual(byLesson["2026-09-17"].receipt.length, 1);
+});
+t("compute()'s hubLessonReadsReceipt counts in-period receipt-lesson reads; denominator is /school page views, null when no bucket exists", () => {
+  const kv = store.memoryKv();
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "receipt", nowMs: dayMs("2026-09-16") });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-2", lesson: "wallets", nowMs: dayMs("2026-09-16") }); // a different lesson — must not count
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-3", lesson: "receipt", nowMs: dayMs("2026-09-01") }); // outside the window
+  const noDenom = traction.compute({ kv, from: "2026-09-14", to: "2026-09-18" });
+  assert.strictEqual(noDenom.counters.hubLessonReadsReceipt.value, 1);
+  assert.strictEqual(noDenom.counters.hubLessonReadsReceipt.denominator, null);
+  const day = traction.dayKeyOf(dayMs("2026-09-16"));
+  kv.set("analytics_v1", { days: { [day]: { paths: { "/school": 400 } } } });
+  const withDenom = traction.compute({ kv, from: "2026-09-14", to: "2026-09-18" });
+  assert.strictEqual(withDenom.counters.hubLessonReadsReceipt.value, 1);
+  assert.strictEqual(withDenom.counters.hubLessonReadsReceipt.denominator, 400);
+  assert.strictEqual(withDenom.counters.hubLessonReadsReceipt.label, "independent");
+});
+t("no field on a stored hub_lesson_read-by-lesson row identifies a learner", () => {
+  const kv = store.memoryKv();
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "a-very-identifying-sid-123", lesson: "receipt", nowMs: dayMs("2026-09-16") });
+  const raw = JSON.stringify(traction.readHubLessonReadsByLesson(kv));
+  assert.ok(!raw.includes("a-very-identifying-sid-123"), "the raw sid must never be stored");
+});
+
+section("BB5 — hub_bridge_click, the receipt lesson's own finish-card links, fixed from/to allowlist");
+
+t("a valid (from, to) pair is recorded, dedup per (day, from, to, sid)", () => {
+  const kv = store.memoryKv();
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "verify", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "verify", sid: "sid-1", nowMs: dayMs("2026-09-16") + 1000 });
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "verify", sid: "sid-1", nowMs: dayMs("2026-09-17") });
+  const raw = traction.readHubBridgeClicks(kv);
+  assert.strictEqual(raw["2026-09-16"].receipt.verify.length, 1);
+  assert.strictEqual(raw["2026-09-17"].receipt.verify.length, 1);
+});
+t("all three known \"to\" values are independent buckets under the same \"from\"", () => {
+  const kv = store.memoryKv();
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "demo-receipt", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "verify", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "trust", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  const raw = traction.readHubBridgeClicks(kv);
+  assert.strictEqual(raw["2026-09-16"].receipt["demo-receipt"].length, 1);
+  assert.strictEqual(raw["2026-09-16"].receipt.verify.length, 1);
+  assert.strictEqual(raw["2026-09-16"].receipt.trust.length, 1);
+});
+t("a bad \"to\" is dropped, not stored", () => {
+  const kv = store.memoryKv();
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "some-made-up-destination", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  assert.deepStrictEqual(traction.readHubBridgeClicks(kv), {});
+});
+t("a bad \"from\" is dropped, not stored, even when \"to\" is valid", () => {
+  const kv = store.memoryKv();
+  traction.recordHubBridgeClick(kv, { from: "some-other-lesson", to: "verify", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  assert.deepStrictEqual(traction.readHubBridgeClicks(kv), {});
+});
+t("recordHubBridgeClick is a no-op without a from, to, or sid", () => {
+  const kv = store.memoryKv();
+  traction.recordHubBridgeClick(kv, { to: "verify", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubBridgeClick(kv, { from: "receipt", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "verify", nowMs: dayMs("2026-09-16") });
+  assert.deepStrictEqual(traction.readHubBridgeClicks(kv), {});
+});
+t("compute()'s three hubBridgeClicks* counters read their own \"to\" bucket only, denominator is /school page views", () => {
+  const kv = store.memoryKv();
+  const day = traction.dayKeyOf(dayMs("2026-09-16"));
+  kv.set("analytics_v1", { days: { [day]: { paths: { "/school": 400 } } } });
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "demo-receipt", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "demo-receipt", sid: "sid-2", nowMs: dayMs("2026-09-16") });
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "verify", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "trust", sid: "sid-1", nowMs: dayMs("2026-09-01") }); // outside the window
+  const out = traction.compute({ kv, from: "2026-09-14", to: "2026-09-18" });
+  assert.strictEqual(out.counters.hubBridgeClicksDemoReceipt.value, 2);
+  assert.strictEqual(out.counters.hubBridgeClicksVerify.value, 1);
+  assert.strictEqual(out.counters.hubBridgeClicksTrust.value, 0);
+  assert.strictEqual(out.counters.hubBridgeClicksDemoReceipt.denominator, 400);
+  assert.strictEqual(out.counters.hubBridgeClicksVerify.denominator, 400);
+  assert.strictEqual(out.counters.hubBridgeClicksTrust.denominator, 400);
+  assert.strictEqual(out.counters.hubBridgeClicksDemoReceipt.label, "independent");
+});
+t("compute()'s hubBridgeClicks* denominator is null (never a guessed zero) with no /school bucket", () => {
+  const kv = store.memoryKv();
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "verify", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  const out = traction.compute({ kv, from: "2026-09-14", to: "2026-09-18" });
+  assert.strictEqual(out.counters.hubBridgeClicksVerify.denominator, null);
+});
+t("no field on a stored hub_bridge_click row identifies a learner", () => {
+  const kv = store.memoryKv();
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "verify", sid: "a-very-identifying-sid-456", nowMs: dayMs("2026-09-16") });
+  const raw = JSON.stringify(traction.readHubBridgeClicks(kv));
+  assert.ok(!raw.includes("a-very-identifying-sid-456"), "the raw sid must never be stored");
+});
+
+t("scripts/traction-report.cjs prints the BB5 receipt-lesson-bridge lines", () => {
+  const { execFileSync } = require("child_process");
+  const fs = require("fs"), os = require("os"), path = require("path");
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "traction-bb5-"));
+  const out = execFileSync(process.execPath, [require.resolve("./traction-report.cjs")], { env: { ...process.env, DATA_DIR: dataDir }, encoding: "utf8" });
+  assert.ok(/Receipt lesson bridge \(BB5\)/.test(out), "the report must print a dedicated BB5 section");
+  assert.ok(/reached the receipt lesson finish card/.test(out));
+  assert.ok(/demo-receipt/.test(out) && /verify/.test(out) && /trust/.test(out));
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
 section("salt (finding #3, batch 8) — no longer a hardcoded literal, persisted per install");
 
 t("with no env var, a fresh kv gets its own random salt, persisted under kv traction:salt_v1", () => {

@@ -24,6 +24,15 @@
  *      lib/hub/ledger.js, which lib/hub/reproduce.js does not read from yet — docs/HUB_VERIFY.md
  *      §g) — that is the true state of this project's payout path, not a test failure.
  *
+ * AA2 bug fix (2026-09-18, this test's own fixture now carries a real program version): `bundle.
+ * program` used to be built from lib/hub/public.js programVersionView()'s PLAIN shape, which drops
+ * fields lib/hub/project.js verifyVersionHash() actually hashes — so "recompute the hash" could
+ * never pass for ANY project, seeded or demo. Pinned above (2, 4, 5): verifyVersionHash(bundle.
+ * program) is true in Node for both the seeded project and the demo bundle; the Chromium drop
+ * renders "Program-version hash recompute: matches"; and a one-character tamper to program.terms
+ * is caught by the targeted program-hash recompute independently of (not merely inherited from)
+ * the whole-bundle hash check.
+ *
  * Usage: node scripts/hub-bundle-test.cjs [baseUrl]
  * Env:   HUB_BUNDLE_TEST_PORT (default 3255) — used only when baseUrl is omitted (a server is booted).
  */
@@ -58,6 +67,8 @@ const ok = (name, cond, detail) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const bundleLib = require("../lib/hub/bundle");
+const pub = require("../lib/hub/public");
+const proj = require("../lib/hub/project");
 
 // ── fixture data — a REAL project registered in the hub kv registry (not the demo fixture) ──────
 const WALLET = "4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs";
@@ -70,9 +81,19 @@ const SIG2 = fakeSig(2);
 const PROJECT = "hbtest";
 const T0 = 1_800_000_000; // fixed, arbitrary unix seconds — a fixture, not a live clock
 const T1 = T0 + 3600;
-const BATCH_AT = T0 + 7200;
+const BATCH_AT = T0 + 7200;   // real UTC day for this timestamp is 2027-01-15
 const BATCH_ID = "hb-batch-1";
 const EMPTY_BATCH_ID = "hb-batch-empty";
+const MINT = fakeAddr(99);
+const FUND = fakeAddr(50);
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+
+// A real program version (AA2 bug fix, 2026-09-18) — effective well before BATCH_AT's own UTC day
+// so the bundle route's versionFor() lookup finds it in force for this batch.
+const VERSION_PROJECT = { id: PROJECT, mint: MINT, rewardMint: MINT, rewardDecimals: 9, rewardTokenProgram: TOKEN_PROGRAM, fundingWallet: FUND };
+const VERSION = proj.createVersion({}, VERSION_PROJECT, {
+  poolDailyRaw: "1000000000000", minDurationDays: 1, maxTermDays: 540, payoutSchedule: "weekly", vesting: "any", fundedBy: [FUND],
+}, { effectiveFrom: "2027-01-01", todayKey: "2027-01-01" }).versions[0];
 
 function buildFixtureState() {
   const days = {
@@ -89,11 +110,12 @@ function buildFixtureState() {
   };
   return {
     "hub:projects": {
-      [PROJECT]: { id: PROJECT, label: "Hub Bundle Test", symbol: "HBT", mint: fakeAddr(99), decimals: 9, rewardMint: fakeAddr(99), rewardDecimals: 9 },
+      [PROJECT]: { id: PROJECT, label: "Hub Bundle Test", symbol: "HBT", mint: MINT, decimals: 9, rewardMint: MINT, rewardDecimals: 9, fundingWallet: FUND },
     },
     [`program:${PROJECT}:days`]: days,
     [`program:${PROJECT}:batches`]: batches,
     [`program:${PROJECT}:paid`]: {},
+    [`program:${PROJECT}:state`]: { versions: [VERSION] },
   };
 }
 
@@ -194,6 +216,19 @@ async function main() {
     ok("batch.inputs carries both wallets", Object.keys(bundleBody.batch.inputs).sort().join(",") === [WALLET, WALLET2].sort().join(","));
     ok("hash verifies in Node", bundleLib.verifyBundleHash(bundleBody).ok === true, JSON.stringify(bundleLib.verifyBundleHash(bundleBody)));
 
+    // AA2 bug fix (2026-09-18): bundle.program used to be built via programVersionView()'s PLAIN
+    // shape, which drops fields the hash was actually taken over — so this NEVER verified for any
+    // project. It must now carry the FULL record and recompute.
+    ok("bundle.program carries the full record (projectId/mint/exclusions present)", !!bundleBody.program && bundleBody.program.projectId === PROJECT && Array.isArray(bundleBody.program.exclusions && bundleBody.program.exclusions.wallets), JSON.stringify(bundleBody.program));
+    ok("verifyVersionHash(bundle.program) is true in Node for the seeded project", proj.verifyVersionHash(bundleBody.program) === true, JSON.stringify(bundleBody.program));
+
+    // A one-character tamper to program.terms is caught by the TARGETED program-hash recompute —
+    // independently of (never merely inherited from) the whole-bundle hash check below.
+    const tamperedTerm = JSON.parse(JSON.stringify(bundleBody));
+    tamperedTerm.program.terms.sharePct = Number(tamperedTerm.program.terms.sharePct) + 0.5;
+    ok("a one-char program.terms tamper: the BUNDLE hash also disagrees (the term is inside what it covers)", bundleLib.verifyBundleHash(tamperedTerm).ok === false);
+    ok("a one-char program.terms tamper: verifyVersionHash(program) independently disagrees too (the program-hash check, distinct from the bundle-hash check)", proj.verifyVersionHash(tamperedTerm.program) === false);
+
     const r2 = await fetch(`${BASE}/api/hub/${PROJECT}/batch/${BATCH_ID}/bundle`);
     const body2 = await r2.json();
     ok("re-fetching the SAME settled batch hashes identically", bundleBody.hash === body2.hash, `${bundleBody.hash} vs ${body2.hash}`);
@@ -259,6 +294,11 @@ async function main() {
       ok("every fixture receipt shows MATCH", badges.slice(1).every((b) => b === "MATCH") && badges.length === 3, JSON.stringify(badges));
       ok("no uncaught page errors on a clean bundle", pageErrors.length === 0, pageErrors.join("\n"));
 
+      // AA2 bug fix: the program-hash recompute line, rendered by the SAME drop, independently of
+      // the bundle-hash line above — find the exact string the page renders.
+      const cleanBodyText = await page.textContent("body").catch(() => "");
+      ok('the program-hash line renders "Program-version hash recompute: matches" on a clean bundle', /Program-version hash recompute:\s*matches/.test(cleanBodyText), cleanBodyText.slice(0, 4000));
+
       const tampered = JSON.parse(JSON.stringify(bundleBody));
       tampered.batch.inputs[WALLET2].amountRaw = "1";
       const tamperedPath = path.join(tmp, "tampered.json");
@@ -271,6 +311,25 @@ async function main() {
       ok("a one-byte-altered bundle shows the hash-mismatch line first", badges2[0] === "BUNDLE HASH: DOES NOT MATCH", JSON.stringify(badges2));
       ok("...and still renders a verdict row per receipt underneath it", badges2.length === 3, JSON.stringify(badges2));
       ok("still no uncaught page errors on the tampered bundle", pageErrors.length === 0, pageErrors.join("\n"));
+      const amountTamperedText = await page.textContent("body").catch(() => "");
+      ok('a batch-inputs tamper (program untouched): the program-hash line STILL shows "matches" — the two checks are independent', /Program-version hash recompute:\s*matches/.test(amountTamperedText), amountTamperedText.slice(0, 4000));
+
+      // A one-character tamper to program.terms — the BUNDLE hash disagrees (the term is inside
+      // what it covers) AND, separately, the program-hash recompute line disagrees on its own: two
+      // distinct lines on the page, not one hash check standing in for both.
+      const termTampered = JSON.parse(JSON.stringify(bundleBody));
+      termTampered.program.terms.sharePct = Number(termTampered.program.terms.sharePct) + 0.5;
+      const termTamperedPath = path.join(tmp, "term-tampered.json");
+      fs.writeFileSync(termTamperedPath, JSON.stringify(termTampered));
+      await page.goto(`${BASE}/hub/verify`, { waitUntil: "networkidle", timeout: 20000 });
+      await page.click("#tabFiles");
+      await page.setInputFiles("#fileIn", [termTamperedPath]);
+      await page.waitForSelector(".verdict .badge", { timeout: 10000 }).catch(() => {});
+      const badges3 = await page.$$eval(".verdict .badge", (els) => els.map((e) => e.textContent));
+      ok("a program.terms tamper: the BUNDLE hash line also says DOES NOT MATCH", badges3[0] === "BUNDLE HASH: DOES NOT MATCH", JSON.stringify(badges3));
+      const termTamperedText = await page.textContent("body").catch(() => "");
+      ok('a program.terms tamper: the program-hash line says "does not match" — the program-hash mismatch, distinct from the bundle-hash mismatch above', /Program-version hash recompute:\s*does not match/.test(termTamperedText), termTamperedText.slice(0, 4000));
+      ok("no uncaught page errors on the program-tampered bundle", pageErrors.length === 0, pageErrors.join("\n"));
 
       const bodyText = (await page.textContent("body").catch(() => "")).toLowerCase();
       ok("no 'verified project' / 'safe' / APR-APY language anywhere on the page", !bodyText.includes("verified project") && !/\bsafe\b/.test(bodyText) && !/\bapr\b/.test(bodyText) && !/\bapy\b/.test(bodyText));
@@ -290,6 +349,8 @@ async function main() {
       const demoBundle = await r.json();
       ok("carries dryRun:true throughout", demoBundle.project.dryRun === true, JSON.stringify(demoBundle.project));
       ok("hash verifies in Node", bundleLib.verifyBundleHash(demoBundle).ok === true, JSON.stringify(bundleLib.verifyBundleHash(demoBundle)));
+      // AA2 bug fix: the demo bundle's program used the same broken PLAIN view — pin it too.
+      ok("verifyVersionHash(bundle.program) is true in Node for the demo bundle", !!demoBundle.program && proj.verifyVersionHash(demoBundle.program) === true, JSON.stringify(demoBundle.program));
       ok("has at least one receipt", Array.isArray(demoBundle.receipts) && demoBundle.receipts.length > 0, demoBundle.receipts.length);
 
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "hub-demo-bundle-"));

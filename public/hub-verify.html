@@ -119,7 +119,7 @@
     </div>
   </div>
 
-  <div id="result"></div>
+  <div id="result" data-i18n-skip="1"></div>
 
   <div class="card">
     <div class="sec-title" data-clkn-avoid="1">What this proves — and does not</div>
@@ -148,6 +148,50 @@ import * as HubVerify from '/hub-verify.bundle.js';
 (function () {
   var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
   var resultEl = document.getElementById('result');
+
+  // ── i18n for the strings THIS SCRIPT builds ─────────────────────────────────────────────────
+  // The static markup above is already covered by i18n.js's own DOM walker (loaded sitewide by
+  // cluck-nav.js) — it walks every text node and machine-translates on demand. But that walker
+  // only ever sees text that is ALREADY in the DOM; text this script assembles into `.innerHTML`
+  // strings (verdicts, errors, missing-input explanations) never goes through it as *source*
+  // text, only as a fait accompli once inserted (and `#result` carries `data-i18n-skip` above so
+  // the walker doesn't then try to re-translate our own output as if it were fresh English).
+  // `t()`/`tf()` are a small, page-local lookup over the SAME curated dictionaries i18n.js loads
+  // (`public/i18n/<lang>.json`, via the `window.CLKN_I18N` object i18n.js publishes once its
+  // fetch resolves) — no second translation system, no machine-translation fallback for this
+  // page's own copy (it is meant to be hand-curated, not queued for a live API call). A miss
+  // just falls back to the English literal. `tf(s, {a:1})` does plain `{a}`-token substitution
+  // so a translator can reorder words around a value instead of us splicing sentence halves.
+  // scripts/i18n-audit.cjs's Hub-pages gate scans this file's <script> block for every literal
+  // passed to t()/tf() and requires it in all six dictionaries — zero gaps, same bar as the
+  // markup strings.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function tf(s, vars) {
+    var out = t(s);
+    if (vars) for (var k in vars) out = out.split('{' + k + '}').join(String(vars[k]));
+    return out;
+  }
+  // i18n.js is loaded by cluck-nav.js off the same defer/module queue as this script, and its
+  // dictionary fetch is async — so on a dead-cold load (e.g. the `?receipt=` auto-run below,
+  // which can fire before either has settled) `t()` could still see no dictionary yet. Every
+  // render path here already awaits a network fetch or a file read first, so in practice the
+  // dictionary is long since loaded; this just makes sure of it rather than trusting the race.
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 4000)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
 
   // ── tabs ─────────────────────────────────────────────────────────────────────────────────
   var tabUrl = document.getElementById('tabUrl'), tabFiles = document.getElementById('tabFiles');
@@ -183,20 +227,29 @@ import * as HubVerify from '/hub-verify.bundle.js';
   // $schema yet — HUB_VERIFY.md §g — so "not published for this shape yet" is the honest, common
   // case, not an error). ──────────────────────────────────────────────────────────────────────
   async function schemaLine(label, body) {
-    if (!body || !body.$schema) return '<div class="fact">' + esc(label) + ': no schema published for this shape yet (see HUB_VERIFY.md §g).</div>';
+    var L = t(label);
+    if (!body || !body.$schema) return '<div class="fact">' + tf('{label}: no schema published for this shape yet (see HUB_VERIFY.md §g).', { label: esc(L) }) + '</div>';
     try {
       var s = await fetchJson(body.$schema);
-      if (!s.ok || !s.body) return '<div class="fact">' + esc(label) + ': could not fetch its schema at <span class="mono">' + esc(body.$schema) + '</span>.</div>';
+      if (!s.ok || !s.body) return '<div class="fact">' + tf('{label}: could not fetch its schema at {url}.', { label: esc(L), url: '<span class="mono">' + esc(body.$schema) + '</span>' }) + '</div>';
       var errors = HubVerify.validate(s.body, body);
       return errors.length
-        ? '<div class="fact">' + esc(label) + ': <span style="color:#FCA5A5">' + errors.length + ' schema error' + (errors.length === 1 ? '' : 's') + '</span> against <span class="mono">' + esc(body.$schema) + '</span>.</div>'
-        : '<div class="fact">' + esc(label) + ': <span style="color:var(--green)">valid</span> against its own published schema.</div>';
-    } catch (e) { return '<div class="fact">' + esc(label) + ': schema check failed (' + esc(e.message) + ').</div>'; }
+        ? '<div class="fact">' + tf('{label}: {n} schema error(s) against {url}.', { label: esc(L), n: '<span style="color:#FCA5A5">' + errors.length + '</span>', url: '<span class="mono">' + esc(body.$schema) + '</span>' }) + '</div>'
+        : '<div class="fact">' + tf('{label}: valid against its own published schema.', { label: esc(L) }) + '</div>';
+    } catch (e) { return '<div class="fact">' + tf('{label}: schema check failed ({err}).', { label: esc(L), err: esc(e.message) }) + '</div>'; }
   }
 
   // ── rendering ────────────────────────────────────────────────────────────────────────────
+  // MATCH / MISMATCH / MISSING_INPUTS are the `reproduce()` verdict codes themselves — they stay
+  // literal in every language (verdictWord() never runs through t()). `verdictExplain()` is the
+  // translated sentence that sits beside the badge, saying what that code means in prose.
   function verdictClass(status) { return status === 'MATCH' ? 'match' : status === 'MISMATCH' ? 'mismatch' : 'missing'; }
   function verdictWord(status) { return status === 'MATCH' ? 'MATCH' : status === 'MISMATCH' ? 'MISMATCH' : 'MISSING INPUTS'; }
+  function verdictExplain(status) {
+    if (status === 'MATCH') return t('This amount is exactly reproducible from the inputs the server published.');
+    if (status === 'MISMATCH') return t('This amount does not match what the published inputs reproduce.');
+    return t('Some of the inputs needed to reproduce this are missing or could not be fetched.');
+  }
   function fmtAmount(raw, decimals) {
     if (raw == null) return null;
     if (!Number.isFinite(decimals)) return raw;
@@ -211,8 +264,8 @@ import * as HubVerify from '/hub-verify.bundle.js';
       return '<li><div class="lbl">' + esc(p.key) + '</div><div class="val">+ ' + esc(fmtAmount(p.creditRaw, decimals) || p.creditRaw) + '</div></li>';
     }).join('');
     return '<ul class="steps">' + rows +
-      '<li><div class="lbl">already paid, other batches</div><div class="val">− ' + esc(fmtAmount(inputs.priorPaidRaw, decimals) || inputs.priorPaidRaw) + '</div></li>' +
-      '<li><div class="lbl">held, another pending batch</div><div class="val">− ' + esc(fmtAmount(inputs.priorReservedRaw, decimals) || inputs.priorReservedRaw) + '</div></li>' +
+      '<li><div class="lbl">' + esc(t('already paid, other batches')) + '</div><div class="val">− ' + esc(fmtAmount(inputs.priorPaidRaw, decimals) || inputs.priorPaidRaw) + '</div></li>' +
+      '<li><div class="lbl">' + esc(t('held, another pending batch')) + '</div><div class="val">− ' + esc(fmtAmount(inputs.priorReservedRaw, decimals) || inputs.priorReservedRaw) + '</div></li>' +
       '</ul>';
   }
   function renderVerdict(r, opts) {
@@ -220,17 +273,18 @@ import * as HubVerify from '/hub-verify.bundle.js';
     var cls = verdictClass(r.status);
     var html = '<div class="card">' +
       '<div class="verdict ' + cls + '"><span class="badge">' + esc(verdictWord(r.status)) + '</span>' +
-      '<span class="vtext">' + (opts.projectId ? esc(opts.projectId) + (opts.wallet ? ' · ' + esc(shortAddr(opts.wallet, 5, 4)) : '') : '') + '</span></div>';
+      '<span class="vtext">' + (opts.projectId ? esc(opts.projectId) + (opts.wallet ? ' · ' + esc(shortAddr(opts.wallet, 5, 4)) : '') : '') + '</span></div>' +
+      '<div class="vtext" style="width:100%;margin-top:-4px">' + esc(verdictExplain(r.status)) + '</div>';
     if (opts.stepsHtml) html += opts.stepsHtml;
-    html += '<ul class="steps"><li class="op">−</li><li class="total"><div class="lbl">published amount</div><div class="val">' + (r.published == null ? '(unknown)' : esc(r.published) + (opts.symbol ? ' ' + esc(opts.symbol) : '')) + '</div></li>' +
-      '<li class="total"><div class="lbl">reproduced amount</div><div class="val">' + (r.reproduced == null ? '(not computed)' : esc(r.reproduced) + (opts.symbol ? ' ' + esc(opts.symbol) : '')) + '</div></li></ul>' +
-      '<div class="fact" style="margin-top:10px"><b>Program-version hash:</b> ' + (r.hash ? '<span class="mono">' + esc(r.hash) + '</span>' : 'none published for this program yet') + '</div>';
+    html += '<ul class="steps"><li class="op">−</li><li class="total"><div class="lbl">' + esc(t('published amount')) + '</div><div class="val">' + (r.published == null ? esc(t('(unknown)')) : esc(r.published) + (opts.symbol ? ' ' + esc(opts.symbol) : '')) + '</div></li>' +
+      '<li class="total"><div class="lbl">' + esc(t('reproduced amount')) + '</div><div class="val">' + (r.reproduced == null ? esc(t('(not computed)')) : esc(r.reproduced) + (opts.symbol ? ' ' + esc(opts.symbol) : '')) + '</div></li></ul>' +
+      '<div class="fact" style="margin-top:10px"><b>' + esc(t('Program-version hash:')) + '</b> ' + (r.hash ? '<span class="mono">' + esc(r.hash) + '</span>' : esc(t('none published for this program yet'))) + '</div>';
     if (r.missing && r.missing.length) {
-      html += '<div class="fact" style="margin-top:10px"><b>Missing:</b></div><ul class="missing-list">' + r.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
+      html += '<div class="fact" style="margin-top:10px"><b>' + esc(t('Missing:')) + '</b></div><ul class="missing-list">' + r.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
     }
     if (opts.schemaLines && opts.schemaLines.length) html += '<div style="margin-top:10px">' + opts.schemaLines.join('') + '</div>';
     if (opts.versionHash) {
-      html += '<div class="fact" style="margin-top:10px"><b>Program version hash recompute:</b> ' + (opts.versionHash.ok ? '<span style="color:var(--green)">matches</span>' : opts.versionHash.reason ? esc(opts.versionHash.reason) : '<span style="color:#FCA5A5">does not match — computed ' + esc(opts.versionHash.computed) + '</span>') + '</div>';
+      html += '<div class="fact" style="margin-top:10px"><b>' + esc(t('Program-version hash recompute:')) + '</b> ' + (opts.versionHash.ok ? '<span style="color:var(--green)">' + esc(t('matches')) + '</span>' : opts.versionHash.reason ? esc(opts.versionHash.reason) : '<span style="color:#FCA5A5">' + esc(tf('does not match — computed {computed}', { computed: opts.versionHash.computed })) + '</span>') + '</div>';
     }
     html += '</div>';
     resultEl.innerHTML = html;
@@ -240,14 +294,15 @@ import * as HubVerify from '/hub-verify.bundle.js';
 
   // ── URL path ─────────────────────────────────────────────────────────────────────────────
   async function reproduceFromUrl(raw) {
+    await waitForI18n();
     var parsed = parseReceiptUrl(raw);
-    if (!parsed) { renderError('Not a receipt URL — expected .../hub/<project>/r/<sig> (or the /api/... JSON form).'); return; }
-    renderStatus('FETCHING…');
+    if (!parsed) { renderError(t('Not a receipt URL — expected .../hub/<project>/r/<sig> (or the /api/... JSON form).')); return; }
+    renderStatus(t('FETCHING…'));
     var schemaLines = [];
     var receiptRes;
     try { receiptRes = await fetchJson(parsed.host + '/api/hub/' + encodeURIComponent(parsed.project) + '/r/' + encodeURIComponent(parsed.sig)); }
-    catch (e) { renderError('Could not fetch the receipt (' + e.message + ') — a cross-origin host must allow this read, or try the offline/file path instead.'); return; }
-    if (!receiptRes.ok || !receiptRes.body || !receiptRes.body.ok || !receiptRes.body.receipt) { renderError('Could not fetch the receipt — check the URL.'); return; }
+    catch (e) { renderError(tf('Could not fetch the receipt ({err}) — a cross-origin host must allow this read, or try the offline/file path instead.', { err: e.message })); return; }
+    if (!receiptRes.ok || !receiptRes.body || !receiptRes.body.ok || !receiptRes.body.receipt) { renderError(t('Could not fetch the receipt — check the URL.')); return; }
     var receiptBody = receiptRes.body;
     schemaLines.push(await schemaLine('receipt', receiptBody));
     var kind = receiptBody.program && receiptBody.program.kind;
@@ -258,28 +313,35 @@ import * as HubVerify from '/hub-verify.bundle.js';
       var compId = receiptBody.program && receiptBody.program.id;
       var standingsRes;
       try { standingsRes = await fetchJson(parsed.host + '/api/hub/' + encodeURIComponent(parsed.project) + '/p/' + encodeURIComponent(compId) + '/standings'); }
-      catch (e) { renderVerdict({ status: 'MISSING_INPUTS', published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) : null, reproduced: null, hash: null, missing: ['could not fetch the sealed standings (' + e.message + ')'] }, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines }); return; }
+      catch (e) { renderVerdict({ status: 'MISSING_INPUTS', published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) : null, reproduced: null, hash: null, missing: [tf('could not fetch the sealed standings ({err})', { err: e.message })] }, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines }); return; }
       var comp = standingsRes.body && standingsRes.body.ok ? standingsRes.body.comp : null;
-      if (!comp || !comp.sealed) { renderVerdict({ status: 'MISSING_INPUTS', published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) : null, reproduced: null, hash: null, missing: ['the competition is not sealed yet, or the standings could not be fetched'] }, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines }); return; }
+      if (!comp || !comp.sealed) { renderVerdict({ status: 'MISSING_INPUTS', published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) : null, reproduced: null, hash: null, missing: [t('the competition is not sealed yet, or the standings could not be fetched')] }, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines }); return; }
       var win = (comp.results || []).filter(function (r) { return r.wallet === wallet; })[0];
       var rev = (comp.review || []).filter(function (r) { return r.wallet === wallet; })[0];
       var result = HubVerify.reproduceBuyCompRow({ terms: comp.terms, rank: win ? win.rank : null, tokensBought: rev ? rev.tokensBought : null, valueSol: rev ? rev.value : null, published: receiptBody.receipt.amountUi });
       renderVerdict(result, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines });
       return;
     }
-    if (kind && kind !== 'lock-to-earn') { renderVerdict({ status: 'MISSING_INPUTS', published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) : null, reproduced: null, hash: null, missing: ['reproduction is not implemented yet for kind "' + kind + '" — only "lock-to-earn" and "buy-comp" today'] }, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines }); return; }
+    if (kind && kind !== 'lock-to-earn') { renderVerdict({ status: 'MISSING_INPUTS', published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) : null, reproduced: null, hash: null, missing: [tf('reproduction is not implemented yet for kind "{kind}" — only "lock-to-earn" and "buy-comp" today', { kind: kind })] }, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines }); return; }
     var batchId = receiptBody.receipt.batchId || null;
-    if (!batchId || !wallet) { renderVerdict({ status: 'MISSING_INPUTS', published: null, reproduced: null, hash: null, missing: ['the receipt has no batchId/wallet — not a lock-to-earn payout'] }, { projectId: parsed.project, schemaLines: schemaLines }); return; }
+    if (!batchId || !wallet) { renderVerdict({ status: 'MISSING_INPUTS', published: null, reproduced: null, hash: null, missing: [t('the receipt has no batchId/wallet — not a lock-to-earn payout')] }, { projectId: parsed.project, schemaLines: schemaLines }); return; }
     var inputsRes;
     try { inputsRes = await fetchJson(parsed.host + '/api/hub/' + encodeURIComponent(parsed.project) + '/batch/' + encodeURIComponent(batchId) + '/inputs?wallet=' + encodeURIComponent(wallet)); }
-    catch (e) { renderVerdict({ status: 'MISSING_INPUTS', published: null, reproduced: null, hash: null, missing: ['could not fetch the batch inputs (' + e.message + ')'] }, { projectId: parsed.project, wallet: wallet, schemaLines: schemaLines }); return; }
+    catch (e) { renderVerdict({ status: 'MISSING_INPUTS', published: null, reproduced: null, hash: null, missing: [tf('could not fetch the batch inputs ({err})', { err: e.message })] }, { projectId: parsed.project, wallet: wallet, schemaLines: schemaLines }); return; }
     var inputsBody = inputsRes.body;
     var entry = inputsBody && inputsBody.ok && inputsBody.wallets ? inputsBody.wallets[wallet] : null;
     var receiptForCore = { amountRaw: entry ? entry.amountRaw : null };
     var inputsForCore = entry ? { periods: entry.periods, priorPaidRaw: entry.priorPaidRaw, priorReservedRaw: entry.priorReservedRaw } : null;
     var res2 = HubVerify.reproduce({ programVersion: entry && entry.programVersion ? entry.programVersion : null, inputs: inputsForCore, receipt: receiptForCore });
-    if (!entry) res2.missing.push('the fetch for the batch inputs did not return this wallet');
-    renderVerdict(res2, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody ? inputsBody.decimals : null) });
+    if (!entry) res2.missing.push(t('the fetch for the batch inputs did not return this wallet'));
+    // AA2 bug fix: the batch-inputs response now carries the program version in force for this
+    // batch (when one exists) — recompute its hash here too, the same check the offline-files and
+    // bundle tabs already run, so the URL path has the same evidence.
+    var versionOpt = null;
+    if (entry && entry.programVersion) {
+      try { versionOpt = await HubVerify.verifyVersionHash(entry.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
+    }
+    renderVerdict(res2, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody ? inputsBody.decimals : null), versionHash: versionOpt });
   }
   document.getElementById('urlBtn').addEventListener('click', function () { reproduceFromUrl(document.getElementById('urlIn').value); });
   document.getElementById('urlIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') reproduceFromUrl(e.target.value); });
@@ -338,12 +400,13 @@ import * as HubVerify from '/hub-verify.bundle.js';
   document.getElementById('filesClear').addEventListener('click', function () { loadedFiles = {}; renderFileList(); resultEl.innerHTML = ''; });
 
   async function reproduceFromFiles() {
+    await waitForI18n();
     var receipt = loadedFiles['receipt'] && loadedFiles['receipt'].body;
-    if (!receipt || !receipt.receipt) { renderError('Load a receipt.json first.'); return; }
+    if (!receipt || !receipt.receipt) { renderError(t('Load a receipt.json first.')); return; }
     var kind = receipt.program && receipt.program.kind;
     var wallet = receipt.receipt.wallet || null;
     var symbol = (receipt.program && receipt.program.ticker) || receipt.symbol || null;
-    var schemaLines = ['<div class="fact">receipt: loaded from a local file — schema check needs a network fetch of its $schema, skipped offline.</div>'];
+    var schemaLines = ['<div class="fact">' + tf('{label}: loaded from a local file — schema check needs a network fetch of its $schema, skipped offline.', { label: esc(t('receipt')) }) + '</div>'];
     var versionOpt = null;
     if (loadedFiles['program-version']) {
       var v = loadedFiles['program-version'].body;
@@ -351,9 +414,9 @@ import * as HubVerify from '/hub-verify.bundle.js';
     }
     if (kind === 'buy-comp') {
       var standings = loadedFiles['standings'] && loadedFiles['standings'].body;
-      if (!standings || !standings.comp) { renderError('Load standings.json for this buy competition.'); return; }
+      if (!standings || !standings.comp) { renderError(t('Load standings.json for this buy competition.')); return; }
       var comp = standings.comp;
-      if (!comp.sealed) { renderVerdict({ status: 'MISSING_INPUTS', published: receipt.receipt.amountUi != null ? String(receipt.receipt.amountUi) : null, reproduced: null, hash: null, missing: ['the competition is not sealed'] }, { wallet: wallet, symbol: symbol, schemaLines: schemaLines, versionHash: versionOpt }); return; }
+      if (!comp.sealed) { renderVerdict({ status: 'MISSING_INPUTS', published: receipt.receipt.amountUi != null ? String(receipt.receipt.amountUi) : null, reproduced: null, hash: null, missing: [t('the competition is not sealed')] }, { wallet: wallet, symbol: symbol, schemaLines: schemaLines, versionHash: versionOpt }); return; }
       var win = (comp.results || []).filter(function (r) { return r.wallet === wallet; })[0];
       var rev = (comp.review || []).filter(function (r) { return r.wallet === wallet; })[0];
       var result = HubVerify.reproduceBuyCompRow({ terms: comp.terms, rank: win ? win.rank : null, tokensBought: rev ? rev.tokensBought : null, valueSol: rev ? rev.value : null, published: receipt.receipt.amountUi });
@@ -361,12 +424,17 @@ import * as HubVerify from '/hub-verify.bundle.js';
       return;
     }
     var inputsBody = loadedFiles['batch-inputs'] && loadedFiles['batch-inputs'].body;
-    if (!inputsBody) { renderError('Load batch-inputs.json (GET /api/hub/<project>/batch/<batchId>/inputs?wallet=<wallet>).'); return; }
+    if (!inputsBody) { renderError(t('Load batch-inputs.json (GET /api/hub/<project>/batch/<batchId>/inputs?wallet=<wallet>).')); return; }
     var entry = inputsBody.wallets ? inputsBody.wallets[wallet] : null;
     var receiptForCore = { amountRaw: entry ? entry.amountRaw : null };
     var inputsForCore = entry ? { periods: entry.periods, priorPaidRaw: entry.priorPaidRaw, priorReservedRaw: entry.priorReservedRaw } : null;
     var res2 = HubVerify.reproduce({ programVersion: entry && entry.programVersion ? entry.programVersion : null, inputs: inputsForCore, receipt: receiptForCore });
-    if (!entry) res2.missing.push('batch-inputs.json does not carry this wallet');
+    if (!entry) res2.missing.push(t('batch-inputs.json does not carry this wallet'));
+    // A separate program-version.json takes priority (it may be all a reader saved); otherwise
+    // fall back to the version batch-inputs.json now carries inline for its own batch.
+    if (!versionOpt && entry && entry.programVersion) {
+      try { versionOpt = await HubVerify.verifyVersionHash(entry.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
+    }
     renderVerdict(res2, { wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody.decimals), versionHash: versionOpt });
   }
   document.getElementById('filesBtn').addEventListener('click', reproduceFromFiles);
@@ -383,7 +451,7 @@ import * as HubVerify from '/hub-verify.bundle.js';
     var receiptForCore = { amountRaw: entry ? entry.amountRaw : (rb && rb.receipt ? rb.receipt.amountRaw : null) };
     var inputsForCore = entry ? { periods: entry.periods, priorPaidRaw: entry.priorPaidRaw, priorReservedRaw: entry.priorReservedRaw } : null;
     var result = HubVerify.reproduce({ programVersion: programVersion, inputs: inputsForCore, receipt: receiptForCore });
-    if (!entry) result.missing.push("the bundle's batch inputs do not carry this wallet");
+    if (!entry) result.missing.push(t("the bundle's batch inputs do not carry this wallet"));
     return { wallet: wallet, symbol: symbol, result: result };
   }
   function renderBundleResults(bundle, hashCheck, rows, versionOpt) {
@@ -392,37 +460,39 @@ import * as HubVerify from '/hub-verify.bundle.js';
     var missing = rows.length - matches - mismatches;
     var hashCls = hashCheck.ok ? 'match' : 'mismatch';
     var html = '<div class="card">' +
-      '<div class="verdict ' + hashCls + '"><span class="badge">' + (hashCheck.ok ? 'BUNDLE HASH: MATCHES' : 'BUNDLE HASH: DOES NOT MATCH') + '</span>' +
+      '<div class="verdict ' + hashCls + '"><span class="badge">' + esc(hashCheck.ok ? t('BUNDLE HASH: MATCHES') : t('BUNDLE HASH: DOES NOT MATCH')) + '</span>' +
       '<span class="vtext">' + (hashCheck.ok
-        ? 'This file is byte-for-byte what it was when it was built — intact, not truncated or edited.'
-        : (hashCheck.reason ? esc(hashCheck.reason) : 'The bytes changed after this bundle was built — reproduction below still ran, but treat this copy as unverified.')) + '</span></div>';
-    if (bundle && bundle.settled === false) html += '<div class="fact" style="margin-top:6px">' + esc(bundle.note || 'This batch has not been settled yet.') + '</div>';
-    html += '<div class="fact" style="margin-top:6px"><b>Project</b> ' + esc((bundle.project && (bundle.project.label || bundle.project.id)) || '(unknown)') +
-      ' · <b>Batch</b> <span class="mono">' + esc((bundle.batch && bundle.batch.id) || '(unknown)') + '</span></div>';
+        ? esc(t('This file is byte-for-byte what it was when it was built — intact, not truncated or edited.'))
+        : (hashCheck.reason ? esc(hashCheck.reason) : esc(t('The bytes changed after this bundle was built — reproduction below still ran, but treat this copy as unverified.')))) + '</span></div>';
+    if (bundle && bundle.settled === false) html += '<div class="fact" style="margin-top:6px">' + esc(bundle.note || t('This batch has not been settled yet.')) + '</div>';
+    html += '<div class="fact" style="margin-top:6px"><b>' + esc(t('Project')) + '</b> ' + esc((bundle.project && (bundle.project.label || bundle.project.id)) || t('(unknown)')) +
+      ' · <b>' + esc(t('Batch')) + '</b> <span class="mono">' + esc((bundle.batch && bundle.batch.id) || t('(unknown)')) + '</span></div>';
     if (versionOpt) {
-      html += '<div class="fact" style="margin-top:4px"><b>Program-version hash recompute:</b> ' +
-        (versionOpt.ok ? '<span style="color:var(--green)">matches</span>' : (versionOpt.reason ? esc(versionOpt.reason) : '<span style="color:#FCA5A5">does not match — computed ' + esc(versionOpt.computed) + '</span>')) + '</div>';
+      html += '<div class="fact" style="margin-top:4px"><b>' + esc(t('Program-version hash recompute:')) + '</b> ' +
+        (versionOpt.ok ? '<span style="color:var(--green)">' + esc(t('matches')) + '</span>' : (versionOpt.reason ? esc(versionOpt.reason) : '<span style="color:#FCA5A5">' + esc(tf('does not match — computed {computed}', { computed: versionOpt.computed })) + '</span>')) + '</div>';
     }
     if (rows.length) {
-      html += '<div class="fact" style="margin-top:8px"><b>' + matches + ' of ' + rows.length + '</b> receipt' + (rows.length === 1 ? '' : 's') + ' in this batch reproduce' + (rows.length === 1 ? 's' : '') + ' to MATCH' +
+      html += '<div class="fact" style="margin-top:8px">' + esc(tf('{total} receipt(s) in this batch:', { total: rows.length })) + ' ' + matches + ' MATCH' +
         (mismatches ? ', ' + mismatches + ' MISMATCH' : '') + (missing ? ', ' + missing + ' MISSING_INPUTS' : '') + '.</div>';
     } else {
-      html += '<div class="fact" style="margin-top:8px">No receipts in this bundle yet.</div>';
+      html += '<div class="fact" style="margin-top:8px">' + esc(t('No receipts in this bundle yet.')) + '</div>';
     }
     html += '</div>';
     html += rows.map(function (r) {
       var cls = verdictClass(r.result.status);
       var row = '<div class="card"><div class="verdict ' + cls + '"><span class="badge">' + esc(verdictWord(r.result.status)) + '</span>' +
         '<span class="vtext">' + (r.wallet ? esc(shortAddr(r.wallet, 5, 4)) : '') + '</span></div>' +
-        '<ul class="steps"><li class="total"><div class="lbl">published amount</div><div class="val">' + (r.result.published == null ? '(unknown)' : esc(r.result.published) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li>' +
-        '<li class="total"><div class="lbl">reproduced amount</div><div class="val">' + (r.result.reproduced == null ? '(not computed)' : esc(r.result.reproduced) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li></ul>';
-      if (r.result.missing && r.result.missing.length) row += '<div class="fact" style="margin-top:10px"><b>Missing:</b></div><ul class="missing-list">' + r.result.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
+        '<div class="vtext" style="width:100%;margin-top:-4px">' + esc(verdictExplain(r.result.status)) + '</div>' +
+        '<ul class="steps"><li class="total"><div class="lbl">' + esc(t('published amount')) + '</div><div class="val">' + (r.result.published == null ? esc(t('(unknown)')) : esc(r.result.published) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li>' +
+        '<li class="total"><div class="lbl">' + esc(t('reproduced amount')) + '</div><div class="val">' + (r.result.reproduced == null ? esc(t('(not computed)')) : esc(r.result.reproduced) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li></ul>';
+      if (r.result.missing && r.result.missing.length) row += '<div class="fact" style="margin-top:10px"><b>' + esc(t('Missing:')) + '</b></div><ul class="missing-list">' + r.result.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
       return row + '</div>';
     }).join('');
     resultEl.innerHTML = html;
   }
   async function reproduceFromBundle(bundle) {
-    renderStatus('CHECKING THE BUNDLE…');
+    await waitForI18n();
+    renderStatus(t('CHECKING THE BUNDLE…'));
     var hashCheck;
     try { hashCheck = HubVerify.verifyBundleHash(bundle); } catch (e) { hashCheck = { ok: false, reason: e.message }; }
     var split = HubVerify.splitBundle(bundle);

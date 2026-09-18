@@ -477,7 +477,7 @@ secret, or a live engine. Every number is fetched from a route the reader can op
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke.
 
-## 12. Extension 6 — 2026-09-18 evening (AA1, AA3, AA5 landed on batch 10; AA2, AA4 in flight)
+## 12. Extension 6 — 2026-09-18 evening (AA1–AA5, BB1, BB3 landed on batch 10; BB2, BB4, BB5 on batch 11)
 
 The Hub's public record is now readable by a holder (AA1), a judge (AA4), a skeptic (AA5) and a
 script (AA2). Extension 6 closes the loop back to the two pillars the record depends on: the
@@ -495,3 +495,60 @@ claim we cannot recompute. Nothing here needs a wallet, a new secret or a live e
 
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke.
+
+## 13. Extension 7 — 2026-09-18 evening (CC3 landed on batch 11; CC1, CC2, CC4 on batch 12; CC5 blocked on #342)
+
+Extension 7 is about the two readers we have served least well so far: the holder who wants to
+know **what changed in the rules** between two program versions, and the non-English reader on
+the one Hub page (`/hub/verify`) that was never wired to translation. It also closes two gaps the
+builders themselves reported (no accessibility gate on the holders page; a badge with no history).
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **CC1** | **What changed in the rules: `/hub/<project>/programs/compare`.** Two program versions side by side (default: the two most recent), each with its hash and published date, and a field-by-field diff of the terms in plain words (term, multiplier, eligibility rule, period, budget), computed in the browser from the two public `/api/hub/:project/program/:version` documents — nothing new is served. A holder who was paid under v1 can see exactly what v2 changed before deciding whether to stay locked. Linked from the programs page and every receipt that names a superseded version. | Insight, Product | Diffing a version with itself is empty; every diffed field is one the public document already exposes; seven languages; a11y page list; a test with two fixture versions. |
+| **CC2** | **`/hub/verify` in seven languages.** The one Hub page whose copy lives in JavaScript strings was never translated (E8 covered the markup pages). Route its dynamic strings through a small `t()` over the same `public/i18n/<lang>.json` dictionaries `cluck-nav.js` loads, add the page to `i18n-audit.cjs`'s gated `HUB_FILES` (with a source scan for the JS strings), and translate every string. | Product (Educate) | The audit gates the page with zero gaps; the verify-page browser test passes in `es` and `zh` as well as `en`; verdict words (MATCH / MISMATCH / MISSING_INPUTS) stay untranslated codes with a translated explanation beside them. |
+| **CC3** | **The holders page in the accessibility gate.** `/holders` (with the X7 history and AA3 Compare panels) joins `scripts/hub-a11y-test.cjs`'s page list at 360 and 390 px; whatever fails is fixed (tap targets, contrast, focus order, the floating-pill avoid markers). | Product | a11y suite green with the page included; no visual regression on the existing panels (a screenshot pair in the report). |
+| **CC4** | **Reproducibility over time.** A daily append-only record per project of `{reproduced, total, missingInputs}` (written by the same scheduler tick that refreshes the status cache, kept 90 days, hashed like the holder snapshots), served as `GET /api/hub/:project/reproducibility/history` and drawn as a small sparkline on `/hub/status` and the project page, so the badge has a trend and a regression is visible the day it happens. | Traction, Insight | The record is append-only (a test tries to overwrite a day); a missing day is a gap, never interpolated; demo projects excluded; the sparkline renders in the a11y job. |
+| **CC5** | **X6 browser-signed payout** — carried from Extension 2, still blocked on #342 merging: the operator signs the settlement batch in the browser (the wallet signs first, then extra signers, per the multi-signer rule), the server observes and journals. Not started until the journal is the live path. | Product, Viability | Two Opus lenses on its own PR, as for every money path. |
+
+**Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
+terms; the Sep 20 recording; the real-wallet smoke.
+
+## 14. Extension 8 — 2026-09-18 late afternoon (DD1 landed on batch 12; DD2, DD4 building; DD3, DD5 on batch 13)
+
+Eleven batches in, the record is readable, reproducible, shareable and taught. Extension 8 does
+three things: puts the verifier in a reviewer's hands without a clone, lets anyone follow a
+project's record without a wallet, and turns an adversarial eye on the public pages themselves
+(nine new surfaces since batch 9, each self-tested by its builder, none yet read by a second
+lens). Nothing here needs a wallet, a new secret or a live engine.
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **DD1** | **The verifier as a standalone command.** `scripts/reproduce-receipt.cjs` and the pure libs it needs are packaged as a small workspace package (`packages/hub-verify`, MIT, no runtime dependency beyond Node) with a `bin` so a reviewer runs `npx @clkn/hub-verify <receipt-url | bundle.json>` — no clone, no build. Same code path as the browser bundle and the script (a test asserts all three agree on every fixture). Published to npm only on the owner's go; the README shows the `npx` line as the first command. | Open-source / composability | The package builds from the repo, its test runs in CI, `npm pack` produces a tarball under 200 KB, and the three verifiers agree on every fixture. |
+| **DD2** | **Follow a project without a wallet.** `GET /api/hub/:project/feed.json` (JSON Feed 1.1) and `GET /hub/:project/feed.xml` (RSS) listing, newest first: program versions published (with hash), batches settled (with receipt count and the reproducibility ratio of that batch), holder snapshots taken, commitments observed — every item linking its public page. A "Follow" line on the project page with both URLs. Read-only, demo projects excluded, cached like the other reads. | Traction, Product | Both feeds validate (a JSON Feed schema check and an RSS well-formedness check in the test); items are stable (same id on every fetch); no private field; the feeds are in the route-hygiene test. |
+| **DD3** | **Arena drafts round 3 + weekly update #2 filled from the record.** `docs/ARENA_POSTS.md` round 3 for everything merged since batch 8 (#347–#350), each draft checked against the code; `docs/WEEKLY_UPDATE_2026-09-27.md` filled from `scripts/weekly-update-draft.cjs` for the week, with the three founder bullets drafted and marked for the owner's edit. All HOLD until promoted. | Founder Communication | Every claim traces to a merged PR; no yield language; the script's output for the window is committed beside the draft. |
+| **DD4** | **A receipt you can print.** `/hub/<project>/r/<sig>?print=1` renders the receipt as a single printable page (the amount, the rule, the settlement signature as text and QR, the program hash, the reproduce steps, the trust-boundary line) with print CSS, so a holder can keep a paper copy; the QR encodes the public receipt URL only. | Product | Renders in the a11y job; the print stylesheet hides nav and pills; the QR decodes to the receipt URL in a test (a pure QR encoder, no network); seven languages. |
+| **DD5** | **Second lens on the public surfaces.** One read-only adversarial pass (Opus, the money-path tier — this is the brand's public face) over the nine surfaces added since batch 9: `/hub/verify`, `/hub/status`, `/hub/wallet`, `/hub/trust`, `/hub/judge`, the compare page, the holders Compare panel, the badge routes, the feeds — looking for a private field on the wire, an unescaped string, a route that shadows a project id, a cache header that leaks per-user data, an amount rendered from the wrong decimals. Findings to `docs/HUB_PUBLIC_SURFACES_VERIFY_<date>.md`; fixes as the next batch's first item. | Viability, Insight | The report exists with a verdict per surface; every P0/P1 is fixed and re-verified before the next promote ask; P2/P3 are listed with an owner. |
+
+**Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
+terms; the Sep 20 recording; the real-wallet smoke; the npm publish for DD1.
+
+## 15. Extension 9 — 2026-09-18 evening (batch 12 in CI; DD2, DD4 building; DD3, DD5 gated on the merge)
+
+Twelve batches in. The holder side is covered (read, reproduce, share, print, follow); the
+judge side is covered (guide, status, trust, badge); the money path is under its fourth lens.
+Extension 9 turns to the two people we still ask to trust us blind: the **operator** who
+publishes terms without seeing who they will pay, and the **reader** who meets a reason code with
+no plain-words definition. It also proves the public reads hold up under load, which the rate
+limits assert but nothing measures.
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **EE1** | **Preview before publish.** On the operator desk, a "who would this pay today?" preview for DRAFT terms: the same pure eligibility and accrual functions the live route runs (`lib/hub/engine.js` / `lib/hub/ledger.js`) applied to the current lock and holder data, returning per wallet qualified / excluded + reason code and the day's pool split, with the budget line from Launch Readiness — read-only, nothing written, nothing sent, rate-limited like the heavy reads, operator-token gated like the desk. Publishing stays the separate, explicit act it is today. (Scope confirmed by a read-only inventory of the desk on 2026-09-18: today the desk has two reads and nine writes, `/readiness` runs only the in-force version, and no route computes eligibility for current holders against draft terms — `readiness.planBudget()` already projects the next N days from the exact accrual engine, which is the piece to build on.) | Product, Viability | The preview for the PUBLISHED version equals the live route's next-batch computation on the same data (a test proves the two functions are the same call); a draft with a wider term shows the difference; no write path is reachable from it (guard test). |
+| **EE2** | **The Hub glossary.** `/hub/glossary`: every term and reason code the receipts, the compare page and the lesson use (from `lib/hub/teach.js` / `lib/hub/explain.js`, one source), defined in plain words in seven languages, each entry anchorable (`/hub/glossary#term_rule`) and linked from wherever the code appears (receipt rows, compare rows, the wallet view's exclusion reasons, the lesson). A drift test fails if a reason code exists in code without a glossary entry. | Product (Educate), Insight | Every reason code in `lib/hub/` has an entry; the a11y job passes; the audit gates the page; the receipt page links each code. |
+| **EE3** | **Load proof for the public reads.** A fixture of 50 projects × 200 receipts, and `scripts/hub-load-smoke.cjs` that boots the server against it and drives the heavy routes (reproducibility, history, standings, bundle, badge, feeds, wallet roll-up) at the rate-limit ceiling, reporting p50/p95 latency and confirming the limiter refuses the burst while a page load stays under a stated budget; a CI job runs a reduced version (10×50). | Viability | Numbers in the report; no route exceeds the budget on the reduced fixture in CI; the caches are shown to serve the second wave. |
+| **EE4** | **Weekly update as a routine.** A fresh-session Sunday routine (Sonnet) that runs `scripts/weekly-update-draft.cjs` for the week, writes `docs/WEEKLY_UPDATE_<next-Sunday>.md` on a fresh branch and opens the PR for the owner's three bullets — the record, not memory, every week until Oct 12. Set up only on the owner's go (a routine is an approval card). | Founder Communication | The routine exists with the model set explicitly; its first run produces a PR the owner can edit. |
+| **EE5** | **Operator interviews, measured.** `docs/VALIDATION_2026-09.md` gains the onboarding-clock deltas from E7 for POKEAHOE (the dry run) and a template row per invited project, filled from `/api/traction` milestones, so the validation doc reads from the record too. | Founder+Market Fit | Every number traces to a milestone timestamp; the doc names what is still unfilled. |
+
+**Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
+terms; the Sep 20 recording; the real-wallet smoke; the npm publish for DD1; the go for EE4.

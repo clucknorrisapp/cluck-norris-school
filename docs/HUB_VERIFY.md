@@ -13,6 +13,20 @@ it needs a wallet, a login, or anything from us beyond an HTTP request.
 Written 2026-09-18. Re-read the note below before you start — some of these commands run against
 production today, and some still run only on staging, honestly labelled either way.
 
+**The reviewer's path, in order.** If you have fifteen minutes rather than two, this is the
+sequence a judge or a second reviewer should actually click through, each stop building on the
+last: [`/hub/judge`](https://clucknorris.app/hub/judge) (the map — which URL answers which
+judging criterion, and the test that pins each claim) → [`/hub/status`](https://clucknorris.app/hub/status)
+(what is live, on which host, at which commit, and how reproducible today) →
+[`/hub/demo`](https://clucknorris.app/hub/demo) (the whole loop once, no wallet, on a labelled
+dry-run fixture) → [`/hub/verify`](https://clucknorris.app/hub/verify) (reproduce one receipt
+yourself) → **the evidence bundle** (§ below — the same reproduction, saved once, checked
+offline forever) → [`/hub/wallet`](https://clucknorris.app/hub/wallet) (the same public record,
+read by address instead of by project) → [`/hub/trust`](https://clucknorris.app/hub/trust) (what
+none of the above proves, stated plainly). Everything after this paragraph is the detailed,
+runnable version of the middle two stops (`/hub/verify` and the bundle) for a reader who wants to
+run the commands themselves rather than click through the pages.
+
 ## What's live where, as of today (2026-09-18)
 
 Railway auto-deploys both branches; the owner promotes `develop` → `main` by hand
@@ -90,8 +104,14 @@ a `wallet` lookup, a `standings`/`readiness` body — none of those are schema'd
 
 ## (b) Reproduce a receipt's amount from the published inputs
 
+No clone, no build — `npx @clkn/hub-verify` is the same verifier, packaged as a standalone
+command (DD1, `packages/hub-verify`). Publishing to npm is pending the owner's own go; until
+then run it from a git ref or from this repo, both shown below:
+
 ```bash
 curl -s "$HOST/api/hub/cuna" | grep -o '"sig":"[^"]*"' | head -1   # grab a settled signature
+npx @clkn/hub-verify "$HOST/hub/cuna/r/<sig>"                      # once published to npm
+# or, right now, from this repo (identical output):
 node scripts/reproduce-receipt.cjs "$HOST/hub/cuna/r/<sig>"
 ```
 
@@ -150,11 +170,22 @@ console.log(got === hash ? "MATCH: " + got : "MISMATCH: got " + got + ", body sa
 '
 ```
 
-(The public `GET /api/hub/:project` view does not surface a version's `hash` for any project
-today, real or legacy — only the gated operator desk (`GET /api/hub/:project/desk`) and the
-self-serve preview (`POST /api/hub-apply?preview=1`) carry the full version shape this algorithm
-needs; the demo fixture above is the one place it's public with no key. `lib/hub/README.md` §4
-lists exactly which route carries which shape.)
+(The plain `GET /api/hub/:project` project view does not surface a version's `hash` for any
+project — only the gated operator desk (`GET /api/hub/:project/desk`) and the self-serve preview
+(`POST /api/hub-apply?preview=1`) carry that PLAIN shape, and it is not enough to recompute the
+hash from on its own. The routes that ARE enough, with no key, for any project — real or the demo
+fixture above — are `GET /api/hub/:project/program/:version` and the evidence bundle
+(`GET /api/hub/:project/batch/:batchId/bundle`, `docs/HUB_VERIFY.md` "Save the evidence bundle
+first" above): both serve the FULL record (`lib/hub/public.js programVersionView(v, {full:true})`),
+which is what the algorithm above actually needs. **Fixed 2026-09-18**: before that date, both
+routes served the same PLAIN shape the desk/preview responses show — missing `projectId`, `mint`,
+`rewardMint`, `rewardDecimals`, `rewardTokenProgram`, `fundingResponsibility`, `signer` and
+`exclusions`, all of which the hash is taken over — so this recompute could never pass for ANY
+project's `program/:version` or bundle, found by the BB2 docs builder while writing this file.
+`/hub/verify` itself now runs this exact recompute for you (the "Program version hash recompute"
+line, on the URL path, the offline-files path, and the evidence-bundle drop) rather than requiring
+the command above — the command remains for a reader who wants to run it themselves.
+`lib/hub/README.md` §4 lists exactly which route carries which shape.)
 
 ## (e) Check the on-chain commitment, once one exists
 

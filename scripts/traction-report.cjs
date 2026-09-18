@@ -56,6 +56,34 @@ for (const [name, c] of Object.entries(out.counters)) {
   if (c.bySource) console.log(`    by source: ${JSON.stringify(c.bySource)}`);
 }
 
+// ── receipt lesson bridge (BB5) — reached the finish card, then clicked through ────────────────
+// Same shape as the "doors" counters above (hubDoorClicksSchool/Home): a count, /school's own
+// page views as the denominator, and — unlike the generic table — a printed percentage, because
+// this is the one funnel BB5 exists to show end to end.
+function pct(value, denom) {
+  const v = Number(value), d = Number(denom);
+  if (denom == null || !Number.isFinite(d) || d <= 0 || !Number.isFinite(v)) return "—";
+  return ((v / d) * 100).toFixed(1) + "%";
+}
+const BRIDGE_ROWS = [
+  { door: "reached the receipt lesson finish card", counter: "hubLessonReadsReceipt" },
+  { door: "  → clicked \"open a real receipt\" (demo-receipt)", counter: "hubBridgeClicksDemoReceipt" },
+  { door: "  → clicked \"reproduce it yourself\" (verify)", counter: "hubBridgeClicksVerify" },
+  { door: "  → clicked \"see what none of this proves\" (trust)", counter: "hubBridgeClicksTrust" },
+];
+if (BRIDGE_ROWS.every((r) => out.counters[r.counter])) {
+  console.log("\nReceipt lesson bridge (BB5) — /school page views as the denominator:\n");
+  const bridgeRows = BRIDGE_ROWS.map((r) => {
+    const c = out.counters[r.counter];
+    return { door: r.door, value: String(c.value), denominator: c.denominator == null ? "—" : String(c.denominator), pct: pct(c.value, c.denominator) };
+  });
+  const bCols = ["door", "value", "denominator", "pct"];
+  const bWidths = bCols.map((c) => Math.max(c.length, ...bridgeRows.map((r) => String(r[c]).length)));
+  console.log(bCols.map((c, i) => pad(c, bWidths[i])).join("  "));
+  console.log(bWidths.map((w) => "-".repeat(w)).join("  "));
+  for (const r of bridgeRows) console.log(bCols.map((c, i) => pad(r[c], bWidths[i])).join("  "));
+}
+
 // ── operator onboarding clock (Colosseum E7 / W6b "observed setup time") ──────────────────────
 function fmtDur(sec) {
   if (sec == null) return "—";

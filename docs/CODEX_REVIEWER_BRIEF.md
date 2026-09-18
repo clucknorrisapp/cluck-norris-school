@@ -373,6 +373,211 @@ and the traction/analytics salt), each fixed the same day it was found, on the
    every later call, never logged. Test: `scripts/traction-test.cjs` (the "salt (finding #3, batch
    8)" section) and `scripts/analytics-engaged-test.cjs` (the "salt: with no env var…" test).
 
+## Round 3 — 2026-09-18 (BB2, roadmap §12): caught up through batch 10, plus #342's status
+
+Docs-drift pass, not a code review — written from `git log --oneline origin/develop -20` and the
+actual diffs of #347/#348 on the merged tree (`claude/colosseum-batch-10`, which carries batch 9 +
+AA1–AA5 + BB1 + BB3). The coordinator notes a follow-on branch `claude/colosseum-batch-11` (PR
+#349) already carries BB4 on top of this — not reviewed here, out of this pass's scope.
+
+### PR #347 — batch 9 (Y1 `/hub/verify`, Y2 receipt lesson, Y4 OG cards, Z1 weekly-update
+generator, Z2 `/hub/status` + `/api/build`, Z3 route hygiene)
+
+**Y1 — `/hub/verify`'s browser bundle.** Read `hub-verify-src/entry.js` (the ESM entry vite bundles
+into `public/hub-verify.bundle.js`), `lib/hub/reproduce.js`, `lib/hub/schema-validate.js`,
+`lib/hub/canonical.js`, `lib/hub/bundle.js`, and `public/hub-verify.html`'s two flows (paste-a-URL,
+drop-files/bundle). Pinned by `scripts/hub-verify-page-test.cjs` and `scripts/hub-bundle-test.cjs`
+(item 4 in its header: "Chromium drops the bundle file … every fixture receipt shows MATCH").
+Questions:
+1. **A confirmed drift, not hypothetical — the bundle's embedded program version can never pass
+   its own hash check.** `server.js`'s `/api/hub/:project/batch/:batchId/bundle` (and its demo
+   **Fixed on batch 12 (commit d77729c):** the bundle routes, `/api/hub/:project/program/:version` and the batch-inputs route now serve the full hashed record (`programVersionView(v, {full:true})`), and `versionHashInput()` strips the served `$schema` (a second hash-input bug found on the way); `hub-bundle-test` and `hub-verify-page-test` assert the recompute matches in Node and Chromium. The note below is kept as the record of the finding.
+   twin) builds `program` as `{ ...hubPublic.programVersionView(p.version), $schema }`.
+   `programVersionView()` (`lib/hub/public.js` ~289) returns only
+   `{version, effectiveFrom, effectiveTo, hash, terms, commitment}` — it drops `projectId, mint,
+   rewardMint, rewardDecimals, rewardTokenProgram, fundingResponsibility, signer, exclusions`,
+   every one of which `versionRecord()` (`lib/hub/project.js` ~181) hashed. Reproduced directly:
+   `proj.verifyVersionHash(fullInternalVersion)` → `true`; `proj.verifyVersionHash(pub.programVersionView(fullInternalVersion))`
+   → `false`, on the SAME untampered version. `public/hub-verify.html`'s `reproduceFromBundle()`
+   (~424–433) feeds exactly `split.programVersion` — the bundle's reshaped field — into
+   `HubVerify.verifyVersionHash`, so every bundle drop, for every project, prints "Program-version
+   hash recompute: does not match — computed …" even when nothing is wrong. Captured live in
+   `docs/demo/2026-09-18/hub-verify-bundle.desktop.png` (this batch). `scripts/hub-bundle-test.cjs`
+   asserts the bundle's OWN top-level hash round-trips (it does) but never asserts on this
+   embedded line, so it's a real gap, not a regression from a passing test. Is this shape
+   (`programVersionView` inside the bundle) intentional — should the bundle instead embed the
+   fields `versionHashInput` needs, or should the page stop attempting this specific check when a
+   bundle (rather than a raw `/api/hub/:project` fetch) is the source? Either fix is small; flagging
+   because it silently prints a scary-looking false negative on the doc's own recommended
+   fast-path ("Save the evidence bundle first").
+2. Does `verifyVersionHash`'s comparison ever produce a false MATCH — i.e., can two different
+   `terms` bodies canonicalize to strings that hash the same after `programVersionView`'s field
+   drop, given the drop is lossy in one direction only (fields removed, never added)? (Reasoning
+   only — no attack found; asking because the finding above shows the shape is under-specified.)
+
+**Y2 — the receipt lesson.** Read `src/App.jsx`'s `LESSONS` entry for "Read a payout receipt" and
+`lib/hub/teach.js` (six-question, no-copy-from-project derivation the lesson links to). No
+dedicated lesson test file exists; coverage is indirect — the CI language-coverage guard
+(`.github/workflows/syntax-check.yml`, every lesson in all seven languages) and
+`scripts/analytics-engaged-test.cjs` (the `hub_lesson_read` event name). Questions: does the
+lesson's report card link land on a live route in all seven languages (the `#lesson=` /
+`#library=` deep-link pattern CLAUDE.md's i18n trap warns about)? Is `hub_lesson_read` actually
+fired once per learner reaching the finish card, not once per render (a re-render inflating the
+BB5 breakdown roadmap item AA1's sibling section plans to build on this same counter)?
+
+**Y4 — server-rendered OG cards.** Read the OG route in `server.js` and `scripts/hub-og-test.cjs`.
+Questions: does every card correctly say DRY RUN in its description for `/hub/demo`, `/hub/demo-b`
+and `/hub/poke` (CLAUDE.md: dry-run labelling must be visible everywhere it applies, and an OG
+card is exactly the kind of surface that gets forgotten because nobody looks at it directly)? Is
+any attacker-controlled string (a project label, symbol) reaching the rendered image without the
+same escaping `CluckUtil.esc` enforces on the HTML pages?
+
+**Z1 — the weekly-update generator.** Read `scripts/weekly-update-draft.cjs` (pure `git log`
+classification, no memory-authored claims) and its test, `scripts/weekly-update-draft-test.cjs`
+(13 passing as of this branch — re-ran it, see below). Questions: does `classify()`'s
+security-over-hub-over-school priority ever misfile a genuinely Hub-money-path commit under
+"Operations" because its subject line also contains a security keyword, understating what a
+weekly update should lead with? Does the promoted/staging-only split correctly re-derive from
+`git log origin/main`/`origin/develop` rather than trusting a commit's own claimed branch?
+
+**Z2 — `/hub/status` + `GET /api/build`.** Read `public/hub-status.html` and the two routes in
+`server.js`. Pinned by `scripts/hub-status-test.cjs`. Questions: does `projectReproducibility`
+(the same figure BB3's badge reads) exclude demo/dry-run projects consistently with every other
+public count (CLAUDE.md, "(f) dry-run caveats" in `HUB_VERIFY.md`)? Does `/api/build` ever leak
+anything beyond `sha`/`branch`/`builtAt`/`env` — in particular, could `branch` on a real deploy
+name a feature branch in a way that discloses unshipped work?
+
+**Z3 — route hygiene.** Read `scripts/public-route-hygiene-test.cjs`'s own header (ETag + cache
+tier parity, per-IP rate limits on the routes that do real work per request, param shape checks
+before any store read). Question: does the per-IP rate limit on the holder-snapshot series route
+(shared with AA3's new diff route) actually cover the diff route too, or only the route it was
+written against before AA3 added a sibling on the same prefix?
+
+### PR #348 — batch 10 (AA1 `/hub/wallet`, AA2 evidence bundle, AA3 snapshot diff, AA4 judge
+guide, AA5 `/hub/trust`, BB1 classroom curriculum, BB3 badge)
+
+**AA1 — `/hub/wallet/<address>`.** Read `public/hub-wallet.html`, the
+`GET /api/hub/wallet/:wallet` route composing only `hubPublic.walletLookup` per project.
+Pinned by `scripts/hub-wallet-test.cjs`. Questions: can any private field (a chat id, an internal
+note, a comp's `payoutToken`) reach this roll-up through a project whose `walletLookup` shape
+changes later without this route's own allow-list being updated in step? Confirmed live:
+`GET /api/hub/wallet/<CLKN mint>` → `{"projects":[],"seenIn":0}` — an honest empty, not an error —
+captured in `docs/demo/2026-09-18/hub-wallet-clkn.desktop.png` (this batch). Second question: the
+roadmap's own DoD says "a test drives a fixture wallet across two projects" — that fixture only
+exists inside `scripts/hub-wallet-test.cjs`'s own throwaway registry, never in the real
+`/hub-demo` fixture (by design — a demo project must never leak into the real registry). Is there
+any path, now or after a future change, where a project seeded for a test or a demo could land in
+the real registry this route reads?
+
+**AA2 — the evidence bundle.** Read `lib/hub/bundle.js`, the two bundle routes in `server.js`
+(`/api/hub/:project/batch/:batchId/bundle` and its `/api/hub-demo/...` twin), and
+`public/hub-verify.html`'s bundle-drop tab. Pinned by `scripts/hub-bundle-test.cjs`. **Does the
+bundle hash survive a JSON round trip?** Yes for the bundle's own top-level hash (confirmed:
+`BUNDLE_HASH: MATCHES` on a real drop, `docs/demo/2026-09-18/hub-verify-bundle.desktop.png`) — but
+see Y1 finding 1 above: the EMBEDDED program-version hash does not, for a structural reason
+(`programVersionView`'s field drop) that has nothing to do with tampering. Second question: the
+bundle's `note` field for an unsettled/model-mismatched batch (the demo fixture's own receipts,
+which are honestly `MISSING_INPUTS` per `HUB_VERIFY.md` §g) is free text built server-side from a
+string literal — never project-authored — so no escaping question there; confirm that stays true
+if a real (non-demo) project's batch ever needs a similar note.
+
+**AA3 — snapshot diff over the recorded top-25.** Read `lib/holders-snapshot.js`
+(`diffSnapshots`, the honest-limit header comment) and the Compare panel in
+`public/token-holders.html`. Pinned by `scripts/holders-snapshot-diff-test.cjs`. Captured live
+with two seeded snapshots (no live RPC — see `docs/DEMO_STORYBOARD.md`'s honesty note on how
+`docs/demo/2026-09-18/holders-compare.*.png` was produced). Questions: is the diff labelled
+"top-25" (or the recorded-scope language) everywhere it renders, not just in the one `view-note`
+line — in particular, does the exported/copied hash on the history table make clear it covers the
+FULL list while the diff table two cards down covers only the top 25, so a reader skimming both
+tables in sequence doesn't conflate the two scopes? Does `renderCompare()` ever let a
+attacker-influenced wallet string (from a mint whose holder set includes an oddly-named contract
+label) reach `innerHTML` unescaped — the same class of bug CLAUDE.md's "Verification" section
+already found five times elsewhere?
+
+**AA4 — the judge's fifteen minutes.** Read `docs/JUDGE_GUIDE.md` and
+`scripts/build-judge-page.cjs`'s `renderPage()` (the doc is the single source; the HTML page is a
+byte-identical rebuild — asserted by `scripts/hub-judge-doc-test.cjs`, re-ran green, see below).
+Questions: does every URL the guide names actually 200 on a NO-BUILD boot (the CI link-check step
+the roadmap DoD requires), not just on a built server — `CLAUDE.md`'s own "public/ is not mounted
+directly" trap is exactly the failure mode a judge would hit if this guide is only ever tested
+post-build? Is `scripts/hub-judge-link-test.cjs` that link-check, or a different check — confirm
+which file actually boots a no-build server and hits every named URL.
+
+**AA5 — `/hub/trust`.** Read `public/hub-trust.html` and `docs/HUB_VERIFY.md` §(g)'s four
+boundary bullets. Pinned by `scripts/hub-trust-doc-test.cjs` (boundary-marker parity both
+directions, forbidden-word scan, link-to-route check — all re-ran green, see below). Question:
+the doc-test only checks that every `<!-- boundary: … -->` in §(g) has a matching
+`data-boundary="…"` on the page and vice versa — it does not diff the WORDING on each side. If a
+future edit to §(g)'s bullet text changes what it claims (e.g., loosens "does not prove... fair"
+to something softer) while the page's copy is untouched, would anything catch the two saying
+different things under the same boundary id?
+
+**BB1 — the Live Classroom reads the real curriculum again.** Read `scripts/extract-curriculum.js`
+(now reading `src/App.jsx`, `src/sections/LPLab.jsx`, `src/sections/Library.jsx` per the fixed
+scanner) and `scripts/check-counts.js` (the pinned per-course counts). Re-ran live on this branch:
+`✓ curriculum counts consistent — 15 classes, 7 beginner lessons, 14 LP Lab lessons`. Questions:
+the roadmap item names "LP Lab (22)" and "deep-dive (11)" courses as what the old extractor
+silently dropped — `check-counts.js`'s pinned figure for LP Lab is 14, not 22; is "22" the
+roadmap's own shorthand for something else (e.g., a raw lesson-plus-quiz-item count before
+dedup), or is a course class still missing from the regenerated `data/curriculum.json` that
+`check-counts.js` doesn't cover because it was never told to count it? Second: is the
+apostrophe-in-comment bracket-scanner fix (the roadmap's stated second bug) covered by its own
+regression case, or only implicitly exercised by the current file's own comments happening to
+contain one?
+
+**BB3 — the reproducibility badge.** Read the `GET /api/hub/badge.json` and `GET /hub/badge.svg`
+routes and `scripts/hub-badge-test.cjs`. Re-ran live on this branch (below). Questions: does the
+README's badge row point at production (`clucknorris.app`) or could it point at a staging host by
+accident, given `develop`/`main` are not always in step (`HUB_VERIFY.md`'s own "what's live where"
+table already tracks this same divergence risk for other routes)? Does the badge's "no receipts
+yet" fresh-install case ever get reached in CI where a persisted `DATA_DIR` from an earlier test
+run could leave a stale count behind?
+
+### #342 status (the settlement journal) — summary, not a new review
+
+Three verification rounds have now run on `claude/hub-settlement-journal` (commit `332a79c` plus
+two fix rounds), documented in `docs/HUB_JOURNAL_VERIFY_2026-09-18.md` on that branch (not yet
+merged to `develop`). Summarising only — this pass did not re-verify anything itself:
+
+- **Round 1 (two lenses, pre-fix):** an adversarial lens found the transfer source was never
+  checked (any inbound transfer of the reward mint settled a row) and that a journal refusal still
+  let the legacy ledger record the row as paid anyway; a durability lens independently found the
+  journal is one whole-object kv blob, so two overlapping payout requests — or two different
+  projects' requests — can clobber each other's entries under a stalled RPC read, silently
+  defeating the cross-project reuse guard the journal exists to provide.
+- **Round 2 (one lens, re-verification):** most P0/P1s closed (source check, cross-project reuse,
+  the per-row union in `owedNow`, the receipt page's new body shape, the amount source). Two items
+  stayed open: the phantom-excess finding reproduced in a new shape (stapling a second, larger
+  transfer to an already-settled row in the SAME request still inflates the receipt's `excess`
+  even though the fix closed the two-request version), and the money-path diff for `owedNow`'s fix
+  had briefly gone out as three raw NUL-byte separators in `lib/cuna-payout.js`, making that
+  specific diff unreviewable on GitHub (unrelated to correctness — `node --check` passed — but a
+  process blocker for a second reviewer).
+- **Round 3 (one lens, re-verification of round 2's fixes):** the NUL-byte issue and the
+  `payoutSources` allowlist design are CLOSED. **Item 1, the phantom-excess receipt forgery, is
+  still OPEN as P1** — the round-2 fix only closed the ordering where the genuine transfer is
+  submitted first; swapping the order in the same `&sent=` array (or submitting one oversized
+  genuine transfer alone) reproduces the original outcome verbatim, and the fix round now on the
+  branch is applying an EXACT-AMOUNT rule (a settlement must consume the row's full remaining
+  balance or be refused, never partially apply-and-staple) rather than an ordering-dependent guard.
+  Five new lower-severity findings came out of round 3 (N1–N5): unbounded per-row fraud alerts on
+  one request (N1), an application-approval path that can take over an existing project and reset
+  its payout-source allowlist (N2), the allowlist itself being invisible on every public/operator
+  read (N3), `&sweep=` accepting any vault project's operator wallet rather than just the one
+  broadcasting (N4), and an orphan-journal key-parsing asymmetry that mirrors the earlier NUL-byte
+  shape (N5). None of these are money-loss paths as scoped; the journal is still not wired into
+  any live payout route (`HUB_VERIFY.md` §g's `journal-not-live` boundary), so nothing above
+  affects any receipt a reader can fetch today. See the journal doc itself for exact repro steps
+  and line numbers — findings, not rewrites, same rule as every other round.
+
+### Drift tests re-run on this branch (verbatim last line of each)
+
+- `node scripts/hub-verify-doc-test.cjs` → all passed
+- `node scripts/hub-trust-doc-test.cjs` → all passed
+- `node scripts/hub-judge-doc-test.cjs` → all passed
+- `node scripts/weekly-update-draft-test.cjs` → all passed (13 passed)
+- `node scripts/check-counts.js` → curriculum counts consistent — 15 classes, 7 beginner lessons, 14 LP Lab lessons
+
 ## Open questions the owner would like your opinion on
 - Is lock-to-earn on Jupiter Lock the right headline mechanism for a Consumer Apps entry, or is
   the read-only engine dashboard a stronger single story?

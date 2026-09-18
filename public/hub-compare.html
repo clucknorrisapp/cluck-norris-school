@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Compare program versions</title>
+<meta name="description" content="What changed between two published Lock to Earn program versions — field by field, in plain words. No wallet needed."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:32px; letter-spacing:1px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact b { color:var(--text); }
+  .fact a, .small a { color:var(--cyan, #67E8F9); }
+  .small { font-size:12px; color:var(--sub); }
+  .mono { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; word-break:break-all; }
+  a.mono, .mono a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+  .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
+  .verGrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:480px) { .verGrid { grid-template-columns:1fr; } }
+  .verCard { background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .verTag { font-family:var(--disp); font-size:10.5px; letter-spacing:2px; color:var(--sub); text-transform:uppercase; }
+  .verNum { font-family:var(--disp); font-size:22px; color:var(--text); margin-top:2px; }
+  .tscroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 -6px; padding:0 6px; }
+  table { width:100%; min-width:420px; border-collapse:collapse; font-size:12.5px; }
+  th { text-align:left; font-size:9.5px; letter-spacing:2px; color:var(--sub); text-transform:uppercase; padding:6px 6px; border-bottom:1px solid var(--border); }
+  td { padding:8px 6px; border-bottom:1px solid var(--border-soft, rgba(255,255,255,.06)); vertical-align:top; font-size:12.5px; color:var(--subtext, #9CA3AF); }
+  td.field { color:var(--text); font-weight:600; }
+  tr.changedRow td { color:var(--text); }
+  tr.changedRow td.field { color:var(--gold); }
+  details summary { cursor:pointer; font-size:12.5px; color:var(--sub); letter-spacing:1px; margin:8px 0; min-height:44px; display:flex; align-items:center; }
+  .caveat { margin-top:0; }
+  /* Standalone one-line CTA links get invisible tap-area padding — the negative margin cancels
+     the padding's visual footprint, so the link looks identical but its hit box grows toward
+     44px tall (a11y gate: tap targets >= 44x44). */
+  .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; text-decoration:none; }
+  .fact > a { display:inline-block; padding:14px 3px; margin:-14px -3px; text-decoration:none; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/">← CLUCK NORRIS</a>
+  <div class="header">
+    <h1 id="title" data-clkn-avoid="1">Project Hub</h1>
+    <p id="subtitle" data-clkn-avoid="1">RECEIPTS YOU CAN VERIFY · NO WALLET NEEDED</p>
+  </div>
+  <div id="app"><div class="status">LOADING…</div></div>
+  <div class="card caveat" data-clkn-avoid-kids="1">
+    <div class="fact">A hash commits to the published terms, not to intent. <a href="/hub/trust">Read the trust boundary →</a></div>
+  </div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
+  var app = document.getElementById('app');
+  // /hub/:project/programs/compare?a=<version>&b=<version>
+  var path = location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+  var projectId = path[1] ? String(path[1]).toLowerCase() : null;
+  var qs = new URLSearchParams(location.search);
+  var qa = qs.get('a'), qb = qs.get('b');
+
+  // raw base units -> whole-token string by string surgery, never division (mirrors
+  // lib/hub/teach.js whole() — the same arithmetic, so a reader sees the same number either way).
+  function whole(raw, decimals) {
+    var s; try { s = (BigInt(raw == null ? 0 : raw)).toString(); } catch (e) { return String(raw); }
+    var neg = s.charAt(0) === '-'; if (neg) s = s.slice(1);
+    var d = Number(decimals) || 0;
+    if (d > 0) { if (s.length <= d) s = new Array(d - s.length + 2).join('0') + s;
+      var w = s.slice(0, s.length - d), f = s.slice(s.length - d).replace(/0+$/, '');
+      return (neg ? '-' : '') + Number(w).toLocaleString('en-US') + (f ? '.' + f : '');
+    }
+    return (neg ? '-' : '') + Number(s).toLocaleString('en-US');
+  }
+
+  // Every term key a program version can carry (lib/hub/project.js validateTerms /
+  // program-version.schema.json), in the plain-words order a holder should read them: the
+  // pool/budget, the term/lock length, eligibility, and payout cadence — the same vocabulary
+  // lib/hub/teach.js and lib/hub/explain.js use for these same fields. A key this page has never
+  // heard of still gets a row (its own name as the label) rather than being silently dropped —
+  // "iterate over the document's keys generically" (roadmap CC1). `effectiveFrom`/`effectiveTo`
+  // (the "period") are NOT in this table — every two versions differ there by construction (a
+  // version only ever exists because an earlier one closed), so treating them as an ordinary
+  // changed/unchanged row would make "no changes" impossible to show even when the terms
+  // genuinely didn't move; they're shown once, plainly, in each version's own card above instead.
+  var ORDER = ['poolDailyRaw', 'sharePct', 'maxSharePct', 'minDurationDays', 'maxTermDays',
+    'minLockRaw', 'maxWalletSharePct', 'payoutSchedule', 'vesting', 'cancelableAllowed',
+    'fundedBy', 'excludeWallets', 'backdateCapDays', 'backdateNotBefore'];
+  var LABEL = {
+    poolDailyRaw: 'Fixed daily pool', sharePct: "Share of the funding wallet's own daily unlock",
+    maxSharePct: 'Ceiling on that share', minDurationDays: 'Shortest lock term admitted',
+    maxTermDays: 'Term length at the top rate', minLockRaw: 'Minimum amount locked to qualify',
+    maxWalletSharePct: "Per-wallet cap on the pool's share", payoutSchedule: 'Payout cadence',
+    vesting: 'Which lock shapes qualify', cancelableAllowed: 'Cancelable locks admitted',
+    fundedBy: "Wallets whose own unlock feeds the pool", excludeWallets: 'Wallets excluded from the pool (Rule B)',
+    backdateCapDays: 'How far back a late-seen lock backdates', backdateNotBefore: 'Earliest a lock may ever backdate to'
+  };
+  function flatten(doc) { return doc.terms || {}; }
+  function sortedCopy(a) { return (a || []).slice().sort(); }
+  function eq(a, b) {
+    if (Array.isArray(a) || Array.isArray(b)) {
+      var sa = sortedCopy(a), sb = sortedCopy(b);
+      if (sa.length !== sb.length) return false;
+      for (var i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
+      return true;
+    }
+    if (a == null && b == null) return true;
+    return a === b;
+  }
+  function fmtVal(key, val, sym, dec) {
+    if (val == null) return key === 'effectiveTo' ? 'still in force' : '—';
+    if (key === 'poolDailyRaw' || key === 'minLockRaw') return whole(val, dec) + ' ' + sym;
+    if (key === 'sharePct' || key === 'maxSharePct') return Number(val) + '%';
+    if (key === 'maxWalletSharePct') return Number(val) > 0 ? Number(val) + '%' : 'off';
+    if (key === 'minDurationDays' || key === 'maxTermDays' || key === 'backdateCapDays') {
+      var n = Number(val); return n.toLocaleString('en-US') + ' day' + (n === 1 ? '' : 's');
+    }
+    if (key === 'backdateNotBefore') return Number(val) > 0 ? new Date(Number(val) * 1000).toISOString().slice(0, 10) : 'no floor';
+    if (key === 'cancelableAllowed') return val ? 'Yes' : 'No';
+    if (key === 'payoutSchedule' || key === 'vesting') return String(val).replace(/-/g, ' ');
+    if (Array.isArray(val)) return val.length ? (val.length + ' wallet' + (val.length === 1 ? '' : 's') + ': ' + val.map(function (w) { return shortAddr(w, 4, 4); }).join(', ')) : 'none';
+    if (typeof val === 'object') return JSON.stringify(val);
+    return String(val);
+  }
+  function noticeFor(doc) {
+    return doc.commitment
+      ? 'Independently committed on-chain by the funding wallet — check the memo on any explorer.'
+      : 'The calculation is reproducible from the published inputs.';
+  }
+  function verCard(doc, tag) {
+    return '<div class="verCard"><div class="verTag" data-clkn-avoid="1">' + esc(tag) + '</div>' +
+      '<div class="verNum">v' + esc(doc.version) + '</div>' +
+      '<div class="mono" style="margin-top:6px">' + esc(String(doc.hash || '').slice(0, 16)) + '…</div>' +
+      '<div class="small" style="margin-top:6px">Published ' + esc(doc.effectiveFrom) + (doc.effectiveTo ? ' · superseded ' + esc(doc.effectiveTo) : ' · currently in force') + '</div>' +
+      '<div class="small" style="margin-top:6px">' + esc(noticeFor(doc)) + '</div>' +
+      (doc.commitment ? '<div class="small" style="margin-top:4px"><a class="mono" target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(doc.commitment.sig) + '">' + esc(shortAddr(doc.commitment.sig, 6, 6)) + '</a></div>' : '') +
+      '</div>';
+  }
+  function diffTable(rows, sym, dec) {
+    return '<div class="tscroll"><table><thead><tr><th>Field</th><th>Version A</th><th>Version B</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr' + (r.changed ? ' class="changedRow"' : '') + '><td class="field">' + esc(r.label) + '</td>' +
+          '<td>' + esc(fmtVal(r.key, r.va, sym, dec)) + '</td><td>' + esc(fmtVal(r.key, r.vb, sym, dec)) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function renderCompare(v, A, B, latest) {
+    var sym = v.symbol, dec = Number.isInteger(v.rewardDecimals) ? v.rewardDecimals : (Number.isInteger(v.decimals) ? v.decimals : 9);
+    var fa = flatten(A), fb = flatten(B);
+    var seen = {}, keys = [];
+    ORDER.forEach(function (k) { if ((k in fa) || (k in fb)) { keys.push(k); seen[k] = 1; } });
+    Object.keys(fa).concat(Object.keys(fb)).sort().forEach(function (k) { if (!seen[k]) { keys.push(k); seen[k] = 1; } });
+    var rows = keys.map(function (k) { return { key: k, label: LABEL[k] || k, va: fa[k], vb: fb[k], changed: !eq(fa[k], fb[k]) }; });
+    var changed = rows.filter(function (r) { return r.changed; });
+    var unchanged = rows.filter(function (r) { return !r.changed; });
+    var html = '<div class="card">' +
+      '<div class="fact" data-clkn-avoid="1" style="margin-bottom:12px">Two published program versions for <b>' + esc(v.label) + '</b>, field by field.' + (latest > B.version ? ' A newer version, v' + esc(latest) + ', has since been published.' : '') + '</div>' +
+      '<div class="verGrid">' + verCard(A, 'Version A') + verCard(B, 'Version B') + '</div>' +
+      (A.version === B.version ? '<div class="fact" style="margin-top:12px">Comparing a version with itself — nothing changed.</div>' : '') +
+      '</div>' +
+      '<div class="card"><div class="sec-title">What changed</div>' +
+      (changed.length ? diffTable(changed, sym, dec) : '<div class="fact">No changes between these two versions.</div>') +
+      (unchanged.length ? '<details style="margin-top:10px"><summary>' + unchanged.length + ' unchanged field' + (unchanged.length === 1 ? '' : 's') + '</summary>' + diffTable(unchanged, sym, dec) + '</details>' : '') +
+      '</div>' +
+      '<div class="small" style="text-align:center"><a href="/api/hub/' + esc(v.id) + '/program/' + esc(A.version) + '">v' + esc(A.version) + ' raw JSON</a> · <a href="/api/hub/' + esc(v.id) + '/program/' + esc(B.version) + '">v' + esc(B.version) + ' raw JSON</a></div>' +
+      '<div class="small" style="text-align:center;margin-top:8px"><a href="/hub/' + esc(v.id) + '/programs">← all programs for ' + esc(v.label) + '</a></div>';
+    app.innerHTML = html;
+  }
+
+  (async function () {
+    try {
+      if (!projectId) throw new Error('no project specified');
+      var pr = await fetch('/api/hub/' + encodeURIComponent(projectId)).then(function (x) { return x.json(); });
+      if (!pr.ok) throw new Error(pr.error || 'no such project');
+      var v = pr.project;
+      document.getElementById('title').textContent = v.label + ' · Compare';
+      document.getElementById('subtitle').textContent = 'WHAT CHANGED BETWEEN VERSIONS';
+      document.title = v.label + ' — compare program versions';
+      var versions = v.versions || [];
+      if (versions.length < 2) {
+        app.innerHTML = '<div class="card"><div class="fact">' + esc(v.label) + ' has ' + (versions.length === 0 ? 'not published a program version yet' : 'published only one program version') + ' — there is nothing yet to compare.</div>' +
+          '<div class="small" style="margin-top:10px"><a href="/hub/' + esc(v.id) + '/programs">← all programs for ' + esc(v.label) + '</a></div></div>';
+        return;
+      }
+      var sorted = versions.slice().sort(function (x, y) { return x.version - y.version; });
+      var latest = sorted[sorted.length - 1].version;
+      var av = qa != null && qa !== '' ? Number(qa) : sorted[sorted.length - 2].version;
+      var bv = qb != null && qb !== '' ? Number(qb) : latest;
+      var aMeta = versions.filter(function (x) { return x.version === av; })[0];
+      var bMeta = versions.filter(function (x) { return x.version === bv; })[0];
+      if (!Number.isFinite(av) || !Number.isFinite(bv) || !aMeta || !bMeta) throw new Error('no such program version');
+      var docs = await Promise.all([av, bv].map(function (n) {
+        return fetch('/api/hub/' + encodeURIComponent(v.id) + '/program/' + encodeURIComponent(n)).then(function (x) { return x.json(); });
+      }));
+      if (!docs[0].ok) throw new Error(docs[0].error || 'no such program version');
+      if (!docs[1].ok) throw new Error(docs[1].error || 'no such program version');
+      renderCompare(v, docs[0].version, docs[1].version, latest);
+    } catch (e) {
+      app.innerHTML = '<div class="card"><div class="err">' + esc(e.message || String(e)) + '</div><div class="small" style="margin-top:10px"><a href="/hub' + (projectId ? '/' + esc(projectId) + '/programs' : '') + '">← ' + (projectId ? 'all programs' : 'all projects') + '</a></div></div>';
+    }
+  })();
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

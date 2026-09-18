@@ -46,12 +46,77 @@ const ARG_BASE = process.argv.find((a) => /^https?:\/\//.test(a)) || null;
 const PORT = Number(process.env.A11Y_TEST_PORT || 3204);
 const BASE = ARG_BASE || `http://127.0.0.1:${PORT}`;
 
+// Holders (Colosseum roadmap §12 CC3 — the X7 history + AA3 Compare panels join the gate).
+// SEED_MINT is a fixture address (same shape scripts/holders-snapshot-diff-test.cjs uses, not a
+// real mint) with two snapshots seeded directly through lib/holders-snapshot.js's appendSnapshot
+// (see the DATA_DIR setup below) so both panels render without a live RPC crawl, which this
+// throwaway boot can't do (FALLBACK_RPC_URL points nowhere on purpose). The empty-state URL
+// (no history/compare yet — a mint nobody has ever crawled) stays in the list too, since it's a
+// different render path (both cards are `display:none` until at least one/two snapshots exist).
+const SEED_MINT = "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc";
+// CC1 (docs/COLOSSEUM_ROADMAP.md §13): a11y coverage for /hub/:project/programs/compare needs a
+// project with two published program versions to actually render a diff — "poke" (seeded by
+// server.js itself, dryRun, no program version) can't exercise it. Seeded directly through
+// lib/hub/project.js, the same way the admin route itself creates a version, into a throwaway
+// DATA_DIR's app-state.json BEFORE the server boots (this test has no per-page setup hook, so
+// this is the file-level seed hub-status-test.cjs / hub-bundle-test.cjs already use).
+const hubProject = require(path.join(__dirname, "..", "lib", "hub", "project"));
+const A11Y_CMP_PROJECT = "a11ycmp";
+function a11yCompareFixture() {
+  const MINT = "6M6nk7cGaFC4RfxhKr7VfDD3JkyrFrjPT6RM4a97pump";
+  const FUND = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+  const TOK = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  const project = hubProject.validateProject(
+    { id: A11Y_CMP_PROJECT, label: "A11y Compare Co", symbol: "A11Y", mint: MINT, fundingWallet: FUND, operatorWallets: [] },
+    { decimals: 9, tokenProgram: TOK, extensions: [] },
+  );
+  const base = { poolDailyRaw: "1000000000000", sharePct: 5, maxSharePct: 25, maxTermDays: 540, payoutSchedule: "weekly", minDurationDays: 90, fundedBy: [FUND] };
+  let state = hubProject.createVersion({}, project, base, { effectiveFrom: "2026-01-01", todayKey: "2026-01-01" });
+  state = hubProject.createVersion(state, project, { ...base, minDurationDays: 60, payoutSchedule: "monthly" }, { effectiveFrom: "2026-02-01", todayKey: "2026-01-01" });
+  return {
+    "hub:projects": { [A11Y_CMP_PROJECT]: { id: A11Y_CMP_PROJECT, label: "A11y Compare Co", symbol: "A11Y", mint: MINT, decimals: 9, rewardMint: MINT, rewardDecimals: 9, status: "approved" } },
+    [`program:${A11Y_CMP_PROJECT}:state`]: state,
+  };
+}
+
+// DD4 (docs/COLOSSEUM_ROADMAP.md §14): a11y coverage for the print sheet needs a real settled
+// receipt WITH a program version + accrual days behind it (the same shape
+// scripts/hub-print-test.cjs uses), so the sheet's "amount the rule computed" and reproduce-steps
+// section actually render — a receipt with no retained explanation would exercise the degraded
+// path instead, which is not what a judge scanning this page in real use ever sees.
+const A11Y_PRINT_PROJECT = "a11yprint";
+// Deterministic, guaranteed-valid base58 fixture values (same generator scripts/hub-bundle-test.cjs
+// and scripts/hub-print-test.cjs use) — a hand-typed address risks a base58-excluded character
+// (0, O, I, l) or the wrong length, which HUB_SIG_RE / the wallet-shape check would then 400 on.
+const A11Y_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const a11yFakeAddr = (n) => Array.from({ length: 44 }, (_, i) => A11Y_B58[(i * 13 + n * 7 + 5) % 58]).join("");
+const a11yFakeSig = (n) => Array.from({ length: 87 }, (_, i) => A11Y_B58[(i * 11 + n * 17 + 3) % 58]).join("");
+const A11Y_PRINT_SIG = a11yFakeSig(201);
+function a11yPrintFixture() {
+  const MINT = a11yFakeAddr(201);
+  const FUND = a11yFakeAddr(202);
+  const wallet = a11yFakeAddr(203);
+  const at = 1_800_000_000;
+  const VERSION_PROJECT = { id: A11Y_PRINT_PROJECT, mint: MINT, rewardMint: MINT, rewardDecimals: 9, rewardTokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", fundingWallet: FUND };
+  const version = hubProject.createVersion({}, VERSION_PROJECT, {
+    poolDailyRaw: "1000000000000", minDurationDays: 1, maxTermDays: 540, payoutSchedule: "weekly", vesting: "any", fundedBy: [FUND],
+  }, { effectiveFrom: "2027-01-01", todayKey: "2027-01-01" }).versions[0];
+  return {
+    "hub:projects": { [A11Y_PRINT_PROJECT]: { id: A11Y_PRINT_PROJECT, label: "A11y Print Co", symbol: "A11P", mint: MINT, decimals: 9, rewardMint: MINT, rewardDecimals: 9, fundingWallet: FUND } },
+    [`program:${A11Y_PRINT_PROJECT}:days`]: { "2027-02-01T00": { credits: { [wallet]: "1000000000" }, at }, "2027-02-01T01": { credits: { [wallet]: "500000000" }, at: at + 3600 } },
+    [`program:${A11Y_PRINT_PROJECT}:batches`]: { "a11yprint-batch-1": { id: "a11yprint-batch-1", state: "sent", at: at + 7200, amounts: { [wallet]: "1500000000" }, sent: { [wallet]: { sig: A11Y_PRINT_SIG, at: at + 7260 } } } },
+    [`program:${A11Y_PRINT_PROJECT}:paid`]: {},
+    [`program:${A11Y_PRINT_PROJECT}:state`]: { versions: [version] },
+  };
+}
+
 const PAGES = [
   { path: "/hub", name: "Hub index" },
   // A real branded project page (hero, dry-run badge, social pills) — the index alone never
   // exercises that render path, and it's what a judge actually clicks into from the index.
   { path: "/hub/poke", name: "Hub project page (poke)" },
   { path: "/hub/demo", name: "Hub demo walkthrough" },
+  { path: `/hub/${A11Y_CMP_PROJECT}/programs/compare`, name: "Hub compare — what changed between two program versions (CC1)" },
   { path: "/for-projects", name: "For Projects" },
   { path: "/hub/apply", name: "Hub apply (lock-to-earn form)" },
   { path: "/hub/cuna/pay", name: "Hub pay" },
@@ -61,6 +126,9 @@ const PAGES = [
   { path: "/hub/wallet/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", name: "Hub wallet look-up, pre-filled (AA1)" },
   { path: "/hub/trust", name: "Hub trust boundary (AA5 — what this doesn't prove)" },
   { path: "/hub/judge", name: "Hub judge guide (AA4 — the judge's fifteen minutes)" },
+  { path: "/holders", name: "Holders (CC3 — empty state, no snapshot history yet)" },
+  { path: `/holders?mint=${SEED_MINT}`, name: "Holders (CC3 — X7 history + AA3 Compare, seeded)" },
+  { path: `/hub/${A11Y_PRINT_PROJECT}/r/${A11Y_PRINT_SIG}?print=1`, name: "Hub receipt print sheet (DD4 — a receipt you can print)" },
 ];
 const WIDTHS = [
   { width: 360, height: 780, label: "360×780" },
@@ -210,6 +278,22 @@ async function auditPage(browser, pagePath, pageName) {
   let srv = null, DIR = null;
   if (!ARG_BASE) {
     DIR = fs.mkdtempSync(path.join(os.tmpdir(), "hub-a11y-"));
+    fs.writeFileSync(path.join(DIR, "app-state.json"), JSON.stringify({ ...a11yCompareFixture(), ...a11yPrintFixture() }));
+
+    // Seed two holder snapshots for SEED_MINT directly through the real kv module +
+    // appendSnapshot, pointed at the same DATA_DIR the server is about to boot with — the same
+    // durable-write seeding scripts/holders-snapshot-diff-test.cjs uses, so /holders?mint=... has
+    // both the X7 history table and the AA3 Compare panel populated without a live RPC crawl.
+    process.env.DATA_DIR = DIR;
+    delete require.cache[require.resolve("../lib/kvstore")];
+    const kv = require("../lib/kvstore");
+    const holdersSnapshot = require("../lib/holders-snapshot");
+    const W = (n) => `Wallet${String(n).padStart(6, "0")}xxxxxxxxxxxxxxxxxxxxxxxxxxxx`.slice(0, 44);
+    const fromTop = [{ wallet: W(0), amount: 500 }, { wallet: W(1), amount: 300 }, { wallet: W(2), amount: 100 }];
+    const toTop = [{ wallet: W(0), amount: 650 }, { wallet: W(1), amount: 300 }, { wallet: W(3), amount: 50 }];
+    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now() - 86400000, holderCount: 10, top: fromTop, totalSupplyRaw: "10000", fullList: fromTop });
+    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now(), holderCount: 11, top: toTop, totalSupplyRaw: "10200", fullList: toTop });
+
     const env = { ...process.env, PORT: String(PORT), DATA_DIR: DIR, TOOLGATE_OFF: "1",
       TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", HELIUS_API_KEY: "", MM_OPERATOR_SECRET: "", MM_OPERATOR_SECRET_TREASURY: "",
       FALLBACK_RPC_URL: "http://127.0.0.1:9" };

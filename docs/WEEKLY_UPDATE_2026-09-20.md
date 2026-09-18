@@ -65,10 +65,27 @@ go":**
   funnel; the on-chain program-hash commitment (Addendum B §B5, dry run until the owner signs the
   first real one); the public engine dashboard's three separated evidence classes, now with a
   merged, replayable timeline; Launch Readiness (Addendum A) before a program can arm; per-drop
-  airdrop receipts verified against the chain; the public Buy Special standings + hold-through
+  airdrop receipts checked against the chain; the public Buy Special standings + hold-through
   proof page; append-only hashed holder-count snapshots; the W6b validation kit and operator
   interview script; an accessibility pass on the public Hub pages with a CI gate; `HUB_VERIFY.md`
   for judges.
+- **Colosseum roadmap extension, batches 9–12** (#347, #348, #349, #350 — merged 2026-09-18, after
+  this file's first draft): reproducing a receipt directly in the browser at `/hub/verify`,
+  offline-capable once loaded; a seventh school lesson, "Read a Payout Receipt"; server-rendered
+  share cards on every Hub page; this weekly-update script; `/hub/status` + `GET /api/build`;
+  route hygiene on the new public reads; `/hub/wallet` (one address, every project it's touched);
+  a downloadable evidence bundle for offline reproduction; a diff between two holder snapshots;
+  `/hub/judge`, generated from `docs/JUDGE_GUIDE.md`; `/hub/trust`, the plain-words trust boundary,
+  now in seven languages; a real bug fixed in the Live Classroom's curriculum generator (it had
+  been silently dropping two whole courses since an earlier refactor); an embeddable
+  reproducibility badge; a `/receipt <signature>` Telegram command; the receipt lesson's own
+  read/click counts; an accessibility gate on five public Hub pages (and a real hidden-panels bug
+  it caught on the holders tool); `/hub/verify` in all seven languages, plus a real bug fixed in
+  the evidence bundle's program-version hash check that made a correct bundle print a false
+  mismatch; a field-by-field compare between two program versions; a daily hashed history of the
+  reproduce ratio; and the reproducer packaged as a standalone `npx` command — not yet published
+  to the npm registry, which is the owner's own act. Arena/X drafts for all of the above:
+  `docs/ARENA_POSTS.md` round 3.
 - **School:** the Q&A + LP Lab audit against how Orca, Raydium CLMM, Meteora DLMM and DAMM v2
   actually work, with the corrections re-keyed in all seven languages — #328; the last GET-only
   admin mutation (`/api/meme-queue`) made POST-only — #336.
@@ -82,9 +99,13 @@ go":**
 - **Whole-repo simplification pass** (one address regex, one HTML escaper, one memoised RPC
   client) — #331.
 
-**Not yet a PR (batch 9, in flight as of 2026-09-18):** reproducing a receipt directly in the
-browser at `/hub/verify`, offline-capable once loaded; this weekly-update script itself. Re-run
-the script once batch 9 lands to pick these up with their own PR numbers.
+**Not yet a PR: nothing, as of this refresh (2026-09-18).** Batch 9 (previously "in flight" in this
+file's first draft) landed as PR #347 the same day, and batches 10–12 followed as #348–#350. This
+refresh was generated with
+`node scripts/weekly-update-draft.cjs --from 2026-09-14 --to 2026-09-18 --develop-ref
+origin/develop --main-ref origin/main --no-fetch` (raw output: `docs/weekly-update-raw-2026-09-18.md`)
+and reconciled by hand the same way the first draft was — **re-run with `--to` set to the actual
+day before recording**; anything merged after 2026-09-18 still belongs in this list too.
 
 ## Where to post
 Colosseum Arena (the project's update thread) and X from the CLKN account (X Premium, no 280 limit).

@@ -53,7 +53,10 @@ below works with no wallet connected:
   walkthrough using the holder's own term, multiplier and pro-rata share — derived by the same
   code that computed the payout, never authored copy.
 - **Reproduce a receipt yourself** — `node scripts/reproduce-receipt.cjs <receipt-url>` re-derives
-  the amount from the published inputs on your own machine, no server call, no wallet. Every
+  the amount from the published inputs on your own machine, no server call, no wallet. The exact
+  same verifier also ships as a standalone package — no clone, no build —
+  [`packages/hub-verify`](packages/hub-verify) (`npx @clkn/hub-verify <receipt-url>`; publishing to
+  npm is pending the owner's go, so for now run it from a git ref or from this repo). Every
   program page states the measured ratio, never an asserted one: **"N of M receipts in `<batch>`
   reproduce; K have missing inputs"** (`GET /api/hub/:project/reproducibility`).
 - **[`/hub/demo`](https://clucknorris.app/hub/demo)** — the whole loop with no wallet at all: a

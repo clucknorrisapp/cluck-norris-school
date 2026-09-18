@@ -135,6 +135,7 @@ Public, no wallet needed, `Cache-Control: public`:
 | `GET /api/hub/:project/r/:sig` | a payout row found by signature — the Addendum-B3 shape once a journal event exists for it, else the legacy shape | see **the receipt gap**, below |
 | `GET /api/hub/:project/holder?address=` | one wallet's lock-to-earn view: `programVersion`, `programHash`, locks, accrued/paid/owed | — |
 | `GET /api/hub-pricing` | live platform-access pricing | — |
+| Telegram `/receipt <sig>` (BB4) | same lookup as `GET /api/hub/:project/r/:sig`, tried across every registered project, replying with the reproduce() verdict — `lib/hub/receipt-command.js` | — |
 | `GET /hub/schema/:name.json` | one of the four schemas below, verbatim | itself |
 
 Gated (owner admin key, or an operator's signed-nonce desk session), still real JSON with a real
