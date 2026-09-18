@@ -462,7 +462,8 @@
       '<div class="verify-bar" data-clkn-avoid="1"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote"><span class="verify" data-sig="' + esc(x.sig) + '"><span class="small">not checked</span></span></span></div>' +
       '<div class="sec-title" data-clkn-avoid="1">Verify it yourself</div><div class="fact">Send this to any Solana RPC. A <span class="mono">confirmationStatus</span> of <span class="mono">confirmed</span> or <span class="mono">finalized</span> with no <span class="mono">err</span> means the transfer is on the chain.</div><pre class="proof">' + esc(proof) + '</pre>' +
       explainBlock(x) +
-      '<div class="small" data-clkn-avoid="1" style="margin-top:12px"><a href="/hub/' + esc(r.projectId) + '#p-' + esc(p.id) + '">← all receipts for ' + esc(p.label || p.kind) + '</a></div></div>';
+      '<div class="small" data-clkn-avoid="1" style="margin-top:12px"><a href="/hub/verify?receipt=' + encodeURIComponent(location.origin + '/hub/' + r.projectId + '/r/' + x.sig) + '">Reproduce this receipt in your browser →</a></div>' +
+      '<div class="small" data-clkn-avoid="1" style="margin-top:6px"><a href="/hub/' + esc(r.projectId) + '#p-' + esc(p.id) + '">← all receipts for ' + esc(p.label || p.kind) + '</a></div></div>';
     document.getElementById('verifyBtn').addEventListener('click', verifyAll);
   }
 

@@ -1,5 +1,10 @@
 # Verify the Project Hub yourself — a two-minute checklist for judges
 
+**Don't run Node? Paste a receipt link into [`/hub/verify`](https://clucknorris.app/hub/verify)
+instead** — the exact same reproduction (§b below), run in your own browser with no terminal and
+no server call once the page has loaded. Every receipt page links to it. The checklist below is
+for judges who want to run the commands themselves.
+
 This is the reproduction the pitch is built on: *"lock with a project that published its terms,
 and get a receipt you can reproduce yourself — from the published inputs, offline, without
 trusting us."* Every command below runs on your own machine against real, public JSON. None of
