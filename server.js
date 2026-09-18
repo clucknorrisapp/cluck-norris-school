@@ -6843,6 +6843,20 @@ app.get("/api/jvp/project/:id", async (req, res) => {
     return res.status(200).json({ success: true, updatedAt: Date.now(), project: out });
   } catch (e) { console.warn("[jvp] project failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
 });
+// X5: the three evidence classes merged into one time-ordered, capped array, with a pure
+// replay of the retained decision rows against the real gates. Read-only, same GET-only shape
+// as the two routes above — no flag on this route can arm, pause, roll or sign anything.
+app.get("/api/jvp/project/:id/timeline", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const id = String(req.params.id || "").toLowerCase();
+  if (!JVP_PUBLIC_PROJECTS.includes(id)) return res.status(404).json({ success: false, error: "not_found" });
+  try {
+    const hours = Math.max(1, Math.min(720, parseInt(req.query.hours, 10) || 168));
+    const out = await jvpDashboard.timeline({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, id, hours, helius: JVP_HELIUS });
+    if (!out) return res.status(404).json({ success: false, error: "not_found" });
+    return res.status(200).json({ success: true, updatedAt: Date.now(), id, ...out });
+  } catch (e) { console.warn("[jvp] timeline failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
+});
 
 app.get("/api/engine-proof", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=120");

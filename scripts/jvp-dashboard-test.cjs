@@ -228,6 +228,84 @@ console.log("\nJVP dashboard — freshness and fleet state\n");
     ok("no helius dependency → transfers unavailable, not a fake row", missing.transfers.available === false && missing.transfers.rows.length === 0);
   }
 
+  console.log("\nX5 — replayDecisions(): the real gates, matching by construction, honest about the ceiling\n");
+  {
+    const engineSimScenarios = require("../lib/engine-sim-scenarios.js");
+    // Same CFG values engine-sim-scenarios.js documents as "mirroring the live DNC posture" —
+    // duplicated deliberately (that file's own header explains why), so this test can build a
+    // FULLY-SPECIFIED input row for the "decay-loop-leftovers" scenario and expect a match.
+    const CFG = { buybackEnabled: true, usdcFloor: 20, buybackReserveUsd: 0, maxBuybackUsdPerCycle: 50, minBuybackUsd: 5, maxBuybacksPerDay: 12,
+      buybackMinIntervalSec: 900, swapSolFloor: 0.4, solGasReserve: 0.35, baseDeployThresholdUsd: 40, oorDwellSec: 300, minRebalanceIntervalSec: 1800, maxActionsPerDay: 36 };
+    const scenario = engineSimScenarios.list().find((s) => s.id === "decay-loop-leftovers");
+    ok("the scenario exists in lib/engine-sim-scenarios.js", !!scenario && scenario.decision && scenario.decision.action === "hold");
+    const fullRow = { t: Date.now(), action: scenario.decision.action, reason: scenario.decision.reason, price: null,
+      gate: "rollGate", cfg: CFG, nowMs: 90_000, frac: 0.5, oorSince: null, sinceLastRollSec: 90, dayActions: 0, deployStagedUsd: 10, idlePairUsd: 10, widthOffPct: 0 };
+    const [replayedFull] = d.replayDecisions([fullRow]);
+    ok("a row with the full input set replays the SAME gate and matches by construction",
+      replayedFull.gate === "rollGate" && replayedFull.replayed && replayedFull.replayed.action === "hold" && replayedFull.matches === true, JSON.stringify(replayedFull));
+
+    // The real production shape — {t,action,reason,price} only (recordDecision's allow-list) —
+    // never carries enough to replay. This is the honest common case, not an edge case.
+    const thinRow = { t: Date.now(), action: "roll", reason: "deploying staged", price: 0.00035 };
+    const [replayedThin] = d.replayDecisions([thinRow]);
+    ok("a real (thin) retained row can never be replayed — inputs not retained, no fabricated match",
+      replayedThin.replayed === null && replayedThin.note === "inputs not retained" && replayedThin.matches === undefined, JSON.stringify(replayedThin));
+
+    // A buyback-shaped full row also replays correctly (both gates are covered, not just rollGate).
+    const buybackRow = { t: Date.now(), action: "none", reason: "no spendable quote", gate: "buybackDecision",
+      cfg: CFG, st: { paused: false, lastPrice: 0.0001, lastBuybackTs: 0, buybacksToday: 0, buybackDayStamp: "2026-08-28" },
+      float: { usdc: 0, sol: 0, jup: 0, clkn: 0 }, prices: null, nowMs: 10_000_000, todayStamp: "2026-08-28" };
+    const [replayedBB] = d.replayDecisions([buybackRow]);
+    ok("buybackDecision replays too, not only rollGate", replayedBB.gate === "buybackDecision" && replayedBB.matches === true, JSON.stringify(replayedBB));
+  }
+
+  console.log("\nX5 — timeline(): the merged array, class counts, the hours window, and no forbidden fields\n");
+  d._resetCache();
+  {
+    const now = Date.now();
+    const fakeVault = {
+      listProjects: () => ({ dnc: { id: "dnc", label: "DNC", symbol: "DNC", tokenMint: "MDNC", venue: "orca" } }),
+      status: async () => ({ project: "dnc", enabled: true, paused: false, config: {}, state: {} }),
+      operatorPubkey: () => "OPWALLETDNC",
+    };
+    const fakeHelius = { fetchAddressHistory: async () => [
+      { signature: "SIGRECENT", timestamp: Math.floor((now - 3600_000) / 1000), nativeTransfers: [{ amount: 1_000_000_000, fromUserAccount: "X", toUserAccount: "OPWALLETDNC" }], tokenTransfers: [] },
+      { signature: "SIGOLD", timestamp: Math.floor((now - 200 * 3600_000) / 1000), nativeTransfers: [{ amount: 2_000_000_000, fromUserAccount: "Y", toUserAccount: "OPWALLETDNC" }], tokenTransfers: [] },
+    ] };
+    const decisionRows = [{ t: now - 7200_000, action: "roll", reason: "deploying staged", price: 0.002 }];
+    const kvFake = { get: (k, def) => (k === "engineLog:dnc" ? decisionRows : def) };
+    const tl = await d.timeline({ vault: fakeVault, kv: kvFake, clknMint: "MCLKN", id: "dnc", hours: 168, helius: fakeHelius });
+    const tlJson = JSON.stringify(tl);
+    ok("timeline() assembles all three classes", !!tl && Array.isArray(tl.rows) && tl.rows.length > 0, tlJson.slice(0, 200));
+    ok("newest-first: the transfer (1h ago) leads the decision (2h ago)", tl.rows[0].cls === "transfer" && tl.rows[1].cls === "decision");
+    ok("class counts reflect the merge", tl.classes.transfer === 1 && tl.classes.decision === 1 && tl.classes.illustrative >= 5, JSON.stringify(tl.classes));
+    ok("the 200h-old transfer is outside the 168h window and dropped", !tl.rows.some((r) => r.cls === "transfer" && r.signature === "SIGOLD"));
+    ok("every illustrative row keeps the exact replay label", tl.rows.filter((r) => r.cls === "illustrative").every((r) => r.label === "illustrative — replayed from a recorded incident, not live"));
+    ok("the retained decision row carries a replay verdict (honestly null — thin production shape)", tl.rows[1].replayed === null && tl.rows[1].note === "inputs not retained");
+    ok("no wallet address reaches a timeline row", !tlJson.includes("OPWALLETDNC"));
+    for (const field of ["operator", "floatUsdc", "pnl"]) ok(`no forbidden field '${field}' in any timeline row`, !new RegExp(`"${field}"`).test(tlJson));
+
+    // Cap: 350 retained rows, all more recent than every illustrative incident date (2026-08-27/28)
+    // → the top 300 by time are exactly the 300 newest decisions; the older illustrative rows and
+    // the tail of the decision log are the ones cut, proving the cap operates on the MERGED order.
+    const manyRows = Array.from({ length: 350 }, (_, i) => ({ t: now - i * 1000, action: "hold", reason: "in range", price: 1 }));
+    const kvMany = { get: (k, def) => (k === "engineLog:dnc" ? manyRows : def) };
+    d._resetCache();
+    const tlCap = await d.timeline({ vault: fakeVault, kv: kvMany, clknMint: "MCLKN", id: "dnc", hours: 720, helius: null });
+    ok("capped at 300", tlCap.rows.length === 300, "len=" + tlCap.rows.length);
+    ok("the cap dropped the oldest (illustrative) rows first, in time order", tlCap.classes.decision === 300 && tlCap.classes.illustrative === 0, JSON.stringify(tlCap.classes));
+
+    const missingProject = await d.timeline({ vault: fakeVault, kv: kvFake, clknMint: "MCLKN", id: "nope", hours: 168, helius: null });
+    ok("unknown project id → null, not a throw", missingProject === null);
+  }
+
+  console.log("\nengine-sim-test.cjs is untouched by any of this\n");
+  {
+    const { spawnSync } = require("child_process");
+    const r = spawnSync(process.execPath, [require("path").join(__dirname, "engine-sim-test.cjs")], { encoding: "utf8" });
+    ok("scripts/engine-sim-test.cjs still passes unchanged", r.status === 0, (r.stdout || "").slice(-400) + (r.stderr || "").slice(-400));
+  }
+
   console.log(failures ? `\n${failures} failed` : "\nall passed");
   process.exit(failures ? 1 : 0);
 })();
