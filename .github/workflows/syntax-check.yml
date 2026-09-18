@@ -241,6 +241,13 @@ jobs:
       # what is missing; the reproducibility ratio; the CLI script's --offline mode with no server.
       - name: Hub receipt reproduction (the number — MATCH/MISMATCH/MISSING_INPUTS, --offline)
         run: node scripts/reproduce-receipt-test.cjs
+      # Colosseum roadmap §7 (the W4 deferred item): the public Buy Special standings page.
+      # Unsealed publishes rules only (no results/review/payouts key at all); sealed publishes the
+      # full view plus a stable resultsHash; hold-through is held/sold/moved-out/locked-not-a-sell
+      # (PR #298 — a lock is not a sell) with its on-chain evidence signature; the split is the one
+      # function buyCompVerify, the walkthrough and reproduce-a-receipt all share.
+      - name: Hub public Buy Special standings + hold-through proof (Colosseum §7)
+        run: node scripts/hub-buycomp-public-test.cjs
       # The per-project Lock to Earn engine: config from the version in force, the two new rules,
       # one hour of accrual, the tick over the project's own keys, the holder view.
       - name: Hub engine (Lock to Earn for any project)

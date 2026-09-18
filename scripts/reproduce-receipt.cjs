@@ -24,7 +24,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { reproduce } = require("../lib/hub/reproduce");
+const { reproduce, reproduceBuyCompRow } = require("../lib/hub/reproduce");
 
 const DEFAULT_HOST = "https://clucknorris.app";
 const RECEIPT_URL_RE = /^\/(?:api\/)?hub\/([a-z0-9-]{1,32})\/r\/([1-9A-HJ-NP-Za-km-z]{60,100})\/?$/;
@@ -79,6 +79,34 @@ function report({ project, batchId, wallet, result }) {
   }
 }
 
+// Colosseum roadmap §7 — a "buy-comp" receipt reproduces from the PUBLIC standings route (the
+// terms it ran under, this wallet's rank, and what the scan counted as its own qualifying buy)
+// rather than a batch/inputs pair — there is no raw-base-unit ledger for a buy comp the way
+// lock-to-earn has. Exits the same way the lock-to-earn path does: 0 MATCH, 2 MISMATCH, 3
+// MISSING_INPUTS.
+async function reproduceBuyComp({ host, project, receiptBody, offlineDir }) {
+  const wallet = receiptBody.receipt.wallet || null;
+  const compId = receiptBody.program && receiptBody.program.id;
+  const published = receiptBody.receipt.amountUi;
+  const standingsBody = offlineDir
+    ? readJson(path.join(offlineDir, "standings.json"))
+    : await (async () => { try { const r = await fetchJson(`${host}/api/hub/${encodeURIComponent(project)}/p/${encodeURIComponent(compId)}/standings`); return r.ok ? r.body : null; } catch (_) { return null; } })();
+  const comp = standingsBody && standingsBody.ok ? standingsBody.comp : null;
+  if (!comp || !comp.sealed) {
+    report({ project, wallet, result: { status: "MISSING_INPUTS", published: published != null ? String(published) : null, reproduced: null, hash: null, missing: [offlineDir ? `${path.join(offlineDir, "standings.json")} is missing, or the competition is not sealed` : "could not fetch the sealed standings (GET /api/hub/<project>/p/<compId>/standings), or the competition is not sealed yet"] } });
+    process.exit(3);
+  }
+  const win = (comp.results || []).find((r) => r.wallet === wallet);
+  const rev = (comp.review || []).find((r) => r.wallet === wallet);
+  const result = reproduceBuyCompRow({
+    terms: comp.terms, rank: win ? win.rank : null,
+    tokensBought: rev ? rev.tokensBought : null, valueSol: rev ? rev.value : null,
+    published,
+  });
+  report({ project, wallet, result });
+  process.exit(result.status === "MATCH" ? 0 : result.status === "MISMATCH" ? 2 : 3);
+}
+
 async function main() {
   const { rest, offlineDir } = parseArgs(process.argv.slice(2));
   if (rest.length !== 1 && rest.length !== 3) { usage(); process.exit(1); }
@@ -107,8 +135,9 @@ async function main() {
     batchId = receiptBody.receipt.batchId || null;
     wallet = receiptBody.receipt.wallet || null;
     const kind = receiptBody.program && receiptBody.program.kind;
+    if (kind === "buy-comp") { await reproduceBuyComp({ host, project, receiptBody, offlineDir }); return; }
     if (kind && kind !== "lock-to-earn") {
-      report({ project, batchId, wallet, result: { status: "MISSING_INPUTS", published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) + " (UI units — raw not published for this kind)" : null, reproduced: null, hash: null, missing: [`reproduction is not implemented yet for kind "${kind}" — only "lock-to-earn" today`] } });
+      report({ project, batchId, wallet, result: { status: "MISSING_INPUTS", published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) + " (UI units — raw not published for this kind)" : null, reproduced: null, hash: null, missing: [`reproduction is not implemented yet for kind "${kind}" — only "lock-to-earn" and "buy-comp" today`] } });
       process.exit(3);
     }
     if (!batchId || !wallet) {

@@ -125,8 +125,10 @@
   function acct(a) { return '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/account/' + encodeURIComponent(a) + '">' + esc(shortAddr(a, 5, 4)) + '</a>'; }
   function txLink(sig) { return sig ? '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(sig) + '">' + esc(shortAddr(sig, 6, 6)) + '</a>' : '<span class="small">—</span>'; }
   function pill(state) {
-    var m = { settled: 'ok', paid: 'ok', qualified: 'ok', eligible: 'ok', confirmed: 'ok', submitted: 'warn', manual: 'warn', pending: 'warn', dq: 'bad', cancelled: 'bad' };
-    var label = { 'no-receipt': 'no receipt on file', 'confirmed-manually': 'confirmed by hand', dq: 'disqualified', manual: 'reviewed by hand' }[state] || String(state || '').replace(/-/g, ' ');
+    // held/sold/moved-out/locked-not-a-sell/unverified: the hold-through classification (PR #298
+    // — a lock is not a sell, so it is a warn, never a bad, alongside a genuine "still verifying").
+    var m = { settled: 'ok', paid: 'ok', qualified: 'ok', eligible: 'ok', confirmed: 'ok', held: 'ok', submitted: 'warn', manual: 'warn', pending: 'warn', 'locked-not-a-sell': 'warn', unverified: 'warn', dq: 'bad', cancelled: 'bad', sold: 'bad', 'moved-out': 'bad' };
+    var label = { 'no-receipt': 'no receipt on file', 'confirmed-manually': 'confirmed by hand', dq: 'disqualified', manual: 'reviewed by hand', 'moved-out': 'moved the bag out', 'locked-not-a-sell': 'locked — not a sell', unverified: 'not verified' }[state] || String(state || '').replace(/-/g, ' ');
     return '<span class="pill ' + (m[state] || '') + '">' + esc(label) + '</span>';
   }
   function verifyCell(sig) { return sig ? '<span class="verify" data-sig="' + esc(sig) + '"><span class="small">not checked</span></span>' : '<span class="small">—</span>'; }
@@ -176,11 +178,24 @@
     return scrollable('<table><thead><tr>' + (withRank ? '<th>#</th>' : '') + '<th>Wallet</th><th style="text-align:right">Amount</th><th>State</th><th>Transaction</th><th>Chain check</th></tr></thead><tbody>' +
       rows.map(function (r) { return '<tr>' + (withRank ? '<td class="num">' + esc(r.rank == null ? '' : r.rank) + '</td>' : '') + '<td>' + acct(r.wallet) + '</td><td class="num">' + amt(r.amountUi, sym) + '</td><td>' + pill(r.state) + '</td><td>' + txLink(r.sig) + '</td><td>' + verifyCell(r.sig) + '</td></tr>'; }).join('') + '</tbody></table>');
   }
+  // The hold-through evidence link (Colosseum roadmap §7): the FIRST transaction that actually
+  // decided a "sold" / "moved out" / "locked" call, opened on Solscan — a reader checks the fact
+  // themselves rather than taking the page's word for it.
+  function evidenceLink(sig) { return sig ? '<span class="row-flex" style="margin-top:2px"><span class="small">on-chain evidence</span> ' + txLink(sig) + '</span>' : ''; }
   function reviewList(review, results) {
     var rows = (review || []).filter(function (r) { return r.status !== 'qualified' && r.status !== 'eligible'; });
     if (!rows.length) return '';
     return '<details><summary>' + rows.length + ' wallet' + (rows.length > 1 ? 's' : '') + ' reviewed and not paid — the observed fact for each</summary><ul class="facts">' +
-      rows.map(function (r) { return '<li><div class="row-flex">' + acct(r.wallet) + ' ' + pill(r.status) + (r.tokensBought ? '<span class="small">bought ' + amt(r.tokensBought) + '</span>' : '') + '</div><div class="fact">' + esc(r.fact) + '</div></li>'; }).join('') + '</ul></details>';
+      rows.map(function (r) { return '<li><div class="row-flex">' + acct(r.wallet) + ' ' + (r.holdThrough ? pill(r.holdThrough) : pill(r.status)) + (r.tokensBought ? '<span class="small">bought ' + amt(r.tokensBought) + '</span>' : '') + '</div><div class="fact">' + esc(r.fact) + '</div>' + evidenceLink(r.evidenceSig) + '</li>'; }).join('') + '</ul></details>';
+  }
+  // The E5 "how this number was computed" pattern (Colosseum roadmap), for a buy comp's own
+  // winners: each result row carries its own `explanation` (lib/hub/public.js, built by
+  // lib/hub/explain.js explainBuyCompRow — the exact split function buyCompVerify used, never a
+  // re-typed copy). Rendered as one collapsible per winner, reusing explainBlock() below.
+  function winnersExplainSection(results) {
+    var rows = (results || []).filter(function (r) { return r.explanation; });
+    if (!rows.length) return '';
+    return rows.map(function (r) { return '<div style="margin-top:4px">' + acct(r.wallet) + ' <span class="small">#' + esc(r.rank) + '</span>' + explainBlock(r) + '</div>'; }).join('');
   }
   function compCard(p, sym) {
     var t = p.terms || {}, tot = p.totals || {};
@@ -192,11 +207,13 @@
       '<div class="prog-head" data-clkn-avoid-kids="1"><h2>' + esc(p.label || 'Buy competition') + '</h2><div class="chips"><span class="chip kind">buy competition</span><span class="chip ' + (p.status === 'verified' || p.status === 'closed' ? 'ok' : '') + '">' + esc(p.status) + '</span>' + (p.verifiedBy === 'operator' ? '<span class="chip warn">list set by operator</span>' : '') + '</div></div>' +
       timeline(p) +
       '<div class="terms" data-clkn-avoid-kids="1"><div><b>Metric</b> ' + esc(t.metric === 'single' ? 'largest single buy' : 'cumulative buys') + '</div><div><b>Prizes</b> ' + prizes + '</div><div><b>Hold</b> ' + esc(t.holdHours) + ' h after close</div>' + (t.minVolSol ? '<div><b>Min volume</b> ' + esc(t.minVolSol) + ' SOL</div>' : '') + (t.exclude && t.exclude.length ? '<div><b>Excluded wallets</b> ' + t.exclude.length + '</div>' : '') +
-      '<div><b>Terms hash</b> <span class="mono" title="sha256 of the terms this competition ran under — recompute it from the JSON at /api/hub/' + esc(projectId) + '">' + esc(String(p.termsHash || '').slice(0, 16)) + '…</span></div></div>' +
+      '<div><b>Terms hash</b> <span class="mono" title="sha256 of the terms this competition ran under — recompute it from the JSON at /api/hub/' + esc(projectId) + '">' + esc(String(p.termsHash || '').slice(0, 16)) + '…</span></div>' +
+      (p.sealed ? '<div><b>Sealed</b> ' + ts(p.sealedAt) + ' · <span class="mono" title="sha256 of the sealed (rank, wallet, amount, status) list — recompute it yourself to check it never changed">' + esc(String(p.resultsHash || '').slice(0, 16)) + '…</span></div>' : '') +
+      '</div>' +
       statTiles([['Sealed total', amt(tot.sealedUi)], ['Receipted', amt(tot.paidUi)], ['Settled', tot.settled], ['Submitted', tot.submitted || null], ['Winners', tot.winners], ['Disqualified', tot.disqualified]]) +
       (p.payoutNote ? '<div class="fact" style="margin-bottom:8px">' + esc(p.payoutNote) + '</div>' : '') +
       (p.listHistory && p.listHistory.length ? '<div class="fact" style="margin-bottom:8px">The sealed list was replaced by the operator ' + p.listHistory.length + ' time' + (p.listHistory.length > 1 ? 's' : '') + ': <b>' + esc(p.listHistory[p.listHistory.length - 1].note || 'no note') + '</b> (' + ts(p.listHistory[p.listHistory.length - 1].at) + ').</div>' : '') +
-      '<div class="sec-title" data-clkn-avoid="1">Winners and receipts</div>' + (winners.length ? payoutTable(winners, sym, true) : '<div class="fact">Not verified yet — the hold period runs ' + esc(t.holdHours) + ' hours past the close.</div>') +
+      '<div class="sec-title" data-clkn-avoid="1">Winners and receipts</div>' + (winners.length ? payoutTable(winners, sym, true) + winnersExplainSection(p.results) : '<div class="fact">Not verified yet — standings are sealed at the window\'s end, after the ' + esc(t.holdHours) + '-hour hold-through check runs.</div>') +
       reviewList(p.review) +
       (p.voids && p.voids.length ? '<details><summary>' + p.voids.length + ' voided transfer record' + (p.voids.length > 1 ? 's' : '') + '</summary><ul class="facts">' + p.voids.map(function (v) { return '<li><div class="row-flex">' + acct(v.wallet) + ' ' + txLink(v.sig) + ' ' + pill(v.reason || 'void') + '</div></li>'; }).join('') + '</ul></details>' : '') +
       '</div>';
