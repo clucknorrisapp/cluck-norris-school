@@ -211,6 +211,14 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 4** — the school → Hub bridge (the six lock lessons end on a "Ready to lock?"
+  card that carries the project the learner came from; an anonymous, deduplicated
+  lesson-read counter shows on a project page only when it is above zero); the independent
+  on-chain commitment of a program-version hash (Addendum B §B5: the desk builds an unsigned
+  memo transaction, the funding wallet signs it, the server observes the memo on-chain before it
+  writes the commitment — shipped dry-run until the owner signs the first one, and the public
+  wording only upgrades on observation); Hub pages in all seven languages with a CI coverage
+  gate, plus the floating-pill overlap fix on the Hub pages. PR #341.
 - **Colosseum batch 3** — the school is genuinely seven languages (the two lessons missing from
   six dictionaries translated, and CI now fails on any lesson missing from any language); the
   public engine dashboard separates three evidence classes that never mix (historical transfers,

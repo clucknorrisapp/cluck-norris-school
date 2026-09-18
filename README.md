@@ -40,23 +40,58 @@ to be disclosed. So the baseline is declared up front rather than blurred:
 | **The plan** | [`docs/COLOSSEUM_ROADMAP.md`](docs/COLOSSEUM_ROADMAP.md) |
 
 **What we're entering: the Project Hub** — a project-owned rewards program whose terms,
-eligibility and payments a holder can check *without trusting us*. Versioned program records,
-per-recipient receipts, and a calculation anyone can reproduce from published inputs. The school
-is the front door; the rest of the tools below are the same stack, already live.
+eligibility and payments any holder can check *without trusting us*. Live today, and every piece
+below works with no wallet connected:
 
-The Hub's settlement library (`lib/hub/`) is documented as a public, composable contract, not just
-an internal module: [`lib/hub/README.md`](lib/hub/README.md) spells out the entities, the
-Addendum-B settlement invariants, and exactly which shapes are live on which route today (and
-which are pure, tested libraries not yet wired to one — that gap is stated plainly, not glossed
-over). The wire shapes are published as JSON Schema at
-[`clucknorris.app/hub/schema/project-public.json`](https://clucknorris.app/hub/schema/project-public.json),
-[`.../program-version.json`](https://clucknorris.app/hub/schema/program-version.json),
-[`.../batch.json`](https://clucknorris.app/hub/schema/batch.json) and
-[`.../receipt.json`](https://clucknorris.app/hub/schema/receipt.json) — a second product can
-validate a Hub JSON body against these without reading this repo. Reproducing a receipt's amount
-from its published inputs is covered separately — see **reproduce-receipt**.
+- **[`/hub`](https://clucknorris.app/hub)** — every project's published program version (pool
+  size, term tiers, exclusions, payout cadence) and a wallet's own eligibility, backed by a
+  stable **reason code** rather than a bare yes/no (`below_min_lock`, `term_too_short`,
+  `excluded_creator`, …) — `GET /api/hub/:project/holder?address=`.
+- **Receipts that explain their number** — a settled receipt page (`/hub/:project/r/:sig`) shows
+  the payout row *and*, where the inputs were retained, a "how this number was computed"
+  walkthrough using the holder's own term, multiplier and pro-rata share — derived by the same
+  code that computed the payout, never authored copy.
+- **Reproduce a receipt yourself** — `node scripts/reproduce-receipt.cjs <receipt-url>` re-derives
+  the amount from the published inputs on your own machine, no server call, no wallet. Every
+  program page states the measured ratio, never an asserted one: **"N of M receipts in `<batch>`
+  reproduce; K have missing inputs"** (`GET /api/hub/:project/reproducibility`).
+- **[`/hub/demo`](https://clucknorris.app/hub/demo)** — the whole loop with no wallet at all: a
+  clearly labelled `dryRun:true` fixture project walks a program version → a holder qualifying
+  under a stated rule → funding coverage → a batch → a receipt → reproducing it, then a second
+  fixture (`/hub/demo-b`) proving one project's data can never leak into another's.
+- **The settlement library as a public, composable module** — [`lib/hub/README.md`](lib/hub/README.md)
+  documents the entities and invariants in plain words, and every wire shape is published JSON
+  Schema at `/hub/schema/<name>.json` (`project-public`, `program-version`, `batch`, `receipt`),
+  so a second product can validate a Hub JSON body without reading this repo.
+- **[`/for-projects`](https://clucknorris.app/for-projects)** — the guided front door for a
+  project team: lock → apply for lock-to-earn → buy competition → airdrop → listing checkup →
+  owners snapshot → burn receipt, in the order teams actually use them, plus a per-mint checklist
+  of what a token has already done.
+- **Seven languages, kept honest** — the two lessons that shipped with zero translated strings
+  (Seed Phrase Survival, Inheritance) were translated into all six non-English school dictionaries
+  during this window, and the i18n audit now checks lesson coverage by id so the gap can't recur
+  silently.
 
-No prizes are claimed and no result is predicted here. Everything on this page that predates
+- **The school points at the Hub, and the Hub points back** — the six lock lessons end on a
+  "Ready to lock?" card that carries the project a learner arrived from, and a project page shows
+  how many anonymous visitors read the lock lessons before reaching it (only when above zero).
+- **The Hub pages in all seven languages**, with the same CI coverage gate as the school.
+
+**What isn't true yet, stated plainly.** A program version's `hash` is served by the same server
+that computes the payout — that lets a reader *re-derive* the arithmetic from the published
+inputs; it does not prove the server omitted no qualifying escrow. The independent on-chain
+commitment (the funding wallet signs a memo transaction over that hash; the server writes the
+commitment only after it observes the memo on-chain) is **built and ships dry-run**: no program
+has been committed yet, so every Hub surface still says "reproducible from the published inputs,"
+never "independently verified," and the wording upgrades per program only on observation.
+Separately, the Addendum-B settlement journal (the full append-only-per-transfer shape
+`receipt.schema.json` documents) is built, unit-tested and wired into the payout route on a
+pull request under money-path review; until it merges, today's live payout and receipt routes
+still run on the earlier CUNA payout model. `lib/hub/README.md` §5 states the exact gap rather
+than glossing over it.
+
+The school is the front door; the rest of the tools below are the same stack, already live. No
+prizes are claimed and no result is predicted here. Everything on this page that predates
 2026-09-14 is disclosed as such.
 
 ---
