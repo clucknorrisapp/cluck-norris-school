@@ -33,6 +33,17 @@
         "payoutSchedule": { "type": "string", "enum": ["daily", "weekly", "monthly", "at-unlock", "manual"], "description": "cadence a batch is expected to be raised on (owner, 2026-09-16). `at-unlock` pays each wallet when ITS OWN lock finishes releasing; accrual itself is unaffected — only the payout cadence changes." },
         "vesting": { "type": "string", "enum": ["any", "cliff-only", "vesting-only"], "description": "which lock SHAPES are admitted: `cliff-only` = a single release at the cliff (\"no vesting\"), `vesting-only` = periodic releases, `any` = either." }
       }
+    },
+    "commitment": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["sig", "slot", "observedAt"],
+      "description": "Addendum B5 (roadmap E3): present once the funding wallet's own on-chain memo committing THIS version's hash has been independently OBSERVED by the server (lib/hub/commit.js) — never on a client's say-so. Null, or the key absent entirely, means the public wording stays \"the calculation is reproducible from the published inputs,\" never \"independently verified\" or \"independently committed.\"",
+      "properties": {
+        "sig": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{60,100}$", "description": "the memo transaction's own signature — check it, and the memo it carries, on any explorer." },
+        "slot": { "type": ["integer", "null"], "minimum": 0, "description": "the slot the memo transaction landed in, when the RPC reported one." },
+        "observedAt": { "type": "integer", "minimum": 0, "description": "unix seconds this SERVER verified the memo on-chain — not the transaction's own block time." }
+      }
     }
   }
 }

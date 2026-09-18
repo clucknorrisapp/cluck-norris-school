@@ -72,9 +72,28 @@ if(typeof window!=="undefined"){
 }
 const trackId=(prefix,id)=>track(prefix+":"+String(id).toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,48));
 // #key=value out of the URL hash, or null. Deep links into one screen: #lesson=<id>, #library=<id>.
+// The hash can carry more than one pair, "&"-joined (E6: #lesson=<id>&from=hub:<project>), so
+// this splits on "&" and matches the part starting with "key=" rather than assuming key is first.
 function hashParam(key){
-  try{ const h=(window.location.hash||"").replace(/^#/,""); return h.startsWith(key+"=")?decodeURIComponent(h.slice(key.length+1)).slice(0,48):null; }
+  try{
+    const h=(window.location.hash||"").replace(/^#/,"");
+    const part=h.split("&").find(p=>p.startsWith(key+"="));
+    return part?decodeURIComponent(part.slice(key.length+1)).slice(0,48):null;
+  }
   catch(e){ return null; }
+}
+// E6: the school → Hub bridge. A Hub project page links a locking lesson with
+// "&from=hub:<projectId>" (lib/hub/teach.js lessonHref, public/hub.html `lessons()`) so a
+// finished lesson can bridge the learner back to THAT project instead of the generic /hub index,
+// and so the read can be attributed (POST /api/track "hub_lesson_read:<project>"). Validated
+// against the same id shape the Hub itself enforces (server.js hubProjects()); anything else is
+// treated as "arrived with no Hub context" rather than trusted verbatim.
+const HUB_FROM_RE=/^hub:([a-z0-9][a-z0-9-]{0,31})$/i;
+function hubFromParam(){
+  const raw=hashParam("from");
+  if(!raw) return null;
+  const m=HUB_FROM_RE.exec(raw);
+  return m?m[1].toLowerCase():null;
 }
 
 // "Now go look at a real one." Every core lesson points at the tool that shows its concept live
@@ -133,7 +152,25 @@ function LessonLinks({lesson:l}){
   );
 }
 
-
+// E6: the school → Hub bridge — the one Educate→Earn number we can show honestly (a real learner
+// reading real material before a real decision, not a promise of anything paid). These six ids
+// are the LESSONS ids lib/hub/teach.js LESSON_MAP maps its six pre-lock questions onto; kept as a
+// literal set here (rather than importing the CommonJS lib into the Vite bundle) and pinned by
+// scripts/hub-teach-test.cjs's C4 guard, which fails the build if any of those ids stops
+// resolving to a real lesson. Update both places together if the lesson map ever changes.
+const LOCK_LESSON_IDS=new Set(["tokenomics","wallets","staking","lp","volatility","rugs"]);
+// The report-card card that offers the bridge. STORE carries no Hub (no wallet, no on-chain
+// programs there) so it folds out entirely at build time — same `STORE ? null : …` pattern
+// src/edition.js documents for LESSON_TOOLS, so the excluded href can't survive into that bundle.
+function HubBridge({lesson:l,hubFrom}){
+  if(!LOCK_LESSON_IDS.has(l.id)) return null;
+  return STORE ? null : (
+    <div style={{background:"rgba(103,232,249,0.06)",border:"1px solid rgba(103,232,249,0.25)",borderRadius:12,padding:"12px 14px",margin:"0 0 14px",textAlign:"left"}}>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,color:"#67E8F9",marginBottom:8}}>READY TO LOCK?</div>
+      <a href={hubFrom?("/hub/"+encodeURIComponent(hubFrom)):"/hub"} onClick={()=>trackId("hub_bridge_click",l.id)} style={{display:"block",color:"#FFEFE0",textDecoration:"none",fontSize:14.5,lineHeight:1.5,padding:"8px 10px",background:"rgba(0,0,0,0.25)",borderRadius:8,border:"1px solid rgba(103,232,249,0.18)"}}>{"See a project's published terms and receipts"} →</a>
+    </div>
+  );
+}
 
 const LESSONS = [
   // ── EXISTING (expanded questions) ──────────────────────────
@@ -1301,7 +1338,7 @@ function Select({onSelect,completed}){
   );
 }
 
-function Lesson({lesson:l,onComplete,onBack}){
+function Lesson({lesson:l,onComplete,onBack,hubFrom}){
   const [phase,setPhase]=useState("intro");
   const [qi,setQi]=useState(0);
   const [sel,setSel]=useState(null);
@@ -1404,6 +1441,7 @@ function Lesson({lesson:l,onComplete,onBack}){
         </p>
       </div>
       <LessonLinks lesson={l}/>
+      <HubBridge lesson={l} hubFrom={hubFrom}/>
       <div style={{display:"flex",gap:10}}>
         {!passed&&<button onClick={retry} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,color:"#D1D5DB",cursor:"pointer",letterSpacing:2}}>↩ RETAKE</button>}
         <button onClick={()=>onComplete(l.id,passed)} style={{flex:2,background:passed?`#FF7A18`:"rgba(239,68,68,0.2)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:2,boxShadow:passed?`0 0 20px ${l.glow}`:"none"}}>
@@ -1780,10 +1818,11 @@ export default function App(){
       const path=(window.location.pathname||"").replace(/\/+$/,"").toLowerCase();
       if(PATHS[path]) return PATHS[path];
       const h=(window.location.hash||"").replace(/^#/,"");
-      // #lesson=<id> opens one lesson directly. The Project Hub links a holder to the lesson that
-      // explains the button they are about to press (Addendum C); an unknown id falls through to
-      // the normal landing rather than an empty lesson screen.
-      if(h.startsWith("lesson=")&&LESSONS.some(l=>l.id===h.slice(7))) return "lesson";
+      // #lesson=<id>[&from=hub:<project>] opens one lesson directly. The Project Hub links a
+      // holder to the lesson that explains the button they are about to press (Addendum C); an
+      // unknown id falls through to the normal landing rather than an empty lesson screen.
+      const lp=hashParam("lesson");
+      if(lp!=null&&LESSONS.some(l=>l.id===lp)) return "lesson";
       if(h.startsWith("library=")) return "library";
       // STORE edition (1.0.3, "AI-correct"): the Concierge — journey cards + Ask Cluck — is the
       // landing surface, so the AI tutor is the first thing a new user meets. The website keeps
@@ -1793,9 +1832,13 @@ export default function App(){
     catch(e){ return STORE?"start":"landing"; }
   });
   const [lessonId,setLessonId]=useState(()=>{
-    try { const h=(window.location.hash||"").replace(/^#/,""); if(h.startsWith("lesson=")&&LESSONS.some(l=>l.id===h.slice(7))) return h.slice(7); } catch(e){}
+    try { const lp=hashParam("lesson"); if(lp!=null&&LESSONS.some(l=>l.id===lp)) return lp; } catch(e){}
     return null;
   });
+  // E6: which Hub project (if any) the learner arrived from, captured once on load — see
+  // hubFromParam() above. Read the same way lessonId is: a lazy initializer, not a hashchange
+  // listener, matching how deep links are handled everywhere else in this component.
+  const [hubFrom]=useState(hubFromParam);
   const [completed,setCompleted]=useState(()=>{
     try {
       const s=localStorage.getItem("clkn_completed");
@@ -1832,6 +1875,12 @@ export default function App(){
     // marks were replayed together (see flushTrackQueue) spreads their live record over real
     // minutes again. The server keeps the first sighting and records the re-pass separately.
     if(passed) trackId("lesson_complete",id);
+    // E6: the one Educate→Earn number we can show honestly — a real learner who arrived from a
+    // Hub project's page finished one of the six lessons that teach locking, before any decision
+    // to lock. Fires on every pass, not only the first (the server dedupes per project/day/sid;
+    // re-reading counts too, same as lesson_complete above), and never in the STORE edition
+    // (which carries no Hub, so hubFrom can never be set there anyway).
+    if(!STORE&&passed&&hubFrom&&LOCK_LESSON_IDS.has(id)) track("hub_lesson_read:"+hubFrom,{lessonId:id});
     if(passed&&!completed.includes(id)){
       const next=[...completed,id];
       setCompleted(next);
@@ -1872,7 +1921,7 @@ export default function App(){
         {screen==="lplab"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><LPLab/></Suspense>}
         {screen==="library"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><Library initialTopic={hashParam("library")}/></Suspense>}
         {screen==="select"&&<Select onSelect={id=>{trackId("lesson_start",id);setLessonId(id);setScreen("lesson");}} completed={completed}/>}
-        {screen==="lesson"&&lesson&&<Lesson lesson={lesson} onComplete={finish} onBack={()=>setScreen("select")}/>}
+        {screen==="lesson"&&lesson&&<Lesson lesson={lesson} onComplete={finish} onBack={()=>setScreen("select")} hubFrom={hubFrom}/>}
         {screen==="complete"&&<Complete onRestart={()=>{setCompleted([]);setScreen("landing");}}/>}
       </div>
       {/* Footer — third-party security verification. Badge + score live in shared.jsx (ROOTCRAK),

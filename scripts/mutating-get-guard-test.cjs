@@ -182,6 +182,20 @@ function raw(method, p, headers) {
   r = await call("GET", "/api/hub/nope/holder?address=4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs", false);
   ok("the public holder view answers 404 for an unknown project (no key needed)", r.status === 404 && !!r.body && /no such project/.test(String(r.body.error)));
 
+  // ── B5 (Colosseum E3): commit/build and commit/observe are POST-only, refused before the
+  // project lookup — a pasted link (or a chat unfurl) must never even attempt to build or observe
+  // an on-chain commitment.
+  r = await call("GET", "/api/hub/nope/commit/build?version=1");
+  ok("GET /api/hub/:project/commit/build is refused with 405 (POST-only)", r.status === 405, JSON.stringify(r.body));
+  r = await call("POST", "/api/hub/nope/commit/build?version=1");
+  ok("POST /api/hub/:project/commit/build for an unknown project is 404", r.status === 404);
+  r = await call("GET", "/api/hub/nope/commit/observe?sig=x");
+  ok("GET /api/hub/:project/commit/observe is refused with 405 (POST-only)", r.status === 405, JSON.stringify(r.body));
+  r = await call("POST", "/api/hub/nope/commit/observe?sig=x");
+  ok("POST /api/hub/:project/commit/observe for an unknown project is 404", r.status === 404);
+  r = await call("GET", "/api/hub/nope/program/1", false);
+  ok("the public program-version view answers 404 for an unknown project (no key needed, no method restriction — it only reads)", r.status === 404);
+
   // ── lock-to-earn server send: send / sweep / void on a GET → 405 like confirm / cancel / export
   r = await call("GET", "/api/cuna-stake/payout?send=nope&run=1");
   ok("GET /api/cuna-stake/payout?send= is refused with 405", r.status === 405, JSON.stringify(r.body));

@@ -51,6 +51,16 @@ t("a funnel event without a request still counts the event and marks nobody", ()
   assert.strictEqual(A.summary(1).totals.engagedVisitorDays, 2);
 });
 
+// E6: the school → Hub bridge posts "hub_lesson_read:<project>" — a normal prefix:suffix funnel
+// event, so it needs no analytics.js change, but it's worth pinning that the shape actually
+// passes FUNNEL_RE (the project-id suffix has no underscore, unlike the "hub_lesson_read" prefix).
+// No request is passed here (like the "without a request" case above) so this doesn't shift the
+// engaged-visitor counts the later flush/reload test hardcodes.
+t("a hub_lesson_read:<project> event (E6) is recorded like any other funnel event", () => {
+  A.trackFunnel("hub_lesson_read:acme");
+  assert.strictEqual(A.summary(1).funnel["hub_lesson_read:acme"], 1);
+});
+
 t("views are keyed by the raw Host header — the game domain's / is not the homepage's /", () => {
   A.trackView(req({ headers: { "user-agent": "Mozilla/5.0 (iPhone) Safari", host: "normiequest.app" } }));
   A.trackView(req({ headers: { "user-agent": "Mozilla/5.0 (iPhone) Safari", host: "www.staking.cunatoken.com:443" } }));

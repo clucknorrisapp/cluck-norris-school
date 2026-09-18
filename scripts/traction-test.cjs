@@ -188,6 +188,64 @@ t("hubReceiptsOpened denominator is every receipt issued to date, across all thr
   assert.strictEqual(out.counters.hubReceiptsOpened.denominator, 3);
 });
 
+section("hub lesson reads — E6, the school → Hub bridge, same durable-event shape as receipt opens");
+
+t("finishing the same locking lesson twice in a day for the same sid counts once; a different day counts again", () => {
+  const kv = store.memoryKv();
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") + 1000 });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-17") });
+  const raw = traction.readHubLessonReads(kv);
+  assert.strictEqual(raw["2026-09-16"].acme.length, 1);
+  assert.strictEqual(raw["2026-09-17"].acme.length, 1);
+  assert.ok(!JSON.stringify(raw).includes("sid-1"), "the raw sid must never be stored");
+});
+t("a different sid the same day is counted separately", () => {
+  const kv = store.memoryKv();
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-2", nowMs: dayMs("2026-09-16") });
+  const raw = traction.readHubLessonReads(kv);
+  assert.strictEqual(raw["2026-09-16"].acme.length, 2);
+});
+t("compute()'s hubLessonReads counts in-period reads and reports the lifetime total as the denominator", () => {
+  const kv = store.memoryKv();
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-2", nowMs: dayMs("2026-09-01") }); // outside the window
+  const out = traction.compute({ kv, from: "2026-09-14", to: "2026-09-18" });
+  assert.strictEqual(out.counters.hubLessonReads.value, 1);
+  assert.strictEqual(out.counters.hubLessonReads.denominator, 2);
+  assert.strictEqual(out.counters.hubLessonReads.label, "independent");
+});
+t("lessonReadsForProject counts only the named project, defaults to the trailing 30 days, and denominator is null when analytics has no bucket for that path", () => {
+  const kv = store.memoryKv();
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: Date.now() });
+  traction.recordHubLessonRead(kv, { project: "other", sid: "sid-1", nowMs: Date.now() });
+  const r = traction.lessonReadsForProject(kv, "acme");
+  assert.strictEqual(r.count, 1);
+  assert.strictEqual(r.denominator, null);
+  assert.ok(r.period && r.period.from && r.period.to);
+});
+t("lessonReadsForProject's denominator is that project's own /hub/<id> page views from the analytics store, never another project's or another path's", () => {
+  const kv = store.memoryKv();
+  const day = traction.dayKeyOf(dayMs("2026-09-16"));
+  kv.set("analytics_v1", { days: { [day]: { paths: { "/hub/acme": 42, "/hub/other": 999, "/hub": 5 } } } });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  const r = traction.lessonReadsForProject(kv, "acme", { from: "2026-09-14", to: "2026-09-18" });
+  assert.strictEqual(r.count, 1);
+  assert.strictEqual(r.denominator, 42);
+});
+t("lib/hub/public.js projectView surfaces lessonReads only when count > 0 — never a zero brag", () => {
+  const pub = require("../lib/hub/public");
+  const p = { id: "acme", label: "ACME", symbol: "ACME", mint: MINT_A };
+  const zero = pub.projectView({ project: p, lessonReads: { count: 0, period: { from: "a", to: "b" } } });
+  assert.strictEqual(zero.lessonReads, null);
+  const none = pub.projectView({ project: p });
+  assert.strictEqual(none.lessonReads, null);
+  const some = pub.projectView({ project: p, lessonReads: { count: 3, period: { from: "2026-09-14", to: "2026-09-18" }, denominator: 42 } });
+  assert.deepStrictEqual(some.lessonReads, { count: 3, period: { from: "2026-09-14", to: "2026-09-18" } });
+  assert.ok(!("denominator" in some.lessonReads), "the internal denominator never reaches the public view");
+});
+
 section("batches signed — lib/hub/attempts.js's self-sign state machine");
 
 t("a recorded attempt signature in-period is counted; one outside is not", () => {
