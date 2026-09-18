@@ -130,6 +130,15 @@ console.log("\n4. receipt.schema.json — lib/hub/ledger.js receipt() (Addendum 
   const j2 = L.settle({ journal: {}, projectId: "alpha", batch: b2, wallet: W.A, transfer: { sig: SIG(11), instructionIndex: 0, amountRaw: "120", slot: 200 }, nowUnix: NOW }).journal;
   const over = L.receipt({ projectId: "alpha", batch: b2, wallet: W.A, journal: j2, project: A });
   validOk("an overpaid receipt (excess > 0) validates", schemas["receipt"], over);
+  // Round 3 N3 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): a settlement recorded WITH its verified
+  // source wallet carries that source per-entry and surfaces it as the receipt's own `paidFrom`
+  // when every settlement on the row agrees.
+  const b3 = L.buildBatch({ projectId: "alpha", programVersion: V1, periods: [], part, batchId: "b10", nowUnix: NOW });
+  const FUND2 = "6uGpiHY7VfCryFvcz1QQg7oDG1cUuXTRVvzXBqRQqXpJ";
+  const j3 = L.settle({ journal: {}, projectId: "alpha", batch: b3, wallet: W.A, transfer: { sig: SIG(12), instructionIndex: 0, amountRaw: "100", slot: 300, sourceWallet: FUND2 }, exactOnly: true, nowUnix: NOW }).journal;
+  const sourced = L.receipt({ projectId: "alpha", batch: b3, wallet: W.A, journal: j3, project: A });
+  validOk("a receipt whose settlement carries a verified sourceWallet validates, and paidFrom differs from fundingWallet", schemas["receipt"], sourced);
+  ok("paidFrom is the settlement's own source wallet, not the project's funding wallet", sourced.paidFrom === FUND2 && sourced.fundingWallet === A.fundingWallet && sourced.paidFrom !== sourced.fundingWallet, JSON.stringify({ paidFrom: sourced.paidFrom, fundingWallet: sourced.fundingWallet }));
   ok("the live /api/hub/:project/r/:sig body would NOT validate (documented gap — a different, older shape)", (() => {
     const legacy = { projectId: "rose", symbol: "ROSE", program: { kind: "buy-comp", id: "x", label: "x", ticker: "x", mint: W.MINT1, prizeMint: W.MINT1, termsHash: "a".repeat(64) }, receipt: { wallet: W.A, amountUi: 1, sig: SIG(1), at: NOW, state: "settled", confirmedAt: NOW } };
     return validate(schemas["receipt"], legacy).length > 0;

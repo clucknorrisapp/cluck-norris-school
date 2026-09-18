@@ -94,7 +94,8 @@ section("1. locateTransferInstruction — the chain's own identity, never a gues
 
 t("a single-recipient transaction locates instructionIndex 0, innerIndex null", () => {
   const r = payoutVerify.locateTransferInstruction(txSingle({ wallet: W.A, amountRaw: "1000000000" }), { mint: W.MINT1, wallet: W.A, nowUnix: NOW });
-  assert.deepStrictEqual(r, { instructionIndex: 0, innerIndex: null, amountRaw: "1000000000", slot: 42 });
+  // sourceWallet (Round 3 N3): txSingle's default sourceOwner is W.FUND.
+  assert.deepStrictEqual(r, { instructionIndex: 0, innerIndex: null, amountRaw: "1000000000", slot: 42, sourceWallet: W.FUND });
 });
 
 t("a batched (two-recipient) transaction locates each wallet's OWN instruction — no cross-contamination", () => {
@@ -107,7 +108,8 @@ t("a batched (two-recipient) transaction locates each wallet's OWN instruction �
 
 t("a CPI (inner-instruction) transfer locates instructionIndex + innerIndex", () => {
   const r = payoutVerify.locateTransferInstruction(txInner({ wallet: W.A, amountRaw: "777" }), { mint: W.MINT1, wallet: W.A, nowUnix: NOW });
-  assert.deepStrictEqual(r, { instructionIndex: 0, innerIndex: 0, amountRaw: "777", slot: 44 });
+  // sourceWallet (Round 3 N3): txInner's default sourceOwner is W.DEST2.
+  assert.deepStrictEqual(r, { instructionIndex: 0, innerIndex: 0, amountRaw: "777", slot: 44, sourceWallet: W.DEST2 });
 });
 
 t("two transfers to the same wallet in one signature are AMBIGUOUS — never a guess, returns null", () => {
@@ -211,9 +213,13 @@ t("callers that pass no journal see exactly the pre-W3 behavior", () => {
 // ── section 5+: the REAL route, invoked directly (no HTTP/network — a fake Express `app` that
 // just records the handler closures, so these exercise lib/hub/routes.js's actual code) ──────────
 function fakeApp() {
-  const handlers = new Map();   // path -> handler (app.all/app.get both just need "the" handler; the
-                                 // route itself branches on req.method, exactly as Express would call it)
-  return { get: (p, h) => handlers.set(p, h), all: (p, h) => handlers.set(p, h), handlers };
+  // path -> [fn, fn, ...] — app.all/app.get both just need "the" chain; the route itself branches
+  // on req.method, exactly as Express would call it. N1 (Round 3) added a real middleware
+  // (`limited(...)`) ahead of the /payout handler, so this now stores and RUNS every fn given,
+  // Express-style (each fn gets its own `next`), rather than assuming there is exactly one.
+  const handlers = new Map();
+  const register = (p, ...fns) => handlers.set(p, fns);
+  return { get: register, all: register, handlers };
 }
 function fakeRes() {
   const r = { statusCode: 200 };
@@ -223,11 +229,15 @@ function fakeRes() {
   return r;
 }
 async function call(app, path, { method = "GET", params = {}, query = {}, body = {}, headers = {} } = {}) {
-  const h = app.handlers.get(path);
-  if (!h) throw new Error(`no handler mounted for ${path}`);
+  const fns = app.handlers.get(path);
+  if (!fns) throw new Error(`no handler mounted for ${path}`);
   const req = { method, params, query, body, headers, cluckDirect: false };
   const res = fakeRes();
-  await h(req, res);
+  for (const fn of fns) {
+    let calledNext = false;
+    await fn(req, res, () => { calledNext = true; });
+    if (!calledNext) break;   // the middleware/handler sent a response and never called next()
+  }
   return res;
 }
 
@@ -267,7 +277,7 @@ function flakyKv(kv, { failOnKeys, failOnPrefix } = {}) {
   };
 }
 
-function mountFor({ kv, getTx = async () => null, vault = fakeVault(), alerts = [], nowUnix = () => NOW, scanDeps = async () => ({ scan: async () => [] }), adminAuthOK = () => true, secret = "test-secret" } = {}) {
+function mountFor({ kv, getTx = async () => null, vault = fakeVault(), alerts = [], nowUnix = () => NOW, scanDeps = async () => ({ scan: async () => [] }), adminAuthOK = () => true, secret = "test-secret", rateLimit = null, reservedMints = null } = {}) {
   const app = fakeApp();
   routes.mount(app, {
     kv, adminAuthOK, publicErrMsg: (e) => (e && e.message) || String(e), secret,
@@ -280,9 +290,21 @@ function mountFor({ kv, getTx = async () => null, vault = fakeVault(), alerts = 
     scanDeps, getTx, alert: (m) => alerts.push(m),
     // The route's own clock, injected so a fixture's fabricated `blockTime: NOW` agrees with "now"
     // (adv P0-1's future-blockTime refusal in lib/payout-verify.js compares against it).
-    nowUnix,
+    nowUnix, rateLimit, reservedMints,
   });
   return app;
+}
+// N1 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 3): a minimal per-bucket counting limiter, the
+// same DI shape lib/hub/routes.js's `limited(bucket, opts)` expects — refuses past `opts.max`
+// calls to the SAME bucket, resettable between tests by constructing a fresh one.
+function fakeRateLimit() {
+  const counts = new Map();
+  return (bucket, opts) => (req, res, next) => {
+    const n = (counts.get(bucket) || 0) + 1;
+    counts.set(bucket, n);
+    if (n > (opts && opts.max)) return res.status(429).json({ ok: false, error: "rate_limited" });
+    next();
+  };
 }
 function seedProject(kv, id, mint, over = {}) {
   const p = proj.validateProject({ id, label: id.toUpperCase(), symbol: id.toUpperCase().slice(0, 6), mint, fundingWallet: W.FUND, operatorWallets: [W.A], ...over }, { decimals: 9, tokenProgram: TOK, extensions: [] });
@@ -420,22 +442,29 @@ t("a registry project's payout NEVER touches the dedicated CUNA keys", async () 
   assert.ok(Object.prototype.hasOwnProperty.call(dump, "program:alpha:batches"));
 });
 
-t("an overpaid transfer records excess, caps applied, and never touches accrued", async () => {
+t("Round 3 #1: an oversized transfer is REFUSED as amount_mismatch, never journaled, never recorded sent — the row stays open for the genuine amount", async () => {
   const kv = store.memoryKv();
   seedProject(kv, "alpha", W.MINT1);
   store.write(kv, "alpha", "days", days({ [W.A]: "1000000000" }));
   const app = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1200000000" }) });   // 200000000 more than owed
   const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha" }, query: { export: "1" } });
   const batchId = exp.body.created.id;
-  await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(14) }]), batch: batchId } });
+  const r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(14) }]), batch: batchId } });
+  assert.deepStrictEqual(r.body.sent.recorded, [], "the oversized transfer never gets recorded sent");
+  assert.ok(r.body.sent.ignored.some((x) => x.wallet === W.A && x.why === "amount_mismatch" && x.expectedRaw === "1000000000" && x.actualRaw === "1200000000"), JSON.stringify(r.body.sent.ignored));
   const j = store.readJournal(kv);
-  const entry = Object.values(j).find((e) => e.projectId === "alpha" && e.batchId === batchId);
-  assert.strictEqual(entry.appliedRaw, "1000000000"); assert.strictEqual(entry.excessRaw, "200000000");
+  assert.strictEqual(Object.keys(j).filter((k) => j[k].projectId === "alpha" && j[k].batchId === batchId).length, 0, "nothing journaled — no phantom excess");
   const part = L.partition({ projectId: "alpha", days: store.read(kv, "alpha", "days", {}), batches: store.read(kv, "alpha", "batches", {}), journal: j });
-  assert.strictEqual(part[W.A].accruedRaw, "1000000000");   // accrued is untouched by the overpay
-  assert.strictEqual(part[W.A].paidAppliedRaw, "1000000000");
-  assert.strictEqual(part[W.A].excessRaw, "200000000");
+  assert.strictEqual(part[W.A].accruedRaw, "1000000000");
+  assert.strictEqual(part[W.A].paidAppliedRaw, "0");
+  assert.strictEqual(part[W.A].excessRaw, "0", "excess is unreachable on the live path");
   assert.deepStrictEqual(L.checkInvariant(part), []);
+  // The genuine, exactly-matching transfer settles it in a LATER request — the row was never
+  // stapled shut by the oversized one.
+  const app2 = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000" }) });
+  const r2 = await call(app2, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(15) }]), batch: batchId } });
+  assert.deepStrictEqual(r2.body.sent.recorded, [W.A]);
+  assert.strictEqual(Object.keys(store.readJournal(kv)).filter((k) => store.readJournal(kv)[k].batchId === batchId).length, 1);
 });
 
 section("7. the payout route — managed-payer &send=, submitted-then-settled, and a lost journal write never loses the payment");
@@ -792,8 +821,14 @@ t("row settled at 1.0; a second, unrelated 50-token transfer to the SAME wallet 
   // Round 2 #1 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): lib/hub/ledger.js `settle` now refuses a
   // row whose remaining is already 0 BEFORE PASS 1 ever calls recordSent, so this shows up as a
   // hard rejection (PASS 1, alerted) rather than reaching PASS 3's journal report at all.
+  //
+  // Round 3 #1: the PASS-1 grouping refuses this the same way it refuses ANY non-matching amount —
+  // `amount_mismatch` against a remaining of "0" — rather than the more specific
+  // `row_already_settled` lib/hub/ledger.js settle() itself still reports when called directly (see
+  // the pure-ledger test below); the route's own grouping never gets far enough to ask settle()
+  // that question, since no candidate for this wallet equals the row's remaining.
   assert.strictEqual(second.body.sent.journal.length, 0, "never reaches PASS 3 — refused earlier, in PASS 1");
-  assert.ok(second.body.sent.ignored.some((x) => x.wallet === W.A && x.sig === SIG(71) && x.why === "row_already_settled"), JSON.stringify(second.body.sent.ignored));
+  assert.ok(second.body.sent.ignored.some((x) => x.wallet === W.A && x.sig === SIG(71) && x.why === "amount_mismatch" && x.expectedRaw === "0" && x.actualRaw === "50000000000"), JSON.stringify(second.body.sent.ignored));
   assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1, "still exactly one journal entry — no phantom excess, no second settlement");
 });
 
@@ -964,6 +999,54 @@ t("ONE &sent= request carrying a genuine good sig AND a genuine but unrelated ex
   assert.strictEqual(part[W.A].excessRaw, "0", "the Addendum-B partition is not poisoned");
 });
 
+t("Round 3 #1 — the SAME request with the two sigs SWAPPED (extra first, good second) settles identically: order never decides the winner", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "psi25b", W.MINT1);
+  store.write(kv, "psi25b", "days", days({ [W.A]: "1000000000" }));
+  const good = txSingle({ wallet: W.A, amountRaw: "1000000000", slot: 201 });
+  const extra = txSingle({ wallet: W.A, amountRaw: "50000000000", slot: 202 });
+  const app = mountFor({ kv, getTx: async (sig) => (sig === SIG(212) ? good : extra) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "psi25b" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  // EXTRA FIRST this time — SIG(213) is the oversized one, SIG(212) the genuine match.
+  const r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "psi25b" },
+    query: { batch: batchId, sent: JSON.stringify([{ wallet: W.A, sig: SIG(213) }, { wallet: W.A, sig: SIG(212) }]) } });
+  assert.deepStrictEqual(r.body.sent.recorded, [W.A], "the genuine transfer still wins the row, wherever it sits in the array");
+  const j = store.readJournal(kv);
+  assert.strictEqual(Object.keys(j).length, 1, "exactly one journal entry, whichever order the sigs arrived in");
+  const entry = Object.values(j)[0];
+  assert.strictEqual(entry.sig, SIG(212), "the GOOD sig settled it, not whichever came first");
+  assert.strictEqual(entry.excessRaw, "0", "no phantom excess");
+  assert.strictEqual(entry.appliedRaw, "1000000000");
+  assert.ok(r.body.sent.ignored.some((x) => x.sig === SIG(213) && x.why === "amount_mismatch"), JSON.stringify(r.body.sent.ignored));
+  const batch = store.read(kv, "psi25b", "batches", {})[batchId];
+  const rec = L.receipt({ projectId: "psi25b", batch: { ...batch, projectId: "psi25b" }, wallet: W.A, journal: j, project: { fundingWallet: W.FUND } });
+  assert.strictEqual(rec.totals.excessRaw, "0"); assert.strictEqual(rec.totals.appliedRaw, "1000000000"); assert.strictEqual(rec.totals.remainingRaw, "0");
+  const part = L.partition({ projectId: "psi25b", days: store.read(kv, "psi25b", "days", {}), batches: store.read(kv, "psi25b", "batches", {}), journal: j });
+  assert.strictEqual(part[W.A].excessRaw, "0");
+  const owed = pay.owedNow({ days: store.read(kv, "psi25b", "days", {}), paid: store.read(kv, "psi25b", "paid", {}), pending: store.read(kv, "psi25b", "batches", {}), journal: j, projectId: "psi25b" });
+  assert.strictEqual(String(owed[W.A]), "0", "owedNow for the next period is unaffected — nothing left owed, nothing extra absorbed");
+});
+
+t("Round 3 #1 — TWO genuine transfers of the exact same amount in one request: the EARLIEST by slot wins, the other is refused as duplicate_settlement_candidate", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "psi25c", W.MINT1);
+  store.write(kv, "psi25c", "days", days({ [W.A]: "1000000000" }));
+  const later = txSingle({ wallet: W.A, amountRaw: "1000000000", slot: 300 });
+  const earlier = txSingle({ wallet: W.A, amountRaw: "1000000000", slot: 100 });
+  const app = mountFor({ kv, getTx: async (sig) => (sig === SIG(214) ? later : earlier) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "psi25c" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  // The LATER-slot sig listed FIRST in the array — order must not decide it, slot must.
+  const r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "psi25c" },
+    query: { batch: batchId, sent: JSON.stringify([{ wallet: W.A, sig: SIG(214) }, { wallet: W.A, sig: SIG(215) }]) } });
+  assert.deepStrictEqual(r.body.sent.recorded, [W.A]);
+  const j = store.readJournal(kv);
+  assert.strictEqual(Object.keys(j).length, 1, "only one of the two identical-amount transfers is journaled");
+  assert.strictEqual(Object.values(j)[0].sig, SIG(215), "the EARLIER slot won, despite being listed second");
+  assert.ok(r.body.sent.ignored.some((x) => x.sig === SIG(214) && x.why === "duplicate_settlement_candidate"), JSON.stringify(r.body.sent.ignored));
+});
+
 t("lib/hub/ledger.js settle() itself refuses a transfer against a row whose remaining is already 0 — never writes an applied:0/excess-only entry", () => {
   const batch = { id: "b1", projectId: "chi26", amounts: { [W.A]: "1000000000" } };
   const first = L.settle({ journal: {}, projectId: "chi26", batch, wallet: W.A, transfer: { sig: SIG(220), instructionIndex: 0, amountRaw: "1000000000", slot: 1 }, nowUnix: NOW });
@@ -1098,15 +1181,16 @@ t("&send= does NOT accept a DIFFERENT vault project's operator wallet as this pr
   assert.ok(alerts.some((a) => /journal refused/.test(a)));
 });
 
-t("&sweep= accepts ANY of our own vault operator wallets (it has no from= to say which project signed)", async () => {
+t("&sweep= accepts the project's OWN named vaultProject's operator wallet (superseded by N4/Round 3 — it used to accept ANY vault operator; see section 29)", async () => {
   const kv = store.memoryKv(); const alerts = [];
   seedProject(kv, "ups32", W.MINT1);
+  let reg32 = store.readRegistry(kv); reg32.ups32 = { ...reg32.ups32, vaultProject: "ups32-vault" }; store.writeRegistry(kv, reg32);
   store.write(kv, "ups32", "days", days({ [W.A]: "1000000000" }));
   store.write(kv, "ups32", "batches", { b1: { id: "b1", state: "pending", at: NOW, count: 1, totalRaw: "1000000000",
     amounts: { [W.A]: "1000000000" }, sent: { [W.A]: { sig: SIG(252), at: NOW, pending: true } } } });
   store.write(kv, "ups32", "paid", { [W.A]: "1000000000" });
   const tx = txSingle({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.B });
-  const vault = { operatorPubkeys: () => [W.B], payoutSpl: async () => ({ action: "none" }) };
+  const vault = { operatorPubkey: (id) => (id === "ups32-vault" ? W.B : null), payoutSpl: async () => ({ action: "none" }) };
   const app = mountFor({ kv, alerts, vault, getTx: async () => tx,
     scanDeps: async () => ({ scan: async () => [] }) });
   // sweep uses connection().getSignatureStatuses — build a bespoke app with that stubbed to confirm.
@@ -1176,6 +1260,155 @@ t("store.readJournal ignores a non-journal-shaped value even under the legacy JO
   store.writeJournal(kv, { "settle:payout": { at: Date.now(), token: "held" } });
   kv.set(store.journalEntryKey("settle:bogus:0"), { at: Date.now(), token: "held" });
   assert.deepStrictEqual(store.readJournal(kv), {}, "neither lock-shaped value is read back as a settlement");
+});
+
+section("28. N1 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 3) — one alert per request, and the payout route is rate-limited");
+
+t("23 stranger-sourced rows in ONE &sent= request raise exactly ONE operator alert, not 23", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "n1a", W.MINT1);
+  const N = 23;
+  const wallets = Array.from({ length: N }, (_, i) => "n1wallet" + String(i).padStart(3, "0"));
+  store.write(kv, "n1a", "days", days(Object.fromEntries(wallets.map((w) => [w, "1000000000"]))));
+  const alerts = [];
+  const sigFor = (i) => SIG(400 + i);
+  const txBySig = new Map(wallets.map((w, i) => [sigFor(i), txSingle({ wallet: w, amountRaw: "1000000000", sourceOwner: W.B })]));
+  const app = mountFor({ kv, alerts, getTx: async (sig) => txBySig.get(sig) || null });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "n1a" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  const sent = wallets.map((w, i) => ({ wallet: w, sig: sigFor(i) }));
+  const r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "n1a" }, query: { batch: batchId, sent: JSON.stringify(sent) } });
+  assert.deepStrictEqual(r.body.sent.recorded, [], "every row refused — all stranger-sourced");
+  assert.strictEqual(r.body.sent.ignored.filter((x) => x.why === "transfer_not_from_funding_wallet").length, N, "all 23 refusals are still reported back to the caller");
+  const fraudAlerts = alerts.filter((a) => /settlement REFUSED/.test(a));
+  assert.strictEqual(fraudAlerts.length, 1, "exactly one summary alert, not one per rejected row: " + JSON.stringify(alerts));
+  assert.ok(new RegExp(`${N} settlement REFUSED`).test(fraudAlerts[0]), fraudAlerts[0]);
+  assert.ok(/transfer_not_from_funding_wallet/.test(fraudAlerts[0]), fraudAlerts[0]);
+});
+
+t("POST /api/hub/:project/payout is rate-limited per IP like every other write route on this mount", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "n1b", W.MINT1);
+  const rateLimit = fakeRateLimit();
+  const app = mountFor({ kv, rateLimit });
+  let last;
+  for (let i = 0; i < 35; i++) last = await call(app, "/api/hub/:project/payout", { method: "GET", params: { project: "n1b" }, query: {} });
+  assert.strictEqual(last.statusCode, 429, "a burst past the limiter's max is refused");
+});
+
+section("29. N4 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 3) — &sweep= is pinned to the project's OWN vaultProject, never every vault operator");
+
+t("&sweep= accepts the named vaultProject's operator wallet, and refuses an unrelated vault's", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "n4a", W.MINT1);
+  // vaultProject is owner-set only (never read from validateProject's own input, same discipline
+  // as payoutSources) — set it directly on the registry row, exactly as /api/hub-registry would.
+  let reg4a = store.readRegistry(kv); reg4a.n4a = { ...reg4a.n4a, vaultProject: "treasury" }; store.writeRegistry(kv, reg4a);
+  store.write(kv, "n4a", "batches", { b1: { id: "b1", state: "pending", at: NOW, count: 1, totalRaw: "1000000000",
+    amounts: { [W.A]: "1000000000" }, sent: { [W.A]: { sig: SIG(420), at: NOW, pending: true } } } });
+  store.write(kv, "n4a", "paid", { [W.A]: "1000000000" });
+  const tx = txSingle({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.B });
+  const vault = { operatorPubkey: (id) => (id === "treasury" ? W.B : null) };
+  const app2 = fakeApp();
+  routes.mount(app2, {
+    kv, adminAuthOK: () => true, publicErrMsg: (e) => e.message, secret: "s", vault,
+    connection: () => ({ getSignatureStatuses: async () => ({ value: [{ confirmationStatus: "finalized", err: null }] }) }),
+    scanDeps: async () => ({ scan: async () => [] }), getTx: async () => tx, alert: () => {}, nowUnix: () => NOW,
+  });
+  const r = await call(app2, "/api/hub/:project/payout", { method: "POST", params: { project: "n4a" }, query: { batch: "b1", sweep: "1" } });
+  assert.strictEqual(r.body.sweep.journal[0].journaled, true, JSON.stringify(r.body.sweep));
+});
+
+t("&sweep= with NO vaultProject set accepts only the funding wallet + payoutSources — never any vault operator", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "n4b", W.MINT1);   // no vaultProject
+  store.write(kv, "n4b", "batches", { b1: { id: "b1", state: "pending", at: NOW, count: 1, totalRaw: "1000000000",
+    amounts: { [W.A]: "1000000000" }, sent: { [W.A]: { sig: SIG(421), at: NOW, pending: true } } } });
+  store.write(kv, "n4b", "paid", { [W.A]: "1000000000" });
+  const tx = txSingle({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.B });   // W.B is SOME vault's operator, just not named
+  const vault = { operatorPubkey: (id) => (id === "some-vault" ? W.B : null) };
+  const app2 = fakeApp();
+  routes.mount(app2, {
+    kv, adminAuthOK: () => true, publicErrMsg: (e) => e.message, secret: "s", vault,
+    connection: () => ({ getSignatureStatuses: async () => ({ value: [{ confirmationStatus: "finalized", err: null }] }) }),
+    scanDeps: async () => ({ scan: async () => [] }), getTx: async () => tx, alert: () => {}, nowUnix: () => NOW,
+  });
+  const r = await call(app2, "/api/hub/:project/payout", { method: "POST", params: { project: "n4b" }, query: { batch: "b1", sweep: "1" } });
+  assert.strictEqual(r.body.sweep.journal[0].journaled, false, JSON.stringify(r.body.sweep));
+});
+
+t("&vaultProject= is owner-set via /api/hub-registry, carried forward on an unrelated edit, and validated as a short lowercase id", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "n4c", W.MINT1);
+  const app = mountFor({ kv });
+  const set = await call(app, "/api/hub-registry", { method: "POST", query: { id: "n4c", label: "N4C", symbol: "N4C", mint: W.MINT1, fundingWallet: W.FUND, vaultProject: "Treasury " } });
+  assert.strictEqual(set.statusCode, 200, JSON.stringify(set.body));
+  assert.strictEqual(store.readRegistry(kv).n4c.vaultProject, "treasury", "normalized to lowercase, trimmed");
+  const edit = await call(app, "/api/hub-registry", { method: "POST", query: { id: "n4c", label: "N4C renamed", symbol: "N4C", mint: W.MINT1, fundingWallet: W.FUND } });
+  assert.strictEqual(edit.statusCode, 200, JSON.stringify(edit.body));
+  assert.strictEqual(store.readRegistry(kv).n4c.vaultProject, "treasury", "an unrelated edit carries vaultProject forward unchanged");
+});
+
+section("30. N2 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 3) — an application cannot take over an existing project");
+
+t("POST /api/hub-registry?approve= refuses 409 project_exists when the id was registered AFTER the application was filed (the stale-application race N2 describes)", async () => {
+  const kv = store.memoryKv();
+  const app = mountFor({ kv });
+  // The application is filed FIRST, while "n2a" is not yet a project — /api/hub-apply's own
+  // "id is taken" check (routes.js, unrelated to this finding) cannot see a race that hasn't
+  // happened yet, which is exactly how a stale application ends up pointed at an id that gets
+  // registered later, by a completely different route.
+  const apply = await call(app, "/api/hub-apply", { method: "POST",
+    query: { id: "n2a", label: "Impostor", symbol: "IMP", mint: "6zro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc", fundingWallet: W.B, operatorWallets: W.B, contact: "@impostor", terms: { poolDailyRaw: "1" } } });
+  assert.strictEqual(apply.statusCode, 200, JSON.stringify(apply.body));
+  const appId = apply.body.application.id;
+  // NOW "n2a" gets registered for real, but WITHOUT a program version yet — exactly the
+  // "registry-seeded, not-yet-termed project" the finding names (seedProject() always creates v1,
+  // which would trip routes.js's OLDER, narrower "already has program versions" 409 instead of
+  // reaching the code this test is actually pinning).
+  const seeded = proj.validateProject({ id: "n2a", label: "N2A", symbol: "N2A", mint: MINT_B, fundingWallet: W.FUND, operatorWallets: [W.A] }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  store.writeRegistry(kv, proj.approveProject(store.readRegistry(kv) || {}, seeded, { nowUnix: NOW }));
+  const beforeFundingWallet = store.readRegistry(kv).n2a.fundingWallet;
+  const r = await call(app, "/api/hub-registry", { method: "POST", query: { approve: appId } });
+  assert.strictEqual(r.statusCode, 409, JSON.stringify(r.body));
+  assert.ok(/project_exists|already exists/.test(r.body.error), r.body.error);
+  assert.strictEqual(store.readRegistry(kv).n2a.fundingWallet, beforeFundingWallet, "the existing project's fundingWallet is untouched");
+  assert.strictEqual(store.readRegistry(kv).n2a.payoutSourcesHistory.length, 0, "and its (empty) payoutSourcesHistory was not reset by the refused approval");
+});
+
+t("payoutSourcesHistory survives every other mutating registry/admin write on the same project — append-only, never reset", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "n2b", W.MINT1);
+  const app = mountFor({ kv });
+  const proj0 = store.readRegistry(kv).n2b;
+  await call(app, "/api/hub-registry", { method: "POST", query: { id: "n2b", label: "N2B", symbol: "N2B", mint: proj0.mint, fundingWallet: proj0.fundingWallet, payoutSources: W.B } });
+  const grown = store.readRegistry(kv).n2b.payoutSourcesHistory.length;
+  assert.strictEqual(grown, 1);
+  // suspend + admin terms=1 (a desk operator/owner write to a DIFFERENT kv part, "state") — neither
+  // path may shrink or reset the registry row's payoutSourcesHistory.
+  await call(app, "/api/hub-registry", { method: "POST", query: { suspend: "n2b" } });
+  assert.strictEqual(store.readRegistry(kv).n2b.payoutSourcesHistory.length, grown, "suspend preserves history");
+  store.writeRegistry(kv, { ...store.readRegistry(kv), n2b: { ...store.readRegistry(kv).n2b, status: "approved" } });   // un-suspend for the next call
+  await call(app, "/api/hub/:project/admin", { method: "POST", params: { project: "n2b" }, query: { terms: "1", poolDailyRaw: "5" } });
+  assert.strictEqual(store.readRegistry(kv).n2b.payoutSourcesHistory.length, grown, "an admin terms write never touches the registry row's history");
+  assert.deepStrictEqual(store.readRegistry(kv).n2b.payoutSources, [W.B], "and payoutSources itself is unchanged by an unrelated write");
+});
+
+section("31. N3 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 3) — payoutSources is echoed publicly; history only on the owner's own registry read");
+
+t("publicProject() echoes payoutSources everywhere; payoutSourcesHistory is added only with {full:true}, which /api/hub-registry alone passes", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "n3a", W.MINT1);
+  const app = mountFor({ kv, adminAuthOK: () => true });
+  const set = await call(app, "/api/hub-registry", { method: "POST", query: { id: "n3a", label: "N3A", symbol: "N3A", mint: W.MINT1, fundingWallet: W.FUND, payoutSources: W.B } });
+  assert.strictEqual(set.statusCode, 200, JSON.stringify(set.body));
+  const reg = await call(app, "/api/hub-registry", { method: "GET", query: {} });
+  const row = reg.body.projects.find((x) => x.id === "n3a");
+  assert.deepStrictEqual(row.payoutSources, [W.B], "the owner's own registry read echoes payoutSources");
+  assert.ok(Array.isArray(row.payoutSourcesHistory) && row.payoutSourcesHistory.length === 1, "and the full history, since this call passes {full:true}");
+  const desk = await call(app, "/api/hub/:project/desk", { method: "GET", params: { project: "n3a" }, query: {} });
+  assert.deepStrictEqual(desk.body.project.payoutSources, [W.B], "an operator/owner desk view also sees payoutSources — it is not secret");
+  assert.strictEqual(desk.body.project.payoutSourcesHistory, undefined, "but not the full history, outside the owner registry read");
 });
 
 (async () => {
