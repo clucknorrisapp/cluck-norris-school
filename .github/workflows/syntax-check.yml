@@ -431,7 +431,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -635,6 +635,17 @@ jobs:
       - name: Hub shareable pages — Open Graph / Twitter Card meta (Y4)
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-og-test.cjs
+      # Colosseum roadmap §11 AA1 — one wallet, every project. Boots its own server (two registry
+      # projects pre-seeded into DATA_DIR, a buy competition on each, the same fixture wallet
+      # qualifying and paid in one, disqualified with a reason on record in the other) and drives
+      # GET /api/hub/wallet/:wallet and the /hub/wallet[/:wallet] page: composed only from
+      # hubPublic.walletLookup per project, no private field on the wire, a malformed address is
+      # 400, an unseen valid address is an honest 200/seenIn:0, a demo/fixture project never
+      # appears, "wallet" is refused as a real project id, and the page carries none of the
+      # banned yield/APR/APY/verified/safe/guaranteed language.
+      - name: Hub wallet look-up — one wallet, every project (AA1)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-wallet-test.cjs
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the
