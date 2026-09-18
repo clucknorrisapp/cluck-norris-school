@@ -533,7 +533,7 @@ lens). Nothing here needs a wallet, a new secret or a live engine.
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke; the npm publish for DD1.
 
-## 15. Extension 9 — 2026-09-18 evening (batch 12 in CI; DD2, DD4 building; DD3, DD5 gated on the merge)
+## 15. Extension 9 — 2026-09-18 evening (DD1–DD5 landed on batches 12–13; EE2, EE3, EE5 building; EE1 after #342; EE4 on the owner's go)
 
 Twelve batches in. The holder side is covered (read, reproduce, share, print, follow); the
 judge side is covered (guide, status, trust, badge); the money path is under its fourth lens.
