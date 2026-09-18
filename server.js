@@ -16748,6 +16748,25 @@ app.get("/cluck-wallet.js", (req, res) => {
   res.sendFile(join(__dirname, "public", "cluck-wallet.js"));
 });
 
+// The sitewide browser runtime every page loads (the floating nav + its i18n and read-aloud
+// loaders, and the theme sheet) had NO explicit route: they were reachable only through the vite
+// build's copy in dist/, so a no-build boot (the CI a11y gate, `node server.js` on a fresh clone)
+// served every page without its nav landmark, language toggle or Listen button — exactly the
+// public/-is-not-mounted trap CLAUDE.md describes. Found by scripts/hub-a11y-test.cjs on
+// 2026-09-18: green with dist/, 24 failures without it. Same no-cache posture as the modules above.
+for (const f of ["cluck-nav.js", "i18n.js", "read-aloud.js"]) {
+  app.get("/" + f, (req, res) => {
+    res.setHeader("Cache-Control", "no-cache, must-revalidate");
+    res.type("application/javascript");
+    res.sendFile(join(__dirname, "public", f));
+  });
+}
+app.get("/theme.css", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("text/css");
+  res.sendFile(join(__dirname, "public", "theme.css"));
+});
+
 // Unified tools pass (owner, 2026-08-18, for the app-store transition): hold $50 worth of
 // CLKN → every heavy tool free; else 0.05 SOL buys a 7-day ALL-TOOLS pass. One client module
 // drives the gate on X-Ray / Holders / Trace / Airdrop / Buy Special; quick safety tools and

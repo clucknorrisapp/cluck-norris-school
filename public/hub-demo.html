@@ -15,7 +15,7 @@
   * { box-sizing:border-box; margin:0; padding:0; }
   body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
   .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
-  .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
   .header { text-align:center; margin-bottom:14px; }
   .header h1 { font-family:var(--disp); font-size:28px; letter-spacing:1px; color:var(--gold); font-weight:400; }
   .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
@@ -60,7 +60,7 @@
   /* Each link is the sole content of its row, not a word in a sentence — invisible tap-area
      padding (cancelled by an equal negative margin, so nothing shifts visually) brings the hit
      box toward 44px tall without changing how the row looks. */
-  .step-links a { display:inline-block; padding:14px 2px; margin:-14px -2px; color:var(--cyan, #67E8F9); text-decoration:none; letter-spacing:.5px; }
+  .step-links a { display:inline-block; padding:16px 2px; margin:-16px -2px; color:var(--cyan, #67E8F9); text-decoration:none; letter-spacing:.5px; }
   pre.proof { background:rgba(0,0,0,.35); border:1px solid var(--border); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11.5px; color:#D1D5DB; overflow-x:auto; white-space:pre-wrap; word-break:break-all; }
   .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
   .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
