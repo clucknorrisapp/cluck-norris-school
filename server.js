@@ -8831,6 +8831,16 @@ const hubScanDeps = (() => {
 // which are worth leaving exactly as audited. So hubAlert calls cunaOpsAlert with dedupeKey=null
 // (bypassing its internal dedupe entirely — see the `if (dedupeKey)` guard there) and does its own
 // check-then-send-then-set around it instead.
+//
+// NEW-1 (Round 5, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): the check-then-AWAIT-send-then-set above
+// raced. Every call inside one synchronous loop (e.g. one alert per row of a batch) reads
+// HUB_ALERT_SEEN, finds it unset, and starts its own `await cunaOpsAlert(...)` BEFORE any of the
+// earlier calls' sends have resolved and set the watermark — so a burst sharing one dedupe key
+// sent one Telegram message per row instead of one per request. The claim has to happen
+// SYNCHRONOUSLY, in the same tick as the check, so the second call in a burst sees it already
+// taken. A falsy send result (cunaOpsAlert/tgSend swallow their own errors and return null/0 —
+// never throw, never `{ok:false}`) deletes the claim so the NEXT occurrence retries rather than
+// being silenced for 6 hours by a send that never landed; a defensive catch does the same.
 const { hubAlertKey } = require("./lib/hub/alert-key");
 const HUB_ALERT_SEEN = new Map();
 const hubAlert = (m, meta) => {
@@ -8838,11 +8848,12 @@ const hubAlert = (m, meta) => {
   const key = hubAlertKey(m, meta);
   const now = Date.now();
   if (now - (HUB_ALERT_SEEN.get(key) || 0) < 6 * 60 * 60 * 1000) return;
+  HUB_ALERT_SEEN.set(key, now);
   (async () => {
     try {
       const sent = await cunaOpsAlert(`⚠️ Hub: ${m}`, null);
-      if (sent) HUB_ALERT_SEEN.set(key, now);
-    } catch (_) {}
+      if (!sent) HUB_ALERT_SEEN.delete(key);
+    } catch (_) { HUB_ALERT_SEEN.delete(key); }
   })();
 };
 // A corrupt app-state.json boots the kv store IN-MEMORY with the file preserved (lib/kvstore.js,

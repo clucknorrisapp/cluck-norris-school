@@ -1566,6 +1566,88 @@ t("lib/hub/alert-key.js hubAlertKey: a stable per-(project,batch,kind) hash, nev
   assert.strictEqual(hubAlertKey("short message"), "hub:short message", "a message-only call (no meta) keeps the old 40-char-of-text shape");
 });
 
+section("35. NEW-1 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 5) — hubAlert's claim is synchronous, so a same-tick burst sends once");
+
+// The REAL hubAlert, lifted verbatim out of server.js (same technique the round-5 probe used) —
+// a source-shape assertion in scripts/broadcast-integrity-test.cjs pins the code that makes this
+// safe; this exercises the actual function's runtime behavior.
+function realHubAlert(cunaOpsAlert) {
+  const { hubAlertKey } = require("../lib/hub/alert-key");
+  const src = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+  const m = src.match(/const HUB_ALERT_SEEN = new Map\(\);\nconst hubAlert = [\s\S]*?\n\};\n/);
+  if (!m) throw new Error("hubAlert not found in server.js — did its declaration shape change?");
+  return new Function("hubAlertKey", "cunaOpsAlert", "console", m[0] + "\nreturn hubAlert;")(hubAlertKey, cunaOpsAlert, { warn: () => {} });
+}
+
+t("a burst of 50 calls sharing one key in the same tick sends exactly once (the round-4 fix raced: check -> await -> set let every call in the burst pass the check)", async () => {
+  const sends = [];
+  const cunaOpsAlert = async (text) => { sends.push(text); return 777; };
+  const hubAlert = realHubAlert(cunaOpsAlert);
+  for (let i = 0; i < 50; i++) hubAlert("same message, called 50 times synchronously");
+  // Give every fire-and-forget async body a chance to resolve before asserting.
+  await new Promise((res) => setImmediate(() => setImmediate(res)));
+  assert.strictEqual(sends.length, 1, "50 synchronous calls sharing one dedupe key must send exactly once, not once per call — got " + sends.length);
+});
+
+t("the round-5 q5 scenario: three lockers, one signature, an attribution-failure split — exactly ONE operator-room message, not one per row", async () => {
+  const sends = [];
+  const cunaOpsAlert = async (text) => { sends.push(text); return 777; };
+  const hubAlert = realHubAlert(cunaOpsAlert);
+  const kv = store.memoryKv();
+  // 21 chars — long enough that the per-row message-only dedupe key (no meta on this call site,
+  // by design — see routes.js NEW-1b) would have collapsed all three rows onto one 40-char slice
+  // EVEN without the race; this test isolates the race fix by giving every row the exact same key.
+  const pid = "partner-lock-to-earn";
+  seedProject(kv, pid, W.MINT1);
+  store.write(kv, pid, "days", days({ [W.A]: "500000000", [W.B]: "500000000", [W.DEST2]: "500000000" }));
+  // One signature, each locker paid across TWO instructions (ambiguous — locateTransferInstruction
+  // returns null) so PASS 1 never journals any of the three rows, but the net-delta-based legacy
+  // check still records all three as sent — the attribution-failure alert path (routes.js ~1030).
+  function txTripleSplit() {
+    const wallets = [W.A, W.B, W.DEST2];
+    const keys = [SRC_ATA]; const instructions = []; const pre = [bal(0, W.FUND, "999999999999999")]; const post = [];
+    wallets.forEach((w, i) => {
+      const a1 = "Ata" + (2 * i + 1) + "111111111111111111111111111111", a2 = "Ata" + (2 * i + 2) + "111111111111111111111111111111";
+      keys.push(a1, a2);
+      instructions.push(tokenTransfer(a1, "250000000"), tokenTransfer(a2, "250000000"));
+      pre.push(bal(2 * i + 1, w, "0"), bal(2 * i + 2, w, "0"));
+      post.push(bal(2 * i + 1, w, "250000000"), bal(2 * i + 2, w, "250000000"));
+    });
+    return { slot: 42, blockTime: NOW, meta: { err: null, preTokenBalances: pre, postTokenBalances: post }, transaction: { message: { accountKeys: keys, instructions } } };
+  }
+  const tx = txTripleSplit();
+  const app = fakeApp();
+  routes.mount(app, {
+    kv, adminAuthOK: () => true, publicErrMsg: (e) => (e && e.message) || String(e), secret: "test-secret",
+    vault: fakeVault(), connection: () => ({ getSignatureStatuses: async () => ({ value: [] }), getParsedTokenAccountsByOwner: async () => ({ value: [] }), getParsedAccountInfo: async () => ({ value: null }) }),
+    scanDeps: async () => ({ scan: async () => [] }), getTx: async () => tx, alert: hubAlert, nowUnix: () => NOW,
+  });
+  let r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: pid }, query: { export: "1" } });
+  const id = r.body.created.id;
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: pid },
+    query: { batch: id, sent: JSON.stringify([W.A, W.B, W.DEST2].map((w) => ({ wallet: w, sig: SIG(900) }))) } });
+  await new Promise((res) => setImmediate(() => setImmediate(res)));
+  const journalReport = (r.body.sent && r.body.sent.journal) || [];
+  const unjournaled = journalReport.filter((x) => x.journaled === false && /could not attribute/.test(String(x.why || "")));
+  assert.strictEqual(unjournaled.length, 3, "setup check: all three rows should land legacy-recorded but unjournaled — " + JSON.stringify(journalReport));
+  assert.strictEqual(sends.length, 1, "one request covering three unjournaled rows must send ONE operator-room message, not three — got " + sends.length);
+  assert.ok(/recorded sent but not journaled/.test(sends[0]), sends[0]);
+});
+
+t("a null (failed) send releases the claim so the NEXT occurrence retries, rather than being silenced for 6 hours", async () => {
+  let landsNow = false;
+  const sends = [];
+  const cunaOpsAlert = async (text) => { const r = landsNow ? 777 : null; if (r) sends.push(text); return r; };
+  const hubAlert = realHubAlert(cunaOpsAlert);
+  hubAlert("a message that will fail to send the first time");
+  await new Promise((res) => setImmediate(() => setImmediate(res)));
+  assert.strictEqual(sends.length, 0, "the first (failed) send never landed");
+  landsNow = true;
+  hubAlert("a message that will fail to send the first time");
+  await new Promise((res) => setImmediate(() => setImmediate(res)));
+  assert.strictEqual(sends.length, 1, "a null return must release the claim so the identical message can be retried and land — got " + sends.length);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
