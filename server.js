@@ -7916,6 +7916,43 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
     return res.status(200).json({ ok: true, ...r });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// ── Colosseum judges' demo (roadmap W7 acceptance target / design §6, E2): a fixture project
+// "demo" (+ "demo-b" to prove isolation), fully derived from the real Hub libs over fabricated
+// addresses — no wallet needed, no chain call, no real registry entry, never mixed with the real
+// hub, the Lock of Fame, traction counters or the accrual scheduler (all three read from
+// hubStore's real registry / kv; this module never writes to either). Every JSON body here carries
+// dryRun:true. See lib/hub/demo-fixture.js for how the numbers are derived.
+const hubDemoFixture = require("./lib/hub/demo-fixture");
+app.get("/api/hub-demo", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const d = hubDemoFixture.get();
+    const summarize = (p) => ({ id: p.project.id, label: p.project.label, symbol: p.project.symbol, mint: p.project.mint,
+      holders: p.holders.length, qualifying: p.holders.filter((h) => h.qualifies).length, dryRun: true });
+    return res.status(200).json({ ok: true, dryRun: true, projects: [summarize(d.demo), summarize(d["demo-b"])] });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/hub-demo/:project", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const id = String(req.params.project || "").toLowerCase();
+  try {
+    const p = hubDemoFixture.get()[id];
+    if (!p) return res.status(404).json({ ok: false, error: "no such demo project" });
+    return res.status(200).json({ ok: true, project: p });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/hub-demo/:project/r/:id", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const id = String(req.params.project || "").toLowerCase();
+  try {
+    const p = hubDemoFixture.get()[id];
+    if (!p) return res.status(404).json({ ok: false, error: "no such demo project" });
+    const r = (p.receipts || {})[String(req.params.id || "")];
+    if (!r) return res.status(404).json({ ok: false, error: "no such receipt" });
+    return res.status(200).json({ ok: true, dryRun: true, projectId: id, receipt: r });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
 // Live platform-access pricing for the pre-registration apply page (hub-apply.html) — the
 // per-project quote at /api/hub/:project/access needs an already-registered project, but a
 // prospective applicant has none yet. This reads the same append-only schedule
@@ -7932,6 +7969,13 @@ app.get("/api/hub-pricing", (req, res) => {
 app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
 app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
 app.get("/hub/:project/desk", (req, res) => { res.sendFile(join(__dirname, "public", "hub-desk.html")); });
+// Registered BEFORE the generic /hub/:project pattern below so a literal "demo" / "demo-b" always
+// hits the fixture page, never the real one — a pasted /hub/demo link can never resolve to a real
+// project id later reusing that name (store.js's ID_RE would allow "demo" to be registered for
+// real; this ordering plus the fixture never touching the real registry is the actual guarantee).
+app.get(["/hub/demo", "/hub/demo/p/:program", "/hub/demo/r/:id", "/hub/demo-b"], (req, res) => {
+  res.sendFile(join(__dirname, "public", "hub-demo.html"));
+});
 app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:program", "/hub/:project/r/:sig"], (req, res) => {
   res.sendFile(join(__dirname, "public", "hub.html"));
 });
@@ -7997,7 +8041,10 @@ hubRoutes.mount(app, {
   // The built-in programmes are not registry rows, so the duplicate-mint guard could not see them:
   // a second project was approvable on CUNA's live mint (deep dive P1-030). Lazy — SUPPLY_FEEDS is
   // declared further down.
-  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint }),
+  // "demo" / "demo-b" are the Colosseum fixture ids (lib/hub/demo-fixture.js, /hub/demo) — reserved
+  // by id (not mint) so a real project can never be approved under either name and collide with
+  // the fixture's routes.
+  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null }),
   getTx: async (sig) => {
     const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     return r && r.result;
