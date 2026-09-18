@@ -172,18 +172,23 @@ counters — a dry run adds nothing to any number this doc or the submission cit
 
 ## (g) What is honestly NOT verifiable yet
 
-Say this plainly rather than let a reader assume more than what's built:
+Say this plainly rather than let a reader assume more than what's built. The plain-words version
+of every bullet below is on the trust-boundary page, `/hub/trust` (AA5) — the `<!-- boundary: … -->`
+markers pin that the two never drift apart (`scripts/hub-trust-doc-test.cjs`).
 
+<!-- boundary: hash-served-by-server -->
 - **A program-version hash is served by the same server that computes the payout.** Recomputing
   it (§d) proves the server didn't change the terms out from under you after publishing them —
   it does not prove the server omitted no qualifying escrow from the calculation in the first
   place. That second guarantee is exactly what (e)'s on-chain commitment is for, and it isn't live
   for any real program yet.
+<!-- boundary: giveaway-not-reproducible -->
 - **Giveaway rows (the CUNA sealed-draw giveaway) do not reproduce.** `reproduce-receipt.cjs`
   handles `lock-to-earn` and `buy-comp` receipt kinds only; a giveaway kind reports
   `MISSING_INPUTS` naming that reproduction isn't implemented for it, rather than guessing at a
   number. The legacy Buy Special *draw* (pre-Hub, paid through the airdropper) carries the same
   honest note on its own page: no receipts were journaled for it.
+<!-- boundary: journal-not-live -->
 - **The Addendum-B settlement journal isn't the live payout path yet.** Every receipt you can
   fetch today (including through this doc) is still the pre-journal shape — a single payout row,
   not the append-only per-transfer ledger `receipt.schema.json` documents. The journal is built
@@ -191,6 +196,7 @@ Say this plainly rather than let a reader assume more than what's built:
   wired into the live route (`lib/hub/README.md` §5, §6); the review found real gaps (a transfer's
   *source* is never checked, and a lost-write race under concurrent requests) that block it from
   merging as-is. Nothing above is affected — none of it depends on that PR.
+<!-- boundary: ratio-incomplete -->
 - **The reproducibility ratio doesn't yet cover every program kind.** `GET
   /api/hub/:project/reproducibility` counts lock-to-earn and buy-comp rows; giveaway rows are
   named as not implemented rather than silently excluded from the denominator.
@@ -198,5 +204,7 @@ Say this plainly rather than let a reader assume more than what's built:
 ---
 
 Related reading: [`lib/hub/README.md`](../lib/hub/README.md) (the entities and invariants in
-plain words), [`docs/COLOSSEUM_ROADMAP.md`](COLOSSEUM_ROADMAP.md) §7/§8 (E1–E10, X1–X7),
-[`docs/PRE_EVENT_STATE.md`](PRE_EVENT_STATE.md) (what predates the hackathon window).
+plain words), [`docs/COLOSSEUM_ROADMAP.md`](COLOSSEUM_ROADMAP.md) §7/§8/§11 (E1–E10, X1–X7, AA5),
+[`docs/PRE_EVENT_STATE.md`](PRE_EVENT_STATE.md) (what predates the hackathon window), and
+[`/hub/trust`](https://clucknorris.app/hub/trust) — this file's §(g) in plain words, for a holder
+rather than a judge running commands.

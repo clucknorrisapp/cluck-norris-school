@@ -59,6 +59,7 @@ const PAGES = [
   { path: "/hub/status", name: "Hub status (Z2 — what is live, where, and how reproducible)" },
   { path: "/hub/wallet", name: "Hub wallet look-up (AA1 — one wallet, every project)" },
   { path: "/hub/wallet/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", name: "Hub wallet look-up, pre-filled (AA1)" },
+  { path: "/hub/trust", name: "Hub trust boundary (AA5 — what this doesn't prove)" },
 ];
 const WIDTHS = [
   { width: 360, height: 780, label: "360×780" },

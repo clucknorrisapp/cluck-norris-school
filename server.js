@@ -8356,6 +8356,13 @@ app.get("/hub/verify", (req, res) => { res.sendFile(join(__dirname, "public", "h
 // a project id (it is also a reserved project id, hubRoutes.mount's reservedMints, above).
 app.get(["/hub/wallet", "/hub/wallet/:wallet"], (req, res) => { res.sendFile(join(__dirname, "public", "hub-wallet.html")); });
 
+// AA5 (Colosseum roadmap §11): the trust-boundary page — what the Hub does NOT prove, in plain
+// words. Static content, same reason it needs its own route as /hub/verify above: registered
+// BEFORE the generic /hub/:project pattern below, or "trust" would be read as a project id and
+// served hub.html instead. Meta is static (like for-projects.html) rather than the dynamic
+// per-request OG build below — there is no project/program/receipt to vary the text by.
+app.get("/hub/trust", (req, res) => { res.sendFile(join(__dirname, "public", "hub-trust.html")); });
+
 // ── Y4: shareable Hub pages — server-rendered Open Graph / Twitter Card meta (Colosseum roadmap
 // §9). One static branded image (public/og/hub-card.png, 1200x630 — no dynamic image generation,
 // the roadmap line, and served below with a long cache) shared by every route; only the <title>/

@@ -4182,5 +4182,6 @@
   "Only if the multiplier is above 1x": "只有当倍数高于1倍时才是",
   "A lock is a public promise not to move tokens for a period — an on-chain escrow you can go open and inspect yourself. It is not a transfer of ownership or a swap for something else. You remain the owner the entire time; you've only committed not to touch them until the date, which is exactly what makes the promise checkable in the first place.": "锁仓是一项公开的承诺，承诺在一段时间内不动用代币——一个你可以自己打开并查验的链上托管账户。它不是所有权的转移，也不是换成别的东西。你在整个过程中始终是所有者；你只是承诺在到期日之前不去动用它们，而这正是这项承诺之所以可以被核实的原因。",
   "Open a real receipt and check it, line by line": "打开一份真实收据，逐行核对",
-  "Reproduce it yourself, in your own browser": "在你自己的浏览器里，自行复现验证"
+  "Reproduce it yourself, in your own browser": "在你自己的浏览器里，自行复现验证",
+  "See what none of this proves": "看看这一切都无法证明什么"
 }
