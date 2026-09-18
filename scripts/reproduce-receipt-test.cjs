@@ -114,14 +114,16 @@ t("a program-version hash, when one exists, is carried through untouched", () =>
 
 section("3. projectReproducibility — the ratio, batch by batch");
 
-t("counts MATCH/MISMATCH/MISSING_INPUTS across every lock-to-earn batch plus every other program's payouts", () => {
+t("counts MATCH/MISMATCH/MISSING_INPUTS across every lock-to-earn batch plus every other (still-unimplemented-kind) program's payouts", () => {
   const days = { "2026-09-17T00": { at: 1000, credits: { [W.A]: "60", [W.B]: "60" } } };
   const good = mkBatch({ id: "good", at: 3000, amounts: { [W.A]: "60", [W.B]: "60" }, sentAt: 3100 });
   // batch2's recorded amount does not match what the periods actually add up to — a real bug this
   // ratio exists to catch, not a fixture bug: the amount is deliberately wrong.
   const bad = mkBatch({ id: "bad", at: 4000, amounts: { [W.A]: "999" }, sentAt: 4100 });
   const batches = { good, bad };
-  const otherPrograms = [{ id: "bc_1", kind: "buy-comp", payouts: [{ wallet: W.A, sig: SIG }, { wallet: W.B, sig: SIG }] }, { id: "bc_2", kind: "buy-comp", payouts: [{ wallet: W.A, sig: null }] }];
+  // "giveaway" here (not "buy-comp" — that kind got its own real reproduction below, X3) pins the
+  // still-generic fallback path for a kind this file does not (yet) reproduce.
+  const otherPrograms = [{ id: "bc_1", kind: "giveaway", payouts: [{ wallet: W.A, sig: SIG }, { wallet: W.B, sig: SIG }] }, { id: "bc_2", kind: "giveaway", payouts: [{ wallet: W.A, sig: null }] }];
   const rep = R.projectReproducibility({ batches, days, otherPrograms });
   const good1 = rep.batches.find((b) => b.batchId === "good"), bad1 = rep.batches.find((b) => b.batchId === "bad"), other = rep.batches.find((b) => b.batchId === "bc_1");
   assert.strictEqual(good1.total, 2); assert.strictEqual(good1.reproduced, 2); assert.strictEqual(good1.mismatched, 0);
@@ -278,6 +280,63 @@ t("CLI --offline, receipt-url form: a buy-comp receipt from an UNSEALED competit
     assert.strictEqual(r.status, 3, r.out);
     assert.ok(/not sealed/.test(r.out), r.out);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+section("7. X3 (docs/COLOSSEUM_ROADMAP.md §8) — the aggregate ratio counts sealed buy-comp rows too");
+
+// The shape hubProjectView(p).programs hands back for one buy-comp program (lib/hub/public.js
+// compView()) — the exact fields buyCompProgramRow() reads: sealed, terms, results (winners),
+// review (this wallet's rank inputs), payouts (an actual paid transaction).
+function sealedCompProgram({ id = "bc_1", amount = 13722.42, published = amount, sig = SIG } = {}) {
+  return {
+    id, kind: "buy-comp", sealed: true, terms: COMP_TERMS,
+    results: [{ rank: 1, wallet: W.A, amount }],
+    review: [{ wallet: W.A, tokensBought: 137224.2, value: null }],
+    payouts: sig ? [{ wallet: W.A, amountUi: published, sig }] : [],
+  };
+}
+
+t("a project with one lock-to-earn batch and one sealed comp — the ratio's total is both, and both reproduce", () => {
+  const days = { "2026-09-17T00": { at: 1000, credits: { [W.A]: "60" } } };
+  const batches = { good: mkBatch({ id: "good", at: 3000, amounts: { [W.A]: "60" }, sentAt: 3100 }) };
+  const otherPrograms = [sealedCompProgram()];
+  const rep = R.projectReproducibility({ batches, days, otherPrograms });
+  const lte = rep.batches.find((b) => b.batchId === "good"), comp = rep.batches.find((b) => b.batchId === "bc_1");
+  assert.strictEqual(lte.total, 1); assert.strictEqual(lte.reproduced, 1);
+  assert.strictEqual(comp.kind, "buy-comp"); assert.strictEqual(comp.total, 1); assert.strictEqual(comp.reproduced, 1); assert.strictEqual(comp.mismatched, 0);
+  assert.ok(!comp.note, "a sealed, reproducing comp carries no note");
+  assert.strictEqual(rep.overall.total, 2); assert.strictEqual(rep.overall.reproduced, 2);
+});
+
+t("a tampered comp row (the paid receipt disagrees with the sealed split) counts as mismatched, never smoothed over", () => {
+  const otherPrograms = [sealedCompProgram({ published: 99999 })];
+  const rep = R.projectReproducibility({ batches: {}, days: {}, otherPrograms });
+  const comp = rep.batches.find((b) => b.batchId === "bc_1");
+  assert.strictEqual(comp.total, 1); assert.strictEqual(comp.reproduced, 0); assert.strictEqual(comp.mismatched, 1);
+  assert.strictEqual(rep.overall.total, 1); assert.strictEqual(rep.overall.reproduced, 0);
+});
+
+t("an unsealed comp's rows are missingInputs \"not sealed\" — never run through the split at all", () => {
+  const p = sealedCompProgram(); p.sealed = false;
+  const rep = R.projectReproducibility({ batches: {}, days: {}, otherPrograms: [p] });
+  const comp = rep.batches.find((b) => b.batchId === "bc_1");
+  assert.strictEqual(comp.total, 1); assert.strictEqual(comp.reproduced, 0); assert.strictEqual(comp.missingInputs, 1);
+  assert.strictEqual(comp.note, "not sealed");
+  assert.strictEqual(rep.overall.total, 1); assert.strictEqual(rep.overall.reproduced, 0);
+});
+
+t("a sealed comp winner not yet paid still counts (sealing, not payment, is the reproducibility gate) and reproduces from the sealed claim itself", () => {
+  const p = sealedCompProgram({ sig: null });   // no payout row at all — the sealed result is the published claim
+  const rep = R.projectReproducibility({ batches: {}, days: {}, otherPrograms: [p] });
+  const comp = rep.batches.find((b) => b.batchId === "bc_1");
+  assert.strictEqual(comp.total, 1); assert.strictEqual(comp.reproduced, 1); assert.strictEqual(comp.missingInputs, 0);
+});
+
+t("a comp with zero winners contributes nothing to the ratio (never a phantom zero-of-zero row)", () => {
+  const p = sealedCompProgram(); p.results = [];
+  const rep = R.projectReproducibility({ batches: {}, days: {}, otherPrograms: [p] });
+  assert.strictEqual(rep.batches.find((b) => b.batchId === "bc_1"), undefined);
+  assert.deepStrictEqual(rep.overall, { total: 0, reproduced: 0 });
 });
 
 (async () => {

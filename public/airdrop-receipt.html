@@ -88,11 +88,11 @@
         '<div class="stat-row">' +
           '<div class="stat"><div class="big">' + d.count + '</div><div class="lbl">RECIPIENTS</div></div>' +
           '<div class="stat"><div class="big">' + d.verifiedCount + '</div><div class="lbl">OBSERVED ON-CHAIN</div></div>' +
-          '<div class="stat"><div class="big">' + esc(d.total) + '</div><div class="lbl">' + symbol + ' PAID</div></div>' +
+          '<div class="stat"><div class="big">' + esc(d.total) + '</div><div class="lbl">' + symbol + ' <span>PAID</span></div></div>' +
         '</div>' +
         '<div class="small" style="margin-top:12px">' +
           'Mint <span class="mono">' + esc(d.mint) + '</span><br>' +
-          'Created ' + esc(when) + '<br><br>' +
+          'Created <span>' + esc(when) + '</span><br><br>' +
           'Each row below is <b>a signature the airdrop tool sent, checked against the chain</b>: the ' +
           'transaction it names actually moved this many ' + symbol + ' to this wallet. "Not verified" ' +
           'means the chain did not show that transfer landing — the row is shown anyway, with why. This ' +

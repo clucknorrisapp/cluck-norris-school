@@ -445,14 +445,15 @@ for (const fam of FAMILIES) {
     };
     if (usedNotInAnyDict.length) hasWarnFindings = true;
 
-    // Hub Colosseum E8 (docs/COLOSSEUM_ROADMAP.md §7): unlike the rest of `base` (informational —
-    // most of the site leans on machine translation, per i18n.js's own comment), the five Project
-    // Hub pages are held to the same GATING bar as locker-room.html — a static/template string
-    // used on one of them with no entry in ANY of the six base dictionaries fails the audit,
-    // naming the exact key and every language it is missing from. Scoped to just these five files
-    // (not all of `public/`) so this doesn't drag the hundreds of un-curated tool pages into
-    // gating — that would make CI red for pages nobody has curated on purpose.
-    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html'];
+    // Hub Colosseum E8 (docs/COLOSSEUM_ROADMAP.md §7), extended for X4 (§8) with the airdrop
+    // receipt page: unlike the rest of `base` (informational — most of the site leans on machine
+    // translation, per i18n.js's own comment), these Project Hub pages are held to the same
+    // GATING bar as locker-room.html — a static/template string used on one of them with no entry
+    // in ANY of the six base dictionaries fails the audit, naming the exact key and every language
+    // it is missing from. Scoped to just these files (not all of `public/`) so this doesn't drag
+    // the hundreds of un-curated tool pages into gating — that would make CI red for pages nobody
+    // has curated on purpose.
+    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html'];
     const hubKeys = new Set();
     const hubFilesRead = [];
     for (const f of HUB_FILES) {
