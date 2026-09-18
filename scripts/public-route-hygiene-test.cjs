@@ -49,6 +49,7 @@ async function req(method, p, { ip, headers } = {}) {
 // 300s the reproducibility-class computations/receipts, 3600s schemas + the built bundle.
 const ROUTES = [
   { name: "hub reproducibility", path: `/api/hub/clkn/reproducibility`, cache: "public, max-age=300" },
+  { name: "hub reproducibility history", path: `/api/hub/clkn/reproducibility/history`, cache: "public, max-age=300" },
   { name: "hub batch/inputs", path: `/api/hub/clkn/batch/nope/inputs`, cache: "public, max-age=60", cors: true },
   { name: "hub buy-comp standings", path: `/api/hub/clkn/p/nope/standings`, cache: "public, max-age=60", cors: true },
   { name: "hub receipt (r/:sig)", path: `/api/hub/clkn/r/${GOOD_SIG}`, cache: "public, max-age=300", cors: true },
@@ -168,6 +169,9 @@ const ROUTES = [
     const otherHeavy = await req("GET", `/api/hub/clkn/p/nope/standings`, { ip: BURST_IP });
     ok("the same IP is also refused on a different heavy route (one shared bucket)", otherHeavy.status === 429, String(otherHeavy.status));
     ok("…and a route that answers with CORS still carries it on the 429", otherHeavy.headers.get("access-control-allow-origin") === "*", String(otherHeavy.headers.get("access-control-allow-origin")));
+    // CC4's history route shares the same bucket as its sibling reproducibility route.
+    const historyHeavy = await req("GET", `/api/hub/clkn/reproducibility/history`, { ip: BURST_IP });
+    ok("the reproducibility history route is on the same shared bucket too", historyHeavy.status === 429, String(historyHeavy.status));
 
     // A normal page load is unaffected: the light per-page reads on the SAME (rate-limited) IP.
     const lightHub = await req("GET", `/api/hub`, { ip: BURST_IP });
@@ -192,8 +196,11 @@ const ROUTES = [
     const heavyPaths = [...src.matchAll(/app\.get\("([^"]+)",\s*rateLimit\("hubheavy"/g)].map((m) => m[1]);
     // AA2 (docs/COLOSSEUM_ROADMAP.md §11) added the evidence-bundle route to this same bucket —
     // it walks the same batch the /inputs route above it does, so it belongs on the same limiter.
-    // BB3 added the two badge routes (they walk every ledger). 5 original + bundle + 2 badges = 8.
-    ok("found the 8 heavy routes wired to the dedicated limiter", heavyPaths.length === 8, JSON.stringify(heavyPaths));
+    // BB3 added the two badge routes (they walk every ledger). CC4 added the reproducibility
+    // history route (§13) — a read of stored rows, cheap, but the same class as its sibling on
+    // the line right above it, and there is no established light tier to break new ground with.
+    // 5 original + bundle + 2 badges + 1 history = 9.
+    ok("found the 9 heavy routes wired to the dedicated limiter", heavyPaths.length === 9, JSON.stringify(heavyPaths));
     for (const p of heavyPaths) ok(`${p} is not a store-edition contract route`, !STORE_API_RE.test(p), p);
 
     // Live confirmation for one representative store-edition route: a burst well under its own

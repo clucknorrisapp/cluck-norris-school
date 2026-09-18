@@ -37,6 +37,12 @@
   .prog-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap; margin-bottom:6px; }
   .prog-head h2 { font-family:var(--disp); font-weight:400; font-size:20px; letter-spacing:.5px; color:var(--text); }
   .chip { font-family:var(--disp); font-size:11px; letter-spacing:1.5px; padding:4px 9px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; white-space:nowrap; }
+  .chip.ok { color:var(--green); border-color:rgba(16,185,129,.35); }
+  .chip.bad { color:#FCA5A5; border-color:rgba(239,68,68,.4); }
+  /* Sparkline (Colosseum roadmap §13 CC4) — the SVG itself is drawn by /hub-sparkline.js at
+     width:100% so it never forces horizontal scroll on a narrow phone; this only spaces it. */
+  .spark-wrap { margin-top:8px; }
+  .spark-alt { font-size:11px; color:var(--sub); margin-top:4px; line-height:1.5; }
   .badge-dryrun { display:inline-flex; align-items:center; gap:6px; font-family:var(--disp); font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#FCA5A5; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.35); border-radius:999px; padding:5px 12px; margin-bottom:10px; }
   .fact { font-size:12.5px; color:var(--subtext, #9CA3AF); line-height:1.55; margin-top:6px; }
   .fact b { color:var(--text); }
@@ -69,6 +75,7 @@
 </main>
 
 <script src="/cluck-util.js"></script>
+<script src="/hub-sparkline.js"></script>
 <script>
 (function () {
   var esc = CluckUtil.esc;
@@ -120,7 +127,22 @@
     return '<div class="fact"><b>Holders</b> — ' + num(snap.holderCount) + ' as of the snapshot taken ' + ts(snap.at) + '.</div>';
   }
 
-  function projectCard(p, rep, snap) {
+  // Colosseum roadmap §13 CC4 — the daily append-only history behind the ratio above: a small
+  // sparkline (rendered by /hub-sparkline.js, shared with hub.html so this logic exists once)
+  // plus the plain-words text alternative and whether the hash chain behind it still verifies.
+  // Omitted entirely when nothing has been recorded yet (a fresh box, before the first tick).
+  function historySection(hist) {
+    if (!hist || !hist.days || !hist.days.length) return '';
+    var chainWord = hist.chainOk === false
+      ? '<span class="chip bad" title="a stored record\'s hash — or its link to the one before it — no longer recomputes">chain broken</span>'
+      : '<span class="chip ok">chain ok</span>';
+    var alt = HubSparkline.summarize(hist.days);
+    return '<div class="spark-wrap" data-clkn-avoid-kids="1"><div class="row-flex" style="justify-content:space-between"><span class="small">Reproducibility over time</span> ' + chainWord + '</div>' +
+      HubSparkline.render(hist.days, { esc: esc, ariaLabel: alt }) +
+      '<div class="spark-alt">' + esc(alt) + '</div></div>';
+  }
+
+  function projectCard(p, rep, snap, hist) {
     var n = Number(p.programs || 0), r = Number(p.receipts || 0);
     return '<div class="card" id="proj-' + esc(p.id) + '">' +
       (p.dryRun ? '<div class="badge-dryrun" data-clkn-avoid="1">DRY RUN — terms not yet agreed, nothing accrues or pays</div>' : '') +
@@ -129,7 +151,7 @@
       '<div class="stat"><div class="v">' + num(n) + '</div><div class="l">Program' + (n === 1 ? '' : 's') + '</div></div>' +
       '<div class="stat"><div class="v">' + num(r) + '</div><div class="l">Receipt' + (r === 1 ? '' : 's') + '</div></div>' +
       '</div>' +
-      reproLine(rep) + holdersLine(snap) + commitmentLine() +
+      reproLine(rep) + holdersLine(snap) + historySection(hist) + commitmentLine() +
       '<div class="proj-more" style="margin-top:8px"><a href="/hub/' + esc(p.id) + '">Open ' + esc(p.label) + '’s page →</a></div>' +
       '</div>';
   }
@@ -146,6 +168,7 @@
         return Promise.all([
           j('/api/hub/' + encodeURIComponent(p.id) + '/reproducibility'),
           j('/api/holders/snapshots?mint=' + encodeURIComponent(p.mint)),
+          j('/api/hub/' + encodeURIComponent(p.id) + '/reproducibility/history'),
         ]);
       }));
       var html = buildLine(build) + proofBox() +
@@ -154,7 +177,8 @@
           var rep = repAndSnap[i][0];
           var snapAll = repAndSnap[i][1];
           var snap = snapAll && snapAll.snapshots && snapAll.snapshots.length ? snapAll.snapshots[snapAll.snapshots.length - 1] : null;
-          return projectCard(p, rep, snap);
+          var hist = repAndSnap[i][2];
+          return projectCard(p, rep, snap, hist);
         }).join('') +
         (projects.length ? '' : '<div class="card"><div class="fact">No projects on record yet.</div></div>') +
         '<div class="footer-links" data-clkn-avoid="1"><a href="/hub">← all projects</a></div>';

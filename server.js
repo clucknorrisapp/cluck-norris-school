@@ -8460,6 +8460,28 @@ app.get("/api/hub/:project/reproducibility", rateLimit("hubheavy", { windowMs: 6
     return res.status(200).json(hubReproducibilityFor(id, p));
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// ── CC4 (Colosseum roadmap §13): the dated series behind the ratio above — a daily append-only,
+// hashed record per project (lib/reproducibility-history.js, written by the tick registered next
+// to the other Hub schedulers below), so the badge/ratio has a TREND and a regression is visible
+// the day it happens rather than only in the current snapshot. Same route shape/segment count as
+// /api/hub/:project/batch/:batchId/inputs above (4 segments vs :project's 3) — Express matches by
+// exact segment count with no wildcard in :project, so this cannot be swallowed by the route
+// above it; verified with a live boot in scripts/reproducibility-history-test.cjs regardless,
+// per the roadmap's own instruction to test that rather than assume it. `hubheavy` (not a new
+// "light" tier): recomputing the chain's hashes is cheap (<=90 small records), but it is a read
+// of the same class as its siblings on this line and there is no established light tier for a
+// Hub reproducibility route to break new ground with — see scripts/public-route-hygiene-test.cjs.
+app.get("/api/hub/:project/reproducibility/history", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const id = String(req.params.project || "").toLowerCase();
+  const p = hubProjects()[id];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const days = reproHistory.series(kv, id);
+    const chain = reproHistory.verifyChain(kv, id);
+    return res.status(200).json({ ok: true, project: id, days, chainOk: chain.ok });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 // ── BB3 (Colosseum roadmap §12): a reproducibility badge that is COMPUTED, not typed. Both
 // routes below sum hubReproducibilityFor() over every registered, non-demo project — the exact
 // same set /api/hub lists and hub-status.html walks (hubProjects() never contains "demo"/"demo-b";
@@ -8851,6 +8873,41 @@ hubRoutes.mount(app, {
   },
 });
 hubRoutes.startScheduler({ kv, scanDeps: async () => hubScanDeps, alert: hubAlert });
+
+// ── CC4 (Colosseum roadmap §13): the daily reproducibility-history tick — registered here, next
+// to the Hub's own scheduler above, UNCONDITIONALLY (not inside the TELEGRAM_BOT_TOKEN/CHAT_ID
+// gate the alerts/lessons/radar block needs — CLAUDE.md: that whole block only starts with both
+// set, and this must run on every boot regardless). Once at boot and then every 6 hours, for
+// every registered non-demo project (hubProjects() never contains "demo"/"demo-b" — the fixture
+// module is separate and never registered in the real kv registry), write today's UTC-day record
+// if one doesn't already exist. lib/reproducibility-history.js's own day_exists refusal in
+// record() IS the "never twice in the same UTC day per project" guard — no separate lock needed.
+// Reuses hubReproducibilityFor() — the exact function the reproducibility route and the badge
+// already share a 5-minute cache with — so this can never compute a different number than what a
+// reader sees if they hit that route the same moment. Never throws out of the interval; logs one
+// line per project actually written, and stays silent (not an error) on a day already recorded.
+// The two env overrides exist ONLY for scripts/reproducibility-history-test.cjs to observe two
+// ticks without waiting six hours — same idiom as ROSE_POLL_MS/BUYBOT_POLL_MS elsewhere in this
+// file; production never sets either and gets the real defaults.
+const reproHistory = require("./lib/reproducibility-history");
+const HUB_REPRO_HIST_TICK_MS = Math.max(3000, parseInt(process.env.HUB_REPRO_HIST_TICK_MS || String(6 * 60 * 60 * 1000), 10) || (6 * 60 * 60 * 1000));
+const HUB_REPRO_HIST_BOOT_MS = Math.max(0, parseInt(process.env.HUB_REPRO_HIST_BOOT_MS || "60000", 10) || 0);
+function hubReproHistoryTick(reason) {
+  const day = new Date().toISOString().slice(0, 10);
+  let projects = {};
+  try { projects = hubProjects(); } catch (e) { console.warn("[hub-repro-history] " + reason + ": could not list projects — " + (e && e.message)); return; }
+  for (const [id, p] of Object.entries(projects)) {
+    try {
+      const data = hubReproducibilityFor(id, p);
+      const missingInputs = (data.batches || []).reduce((t, b) => t + (Number(b && b.missingInputs) || 0), 0);
+      const r = reproHistory.record(kv, { projectId: id, day, reproduced: data.overall.reproduced, total: data.overall.total, missingInputs, at: Date.now() });
+      if (r.ok) console.log(`[hub-repro-history] ${id} ${day}: ${data.overall.reproduced}/${data.overall.total} (${missingInputs} missing input${missingInputs === 1 ? "" : "s"})`);
+      else if (r.reason !== "day_exists") console.warn(`[hub-repro-history] ${id} ${day}: write did not verify (check DATA_DIR)`);
+    } catch (e) { console.warn(`[hub-repro-history] ${id}: ${(e && e.message) || e}`); }
+  }
+}
+setInterval(() => { try { hubReproHistoryTick("timer"); } catch (e) { console.warn("[hub-repro-history] tick: " + (e && e.message)); } }, HUB_REPRO_HIST_TICK_MS);
+setTimeout(() => { try { hubReproHistoryTick("boot"); } catch (e) { console.warn("[hub-repro-history] boot tick: " + (e && e.message)); } }, HUB_REPRO_HIST_BOOT_MS);
 
 // ── Traction (Colosseum W9 part 1) — owner-only READ of the product OUTCOME counters ──────────
 // Everything here is derived from durable stores by lib/traction.js; this route reads, it never
@@ -17500,6 +17557,17 @@ app.get("/cluck-gate.js", (req, res) => {
   res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.type("application/javascript");
   res.sendFile(join(__dirname, "public", "cluck-gate.js"));
+});
+
+// Hub reproducibility sparkline (Colosseum roadmap §13 CC4) — shared by hub-status.html and
+// hub.html; the same public/-is-not-mounted-directly trap as the modules above (a no-build boot
+// served this file's 404 page as text/plain, which the browser then refused to execute as a
+// script — found the same way scripts/hub-a11y-test.cjs found the nav bundle's gap, this time by
+// scripts/reproducibility-history-test.cjs's own rendered-page check).
+app.get("/hub-sparkline.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "hub-sparkline.js"));
 });
 
 // Shared airdrop machinery. Explicit routes (rather than relying on the vite

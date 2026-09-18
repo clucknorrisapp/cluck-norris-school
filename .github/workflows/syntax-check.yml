@@ -262,6 +262,15 @@ jobs:
       # project view's holders fact line appears only when a snapshot exists.
       - name: Holder snapshot history (append-only, hashed, read-only)
         run: node scripts/holders-snapshot-test.cjs
+      # Colosseum roadmap §13 CC4: the daily reproducibility history behind the badge/ratio — same
+      # append-only, hashed pattern as the holder snapshots above (one record per project per UTC
+      # day, refused on a second write, a hash chain that recomputes end to end, a tampered record
+      # breaks it, the 90-day cap drops the oldest first, a skipped day is a gap, never
+      # interpolated). Also boots a real server (the tick's own env-only fast-interval overrides)
+      # to prove the tick writes today's record exactly once and /hub/status renders the
+      # sparkline with its aria-label.
+      - name: Reproducibility history (append-only daily record, hash chain, sparkline)
+        run: REPRO_HISTORY_TEST_PORT=3317 node scripts/reproducibility-history-test.cjs
       # Colosseum roadmap §11 AA3: the snapshot diff — entered/exited/held over the RECORDED
       # top-25 only (never a full holder-base diff, per lib/holders-snapshot.js's own header). A
       # self-diff is empty, the BigInt sums reconcile, and the route (400/404/200) matches its
