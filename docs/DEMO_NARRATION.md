@@ -68,6 +68,29 @@ it.*
 
 ---
 
+## Reference captures — the reviewer's path (BB2, not part of the ≤3:00 video)
+
+`docs/DEMO_STORYBOARD.md` Part 3's Shots 11–17 aren't in the demo video — they're reference
+captures of the pages `docs/HUB_VERIFY.md`'s "reviewer's path" paragraph now names in order, for
+whoever walks that path without a screen recording to follow. One line per shot, same style as
+the table above, for whoever narrates a screen-share of the reviewer's path out loud:
+
+| Shot | Screen | Line |
+|---|---|---|
+| 11 | `/hub/status` | *"Every project this platform runs today, its programs, its reproducibility ratio, and the exact commit the running server was built from."* |
+| 12 | `/hub/judge` | *"One page mapping each judging criterion to the exact URL to open and the test that pins the claim — built straight from the same markdown file, so the two can't drift."* |
+| 13 | `/hub/trust` | *"What a hash and a receipt prove, and what they don't, in plain words — so nobody reads more into a number than it earns."* |
+| 14 | `/hub/wallet` | *"One address, every project — starting from nothing entered."* |
+| 15 | `/hub/wallet/<CLKN mint>` | *"And here's the honest empty state: no Hub program has ever seen this wallet. Not an error — a real answer."* |
+| 16 | `/hub/verify`, bundle dropped | *"Drop the whole evidence bundle instead of two separate files — the bundle's own hash matches, intact. These two receipts say MISSING_INPUTS, because this fixture's batch runs on a ledger model the reproduction script doesn't read from yet — stated plainly, not hidden."* |
+| 17 | `/holders` Compare panel | *"And the same append-only history idea applied to a token's holder list: entered, exited, held — over the top 25 each snapshot recorded, never a claim about the full list."* |
+
+Line 16's screen also shows a "Program-version hash recompute: does not match" line that is
+**not** part of this narration and should not be read aloud or shown in a public cut — it is a
+real, live finding (a structural gap in what the bundle route embeds, not tampering) documented in
+`docs/DEMO_STORYBOARD.md`'s incidental-finding note and flagged in `docs/CODEX_REVIEWER_BRIEF.md`
+Round 3, not yet fixed.
+
 ## Related
 
 - Shot list, capture filenames, and the honesty notes behind each line: `docs/DEMO_STORYBOARD.md`

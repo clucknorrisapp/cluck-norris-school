@@ -232,7 +232,9 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
   checks on the new public reads; roadmap Extension 5. PR #347.
 - **Colosseum batch 8** — the phone and accessibility pass on the public Hub pages with a CI gate
   (and the no-build-boot fix it exposed: the sitewide nav, i18n, read-aloud and theme files now have
-  explicit routes); the demo storyboard with 20 real captures; Launch Readiness (Addendum A: a
+  explicit routes); the demo storyboard with 22 real captures (`docs/DEMO_STORYBOARD.md`'s own
+  inventory count, grown since first written — see that doc's "Capture inventory" table);
+  Launch Readiness (Addendum A: a
   derived checklist and reward-budget planner, and a known funding shortfall can no longer be armed);
   airdrop per-drop receipts with every row verified against the chain, including the transfer's
   source; the public Buy Special standings and hold-through proof (sealed lists hashed, unsealed

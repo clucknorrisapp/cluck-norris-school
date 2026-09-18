@@ -13,6 +13,20 @@ it needs a wallet, a login, or anything from us beyond an HTTP request.
 Written 2026-09-18. Re-read the note below before you start — some of these commands run against
 production today, and some still run only on staging, honestly labelled either way.
 
+**The reviewer's path, in order.** If you have fifteen minutes rather than two, this is the
+sequence a judge or a second reviewer should actually click through, each stop building on the
+last: [`/hub/judge`](https://clucknorris.app/hub/judge) (the map — which URL answers which
+judging criterion, and the test that pins each claim) → [`/hub/status`](https://clucknorris.app/hub/status)
+(what is live, on which host, at which commit, and how reproducible today) →
+[`/hub/demo`](https://clucknorris.app/hub/demo) (the whole loop once, no wallet, on a labelled
+dry-run fixture) → [`/hub/verify`](https://clucknorris.app/hub/verify) (reproduce one receipt
+yourself) → **the evidence bundle** (§ below — the same reproduction, saved once, checked
+offline forever) → [`/hub/wallet`](https://clucknorris.app/hub/wallet) (the same public record,
+read by address instead of by project) → [`/hub/trust`](https://clucknorris.app/hub/trust) (what
+none of the above proves, stated plainly). Everything after this paragraph is the detailed,
+runnable version of the middle two stops (`/hub/verify` and the bundle) for a reader who wants to
+run the commands themselves rather than click through the pages.
+
 ## What's live where, as of today (2026-09-18)
 
 Railway auto-deploys both branches; the owner promotes `develop` → `main` by hand

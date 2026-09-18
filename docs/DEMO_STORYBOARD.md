@@ -5,7 +5,8 @@ Two separate deliverables, per `docs/COLOSSEUM_OFFICIAL_RULES_NOTES.md`'s submis
 target 2:30)** that is never screen-recorded. Captures for the demo live in
 `docs/demo/2026-09-18/` — real screenshots of the real, running app (`npm run build` then
 `node server.js`), captured with Playwright at phone width (390×844) and desktop (1280×800). File
-sizes: 42–295 KB each, all under the 300 KB target; the full set totals under 3 MB.
+sizes: 42–295 KB each, all under the 300 KB target; the full set (Part 1's 23 files plus Part 3's
+14 reference captures, BB2) totals under 5 MB.
 
 **Every screen in this storyboard carries a visible DRY RUN badge, and every reference to the
 demo project or to POKEAHOE says "dry run" — neither ships a program version a real fund could be
@@ -206,9 +207,98 @@ seat, or simply visibility to the projects the Hub is built for); close on the l
 
 ---
 
+## Part 3 — reference captures for the reviewer's path (BB2, `docs/COLOSSEUM_ROADMAP.md` §12)
+
+Not part of either video — these are the pages `docs/HUB_VERIFY.md`'s "reviewer's path" paragraph
+now names in order, captured so a second reviewer or a judge can see what each stop actually
+renders before clicking through themselves. Same rules as Part 1: real, running app
+(`npm run build` then `node server.js`, port 3297, a fresh temp `DATA_DIR`), Playwright at
+390×844 and 1280×800, `type: 'png'`, clipped to the viewport (not full-page) to stay under the
+size budget on pages with a lot of content. Continuing the shot numbering after Part 1's ten.
+
+**Shot 11 — `/hub/status`.** Captures: `hub-status.desktop.png` / `.mobile.png`. What it shows:
+every registered project, its programs and reproducibility ratio, next to the exact git commit
+and branch the running server was built from (`GET /api/build`) — a DRY RUN badge on the demo and
+POKEAHOE rows.
+
+**Shot 12 — `/hub/judge`.** Captures: `hub-judge.desktop.png` / `.mobile.png`. What it shows: the
+six Colosseum judging criteria, each mapped to the exact URL to open and the test file that pins
+the claim — this page is a byte-identical render of `docs/JUDGE_GUIDE.md` (`scripts/build-judge-page.cjs`).
+
+**Shot 13 — `/hub/trust`.** Captures: `hub-trust.desktop.png` / `.mobile.png`. What it shows: the
+trust-boundary page in plain words — what a hash and a receipt prove, and what they don't — kept
+in step with `docs/HUB_VERIFY.md` §(g) by `scripts/hub-trust-doc-test.cjs`'s boundary-marker check.
+
+**Shot 14 — `/hub/wallet`, empty.** Captures: `hub-wallet-empty.desktop.png` / `.mobile.png`.
+What it shows: the bare lookup page before any address is entered — the honest starting state,
+no wallet connect.
+
+**Shot 15 — `/hub/wallet/<address>`, the "no program has seen this wallet" example.** Captures:
+`hub-wallet-clkn.desktop.png` / `.mobile.png`. The roadmap's own demo/fixture wallet
+(`scripts/hub-wallet-test.cjs`'s "seen in both projects" address) lives only inside that test's
+own throwaway registry — by design, a fixture project can never leak into the real `/hub/wallet`
+roll-up (AA1's own contract). So the honest example on the real, running app is the **CLKN mint
+address** itself, which the real registry has never seen: `GET /api/hub/wallet/DW6DF2mjtyx67…3CBAGS`
+returns `{"projects":[],"seenIn":0}` — confirmed live, and captured exactly as returned, not staged.
+
+**Shot 16 — `/hub/verify`, a dropped evidence bundle.** Captures: `hub-verify-bundle.desktop.png`
+/ `.mobile.png`. The bundle downloaded live from `GET /api/hub-demo/demo/batch/demo-batch-1/bundle`
+(project id `demo`, batch id `demo-batch-1` — `lib/hub/demo-fixture.js`'s own ids), dropped onto
+the "From saved files (offline)" tab's file input. What it shows, both true and both worth
+narrating out loud rather than cropping around: **BUNDLE HASH: MATCHES** (the file is intact), and
+the batch's two receipts reporting **MISSING_INPUTS** — expected, `HUB_VERIFY.md` §(g)'s
+`journal-not-live` boundary already states the demo fixture's batch runs on the not-yet-live
+Addendum-B ledger model that `lib/hub/reproduce.js` doesn't read from. See the incidental finding
+below for a THIRD thing this capture shows that is not yet documented anywhere.
+
+**Shot 17 — `/holders`, the Compare panel (AA3).** Captures: `holders-compare.desktop.png` /
+`.mobile.png`, clipped to the `#compareCard` element only (not the whole page). Two snapshots for
+a clearly-fabricated demo mint (never a real token; see the production note below) were seeded
+directly via `lib/holders-snapshot.js`'s real `appendSnapshot()` — one wallet held with a growing
+balance, one unchanged, one exiting, two new entrants — so `runCompare()` renders real ENTERED /
+EXITED / HELD rows from real (if synthetic) data, not a mock-up. **Why this needed a workaround,
+stated plainly:** the top half of `/holders` (the live holder breakdown) needs a real RPC call
+this environment cannot make (`Wallet X-Ray`/`Holders`-class tools are excluded from the no-network
+rule for exactly this reason), but the Compare panel two cards below it is pure `kv` reads
+(`GET /api/holders/snapshots`, `GET /api/holders/snapshots/:a/diff/:b` — no RPC at all) gated only
+by its parent `.result` container's `show` class, which the RUN button normally sets after a live
+snapshot completes. The capture script set that one class directly and called the page's own
+`loadHolderHistory()` function — the same code path the RUN button calls, minus the RPC-backed
+top section — rather than fabricate the panel's HTML by hand. Production note: the seeded mint is
+a fabricated address (`Df8RdWTsNxXvJFwWfCDMfjygfgZLPL4ZRqTuuyDpy5o9`, derived from a
+`clkn-storyboard-holders:` seed string, never a real token) written only to this capture's throwaway
+`DATA_DIR`, discarded after the shot — no real mint's holder-snapshot history was touched.
+
+---
+
+## An incidental finding, out of this task's scope (BB2)
+
+Dropping the demo evidence bundle onto `/hub/verify` (Shot 16 above) surfaces a line neither
+`HUB_VERIFY.md` nor any existing test documents: **"Program-version hash recompute: does not
+match — computed …"**, on an untampered, honestly-built bundle. Traced it: the bundle route
+(`server.js`, both `/api/hub/:project/batch/:batchId/bundle` and its demo twin) builds the
+bundle's `program` field as `{ ...hubPublic.programVersionView(p.version), $schema }`.
+`programVersionView()` (`lib/hub/public.js` ~289) keeps only
+`{version, effectiveFrom, effectiveTo, hash, terms, commitment}` — it drops `projectId, mint,
+rewardMint, rewardDecimals, rewardTokenProgram, fundingResponsibility, signer, exclusions`, every
+one of which `versionRecord()` (`lib/hub/project.js` ~181) hashed when the version was created.
+Confirmed directly in Node: `verifyVersionHash(fullInternalVersion)` → `true`;
+`verifyVersionHash(programVersionView(fullInternalVersion))` → `false`, on the exact same,
+never-edited version. `public/hub-verify.html`'s `reproduceFromBundle()` feeds precisely that
+reshaped field into the same check the page runs for a plain URL-paste, so **every bundle drop,
+for every project, will print this false "does not match" line** — not a sign of tampering, a
+structural gap between what the bundle route embeds and what the hash-check function needs. This
+is a real, live, reproducible finding (screenshotted, not staged), flagged in
+`docs/CODEX_REVIEWER_BRIEF.md`'s Round 3 (Y1/AA2) for whoever owns `lib/hub/bundle.js` /
+`server.js`'s bundle routes next — not fixed here, since fixing product code wasn't in scope for
+this docs/capture task, matching the precedent set by the 1970-timestamp finding above.
+
+---
+
 ## Capture inventory
 
-All files in `docs/demo/2026-09-18/` (24 PNGs + 1 terminal PNG = 25 files, 42–295 KB each):
+All files in `docs/demo/2026-09-18/` (24 PNGs + 1 terminal PNG = 25 files, 42–295 KB each) plus 14
+new reference captures for BB2's reviewer-path shots (Shots 11–17 above, all under 300 KB):
 
 | File | Viewport | What it shows |
 |---|---|---|
@@ -226,6 +316,13 @@ All files in `docs/demo/2026-09-18/` (24 PNGs + 1 terminal PNG = 25 files, 42–
 | `school-report-card.{mobile,desktop}.png` | both | `/school#lesson=lp` after passing the exam 5/5 — the real post-quiz report card |
 | `hub-real-explain-block.{mobile,desktop}.png` | both, full page | a real (non-fixture) receipt's "How this number was computed" panel, expanded — see the honesty note above about what this project is |
 | `reproduce-receipt-terminal.png` | one, terminal-width | a real, unedited run of `scripts/reproduce-receipt.cjs --offline`, MATCH |
+| `hub-status.{mobile,desktop}.png` | both, viewport | `/hub/status` (Shot 11) |
+| `hub-judge.{mobile,desktop}.png` | both, viewport | `/hub/judge` (Shot 12) |
+| `hub-trust.{mobile,desktop}.png` | both, viewport | `/hub/trust` (Shot 13) |
+| `hub-wallet-empty.{mobile,desktop}.png` | both, viewport | `/hub/wallet`, no address entered (Shot 14) |
+| `hub-wallet-clkn.{mobile,desktop}.png` | both, viewport | `/hub/wallet/<CLKN mint>` — the honest "no program has seen this wallet" example (Shot 15) |
+| `hub-verify-bundle.{mobile,desktop}.png` | both, viewport, scrolled to the result | `/hub/verify` with the demo evidence bundle dropped (Shot 16) — see the incidental finding above |
+| `holders-compare.{mobile,desktop}.png` | both, clipped to `#compareCard` | `/holders` Compare panel over two seeded snapshots (Shot 17) |
 
 **How the extra receipt was produced (for the record).** `/hub/demo`'s own fixture receipt page
 (`public/hub-demo.html`) does not implement the "How this number was computed" `<details>` element
