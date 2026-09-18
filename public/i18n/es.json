@@ -1647,5 +1647,11 @@
   "OBSERVE WHAT I BROADCAST": "OBSERVAR LO QUE TRANSMITÍ",
   "A browser-signed payout is {state} for this batch.": "Un pago firmado desde el navegador está en estado {state} para este lote.",
   "Settled — every row this payout named is fully paid.": "Liquidado — todas las filas que este pago nombró quedaron pagadas por completo.",
-  "Record the SENT — NOT RECORDED rows first (buttons in the table). Signing again would pay them twice.": "Registra primero las filas SENT — NOT RECORDED (botones en la tabla). Firmar de nuevo las pagaría dos veces."
+  "Record the SENT — NOT RECORDED rows first (buttons in the table). Signing again would pay them twice.": "Registra primero las filas SENT — NOT RECORDED (botones en la tabla). Firmar de nuevo las pagaría dos veces.",
+  "a browser-signed payout is {state} for this batch": "un pago firmado desde el navegador está en estado {state} para este lote",
+  "Record the SENT — NOT RECORDED rows first (buttons in the table). Sending again would pay them twice.": "Registra primero las filas SENT — NOT RECORDED (botones en la tabla). Enviar de nuevo las pagaría dos veces.",
+  "Record the SENT — NOT RECORDED rows first. Closing now would return them to owed and pay them twice.": "Registra primero las filas SENT — NOT RECORDED. Cerrar ahora las devolvería a adeudadas y las pagaría dos veces.",
+  "START A FRESH SIGN-REQUEST": "INICIAR UNA NUEVA SOLICITUD DE FIRMA",
+  "Starting a fresh sign-request…": "Iniciando una nueva solicitud de firma…",
+  "Fresh sign-request issued.": "Nueva solicitud de firma emitida."
 }

@@ -557,6 +557,83 @@ t("no OBSERVE button when live but nothing was ever broadcast (ROW_STATUS empty)
   assert.strictEqual(env.dom.els.has("observeBroadcastBtn"), false);
 });
 
+// ── P1-A ─────────────────────────────────────────────────────────────────────────────────────
+section("P1-A — observeAll() chunks a large sign-request across multiple observe() calls, each within the server's wallets×signatures bound");
+
+t("a 90-row sign-request yields multiple observe() calls, none exceeding the per-call signature bound", async () => {
+  const N = 90;
+  const wallets = Array.from({ length: N }, (_, i) => fakeAddr(100 + i));
+  const batchRows = wallets.map((w) => ({ wallet: w, raw: "1000000000", sent: false, sig: null, pending: false, manual: false }));
+  const srRows = wallets.map((w) => ({ wallet: w, ok: true, source: FUND, destination: fakeAddr(9), amountRaw: "1000000000" }));
+  const observeCallSizes = [];
+  const env = makeSandbox({
+    connectWallet: FUND,
+    batch: batchFixture({ id: "hb_big", count: N, totalRaw: "90000000000", rows: batchRows, remainingCount: N, remainingRaw: "90000000000" }),
+    signRequest: () => signRequestFixture({ batchId: "hb_big", rows: srRows }),
+    // Mirrors CluckAirdrop.planBatches' real packing (16 recipients per transaction, one shared
+    // signature per transaction) without pulling in the real chain-building code — P1-A's bound
+    // crosses at N≈84 rows for exactly this reason.
+    cluckAirdropSend: async (opts) => {
+      var recs = opts.recipients;
+      for (var i = 0; i < recs.length; i += 16) {
+        var sig = fakeSig(300 + i);
+        recs.slice(i, i + 16).forEach(function (r) { opts.onResult({ addr: r.addr, amount: r.amount, status: "sent", sig: sig }); });
+      }
+    },
+    observe: (body) => {
+      observeCallSizes.push((body.sigs || []).length);
+      return { ok: true, project: {}, batchId: "hb_big", as: "owner", browserSign: { state: "submitted", nonce: NONCE, wallets: wallets, failed: {} }, recorded: [], ignored: [], journal: [], remainingWallets: wallets };
+    },
+  });
+  await connectAndLoad(env);
+  env.dom.getElementById("signSend").click();
+  await confirmYes(env, 8, 10);
+  // 18 sequential chunked observe() calls, each a real Promise chain (no fake timers) — give the
+  // event loop plenty of ticks to drain all of them.
+  await settle(400);
+  assert.ok(observeCallSizes.length > 1, "a 90-row sign-request must be chunked into more than one observe() call — got " + observeCallSizes.length);
+  const per = Math.max(1, Math.min(40, N + 5, Math.floor(500 / N)));
+  observeCallSizes.forEach((n) => assert.ok(n > 0 && n <= per, "every observe() call must stay within the bound (<=" + per + " for " + N + " wallets): got " + n));
+});
+
+// ── R3-6/R3-7/P3-F ───────────────────────────────────────────────────────────────────────────
+section("R3-6/R3-7/P3-F — START A FRESH SIGN-REQUEST recovers a live flow by rotating the nonce and re-observing under it, never re-broadcasting");
+
+t("the button appears for the accepted wallet while live, POSTs force=1, and re-observes the known broadcast signature under the NEW nonce", async () => {
+  const SIG1 = fakeSig(95);
+  const NEW_NONCE = "nonce-fresh-999";
+  let signRequestForce = null;
+  let observedNonce = null;
+  const liveBatch = batchFixture({ browserSign: { state: "submitted", nonce: NONCE, wallets: [W1], failed: {} } });
+  const env = makeSandbox({
+    connectWallet: FUND,
+    batch: liveBatch,
+    signRequest: (body) => { signRequestForce = body && body.force; return signRequestFixture({ nonce: NEW_NONCE }); },
+    observe: (body) => {
+      observedNonce = body.nonce;
+      liveBatch.browserSign = { state: "settled", nonce: NEW_NONCE, wallets: [W1], failed: {} };
+      return { ok: true, project: {}, batchId: "hb_test1", as: "owner", browserSign: liveBatch.browserSign, recorded: [W1], ignored: [], journal: [], remainingWallets: [] };
+    },
+  });
+  await connectAndLoad(env);
+  env.store.local.set("hub_desk_rows_" + PID + "_hb_test1", JSON.stringify({ [W1]: { status: "sent", sig: SIG1, nonce: NONCE } }));
+  env.dom.getElementById("reload").click();
+  await settle(20);
+  const btn = env.dom.getElementById("startFreshBtn");
+  assert.ok(btn, "the START A FRESH SIGN-REQUEST button must exist for the accepted wallet while live");
+  btn.click();
+  await settle(30);
+  assert.strictEqual(signRequestForce, "1", "force=1 — an explicit abandon-and-reissue, never a silent double sign-request");
+  assert.strictEqual(observedNonce, NEW_NONCE, "the already-broadcast signature is re-observed under the NEW nonce, not the stale one — never re-signed");
+  assert.ok(/Settled/.test(env.dom.getElementById("signSendStatus").innerHTML));
+});
+
+t("no START A FRESH SIGN-REQUEST button when the connected wallet is not an accepted payout source", async () => {
+  const env = makeSandbox({ connectWallet: OTHER_WALLET, batch: batchFixture({ browserSign: { state: "submitted", nonce: NONCE, wallets: [W1], failed: {} } }) });
+  await connectAndLoad(env);
+  assert.strictEqual(env.dom.els.has("startFreshBtn"), false);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }

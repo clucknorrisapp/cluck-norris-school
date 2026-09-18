@@ -1647,5 +1647,11 @@
   "OBSERVE WHAT I BROADCAST": "查看我广播的内容",
   "A browser-signed payout is {state} for this batch.": "本批次有一笔浏览器签名的付款处于 {state} 状态。",
   "Settled — every row this payout named is fully paid.": "已结清——本次付款所列的所有行都已全额支付。",
-  "Record the SENT — NOT RECORDED rows first (buttons in the table). Signing again would pay them twice.": "请先记录 SENT — NOT RECORDED 的行（表格中的按钮）。再次签名会导致重复支付。"
+  "Record the SENT — NOT RECORDED rows first (buttons in the table). Signing again would pay them twice.": "请先记录 SENT — NOT RECORDED 的行（表格中的按钮）。再次签名会导致重复支付。",
+  "a browser-signed payout is {state} for this batch": "本批次有一笔浏览器签名的付款处于 {state} 状态",
+  "Record the SENT — NOT RECORDED rows first (buttons in the table). Sending again would pay them twice.": "请先记录 SENT — NOT RECORDED 的行（表格中的按钮）。再次发送会导致重复支付。",
+  "Record the SENT — NOT RECORDED rows first. Closing now would return them to owed and pay them twice.": "请先记录 SENT — NOT RECORDED 的行。现在关闭会让它们回到欠款状态并导致重复支付。",
+  "START A FRESH SIGN-REQUEST": "开始一个新的签名请求",
+  "Starting a fresh sign-request…": "正在开始一个新的签名请求…",
+  "Fresh sign-request issued.": "新的签名请求已发出。"
 }

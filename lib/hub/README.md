@@ -236,18 +236,27 @@ that differs (`browserSignAlreadyNote`).
   payer (`/payout`'s `&send=`, via `browserSignIsLive(bt)`), `&cancel=` — a bare cancel + re-export
   while an already-broadcast-but-unobserved transfer exists would draw the SAME amount into a fresh
   batch while the original transfer is still real and about to be observed into the batch just
-  cancelled — and, since the round-2 pass (**P2-7**), `&confirm=` too, for the same reason (marking a
+  cancelled — since the round-2 pass (**P2-7**), `&confirm=` too, for the same reason (marking a
   batch paid without per-row signatures while a real broadcast might already be in flight would
-  settle rows a later `observe()` can never journal, and permanently pin `browserSign` live). SEND
-  and SIGN AND SEND on the desk are ALSO mutually exclusive with each other while either is live.
-  `observe` independently refuses any batch whose `state !== "pending"` too (defense in depth, even
-  if a cancel is ever reached some other way). **What still works while live, and can even complete
-  the flow:** `&sent=` (the desk's per-row "record on server" recovery button) and `&waive=`. **N5**
-  (round-2 verification): the README used to claim neither touches `browserSign`/`bt.state` — false;
-  `&sent=` recording the LAST unpaid row flips `bt.state` straight to `sent` the same way it always
-  did, and if that happens while `browserSign` is still live, it is now stamped `state:"settled"` in
-  the SAME persist, rather than left pinned `signing`/`submitted` forever with no lever but the
-  owner's `clear=1`.
+  settle rows a later `observe()` can never journal, and permanently pin `browserSign` live), and
+  since round 3 (**R3-1**) `&waive=` as well — `ledger.waiveRemainder` frees a row's unsettled
+  remainder straight back to `available`, which is exactly what made a bare `&cancel=` a double
+  payment (F2); a wallet this sign-request handed out that the operator already broadcast for, but
+  never observed, has no settlement on file, so waiving it and re-exporting draws the SAME amount
+  again with no warning. SEND and SIGN AND SEND on the desk are ALSO mutually exclusive with each
+  other while either is live. `observe` independently refuses any batch whose `state !== "pending"`
+  too (defense in depth, even if a cancel is ever reached some other way). **What still works
+  while live, and can even complete the flow:** `&sent=` (the desk's per-row "record on server"
+  recovery button) — `&waive=` moved to the blocked list above in round 3 (R3-1); it was never
+  actually safe while live. **N5** (round-2 verification): the README used to claim `&sent=` never
+  touches `browserSign`/`bt.state` — false; `&sent=` recording the LAST unpaid row flips `bt.state`
+  straight to `sent` the same way it always did, and if that happens while `browserSign` is still
+  live, it is now stamped `state:"settled"` in the SAME persist, rather than left pinned
+  `signing`/`submitted` forever with no lever but the owner's `clear=1`. **R3-2** (round 3):
+  `observe` itself now mirrors that same one-liner — once `finalBatch.state === "sent"` (nothing is
+  legacy-owed, so no still-unindexed submitted signature could possibly settle anything more) the
+  flow settles regardless of what is still `pending`, instead of pinning at `submitted` forever
+  with the owner's `clear=1` as the only exit for a batch that was already fully, correctly paid.
 - **The connected wallet must be one of the project's accepted payout sources.** **P2-4** (round-2
   verification): this used to mean `fundingWallet` only — a project configured to pay from an
   owner-allowlisted `payoutSources` wallet (`/api/hub-registry`'s admin-only lever) had BOTH payout
@@ -261,7 +270,14 @@ that differs (`browserSignAlreadyNote`).
   even generate transfer parameters for anyone else, naming the funding wallet in the 403. Without
   either, an operator signing (or curling) from an unaccepted wallet would broadcast a REAL transfer
   that `observe`/`&sent=` can never credit (`transfer_not_from_funding_wallet`), paying the wrong
-  pocket and deadlocking the batch (the reset above is the only way out).
+  pocket and deadlocking the batch (the reset above is the only way out). **R3-4/P1-B** (round 3):
+  `observe` carried no matching gate — any operator token could POST a handful of resolvable-but-
+  irrelevant signatures and flip `signing -> submitted` on nothing at all, and `submitted` has no
+  `force=1` escape, only the owner's `clear=1` (which now demands `&confirm=abandon-broadcast` for
+  the wallets it named). `observe` now requires the SAME `who` check as `sign-request`, AND never
+  advances `signing -> submitted` on a pass that attributed nothing — no newly recorded settlement
+  and no newly failed wallet — to any wallet this sign-request named; junk signatures from an
+  accepted caller leave the state exactly where it was.
 - **The sign-request response is validated before anything is built to sign, and the confirm
   dialog comes AFTER sign-request.** `signAndSend()` checks the returned `mint`/`decimals` against
   what the page already knows (`MINT`/`DEC`), that every offered wallet is one of `BATCH`'s own
@@ -291,6 +307,55 @@ that differs (`browserSignAlreadyNote`).
   `/payout`'s `&send=` branch outright, and both `sign-request`/`observe` acquire the SAME
   per-project `hublock:<id>:payout` lock `/payout` already does, so a managed send mid-flight
   refuses a concurrent `sign-request` with `busy` even before the state check would matter.
+- **Round 3 (docs/HUB_BROWSER_SIGN_VERIFY_2026-09-18.md) — the remaining findings.**
+  - **R3-3**: `browserSign.failed`'s zero-remaining sweep (N2(a)) used to run over only THIS pass's
+    refusals, before they were merged with the carried-forward map — a wallet that failed in an
+    EARLIER pass and was later paid some other way (the desk's own `&sent=` recovery button) was
+    never re-checked, so it read `failed` forever, including in the terminal `settled` record. The
+    sweep now runs over the FULL merged map, after both merges.
+  - **R3-5/P3-G**: `observedSigs` used to union in every signature the caller named that the RPC
+    could resolve, whatever it was for — unbounded, on a money record every payout route rewrites
+    whole. It now keeps only signatures that attributed to a named wallet this pass (a settlement
+    attempt or a real, wallet-specific refusal — never the cross-product noise `NOISE_WHY_RE`
+    already filters), capped at the most recent 100.
+  - **R3-8**: a `force=1` or post-`clear=1` sign-request used to carry the PRIOR generation's
+    `failed` map forward alongside `observedSigs` — carrying `observedSigs` is load-bearing (P2-6),
+    carrying `failed` is not, and it opened a new generation already reporting a stale failure for
+    a row it had not touched yet. The new generation starts `failed: {}`; the old map survives,
+    unrendered, as `previousFailed`, for diagnosis only.
+  - **P3-H**: `sign-request`'s per-row `source` used to always name `p.fundingWallet`, even when
+    the caller was a `payoutSources` wallet (P2-4/P2-5) — a lie for that caller. `source` is now
+    whichever accepted wallet is actually asking (`who === "owner" ? p.fundingWallet : who`).
+  - **P2-C**: the desk batch view used to spread `browserSign` raw, handing its `nonce`/
+    `idempotencyKey` to ANY operator token — including one `sign-request`/`observe` would refuse.
+    That readable nonce is what let an unaccepted caller's `observe()` be taken as the current
+    generation's (P1-B). `deskBatch` now redacts `nonce`/`idempotencyKey` unless the caller is the
+    owner, the funding wallet, or a `payoutSources` wallet; everything else in the view — `state`,
+    `failed`, `observedSigs`, `wallets` — is unchanged and was never secret.
+  - **P3-E**: each broadcast is now stored in `ROW_STATUS` as `{status, sig, nonce}` — the nonce it
+    was actually broadcast under, kept for diagnosis. The OBSERVE WHAT I BROADCAST and START A
+    FRESH SIGN-REQUEST recovery actions still post under the batch's CURRENT `browserSign.nonce`
+    (whatever generation that is) — that IS the recovery when a `force=1`/owner `clear=1` rotated
+    the nonce since the signatures were broadcast. **The nonce binds an `observe()` call to the
+    batch's CURRENT sign-request generation, not to the generation that originally issued the
+    signatures** — money-safety comes from the chain re-verification, the exact-remaining match and
+    the duplicate-settlement check, not from the nonce matching the original broadcast.
+  - **R3-6/R3-7/P3-F**: the `cleared` note, the stale-nonce 409, and the 24h-old 409 used to say
+    "request a fresh sign-request and re-broadcast from what it returns" — naming the DOUBLE-PAY
+    action as the recovery. All three now say "request a fresh sign-request, then observe the
+    signatures you already broadcast under its new nonce — do not broadcast again". The desk backs
+    this with a START A FRESH SIGN-REQUEST button (POSTs `force=1`, then re-posts whatever
+    `ROW_STATUS` still holds under the new nonce) shown whenever the connected wallet is an accepted
+    payout source and the flow is live — covering both the 24h-stale case (where `force=1` actually
+    reissues) and a `submitted` batch (where the server still refuses and points at the owner's
+    `clear=1`, exactly as it always has; the button surfaces that refusal rather than hiding it).
+  - **P1-A**: `CluckAirdrop.planBatches` packs 16 recipients per transaction (8 with ATA creation),
+    so a sign-request of N rows can produce more signatures than the server's wallets×sigs≤500 bound
+    tolerates in ONE `observe()` call (it crosses at N≈84 rows, N≈63 with ATAs) — the desk's own
+    call used to be refused (400) for any real-size batch, AFTER the money had already broadcast,
+    because nothing on the page ever chunked. `observeAll()` now chunks at
+    `per = max(1, min(40, wallets+5, floor(500/wallets)))`, loops the slices, and merges the
+    (idempotent-per-signature) reports.
 - Fault-injection: `scripts/hub-browser-sign-test.cjs` (crash between the two calls, a bad
   signature, observing the same signature twice — including a two-wallet batch where the state
   never reaches the top-level `already:true` shortcut, forcing the real pipeline to catch the
