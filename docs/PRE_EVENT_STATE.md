@@ -211,6 +211,14 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 12** — `/hub/verify` in seven languages (and the dictionaries served on a
+  no-build boot, which had silently left every Hub page in English there); the evidence bundle's
+  program version made recomputable (the public view had dropped eight hashed fields, and a served
+  `$schema` was being hashed — both found by the docs pass and the new tests); what changed between
+  two program versions at `/hub/<project>/programs/compare`, computed in the browser from the two
+  public documents; reproducibility over time as a daily append-only hashed record with a
+  sparkline; the receipt verifier as a standalone `npx` package built deterministically from the
+  repo's own libraries (publishing pending the owner); roadmap Extension 8. PR #350.
 - **Colosseum batch 11** — `/receipt <signature>` in Telegram: the reproduce verdict for a Hub
   settlement, composed from the same public receipt view, silent, with the OnlyRose refusal pinned
   by a test that calls the real room policy; the receipt lesson measured (per-lesson reads and the

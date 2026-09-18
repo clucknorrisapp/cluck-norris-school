@@ -79,6 +79,37 @@ function a11yCompareFixture() {
   };
 }
 
+// DD4 (docs/COLOSSEUM_ROADMAP.md §14): a11y coverage for the print sheet needs a real settled
+// receipt WITH a program version + accrual days behind it (the same shape
+// scripts/hub-print-test.cjs uses), so the sheet's "amount the rule computed" and reproduce-steps
+// section actually render — a receipt with no retained explanation would exercise the degraded
+// path instead, which is not what a judge scanning this page in real use ever sees.
+const A11Y_PRINT_PROJECT = "a11yprint";
+// Deterministic, guaranteed-valid base58 fixture values (same generator scripts/hub-bundle-test.cjs
+// and scripts/hub-print-test.cjs use) — a hand-typed address risks a base58-excluded character
+// (0, O, I, l) or the wrong length, which HUB_SIG_RE / the wallet-shape check would then 400 on.
+const A11Y_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const a11yFakeAddr = (n) => Array.from({ length: 44 }, (_, i) => A11Y_B58[(i * 13 + n * 7 + 5) % 58]).join("");
+const a11yFakeSig = (n) => Array.from({ length: 87 }, (_, i) => A11Y_B58[(i * 11 + n * 17 + 3) % 58]).join("");
+const A11Y_PRINT_SIG = a11yFakeSig(201);
+function a11yPrintFixture() {
+  const MINT = a11yFakeAddr(201);
+  const FUND = a11yFakeAddr(202);
+  const wallet = a11yFakeAddr(203);
+  const at = 1_800_000_000;
+  const VERSION_PROJECT = { id: A11Y_PRINT_PROJECT, mint: MINT, rewardMint: MINT, rewardDecimals: 9, rewardTokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", fundingWallet: FUND };
+  const version = hubProject.createVersion({}, VERSION_PROJECT, {
+    poolDailyRaw: "1000000000000", minDurationDays: 1, maxTermDays: 540, payoutSchedule: "weekly", vesting: "any", fundedBy: [FUND],
+  }, { effectiveFrom: "2027-01-01", todayKey: "2027-01-01" }).versions[0];
+  return {
+    "hub:projects": { [A11Y_PRINT_PROJECT]: { id: A11Y_PRINT_PROJECT, label: "A11y Print Co", symbol: "A11P", mint: MINT, decimals: 9, rewardMint: MINT, rewardDecimals: 9, fundingWallet: FUND } },
+    [`program:${A11Y_PRINT_PROJECT}:days`]: { "2027-02-01T00": { credits: { [wallet]: "1000000000" }, at }, "2027-02-01T01": { credits: { [wallet]: "500000000" }, at: at + 3600 } },
+    [`program:${A11Y_PRINT_PROJECT}:batches`]: { "a11yprint-batch-1": { id: "a11yprint-batch-1", state: "sent", at: at + 7200, amounts: { [wallet]: "1500000000" }, sent: { [wallet]: { sig: A11Y_PRINT_SIG, at: at + 7260 } } } },
+    [`program:${A11Y_PRINT_PROJECT}:paid`]: {},
+    [`program:${A11Y_PRINT_PROJECT}:state`]: { versions: [version] },
+  };
+}
+
 const PAGES = [
   { path: "/hub", name: "Hub index" },
   // A real branded project page (hero, dry-run badge, social pills) — the index alone never
@@ -97,6 +128,7 @@ const PAGES = [
   { path: "/hub/judge", name: "Hub judge guide (AA4 — the judge's fifteen minutes)" },
   { path: "/holders", name: "Holders (CC3 — empty state, no snapshot history yet)" },
   { path: `/holders?mint=${SEED_MINT}`, name: "Holders (CC3 — X7 history + AA3 Compare, seeded)" },
+  { path: `/hub/${A11Y_PRINT_PROJECT}/r/${A11Y_PRINT_SIG}?print=1`, name: "Hub receipt print sheet (DD4 — a receipt you can print)" },
 ];
 const WIDTHS = [
   { width: 360, height: 780, label: "360×780" },
@@ -246,7 +278,7 @@ async function auditPage(browser, pagePath, pageName) {
   let srv = null, DIR = null;
   if (!ARG_BASE) {
     DIR = fs.mkdtempSync(path.join(os.tmpdir(), "hub-a11y-"));
-    fs.writeFileSync(path.join(DIR, "app-state.json"), JSON.stringify(a11yCompareFixture()));
+    fs.writeFileSync(path.join(DIR, "app-state.json"), JSON.stringify({ ...a11yCompareFixture(), ...a11yPrintFixture() }));
 
     // Seed two holder snapshots for SEED_MINT directly through the real kv module +
     // appendSnapshot, pointed at the same DATA_DIR the server is about to boot with — the same

@@ -97,6 +97,45 @@
   .small { font-size:12px; color:var(--sub); }
   pre.proof { background:rgba(0,0,0,.35); border:1px solid var(--border); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11.5px; color:#D1D5DB; overflow-x:auto; white-space:pre; }
   @media (max-width:520px) { .prog-head h2 { font-size:19px; } td, th { padding:6px 4px; } }
+  /* Print sheet (Colosseum roadmap DD4) — a single printable/screenshot-able summary of a
+     receipt, built into #printSheet, a direct child of the page body element and never nested
+     inside the main content region, so hiding "everything except #printSheet" doesn't also hide
+     it by hiding an ancestor. Hidden on screen by default; shown either by an actual print
+     (@media print) or by ?print=1 (JS adds a print-mode class to the body element so a phone user
+     can screenshot the exact same layout without opening the OS print dialog). The two selector
+     blocks below are intentionally identical in effect — CSS has no "media print OR this class"
+     combinator — so a real print always looks the same as the ?print=1 preview. NOTE: never spell
+     an HTML tag name as a literal "<tagname>" in this comment — the i18n audit's Hub-page scanner
+     locates the real body element with a naive first-match "<body" search over the whole file,
+     and a comment mentioning it the same way hijacks that search into slicing this stylesheet in
+     as scannable page text (found the hard way while writing this very feature). */
+  #printSheet { display:none; }
+  .ps-card { max-width:640px; margin:0 auto; background:#fff; color:#111; border:1px solid #ccc; border-radius:10px; padding:22px; font-family:var(--body); }
+  .ps-card h1 { font-family:var(--disp); font-weight:400; font-size:20px; margin-bottom:4px; }
+  .ps-card .ps-sub { font-size:12px; letter-spacing:1px; color:#555; text-transform:uppercase; margin-bottom:16px; }
+  .ps-row { display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid #ddd; font-size:13.5px; }
+  .ps-row b { color:#111; }
+  .ps-row .ps-val { text-align:right; word-break:break-word; }
+  .ps-mono { font-family:var(--mono); font-size:11.5px; word-break:break-all; color:#111; }
+  .ps-qr { display:flex; flex-direction:column; align-items:center; gap:8px; margin:18px 0; }
+  .ps-qr svg { max-width:220px; }
+  .ps-trust { font-size:12px; color:#333; line-height:1.6; margin-top:14px; }
+  .ps-trust a { color:#111; }
+  .ps-card .explain { margin-top:14px; }
+  .ps-card .explain summary { color:#111; font-weight:600; }
+  .ps-card .fact { color:#333; }
+  .ps-print-btn-row { text-align:center; margin:14px 0; }
+  @media print {
+    body > *:not(#printSheet) { display:none !important; }
+    #printSheet { display:block !important; background:#fff !important; }
+    #printSheet, #printSheet * { color:#111 !important; }
+    #printSheet a { color:#111 !important; text-decoration:underline; }
+    .ps-card { border:none; }
+  }
+  body.print-mode > *:not(#printSheet) { display:none !important; }
+  body.print-mode #printSheet { display:block !important; background:#fff !important; min-height:100vh; padding:20px 0; }
+  body.print-mode #printSheet, body.print-mode #printSheet * { color:#111 !important; }
+  body.print-mode #printSheet a { color:#111 !important; text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -108,9 +147,11 @@
   </div>
   <div id="app"><div class="status">LOADING…</div></div>
 </main>
+<div id="printSheet"></div>
 
 <script src="/cluck-util.js"></script>
 <script src="/hub-sparkline.js"></script>
+<script src="/hub-qr.js"></script>
 <script>
 (function () {
   var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr, rpc = CluckUtil.rpc;
@@ -419,6 +460,11 @@
     document.getElementById('subtitle').textContent = one ? (one.kind === 'lock-to-earn' ? 'REWARDS FOR LOCKED WALLETS · RECEIPTS YOU CAN VERIFY' : 'RECEIPTS YOU CAN VERIFY · NO WALLET NEEDED') : 'PROGRAMS ON RECORD';
     document.title = (one ? (one.kind === 'lock-to-earn' ? v.label + ' Lock to Earn' : one.label) : v.label) + ' — receipts you can verify';
     var tokenLine = '<div class="row-flex" style="margin-top:10px"><span class="small">Token</span> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(v.mint) + '">' + esc(v.mint) + '</a></div>';
+    // DD2 (Colosseum roadmap §14): "Follow a project without a wallet" — the two feed URLs this
+    // project's published versions, settled batches, holder snapshots and on-chain commitments
+    // are listed at, newest first. No wallet, no signup; a plain feed reader (or the <link
+    // rel="alternate"> tags server.js adds to this page's own <head>) picks either one up.
+    var followLine = '<div class="row-flex" style="margin-top:6px"><span class="small">Follow this project</span> <a class="mono" target="_blank" rel="noopener" href="/api/hub/' + esc(v.id) + '/feed.json">JSON Feed</a> · <a class="mono" target="_blank" rel="noopener" href="/hub/' + esc(v.id) + '/feed.xml">RSS</a></div>';
     // X7 (Colosseum roadmap §8): a fact line, never a judgement — what the last owners-snapshot
     // crawl counted and its hash, not "growing"/"healthy" (CLAUDE.md: say what's on-chain, never
     // why). Absent entirely when this mint has never been crawled.
@@ -437,7 +483,7 @@
       var compareLine = (v.versions && v.versions.length >= 2)
         ? '<div class="small" data-clkn-avoid="1" style="margin-top:10px"><a href="/hub/' + esc(v.id) + '/programs/compare">What changed between versions? →</a></div>' : '';
       app.innerHTML = heroBlock(v) +
-        '<div class="card"><div class="intro" data-clkn-avoid="1">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + tokenLine + holdersLine + compareLine + '</div>' +
+        '<div class="card"><div class="intro" data-clkn-avoid="1">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + tokenLine + holdersLine + followLine + compareLine + '</div>' +
         (v.programs.length ? v.programs.map(function (p) { var n = (p.payouts || []).filter(function (x) { return x.sig; }).length; return '<a class="card proj-link" href="/hub/' + esc(v.id) + '/p/' + encodeURIComponent(p.id) + '"><div class="prog-head" data-clkn-avoid-kids="1"><h2>' + esc(p.label || p.kind) + '</h2><div class="chips"><span class="chip kind">' + esc(String(p.kind).replace(/-/g, ' ')) + '</span><span class="chip ' + (n ? 'ok' : '') + '">' + n + ' receipt' + (n === 1 ? '' : 's') + '</span></div></div></a>'; }).join('') : '<div class="card"><div class="fact">No programs on record for this project yet.' + (v.dryRun ? ' This is a dry run — see the note above.' : '') + '</div></div>');
       return;
     }
@@ -454,7 +500,7 @@
       } catch (e) { /* omit the line rather than guess */ }
     }
     app.innerHTML = heroBlock(v) +
-      '<div class="card"><div class="intro" data-clkn-avoid="1">' + intro + '</div>' + tokenLine + holdersLine + historyBlock(hist) +
+      '<div class="card"><div class="intro" data-clkn-avoid="1">' + intro + '</div>' + tokenLine + holdersLine + followLine + historyBlock(hist) +
       '<div class="verify-bar" data-clkn-avoid="1"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote">' + receipts + ' receipt' + (receipts === 1 ? '' : 's') + ' on this page. Press to re-check every signature against Solana, from your browser.</span></div></div>' +
       '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Check a wallet</div><div class="fact">Paste any address to see what it received in this program, with the transaction' + (one.kind === 'lock-to-earn' ? '' : ' — and, if it was disqualified, the fact that decided it') + '.</div><div class="input-row"><input class="addr-input" id="walletIn" placeholder="Solana wallet address" aria-label="Solana wallet address" autocomplete="off" spellcheck="false"/><button class="btn ghost" id="walletBtn">CHECK</button></div><div id="walletOut"></div></div>' +
       programCard(one, sym, batchRepro) +
@@ -481,6 +527,46 @@
     }).join('');
     return '<details class="explain"><summary>How this number was computed' + (e.matchesReceipt ? '' : ' (could not be fully re-checked)') + '</summary><ul class="facts">' + rows + '</ul></details>';
   }
+  // Colosseum roadmap DD4 — "a receipt you can print." The value a rule computed and the value
+  // that actually arrived are usually the same number (a batch's amount is fixed before it sends),
+  // but the receipt only carries ONE field that is unambiguously "what the rule computed" — the
+  // walkthrough's own subtotal/computed step (lib/hub/explain.js). When a receipt has no retained
+  // walkthrough (an older payout shape, or missing inputs) this is honestly absent rather than
+  // silently repeating the arrived amount under a different label.
+  function computedAmountText(x) {
+    var e = x && x.explanation;
+    if (!e || !e.steps || !e.steps.length) return null;
+    var step = e.steps.filter(function (s) { return s.key === 'computed' || s.key === 'subtotal'; })[0];
+    return step ? step.value : null;
+  }
+  // The printable sheet: project + symbol, both amounts, the program version + hash, the full
+  // settlement signature, the same E5 reproduce-steps block as the normal page (explainBlock,
+  // unchanged), the trust-boundary line linking /hub/trust, the public receipt URL in text, and a
+  // QR of that same URL (built from location.origin + the page's own path — never the query
+  // string, so a stray query param can never end up encoded into the code).
+  function printSheetHtml(r, p, x, sym, receiptUrl) {
+    var computed = computedAmountText(x);
+    var pv = x.programVersion;
+    var qrSvg = '';
+    try { if (window.HubQr) qrSvg = HubQr.renderSvg(receiptUrl); } catch (e) { qrSvg = ''; }
+    // The trust link is wrapped in the site's own `.small` class specifically for its `.small a`
+    // rule (already in this file's <style>) — an invisible negative-margin tap-area trick that
+    // grows a compact inline link's hit box toward 44px without changing how it looks. This is
+    // the established fix for exactly this shape of link elsewhere on this page; a bespoke class
+    // here would just re-solve the same problem worse.
+    return '<div class="ps-card">' +
+      '<h1>' + esc(String(r.projectId).toUpperCase()) + ' · ' + esc(sym) + '</h1>' +
+      '<div class="ps-sub">' + esc(p.label || p.kind) + '</div>' +
+      '<div class="ps-row"><b>Amount that arrived</b><span class="ps-val">' + amt(x.amountUi, sym) + '</span></div>' +
+      '<div class="ps-row"><b>Amount the rule computed</b><span class="ps-val">' + (computed ? esc(computed) : esc('Not retained for this receipt — see below.')) + '</span></div>' +
+      '<div class="ps-row"><b>Program version</b><span class="ps-val">' + (pv && pv.version != null ? ('v' + esc(pv.version) + ' · ' + esc(String(pv.hash || '').slice(0, 16)) + '…') : esc('Not recorded for this receipt')) + '</span></div>' +
+      '<div class="ps-row" style="display:block"><b>Settlement signature</b><div class="ps-mono" style="margin-top:4px">' + esc(x.sig) + '</div></div>' +
+      '<div class="ps-qr">' + qrSvg + '<div class="ps-mono">' + esc(receiptUrl) + '</div></div>' +
+      explainBlock(x) +
+      '<div class="ps-trust"><b>A receipt proves a rule was followed, not that it was fair</b></div>' +
+      '<div class="small" style="margin-top:2px"><a href="/hub/trust">Read the trust boundary →</a></div>' +
+      '</div>';
+  }
   async function renderReceipt() {
     var r = await fetch('/api/hub/' + encodeURIComponent(projectId) + '/r/' + encodeURIComponent(receiptSig)).then(function (x) { return x.json(); });
     if (!r.ok) throw new Error(r.error || 'no such receipt');
@@ -503,20 +589,31 @@
         }
       } catch (e) { /* omit the line rather than guess */ }
     }
+    // The public receipt URL, built ONLY from this page's own origin + path — never the query
+    // string, so a stray/hostile query param can never end up encoded into the print sheet's QR.
+    var receiptUrl = location.origin + '/hub/' + r.projectId + '/r/' + x.sig;
     app.innerHTML = (r.dryRun ? '<div class="card">' + dryRunBadge() + '</div>' : '') +
       '<div class="card">' + statTiles([['Amount', amt(x.amountUi, sym)], ['State', esc(x.state)], ['Submitted', ts(x.at)]]) +
       '<div class="terms" data-clkn-avoid-kids="1"><div><b>To</b> ' + acct(x.wallet) + '</div><div><b>Token</b> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(p.prizeMint || p.mint) + '">' + esc(shortAddr(p.prizeMint || p.mint, 6, 4)) + '</a></div><div><b>Program</b> ' + esc(p.label || p.kind) + '</div>' + (p.termsHash ? '<div><b>Terms hash</b> <span class="mono">' + esc(p.termsHash.slice(0, 16)) + '…</span></div>' : '') + '</div>' +
       '<div class="sec-title" data-clkn-avoid="1">Transaction</div><div class="mono"><a target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(x.sig) + '">' + esc(x.sig) + '</a></div>' +
       '<div class="verify-bar" data-clkn-avoid="1"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote"><span class="verify" data-sig="' + esc(x.sig) + '"><span class="small">not checked</span></span></span></div>' +
+      '<div class="ps-print-btn-row" data-clkn-avoid="1"><button class="btn ghost" id="printBtn">Print this page</button></div>' +
       '<div class="sec-title" data-clkn-avoid="1">Verify it yourself</div><div class="fact">Send this to any Solana RPC. A <span class="mono">confirmationStatus</span> of <span class="mono">confirmed</span> or <span class="mono">finalized</span> with no <span class="mono">err</span> means the transfer is on the chain.</div><pre class="proof">' + esc(proof) + '</pre>' +
       explainBlock(x) +
-      '<div class="small" data-clkn-avoid="1" style="margin-top:12px"><a href="/hub/verify?receipt=' + encodeURIComponent(location.origin + '/hub/' + r.projectId + '/r/' + x.sig) + '">Reproduce this receipt in your browser →</a></div>' +
+      '<div class="small" data-clkn-avoid="1" style="margin-top:12px"><a href="/hub/verify?receipt=' + encodeURIComponent(receiptUrl) + '">Reproduce this receipt in your browser →</a></div>' +
       compareLine +
       // AA2: only where a batch id is known (lock-to-earn receipts carry one; a buy-comp receipt
       // reproduces from the sealed standings instead and has no batch to bundle).
       (x.batchId ? '<div class="small" data-clkn-avoid="1" style="margin-top:6px"><a href="/api/hub/' + esc(r.projectId) + '/batch/' + esc(x.batchId) + '/bundle">Download the evidence bundle →</a></div>' : '') +
       '<div class="small" data-clkn-avoid="1" style="margin-top:6px"><a href="/hub/' + esc(r.projectId) + '#p-' + esc(p.id) + '">← all receipts for ' + esc(p.label || p.kind) + '</a></div></div>';
     document.getElementById('verifyBtn').addEventListener('click', verifyAll);
+    document.getElementById('printBtn').addEventListener('click', function () { window.print(); });
+    // ?print=1 — the DD4 print sheet, filled every time (so Ctrl+P from the normal view also
+    // prints it via the @media print rule above) and additionally shown ON SCREEN when the query
+    // param is present, so a phone user can screenshot the exact same layout without opening the
+    // OS print dialog (which most mobile browsers render poorly or not at all).
+    document.getElementById('printSheet').innerHTML = printSheetHtml(r, p, x, sym, receiptUrl);
+    if (new URLSearchParams(location.search).get('print') === '1') document.body.classList.add('print-mode');
   }
 
   (async function () {

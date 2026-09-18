@@ -63,6 +63,10 @@ const ROUTES = [
   { name: "hub badge.svg", path: `/hub/badge.svg`, cache: "public, max-age=300" },
   { name: "hub-demo overview", path: `/api/hub-demo`, cache: "public, max-age=60" },
   { name: "hub-demo project", path: `/api/hub-demo/demo`, cache: "public, max-age=60" },
+  // DD2 (Colosseum roadmap §14): the project feed, JSON Feed + RSS — same 300s tier as the
+  // reproducibility-class reads above, since a feed walks the same per-batch computation.
+  { name: "hub feed.json", path: `/api/hub/clkn/feed.json`, cache: "public, max-age=300" },
+  { name: "hub feed.xml", path: `/hub/clkn/feed.xml`, cache: "public, max-age=300" },
 ];
 
 (async () => {
@@ -139,6 +143,12 @@ const ROUTES = [
     // the shape check is a gate, not a stand-in for the real lookup.
     r = await req("GET", `/api/hub/clkn/r/${GOOD_SIG}`, { ip: "10.0.2.1" });
     ok("well-formed but unknown sig is 404, not 400/500", r.status === 404, String(r.status));
+    // DD2: a demo project (never actually registered) 404s on both feed routes, same as every
+    // other real Hub read.
+    r = await req("GET", `/api/hub/demo/feed.json`, { ip: "10.0.2.1" });
+    ok("demo project 404s on feed.json", r.status === 404, String(r.status));
+    r = await req("GET", `/hub/demo/feed.xml`, { ip: "10.0.2.1" });
+    ok("demo project 404s on feed.xml", r.status === 404, String(r.status));
   }
 
   // ── 3) hours cap (jvp timeline): already 1..720 in code — pin it so it can't regress. ─────────
@@ -172,6 +182,11 @@ const ROUTES = [
     // CC4's history route shares the same bucket as its sibling reproducibility route.
     const historyHeavy = await req("GET", `/api/hub/clkn/reproducibility/history`, { ip: BURST_IP });
     ok("the reproducibility history route is on the same shared bucket too", historyHeavy.status === 429, String(historyHeavy.status));
+    // DD2's two feed routes share the same bucket too.
+    const feedJsonHeavy = await req("GET", `/api/hub/clkn/feed.json`, { ip: BURST_IP });
+    ok("feed.json is on the same shared bucket too", feedJsonHeavy.status === 429, String(feedJsonHeavy.status));
+    const feedXmlHeavy = await req("GET", `/hub/clkn/feed.xml`, { ip: BURST_IP });
+    ok("feed.xml is on the same shared bucket too", feedXmlHeavy.status === 429, String(feedXmlHeavy.status));
 
     // A normal page load is unaffected: the light per-page reads on the SAME (rate-limited) IP.
     const lightHub = await req("GET", `/api/hub`, { ip: BURST_IP });
@@ -199,8 +214,10 @@ const ROUTES = [
     // BB3 added the two badge routes (they walk every ledger). CC4 added the reproducibility
     // history route (§13) — a read of stored rows, cheap, but the same class as its sibling on
     // the line right above it, and there is no established light tier to break new ground with.
-    // 5 original + bundle + 2 badges + 1 history = 9.
-    ok("found the 9 heavy routes wired to the dedicated limiter", heavyPaths.length === 9, JSON.stringify(heavyPaths));
+    // DD2 (§14) added the two feed routes (feed.json + feed.xml) — each walks the same per-batch
+    // reproducibility computation the badge/reproducibility routes already share this bucket for.
+    // 5 original + bundle + 2 badges + 1 history + 2 feed = 11.
+    ok("found the 11 heavy routes wired to the dedicated limiter", heavyPaths.length === 11, JSON.stringify(heavyPaths));
     for (const p of heavyPaths) ok(`${p} is not a store-edition contract route`, !STORE_API_RE.test(p), p);
 
     // Live confirmation for one representative store-edition route: a burst well under its own

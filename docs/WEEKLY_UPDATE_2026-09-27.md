@@ -1,10 +1,26 @@
-# Colosseum weekly update #2 — Sunday 2026-09-27 (W10) — SKELETON
+# Colosseum weekly update #2 — Sunday 2026-09-27 (W10) — DRAFT, filled to-date
 
-Covers **Sep 20 → Sep 27**. This is a skeleton, drafted 2026-09-18 before the week it describes
-has happened — every bullet below is a placeholder to be filled from that week's actual merged
-PRs, the same way `docs/WEEKLY_UPDATE_2026-09-20.md` was filled for update #1. **Do not invent a
-shipped item, a blocker, or a next-step to make this look finished before the week is over** —
-`CLAUDE.md` "Tell the truth about what you did" applies to this doc as much as to anything else.
+Covers **Sep 20 → Sep 27**. **That window has not happened yet** — this draft is written
+2026-09-18, before it starts. There is therefore nothing yet that truthfully belongs in a "shipped
+this week" list for Sep 20 → Sep 27: everything on record so far (batches 2–12, PRs #339–#350,
+including the newest batches 9–12 merged today) carries a commit date before Sep 20 13:00 UTC, so
+by the same rule this doc's own checklist states ("a PR merged before Sep 20 13:00 UTC belongs to
+LAST week's update, not this one"), all of it belongs to update #1
+(`docs/WEEKLY_UPDATE_2026-09-27.md`'s sibling, `docs/WEEKLY_UPDATE_2026-09-20.md`), not here.
+`CLAUDE.md` "Tell the truth about what you did" governs this file as much as any other — so rather
+than invent a Sep 20–27 shipped item that does not exist, this draft is filled with the record
+**through Sep 18** (the same window update #1 uses), clearly labelled as provisional, so the doc
+is reconciled from a real run instead of sitting as hand-typed placeholders. **Re-run for the
+real Sep 20 → 27 window on Sep 26** and replace every section below with that week's actual
+result — do not record from this draft as-is.
+
+Generated with:
+```
+node scripts/weekly-update-draft.cjs --from 2026-09-14 --to 2026-09-18 --develop-ref origin/develop --main-ref origin/main --no-fetch
+```
+Raw output committed beside this draft: `docs/weekly-update-raw-2026-09-18.md`. **On Sep 26,
+re-run with `--from 2026-09-20 --to 2026-09-27`** (or the actual recording day) and rebuild every
+section from that output, not this one.
 
 Format matches update #1 exactly: three bullets (~55 seconds spoken total), a paste-ready
 "Shipped this week" list with links, a "Where to post" line, and a same-day-before-recording
@@ -12,40 +28,73 @@ refresh checklist. Rules for the recording are unchanged from update #1: phone, 
 slides; "Earn" is capability, never a promise; nothing about Normie Quest prize terms; nothing
 about Wallet Watch; no APR/APY figures anywhere.
 
-## The three bullets (≈55 seconds spoken) — [FILL FROM THE WEEK'S ACTUAL PRs]
+## The three bullets (≈55 seconds spoken) — [OWNER TO EDIT — provisional, based on the record through Sep 18]
 
-1. **What shipped.** `[to be filled — one or two sentences naming the week's real, merged
-   features with a concrete noun a listener can picture, the way update #1 named "/hub/apply,"
-   "operator wallet signs into," and "the two lessons... in all seven languages." Pull the list
-   from the "Shipped this week" section below once it is filled, not the other way around.]`
-2. **What was hard.** `[to be filled — the real blocker or reviewer finding that cost time this
-   week, the way update #1 named "a rounded total that refused a real payout" and "nine P0s." If
-   nothing money-adjacent was hard this week, say the actual hard thing instead of manufacturing
-   one — a stale i18n key, a flaky test, an owner decision that took longer to land than expected.
-   Never leave this bullet generic ("we worked hard") — it exists to be specific.]`
-3. **What's next.** `[to be filled — the next concrete milestone, the way update #1 named "the
-   dry-run second project and the first real receipts a holder can reproduce." Check
-   `docs/COLOSSEUM_ROADMAP.md` §2/§7/§8/§9 for the next unstarted item in sequence, and
-   `docs/VALIDATION_2026-09.md` §(a) for whether the independent column is still empty — if an
-   operator interview or the POKEAHOE terms conversation happened this week, that belongs here.]`
+Drafted from the most recent work on record as of this draft (batches 9–12), since the real Sep
+20–27 shipped list does not exist yet. **Replace all three on Sep 26** with that week's actual
+merged work — do not read these on camera as-is.
 
-## Shipped this week (paste-ready, with links) — [FILL FROM `git log`]
+1. **What shipped.** [owner to edit] Provisional, from the record through Sep 18: the newest
+   layer on the reproduce story — a holder can now download a whole batch's evidence as one file
+   and check it offline (the evidence bundle), diff two program versions to see exactly what
+   changed, see a project's reproduce ratio as a trend line instead of a single number, and run
+   the same reproduction as a one-line, no-clone command once it's published. `/hub/verify` now
+   speaks all seven languages, and a real bug in its bundle check — a correct receipt printing a
+   false mismatch — was found and fixed the same week it shipped. All of it is still on `develop`,
+   not `main`.
+2. **What was hard.** [owner to edit] Provisional: a genuinely correct evidence bundle could print
+   a false "does not match" on its program-version check, because the bundle's embedded copy of
+   the version was missing fields the hash needs — found by the same tool that was supposed to
+   prove correctness, not by a reviewer catching it after the fact. Also: our own curriculum
+   generator had been silently dropping two whole courses since an earlier refactor and kept
+   reporting success the entire time.
+3. **What's next.** [owner to edit] Check `docs/COLOSSEUM_ROADMAP.md` §14 for the next unstarted
+   item in sequence and `docs/VALIDATION_2026-09.md` §(a) for whether the independent column is
+   still empty — if an operator interview or the POKEAHOE terms conversation happens before
+   recording, that is this update's headline, not a footnote. As of this draft, the standing next
+   step is unchanged from update #1: getting the reproducibility work off staging (the owner's
+   explicit promote, never automatic), the first real on-chain commitment, and POKEAHOE as the
+   second project.
 
-**How to fill this section:** run `git log --oneline --merges origin/main..origin/develop` (or,
-once promotions have happened, diff against whatever `main` was at last Sunday) filtered to the
-week's date range, and cross-reference against `docs/PRE_EVENT_STATE.md`'s "Built inside the
-window" — every PR merged since update #1's cutoff (`#339` and later, batch 2 onward, per that
-doc) that is **new since 2026-09-20** belongs here with its PR number, in the same grouped format
-update #1 used:
+## Shipped this week (paste-ready, with links) — [OWNER TO EDIT on Sep 26 with the real window]
 
-- Project Hub — the entry: `[to be filled]`
-- Money-path hardening: `[to be filled]`
-- School: `[to be filled]`
-- Security: `[to be filled]`
-- Front door / evidence / traction: `[to be filled]`
+**As of 2026-09-18, the real "Sep 20 → Sep 27" shipped list is empty because that week has not
+started.** What follows is the record **through Sep 18** (same window as update #1, same script
+run), included only so this doc is built from a real run rather than left blank — **it duplicates
+update #1's own list and none of it should be re-announced as new in update #2's actual post.**
+Cross-reference `docs/PRE_EVENT_STATE.md`'s "Built inside the window" and confirm on Sep 26 that
+whatever is listed there for Sep 20–27 is genuinely dated after Sep 20 13:00 UTC before using it.
 
-`[to be filled: confirm nothing listed here was already cited in update #1 — a PR merged before
-Sep 20 13:00 UTC belongs to LAST week's update, not this one, even if it's freshly noticed]`.
+- **Hub (production on `main`):** #299 roadmap revision 3 + Educate/Build/Earn; #307 Hub W1 core;
+  #308 Addendum C; #311 buy-comp server payout; #313 payout hardening; #315 the public Hub +
+  server-signed lock-to-earn send; #319 one program per page, honest "owed".
+- **Hub (staging only, `develop`):** #321–#325 the Lock to Earn engine generalised + platform
+  access + self-serve onboarding + the operator desk; #331 whole-repo simplification; #340/#341
+  Colosseum batches 3–4 (seven-language lessons, engine evidence classes, reproduce-a-receipt,
+  `/hub/demo`, Hub schemas, the school→Hub bridge, the on-chain hash commitment dry run); #345
+  batch 7 (school/homepage doors to the Hub); #347 batch 9 (`/hub/verify`, the receipt lesson,
+  share cards, the weekly-update generator, `/hub/status` + `/api/build`, route hygiene); #349
+  batch 11 (`/receipt` in Telegram, the receipt lesson measured, the holders a11y gate); #350
+  batch 12 (`/hub/verify` in seven languages, program-version compare, reproducibility history,
+  the evidence-bundle hash fix, the standalone `npx` verifier package, not yet published to npm).
+- **School:** #309 report card links to a real tool (production); #328 Q&A + LP Lab audit,
+  re-keyed in seven languages (staging); #336 the last GET-only admin mutation made POST-only
+  (staging); #348 batch 10 (`/hub/wallet`, the evidence bundle, snapshot diff, the judge guide,
+  `/hub/trust`, the classroom curriculum generator fix, the computed reproducibility badge) —
+  staging.
+- **Security:** #329/#330 the platform deep-dive P0/P1 batches + Codex round 1 (staging); #333/
+  #334 the owner-decisions batch + Codex round 2 (staging); #338 the OnlyRose room lockdown
+  (staging); #346 batch 8 — a11y pass, Launch Readiness, airdrop receipts, Buy Special standings,
+  the engine timeline, holder snapshots (staging).
+- **Operations:** #298 a lock is not a sell (production); #302/#303 the Official Rules correction
+  and the submission copy as entered (production); #306 the CUNA lock-scan reliability fix
+  (production); #310 the engaged-visitor analytics fix (production); #317 the vault BigInt
+  serialisation fix (production); #339/#343/#344 Colosseum batches 2/5/6 (staging).
+
+**Promotions in this to-date window (develop → main):** #300, #301, #304, #312, #314, #316, #318,
+#320, #327, #332, #335, #337 — the release mechanism for every "production" line above, not
+separate features. `main` is currently at PR #337; nothing from batch 2 onward (#339 and later)
+has been promoted.
 
 ## Where to post
 
@@ -59,8 +108,10 @@ Confirm these before finalizing the script and picking the demo URL to show on c
 way update #1's "Refresh on Sep 19" checklist worked. Don't assume from this file — re-check on
 the day.
 
-- [ ] `git log origin/develop` — list every PR merged between the two Sundays (Sep 20 13:00 UTC →
-      Sep 27) and confirm none of them were already cited in update #1.
+- [ ] Re-run `node scripts/weekly-update-draft.cjs --from 2026-09-20 --to 2026-09-27` (adjust `--to`
+      to the actual recording day) and rebuild every section above from that output, not this
+      draft's to-date placeholder — list every PR merged between the two Sundays (Sep 20 13:00 UTC
+      → Sep 27) and confirm none of them were already cited in update #1.
 - [ ] `git log origin/main` — confirm which of the week's work is actually **promoted** (owner's
       explicit go, per `CLAUDE.md` "Branching"; never assumed). State plainly in the recording
       whether the demo URL shown is production or staging.
@@ -80,6 +131,7 @@ the day.
 ## Related
 
 - Update #1 (the format this file follows): `docs/WEEKLY_UPDATE_2026-09-20.md`.
+- The script's raw output this to-date draft is built from: `docs/weekly-update-raw-2026-09-18.md`.
 - The disclosure this update's "shipped" list draws from: `docs/PRE_EVENT_STATE.md`.
 - The honesty rule behind the traction bullet: `docs/VALIDATION_2026-09.md`.
 - Roadmap cadence (four updates: Sep 20, Sep 27, Oct 4, Oct 11): `docs/COLOSSEUM_ROADMAP.md` §W10.

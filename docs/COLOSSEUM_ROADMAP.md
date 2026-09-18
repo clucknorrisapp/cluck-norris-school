@@ -514,7 +514,7 @@ builders themselves reported (no accessibility gate on the holders page; a badge
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke.
 
-## 14. Extension 8 — 2026-09-18 late afternoon (batch 11 merged; CC1, CC2, CC4 and the bundle-hash fix on batch 12)
+## 14. Extension 8 — 2026-09-18 late afternoon (DD1 landed on batch 12; DD2, DD4 building; DD3, DD5 on batch 13)
 
 Eleven batches in, the record is readable, reproducible, shareable and taught. Extension 8 does
 three things: puts the verifier in a reviewer's hands without a clone, lets anyone follow a
@@ -532,3 +532,23 @@ lens). Nothing here needs a wallet, a new secret or a live engine.
 
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke; the npm publish for DD1.
+
+## 15. Extension 9 — 2026-09-18 evening (batch 12 in CI; DD2, DD4 building; DD3, DD5 gated on the merge)
+
+Twelve batches in. The holder side is covered (read, reproduce, share, print, follow); the
+judge side is covered (guide, status, trust, badge); the money path is under its fourth lens.
+Extension 9 turns to the two people we still ask to trust us blind: the **operator** who
+publishes terms without seeing who they will pay, and the **reader** who meets a reason code with
+no plain-words definition. It also proves the public reads hold up under load, which the rate
+limits assert but nothing measures.
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **EE1** | **Preview before publish.** On the operator desk, a "who would this pay today?" preview for DRAFT terms: the same pure eligibility and accrual functions the live route runs (`lib/hub/engine.js` / `lib/hub/ledger.js`) applied to the current lock and holder data, returning per wallet qualified / excluded + reason code and the day's pool split, with the budget line from Launch Readiness — read-only, nothing written, nothing sent, rate-limited like the heavy reads, operator-token gated like the desk. Publishing stays the separate, explicit act it is today. (Scope confirmed by a read-only inventory of the desk on 2026-09-18: today the desk has two reads and nine writes, `/readiness` runs only the in-force version, and no route computes eligibility for current holders against draft terms — `readiness.planBudget()` already projects the next N days from the exact accrual engine, which is the piece to build on.) | Product, Viability | The preview for the PUBLISHED version equals the live route's next-batch computation on the same data (a test proves the two functions are the same call); a draft with a wider term shows the difference; no write path is reachable from it (guard test). |
+| **EE2** | **The Hub glossary.** `/hub/glossary`: every term and reason code the receipts, the compare page and the lesson use (from `lib/hub/teach.js` / `lib/hub/explain.js`, one source), defined in plain words in seven languages, each entry anchorable (`/hub/glossary#term_rule`) and linked from wherever the code appears (receipt rows, compare rows, the wallet view's exclusion reasons, the lesson). A drift test fails if a reason code exists in code without a glossary entry. | Product (Educate), Insight | Every reason code in `lib/hub/` has an entry; the a11y job passes; the audit gates the page; the receipt page links each code. |
+| **EE3** | **Load proof for the public reads.** A fixture of 50 projects × 200 receipts, and `scripts/hub-load-smoke.cjs` that boots the server against it and drives the heavy routes (reproducibility, history, standings, bundle, badge, feeds, wallet roll-up) at the rate-limit ceiling, reporting p50/p95 latency and confirming the limiter refuses the burst while a page load stays under a stated budget; a CI job runs a reduced version (10×50). | Viability | Numbers in the report; no route exceeds the budget on the reduced fixture in CI; the caches are shown to serve the second wave. |
+| **EE4** | **Weekly update as a routine.** A fresh-session Sunday routine (Sonnet) that runs `scripts/weekly-update-draft.cjs` for the week, writes `docs/WEEKLY_UPDATE_<next-Sunday>.md` on a fresh branch and opens the PR for the owner's three bullets — the record, not memory, every week until Oct 12. Set up only on the owner's go (a routine is an approval card). | Founder Communication | The routine exists with the model set explicitly; its first run produces a PR the owner can edit. |
+| **EE5** | **Operator interviews, measured.** `docs/VALIDATION_2026-09.md` gains the onboarding-clock deltas from E7 for POKEAHOE (the dry run) and a template row per invited project, filled from `/api/traction` milestones, so the validation doc reads from the record too. | Founder+Market Fit | Every number traces to a milestone timestamp; the doc names what is still unfilled. |
+
+**Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
+terms; the Sep 20 recording; the real-wallet smoke; the npm publish for DD1; the go for EE4.
