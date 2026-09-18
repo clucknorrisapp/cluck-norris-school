@@ -8125,7 +8125,13 @@ function hubProjectView(project) {
   const versions = (projectState && Array.isArray(projectState.versions)) ? projectState.versions : [];
   return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads, holderSnapshot, versions });
 }
-app.get("/api/hub", (req, res) => {
+// P1-03 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): this route calls hubProjectView() once
+// PER REGISTERED PROJECT — the same full stakeView + per-receipt explanation walk the
+// reproducibility/badge routes below already gate with the "hubheavy" limiter — but it carried no
+// limiter of its own. Ten concurrent hits measured the Node event loop pinned for ~10s, stalling
+// every other route on the box (the school, the tools, the store-edition contract endpoints).
+// Same shared bucket as the other heavy reads: a burst here also counts against them.
+app.get("/api/hub", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   try {
     const projects = Object.values(hubProjects()).map((p) => {
@@ -8157,19 +8163,56 @@ function hubWalletGroupPrograms(entries) {
   }
   return order;
 }
-app.get("/api/hub/wallet/:wallet", (req, res) => {
+// P1-03: this route re-walks EVERY registered project's full ledger for a wallet the caller
+// controls in the URL, so no HTTP cache tier can ever absorb a repeat the way `/api/hub`'s
+// `public, max-age=60` can — it is `no-store` on purpose (the report a wallet sees must never be
+// another wallet's stale cache). A 60s in-memory cache keyed by wallet closes that gap without
+// giving up the no-store *response* header: the expensive per-project walk is memoised, but
+// `generatedAt` is still stamped fresh on every response, cache hit or not. Bounded to ~500
+// wallets with LRU-ish eviction (a Map preserves insertion order; re-touching a hit moves it to
+// the end, and the oldest entry is dropped once the cap is exceeded) so a burst of one-off
+// addresses can't grow this unbounded.
+const HUB_WALLET_CACHE = new Map();   // wallet -> { at, data: { projects, seenIn } }
+const HUB_WALLET_CACHE_MS = 60 * 1000;
+const HUB_WALLET_CACHE_MAX = 500;
+function hubWalletCacheGet(wallet) {
+  const e = HUB_WALLET_CACHE.get(wallet);
+  if (!e) return null;
+  if (Date.now() - e.at >= HUB_WALLET_CACHE_MS) { HUB_WALLET_CACHE.delete(wallet); return null; }
+  HUB_WALLET_CACHE.delete(wallet); HUB_WALLET_CACHE.set(wallet, e);   // touch -> most-recently-used
+  return e.data;
+}
+function hubWalletCacheSet(wallet, data) {
+  HUB_WALLET_CACHE.set(wallet, { at: Date.now(), data });
+  while (HUB_WALLET_CACHE.size > HUB_WALLET_CACHE_MAX) {
+    const oldest = HUB_WALLET_CACHE.keys().next().value;
+    HUB_WALLET_CACHE.delete(oldest);
+  }
+}
+app.get("/api/hub/wallet/:wallet", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const wallet = String(req.params.wallet || "");
   if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ ok: false, error: "not a Solana address" });
   try {
-    const projects = [];
-    for (const p of Object.values(hubProjects())) {
-      let r;
-      try { r = hubPublic.walletLookup(hubProjectView(p), wallet); } catch (_) { continue; }
-      if (!r.ok || !r.entries.length) continue;
-      projects.push({ id: p.id, label: p.label, brand: p.brand ? { logo: p.brand.logo || null, accent: p.brand.accent || null, tagline: p.brand.tagline || null } : null, programs: hubWalletGroupPrograms(r.entries) });
+    let cacheHit = true;
+    let cached = hubWalletCacheGet(wallet);
+    if (!cached) {
+      cacheHit = false;
+      const projects = [];
+      for (const p of Object.values(hubProjects())) {
+        let r;
+        try { r = hubPublic.walletLookup(hubProjectView(p), wallet); } catch (_) { continue; }
+        if (!r.ok || !r.entries.length) continue;
+        projects.push({ id: p.id, label: p.label, brand: p.brand ? { logo: p.brand.logo || null, accent: p.brand.accent || null, tagline: p.brand.tagline || null } : null, programs: hubWalletGroupPrograms(r.entries) });
+      }
+      cached = { projects, seenIn: projects.length };
+      hubWalletCacheSet(wallet, cached);
     }
-    return res.status(200).json({ ok: true, wallet, projects, seenIn: projects.length, generatedAt: Date.now() });
+    // Test-only visibility into the cache (never present outside NODE_ENV=test) — lets
+    // scripts/hub-wallet-test.cjs assert a second lookup within 60s served from cache without
+    // depending on timing.
+    if (process.env.NODE_ENV === "test") res.setHeader("x-hub-wallet-cache", cacheHit ? "hit" : "miss");
+    return res.status(200).json({ ok: true, wallet, projects: cached.projects, seenIn: cached.seenIn, generatedAt: Date.now() });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // BB3 (Colosseum roadmap §12) — shields.io "endpoint badge" schema exactly
@@ -8189,7 +8232,9 @@ app.get("/api/hub/badge.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 
     return res.status(200).json({ schemaVersion: 1, label: "receipts reproducible", message: b.message, color: b.color, cacheSeconds: 300 });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
-app.get("/api/hub/:project", (req, res) => {
+// P1-03: same unbounded hubProjectView() cost as /api/hub above, per-request, with no limiter —
+// closed the same way, same shared bucket.
+app.get("/api/hub/:project", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=30");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
@@ -8844,6 +8889,23 @@ function hubOgFor(projectId, kind, sub) {
     url: base, feedProjectId: p.id,
   };
 }
+// P1-03 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): the `/hub/:project` share-page route
+// below calls hubOgFor() on EVERY request — the exact same hubProjectView() walk /api/hub/:project
+// just gained a limiter for — purely to fill in <meta> tags for a link-unfurl crawler. That page
+// route must always render 200 for a real browser (never 429 a person clicking a shared link), so
+// it gets a cache instead of a limiter: the computed OG meta is memoised per (project, kind, sub)
+// for 60s. A stale meta line for up to a minute after a payout lands is a fine trade against
+// recomputing the whole ledger on every Discord/Twitter unfurl of a popular link.
+const HUB_OG_CACHE = new Map();   // "projectId:kind:sub" -> { at, meta }
+const HUB_OG_CACHE_MS = 60 * 1000;
+function hubOgForCached(projectId, kind, sub) {
+  const key = `${projectId || ""}:${kind}:${sub || ""}`;
+  const cached = HUB_OG_CACHE.get(key);
+  if (cached && Date.now() - cached.at < HUB_OG_CACHE_MS) return cached.meta;
+  const meta = hubOgFor(projectId, kind, sub);
+  HUB_OG_CACHE.set(key, { at: Date.now(), meta });
+  return meta;
+}
 // The Colosseum judges' demo fixture (E2) — same treatment, labelled DRY RUN — fixture data
 // rather than the real dryNote above (there is no "project team" to agree terms with here).
 function hubDemoOgFor(projectId, kind, sub) {
@@ -8906,9 +8968,9 @@ app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:pr
   try {
     const projectId = req.params.project ? String(req.params.project).toLowerCase() : null;
     const meta = !projectId ? { ...HUB_OG_DEFAULT, url: HUB_OG_BASE }
-      : req.params.sig ? hubOgFor(projectId, "receipt", req.params.sig)
-      : req.params.program ? hubOgFor(projectId, "program", req.params.program)
-      : hubOgFor(projectId, "project", null);
+      : req.params.sig ? hubOgForCached(projectId, "receipt", req.params.sig)
+      : req.params.program ? hubOgForCached(projectId, "program", req.params.program)
+      : hubOgForCached(projectId, "project", null);
     res.type("html").send(renderHubOgHtml(hubOgShell(), meta));
   } catch (e) { res.sendFile(join(__dirname, "public", "hub.html")); }
 });

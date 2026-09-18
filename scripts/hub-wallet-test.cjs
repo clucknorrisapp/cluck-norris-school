@@ -75,7 +75,9 @@ const SEED = {
   let srv = null;
   if (!ARG_BASE) {
     fs.writeFileSync(path.join(DIR, "app-state.json"), JSON.stringify(SEED));
-    const env = { ...process.env, PORT: String(PORT), DATA_DIR: DIR, TOOLGATE_OFF: "1",
+    // NODE_ENV=test turns on the wallet-cache debug header (P1-03, server.js /api/hub/wallet/:wallet)
+    // — never present outside test, so this is the ONE test file that needs it set.
+    const env = { ...process.env, PORT: String(PORT), DATA_DIR: DIR, TOOLGATE_OFF: "1", NODE_ENV: "test",
       TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", HELIUS_API_KEY: "", MM_OPERATOR_SECRET: "", MM_OPERATOR_SECRET_TREASURY: "",
       FALLBACK_RPC_URL: "http://127.0.0.1:9" };
     srv = spawn(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env, stdio: "ignore" });
@@ -130,6 +132,27 @@ const SEED = {
     ok("no private field reaches the wire (chatId, board id, payout token, live board)", PRIVATE.every((s) => !json.includes(s)), PRIVATE.filter((s) => json.includes(s)).join(","));
     ok("Cache-Control: no-store, like the per-project wallet route", (await fetch(BASE + "/api/hub/wallet/" + WALLET)).headers.get("cache-control") === "no-store");
     ok("generatedAt is a fresh timestamp", typeof body.generatedAt === "number" && Math.abs(Date.now() - body.generatedAt) < 15000);
+  }
+
+  // ── 3b. P1-03: a 60s in-memory cache keyed by wallet — a second lookup within the window is
+  // served from cache (never re-walks every project's ledger), while the response still stamps a
+  // fresh `generatedAt` and keeps `Cache-Control: no-store` (the cache is server-side memoisation
+  // of the expensive computation, never a claim that the HTTP response itself is cacheable).
+  // Asserted with the `x-hub-wallet-cache` debug header the route exposes ONLY under NODE_ENV=test
+  // (this test file's server was booted with it — see above) rather than by timing, which would
+  // be flaky under load. A wallet never looked up anywhere else in this file, so the first hit is
+  // guaranteed a cache MISS. ──────────────────────────────────────────────────────────────────
+  {
+    const CACHE_WALLET = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+    const r1 = await fetch(BASE + "/api/hub/wallet/" + CACHE_WALLET);
+    const body1 = await r1.json();
+    ok("P1-03: first lookup is a cache MISS", r1.headers.get("x-hub-wallet-cache") === "miss", String(r1.headers.get("x-hub-wallet-cache")));
+    const r2 = await fetch(BASE + "/api/hub/wallet/" + CACHE_WALLET);
+    const body2 = await r2.json();
+    ok("P1-03: a second lookup within 60s is a cache HIT", r2.headers.get("x-hub-wallet-cache") === "hit", String(r2.headers.get("x-hub-wallet-cache")));
+    ok("P1-03: the cached data itself is unchanged (same seenIn/projects)", body1.seenIn === body2.seenIn && JSON.stringify(body1.projects) === JSON.stringify(body2.projects));
+    ok("P1-03: generatedAt is still stamped fresh on the cache-HIT response too", typeof body2.generatedAt === "number" && Math.abs(Date.now() - body2.generatedAt) < 15000);
+    ok("P1-03: Cache-Control stays no-store on a cache-HIT response", r2.headers.get("cache-control") === "no-store", String(r2.headers.get("cache-control")));
   }
 
   // ── 4. "wallet" cannot be registered as a project id ────────────────────────────────────────

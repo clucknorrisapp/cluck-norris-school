@@ -161,8 +161,11 @@ const ROUTES = [
   }
 
   // ── 4) rate limiting: a burst on a heavy route 429s, the bucket is shared across the heavy
-  // routes (one dedicated bucket), a light read on the SAME ip is unaffected, and a heavy route
-  // from a DIFFERENT ip is unaffected (per-IP, not global). ───────────────────────────────────
+  // routes (one dedicated bucket — P1-03 (2026-09-18) folded /api/hub, /api/hub/:project and
+  // /api/hub/wallet/:wallet into it too, since each did the same unbounded per-project walk with
+  // no limiter), a genuinely light read (a single receipt) on the SAME ip is unaffected, the
+  // `/hub/:project` HTML share page is unaffected (cached, not limited — see below), and a heavy
+  // route from a DIFFERENT ip is unaffected (per-IP, not global). ───────────────────────────────
   console.log("\nRate limiting (heavy routes only, per-IP, never the light reads)\n");
   {
     const BURST_IP = "10.0.9.9";
@@ -188,17 +191,36 @@ const ROUTES = [
     const feedXmlHeavy = await req("GET", `/hub/clkn/feed.xml`, { ip: BURST_IP });
     ok("feed.xml is on the same shared bucket too", feedXmlHeavy.status === 429, String(feedXmlHeavy.status));
 
-    // A normal page load is unaffected: the light per-page reads on the SAME (rate-limited) IP.
-    const lightHub = await req("GET", `/api/hub`, { ip: BURST_IP });
-    ok("…but a light read (/api/hub) on the same IP is unaffected (different bucket)", lightHub.status !== 429, String(lightHub.status));
-    const lightProject = await req("GET", `/api/hub/clkn`, { ip: BURST_IP });
-    ok("…and the per-project read is unaffected too", lightProject.status !== 429, String(lightProject.status));
+    // P1-03 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): /api/hub, /api/hub/:project and
+    // /api/hub/wallet/:wallet each call hubProjectView() once per registered project with no
+    // limiter of their own — ten concurrent hits measured the event loop pinned for ~10s. They
+    // now share the SAME "hubheavy" bucket as the routes above, so the IP already exhausted above
+    // is refused on these too — they are no longer "light".
+    const hubIndexHeavy = await req("GET", `/api/hub`, { ip: BURST_IP });
+    ok("P1-03: /api/hub now shares the heavy bucket too (was unlimited)", hubIndexHeavy.status === 429, String(hubIndexHeavy.status));
+    const hubProjectHeavy = await req("GET", `/api/hub/clkn`, { ip: BURST_IP });
+    ok("P1-03: /api/hub/:project now shares the heavy bucket too (was unlimited)", hubProjectHeavy.status === 429, String(hubProjectHeavy.status));
+    const hubWalletHeavy = await req("GET", `/api/hub/wallet/${GOOD_WALLET}`, { ip: BURST_IP });
+    ok("P1-03: /api/hub/wallet/:wallet now shares the heavy bucket too (was unlimited)", hubWalletHeavy.status === 429, String(hubWalletHeavy.status));
+
+    // A single receipt lookup (r/:sig) stays genuinely light — never folded into this bucket.
     const lightReceipt = await req("GET", `/api/hub/clkn/r/${GOOD_SIG}`, { ip: BURST_IP });
     ok("…and a single receipt (r/:sig) is unaffected — never rate-limited", lightReceipt.status !== 429, String(lightReceipt.status));
+
+    // P1-03: the `/hub/:project` HTML share page runs the SAME hubOgFor()->hubProjectView() walk
+    // on every hit purely to fill in <meta> tags for a link-unfurl crawler, but it must always
+    // render 200 for a person clicking a shared link — never 429 them — so it got a 60s per-project
+    // cache (hubOgForCached) instead of a limiter. Confirm it stays unaffected even on the IP
+    // that just exhausted the API-side bucket above, and still returns real HTML.
+    const sharePage = await req("GET", `/hub/clkn`, { ip: BURST_IP });
+    ok("P1-03: the /hub/:project share page is cached, not limited — still 200 on the exhausted IP", sharePage.status === 200, String(sharePage.status));
 
     // Per-IP, not global: a DIFFERENT ip on the exhausted heavy route still goes through.
     const otherIp = await req("GET", `/api/hub/clkn/reproducibility`, { ip: OTHER_IP });
     ok("a different IP on the same heavy route is unaffected (per-IP, not global)", otherIp.status !== 429, String(otherIp.status));
+    // ...and the newly-limited routes are equally per-IP, not global.
+    const otherIpHubIndex = await req("GET", `/api/hub`, { ip: OTHER_IP });
+    ok("P1-03: a different IP on /api/hub is unaffected too (per-IP, not global)", otherIpHubIndex.status !== 429, String(otherIpHubIndex.status));
   }
 
   // ── 5) no store-edition contract route was ever wired into the heavy limiter. ──────────────────
@@ -216,8 +238,13 @@ const ROUTES = [
     // the line right above it, and there is no established light tier to break new ground with.
     // DD2 (§14) added the two feed routes (feed.json + feed.xml) — each walks the same per-batch
     // reproducibility computation the badge/reproducibility routes already share this bucket for.
-    // 5 original + bundle + 2 badges + 1 history + 2 feed = 11.
-    ok("found the 11 heavy routes wired to the dedicated limiter", heavyPaths.length === 11, JSON.stringify(heavyPaths));
+    // P1-03 (2026-09-18 fix round) added /api/hub, /api/hub/:project and /api/hub/wallet/:wallet —
+    // each called hubProjectView() once per registered project with no limiter at all. The
+    // `/hub/:project` HTML share page is NOT in this list on purpose — it got a 60s OG-meta cache
+    // instead (hubOgForCached), so a person clicking a shared link is never 429'd; see the
+    // dedicated assertions in section 4 above.
+    // 5 original + bundle + 2 badges + 1 history + 2 feed + 3 (P1-03) = 14.
+    ok("found the 14 heavy routes wired to the dedicated limiter", heavyPaths.length === 14, JSON.stringify(heavyPaths));
     for (const p of heavyPaths) ok(`${p} is not a store-edition contract route`, !STORE_API_RE.test(p), p);
 
     // Live confirmation for one representative store-edition route: a burst well under its own
