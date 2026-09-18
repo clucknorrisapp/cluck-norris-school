@@ -256,6 +256,50 @@ current list) and `payoutSourcesHistory` (`[{payoutSources, at}]`, grown only on
 and every change alerts the operator room. Omitting `&payoutSources=` on an otherwise-ordinary
 project edit carries the existing value forward unchanged.
 
+## 5c. When a non-exact transfer goes out (N-4, Round 4, `docs/HUB_JOURNAL_VERIFY_2026-09-18.md`)
+
+`lib/hub/ledger.js settle()` is called with `exactOnly` on every live path (Round 3 #1) — a transfer
+that is not EXACTLY the row's remaining amount is refused outright, never capped into applied/
+excess. That is correct for fraud (a stranger's unrelated transfer must never claim a row), but it
+is also what happens to a genuine mistake: an operator fat-fingers the amount, or the reward mint
+turns out to charge a transfer fee so less arrives than was sent. The blast radius:
+
+- **The row is refused everywhere** — not journaled, not recorded in the legacy `sent`/`paid` state
+  either (`&sent=`'s PASS 2/3 only record what PASS 1 actually settled). The holder received real
+  tokens on chain, but nothing in the Hub says so.
+- **The batch can never reach `sent`.** `owedNow` still holds the row's full amount reserved inside
+  the pending batch (it is not "sent", so it is not double-counted, but it is not released either) —
+  the wallet reads owed 0 for that amount indefinitely, not because it was paid, but because it is
+  stuck.
+- **The signal is the summary alert** — `alert(..., { projectId, batchId, kind: "sent" })` at the
+  end of the `&sent=` branch, ONE per request (N-1's dedupe key, `lib/hub/alert-key.js`, keeps a
+  refusal on one batch from being silently swallowed by an unrelated batch's alert on the same
+  project). No alert reaching the operator room within 6 hours of a real mismatch means something
+  else is wrong with delivery, not that nothing happened — check `report.sent.ignored` in the
+  route's own response, which lists every refusal individually regardless of the alert.
+- **Two ways out:**
+  1. **A second, exactly-correct transfer.** The holder keeps whatever the first (mismatched)
+     transfer sent them — that money is real and already theirs — and the row settles normally once
+     an exact-remainder (or, for a fresh row, exact-full-amount) transfer lands. This is the
+     everyday remedy for an operator's own mistake, no owner action needed.
+  2. **`&cancel=`**, which returns the batch's unsettled rows to available and re-offers them on the
+     next `&export=`. Use this when the batch should never have existed as drawn (wrong recipients,
+     wrong terms) — not as a way to "fix" one row, since it re-offers the WHOLE batch, including any
+     rows that already settled correctly (those stay settled; cancelling only affects what is still
+     unsettled).
+- **The N-3 case — a PARTIAL row:** if a row already has a real, exact settlement for PART of its
+  amount (only reachable today via a pre-`exactOnly` or backfilled journal entry — see §6), the
+  route now verifies a further transfer against the row's REMAINING amount, not its original full
+  amount, so an exact-remainder transfer settles it like any other exact match. If the project
+  genuinely will never pay the rest (a dispute, a wallet the holder can no longer sign for), the
+  owner can write it off with `POST /api/hub/:project/payout?batch=<id>&waive=<wallet>&reason=<why>`
+  (owner-only; an operator gets 403) — `lib/hub/ledger.js waiveRemainder()`, journaled under its own
+  `hub:waive:<projectId>:<batchId>:<wallet>` kv entry (never the settlement journal's own
+  `hub:settle:` prefix, so a waiver can never be mistaken for a paid transfer) with the owner's own
+  reason string. The amount is still owed in the sense that it was never collected — this only stops
+  the batch holding it in permanent limbo; it does not manufacture a receipt for money that never
+  moved.
+
 ## 6. What is NOT independently verified yet
 
 A program-version `hash` served by the same server that computes the payout lets a reader rerun
@@ -267,6 +311,16 @@ honest public wording is **"the calculation is reproducible from the published i
 **"independently verified."** Neither step has shipped as of this writing; both are planned as a
 dry run before being treated as load-bearing. `lib/hub/teach.js` already carries this exact wording
 in its `notices.reproducible` string — copy it verbatim rather than writing a new claim.
+
+Known operational limits, tracked but not yet closed:
+
+- **`POST /api/hub-apply` is the one unauthenticated source of operator-room alerts** (N-5, Round 4,
+  `docs/HUB_JOURNAL_VERIFY_2026-09-18.md`). No signature is required — `applicantWallet` is
+  optional — and every accepted application raises one alert. It is rate-limited (12/min/IP) and
+  capped at `MAX_PENDING` (200) pending applications, so the cost to a griefer is bounded (roughly
+  200 throwaway SPL mints for ~200 messages in ~17 minutes) but not zero, and a full queue also
+  refuses legitimate applications until the owner clears some. Pre-existing, outside the settlement
+  journal's own diff; not fixed here.
 
 ## 7. How a second product consumes a receipt (or any of these entities)
 
