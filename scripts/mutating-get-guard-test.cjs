@@ -167,6 +167,8 @@ function raw(method, p, headers) {
   ok("GET /api/hub/:project/desk/session is refused with 405 (POST-only)", r.status === 405, JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/desk", false);
   ok("/api/hub/:project/desk without a key or operator token is 404", r.status === 404);
+  r = await call("GET", "/api/hub/nope/readiness", false);
+  ok("/api/hub/:project/readiness without a key or operator token is 404 (it is a read, but an operator-gated one — it reveals a funding balance)", r.status === 404);
   r = await call("GET", "/api/hub/nope/admin", false);
   ok("/api/hub/:project/admin without a key or operator token is 404 (no project-exists hint)", r.status === 404 && !(r.body && /no such project/.test(String(r.body.error))), JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/access?sig=x&quote=y", false);
