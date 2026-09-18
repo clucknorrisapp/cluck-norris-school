@@ -277,6 +277,8 @@ Dropping the demo evidence bundle onto `/hub/verify` (Shot 16 above) surfaces a 
 `HUB_VERIFY.md` nor any existing test documents: **"Program-version hash recompute: does not
 match — computed …"**, on an untampered, honestly-built bundle. Traced it: the bundle route
 (`server.js`, both `/api/hub/:project/batch/:batchId/bundle` and its demo twin) builds the
+**Fixed on batch 12 (commit d77729c)** — the served program version now carries every hashed field and the recompute line reads "matches"; the capture below predates the fix and is kept as the record.
+
 bundle's `program` field as `{ ...hubPublic.programVersionView(p.version), $schema }`.
 `programVersionView()` (`lib/hub/public.js` ~289) keeps only
 `{version, effectiveFrom, effectiveTo, hash, terms, commitment}` — it drops `projectId, mint,

@@ -496,7 +496,7 @@ claim we cannot recompute. Nothing here needs a wallet, a new secret or a live e
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke.
 
-## 13. Extension 7 — 2026-09-18 evening (AA1–AA5, BB1, BB3 on batch 10; BB2, BB4, BB5 in flight)
+## 13. Extension 7 — 2026-09-18 evening (CC3 landed on batch 11; CC1, CC2, CC4 on batch 12; CC5 blocked on #342)
 
 Extension 7 is about the two readers we have served least well so far: the holder who wants to
 know **what changed in the rules** between two program versions, and the non-English reader on
@@ -513,3 +513,22 @@ builders themselves reported (no accessibility gate on the holders page; a badge
 
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke.
+
+## 14. Extension 8 — 2026-09-18 late afternoon (batch 11 merged; CC1, CC2, CC4 and the bundle-hash fix on batch 12)
+
+Eleven batches in, the record is readable, reproducible, shareable and taught. Extension 8 does
+three things: puts the verifier in a reviewer's hands without a clone, lets anyone follow a
+project's record without a wallet, and turns an adversarial eye on the public pages themselves
+(nine new surfaces since batch 9, each self-tested by its builder, none yet read by a second
+lens). Nothing here needs a wallet, a new secret or a live engine.
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **DD1** | **The verifier as a standalone command.** `scripts/reproduce-receipt.cjs` and the pure libs it needs are packaged as a small workspace package (`packages/hub-verify`, MIT, no runtime dependency beyond Node) with a `bin` so a reviewer runs `npx @clkn/hub-verify <receipt-url | bundle.json>` — no clone, no build. Same code path as the browser bundle and the script (a test asserts all three agree on every fixture). Published to npm only on the owner's go; the README shows the `npx` line as the first command. | Open-source / composability | The package builds from the repo, its test runs in CI, `npm pack` produces a tarball under 200 KB, and the three verifiers agree on every fixture. |
+| **DD2** | **Follow a project without a wallet.** `GET /api/hub/:project/feed.json` (JSON Feed 1.1) and `GET /hub/:project/feed.xml` (RSS) listing, newest first: program versions published (with hash), batches settled (with receipt count and the reproducibility ratio of that batch), holder snapshots taken, commitments observed — every item linking its public page. A "Follow" line on the project page with both URLs. Read-only, demo projects excluded, cached like the other reads. | Traction, Product | Both feeds validate (a JSON Feed schema check and an RSS well-formedness check in the test); items are stable (same id on every fetch); no private field; the feeds are in the route-hygiene test. |
+| **DD3** | **Arena drafts round 3 + weekly update #2 filled from the record.** `docs/ARENA_POSTS.md` round 3 for everything merged since batch 8 (#347–#350), each draft checked against the code; `docs/WEEKLY_UPDATE_2026-09-27.md` filled from `scripts/weekly-update-draft.cjs` for the week, with the three founder bullets drafted and marked for the owner's edit. All HOLD until promoted. | Founder Communication | Every claim traces to a merged PR; no yield language; the script's output for the window is committed beside the draft. |
+| **DD4** | **A receipt you can print.** `/hub/<project>/r/<sig>?print=1` renders the receipt as a single printable page (the amount, the rule, the settlement signature as text and QR, the program hash, the reproduce steps, the trust-boundary line) with print CSS, so a holder can keep a paper copy; the QR encodes the public receipt URL only. | Product | Renders in the a11y job; the print stylesheet hides nav and pills; the QR decodes to the receipt URL in a test (a pure QR encoder, no network); seven languages. |
+| **DD5** | **Second lens on the public surfaces.** One read-only adversarial pass (Opus, the money-path tier — this is the brand's public face) over the nine surfaces added since batch 9: `/hub/verify`, `/hub/status`, `/hub/wallet`, `/hub/trust`, `/hub/judge`, the compare page, the holders Compare panel, the badge routes, the feeds — looking for a private field on the wire, an unescaped string, a route that shadows a project id, a cache header that leaks per-user data, an amount rendered from the wrong decimals. Findings to `docs/HUB_PUBLIC_SURFACES_VERIFY_<date>.md`; fixes as the next batch's first item. | Viability, Insight | The report exists with a verdict per surface; every P0/P1 is fixed and re-verified before the next promote ask; P2/P3 are listed with an owner. |
+
+**Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
+terms; the Sep 20 recording; the real-wallet smoke; the npm publish for DD1.

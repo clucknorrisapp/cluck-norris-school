@@ -391,6 +391,7 @@ drop-files/bundle). Pinned by `scripts/hub-verify-page-test.cjs` and `scripts/hu
 Questions:
 1. **A confirmed drift, not hypothetical — the bundle's embedded program version can never pass
    its own hash check.** `server.js`'s `/api/hub/:project/batch/:batchId/bundle` (and its demo
+   **Fixed on batch 12 (commit d77729c):** the bundle routes, `/api/hub/:project/program/:version` and the batch-inputs route now serve the full hashed record (`programVersionView(v, {full:true})`), and `versionHashInput()` strips the served `$schema` (a second hash-input bug found on the way); `hub-bundle-test` and `hub-verify-page-test` assert the recompute matches in Node and Chromium. The note below is kept as the record of the finding.
    twin) builds `program` as `{ ...hubPublic.programVersionView(p.version), $schema }`.
    `programVersionView()` (`lib/hub/public.js` ~289) returns only
    `{version, effectiveFrom, effectiveTo, hash, terms, commitment}` — it drops `projectId, mint,

@@ -21,6 +21,11 @@
  *      and asserts the rendered verdict badge equals what `node scripts/reproduce-receipt.cjs`
  *      prints for the exact same URL.
  *
+ * AA2 bug fix (2026-09-18): the fixture project now carries a real program version, and
+ * GET /api/hub/:project/batch/<batchId>/inputs (what the URL path reads) attaches it per wallet —
+ * both the URL path and the offline-files path now recompute its hash to a match too, the same
+ * check the bundle tab already ran (see scripts/hub-bundle-test.cjs's own header for the bug).
+ *
  * Usage: node scripts/hub-verify-page-test.cjs [baseUrl]
  * Env:   HUB_VERIFY_TEST_PORT (default 3218) — used only when baseUrl is omitted (a server is booted).
  */
@@ -53,6 +58,13 @@ const ok = (name, cond, detail) => {
   else { failures++; console.log("  ✗ " + name + (detail ? "\n      " + detail : "")); }
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// `page.textContent("body")` returns raw DOM textContent, which walks INTO <script> elements too
+// (a script tag's source is stored as a text-node child) — on this page that means every English
+// literal passed to t()/tf() is "found in the body" simply because it sits in the inline module
+// script, independent of what actually rendered. `innerText` is the rendered/visible text only
+// (CSS-aware, skips script/style), which is what "does this leak on screen" actually means; the
+// language-guard and i18n checks below both need that distinction or they pass for the wrong reason.
+const innerText = (pg) => pg.evaluate(() => document.body.innerText).catch(() => "");
 
 // ── fixture data — a REAL project registered in the hub kv registry, not the demo fixture ──────
 const WALLET = "4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs";
@@ -65,7 +77,19 @@ const SIG_MISMATCH = fakeSig(2);
 const PROJECT = "hvtest";
 const T0 = 1_800_000_000; // fixed, arbitrary unix seconds — this is a fixture, not a live clock
 const T1 = T0 + 3600;
-const BATCH_AT = T0 + 7200;
+const BATCH_AT = T0 + 7200;   // real UTC day for this timestamp is 2027-01-15
+const MINT = fakeAddr(99);
+const FUND = fakeAddr(50);
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+
+// A real program version (AA2 bug fix, 2026-09-18) — effective before BATCH_AT's own UTC day, so
+// GET /api/hub/:project/batch/<batchId>/inputs (what the URL path on /hub/verify reads) finds it
+// in force and attaches it to each wallet's entry.
+const proj = require("../lib/hub/project");
+const VERSION_PROJECT = { id: PROJECT, mint: MINT, rewardMint: MINT, rewardDecimals: 9, rewardTokenProgram: TOKEN_PROGRAM, fundingWallet: FUND };
+const VERSION = proj.createVersion({}, VERSION_PROJECT, {
+  poolDailyRaw: "1000000000000", minDurationDays: 1, maxTermDays: 540, payoutSchedule: "weekly", vesting: "any", fundedBy: [FUND],
+}, { effectiveFrom: "2027-01-01", todayKey: "2027-01-01" }).versions[0];
 
 function buildFixtureState() {
   const days = {
@@ -86,11 +110,12 @@ function buildFixtureState() {
   };
   return {
     "hub:projects": {
-      [PROJECT]: { id: PROJECT, label: "Hub Verify Test", symbol: "HVT", mint: fakeAddr(99), decimals: 9, rewardMint: fakeAddr(99), rewardDecimals: 9 },
+      [PROJECT]: { id: PROJECT, label: "Hub Verify Test", symbol: "HVT", mint: MINT, decimals: 9, rewardMint: MINT, rewardDecimals: 9, fundingWallet: FUND },
     },
     [`program:${PROJECT}:days`]: days,
     [`program:${PROJECT}:batches`]: batches,
     [`program:${PROJECT}:paid`]: {},
+    [`program:${PROJECT}:state`]: { versions: [VERSION] },
   };
 }
 
@@ -221,7 +246,13 @@ async function main() {
     await page.waitForSelector(".verdict .badge", { timeout: 10000 }).catch(() => {});
     let badge = await page.textContent(".verdict .badge").catch(() => null);
     ok("?receipt= query param auto-runs and shows MATCH", badge === "MATCH", "got: " + badge);
-    allBodyText += (await page.textContent("body").catch(() => "")) + " ";
+    let bodyText4a = await innerText(page);
+    // AA2 bug fix (2026-09-18): GET /api/hub/:project/batch/<batchId>/inputs now carries this
+    // batch's program version (the fixture seeds one) — the URL path recomputes its hash exactly
+    // like the offline-files and bundle tabs already do. Same assertion, same exact string, on
+    // the URL path: paste a receipt URL, and the program hash recomputes to a match.
+    ok('the URL path recomputes the program-version hash too: "Program version hash recompute: matches"', /Program[- ]version hash recompute:\s*matches/.test(bodyText4a), bodyText4a.slice(0, 4000));
+    allBodyText += bodyText4a + " ";
 
     // 4b. typed into the URL field + button click — the interactive path
     await page.goto(`${BASE}/hub/verify`, { waitUntil: "networkidle", timeout: 20000 });
@@ -230,7 +261,11 @@ async function main() {
     await page.waitForSelector(".verdict .badge", { timeout: 10000 }).catch(() => {});
     badge = await page.textContent(".verdict .badge").catch(() => null);
     ok("typed URL + REPRODUCE shows MISMATCH for the tampered batch", badge === "MISMATCH", "got: " + badge);
-    allBodyText += (await page.textContent("body").catch(() => "")) + " ";
+    let bodyText4b = await innerText(page);
+    // The amount is wrong (deliberately) but the program version itself was never tampered — the
+    // two checks are independent, so this still recomputes to a match.
+    ok('an amount MISMATCH does not affect the program-hash line: it still says "matches"', /Program[- ]version hash recompute:\s*matches/.test(bodyText4b), bodyText4b.slice(0, 4000));
+    allBodyText += bodyText4b + " ";
 
     ok("no uncaught page errors", pageErrors.length === 0, pageErrors.join("\n"));
 
@@ -255,11 +290,57 @@ async function main() {
       badge = await page.textContent(".verdict .badge").catch(() => null);
       ok("offline path from saved files shows MATCH (same as the CLI)", badge === "MATCH", "got: " + badge);
     }
-    allBodyText += (await page.textContent("body").catch(() => "")) + " ";
+    const bodyText5 = await innerText(page);
+    // batch-inputs.json (saved straight off the wire, no separate program-version.json) now
+    // carries the program version inline — the offline-files tab falls back to it too.
+    ok('the offline-files path recomputes the program-version hash from the saved batch-inputs.json alone', /Program[- ]version hash recompute:\s*matches/.test(bodyText5), bodyText5.slice(0, 4000));
+    allBodyText += bodyText5 + " ";
     fs.rmSync(tmp, { recursive: true, force: true });
 
     console.log("\n6. language guard — no verified-project/safe badge, no APR anywhere on the page\n");
     languageGuard(allBodyText);
+
+    // ── 7. CC2 (docs/COLOSSEUM_ROADMAP.md Extension 7): the page's own t()/tf() strings must
+    // actually render in the visitor's chosen language, not fall through to English. `clkn_lang`
+    // (the same localStorage key i18n.js reads — see public/i18n.js's own `detect()`) is set via
+    // `addInitScript` BEFORE the page's first script runs, in a fresh context per language so it
+    // never leaks between runs. Three sample strings per language: one from the static markup
+    // (curated via i18n.js's own DOM walker) and two this page's own `t()` builds at render time
+    // — covering both translation paths this CC2 change touches. The verdict CODE (MATCH) must
+    // stay the literal, untranslated string in every language — only the prose beside it changes.
+    async function runLanguageCheck(lang, expectSamples) {
+      console.log(`\n7. /hub/verify in "${lang}" — curated strings render translated, not English\n`);
+      const ctx = await browser.newContext();
+      await ctx.addInitScript((l) => { try { localStorage.setItem("clkn_lang", l); } catch (_) {} }, lang);
+      const p = await ctx.newPage();
+      try {
+        await p.goto(`${BASE}/hub/verify?receipt=${encodeURIComponent(urlMatch)}`, { waitUntil: "networkidle", timeout: 20000 });
+        await p.waitForSelector(".verdict .badge", { timeout: 10000 }).catch(() => {});
+        const badge = await p.textContent(".verdict .badge").catch(() => null);
+        ok(`[${lang}] verdict code stays the literal "MATCH" (never translated)`, badge === "MATCH", "got: " + badge);
+        // Case-insensitive: some of these labels sit under CSS `text-transform:uppercase` (the
+        // `.steps .lbl` rule), so the rendered text is e.g. "CANTIDAD PUBLICADA" while the curated
+        // dictionary value (and the sample below) is sentence case — that's a CSS presentation
+        // detail, not a translation gap, and the check should not care about it either way.
+        const body = (await innerText(p)).toLowerCase();
+        for (const s of expectSamples) {
+          ok(`[${lang}] renders "${s.slice(0, 44)}${s.length > 44 ? "…" : ""}"`, body.includes(s.toLowerCase()), "page body did not contain the expected " + lang + " string: " + s);
+        }
+        ok(`[${lang}] does not fall back to the raw English verdict explanation`, !body.includes("this amount is exactly reproducible from the inputs the server published."));
+      } finally {
+        await ctx.close();
+      }
+    }
+    await runLanguageCheck("es", [
+      "Reproducir un recibo",                  // markup (h1) — i18n.js's own curated-dict path
+      "Cantidad publicada",                    // this page's t() — a plain label
+      "Esta cantidad es exactamente reproducible a partir de las entradas que publicó el servidor.", // this page's t() — the MATCH explanation sentence
+    ]);
+    await runLanguageCheck("zh", [
+      "复现一张收据",           // markup (h1) — i18n.js's own curated-dict path
+      "已公布金额",             // this page's t() — a plain label
+      "该金额可由服务器公布的输入精确复现。", // this page's t() — the MATCH explanation sentence
+    ]);
   } finally {
     await browser.close();
     if (srv) { try { srv.kill("SIGKILL"); } catch (_) {} }

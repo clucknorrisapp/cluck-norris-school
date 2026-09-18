@@ -82,6 +82,27 @@
  *   node scripts/i18n-audit.cjs --json           machine-readable dump on stdout, same exit code
  *   node scripts/i18n-audit.cjs --warn-only      print everything, always exit 0 (CI wiring)
  *
+ * JS-BUILT STRINGS ON HUB_FILES (public/hub-verify.html)
+ * -------------------------------------------------------
+ * Every other page's copy lives in markup, so the source scan above (extractMarkupText, which
+ * explicitly cuts out `<script>` blocks) is enough. hub-verify.html is the one Hub page whose
+ * verdicts, errors and "missing input" explanations are ASSEMBLED IN JS and injected via
+ * `.innerHTML` — that text never exists in the file as markup, so the markup scanner cannot see
+ * it, and until it went through a small page-local `t()`/`tf()` helper (see hub-verify.html's own
+ * comment beside it) it was never in a curated dictionary either — English-only regardless of
+ * `clkn_lang`, silently, since a JS string failing to match a dict key just renders as-is.
+ * `extractJsTFCalls` is a narrow, deliberately dumb regex over that file's `<script>` block: it
+ * matches `t(` or `tf(` immediately followed by a single- or double-quoted string literal and
+ * takes that literal as a candidate key, verbatim (including any `{token}` placeholders `tf`
+ * substitutes at render time — those stay literal in translation, same as the placeholder check
+ * elsewhere in this file). LIMITATIONS, on purpose, because a real JS parser is not an available
+ * dependency here: it cannot see a key built by concatenation or a template literal (this file
+ * has none — every t()/tf() call site was written with a literal first argument specifically so
+ * this scan can see it), it cannot tell a real `t(`/`tf(` call from an unrelated identifier that
+ * happens to be named `t` or `tf` (none exist in this file today), and it does not understand
+ * escaped quotes beyond a simple `\'`/`\"` backslash skip. If hub-verify.html ever grows a second
+ * call site pattern, extend this function rather than trusting it silently.
+ *
  * LESSON COVERAGE BY ID (school family only)
  * -------------------------------------------
  * The cross-language key diff above (A) only catches a string missing from SOME language
@@ -217,6 +238,29 @@ function extractMarkupText(raw, { bodyOnly } = {}) {
   while ((m = textRe.exec(s))) {
     const v = norm(decodeEntities(m[1]));
     if (v && hasLetter(v) && !CODE_SMELL_RE.test(v)) keys.add(v);
+  }
+  return keys;
+}
+
+// See the "JS-BUILT STRINGS ON HUB_FILES" header comment for what this does and does not catch.
+// Scoped to the file's <script> block(s) only (the inverse of extractMarkupText, which cuts them
+// out) so this never double-counts a literal that also happens to appear as markup text.
+function extractJsScriptBlocks(raw) {
+  const blocks = [];
+  const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(raw))) blocks.push(m[1]);
+  return blocks;
+}
+function extractJsTFCalls(raw) {
+  const keys = new Set();
+  const callRe = /\b(?:t|tf)\(\s*(['"])((?:\\.|(?!\1)[\s\S])*)\1/g;
+  for (const block of extractJsScriptBlocks(raw)) {
+    let m;
+    while ((m = callRe.exec(block))) {
+      const v = norm(decodeEntities(m[2].replace(/\\(['"\\])/g, '$1')));
+      if (v) keys.add(v);
+    }
   }
   return keys;
 }
@@ -453,16 +497,22 @@ for (const fam of FAMILIES) {
     // it is missing from. Scoped to just these files (not all of `public/`) so this doesn't drag
     // the hundreds of un-curated tool pages into gating — that would make CI red for pages nobody
     // has curated on purpose.
-    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html', 'hub-trust.html'];
+    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html', 'hub-trust.html', 'hub-verify.html', 'hub-compare.html'];
     const hubKeys = new Set();
+    // JS-built strings (see the "JS-BUILT STRINGS ON HUB_FILES" header comment): every literal
+    // passed to a page-local t()/tf() call is an explicit "translate this" signal from whoever
+    // wrote it, unlike arbitrary markup text — so these skip the isCandidateGap heuristic below
+    // entirely and gate on their own, verbatim (including any `{token}` placeholder).
+    const hubJsKeys = new Set();
     const hubFilesRead = [];
     for (const f of HUB_FILES) {
       const raw = safeRead(path.join(ROOT, 'public', f));
       if (raw == null) continue;
       hubFilesRead.push(path.join('public', f));
       for (const k of extractMarkupText(raw, { bodyOnly: true })) hubKeys.add(k);
+      for (const k of extractJsTFCalls(raw)) hubJsKeys.add(k);
     }
-    const hubCandidates = [...hubKeys].filter(isCandidateGap);
+    const hubCandidates = Array.from(new Set([...[...hubKeys].filter(isCandidateGap), ...hubJsKeys]));
     const hubUsedNotInAnyDict = hubCandidates.filter((k) => !REFERENCE.has(k)).sort();
     // Per-language view of the same gap: for a key that IS in some language's dict (added for one
     // language but missed for another) the cross-language diff above already gates it — this

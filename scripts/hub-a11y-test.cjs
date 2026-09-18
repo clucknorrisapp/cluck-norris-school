@@ -54,6 +54,30 @@ const BASE = ARG_BASE || `http://127.0.0.1:${PORT}`;
 // (no history/compare yet — a mint nobody has ever crawled) stays in the list too, since it's a
 // different render path (both cards are `display:none` until at least one/two snapshots exist).
 const SEED_MINT = "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc";
+// CC1 (docs/COLOSSEUM_ROADMAP.md §13): a11y coverage for /hub/:project/programs/compare needs a
+// project with two published program versions to actually render a diff — "poke" (seeded by
+// server.js itself, dryRun, no program version) can't exercise it. Seeded directly through
+// lib/hub/project.js, the same way the admin route itself creates a version, into a throwaway
+// DATA_DIR's app-state.json BEFORE the server boots (this test has no per-page setup hook, so
+// this is the file-level seed hub-status-test.cjs / hub-bundle-test.cjs already use).
+const hubProject = require(path.join(__dirname, "..", "lib", "hub", "project"));
+const A11Y_CMP_PROJECT = "a11ycmp";
+function a11yCompareFixture() {
+  const MINT = "6M6nk7cGaFC4RfxhKr7VfDD3JkyrFrjPT6RM4a97pump";
+  const FUND = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+  const TOK = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  const project = hubProject.validateProject(
+    { id: A11Y_CMP_PROJECT, label: "A11y Compare Co", symbol: "A11Y", mint: MINT, fundingWallet: FUND, operatorWallets: [] },
+    { decimals: 9, tokenProgram: TOK, extensions: [] },
+  );
+  const base = { poolDailyRaw: "1000000000000", sharePct: 5, maxSharePct: 25, maxTermDays: 540, payoutSchedule: "weekly", minDurationDays: 90, fundedBy: [FUND] };
+  let state = hubProject.createVersion({}, project, base, { effectiveFrom: "2026-01-01", todayKey: "2026-01-01" });
+  state = hubProject.createVersion(state, project, { ...base, minDurationDays: 60, payoutSchedule: "monthly" }, { effectiveFrom: "2026-02-01", todayKey: "2026-01-01" });
+  return {
+    "hub:projects": { [A11Y_CMP_PROJECT]: { id: A11Y_CMP_PROJECT, label: "A11y Compare Co", symbol: "A11Y", mint: MINT, decimals: 9, rewardMint: MINT, rewardDecimals: 9, status: "approved" } },
+    [`program:${A11Y_CMP_PROJECT}:state`]: state,
+  };
+}
 
 const PAGES = [
   { path: "/hub", name: "Hub index" },
@@ -61,6 +85,7 @@ const PAGES = [
   // exercises that render path, and it's what a judge actually clicks into from the index.
   { path: "/hub/poke", name: "Hub project page (poke)" },
   { path: "/hub/demo", name: "Hub demo walkthrough" },
+  { path: `/hub/${A11Y_CMP_PROJECT}/programs/compare`, name: "Hub compare — what changed between two program versions (CC1)" },
   { path: "/for-projects", name: "For Projects" },
   { path: "/hub/apply", name: "Hub apply (lock-to-earn form)" },
   { path: "/hub/cuna/pay", name: "Hub pay" },
@@ -221,6 +246,7 @@ async function auditPage(browser, pagePath, pageName) {
   let srv = null, DIR = null;
   if (!ARG_BASE) {
     DIR = fs.mkdtempSync(path.join(os.tmpdir(), "hub-a11y-"));
+    fs.writeFileSync(path.join(DIR, "app-state.json"), JSON.stringify(a11yCompareFixture()));
 
     // Seed two holder snapshots for SEED_MINT directly through the real kv module +
     // appendSnapshot, pointed at the same DATA_DIR the server is about to boot with — the same

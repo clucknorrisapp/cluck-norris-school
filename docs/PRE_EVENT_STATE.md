@@ -211,6 +211,15 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 11** — `/receipt <signature>` in Telegram: the reproduce verdict for a Hub
+  settlement, composed from the same public receipt view, silent, with the OnlyRose refusal pinned
+  by a test that calls the real room policy; the receipt lesson measured (per-lesson reads and the
+  finish card's click-throughs counted per day, nothing identifying a learner) and, found on the
+  way, the Google Play bundle stripped of Hub strings that had ridden in through the shared
+  dictionaries; the holders page in the accessibility gate, with the history and compare panels
+  unhidden on a shared snapshot link; the Codex reviewer brief through batch 10, the reviewer's
+  path in `HUB_VERIFY.md`, fourteen reference captures of the new pages; roadmap Extension 7.
+  PR #349.
 - **Colosseum batch 10** — one wallet across every project (`/hub/wallet/<address>`: what each
   program qualified or excluded it for, each receipt with its settlement signature, owed against
   arrived); the evidence bundle (one downloadable JSON per settled batch with a canonical hash, and

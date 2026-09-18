@@ -262,6 +262,15 @@ jobs:
       # project view's holders fact line appears only when a snapshot exists.
       - name: Holder snapshot history (append-only, hashed, read-only)
         run: node scripts/holders-snapshot-test.cjs
+      # Colosseum roadmap §13 CC4: the daily reproducibility history behind the badge/ratio — same
+      # append-only, hashed pattern as the holder snapshots above (one record per project per UTC
+      # day, refused on a second write, a hash chain that recomputes end to end, a tampered record
+      # breaks it, the 90-day cap drops the oldest first, a skipped day is a gap, never
+      # interpolated). Also boots a real server (the tick's own env-only fast-interval overrides)
+      # to prove the tick writes today's record exactly once and /hub/status renders the
+      # sparkline with its aria-label.
+      - name: Reproducibility history (append-only daily record, hash chain, sparkline)
+        run: REPRO_HISTORY_TEST_PORT=3317 node scripts/reproducibility-history-test.cjs
       # Colosseum roadmap §11 AA3: the snapshot diff — entered/exited/held over the RECORDED
       # top-25 only (never a full holder-base diff, per lib/holders-snapshot.js's own header). A
       # self-diff is empty, the BigInt sums reconcile, and the route (400/404/200) matches its
@@ -274,6 +283,22 @@ jobs:
       # what is missing; the reproducibility ratio; the CLI script's --offline mode with no server.
       - name: Hub receipt reproduction (the number — MATCH/MISMATCH/MISSING_INPUTS, --offline)
         run: node scripts/reproduce-receipt-test.cjs
+      # DD1 (docs/COLOSSEUM_ROADMAP.md §14): packages/hub-verify (the `npx @clkn/hub-verify`
+      # standalone CLI) is a BUILD OUTPUT of scripts/build-hub-verify-package.cjs, never a second
+      # hand-typed copy of the repo's verifier. This asserts a fresh rebuild is byte-identical to
+      # the committed package, that the repo lib / packaged lib / browser bundle agree on every
+      # fixture scripts/hub-verify-page-test.cjs uses, that the packaged CLI's output matches
+      # scripts/reproduce-receipt.cjs's against a real ephemeral fixture server, that `npm pack
+      # --dry-run` stays under 200 KB with only allowlisted files, and that the package's lib/
+      # requires resolve from a directory outside this repo entirely. Needs the small hub-verify
+      # bundle (not the full React build), which this step builds itself when missing — same
+      # pattern the Y1/AA2 smoke-test steps below use.
+      - name: Hub verify standalone package — build determinism, fixture parity, npm pack, no repo-relative requires (DD1)
+        env:
+          HUB_VERIFY_PKG_TEST_PORT: "3339"
+        run: |
+          test -f public/hub-verify.bundle.js || npm run build:hubverify
+          node scripts/hub-verify-package-test.cjs
       # BB3 (Colosseum roadmap §12): the shields.io-shaped reproducibility badge
       # (/api/hub/badge.json + /hub/badge.svg) sums the SAME projectReproducibility every
       # non-demo project — a fresh install says "no receipts yet"/lightgrey rather than "0 of 0",
@@ -459,7 +484,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -711,6 +736,18 @@ jobs:
       - name: Hub wallet look-up — one wallet, every project (AA1)
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-wallet-test.cjs
+      # CC1 (docs/COLOSSEUM_ROADMAP.md §13) — "what changed in the rules" between two program
+      # versions. Boots its own server with two fixture program versions seeded directly through
+      # lib/hub/project.js (differing in exactly two term fields) and asserts:
+      # /hub/<project>/programs/compare resolves to the compare page at its literal path (never
+      # the /hub/:project/programs or /hub/:project catch-alls — a longer path a shorter pattern
+      # cannot match), a real Chromium renders exactly those two fields as changed and every other
+      # field as unchanged (collapsed under the toggle), comparing a version with itself is empty,
+      # both versions' hashes are shown and equal the public program-version API's own hashes, an
+      # unknown version answers an honest not-found state, and no forbidden word appears.
+      - name: Hub compare — what changed between two program versions (CC1)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-compare-test.cjs
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the

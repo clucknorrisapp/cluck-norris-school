@@ -8093,6 +8093,10 @@ function hubProjectView(project) {
   const comps = Object.values(buyCompsAll()).filter((c) => c && c.mint === project.mint);
   const draws = Object.values(bsDrawsAll()).filter((d) => d && d.mint === project.mint);
   let stake = null, giveaway = null;
+  // Read once, reused for both the accrual ledger view below and the public versions list (CC1) —
+  // a project with no programme store yet just has an empty versions[], never an error.
+  let projectState = null;
+  try { projectState = hubStore.read(kv, project.id, "state", null); } catch (_) { /* no store yet */ }
   try {
     const days = hubStore.read(kv, project.id, "days", null);
     if (days && Object.keys(days).length) {
@@ -8101,7 +8105,7 @@ function hubProjectView(project) {
         // Additive (roadmap E5, "the receipt teaches"): lets each receipt attribute its own hourly
         // accrual slices and the program version they ran under. Missing or unreadable state just
         // degrades every row's `explanation` to "not retained" — never a fabricated walkthrough.
-        project, programState: hubStore.read(kv, project.id, "state", null) });
+        project, programState: projectState });
     }
   } catch (_) { /* a project without a programme store is not an error */ }
   if (project.id === "cuna") {
@@ -8117,7 +8121,8 @@ function hubProjectView(project) {
   // just has no holders fact line.
   let holderSnapshot = null;
   try { holderSnapshot = require("./lib/holders-snapshot").latest(kv, project.mint); } catch (_) { /* no snapshot yet */ }
-  return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads, holderSnapshot });
+  const versions = (projectState && Array.isArray(projectState.versions)) ? projectState.versions : [];
+  return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads, holderSnapshot, versions });
 }
 app.get("/api/hub", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
@@ -8306,7 +8311,10 @@ app.get("/api/hub-demo/:project/batch/:batchId/bundle", (req, res) => {
     if (!p) return res.status(404).json({ ok: false, error: "no such demo project" });
     if (!p.batch || !p.batch.id) return res.status(404).json({ ok: false, error: "this demo project has no batch to bundle" });
     if (String(req.params.batchId || "") !== p.batch.id) return res.status(404).json({ ok: false, error: "no such batch" });
-    const programVersion = { ...hubPublic.programVersionView(p.version), $schema: HUB_SCHEMA_URL("program-version") };
+    // full:true (AA2 bug fix): the bundle's program version must carry every field
+    // lib/hub/project.js verifyVersionHash actually hashes, or "recompute the hash" can never
+    // pass — see lib/hub/public.js programVersionView's own comment.
+    const programVersion = { ...hubPublic.programVersionView(p.version, { full: true }), $schema: HUB_SCHEMA_URL("program-version") };
     const receiptIds = Object.keys(p.receipts || {}).sort();
     const receiptsOut = receiptIds.map((rid) => {
       const r = p.receipts[rid];
@@ -8358,11 +8366,28 @@ app.get("/api/hub/:project/batch/:batchId/inputs", rateLimit("hubheavy", { windo
     // lib/hub/public.js draws (a batch row with no signature is never public). Optional
     // ?wallet= narrows to one, so a reader reproducing a single receipt fetches one small file.
     const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
+    // The program version in force when this batch was built (same lookup the AA2 bundle route
+    // runs) — attached per wallet so /hub/verify's URL path (which reads THIS route, not the
+    // bundle) can recompute the version's own hash without a second fetch, the same way the
+    // offline-files and bundle tabs already do. Absent for a project whose payout predates program
+    // versions (CUNA) — reported as no `programVersion` key at all, never invented. full:true (AA2
+    // bug fix): must carry every field lib/hub/project.js verifyVersionHash hashes.
+    let programVersion = null;
+    try {
+      const state = hubStore.read(kv, p.id, "state", {}) || {};
+      if (Array.isArray(state.versions) && state.versions.length) {
+        const dayKey = new Date((Number(bt.at) || 0) * 1000).toISOString().slice(0, 10);
+        const v = hubProject.versionFor(state, dayKey);
+        if (v) programVersion = { ...hubPublic.programVersionView(v, { full: true }), $schema: HUB_SCHEMA_URL("program-version") };
+      }
+    } catch (_) { /* no version state on this project — programVersion stays absent, reported honestly */ }
+    const withVersion = (entry) => (programVersion ? { ...entry, programVersion } : entry);
     if (wanted) {
       if (!Object.prototype.hasOwnProperty.call(all, wanted)) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
-      return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: all[wanted] } });
+      return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: withVersion(all[wanted]) } });
     }
-    return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: all });
+    const walletsOut = {}; for (const [w, entry] of Object.entries(all)) walletsOut[w] = withVersion(entry);
+    return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: walletsOut });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // ── AA2: the offline evidence bundle (Colosseum roadmap §11) — one JSON download that carries
@@ -8402,7 +8427,8 @@ app.get("/api/hub/:project/batch/:batchId/bundle", rateLimit("hubheavy", { windo
       if (Array.isArray(state.versions) && state.versions.length) {
         const dayKey = new Date((Number(bt.at) || 0) * 1000).toISOString().slice(0, 10);
         const v = hubProject.versionFor(state, dayKey);
-        if (v) programVersion = { ...hubPublic.programVersionView(v), $schema: HUB_SCHEMA_URL("program-version") };
+        // full:true (AA2 bug fix): see the demo-bundle route above.
+        if (v) programVersion = { ...hubPublic.programVersionView(v, { full: true }), $schema: HUB_SCHEMA_URL("program-version") };
       }
     } catch (_) { /* no version state on this project — programVersion stays null, reported honestly */ }
     let receiptsOut = [];
@@ -8458,6 +8484,28 @@ app.get("/api/hub/:project/reproducibility", rateLimit("hubheavy", { windowMs: 6
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
   try {
     return res.status(200).json(hubReproducibilityFor(id, p));
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── CC4 (Colosseum roadmap §13): the dated series behind the ratio above — a daily append-only,
+// hashed record per project (lib/reproducibility-history.js, written by the tick registered next
+// to the other Hub schedulers below), so the badge/ratio has a TREND and a regression is visible
+// the day it happens rather than only in the current snapshot. Same route shape/segment count as
+// /api/hub/:project/batch/:batchId/inputs above (4 segments vs :project's 3) — Express matches by
+// exact segment count with no wildcard in :project, so this cannot be swallowed by the route
+// above it; verified with a live boot in scripts/reproducibility-history-test.cjs regardless,
+// per the roadmap's own instruction to test that rather than assume it. `hubheavy` (not a new
+// "light" tier): recomputing the chain's hashes is cheap (<=90 small records), but it is a read
+// of the same class as its siblings on this line and there is no established light tier for a
+// Hub reproducibility route to break new ground with — see scripts/public-route-hygiene-test.cjs.
+app.get("/api/hub/:project/reproducibility/history", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const id = String(req.params.project || "").toLowerCase();
+  const p = hubProjects()[id];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const days = reproHistory.series(kv, id);
+    const chain = reproHistory.verifyChain(kv, id);
+    return res.status(200).json({ ok: true, project: id, days, chainOk: chain.ok });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // ── BB3 (Colosseum roadmap §12): a reproducibility badge that is COMPUTED, not typed. Both
@@ -8565,6 +8613,14 @@ app.get("/hub/schema/:name.json", (req, res) => {
 app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
 app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
 app.get("/hub/:project/desk", (req, res) => { res.sendFile(join(__dirname, "public", "hub-desk.html")); });
+// CC1 (Colosseum roadmap §13): "what changed in the rules" between two program versions. Same
+// ordering reason as /pay and /desk above — registered BEFORE the /hub/:project/programs and
+// /hub/:project catch-all patterns further down, or Express would need to match a LONGER path
+// (/hub/<project>/programs/compare has 4 segments; /hub/:project/programs only matches 3) and
+// this route would never be reached at all, 404ing through to the SPA/static fallback instead of
+// serving the compare page. scripts/hub-compare-test.cjs asserts this exact ordering with a real
+// boot, not just by reading the file top-to-bottom.
+app.get("/hub/:project/programs/compare", (req, res) => { res.sendFile(join(__dirname, "public", "hub-compare.html")); });
 // ── Y1: reproduce a receipt in the browser, offline-capable (Colosseum roadmap §9) ──────────────
 // The bundle is generated by `npm run build:hubverify` (vite.hubverify.config.js) straight from
 // the SAME pure lib/hub/reproduce.js + lib/hub/schema-validate.js + lib/hub/canonical.js the
@@ -8851,6 +8907,41 @@ hubRoutes.mount(app, {
   },
 });
 hubRoutes.startScheduler({ kv, scanDeps: async () => hubScanDeps, alert: hubAlert });
+
+// ── CC4 (Colosseum roadmap §13): the daily reproducibility-history tick — registered here, next
+// to the Hub's own scheduler above, UNCONDITIONALLY (not inside the TELEGRAM_BOT_TOKEN/CHAT_ID
+// gate the alerts/lessons/radar block needs — CLAUDE.md: that whole block only starts with both
+// set, and this must run on every boot regardless). Once at boot and then every 6 hours, for
+// every registered non-demo project (hubProjects() never contains "demo"/"demo-b" — the fixture
+// module is separate and never registered in the real kv registry), write today's UTC-day record
+// if one doesn't already exist. lib/reproducibility-history.js's own day_exists refusal in
+// record() IS the "never twice in the same UTC day per project" guard — no separate lock needed.
+// Reuses hubReproducibilityFor() — the exact function the reproducibility route and the badge
+// already share a 5-minute cache with — so this can never compute a different number than what a
+// reader sees if they hit that route the same moment. Never throws out of the interval; logs one
+// line per project actually written, and stays silent (not an error) on a day already recorded.
+// The two env overrides exist ONLY for scripts/reproducibility-history-test.cjs to observe two
+// ticks without waiting six hours — same idiom as ROSE_POLL_MS/BUYBOT_POLL_MS elsewhere in this
+// file; production never sets either and gets the real defaults.
+const reproHistory = require("./lib/reproducibility-history");
+const HUB_REPRO_HIST_TICK_MS = Math.max(3000, parseInt(process.env.HUB_REPRO_HIST_TICK_MS || String(6 * 60 * 60 * 1000), 10) || (6 * 60 * 60 * 1000));
+const HUB_REPRO_HIST_BOOT_MS = Math.max(0, parseInt(process.env.HUB_REPRO_HIST_BOOT_MS || "60000", 10) || 0);
+function hubReproHistoryTick(reason) {
+  const day = new Date().toISOString().slice(0, 10);
+  let projects = {};
+  try { projects = hubProjects(); } catch (e) { console.warn("[hub-repro-history] " + reason + ": could not list projects — " + (e && e.message)); return; }
+  for (const [id, p] of Object.entries(projects)) {
+    try {
+      const data = hubReproducibilityFor(id, p);
+      const missingInputs = (data.batches || []).reduce((t, b) => t + (Number(b && b.missingInputs) || 0), 0);
+      const r = reproHistory.record(kv, { projectId: id, day, reproduced: data.overall.reproduced, total: data.overall.total, missingInputs, at: Date.now() });
+      if (r.ok) console.log(`[hub-repro-history] ${id} ${day}: ${data.overall.reproduced}/${data.overall.total} (${missingInputs} missing input${missingInputs === 1 ? "" : "s"})`);
+      else if (r.reason !== "day_exists") console.warn(`[hub-repro-history] ${id} ${day}: write did not verify (check DATA_DIR)`);
+    } catch (e) { console.warn(`[hub-repro-history] ${id}: ${(e && e.message) || e}`); }
+  }
+}
+setInterval(() => { try { hubReproHistoryTick("timer"); } catch (e) { console.warn("[hub-repro-history] tick: " + (e && e.message)); } }, HUB_REPRO_HIST_TICK_MS);
+setTimeout(() => { try { hubReproHistoryTick("boot"); } catch (e) { console.warn("[hub-repro-history] boot tick: " + (e && e.message)); } }, HUB_REPRO_HIST_BOOT_MS);
 
 // ── Traction (Colosseum W9 part 1) — owner-only READ of the product OUTCOME counters ──────────
 // Everything here is derived from durable stores by lib/traction.js; this route reads, it never
@@ -17479,6 +17570,18 @@ app.get("/theme.css", (req, res) => {
   res.type("text/css");
   res.sendFile(join(__dirname, "public", "theme.css"));
 });
+// The translation dictionaries (public/i18n/<lang>[.school|.locker].json) are fetched by i18n.js at
+// runtime on every page; with no explicit route they exist only through the vite build's copy in
+// dist/, so a no-build boot (the CI render job, `node server.js` on a fresh clone) served 404 and
+// every Hub page silently fell back to English — CC2's es/zh browser test caught it in CI on
+// 2026-09-18. Same trap and same fix as the nav/i18n/read-aloud/theme files above. The name is
+// allowlisted by regex, never taken from the request as a path.
+app.get(/^\/i18n\/([a-z]{2})(\.school|\.locker)?\.json$/, (req, res) => {
+  const name = req.params[0] + (req.params[1] || "") + ".json";
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.type("application/json");
+  res.sendFile(join(__dirname, "public", "i18n", name), (err) => { if (err && !res.headersSent) res.status(404).json({ ok: false, error: "not_found" }); });
+});
 
 // Unified tools pass (owner, 2026-08-18, for the app-store transition): hold $50 worth of
 // CLKN → every heavy tool free; else 0.05 SOL buys a 7-day ALL-TOOLS pass. One client module
@@ -17488,6 +17591,17 @@ app.get("/cluck-gate.js", (req, res) => {
   res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.type("application/javascript");
   res.sendFile(join(__dirname, "public", "cluck-gate.js"));
+});
+
+// Hub reproducibility sparkline (Colosseum roadmap §13 CC4) — shared by hub-status.html and
+// hub.html; the same public/-is-not-mounted-directly trap as the modules above (a no-build boot
+// served this file's 404 page as text/plain, which the browser then refused to execute as a
+// script — found the same way scripts/hub-a11y-test.cjs found the nav bundle's gap, this time by
+// scripts/reproducibility-history-test.cjs's own rendered-page check).
+app.get("/hub-sparkline.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "hub-sparkline.js"));
 });
 
 // Shared airdrop machinery. Explicit routes (rather than relying on the vite
