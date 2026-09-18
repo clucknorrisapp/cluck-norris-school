@@ -211,6 +211,15 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **The settlement journal as the live payout path (#342, the W3 integration gate)** — on its
+  own PR because it is a money path: journal-first settlement with exact-amount matching (a
+  transfer settles a row only when its amount equals what the row is owed), the transfer source
+  bound to the funding wallet or an owner-set allowlist, cross-project reuse and future block
+  times refused, per-project locks and per-transfer keys, one summary alert per request, the
+  holder view and the desk reading the same journal, "paid from" on receipts, reserved project
+  ids in one list, an owner-only waive for partial rows. Five read-only verification rounds
+  (`docs/HUB_JOURNAL_VERIFY_2026-09-18.md`) and five fix rounds before it merged; 84 route
+  cases. PR #342.
 - **Colosseum batch 13** — follow a project without a wallet (a JSON Feed and an RSS feed per
   project: versions published, batches settled with their reproducibility ratio, holder snapshots,
   observed commitments, from the public view only); Arena drafts round 3 and weekly update #2
