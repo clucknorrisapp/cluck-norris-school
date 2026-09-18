@@ -567,3 +567,141 @@ Fixed: 6d2480f — the "reload…" wording dropped, an OBSERVE WHAT I BROADCAST 
 | F10 | **CLOSED** (see P3-8) | copy `:132`, dead `kv` gone, page test wired into `syntax-check.yml`; README §3a inaccurate |
 
 **Merge-ready: no** — P1-1 is a one-line hole in the very guard this round added (`unconfirmed` sails past `unrecordedSent()`), and I reproduced it re-broadcasting a row through the real page script; P1-2 makes the owner reset that triggers it a routine event rather than a rare one, because one dropped signature 503s every `observe` for that batch forever with no way to send a subset from the desk. Both are small, local fixes. Separately, the branch is three commits behind `origin/develop` and touches the same files develop just changed, so it must be merged forward before anyone reads the diff as the change (P1-3). Everything F1–F10 claimed is genuinely implemented and genuinely tested — the negative mutations prove the suites bite — and the server-side verification half (frozen parameters, nonce, journal, exact-amount, funding-wallet source, cross-project consumed set, bounded cross product, lock-after-fetch) is good work.
+
+---
+
+## Round 3, lens 1 (crash windows and idempotency) — head 801e00f
+
+# X6 lens 1, round 3 — crash windows and idempotency
+
+Read-only pass on `origin/claude/hub-browser-sign` @ `801e00f`. No files edited, no git writes, no work-tree touches. I extracted the branch with `git archive` into the scratchpad, ran `scripts/hub-browser-sign-test.cjs` (**47/47 pass**) and `scripts/hub-desk-sign-page-test.cjs` (**23/23 pass**), drove **nine fault probes** against the real route closures through the same DI harness, and **mutation-tested seven of the eight named fixes** (revert the fix, re-run the suite, confirm it goes red). Findings marked **[probe]** are reproduced output. All line numbers are at `801e00f`.
+
+---
+
+## Part 1 — are N1–N8 closed?
+
+**N1 — `clear=1` re-opened F2's cancel window. CLOSED.** `routes.js:1543-1567`: `atRisk` filters `bt.browserSign.wallets` by "not legacy-sent AND `rowState().remainingRaw !== "0"`", 409s without `&confirm=abandon-broadcast`, and echoes `atRisk/observedSigs/failed/nonce` on both the refusal and the 200. **[mutation]** `if (false && b.confirm !== …)` → §13b "clear=1 with an unobserved, at-risk wallet is refused (409)…" goes red (1 FAILED / 46 passed). **[probe P8]** the echo is real (`observedSigs ["5pwdmu"] atRisk ["5WKKoF"]`) and a journaled wallet is correctly excluded from `atRisk`. **But the same window is still open through `&waive=` — R3-1.**
+
+**N2 — an idempotent re-observe marked a paid row failed and fired the fraud alert. PARTIAL.** The within-call case is genuinely fixed: **[probe P7]** two-wallet batch, observe `SIG_A` twice → second call `failed: {}`, `alerts: []`. **[mutation]** dropping `ownPriorSettlement(rj) continue` at `:1815` → §19 goes red. The **carried-forward** case is open: the N2(a) zero-remaining sweep at `:1943-1946` runs over `failedNow` only, and `:1947` then merges `bt.browserSign.failed` back in — **[probe P6]** a terminal record that reads `state:"settled"`, `remainingWallets:[]` **and** `failed:{A:"transfer smaller than the amount owed (1 < 1000000000)"}` for a fully-paid row. See **R3-3**.
+
+**N3 — observe was all-or-nothing on unindexed signatures. CLOSED, with a new hazard.** `routes.js:1768-1776` 503s only when `notYetIndexed.length === sigs.length`, settles `resolvedSigs`, returns `pending`/`retry:true`; `hub-desk.html:691-705` retries just the outstanding set with backoff, 3 tries. **[mutation]** restoring `if (notYetIndexed.length)` → 2 FAILED. **But the new `nextState` rule bricks a fully-paid batch — R3-2.**
+
+**N4 — `unrecordedSent()` ignored `unconfirmed`. CLOSED.** `hub-desk.html:609` and the purge at `:620`. **[mutation]** reverting `:609` to `l.status === "sent"` → page test 2 FAILED.
+
+**N5 — `&sent=` pinned `browserSign` live forever. CLOSED for `&sent=`.** `routes.js:1167-1169` stamps `settled` inside the **same** `writeManyVerifiedMixed` at `:1170` — one persist, verified by reading and **[probe P5]** (`&sent=` at +25 h → `bt.state sent`, `bs.state settled`, journal written). **[mutation]** `if (false && browserSignIsLive(finalBatch))` → §25 goes red. Can it stamp `settled` while a browser-signed row is still owed? Only in the legacy sense it cannot: `recordSent` flips `state:"sent"` only when **every** row of `batch.amounts` carries a `sent[w]` flag, and `browserSign.wallets ⊆ batch.amounts`, so no named wallet can still be legacy-owed. A row recorded through `ATTRIBUTION_FAILURE_WHY` is journal-owed but legacy-paid — the pre-existing, documented residual, not a new one. **The same pin returns through `observe` — R3-2.**
+
+**N6 — clear ran before the dry-run refusal. CLOSED.** `routes.js:1519` (dry run) sits above `:1531` (`if (on(b.clear))`). **[probe]** a dry-run project's `clear=1` → `409 "… is a DRY RUN …"`. Echo covered by §13b.
+
+**N7 — a frozen `browserSign` never expired. CLOSED.** `routes.js:1728-1731`, 24 h, correct wording. **[mutation]** ×100000 on the constant → §21 goes red. It does **not** block the owner reset (**[probe P4]** `clear=1` at +25 h reaches its own `atRisk` logic) and does not block `&sent=` (**[probe P5]**, +25 h, 200, journaled) — but the 409 names neither recovery. See **R3-7**.
+
+**N8 — `skipped` was not the complement of `rows`. CLOSED.** `routes.js:1633`. **[mutation]** restoring the bare `continue` → §22 goes red.
+
+---
+
+## Part 2 — new findings
+
+### R3-1 (P1) — `&waive=` is the third un-guarded lever into F2's double-pay window, and README §3a advertises it as safe
+`lib/hub/routes.js:1250` (the `b.waive` branch, no `browserSignIsLive` check) vs `:1213` (`&confirm=`) and `:1228` (`&cancel=`); `lib/hub/README.md:244-245`.
+
+`&cancel=` got the guard (F2), `&confirm=` got it in this very fix round (P2-7). `&waive=` did not — and `ledger.waiveRemainder` frees the row's unsettled remainder straight back to `available` (`lib/cuna-payout.js:119-127`: "an owner waive … frees a row's unsettled remainder back to `ledger.partition`'s `available`"), which is exactly what made a bare cancel a double payment.
+
+**[probe P2]**, one wallet, sign-request issued and (in the real world) broadcast but never observed:
+```
+P2 sign-request:        200  wallets ["4Gccq9pE…"]
+P2 waive while live:    200  {"ok":true,"wallet":"4Gccq9pE…","amountRaw":"1000000000","reason":"looked stuck"}
+P2 bs.state after waive: signing   bt.state pending      <-- no guard, no warning, flow still "live"
+P2 re-export created:   hb_121ba9c2af  owes {"4Gccq9pE…":"1000000000"}   <-- SAME amount drawn again
+```
+It is also **silent afterwards**: the real transfer can never be journaled (`rowState` remaining is now 0 → `amount_mismatch`), and N2(a)'s own new sweep at `:1943-1946` then *deletes* that entry from `failed`, so the operator is told nothing. And the sequencing makes it likely rather than exotic — the owner facing a stuck flow now gets a 409 from `clear=1` demanding `confirm=abandon-broadcast`, while `&waive=` (the documented remedy for a row that "looks stuck") takes no flag at all.
+
+*Minimal fix:* `if (browserSignIsLive(bt0)) return res.status(409).json({…})` on the `b.waive` branch, same wording as `:1228`; if waiving mid-flow must stay possible, require `&confirm=abandon-broadcast` there too and echo the at-risk set. Move `&waive=` out of README §3a's "what still works while live".
+
+### R3-2 (P2) — the N3 fix re-creates N5's pin: every row settles, one signature stays unindexed, and the batch is live forever
+`lib/hub/routes.js:1955` (`const nextState = stillOwed || notYetIndexed.length ? "submitted" : "settled";`) — observe never got the one-liner `&sent=` was given at `:1167`.
+
+**[probe P1]**, one wallet, `sigs=[GOOD, DEAD]`, `DEAD` never indexed:
+```
+P1 observe:              200  bs.state submitted  bt.state sent  pending [DEAD]
+P1 re-observe DEAD:      400  "batch is sent, not pending"
+P1 fresh sign-request:   400  "batch is sent, not pending"
+P1 cancel:               409  "a browser-signed payout is submitted for this batch…"
+P1 owner clear:          200  {"cleared":true,"atRisk":[]}          <-- the ONLY exit
+```
+Money is safe (everything is paid and journaled), but `browserSignIsLive` is true forever on a batch no route will touch. On the desk it is worse than a dead end: `loadBatch` purges `ROW_STATUS` for every `sent` row (`hub-desk.html:510`), so `liveSigs` is empty and **no OBSERVE WHAT I BROADCAST button renders** (`:672-680`) — the operator gets the bare line "A browser-signed payout is submitted for this batch." with SIGN AND SEND and CLOSE both disabled. And `observeAll`'s own retry (`:701`) re-posts `[DEAD]`, gets the 400, and `call()` throws — so the last thing the operator sees after a fully successful payout is a red *"batch is sent, not pending"*.
+
+Test §20 (`scripts/hub-browser-sign-test.cjs:735-746`) is **this exact scenario** ("even when the resolved signature settles EVERY named row, the state stays `submitted`…") and asserts the pin as intended — it never reads `bt.state`, which is what makes it terminal.
+
+*Minimal fix:* mirror `:1167` — when `finalBatch.state === "sent"` (nothing is legacy-owed, so no still-unindexed signature can settle anything more), use `settled` regardless of `notYetIndexed`; or let observe/sign-request through when `bt.state === "sent"` and nothing is owed.
+
+### R3-3 (P2) — carried-forward `failed` entries are never re-checked, so the terminal `settled` record names a fully-paid row as failed
+`lib/hub/routes.js:1943-1951`. The N2(a) zero-remaining sweep runs over `failedNow`; `:1947` then does `nextFailed = { ...bt.browserSign.failed, ...failedNow }`, and only `r.recorded` **of this pass** clears entries at `:1951`. A row that failed in an earlier pass and was later paid some other way (the desk's own `&sent=` recovery button) is never in `r.recorded` again.
+
+**[probe P6]** wrong-amount observe → `failed[A]`; A really paid via `&sent=`; next observe settles B:
+```
+P6 observe B: 200 recorded ["5WKKoF…"]  bs settled  remainingWallets []
+              failed {"4Gccq9pE…":{"why":"transfer smaller than the amount owed (1 < 1000000000)"}}
+```
+`hub-desk.html:716-717` then renders both sentences at once: *"Settled — every row this payout named is fully paid. 1 row(s) could not be recorded: 4Gccq9… (transfer smaller than the amount owed …)"*. That is N2(a)'s complaint, unfixed for the carried case, and it persists into the record that outlives the flow.
+
+*Minimal fix:* run the zero-remaining sweep over `nextFailed` **after** the merge at `:1947`, not over `failedNow` before it.
+
+### R3-4 (P2) — any operator can flip a live flow to `submitted` with one junk signature, and `submitted` has no `force=1` escape
+`lib/hub/routes.js:1681` (observe takes any operator session), `:1955` (state advances whenever *anything* resolved, attributed or not), `:1611` (`submitted` 409s **even with `force=1`**), `:136` (`deskBatch` spreads `...bt`, so `browserSign.nonce` is readable from the batch view).
+
+P2-5 restricted **sign-request** to owner/funding/`payoutSources`; **observe** got no matching check. **[probe]** three observe calls carrying nine unrelated-but-resolvable signatures, none of which touched any named wallet:
+```
+observedSigs after 3 junk observes: 9   failed: []   bs submitted
+```
+From `submitted` the funding wallet's sign-request 409s with and without `force=1` (**[probe P4]** confirms both), and the only exit is the owner's `clear=1` — which now refuses without `confirm=abandon-broadcast` whenever the handed-out wallets are still owed. That is F4's deadlock, re-reachable in one POST by any operator wallet, including the exact wallet class P2-5 was added to keep off this flow.
+
+*Minimal fix:* advance `signing → submitted` only when this pass attributed something to a named wallet (`r.recorded.length || Object.keys(failedNow).length`), and/or apply sign-request's caller restriction to observe.
+
+### R3-5 (P3) — `browserSign.observedSigs` grows without bound from caller-supplied signatures
+`lib/hub/routes.js:1956`: `observedSigs: [...new Set([...prev, ...resolvedSigs])]`. Every signature the caller names that the RPC can resolve is appended to the batch record forever — up to ~40 per call, 30 calls/min/IP, and `batches` is read and rewritten **whole** by every payout route (the probe above added 9 in 3 calls). *Minimal fix:* keep only signatures that attributed to a named wallet, or cap at a bounded ring of the most recent N.
+
+### R3-6 (P3) — the `cleared` note and the stale-nonce 409 both tell the operator to "re-broadcast", which is the double-pay action
+`lib/hub/routes.js:59` (`browserSignAlreadyNote`), `:1722`, `:1730` — all three end "*request a fresh sign-request and **re-broadcast from what it returns***". **[probe P3]** shows the correct recovery is the opposite: fresh sign-request, then observe the **same old signature** under the **new** nonce → `200 recorded ["4Gccq9pE…"]`. (The per-row `&sent=` button is the other one.) The copy names neither, and on a `cleared` record the desk stops rendering OBSERVE WHAT I BROADCAST (`hub-desk.html:672`, gated on `live`), so the in-page recovery disappears exactly when this note appears. *Minimal fix:* "…then observe the signatures you already broadcast under its new nonce — do not broadcast again until you have."
+
+### R3-7 (P3) — `submitted` + >24 h is owner-only and abandon-flavoured; the errors name no working recovery
+`:1611` + `:1729`. **[probe P4]**: observe `409 more than 24 hours old`; sign-request `409` (and `force=1` gives the identical 409); `clear=1` `409 atRisk ["5WKKoF"]`. So the documented path out requires the owner to assert `confirm=abandon-broadcast` — "I verified none of these landed" — for a transfer that may well have landed. **[probe P5]** shows `&sent=` is unaffected by the 24 h bound, journals the transfer and (via N5) stamps `settled`. Say that in the 409 text.
+
+### R3-8 (P3) — a `force=1` or post-clear sign-request carries `failed` into a generation that never produced it
+`lib/hub/routes.js:1657` (`failed: (bt.browserSign && bt.browserSign.failed) || {}`). Carrying `observedSigs` forward is load-bearing (P2-6); carrying `failed` is not, and with R3-3 the new flow opens already reporting a stale failure for a row it has not touched. *Minimal fix:* start `failed: {}` on a new generation, or move the old map to a `previousFailed` key the response does not render.
+
+---
+
+## The specific questions asked
+
+**Is `cleared` not-live everywhere?** Yes. `browserSignIsLive` (`routes.js:49`) is the single reader-side predicate (`:1167, :1213, :1228, :1358`) and matches only `signing`/`submitted`; the desk's two local copies (`hub-desk.html:574`, `:666`) spell the same pair. Observe's terminal check at `:1709` and its in-lock twin at `:1784` both treat `cleared` as terminal **before** the nonce check, so **a stale observe with the old nonce cannot settle against a `cleared` record** — **[probe P3]**: `200 already:true`, journal entries 0, nothing written. A `force=1` (or plain) sign-request after `cleared` succeeds and carries `observedSigs` forward (**[probe P8]**: `["5pwdmu"]` survives into the new generation), and the old signature then settles under the new nonce.
+
+**Can a batch be left `submitted` with `pending` sigs and no way out but `clear`?** Yes, two ways: R3-2 (everything paid, one dead signature — the only exit is the owner) and R3-4 (a junk observe from any operator). In the ordinary partial case the desk's retry plus the OBSERVE button do get out.
+
+**Does a partially-settled observe persist exactly once?** Yes — one `hubStore.writeManyVerifiedMixed(kv, p.id, { batches, paid }, journalRaw)` at `:1959`, covering the batch, `paid` and every journal entry. `markMilestone` at `:1960` is the only write outside it and cannot lose money (pre-existing).
+
+**Is `settled` ever stamped while `pending` is non-empty?** No — `:1955` ORs `notYetIndexed.length` into `submitted`. That is the correct half of the rule; it is the missing `bt.state === "sent"` half that bricks it (R3-2).
+
+**Does `&sent=` stamping `settled` happen in one persist, and can it fire while a browser-signed row is still owed?** One persist (`:1167-1170`). It cannot fire with a named row legacy-owed — `recordSent` requires every `batch.amounts` key to carry a `sent` flag, and `browserSign.wallets ⊆ batch.amounts`.
+
+**Does the 24 h bound block the owner reset or a legitimate late observe?** Not the reset (**[probe P4]**). It does block a late observe of a genuinely landed transfer, and recovery is `&sent=` with that signature (**[probe P5]**, works at +25 h) — see R3-7.
+
+**Is P2-5's `who` compared the way `payoutSources` is stored?** Yes. `authOf` (`:162-166`) returns the literal `"owner"` or `operator.operatorOf`'s `t.wallet` (`lib/hub/operator.js:63`), which must already be in `project.operatorWallets`; `payoutSources` entries pass through `proj.addr()` (`lib/hub/project.js:135`). Both are canonical base58 strings, so `p.payoutSources.includes(who)` at `:1596` is a like-for-like compare, and no base58 address can collide with the `"owner"` sentinel. The gap is that **observe carries no equivalent check** (R3-4).
+
+---
+
+## Findings table
+
+| Finding | Verdict | Evidence |
+|---|---|---|
+| N1 `clear=1` re-opened the cancel window | **CLOSED** (re-opened by `&waive=`, R3-1) | `routes.js:1543-1567`; §13b; mutation → 1 FAILED; probe P8 |
+| N2 idempotent re-observe marked a paid row failed + alerted | **PARTIAL** — within-call closed, carried-forward open (R3-3) | `routes.js:1815, 1943-1951`; §19; mutation → 1 FAILED; probes P6/P7 |
+| N3 observe all-or-nothing on unindexed sigs | **CLOSED** (introduces R3-2) | `routes.js:1768-1776`; `hub-desk.html:691-705`; §20; mutation → 2 FAILED |
+| N4 `unrecordedSent()` ignored `unconfirmed` | **CLOSED** | `hub-desk.html:609, 620`; page-test mutation → 2 FAILED |
+| N5 `&sent=` pinned `browserSign` live | **CLOSED** for `&sent=` (pin returns via observe, R3-2) | `routes.js:1167-1170`; §25; mutation → 1 FAILED; probe P5 |
+| N6 clear ran before the dry-run refusal / echoed nothing | **CLOSED** | `routes.js:1519` above `:1531`; probe (dry-run clear → 409); §13b echo |
+| N7 a frozen `browserSign` never expired | **CLOSED** (recovery wording, R3-7) | `routes.js:1728-1731`; §21; mutation → 1 FAILED; probes P4/P5 |
+| N8 `skipped` was not the complement of `rows` | **CLOSED** | `routes.js:1633`; §22; mutation → 1 FAILED |
+
+New this round: **R3-1 (P1)**, **R3-2 (P2)**, **R3-3 (P2)**, **R3-4 (P2)**, **R3-5 (P3)**, **R3-6 (P3)**, **R3-7 (P3)**, **R3-8 (P3)**.
+
+**Merge-ready: no** — `&waive=` is the one lever into the F2 double-pay window that never got the guard `&cancel=` and `&confirm=` now have, and `lib/hub/README.md:244-245` still names it as safe to use while a flow is live; **[probe P2]** waives a handed-out, broadcast, unobserved row and re-exports the identical amount into a fresh batch with no warning, no alert and no trace. That is one line of code and one line of README. Everything else is recoverable: R3-2/R3-4 brick the state machine behind an owner `clear=1` without losing money, R3-3 makes a paid batch *read* failed, and the rest is copy and hygiene. N1 and N3–N8 are genuinely implemented and genuinely test-backed — every named test goes red when I revert its fix — and the server-side verification core (nonce, frozen parameters, single persist, journal, exact-amount, funding-wallet source, bounded cross product, lock-after-fetch) remains solid.
+
