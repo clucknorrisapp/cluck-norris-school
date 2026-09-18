@@ -123,6 +123,22 @@ jobs:
       # outage changes nothing. The six fault cases and the earlier concurrency set.
       - name: Project Hub — payout attempts and reconcile fault cases
         run: node scripts/hub-attempts-test.cjs
+      # W3 integration gate (docs/COLOSSEUM_ROADMAP.md §W3, closing lib/hub/README.md's "receipt
+      # gap"): the settlement journal dual-write in POST /api/hub/:project/payout, both the
+      # self-signed &sent= and managed-payer &send= branches (plus &sweep=). The chain's own
+      # identity of a transfer (never a guessed instruction index), a fault at the journal write
+      # for each branch (the row stays reserved and is never re-offered; a resume settles it), the
+      # same signature submitted twice producing one event, a dryRun project refused before any
+      # write, a registry project's payout never touching the dedicated CUNA keys, an overpaid
+      # transfer recording excess without touching accrued, and a journal-backed receipt that
+      # validates against receipt.schema.json.
+      - name: Project Hub — W3 settlement journal dual-write (integration gate)
+        run: node scripts/hub-settle-route-test.cjs
+      # The public receipt page must render BOTH receipt shapes (legacy and Addendum-B3): a
+      # journal-backed receipt threw a TypeError in the page's own script until the wrapper fix
+      # (adv P1-4 in docs/HUB_JOURNAL_VERIFY_2026-09-18.md). Runs hub.html's real inline script in a vm.
+      - name: Project Hub — receipt page renders both shapes
+        run: node scripts/hub-receipt-page-test.cjs
       # Addendum C: the six answers a holder gets before locking are DERIVED from the program's
       # entities (15), the differing-reward-asset warning is mandatory and not operator-controlled
       # (16), no string anywhere in the block carries APR / APY / per-year language (17), and every
@@ -446,6 +462,14 @@ jobs:
           node normie-quest/src/build.js
           git diff --exit-code normie-quest/public/normie-quest-platformer.html \
             || (echo "::error::served HTML is stale — run node normie-quest/src/build.js and commit" && exit 1)
+      # EE5 (docs/COLOSSEUM_ROADMAP.md §15): the "onboarding clock, from the record" table
+      # docs/VALIDATION_2026-09.md quotes is a SCRIPT's output, not typed numbers — this seeds a
+      # temp DATA_DIR with a two-project fixture built through lib/hub/project.js (one project with
+      # every milestone reached, one registered-only), runs scripts/validation-rows.cjs as a real
+      # subprocess against it, and asserts every delta and the "—" dash for whatever was never
+      # reached, plus the honest empty-template output for a DATA_DIR with no registry at all.
+      - name: Validation rows — onboarding-clock table is derived, never guessed (EE5)
+        run: node scripts/validation-rows-test.cjs
 
   # Renders the actual app. The checks above are all static — they cannot see a component that
   # compiles fine and throws on mount, which is how the LP Lab shipped blank to production.

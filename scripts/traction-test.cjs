@@ -45,8 +45,12 @@ function addAttempt(kv, projectId, batchId, wallet, sig, sigAtUnix, state = "sub
   store.write(kv, projectId, "batches", { ...batches, [batchId]: b });
 }
 function addJournalEntry(kv, key, projectId, atUnix) {
+  // Round 2 #6 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): readJournal() now ignores anything that
+  // does not look like a real settlement entry (store.looksLikeJournalEntry) — the fields below
+  // are the minimum that shape check requires; `key` is expected to be a full xferKey ("settle:
+  // <sig>:<idx>") by every call site in this file already.
   const j = store.readJournal(kv) || {};
-  store.writeJournal(kv, { ...j, [key]: { projectId, at: atUnix } });
+  store.writeJournal(kv, { ...j, [key]: { xferKey: key, projectId, batchId: "b1", wallet: WALLET_1, amountRaw: "1", appliedRaw: "1", excessRaw: "0", at: atUnix } });
 }
 function addDaySlice(kv, projectId, sliceKey) {
   const days = store.read(kv, projectId, "days", {}) || {};
@@ -327,12 +331,19 @@ t("a recorded attempt signature in-period is counted; one outside is not", () =>
   assert.strictEqual(out.counters.hubBatchesSigned.value, 1);
   assert.strictEqual(out.counters.hubBatchesSigned.denominator, 2);
 });
-t("the journal and attempts counters read 0 with a caveat when nothing has used them yet", () => {
+// W3 (docs/COLOSSEUM_ROADMAP.md §W3) wired the settlement journal and the attempt-state stamps
+// into POST /api/hub/:project/payout — both counters now read real numbers once a row settles, so
+// a FRESH kv (nothing has ever settled) still reads 0, but the caveat text changed from "not yet
+// mounted/wired" (no longer true) to "0 so far on this deployment" (lib/traction.js's own note per
+// counter). This assertion was updated in step with that wording, per this file's header.
+t("the journal and attempts counters read 0, with a note, when nothing has settled yet", () => {
   const kv = store.memoryKv();
   const out = traction.compute({ kv, from: "2026-09-14", to: "2026-09-18" });
   assert.strictEqual(out.counters.hubReceiptsIssuedJournal.value, 0);
   assert.strictEqual(out.counters.hubBatchesSigned.value, 0);
-  assert.ok(out.caveats.some((c) => /not yet (mounted|wired)/.test(c)));
+  assert.ok(/0 so far on this deployment/.test(out.counters.hubReceiptsIssuedJournal.note || ""));
+  assert.ok(/0 so far on this deployment/.test(out.counters.hubBatchesSigned.note || ""));
+  assert.ok(out.caveats.some((c) => /hubReceiptsIssuedJournal, hubBatchesSigned/.test(c)));
 });
 
 section("repeat operators — activity in two or more distinct ISO weeks");

@@ -232,9 +232,9 @@ from `approveProject` and `server.js`'s `reserved()`, with a test that greps `se
 literal `/hub/<segment>` routes it must cover.
 
 **Not implemented here (2026-09-18 fix round):** the journal branch `claude/hub-settlement-journal`
-(#342) already carries `RESERVED_PROJECT_IDS` and is merging soon — a second copy written here
-would conflict with it on merge. Left open on purpose; port this fix from #342 once it lands, don't
-re-derive it.
+(#342) already carries `RESERVED_PROJECT_IDS` and merged into `claude/colosseum-batch-14` — a
+second copy written here would have conflicted with it. Confirmed merged: `lib/hub/project.js`
+now carries `RESERVED_PROJECT_IDS` from #342; nothing further needed here.
 
 ### P2-06 · The holders Compare panel mixes whole-token and base-unit values in one card
 
