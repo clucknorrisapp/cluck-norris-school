@@ -191,6 +191,11 @@ jobs:
       # the burn watcher (lib/sig-cursor.js) — pure, so this runs standalone with no server boot.
       - name: signature cursor walk (buy/burn watchers' shared fresh-since-cursor logic)
         run: node scripts/sig-cursor-test.cjs
+      # Room policy (owner, 2026-09-17): the Cluck bot never posts in the OnlyRose room. Pure checks
+      # on lib/telegram-rooms plus source assertions that every Telegram sender consults it and that
+      # no direct send exists outside the audited functions.
+      - name: Telegram room policy (nothing lands in the OnlyRose room)
+        run: node scripts/telegram-rooms-test.cjs
       # The public Hub views whitelist their fields — a comp's payout token or chat id must never
       # reach /api/hub — and hash the terms a program ran under.
       - name: Hub public views (no private fields, stable terms hash, honest totals)

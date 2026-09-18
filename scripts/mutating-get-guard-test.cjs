@@ -98,6 +98,15 @@ function raw(method, p, headers) {
   ok("GET /api/buybot?list=1 still lists", r.status === 200 && r.body && Array.isArray(r.body.bots));
   r = await call("GET", "/api/rose-buybot?arm=1");
   ok("GET /api/rose-buybot?arm=1 is refused with 405", r.status === 405);
+  // Incident 2026-09-17: the flag-less GET used to run a full poll "even while disarmed" and, with
+  // a cursor stale from days of disarm, posted a whole window of old buys into the OnlyRose room.
+  // The plain GET is a status read now; the poll is POST ?run=1 only.
+  r = await call("GET", "/api/rose-buybot");
+  ok("GET /api/rose-buybot (flag-less) is the status read — never a poll", r.status === 200 && r.body && r.body.status === true && !("scanned" in r.body) && !("posted" in r.body), JSON.stringify(r.body).slice(0, 160));
+  r = await call("GET", "/api/rose-buybot?run=1");
+  ok("GET /api/rose-buybot?run=1 is refused with 405", r.status === 405, String(r.status));
+  r = await call("POST", "/api/rose-buybot?run=1");
+  ok("POST /api/rose-buybot?run=1 reaches the poll (no token here → dormant, not the status shape)", r.status === 200 && r.body && r.body.status !== true, JSON.stringify(r.body).slice(0, 160));
   // /api/tg-test is POST-only since 2026-09-17 (owner: "convert tg-test too, routine first"): every
   // form of it sends, so the whole GET method is refused — after the key check, which stays 404.
   r = await call("GET", "/api/tg-test?text=hello"); ok("GET /api/tg-test?text= is refused with 405 (POST-only since 2026-09-17)", r.status === 405, JSON.stringify(r.body));

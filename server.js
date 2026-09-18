@@ -50,6 +50,7 @@ const premiumForensics = require("./lib/premium-forensics");
 const sigStore = require("./lib/sigstore");
 const kv = require("./lib/kvstore");
 const { freshSince } = require("./lib/sig-cursor"); // shared "fresh sigs since the durable cursor" walk — see the ROSE/generic buy bots + burn watcher below
+const tgRooms = require("./lib/telegram-rooms"); // room policy: the Cluck bot never posts in the OnlyRose room (owner, 2026-09-17) — enforced in tgApi and the direct senders
 const payoutVerify = require("./lib/payout-verify");
 const engineRatchet = require("./lib/engine-ratchet"); // pure merge/diff shared by the four liquidity-engine config ratchets below
 const { redeemPaidPass } = require("./lib/tool-pass-redeem");
@@ -2305,7 +2306,9 @@ async function buyCompUpdate(c) {
   // as a "comp is live" reminder), then delete the previous one — one board at a
   // time, no clutter. Silent so it bumps the feed without an hourly ping.
   const prev = c.boardMsgId;
-  const mid = await tgSend(c.chatId, text, null, { silent: true });
+  // roseRoomOk: a comp's chat is set by the owner when the comp is created — an explicit choice,
+  // which is the one way a comp board may land in the OnlyRose room (lib/telegram-rooms).
+  const mid = await tgSend(c.chatId, text, null, { silent: true, roseRoomOk: true });
   if (mid) { c.boardMsgId = mid; if (prev && prev !== mid) tgDelete(c.chatId, prev); }
   c.lastUpdateTs = Date.now();
   buyCompSave(c);
@@ -2320,7 +2323,7 @@ async function buyCompTick() {
       if (now >= c.endTs) {
         await buyCompUpdate(c);                 // final provisional board
         c.status = "closed"; buyCompSave(c);
-        await tgSend(c.chatId, `🏁 <b>$${tgEsc(c.ticker)} buy comp — window closed!</b>\n\nThe board above is the PROVISIONAL standing. Winners must hold their buys for <b>${c.holdHours}h</b> (no sells, no transfers) — official winners are confirmed by the Rose scan after the hold. 🌹`);
+        await tgSend(c.chatId, `🏁 <b>$${tgEsc(c.ticker)} buy comp — window closed!</b>\n\nThe board above is the PROVISIONAL standing. Winners must hold their buys for <b>${c.holdHours}h</b> (no sells, no transfers) — official winners are confirmed by the Rose scan after the hold. 🌹`, null, { roseRoomOk: true });
         continue;
       }
       if (now >= c.startTs && (!c.lastUpdateTs || now - c.lastUpdateTs >= c.updateMins * 60000)) {
@@ -2352,7 +2355,7 @@ async function buyLeadersReply(c, chatId, replyTo) {
   // Deliberately NOT tracked as c.boardMsgId and never deletes prior posts: only the
   // BOT's OWN scheduled reposts self-clean (see buyCompUpdate), so "ours" never stacks
   // while member-requested boards stay put. Silent so the bump doesn't ping the room.
-  tgSend(chatId, buyCompRender(c, standings), replyTo, { silent: true });
+  tgSend(chatId, buyCompRender(c, standings), replyTo, { silent: true, roseRoomOk: true });   // a member asked for a comp the owner configured for this room
 }
 
 // ── Interactive slash commands ─────────────────────────────────────────────
@@ -2383,8 +2386,14 @@ const TG_WEBHOOK_SECRET = process.env.TELEGRAM_BOT_TOKEN
 // diagnostics still log at the call site, same as before. `token` defaults to
 // the main bot but can be overridden — the ROSE buy/burn bots optionally speak
 // through their own `ROSE_TG_BOT_TOKEN` (see roseTgSend/roseTgSendPhoto).
-async function tgApi(method, payload = {}, token = process.env.TELEGRAM_BOT_TOKEN) {
+async function tgApi(method, payload = {}, token = process.env.TELEGRAM_BOT_TOKEN, opts = {}) {
   if (!token) return null;
+  // Room policy (owner, 2026-09-17: "make sure it is not posting anything in rose"): a send aimed
+  // at the OnlyRose room is refused here, at the one choke point, unless the caller passed
+  // `roseRoomOk` — which only the ROSE bot's own path, an explicit tg-test chat=, and a buy comp
+  // configured for that room do. Logged so a refused post is visible, never silent.
+  const refused = tgRooms.refusal(payload && payload.chat_id, method, opts);
+  if (refused) { console.warn(`[TG] refused: ${refused}`); return null; }
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -2407,12 +2416,12 @@ async function tgSend(chatId, text, replyTo, opts = {}) {
     ...(opts.silent ? { disable_notification: true } : {}),
     // Still send even if the user's command message was deleted meanwhile.
     ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
-  });
+  }, undefined, { roseRoomOk: opts.roseRoomOk === true });
   return result ? result.message_id : null; // for thread tracking
 }
 
 // Like tgSend, but with an optional inline keyboard (array of button rows).
-async function tgSendKb(chatId, text, keyboard, replyTo) {
+async function tgSendKb(chatId, text, keyboard, replyTo, opts = {}) {
   if (!chatId) return null;
   // FIX (2026-09-17 tgSend consolidation): this had drifted from tgSend by never adding the
   // STAGING marker below, even though it posts to the same real, shared chat ids — including
@@ -2425,7 +2434,7 @@ async function tgSendKb(chatId, text, keyboard, replyTo) {
     chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
     ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
     ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-  });
+  }, undefined, { roseRoomOk: opts.roseRoomOk === true });
   return result ? result.message_id : null;
 }
 
@@ -2443,13 +2452,13 @@ async function tgDelete(chatId, messageId) {
 // Send a photo + caption + optional inline keyboard to a SPECIFIC chat. Silent
 // by default (owner rule). Returns the message_id, or null on failure. Used by
 // the Content Engine to DM an approval card with Approve/Skip buttons.
-async function tgSendPhotoKb(chatId, photoUrl, caption, keyboard) {
+async function tgSendPhotoKb(chatId, photoUrl, caption, keyboard, opts = {}) {
   if (!chatId) return null;
   const result = await tgApi("sendPhoto", {
     chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024),
     parse_mode: "HTML", disable_notification: true,
     ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-  });
+  }, undefined, { roseRoomOk: opts.roseRoomOk === true });
   return result ? result.message_id : null;
 }
 
@@ -3055,6 +3064,7 @@ async function hfGenerateMeme(desc) {
 }
 async function tgUploadPhotoFromUrl(chatId, srcUrl, caption) {
   const token = process.env.TELEGRAM_BOT_TOKEN; if (!token) return false;
+  const refused = tgRooms.refusal(chatId, "sendPhoto"); if (refused) { console.warn(`[MEME-GEN] ${refused}`); return false; }
   const ir = await fetch(srcUrl, { signal: AbortSignal.timeout(30000), redirect: "follow" });
   if (!ir.ok) return false;
   const buf = Buffer.from(await ir.arrayBuffer());
@@ -3071,6 +3081,7 @@ async function tgUploadPhotoFromUrl(chatId, srcUrl, caption) {
 async function tgUploadAnimationFromBuffer(chatId, buf, caption) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || !Buffer.isBuffer(buf) || buf.length > 11.5 * 1024 * 1024) return false;
+  const refused = tgRooms.refusal(chatId, "sendAnimation"); if (refused) { console.warn(`[MEME-GEN] ${refused}`); return false; }
   const fd = new FormData();
   fd.append("chat_id", String(chatId));
   if (caption) fd.append("caption", String(caption).slice(0, 1024));
@@ -7019,6 +7030,13 @@ async function tgTestQuerySend(req, res) {
   else if (req.query.project) {
     try { const p = whirlpoolMM.vault.getProject(String(req.query.project)); if (p && p.telegramChatId) chatId = p.telegramChatId; } catch (_) {}
   }
+  // Room policy: the OnlyRose room is reachable from here ONLY by an operator naming it outright
+  // (chat= or project=) — that is an explicit act behind the admin key. Any other resolution that
+  // lands on it is refused (the ROSE bot's own alerts never come through this route).
+  {
+    const refused = tgRooms.refusal(chatId, "sendMessage", { roseRoomOk: !!(req.query.chat || req.query.project) });
+    if (refused) return res.status(403).json({ success: false, error: refused });
+  }
   const photo = req.query.photo ? String(req.query.photo) : null;  // optional image URL -> sendPhoto with caption
   const video = req.query.video ? String(req.query.video) : null;  // optional video URL -> sendVideo with caption (Telegram URL limit ~20MB — send a compressed encode)
   // &upload=1 with &photo=: fetch the image server-side and multipart-upload the BYTES to
@@ -7123,6 +7141,10 @@ async function tgTestRawUpload(req, res, buf) {
   if (!process.env.TELEGRAM_BOT_TOKEN) return res.status(200).json({ success: false, error: "Telegram not configured" });
   const chatId = req.query.chat ? String(req.query.chat) : process.env.TELEGRAM_CHAT_ID;
   if (!chatId) return res.status(200).json({ success: false, error: "no chat target" });
+  {
+    const refused = tgRooms.refusal(chatId, "sendAnimation", { roseRoomOk: !!req.query.chat });   // room policy — explicit chat= only
+    if (refused) return res.status(403).json({ success: false, error: refused });
+  }
   const kind = ["animation", "document", "photo", "video"].includes(String(req.query.kind)) ? String(req.query.kind) : "animation";
   const name = String(req.query.name || (kind === "animation" ? "cuna.gif" : "file.bin")).replace(/[^\w.-]/g, "_").slice(0, 64);
   const silent = req.query.loud !== "1";
@@ -7409,10 +7431,10 @@ app.post("/api/buycomp/stop", async (req, res) => {
   // Alert the group either way (emergency stop should never be silent).
   try {
     if (cancel) {
-      await tgSend(c.chatId, `🛑 <b>$${tgEsc(c.ticker)} BUY COMPETITION — STOPPED</b>\n\nThis competition has been cancelled by the organizers${reason ? `:\n<i>${tgEsc(reason)}</i>` : "."}\n\nNo winners will be drawn from this round. Questions? Reach the team. 🌹`);
+      await tgSend(c.chatId, `🛑 <b>$${tgEsc(c.ticker)} BUY COMPETITION — STOPPED</b>\n\nThis competition has been cancelled by the organizers${reason ? `:\n<i>${tgEsc(reason)}</i>` : "."}\n\nNo winners will be drawn from this round. Questions? Reach the team. 🌹`, null, { roseRoomOk: true });
     } else {
       await buyCompUpdate(c).catch(() => {});   // post the final provisional board (status now closed → won't re-tick)
-      await tgSend(c.chatId, `🏁 <b>$${tgEsc(c.ticker)} buy comp — closed early.</b>\n\nThe board above is the PROVISIONAL standing. Winners must hold their buys for <b>${c.holdHours}h</b> (no sells, no transfers) — official winners are confirmed by the Rose scan after the hold. 🌹`);
+      await tgSend(c.chatId, `🏁 <b>$${tgEsc(c.ticker)} buy comp — closed early.</b>\n\nThe board above is the PROVISIONAL standing. Winners must hold their buys for <b>${c.holdHours}h</b> (no sells, no transfers) — official winners are confirmed by the Rose scan after the hold. 🌹`, null, { roseRoomOk: true });
     }
   } catch (_) {}
   return res.status(200).json({ ok: true, competition: c });
@@ -9009,6 +9031,11 @@ function roseMinBuyUsd() {
   const o = Number(kv.get("roseMinBuyUsd", NaN));
   return Number.isFinite(o) && o > 0 ? o : ROSE_MIN_BUY_USD_DEFAULT;
 }
+// Replay horizon for BOTH buy bots (ROSE + generic): a transaction older than this when the poll
+// sees it is history, not a buy to announce. Incident 2026-09-17: the ROSE bot resumed after days
+// disarmed and posted every buy in its 100-signature window into the OnlyRose room in one go.
+// 15 min is far longer than any poll interval or indexing lag, and far shorter than any pause.
+const BUYBOT_REPLAY_MAX_AGE_S = Math.max(60, parseInt(process.env.BUYBOT_REPLAY_MAX_AGE_S || "900", 10) || 900);
 const ROSE_BUY_OVERLAP_MS = 150 * 1000;        // re-scan the trailing 2.5 min for lagged enrichment
 const ROSE_BUY_LOOKBACK_CAP_MS = 15 * 60 * 1000; // never scan more than 15 min back (redeploy/gap guard)
 const ROSE_BUY_SEEN_MAX = 600;                 // bound the durable dedup set
@@ -9067,13 +9094,16 @@ async function roseMarket() {
   return out || _roseMktCache.data;
 }
 
+// The ROSE bot's OWN send path is the one legitimate way into the OnlyRose room (it passes
+// roseRoomOk). It only runs when the ROSE bot is armed or an operator fires an explicit POST
+// lever on /api/rose-buybot; the generic per-project bot shares it, aimed at its own project room.
 async function roseTgSend(token, chatId, text, opts = {}) {
-  const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: opts.silent !== false }, token);
+  const result = await tgApi("sendMessage", { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: opts.silent !== false }, token, { roseRoomOk: true });
   if (!result) { console.warn("[ROSE-BUY] sendMessage failed"); return false; }
   return true;
 }
 async function roseTgSendPhoto(token, chatId, photoUrl, caption, opts = {}) {
-  const result = await tgApi("sendPhoto", { chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML", disable_notification: opts.silent !== false }, token);
+  const result = await tgApi("sendPhoto", { chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML", disable_notification: opts.silent !== false }, token, { roseRoomOk: true });
   if (result) return true;
   // Photo failed (bad URL / TG couldn't fetch it) — fall back to text so the buy still posts.
   console.warn("[ROSE-BUY] sendPhoto failed, falling back to text");
@@ -9252,7 +9282,10 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   const lastSig = kv.get("roseBuyLastSig", null);
   if (!lastSig) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, firstRun: true, note: "pool head recorded; history skipped" }; }
 
-  const { fresh, cursorFound } = freshSince(sigs, lastSig); // newest→oldest until the cursor, then flipped to oldest→newest
+  // Replay horizon (incident 2026-09-17): after a pause the cursor sits far behind the head, and
+  // the whole window would otherwise be posted into the room as if it just happened. Anything
+  // older than BUYBOT_REPLAY_MAX_AGE_S is stepped over (marked seen, cursor advanced) and logged.
+  const { fresh, stale, cursorFound } = freshSince(sigs, lastSig, { maxAgeS: BUYBOT_REPLAY_MAX_AGE_S }); // newest→oldest until the cursor, then flipped to oldest→newest
   // Cursor off the end of the window ⇒ more than SIG_LIMIT txns landed since last poll: buys
   // older than the oldest fetched sig are unrecoverable. Surface it LOUDLY (kv marker + log +
   // status field) — never skip silently. Fix by raising ROSE_SIG_LIMIT or lowering ROSE_POLL_MS.
@@ -9261,10 +9294,18 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
     kv.set("roseBuyGapCount", (kv.get("roseBuyGapCount", 0) || 0) + 1);
     console.warn(`[ROSE-BUY] cursor fell outside a ${sigs.length}-sig window — possible missed buys; raise ROSE_SIG_LIMIT or lower ROSE_POLL_MS`);
   }
-  if (!fresh.length) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, scanned: 0, posted: 0 }; }
-
   const seen = new Set(kv.get("roseBuySeen", []));
-  let posted = 0, scanned = 0, buysSeen = 0, advanceTo = lastSig;
+  if (stale.length) {
+    for (const sig of stale) seen.add(sig);
+    console.warn(`[ROSE-BUY] resume after a pause: ${stale.length} txns older than ${BUYBOT_REPLAY_MAX_AGE_S}s stepped over, not posted`);
+  }
+  if (!fresh.length) {
+    kv.set("roseBuyLastSig", sigs[0].signature);
+    if (stale.length) kv.set("roseBuySeen", [...seen].slice(-ROSE_BUY_SEEN_MAX));
+    return { ok: true, scanned: 0, posted: 0, skippedStale: stale.length };
+  }
+
+  let posted = 0, scanned = 0, buysSeen = 0, advanceTo = stale.length ? stale[stale.length - 1] : lastSig;
   for (const sig of fresh) {
     if (seen.has(sig)) { advanceTo = sig; continue; }
     const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
@@ -9291,7 +9332,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   }
   kv.set("roseBuyLastSig", advanceTo);
   kv.set("roseBuySeen", [...seen].slice(-ROSE_BUY_SEEN_MAX));
-  return { ok: true, scanned, buys: buysSeen, posted, floorUsd: roseMinBuyUsd(), gap: !cursorFound, image: !!img };
+  return { ok: true, scanned, buys: buysSeen, posted, skippedStale: stale.length, floorUsd: roseMinBuyUsd(), gap: !cursorFound, image: !!img };
 }
 
 // Auto-posting is OFF until explicitly armed (kv roseBuyArmed), so resolving the chat
@@ -9402,7 +9443,7 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
   const SIG_LIMIT = 100;
   const poolList = [cfg.pool, ...(Array.isArray(cfg.extraPools) ? cfg.extraPools.filter(p => p && p !== cfg.pool) : [])];
   const seenKey = `buyBotSeen:${cfg.id}`;
-  let posted = 0, scanned = 0, gap = false;
+  let posted = 0, scanned = 0, gap = false, skippedStale = 0;
   for (const poolAddr of poolList) {
     const lastKey = `buyBotLastSig:${cfg.id}` + (poolAddr === cfg.pool ? "" : `:${poolAddr.slice(0, 8)}`);
     const sigsRes = await roseHeliusRpc(key, "getSignaturesForAddress", [poolAddr, { limit: SIG_LIMIT }]).catch(() => null);
@@ -9410,11 +9451,22 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
     if (!sigs.length) continue;
     const lastSig = kv.get(lastKey, null);
     if (!lastSig) { kv.set(lastKey, sigs[0].signature); continue; }
-    const { fresh, cursorFound } = freshSince(sigs, lastSig);
+    // Replay horizon (incident 2026-09-17, see the ROSE bot): a resume after a pause never posts
+    // history — txns older than BUYBOT_REPLAY_MAX_AGE_S are stepped over and marked seen.
+    const { fresh, stale, cursorFound } = freshSince(sigs, lastSig, { maxAgeS: BUYBOT_REPLAY_MAX_AGE_S });
     if (!cursorFound) { gap = true; console.warn(`[BUYBOT ${cfg.id}] cursor outside ${sigs.length}-sig window on ${poolAddr.slice(0, 8)} — possible missed buys`); }
-    if (!fresh.length) { kv.set(lastKey, sigs[0].signature); continue; }
     const seen = new Set(kv.get(seenKey, []));
-    let advanceTo = lastSig;
+    if (stale.length) {
+      for (const sig of stale) seen.add(sig);
+      skippedStale += stale.length;
+      console.warn(`[BUYBOT ${cfg.id}] resume after a pause: ${stale.length} txns older than ${BUYBOT_REPLAY_MAX_AGE_S}s stepped over on ${poolAddr.slice(0, 8)}, not posted`);
+    }
+    if (!fresh.length) {
+      kv.set(lastKey, sigs[0].signature);
+      if (stale.length) kv.set(seenKey, [...seen].slice(-BUYBOT_SEEN_MAX));
+      continue;
+    }
+    let advanceTo = stale.length ? stale[stale.length - 1] : lastSig;
     for (const sig of fresh) {
       if (seen.has(sig)) { advanceTo = sig; continue; }
       const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
@@ -9442,7 +9494,7 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
     kv.set(lastKey, advanceTo);
     kv.set(seenKey, [...seen].slice(-BUYBOT_SEEN_MAX));
   }
-  return { ok: true, scanned, posted, floorUsd: Number(cfg.minUsd) || 0, gap, pools: poolList.length };
+  return { ok: true, scanned, posted, skippedStale, floorUsd: Number(cfg.minUsd) || 0, gap, pools: poolList.length };
 }
 
 // ── Project BURN watcher ("feel the burn") ──────────────────────────────────
@@ -9983,28 +10035,32 @@ app.all("/api/meme-queue", adminGuarded(ADMIN_404, { noStore: true }), (req, res
 });
 
 // Admin lever (PREMIUM_ACCESS_KEY-gated):
-//   ?status=1  → read-only wiring probe (never posts)
+//   default    → read-only wiring/status probe (never posts, never polls) — same as ?status=1
 //   ?arm=1     → turn ON automatic buy posting; ?disarm=1 → turn it OFF
 //   ?setmin=N  → set the min-buy USD floor live (e.g. 10). ?setmin=0 clears the override
 //                back to the code/env default. Survives redeploys (kv-durable).
-//   default    → run one poll cycle now (manual; works even while disarmed)
+//   ?run=1     → run one poll cycle now (manual; works even while disarmed) — POST only
 //   ?test=1    → fire a sample buy alert (verify chat + image wiring)
 //   ?announce=1→ post the one-off "buy bot warming up" announcement
 //   ?loud=1    → make THIS post notify (announce/test only; silent otherwise per owner rule)
+// ⚠️ Incident 2026-09-17: the flag-less GET used to RUN A POLL "even while disarmed". A status
+// check on a bot that had been disarmed for days walked its whole 100-signature window and posted
+// every buy above the floor into the OnlyRose room, in a row. A plain GET is a read now; the poll
+// is an explicit POST ?run=1, and both bots step over anything older than the replay horizon.
 app.all("/api/rose-buybot", adminGuarded(ADMIN_404_OK), async (req, res) => {
-  if (mutatingGetRefused(req, res, ["arm", "disarm", "setmin", "test", "announce", "backfill"])) return;   // audit #8; the flag-less poll stays a GET
+  if (mutatingGetRefused(req, res, ["arm", "disarm", "setmin", "test", "announce", "backfill", "run"])) return;   // audit #8 + incident 2026-09-17; the flag-less GET is the status read
   try {
     if (req.query.arm === "1") kv.set("roseBuyArmed", true);
     if (req.query.disarm === "1") kv.set("roseBuyArmed", false);
     // Live min-buy floor: setmin=0 (or negative/NaN) clears the override → back to default.
-    let minChanged = false;
     if (req.query.setmin != null) {
       const v = Number(req.query.setmin);
       if (Number.isFinite(v) && v > 0) kv.set("roseMinBuyUsd", v); else kv.set("roseMinBuyUsd", null);
-      minChanged = true;
     }
-    // arm/disarm/setmin are clean toggles — report status, don't also fire a poll.
-    const wantStatus = req.query.status === "1" || req.query.arm === "1" || req.query.disarm === "1" || minChanged;
+    // Everything that is not an explicit action (run / test / announce / backfill) is the status
+    // read — arm/disarm/setmin toggles included. A poll only ever runs on POST ?run=1.
+    const isAction = req.query.run === "1" || req.query.test === "1" || req.query.announce === "1" || !!req.query.backfill;
+    const wantStatus = !isAction;
     const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1", announce: req.query.announce === "1", loud: req.query.loud === "1", status: wantStatus, backfill: req.query.backfill || null });
     return res.status(200).json({ configured: !!roseResolveChatId(), armed: roseBuyArmed(), imageSet: !!process.env.ROSE_BUY_IMAGE_URL, ...out });
   } catch (e) {
@@ -20109,6 +20165,13 @@ app.listen(PORT, () => {
         // PROJECT_ROOM_CMDS. Add it explicitly so the "/" menu matches what actually works.
         if (CUNA_PUBLIC_ROOM && String(CUNA_PUBLIC_ROOM) !== mainRoom) projectRoomChatIds.add(String(CUNA_PUBLIC_ROOM));
         for (const cid of projectRoomChatIds) {
+          // Room policy (owner, 2026-09-17): the Cluck bot posts NOTHING in the OnlyRose room, so a
+          // command menu there would advertise replies that are now refused. Drop the scoped menu
+          // instead of registering one (deleteMyCommands is not a post).
+          if (tgRooms.isRoseRoom(cid)) {
+            try { await fetch(`https://api.telegram.org/bot${token}/deleteMyCommands`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: { type: "chat", chat_id: /^-?\d+$/.test(cid) ? Number(cid) : cid } }) }); } catch (_) {}
+            continue;
+          }
           try {
             await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
               method: "POST", headers: { "Content-Type": "application/json" },
