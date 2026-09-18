@@ -127,16 +127,27 @@
   function verifyCell(sig) { return sig ? '<span class="verify" data-sig="' + esc(sig) + '"><span class="small">not checked</span></span>' : '<span class="small">—</span>'; }
 
   // ── the lessons behind the mechanics (Hub Addendum C: teach the button before you offer it) ──
-  function lessons(kind) {
+  // ── E6 begin: school → Hub bridge — carry the project back to the school (`&from=hub:<id>`,
+  // read by src/App.jsx hashParam("from")) so a finished locking lesson can bridge the learner
+  // back to THIS project's page, and so the read counts toward it (POST /api/track
+  // "hub_lesson_read:<id>", lib/traction.js). `lessonReads` is the project's own JSON field
+  // (lib/hub/public.js projectView) — null unless it's > 0, so this never brags a zero.
+  function lessons(kind, lessonReads) {
+    var from = '&from=hub:' + encodeURIComponent(projectId);
     var L = [
-      ['What a hold period is, and why selling early forfeits the prize', '/school#lesson=tokenomics'],
-      ['Custody: who can move what — why a transfer out counts the same as a sell', '/school#lesson=wallets'],
-      ['Where rewards actually come from (never a promised rate)', '/school#lesson=staking'],
+      ['What a hold period is, and why selling early forfeits the prize', '/school#lesson=tokenomics' + from],
+      ['Custody: who can move what — why a transfer out counts the same as a sell', '/school#lesson=wallets' + from],
+      ['Where rewards actually come from (never a promised rate)', '/school#lesson=staking' + from],
     ];
-    if (kind === 'lock-to-earn') L.push(['Why projects lock in the first place', '/school#lesson=rugs']);
+    if (kind === 'lock-to-earn') L.push(['Why projects lock in the first place', '/school#lesson=rugs' + from]);
+    var stat = (lessonReads && lessonReads.count > 0)
+      ? '<div class="small" style="margin-top:10px">' + lessonReads.count + ' visitor' + (lessonReads.count === 1 ? '' : 's') +
+        ' read the lock lessons before this page in the last 30 days.</div>'
+      : '';
     return '<div class="card lessons"><div class="sec-title" style="margin-top:0">Learn the mechanics</div>' +
-      L.map(function (x) { return '<div class="fact" style="padding:4px 0"><a href="' + x[1] + '">' + esc(x[0]) + ' →</a></div>'; }).join('') + '</div>';
+      L.map(function (x) { return '<div class="fact" style="padding:4px 0"><a href="' + x[1] + '">' + esc(x[0]) + ' →</a></div>'; }).join('') + stat + '</div>';
   }
+  // ── E6 end ───────────────────────────────────────────────────────────────────────────────────
 
   // ── program cards ─────────────────────────────────────────────────────────────────────────
   function timeline(p) {
@@ -380,7 +391,7 @@
       '<div class="verify-bar"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote">' + receipts + ' receipt' + (receipts === 1 ? '' : 's') + ' on this page. Press to re-check every signature against Solana, from your browser.</span></div></div>' +
       '<div class="card"><div class="sec-title" style="margin-top:0">Check a wallet</div><div class="fact">Paste any address to see what it received in this program, with the transaction' + (one.kind === 'lock-to-earn' ? '' : ' — and, if it was disqualified, the fact that decided it') + '.</div><div class="input-row"><input class="addr-input" id="walletIn" placeholder="Solana wallet address" autocomplete="off" spellcheck="false"/><button class="btn ghost" id="walletBtn">CHECK</button></div><div id="walletOut"></div></div>' +
       programCard(one, sym, batchRepro) +
-      lessons(one.kind === 'lock-to-earn' ? 'lock-to-earn' : '') +
+      lessons(one.kind === 'lock-to-earn' ? 'lock-to-earn' : '', v.lessonReads) +
       '<div class="small" style="text-align:center">Raw data: <a class="mono" href="/api/hub/' + esc(v.id) + '">/api/hub/' + esc(v.id) + '</a> · generated ' + ts(v.generatedAt) + '</div>';
     document.getElementById('verifyBtn').addEventListener('click', verifyAll);
     document.getElementById('walletBtn').addEventListener('click', function () { lookup(document.getElementById('walletIn').value, one.id); });
