@@ -3351,6 +3351,75 @@ app.disable("x-powered-by");
 // block deploys for reasons that have nothing to do with whether the app can serve.
 app.get("/healthz", (req, res) => res.status(200).type("text/plain").send("ok"));
 
+// ── /api/build — the git sha/branch this container is actually running (Colosseum roadmap §10
+// Z2). Computed ONCE at boot, never re-read per request: a git sha cannot change under a running
+// process, so there is nothing to gain from re-reading disk on every hit, only latency. Nothing
+// secret — a commit sha and a branch name are already public on GitHub.
+//   1. Railway sets RAILWAY_GIT_COMMIT_SHA / RAILWAY_GIT_BRANCH on every deploy from a connected
+//      repo (Railway's own docs; this repo had no prior reader for them — grepped for RAILWAY_
+//      and found none — so this is the first). Preferred when present: it is what Railway itself
+//      believes it deployed, with zero disk reads.
+//   2. Otherwise fall back to reading `.git/HEAD` (+ the ref it points at) directly — covers a
+//      local `node server.js` and a no-build CI boot, where Railway's env vars don't exist. This
+//      handles a plain clone's `.git/HEAD` ("ref: refs/heads/<branch>" or a bare sha for a detached
+//      checkout) and a git WORKTREE's `.git` file (a `gitdir: <path>` pointer, never the ref
+//      itself, so a worktree's own HEAD lives at `<that path>/HEAD`).
+//   3. Env is derived from the branch, never from Railway's own environment name (this project's
+//      two Railway services and its `main`/`develop` branches are already the source of truth —
+//      CLAUDE.md "Branching"): `main` -> production, `develop` -> staging, anything else -> local.
+function readGitHeadInfo() {
+  try {
+    let gitDir = join(__dirname, ".git");
+    const st = fs.statSync(gitDir);
+    if (!st.isDirectory()) {
+      // A worktree checkout: `.git` is a text file, "gitdir: /path/to/main/.git/worktrees/<name>".
+      const pointer = fs.readFileSync(gitDir, "utf8").trim();
+      const m = /^gitdir:\s*(.+)$/.exec(pointer);
+      if (!m) return null;
+      gitDir = m[1];
+    }
+    const head = fs.readFileSync(join(gitDir, "HEAD"), "utf8").trim();
+    const refMatch = /^ref:\s*(\S+)$/.exec(head);
+    if (refMatch) {
+      const branch = refMatch[1].replace(/^refs\/heads\//, "");
+      let sha = null;
+      // Try the loose ref file first, then packed-refs (a ref just merged/fetched with no loose
+      // file yet — a worktree's own dir won't have this, so check the common dir it points at too).
+      for (const dir of [gitDir, join(gitDir, "..", "..")]) {
+        try { sha = fs.readFileSync(join(dir, refMatch[1]), "utf8").trim(); break; } catch (_) {}
+      }
+      if (!sha) {
+        for (const dir of [gitDir, join(gitDir, "..", "..")]) {
+          try {
+            const packed = fs.readFileSync(join(dir, "packed-refs"), "utf8");
+            const line = packed.split("\n").find((l) => l.endsWith(" " + refMatch[1]));
+            if (line) { sha = line.split(" ")[0]; break; }
+          } catch (_) {}
+        }
+      }
+      return { sha: sha || null, branch };
+    }
+    // Detached HEAD: the file itself is the sha, no branch name available.
+    if (/^[0-9a-f]{40}$/i.test(head)) return { sha: head, branch: null };
+    return null;
+  } catch (_) { return null; }
+}
+const BUILD_INFO = (() => {
+  const envSha = String(process.env.RAILWAY_GIT_COMMIT_SHA || "").trim();
+  const envBranch = String(process.env.RAILWAY_GIT_BRANCH || "").trim();
+  let sha = envSha || null, branch = envBranch || null;
+  if (!sha || !branch) {
+    const git = readGitHeadInfo();
+    if (git) { sha = sha || git.sha; branch = branch || git.branch; }
+  }
+  const env = branch === "main" ? "production" : branch === "develop" ? "staging" : "local";
+  return { sha: sha || null, branch: branch || null, builtAt: Date.now(), env };
+})();
+app.get("/api/build", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  return res.status(200).json({ ok: true, ...BUILD_INFO });
+});
+
 // gzip/brotli-style compression for every response (HTML, JS bundle, and the
 // large i18n dictionaries). Cuts the school dict from ~700KB to ~150KB on the
 // wire — a big win on mobile/Seeker. Safe: standard middleware, no streaming here.
@@ -3652,6 +3721,11 @@ app.use((req, res, next) => {
 // as the in-memory Telegram trackers). Railway sits behind a proxy, so trust
 // X-Forwarded-For for the real client IP rather than the proxy's.
 app.set("trust proxy", true);
+// Explicit, not just relying on Express's default: weak ETags on every res.json/res.send body,
+// so the Hub's public read routes (Colosseum roadmap Z3) answer a matching If-None-Match with a
+// bare 304 for free — no per-route code needed, Express's own `fresh` check does it inside
+// res.send(). scripts/public-route-hygiene-test.cjs pins this against a real conditional request.
+app.set("etag", "weak");
 
 // Last-resort guards: on Node ≥15 an unhandled promise rejection (e.g. a throw inside an
 // un-.catch'd setInterval tick) terminates the process, taking down every scheduler AND the
@@ -3706,7 +3780,7 @@ function clientIp(req) {
 // that long — so introducing one day-long limiter would quietly make all fifteen minute-long ones
 // retain a day of timestamps each. The sweep now trims each key by its own window.
 const RL_WINDOWS = new Map();   // bucket -> windowMs
-function rateLimit(bucket, { windowMs, max, message, onLimit }) {
+function rateLimit(bucket, { windowMs, max, message, onLimit, cors }) {
   RL_WINDOWS.set(bucket, Math.max(RL_WINDOWS.get(bucket) || 0, windowMs));
   if (windowMs > RL_MAX_WINDOW_MS) RL_MAX_WINDOW_MS = windowMs;   // fallback for un-prefixed keys
   return (req, res, next) => {
@@ -3723,8 +3797,16 @@ function rateLimit(bucket, { windowMs, max, message, onLimit }) {
       const retryAfter = Math.ceil((windowMs - (now - arr[0])) / 1000);
       if (typeof onLimit === "function") { try { onLimit(ip, req); } catch (_) {} }
       res.setHeader("Retry-After", Math.max(1, retryAfter));
-      return res.status(429).json({ success: false,
-        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter) });
+      // `cors: true` for a limiter mounted on a route that itself answers with
+      // Access-Control-Allow-Origin (Colosseum roadmap Z3 — the Hub's cross-origin public
+      // reads): the 429 short-circuits BEFORE the route handler ever runs, so without this the
+      // limited response would carry no CORS header and a cross-origin caller (e.g. /hub/verify
+      // reproducing a receipt published on another host) would see an opaque network error
+      // instead of a readable 429. Never used for the store-edition contract routes — see
+      // STORE_API_RE and the store-CORS middleware above, which this is mounted after.
+      if (cors) { res.setHeader("Access-Control-Allow-Origin", "*"); }
+      return res.status(429).json({ success: false, ok: false,
+        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter), retryAfter: Math.max(1, retryAfter) });
     }
     arr.push(now);
     next();
@@ -6846,7 +6928,9 @@ app.get("/api/jvp/project/:id", async (req, res) => {
 // X5: the three evidence classes merged into one time-ordered, capped array, with a pure
 // replay of the retained decision rows against the real gates. Read-only, same GET-only shape
 // as the two routes above — no flag on this route can arm, pause, roll or sign anything.
-app.get("/api/jvp/project/:id/timeline", async (req, res) => {
+// Rate-limited (Z3): unlike /overview and /project (bounded lookups), this one fans out to the
+// paid Helius history endpoint for up to 720 hours of evidence per call.
+app.get("/api/jvp/project/:id/timeline", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   const id = String(req.params.id || "").toLowerCase();
   if (!JVP_PUBLIC_PROJECTS.includes(id)) return res.status(404).json({ success: false, error: "not_found" });
@@ -6854,7 +6938,12 @@ app.get("/api/jvp/project/:id/timeline", async (req, res) => {
     const hours = Math.max(1, Math.min(720, parseInt(req.query.hours, 10) || 168));
     const out = await jvpDashboard.timeline({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, id, hours, helius: JVP_HELIUS });
     if (!out) return res.status(404).json({ success: false, error: "not_found" });
-    return res.status(200).json({ success: true, updatedAt: Date.now(), id, ...out });
+    // Z3: `updatedAt` is floored to the Cache-Control window, not a raw Date.now() — a literal
+    // live timestamp embedded in the body would give this route a fresh ETag on every single
+    // call, so a matching If-None-Match could never actually 304 no matter how unchanged the
+    // underlying rows were. Flooring to the 60s window it's already cached for means two calls
+    // in the same minute (the only case a real revalidation would ever hit) hash identically.
+    return res.status(200).json({ success: true, updatedAt: Math.floor(Date.now() / 60000) * 60000, id, ...out });
   } catch (e) { console.warn("[jvp] timeline failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
 });
 
@@ -7673,8 +7762,11 @@ app.get("/api/airdrop/record", (req, res) => res.status(405).json({ success: fal
 
 // Public: the drop's full receipt. No operator identity anywhere in the body — the dropId (random,
 // unguessable, in the URL) is the only handle a reader has.
+// Cache-Control (Z3): a per-project-style read, same 60s tier as the Hub's own receipt/batch
+// reads — this was `no-store` only because nobody had gotten to it yet, not because a drop's
+// rows change so often that a minute of staleness would mislead anyone reading it.
 app.get("/api/airdrop/r/:dropId", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=60");
   const drop = airdropReceipt.loadDrop(kv, String(req.params.dropId || ""));
   if (!drop) return res.status(404).json({ success: false, error: "not_found" });
   let symbol = null;
@@ -7683,10 +7775,13 @@ app.get("/api/airdrop/r/:dropId", async (req, res) => {
 });
 // Public: one recipient's row within a drop.
 app.get("/api/airdrop/r/:dropId/:wallet", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const wallet = String(req.params.wallet || "");
+  // Shape-check BEFORE loading the drop or scanning its rows (Z3): a malformed wallet is a 400,
+  // never a scan over every row in the drop just to come back empty.
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "bad wallet" });
   const drop = airdropReceipt.loadDrop(kv, String(req.params.dropId || ""));
   if (!drop) return res.status(404).json({ success: false, error: "not_found" });
-  const wallet = String(req.params.wallet || "");
   const row = Object.values(drop.rows || {}).find((r) => r.wallet === wallet);
   if (!row) return res.status(404).json({ success: false, error: "no row for that wallet in this drop" });
   let symbol = null;
@@ -7937,6 +8032,11 @@ const hubPublic = require("./lib/hub/public");
 const HUB_SCHEMA_DIR = join(__dirname, "lib", "hub", "schema");
 const HUB_SCHEMA_NAMES = new Set(["program-version", "batch", "receipt", "project-public"]);
 function HUB_SCHEMA_URL(name) { return `https://clucknorris.app/hub/schema/${name}.json`; }
+// Shared signature shape (Colosseum roadmap Z3, public-route hygiene) — the same bounds used
+// throughout server.js/lib for a Solana transaction signature. Checked BEFORE any store read on
+// a param named sig/wallet/mint so a malformed value 400s immediately rather than falling through
+// to a scan or a 500.
+const HUB_SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{60,100}$/;
 const hubProject = require("./lib/hub/project");
 function hubProjects() {
   const built = {
@@ -8001,6 +8101,57 @@ app.get("/api/hub", (req, res) => {
     return res.status(200).json({ ok: true, projects });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// ── AA1: one wallet, every project (Colosseum roadmap §11) ─────────────────────────────────────
+// "The strongest honest form of Earn: a holder who can check what they were owed and what
+// arrived" — across EVERY registered real project, never just one. Composed ONLY from
+// hubPublic.walletLookup(hubProjectView(p), wallet) per project — no private field, and demo/
+// fixture projects are excluded exactly as every other feed excludes them (they never reach
+// hubProjects(); see the E2 comment above). Registered BEFORE /api/hub/:project so "wallet" is
+// never read as a project id — belt-and-braces, since "wallet" is also a reserved project id
+// below (hubRoutes.mount's reservedMints) and the two path shapes don't actually collide by
+// segment count, the way /hub/demo and /hub/verify DO collide with the page catch-all.
+function hubWalletGroupPrograms(entries) {
+  const order = [], byProgram = new Map();
+  for (const e of entries || []) {
+    const { program, kind, label, ticker, ...row } = e;
+    let g = byProgram.get(program);
+    if (!g) { g = { id: program, kind, label, ticker, rows: [] }; byProgram.set(program, g); order.push(g); }
+    g.rows.push(row);
+  }
+  return order;
+}
+app.get("/api/hub/wallet/:wallet", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.params.wallet || "");
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ ok: false, error: "not a Solana address" });
+  try {
+    const projects = [];
+    for (const p of Object.values(hubProjects())) {
+      let r;
+      try { r = hubPublic.walletLookup(hubProjectView(p), wallet); } catch (_) { continue; }
+      if (!r.ok || !r.entries.length) continue;
+      projects.push({ id: p.id, label: p.label, brand: p.brand ? { logo: p.brand.logo || null, accent: p.brand.accent || null, tagline: p.brand.tagline || null } : null, programs: hubWalletGroupPrograms(r.entries) });
+    }
+    return res.status(200).json({ ok: true, wallet, projects, seenIn: projects.length, generatedAt: Date.now() });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// BB3 (Colosseum roadmap §12) — shields.io "endpoint badge" schema exactly
+// (https://shields.io/badges/endpoint-badge). Registered here, before the generic
+// /api/hub/:project below, for the same reason /api/hub/wallet/:wallet is — "badge.json" is a
+// 3-segment path that the :project pattern would otherwise swallow as a (nonexistent) project id.
+// hubBadgeCompute/hubBadgeColor are defined further down next to the reproducibility route they
+// share a cache with; being function/const declarations evaluated once at module load (long
+// before any request reaches this handler), where they're defined in the file makes no
+// difference to what this closure sees at call time.
+app.get("/api/hub/badge.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try {
+    const projectId = req.query.project ? String(req.query.project) : null;
+    const b = hubBadgeCompute(projectId);
+    if (projectId && !b) return res.status(404).json({ ok: false, error: "no such project" });
+    return res.status(200).json({ schemaVersion: 1, label: "receipts reproducible", message: b.message, color: b.color, cacheSeconds: 300 });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 app.get("/api/hub/:project", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=30");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
@@ -8021,8 +8172,16 @@ app.get("/api/hub/:project/wallet/:wallet", (req, res) => {
 });
 app.get("/api/hub/:project/r/:sig", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300");
+  // CORS: public, read-only, no auth/cookies — /hub/verify (Y1) may be loaded on one host
+  // (production) while reproducing a receipt published on another (staging), and the browser
+  // enforces same-origin on fetch() unless this route says otherwise.
+  res.setHeader("Access-Control-Allow-Origin", "*");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  const sig = String(req.params.sig || "");
+  // Shape-check BEFORE the lookup (Z3): a malformed sig is a 400, never handed to findReceipt to
+  // scan every program's payout rows just to fail the regex it already runs internally.
+  if (!HUB_SIG_RE.test(sig)) return res.status(400).json({ ok: false, error: "bad sig" });
   try {
     const sig = String(req.params.sig || "");
     // W3: the settlement journal + the raw registry record (fundingWallet) + the project's own
@@ -8066,8 +8225,12 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
 //     tell if it ever changes under them.
 // Cached 60s — a comp's standings don't need to be fresher than that once sealed, and while live
 // this route deliberately shows nothing that would benefit from being fresh.
-app.get("/api/hub/:project/p/:compId/standings", (req, res) => {
+// Rate-limited (Z3): this walks every result/winner/review/payout row of the comp on each call,
+// so it is a "heavy" read next to the plain per-project view — `cors: true` keeps the 429 itself
+// readable by a cross-origin caller, since the 200 below always carries the same ACAO.
+app.get("/api/hub/:project/p/:compId/standings", rateLimit("hubheavy", { windowMs: 60000, max: 60, cors: true }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
+  res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
   const compId = String(req.params.compId || "");
@@ -8084,8 +8247,12 @@ app.get("/api/hub/:project/p/:compId/standings", (req, res) => {
 // hubStore's real registry / kv; this module never writes to either). Every JSON body here carries
 // dryRun:true. See lib/hub/demo-fixture.js for how the numbers are derived.
 const hubDemoFixture = require("./lib/hub/demo-fixture");
+// Cache headers (Z3): the fixture is built once per process (hubDemoFixture.get() memoises), so
+// there is nothing per-visitor or per-request to keep fresh — these three were `no-store` only
+// because nobody had gotten to them yet, not because the content is ever different between two
+// calls in the same deploy. Same tiers as the real Hub reads: per-project 60s, one receipt 300s.
 app.get("/api/hub-demo", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=60");
   try {
     const d = hubDemoFixture.get();
     const summarize = (p) => ({ id: p.project.id, label: p.project.label, symbol: p.project.symbol, mint: p.project.mint,
@@ -8094,7 +8261,7 @@ app.get("/api/hub-demo", (req, res) => {
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 app.get("/api/hub-demo/:project", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=60");
   const id = String(req.params.project || "").toLowerCase();
   try {
     const p = hubDemoFixture.get()[id];
@@ -8103,7 +8270,7 @@ app.get("/api/hub-demo/:project", (req, res) => {
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 app.get("/api/hub-demo/:project/r/:id", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=300");
   const id = String(req.params.project || "").toLowerCase();
   try {
     const p = hubDemoFixture.get()[id];
@@ -8111,6 +8278,43 @@ app.get("/api/hub-demo/:project/r/:id", (req, res) => {
     const r = (p.receipts || {})[String(req.params.id || "")];
     if (!r) return res.status(404).json({ ok: false, error: "no such receipt" });
     return res.status(200).json({ ok: true, dryRun: true, projectId: id, receipt: r });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// AA2's evidence bundle, for the demo fixture too — the same download shape the real Hub route
+// below serves, over the fixture's own version/batch/receipts. The demo's batch and receipts run
+// on the Addendum-B ledger model (lib/hub/ledger.js — receipt() output matches
+// lib/hub/schema/receipt.schema.json exactly, unlike any LIVE receipt today), which
+// lib/hub/reproduce.js does not read from (docs/HUB_VERIFY.md §g) — there is no per-wallet
+// periodsCreditedTo breakdown to publish, so `batch.inputs` is honestly empty rather than reshaped
+// into something that would look reproducible and isn't; `/hub/verify` reports MISSING_INPUTS for
+// these receipts, which is the true state of this project's payout path, not a bug in the bundle.
+app.get("/api/hub-demo/:project/batch/:batchId/bundle", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const id = String(req.params.project || "").toLowerCase();
+  try {
+    const p = hubDemoFixture.get()[id];
+    if (!p) return res.status(404).json({ ok: false, error: "no such demo project" });
+    if (!p.batch || !p.batch.id) return res.status(404).json({ ok: false, error: "this demo project has no batch to bundle" });
+    if (String(req.params.batchId || "") !== p.batch.id) return res.status(404).json({ ok: false, error: "no such batch" });
+    const programVersion = { ...hubPublic.programVersionView(p.version), $schema: HUB_SCHEMA_URL("program-version") };
+    const receiptIds = Object.keys(p.receipts || {}).sort();
+    const receiptsOut = receiptIds.map((rid) => {
+      const r = p.receipts[rid];
+      return {
+        projectId: p.project.id, symbol: p.project.symbol, dryRun: true, brand: null,
+        program: { kind: "lock-to-earn", id: "lock-to-earn", label: "Lock to Earn", ticker: p.project.symbol, mint: p.project.mint, prizeMint: p.project.rewardMint },
+        receipt: { ...r, $schema: HUB_SCHEMA_URL("receipt") },
+      };
+    });
+    const bundle = hubBundle.buildBundle({
+      projectView: { id: p.project.id, label: p.project.label, dryRun: true },
+      programVersion,
+      batchInputs: { projectId: p.project.id, batchId: p.batch.id, decimals: p.project.decimals, wallets: {} },
+      receipts: receiptsOut,
+      note: "Fixture data for the Colosseum judge walkthrough (dryRun:true throughout). `batch.inputs` is empty because this batch runs on the not-yet-live Addendum-B settlement model (docs/HUB_VERIFY.md §g) rather than the model lib/hub/reproduce.js reads from, so /hub/verify will honestly report MISSING_INPUTS for these receipts rather than a fabricated MATCH.",
+    });
+    res.setHeader("Content-Disposition", `attachment; filename="hub-${p.project.id}-${p.batch.id}-evidence.json"`);
+    return res.status(200).json(bundle);
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 
@@ -8121,10 +8325,19 @@ app.get("/api/hub-demo/:project/r/:id", (req, res) => {
 // carries no program-version hash of its own today, so `programVersion`/`hash` come back null —
 // reported honestly rather than invented (see the file header for why).
 const hubReproduce = require("./lib/hub/reproduce");
-app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
+// Rate-limited (Z3): both routes below replay real ledger data (a whole batch, or every batch in
+// the project) on each miss, well past what "load a page" needs — `cors: true` on the one that
+// carries ACAO so its 429 is still readable cross-origin (batch/inputs is what /hub/verify, Y1,
+// fetches from a possibly different host than it's loaded on).
+app.get("/api/hub/:project/batch/:batchId/inputs", rateLimit("hubheavy", { windowMs: 60000, max: 60, cors: true }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
+  res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  // Shape-check ?wallet= BEFORE it is used to index the built map (Z3) — a malformed value 400s
+  // instead of silently missing (or, worse, hitting an inherited key like "__proto__").
+  const wanted = String(req.query.wallet || "").trim();
+  if (wanted && !SOL_ADDR_RE.test(wanted)) return res.status(400).json({ ok: false, error: "bad wallet" });
   try {
     const batches = hubStore.read(kv, p.id, "batches", {}) || {};
     const bt = batches[String(req.params.batchId || "")];
@@ -8143,10 +8356,75 @@ app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
     try { programState = hubStore.read(kv, p.id, "state", null); } catch (_) {}
     const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches, journal, programState });
     if (wanted) {
-      if (!all[wanted]) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
+      if (!Object.prototype.hasOwnProperty.call(all, wanted)) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
       return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: all[wanted] } });
     }
     return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: all });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── AA2: the offline evidence bundle (Colosseum roadmap §11) — one JSON download that carries
+// everything the route above (plus the receipt and program-version routes) would otherwise need
+// three separate curls for: the program version this batch paid under, its published inputs, and
+// every settled receipt in it. Composed ONLY from the same public view functions those routes
+// already call (hubReproduce.buildBatchInputs, hubPublic.findReceipt, hubPublic.programVersionView
+// via hubProject.versionFor) — never a private field, never desk data. Same rate limit and CORS
+// as the route above, since it walks the same batch. `/hub/verify` (Y1) accepts this file dropped
+// in one move; `scripts/reproduce-receipt.cjs --bundle` reproduces every receipt in it on a
+// reader's own machine. See lib/hub/bundle.js for what the hash does and does not prove.
+const hubBundle = require("./lib/hub/bundle");
+app.get("/api/hub/:project/batch/:batchId/bundle", rateLimit("hubheavy", { windowMs: 60000, max: 60, cors: true }), (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const batches = hubStore.read(kv, p.id, "batches", {}) || {};
+    const bt = batches[String(req.params.batchId || "")];
+    if (!bt) return res.status(404).json({ ok: false, error: "no such batch" });
+    const days = hubStore.read(kv, p.id, "days", {}) || {};
+    const dec = Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : (Number.isInteger(p.decimals) ? p.decimals : 9);
+    // Same wallets a plain /inputs fetch (no ?wallet=) would return — every wallet already SENT
+    // in this batch. Sorted so the receipts array below (and therefore the bundle's hash) comes
+    // out in the same order on every rebuild of the same settled batch.
+    const wallets = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
+    const settledWallets = Object.keys(wallets).sort();
+    // The program version in force when this batch was built — the exact lookup
+    // hubPublic.stakeView's own per-receipt "explanation" already runs (lib/hub/public.js
+    // stakeView -> lib/hub/explain.js), independent of whether anything in the batch has settled
+    // yet. Absent for a project whose lock-to-earn payout predates program versions (CUNA) — that
+    // is reported as `program: null`, never invented (lib/hub/reproduce.js's own header explains
+    // why a lock-to-earn batch carries no hash of its own today).
+    let programVersion = null;
+    try {
+      const state = hubStore.read(kv, p.id, "state", {}) || {};
+      if (Array.isArray(state.versions) && state.versions.length) {
+        const dayKey = new Date((Number(bt.at) || 0) * 1000).toISOString().slice(0, 10);
+        const v = hubProject.versionFor(state, dayKey);
+        if (v) programVersion = { ...hubPublic.programVersionView(v), $schema: HUB_SCHEMA_URL("program-version") };
+      }
+    } catch (_) { /* no version state on this project — programVersion stays null, reported honestly */ }
+    let receiptsOut = [];
+    if (settledWallets.length) {
+      const view = hubProjectView(p);
+      receiptsOut = settledWallets.map((w) => {
+        const sig = bt.sent && bt.sent[w] && bt.sent[w].sig;
+        return sig ? hubPublic.findReceipt(view, sig) : null;
+      }).filter(Boolean);
+    }
+    // An unsettled batch (built, but nothing sent yet) is not an error — it just has nothing to
+    // bundle yet. Said in plain words rather than served as an empty-but-unexplained receipts
+    // array, which could otherwise read as "this project has never paid anyone." `settled`/`note`
+    // are passed INTO buildBundle (not merged onto its result afterward) so they are hashed along
+    // with everything else — see bundle.js's own comment on why that matters.
+    const bundle = hubBundle.buildBundle({
+      projectView: { id: p.id, label: p.label, dryRun: p.dryRun === true },
+      programVersion,
+      batchInputs: { projectId: p.id, batchId: bt.id, decimals: dec, wallets },
+      receipts: receiptsOut,
+      note: receiptsOut.length ? null : "This batch has not been settled yet — no wallet in it has been paid, so there is nothing to bundle. Check back once at least one payout from this batch has landed.",
+    });
+    res.setHeader("Content-Disposition", `attachment; filename="hub-${p.id}-${bt.id}-evidence.json"`);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    return res.status(200).json(bundle);
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // { batches: [{batchId, total, reproduced, mismatched, missingInputs, period}], overall } —
@@ -8155,25 +8433,113 @@ app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
 // header, same pattern as the other Hub read routes.
 const HUB_REPRO_CACHE = new Map();   // projectId -> { at, data }
 const HUB_REPRO_CACHE_MS = 5 * 60 * 1000;
-app.get("/api/hub/:project/reproducibility", (req, res) => {
+// Shared by the route below AND /api/hub/badge.json (BB3, Colosseum roadmap §12): pulled out so
+// the badge sums the SAME per-project computation — and hits the SAME 5-minute cache — that a
+// direct call to /api/hub/:project/reproducibility would, rather than growing a second code path
+// that could quietly drift from what the route publishes.
+function hubReproducibilityFor(id, p) {
+  const cached = HUB_REPRO_CACHE.get(id);
+  if (cached && Date.now() - cached.at < HUB_REPRO_CACHE_MS) return cached.data;
+  const batches = hubStore.read(kv, id, "batches", {}) || {};
+  const days = hubStore.read(kv, id, "days", {}) || {};
+  const otherPrograms = hubProjectView(p).programs.filter((pr) => pr.kind !== "lock-to-earn");
+  // W3: journal + programState are additive — a row with a journal event gets its real
+  // program-version hash (lib/hub/reproduce.js buildInputsForWallet); one without still reports
+  // hash: null, exactly as before the journal was wired in.
+  let journal = {}, programState = null;
+  try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
+  try { programState = hubStore.read(kv, id, "state", null); } catch (_) {}
+  const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms, journal, programState });
+  const data = { ok: true, project: id, batches: rep.batches, overall: rep.overall };
+  HUB_REPRO_CACHE.set(id, { at: Date.now(), data });
+  return data;
+}
+app.get("/api/hub/:project/reproducibility", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300");
   const id = String(req.params.project || "").toLowerCase();
   const p = hubProjects()[id];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
   try {
-    const cached = HUB_REPRO_CACHE.get(id);
-    if (cached && Date.now() - cached.at < HUB_REPRO_CACHE_MS) return res.status(200).json(cached.data);
-    const batches = hubStore.read(kv, id, "batches", {}) || {};
-    const days = hubStore.read(kv, id, "days", {}) || {};
-    const otherPrograms = hubProjectView(p).programs.filter((pr) => pr.kind !== "lock-to-earn");
-    let journal = {}, programState = null;
-    try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
-    try { programState = hubStore.read(kv, id, "state", null); } catch (_) {}
-    const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms, journal, programState });
-    const data = { ok: true, project: id, batches: rep.batches, overall: rep.overall };
-    HUB_REPRO_CACHE.set(id, { at: Date.now(), data });
-    return res.status(200).json(data);
+    return res.status(200).json(hubReproducibilityFor(id, p));
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── BB3 (Colosseum roadmap §12): a reproducibility badge that is COMPUTED, not typed. Both
+// routes below sum hubReproducibilityFor() over every registered, non-demo project — the exact
+// same set /api/hub lists and hub-status.html walks (hubProjects() never contains "demo"/"demo-b";
+// those live only in lib/hub/demo-fixture.js and are never registered in the real kv registry —
+// see the reservedMints comment above). `?project=<id>` narrows to one project's own ratio; an
+// unknown or demo id 404s (a demo id can never resolve through hubProjects() either, since it was
+// never registered there). The message is built ONLY from integers this file computed and a
+// small set of fixed words — never a project's label, symbol or any other attacker-influenced
+// field — so nothing user-controlled can ever reach the badge text. Keep it that way.
+const HUB_BADGE_COLORS = { green: "#3fb950", yellow: "#d4a72c", lightgrey: "#9aa0a6" };
+function hubBadgeColor(reproduced, total) {
+  if (!total) return "lightgrey";
+  return reproduced === total ? "green" : "yellow";
+}
+// Returns null when `projectId` is set but doesn't resolve to a registered, non-demo project —
+// the caller 404s. With no projectId, sums across every registered project. `K` in the aggregate
+// message counts only projects that actually contributed a row to the ratio (total > 0) — a
+// project with a Hub page but zero settled receipts (the poke dry-run carve-out registers this
+// way at boot, and any freshly-onboarded project starts this way too) has nothing to "reproduce"
+// yet and would otherwise inflate K with projects the ratio never touched.
+function hubBadgeCompute(projectId) {
+  const projects = hubProjects();
+  if (projectId) {
+    const id = String(projectId).toLowerCase();
+    const p = projects[id];
+    if (!p) return null;
+    const data = hubReproducibilityFor(id, p);
+    const n = data.overall.reproduced, m = data.overall.total;
+    return { message: m ? `${n} of ${m}` : "no receipts yet", color: hubBadgeColor(n, m) };
+  }
+  let totalAll = 0, reproducedAll = 0, k = 0;
+  for (const [id, p] of Object.entries(projects)) {
+    const data = hubReproducibilityFor(id, p);
+    if (data.overall.total > 0) k++;
+    totalAll += data.overall.total;
+    reproducedAll += data.overall.reproduced;
+  }
+  const message = totalAll ? `${reproducedAll} of ${totalAll} across ${k} project${k === 1 ? "" : "s"}` : "no receipts yet";
+  return { message, color: hubBadgeColor(reproducedAll, totalAll) };
+}
+// The route for this is registered ABOVE, next to /api/hub/wallet/:wallet — a 3-segment path
+// collides with the generic /api/hub/:project pattern the same way "wallet" does (see the AA1
+// comment there), so it must be registered before it or Express reads "badge.json" as a project
+// id and 404s "no such project" (this bit once, before the reorder).
+//
+// A small server-rendered flat badge, same numbers as the JSON above, for README/markdown
+// embeds that want an <img> rather than a shields.io round-trip. Width is a fixed per-character
+// estimate (no font metrics available server-side) — close enough for a two-box flat badge, and
+// every text node is escHtml'd even though (see the comment above) nothing user-controlled can
+// ever reach it.
+function hubBadgeCharWidth(s) { return Math.round(String(s).length * 6.2) + 10; }
+function renderHubBadgeSvg(label, message, colorName) {
+  const color = HUB_BADGE_COLORS[colorName] || HUB_BADGE_COLORS.lightgrey;
+  const labelW = hubBadgeCharWidth(label);
+  const msgW = hubBadgeCharWidth(message);
+  const w = labelW + msgW, h = 20;
+  const labelText = escHtml(label), msgText = escHtml(message);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" role="img" aria-label="${labelText}: ${msgText}">` +
+    `<clipPath id="hbr"><rect width="${w}" height="${h}" rx="3" fill="#fff"/></clipPath>` +
+    `<g clip-path="url(#hbr)">` +
+    `<rect width="${labelW}" height="${h}" fill="#555"/>` +
+    `<rect x="${labelW}" width="${msgW}" height="${h}" fill="${color}"/>` +
+    `</g>` +
+    `<g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">` +
+    `<text x="${labelW / 2}" y="14">${labelText}</text>` +
+    `<text x="${labelW + msgW / 2}" y="14">${msgText}</text>` +
+    `</g></svg>`;
+}
+app.get("/hub/badge.svg", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try {
+    const projectId = req.query.project ? String(req.query.project) : null;
+    const b = hubBadgeCompute(projectId);
+    if (projectId && !b) return res.status(404).type("text/plain").send("not found");
+    res.type("image/svg+xml");
+    return res.status(200).send(renderHubBadgeSvg("receipts reproducible", b.message, b.color));
+  } catch (e) { return res.status(500).type("text/plain").send("error rendering badge"); }
 });
 // Live platform-access pricing for the pre-registration apply page (hub-apply.html) — the
 // per-project quote at /api/hub/:project/access needs an already-registered project, but a
@@ -8194,6 +8560,7 @@ app.get("/hub/schema/:name.json", (req, res) => {
   const name = String(req.params.name || "");
   if (!HUB_SCHEMA_NAMES.has(name)) return res.status(404).json({ ok: false, error: "not_found" });
   res.setHeader("Cache-Control", "public, max-age=3600");
+  res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
   res.type("application/schema+json");
   res.sendFile(join(HUB_SCHEMA_DIR, `${name}.schema.json`));
 });
@@ -8201,15 +8568,213 @@ app.get("/hub/schema/:name.json", (req, res) => {
 app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
 app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
 app.get("/hub/:project/desk", (req, res) => { res.sendFile(join(__dirname, "public", "hub-desk.html")); });
+// ── Y1: reproduce a receipt in the browser, offline-capable (Colosseum roadmap §9) ──────────────
+// The bundle is generated by `npm run build:hubverify` (vite.hubverify.config.js) straight from
+// the SAME pure lib/hub/reproduce.js + lib/hub/schema-validate.js + lib/hub/canonical.js the
+// /api/hub/* routes above and scripts/reproduce-receipt.cjs already run — never committed
+// (.gitignore'd), so a no-build boot (a fresh CI checkout before `npm run build` has run) 404s
+// with a clear message rather than serving a stale copy or silently 404ing as a generic asset.
+const HUB_VERIFY_BUNDLE_PATH = join(__dirname, "public", "hub-verify.bundle.js");
+app.get("/hub-verify.bundle.js", (req, res) => {
+  if (!fs.existsSync(HUB_VERIFY_BUNDLE_PATH)) {
+    return res.status(404).json({ ok: false, error: "hub-verify.bundle.js has not been built yet — run `npm run build` (or `npm run build:hubverify`) first" });
+  }
+  // Z3: same 3600s tier as /hub/schema/*.json — a built bundle only ever changes on a new
+  // deploy, same as a schema file, so it gets the same long cache rather than the 300s a live
+  // computation (reproducibility) gets.
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("application/javascript");
+  res.sendFile(HUB_VERIFY_BUNDLE_PATH);
+});
+// Registered BEFORE the generic /hub/:project pattern below, or "verify" would be read as a
+// project id and served hub.html instead.
+app.get("/hub/verify", (req, res) => { res.sendFile(join(__dirname, "public", "hub-verify.html")); });
+// AA1: one wallet, every project — a typed address, no connect. Same ordering reason as
+// /hub/verify above: registered before the /hub/:project catch-all so "wallet" is never read as
+// a project id (it is also a reserved project id, hubRoutes.mount's reservedMints, above).
+app.get(["/hub/wallet", "/hub/wallet/:wallet"], (req, res) => { res.sendFile(join(__dirname, "public", "hub-wallet.html")); });
+
+// AA5 (Colosseum roadmap §11): the trust-boundary page — what the Hub does NOT prove, in plain
+// words. Static content, same reason it needs its own route as /hub/verify above: registered
+// BEFORE the generic /hub/:project pattern below, or "trust" would be read as a project id and
+// served hub.html instead. Meta is static (like for-projects.html) rather than the dynamic
+// per-request OG build below — there is no project/program/receipt to vary the text by.
+app.get("/hub/trust", (req, res) => { res.sendFile(join(__dirname, "public", "hub-trust.html")); });
+
+// AA4 (Colosseum roadmap §11): the judge's fifteen minutes — one page mapping each judging
+// criterion to the exact URLs to open. Same reason for its own route as /hub/verify and
+// /hub/trust above: registered BEFORE the generic /hub/:project pattern below, or "judge" would
+// be read as a project id and served hub.html instead. public/hub-judge.html is GENERATED from
+// docs/JUDGE_GUIDE.md by scripts/build-judge-page.cjs and committed (unlike hub-verify.bundle.js,
+// it must serve on a no-build boot), so this is a plain sendFile like hub-trust.html's, not a
+// build-time dependency check.
+app.get("/hub/judge", (req, res) => { res.sendFile(join(__dirname, "public", "hub-judge.html")); });
+
+// ── Y4: shareable Hub pages — server-rendered Open Graph / Twitter Card meta (Colosseum roadmap
+// §9). One static branded image (public/og/hub-card.png, 1200x630 — no dynamic image generation,
+// the roadmap line, and served below with a long cache) shared by every route; only the <title>/
+// description/url text is computed per request, from the SAME public view functions the JSON
+// routes above already call — hubProjectView() (wraps lib/hub/public.js projectView) and
+// hubPublic.findReceipt() — never a private field. Every value is escaped with the shared
+// Node-side escaper (escHtml, lib/html-escape.js) before it reaches the page, same discipline as
+// the Lock of Fame / LP Lab cards elsewhere in this file. A missing project/program/receipt still
+// serves 200 with the GENERIC Hub meta (the client renders its own not-found state) — a share
+// link that outlives its target must not itself look broken to an unfurler, and the meta build
+// never throws the page itself: any error here falls back to the unmodified file.
+const HUB_OG_IMAGE = "https://clucknorris.app/og/hub-card.png";
+const HUB_OG_BASE = "https://clucknorris.app/hub";
+const HUB_OG_DEFAULT = Object.freeze({
+  title: "Project Hub — receipts you can verify",
+  desc: "What a project promised its holders, who qualified, and the transaction that paid each one — re-checked against Solana in your browser. No wallet needed.",
+});
+const HUB_OG_REPRO_LINE = "reproducible from the published inputs";
+function ogClamp(s, max) {
+  s = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  return s.length > max ? s.slice(0, Math.max(0, max - 1)).trim() + "…" : s;
+}
+// Read once per file, cached — the placeholder is swapped in fresh on every request (the VALUES
+// are per-request; the shell they sit inside is not).
+let _hubOgShell = null, _hubDemoOgShell = null;
+function hubOgShell() { if (!_hubOgShell) _hubOgShell = fs.readFileSync(join(__dirname, "public", "hub.html"), "utf8"); return _hubOgShell; }
+function hubDemoOgShell() { if (!_hubDemoOgShell) _hubDemoOgShell = fs.readFileSync(join(__dirname, "public", "hub-demo.html"), "utf8"); return _hubDemoOgShell; }
+// Replacement is a FUNCTION, never a plain string — a label or tagline containing a literal "$"
+// would otherwise be read by String.replace as a $&/$1-style backreference token.
+function renderHubOgHtml(rawHtml, meta) {
+  const t = escHtml(ogClamp(meta.title, 70));
+  const d = escHtml(ogClamp(meta.desc, 200));
+  const u = escHtml(String(meta.url || HUB_OG_BASE));
+  const block = [
+    `<meta property="og:title" content="${t}">`,
+    `<meta property="og:description" content="${d}">`,
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:url" content="${u}">`,
+    `<meta property="og:image" content="${HUB_OG_IMAGE}">`,
+    `<meta property="og:image:width" content="1200">`,
+    `<meta property="og:image:height" content="630">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${t}">`,
+    `<meta name="twitter:description" content="${d}">`,
+    `<meta name="twitter:image" content="${HUB_OG_IMAGE}">`,
+  ].join("\n");
+  return rawHtml
+    .replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${t}</title>`)
+    .replace(/<meta name="description"[^>]*>/i, () => `<meta name="description" content="${d}">`)
+    .replace("<!-- OG -->", () => block);
+}
+// One real Hub project/program/receipt. kind: "project" | "program" | "receipt"; sub: the
+// program id or receipt signature. Text built ONLY from hubProjectView()/hubPublic.findReceipt().
+function hubOgFor(projectId, kind, sub) {
+  if (!projectId) return { ...HUB_OG_DEFAULT, url: HUB_OG_BASE };
+  const base = `${HUB_OG_BASE}/${encodeURIComponent(projectId)}`;
+  const p = hubProjects()[projectId];
+  if (!p) return { ...HUB_OG_DEFAULT, url: base };
+  let v;
+  try { v = hubProjectView(p); } catch (_) { return { ...HUB_OG_DEFAULT, url: base }; }
+  // dryRun (E10, e.g. POKE): a plain, generic label — no project-specific wording, so this is
+  // never a second code path per project.
+  const dryNote = v.dryRun === true ? " DRY RUN — terms not yet agreed with the project team; nothing here is live." : "";
+  if (kind === "receipt") {
+    const url = `${base}/r/${encodeURIComponent(sub || "")}`;
+    let rec; try { rec = hubPublic.findReceipt(v, sub); } catch (_) { rec = null; }
+    if (!rec) return { ...HUB_OG_DEFAULT, url };
+    const row = rec.receipt || {};
+    const amt = row.amountUi != null ? row.amountUi : "?";
+    // "committed on-chain" only when the program object itself carries an observed commitment
+    // (roadmap E3) — not wired into the public program view as of this writing, so this branch
+    // is inert today and the line below is what actually renders; kept so a future E3 field on
+    // `rec.program` upgrades the claim automatically, without a second call site to remember.
+    const claim = (rec.program && rec.program.commitment && rec.program.commitment.sig) ? "independently committed on-chain" : HUB_OG_REPRO_LINE;
+    const progLabel = (rec.program && rec.program.label) || "the program";
+    return {
+      title: `${amt} ${v.symbol} receipt — ${v.label}`,
+      desc: `${v.label} paid ${amt} ${v.symbol} through ${progLabel} — ${claim}.${dryNote}`,
+      url,
+    };
+  }
+  if (kind === "program") {
+    const url = `${base}/p/${encodeURIComponent(sub || "")}`;
+    const prog = (v.programs || []).find((pr) => pr && pr.id === sub);
+    if (!prog) return { ...HUB_OG_DEFAULT, url };
+    return {
+      title: `${prog.label} — ${v.label} — Project Hub`,
+      desc: `${prog.label} for ${v.label} ($${v.symbol}) on the Project Hub — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+      url,
+    };
+  }
+  const n = v.totals || {};
+  return {
+    title: `${v.label} ($${v.symbol}) — Project Hub`,
+    desc: `${v.label}: ${n.receipts || 0} receipt${n.receipts === 1 ? "" : "s"} across ${n.programs || 0} program${n.programs === 1 ? "" : "s"} — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+    url: base,
+  };
+}
+// The Colosseum judges' demo fixture (E2) — same treatment, labelled DRY RUN — fixture data
+// rather than the real dryNote above (there is no "project team" to agree terms with here).
+function hubDemoOgFor(projectId, kind, sub) {
+  const isB = projectId === "demo-b";
+  const url = isB ? `${HUB_OG_BASE}/demo-b`
+    : kind === "receipt" ? `${HUB_OG_BASE}/demo/r/${encodeURIComponent(sub || "")}`
+    : kind === "program" ? `${HUB_OG_BASE}/demo/p/${encodeURIComponent(sub || "")}`
+    : `${HUB_OG_BASE}/demo`;
+  let fx; try { fx = hubDemoFixture.get()[projectId]; } catch (_) { fx = null; }
+  if (!fx || !fx.project) return { ...HUB_OG_DEFAULT, url };
+  const label = fx.project.label, symbol = fx.project.symbol;
+  const dryNote = " DRY RUN — fixture data.";
+  if (kind === "receipt") {
+    const r = (fx.receipts || {})[sub];
+    if (!r) return { ...HUB_OG_DEFAULT, url };
+    const amt = hubPublic.rawToUi(r.totals ? r.totals.owedRaw : "0", r.rewardDecimals);
+    return {
+      title: `${amt} ${symbol} receipt — ${label} (demo)`,
+      desc: `${r.holderLabel || "A holder"} received ${amt} ${symbol} through ${label}'s Lock to Earn — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+      url,
+    };
+  }
+  if (kind === "program") {
+    return {
+      title: `Lock to Earn — ${label} — Hub demo`,
+      desc: `${label}'s Lock to Earn program: who qualifies, funding coverage and a paid receipt — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+      url,
+    };
+  }
+  return {
+    title: `${label} — Hub demo walkthrough`,
+    desc: `A guided, no-wallet walkthrough of the Project Hub's single-holder story.${dryNote}`,
+    url,
+  };
+}
+// The static card is committed under public/, which (CLAUDE.md — public/ is only mounted through
+// the vite-built dist/ copy) 404s on a no-build boot without an explicit route.
+app.get("/og/hub-card.png", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.type("png");
+  res.sendFile(join(__dirname, "public", "og", "hub-card.png"));
+});
+// Registered BEFORE the generic /hub/:project pattern below for the same reason — or "status"
+// would be read as a project id (Colosseum roadmap §10 Z2).
+app.get("/hub/status", (req, res) => { res.sendFile(join(__dirname, "public", "hub-status.html")); });
 // Registered BEFORE the generic /hub/:project pattern below so a literal "demo" / "demo-b" always
 // hits the fixture page, never the real one — a pasted /hub/demo link can never resolve to a real
 // project id later reusing that name (store.js's ID_RE would allow "demo" to be registered for
 // real; this ordering plus the fixture never touching the real registry is the actual guarantee).
 app.get(["/hub/demo", "/hub/demo/p/:program", "/hub/demo/r/:id", "/hub/demo-b"], (req, res) => {
-  res.sendFile(join(__dirname, "public", "hub-demo.html"));
+  try {
+    const projectId = req.path === "/hub/demo-b" ? "demo-b" : "demo";
+    const meta = req.params.id ? hubDemoOgFor(projectId, "receipt", req.params.id)
+      : req.params.program ? hubDemoOgFor(projectId, "program", req.params.program)
+      : hubDemoOgFor(projectId, "project", null);
+    res.type("html").send(renderHubOgHtml(hubDemoOgShell(), meta));
+  } catch (e) { res.sendFile(join(__dirname, "public", "hub-demo.html")); }
 });
 app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:program", "/hub/:project/r/:sig"], (req, res) => {
-  res.sendFile(join(__dirname, "public", "hub.html"));
+  try {
+    const projectId = req.params.project ? String(req.params.project).toLowerCase() : null;
+    const meta = !projectId ? { ...HUB_OG_DEFAULT, url: HUB_OG_BASE }
+      : req.params.sig ? hubOgFor(projectId, "receipt", req.params.sig)
+      : req.params.program ? hubOgFor(projectId, "program", req.params.program)
+      : hubOgFor(projectId, "project", null);
+    res.type("html").send(renderHubOgHtml(hubOgShell(), meta));
+  } catch (e) { res.sendFile(join(__dirname, "public", "hub.html")); }
 });
 
 // ── For Projects — the guided front door (Colosseum W4, cut to two days). LINKS the tools that
@@ -14256,7 +14821,7 @@ YOUR SCHOOL -- KNOW THIS COLD:
 - Built on Bags.fm, powered by the CLKN token on Solana
 - CLKN contract: DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS
 - Trade CLKN at: bags.fm or Jupiter
-- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (14 lessons), the LP Lab, The Library, and Token Data
+- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (15 lessons), the LP Lab, The Library, and Token Data
 
 THE CLKN INCUBATOR:
 - For complete beginners. 7 lessons covering wallets, tokens, on-ramps and off-ramps, DEXs, liquidity, market cap, and staying safe.
@@ -14266,7 +14831,7 @@ SCHOOL OF HARD KNOCKS:
 - 12 progressive lessons with a belt ranking system from Freshman to Emeritus
 - Topics: liquidity pools, tokenomics, MEV, on-chain research, rugs and scams, DeFi strategies and more
 - Each lesson ends in a quiz. Progress saves automatically.
-- Complete all 14 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
+- Complete all 15 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
 
 THE LP LAB (its own tab, not inside the Library):
 - 14 lessons on liquidity providing, from the fundamentals to building a real strategy
@@ -14308,7 +14873,7 @@ CLKN TOKEN UTILITY:
   SOL price buys a 7-day pass to all of them. Premium forensics is separate: 2,000,000 CLKN,
   re-checked live. You connect a wallet and the gate resolves itself -- nothing is sent by hand.
 - Hold CLKN to be eligible for airdrops and exclusive rewards
-- Graduate all 14 lessons and submit your wallet for a transcript and an on-chain graduation NFT
+- Graduate all 15 lessons and submit your wallet for a transcript and an on-chain graduation NFT
 
 FIRECHICKEN CONNECTION:
 - FireChicken (FCKN) was the original token that built the community on Bags.fm
@@ -17592,12 +18157,37 @@ app.get("/api/owners-snapshot/admin", adminGuarded(ADMIN_404, { noStore: true })
 // produced it is already holder-gated; this just serves what was recorded). Never wallets on
 // the series endpoint; the single-snapshot endpoint carries the capped top list only.
 const holdersSnapshot = require("./lib/holders-snapshot");
-app.get("/api/holders/snapshots", (req, res) => {
+// Rate-limited (Z3): the series read walks every retained snapshot for a mint (up to KEEP=90
+// rows each), heavier than the single-snapshot lookup below which is a direct match on one id.
+app.get("/api/holders/snapshots", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   const mint = String(req.query.mint || "").trim();
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
   try { return res.json({ ok: true, mint, snapshots: holdersSnapshot.series(kv, mint) }); }
   catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// Diff between two recorded snapshots (Colosseum roadmap §11 AA3) — registered BEFORE the
+// single-id route above so a 3-segment path is never captured by the 1-segment one; verified
+// this actually matters (it doesn't in Express — a route with more path segments than
+// "/api/holders/snapshots/:id" simply never matches it either way) by
+// scripts/holders-snapshot-diff-test.cjs's route test, but the order is kept defensive regardless.
+// Exact same shape/gate as its siblings: SOL_ADDR_RE mint check, 404 for an unknown id, no pass
+// or wallet gate (read-only history of a public on-chain fact). Wallets are full in the JSON;
+// the page shortens them for display.
+app.get("/api/holders/snapshots/:a/diff/:b", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const mint = String(req.query.mint || "").trim();
+  const idA = String(req.params.a || "").trim();
+  const idB = String(req.params.b || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  try {
+    const snapA = holdersSnapshot.getSnapshot(kv, mint, idA);
+    if (!snapA) return res.status(404).json({ ok: false, error: "no_such_snapshot" });
+    const snapB = holdersSnapshot.getSnapshot(kv, mint, idB);
+    if (!snapB) return res.status(404).json({ ok: false, error: "no_such_snapshot" });
+    const diff = holdersSnapshot.diffSnapshots(snapA, snapB);
+    return res.json({ ok: true, mint, diff });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 app.get("/api/holders/snapshots/:id", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");

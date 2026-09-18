@@ -6,6 +6,7 @@
 [![Live App](https://img.shields.io/badge/Live-clucknorris.app-green)](https://clucknorris.app)
 [![Colosseum Crypto World's Fair](https://img.shields.io/badge/Colosseum-Crypto%20World's%20Fair%202026-C9A227)](https://www.colosseum.com/worldsfair)
 [![Auto-deployed on Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet)](https://railway.app)
+[![Receipts reproducible](https://clucknorris.app/hub/badge.svg)](https://clucknorris.app/hub/status)
 
 > *"We took the hard knocks so you don't have to."*
 
@@ -67,11 +68,19 @@ below works with no wallet connected:
   project team: lock → apply for lock-to-earn → buy competition → airdrop → listing checkup →
   owners snapshot → burn receipt, in the order teams actually use them, plus a per-mint checklist
   of what a token has already done.
+- The **"Receipts reproducible" badge** above is computed live from the public record every time
+  it renders — `GET /api/hub/badge.json` sums `lib/hub/reproduce.js`'s `projectReproducibility`
+  over every registered, non-demo project, the exact same function [`/hub/status`](https://clucknorris.app/hub/status)
+  calls, so the number on this README is never typed by hand.
 - **Seven languages, kept honest** — the two lessons that shipped with zero translated strings
   (Seed Phrase Survival, Inheritance) were translated into all six non-English school dictionaries
   during this window, and the i18n audit now checks lesson coverage by id so the gap can't recur
   silently.
 
+- **[`/hub/status`](https://clucknorris.app/hub/status)** — every project's programs, receipts,
+  reproducibility ratio and latest holder count in one place, plus which git commit and branch
+  the running server was actually built from (`GET /api/build`) — fed only by the public routes
+  above, with a plain-words box on what the page proves and what it doesn't.
 - **The school points at the Hub, and the Hub points back** — the six lock lessons end on a
   "Ready to lock?" card that carries the project a learner arrived from, and a project page shows
   how many anonymous visitors read the lock lessons before reaching it (only when above zero).
@@ -80,6 +89,10 @@ below works with no wallet connected:
   every command copy-pasteable, which routes are live on production today vs staging, and what
   isn't independently verifiable yet, stated plainly. `scripts/hub-verify-doc-test.cjs` pins the
   doc against the code in CI so it can't quietly go stale.
+- **[`/hub/judge`](https://clucknorris.app/hub/judge)** — the judge's fifteen minutes: one section
+  per Colosseum judging criterion, each a short list of exact URLs to open, what to look for, and
+  the test file that pins it — rendered straight from [`docs/JUDGE_GUIDE.md`](docs/JUDGE_GUIDE.md)
+  so the page and the doc can never drift apart.
 
 **What isn't true yet, stated plainly.** A program version's `hash` is served by the same server
 that computes the payout — that lets a reader *re-derive* the arithmetic from the published
@@ -107,7 +120,7 @@ Three tracks, all free, in **multiple languages** — today English · Español 
 | Track | Size | For |
 |---|---|---|
 | 🥚 **The Incubator** | 7 lessons | Total beginners — wallets, tokens, on/off-ramps, DEXs, liquidity, market cap, not getting drained |
-| 🏫 **School of Hard Knocks** | 14 lessons | The core course, belt-ranked Freshman → Emeritus |
+| 🏫 **School of Hard Knocks** | 15 lessons | The core course, belt-ranked Freshman → Emeritus |
 | ⚗️ **[LP Lab](https://clucknorris.app/lp-lab)** | 14 lessons | Liquidity providing in depth — impermanent loss, ranges, fees, bins, DLMM shapes, laddering — with interactive calculators throughout |
 
 Plus **📚 the Library** (glossary + deep dives across Survival / Research / Concepts) and **🤖 Ask Cluck**, a Claude-powered tutor embedded in every lesson, live in the Telegram group, and standalone at [`/ask-cluck`](https://clucknorris.app/ask-cluck).
@@ -283,7 +296,7 @@ didn't traverse the WAF. Both are live since 2026-08-04.
 - `node --check` on every backend entrypoint and lib
 - **undefined-JSX-component guard** — an undefined component compiles fine and only throws at runtime; one shipped and left the LP Lab blank in production for a day
 - **curriculum count guard** — the landing page advertised "72 exams · 6 beginner lessons" when the truth was 70 and 7
-- **render smoke test** — opens every screen and all 35 lessons in headless Chromium, failing on an uncaught error or a blank page
+- **render smoke test** — opens every screen and all 36 lessons in headless Chromium, failing on an uncaught error or a blank page
 - **level-geometry guard** for the game — jumpability, no floating fixtures
 - **liquidity-engine decision simulator** — replays thousands of ticks against the real gate logic; every scenario is a past live incident
 - **visual-regression gate** for the game — boots the server and pixel-diffs the title, HUD, characters and a creature against committed baselines, the render-broke-but-built-clean class nothing above can see
