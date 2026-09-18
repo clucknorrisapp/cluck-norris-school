@@ -1365,7 +1365,6 @@
   "Check it yourself": "自己去核实",
   "Each project's reproducibility ratio is the share of its receipts that recompute to the published amount. Below 1.0 does not by itself mean something is wrong — it can mean a receipt kind this tool can't check yet, or inputs that weren't kept on your end. If you see it: open": "每个项目的可复现率，是其收据中能重新算出发布金额的比例。低于 1.0 本身并不代表出了问题——它可能只是这个工具目前还无法核对的一种收据类型，或者是你这边没有保存的输入。如果你看到这种情况：打开",
   "Every payout on the Hub comes out of the project's own funding wallet, named on its page. Cluck Norris never holds the reward tokens and never fronts them. If a project's funding wallet runs low, its payouts stop — that is the project's balance, not ours.": "Hub 上的每一笔付款都来自项目自己的资金钱包，会在其页面上写明。Cluck Norris 从不持有奖励代币，也从不垫付。如果某个项目的资金钱包余额不足，其付款就会停止——那是项目自己的余额，不是我们的。",
-  "Every receipt on the Hub today is still the older, single-row payout shape, not the newer per-transfer settlement journal the Hub's own schema documents. That journal is built and tested, but it sits on its own pull request under review before it is wired into a live route — nothing you can read today depends on it.": "今天 Hub 上的每一张收据仍是旧的单行付款格式，还不是 Hub 自己的 schema 所记录的那种按转账逐笔记账的新结算日志。那份日志已经写好并测试过，但目前还在自己的 pull request 里等待审查，尚未接入实际使用的路由——你今天能看到的任何内容都不依赖它。",
   "Four things that still need a human": "还需要人来完成的四件事",
   "Locking, qualifying, and getting paid, start to end, with a real wallet.": "用真实钱包完成锁仓、达标、拿到付款的整个流程。",
   "No real program's hash has been committed on-chain by a funding wallet yet.": "目前还没有任何真实项目用资金钱包把自己的哈希值提交上链。",
@@ -1625,5 +1624,6 @@
   "share of pool": "占奖池比例",
   "no locks yet": "尚无锁仓",
   "Estimate ready.": "估算已完成。",
-  "previewing…": "正在预览……"
+  "previewing…": "正在预览……",
+  "The newer per-transfer settlement journal is now the live path for a project paid through the Hub's own payout route — a receipt from that route carries the fuller record the schema documents. CUNA's own payouts, the only real money moving through this today, still run on a separate, older handler that doesn't use it — so the one real receipt you can currently fetch is still the older, single-row shape, and that stays true until CUNA is moved onto the same route.": "新的逐笔结算日志现在已是通过 Hub 自有付款路由付款的项目所走的实际路径——来自该路由的收据带有架构所记录的更完整记录。CUNA 自己的付款是今天唯一真正经过这里的资金，仍然走一个独立的、较旧的处理程序，并不使用这个日志——所以你现在能取到的唯一一张真实收据仍是旧的单行格式，在 CUNA 迁移到同一路由之前都是如此。"
 }
