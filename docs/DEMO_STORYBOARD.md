@@ -208,10 +208,12 @@ seat, or simply visibility to the projects the Hub is built for); close on the l
 
 ## Capture inventory
 
-All files in `docs/demo/2026-09-18/` (22 PNGs + 1 terminal PNG = 23 files, 42–295 KB each):
+All files in `docs/demo/2026-09-18/` (24 PNGs + 1 terminal PNG = 25 files, 42–295 KB each):
 
 | File | Viewport | What it shows |
 |---|---|---|
+| `holders-a11y-before.png` | 390×844 | `/holders?mint=<seeded>` before CC3 — two snapshots recorded, but the X7 history and AA3 Compare panels never render (both lived inside `#result`, which stays `display:none` until a live crawl runs) |
+| `holders-a11y-after.png` | 390×844 | the same URL after CC3 — history table + Compare panel render straight from the seeded snapshots (no live crawl needed), with 44×44 tap targets on the hash-copy buttons |
 | `hub-demo-1-top.{mobile,desktop}.png` | both | `/hub/demo` scrolled to top — intro, Step A (program version), Step B (eligibility) |
 | `hub-demo-2-funding-batch.{mobile,desktop}.png` | both | `/hub/demo` scrolled to Step C (funding) / Step D (batch) |
 | `hub-demo-3-reproduce-isolation.{mobile,desktop}.png` | both | `/hub/demo` scrolled to Step F (reproduce) / Step G (isolation) |
