@@ -1606,5 +1606,9 @@
   "No price quote was on file to check this payment against.": "没有存档的报价可用来核对这笔付款。",
   "The payment transaction has not yet reached finality on-chain. The record settles once it does.": "该笔付款交易尚未在链上达到最终确认状态。一旦确认，记录即会完成结算。",
   "The payment landed after its price quote had already expired.": "该笔付款到账时其报价已经过期。",
-  "Every term and reason code, defined →": "每一个术语和原因代码，都有解释 →"
+  "Every term and reason code, defined →": "每一个术语和原因代码，都有解释 →",
+  "A transfer's amount did not exactly match what this row still had remaining, so it was refused rather than partially applied. The row is left exactly as it was, for a later, exactly-matching transfer to settle.": "某笔转账的金额与该行剩余应付金额不完全一致，因此被拒绝，而不是部分入账。该行保持原状，等待日后一笔金额完全匹配的转账来结算。",
+  "This row was already fully settled before this transfer was checked, so the transfer is refused as too late to be this row's payment — it does not undo or contest the earlier settlement.": "在这笔转账被核查之前，该行已经完全结清，因此这笔转账因为太晚而无法作为该行的付款被拒绝——它并不会撤销或质疑之前的结算。",
+  "The transfer's source was not one of the project's own authorized funding wallets, or fell short of what a payout would require, so it could not be accepted as this row's settlement.": "该转账的来源不是项目自身获授权的资金钱包之一，或金额低于本应支付的数额，因此无法被接受为该行的结算。",
+  "More than one observed transfer could equal this row's exact remaining amount. Only one is ever accepted as the settlement; the rest are refused under this code rather than guessed between.": "有不止一笔观测到的转账金额恰好等于该行的剩余应付金额。其中只有一笔会被接受为结算款；其余的都会以此代码被拒绝，而不是靠猜测在它们之间做选择。"
 }

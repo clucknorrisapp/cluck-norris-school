@@ -211,6 +211,12 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 13** — follow a project without a wallet (a JSON Feed and an RSS feed per
+  project: versions published, batches settled with their reproducibility ratio, holder snapshots,
+  observed commitments, from the public view only); Arena drafts round 3 and weekly update #2
+  filled from the record; a receipt you can print, with a QR of its public URL from a
+  from-scratch encoder; a read-only adversarial pass over every public surface added since batch 9
+  (no P0, four P1 — the fixes follow on batch 14); roadmap Extension 9. PR #351.
 - **Colosseum batch 12** — `/hub/verify` in seven languages (and the dictionaries served on a
   no-build boot, which had silently left every Hub page in English there); the evidence bundle's
   program version made recomputable (the public view had dropped eight hashed fields, and a served

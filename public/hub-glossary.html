@@ -42,7 +42,7 @@
   .entry-head { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
   .entry-head h3 { font-family:var(--disp); font-weight:400; font-size:16px; color:var(--text); }
   .entry-code { font-family:var(--mono); font-size:11.5px; color:#D1D5DB; }
-  .copy-link { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:32px; padding:2px 8px; background:transparent; border:1px solid var(--border); border-radius:6px; color:var(--sub); font-size:11px; letter-spacing:1px; cursor:pointer; }
+  .copy-link { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; padding:2px 8px; background:transparent; border:1px solid var(--border); border-radius:6px; color:var(--sub); font-size:11px; letter-spacing:1px; cursor:pointer; }
   .copy-link:hover { color:var(--cyan, #67E8F9); border-color:var(--cyan, #67E8F9); }
   .definition { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.65; margin-top:6px; }
   .meta-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
@@ -212,6 +212,8 @@
     t("This wallet's status for this program was set by an operator by hand, rather than decided by the automatic scan."), t("The settlement transaction sent for this row failed or errored on-chain, so the payout was voided — the amount was not actually delivered."), t("An operator manually voided this row after it had been marked paid. The record was corrected by hand, not by a transaction failure."),
     t("This project's access is comped. No payment is owed for it and none is ever collected."), t("No payment matching this access request has been recorded yet."), t("A payment was recorded, but its amount is less than the quoted or published price."),
     t("No price quote was on file to check this payment against."), t("The payment transaction has not yet reached finality on-chain. The record settles once it does."), t("The payment landed after its price quote had already expired."),
+    t("A transfer's amount did not exactly match what this row still had remaining, so it was refused rather than partially applied. The row is left exactly as it was, for a later, exactly-matching transfer to settle."), t("This row was already fully settled before this transfer was checked, so the transfer is refused as too late to be this row's payment — it does not undo or contest the earlier settlement."),
+    t("The transfer's source was not one of the project's own authorized funding wallets, or fell short of what a payout would require, so it could not be accepted as this row's settlement."), t("More than one observed transfer could equal this row's exact remaining amount. Only one is ever accepted as the settlement; the rest are refused under this code rather than guessed between."),
   ]; }
 
   searchIn.addEventListener('input', function () { render(searchIn.value); });

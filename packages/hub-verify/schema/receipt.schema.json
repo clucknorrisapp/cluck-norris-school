@@ -46,7 +46,8 @@
           "at": { "type": "integer", "minimum": 0, "description": "unix seconds this settlement was recorded." },
           "amountRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "the FULL verified transfer amount — before splitting into applied/excess." },
           "appliedRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "the part of `amountRaw` applied to this row's remaining owed amount at the moment of settlement (min(amountRaw, remaining-before-this-entry))." },
-          "excessRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "amountRaw − appliedRaw for this one entry." },
+          "excessRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "amountRaw − appliedRaw for this one entry. Always \"0\" on any entry a live route wrote (Round 3 #1, docs/HUB_JOURNAL_VERIFY_2026-09-18.md) — the route settles with exactOnly:true, which refuses rather than caps a mismatched amount; nonzero values can only come from the pure ledger's own direct callers." },
+          "sourceWallet": { "type": ["string", "null"], "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$", "description": "the verified SOURCE (never the instruction's own `authority`, which can be a delegate) of this one settlement's transfer — the wallet that actually paid it, from lib/payout-verify.js locateTransferInstruction. Null on an entry built without it (older entries, or a direct pure-ledger caller that did not supply transfer.sourceWallet)." },
           "verifiedBy": { "type": "string", "description": "how the transfer was verified against this row, e.g. \"getTransaction\"." }
         }
       }
@@ -61,6 +62,7 @@
         "calculationReproducible": { "type": ["boolean", "null"], "description": "whether re-running the reproduce export over the published inputs reproduces `totals.owedRaw`. Always null from lib/hub/ledger.js receipt() itself — it is set by the reproduce step (see reproduce-receipt), never assumed here. A version whose inputs were not retained reports this false with \"inputs: missing\", never fabricates a value." }
       }
     },
-    "fundingWallet": { "type": ["string", "null"], "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$", "description": "the project's funding wallet at the time the receipt was built (from the Project record passed in) — null if the caller did not supply a project record." }
+    "fundingWallet": { "type": ["string", "null"], "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$", "description": "the project's funding wallet at the time the receipt was built (from the Project record passed in) — null if the caller did not supply a project record." },
+    "paidFrom": { "type": ["string", "null"], "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$", "description": "N3 (Round 3, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): the one wallet every settlement on this row was verified as sourced from — set only when every settlement agrees (a mixed-source row, or one with no recorded source at all, reports null rather than guess). `payoutSources` lets a settlement land from an allowlisted wallet other than `fundingWallet`; this is how the receipt says so rather than looking indistinguishable from a funding-wallet payment. Not in `required` — older code paths that never set `transfer.sourceWallet` produce null here, which is honest, not missing." }
   }
 }

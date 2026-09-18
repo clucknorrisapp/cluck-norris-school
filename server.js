@@ -8233,11 +8233,32 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
   // scan every program's payout rows just to fail the regex it already runs internally.
   if (!HUB_SIG_RE.test(sig)) return res.status(400).json({ ok: false, error: "bad sig" });
   try {
-    const r = hubPublic.findReceipt(hubProjectView(p), sig);
+    const sig = String(req.params.sig || "");
+    // W3: the settlement journal + the raw registry record (fundingWallet) + the project's own
+    // program-version state — additive context so findReceipt can serve the Addendum-B3 receipt
+    // (lib/hub/README.md "the receipt gap") once a journal event exists for this row; absent for a
+    // built-in project (clkn/cuna/rose) with no registry row, in which case findReceipt degrades to
+    // exactly the legacy shape it always served.
+    let journal = {}, batches = {}, reg = null, programState = null;
+    try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
+    try { batches = hubStore.read(kv, p.id, "batches", {}) || {}; } catch (_) {}
+    try { reg = (hubStore.readRegistry(kv) || {})[p.id] || null; } catch (_) {}
+    try { programState = hubStore.read(kv, p.id, "state", null); } catch (_) {}
+    const r = hubPublic.findReceipt(hubProjectView(p), sig, { journal, batches, project: reg, programState });
     if (!r) return res.status(404).json({ ok: false, error: "no receipt with that signature" });
     // Traction "receipts opened by a holder" (lib/traction.js) — this route recorded nothing
     // durable before this change.
     try { traction.recordReceiptOpen(kv, { project: p.id, sig }); } catch (_) { /* counter only */ }
+    // The Addendum-B3 shape (settlements[]) validates against receipt.schema.json on its own — an
+    // `ok` sibling would not (additionalProperties:false), so it is nested under `receipt` and
+    // stamped there, exactly as `project` is nested for GET /api/hub/:project. adv P1-4
+    // (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): findReceipt now wraps BOTH shapes in the same
+    // {projectId, symbol, dryRun, brand, program, receipt} envelope — the legacy shape is spread
+    // flat alongside `ok` exactly as before (its `receipt` sub-object carries no $schema — it does
+    // not validate that schema, see scripts/hub-schema-test.cjs E4/"the legacy body does not"); the
+    // journal-backed shape stamps $schema onto `receipt` only, so `r.program`/`r.symbol`/`r.dryRun`
+    // are always where public/hub.html's renderReceipt already reads them.
+    if (r && r.receipt && Array.isArray(r.receipt.settlements)) return res.status(200).json({ ok: true, ...r, receipt: { ...r.receipt, $schema: HUB_SCHEMA_URL("receipt") } });
     return res.status(200).json({ ok: true, ...r });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
@@ -8379,7 +8400,13 @@ app.get("/api/hub/:project/batch/:batchId/inputs", rateLimit("hubheavy", { windo
     // Only wallets already SENT in this batch are built — the same public/private line
     // lib/hub/public.js draws (a batch row with no signature is never public). Optional
     // ?wallet= narrows to one, so a reader reproducing a single receipt fetches one small file.
-    const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
+    // W3: journal + programState are additive — a row with a journal event gets its real
+    // program-version hash (lib/hub/reproduce.js buildInputsForWallet); one without still reports
+    // hash: null, exactly as before this change.
+    let journal = {}, programState = null;
+    try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
+    try { programState = hubStore.read(kv, p.id, "state", null); } catch (_) {}
+    const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches, journal, programState });
     // The program version in force when this batch was built (same lookup the AA2 bundle route
     // runs) — attached per wallet so /hub/verify's URL path (which reads THIS route, not the
     // bundle) can recompute the version's own hash without a second fetch, the same way the
@@ -8486,7 +8513,13 @@ function hubReproducibilityFor(id, p) {
   const batches = hubStore.read(kv, id, "batches", {}) || {};
   const days = hubStore.read(kv, id, "days", {}) || {};
   const otherPrograms = hubProjectView(p).programs.filter((pr) => pr.kind !== "lock-to-earn");
-  const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms });
+  // W3: journal + programState are additive — a row with a journal event gets its real
+  // program-version hash (lib/hub/reproduce.js buildInputsForWallet); one without still reports
+  // hash: null, exactly as before the journal was wired in.
+  let journal = {}, programState = null;
+  try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
+  try { programState = hubStore.read(kv, id, "state", null); } catch (_) {}
+  const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms, journal, programState });
   const data = { ok: true, project: id, batches: rep.batches, overall: rep.overall };
   HUB_REPRO_CACHE.set(id, { at: Date.now(), data });
   return data;
@@ -8976,7 +9009,45 @@ const hubScanDeps = (() => {
     creationTimes: async (escrows) => scanLib.creationTimes((await getProgram()).provider.connection, escrows),
   };
 })();
-const hubAlert = (m) => { console.warn("[hub] " + m); try { cunaOpsAlert(`⚠️ Hub: ${m}`, "hub:" + String(m).slice(0, 40)).catch(() => {}); } catch (_) {} };
+// N-1 (Round 4, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): this used to write the 6-hour dedupe
+// watermark BEFORE calling tgSend, which swallows its own errors and returns null on failure — a
+// Telegram outage silently ate the next 6 hours of fraud-refusal/summary alerts for that key
+// (CLAUDE.md: tgSend never throws; check its return value, never advance durable state on a send
+// that did not land). It also deduped on a 40-char slice of the free-text message, which collapsed
+// distinct batches (even distinct projects) together once the project id ran past ~19 characters —
+// see lib/hub/alert-key.js for that half of the fix.
+//
+// Deliberately its OWN map, never CUNA_ALERT_SEEN: touching cunaOpsAlert itself to fix the
+// watermark timing would move it for EVERY other caller (CUNA accrual/burn/watchdog alerts, the
+// kv-load alert, the lock-celebration fallback) — none of which this fix is scoped to, and all of
+// which are worth leaving exactly as audited. So hubAlert calls cunaOpsAlert with dedupeKey=null
+// (bypassing its internal dedupe entirely — see the `if (dedupeKey)` guard there) and does its own
+// check-then-send-then-set around it instead.
+//
+// NEW-1 (Round 5, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): the check-then-AWAIT-send-then-set above
+// raced. Every call inside one synchronous loop (e.g. one alert per row of a batch) reads
+// HUB_ALERT_SEEN, finds it unset, and starts its own `await cunaOpsAlert(...)` BEFORE any of the
+// earlier calls' sends have resolved and set the watermark — so a burst sharing one dedupe key
+// sent one Telegram message per row instead of one per request. The claim has to happen
+// SYNCHRONOUSLY, in the same tick as the check, so the second call in a burst sees it already
+// taken. A falsy send result (cunaOpsAlert/tgSend swallow their own errors and return null/0 —
+// never throw, never `{ok:false}`) deletes the claim so the NEXT occurrence retries rather than
+// being silenced for 6 hours by a send that never landed; a defensive catch does the same.
+const { hubAlertKey } = require("./lib/hub/alert-key");
+const HUB_ALERT_SEEN = new Map();
+const hubAlert = (m, meta) => {
+  console.warn("[hub] " + m);
+  const key = hubAlertKey(m, meta);
+  const now = Date.now();
+  if (now - (HUB_ALERT_SEEN.get(key) || 0) < 6 * 60 * 60 * 1000) return;
+  HUB_ALERT_SEEN.set(key, now);
+  (async () => {
+    try {
+      const sent = await cunaOpsAlert(`⚠️ Hub: ${m}`, null);
+      if (!sent) HUB_ALERT_SEEN.delete(key);
+    } catch (_) { HUB_ALERT_SEEN.delete(key); }
+  })();
+};
 // A corrupt app-state.json boots the kv store IN-MEMORY with the file preserved (lib/kvstore.js,
 // deep dive P0-005): every verified write refuses until an operator restores it. That must be
 // seen, not found three payouts later. Delayed so the Telegram config is loaded.
@@ -9002,13 +9073,22 @@ hubRoutes.mount(app, {
   // declared further down.
   // "demo" / "demo-b" are the Colosseum fixture ids (lib/hub/demo-fixture.js, /hub/demo) — reserved
   // by id (not mint) so a real project can never be approved under either name and collide with
-  // the fixture's routes. "wallet" is reserved the same way (Colosseum roadmap AA1,
-  // /hub/wallet[/:wallet] and GET /api/hub/wallet/:wallet) — a project literally named "wallet"
-  // would not actually collide with those routes by path shape, but would be a permanently
-  // confusing id on a Hub whose whole point is a reader pasting URLs by hand.
-  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null, wallet: null }),
+  // the fixture's routes. Item 5 / Round 3 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): every other
+  // page-shadowing id (apply/verify/status/wallet/trust/judge/schema/registry/hub/settle/badge) is
+  // ALSO merged in by lib/hub/routes.js's own `reserved()` from hubProject.RESERVED_PROJECT_IDS —
+  // spelled out here too, explicitly, as the second of the two places this finding named.
+  reservedMints: () => {
+    const base = { clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null };
+    for (const id of hubProject.RESERVED_PROJECT_IDS) if (!(id in base)) base[id] = null;
+    return base;
+  },
   getTx: async (sig) => {
-    const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
+    // crash P2-9 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): the settlement journal has no
+    // "unconsume" — a confirmed-but-later-forked transaction would be journaled permanently.
+    // `finalized` closes the fork-depth window this read is used for (both the platform-access
+    // payment check above and every settlement journal write in lib/hub/routes.js); the small
+    // extra latency is paid once, at settlement time, never on every read of a project's numbers.
+    const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "finalized" }]);
     return r && r.result;
   },
 });
@@ -12587,6 +12667,11 @@ app.get("/api/cuna-stake/wallet", async (req, res) => {
       if (!b || b.state !== "pending" || !b.amounts || !b.amounts[addr] || (b.sent && b.sent[addr])) continue;
       try { pendingRaw += BigInt(b.amounts[addr]); } catch (_) {}
     }
+    // No `journal`/`projectId` here on purpose: this is the dedicated CUNA desk (crash P1-4 /
+    // CLAUDE.md "CUNA on the Hub — HELD, owner 2026-09-17: do not duplicate cuna yet"). It reads
+    // the raw cunaStake* keys directly rather than going through a registry project, and its own
+    // payout route (below) never writes a settlement journal entry — passing one here would just
+    // consult an empty set. Leave this desk exactly as it is until CUNA is registered.
     const owedRaw = pay.owedNow({ days, paid: paidMap, pending: batchMap })[addr] || 0n;
     const claim = s.claimableFor({ accruedRaw: owedRaw.toString(), locks: mine, nowUnix });
     let earningRaw = 0n, readyRaw = 0n, totalRaw = 0n;
@@ -13365,6 +13450,9 @@ async function cunaPayoutChecks(batch, { days, paid, batches }) {
 
   // 1. Conservation: everything ever credited == owed + held in pending batches + paid. This is
   //    the check the old verifier script compared to itself; here it compares to the ledger.
+  //    No `journal`/`projectId`: this is the dedicated, pre-registry CUNA payout desk (CLAUDE.md
+  //    "CUNA on the Hub — HELD, owner 2026-09-17") — it never writes a settlement journal entry,
+  //    so consulting one here would compare against an empty set for no benefit.
   const owed = pay.owedNow({ days, paid, pending: batches });
   let held = 0n;
   for (const b of Object.values(batches)) if (b && b.state === "pending") held += sum(pay.remainingOf(b));
@@ -13570,6 +13658,8 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       }
     }
 
+    // No `journal`/`projectId`: the dedicated CUNA payout desk (CLAUDE.md "CUNA on the Hub —
+    // HELD") never writes a settlement journal entry — see the comment on cunaPayoutChecks above.
     const owed = pay.owedNow({ days, paid, pending: batches });
 
     let created = null, note = null;

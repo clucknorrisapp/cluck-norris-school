@@ -97,6 +97,30 @@ for (const rel of ["lib/hub/access.js", "lib/hub/access-pay.js"]) {
   for (const code of ["dq", "manual"]) ok(`the raw review status "${code}" has a glossary entry`, reasonIds.has(code));
 }
 
+// The per-transfer settlement journal's own refusal codes (docs/HUB_JOURNAL_VERIFY_2026-09-18.md,
+// merged via lib/hub/ledger.js / lib/hub/routes.js / lib/payout-verify.js) — checked as the four
+// specific identifiers this glossary documents (not every identifier-shaped error in these three
+// large files: batch_not_in_project/row_not_in_batch/transfer_already_consumed/
+// transfer_amount_invalid are real, but they are "this call was malformed" plumbing errors, not a
+// record's own settled/excluded reason, the same distinction that keeps engine.js's "armed with
+// no start date"-class strings out of this glossary too). Operator-desk-only today (usedOn: []) —
+// documented ahead of a public surface for them existing, same as the access-gate codes above.
+{
+  const ledgerSrc = fs.readFileSync(path.join(ROOT, "lib", "hub", "ledger.js"), "utf8");
+  const routesSrcFull = fs.readFileSync(path.join(ROOT, "lib", "hub", "routes.js"), "utf8");
+  const payoutVerifySrc = fs.readFileSync(path.join(ROOT, "lib", "payout-verify.js"), "utf8");
+  const checks = [
+    ["amount_mismatch", ledgerSrc, "lib/hub/ledger.js"],
+    ["row_already_settled", ledgerSrc, "lib/hub/ledger.js"],
+    ["duplicate_settlement_candidate", routesSrcFull, "lib/hub/routes.js"],
+    ["transfer_not_from_funding_wallet", payoutVerifySrc, "lib/payout-verify.js"],
+  ];
+  for (const [code, src, rel] of checks) {
+    ok(`${rel}'s literal "${code}" is still there`, new RegExp(`"${code}"`).test(src));
+    ok(`settlement-journal code "${code}" has a glossary entry`, reasonIds.has(code));
+  }
+}
+
 // lessonId discipline — same C4 guard as scripts/hub-teach-test.cjs's lesson-map check.
 {
   const lessonIds = curriculum.lessonIds();

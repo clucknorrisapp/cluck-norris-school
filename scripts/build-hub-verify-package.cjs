@@ -34,6 +34,7 @@ const DEFAULT_OUT = path.join(ROOT, "packages", "hub-verify");
 // shape was chosen. `kind` only affects the require-scan below (schemas and docs carry none).
 const FILE_MAP = [
   { src: "lib/hub/reproduce.js", dest: "lib/hub/reproduce.js", kind: "js" },
+  { src: "lib/hub/version-for.js", dest: "lib/hub/version-for.js", kind: "js" },
   { src: "lib/hub/schema-validate.js", dest: "lib/hub/schema-validate.js", kind: "js" },
   { src: "lib/hub/canonical.js", dest: "lib/hub/canonical.js", kind: "js" },
   { src: "lib/hub/bundle.js", dest: "lib/hub/bundle.js", kind: "js" },
