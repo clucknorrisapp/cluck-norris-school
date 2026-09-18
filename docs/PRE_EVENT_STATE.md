@@ -211,6 +211,10 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 5** — the truth pass: README, `/about` and the submission document brought back
+  in step with the code after batches 2–4 (the Hub's live surfaces listed as they are; what is not
+  yet true stated plainly — the program hash is server-served until a program is committed
+  on-chain, and the settlement journal is on its own money-path pull request). PR #343.
 - **Colosseum batch 4** — the school → Hub bridge (the six lock lessons end on a "Ready to lock?"
   card that carries the project the learner came from; an anonymous, deduplicated
   lesson-read counter shows on a project page only when it is above zero); the independent
