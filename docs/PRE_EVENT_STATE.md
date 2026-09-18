@@ -211,6 +211,15 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 14** — the four P1s from the public-surfaces lens closed with regression tests
+  (`/hub/verify` refuses receipt URLs from any origin but our own; amounts in token units; the
+  heaviest Hub reads rate-limited with a bounded wallet-lookup cache; `/api/track` no longer mints
+  per-project keys for unknown ids); `/hub/glossary` — every term and reason code from one source
+  in seven languages, with a drift test; a load proof for the public reads (fixture generator,
+  `scripts/hub-load-smoke.cjs`, before/after numbers in `docs/HUB_LOAD_2026-09-18.md`, a reduced
+  run in CI); the validation doc filled from milestone timestamps; and preview-before-publish on
+  the operator desk — a draft's terms run through the same validate/version/accrue code the real
+  publish uses, showing who would qualify today, with nothing written. PR #352.
 - **The settlement journal as the live payout path (#342, the W3 integration gate)** — on its
   own PR because it is a money path: journal-first settlement with exact-amount matching (a
   transfer settles a row only when its amount equals what the row is owed), the transfer source
