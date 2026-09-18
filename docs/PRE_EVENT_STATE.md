@@ -211,6 +211,10 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 6** — the W6b validation kit: `docs/VALIDATION_2026-09.md` (the
+  founder-operated / dry-run / independent rule applied per partner project, interview records,
+  the consented POKEAHOE dry-run pilot timeline, every number and quote left to be filled) and the
+  20-minute operator interview script; the submission's traction section cites it. Docs only. PR #344.
 - **Colosseum batch 5** — the truth pass: README, `/about` and the submission document brought back
   in step with the code after batches 2–4 (the Hub's live surfaces listed as they are; what is not
   yet true stated plainly — the program hash is server-served until a program is committed
