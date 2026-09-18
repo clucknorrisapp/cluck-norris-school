@@ -24,8 +24,11 @@ const cluckUtilSrc = fs.readFileSync(path.join(__dirname, "..", "public", "cluck
 
 // The main inline script sits right after the cluck-util.js <script src> tag — extract it
 // verbatim so a future edit to renderReceipt is what this test actually exercises.
-const MARKER = '<script src="/cluck-util.js"></script>\n<script>';
-const startIdx = htmlSrc.indexOf(MARKER);
+// The main inline script is the first src-less <script> after the cluck-util.js tag (other
+// shared modules — hub-sparkline.js, hub-qr.js — may sit between them).
+const utilIdx = htmlSrc.indexOf('<script src="/cluck-util.js"></script>');
+const MARKER = '<script>';
+const startIdx = utilIdx === -1 ? -1 : htmlSrc.indexOf(MARKER, utilIdx);
 if (startIdx === -1) throw new Error("could not find the main inline <script> in public/hub.html — has the marker text changed?");
 const bodyStart = startIdx + MARKER.length;
 const endIdx = htmlSrc.indexOf("</script>", bodyStart);
