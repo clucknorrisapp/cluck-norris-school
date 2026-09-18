@@ -1411,6 +1411,64 @@ t("publicProject() echoes payoutSources everywhere; payoutSourcesHistory is adde
   assert.strictEqual(desk.body.project.payoutSourcesHistory, undefined, "but not the full history, outside the owner registry read");
 });
 
+section("32. N-2 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 4) — a suspended, never-termed project id is no longer takeable");
+
+t("a self-serve application can no longer take over a SUSPENDED, never-termed project id and inherit its days/paid store", async () => {
+  const kv = store.memoryKv();
+  // Seeded WITHOUT a state/version (unlike seedProject) — a suspended project that was never
+  // termed, exactly the gap N-2 named. approveProject directly, never through the route, so the
+  // routes.js "already has program versions" pre-check (a DIFFERENT, older guard) never fires and
+  // this test actually exercises proj.approveProject's own requireNew path.
+  const p = proj.validateProject({ id: "beta", label: "Beta", symbol: "BETA", mint: W.MINT1, fundingWallet: W.FUND, operatorWallets: [W.A] }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  store.writeRegistry(kv, proj.approveProject({}, p, { nowUnix: NOW }));
+  const reg0 = store.readRegistry(kv); store.writeRegistry(kv, { ...reg0, beta: { ...reg0.beta, status: "suspended" } });
+  store.write(kv, "beta", "days", days({ [W.A]: "1000000000" }));
+  store.write(kv, "beta", "paid", { [W.A]: "500000000" });
+  const app = mountFor({ kv, adminAuthOK: () => true });
+  const apply = await call(app, "/api/hub-apply", { method: "POST",
+    query: { id: "beta", label: "Takeover", symbol: "TKO", mint: MINT_B, fundingWallet: W.B, operatorWallets: W.B, contact: "@impostor", terms: { poolDailyRaw: "1000000000000" } } });
+  assert.strictEqual(apply.statusCode, 200, JSON.stringify(apply.body));
+  const appId = apply.body.application.id;
+  const r = await call(app, "/api/hub-registry", { method: "POST", query: { approve: appId } });
+  assert.strictEqual(r.statusCode, 409, JSON.stringify(r.body));
+  assert.ok(/project_exists|already exists/.test(r.body.error), r.body.error);
+  assert.strictEqual(store.readRegistry(kv).beta.fundingWallet, W.FUND, "the suspended project's fundingWallet is untouched");
+  assert.strictEqual(store.read(kv, "beta", "paid", {})[W.A], "500000000", "and its ledger was never inherited by the applicant");
+});
+
+t("the owner's own re-approve of the SAME (id, mint) still works after N-2", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "gamma", W.MINT1);
+  const app = mountFor({ kv, adminAuthOK: () => true });
+  const r = await call(app, "/api/hub-registry", { method: "POST", query: { id: "gamma", label: "Gamma Renamed", symbol: "GAMMA", mint: W.MINT1, fundingWallet: W.FUND } });
+  assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
+  assert.strictEqual(store.readRegistry(kv).gamma.label, "Gamma Renamed");
+});
+
+t("N-2: the owner re-issuing a suspended id to a NEW mint is refused while the id's store still holds data", async () => {
+  const kv = store.memoryKv();
+  const p = proj.validateProject({ id: "delta", label: "Delta", symbol: "DELTA", mint: W.MINT1, fundingWallet: W.FUND, operatorWallets: [W.A] }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  store.writeRegistry(kv, proj.approveProject({}, p, { nowUnix: NOW }));
+  const reg0 = store.readRegistry(kv); store.writeRegistry(kv, { ...reg0, delta: { ...reg0.delta, status: "suspended" } });
+  store.write(kv, "delta", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, adminAuthOK: () => true });
+  const r = await call(app, "/api/hub-registry", { method: "POST", query: { id: "delta", label: "Delta II", symbol: "DELTA", mint: MINT_B, fundingWallet: W.B } });
+  assert.strictEqual(r.statusCode, 409, JSON.stringify(r.body));
+  assert.strictEqual(store.readRegistry(kv).delta.mint, W.MINT1, "the mint was never changed");
+});
+
+t("N-2: …and is allowed once the id's store is completely empty", async () => {
+  const kv = store.memoryKv();
+  const p = proj.validateProject({ id: "epsilon", label: "Epsilon", symbol: "EPS", mint: W.MINT1, fundingWallet: W.FUND, operatorWallets: [W.A] }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  store.writeRegistry(kv, proj.approveProject({}, p, { nowUnix: NOW }));
+  const reg0 = store.readRegistry(kv); store.writeRegistry(kv, { ...reg0, epsilon: { ...reg0.epsilon, status: "suspended" } });
+  assert.strictEqual(store.storeIsEmptyFor(kv, "epsilon"), true, "nothing was ever written for this id");
+  const app = mountFor({ kv, adminAuthOK: () => true });
+  const r = await call(app, "/api/hub-registry", { method: "POST", query: { id: "epsilon", label: "Epsilon II", symbol: "EPS", mint: MINT_B, fundingWallet: W.B } });
+  assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
+  assert.strictEqual(store.readRegistry(kv).epsilon.mint, MINT_B);
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
