@@ -1498,5 +1498,17 @@
   "Not retained for this receipt — see below.": "No se conservó para este recibo — ver abajo.",
   "Program version": "Versión del programa",
   "Not recorded for this receipt": "No se registró para este recibo",
-  "Settlement signature": "Firma de liquidación"
+  "Settlement signature": "Firma de liquidación",
+  "PREVIEW WHO THIS WOULD PAY TODAY": "VISTA PREVIA DE A QUIÉN PAGARÍA ESTO HOY",
+  "PREVIEW — WHO THIS DRAFT WOULD PAY TODAY": "VISTA PREVIA — A QUIÉN PAGARÍA ESTE BORRADOR HOY",
+  "An estimate from today's locks — never a promise.": "Una estimación a partir de los bloqueos de hoy — nunca una promesa.",
+  "Publishing is a separate step; nothing was saved by this preview.": "Publicar es un paso aparte; esta vista previa no guardó nada.",
+  "Qualify today": "Califican hoy",
+  "Today's pool": "Pool de hoy",
+  "reason": "motivo",
+  "would earn today": "ganaría hoy",
+  "share of pool": "parte del pool",
+  "no locks yet": "aún no hay bloqueos",
+  "Estimate ready.": "Estimación lista.",
+  "previewing…": "generando vista previa…"
 }

@@ -1498,5 +1498,17 @@
   "Not retained for this receipt — see below.": "此收据未保留该数据——见下文。",
   "Program version": "程序版本",
   "Not recorded for this receipt": "此收据未记录",
-  "Settlement signature": "结算签名"
+  "Settlement signature": "结算签名",
+  "PREVIEW WHO THIS WOULD PAY TODAY": "预览今天将支付给谁",
+  "PREVIEW — WHO THIS DRAFT WOULD PAY TODAY": "预览 —— 这份草案今天会支付给谁",
+  "An estimate from today's locks — never a promise.": "根据今天的锁仓情况得出的估算 —— 绝非承诺。",
+  "Publishing is a separate step; nothing was saved by this preview.": "发布是另一个独立的步骤;此预览未保存任何内容。",
+  "Qualify today": "今日符合资格",
+  "Today's pool": "今日奖池",
+  "reason": "原因",
+  "would earn today": "今日预计收益",
+  "share of pool": "占奖池比例",
+  "no locks yet": "尚无锁仓",
+  "Estimate ready.": "估算已完成。",
+  "previewing…": "正在预览……"
 }
