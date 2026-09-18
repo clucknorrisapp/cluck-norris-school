@@ -190,6 +190,9 @@ function raw(method, p, headers) {
   ok("GET /api/hub/:project/payout?export=1 is refused with 405", r.status === 405);
   r = await call("GET", "/api/hub/nope/payout?send=x&run=1");
   ok("GET /api/hub/:project/payout?send= is refused with 405", r.status === 405);
+  // N-3 (Round 4, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): ledger.waiveRemainder's owner-only route.
+  r = await call("GET", "/api/hub/nope/payout?waive=4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs&batch=x");
+  ok("GET /api/hub/:project/payout?waive= is refused with 405", r.status === 405);
   r = await call("GET", "/api/hub/nope/payout", false);
   ok("/api/hub/:project/payout without the key is 404", r.status === 404);
   r = await call("GET", "/api/hub/nope/holder?address=4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs", false);

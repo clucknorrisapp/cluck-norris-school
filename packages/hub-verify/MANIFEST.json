@@ -25,12 +25,17 @@
     {
       "source": "lib/hub/reproduce.js",
       "dest": "lib/hub/reproduce.js",
-      "sha256": "7e136e3df0ec84c780771bfddece76680c1a57bed6ae6c060fb5a0cad03920db"
+      "sha256": "78fe479ebc26e088af3f789ba3c3d7ad1ed328b1aba5d49de6ece49124a45dab"
     },
     {
       "source": "lib/hub/schema-validate.js",
       "dest": "lib/hub/schema-validate.js",
       "sha256": "a8c01874a72d8110aa125ce79d2bedc6e24de3756939b76b709e70bb291e6336"
+    },
+    {
+      "source": "lib/hub/version-for.js",
+      "dest": "lib/hub/version-for.js",
+      "sha256": "b79dcfcd7f78e1a44afa134336e0e287ef80bb410091ee792d41cb009a39f0eb"
     },
     {
       "source": "lib/sol-addr-re.js",
@@ -55,7 +60,7 @@
     {
       "source": "lib/hub/schema/receipt.schema.json",
       "dest": "schema/receipt.schema.json",
-      "sha256": "31519ba649a12255e402cae6a9c1cca74a2ffeb54ee47042e836f251906d158f"
+      "sha256": "99fd60ac6cc3669af9d40dcba86db55985dd3f4db9d2bb736ad34621b0720f96"
     }
   ]
 }
