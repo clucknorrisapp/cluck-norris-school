@@ -1425,15 +1425,21 @@ t("a self-serve application can no longer take over a SUSPENDED, never-termed pr
   store.write(kv, "beta", "days", days({ [W.A]: "1000000000" }));
   store.write(kv, "beta", "paid", { [W.A]: "500000000" });
   const app = mountFor({ kv, adminAuthOK: () => true });
+  // Consistency nit (Round 5, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): /api/hub-apply now refuses
+  // this AT THE DOOR — it used to accept it (200, an application queued) even though the approval
+  // it advertised in its own response could never succeed (proj.approveProject's requireNew path
+  // refuses ANY existing id, suspended or not), leaving the owner a permanently dead application.
   const apply = await call(app, "/api/hub-apply", { method: "POST",
     query: { id: "beta", label: "Takeover", symbol: "TKO", mint: MINT_B, fundingWallet: W.B, operatorWallets: W.B, contact: "@impostor", terms: { poolDailyRaw: "1000000000000" } } });
-  assert.strictEqual(apply.statusCode, 200, JSON.stringify(apply.body));
-  const appId = apply.body.application.id;
-  const r = await call(app, "/api/hub-registry", { method: "POST", query: { approve: appId } });
-  assert.strictEqual(r.statusCode, 409, JSON.stringify(r.body));
-  assert.ok(/project_exists|already exists/.test(r.body.error), r.body.error);
+  assert.strictEqual(apply.statusCode, 409, JSON.stringify(apply.body));
+  assert.ok(/project_exists|taken/.test(apply.body.error), apply.body.error);
   assert.strictEqual(store.readRegistry(kv).beta.fundingWallet, W.FUND, "the suspended project's fundingWallet is untouched");
   assert.strictEqual(store.read(kv, "beta", "paid", {})[W.A], "500000000", "and its ledger was never inherited by the applicant");
+  // The mint-only route to the same id is refused identically (a different id, the OLD mint).
+  const apply2 = await call(app, "/api/hub-apply", { method: "POST",
+    query: { id: "beta2", label: "Takeover2", symbol: "TK2", mint: W.MINT1, fundingWallet: W.B, operatorWallets: W.B, contact: "@impostor2", terms: { poolDailyRaw: "1000000000000" } } });
+  assert.strictEqual(apply2.statusCode, 409, JSON.stringify(apply2.body));
+  assert.ok(/project_exists|already runs/.test(apply2.body.error), apply2.body.error);
 });
 
 t("the owner's own re-approve of the SAME (id, mint) still works after N-2", async () => {
