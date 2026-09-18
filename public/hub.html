@@ -64,6 +64,8 @@
   .fact b { color:var(--text); }
   .facts li { list-style:none; padding:8px 0; border-bottom:1px solid var(--border-soft, rgba(255,255,255,.06)); }
   details summary { cursor:pointer; font-size:12.5px; color:var(--sub); letter-spacing:1px; margin:8px 0; }
+  details.explain { margin-top:14px; }
+  details.explain summary { color:var(--gold); font-weight:600; }
   .verify-bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px; }
   .verify-note { font-size:12px; color:var(--sub); }
   .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
@@ -306,6 +308,22 @@
     document.getElementById('walletIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') lookup(e.target.value, one.id); });
     var pre = new URLSearchParams(location.search).get('wallet'); if (pre) { document.getElementById('walletIn').value = pre; lookup(pre, one.id); }
   }
+  // ── "how this number was computed" (roadmap E5) — the post-payment mirror of the lessons
+  // block above: a receipt only carries a walkthrough when the inputs that produced it were
+  // retained (which accrual hours it drew on, which program version was in force). Plain words,
+  // one step per line, each with the rule that produced it and a link to the lesson behind it.
+  function explainBlock(x) {
+    var e = x && x.explanation;
+    if (!e) return '';
+    if (!e.steps || !e.steps.length) {
+      var why = (e.missing || []).map(function (m) { return esc(m); }).join('; ');
+      return '<details class="explain"><summary>How this number was computed</summary><div class="fact">The inputs for this receipt were not retained' + (why ? ' (' + why + ')' : '') + ', so no walkthrough can be shown here — the amount above is still the one that was actually sent, on the transaction below.</div></details>';
+    }
+    var rows = e.steps.map(function (s) {
+      return '<li><div class="fact"><b>' + esc(s.label) + ':</b> ' + esc(s.value) + '</div><div class="fact" style="margin-top:2px">' + esc(s.rule) + (s.lesson && s.lesson.href ? ' <a href="' + esc(s.lesson.href) + '">Learn this →</a>' : '') + '</div></li>';
+    }).join('');
+    return '<details class="explain"><summary>How this number was computed' + (e.matchesReceipt ? '' : ' (could not be fully re-checked)') + '</summary><ul class="facts">' + rows + '</ul></details>';
+  }
   async function renderReceipt() {
     var r = await fetch('/api/hub/' + encodeURIComponent(projectId) + '/r/' + encodeURIComponent(receiptSig)).then(function (x) { return x.json(); });
     if (!r.ok) throw new Error(r.error || 'no such receipt');
@@ -319,6 +337,7 @@
       '<div class="sec-title">Transaction</div><div class="mono"><a target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(x.sig) + '">' + esc(x.sig) + '</a></div>' +
       '<div class="verify-bar"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote"><span class="verify" data-sig="' + esc(x.sig) + '"><span class="small">not checked</span></span></span></div>' +
       '<div class="sec-title">Verify it yourself</div><div class="fact">Send this to any Solana RPC. A <span class="mono">confirmationStatus</span> of <span class="mono">confirmed</span> or <span class="mono">finalized</span> with no <span class="mono">err</span> means the transfer is on the chain.</div><pre class="proof">' + esc(proof) + '</pre>' +
+      explainBlock(x) +
       '<div class="small" style="margin-top:12px"><a href="/hub/' + esc(r.projectId) + '#p-' + esc(p.id) + '">← all receipts for ' + esc(p.label || p.kind) + '</a></div></div>';
     document.getElementById('verifyBtn').addEventListener('click', verifyAll);
   }

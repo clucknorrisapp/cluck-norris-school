@@ -7872,7 +7872,11 @@ function hubProjectView(project) {
     const days = hubStore.read(kv, project.id, "days", null);
     if (days && Object.keys(days).length) {
       stake = hubPublic.stakeView({ days, paid: hubStore.read(kv, project.id, "paid", {}), batches: hubStore.read(kv, project.id, "batches", {}),
-        decimals: Number.isInteger(project.rewardDecimals) ? project.rewardDecimals : (project.decimals || 9) });   // reward-asset decimals, not the locked token's (P1-036)
+        decimals: Number.isInteger(project.rewardDecimals) ? project.rewardDecimals : (project.decimals || 9),   // reward-asset decimals, not the locked token's (P1-036)
+        // Additive (roadmap E5, "the receipt teaches"): lets each receipt attribute its own hourly
+        // accrual slices and the program version they ran under. Missing or unreadable state just
+        // degrades every row's `explanation` to "not retained" — never a fabricated walkthrough.
+        project, programState: hubStore.read(kv, project.id, "state", null) });
     }
   } catch (_) { /* a project without a programme store is not an error */ }
   if (project.id === "cuna") {

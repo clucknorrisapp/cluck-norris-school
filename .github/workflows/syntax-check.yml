@@ -128,6 +128,13 @@ jobs:
       # the accrual scheduler — "demo"/"demo-b" can never be approved as real project ids.
       - name: Project Hub — Colosseum demo fixture (derivation + exclusion)
         run: node scripts/hub-demo-fixture-test.cjs
+      # Roadmap extension E5 ("the receipt teaches"): a settled receipt's walkthrough sums to its
+      # own amount via accruedByWallet (the SAME function the ledger uses), a partial payment is
+      # explained as partial, missing inputs never produce a fabricated walkthrough, and no
+      # APR/APY/per-year language or the word "owed" reaches the module's output or the rendered
+      # hub.html page.
+      - name: Project Hub — the receipt teaches (E5)
+        run: node scripts/hub-explain-test.cjs
       # Analytics: a visitor counts as ENGAGED only after a second page or a funnel event, and
       # views are keyed by the real Host header. Since 2026-08-16 the site records ~4,500
       # one-page, no-referrer "visitors" a day that BOT_RE cannot see; this is what stops that
