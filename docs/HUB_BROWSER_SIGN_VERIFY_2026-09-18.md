@@ -91,3 +91,137 @@ The comment at `:1487-1491` states the key "ties an observe() call back to the e
 
 **Merge-ready: no** — F1 (no funding-wallet check before the wallet signs) and F2 (cancel-while-live plus observe-on-a-cancelled-batch, both reproduced) are each a live route to real money leaving twice or landing where the server will never credit it; F3/F4 make the flow double-broadcast on recovery and deadlockable by any operator. The server-side verification half (journal, exact-amount, funding-wallet source, `notBefore`, cross-project consumed set) is genuinely good and the i18n is clean — the gaps are all in the browser half and in the two state transitions around it.
 
+
+---
+
+## Round 1, lens 1 (crash windows and idempotency) — head cc90f0f
+
+# X6 lens 1 — crash windows and idempotency
+
+Branch `claude/hub-browser-sign` @ `cc90f0f` (one commit on `origin/develop`). Read-only review; no files edited, no git writes. I extracted the branch with `git archive` into the scratchpad and ran the new test (16/16 pass) plus three fault probes against the real route closures — findings marked **[probe]** are reproduced, not reasoned.
+
+---
+
+## P0-1 — `sign-request` ignores the legacy `sent` ledger, so it re-offers rows the managed payer has already broadcast **[probe]**
+
+`lib/hub/routes.js:1477-1483` selects rows with **`ledger.rowState()` only** (journal-derived remaining). Every other payer path selects with `pay.remainingOf(bt)` (`lib/cuna-payout.js:200`), which honours the legacy `batch.sent[wallet]` flag — that is what `&send=` uses at `lib/hub/routes.js:1305` and what the desk's `remainingCount` is built from (`lib/hub/routes.js:122`).
+
+A row is legacy-sent-but-unjournaled in several ordinary situations: the managed payer's `onPaid({pending:true})` writes `sent[w]` *before* broadcast and only journals on confirm (`routes.js:1319-1331`); a confirm that times out (`r.pending`) never journals at all; `&sent=` rows that hit `ATTRIBUTION_FAILURE_WHY`; and the `&send=` branch's own "paid on-chain but the settlement journal did not persist" fallback (`routes.js:1391`).
+
+Reproduced: two wallets owed, managed payer broadcasts A (`pending:true`) and fails B, so the batch stays `pending`:
+
+```
+batch state: pending | legacy sent rows: [A] | A pending: true | journal entries: 0
+sign-request rows offered: [[A,"1000000000"],[B,"2000000000"]]      <-- A offered again
+pay.remainingOf(bt):       {B:"2000000000"}                          <-- what &send= would send
+```
+
+The operator's wallet then signs and broadcasts a **second** payment to A. Worse, `observe` cannot even record it: PASS 2 `recordSent` sees `sent[A]` already set and returns "already recorded", so the loop at `routes.js:1619-1630` discards the journal entry — the double payment leaves no trace at all.
+
+**Minimal fix:** in the loop at `routes.js:1477`, `if (bt.sent && bt.sent[wallet]) continue;` (i.e. intersect `rowState` remaining with `pay.remainingOf(bt)`), and surface those wallets in `skipped` with a reason.
+
+---
+
+## P0-2 — nothing is recorded before the browser broadcasts, and a second `sign-request` while `signing` re-offers every row
+
+`sign-request` refuses only `state === "submitted"` (`routes.js:1468`); `signing` is explicitly re-issuable, and the test at `scripts/hub-browser-sign-test.cjs:131` asserts that as correct behaviour. Nothing about *what was handed out* is durable except `browserSign.wallets`, which is never consulted as a hazard list.
+
+The client makes this reachable without any crash. `public/hub-desk.html:632` reports **only** `r.status === "sent"` signatures to `observe`. `public/airdrop-engine.js:395-400` has three outcomes and its own comment says an `unconfirmed` (30 s confirm timeout) result must "never [be] 'failed' (a resend double-pays)" — yet the browser-sign path drops those signatures on the floor, and `hub-desk.html:634` then tells the operator **"Nothing broadcast"**. The `sigs` array is never persisted (unlike the SEND path's `ROW_STATUS`/`saveStatus()` at `hub-desk.html:589`), so a reload loses them. Finally `refreshSignSendButton` (`hub-desk.html:610-615`) computes `live` but **omits it from `ok`** — the SIGN AND SEND button stays enabled while `browserSign.state === "signing"`, and `remainingCount` is still full because nothing was legacy-recorded. Click twice → everyone paid twice.
+
+This is the residual the README §3a names, but the claim there — *"nothing here can lose a real payment"* — is not what the code does: a real payment is lost to the record **and** the same rows are re-offered.
+
+**Minimal fix:** (a) `hub-desk.html:632` push `unconfirmed` sigs too (the server verifies them on chain anyway — `getTx` null simply settles nothing); (b) `routes.js:1468` refuse a re-`sign-request` while `signing` unless the caller passes the prior nonce with an explicit `&abandon=1`, or exclude `bt.browserSign.wallets` from the new offer until they have been observed; (c) `hub-desk.html:614` add `&& !live` to `ok`.
+
+---
+
+## P1-3 — `&cancel=` is not guarded by `browserSignIsLive`, so a batch mid-signing can be closed and re-exported **[probe]**
+
+`browserSignIsLive(bt)` is checked only in the `&send=` branch (`routes.js:1292`). `&cancel=` (`routes.js:1168-1172`) has no such check, and the desk's CLOSE button is disabled only on `SENDING`/non-pending (`hub-desk.html:541`) — not on `SIGN_SENDING` or `bsLive`. Its `unrecordedSent()` guard (`hub-desk.html:666`) reads `ROW_STATUS`, which the browser-sign path never writes.
+
+```
+cancel while browserSign=signing -> 200
+batch state now: cancelled  browserSign: signing
+re-export after cancel created a NEW batch owing: {A:"1000000000"}
+observe on the CANCELLED batch -> 200 recorded: [A]
+```
+
+The wallet is settled on the cancelled batch **and** carried as a full row on the new pending batch, which `remainingOf` will happily pay again.
+
+**Minimal fix:** `if (browserSignIsLive(batchOf(id))) return 409` in the `&cancel=` branch, with the same wording as `&send=`; and gate the CLOSE button on `bsLive`.
+
+---
+
+## P1-4 — `submitted` is a dead end: an early/lagging observe bricks a batch that has moved no money **[probe]**
+
+`getTx` returning **null** (a validator that has not yet indexed a just-broadcast signature — the normal case one second after `signAndSendTransaction`) is not an RPC error, so it is not the 503 path. It flows to `rowPaidBy`'s `"transaction not found on chain"`, is written into `browserSign.failed[wallet]` (`routes.js:1645`) and flips the state to `submitted` (`routes.js:1651`).
+
+```
+observe (getTx -> null): 200 state: submitted failed: {A:{why:"transaction not found on chain"}}
+sign-request again: 409 "…already broadcast — observe it (or let its blockhash lapse)…"
+managed &send=  : 409 "a browser-signed payout is submitted for this batch…"
+=> zero money moved, batch unpayable by BOTH routes
+```
+
+The only exit is `&cancel=` — which is itself P1-3, and is nowhere documented as the remedy. The same dead end is reached permanently by any row that settles through `ATTRIBUTION_FAILURE_WHY`: `stillOwed` (`routes.js:1638`) is journal-derived, so a legacy-recorded-but-unjournaled row keeps `stillOwed` true forever and pins `submitted`.
+
+**Minimal fix:** distinguish "not found yet" from "failed" (treat a null `tx` whose signature is younger than a few minutes as `retry`, not `failed`, and do not advance out of `signing` on it), and add an owner/operator lever to clear `browserSign` on a batch with no journal entry for it (e.g. `POST …/payout?abandonSign=<batchId>`), so `submitted` is never terminal.
+
+---
+
+## P1-5 — RPC outage is partly handled; the null case is reported as a permanent failure
+
+Question 5 holds for the throwing case: `routes.js:1550-1551` fetches every signature before any mutation, returns 503 `retry:true`, and the batch is byte-identical (verified by `hub-browser-sign-test.cjs:231`, and the `dryRun` refusal at `routes.js:1518` precedes even `lockAcquire`, so the lock key is not written either). It does **not** hold for `getTx` resolving null — see P1-4. The two cases are the same underlying condition (this RPC cannot see the transaction right now) and only one is treated as `unavailable`.
+
+---
+
+## P2-6 — the `nonce`/`idempotencyKey` is generated, persisted and returned but never checked
+
+`routes.js:1486-1492` documents the key as what "ties an observe() call back to the exact set of rows/amounts a sign-request handed out, so a stale or superseded sign-request can never be conflated with a fresh one". `observe` reads only `b.sigs`/`b.sig` (`routes.js:1520-1526`) and the client never sends it (`hub-desk.html:636`). The stated guarantee does not exist; a comment asserting a control that isn't implemented is exactly the class CLAUDE.md warns about.
+
+**Minimal fix:** either have `observe` require and compare `nonce` against `bt.browserSign.nonce`, or delete the claim from the comment and the README.
+
+---
+
+## P2-7 — `browserSign.failed[wallet]` routinely records a wrong reason, and contradicts `paid`
+
+`results` is the full cross product `wallets × sigs` (`routes.js:1559-1560`). In the normal multi-transaction run every wallet is rejected for every signature it is *not* in, so `failedNow[wallet]` (`routes.js:1645`) is overwritten with `"no <mint>… reached this wallet in that transaction"` from an unrelated signature. It is cleared only for wallets whose settlement journaled (`routes.js:1650`). A row that legacy-recorded through `ATTRIBUTION_FAILURE_WHY` (pushed into `passed` at `routes.js:1592`, recorded by `recordSent` at `routes.js:1616`, so `paid[wallet]` was incremented) therefore ends up **both** paid and permanently listed in `failed` with a misleading reason — and the desk prints it as "row(s) could not be recorded" (`hub-desk.html:641`).
+
+**Minimal fix:** only write `failedNow[w]` from `pass1Refusals` and from `vr.rejected` entries whose `why` is a real refusal for that wallet's *best* candidate; clear the entry for any wallet in `r.recorded`, not only for journaled ones.
+
+---
+
+## P2-8 — test §5's idempotency assertion passes for a reason other than its name
+
+`scripts/hub-browser-sign-test.cjs:215-227` asserts "observe twice ⇒ one settle" but the second call is short-circuited at `routes.js:1537-1539` (`state === "settled"` ⇒ `already:true`) and never reaches `ledger.settle`'s consumed-signature check at `lib/hub/ledger.js:169-172`. An implementation that dropped that check entirely would still pass this test. (The property does hold via a second layer — `remaining === 0n` ⇒ `amount_mismatch` — but nothing tests it.) A faithful test needs a two-wallet batch where one row settles and the state stays `submitted`, then re-observes the same signature.
+
+---
+
+## P2-9 — the other tests do not cover the hazards their sections claim
+
+- `:131` "a second sign-request while `signing` (**nothing broadcast yet**) is allowed" — the server cannot know nothing was broadcast; the test enshrines P0-2.
+- `:326` §11 covers only a batch the managed payer sent **in full** (`onPaid` without `pending`, `paid:[…]`, `failed:[]`). The partial/pending managed send — the P0-1 double-pay — is untested; adding the fake vault variant in my probe turns it red.
+- `:143` §2 asserts `&send=` is refused during `signing`, but not the reverse the README §3a claims (a concurrent `sign-request` refused with `busy` during a managed send).
+- Nothing tests that project A's operator token is refused on project B, nor the lapsed-project case.
+
+Auth itself is sound: `authOf` (`routes.js:154-158`) → `operator.operatorOf` (`lib/hub/operator.js:61-67`) pins the token's `projectId` to `project.id` and re-checks `operatorWallets` on every request; unauthenticated is `notFound(res)` = 404 (`routes.js:1454`, `:1517`), and `mutating-get-guard-test.cjs` pins 405-on-GET and the no-project-exists-hint. Neither new route has a lapsed-access gate — consistent with `/payout`, which has none either, but *not* with the terms write (`routes.js:345`); worth an explicit owner decision rather than an omission.
+
+---
+
+## P3-10 — inconsistent freezing of the payment parameters
+
+`observe` reads `mint` from `bt.browserSign.mint` (frozen at sign-request, `routes.js:1542`) but `fundingWallet`/`payoutSources` from the live project record (`routes.js:1543`), while `browserSign.fundingWallet`, `decimals` and `tokenProgram` are persisted and never read. Pick one: freeze all of the settlement-relevant parameters on the batch and use them, or freeze none and read the live record.
+
+---
+
+## What is correct
+
+- One persist per transition: `observe` lands `batches` + `paid` + every journal entry in a single `hubStore.writeManyVerifiedMixed` (`routes.js:1654`), and `sign-request` touches only `batches` (`routes.js:1499`). A crash immediately after either leaves a consistent, re-runnable state; a crash before leaves nothing. No two-write money window.
+- Journal entries land at their own per-transfer kv key (`store.js:journalEntryKey`), so concurrent settlements of different transfers cannot clobber each other.
+- The `hublock:<id>:payout` lock is acquired before the `getTx` fetch and released in `finally` on both routes (`routes.js:1459/1507`, `1528/1675`) — the RPC read is inside the critical section, and it is the same key `/payout` holds, so the managed payer and the browser path cannot interleave *within* a request.
+- Idempotency of a signature across routes holds at three layers: the `state === "settled"` short-circuit, `ledger.settle`'s `existing` check, and `exactOnly` + `remaining === 0n`. A signature paying wallet A cannot settle row B (token-delta + `locateTransferInstruction` owner match), an oversized or undersized amount is refused, a foreign mint is refused, and a transfer not sourced from `fundingWallet`/`payoutSources` is refused and alerted (`hub-browser-sign-test.cjs:185, 201`).
+- `dryRun` is refused before any read, lock or write on both routes, with the `/payout` wording.
+
+---
+
+**Merge-ready: no** — `sign-request` picks rows from the journal alone while every other payer path picks them from the legacy `sent` ledger (P0-1, reproduced), and nothing durable is written before the browser broadcasts while a re-`sign-request` during `signing` is explicitly allowed (P0-2); either one pays a holder twice on an ordinary managed-send timeout or a lost tab, and the second payment is silently discarded by `recordSent` rather than journaled.
+
