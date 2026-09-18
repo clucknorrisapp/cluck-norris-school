@@ -313,6 +313,17 @@ Judges weight traction and revenue. These are all verifiable on-chain or on the 
 | Community | `[OWNER — Telegram members, X followers]` | |
 | Security | Cloudflare WAF cutover + origin lockdown live since 2026-08-04, from findings by our scan partner RootCrak (@ro0TCr4k, https://rootcrak.com/?ref=clucknorris) | README |
 
+**Validation.** The traction table above says *what* happened; `docs/VALIDATION_2026-09.md`
+(W6b) says *who independently pays for it and why they'd return* — the question none of these
+counters answer on their own. Every claim of adoption there is sorted into one of three columns
+before it is allowed near this submission: **founder-operated** (CLKN Productions ran the setup
+or payout on the project's behalf), **dry run** (wired up, labelled, nothing accrues or pays —
+e.g. the POKEAHOE Hub page), or **independent** (a project operator ran it themselves, through
+their own signed operator-desk session, with no founder in the loop). `[measured on <date>]`:
+of the four partner projects (POKE, CUNA, DNC, ROSE), `[N] of 4` fall in founder-operated, `[N]
+of 4` in dry run, and `[N] of 4` in independent — see `docs/VALIDATION_2026-09.md` §(a) for the
+per-project breakdown and §(d) for the honest headline it produced.
+
 ---
 
 ## 5. Go-to-market (paste-ready)
