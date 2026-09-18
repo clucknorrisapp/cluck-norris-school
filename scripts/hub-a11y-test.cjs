@@ -57,6 +57,8 @@ const PAGES = [
   { path: "/hub/cuna/pay", name: "Hub pay" },
   { path: "/hub/verify", name: "Hub verify (Y1 — reproduce a receipt in the browser)" },
   { path: "/hub/status", name: "Hub status (Z2 — what is live, where, and how reproducible)" },
+  { path: "/hub/wallet", name: "Hub wallet look-up (AA1 — one wallet, every project)" },
+  { path: "/hub/wallet/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", name: "Hub wallet look-up, pre-filled (AA1)" },
 ];
 const WIDTHS = [
   { width: 360, height: 780, label: "360×780" },

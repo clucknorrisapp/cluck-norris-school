@@ -8101,6 +8101,40 @@ app.get("/api/hub", (req, res) => {
     return res.status(200).json({ ok: true, projects });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// ── AA1: one wallet, every project (Colosseum roadmap §11) ─────────────────────────────────────
+// "The strongest honest form of Earn: a holder who can check what they were owed and what
+// arrived" — across EVERY registered real project, never just one. Composed ONLY from
+// hubPublic.walletLookup(hubProjectView(p), wallet) per project — no private field, and demo/
+// fixture projects are excluded exactly as every other feed excludes them (they never reach
+// hubProjects(); see the E2 comment above). Registered BEFORE /api/hub/:project so "wallet" is
+// never read as a project id — belt-and-braces, since "wallet" is also a reserved project id
+// below (hubRoutes.mount's reservedMints) and the two path shapes don't actually collide by
+// segment count, the way /hub/demo and /hub/verify DO collide with the page catch-all.
+function hubWalletGroupPrograms(entries) {
+  const order = [], byProgram = new Map();
+  for (const e of entries || []) {
+    const { program, kind, label, ticker, ...row } = e;
+    let g = byProgram.get(program);
+    if (!g) { g = { id: program, kind, label, ticker, rows: [] }; byProgram.set(program, g); order.push(g); }
+    g.rows.push(row);
+  }
+  return order;
+}
+app.get("/api/hub/wallet/:wallet", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.params.wallet || "");
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ ok: false, error: "not a Solana address" });
+  try {
+    const projects = [];
+    for (const p of Object.values(hubProjects())) {
+      let r;
+      try { r = hubPublic.walletLookup(hubProjectView(p), wallet); } catch (_) { continue; }
+      if (!r.ok || !r.entries.length) continue;
+      projects.push({ id: p.id, label: p.label, brand: p.brand ? { logo: p.brand.logo || null, accent: p.brand.accent || null, tagline: p.brand.tagline || null } : null, programs: hubWalletGroupPrograms(r.entries) });
+    }
+    return res.status(200).json({ ok: true, wallet, projects, seenIn: projects.length, generatedAt: Date.now() });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 app.get("/api/hub/:project", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=30");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
@@ -8317,6 +8351,10 @@ app.get("/hub-verify.bundle.js", (req, res) => {
 // Registered BEFORE the generic /hub/:project pattern below, or "verify" would be read as a
 // project id and served hub.html instead.
 app.get("/hub/verify", (req, res) => { res.sendFile(join(__dirname, "public", "hub-verify.html")); });
+// AA1: one wallet, every project — a typed address, no connect. Same ordering reason as
+// /hub/verify above: registered before the /hub/:project catch-all so "wallet" is never read as
+// a project id (it is also a reserved project id, hubRoutes.mount's reservedMints, above).
+app.get(["/hub/wallet", "/hub/wallet/:wallet"], (req, res) => { res.sendFile(join(__dirname, "public", "hub-wallet.html")); });
 
 // ── Y4: shareable Hub pages — server-rendered Open Graph / Twitter Card meta (Colosseum roadmap
 // §9). One static branded image (public/og/hub-card.png, 1200x630 — no dynamic image generation,
@@ -8551,8 +8589,11 @@ hubRoutes.mount(app, {
   // declared further down.
   // "demo" / "demo-b" are the Colosseum fixture ids (lib/hub/demo-fixture.js, /hub/demo) — reserved
   // by id (not mint) so a real project can never be approved under either name and collide with
-  // the fixture's routes.
-  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null }),
+  // the fixture's routes. "wallet" is reserved the same way (Colosseum roadmap AA1,
+  // /hub/wallet[/:wallet] and GET /api/hub/wallet/:wallet) — a project literally named "wallet"
+  // would not actually collide with those routes by path shape, but would be a permanently
+  // confusing id on a Hub whose whole point is a reader pasting URLs by hand.
+  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null, wallet: null }),
   getTx: async (sig) => {
     const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     return r && r.result;
