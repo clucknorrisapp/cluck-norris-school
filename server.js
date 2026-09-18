@@ -7912,6 +7912,31 @@ app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:pr
   res.sendFile(join(__dirname, "public", "hub.html"));
 });
 
+// ── For Projects — the guided front door (Colosseum W4, cut to two days). LINKS the tools that
+// already exist (lock -> lock-to-earn -> buy competition -> airdrop -> listing checkup -> owners
+// snapshot -> burn receipt) in the order a project team would actually use them, plus a per-mint
+// checklist below. Explicit route (not just a public/ file) for the same no-build-boot reason as
+// every other page here.
+app.get("/for-projects", (req, res) => { res.sendFile(join(__dirname, "public", "for-projects.html")); });
+// Read-only checklist for one mint. Three of the four checks already have a public GET
+// (/api/locks, /api/hub, /api/listing-checkup/report) — this endpoint exists ONLY because no
+// feed indexes burn receipts by mint (burnReceipts in kv is keyed by signature). GET, no writes,
+// whitelisted fields only (no wallet — the checklist doesn't need one).
+app.get("/api/for-projects/burn-check", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const mint = String(req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  try {
+    const store = kv.get("burnReceipts", {}) || {};
+    const rows = Object.values(store)
+      .filter((r) => r && r.mint === mint)
+      .sort((a, b) => (b.at || 0) - (a.at || 0))
+      .slice(0, 10)
+      .map((r) => ({ sig: r.sig, symbol: r.symbol || null, burned: r.burned, usdValue: r.usdValue != null ? r.usdValue : null, pctSupply: r.pctSupply != null ? r.pctSupply : null, at: r.at || null }));
+    return res.status(200).json({ ok: true, mint, count: rows.length, receipts: rows });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
 // ── Lock to Earn for ANY project — the per-project routes + scheduler (Phase 1a-ii, owner
 // 2026-09-16 "keep going on the platform"). lib/hub/routes.js on lib/hub/engine.js; CUNA stays on
 // its own code until Phase 1b (the scheduler skips it). The chain client is built lazily and only
@@ -17361,7 +17386,7 @@ const SITEMAP_PAGES = [
   // pool-monitor, admin) are deliberately absent; their meta handles them.
   // /autopsy + /order-book left the sitemap 2026-07-29 when they went operator-only,
   // and /grant + /token-vitals were removed outright.
-  "/", "/school", "/education", "/tools", "/wallet-xray", "/trace",
+  "/", "/school", "/education", "/tools", "/for-projects", "/wallet-xray", "/trace",
   "/snapshot", "/holders", "/owners-snapshot", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
   "/wallet-checkup", "/locker-room", "/clkn", "/alpha", "/lp-lab",
   "/classroom", "/bags", "/about", "/privacy", "/terms",
