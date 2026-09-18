@@ -561,6 +561,14 @@ jobs:
       # would not otherwise touch a page or the game.
       - name: HUB_VERIFY.md matches the code it tells judges to run (X2)
         run: node scripts/hub-verify-doc-test.cjs
+      # AA5 (docs/COLOSSEUM_ROADMAP.md §11): the trust-boundary page (/hub/trust) cannot silently
+      # drift from HUB_VERIFY.md §(g) — every "not verifiable yet" bullet there carries a
+      # `<!-- boundary: ... -->` marker matched to a `data-boundary` element on the page (both
+      # directions, and the bullet count itself), the page never uses a forbidden word (verified /
+      # safe / guaranteed / APR / APY / yield), and every relative link on it resolves to a
+      # registered server.js route. Static, no server boot — always runs, like X2 above.
+      - name: hub-trust.html matches HUB_VERIFY.md §(g), no forbidden words (AA5)
+        run: node scripts/hub-trust-doc-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)

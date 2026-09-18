@@ -204,6 +204,7 @@ function ReceiptLessonBridge({lesson:l}){
     <div style={{background:"rgba(103,232,249,0.05)",border:"1px solid rgba(103,232,249,0.16)",borderRadius:12,padding:"10px 14px",margin:"0 0 14px",textAlign:"left",display:"flex",flexDirection:"column",gap:6}}>
       <a href="/hub/demo/r/rcpt-a" onClick={()=>track("hub_door_click:receipt_lesson")} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"Open a real receipt and check it, line by line"} →</a>
       <a href="/hub/verify" onClick={()=>track("hub_verify_click:receipt_lesson")} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"Reproduce it yourself, in your own browser"} →</a>
+      <a href="/hub/trust" onClick={()=>track("hub_trust_click:receipt_lesson")} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"See what none of this proves"} →</a>
     </div>
   );
 }
