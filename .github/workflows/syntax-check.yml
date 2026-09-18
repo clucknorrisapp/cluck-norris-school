@@ -527,6 +527,13 @@ jobs:
       # here rather than in node-check.
       - name: Hub settlement-library JSON Schemas (lib/hub/schema, E4)
         run: node scripts/hub-schema-test.cjs
+      # X2 (docs/HUB_VERIFY.md): a static check, no server boot — asserts every script, lib file,
+      # relative link and $HOST route the doc tells a judge to paste actually exists in this repo,
+      # so the doc cannot silently drift from the code it describes. Always runs (like the schema
+      # test above), never diff-gated: a route rename anywhere is exactly the kind of change that
+      # would not otherwise touch a page or the game.
+      - name: HUB_VERIFY.md matches the code it tells judges to run (X2)
+        run: node scripts/hub-verify-doc-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)

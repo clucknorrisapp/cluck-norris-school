@@ -76,6 +76,10 @@ below works with no wallet connected:
   "Ready to lock?" card that carries the project a learner arrived from, and a project page shows
   how many anonymous visitors read the lock lessons before reaching it (only when above zero).
 - **The Hub pages in all seven languages**, with the same CI coverage gate as the school.
+- **[`docs/HUB_VERIFY.md`](docs/HUB_VERIFY.md)** — the two-minute version of all of the above:
+  every command copy-pasteable, which routes are live on production today vs staging, and what
+  isn't independently verifiable yet, stated plainly. `scripts/hub-verify-doc-test.cjs` pins the
+  doc against the code in CI so it can't quietly go stale.
 
 **What isn't true yet, stated plainly.** A program version's `hash` is served by the same server
 that computes the payout — that lets a reader *re-derive* the arithmetic from the published

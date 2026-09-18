@@ -369,7 +369,7 @@
     // top nav bar, worse than the original overlap). Only the SHORT trailing line inside each
     // card (its mint address) is marked, so a pill landing on any one card only has to clear that
     // one line, never the whole card.
-    app.innerHTML = '<div class="card"><div class="intro" data-clkn-avoid="1">Every project here has a public record: <b>what it promised its holders, who qualified, and the transaction that paid each one</b>. Nothing on these pages needs a wallet, and every signature can be re-checked against Solana from the page itself.</div><div class="small" style="margin-top:10px" data-clkn-avoid="1">Run a project? <a href="/for-projects" style="color:var(--cyan)">Start at the guided front door →</a></div></div>' +
+    app.innerHTML = '<div class="card"><div class="intro" data-clkn-avoid="1">Every project here has a public record: <b>what it promised its holders, who qualified, and the transaction that paid each one</b>. Nothing on these pages needs a wallet, and every signature can be re-checked against Solana from the page itself.</div><div class="small" style="margin-top:10px" data-clkn-avoid="1">Run a project? <a href="/for-projects" style="color:var(--cyan)">Start at the guided front door →</a></div><div class="small" style="margin-top:6px" data-clkn-avoid="1">Judging or just skeptical? <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/HUB_VERIFY.md" style="color:var(--cyan)" target="_blank" rel="noopener">Verify it yourself — a two-minute checklist →</a></div></div>' +
       r.projects.map(function (p) {
         return '<a class="card proj-link" href="/hub/' + esc(p.id) + '">' +
           (p.dryRun ? dryRunBadge() : '') +

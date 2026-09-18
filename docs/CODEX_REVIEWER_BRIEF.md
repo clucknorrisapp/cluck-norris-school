@@ -204,6 +204,139 @@ published inputs" until Addendum B §B5's witness exists.
 
 Findings, not rewrites. "Reviewed, no issue" on a money path is a real answer.
 
+## Round 2 — 2026-09-18 evening (X1, roadmap §8): caught up through batch 8
+
+Batches 2–8 (#339–#346) plus the money-path settlement-journal PR (#342) all landed the same day
+under the owner's "build non-stop, merge to `develop` on green, `main` only on promote" policy —
+this is the list your terminal pass starts from instead of a raw diff, ranked money-first. Every
+question below was written from the actual diff (`git show`/`git log` on each PR's commits), not
+a template; where a lens has already run, its own findings doc is cited directly rather than
+repeated.
+
+**#342 — Hub W3 integration gate: the settlement journal becomes the payout system of record
+(money path, open, blocked).** `lib/hub/settle.js` (new), `lib/hub/attempts.js`, `lib/hub/store.js`
+`writeManyVerifiedMixed`, `lib/hub/routes.js` (`&sent=`/`&send=`/`&sweep=`), `lib/cuna-payout.js`
+`owedNow`. Two lenses already ran on commit `332a79c` and wrote up 21 findings in
+`docs/HUB_JOURNAL_VERIFY_2026-09-18.md` on branch `claude/hub-settlement-journal` (not yet on
+`develop`) — **read that file first**, it has exact line numbers and reproduced attacks. **Your
+question:** the PR body claims the P0/P1 items from that doc are fixed on top of `332a79c` before
+merge — verify the two headline crash windows are actually closed, not just narrowed: (1) **the
+idempotency key** — is the journal now one kv key per `xferKey` (`settle:<sig>:<instructionIndex>`)
+as Addendum B1 names it, or still the single whole-object `hub:settle` blob that made two
+concurrent `&sent=`/`&send=` requests overwrite each other's entries (lens 2's P0-1/P1-1, the one
+that let a landed, verified payment be re-offered by `owedNow` after a cancel)? (2) **the crash
+windows** — with whatever the fix is, replay lens 2's probe (or an equivalent): two payout requests
+for different wallets in the same batch, one stalling inside `getTx()` while the other completes
+and journals — does the second survive the first's write? And separately, does a transfer's
+**source** now get checked against the project's funding wallet (lens 1's P0-1 — as shipped, ANY
+inbound transfer of the reward mint to a wallet, from anywhere, settles that wallet's row)?
+
+**#346 — a11y pass, demo storyboard, Launch Readiness, airdrop receipts, Buy Special standings +
+hold-through proof, roadmap extension 2 (open, on this branch).** Three separate money-adjacent
+surfaces in one PR — each gets its own question:
+- **Airdrop receipts** (`lib/airdrop-receipt.js`, `POST /api/airdrop/record`, public `GET
+  /api/airdrop/r/:dropId`). `recordDrop` verifies each row with `payoutVerify.rowPaidBy(tx, {mint,
+  wallet, minRaw, notBefore})` — the same function `lib/hub/settle.js`/`locateTransferInstruction`
+  wraps for the Hub journal, but here called directly with **no per-instruction location and no
+  source check** (it only asserts the named wallet's own net token-balance delta for the mint
+  increased by the amount, after `createdAt`). Given #342's P0-1 finding that this exact check
+  lets ANY inbound transfer settle a row: can an operator submit `{wallet, sig}` for a real
+  transaction where `wallet` received the mint from something with nothing to do with this drop —
+  a DEX buy, another operator's airdrop, another project's payout — and have the public receipt at
+  `/airdrop/r/<dropId>` show `verified:true` next to a signature that was never this drop's
+  payment to that wallet?
+- **Buy Special public standings** (`GET /api/hub/:project/p/:compId/standings`,
+  `lib/hub/public.js compStandingsView`). Gated on `c.status === "verified"` only — anything else
+  (`open`/`closed`/`closed-awaiting-verify`) returns terms only, no results, not even an empty
+  array (server.js ~8017–8046 states why: a live board would let a whale time the last buy).
+  `buyCompVerify` (server.js ~2280–2307) builds `c.verified`/`c.verifyResults`/`c.verifiedAt` on
+  the in-memory object and sets `c.status = "verified"` last, before one `buyCompSave(c)` call.
+  Can an unsealed board still leak through this or another route before that single save lands —
+  the hourly `buyCompUpdate()` autosave's `c.provisional` field, a read hitting the object between
+  `c.verified` being set and `c.status` flipping if `buyCompVerify` is ever made non-atomic later,
+  or a second in-flight request reading a partially-built `c` — and if not today, what would make
+  it true after the next edit to this function?
+- **Launch Readiness** (`lib/hub/readiness.js`, the `&arm=1&confirm=go-live` refusal in
+  `lib/hub/routes.js` ~260–284). `computeReadiness()` reads a **live** RPC balance
+  (`getParsedTokenAccountsByOwner` on the funding wallet) at the moment of arming and blocks on
+  `coverage < 1`; once armed, nothing re-checks it. Can a shortfall be armed around — e.g. a
+  funding wallet topped up just long enough to pass the one-time check and drained immediately
+  after, or terms edited (`&terms=1`, which does not re-run readiness) after arming to raise the
+  obligation past what was funded? Readiness is a `block`-classified read at arm time only, never
+  an ongoing invariant — is that gap acceptable given the accrual engine has no independent
+  "am I still funded" check of its own?
+
+**#341 — school→Hub bridge (E6), on-chain hash commitment dry-run (E3), Hub pages in seven
+languages (E8).** `lib/hub/commit.js`, `POST /api/hub/:project/commit/build` +
+`…/commit/observe`, `docs/hub/commitments.md`. **Your question (as scoped by the roadmap item
+itself):** `commit/build` returns an unsigned Memo transaction with the funding wallet as fee
+payer for the desk to sign and broadcast; `commit/observe?sig=` then fetches that signature and
+writes `commitment` only after verifying confirmation, fee payer, and exactly one memo matching
+`clkn-hub:v1:<project>:<version>:<hash>`. Can `commit/observe` be fed a memo the funding wallet
+did NOT sign — e.g. a signature for a transaction some other wallet paid the fee on that happens
+to carry a matching-looking memo string, a transaction with the right memo but a different fee
+payer, or a memo that matches by prefix/substring rather than exact text? And separately: is the
+30-case byte-diff in `scripts/hub-commit-test.cjs` actually pinning the built instruction against
+`@solana/spl-memo` (or an equivalent library encoder), or only against a hand-built expectation
+that could drift from what the library would produce?
+
+**#340 — engine evidence classes (W5), seven-language lessons (F4), POKEAHOE decided (E10).**
+`lib/whirlpool-vault.js recordDecision` / the `engineLog:<project>` ring buffer, read by
+`/liquidity-engine` (`lib/jvp-dashboard.js`). The header comment claims this is "written from ONE
+choke point... every caller of `vault.tick()`... goes through here". **Your question:** the
+module also exports `tickAskWall` (`lib/whirlpool-vault.js` ~1302, wrapped separately at the
+bottom of the file as `tickAskWall: (o) => withProject(o.projectId, () => tickAskWall(o))`, with
+**no** `recordDecision` call) — it returns its own `action`/`reason` shape (`"skip"`, presumably
+others) and clearly makes a real decision about the ask-wall position. Is a decision `tickAskWall`
+makes while an engine is armed silently absent from the "decision log (retained events)" evidence
+class the dashboard presents as the complete record of what the engine decided, and if so, is that
+an intentional scope cut (ask-wall isn't "the base tick") or a real gap in the choke point?
+
+**#339 — disclosure caught up, traction counters (W9 part 1), `/for-projects` front door.**
+`lib/traction.js` `recordWalletConnect`/`recordReceiptOpen`, described as "PII-free by
+construction" because only a salted hash is stored, never the wallet. **Your question:** the salt
+is `process.env.ANALYTICS_SALT || process.env.PREMIUM_ACCESS_KEY || "clkn-traction-salt"` — a
+literal string committed to the repo as the fallback. Is `ANALYTICS_SALT` actually set in the
+production environment? If not (and `PREMIUM_ACCESS_KEY` is also unset, or ever gets rotated to a
+value that leaks the same way), the hash is `sha256("wallet|<source>|<wallet>|clkn-traction-salt")`
+with every input but the wallet address public — and CLKN/CUNA/ROSE holder addresses are
+themselves public on-chain. Does that make "which wallets connected to the tools pass / Hub
+desk" reversible by brute-forcing the known holder list against the committed salt, contradicting
+the "PII-free by construction" claim in the file's own header?
+
+**#345 — W9 part 2: school and homepage doors to the Hub, door counters, disclosure for batch 6.**
+`lib/traction.js` `recordHubDoorClick`, fired over the existing `POST /api/track` beacon
+(rate-limited 120/min per IP, `server.js:3823`) with an anonymous per-browser `sid` the client
+controls and a source of `"school"` or `"home"`. Dedup is per (day, source, sid-hash) — there is
+no proof the `sid` corresponds to a real page load. **Your question:** can a script inflate the
+`hub_door_click` counters (and therefore the "N visitors saw the door" numbers this doc's own
+traction table and the submission may cite) by POSTing distinct fabricated `sid` values from
+rotating IPs, and if so, is 120/min/IP a meaningful ceiling on that at hackathon-judging traffic
+volumes, or effectively no ceiling at all?
+
+**#343 — truth pass: README, `/about`, submission match `develop` (batch 4).** Docs only. Four
+more batches (5–8) have shipped since this "truth pass" ran, adding Launch Readiness, airdrop
+receipts, and Buy Special standings — grepping `README.md` and `public/investors.html` for those
+terms today finds nothing. **Your question:** is the truth pass stale again (i.e., does the code
+now do things the docs don't mention — an omission, not an overclaim, so lower severity but the
+same "docs must match the code" rule), and separately, does anything either doc says today
+overstate what's actually live (in particular any phrase implying independent verification, given
+§6/§g of `docs/HUB_VERIFY.md` — this batch — says plainly that no program hash has been
+independently committed yet)?
+
+**#344 — W6b validation kit + interview script, `.claude/settings.json` allowlist.** Mostly docs
+(`docs/VALIDATION_2026-09.md`, `docs/OPERATOR_INTERVIEW_SCRIPT.md`); the one code-adjacent change
+is the settings allowlist addition (`Bash(node scripts/<name>-test.cjs)` entries plus
+`Bash(git fetch *)`, `Bash(git worktree list)`, `Bash(git worktree prune)`). **Your question:**
+`scripts/engine-arm-gate-test.cjs` and `scripts/mutating-get-guard-test.cjs` are both described
+elsewhere as doing "real boots" of the server — does allowlisting them without a permission prompt
+risk a cloud session starting a real process that reads a live secret or reaches a scheduler,
+in an environment where `.env`/Railway variables are present, or are they confirmed hermetic
+(their own `DATA_DIR`/port, no real API keys) regardless of what's in the ambient environment?
+
+Findings, not rewrites, same as every other round. Money paths first if your time is short: #342,
+then #346's three sub-questions, then #341.
+
 ## Open questions the owner would like your opinion on
 - Is lock-to-earn on Jupiter Lock the right headline mechanism for a Consumer Apps entry, or is
   the read-only engine dashboard a stronger single story?
