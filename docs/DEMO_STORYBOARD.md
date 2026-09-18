@@ -18,6 +18,9 @@ make on their behalf. No yield, APR or APY figure appears anywhere in the produc
 
 ## Part 1 — the demo video (≤3:00), shot by shot
 
+**The spoken track for this section, extracted as a standalone teleprompter script (one line per
+shot, same timestamps): `docs/DEMO_NARRATION.md`.**
+
 The founder is on camera or voicing over a screen recording of these exact pages, live at
 `clucknorris.app` (or staging, if not yet promoted — see `docs/WEEKLY_UPDATE_2026-09-20.md`'s
 refresh checklist). The sequence follows the roadmap's acceptance target word for word: program
