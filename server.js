@@ -6795,6 +6795,25 @@ let _engineProofCache = null, _engineProofAt = 0;
 // pause, roll or sign, and the responses carry no operator pubkey, float or P&L. The treasury
 // vault is CLKN's own book, not a client, so it is not part of the public story.
 const JVP_PUBLIC_PROJECTS = ["clkn", "poke", "cuna", "dnc", "rose"];
+// One page of enhanced history for a project's OPERATOR wallet — the "historical transfers"
+// evidence class (W5). Same shape/pattern as owners-snapshot's `enhancedAddress` dependency:
+// bounded, timed-out, non-throwing on a bad status. Injected into lib/jvp-dashboard.js so that
+// pure layer never makes a network call of its own; jvp-dashboard sanitizes the result (no
+// wallet addresses, no operator pubkey — only signature/direction/symbol/amount/time) and
+// memo() there serves last-good on a failed refresh, same as the Jupiter/GeckoTerminal feeds.
+async function jvpOperatorHistory(wallet, { limit = 50 } = {}) {
+  const key = process.env.HELIUS_API_KEY;
+  if (!key || !wallet) return [];
+  const u = new URL(`https://api.helius.xyz/v0/addresses/${wallet}/transactions`);
+  u.searchParams.set("api-key", key);
+  u.searchParams.set("limit", String(Math.max(1, Math.min(100, Number(limit) || 50))));
+  try { heliusUsage.note("getEnhancedTransactionsByAddress", "jvp-dashboard", "api.helius.xyz"); } catch (_) {}
+  const r = await fetch(u, { signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(`helius addresses ${r.status}`);
+  const a = await r.json();
+  return Array.isArray(a) ? a : [];
+}
+const JVP_HELIUS = { fetchAddressHistory: jvpOperatorHistory };
 app.get("/api/jvp/overview", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   try {
@@ -6808,7 +6827,7 @@ app.get("/api/jvp/project/:id", async (req, res) => {
   if (!JVP_PUBLIC_PROJECTS.includes(id)) return res.status(404).json({ success: false, error: "not_found" });
   try {
     const hours = Math.max(24, Math.min(720, parseInt(req.query.hours, 10) || 168));
-    const out = await jvpDashboard.projectDetail({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, id, hours });
+    const out = await jvpDashboard.projectDetail({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, id, hours, helius: JVP_HELIUS });
     if (!out) return res.status(404).json({ success: false, error: "not_found" });
     return res.status(200).json({ success: true, updatedAt: Date.now(), project: out });
   } catch (e) { console.warn("[jvp] project failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }

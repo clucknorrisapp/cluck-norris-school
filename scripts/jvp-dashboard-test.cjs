@@ -114,6 +114,120 @@ console.log("\nJVP dashboard — freshness and fleet state\n");
   d._expireForTests();
   const ov3 = await d.overview({ vault: flaky2, kv: { get: () => [] }, clknMint: "M1" });
   ok("fleet aggregate carries staleness", ov3.fleetState === "paused" && ov3.fleetFreshness.state === "stale" && ov3.fleetFreshness.staleStatuses === 1 && ov3.fleetFreshness.oldestObservedAt === ov2.fleetFreshness.oldestObservedAt, JSON.stringify(ov3.fleetFreshness));
+
+  console.log("\nW5 — retained decision events: the ring buffer, and the paused no-op exclusion\n");
+  {
+    // lib/whirlpool-vault.js's recordDecision is the ONE choke point that writes engineLog:<id>
+    // (wired from the module.exports `tick` wrapper). It uses the real, shared kvstore, so this
+    // test scopes itself to a clearly test-only project id and restores whatever was there.
+    const vault = require("../lib/whirlpool-vault.js");
+    const kvReal = require("../lib/kvstore.js");
+    const TESTKEY = "engineLog:__w5test__";
+    const prior = kvReal.get(TESTKEY, undefined);
+    try {
+      kvReal.set(TESTKEY, []);
+      for (let i = 0; i < 250; i++) vault.recordDecision("__w5test__", { action: "roll", reason: "test " + i, price: 1 });
+      const log = kvReal.get(TESTKEY, []);
+      ok("ring buffer is bounded at 200 entries", log.length === 200, "len=" + log.length);
+      ok("the buffer keeps the newest entries, not the oldest", log[log.length - 1].reason === "test 249" && log[0].reason === "test 50");
+
+      kvReal.set(TESTKEY, []);
+      vault.recordDecision("__w5test__", { action: "none", reason: "paused" });
+      ok("a paused no-op tick is never recorded", kvReal.get(TESTKEY, []).length === 0);
+      vault.recordDecision("__w5test__", { action: "roll", reason: "deploying staged", price: 0.00035, operator: "SHOULD-NOT-APPEAR", floatUsdc: 999999 });
+      const rec = kvReal.get(TESTKEY, [])[0];
+      ok("a real decision is recorded as {t,action,reason,price} only — nothing else passed through", rec && rec.action === "roll" && rec.reason === "deploying staged" && rec.price === 0.00035 && typeof rec.t === "number" && !("operator" in rec) && !("floatUsdc" in rec), JSON.stringify(rec));
+    } finally {
+      kvReal.set(TESTKEY, prior === undefined ? [] : prior); // leave the store as found (or a harmless empty ring)
+    }
+  }
+
+  console.log("\nW5 — decisionLog(): the paused-vs-empty note, and row shape\n");
+  {
+    const emptyKv = { get: (k, d) => (k === "engineLog:cuna" ? [] : d) };
+    const paused = d.decisionLog(emptyKv, "cuna", true);
+    ok("empty log + paused → retained 0, names the pause", paused.retained === 0 && paused.rows.length === 0 && /engine is paused/.test(paused.note));
+    const notPaused = d.decisionLog(emptyKv, "cuna", false);
+    ok("empty log + not paused → the generic missing-data note, not the pause note", notPaused.retained === 0 && /no data retained/.test(notPaused.note) && !/paused/.test(notPaused.note));
+    const withRows = { get: (k, d) => (k === "engineLog:cuna" ? [{ t: 1700000000000, action: "roll", reason: "x", price: 2 }, { score: 1 }, { t: 2 }] : d) };
+    const dl = d.decisionLog(withRows, "cuna", true);
+    ok("rows missing t/action are dropped; a real row survives", dl.retained === 1 && dl.rows[0].action === "roll" && dl.rows[0].price === 2);
+  }
+
+  console.log("\nW5 — historical transfers: sanitized shape, no wallet addresses, symbol resolution\n");
+  {
+    const project = { tokenMint: "PROJECTMINT111", symbol: "CUNA" };
+    ok("known quote mint resolves to its symbol", d.symbolForMint("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", project) === "USDC");
+    ok("the project's own mint resolves to its own symbol", d.symbolForMint("PROJECTMINT111", project) === "CUNA");
+    ok("an unrecognized mint reads as TOKEN, never the mint address itself", d.symbolForMint("SOMERANDOMMINT999", project) === "TOKEN");
+    const txs = [
+      { signature: "SIGOUT1", timestamp: 1700000000, nativeTransfers: [{ amount: 2_000_000_000, fromUserAccount: "OPWALLET", toUserAccount: "COUNTERPARTYA" }], tokenTransfers: [] },
+      { signature: "SIGIN1", timestamp: 1700000100, nativeTransfers: [], tokenTransfers: [{ tokenAmount: 100, mint: "PROJECTMINT111", fromUserAccount: "COUNTERPARTYB", toUserAccount: "OPWALLET" }] },
+      { signature: "SIGZERO", timestamp: 1700000200, nativeTransfers: [{ amount: 0, fromUserAccount: "OPWALLET", toUserAccount: "COUNTERPARTYC" }], tokenTransfers: [] },
+    ];
+    const rows = d.slimTransfers(txs, "OPWALLET", project);
+    const rowsJson = JSON.stringify(rows);
+    ok("no wallet address (ours or a counterparty's) reaches the row shape", !rowsJson.includes("OPWALLET") && !rowsJson.includes("COUNTERPARTYA") && !rowsJson.includes("COUNTERPARTYB"));
+    ok("zero-amount transfers are dropped", rows.length === 2);
+    ok("direction, symbol, amount, signature computed for both legs", rows.some((r) => r.direction === "out" && r.symbol === "SOL" && r.amount === 2 && r.signature === "SIGOUT1") && rows.some((r) => r.direction === "in" && r.symbol === "CUNA" && r.amount === 100 && r.signature === "SIGIN1"));
+    ok("rows come back newest-first", rows[0].signature === "SIGIN1");
+  }
+
+  console.log("\nW5 — operatorHistory(): 15-min cache, serve-last-good stale on a failed refresh\n");
+  d._resetCache();
+  {
+    let calls = 0;
+    const fakeVault = { operatorPubkey: () => "OPWALLET2" };
+    const project = { tokenMint: "M", symbol: "X" };
+    const fakeHelius = { fetchAddressHistory: async () => { calls++; if (calls === 1) return [{ signature: "S1", timestamp: 1700000000, nativeTransfers: [{ amount: 1_000_000_000, fromUserAccount: "OTHERPARTY", toUserAccount: "OPWALLET2" }] }]; throw new Error("429"); } };
+    const first = await d.operatorHistory({ helius: fakeHelius, vault: fakeVault, id: "cuna-xfer-test", project });
+    ok("first fetch succeeds, one sanitized row, not stale", first && first.rows.length === 1 && !first.stale);
+    d._expireForTests();
+    const second = await d.operatorHistory({ helius: fakeHelius, vault: fakeVault, id: "cuna-xfer-test", project });
+    ok("a failed refresh serves the last-good transfers, flagged stale", second && second.rows.length === 1 && second.stale === true);
+    const noHelius = await d.operatorHistory({ helius: null, vault: fakeVault, id: "cuna-xfer-test", project });
+    ok("no helius dependency injected → unavailable, never throws", noHelius === null);
+    const noWallet = await d.operatorHistory({ helius: fakeHelius, vault: { operatorPubkey: () => null }, id: "cuna-xfer-test", project });
+    ok("no operator key configured for the project → unavailable, never throws", noWallet === null);
+  }
+
+  console.log("\nW5 — earningsSuspect(): the honesty flag, never the poisoned number\n");
+  {
+    const suspectVault = { earnings: async () => ({ totalEarnedUsd: 123456, realized: { usd: 99999 }, realizedSuspect: ["realizedFeeUsdc=1e30"] }) };
+    const cleanVault = { earnings: async () => ({ totalEarnedUsd: 12, realized: { usd: 5 } }) };
+    d._resetCache();
+    const flagOn = await d.earningsSuspect({ vault: suspectVault, id: "rose-earn-test" });
+    ok("a discarded counter surfaces as a plain boolean", flagOn === true);
+    d._resetCache();
+    const flagOff = await d.earningsSuspect({ vault: cleanVault, id: "rose-earn-test2" });
+    ok("a healthy counter reports false", flagOff === false);
+    const noVault = await d.earningsSuspect({ vault: {}, id: "x" });
+    ok("no earnings() on the vault → false, never throws", noVault === false);
+  }
+
+  console.log("\nW5 — projectDetail assembly: all three evidence classes, still sanitized\n");
+  d._resetCache();
+  {
+    const fakeVault = {
+      listProjects: () => ({ rose: { id: "rose", label: "ROSE", symbol: "ROSE", tokenMint: "MROSE", venue: "orca" } }),
+      status: async () => ({ project: "rose", enabled: true, paused: true, config: {}, state: {} }),
+      publicPositions: async () => ({ positions: [], totalUsd: 0 }),
+      dislocation: async () => ({ pools: [] }),
+      operatorPubkey: () => "OPWALLETROSE",
+      earnings: async () => ({ totalEarnedUsd: 123456, realized: { usd: 99999 }, realizedSuspect: ["realizedFeeUsdc=1e30"] }),
+    };
+    const fakeHelius = { fetchAddressHistory: async () => [{ signature: "SIGX", timestamp: 1700000000, nativeTransfers: [{ amount: 5_000_000_000, fromUserAccount: "SOMECOUNTERPARTY", toUserAccount: "OPWALLETROSE" }] }] };
+    const kvFake = { get: (k, def) => (k === "engineLog:rose" ? [] : def) };
+    const detail = await d.projectDetail({ vault: fakeVault, kv: kvFake, clknMint: "MCLKN", id: "rose", hours: 168, helius: fakeHelius });
+    const json = JSON.stringify(detail);
+    ok("transfers: available, sanitized, no wallet address", detail.transfers.available === true && detail.transfers.rows.length === 1 && !json.includes("OPWALLETROSE") && !json.includes("SOMECOUNTERPARTY"));
+    ok("decision log: empty + paused → the pause note", detail.decisionLog.retained === 0 && /engine is paused/.test(detail.decisionLog.note));
+    ok("earnings suspect flag surfaces, poisoned figures never do", detail.earningsSuspect === true && !json.includes("123456") && !json.includes("99999") && !json.includes("realizedFeeUsdc"));
+    ok("illustrative simulator scenarios attached and freshly computed", Array.isArray(detail.simulatorScenarios) && detail.simulatorScenarios.length >= 5 && detail.simulatorScenarios.every((s) => s.decision && s.decision.action));
+    const missing = await d.projectDetail({ vault: fakeVault, kv: kvFake, clknMint: "MCLKN", id: "rose", hours: 168, helius: null });
+    ok("no helius dependency → transfers unavailable, not a fake row", missing.transfers.available === false && missing.transfers.rows.length === 0);
+  }
+
   console.log(failures ? `\n${failures} failed` : "\nall passed");
   process.exit(failures ? 1 : 0);
 })();
