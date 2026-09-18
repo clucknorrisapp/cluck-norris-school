@@ -53,7 +53,14 @@ see **What is NOT independently verified yet** below.
 1. **One idempotent settlement event per transfer.** A retry with the same `sig:instructionIndex`
    either returns the same result (this row already owns it) or is refused with
    `transfer_already_consumed`, naming the project/batch/wallet that does. There is no path that
-   applies a transfer twice, and no path that "unconsumes" one.
+   applies a transfer twice, and no path that "unconsumes" one. **This is why `&void=` on
+   `POST /api/hub/:project/payout` REFUSES a row the settlement journal already holds an event
+   for** (crash P1-2, docs/HUB_JOURNAL_VERIFY_2026-09-18.md, closed 2026-09-18) — "it never went"
+   is not a fact this route can assert once the chain has an on-chain transfer for that exact row;
+   the refusal names the `xferKey`. A legacy-recorded row whose transfer never journaled (an
+   ambiguous/batched transaction — see §5) is not "already journaled" and can still be voided.
+   Voiding is otherwise unchanged: the exact signature is required, the amount comes off `paid`,
+   and a completed batch reopens for a re-send of that one row.
 2. **Overpayment is kept as `excess`, never netted across wallets.** `paidApplied =
    min(paidTotal, accrued)`; `excess = paidTotal − paidApplied`. Wallet A's excess can never hide
    wallet B's unpaid amount — obligations are `Σ(accrued − paidApplied)`, a per-wallet sum.
@@ -126,6 +133,7 @@ shape a second product would need if it operates as an approved project:
 | `GET/POST /api/hub/:project/admin` | `versions: [...]` (program versions in force) | `program-version.schema.json` per entry |
 | `GET /api/hub/:project/desk` | the operator's full view, including `versions` | `program-version.schema.json` per entry |
 | `POST /api/hub-apply?preview=1` (public — no auth) | a draft `version` an applicant would sign up to | `program-version.schema.json` |
+| `GET /api/hub/:project/reconcile` | read-only: rebuilds the consumed set from the journal and reports every (batch, wallet) row where the legacy `sent` flag and a journal event disagree — never writes | — (crash P2-2, docs/HUB_JOURNAL_VERIFY_2026-09-18.md) |
 
 Where a program-version or project body is emitted above, the wire body (or the version entry
 itself) carries a `$schema` field pointing at the served URL
@@ -155,7 +163,14 @@ lock-to-earn payout table:
 
 This legacy body is still not schema'd — do not validate it against `receipt.schema.json`, the
 shapes are unrelated, and it never carries `$schema` (it would not validate against
-`receipt.schema.json`, per `scripts/hub-schema-test.cjs`'s own fixture proving exactly that). The
+`receipt.schema.json`, per `scripts/hub-schema-test.cjs`'s own fixture proving exactly that).
+**Fixed 2026-09-18 (adv P1-4, docs/HUB_JOURNAL_VERIFY_2026-09-18.md):** the journal-backed body
+above is wrapped in the SAME envelope as the legacy one — `projectId`/`symbol`/`dryRun`/`brand`/
+`program` as siblings of `receipt` — instead of being served bare; the bare shape had no
+`program`/`symbol` for `public/hub.html`'s `renderReceipt()` to read, which threw and rendered an
+error card for every journal-backed receipt (`scripts/hub-receipt-page-test.cjs` runs the real page
+script against both shapes). Only `receipt` itself is what validates `receipt.schema.json` — the
+wrapper siblings are not part of that schema, same as the legacy shape. The
 design's own `/receipt/<batchId>/<wallet>` route (§5) — a separate, dedicated URL rather than
 `GET /api/hub/:project/r/:sig` sniffing which shape to serve — has still not shipped; when it does,
 it should route through `lib/hub/ledger.js receipt()` and reuse `receipt.schema.json` as-is (do not
