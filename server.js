@@ -8817,7 +8817,34 @@ const hubScanDeps = (() => {
     creationTimes: async (escrows) => scanLib.creationTimes((await getProgram()).provider.connection, escrows),
   };
 })();
-const hubAlert = (m) => { console.warn("[hub] " + m); try { cunaOpsAlert(`⚠️ Hub: ${m}`, "hub:" + String(m).slice(0, 40)).catch(() => {}); } catch (_) {} };
+// N-1 (Round 4, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): this used to write the 6-hour dedupe
+// watermark BEFORE calling tgSend, which swallows its own errors and returns null on failure — a
+// Telegram outage silently ate the next 6 hours of fraud-refusal/summary alerts for that key
+// (CLAUDE.md: tgSend never throws; check its return value, never advance durable state on a send
+// that did not land). It also deduped on a 40-char slice of the free-text message, which collapsed
+// distinct batches (even distinct projects) together once the project id ran past ~19 characters —
+// see lib/hub/alert-key.js for that half of the fix.
+//
+// Deliberately its OWN map, never CUNA_ALERT_SEEN: touching cunaOpsAlert itself to fix the
+// watermark timing would move it for EVERY other caller (CUNA accrual/burn/watchdog alerts, the
+// kv-load alert, the lock-celebration fallback) — none of which this fix is scoped to, and all of
+// which are worth leaving exactly as audited. So hubAlert calls cunaOpsAlert with dedupeKey=null
+// (bypassing its internal dedupe entirely — see the `if (dedupeKey)` guard there) and does its own
+// check-then-send-then-set around it instead.
+const { hubAlertKey } = require("./lib/hub/alert-key");
+const HUB_ALERT_SEEN = new Map();
+const hubAlert = (m, meta) => {
+  console.warn("[hub] " + m);
+  const key = hubAlertKey(m, meta);
+  const now = Date.now();
+  if (now - (HUB_ALERT_SEEN.get(key) || 0) < 6 * 60 * 60 * 1000) return;
+  (async () => {
+    try {
+      const sent = await cunaOpsAlert(`⚠️ Hub: ${m}`, null);
+      if (sent) HUB_ALERT_SEEN.set(key, now);
+    } catch (_) {}
+  })();
+};
 // A corrupt app-state.json boots the kv store IN-MEMORY with the file preserved (lib/kvstore.js,
 // deep dive P0-005): every verified write refuses until an operator restores it. That must be
 // seen, not found three payouts later. Delayed so the Telegram config is loaded.

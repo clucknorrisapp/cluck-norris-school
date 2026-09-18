@@ -68,6 +68,33 @@ ok('the ops report only starts its 12h clock on an accepted send',
   ok('treasury recap: sent:true is only ever returned after the write', /sent: true, text, valueBtc, valueUsd/.test(fn) && !/sent: !!tgtok/.test(fn));
 }
 
+// Hub alert dedupe (N-1, Round 4, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): hubAlert used to write
+// its 6-hour dedupe watermark BEFORE calling cunaOpsAlert/tgSend, so a swallowed send (tgSend
+// returns null on failure — the exact pattern this file exists to catch) ate the next 6 hours of
+// fraud-refusal alerts for that key. It also deduped on a 40-char slice of free text, which could
+// collapse two different batches together once the project id ran past ~19 characters — see
+// scripts/hub-settle-route-test.cjs section 34 for the executable half of that fix
+// (lib/hub/alert-key.js). This is the source-shape half: hubAlert's own watermark timing.
+{
+  const start = server.indexOf('const hubAlert = (m, meta) => {');
+  const end = start >= 0 ? server.indexOf('\n};', start) : -1;
+  const fn = start >= 0 && end > start ? server.slice(start, end) : '';
+  ok('hubAlert exists with the (message, meta) signature', start >= 0, 'const hubAlert = (m, meta) => { not found');
+  const iSend = fn.indexOf('await cunaOpsAlert(');
+  const iSet = fn.indexOf('HUB_ALERT_SEEN.set(key, now)');
+  ok('hubAlert captures the send result before touching its watermark', iSend >= 0 && iSet > iSend, `send@${iSend} set@${iSet}`);
+  ok('the watermark is set only when the send returned something (never unconditionally)',
+     /if \(sent\) HUB_ALERT_SEEN\.set\(key, now\);/.test(fn), 'no `if (sent) HUB_ALERT_SEEN.set(...)` guard found');
+  ok('hubAlert never writes HUB_ALERT_SEEN outside that guarded line', (fn.match(/HUB_ALERT_SEEN\.set\(/g) || []).length === 1);
+  // Bypasses cunaOpsAlert's OWN dedupe (dedupeKey=null) rather than moving CUNA_ALERT_SEEN's
+  // watermark timing for every other caller (accrual/burn/watchdog/kv-load alerts).
+  ok('hubAlert bypasses cunaOpsAlert\'s own dedupe key rather than reusing/altering it',
+     /await cunaOpsAlert\(`⚠️ Hub: \$\{m\}`, null\)/.test(fn), 'cunaOpsAlert is not called with dedupeKey=null');
+  ok('cunaOpsAlert itself (the CUNA scheduler\'s shared dedupe) is untouched by this fix',
+     /const last = CUNA_ALERT_SEEN\.get\(dedupeKey\) \|\| 0;\s*\n\s*if \(now - last < 6 \* 60 \* 60 \* 1000\) return null;\s*\n\s*CUNA_ALERT_SEEN\.set\(dedupeKey, now\);/.test(server),
+     'cunaOpsAlert\'s check-then-set-before-send shape changed — that was deliberately left alone for every non-Hub caller');
+}
+
 console.log('\nB. an announcement must be about a mint that exists\n');
 
 const minted = hatchery.slice(hatchery.indexOf('router.post("/minted"'), hatchery.indexOf('router.post("/minted"') + 3500);
