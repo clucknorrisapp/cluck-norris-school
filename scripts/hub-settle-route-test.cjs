@@ -8,6 +8,8 @@
 // No HTTP, no network — the same DI style every other hub test uses (store.memoryKv, a fake
 // `getTx`), plus a minimal in-process Express stand-in so the fault-injection cases exercise the
 // REAL route closures in lib/hub/routes.js rather than a re-implementation of their logic.
+const fs = require("fs");
+const path = require("path");
 const assert = require("assert");
 const store = require("../lib/hub/store");
 const proj = require("../lib/hub/project");
@@ -18,6 +20,8 @@ const payoutVerify = require("../lib/payout-verify");
 const pay = require("../lib/cuna-payout");
 const routes = require("../lib/hub/routes");
 const eng = require("../lib/hub/engine");
+const operator = require("../lib/hub/operator");
+const access = require("../lib/hub/access");
 
 let pass = 0, fail = 0;
 const queue = [];
@@ -173,10 +177,16 @@ t("a fault on the journal key lands NEITHER the journal nor the project part", (
 
 t("with no fault, all keys land together", () => {
   const kv = store.memoryKv();
-  assert.strictEqual(store.writeManyVerifiedMixed(kv, "alpha", { batches: { x: 1 }, paid: { y: 2 } }, { [store.JOURNAL_KEY]: { z: 3 } }), true);
+  // Round 2 #6 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): readJournal now ignores anything that is
+  // not shaped like a real settlement entry (store.looksLikeJournalEntry) — the placeholder `{z:
+  // 3}` this test used to write no longer round-trips, so a real-shaped entry is used instead; the
+  // point of the test (a raw journal key lands atomically alongside the per-project parts) is
+  // unchanged.
+  const entry = { xferKey: "settle:" + SIG(9) + ":0", projectId: "alpha", batchId: "b1", wallet: W.A, amountRaw: "3", appliedRaw: "3", excessRaw: "0" };
+  assert.strictEqual(store.writeManyVerifiedMixed(kv, "alpha", { batches: { x: 1 }, paid: { y: 2 } }, { [store.JOURNAL_KEY]: { [entry.xferKey]: entry } }), true);
   assert.deepStrictEqual(store.read(kv, "alpha", "batches", null), { x: 1 });
   assert.deepStrictEqual(store.read(kv, "alpha", "paid", null), { y: 2 });
-  assert.deepStrictEqual(store.readJournal(kv), { z: 3 });
+  assert.deepStrictEqual(store.readJournal(kv), { [entry.xferKey]: entry });
 });
 
 section("4. owedNow consults the journal — never re-offers a settled row, never nets across wallets");
@@ -212,10 +222,10 @@ function fakeRes() {
   r.setHeader = () => {};
   return r;
 }
-async function call(app, path, { method = "GET", params = {}, query = {}, body = {} } = {}) {
+async function call(app, path, { method = "GET", params = {}, query = {}, body = {}, headers = {} } = {}) {
   const h = app.handlers.get(path);
   if (!h) throw new Error(`no handler mounted for ${path}`);
-  const req = { method, params, query, body, headers: {}, cluckDirect: false };
+  const req = { method, params, query, body, headers, cluckDirect: false };
   const res = fakeRes();
   await h(req, res);
   return res;
@@ -257,11 +267,16 @@ function flakyKv(kv, { failOnKeys, failOnPrefix } = {}) {
   };
 }
 
-function mountFor({ kv, getTx = async () => null, vault = fakeVault(), alerts = [], nowUnix = () => NOW, scanDeps = async () => ({ scan: async () => [] }) } = {}) {
+function mountFor({ kv, getTx = async () => null, vault = fakeVault(), alerts = [], nowUnix = () => NOW, scanDeps = async () => ({ scan: async () => [] }), adminAuthOK = () => true, secret = "test-secret" } = {}) {
   const app = fakeApp();
   routes.mount(app, {
-    kv, adminAuthOK: () => true, publicErrMsg: (e) => (e && e.message) || String(e),
-    vault, connection: () => ({ getSignatureStatuses: async () => ({ value: [] }), getParsedTokenAccountsByOwner: async () => ({ value: [] }) }),
+    kv, adminAuthOK, publicErrMsg: (e) => (e && e.message) || String(e), secret,
+    vault, connection: () => ({
+      getSignatureStatuses: async () => ({ value: [] }), getParsedTokenAccountsByOwner: async () => ({ value: [] }),
+      // /api/hub-registry's readMint reads this — a fixed valid mint account for any pubkey asked,
+      // matching seedProject's own assumed { decimals: 9, tokenProgram: TOK }.
+      getParsedAccountInfo: async () => ({ value: { owner: TOK, data: { parsed: { type: "mint", info: { decimals: 9, extensions: [] } } } } }),
+    }),
     scanDeps, getTx, alert: (m) => alerts.push(m),
     // The route's own clock, injected so a fixture's fabricated `blockTime: NOW` agrees with "now"
     // (adv P0-1's future-blockTime refusal in lib/payout-verify.js compares against it).
@@ -774,8 +789,11 @@ t("row settled at 1.0; a second, unrelated 50-token transfer to the SAME wallet 
   assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1);
   const second = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "eps16" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(71) }]), batch: batchId } });
   assert.deepStrictEqual(second.body.sent.recorded, [], "already recorded — the stapled transfer records nothing new");
-  assert.strictEqual(second.body.sent.journal.length, 1);
-  assert.strictEqual(second.body.sent.journal[0].journaled, false, "the extra transfer is NOT journaled against a finished row");
+  // Round 2 #1 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): lib/hub/ledger.js `settle` now refuses a
+  // row whose remaining is already 0 BEFORE PASS 1 ever calls recordSent, so this shows up as a
+  // hard rejection (PASS 1, alerted) rather than reaching PASS 3's journal report at all.
+  assert.strictEqual(second.body.sent.journal.length, 0, "never reaches PASS 3 — refused earlier, in PASS 1");
+  assert.ok(second.body.sent.ignored.some((x) => x.wallet === W.A && x.sig === SIG(71) && x.why === "row_already_settled"), JSON.stringify(second.body.sent.ignored));
   assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1, "still exactly one journal entry — no phantom excess, no second settlement");
 });
 
@@ -917,6 +935,247 @@ t("a submitted signature with a leading/trailing space still verifies and journa
   assert.strictEqual(sent.body.sent.journal[0].journaled, true, JSON.stringify(sent.body.sent.journal));
   assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1);
   assert.strictEqual(store.read(kv, "xi24", "batches", {})[batchId].sent[W.A].sig, SIG(95), "the stored signature is the trimmed one");
+});
+
+section("22. Round 2 #1 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md) — the single-request stapled-excess variant");
+
+t("ONE &sent= request carrying a genuine good sig AND a genuine but unrelated extra transfer for the SAME wallet journals only the good one — no phantom excess", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "psi25", W.MINT1);
+  store.write(kv, "psi25", "days", days({ [W.A]: "1000000000" }));
+  const good = txSingle({ wallet: W.A, amountRaw: "1000000000", slot: 201 });
+  const extra = txSingle({ wallet: W.A, amountRaw: "50000000000", slot: 202 });
+  const app = mountFor({ kv, getTx: async (sig) => (sig === SIG(210) ? good : extra) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "psi25" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  const r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "psi25" },
+    query: { batch: batchId, sent: JSON.stringify([{ wallet: W.A, sig: SIG(210) }, { wallet: W.A, sig: SIG(211) }]) } });
+  assert.deepStrictEqual(r.body.sent.recorded, [W.A]);
+  const j = store.readJournal(kv);
+  assert.strictEqual(Object.keys(j).length, 1, "exactly one journal entry — the second sig never lands, in the SAME request");
+  const entry = Object.values(j)[0];
+  assert.strictEqual(entry.excessRaw, "0", "no phantom excess");
+  assert.strictEqual(entry.sig, SIG(210));
+  const batch = store.read(kv, "psi25", "batches", {})[batchId];
+  const rec = L.receipt({ projectId: "psi25", batch: { ...batch, projectId: "psi25" }, wallet: W.A, journal: j, project: { fundingWallet: W.FUND } });
+  assert.strictEqual(rec.totals.excessRaw, "0", "the public receipt shows no phantom excess");
+  assert.strictEqual(rec.settlements.length, 1);
+  const part = L.partition({ projectId: "psi25", days: store.read(kv, "psi25", "days", {}), batches: store.read(kv, "psi25", "batches", {}), journal: j });
+  assert.strictEqual(part[W.A].excessRaw, "0", "the Addendum-B partition is not poisoned");
+});
+
+t("lib/hub/ledger.js settle() itself refuses a transfer against a row whose remaining is already 0 — never writes an applied:0/excess-only entry", () => {
+  const batch = { id: "b1", projectId: "chi26", amounts: { [W.A]: "1000000000" } };
+  const first = L.settle({ journal: {}, projectId: "chi26", batch, wallet: W.A, transfer: { sig: SIG(220), instructionIndex: 0, amountRaw: "1000000000", slot: 1 }, nowUnix: NOW });
+  assert.ok(first.ok);
+  const second = L.settle({ journal: first.journal, projectId: "chi26", batch, wallet: W.A, transfer: { sig: SIG(221), instructionIndex: 0, amountRaw: "50000000000", slot: 2 }, nowUnix: NOW });
+  assert.strictEqual(second.ok, false);
+  assert.strictEqual(second.error, "row_already_settled");
+  assert.strictEqual(Object.keys(first.journal).length, 1, "the refused second transfer never entered the journal");
+});
+
+section("23. Round 2 #2 — lib/cuna-payout.js has no raw NUL bytes (the owedNow money diff must be reviewable)");
+
+t("lib/cuna-payout.js is a plain text file with no \\x00 byte anywhere", () => {
+  const p = path.join(__dirname, "..", "lib", "cuna-payout.js");
+  const buf = fs.readFileSync(p);
+  const nulAt = buf.indexOf(0);
+  assert.strictEqual(nulAt, -1, `found a raw NUL byte at offset ${nulAt} — the money diff becomes invisible to a human reviewer, Codex, and GitHub`);
+});
+
+section("24. Round 2 #3 — payoutSources is a project-record field only the OWNER can set, never a desk operator's terms");
+
+t("an operator (desk token, not owner) widening the program version's fundedBy does NOT open the payment-source allowlist any more", async () => {
+  const kv = store.memoryKv();
+  const secret = "s3cr3t-24";
+  seedProject(kv, "om27", W.MINT1);
+  let reg = store.readRegistry(kv);
+  reg.om27 = { ...reg.om27, access: access.normalizeAccess({ tier: "comped", note: "test" }) };
+  store.writeRegistry(kv, reg);
+  store.write(kv, "om27", "days", days({ [W.A]: "1000000000" }));
+  const token = operator.issueToken(secret, { projectId: "om27", wallet: W.A });
+  const strangerTx = txSingle({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.B });
+  const app = mountFor({ kv, secret, adminAuthOK: () => false, getTx: async () => strangerTx });
+  let r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "om27" }, query: { export: "1" }, headers: { "x-clkn-operator": token } });
+  const id0 = r.body.created.id;
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "om27" }, query: { batch: id0, sent: JSON.stringify([{ wallet: W.A, sig: SIG(230) }]) }, headers: { "x-clkn-operator": token } });
+  assert.strictEqual(r.body.sent.recorded.length, 0, "the stranger's transfer is still refused before any operator terms change");
+  await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "om27" }, query: { cancel: id0 }, headers: { "x-clkn-operator": token } });
+  // The operator widens `fundedBy` on the program version — the ORIGINAL P0-1 narrowing (this is
+  // exactly the lever the finding named).
+  r = await call(app, "/api/hub/:project/admin", { method: "POST", params: { project: "om27" }, query: { terms: "1", fundedBy: `${W.FUND},${W.B}`, effectiveFrom: "2027-01-15" }, headers: { "x-clkn-operator": token } });
+  assert.strictEqual(r.statusCode, 200); assert.strictEqual(r.body.as, W.A, "authOf returns the operator's own wallet, never the owner's");
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "om27" }, query: { export: "1" }, headers: { "x-clkn-operator": token } });
+  const id = r.body.created.id;
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "om27" }, query: { batch: id, sent: JSON.stringify([{ wallet: W.A, sig: SIG(230) }]) }, headers: { "x-clkn-operator": token } });
+  assert.strictEqual(r.body.sent.recorded.length, 0, "widening `fundedBy` through the desk no longer opens the payment-source allowlist");
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 0);
+});
+
+t("the OWNER setting payoutSources through /api/hub-registry (never a desk operator) DOES open the allowlist, and alerts", async () => {
+  const kv = store.memoryKv(); const alerts = [];
+  seedProject(kv, "pi28", W.MINT1);
+  store.write(kv, "pi28", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, alerts, adminAuthOK: () => true, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.B }) });
+  // The owner sets payoutSources through the SAME registry admin path a project is registered on
+  // — never through /api/hub/:project/admin (the desk operator's path).
+  const proj0 = store.readRegistry(kv).pi28;
+  const upd = await call(app, "/api/hub-registry", { method: "POST",
+    query: { id: "pi28", label: "PI28", symbol: "PI28", mint: proj0.mint, fundingWallet: proj0.fundingWallet, payoutSources: W.B } });
+  assert.strictEqual(upd.statusCode, 200, JSON.stringify(upd.body));
+  assert.ok(alerts.some((a) => /payoutSources changed by the owner/.test(a)), JSON.stringify(alerts));
+  assert.deepStrictEqual(store.readRegistry(kv).pi28.payoutSources, [W.B]);
+  assert.strictEqual(store.readRegistry(kv).pi28.payoutSourcesHistory.length, 1);
+  let r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "pi28" }, query: { export: "1" } });
+  const id = r.body.created.id;
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "pi28" }, query: { batch: id, sent: JSON.stringify([{ wallet: W.A, sig: SIG(240) }]) } });
+  assert.deepStrictEqual(r.body.sent.recorded, [W.A], "the owner-set payoutSources wallet is now an accepted source");
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1);
+  // A later edit that does not mention payoutSources carries the value forward unchanged.
+  const upd2 = await call(app, "/api/hub-registry", { method: "POST", query: { id: "pi28", label: "PI28 v2", symbol: "PI28", mint: proj0.mint, fundingWallet: proj0.fundingWallet } });
+  assert.strictEqual(upd2.statusCode, 200, JSON.stringify(upd2.body));
+  assert.deepStrictEqual(store.readRegistry(kv).pi28.payoutSources, [W.B], "an unrelated edit never clears payoutSources");
+});
+
+t("proj.validatePayoutSources refuses more than 5 DISTINCT wallets (dedup happens first) and a bad address", () => {
+  assert.deepStrictEqual(proj.validatePayoutSources(Array(6).fill(W.A)), [W.A], "6 copies of the same wallet dedup to 1 — not a violation");
+  const sixDistinct = ["1111111111111111111111111111111111111112", "SysvarC1ock11111111111111111111111111111", "SysvarRent111111111111111111111111111111",
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", W.A];
+  assert.throws(() => proj.validatePayoutSources(sixDistinct), /at most 5/);
+  assert.throws(() => proj.validatePayoutSources(["not-an-address"]), /payoutSources entry/);
+});
+
+t("a self-serve /hub-apply application can never smuggle payoutSources onto its own project — validateProject never reads it from input", () => {
+  const project = proj.validateProject({ id: "rho29", label: "RHO", symbol: "RHO", mint: W.MINT1, fundingWallet: W.FUND, operatorWallets: [W.A], payoutSources: [W.B] }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  assert.deepStrictEqual(project.payoutSources, [], "payoutSources on the input is silently ignored by validateProject");
+});
+
+section("25. Round 2 #4 — managed-payer (&send=/&sweep=) broadcasts are journaled, never refused for OUR OWN signature");
+
+t("&send= from a vault whose operator wallet is NOT the project's fundingWallet still journals (the vault's own wallet is an allowed source for THIS project's send)", async () => {
+  const kv = store.memoryKv(); const alerts = [];
+  seedProject(kv, "sig30", W.MINT1);
+  store.write(kv, "sig30", "days", days({ [W.A]: "1000000000" }));
+  const tx = txSingle({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.B });   // W.B signs, NOT fundingWallet
+  const vault = {
+    operatorPubkey: (id) => (id === "treasury" ? W.B : null),
+    payoutSpl: async ({ recipients, dryRun, onPaid }) => {
+      if (dryRun) return { action: "would-pay", recipients };
+      const paid = [];
+      for (const rr of recipients) { const sig = SIG(250); onPaid({ wallet: rr.wallet, sig, pending: true }); onPaid({ wallet: rr.wallet, sig }); paid.push({ wallet: rr.wallet, sig, amountUi: rr.amountUi }); }
+      return { action: "paid", paid, pending: [], failed: [] };
+    },
+  };
+  const app = mountFor({ kv, alerts, vault, getTx: async () => tx });
+  let r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "sig30" }, query: { export: "1" } });
+  const id = r.body.created.id;
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "sig30" }, query: { send: id, from: "treasury", run: "1" } });
+  assert.strictEqual(r.body.send.journal[0].journaled, true, JSON.stringify(r.body.send.journal));
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1);
+  assert.strictEqual(alerts.filter((a) => /journal refused/.test(a)).length, 0);
+});
+
+t("&send= does NOT accept a DIFFERENT vault project's operator wallet as this project's source", async () => {
+  const kv = store.memoryKv(); const alerts = [];
+  seedProject(kv, "tau31", W.MINT1);
+  store.write(kv, "tau31", "days", days({ [W.A]: "1000000000" }));
+  const tx = txSingle({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.B });
+  const vault = {
+    operatorPubkey: (id) => (id === "some-other-vault" ? W.B : null),   // "treasury" resolves to null — not W.B
+    payoutSpl: async ({ recipients, dryRun, onPaid }) => {
+      if (dryRun) return { action: "would-pay", recipients };
+      const paid = [];
+      for (const rr of recipients) { const sig = SIG(251); onPaid({ wallet: rr.wallet, sig, pending: true }); onPaid({ wallet: rr.wallet, sig }); paid.push({ wallet: rr.wallet, sig, amountUi: rr.amountUi }); }
+      return { action: "paid", paid, pending: [], failed: [] };
+    },
+  };
+  const app = mountFor({ kv, alerts, vault, getTx: async () => tx });
+  let r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "tau31" }, query: { export: "1" } });
+  const id = r.body.created.id;
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "tau31" }, query: { send: id, from: "treasury", run: "1" } });
+  assert.strictEqual(r.body.send.journal[0].journaled, false);
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 0);
+  assert.ok(alerts.some((a) => /journal refused/.test(a)));
+});
+
+t("&sweep= accepts ANY of our own vault operator wallets (it has no from= to say which project signed)", async () => {
+  const kv = store.memoryKv(); const alerts = [];
+  seedProject(kv, "ups32", W.MINT1);
+  store.write(kv, "ups32", "days", days({ [W.A]: "1000000000" }));
+  store.write(kv, "ups32", "batches", { b1: { id: "b1", state: "pending", at: NOW, count: 1, totalRaw: "1000000000",
+    amounts: { [W.A]: "1000000000" }, sent: { [W.A]: { sig: SIG(252), at: NOW, pending: true } } } });
+  store.write(kv, "ups32", "paid", { [W.A]: "1000000000" });
+  const tx = txSingle({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.B });
+  const vault = { operatorPubkeys: () => [W.B], payoutSpl: async () => ({ action: "none" }) };
+  const app = mountFor({ kv, alerts, vault, getTx: async () => tx,
+    scanDeps: async () => ({ scan: async () => [] }) });
+  // sweep uses connection().getSignatureStatuses — build a bespoke app with that stubbed to confirm.
+  const app2 = fakeApp();
+  routes.mount(app2, {
+    kv, adminAuthOK: () => true, publicErrMsg: (e) => e.message, secret: "s", vault,
+    connection: () => ({ getSignatureStatuses: async () => ({ value: [{ confirmationStatus: "finalized", err: null }] }) }),
+    scanDeps: async () => ({ scan: async () => [] }), getTx: async () => tx, alert: (m) => alerts.push(m), nowUnix: () => NOW,
+  });
+  const r = await call(app2, "/api/hub/:project/payout", { method: "POST", params: { project: "ups32" }, query: { batch: "b1", sweep: "1" } });
+  assert.strictEqual(r.body.sweep.journal[0].journaled, true, JSON.stringify(r.body.sweep));
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1);
+});
+
+section("26. Round 2 #5 — the fraud-signal alert fires for BOTH named `why` values, not just row_not_in_batch");
+
+t("a stranger's top-level transfer (transfer_not_from_funding_wallet, adv P0-1) alerts even though it never reaches recordSent", async () => {
+  const kv = store.memoryKv(); const alerts = [];
+  seedProject(kv, "phi33", W.MINT1);
+  store.write(kv, "phi33", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, alerts, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.B }) });
+  let r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "phi33" }, query: { export: "1" } });
+  const id = r.body.created.id;
+  await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "phi33" }, query: { batch: id, sent: JSON.stringify([{ wallet: W.A, sig: SIG(260) }]) } });
+  assert.ok(alerts.some((a) => /settlement REFUSED/.test(a) && /transfer_not_from_funding_wallet/.test(a)), JSON.stringify(alerts));
+});
+
+t("a cross-project signature-reuse attempt (adv P0-2a) alerts too — it used to be caught silently", async () => {
+  const kv = store.memoryKv(); const alerts = [];
+  const MINT_C = "6zro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc"; // a distinct LOCKED mint, same reward mint as MINT_B's sibling below
+  seedProjectReward(kv, "chi34", MINT_B, W.MINT1);
+  seedProjectReward(kv, "psi34", MINT_C, W.MINT1);
+  store.write(kv, "chi34", "days", days({ [W.A]: "1000000000" }));
+  store.write(kv, "psi34", "days", days({ [W.A]: "1000000000" }));
+  const tx = txSingle({ wallet: W.A, amountRaw: "1000000000" });
+  const app = mountFor({ kv, alerts, getTx: async () => tx });
+  let r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "chi34" }, query: { export: "1" } });
+  await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "chi34" }, query: { batch: r.body.created.id, sent: JSON.stringify([{ wallet: W.A, sig: SIG(261) }]) } });
+  alerts.length = 0;
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "psi34" }, query: { export: "1" } });
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "psi34" }, query: { batch: r.body.created.id, sent: JSON.stringify([{ wallet: W.A, sig: SIG(261) }]) } });
+  assert.ok(alerts.some((a) => /settlement REFUSED/.test(a) && /transfer_already_consumed/.test(a)), JSON.stringify(alerts));
+  assert.strictEqual(r.body.sent.recorded.length, 0);
+});
+
+section("27. Round 2 #6 — the lock-key namespace no longer collides with the journal's own kv prefix");
+
+t("a project id of 'settle' is refused outright (approveProject)", () => {
+  assert.throws(() => proj.approveProject({}, proj.validateProject({ id: "settle", label: "SETTLE", symbol: "STL", mint: W.MINT1, fundingWallet: W.FUND, operatorWallets: [W.A] }, { decimals: 9, tokenProgram: TOK, extensions: [] }), { nowUnix: NOW }), /reserved/);
+});
+
+t("the payout lock key lives under hublock:, never inside the journal's hub:settle: prefix", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "upsilon35", W.MINT1);
+  store.write(kv, "upsilon35", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000" }) });
+  // Simulate a held lock exactly as the route would while a request is in flight.
+  kv.set("hublock:upsilon35:payout", { at: Date.now(), token: "held" });
+  const j = store.readJournal(kv);
+  assert.strictEqual(Object.keys(j).length, 0, "the lock row is not under the journal's own prefix, and would be filtered by shape even if it were");
+  const r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "upsilon35" }, query: { export: "1" } });
+  assert.strictEqual(r.statusCode, 409, "the lock, from ANY source under this key, still serialises the route");
+});
+
+t("store.readJournal ignores a non-journal-shaped value even under the legacy JOURNAL_KEY blob or the JOURNAL_PREFIX", () => {
+  const kv = store.memoryKv();
+  store.writeJournal(kv, { "settle:payout": { at: Date.now(), token: "held" } });
+  kv.set(store.journalEntryKey("settle:bogus:0"), { at: Date.now(), token: "held" });
+  assert.deepStrictEqual(store.readJournal(kv), {}, "neither lock-shaped value is read back as a settlement");
 });
 
 (async () => {

@@ -45,8 +45,12 @@ function addAttempt(kv, projectId, batchId, wallet, sig, sigAtUnix, state = "sub
   store.write(kv, projectId, "batches", { ...batches, [batchId]: b });
 }
 function addJournalEntry(kv, key, projectId, atUnix) {
+  // Round 2 #6 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): readJournal() now ignores anything that
+  // does not look like a real settlement entry (store.looksLikeJournalEntry) — the fields below
+  // are the minimum that shape check requires; `key` is expected to be a full xferKey ("settle:
+  // <sig>:<idx>") by every call site in this file already.
   const j = store.readJournal(kv) || {};
-  store.writeJournal(kv, { ...j, [key]: { projectId, at: atUnix } });
+  store.writeJournal(kv, { ...j, [key]: { xferKey: key, projectId, batchId: "b1", wallet: WALLET_1, amountRaw: "1", appliedRaw: "1", excessRaw: "0", at: atUnix } });
 }
 function addDaySlice(kv, projectId, sliceKey) {
   const days = store.read(kv, projectId, "days", {}) || {};
