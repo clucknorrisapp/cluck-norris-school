@@ -1,0 +1,17 @@
+HTTP/1.1 403 Forbidden
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Referrer-Policy: strict-origin-when-cross-origin
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://plugin.jup.ag https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; worker-src 'self' blob:; media-src 'self' data: blob: https:; frame-ancestors 'self'; base-uri 'self'; object-src 'none'
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+Cache-Control: no-store
+Content-Type: application/json; charset=utf-8
+Content-Length: 106
+ETag: W/"6a-XyzUnvwguse9RHMy830dnWVxH20"
+Vary: Accept-Encoding
+Date: Fri, 18 Sep 2026 17:52:01 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"ok":false,"error":"the managed payer is owner-only — export the batch and sign it in your own wallet"}
