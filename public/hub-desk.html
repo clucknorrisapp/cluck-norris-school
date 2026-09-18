@@ -269,7 +269,15 @@
     var r = await fetch(url, opts); var j = null; try { j = await r.json(); } catch (_) {}
     if (!j) throw new Error("server returned " + r.status + " with no JSON");
     if (r.status === 404 && j.error === "not_found") throw new Error("not signed in (session expired, or this wallet is no longer an operator) — connect again");
-    if (!j.ok) throw new Error(j.error || ("server returned " + r.status));
+    if (!j.ok) {
+      // N3 (docs/HUB_BROWSER_SIGN_VERIFY_2026-09-18.md): a 503 `retry:true`/`pending` (observe()
+      // could not read every signature yet) used to be indistinguishable from any other failure
+      // once thrown — the retry loop below needs both fields on the Error it catches.
+      var err = new Error(j.error || ("server returned " + r.status));
+      if (j.retry) err.retry = true;
+      if (j.pending) err.pending = j.pending;
+      throw err;
+    }
     return j;
   }
   var admin = function (p, m) { return call("/admin", p, m); };
@@ -543,6 +551,19 @@
       try { bar.scrollIntoView({ block: "nearest" }); } catch (_) {}
     });
   }
+  // P2-4 (docs/HUB_BROWSER_SIGN_VERIFY_2026-09-18.md): the server accepts a settlement sourced
+  // from the funding wallet OR any owner-set `payoutSources` wallet (lib/hub/routes.js — the
+  // admin-only allowlist, `publicProject` already exposes it). This page used to hardcode
+  // `fundingWallet` only, so a project configured to pay from an allowlisted vault wallet had
+  // BOTH payout buttons permanently disabled with no way through but the less-guarded per-row
+  // `&sent=` buttons.
+  function acceptedWallets() {
+    var proj = DESK && DESK.project;
+    if (!proj) return [];
+    return [proj.fundingWallet].concat(Array.isArray(proj.payoutSources) ? proj.payoutSources : []).filter(Boolean);
+  }
+  function acceptedWalletsText() { return acceptedWallets().map(function (w) { return CluckUtil.shortAddr(w); }).join(", ") || "—"; }
+  function walletIsAccepted(w) { return !!(w && acceptedWallets().indexOf(w) !== -1); }
   function refreshSendButton() {
     var need = BATCH ? Number(BATCH.remainingRaw) / Math.pow(10, DEC) : 0;
     // X6/CC5: a live browser-signed flow (SIGN_SENDING, this tab's own in-flight call, or
@@ -551,11 +572,12 @@
     // F2: CLOSE BATCH is disabled while live too — a bare cancel + re-export while an already-
     // broadcast (but unobserved) transfer exists would draw the same amount into a fresh batch.
     var bsLive = BATCH && BATCH.browserSign && (BATCH.browserSign.state === "signing" || BATCH.browserSign.state === "submitted");
-    // F1: this button pays FROM the connected wallet — it must be the project's funding wallet, the
-    // one `observe`/`&sent=` will actually verify a transfer came from. Any other wallet's broadcast
-    // is money the server can never credit to this batch (transfer_not_from_funding_wallet) and the
-    // batch is deadlocked behind it (F4) until an owner clears it.
-    var walletIsFunding = !!(WALLET && DESK && DESK.project && WALLET === DESK.project.fundingWallet);
+    // F1/P2-4: this button pays FROM the connected wallet — it must be one of the project's
+    // accepted settlement sources, the ones `observe`/`&sent=` will actually verify a transfer
+    // came from. Any other wallet's broadcast is money the server can never credit to this batch
+    // (transfer_not_from_funding_wallet) and the batch is deadlocked behind it (F4) until an owner
+    // clears it.
+    var walletIsFunding = walletIsAccepted(WALLET);
     var ok = !SENDING && !SIGN_SENDING && !bsLive && BATCH && BATCH.state === "pending" && BATCH.remainingCount > 0 && walletIsFunding && PROVIDER && WALLET_BAL != null && WALLET_BAL >= need;
     $("send").disabled = !ok; $("close").disabled = SENDING || !BATCH || BATCH.state !== "pending" || bsLive;
     $("bWalletBal").textContent = WALLET ? (WALLET_BAL == null ? "could not read" : WALLET_BAL.toLocaleString() + " " + SYM) : "no wallet";
@@ -563,7 +585,7 @@
     if (BATCH && BATCH.state !== "pending") why.push("batch is " + BATCH.state); else if (BATCH && !BATCH.remainingCount) why.push("nothing left to send");
     else if (bsLive) why.push("a browser-signed payout is " + BATCH.browserSign.state + " for this batch");
     if (!WALLET) why.push("no wallet connected (the owner key can read, only a wallet can sign)");
-    else if (DESK && DESK.project && !walletIsFunding) why.push(tf("connect the project's FUNDING wallet ({wallet}) to send — not just any operator wallet", { wallet: CluckUtil.shortAddr(DESK.project.fundingWallet) }));
+    else if (DESK && DESK.project && !walletIsFunding) why.push(tf("connect one of this project's accepted payout wallets ({wallets}) to send — not just any operator wallet", { wallets: acceptedWalletsText() }));
     else if (WALLET_BAL == null) why.push("could not read the wallet's " + SYM + " balance"); else if (BATCH && WALLET_BAL < need) why.push("wallet holds less " + SYM + " than the remaining total");
     $("walletChecks").innerHTML = why.length ? '<div class="warn">Send is off: ' + esc(why.join("; ")) + "</div>" : '<div class="ok">Ready to send.</div>';
     refreshSignSendButton();
@@ -581,15 +603,21 @@
     ((r.sent && r.sent.recorded) || []).forEach(function (w) { delete ROW_STATUS[w]; }); saveStatus();
     return r.sent;
   }
-  function unrecordedSent() { return (BATCH ? BATCH.rows : []).filter(function (r) { var l = ROW_STATUS[r.wallet]; return !r.sent && l && l.status === "sent" && l.sig; }); }
+  // N4 (docs/HUB_BROWSER_SIGN_VERIFY_2026-09-18.md): F5's own comment says an `unconfirmed`
+  // result "may still land" and must never be dropped — but this guard used to filter `"sent"`
+  // only, so an unconfirmed-but-landed row blocked neither a re-sign nor a re-send.
+  function unrecordedSent() { return (BATCH ? BATCH.rows : []).filter(function (r) { var l = ROW_STATUS[r.wallet]; return !r.sent && l && (l.status === "sent" || l.status === "unconfirmed") && l.sig; }); }
   async function send() {
     if ($("send").disabled) return;
-    // F1 belt-and-braces: refreshSendButton already keeps this disabled unless the connected
-    // wallet IS the funding wallet, but never send for real without checking it again right here.
-    if (!DESK || !DESK.project || WALLET !== DESK.project.fundingWallet) { $("progressText").innerHTML = '<span class="bad">' + esc(tf("Connect the project's FUNDING wallet ({wallet}) to send — not just any operator wallet.", { wallet: CluckUtil.shortAddr(DESK && DESK.project && DESK.project.fundingWallet) })) + "</span>"; return; }
+    // F1/P2-4 belt-and-braces: refreshSendButton already keeps this disabled unless the connected
+    // wallet is an accepted payout source, but never send for real without checking it again here.
+    if (!DESK || !DESK.project || !walletIsAccepted(WALLET)) { $("progressText").innerHTML = '<span class="bad">' + esc(tf("Connect one of this project's accepted payout wallets ({wallets}) to send — not just any operator wallet.", { wallets: acceptedWalletsText() })) + "</span>"; return; }
     if (unrecordedSent().length) { $("progressText").innerHTML = '<span class="bad">Record the SENT — NOT RECORDED rows first (buttons in the table). Sending again would pay them twice.</span>'; return; }
     SENDING = true; ABORT = false; refreshSendButton();
-    BATCH.rows.forEach(function (r) { if (!r.sent && !(ROW_STATUS[r.wallet] && ROW_STATUS[r.wallet].status === "sent")) delete ROW_STATUS[r.wallet]; }); saveStatus();
+    // N4: the purge before a fresh send keeps an `unconfirmed` row too — it is not confirmed
+    // failed, and dropping its ROW_STATUS entry here would take its "record on server" button
+    // with it (the same reasoning as the guard above).
+    BATCH.rows.forEach(function (r) { if (!r.sent && !(ROW_STATUS[r.wallet] && (ROW_STATUS[r.wallet].status === "sent" || ROW_STATUS[r.wallet].status === "unconfirmed"))) delete ROW_STATUS[r.wallet]; }); saveStatus();
     var recipients = String(BATCH.remainingLines || "").split("\n").filter(Boolean).map(function (l) { var p = l.split(","); return { addr: p[0].trim(), amount: p[1].trim() }; });
     var queue = [], flushing = null;
     var flush = function () {
@@ -636,34 +664,92 @@
     // F3: `!live` is now part of `ok` — a reload mid-flow used to leave this button enabled (only
     // the status line below warned), which is exactly the state a lost tab could re-broadcast from.
     var live = !!(bs && (bs.state === "signing" || bs.state === "submitted"));
-    // F1: same funding-wallet requirement as the SEND button — this pays from the connected
+    // F1/P2-4: same accepted-wallet requirement as the SEND button — this pays from the connected
     // wallet, and `observe` will refuse (and deadlock the batch, F4) anything not sourced from it.
-    var walletIsFunding = !!(WALLET && DESK && DESK.project && WALLET === DESK.project.fundingWallet);
+    var walletIsFunding = walletIsAccepted(WALLET);
     var ok = !SENDING && !SIGN_SENDING && !live && BATCH && BATCH.state === "pending" && BATCH.remainingCount > 0 && walletIsFunding && PROVIDER && WALLET_BAL != null && WALLET_BAL >= need;
     $("signSend").disabled = !ok;
     if (live && !SIGN_SENDING) {
-      $("signSendStatus").innerHTML = '<span class="warn">' + esc(tf("A browser-signed payout is {state} for this batch — reload to check its progress.", { state: bs.state })) + "</span>";
+      // P3-10 (docs/HUB_BROWSER_SIGN_VERIFY_2026-09-18.md): "reload to check its progress" told the
+      // operator to do something that cannot help — reloading just re-reads the same server state.
+      // Offer the one thing that CAN help instead: re-observe exactly the signatures this browser
+      // already broadcast (kept in ROW_STATUS/localStorage) under the batch's own current nonce.
+      var liveSigs = (BATCH.rows || []).map(function (r) { var l = ROW_STATUS[r.wallet]; return l && l.sig && (l.status === "sent" || l.status === "unconfirmed") ? l.sig : null; }).filter(Boolean);
+      var canObserve = liveSigs.length && bs.nonce;
+      var btnHtml = canObserve ? ' <button class="ghost" id="observeBroadcastBtn" style="padding:3px 8px;font-size:11px">' + esc(t("OBSERVE WHAT I BROADCAST")) + '</button>' : "";
+      $("signSendStatus").innerHTML = '<span class="warn">' + esc(tf("A browser-signed payout is {state} for this batch.", { state: bs.state })) + "</span>" + btnHtml;
+      if (canObserve) $("observeBroadcastBtn").addEventListener("click", function () { observeBroadcast(liveSigs, bs.nonce); });
     } else if (!SIGN_SENDING && WALLET && DESK && DESK.project && !walletIsFunding && BATCH && BATCH.state === "pending" && BATCH.remainingCount > 0) {
-      $("signSendStatus").innerHTML = '<span class="warn">' + esc(tf("Connect the project's FUNDING wallet ({wallet}) to sign — not just any operator wallet.", { wallet: CluckUtil.shortAddr(DESK.project.fundingWallet) })) + "</span>";
+      $("signSendStatus").innerHTML = '<span class="warn">' + esc(tf("Connect one of this project's accepted payout wallets ({wallets}) to sign — not just any operator wallet.", { wallets: acceptedWalletsText() })) + "</span>";
+    }
+  }
+  // N3 (docs/HUB_BROWSER_SIGN_VERIFY_2026-09-18.md): observe() can now answer 200 with `pending`
+  // signatures still unindexed (a partial settle), or 503 `retry:true` when NONE of them resolved
+  // yet — both are the ordinary "the RPC hasn't caught up" case, not a failure. Retries only the
+  // signatures still outstanding (the response's own `pending` list, or on a thrown 503 whatever
+  // `call()` attached), backing off between attempts, up to 3 tries total before surfacing.
+  async function observeAll(sigsToObserve, nonce) {
+    var toGo = sigsToObserve;
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      var res;
+      try {
+        res = await call("/batch/" + encodeURIComponent(BATCH.id) + "/observe", { sigs: toGo, nonce: nonce }, "POST");
+      } catch (e) {
+        if (e.retry && attempt < 3) { toGo = (e.pending && e.pending.length) ? e.pending : toGo; await new Promise(function (r) { setTimeout(r, 300 * attempt); }); continue; }
+        throw e;
+      }
+      if (res.pending && res.pending.length && attempt < 3) { toGo = res.pending; await new Promise(function (r) { setTimeout(r, 300 * attempt); }); continue; }
+      return res;
+    }
+    return res;
+  }
+  // Shared by signAndSend() and the OBSERVE WHAT I BROADCAST recovery button — one report format
+  // for what an observe() call settled, whichever path called it.
+  function reportObserveResult(ob) {
+    (ob.recorded || []).forEach(function (w) { delete ROW_STATUS[w]; }); saveStatus();
+    var bs = ob.browserSign || {};
+    var failedWallets = Object.keys(bs.failed || {});
+    var lines = [];
+    // P3-9: "every row this BATCH named" overstated it — a row this sign-request skipped as
+    // already legacy-sent is excluded from `browserSign.wallets`, so "settled" only ever meant
+    // every row THIS sign-request named, not necessarily the whole batch.
+    lines.push(bs.state === "settled" ? t("Settled — every row this payout named is fully paid.") : tf("Broadcast recorded — {n} row(s) still owed.", { n: (ob.remainingWallets || []).length }));
+    if (failedWallets.length) lines.push(tf("{n} row(s) could not be recorded: {reasons}", { n: failedWallets.length, reasons: failedWallets.map(function (w) { return CluckUtil.shortAddr(w) + " (" + bs.failed[w].why + ")"; }).join("; ") }));
+    $("signSendStatus").innerHTML = '<span class="' + (bs.state === "settled" ? "ok" : "warn") + '">' + esc(lines.join(" ")) + "</span>";
+  }
+  // P3-10: the recovery path off the OBSERVE WHAT I BROADCAST button — re-posts exactly the
+  // signatures this browser already broadcast (from ROW_STATUS) under the batch's OWN current
+  // nonce (BATCH.browserSign.nonce, which the batch view already carries), never a fresh
+  // sign-request (that would draw a NEW nonce and abandon the in-flight one, F3).
+  async function observeBroadcast(sigsToObserve, nonce) {
+    $("signSendStatus").textContent = t("Observing what you broadcast…");
+    try {
+      reportObserveResult(await observeAll(sigsToObserve, nonce));
+    } catch (e) {
+      $("signSendStatus").innerHTML = '<span class="bad">' + esc((e && e.message) || String(e)) + "</span>";
+    } finally {
+      await loadBatch(BATCH.id).catch(function () {});
+      readWalletBal().then(function () { refreshSendButton(); refreshSignSendButton(); });
     }
   }
   async function signAndSend() {
     if ($("signSend").disabled) return;
-    // F1 belt-and-braces: refreshSignSendButton already keeps this disabled unless connected to
-    // the funding wallet, but never sign-request for real without checking it again right here.
-    if (!DESK || !DESK.project || WALLET !== DESK.project.fundingWallet) { $("signSendStatus").innerHTML = '<span class="bad">' + esc(tf("Connect the project's FUNDING wallet ({wallet}) to sign — not just any operator wallet.", { wallet: CluckUtil.shortAddr(DESK && DESK.project && DESK.project.fundingWallet) })) + "</span>"; return; }
+    // F1/P2-4 belt-and-braces: refreshSignSendButton already keeps this disabled unless connected
+    // to an accepted payout wallet, but never sign-request for real without checking it again here.
+    if (!DESK || !DESK.project || !walletIsAccepted(WALLET)) { $("signSendStatus").innerHTML = '<span class="bad">' + esc(tf("Connect one of this project's accepted payout wallets ({wallets}) to sign — not just any operator wallet.", { wallets: acceptedWalletsText() })) + "</span>"; return; }
     // F5: the same "don't send again until the SENT — NOT RECORDED rows are dealt with" guard the
     // SEND button already enforces — a lost tab or a thrown observe() below now leaves broadcast
     // signatures in ROW_STATUS (see onResult), so this guard actually has something to catch.
-    if (unrecordedSent().length) { $("signSendStatus").innerHTML = '<span class="bad">Record the SENT — NOT RECORDED rows first (buttons in the table). Signing again would pay them twice.</span>'; return; }
+    if (unrecordedSent().length) { $("signSendStatus").innerHTML = '<span class="bad">' + esc(t("Record the SENT — NOT RECORDED rows first (buttons in the table). Signing again would pay them twice.")) + "</span>"; return; }
     SIGN_SENDING = true; ABORT = false; $("send").disabled = true; refreshSignSendButton();
     $("signSendStatus").textContent = t("Requesting the transfer instructions to sign…");
     try {
       var sr = await call("/batch/" + encodeURIComponent(BATCH.id) + "/sign-request", {}, "POST");
       if (!sr.rows || !sr.rows.length) { $("signSendStatus").textContent = t("Nothing left on this batch to sign."); return; }
-      // F1 belt-and-braces: refuse before touching CluckAirdrop.send if the server's own idea of
-      // the funding wallet ever disagrees with what this page already checked above.
-      if (sr.fundingWallet !== WALLET) { $("signSendStatus").innerHTML = '<span class="bad">' + esc(t("The server's funding wallet does not match your connected wallet — reload and try again.")) + "</span>"; return; }
+      // F1/P2-4 belt-and-braces: refuse before touching CluckAirdrop.send if the server's own idea
+      // of the accepted sources ever disagrees with what this page already checked above.
+      var srAccepted = [sr.fundingWallet].concat(Array.isArray(sr.payoutSources) ? sr.payoutSources : []);
+      if (srAccepted.indexOf(WALLET) === -1) { $("signSendStatus").innerHTML = '<span class="bad">' + esc(t("The server's funding wallet does not match your connected wallet — reload and try again.")) + "</span>"; return; }
       // F6: nothing from this response is trusted to build a transaction with until it is checked
       // against what this page already knows about the batch — a stale or tampered mint, decimals
       // or amount would otherwise sign and broadcast something silently different from BATCH itself.
@@ -702,17 +788,14 @@
       });
       if (!sigs.length) { $("signSendStatus").innerHTML = '<span class="bad">' + esc(t("Nothing broadcast — check the progress line above.")) + "</span>"; return; }
       $("signSendStatus").textContent = t("Observing what you broadcast…");
-      var ob = await call("/batch/" + encodeURIComponent(BATCH.id) + "/observe", { sigs: sigs, nonce: sr.nonce }, "POST");
+      // N3: observe() may 503 `retry:true` (nothing indexed yet) or 200 with `pending` (some, not
+      // all, resolved) — observeAll() retries just the outstanding signatures a few times with a
+      // short backoff before surfacing anything to the operator.
+      var ob = await observeAll(sigs, sr.nonce);
       // Every signature just reported is off the "unrecorded" list now, whether or not the server
       // could journal it — recorded means the legacy sent row exists, which is what unrecordedSent()
       // actually checks.
-      (ob.recorded || []).forEach(function (w) { delete ROW_STATUS[w]; }); saveStatus();
-      var bs = ob.browserSign || {};
-      var failedWallets = Object.keys(bs.failed || {});
-      var lines = [];
-      lines.push(bs.state === "settled" ? t("Settled — every row this batch named is fully paid.") : tf("Broadcast recorded — {n} row(s) still owed.", { n: (ob.remainingWallets || []).length }));
-      if (failedWallets.length) lines.push(tf("{n} row(s) could not be recorded: {reasons}", { n: failedWallets.length, reasons: failedWallets.map(function (w) { return CluckUtil.shortAddr(w) + " (" + bs.failed[w].why + ")"; }).join("; ") }));
-      $("signSendStatus").innerHTML = '<span class="' + (bs.state === "settled" ? "ok" : "warn") + '">' + esc(lines.join(" ")) + "</span>";
+      reportObserveResult(ob);
     } catch (e) {
       $("signSendStatus").innerHTML = '<span class="bad">' + esc((e && e.message) || String(e)) + "</span>";
     } finally {

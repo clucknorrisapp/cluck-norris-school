@@ -135,83 +135,133 @@ pending/sent/cancelled/closed vocabulary every other route reads):
 ```
 POST …/batch/:batchId/sign-request        POST …/batch/:batchId/observe
   pending ────────────────────▶ signing ──(sigs fetched, some/none settle)──▶ submitted
-                                    │                                              │
-                                    │                                   (every named row's
-                                    │                                    remaining reaches 0)
+                                    │  │                                          │
+                                    │  └──(owner clear=1)──▶ cleared             (every named row's
+                                    │                                             remaining reaches 0,
+                                    │                                             AND no signature
+                                    │                                             this call submitted
+                                    │                                             is still unindexed)
                                     ▼                                              ▼
                               (stays signing until observed)                  settled
 ```
+`cleared` and `settled` are both terminal, non-live states (`browserSignIsLive` only matches
+`signing`/`submitted`); `observe` answers the same `already:true` shape for either, with a note
+that differs (`browserSignAlreadyNote`).
 
-- `sign-request` (owner or operator, POST-only, `hubheavy`-limited, refused for a `dryRun`
-  project before any write) computes each still-owed row's exact remaining amount
-  (`ledger.rowState`, intersected with `pay.remainingOf(bt)` so a row the managed payer already
-  broadcast — legacy-`sent`, even before it journals — is never re-offered here) and derives its
-  destination ATA server-side (`lib/solana-addr.js deriveAta` — no `@solana/web3.js` needed for
-  this). It returns `{ mint, decimals, tokenProgram, fundingWallet, rows:
+- `sign-request` (owner, the project's funding wallet, or an allowlisted `payoutSources` wallet —
+  narrowed from "any operator" in the round-2 verification pass, P2-5: an operator whose own
+  wallet could never legitimately settle a row should not receive real transfer parameters to
+  broadcast from it, since `observe` would just refuse and deadlock the batch behind it — POST-only,
+  `hubheavy`-limited, refused for a `dryRun` project before any other branch including `clear=1`)
+  computes each still-owed row's exact remaining amount (`ledger.rowState`, intersected with
+  `pay.remainingOf(bt)` so a row the managed payer already broadcast — legacy-`sent`, even before it
+  journals — is never re-offered here; a row settled to zero some other way, e.g. an owner waive, is
+  still NAMED in `skipped` with "nothing remaining on this row" rather than silently vanishing) and
+  derives its destination ATA server-side (`lib/solana-addr.js deriveAta` — no `@solana/web3.js`
+  needed for this). It returns `{ mint, decimals, tokenProgram, fundingWallet, payoutSources, rows:
   [{wallet, source, destination, amountRaw}], nonce, idempotencyKey }` — a description the browser
   reuses `public/airdrop-engine.js`'s existing `splToken.*` helpers to build from (never
   `SystemProgram.transfer()`/`toBufferLE` — CLAUDE.md). It stamps `batch.browserSign =
   {state:"signing", nonce, wallets:[...], mint, decimals, tokenProgram, fundingWallet,
-  payoutSources, ...}` in one persist — **every settlement-relevant parameter is FROZEN here and
-  `observe` reads all of it back from `batch.browserSign`, never the live project record**, so an
-  owner edit to `payoutSources` (say) between the two calls can never silently change which source
-  wallet an already-broadcast transfer is checked against.
+  payoutSources, observedSigs, ...}` in one persist — **every settlement-relevant parameter is
+  FROZEN here and `observe` reads all of it back from `batch.browserSign`, never the live project
+  record**, so an owner edit to `payoutSources` (say) between the two calls can never silently
+  change which source wallet an already-broadcast transfer is checked against.
   - A second `sign-request` while the prior one is `signing` is refused (409) by default — nothing
     durable proves a real broadcast doesn't already exist for those rows, so silently re-issuing
     risked signing the SAME transfer twice. Pass `force=1` to explicitly abandon it and get a fresh
-    nonce anyway (only when you know nothing was actually signed against the old one).
+    nonce anyway (only when you know nothing was actually signed against the old one) — the new
+    generation carries the prior one's `observedSigs` forward, so a signature already observed
+    under the old nonce is never forgotten.
   - A `submitted` sign-request (something WAS observed, but rows still remain) refuses a fresh
     request outright — there is no blockhash tracked here to "lapse"; observe more signatures, or
     use the reset below.
-  - **`POST …/batch/:batchId/sign-request?clear=1` — owner-only reset.** Sets `batch.browserSign =
-    null` in one persist, touching nothing else (amounts, the legacy sent/paid rows, the journal
-    are all untouched). This is the escape hatch for a batch stuck in `submitted` (e.g. every named
-    row settled through the attribution-failure path, so `stillOwed` can never reach false) or for
-    an operator who broadcast from the wrong wallet (see F1 below) and needs the flow reset before
-    trying again correctly. An operator token gets 403; the owner key or `x-clkn-operator`-less
-    owner session succeeds.
+  - **`POST …/batch/:batchId/sign-request?clear=1` — owner-only reset.** N1 (round-2 verification):
+    a bare clear used to silently re-open the exact double-pay window `&cancel=` is guarded against
+    — a wallet this sign-request handed out that the operator may already have broadcast for, but
+    never observed, is neither legacy-`sent` nor journaled, so clearing it and letting `&cancel=`
+    (now unblocked) return it to `available` would let a fresh export draw the SAME amount again.
+    `clear=1` now computes that **at-risk** set (`atRisk`) and refuses (409, echoing `atRisk`,
+    `observedSigs`, `failed`, `nonce`) unless `&confirm=abandon-broadcast` is also passed,
+    acknowledging that risk explicitly. Sets `batch.browserSign = {state:"cleared", clearedAt,
+    nonce, observedSigs, wallets, failed}` — P2-6: **kept, never nulled** — the amounts, the legacy
+    sent/paid rows and the journal are all untouched either way; only the in-flight sign-request
+    bookkeeping is retired, and the 200 body echoes the same `atRisk`/`observedSigs`/`failed`/
+    `nonce` so the owner sees exactly what they are overriding. This is the escape hatch for a batch
+    stuck in `submitted` (e.g. every named row settled through the attribution-failure path, so
+    `stillOwed` can never reach false) or for an operator who broadcast from the wrong wallet (see
+    F1 below) and needs the flow reset before trying again correctly. An operator token gets 403;
+    the owner key or `x-clkn-operator`-less owner session succeeds.
 - `observe` **requires the `nonce` sign-request handed out** (`nonce` in the request body/query) and
   answers 409 on a mismatch — this is what actually ties a call back to the exact set of
   rows/amounts a specific sign-request named, so a stale or superseded one (a `force=1` re-request,
-  or an owner `clear=1`) can never be conflated with a fresh one. It reads back the signature(s) the
-  browser broadcast (`public/hub-desk.html` reuses `CluckAirdrop.send()` unchanged — the same
-  `provider.signAndSendTransaction` path the pre-existing self-signed `&sent=` report already
-  drives, not the stricter `signTransaction`-only / server-broadcasts invariant `lib/hub/
-  attempts.js` implements — the desk reports BOTH a "sent" and an "unconfirmed" (30s confirm
-  timeout) result to `observe`, never dropping the ambiguous case) and settles them through the
-  **exact same** `lib/hub/settle.js settleAndPersist()` + `lib/cuna-payout.js recordSent()`
-  pipeline `/payout`'s `&sent=` branch uses — same settlement journal, same
-  `settle:<sig>:<instructionIndex>[:<innerIndex>]` idempotency key, same funding-wallet-sourced
-  check (adv P0-1), same cross-project consumed-set check (adv P0-2a). A signature that verifies
-  nothing, or the wrong amount, settles that row NOT AT ALL — recorded in
+  or an owner `clear=1`) can never be conflated with a fresh one. **N7:** the freeze also expires —
+  an observe against a sign-request more than 24h old (`browserSign.requestedAt`) is refused 409
+  ("request a fresh sign-request…") even with the right nonce, so a months-old frozen
+  `fundingWallet`/`payoutSources` snapshot can never outlive an owner rotation indefinitely. It
+  reads back the signature(s) the browser broadcast (`public/hub-desk.html` reuses
+  `CluckAirdrop.send()` unchanged — the same `provider.signAndSendTransaction` path the pre-existing
+  self-signed `&sent=` report already drives, not the stricter `signTransaction`-only /
+  server-broadcasts invariant `lib/hub/attempts.js` implements — the desk reports BOTH a "sent" and
+  an "unconfirmed" (30s confirm timeout) result to `observe`, never dropping the ambiguous case) and
+  settles them through the **exact same** `lib/hub/settle.js settleAndPersist()` +
+  `lib/cuna-payout.js recordSent()` pipeline `/payout`'s `&sent=` branch uses — same settlement
+  journal, same `settle:<sig>:<instructionIndex>[:<innerIndex>]` idempotency key, same
+  funding-wallet-sourced check (adv P0-1), same cross-project consumed-set check (adv P0-2a). A
+  signature that verifies nothing, or the wrong amount, settles that row NOT AT ALL — recorded in
   `batch.browserSign.failed[wallet]` with why (only from a real refusal of that wallet's own best
   candidate — never the cross-product noise of every OTHER signature it wasn't paired with), never
   as paid; a wallet actually recorded this pass is cleared from `failed` regardless of which path
-  recorded it. Observing the same signature twice is exactly as idempotent as reporting it to
-  `&sent=` twice. A signature the RPC has not indexed yet (`getTransaction` resolving `null` — the
-  ordinary state one second after broadcast, not a fault) is treated exactly like an RPC outage:
-  503, `retry:true`, nothing written, the state never advances — it used to be recorded as a
-  permanent "transaction not found on chain" failure and stick the batch in `submitted` forever.
-  The wallets×signatures cross product is bounded (at most `wallets.length + 5` signatures, and
-  their product capped at 500 — the same bound `&sent=`'s `results` list uses) and every signature
-  is fetched through a small concurrency pool BEFORE the per-project payout lock is acquired, so a
-  slow or flaky RPC no longer holds every other payout route for the project hostage across up to
-  40 sequential round trips.
+  recorded it. **N2** (round-2 verification): a wallet whose row has nothing remaining AFTER this
+  pass is never written into `failed` (an ordinary idempotent re-observe of its own settling
+  signature refuses as `amount_mismatch`/`duplicate_settlement_candidate`, which is correct and not
+  a thing to report), and a `TRANSFER_ALREADY_CONSUMED_WHY` refusal whose consuming journal entry
+  names THIS SAME project+batch is our own prior settlement, never a cross-project reuse — it is
+  suppressed from both `failed` and the fraud alert. Observing the same signature twice really is
+  exactly as idempotent as reporting it to `&sent=` twice, and raises no alert either. A signature
+  the RPC has not indexed yet (`getTransaction` resolving `null` — the ordinary state one second
+  after broadcast, not a fault) is treated like an RPC outage — but **N3** (round-2 verification):
+  only when **NONE** of the submitted signatures resolved (503, `retry:true`, nothing written, the
+  state never advances). If SOME resolved, the rest come back in the SAME 200 response as
+  `pending: [...] , retry: true` and are simply excluded from this pass — the resolved ones still
+  settle, and the state never advances to `settled` while any submitted signature remains
+  unresolved (it stays `submitted`). `public/hub-desk.html`'s `signAndSend()`/`observeBroadcast()`
+  retry the outstanding `pending` signatures automatically, with a short backoff, up to 3 attempts
+  total, before surfacing anything. The wallets×signatures cross product is bounded (at most
+  `wallets.length + 5` signatures, and their product capped at 500 — the same bound `&sent=`'s
+  `results` list uses) and every signature is fetched through a small concurrency pool BEFORE the
+  per-project payout lock is acquired, so a slow or flaky RPC no longer holds every other payout
+  route for the project hostage across up to 40 sequential round trips.
 - **What is blocked while a browser-signed flow is live (`signing`/`submitted`):** the managed
-  payer (`/payout`'s `&send=`, via `browserSignIsLive(bt)`) AND `&cancel=` — a bare cancel + re-
-  export while an already-broadcast-but-unobserved transfer exists would draw the SAME amount into
-  a fresh batch while the original transfer is still real and about to be observed into the batch
-  just cancelled. `observe` independently refuses any batch whose `state !== "pending"` too
-  (defense in depth, even if a cancel is ever reached some other way). **What still works while
-  live:** `&sent=`, `&waive=`, and the per-row "record on server" recovery buttons — none of those
-  touch `browserSign` or `bt.state`.
-- **The connected wallet must BE the project's funding wallet.** Both the desk's SEND and SIGN AND
-  SEND buttons are disabled unless `WALLET === DESK.project.fundingWallet` (the reason is shown in
-  their own status line), and `signAndSend()`/`send()` refuse again at the top of the function
-  before doing anything — belt-and-braces against a stale button state. Without this, an operator
-  signing from their own personal wallet would broadcast a REAL transfer that `observe`/`&sent=`
-  can never credit (`transfer_not_from_funding_wallet`), paying the wrong pocket and deadlocking
-  the batch (the reset above is the only way out).
+  payer (`/payout`'s `&send=`, via `browserSignIsLive(bt)`), `&cancel=` — a bare cancel + re-export
+  while an already-broadcast-but-unobserved transfer exists would draw the SAME amount into a fresh
+  batch while the original transfer is still real and about to be observed into the batch just
+  cancelled — and, since the round-2 pass (**P2-7**), `&confirm=` too, for the same reason (marking a
+  batch paid without per-row signatures while a real broadcast might already be in flight would
+  settle rows a later `observe()` can never journal, and permanently pin `browserSign` live). SEND
+  and SIGN AND SEND on the desk are ALSO mutually exclusive with each other while either is live.
+  `observe` independently refuses any batch whose `state !== "pending"` too (defense in depth, even
+  if a cancel is ever reached some other way). **What still works while live, and can even complete
+  the flow:** `&sent=` (the desk's per-row "record on server" recovery button) and `&waive=`. **N5**
+  (round-2 verification): the README used to claim neither touches `browserSign`/`bt.state` — false;
+  `&sent=` recording the LAST unpaid row flips `bt.state` straight to `sent` the same way it always
+  did, and if that happens while `browserSign` is still live, it is now stamped `state:"settled"` in
+  the SAME persist, rather than left pinned `signing`/`submitted` forever with no lever but the
+  owner's `clear=1`.
+- **The connected wallet must be one of the project's accepted payout sources.** **P2-4** (round-2
+  verification): this used to mean `fundingWallet` only — a project configured to pay from an
+  owner-allowlisted `payoutSources` wallet (`/api/hub-registry`'s admin-only lever) had BOTH payout
+  buttons permanently disabled with no route through but the less-guarded per-row `&sent=` buttons.
+  Both the desk's SEND and SIGN AND SEND buttons are now disabled unless the connected wallet is
+  `fundingWallet` OR one of `payoutSources` (`publicProject`/the sign-request response both carry
+  the list; the reason line names every accepted wallet), and `signAndSend()`/`send()` refuse again
+  at the top of the function before doing anything — belt-and-braces against a stale button state.
+  **P2-5**: the server enforces the SAME restriction independently of the browser check — `who`
+  (owner / the funding wallet / a `payoutSources` wallet) is required before `sign-request` will
+  even generate transfer parameters for anyone else, naming the funding wallet in the 403. Without
+  either, an operator signing (or curling) from an unaccepted wallet would broadcast a REAL transfer
+  that `observe`/`&sent=` can never credit (`transfer_not_from_funding_wallet`), paying the wrong
+  pocket and deadlocking the batch (the reset above is the only way out).
 - **The sign-request response is validated before anything is built to sign, and the confirm
   dialog comes AFTER sign-request.** `signAndSend()` checks the returned `mint`/`decimals` against
   what the page already knows (`MINT`/`DEC`), that every offered wallet is one of `BATCH`'s own
@@ -220,10 +270,23 @@ POST …/batch/:batchId/sign-request        POST …/batch/:batchId/observe
   amount `sign-request` actually returned, never numbers from the page's last load (which could
   disagree with what the wallet is about to sign if the batch changed in between).
 - Every broadcast result (`CluckAirdrop.send`'s `onResult`) is persisted into the SAME
-  `ROW_STATUS`/`localStorage` mechanism the pre-existing SEND button uses, and `signAndSend()`
-  refuses to run again while `unrecordedSent()` is non-empty (same wording as SEND) — a lost tab or
-  a thrown `observe()` call used to lose the broadcast signature from the page entirely, with
-  nothing to recover it from.
+  `ROW_STATUS`/`localStorage` mechanism the pre-existing SEND button uses, and `signAndSend()`/
+  `send()` refuse to run again while `unrecordedSent()` is non-empty (same wording as SEND) — a lost
+  tab or a thrown `observe()` call used to lose the broadcast signature from the page entirely, with
+  nothing to recover it from. **N4** (round-2 verification): `unrecordedSent()` now also matches an
+  `unconfirmed` (30s confirm timeout — ambiguous, may still land) result, not just `sent` — it used
+  to block neither a re-sign nor a re-send, and `send()`'s own pre-flight purge now keeps an
+  `unconfirmed` entry too, for the same reason.
+- **The status line for a live flow offers a real recovery, not a dead end.** **P3-10** (round-2
+  verification): "reload to check its progress" told the operator to do something that cannot
+  help — reloading just re-reads the same server state. The live-flow status line now offers an
+  OBSERVE WHAT I BROADCAST button (shown whenever ROW_STATUS holds a broadcast signature for this
+  batch) that re-posts exactly those signatures under `BATCH.browserSign.nonce` (the batch view
+  already carries it) through the SAME `observeAll()`/retry path `signAndSend()` uses — never a
+  fresh `sign-request`, which would abandon the in-flight nonce (F3). **P3-9**: the settled line
+  also now reads "every row THIS PAYOUT named", not "this batch" — a row this sign-request skipped
+  as already legacy-sent is excluded from `browserSign.wallets`, so "settled" only ever meant every
+  row this specific sign-request named.
 - **Vice versa with the managed payer**: `browserSignIsLive(bt)` (`signing`/`submitted`) refuses
   `/payout`'s `&send=` branch outright, and both `sign-request`/`observe` acquire the SAME
   per-project `hublock:<id>:payout` lock `/payout` already does, so a managed send mid-flight
@@ -231,13 +294,19 @@ POST …/batch/:batchId/sign-request        POST …/batch/:batchId/observe
 - Fault-injection: `scripts/hub-browser-sign-test.cjs` (crash between the two calls, a bad
   signature, observing the same signature twice — including a two-wallet batch where the state
   never reaches the top-level `already:true` shortcut, forcing the real pipeline to catch the
-  repeat itself — an RPC outage, a not-yet-indexed signature, a dry-run project, no auth including
-  cross-project, GET, a cancelled batch, the owner reset, a partial managed-send row never
-  re-offered, the reverse `busy` case, and the wallets×signatures bound) plus
+  repeat itself — an RPC outage, a not-yet-indexed signature (all-unindexed AND partial), a dry-run
+  project, no auth including cross-project, GET, a cancelled batch, the owner reset (refused/
+  confirmed/journaled-is-never-at-risk/observedSigs-carried-forward), a partial managed-send row
+  never re-offered, the reverse `busy` case, the wallets×signatures bound, an idempotent re-observe
+  raising no alert, a `&sent=` landing mid-flow, a sign-request older than 24h, a zero-remaining row
+  named in `skipped`, an operator whose own wallet cannot request instructions, `&confirm=` refused
+  while live, and `&sent=` completing a batch settling a live `browserSign`) plus
   `scripts/hub-desk-sign-page-test.cjs` (the REAL `public/hub-desk.html` inline script in a Node
-  vm, `CluckAirdrop.send` stubbed — the wrong-wallet refusal, the disabled-while-live button, a
-  signature surviving a thrown `observe()`, and a tampered sign-request response, none of which the
-  server-only suite can see).
+  vm, `CluckAirdrop.send` stubbed — the wrong-wallet refusal (now against every accepted wallet), the
+  disabled-while-live button, a signature surviving a thrown `observe()`, a tampered sign-request
+  response, an `unconfirmed` row blocking a re-sign/re-send and surviving the send() purge, the
+  automatic retry on a `pending`/`retry:true` observe response, the reworded settled line, and the
+  OBSERVE WHAT I BROADCAST recovery button, none of which the server-only suite can see).
 
 ## 4. What is served over HTTP today
 

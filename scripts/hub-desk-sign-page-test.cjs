@@ -67,7 +67,7 @@ function batchFixture(over) {
 function deskFixture(over) {
   return Object.assign({
     ok: true, as: "owner",
-    project: { id: PID, symbol: SYM, fundingWallet: FUND, operatorWallets: [FUND] },
+    project: { id: PID, symbol: SYM, fundingWallet: FUND, operatorWallets: [FUND], payoutSources: [] },
     rewardMint: MINT, decimals: DEC,
     armed: true, startedAt: NOW - 86400,
     access: { state: "active", daysLeft: 10 },
@@ -84,7 +84,7 @@ function signRequestFixture(over) {
   return Object.assign({
     ok: true, project: { id: PID }, batchId: "hb_test1", nonce: NONCE, idempotencyKey: "hub:signreq:x",
     requestedAt: NOW, mint: MINT, decimals: DEC, tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-    fundingWallet: FUND,
+    fundingWallet: FUND, payoutSources: [],
     rows: [{ wallet: W1, ok: true, source: FUND, destination: fakeAddr(9), amountRaw: "1000000000" }],
     skipped: [],
   }, over || {});
@@ -198,7 +198,10 @@ function makeSandbox({ connectWallet = FUND, batch = batchFixture(), desk = desk
       if (/\/sign-request$/.test(url)) { let r; try { r = signRequest(body); } catch (e) { return json({ ok: false, error: e.message }); } return json(r); }
       if (/\/observe$/.test(url)) {
         let r;
-        try { r = observe(body); } catch (e) { return { ok: false, status: 500, json: async () => ({ ok: false, error: e.message }) }; }
+        // N3: a thrown error may carry `.retry`/`.pending` (the 503 "not indexed yet" shape) —
+        // propagate both into the JSON body exactly like the real route, so observeAll()'s retry
+        // loop (which reads them off the Error call() throws) has something to see.
+        try { r = observe(body); } catch (e) { return { ok: false, status: 503, json: async () => ({ ok: false, error: e.message, retry: e.retry, pending: e.pending }) }; }
         return json(r);
       }
       if (/\/payout(\?|$)/.test(url)) return json({ ok: true, project: desk.project, mint: MINT, decimals: DEC, batch: batch, owed: {}, owedTotalRaw: "0", created: null, note: null, previewLines: null, pendingBatches: [] });
@@ -243,7 +246,7 @@ t("SIGN AND SEND is disabled for a non-funding wallet, and refuses even if force
   assert.strictEqual(env.calls.sends, 0, "CluckAirdrop.send was never called");
   assert.ok(env.calls.fetch.length === fetchesBefore, "no new network calls at all");
   const status = env.dom.getElementById("signSendStatus").innerHTML;
-  assert.ok(/FUNDING wallet/.test(status), status);
+  assert.ok(/accepted payout wallet/.test(status), status);
 });
 
 t("SEND is disabled for a non-funding wallet, and refuses even if force-enabled, before CluckAirdrop.send", async () => {
@@ -256,7 +259,7 @@ t("SEND is disabled for a non-funding wallet, and refuses even if force-enabled,
   await confirmYes(env);
   assert.strictEqual(env.calls.sends, 0, "CluckAirdrop.send was never called");
   const status = env.dom.getElementById("progressText").innerHTML;
-  assert.ok(/FUNDING wallet/.test(status), status);
+  assert.ok(/accepted payout wallet/.test(status), status);
 });
 
 t("SIGN AND SEND and SEND are both enabled for the funding wallet (sanity check on the guard's other side)", async () => {
@@ -384,6 +387,174 @@ t("a matching, untampered sign-request response is accepted and CluckAirdrop.sen
   assert.ok(hadConfirm, "a confirm bar should have appeared — nothing here should have been refused");
   assert.strictEqual(env.calls.sends, 1, "CluckAirdrop.send ran exactly once");
   assert.ok(/Settled/.test(env.dom.getElementById("signSendStatus").innerHTML));
+});
+
+// ── P2-4 ─────────────────────────────────────────────────────────────────────────────────────
+section("P2-4 — the desk accepts any of the project's accepted payout wallets, not just fundingWallet");
+
+t("a payoutSources wallet (not fundingWallet) is accepted for both SEND and SIGN AND SEND", async () => {
+  const VAULT = fakeAddr(20);
+  const env = makeSandbox({ connectWallet: VAULT, desk: deskFixture({ project: { id: PID, symbol: SYM, fundingWallet: FUND, operatorWallets: [FUND], payoutSources: [VAULT] } }) });
+  await connectAndLoad(env);
+  assert.strictEqual(env.dom.getElementById("signSend").disabled, false);
+  assert.strictEqual(env.dom.getElementById("send").disabled, false);
+});
+
+t("the reason line names the accepted wallets (short addresses) when the connected wallet is none of them", async () => {
+  const env = makeSandbox({ connectWallet: OTHER_WALLET, desk: deskFixture({ project: { id: PID, symbol: SYM, fundingWallet: FUND, operatorWallets: [FUND], payoutSources: [fakeAddr(21)] } }) });
+  await connectAndLoad(env);
+  const status = env.dom.getElementById("signSendStatus").innerHTML;
+  assert.ok(/accepted payout wallet/.test(status), status);
+});
+
+t("sign-request's own frozen `payoutSources` widens the belt-and-braces check after sign-request returns", async () => {
+  const VAULT = fakeAddr(22);
+  const env = makeSandbox({
+    connectWallet: VAULT,
+    desk: deskFixture({ project: { id: PID, symbol: SYM, fundingWallet: FUND, operatorWallets: [FUND], payoutSources: [VAULT] } }),
+    signRequest: () => signRequestFixture({ fundingWallet: FUND, payoutSources: [VAULT] }),
+  });
+  await connectAndLoad(env);
+  env.dom.getElementById("signSend").click();
+  const hadConfirm = await confirmYes(env);
+  assert.ok(hadConfirm, "the server's own payoutSources list must clear the belt-and-braces check too");
+  assert.strictEqual(env.calls.sends, 1);
+});
+
+// ── N4 ───────────────────────────────────────────────────────────────────────────────────────
+section("N4 — an `unconfirmed` (not just `sent`) ROW_STATUS entry blocks a re-sign/re-send, and the send() purge keeps it");
+
+t("an unconfirmed row (with a signature) blocks SIGN AND SEND from re-broadcasting", async () => {
+  const SIG1 = fakeSig(70);
+  const env = makeSandbox({ connectWallet: FUND });
+  await connectAndLoad(env);
+  env.store.local.set("hub_desk_rows_" + PID + "_hb_test1", JSON.stringify({ [W1]: { status: "unconfirmed", sig: SIG1 } }));
+  env.dom.getElementById("reload").click();
+  await settle(20);
+  env.dom.getElementById("signSend").click();
+  await settle(15);
+  assert.strictEqual(env.calls.sends, 0, "CluckAirdrop.send did not run — the unconfirmed row is still unrecorded");
+  assert.ok(/pay them twice|Record the SENT/.test(env.dom.getElementById("signSendStatus").innerHTML));
+});
+
+t("an unconfirmed row (with a signature) blocks SEND from re-broadcasting", async () => {
+  const SIG1 = fakeSig(71);
+  const env = makeSandbox({ connectWallet: FUND });
+  await connectAndLoad(env);
+  env.store.local.set("hub_desk_rows_" + PID + "_hb_test1", JSON.stringify({ [W1]: { status: "unconfirmed", sig: SIG1 } }));
+  env.dom.getElementById("reload").click();
+  await settle(20);
+  env.dom.getElementById("send").click();
+  await confirmYes(env, 4, 15);
+  assert.strictEqual(env.calls.sends, 0, "CluckAirdrop.send did not run");
+  assert.ok(/pay them twice|Record the SENT/.test(env.dom.getElementById("progressText").innerHTML));
+});
+
+t("the send() purge keeps an unconfirmed ROW_STATUS entry even when it carries no signature yet (unrecordedSent() itself requires one)", async () => {
+  const env = makeSandbox({ connectWallet: FUND, cluckAirdropSend: async (opts) => { opts.onResult && opts.onResult({ addr: W1, amount: "1", status: "sent", sig: fakeSig(72) }); } });
+  await connectAndLoad(env);
+  const key = "hub_desk_rows_" + PID + "_hb_test1";
+  env.store.local.set(key, JSON.stringify({ [W1]: { status: "unconfirmed", sig: null } }));
+  env.dom.getElementById("reload").click();
+  await settle(20);
+  env.dom.getElementById("send").click();
+  await confirmYes(env, 4, 15);
+  const saved = JSON.parse(env.store.local.get(key) || "{}");
+  assert.ok(saved[W1], "the unconfirmed (sig-less) entry survived send()'s purge");
+  assert.strictEqual(saved[W1].status, "sent", "…then was overwritten by this send's own real result, same as any other row");
+});
+
+// ── N3 ───────────────────────────────────────────────────────────────────────────────────────
+section("N3 — signAndSend retries observe() on a `pending`/`retry:true` response before surfacing anything");
+
+t("a partial observe (one signature still pending) is retried automatically and settles on the second attempt", async () => {
+  let calls = 0;
+  const SIG1 = fakeSig(80);
+  const env = makeSandbox({
+    connectWallet: FUND,
+    observe: () => {
+      calls++;
+      if (calls === 1) return { ok: true, project: {}, batchId: "hb_test1", as: "owner", browserSign: { state: "signing", failed: {} }, recorded: [], ignored: [], journal: [], remainingWallets: [W1], pending: [SIG1], retry: true };
+      return { ok: true, project: {}, batchId: "hb_test1", as: "owner", browserSign: { state: "settled", failed: {} }, recorded: [W1], ignored: [], journal: [], remainingWallets: [] };
+    },
+  });
+  await connectAndLoad(env);
+  env.dom.getElementById("signSend").click();
+  await settle(8);
+  const bar = env.dom.els.get("confirmBar");
+  assert.ok(bar, "a confirm bar should have appeared");
+  bar.querySelector("#confirmYes").click();
+  // observeAll()'s backoff is a REAL setTimeout (production timing) — settle() only drains
+  // microtasks/setImmediate, so this waits real wall-clock time long enough for the one retry.
+  await new Promise((r) => setTimeout(r, 800));
+  assert.strictEqual(calls, 2, "observe() was retried exactly once after the pending response");
+  assert.ok(/Settled/.test(env.dom.getElementById("signSendStatus").innerHTML));
+});
+
+t("a thrown retry:true (the all-unindexed 503 shape) is retried up to 3 tries total, then surfaced", async () => {
+  let calls = 0;
+  const env = makeSandbox({
+    connectWallet: FUND,
+    observe: () => { calls++; throw Object.assign(new Error("the chain has not indexed these signature(s) yet"), { retry: true, pending: [fakeSig(81)] }); },
+  });
+  await connectAndLoad(env);
+  env.dom.getElementById("signSend").click();
+  await settle(8);
+  const bar = env.dom.els.get("confirmBar");
+  assert.ok(bar, "a confirm bar should have appeared");
+  bar.querySelector("#confirmYes").click();
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.strictEqual(calls, 3, "exactly 3 attempts before giving up");
+  assert.ok(/not indexed/.test(env.dom.getElementById("signSendStatus").innerHTML));
+});
+
+// ── P3-9 / P3-10 ─────────────────────────────────────────────────────────────────────────────
+section("P3-9/P3-10 — the settled wording says 'this payout', and a stuck live flow offers a real recovery button");
+
+t("the settled line reads 'every row this payout named', not 'this batch'", async () => {
+  const env = makeSandbox({ connectWallet: FUND });
+  await connectAndLoad(env);
+  env.dom.getElementById("signSend").click();
+  await confirmYes(env);
+  const status = env.dom.getElementById("signSendStatus").innerHTML;
+  assert.ok(/this payout named/.test(status), status);
+  assert.ok(!/this batch named/.test(status), status);
+});
+
+t("a live (signing/submitted) browserSign with a broadcast signature on file offers an OBSERVE WHAT I BROADCAST button that re-posts it under the batch's own nonce", async () => {
+  const SIG1 = fakeSig(90);
+  let observedBody = null;
+  // A mutable batch: the mock /payout route always echoes THIS object, so mutating its
+  // browserSign in the observe() stub — the way a real observe() call updates the real batch —
+  // is what the finally-block reload after the click actually sees, instead of a static fixture
+  // that would still read "signing" forever and re-clobber the settled status line.
+  const liveBatch = batchFixture({ browserSign: { state: "signing", nonce: NONCE, wallets: [W1], failed: {} } });
+  const env = makeSandbox({
+    connectWallet: FUND,
+    batch: liveBatch,
+    observe: (body) => {
+      observedBody = body;
+      liveBatch.browserSign = { state: "settled", nonce: NONCE, wallets: [W1], failed: {} };
+      return { ok: true, project: {}, batchId: "hb_test1", as: "owner", browserSign: liveBatch.browserSign, recorded: [W1], ignored: [], journal: [], remainingWallets: [] };
+    },
+  });
+  await connectAndLoad(env);
+  env.store.local.set("hub_desk_rows_" + PID + "_hb_test1", JSON.stringify({ [W1]: { status: "sent", sig: SIG1 } }));
+  env.dom.getElementById("reload").click();
+  await settle(20);
+  const btn = env.dom.getElementById("observeBroadcastBtn");
+  assert.ok(btn, "the OBSERVE WHAT I BROADCAST button must exist while live with a broadcast on file");
+  btn.click();
+  await settle(20);
+  assert.deepStrictEqual(observedBody && observedBody.sigs, [SIG1], "it re-posts exactly the signature this browser broadcast");
+  assert.strictEqual(observedBody && observedBody.nonce, NONCE, "…under the batch's OWN current nonce, never a fresh sign-request's");
+  assert.ok(/Settled/.test(env.dom.getElementById("signSendStatus").innerHTML));
+});
+
+t("no OBSERVE button when live but nothing was ever broadcast (ROW_STATUS empty)", async () => {
+  const env = makeSandbox({ connectWallet: FUND, batch: batchFixture({ browserSign: { state: "signing", nonce: NONCE, wallets: [W1], failed: {} } }) });
+  await connectAndLoad(env);
+  assert.strictEqual(env.dom.els.has("observeBroadcastBtn"), false);
 });
 
 (async () => {
