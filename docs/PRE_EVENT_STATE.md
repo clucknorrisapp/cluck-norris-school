@@ -211,6 +211,17 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 3** — the school is genuinely seven languages (the two lessons missing from
+  six dictionaries translated, and CI now fails on any lesson missing from any language); the
+  public engine dashboard separates three evidence classes that never mix (historical transfers,
+  retained decision events, illustrative simulator runs) and surfaces the discarded-counter flag;
+  reproduce-a-receipt (`scripts/reproduce-receipt.cjs` re-derives a payout from the published
+  inputs on the reader's machine; every program page states "N of M receipts reproduce"); the
+  `/hub/demo` no-wallet walkthrough on a labelled dry-run fixture derived by the real libs; the
+  settlement library's public contract (`lib/hub/README.md` + JSON Schemas served at
+  `/hub/schema/*.json`); receipts that explain their own number with the ledger's own functions;
+  the operator onboarding clock; POKEAHOE seeded as a labelled dry-run second project with
+  project-provided branding; Arena and X post drafts. PR #340.
 - **Colosseum batch 2** — the disclosure file caught up to every in-window PR; the roadmap
   extension §7 (E1–E9: reproduce-a-receipt, the no-wallet `/hub/demo` walkthrough, on-chain
   commitment of the program hash dry-run first, the settlement library as a schema'd public module,
