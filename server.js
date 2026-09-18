@@ -8465,6 +8465,15 @@ app.get(["/hub/wallet", "/hub/wallet/:wallet"], (req, res) => { res.sendFile(joi
 // per-request OG build below — there is no project/program/receipt to vary the text by.
 app.get("/hub/trust", (req, res) => { res.sendFile(join(__dirname, "public", "hub-trust.html")); });
 
+// AA4 (Colosseum roadmap §11): the judge's fifteen minutes — one page mapping each judging
+// criterion to the exact URLs to open. Same reason for its own route as /hub/verify and
+// /hub/trust above: registered BEFORE the generic /hub/:project pattern below, or "judge" would
+// be read as a project id and served hub.html instead. public/hub-judge.html is GENERATED from
+// docs/JUDGE_GUIDE.md by scripts/build-judge-page.cjs and committed (unlike hub-verify.bundle.js,
+// it must serve on a no-build boot), so this is a plain sendFile like hub-trust.html's, not a
+// build-time dependency check.
+app.get("/hub/judge", (req, res) => { res.sendFile(join(__dirname, "public", "hub-judge.html")); });
+
 // ── Y4: shareable Hub pages — server-rendered Open Graph / Twitter Card meta (Colosseum roadmap
 // §9). One static branded image (public/og/hub-card.png, 1200x630 — no dynamic image generation,
 // the roadmap line, and served below with a long cache) shared by every route; only the <title>/

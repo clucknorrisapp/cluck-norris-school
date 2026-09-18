@@ -1407,5 +1407,12 @@
   "RANK": "RANGO",
   "PREV RANK": "RANGO ANTERIOR",
   "CHANGE": "CAMBIO",
-  "Embed this — the number is computed live, the same way this page is:": "Insértalo — el número se calcula en vivo, igual que esta página:"
+  "Embed this — the number is computed live, the same way this page is:": "Insértalo — el número se calcula en vivo, igual que esta página:",
+  "The Judge's Fifteen Minutes": "Los Quince Minutos del Jurado",
+  "WHAT TO OPEN, IN ORDER, PER JUDGING CRITERION": "QUÉ ABRIR, EN ORDEN, POR CRITERIO DE EVALUACIÓN",
+  "Every claim here is checked against a route this repo registers and a test file in scripts/.": "Cada afirmación aquí se verifica contra una ruta que este repositorio registra y un archivo de prueba en scripts/.",
+  "Read docs/JUDGE_GUIDE.md on GitHub →": "Leer docs/JUDGE_GUIDE.md en GitHub →",
+  "What the Hub doesn't prove →": "Lo que el Hub no demuestra →",
+  "New here? Start with": "¿Nuevo aquí? Empieza con",
+  "the judge's fifteen minutes →": "los quince minutos del jurado →"
 }

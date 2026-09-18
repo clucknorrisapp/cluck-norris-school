@@ -1407,5 +1407,12 @@
   "RANK": "排名",
   "PREV RANK": "此前排名",
   "CHANGE": "变化",
-  "Embed this — the number is computed live, the same way this page is:": "嵌入此徽章 — 数字实时计算，与本页相同："
+  "Embed this — the number is computed live, the same way this page is:": "嵌入此徽章 — 数字实时计算，与本页相同：",
+  "The Judge's Fifteen Minutes": "评委的十五分钟",
+  "WHAT TO OPEN, IN ORDER, PER JUDGING CRITERION": "按评审标准依次打开的内容",
+  "Every claim here is checked against a route this repo registers and a test file in scripts/.": "此处的每一条陈述都对照本仓库注册的路由和 scripts/ 中的测试文件进行了核实。",
+  "Read docs/JUDGE_GUIDE.md on GitHub →": "在 GitHub 上阅读 docs/JUDGE_GUIDE.md →",
+  "What the Hub doesn't prove →": "Hub 无法证明的事 →",
+  "New here? Start with": "初次来访？从这里开始",
+  "the judge's fifteen minutes →": "评委的十五分钟 →"
 }

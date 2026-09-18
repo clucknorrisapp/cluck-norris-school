@@ -590,6 +590,14 @@ jobs:
       # registered server.js route. Static, no server boot — always runs, like X2 above.
       - name: hub-trust.html matches HUB_VERIFY.md §(g), no forbidden words (AA5)
         run: node scripts/hub-trust-doc-test.cjs
+      # AA4 (docs/COLOSSEUM_ROADMAP.md §11): public/hub-judge.html (the judge's fifteen minutes)
+      # cannot silently drift from docs/JUDGE_GUIDE.md — regenerating the doc via
+      # scripts/build-judge-page.cjs must produce the exact committed page, the doc never uses a
+      # forbidden word or mentions Normie Quest/Wallet Watch, and every scripts/*.cjs, docs/*.md
+      # and relative URL it names exists / matches a registered route. Static, no server boot —
+      # always runs, like X2 and AA5 above.
+      - name: hub-judge.html matches docs/JUDGE_GUIDE.md, no drift, no forbidden words (AA4)
+        run: node scripts/hub-judge-doc-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)
@@ -642,6 +650,17 @@ jobs:
       - name: Hub status — /api/build and /hub/status
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-status-test.cjs
+      # AA4 (docs/COLOSSEUM_ROADMAP.md §11): the doc-drift test above only proves a URL's SHAPE
+      # matches a registered route (static, no boot). This is the live half — boots the real
+      # server with NO BUILD (dist/ never generated) on port 3268 and GETs every relative URL
+      # docs/JUDGE_GUIDE.md tells a judge to open, asserting 200. Every route it names has an
+      # explicit app.get reading public/ or lib/hub/schema/ directly (like hub-trust.html and
+      # hub-status.html above), so this must pass with no `npm run build` step run first.
+      - name: Hub judge guide — every URL it names answers 200 on a no-build boot (AA4)
+        if: steps.gate.outputs.run == 'true'
+        env:
+          HUB_JUDGE_LINK_TEST_PORT: "3268"
+        run: node scripts/hub-judge-link-test.cjs
       # Y1 (docs/COLOSSEUM_ROADMAP.md §9): /hub/verify reproduces a Hub receipt IN THE BROWSER —
       # a second vite build (vite.hubverify.config.js) bundles the exact same pure
       # lib/hub/reproduce.js + lib/hub/schema-validate.js + lib/hub/canonical.js the Node script

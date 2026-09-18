@@ -89,6 +89,10 @@ below works with no wallet connected:
   every command copy-pasteable, which routes are live on production today vs staging, and what
   isn't independently verifiable yet, stated plainly. `scripts/hub-verify-doc-test.cjs` pins the
   doc against the code in CI so it can't quietly go stale.
+- **[`/hub/judge`](https://clucknorris.app/hub/judge)** — the judge's fifteen minutes: one section
+  per Colosseum judging criterion, each a short list of exact URLs to open, what to look for, and
+  the test file that pins it — rendered straight from [`docs/JUDGE_GUIDE.md`](docs/JUDGE_GUIDE.md)
+  so the page and the doc can never drift apart.
 
 **What isn't true yet, stated plainly.** A program version's `hash` is served by the same server
 that computes the payout — that lets a reader *re-derive* the arithmetic from the published
