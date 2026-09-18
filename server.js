@@ -7966,6 +7966,58 @@ app.get("/api/hub-demo/:project/r/:id", (req, res) => {
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 
+// ── E1: reproduce a receipt from the published inputs (Colosseum roadmap §1 "the number") ─────
+// lib/hub/reproduce.js is the pure core scripts/reproduce-receipt.cjs runs on a reader's own
+// machine; these two routes publish exactly what it needs and nothing else. Read-only, no wallet,
+// no key. The lock-to-earn payout (lib/cuna-payout.js, CUNA aliased onto it — lib/hub/store.js)
+// carries no program-version hash of its own today, so `programVersion`/`hash` come back null —
+// reported honestly rather than invented (see the file header for why).
+const hubReproduce = require("./lib/hub/reproduce");
+app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const batches = hubStore.read(kv, p.id, "batches", {}) || {};
+    const bt = batches[String(req.params.batchId || "")];
+    if (!bt) return res.status(404).json({ ok: false, error: "no such batch" });
+    const days = hubStore.read(kv, p.id, "days", {}) || {};
+    const dec = Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : (Number.isInteger(p.decimals) ? p.decimals : 9);
+    // Only wallets already SENT in this batch are built — the same public/private line
+    // lib/hub/public.js draws (a batch row with no signature is never public). Optional
+    // ?wallet= narrows to one, so a reader reproducing a single receipt fetches one small file.
+    const wanted = String(req.query.wallet || "").trim();
+    const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
+    if (wanted) {
+      if (!all[wanted]) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
+      return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: all[wanted] } });
+    }
+    return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: all });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// { batches: [{batchId, total, reproduced, mismatched, missingInputs, period}], overall } —
+// every settled row of every batch, reproduced from the inputs the route above publishes. In-memory
+// 5-minute cache (this is real work over the whole ledger, not a lookup) on top of the HTTP cache
+// header, same pattern as the other Hub read routes.
+const HUB_REPRO_CACHE = new Map();   // projectId -> { at, data }
+const HUB_REPRO_CACHE_MS = 5 * 60 * 1000;
+app.get("/api/hub/:project/reproducibility", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const id = String(req.params.project || "").toLowerCase();
+  const p = hubProjects()[id];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const cached = HUB_REPRO_CACHE.get(id);
+    if (cached && Date.now() - cached.at < HUB_REPRO_CACHE_MS) return res.status(200).json(cached.data);
+    const batches = hubStore.read(kv, id, "batches", {}) || {};
+    const days = hubStore.read(kv, id, "days", {}) || {};
+    const otherPrograms = hubProjectView(p).programs.filter((pr) => pr.kind !== "lock-to-earn");
+    const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms });
+    const data = { ok: true, project: id, batches: rep.batches, overall: rep.overall };
+    HUB_REPRO_CACHE.set(id, { at: Date.now(), data });
+    return res.status(200).json(data);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 // Live platform-access pricing for the pre-registration apply page (hub-apply.html) — the
 // per-project quote at /api/hub/:project/access needs an already-registered project, but a
 // prospective applicant has none yet. This reads the same append-only schedule

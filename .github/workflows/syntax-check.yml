@@ -221,6 +221,12 @@ jobs:
       # reach /api/hub — and hash the terms a program ran under.
       - name: Hub public views (no private fields, stable terms hash, honest totals)
         run: node scripts/hub-public-test.cjs
+      # E1 (docs/COLOSSEUM_ROADMAP.md §1 "the number"): a receipt's amount re-derived from the
+      # batch's own published inputs (periods, prior paid, prior reserved), reconstructed purely
+      # from durable timestamps — MATCH, a tampered MISMATCH, and an honest MISSING_INPUTS naming
+      # what is missing; the reproducibility ratio; the CLI script's --offline mode with no server.
+      - name: Hub receipt reproduction (the number — MATCH/MISMATCH/MISSING_INPUTS, --offline)
+        run: node scripts/reproduce-receipt-test.cjs
       # The per-project Lock to Earn engine: config from the version in force, the two new rules,
       # one hour of accrual, the tick over the project's own keys, the holder view.
       - name: Hub engine (Lock to Earn for any project)
