@@ -1674,6 +1674,75 @@ t("a null (failed) send releases the claim so the NEXT occurrence retries, rathe
   assert.strictEqual(sends.length, 1, "a null return must release the claim so the identical message can be retried and land — got " + sends.length);
 });
 
+section("36. NEW-3 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 5) — an id re-issue carries only what a fresh mint should inherit");
+
+t("storeIsEmptyFor also treats a stray hub:waive: entry, or a stashed hub:quotes: book, as NOT empty", () => {
+  const p = proj.validateProject({ id: "zzwaive", label: "ZZ", symbol: "ZZW", mint: W.MINT1, fundingWallet: W.FUND, operatorWallets: [W.A] }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  const kv1 = store.memoryKv();
+  store.writeRegistry(kv1, proj.approveProject({}, p, { nowUnix: NOW }));
+  assert.strictEqual(store.storeIsEmptyFor(kv1, "zzwaive"), true, "nothing written yet");
+  kv1.set(`hub:waive:zzwaive:hb_x:${W.A}`, { kind: "waive", projectId: "zzwaive", batchId: "hb_x", wallet: W.A, amountRaw: "100", by: "owner", at: NOW, reason: "" });
+  assert.strictEqual(store.storeIsEmptyFor(kv1, "zzwaive"), false, "a waiver paper trail for this id must not be silently inherited by a re-issue");
+  // A waiver tagged with a DIFFERENT id never counts against this one.
+  const kv1b = store.memoryKv();
+  store.writeRegistry(kv1b, proj.approveProject({}, p, { nowUnix: NOW }));
+  kv1b.set(`hub:waive:someotherid:hb_x:${W.A}`, { kind: "waive", projectId: "someotherid", batchId: "hb_x", wallet: W.A, amountRaw: "100", by: "owner", at: NOW, reason: "" });
+  assert.strictEqual(store.storeIsEmptyFor(kv1b, "zzwaive"), true, "a different id's waiver is irrelevant");
+
+  const kv2 = store.memoryKv();
+  store.writeRegistry(kv2, proj.approveProject({}, p, { nowUnix: NOW }));
+  assert.strictEqual(store.storeIsEmptyFor(kv2, "zzwaive"), true, "nothing written yet");
+  kv2.set(`hub:quotes:zzwaive`, { q1: { wallet: W.A, lamports: 500000000, expiresAt: NOW + 600 } });
+  assert.strictEqual(store.storeIsEmptyFor(kv2, "zzwaive"), false, "a stashed, still-payable access quote for this id must not be silently inherited by a re-issue");
+});
+
+t("same-mint re-approve/un-suspend keeps access, milestones, payoutSources and vaultProject exactly as they were", async () => {
+  const kv = store.memoryKv();
+  const p = proj.validateProject({ id: "zzsame", label: "ZZ", symbol: "ZZS", mint: W.MINT1, fundingWallet: W.FUND, operatorWallets: [W.A] }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  const reg = proj.approveProject({}, p, { nowUnix: NOW });
+  reg.zzsame = {
+    ...reg.zzsame, status: "suspended",
+    access: { tier: "standard", note: "", paidThroughUnix: NOW + 999999, payments: [{ sig: SIG(500), atUnix: NOW, coversUntilUnix: NOW + 999999 }], grantedAt: NOW },
+    milestones: { ...proj.milestonesInit(), approvedAt: NOW, firstBatchSignedAt: NOW - 1000 },
+    payoutSources: [W.B], payoutSourcesHistory: [{ payoutSources: [W.B], at: NOW }], vaultProject: "clkn",
+  };
+  store.writeRegistry(kv, reg);
+  const app = mountFor({ kv, adminAuthOK: () => true });
+  const r = await call(app, "/api/hub-registry", { method: "POST", query: { id: "zzsame", label: "ZZ Renamed", symbol: "ZZS", mint: W.MINT1, fundingWallet: W.FUND } });
+  assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
+  const after = store.readRegistry(kv).zzsame;
+  assert.strictEqual(after.access.paidThroughUnix, NOW + 999999, "same-mint keeps the paid-through date");
+  assert.strictEqual(after.milestones.firstBatchSignedAt, NOW - 1000, "same-mint keeps milestones");
+  assert.deepStrictEqual(after.payoutSources, [W.B], "same-mint keeps the allowlist");
+  assert.strictEqual(after.vaultProject, "clkn", "same-mint keeps vaultProject");
+});
+
+t("a mint change on a suspended, EMPTY-STORE id resets access, milestones, payoutSources and vaultProject — never inherited by the new mint", async () => {
+  const kv = store.memoryKv();
+  const p = proj.validateProject({ id: "zzdiff", label: "ZZ", symbol: "ZZD", mint: W.MINT1, fundingWallet: W.FUND, operatorWallets: [W.A] }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  const reg = proj.approveProject({}, p, { nowUnix: NOW });
+  reg.zzdiff = {
+    ...reg.zzdiff, status: "suspended",
+    access: { tier: "standard", note: "", paidThroughUnix: NOW + 999999, payments: [{ sig: SIG(501), atUnix: NOW, coversUntilUnix: NOW + 999999 }], grantedAt: NOW },
+    milestones: { ...proj.milestonesInit(), approvedAt: NOW, firstBatchSignedAt: NOW - 1000 },
+    payoutSources: [W.B], payoutSourcesHistory: [{ payoutSources: [W.B], at: NOW }], vaultProject: "clkn",
+  };
+  store.writeRegistry(kv, reg);
+  assert.strictEqual(store.storeIsEmptyFor(kv, "zzdiff"), true, "no days/paid/batches/journal ever written for this id");
+  const app = mountFor({ kv, adminAuthOK: () => true });
+  const r = await call(app, "/api/hub-registry", { method: "POST", query: { id: "zzdiff", label: "ZZ Relaunch", symbol: "ZZD", mint: MINT_B, fundingWallet: W.B } });
+  assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
+  const after = store.readRegistry(kv).zzdiff;
+  assert.strictEqual(after.mint, MINT_B);
+  assert.strictEqual(after.access.paidThroughUnix, null, "a new mint starts owing platform access from zero, never inheriting the old mint's paid months");
+  assert.deepStrictEqual(after.access.payments, []);
+  assert.strictEqual(after.milestones.firstBatchSignedAt, null, "the onboarding clock restarts");
+  assert.strictEqual(after.milestones.approvedAt, NOW, "approvedAt is set FRESH by this very call, not carried");
+  assert.deepStrictEqual(after.payoutSources, [], "the old mint's settlement-source allowlist does not carry to a different escrow");
+  assert.ok(after.payoutSourcesHistory.length === 2 && after.payoutSourcesHistory[1].payoutSources.length === 0, "the reset itself is recorded, append-only — " + JSON.stringify(after.payoutSourcesHistory));
+  assert.strictEqual(after.vaultProject, null, "the vault-sweep wallet does not carry to a different escrow either");
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
