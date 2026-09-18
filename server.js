@@ -17900,6 +17900,29 @@ app.get("/api/holders/snapshots", rateLimit("hubheavy", { windowMs: 60000, max: 
   try { return res.json({ ok: true, mint, snapshots: holdersSnapshot.series(kv, mint) }); }
   catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// Diff between two recorded snapshots (Colosseum roadmap §11 AA3) — registered BEFORE the
+// single-id route above so a 3-segment path is never captured by the 1-segment one; verified
+// this actually matters (it doesn't in Express — a route with more path segments than
+// "/api/holders/snapshots/:id" simply never matches it either way) by
+// scripts/holders-snapshot-diff-test.cjs's route test, but the order is kept defensive regardless.
+// Exact same shape/gate as its siblings: SOL_ADDR_RE mint check, 404 for an unknown id, no pass
+// or wallet gate (read-only history of a public on-chain fact). Wallets are full in the JSON;
+// the page shortens them for display.
+app.get("/api/holders/snapshots/:a/diff/:b", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const mint = String(req.query.mint || "").trim();
+  const idA = String(req.params.a || "").trim();
+  const idB = String(req.params.b || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  try {
+    const snapA = holdersSnapshot.getSnapshot(kv, mint, idA);
+    if (!snapA) return res.status(404).json({ ok: false, error: "no_such_snapshot" });
+    const snapB = holdersSnapshot.getSnapshot(kv, mint, idB);
+    if (!snapB) return res.status(404).json({ ok: false, error: "no_such_snapshot" });
+    const diff = holdersSnapshot.diffSnapshots(snapA, snapB);
+    return res.json({ ok: true, mint, diff });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 app.get("/api/holders/snapshots/:id", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   const mint = String(req.query.mint || "").trim();
