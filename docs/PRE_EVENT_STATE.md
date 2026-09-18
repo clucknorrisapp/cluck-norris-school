@@ -211,6 +211,13 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 17** — the pitch script and demo narration re-timed to the final surface set
+  (every claim re-checked against `develop`, a false "four weeks" claim removed, a stale "not yet
+  fixed" note corrected) with a one-page click sheet for the recording; the desk fix round from
+  the rehearsal (`/api/hub-registry` accepts `accessTier` and refuses unknown fields instead of
+  answering ok while doing nothing; the wallet roll-up says it shows history, not today's
+  eligibility; the project page states what a version is versus a program; a project with no
+  funding wallet is told the exact next step). PR #356.
 - **Colosseum batch 16** — the POKEAHOE rehearsal end to end with `dryRun` kept on (the dry-run
   project taken from placeholder terms through preview, Launch Readiness, the refusal at export
   and send, and every public page, against a local boot of the merged tree; the write-up names
