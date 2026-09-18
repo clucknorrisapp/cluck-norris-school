@@ -433,8 +433,11 @@
     } catch (e) { /* omit the sparkline rather than guess */ }
     if (!one) {
       // Program index — names and counts only; the details live on each program's own page.
+      // CC1: "what changed in the rules" — only once there is something to diff (2+ versions).
+      var compareLine = (v.versions && v.versions.length >= 2)
+        ? '<div class="small" data-clkn-avoid="1" style="margin-top:10px"><a href="/hub/' + esc(v.id) + '/programs/compare">What changed between versions? →</a></div>' : '';
       app.innerHTML = heroBlock(v) +
-        '<div class="card"><div class="intro" data-clkn-avoid="1">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + tokenLine + holdersLine + historyBlock(hist) + '</div>' +
+        '<div class="card"><div class="intro" data-clkn-avoid="1">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + tokenLine + holdersLine + compareLine + '</div>' +
         (v.programs.length ? v.programs.map(function (p) { var n = (p.payouts || []).filter(function (x) { return x.sig; }).length; return '<a class="card proj-link" href="/hub/' + esc(v.id) + '/p/' + encodeURIComponent(p.id) + '"><div class="prog-head" data-clkn-avoid-kids="1"><h2>' + esc(p.label || p.kind) + '</h2><div class="chips"><span class="chip kind">' + esc(String(p.kind).replace(/-/g, ' ')) + '</span><span class="chip ' + (n ? 'ok' : '') + '">' + n + ' receipt' + (n === 1 ? '' : 's') + '</span></div></div></a>'; }).join('') : '<div class="card"><div class="fact">No programs on record for this project yet.' + (v.dryRun ? ' This is a dry run — see the note above.' : '') + '</div></div>');
       return;
     }
@@ -486,6 +489,20 @@
     document.getElementById('title').textContent = 'Receipt';
     document.getElementById('subtitle').textContent = (p.label || p.kind).toUpperCase() + ' · ' + String(r.projectId).toUpperCase();
     var proof = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getSignatureStatuses', params: [[x.sig], { searchTransactionHistory: true }] }, null, 2);
+    // CC1: "the rules changed since this receipt" — only when this receipt names the program
+    // version it was paid under (x.programVersion) AND a newer one has since been published.
+    // Best-effort like batchRepro above: a failed fetch just omits the line, never guesses.
+    var compareLine = '';
+    if (x.programVersion && x.programVersion.version) {
+      try {
+        var pv0 = await fetch('/api/hub/' + encodeURIComponent(r.projectId)).then(function (y) { return y.json(); });
+        var vlist = (pv0 && pv0.ok && pv0.project.versions) || [];
+        var latestV = vlist.reduce(function (m, v) { return Math.max(m, v.version); }, 0);
+        if (latestV > x.programVersion.version) {
+          compareLine = '<div class="small" data-clkn-avoid="1" style="margin-top:6px"><a href="/hub/' + esc(r.projectId) + '/programs/compare?a=' + esc(x.programVersion.version) + '&b=' + esc(latestV) + '">The rules changed since this receipt — compare →</a></div>';
+        }
+      } catch (e) { /* omit the line rather than guess */ }
+    }
     app.innerHTML = (r.dryRun ? '<div class="card">' + dryRunBadge() + '</div>' : '') +
       '<div class="card">' + statTiles([['Amount', amt(x.amountUi, sym)], ['State', esc(x.state)], ['Submitted', ts(x.at)]]) +
       '<div class="terms" data-clkn-avoid-kids="1"><div><b>To</b> ' + acct(x.wallet) + '</div><div><b>Token</b> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(p.prizeMint || p.mint) + '">' + esc(shortAddr(p.prizeMint || p.mint, 6, 4)) + '</a></div><div><b>Program</b> ' + esc(p.label || p.kind) + '</div>' + (p.termsHash ? '<div><b>Terms hash</b> <span class="mono">' + esc(p.termsHash.slice(0, 16)) + '…</span></div>' : '') + '</div>' +
@@ -494,6 +511,7 @@
       '<div class="sec-title" data-clkn-avoid="1">Verify it yourself</div><div class="fact">Send this to any Solana RPC. A <span class="mono">confirmationStatus</span> of <span class="mono">confirmed</span> or <span class="mono">finalized</span> with no <span class="mono">err</span> means the transfer is on the chain.</div><pre class="proof">' + esc(proof) + '</pre>' +
       explainBlock(x) +
       '<div class="small" data-clkn-avoid="1" style="margin-top:12px"><a href="/hub/verify?receipt=' + encodeURIComponent(location.origin + '/hub/' + r.projectId + '/r/' + x.sig) + '">Reproduce this receipt in your browser →</a></div>' +
+      compareLine +
       // AA2: only where a batch id is known (lock-to-earn receipts carry one; a buy-comp receipt
       // reproduces from the sealed standings instead and has no batch to bundle).
       (x.batchId ? '<div class="small" data-clkn-avoid="1" style="margin-top:6px"><a href="/api/hub/' + esc(r.projectId) + '/batch/' + esc(x.batchId) + '/bundle">Download the evidence bundle →</a></div>' : '') +

@@ -14,6 +14,7 @@
     "rewardDecimals",
     "generatedAt",
     "programs",
+    "versions",
     "totals"
   ],
   "additionalProperties": false,
@@ -108,6 +109,36 @@
             "type": "object",
             "additionalProperties": true,
             "description": "per-kind totals — winners/paid/settled/submitted counts and sealed/paid amounts. Never includes the word \"owed\" next to an address: an unsent or unreceipted amount is reported as \"no receipt on file\", never as owed (owner, 2026-09-16)."
+          }
+        }
+      }
+    },
+    "versions": {
+      "type": "array",
+      "description": "Colosseum roadmap CC1: every program version this project has published, oldest first — [] if none yet. NEVER carries `terms`, `effectiveTo` or `commitment`; a reader fetches the full document (including its terms) from GET /api/hub/<projectId>/program/<version>, the one canonical place a version's terms are published. `publishedAt` is the version's own `effectiveFrom` (YYYY-MM-DD) — a program version has no separate wall-clock publish time, it takes effect (and is published) on that UTC day.",
+      "items": {
+        "type": "object",
+        "required": [
+          "version",
+          "hash",
+          "publishedAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "the program-version.schema.json `version` — 1-based, monotonically increasing."
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "that version's own hash — see program-version.schema.json."
+          },
+          "publishedAt": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "the UTC day (YYYY-MM-DD) this version took effect — its `effectiveFrom`."
           }
         }
       }
