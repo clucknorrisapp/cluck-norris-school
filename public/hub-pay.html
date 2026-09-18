@@ -44,8 +44,8 @@
 <div class="wrap">
   <a class="back-home" id="back" href="/hub">← PROJECT HUB</a>
   <div class="header">
-    <h1 id="title">Pay for a month</h1>
-    <p id="subtitle">PLATFORM ACCESS · VERIFIED ON-CHAIN</p>
+    <h1 id="title" data-clkn-avoid="1">Pay for a month</h1>
+    <p id="subtitle" data-clkn-avoid="1">PLATFORM ACCESS · VERIFIED ON-CHAIN</p>
   </div>
   <div id="app"><div class="status">LOADING…</div></div>
 </div>
@@ -92,10 +92,10 @@
     if (!r.ok) throw new Error(r.error || "could not load");
     PROJECT = r.project; QUOTE = r.quote; PAYTO = r.payTo;
     $("title").textContent = "Pay for a month — " + PROJECT.symbol;
-    var h = '<div class="card"><div>' + statusLine(r.access) + '</div>';
+    var h = '<div class="card" data-clkn-avoid-kids="1"><div>' + statusLine(r.access) + '</div>';
     h += '<p class="small" style="margin-top:10px">Plan: <span class="chip gold">' + esc(String(r.access.tier).toUpperCase()) + '</span></p></div>';
     if (!QUOTE) { app.innerHTML = h; return; }
-    h += '<div class="card"><p class="intro">One month is <b>' + esc(String(QUOTE.sol)) + ' SOL</b>' + (QUOTE.clknRaw ? ' or <b>' + esc(QUOTE.clknUi) + ' CLKN</b> at this moment’s price' : '') + '. The quote is good for ' + esc(String(QUOTE.validForMin)) + ' minutes; the payment is checked against it, not against a later price.</p>';
+    h += '<div class="card"><p class="intro" data-clkn-avoid="1">One month is <b>' + esc(String(QUOTE.sol)) + ' SOL</b>' + (QUOTE.clknRaw ? ' or <b>' + esc(QUOTE.clknUi) + ' CLKN</b> at this moment’s price' : '') + '. The quote is good for ' + esc(String(QUOTE.validForMin)) + ' minutes; the payment is checked against it, not against a later price.</p>';
     h += '<p class="small">Pay from one of the project’s <b>operator wallets</b>. The payment is matched to the wallet that sent it — a payment from any other wallet is refused and stays with that wallet.</p>';
     h += '<div id="walletBox" class="row-flex"><button class="btn" id="connect">CONNECT WALLET</button></div>';
     h += '<div id="pay" hidden><div class="opt"><b>PAY ' + esc(String(QUOTE.sol)) + ' SOL</b><div class="row-flex" style="margin-top:8px"><button class="btn" id="paySol">PAY IN SOL</button></div></div>';

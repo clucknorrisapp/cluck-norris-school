@@ -7889,7 +7889,9 @@ function hubProjectView(project) {
       giveaway = hubPublic.giveawayView({ draw: st && st.draw, payouts: cunaGiveaway.payoutState(), cfg: cunaGiveaway.config() });
     } catch (_) { /* no draw = no giveaway card */ }
   }
-  return hubPublic.projectView({ project, comps, draws, stake, giveaway });
+  let lessonReads = null;
+  try { lessonReads = traction.lessonReadsForProject(kv, project.id); } catch (_) { /* the line just doesn't render */ }
+  return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads });
 }
 app.get("/api/hub", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
@@ -17467,6 +17469,11 @@ app.post("/api/track", (req, res) => {
     // progress (grandfathering — sunset lives in the lib).
     const m = /^lesson_complete:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
     if (m && b.sid) schoolProgress.mark(b.sid, m[1], { backfill: b.bf === 1 || b.bf === "1" });
+    // E6: the school → Hub bridge. The client only sends this after a learner who arrived via a
+    // Hub project's lessonHref (lib/hub/teach.js, public/hub.html) FINISHES one of the six
+    // locking lessons — see LOCK_LESSON_IDS in src/App.jsx. Anonymous sid only, never a wallet.
+    const hlrM = /^hub_lesson_read:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
+    if (hlrM && b.sid) { try { traction.recordHubLessonRead(kv, { project: hlrM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
   } catch (_) {}
   return res.status(204).end();
 });

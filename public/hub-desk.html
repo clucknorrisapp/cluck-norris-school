@@ -168,6 +168,8 @@
       <div class="btns"><button class="ghost" id="saveTerms">SAVE AS A NEW VERSION (from tomorrow)</button></div>
       <div class="muted" id="termsNote" style="margin-top:8px"></div>
       <details><summary>VERSION HISTORY</summary><pre id="versions" class="mono" style="white-space:pre-wrap;max-height:220px;overflow:auto"></pre></details>
+      <div class="btns" style="margin-top:10px"><button class="ghost" id="commitBtn">COMMIT LATEST VERSION ON-CHAIN</button></div>
+      <div class="muted" id="commitNote" style="margin-top:8px"></div>
     </div>
   </div>
 </div>
@@ -217,6 +219,7 @@
 
   // ── session ───────────────────────────────────────────────────────────────────────────────
   function b64(u8) { var s = ""; for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); }
+  function b64ToBytes(b64s) { var bin = atob(b64s), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
   async function signIn() {
     $("authNote").textContent = "asking the server for a message to sign…";
     var c = await (await fetch(API + "/desk/challenge?wallet=" + encodeURIComponent(WALLET))).json();
@@ -308,8 +311,72 @@
     $("tMinDays").value = t.minDurationDays || 30; $("tMaxDays").value = t.maxTermDays || 365;
     $("tCancel").value = t.cancelableAllowed ? "1" : "0"; $("tVesting").value = t.vesting || "any"; $("tSched").value = t.payoutSchedule || "weekly"; $("tCap").value = t.maxWalletSharePct || 0;
     $("tExclude").value = (t.excludeWallets || []).filter(function (w) { return w !== DESK.project.fundingWallet; }).join(", ");
-    $("versions").textContent = (DESK.versions || []).map(function (x) { return "v" + x.version + "  " + x.effectiveFrom + (x.effectiveTo ? " → " + x.effectiveTo : " → now") + "  " + x.hash; }).join("\n") || "(no versions)";
+    $("versions").textContent = (DESK.versions || []).map(function (x) { return "v" + x.version + "  " + x.effectiveFrom + (x.effectiveTo ? " → " + x.effectiveTo : " → now") + "  " + x.hash + (x.commitment ? "  committed:" + x.commitment.sig.slice(0, 10) + "…" : ""); }).join("\n") || "(no versions)";
+    renderCommit(v);
   }
+  // B5 (Colosseum E3): the LATEST version's on-chain commitment status. Only the FUNDING wallet's
+  // own signature can ever pass server-side verification (commit/observe checks the fee payer), so
+  // the button stays disabled — with the reason said plainly — unless the connected wallet IS that
+  // funding wallet; the server enforces the real rule, this is just not sending the wallet on a
+  // doomed signature request.
+  function renderCommit(v) {
+    var note = $("commitNote"), btn = $("commitBtn");
+    if (!v) { note.textContent = "No program version published yet."; btn.disabled = true; btn.textContent = "COMMIT LATEST VERSION ON-CHAIN"; return; }
+    if (v.commitment && v.commitment.sig) {
+      note.innerHTML = '<span class="ok">Committed on-chain</span> — <a href="https://solscan.io/tx/' + encodeURIComponent(v.commitment.sig) + '" target="_blank" rel="noopener" class="mono">' + esc(CluckUtil.shortAddr(v.commitment.sig)) + '</a> · check the memo yourself on any explorer.';
+      btn.disabled = true; btn.textContent = "v" + v.version + " ALREADY COMMITTED";
+      return;
+    }
+    btn.textContent = "COMMIT v" + v.version + " ON-CHAIN";
+    if (!WALLET) { note.textContent = "Not yet committed on-chain — the hash above is served by this server. Connect the FUNDING wallet to commit it independently."; btn.disabled = true; return; }
+    if (WALLET !== DESK.project.fundingWallet) {
+      note.innerHTML = 'Not yet committed on-chain. To commit, connect the project’s FUNDING wallet itself (<span class="mono">' + esc(CluckUtil.shortAddr(DESK.project.fundingWallet)) + '</span>) — not just any operator wallet; only its signature verifies.';
+      btn.disabled = true; return;
+    }
+    note.textContent = "Not yet committed on-chain — the hash above is served by this server, so it is reproducible from the published inputs, not independently verified. Signing below commits it on-chain from the funding wallet.";
+    btn.disabled = false;
+  }
+  $("commitBtn").addEventListener("click", function () {
+    var btn = $("commitBtn"), note = $("commitNote");
+    var v = (DESK.versions || [])[DESK.versions.length - 1];
+    if (!v || v.commitment) return;
+    askConfirm("Sign a memo transaction from the FUNDING wallet committing v" + v.version + "'s hash on-chain? Small network fee, cannot be undone, and only the funding wallet can sign it.", btn).then(function (yes) {
+      if (!yes) return;
+      if (!PROVIDER || typeof PROVIDER.signTransaction !== "function") { note.innerHTML = '<span class="bad">This wallet cannot sign transactions here.</span>'; return; }
+      btn.disabled = true; note.textContent = "building the transaction…";
+      var signedTx, builtTx;
+      call("/commit/build", { version: v.version }, "POST").then(function (b) {
+        builtTx = window.solanaWeb3.Transaction.from(b64ToBytes(b.txBase64));
+        note.textContent = "sign in your wallet…";
+        return fetch("/api/helius-rpc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "hub-commit-bh", method: "getLatestBlockhash", params: [{ commitment: "confirmed" }] }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) { var bh = j && j.result && j.result.value && j.result.value.blockhash; if (bh) builtTx.recentBlockhash = bh; return PROVIDER.signTransaction(builtTx); });
+      }).then(function (signed) {
+        signedTx = CluckWallet.asTransaction(signed, builtTx);   // bytes / foreign Transaction / in-place → ours
+        note.textContent = "sending…";
+        return fetch("/api/helius-rpc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "hub-commit-send", method: "sendTransaction", params: [b64(signedTx.serialize()), { encoding: "base64", skipPreflight: true, preflightCommitment: "confirmed", maxRetries: 5 }] }) });
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j.error) throw new Error(j.error.message || "send failed");
+        var sig = j.result;
+        note.textContent = "confirming on-chain… (" + sig.slice(0, 10) + "…)";
+        // The send can return before the RPC we read from has caught up — retry the observe a few
+        // times with a short wait rather than surfacing a scary error for an ordinary confirmation lag.
+        var attempt = function (triesLeft) {
+          return call("/commit/observe", { sig: sig, version: v.version }, "POST").catch(function (e) {
+            if (triesLeft <= 0) throw e;
+            return new Promise(function (res) { setTimeout(res, 2500); }).then(function () { return attempt(triesLeft - 1); });
+          });
+        };
+        return attempt(6);
+      }).then(function () {
+        note.innerHTML = '<span class="ok">Committed on-chain.</span>';
+        return load();
+      }).catch(function (e) {
+        note.innerHTML = '<span class="bad">' + esc((e && e.message) || String(e)) + '</span>';
+        btn.disabled = false;
+      });
+    });
+  });
   $("saveTerms").addEventListener("click", function () {
     askConfirm("Save these terms as a new version effective tomorrow? Hours already accrued keep the old version.", $("saveTerms")).then(function (yes) {
       if (!yes) return;

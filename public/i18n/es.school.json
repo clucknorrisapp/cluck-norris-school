@@ -4132,5 +4132,7 @@
   "Matches buyers and sellers at specific prices. Standard on CEXs; a few on-chain Solana DEXs (OpenBook, Phoenix) use one too.": "Empareja compradores y vendedores a precios específicos. Estándar en los CEX; algunos DEX on-chain de Solana (OpenBook, Phoenix) también usan uno.",
   "Most Solana DEXs (Jupiter routes, Raydium, Orca) are AMMs: every trade pulls from a Liquidity Pool — a smart contract holding two tokens — instead of matching an order book. LP providers earn fees from every swap. A few on-chain DEXs (OpenBook, Phoenix) still use order books, but you keep your own keys either way.": "La mayoría de los DEX de Solana (las rutas de Jupiter, Raydium, Orca) son AMMs: cada operación se nutre de un pool de liquidez —un contrato inteligente que contiene dos tokens— en lugar de emparejar un libro de órdenes. Los proveedores de LP ganan comisiones en cada swap. Algunos DEX on-chain (OpenBook, Phoenix) todavía usan libros de órdenes, pero de cualquier forma conservas tus propias llaves.",
   "AMM-style DEXs (most of them) use liquidity pools instead of a traditional order book — though a few on-chain DEXs like OpenBook and Phoenix still run one.": "Los DEX de estilo AMM (la mayoría) usan pools de liquidez en lugar de un libro de órdenes tradicional — aunque algunos DEX on-chain como OpenBook y Phoenix todavía usan uno.",
-  "Seed Phrase Survival": "Supervivencia de la frase semilla"
+  "Seed Phrase Survival": "Supervivencia de la frase semilla",
+  "READY TO LOCK?": "¿LISTO PARA BLOQUEAR?",
+  "See a project's published terms and receipts": "Ve los términos publicados de un proyecto y sus recibos"
 }

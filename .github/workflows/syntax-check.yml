@@ -146,6 +146,15 @@ jobs:
       # hub.html page.
       - name: Project Hub — the receipt teaches (E5)
         run: node scripts/hub-explain-test.cjs
+      # Addendum B5 / roadmap E3: the on-chain memo format is byte-diffed against a hand-built
+      # Uint8Array before it ships; verifyCommitTx never trusts the client (wrong payer, wrong or
+      # missing memo, more than one memo, a failed or unconfirmed tx are all refused); a version's
+      # own hash is unaffected by attaching a commitment (bookkeeping, like effectiveTo); a
+      # commitment is written ONCE and a later, different-looking observation never overwrites it;
+      # the public projection carries only sig/slot/observedAt, never the memo text; the demo
+      # fixture never carries one, so it shows "not yet committed" honestly rather than by default.
+      - name: Project Hub — independent on-chain commitment (Addendum B5 / E3)
+        run: node scripts/hub-commit-test.cjs
       # Analytics: a visitor counts as ENGAGED only after a second page or a funnel event, and
       # views are keyed by the real Host header. Since 2026-08-16 the site records ~4,500
       # one-page, no-referrer "visitors" a day that BOT_RE cannot see; this is what stops that

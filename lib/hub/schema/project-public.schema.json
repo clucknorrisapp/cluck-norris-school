@@ -200,6 +200,28 @@
           "description": "x.com / t.me / the project's own https site only."
         }
       }
+    },
+    "lessonReads": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "period"
+      ],
+      "description": "E6: how many anonymous visitors read the lock lessons before reaching this project's page in the period — present only when the count is above zero (never a zero brag); no denominator is exposed publicly so it cannot be read as a rate.",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "period": {
+          "type": "string",
+          "description": "the window the count covers, e.g. \"30d\"."
+        }
+      }
     }
   }
 }
