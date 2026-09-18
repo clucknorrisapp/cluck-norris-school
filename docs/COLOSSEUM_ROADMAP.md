@@ -200,7 +200,9 @@ competition → airdrop → listing checkup → owners snapshot → burn receipt
 that exist** with a per-mint checklist read from the existing feeds; the "Request a lock-to-earn
 program" intake with an owner-visible queue. That is all.
 **Deferred until the integration gate is green:** the public Buy Special standings and
-hold-through proof page, the standalone airdrop per-drop receipt page. (Revision 1 called this
+hold-through proof page, the standalone airdrop per-drop receipt page. *(Both pulled forward on
+2026-09-18 under the owner's "build non-stop" directive once the gate's PR was green on CI and
+under verifier review — they move no money and arm nothing; batch 8.)* (Revision 1 called this
 one week; the think tank's own estimates summed to nine days.) Any public-data sanitisation fix
 found along the way ships regardless.
 **Done when:** both pages are linked from the homepage door and render in the smoke test.
