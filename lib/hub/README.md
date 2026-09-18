@@ -296,8 +296,13 @@ turns out to charge a transfer fee so less arrives than was sent. The blast radi
   (owner-only; an operator gets 403) — `lib/hub/ledger.js waiveRemainder()`, journaled under its own
   `hub:waive:<projectId>:<batchId>:<wallet>` kv entry (never the settlement journal's own
   `hub:settle:` prefix, so a waiver can never be mistaken for a paid transfer) with the owner's own
-  reason string. The amount is still owed in the sense that it was never collected — this only stops
-  the batch holding it in permanent limbo; it does not manufacture a receipt for money that never
+  reason string. The amount is still owed in the sense that it was never collected — a waive frees
+  it back to the wallet's `owedNow` and its ledger `available` in the SAME persist as the waive
+  itself (NEW-2, Round 5 — `pay.owedNow` now subtracts a row's own `batch.waived` amount from what
+  the batch still holds, the same way `ledger.partition` already did), so the next batch draws it
+  without needing `&cancel=` first; the row's own state reads `partial-waived` (or `waived` if
+  nothing was ever applied) rather than `paid`, and the batch stays `pending` rather than `sent`
+  until every row on it is genuinely paid. It does not manufacture a receipt for money that never
   moved.
 
 ## 6. What is NOT independently verified yet

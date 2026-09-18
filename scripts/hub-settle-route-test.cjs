@@ -1497,7 +1497,7 @@ t("an exact-remainder transfer settles a pre-existing partial row; a full-amount
   assert.strictEqual(Object.keys(store.readJournal(kv)).length, 2, "no third entry was journaled");
 });
 
-t("&waive= is owner-only, journals its own entry kind with a sanitised reason, and owedNow reads 0 afterward", async () => {
+t("&waive= is owner-only, journals its own entry kind with a sanitised reason, and (NEW-2, Round 5) frees the remainder for owedNow too, not just the ledger partition", async () => {
   const kv = store.memoryKv();
   const secret = "s3cr3t-33";
   seedProject(kv, "eta", W.MINT1);
@@ -1528,8 +1528,34 @@ t("&waive= is owner-only, journals its own entry kind with a sanitised reason, a
   assert.strictEqual(raw[waiveKey].kind, "waive");
   assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1, "the settlement journal itself is untouched by a waive — readJournal ignores the waive-prefixed key");
   const st = { batches: store.read(kv, "eta", "batches", {}), paid: store.read(kv, "eta", "paid", {}), days: store.read(kv, "eta", "days", {}) };
-  const owed = pay.owedNow({ days: st.days, paid: st.paid, pending: st.batches, journal: store.readJournal(kv), projectId: "eta" });
-  assert.strictEqual(String(owed[W.A] || 0n), "0", "owed reads 0 once the remainder is either settled or waived — " + owed[W.A]);
+  const journal = store.readJournal(kv);
+  // NEW-2 (Round 5, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): the documented remedy — "still owed,
+  // the next batch draws it" — must actually free the remainder for the DESK too, immediately,
+  // without needing &cancel= first, and agree with the ledger partition the desk is supposed to
+  // mirror. 1000000000 accrued, 400000000 applied, 600000000 waived → both witnesses read 600000000.
+  const owed = pay.owedNow({ days: st.days, paid: st.paid, pending: st.batches, journal, projectId: "eta" });
+  const part = L.partition({ projectId: "eta", days: st.days, batches: st.batches, journal });
+  assert.strictEqual(String(owed[W.A] || 0n), "600000000", "owedNow must free the waived remainder, not still hold it — " + owed[W.A]);
+  assert.strictEqual(part[W.A].availableRaw, "600000000", JSON.stringify(part[W.A]));
+  assert.strictEqual(String(owed[W.A] || 0n), part[W.A].availableRaw, "the desk and the ledger partition must agree on what is owed");
+  // The batch itself stays "pending" (the remainder never moved on chain, so this is not "sent"),
+  // and the row's own state says plainly that part of it was waived, not paid.
+  assert.strictEqual(st.batches[id].state, "pending", JSON.stringify(st.batches[id]));
+  const rowNow = L.rowState(st.batches[id], W.A, L.journalFor(journal, "eta"));
+  assert.strictEqual(rowNow.state, "partial-waived", JSON.stringify(rowNow));
+  // A further &sent= for this row is still refused — waiving never manufactures a fake settlement.
+  r = await call(appOwner, "/api/hub/:project/payout", { method: "POST", params: { project: "eta" }, query: { batch: id, sent: JSON.stringify([{ wallet: W.A, sig: SIG(411) }]) } });
+  assert.deepStrictEqual((r.body.sent && r.body.sent.recorded) || [], [], JSON.stringify(r.body));
+  // And after &cancel=, everything still agrees (the pre-existing agreement point, unchanged by
+  // this fix — cancel was already correct; the bug was only that owedNow needed it to agree at all).
+  r = await call(appOwner, "/api/hub/:project/payout", { method: "POST", params: { project: "eta" }, query: { cancel: id } });
+  assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
+  const st2 = { batches: store.read(kv, "eta", "batches", {}), paid: store.read(kv, "eta", "paid", {}), days: store.read(kv, "eta", "days", {}) };
+  const journal2 = store.readJournal(kv);
+  const owed2 = pay.owedNow({ days: st2.days, paid: st2.paid, pending: st2.batches, journal: journal2, projectId: "eta" });
+  const part2 = L.partition({ projectId: "eta", days: st2.days, batches: st2.batches, journal: journal2 });
+  assert.strictEqual(String(owed2[W.A] || 0n), "600000000", "cancelling the batch must not change what was already free");
+  assert.strictEqual(String(owed2[W.A] || 0n), part2[W.A].availableRaw, "still in agreement after cancel");
 });
 
 section("34. N-1 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 4) — the payout-summary alerts carry a stable dedupe discriminator");
