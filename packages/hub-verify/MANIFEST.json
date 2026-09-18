@@ -50,7 +50,7 @@
     {
       "source": "lib/hub/schema/project-public.schema.json",
       "dest": "schema/project-public.schema.json",
-      "sha256": "1593b445e5029b1e9b2461adc579c0f6a290c4967f39c448f855a20c199031f1"
+      "sha256": "03b90cd4a9c5f20e259f4ec87b5ac317a19f4f4183622b2ba313fddcb66bff8a"
     },
     {
       "source": "lib/hub/schema/receipt.schema.json",
