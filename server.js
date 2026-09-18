@@ -2655,9 +2655,12 @@ async function priceReply(chatId, replyTo) {
 // relies on.
 const hubReceiptCommand = require("./lib/hub/receipt-command");
 function receiptCommandReply(chatId, replyTo, arg) {
+  // P3-10: hubProjectViewCached, not the raw hubProjectView — see its own comment beside the
+  // definition. findHubReceiptBySig walks every registered project per lookup; this keeps a burst
+  // of /receipt commands across rooms from repeating that walk more than once a minute per project.
   return hubReceiptCommand.handleReceiptCommand({
     arg, chatId, replyToId: replyTo, send: tgSend,
-    hubProjects, hubProjectView, hubPublic, hubStore, hubReproduce, hubProject, kv,
+    hubProjects, hubProjectView: hubProjectViewCached, hubPublic, hubStore, hubReproduce, hubProject, kv,
     publicBase: TG_PUBLIC_BASE,
   }).catch((e) => console.warn("[TELEGRAM] /receipt error:", e.message));
 }
@@ -8124,6 +8127,23 @@ function hubProjectView(project) {
   try { holderSnapshot = require("./lib/holders-snapshot").latest(kv, project.mint); } catch (_) { /* no snapshot yet */ }
   const versions = (projectState && Array.isArray(projectState.versions)) ? projectState.versions : [];
   return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads, holderSnapshot, versions });
+}
+// P3-10 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): a 60s per-project cache over the SAME
+// hubProjectView() walk the routes right below already found too expensive to run unlimited
+// (P1-03) — reused here for lib/hub/receipt-command.js's findHubReceiptBySig, which calls
+// hubProjectView() once per registered project until it finds a signature, behind only a 10s
+// per-chat cooldown (so N Telegram rooms running /receipt gives N/10 full-ledger walks a second
+// with the raw function). Callers that need the guaranteed-fresh view (the /api/hub/:project
+// routes) keep calling hubProjectView() directly; this wrapper is for read paths where a few
+// seconds of staleness is a fine trade against repeating the whole computation.
+const HUB_PROJECT_VIEW_CACHE = new Map(); // projectId -> { at, view }
+const HUB_PROJECT_VIEW_CACHE_MS = 60 * 1000;
+function hubProjectViewCached(project) {
+  const cached = HUB_PROJECT_VIEW_CACHE.get(project.id);
+  if (cached && Date.now() - cached.at < HUB_PROJECT_VIEW_CACHE_MS) return cached.view;
+  const view = hubProjectView(project);
+  HUB_PROJECT_VIEW_CACHE.set(project.id, { at: Date.now(), view });
+  return view;
 }
 // P1-03 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): this route calls hubProjectView() once
 // PER REGISTERED PROJECT — the same full stakeView + per-receipt explanation walk the

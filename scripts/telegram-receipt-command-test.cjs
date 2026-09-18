@@ -182,6 +182,44 @@ async function main() {
     t("a DIFFERENT chat is not affected by another chat's cooldown", sentLog.length === before4 + 1);
   }
 
+  console.log("\n5b. P3-10 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md) — the cooldown map is bounded\n");
+  {
+    // Age-based eviction: an entry older than 10 minutes is pruned on the VERY NEXT call, by any
+    // chat — the map isn't waiting for that chat's own next lookup to clean itself up.
+    const ageMap = new Map();
+    const T0 = 10_000_000;
+    await receiptCmd.handleReceiptCommand({ ...baseCtx, arg: SIG_KNOWN, chatId: "old-chat", replyToId: 9, send: fakeTgSend, cooldownMap: ageMap, now: () => T0 });
+    t("the old chat's own entry exists right after its own lookup", ageMap.has("old-chat"));
+    await receiptCmd.handleReceiptCommand({ ...baseCtx, arg: SIG_KNOWN, chatId: "new-chat", replyToId: 9, send: fakeTgSend, cooldownMap: ageMap, now: () => T0 + 11 * 60 * 1000 }); // 11 min later
+    t("an entry older than 10 minutes is pruned by the NEXT call (any chat's)", !ageMap.has("old-chat"));
+    t("the new chat's own entry is present", ageMap.has("new-chat"));
+    t("the map holds only the one live entry — the old one didn't just get skipped", ageMap.size === 1, "size=" + ageMap.size);
+
+    // Cap-based eviction: drive more distinct chats than the cap within the age window (so age
+    // pruning alone never kicks in) and confirm the map never grows past 1000, evicting the
+    // OLDEST chats first.
+    const capMap = new Map();
+    const T1 = 20_000_000;
+    for (let i = 0; i < 1050; i++) {
+      await receiptCmd.handleReceiptCommand({ ...baseCtx, arg: SIG_KNOWN, chatId: "chat-" + i, replyToId: 9, send: fakeTgSend, cooldownMap: capMap, now: () => T1 + i });
+    }
+    t("the cooldown map never grows past 1000 entries even with 1050 distinct chats in the age window", capMap.size <= 1000, "size=" + capMap.size);
+    t("the OLDEST chats were evicted first; the most recent ones remain", !capMap.has("chat-0") && !capMap.has("chat-49") && capMap.has("chat-1049"));
+  }
+
+  console.log("\n5c. P3-10 — receiptCommandReply (server.js) reuses a memoised project view, not the raw one\n");
+  {
+    // findHubReceiptBySig walks every registered project per lookup, behind only a 10s per-chat
+    // cooldown — a source-level check that the wiring passes the cached wrapper (added beside
+    // hubProjectView's own definition) rather than the raw per-request function, since this
+    // module has no server boot to hit the real /receipt command through.
+    const serverSrc = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+    t("server.js defines hubProjectViewCached beside hubProjectView", /function hubProjectViewCached\(project\)/.test(serverSrc));
+    const replyFn = (serverSrc.match(/function receiptCommandReply\([^)]*\)\s*\{[\s\S]*?\n\}/) || [""])[0];
+    t("receiptCommandReply exists and was matched for inspection", replyFn.length > 0);
+    t("receiptCommandReply passes hubProjectView: hubProjectViewCached, not the raw function", /hubProjectView:\s*hubProjectViewCached/.test(replyFn), replyFn);
+  }
+
   console.log("\n6. scripts/telegram-rooms-test.cjs still passes\n");
   {
     const r = spawnSync(process.execPath, [path.join(__dirname, "telegram-rooms-test.cjs")], { encoding: "utf8" });
