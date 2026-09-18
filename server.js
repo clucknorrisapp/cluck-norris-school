@@ -8158,7 +8158,10 @@ app.get("/api/hub", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, r
   res.setHeader("Cache-Control", "public, max-age=60");
   try {
     const projects = Object.values(hubProjects()).map((p) => {
-      const v = hubProjectView(p);
+      // EE3 (docs/HUB_LOAD_2026-09-18.md): the list is identical for every viewer, so it reads
+      // the same 60-second per-project view cache the receipt command and the share page use —
+      // a burst at the limiter's ceiling computes each project once, not sixty times.
+      const v = hubProjectViewCached(p);
       // Dry runs (Colosseum E10) are LISTED, with the badge, so the owner can show the team the
       // page — never hidden — but their programs/receipts are always 0 (they can never arm), so
       // they add nothing to anyone reading the numbers across the list.

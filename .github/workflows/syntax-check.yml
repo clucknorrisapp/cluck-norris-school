@@ -825,12 +825,16 @@ jobs:
       # per route and the worst `/healthz` latency observed while the burst runs — the exact
       # event-loop-stall shape the P1-03 finding measured. Not diff-gated: a route or a limiter
       # here never touches a rendered page, so the render-diff gate would never see it change.
-      # Always-run per the roadmap item's own budgets; a route without a rate limiter/per-project
-      # cache is expected to fail this until the concurrent P1-03 fix round lands.
+      # Always-run per the roadmap item's own budgets. The P1-03 fix round (limiter + per-project
+      # view cache) landed in the same batch; the after-picture in docs/HUB_LOAD_2026-09-18.md
+      # measures every route under the 500ms p95 budget and `/healthz` at ~400ms max while sixty
+      # requests land on one event loop at once (it was 1.3s before the fix, 52s on the 50x200
+      # fixture). The /healthz budget here is 1000ms — a real stall regression (the P1-03 shape is
+      # seconds, not hundreds of milliseconds) still trips it; a slow CI runner does not.
       - name: Hub load proof — heavy public reads under a rate-limit-ceiling burst (Colosseum §15 EE3)
         run: |
           node scripts/hub-load-fixture.cjs --projects 10 --receipts 50
-          HUB_LOAD_TEST_PORT=3420 node scripts/hub-load-smoke.cjs
+          HUB_LOAD_TEST_PORT=3420 node scripts/hub-load-smoke.cjs --healthz-ms 1000
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the
