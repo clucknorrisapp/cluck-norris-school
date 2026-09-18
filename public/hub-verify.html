@@ -223,7 +223,7 @@ import * as HubVerify from '/hub-verify.bundle.js';
   // "staging" / "local" — derived from the deployed branch; it never carries an actual hostname,
   // so there is no staging host to LEARN from it. The allowlist is therefore just this page's own
   // origin (covers a fresh clone, a local boot, and a Railway staging service reproducing its own
-  // receipts) plus the one hostname that is always safe to name outright: the production site
+  // receipts) plus the one hostname that is fine to name outright without learning it: the production site
   // itself, so a receipt link copied from clucknorris.app still works when this page happens to be
   // loaded from somewhere else.
   var ALLOWED_RECEIPT_ORIGINS = [location.origin, 'https://clucknorris.app'];
@@ -271,6 +271,21 @@ import * as HubVerify from '/hub-verify.bundle.js';
     var whole = s.slice(0, s.length - decimals), frac = s.slice(s.length - decimals).replace(/0+$/, '');
     return (neg ? '-' : '') + whole + (frac ? '.' + frac : '');
   }
+  // P1-02 fix: `reproduce()`'s published/reproduced fields are raw base units (lib/hub/reproduce.js
+  // — the same value the /r/:sig and /batch/:id/inputs routes carry as amountRaw); the step rows
+  // above already convert with `fmtAmount(raw, decimals)`, so the headline must use the exact same
+  // conversion rather than printing the base-unit string. `reproduceBuyCompRow()` is different — it
+  // is handed `receipt.amountUi` (already UI units) as its `published`/`reproduced` fields, so no
+  // second conversion is correct there; callers pass no `decimals` for that branch and this helper
+  // leaves the value alone. When a conversion did happen, the untouched raw string is kept in the
+  // `title` attribute (a secondary line, never the headline) so it is still there to compare against
+  // an API response by eye.
+  function amountCell(raw, decimals) {
+    if (raw == null) return { text: null, raw: null };
+    if (decimals == null) return { text: String(raw), raw: null };
+    var ui = fmtAmount(raw, decimals);
+    return { text: ui != null ? ui : String(raw), raw: String(raw) };
+  }
   function stepsForLockToEarn(inputs, decimals) {
     if (!inputs) return '';
     var rows = (inputs.periods || []).map(function (p) {
@@ -289,8 +304,9 @@ import * as HubVerify from '/hub-verify.bundle.js';
       '<span class="vtext">' + (opts.projectId ? esc(opts.projectId) + (opts.wallet ? ' · ' + esc(shortAddr(opts.wallet, 5, 4)) : '') : '') + '</span></div>' +
       '<div class="vtext" style="width:100%;margin-top:-4px">' + esc(verdictExplain(r.status)) + '</div>';
     if (opts.stepsHtml) html += opts.stepsHtml;
-    html += '<ul class="steps"><li class="op">−</li><li class="total"><div class="lbl">' + esc(t('published amount')) + '</div><div class="val">' + (r.published == null ? esc(t('(unknown)')) : esc(r.published) + (opts.symbol ? ' ' + esc(opts.symbol) : '')) + '</div></li>' +
-      '<li class="total"><div class="lbl">' + esc(t('reproduced amount')) + '</div><div class="val">' + (r.reproduced == null ? esc(t('(not computed)')) : esc(r.reproduced) + (opts.symbol ? ' ' + esc(opts.symbol) : '')) + '</div></li></ul>' +
+    var pubCell = amountCell(r.published, opts.decimals), repCell = amountCell(r.reproduced, opts.decimals);
+    html += '<ul class="steps"><li class="op">−</li><li class="total"><div class="lbl">' + esc(t('published amount')) + '</div><div class="val"' + (pubCell.raw != null ? ' title="' + esc(tf('raw: {raw}', { raw: pubCell.raw })) + '"' : '') + '>' + (r.published == null ? esc(t('(unknown)')) : esc(pubCell.text) + (opts.symbol ? ' ' + esc(opts.symbol) : '')) + '</div></li>' +
+      '<li class="total"><div class="lbl">' + esc(t('reproduced amount')) + '</div><div class="val"' + (repCell.raw != null ? ' title="' + esc(tf('raw: {raw}', { raw: repCell.raw })) + '"' : '') + '>' + (r.reproduced == null ? esc(t('(not computed)')) : esc(repCell.text) + (opts.symbol ? ' ' + esc(opts.symbol) : '')) + '</div></li></ul>' +
       '<div class="fact" style="margin-top:10px"><b>' + esc(t('Program-version hash:')) + '</b> ' + (r.hash ? '<span class="mono">' + esc(r.hash) + '</span>' : esc(t('none published for this program yet'))) + '</div>';
     if (r.missing && r.missing.length) {
       html += '<div class="fact" style="margin-top:10px"><b>' + esc(t('Missing:')) + '</b></div><ul class="missing-list">' + r.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
@@ -355,7 +371,7 @@ import * as HubVerify from '/hub-verify.bundle.js';
     if (entry && entry.programVersion) {
       try { versionOpt = await HubVerify.verifyVersionHash(entry.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
     }
-    renderVerdict(res2, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody ? inputsBody.decimals : null), versionHash: versionOpt });
+    renderVerdict(res2, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody ? inputsBody.decimals : null), versionHash: versionOpt, decimals: inputsBody ? inputsBody.decimals : null });
   }
   document.getElementById('urlBtn').addEventListener('click', function () { reproduceFromUrl(document.getElementById('urlIn').value); });
   document.getElementById('urlIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') reproduceFromUrl(e.target.value); });
@@ -449,7 +465,7 @@ import * as HubVerify from '/hub-verify.bundle.js';
     if (!versionOpt && entry && entry.programVersion) {
       try { versionOpt = await HubVerify.verifyVersionHash(entry.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
     }
-    renderVerdict(res2, { wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody.decimals), versionHash: versionOpt });
+    renderVerdict(res2, { wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody.decimals), versionHash: versionOpt, decimals: inputsBody.decimals });
   }
   document.getElementById('filesBtn').addEventListener('click', reproduceFromFiles);
 
@@ -468,7 +484,7 @@ import * as HubVerify from '/hub-verify.bundle.js';
     if (!entry) result.missing.push(t("the bundle's batch inputs do not carry this wallet"));
     return { wallet: wallet, symbol: symbol, result: result };
   }
-  function renderBundleResults(bundle, hashCheck, rows, versionOpt) {
+  function renderBundleResults(bundle, hashCheck, rows, versionOpt, decimals) {
     var matches = rows.filter(function (r) { return r.result.status === 'MATCH'; }).length;
     var mismatches = rows.filter(function (r) { return r.result.status === 'MISMATCH'; }).length;
     var missing = rows.length - matches - mismatches;
@@ -496,9 +512,10 @@ import * as HubVerify from '/hub-verify.bundle.js';
       var cls = verdictClass(r.result.status);
       var row = '<div class="card"><div class="verdict ' + cls + '"><span class="badge">' + esc(verdictWord(r.result.status)) + '</span>' +
         '<span class="vtext">' + (r.wallet ? esc(shortAddr(r.wallet, 5, 4)) : '') + '</span></div>' +
-        '<div class="vtext" style="width:100%;margin-top:-4px">' + esc(verdictExplain(r.result.status)) + '</div>' +
-        '<ul class="steps"><li class="total"><div class="lbl">' + esc(t('published amount')) + '</div><div class="val">' + (r.result.published == null ? esc(t('(unknown)')) : esc(r.result.published) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li>' +
-        '<li class="total"><div class="lbl">' + esc(t('reproduced amount')) + '</div><div class="val">' + (r.result.reproduced == null ? esc(t('(not computed)')) : esc(r.result.reproduced) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li></ul>';
+        '<div class="vtext" style="width:100%;margin-top:-4px">' + esc(verdictExplain(r.result.status)) + '</div>';
+      var rPubCell = amountCell(r.result.published, decimals), rRepCell = amountCell(r.result.reproduced, decimals);
+      row += '<ul class="steps"><li class="total"><div class="lbl">' + esc(t('published amount')) + '</div><div class="val"' + (rPubCell.raw != null ? ' title="' + esc(tf('raw: {raw}', { raw: rPubCell.raw })) + '"' : '') + '>' + (r.result.published == null ? esc(t('(unknown)')) : esc(rPubCell.text) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li>' +
+        '<li class="total"><div class="lbl">' + esc(t('reproduced amount')) + '</div><div class="val"' + (rRepCell.raw != null ? ' title="' + esc(tf('raw: {raw}', { raw: rRepCell.raw })) + '"' : '') + '>' + (r.result.reproduced == null ? esc(t('(not computed)')) : esc(rRepCell.text) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li></ul>';
       if (r.result.missing && r.result.missing.length) row += '<div class="fact" style="margin-top:10px"><b>' + esc(t('Missing:')) + '</b></div><ul class="missing-list">' + r.result.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
       return row + '</div>';
     }).join('');
@@ -515,7 +532,7 @@ import * as HubVerify from '/hub-verify.bundle.js';
       try { versionOpt = await HubVerify.verifyVersionHash(split.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
     }
     var rows = split.receipts.map(function (rb) { return runBundleReceipt(rb, split.batchInputs, split.programVersion); });
-    renderBundleResults(bundle, hashCheck, rows, versionOpt);
+    renderBundleResults(bundle, hashCheck, rows, versionOpt, split.batchInputs ? split.batchInputs.decimals : null);
   }
 })();
 </script>

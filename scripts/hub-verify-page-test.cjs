@@ -91,6 +91,15 @@ const VERSION = proj.createVersion({}, VERSION_PROJECT, {
   poolDailyRaw: "1000000000000", minDurationDays: 1, maxTermDays: 540, payoutSchedule: "weekly", vesting: "any", fundedBy: [FUND],
 }, { effectiveFrom: "2027-01-01", todayKey: "2027-01-01" }).versions[0];
 
+// P1-02: a second, 6-decimal project — its own MATCH fixture, small enough that raw and UI look
+// nothing alike (1234567 raw vs 1.234567 UI), so a regression to printing the raw string is
+// impossible to miss on the rendered page.
+const PROJECT6 = "hvtest6";
+const MINT6 = fakeAddr(199);
+const FUND6 = fakeAddr(150);
+const WALLET6 = fakeAddr(77);
+const SIG6 = fakeSig(6);
+
 function buildFixtureState() {
   const days = {
     "2027-01-15T00": { credits: { [WALLET]: "1000000000", [WALLET2]: "700000000" }, at: T0 },
@@ -108,14 +117,27 @@ function buildFixtureState() {
       sent: { [WALLET2]: { sig: SIG_MISMATCH, at: BATCH_AT + 60 } },
     },
   };
+  const days6 = { "2027-01-15T00": { credits: { [WALLET6]: "1234567" }, at: T0 } };  // 6 dec -> 1.234567 UI
+  const batches6 = {
+    "hv6-batch-match": {
+      id: "hv6-batch-match", state: "sent", at: BATCH_AT,
+      amounts: { [WALLET6]: "1234567" },
+      sent: { [WALLET6]: { sig: SIG6, at: BATCH_AT + 60 } },
+    },
+  };
   return {
     "hub:projects": {
       [PROJECT]: { id: PROJECT, label: "Hub Verify Test", symbol: "HVT", mint: MINT, decimals: 9, rewardMint: MINT, rewardDecimals: 9, fundingWallet: FUND },
+      [PROJECT6]: { id: PROJECT6, label: "Hub Verify Test (6dec)", symbol: "SIX", mint: MINT6, decimals: 6, rewardMint: MINT6, rewardDecimals: 6, fundingWallet: FUND6 },
     },
     [`program:${PROJECT}:days`]: days,
     [`program:${PROJECT}:batches`]: batches,
     [`program:${PROJECT}:paid`]: {},
     [`program:${PROJECT}:state`]: { versions: [VERSION] },
+    [`program:${PROJECT6}:days`]: days6,
+    [`program:${PROJECT6}:batches`]: batches6,
+    [`program:${PROJECT6}:paid`]: {},
+    [`program:${PROJECT6}:state`]: { versions: [] },
   };
 }
 
@@ -253,6 +275,21 @@ async function main() {
     // the URL path: paste a receipt URL, and the program hash recomputes to a match.
     ok('the URL path recomputes the program-version hash too: "Program version hash recompute: matches"', /Program[- ]version hash recompute:\s*matches/.test(bodyText4a), bodyText4a.slice(0, 4000));
     allBodyText += bodyText4a + " ";
+    // P1-02: the headline published/reproduced amount is UI units (1.5 HVT), never the raw base
+    // units (1500000000) — the same conversion the step rows above it already use.
+    ok("P1-02 (9dec): headline published amount reads 1.5 HVT, not raw base units", /published amount/i.test(bodyText4a) && bodyText4a.includes("1.5 HVT"), bodyText4a.slice(0, 4000));
+    ok("P1-02 (9dec): the raw base-unit string never appears as visible text", !bodyText4a.includes("1500000000"), bodyText4a.slice(0, 4000));
+
+    // P1-02, second fixture: a 6-decimal project (1234567 raw -> 1.234567 UI) — proves the fix is
+    // the general `decimals`-driven conversion, not a coincidence of the 9-decimal fixture.
+    const url6 = `${BASE}/hub/${PROJECT6}/r/${SIG6}`;
+    await page.goto(`${BASE}/hub/verify?receipt=${encodeURIComponent(url6)}`, { waitUntil: "networkidle", timeout: 20000 });
+    await page.waitForSelector(".verdict .badge", { timeout: 10000 }).catch(() => {});
+    const badge6 = await page.textContent(".verdict .badge").catch(() => null);
+    ok("P1-02 (6dec) fixture shows MATCH", badge6 === "MATCH", "got: " + badge6);
+    const bodyText6 = await innerText(page);
+    ok("P1-02 (6dec): headline published amount reads 1.234567 SIX, not raw base units", bodyText6.includes("1.234567 SIX"), bodyText6.slice(0, 4000));
+    ok("P1-02 (6dec): the raw base-unit string never appears as visible text", !bodyText6.includes("1234567 SIX"), bodyText6.slice(0, 4000));
 
     // 4b. typed into the URL field + button click — the interactive path
     await page.goto(`${BASE}/hub/verify`, { waitUntil: "networkidle", timeout: 20000 });

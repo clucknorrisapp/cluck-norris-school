@@ -1500,5 +1500,6 @@
   "Not recorded for this receipt": "No se registró para este recibo",
   "Settlement signature": "Firma de liquidación",
   "This page only reproduces receipts served by clucknorris.app — for another host, save the files and use the offline tab.": "Esta página solo reproduce recibos servidos por clucknorris.app — para otro servidor, guarda los archivos y usa la pestaña sin conexión.",
-  "This page only fetches from its own origin and from": "Esta página solo hace peticiones a su propio origen y a"
+  "This page only fetches from its own origin and from": "Esta página solo hace peticiones a su propio origen y a",
+  "raw: {raw}": "bruto: {raw}"
 }
