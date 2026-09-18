@@ -21,6 +21,11 @@
  *      and asserts the rendered verdict badge equals what `node scripts/reproduce-receipt.cjs`
  *      prints for the exact same URL.
  *
+ * AA2 bug fix (2026-09-18): the fixture project now carries a real program version, and
+ * GET /api/hub/:project/batch/<batchId>/inputs (what the URL path reads) attaches it per wallet —
+ * both the URL path and the offline-files path now recompute its hash to a match too, the same
+ * check the bundle tab already ran (see scripts/hub-bundle-test.cjs's own header for the bug).
+ *
  * Usage: node scripts/hub-verify-page-test.cjs [baseUrl]
  * Env:   HUB_VERIFY_TEST_PORT (default 3218) — used only when baseUrl is omitted (a server is booted).
  */
@@ -72,7 +77,19 @@ const SIG_MISMATCH = fakeSig(2);
 const PROJECT = "hvtest";
 const T0 = 1_800_000_000; // fixed, arbitrary unix seconds — this is a fixture, not a live clock
 const T1 = T0 + 3600;
-const BATCH_AT = T0 + 7200;
+const BATCH_AT = T0 + 7200;   // real UTC day for this timestamp is 2027-01-15
+const MINT = fakeAddr(99);
+const FUND = fakeAddr(50);
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+
+// A real program version (AA2 bug fix, 2026-09-18) — effective before BATCH_AT's own UTC day, so
+// GET /api/hub/:project/batch/<batchId>/inputs (what the URL path on /hub/verify reads) finds it
+// in force and attaches it to each wallet's entry.
+const proj = require("../lib/hub/project");
+const VERSION_PROJECT = { id: PROJECT, mint: MINT, rewardMint: MINT, rewardDecimals: 9, rewardTokenProgram: TOKEN_PROGRAM, fundingWallet: FUND };
+const VERSION = proj.createVersion({}, VERSION_PROJECT, {
+  poolDailyRaw: "1000000000000", minDurationDays: 1, maxTermDays: 540, payoutSchedule: "weekly", vesting: "any", fundedBy: [FUND],
+}, { effectiveFrom: "2027-01-01", todayKey: "2027-01-01" }).versions[0];
 
 function buildFixtureState() {
   const days = {
@@ -93,11 +110,12 @@ function buildFixtureState() {
   };
   return {
     "hub:projects": {
-      [PROJECT]: { id: PROJECT, label: "Hub Verify Test", symbol: "HVT", mint: fakeAddr(99), decimals: 9, rewardMint: fakeAddr(99), rewardDecimals: 9 },
+      [PROJECT]: { id: PROJECT, label: "Hub Verify Test", symbol: "HVT", mint: MINT, decimals: 9, rewardMint: MINT, rewardDecimals: 9, fundingWallet: FUND },
     },
     [`program:${PROJECT}:days`]: days,
     [`program:${PROJECT}:batches`]: batches,
     [`program:${PROJECT}:paid`]: {},
+    [`program:${PROJECT}:state`]: { versions: [VERSION] },
   };
 }
 
@@ -228,7 +246,13 @@ async function main() {
     await page.waitForSelector(".verdict .badge", { timeout: 10000 }).catch(() => {});
     let badge = await page.textContent(".verdict .badge").catch(() => null);
     ok("?receipt= query param auto-runs and shows MATCH", badge === "MATCH", "got: " + badge);
-    allBodyText += (await innerText(page)) + " ";
+    let bodyText4a = await innerText(page);
+    // AA2 bug fix (2026-09-18): GET /api/hub/:project/batch/<batchId>/inputs now carries this
+    // batch's program version (the fixture seeds one) — the URL path recomputes its hash exactly
+    // like the offline-files and bundle tabs already do. Same assertion, same exact string, on
+    // the URL path: paste a receipt URL, and the program hash recomputes to a match.
+    ok('the URL path recomputes the program-version hash too: "Program version hash recompute: matches"', /Program[- ]version hash recompute:\s*matches/.test(bodyText4a), bodyText4a.slice(0, 4000));
+    allBodyText += bodyText4a + " ";
 
     // 4b. typed into the URL field + button click — the interactive path
     await page.goto(`${BASE}/hub/verify`, { waitUntil: "networkidle", timeout: 20000 });
@@ -237,7 +261,11 @@ async function main() {
     await page.waitForSelector(".verdict .badge", { timeout: 10000 }).catch(() => {});
     badge = await page.textContent(".verdict .badge").catch(() => null);
     ok("typed URL + REPRODUCE shows MISMATCH for the tampered batch", badge === "MISMATCH", "got: " + badge);
-    allBodyText += (await innerText(page)) + " ";
+    let bodyText4b = await innerText(page);
+    // The amount is wrong (deliberately) but the program version itself was never tampered — the
+    // two checks are independent, so this still recomputes to a match.
+    ok('an amount MISMATCH does not affect the program-hash line: it still says "matches"', /Program[- ]version hash recompute:\s*matches/.test(bodyText4b), bodyText4b.slice(0, 4000));
+    allBodyText += bodyText4b + " ";
 
     ok("no uncaught page errors", pageErrors.length === 0, pageErrors.join("\n"));
 
@@ -262,7 +290,11 @@ async function main() {
       badge = await page.textContent(".verdict .badge").catch(() => null);
       ok("offline path from saved files shows MATCH (same as the CLI)", badge === "MATCH", "got: " + badge);
     }
-    allBodyText += (await innerText(page)) + " ";
+    const bodyText5 = await innerText(page);
+    // batch-inputs.json (saved straight off the wire, no separate program-version.json) now
+    // carries the program version inline — the offline-files tab falls back to it too.
+    ok('the offline-files path recomputes the program-version hash from the saved batch-inputs.json alone', /Program[- ]version hash recompute:\s*matches/.test(bodyText5), bodyText5.slice(0, 4000));
+    allBodyText += bodyText5 + " ";
     fs.rmSync(tmp, { recursive: true, force: true });
 
     console.log("\n6. language guard — no verified-project/safe badge, no APR anywhere on the page\n");

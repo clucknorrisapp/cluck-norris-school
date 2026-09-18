@@ -8306,7 +8306,10 @@ app.get("/api/hub-demo/:project/batch/:batchId/bundle", (req, res) => {
     if (!p) return res.status(404).json({ ok: false, error: "no such demo project" });
     if (!p.batch || !p.batch.id) return res.status(404).json({ ok: false, error: "this demo project has no batch to bundle" });
     if (String(req.params.batchId || "") !== p.batch.id) return res.status(404).json({ ok: false, error: "no such batch" });
-    const programVersion = { ...hubPublic.programVersionView(p.version), $schema: HUB_SCHEMA_URL("program-version") };
+    // full:true (AA2 bug fix): the bundle's program version must carry every field
+    // lib/hub/project.js verifyVersionHash actually hashes, or "recompute the hash" can never
+    // pass — see lib/hub/public.js programVersionView's own comment.
+    const programVersion = { ...hubPublic.programVersionView(p.version, { full: true }), $schema: HUB_SCHEMA_URL("program-version") };
     const receiptIds = Object.keys(p.receipts || {}).sort();
     const receiptsOut = receiptIds.map((rid) => {
       const r = p.receipts[rid];
@@ -8358,11 +8361,28 @@ app.get("/api/hub/:project/batch/:batchId/inputs", rateLimit("hubheavy", { windo
     // lib/hub/public.js draws (a batch row with no signature is never public). Optional
     // ?wallet= narrows to one, so a reader reproducing a single receipt fetches one small file.
     const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
+    // The program version in force when this batch was built (same lookup the AA2 bundle route
+    // runs) — attached per wallet so /hub/verify's URL path (which reads THIS route, not the
+    // bundle) can recompute the version's own hash without a second fetch, the same way the
+    // offline-files and bundle tabs already do. Absent for a project whose payout predates program
+    // versions (CUNA) — reported as no `programVersion` key at all, never invented. full:true (AA2
+    // bug fix): must carry every field lib/hub/project.js verifyVersionHash hashes.
+    let programVersion = null;
+    try {
+      const state = hubStore.read(kv, p.id, "state", {}) || {};
+      if (Array.isArray(state.versions) && state.versions.length) {
+        const dayKey = new Date((Number(bt.at) || 0) * 1000).toISOString().slice(0, 10);
+        const v = hubProject.versionFor(state, dayKey);
+        if (v) programVersion = { ...hubPublic.programVersionView(v, { full: true }), $schema: HUB_SCHEMA_URL("program-version") };
+      }
+    } catch (_) { /* no version state on this project — programVersion stays absent, reported honestly */ }
+    const withVersion = (entry) => (programVersion ? { ...entry, programVersion } : entry);
     if (wanted) {
       if (!Object.prototype.hasOwnProperty.call(all, wanted)) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
-      return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: all[wanted] } });
+      return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: withVersion(all[wanted]) } });
     }
-    return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: all });
+    const walletsOut = {}; for (const [w, entry] of Object.entries(all)) walletsOut[w] = withVersion(entry);
+    return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: walletsOut });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // ── AA2: the offline evidence bundle (Colosseum roadmap §11) — one JSON download that carries
@@ -8402,7 +8422,8 @@ app.get("/api/hub/:project/batch/:batchId/bundle", rateLimit("hubheavy", { windo
       if (Array.isArray(state.versions) && state.versions.length) {
         const dayKey = new Date((Number(bt.at) || 0) * 1000).toISOString().slice(0, 10);
         const v = hubProject.versionFor(state, dayKey);
-        if (v) programVersion = { ...hubPublic.programVersionView(v), $schema: HUB_SCHEMA_URL("program-version") };
+        // full:true (AA2 bug fix): see the demo-bundle route above.
+        if (v) programVersion = { ...hubPublic.programVersionView(v, { full: true }), $schema: HUB_SCHEMA_URL("program-version") };
       }
     } catch (_) { /* no version state on this project — programVersion stays null, reported honestly */ }
     let receiptsOut = [];

@@ -334,7 +334,14 @@ import * as HubVerify from '/hub-verify.bundle.js';
     var inputsForCore = entry ? { periods: entry.periods, priorPaidRaw: entry.priorPaidRaw, priorReservedRaw: entry.priorReservedRaw } : null;
     var res2 = HubVerify.reproduce({ programVersion: entry && entry.programVersion ? entry.programVersion : null, inputs: inputsForCore, receipt: receiptForCore });
     if (!entry) res2.missing.push(t('the fetch for the batch inputs did not return this wallet'));
-    renderVerdict(res2, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody ? inputsBody.decimals : null) });
+    // AA2 bug fix: the batch-inputs response now carries the program version in force for this
+    // batch (when one exists) — recompute its hash here too, the same check the offline-files and
+    // bundle tabs already run, so the URL path has the same evidence.
+    var versionOpt = null;
+    if (entry && entry.programVersion) {
+      try { versionOpt = await HubVerify.verifyVersionHash(entry.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
+    }
+    renderVerdict(res2, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody ? inputsBody.decimals : null), versionHash: versionOpt });
   }
   document.getElementById('urlBtn').addEventListener('click', function () { reproduceFromUrl(document.getElementById('urlIn').value); });
   document.getElementById('urlIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') reproduceFromUrl(e.target.value); });
@@ -423,6 +430,11 @@ import * as HubVerify from '/hub-verify.bundle.js';
     var inputsForCore = entry ? { periods: entry.periods, priorPaidRaw: entry.priorPaidRaw, priorReservedRaw: entry.priorReservedRaw } : null;
     var res2 = HubVerify.reproduce({ programVersion: entry && entry.programVersion ? entry.programVersion : null, inputs: inputsForCore, receipt: receiptForCore });
     if (!entry) res2.missing.push(t('batch-inputs.json does not carry this wallet'));
+    // A separate program-version.json takes priority (it may be all a reader saved); otherwise
+    // fall back to the version batch-inputs.json now carries inline for its own batch.
+    if (!versionOpt && entry && entry.programVersion) {
+      try { versionOpt = await HubVerify.verifyVersionHash(entry.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
+    }
     renderVerdict(res2, { wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody.decimals), versionHash: versionOpt });
   }
   document.getElementById('filesBtn').addEventListener('click', reproduceFromFiles);

@@ -164,11 +164,22 @@ console.log(got === hash ? "MATCH: " + got : "MISMATCH: got " + got + ", body sa
 '
 ```
 
-(The public `GET /api/hub/:project` view does not surface a version's `hash` for any project
-today, real or legacy — only the gated operator desk (`GET /api/hub/:project/desk`) and the
-self-serve preview (`POST /api/hub-apply?preview=1`) carry the full version shape this algorithm
-needs; the demo fixture above is the one place it's public with no key. `lib/hub/README.md` §4
-lists exactly which route carries which shape.)
+(The plain `GET /api/hub/:project` project view does not surface a version's `hash` for any
+project — only the gated operator desk (`GET /api/hub/:project/desk`) and the self-serve preview
+(`POST /api/hub-apply?preview=1`) carry that PLAIN shape, and it is not enough to recompute the
+hash from on its own. The routes that ARE enough, with no key, for any project — real or the demo
+fixture above — are `GET /api/hub/:project/program/:version` and the evidence bundle
+(`GET /api/hub/:project/batch/:batchId/bundle`, `docs/HUB_VERIFY.md` "Save the evidence bundle
+first" above): both serve the FULL record (`lib/hub/public.js programVersionView(v, {full:true})`),
+which is what the algorithm above actually needs. **Fixed 2026-09-18**: before that date, both
+routes served the same PLAIN shape the desk/preview responses show — missing `projectId`, `mint`,
+`rewardMint`, `rewardDecimals`, `rewardTokenProgram`, `fundingResponsibility`, `signer` and
+`exclusions`, all of which the hash is taken over — so this recompute could never pass for ANY
+project's `program/:version` or bundle, found by the BB2 docs builder while writing this file.
+`/hub/verify` itself now runs this exact recompute for you (the "Program version hash recompute"
+line, on the URL path, the offline-files path, and the evidence-bundle drop) rather than requiring
+the command above — the command remains for a reader who wants to run it themselves.
+`lib/hub/README.md` §4 lists exactly which route carries which shape.)
 
 ## (e) Check the on-chain commitment, once one exists
 

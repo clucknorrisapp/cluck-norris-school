@@ -95,6 +95,14 @@ console.log("\n2. program-version.schema.json — the wire SUBSET routes.js/appl
   const withMemo = { ...wire, commitment: { sig: SIG(1), slot: 123456, observedAt: NOW, memo: "clkn-hub:v1:alpha:1:" + v1.hash } };
   const memoErrs = validate(schemas["program-version"], withMemo);
   ok("a commitment carrying `memo` is rejected — the public shape is sig/slot/observedAt only", memoErrs.some((e) => /memo/.test(e)));
+
+  // AA2 bug fix (2026-09-18): the FULL shape (GET /api/hub/:project/program/:version, the AA2
+  // bundle) — lib/hub/public.js programVersionView(v, {full:true}) — carries every field
+  // verifyVersionHash actually hashes. Both validates AND recomputes.
+  const fullView = pub.programVersionView(v1, { full: true });
+  validOk("the FULL program-version view (program/:version route, the evidence bundle) validates", schemas["program-version"], fullView);
+  ok("...and its hash actually recomputes from that same document", proj.verifyVersionHash(fullView) === true, JSON.stringify(fullView));
+  ok("the PLAIN view (no full option) omits the eight full-only fields", !("projectId" in pub.programVersionView(v1)) && !("exclusions" in pub.programVersionView(v1)));
 }
 
 console.log("\n3. batch.schema.json — lib/hub/ledger.js buildBatch()\n");
