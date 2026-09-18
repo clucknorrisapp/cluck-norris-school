@@ -13,7 +13,10 @@ it needs a wallet, a login, or anything from us beyond an HTTP request.
 Written 2026-09-18. Re-read the note below before you start — some of these commands run against
 production today, and some still run only on staging, honestly labelled either way.
 
-**The reviewer's path, in order.** If you have fifteen minutes rather than two, this is the
+**The reviewer's path, in order.** (Every page in this paragraph is on **staging** today —
+`https://staging.clucknorris.app` — and reaches production only on the owner's promote; the
+links use the production host so they stay right after that. See the table below.) If you have
+fifteen minutes rather than two, this is the
 sequence a judge or a second reviewer should actually click through, each stop building on the
 last: [`/hub/judge`](https://clucknorris.app/hub/judge) (the map — which URL answers which
 judging criterion, and the test that pins each claim) → [`/hub/status`](https://clucknorris.app/hub/status)
