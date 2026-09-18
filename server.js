@@ -8197,15 +8197,169 @@ app.get("/hub-verify.bundle.js", (req, res) => {
 // Registered BEFORE the generic /hub/:project pattern below, or "verify" would be read as a
 // project id and served hub.html instead.
 app.get("/hub/verify", (req, res) => { res.sendFile(join(__dirname, "public", "hub-verify.html")); });
+
+// ── Y4: shareable Hub pages — server-rendered Open Graph / Twitter Card meta (Colosseum roadmap
+// §9). One static branded image (public/og/hub-card.png, 1200x630 — no dynamic image generation,
+// the roadmap line, and served below with a long cache) shared by every route; only the <title>/
+// description/url text is computed per request, from the SAME public view functions the JSON
+// routes above already call — hubProjectView() (wraps lib/hub/public.js projectView) and
+// hubPublic.findReceipt() — never a private field. Every value is escaped with the shared
+// Node-side escaper (escHtml, lib/html-escape.js) before it reaches the page, same discipline as
+// the Lock of Fame / LP Lab cards elsewhere in this file. A missing project/program/receipt still
+// serves 200 with the GENERIC Hub meta (the client renders its own not-found state) — a share
+// link that outlives its target must not itself look broken to an unfurler, and the meta build
+// never throws the page itself: any error here falls back to the unmodified file.
+const HUB_OG_IMAGE = "https://clucknorris.app/og/hub-card.png";
+const HUB_OG_BASE = "https://clucknorris.app/hub";
+const HUB_OG_DEFAULT = Object.freeze({
+  title: "Project Hub — receipts you can verify",
+  desc: "What a project promised its holders, who qualified, and the transaction that paid each one — re-checked against Solana in your browser. No wallet needed.",
+});
+const HUB_OG_REPRO_LINE = "reproducible from the published inputs";
+function ogClamp(s, max) {
+  s = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  return s.length > max ? s.slice(0, Math.max(0, max - 1)).trim() + "…" : s;
+}
+// Read once per file, cached — the placeholder is swapped in fresh on every request (the VALUES
+// are per-request; the shell they sit inside is not).
+let _hubOgShell = null, _hubDemoOgShell = null;
+function hubOgShell() { if (!_hubOgShell) _hubOgShell = fs.readFileSync(join(__dirname, "public", "hub.html"), "utf8"); return _hubOgShell; }
+function hubDemoOgShell() { if (!_hubDemoOgShell) _hubDemoOgShell = fs.readFileSync(join(__dirname, "public", "hub-demo.html"), "utf8"); return _hubDemoOgShell; }
+// Replacement is a FUNCTION, never a plain string — a label or tagline containing a literal "$"
+// would otherwise be read by String.replace as a $&/$1-style backreference token.
+function renderHubOgHtml(rawHtml, meta) {
+  const t = escHtml(ogClamp(meta.title, 70));
+  const d = escHtml(ogClamp(meta.desc, 200));
+  const u = escHtml(String(meta.url || HUB_OG_BASE));
+  const block = [
+    `<meta property="og:title" content="${t}">`,
+    `<meta property="og:description" content="${d}">`,
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:url" content="${u}">`,
+    `<meta property="og:image" content="${HUB_OG_IMAGE}">`,
+    `<meta property="og:image:width" content="1200">`,
+    `<meta property="og:image:height" content="630">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${t}">`,
+    `<meta name="twitter:description" content="${d}">`,
+    `<meta name="twitter:image" content="${HUB_OG_IMAGE}">`,
+  ].join("\n");
+  return rawHtml
+    .replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${t}</title>`)
+    .replace(/<meta name="description"[^>]*>/i, () => `<meta name="description" content="${d}">`)
+    .replace("<!-- OG -->", () => block);
+}
+// One real Hub project/program/receipt. kind: "project" | "program" | "receipt"; sub: the
+// program id or receipt signature. Text built ONLY from hubProjectView()/hubPublic.findReceipt().
+function hubOgFor(projectId, kind, sub) {
+  if (!projectId) return { ...HUB_OG_DEFAULT, url: HUB_OG_BASE };
+  const base = `${HUB_OG_BASE}/${encodeURIComponent(projectId)}`;
+  const p = hubProjects()[projectId];
+  if (!p) return { ...HUB_OG_DEFAULT, url: base };
+  let v;
+  try { v = hubProjectView(p); } catch (_) { return { ...HUB_OG_DEFAULT, url: base }; }
+  // dryRun (E10, e.g. POKE): a plain, generic label — no project-specific wording, so this is
+  // never a second code path per project.
+  const dryNote = v.dryRun === true ? " DRY RUN — terms not yet agreed with the project team; nothing here is live." : "";
+  if (kind === "receipt") {
+    const url = `${base}/r/${encodeURIComponent(sub || "")}`;
+    let rec; try { rec = hubPublic.findReceipt(v, sub); } catch (_) { rec = null; }
+    if (!rec) return { ...HUB_OG_DEFAULT, url };
+    const row = rec.receipt || {};
+    const amt = row.amountUi != null ? row.amountUi : "?";
+    // "committed on-chain" only when the program object itself carries an observed commitment
+    // (roadmap E3) — not wired into the public program view as of this writing, so this branch
+    // is inert today and the line below is what actually renders; kept so a future E3 field on
+    // `rec.program` upgrades the claim automatically, without a second call site to remember.
+    const claim = (rec.program && rec.program.commitment && rec.program.commitment.sig) ? "independently committed on-chain" : HUB_OG_REPRO_LINE;
+    const progLabel = (rec.program && rec.program.label) || "the program";
+    return {
+      title: `${amt} ${v.symbol} receipt — ${v.label}`,
+      desc: `${v.label} paid ${amt} ${v.symbol} through ${progLabel} — ${claim}.${dryNote}`,
+      url,
+    };
+  }
+  if (kind === "program") {
+    const url = `${base}/p/${encodeURIComponent(sub || "")}`;
+    const prog = (v.programs || []).find((pr) => pr && pr.id === sub);
+    if (!prog) return { ...HUB_OG_DEFAULT, url };
+    return {
+      title: `${prog.label} — ${v.label} — Project Hub`,
+      desc: `${prog.label} for ${v.label} ($${v.symbol}) on the Project Hub — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+      url,
+    };
+  }
+  const n = v.totals || {};
+  return {
+    title: `${v.label} ($${v.symbol}) — Project Hub`,
+    desc: `${v.label}: ${n.receipts || 0} receipt${n.receipts === 1 ? "" : "s"} across ${n.programs || 0} program${n.programs === 1 ? "" : "s"} — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+    url: base,
+  };
+}
+// The Colosseum judges' demo fixture (E2) — same treatment, labelled DRY RUN — fixture data
+// rather than the real dryNote above (there is no "project team" to agree terms with here).
+function hubDemoOgFor(projectId, kind, sub) {
+  const isB = projectId === "demo-b";
+  const url = isB ? `${HUB_OG_BASE}/demo-b`
+    : kind === "receipt" ? `${HUB_OG_BASE}/demo/r/${encodeURIComponent(sub || "")}`
+    : kind === "program" ? `${HUB_OG_BASE}/demo/p/${encodeURIComponent(sub || "")}`
+    : `${HUB_OG_BASE}/demo`;
+  let fx; try { fx = hubDemoFixture.get()[projectId]; } catch (_) { fx = null; }
+  if (!fx || !fx.project) return { ...HUB_OG_DEFAULT, url };
+  const label = fx.project.label, symbol = fx.project.symbol;
+  const dryNote = " DRY RUN — fixture data.";
+  if (kind === "receipt") {
+    const r = (fx.receipts || {})[sub];
+    if (!r) return { ...HUB_OG_DEFAULT, url };
+    const amt = hubPublic.rawToUi(r.totals ? r.totals.owedRaw : "0", r.rewardDecimals);
+    return {
+      title: `${amt} ${symbol} receipt — ${label} (demo)`,
+      desc: `${r.holderLabel || "A holder"} received ${amt} ${symbol} through ${label}'s Lock to Earn — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+      url,
+    };
+  }
+  if (kind === "program") {
+    return {
+      title: `Lock to Earn — ${label} — Hub demo`,
+      desc: `${label}'s Lock to Earn program: who qualifies, funding coverage and a paid receipt — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+      url,
+    };
+  }
+  return {
+    title: `${label} — Hub demo walkthrough`,
+    desc: `A guided, no-wallet walkthrough of the Project Hub's single-holder story.${dryNote}`,
+    url,
+  };
+}
+// The static card is committed under public/, which (CLAUDE.md — public/ is only mounted through
+// the vite-built dist/ copy) 404s on a no-build boot without an explicit route.
+app.get("/og/hub-card.png", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.type("png");
+  res.sendFile(join(__dirname, "public", "og", "hub-card.png"));
+});
 // Registered BEFORE the generic /hub/:project pattern below so a literal "demo" / "demo-b" always
 // hits the fixture page, never the real one — a pasted /hub/demo link can never resolve to a real
 // project id later reusing that name (store.js's ID_RE would allow "demo" to be registered for
 // real; this ordering plus the fixture never touching the real registry is the actual guarantee).
 app.get(["/hub/demo", "/hub/demo/p/:program", "/hub/demo/r/:id", "/hub/demo-b"], (req, res) => {
-  res.sendFile(join(__dirname, "public", "hub-demo.html"));
+  try {
+    const projectId = req.path === "/hub/demo-b" ? "demo-b" : "demo";
+    const meta = req.params.id ? hubDemoOgFor(projectId, "receipt", req.params.id)
+      : req.params.program ? hubDemoOgFor(projectId, "program", req.params.program)
+      : hubDemoOgFor(projectId, "project", null);
+    res.type("html").send(renderHubOgHtml(hubDemoOgShell(), meta));
+  } catch (e) { res.sendFile(join(__dirname, "public", "hub-demo.html")); }
 });
 app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:program", "/hub/:project/r/:sig"], (req, res) => {
-  res.sendFile(join(__dirname, "public", "hub.html"));
+  try {
+    const projectId = req.params.project ? String(req.params.project).toLowerCase() : null;
+    const meta = !projectId ? { ...HUB_OG_DEFAULT, url: HUB_OG_BASE }
+      : req.params.sig ? hubOgFor(projectId, "receipt", req.params.sig)
+      : req.params.program ? hubOgFor(projectId, "program", req.params.program)
+      : hubOgFor(projectId, "project", null);
+    res.type("html").send(renderHubOgHtml(hubOgShell(), meta));
+  } catch (e) { res.sendFile(join(__dirname, "public", "hub.html")); }
 });
 
 // ── For Projects — the guided front door (Colosseum W4, cut to two days). LINKS the tools that

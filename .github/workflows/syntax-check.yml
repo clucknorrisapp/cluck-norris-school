@@ -424,7 +424,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -594,6 +594,16 @@ jobs:
         run: |
           test -f public/hub-verify.bundle.js || npm run build:hubverify
           node scripts/hub-verify-page-test.cjs
+      # Colosseum roadmap §9 Y4 — shareable Hub pages. Boots its own server (a hostile-label
+      # registry project pre-seeded into DATA_DIR) and drives /hub, a real project page, the demo
+      # fixture (project/program/receipt) and /for-projects: server-rendered Open Graph/Twitter
+      # Card meta is present, escaped (an XSS-shaped project label never reaches the page raw),
+      # <=70/<=200 char, carries the reproducibility line, a missing project/receipt still serves
+      # 200 with the generic Hub meta, the demo pages carry "DRY RUN — fixture data", and the one
+      # static branded card serves as image/png with a long cache header.
+      - name: Hub shareable pages — Open Graph / Twitter Card meta (Y4)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-og-test.cjs
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the
