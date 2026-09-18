@@ -245,3 +245,151 @@ Fixed: 43ab968 — froze all of it: `mint`, `fundingWallet` and `payoutSources` 
 
 **Merge-ready: no** — `sign-request` picks rows from the journal alone while every other payer path picks them from the legacy `sent` ledger (P0-1, reproduced), and nothing durable is written before the browser broadcasts while a re-`sign-request` during `signing` is explicitly allowed (P0-2); either one pays a holder twice on an ordinary managed-send timeout or a lost tab, and the second payment is silently discarded by `recordSent` rather than journaled.
 
+
+---
+
+## Round 2, lens 1 (crash windows and idempotency) — head 5ffc393
+
+# X6 lens 1, round 2 — crash windows and idempotency
+
+Read-only pass on `origin/claude/hub-browser-sign` @ `5ffc393`. No files edited, no git writes, no work-tree touches. I extracted the branch with `git archive` into the scratchpad, ran `scripts/hub-browser-sign-test.cjs` (**30/30 pass**) and `scripts/hub-desk-sign-page-test.cjs` (**12/12 pass**), and drove eleven fault probes against the real route closures through the same DI harness. Findings marked **[probe]** are reproduced output, not reasoning. All line numbers are at `5ffc393`.
+
+---
+
+## Part 1 — are the round-1 findings really closed?
+
+**P0-1 — sign-request re-offered legacy-sent rows. CLOSED.**
+`lib/hub/routes.js:1531` `const remaining = pay.remainingOf(bt);` and `:1534` `if (!(wallet in remaining)) { rows.push({wallet, ok:false, error:"already recorded as sent — awaiting confirmation, not offered again"}); continue; }`. This is the intersection the finding asked for, and the skipped wallet is surfaced with a reason. Test §14 (`scripts/hub-browser-sign-test.cjs:481-508`) builds the exact probe scenario — a fake vault whose `onPaid` stamps `{pending:true}` for A and fails B — and asserts A is absent from `rows`, present in `skipped`, and B still offered. A journal-only selection offers A, so the test is red without the fix. Verified independently: **[probe P10]** a managed send that legacy-stamps every row flips `bt.state` to `sent` and `sign-request` then answers `400 batch is sent, not pending`.
+
+**P0-2 — nothing durable before broadcast; re-sign while `signing`. CLOSED** (one deliberate residual).
+Server half at `routes.js:1511-1513`: `signing` + no `force` ⇒ 409, and the refusal echoes `{state, nonce}`. Test `:163-172` asserts the 409 *and* that the refused call issued no fresh nonce; `:174-182` asserts `force=1` issues a different one. Client half at `public/hub-desk.html:630` (`!live` is now in `ok`) and `:687-688` (both `sent` **and** `unconfirmed` results persisted to `ROW_STATUS` and pushed to `sigs`), pinned by `hub-desk-sign-page-test.cjs:272-286` (disabled for `signing` *and* `submitted`) and `:291-334`. Two tabs are covered by the server, not the button: a stale tab's `sign-request` gets the 409. Residual, by design and documented: `force=1` re-offers rows whose signatures are genuinely in flight — **[probe P5]** confirms it re-offers the wallet, but also that the old signature is still settleable under the **new** nonce (`200 recorded:[A]`), so the operator can recover instead of double-paying. That is the right trade.
+
+**P1-3 — `&cancel=` unguarded during a browser-sign flow. CLOSED at `&cancel=`, re-opened elsewhere (see N1).**
+`routes.js:1177` refuses 409 while `browserSignIsLive(bt0)`, with the F2 reasoning at `:1170-1176`. `observe` independently refuses a non-`pending` batch twice — `:1615` on the lock-free pre-read and `:1669` on the fresh in-lock read. Test §12 (`:422-448`) covers both, including a hand-forged `cancelled` state to prove the second check is not dead code. The desk gates CLOSE on `bsLive` (`hub-desk.html:548`).
+
+**P1-4 — `submitted` was a dead end. CLOSED.** Both named fixes shipped: the null-`getTx` case is now 503/retry (`:1652-1655`) and the owner-only reset exists (`:1476-1491`). Test §13 (`:450-479`) proves an operator gets 403, the owner gets `cleared:true`, amounts/state/journal are untouched, and a fresh `sign-request` then succeeds **without** `force`. Residual unchanged and acknowledged in the fix note: a row that settles through `ATTRIBUTION_FAILURE_WHY` is legacy-recorded but never journaled, so `stillOwed` (`:1779`, journal-derived) stays true and pins `submitted` for good — an ordinary batched/ambiguous transaction therefore still needs the owner. That matters because the lever it forces you onto is N1.
+
+**P1-5 — RPC outage vs null. CLOSED.** `:1645` (throw) and `:1652-1655` (null) return the same 503 `retry:true` shape before the lock is ever taken. Tests `zeta1`/`zeta2` (`:296-328`) assert the batch JSON is **byte-identical** afterwards and that `failed` stays `{}`. A broken implementation that wrote `failed` or advanced state fails on the byte-compare.
+
+**P2-6 — the nonce was decorative. CLOSED, and load-bearing.** Required at `:1591`/`:1619-1621` (pre-read) and re-checked against the fresh read at `:1672-1674`. Test §16 (`:542-568`) covers both the missing and the superseded nonce. This is also what makes the new lock-free pre-read safe (see Part 2).
+
+**P2-7 — `failed[wallet]` recorded wrong reasons. PARTIAL.** Fixed for the *within-one-call* cross-product noise (`NOISE_WHY_RE` at `:1789`, the `byWallet.has` skip at `:1794`, the `r.recorded` clear at `:1802`), and test §18 (`:586-612`) reproduces the exact attribution-failure-plus-genuine-failure scenario. But the *across-calls* case is wide open — see **N2**, reproduced.
+
+**P2-8 — the idempotency test passed for the wrong reason. CLOSED.** `:270-294` uses a two-wallet batch, asserts `browserSign.state === "submitted"` so the top-level short-circuit cannot fire, and asserts `!second.body.already` — i.e. it genuinely reaches the pipeline. (It is `remaining === 0n` ⇒ `amount_mismatch` that stops A and the ledger's consumed check that stops B; both are the real second layer.) Note the test never inspects `failed` on that second call, which is precisely why N2 was invisible to it.
+
+**P2-9 — tests did not cover what their names claimed. CLOSED as scoped.** §1 inverted, §14 (partial/pending managed send), §15 (cross-project token ⇒ 404; concurrent `&send=` ⇒ `busy` through the shared lock). Lapsed-project access left as the owner decision the finding named.
+
+**P3-10 — inconsistent freezing. CLOSED.** Frozen at `:1555-1558` (`mint`, `decimals`, `tokenProgram`, `fundingWallet`, `payoutSources`), read back at `:1681-1683` and used throughout `verifyBatchRows`/`locateTransferInstruction`/`settleAndPersist` (`:1700`, `:1726`, `:1746`). **[probe P6]** rotating the project's `fundingWallet` between sign-request and observe still settles the old-wallet transfer (`200 recorded:[A]`) — the correct answer for a transfer the operator was told to make. See N7 for the missing staleness bound.
+
+---
+
+## Part 2 — new findings
+
+### N1 (P1) — `sign-request?clear=1` silently re-opens the exact double-pay window F2 was built to close
+`lib/hub/routes.js:1476-1491`, against the F2 reasoning at `:1170-1176`.
+
+`clear=1` nulls `browserSign`, which makes `browserSignIsLive(bt)` false, which un-blocks `&cancel=`. `cancelBatch` returns every row with no settlement to `available` — and a wallet the sign-request handed out, that the operator broadcast for but never observed, has no settlement on file. **[probe P8]**, two wallets, A offered and (in the real world) broadcast but never observed, B observed:
+
+```
+P8 observe B:        200 state submitted recorded [B] failed []
+P8 clear:            200 {"ok":true,"cleared":true,"batchId":"hb_a6136331cc"}    <-- no warning, no wallet list
+P8 cancel after clear: 200 "hb_a6136331cc"
+P8 re-export owes:   {"4Gccq9pE…":"1000000000"}    <-- A drawn again, full amount
+P8 alerts:           []
+```
+
+The route comment claims "nothing here can ever un-journal a real settlement" — true, and `clear` is correctly safe for journaled rows (**[probe P4]**: after a real observed settle, clear + fresh sign-request re-offers only the unpaid wallet and lists the paid one in `skipped`). The hazard is the unjournaled, unobserved handout, which is the whole reason F2 exists. It is made worse by P1-4's residual: an ordinary batched/ambiguous transaction pins `submitted`, and `clear=1` is the documented remedy, so this is not an exotic path.
+
+**Minimal fix:** in the clear branch, compute `atRisk = (bt.browserSign.wallets||[]).filter(w => !(bt.sent && bt.sent[w]) && ledger.rowState(bt, w, entries)?.remainingRaw !== "0")`. If `atRisk.length`, refuse unless a second explicit flag (`confirm=abandon-broadcast`) is passed, and echo `atRisk`, `observedSigs` and `nonce` in the 200 body and the console line either way.
+
+### N2 (P1) — an ordinary idempotent re-observe marks a PAID row failed and fires a fraud alert
+`lib/hub/routes.js:1706-1710` and `:1790-1802`.
+
+The README promises "Observing the same signature twice is exactly as idempotent as reporting it to `&sent=` twice". It is not, on the reporting side. **[probe P1 / P9]**, two-wallet batch, observe `SIG_A` twice:
+
+```
+PROBE1 second: 200 recorded [] failed {"4Gccq9pE…":{"why":"amount_mismatch"},
+                                       "5WKKoF7L…":{"why":"transfer_already_consumed"}}
+PROBE1 A paid? true   (stored on the batch, not just in the response)
+P9 alerts on an idempotent retry:
+  ["p9: batch hb_… — 2 browser-signed settlement REFUSED (not recorded):
+     transfer_already_consumed x1, amount_mismatch x1 — wallets 5WKKoF…, 4Gccq9…"]
+```
+
+Two separate lies. (a) Wallet A is paid and journaled; its remaining is 0, so PASS 1 refuses its own signature as `amount_mismatch`, `refusePass1` writes `failed[A]`, and `:1802` cannot clear it because A is not in `r.recorded` any more. The entry persists for the life of that `browserSign`, including into the terminal `settled` record, and `hub-desk.html:702` prints "1 row(s) could not be recorded: A (amount_mismatch)" for a row that is paid. (b) Wallet B — which has nothing to do with that signature — is rejected as `TRANSFER_ALREADY_CONSUMED_WHY`, which is not caught by `NOISE_WHY_RE`, so it is written into `failed[B]` **and** into `alertRefusals` (`:1709`), raising the adv P0-2a cross-project-reuse **fraud** alert into the operator room on a plain retry. The same shape appears without any retry: **[probe P2]** recording a row through `&sent=` (the desk's own "record on server" recovery button) between sign-request and observe leaves `failed = {A: amount_mismatch}` on a row `&sent=` just paid, while the call reports `state: settled`.
+
+**Minimal fix:** (a) before writing `failedNow[w]`, skip any wallet whose post-pass `ledger.rowState(finalBatch, w, finalEntries).remainingRaw === "0"` — nothing owed is not a failure; (b) at `:1709`, suppress a `TRANSFER_ALREADY_CONSUMED_WHY` whose consuming journal entry names this same `projectId`+`batchId` (it is our own prior settlement, not a reuse) from both `alertRefusals` and `failedNow`.
+
+### N3 (P2) — observe is all-or-nothing on unindexed signatures, and the desk deliberately sends the signatures most likely to be unindexed
+`lib/hub/routes.js:1652-1655`; `public/hub-desk.html:688, 693`.
+
+`notYetIndexed.length` aborts the **whole** call, so signatures that *are* indexed settle nothing. **[probe P3]**: two sigs, one indexed, one not → `503 … has not indexed 1 of these signature(s) yet`, `A paid? false`, `state signing`. Meanwhile the F5 fix at `:688` now pushes `unconfirmed` results (30 s confirm timeout) into `sigs` — exactly the ones the RPC is least likely to have indexed — and `:693` calls observe seconds after `CluckAirdrop.send()` returns, with no retry and no backoff. The likely day-one outcome is a 503, `browserSign` still `signing`, and SEND / SIGN AND SEND / CLOSE all disabled behind `bsLive` (`hub-desk.html:547-548, 630`). It is recoverable — `&sent=` is not blocked while live and the per-row "record on server" buttons exist for both `sent` and `unconfirmed` rows (`hub-desk.html:504, 506`, confirmed by probe P2) — but the feature's own path is stuck, and it leads straight into N5.
+
+**Minimal fix:** drop `notYetIndexed` from `sigs`, settle the rest, never advance to `settled` while any remain, and return 200 with `pendingSigs` + `retry:true`; or, at minimum, have `signAndSend()` retry observe on a 503 with `retry:true` after a short backoff before surfacing the error.
+
+### N4 (P3) — `unrecordedSent()`, the guard F5 leans on, still ignores `unconfirmed`
+`public/hub-desk.html:572`, used at `:578`, `:646`, `:729`; purge at `:580`.
+
+F5's own comment (`:683-686`) says an `unconfirmed` result "may still land" and must never be dropped, and the fix duly reports it to observe. But the double-pay guard still filters `l.status === "sent"` only, so an unconfirmed-but-landed row blocks neither a re-sign nor a CLOSE, and `send()`'s purge at `:580` deletes its `ROW_STATUS` entry outright — taking its "record on server" button with it. `bsLive` masks most of this today (the buttons are disabled while the flow is live), which is why this is P3 and not higher; it is exposed once `browserSign` is cleared or `settled`. The page test's "refuses to run again" case (`hub-desk-sign-page-test.cjs:291-321`) uses `status:"sent"`, and the `unconfirmed` case (`:323-334`) only covers a *successful* observe, so neither catches it.
+
+**Minimal fix:** `:572` → `return !r.sent && l && (l.status === "sent" || l.status === "unconfirmed") && l.sig;`, and make `:580`'s purge keep `unconfirmed` too.
+
+### N5 (P3) — `&sent=` flips `bt.state`, pinning `browserSign` at `signing` forever; the README says it cannot
+`lib/cuna-payout.js:246-250`; `routes.js:1505, 1669`; `lib/hub/README.md` §3a ("What still works while live: `&sent=`, `&waive=`, and the per-row 'record on server' recovery buttons — **none of those touch `browserSign` or `bt.state`**"). `recordSent` flips a pending batch to `sent` once every row is recorded. **[probe Q1]**, recovering the last row with the row button:
+
+```
+Q1 after &sent= of every row: bt.state = sent | browserSign.state = signing
+Q1 observe now:      400 batch is sent, not pending
+Q1 sign-request:     400 batch is sent, not pending
+Q1 cancel:           409 a browser-signed payout is signing for this batch
+Q1 browserSign stuck at: signing   (browserSignIsLive forever)
+```
+
+The money is fine (the batch is fully paid), but the state machine has no terminal transition for it and the contract doc is wrong — which matters because the only tidy-up is the owner's `clear=1`, i.e. N1's lever.
+
+**Minimal fix:** in `observe`, treat `bt.state === "sent"` with nothing still owed as the `already:true` terminal rather than a 400, or stamp `browserSign.state = "settled"` when `recordSent` completes a batch; and correct the README sentence.
+
+### N6 (P3) — the clear branch runs before the dry-run refusal and reports nothing it discarded
+`routes.js:1476` (clear) sits above `:1496` (`if (p.dryRun) …`), so a dry-run project accepts a clear — harmless, but the only branch on either route that does. The 200 body is `{ok, cleared, batchId}`: `wallets`, `observedSigs`, `nonce` and `failed` are destroyed with no echo, so after a clear there is no record anywhere of what the sign-request handed out (the journal and legacy `sent` rows survive, the handout does not). Fold the echo into N1's fix and move the dry-run check above the branch.
+
+### N7 (P3) — a frozen `browserSign` never expires
+`routes.js:1555-1558` / `:1681-1683`. The freeze is right (probe P6), but there is no staleness bound on it — only `notBefore: bt.at`. A months-old `signing` record can still credit a transfer made from a since-rotated funding wallet at any time after the batch was created. **Minimal fix:** refuse an observe whose `browserSign.requestedAt` is older than a bounded window (24 h), with the "request a fresh one" wording the nonce mismatch already uses; the row's money is unaffected and a fresh sign-request re-offers it.
+
+### N8 (P3) — `skipped` is not the complement of `rows`
+`routes.js:1536`: `if (!rs || rs.remainingRaw === "0") continue;` drops a zero-remaining row from **both** `rows` and `skipped`, so a fully-waived or journalled-to-zero wallet simply vanishes from the response the P0-1 fix otherwise made complete. `rows.push({wallet, ok:false, error:"nothing remaining on this row"})`.
+
+---
+
+## The specific questions asked
+
+**Can the batch change between the RPC fetch and the lock?** Yes, and it is handled. Everything carried across the gap is either client input (`sigs`, `nonce`) or immutable chain data (`txBySig`); `preWallets` is used only for the `:1626-1628` bounds. Inside the lock, `bt`, `paid`, the journal, `remainingByWallet`, `notBefore`, `wallets` and all frozen parameters come from a **fresh** read (`:1662-1700`), and four re-checks fire before any write: `!bt.browserSign` (a `clear=1` landed) `:1665`, terminal state `:1666`, `bt.state !== "pending"` (a cancel landed) `:1669`, and the nonce (a `force=1` landed) `:1672`. A managed `&sent=` in the gap is the one thing that can change the batch without tripping any of them — and it is safe for money (fresh `rowState` ⇒ `amount_mismatch`, `recordSent` ⇒ "already recorded"), but it is what produces N2's false `failed` and N5's pin. **[probe P2]** confirms both. A managed `&send=` cannot interleave at all (`:1307`).
+
+**Is `clear=1` safe after a real broadcast?** For a *journaled* settlement, yes — probe P4. For a broadcast that was never observed, no — that is N1.
+
+**Does `force=1` re-offer in-flight rows?** Yes, by design and with an explicit warning in the 409 it replaces; probe P5 also shows the old signature stays settleable under the new nonce, so the operator has a non-destructive recovery.
+
+**Is every multi-key write one `writeManyVerified`?** Yes. `observe` lands `batches` + `paid` + every journal entry in a single `hubStore.writeManyVerifiedMixed` (`:1806`), which funnels into `kv.setManyVerified` (`lib/hub/store.js:79-84`) — all-or-nothing in both the real kvstore and the test kv. `sign-request` and `clear=1` each touch only `batches` via `writeVerified`. The only write outside the money persist is `markMilestone` (`:1807`), which writes the registry after the fact and cannot lose money.
+
+**Does the frozen-parameters policy create a rotation window?** It settles old-wallet transfers, which is correct — the operator was told to pay from that wallet and the holder was really paid. The gap is the unbounded lifetime, N7.
+
+---
+
+## Findings table
+
+| Finding | Verdict | Evidence |
+|---|---|---|
+| P0-1 sign-request ignored the legacy `sent` ledger | **CLOSED** | `routes.js:1531,1534`; test §14 `:481-508`; probe P10 |
+| P0-2 nothing durable before broadcast / re-sign while `signing` | **CLOSED** | `routes.js:1511-1513`; `hub-desk.html:630,687-688`; tests `:163-182`, page test `:272-334` |
+| P1-3 `&cancel=` unguarded mid-flow | **CLOSED** (re-opened by N1) | `routes.js:1177,1615,1669`; test §12 `:422-448` |
+| P1-4 `submitted` was a dead end | **CLOSED** (attribution-failure pin remains, exit is N1's lever) | `routes.js:1652-1655,1476-1491`; test §13 `:450-479` |
+| P1-5 null `getTx` reported as permanent failure | **CLOSED** | `routes.js:1645,1652-1655`; tests `:296-328` (byte-identical) |
+| P2-6 nonce generated but never checked | **CLOSED** | `routes.js:1591,1619-1621,1672-1674`; test §16 `:542-568` |
+| P2-7 `failed[wallet]` records a wrong reason | **PARTIAL** — same-call noise fixed, across-call case open (N2) | `routes.js:1789-1802`; test §18; probes P1/P2/P9 |
+| P2-8 §5's assertion passed for the wrong reason | **CLOSED** | test `:270-294` |
+| P2-9 tests did not cover their claims | **CLOSED** as scoped | tests §14, §15, §1 |
+| P3-10 inconsistent parameter freezing | **CLOSED** (no expiry — N7) | `routes.js:1555-1558,1681-1683`; probe P6 |
+
+New: **N1 (P1)**, **N2 (P1)**, **N3 (P2)**, **N4–N8 (P3)**.
+
+**Merge-ready: no** — `sign-request?clear=1` (`routes.js:1476-1491`) hands the owner a one-call bypass of the F2 cancel guard that re-draws an already-broadcast, unobserved row into a fresh batch with no warning and no record of what it discarded (**[probe P8]**), and an ordinary idempotent re-observe writes `failed: amount_mismatch` onto a paid, journaled row while firing the `transfer_already_consumed` fraud alert at the operator room (**[probe P9]**). Both are small, local fixes; with N1 and N2 closed and N3 decided, the rest are P3 polish and I would merge.
+
