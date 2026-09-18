@@ -105,7 +105,9 @@
     <div class="panel" id="panelFiles">
       <div class="fact">Drop <span class="mono">receipt.json</span> plus <span class="mono">batch-inputs.json</span> (lock-to-earn) or
       <span class="mono">standings.json</span> (buy competition) — saved exactly as HUB_VERIFY.md §c shows. A
-      <span class="mono">program-version.json</span> is optional and only used to recompute that version's own hash (§d).</div>
+      <span class="mono">program-version.json</span> is optional and only used to recompute that version's own hash (§d).
+      Or drop a single <b>evidence bundle</b> (the "download the evidence bundle" link on any batch or receipt
+      page) — it carries all of that in one file and reproduces every receipt in the batch at once.</div>
       <div class="drop" id="dropZone" tabindex="0" role="button" aria-label="Drop JSON files here, or choose files">
         Drop JSON files here, or <label style="color:var(--cyan);cursor:pointer;text-decoration:underline">choose files<input type="file" id="fileIn" accept="application/json,.json" multiple style="display:none"/></label>
       </div>
@@ -287,6 +289,7 @@ import * as HubVerify from '/hub-verify.bundle.js';
   // ── offline file path ────────────────────────────────────────────────────────────────────
   var loadedFiles = {};   // kind -> { name, body }
   function classify(body) {
+    if (body && body.kind === HubVerify.BUNDLE_KIND) return 'bundle';
     if (body && body.receipt && body.program) return 'receipt';
     if (body && body.wallets) return 'batch-inputs';
     if (body && body.comp) return 'standings';
@@ -307,6 +310,12 @@ import * as HubVerify from '/hub-verify.bundle.js';
       try {
         var text = await f.text();
         var body = JSON.parse(text);
+        // AA2: a single evidence bundle is everything this tab needs — "accepts a dropped bundle
+        // in one move" — so it reproduces immediately rather than waiting for a second file and a
+        // button click. Any other files dropped in the same action are ignored (a bundle already
+        // carries its own receipts/inputs/program-version; mixing it with loose files would be
+        // ambiguous about which one wins).
+        if (classify(body) === 'bundle') { await reproduceFromBundle(body); return; }
         var kind = classify(body);
         if (!kind) continue;
         loadedFiles[kind] = { name: f.name, body: body };
@@ -361,6 +370,69 @@ import * as HubVerify from '/hub-verify.bundle.js';
     renderVerdict(res2, { wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody.decimals), versionHash: versionOpt });
   }
   document.getElementById('filesBtn').addEventListener('click', reproduceFromFiles);
+
+  // ── AA2: the evidence bundle — one dropped file, every receipt in the batch reproduced at once
+  // (docs/COLOSSEUM_ROADMAP.md §11). The bundle's own hash is checked FIRST and shown before
+  // anything else: a mismatch means the file was altered or truncated after it was built, and the
+  // reproduction below still runs (and is still shown) even when it fails — a stale/edited copy
+  // is a fact about the FILE, not a reason to hide what it says.
+  function runBundleReceipt(rb, batchInputs, programVersion) {
+    var wallet = rb && rb.receipt ? rb.receipt.wallet : null;
+    var symbol = (rb && rb.program && rb.program.ticker) || (rb && rb.symbol) || null;
+    var entry = wallet && batchInputs.wallets ? batchInputs.wallets[wallet] : null;
+    var receiptForCore = { amountRaw: entry ? entry.amountRaw : (rb && rb.receipt ? rb.receipt.amountRaw : null) };
+    var inputsForCore = entry ? { periods: entry.periods, priorPaidRaw: entry.priorPaidRaw, priorReservedRaw: entry.priorReservedRaw } : null;
+    var result = HubVerify.reproduce({ programVersion: programVersion, inputs: inputsForCore, receipt: receiptForCore });
+    if (!entry) result.missing.push("the bundle's batch inputs do not carry this wallet");
+    return { wallet: wallet, symbol: symbol, result: result };
+  }
+  function renderBundleResults(bundle, hashCheck, rows, versionOpt) {
+    var matches = rows.filter(function (r) { return r.result.status === 'MATCH'; }).length;
+    var mismatches = rows.filter(function (r) { return r.result.status === 'MISMATCH'; }).length;
+    var missing = rows.length - matches - mismatches;
+    var hashCls = hashCheck.ok ? 'match' : 'mismatch';
+    var html = '<div class="card">' +
+      '<div class="verdict ' + hashCls + '"><span class="badge">' + (hashCheck.ok ? 'BUNDLE HASH: MATCHES' : 'BUNDLE HASH: DOES NOT MATCH') + '</span>' +
+      '<span class="vtext">' + (hashCheck.ok
+        ? 'This file is byte-for-byte what it was when it was built — intact, not truncated or edited.'
+        : (hashCheck.reason ? esc(hashCheck.reason) : 'The bytes changed after this bundle was built — reproduction below still ran, but treat this copy as unverified.')) + '</span></div>';
+    if (bundle && bundle.settled === false) html += '<div class="fact" style="margin-top:6px">' + esc(bundle.note || 'This batch has not been settled yet.') + '</div>';
+    html += '<div class="fact" style="margin-top:6px"><b>Project</b> ' + esc((bundle.project && (bundle.project.label || bundle.project.id)) || '(unknown)') +
+      ' · <b>Batch</b> <span class="mono">' + esc((bundle.batch && bundle.batch.id) || '(unknown)') + '</span></div>';
+    if (versionOpt) {
+      html += '<div class="fact" style="margin-top:4px"><b>Program-version hash recompute:</b> ' +
+        (versionOpt.ok ? '<span style="color:var(--green)">matches</span>' : (versionOpt.reason ? esc(versionOpt.reason) : '<span style="color:#FCA5A5">does not match — computed ' + esc(versionOpt.computed) + '</span>')) + '</div>';
+    }
+    if (rows.length) {
+      html += '<div class="fact" style="margin-top:8px"><b>' + matches + ' of ' + rows.length + '</b> receipt' + (rows.length === 1 ? '' : 's') + ' in this batch reproduce' + (rows.length === 1 ? 's' : '') + ' to MATCH' +
+        (mismatches ? ', ' + mismatches + ' MISMATCH' : '') + (missing ? ', ' + missing + ' MISSING_INPUTS' : '') + '.</div>';
+    } else {
+      html += '<div class="fact" style="margin-top:8px">No receipts in this bundle yet.</div>';
+    }
+    html += '</div>';
+    html += rows.map(function (r) {
+      var cls = verdictClass(r.result.status);
+      var row = '<div class="card"><div class="verdict ' + cls + '"><span class="badge">' + esc(verdictWord(r.result.status)) + '</span>' +
+        '<span class="vtext">' + (r.wallet ? esc(shortAddr(r.wallet, 5, 4)) : '') + '</span></div>' +
+        '<ul class="steps"><li class="total"><div class="lbl">published amount</div><div class="val">' + (r.result.published == null ? '(unknown)' : esc(r.result.published) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li>' +
+        '<li class="total"><div class="lbl">reproduced amount</div><div class="val">' + (r.result.reproduced == null ? '(not computed)' : esc(r.result.reproduced) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li></ul>';
+      if (r.result.missing && r.result.missing.length) row += '<div class="fact" style="margin-top:10px"><b>Missing:</b></div><ul class="missing-list">' + r.result.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
+      return row + '</div>';
+    }).join('');
+    resultEl.innerHTML = html;
+  }
+  async function reproduceFromBundle(bundle) {
+    renderStatus('CHECKING THE BUNDLE…');
+    var hashCheck;
+    try { hashCheck = HubVerify.verifyBundleHash(bundle); } catch (e) { hashCheck = { ok: false, reason: e.message }; }
+    var split = HubVerify.splitBundle(bundle);
+    var versionOpt = null;
+    if (split.programVersion) {
+      try { versionOpt = await HubVerify.verifyVersionHash(split.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
+    }
+    var rows = split.receipts.map(function (rb) { return runBundleReceipt(rb, split.batchInputs, split.programVersion); });
+    renderBundleResults(bundle, hashCheck, rows, versionOpt);
+  }
 })();
 </script>
 <!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->

@@ -190,7 +190,10 @@ const ROUTES = [
     ok("STORE_API_RE is still findable in server.js (keep this test in sync if it moves)", !!storeMatch);
     const STORE_API_RE = storeMatch ? eval(storeMatch[1]) : /$^/;   // eslint-disable-line no-eval -- test-only, source-scanned right above
     const heavyPaths = [...src.matchAll(/app\.get\("([^"]+)",\s*rateLimit\("hubheavy"/g)].map((m) => m[1]);
-    ok("found the 7 heavy routes wired to the dedicated limiter", heavyPaths.length === 7, JSON.stringify(heavyPaths));
+    // AA2 (docs/COLOSSEUM_ROADMAP.md §11) added the evidence-bundle route to this same bucket —
+    // it walks the same batch the /inputs route above it does, so it belongs on the same limiter.
+    // BB3 added the two badge routes (they walk every ledger). 5 original + bundle + 2 badges = 8.
+    ok("found the 8 heavy routes wired to the dedicated limiter", heavyPaths.length === 8, JSON.stringify(heavyPaths));
     for (const p of heavyPaths) ok(`${p} is not a store-edition contract route`, !STORE_API_RE.test(p), p);
 
     // Live confirmation for one representative store-edition route: a burst well under its own

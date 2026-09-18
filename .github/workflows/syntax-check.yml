@@ -452,7 +452,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -673,6 +673,16 @@ jobs:
         run: |
           test -f public/hub-verify.bundle.js || npm run build:hubverify
           node scripts/hub-verify-page-test.cjs
+      # AA2 (docs/COLOSSEUM_ROADMAP.md §11): the offline evidence bundle — GET
+      # /api/hub/:project/batch/:batchId/bundle (and the demo-fixture mirror), lib/hub/bundle.js's
+      # own pure SHA-256 in isolation, the Node CLI's `--bundle` flag, and Chromium dropping a
+      # bundle file on /hub/verify. Same reason this rides the Y1 gate: it shares the browser
+      # bundle build and the exact same fixture-agreement discipline.
+      - name: Hub evidence bundle — hash integrity, route, CLI and /hub/verify (AA2)
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          test -f public/hub-verify.bundle.js || npm run build:hubverify
+          node scripts/hub-bundle-test.cjs
       # Colosseum roadmap §9 Y4 — shareable Hub pages. Boots its own server (a hostile-label
       # registry project pre-seeded into DATA_DIR) and drives /hub, a real project page, the demo
       # fixture (project/program/receipt) and /for-projects: server-rendered Open Graph/Twitter

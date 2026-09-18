@@ -8259,6 +8259,43 @@ app.get("/api/hub-demo/:project/r/:id", (req, res) => {
     return res.status(200).json({ ok: true, dryRun: true, projectId: id, receipt: r });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// AA2's evidence bundle, for the demo fixture too — the same download shape the real Hub route
+// below serves, over the fixture's own version/batch/receipts. The demo's batch and receipts run
+// on the Addendum-B ledger model (lib/hub/ledger.js — receipt() output matches
+// lib/hub/schema/receipt.schema.json exactly, unlike any LIVE receipt today), which
+// lib/hub/reproduce.js does not read from (docs/HUB_VERIFY.md §g) — there is no per-wallet
+// periodsCreditedTo breakdown to publish, so `batch.inputs` is honestly empty rather than reshaped
+// into something that would look reproducible and isn't; `/hub/verify` reports MISSING_INPUTS for
+// these receipts, which is the true state of this project's payout path, not a bug in the bundle.
+app.get("/api/hub-demo/:project/batch/:batchId/bundle", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const id = String(req.params.project || "").toLowerCase();
+  try {
+    const p = hubDemoFixture.get()[id];
+    if (!p) return res.status(404).json({ ok: false, error: "no such demo project" });
+    if (!p.batch || !p.batch.id) return res.status(404).json({ ok: false, error: "this demo project has no batch to bundle" });
+    if (String(req.params.batchId || "") !== p.batch.id) return res.status(404).json({ ok: false, error: "no such batch" });
+    const programVersion = { ...hubPublic.programVersionView(p.version), $schema: HUB_SCHEMA_URL("program-version") };
+    const receiptIds = Object.keys(p.receipts || {}).sort();
+    const receiptsOut = receiptIds.map((rid) => {
+      const r = p.receipts[rid];
+      return {
+        projectId: p.project.id, symbol: p.project.symbol, dryRun: true, brand: null,
+        program: { kind: "lock-to-earn", id: "lock-to-earn", label: "Lock to Earn", ticker: p.project.symbol, mint: p.project.mint, prizeMint: p.project.rewardMint },
+        receipt: { ...r, $schema: HUB_SCHEMA_URL("receipt") },
+      };
+    });
+    const bundle = hubBundle.buildBundle({
+      projectView: { id: p.project.id, label: p.project.label, dryRun: true },
+      programVersion,
+      batchInputs: { projectId: p.project.id, batchId: p.batch.id, decimals: p.project.decimals, wallets: {} },
+      receipts: receiptsOut,
+      note: "Fixture data for the Colosseum judge walkthrough (dryRun:true throughout). `batch.inputs` is empty because this batch runs on the not-yet-live Addendum-B settlement model (docs/HUB_VERIFY.md §g) rather than the model lib/hub/reproduce.js reads from, so /hub/verify will honestly report MISSING_INPUTS for these receipts rather than a fabricated MATCH.",
+    });
+    res.setHeader("Content-Disposition", `attachment; filename="hub-${p.project.id}-${p.batch.id}-evidence.json"`);
+    return res.status(200).json(bundle);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 
 // ── E1: reproduce a receipt from the published inputs (Colosseum roadmap §1 "the number") ─────
 // lib/hub/reproduce.js is the pure core scripts/reproduce-receipt.cjs runs on a reader's own
@@ -8295,6 +8332,71 @@ app.get("/api/hub/:project/batch/:batchId/inputs", rateLimit("hubheavy", { windo
       return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: all[wanted] } });
     }
     return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: all });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── AA2: the offline evidence bundle (Colosseum roadmap §11) — one JSON download that carries
+// everything the route above (plus the receipt and program-version routes) would otherwise need
+// three separate curls for: the program version this batch paid under, its published inputs, and
+// every settled receipt in it. Composed ONLY from the same public view functions those routes
+// already call (hubReproduce.buildBatchInputs, hubPublic.findReceipt, hubPublic.programVersionView
+// via hubProject.versionFor) — never a private field, never desk data. Same rate limit and CORS
+// as the route above, since it walks the same batch. `/hub/verify` (Y1) accepts this file dropped
+// in one move; `scripts/reproduce-receipt.cjs --bundle` reproduces every receipt in it on a
+// reader's own machine. See lib/hub/bundle.js for what the hash does and does not prove.
+const hubBundle = require("./lib/hub/bundle");
+app.get("/api/hub/:project/batch/:batchId/bundle", rateLimit("hubheavy", { windowMs: 60000, max: 60, cors: true }), (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const batches = hubStore.read(kv, p.id, "batches", {}) || {};
+    const bt = batches[String(req.params.batchId || "")];
+    if (!bt) return res.status(404).json({ ok: false, error: "no such batch" });
+    const days = hubStore.read(kv, p.id, "days", {}) || {};
+    const dec = Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : (Number.isInteger(p.decimals) ? p.decimals : 9);
+    // Same wallets a plain /inputs fetch (no ?wallet=) would return — every wallet already SENT
+    // in this batch. Sorted so the receipts array below (and therefore the bundle's hash) comes
+    // out in the same order on every rebuild of the same settled batch.
+    const wallets = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
+    const settledWallets = Object.keys(wallets).sort();
+    // The program version in force when this batch was built — the exact lookup
+    // hubPublic.stakeView's own per-receipt "explanation" already runs (lib/hub/public.js
+    // stakeView -> lib/hub/explain.js), independent of whether anything in the batch has settled
+    // yet. Absent for a project whose lock-to-earn payout predates program versions (CUNA) — that
+    // is reported as `program: null`, never invented (lib/hub/reproduce.js's own header explains
+    // why a lock-to-earn batch carries no hash of its own today).
+    let programVersion = null;
+    try {
+      const state = hubStore.read(kv, p.id, "state", {}) || {};
+      if (Array.isArray(state.versions) && state.versions.length) {
+        const dayKey = new Date((Number(bt.at) || 0) * 1000).toISOString().slice(0, 10);
+        const v = hubProject.versionFor(state, dayKey);
+        if (v) programVersion = { ...hubPublic.programVersionView(v), $schema: HUB_SCHEMA_URL("program-version") };
+      }
+    } catch (_) { /* no version state on this project — programVersion stays null, reported honestly */ }
+    let receiptsOut = [];
+    if (settledWallets.length) {
+      const view = hubProjectView(p);
+      receiptsOut = settledWallets.map((w) => {
+        const sig = bt.sent && bt.sent[w] && bt.sent[w].sig;
+        return sig ? hubPublic.findReceipt(view, sig) : null;
+      }).filter(Boolean);
+    }
+    // An unsettled batch (built, but nothing sent yet) is not an error — it just has nothing to
+    // bundle yet. Said in plain words rather than served as an empty-but-unexplained receipts
+    // array, which could otherwise read as "this project has never paid anyone." `settled`/`note`
+    // are passed INTO buildBundle (not merged onto its result afterward) so they are hashed along
+    // with everything else — see bundle.js's own comment on why that matters.
+    const bundle = hubBundle.buildBundle({
+      projectView: { id: p.id, label: p.label, dryRun: p.dryRun === true },
+      programVersion,
+      batchInputs: { projectId: p.id, batchId: bt.id, decimals: dec, wallets },
+      receipts: receiptsOut,
+      note: receiptsOut.length ? null : "This batch has not been settled yet — no wallet in it has been paid, so there is nothing to bundle. Check back once at least one payout from this batch has landed.",
+    });
+    res.setHeader("Content-Disposition", `attachment; filename="hub-${p.id}-${bt.id}-evidence.json"`);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    return res.status(200).json(bundle);
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // { batches: [{batchId, total, reproduced, mismatched, missingInputs, period}], overall } —

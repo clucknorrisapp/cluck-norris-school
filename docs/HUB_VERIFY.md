@@ -26,6 +26,7 @@ Railway auto-deploys both branches; the owner promotes `develop` → `main` by h
 | `GET /api/hub-pricing` | `GET /hub/demo`, `GET /api/hub-demo*` (the no-wallet fixture walkthrough) |
 | `/hub`, `/hub/:project` pages | `GET /api/hub/:project/p/:compId/standings` (Buy Special), `GET /api/airdrop/r/:dropId` |
 | | `GET /api/hub/:project/readiness` (Launch Readiness), on-chain commit routes, the POKEAHOE branded page |
+| | `GET /api/hub/:project/batch/:batchId/bundle` and `GET /api/hub-demo/:project/batch/:batchId/bundle` (AA2, the evidence bundle above) |
 
 **Practically: every step below needs `staging.clucknorris.app` today.** Production has real Hub
 data you can browse (`GET /api/hub/:project`, receipts by signature), but the schema, the
@@ -38,6 +39,31 @@ with no edits needed.
 ```bash
 export HOST=https://staging.clucknorris.app   # or https://clucknorris.app once promoted
 ```
+
+## Save the evidence bundle first
+
+The fastest way to check a settlement, and what every batch/receipt page now links to
+("download the evidence bundle"): one JSON download that carries the program version, the
+batch's published inputs, and every settled receipt in it — save it once, verify it forever, with
+no further `curl`s needed for this batch (AA2, `docs/COLOSSEUM_ROADMAP.md` §11).
+
+```bash
+curl -s "$HOST/api/hub/cuna/batch/<batchId>/bundle" > bundle.json
+```
+
+Verify it two ways, both fully offline once you have the file:
+
+- **The script:** `node scripts/reproduce-receipt.cjs --bundle bundle.json` — prints whether the
+  file's own hash still matches what is printed inside it (a mismatch means the file was altered
+  or truncated after it was built — the script still reproduces every receipt in it regardless),
+  then one MATCH / MISMATCH / MISSING_INPUTS line per receipt in the batch, and a batch-level
+  count at the end.
+- **The page:** drop `bundle.json` straight onto [`/hub/verify`](https://clucknorris.app/hub/verify)'s
+  "From saved files (offline)" tab — the exact same two checks, in your own browser, no terminal.
+
+A batch that has not been settled yet still downloads — the bundle says `settled:false` and gives
+a plain-words note (never a fabricated receipt). A bundle's matching hash proves the file is
+intact, not that the program itself was fair — that is exactly what (d) and (e) below are for.
 
 ## (a) Fetch a project's public JSON and validate it against its own schema
 

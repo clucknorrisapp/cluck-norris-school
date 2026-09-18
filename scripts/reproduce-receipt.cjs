@@ -9,6 +9,7 @@
 //   node scripts/reproduce-receipt.cjs <project> <batchId> <wallet>
 //   node scripts/reproduce-receipt.cjs --offline <dir> <receipt-url>
 //   node scripts/reproduce-receipt.cjs --offline <dir> <project> <batchId> <wallet>
+//   node scripts/reproduce-receipt.cjs --bundle <file>
 //
 // <receipt-url> is the public receipt page, e.g. https://clucknorris.app/hub/cuna/r/<sig>
 // (the JSON form /api/hub/cuna/r/<sig> works too — only the path is read).
@@ -19,12 +20,22 @@
 //   curl -s "https://clucknorris.app/api/hub/cuna/batch/<batchId>/inputs?wallet=<addr>" > batch-inputs.json
 // (with the <project> <batchId> <wallet> form, receipt.json is not needed — only batch-inputs.json.)
 //
-// Exit codes: 0 MATCH, 2 MISMATCH, 3 MISSING_INPUTS (the message names the missing input), 1 usage
-// or a fetch that could not be completed at all.
+// --bundle <file> reproduces EVERY receipt in a saved evidence bundle (AA2,
+// docs/COLOSSEUM_ROADMAP.md §11 — the "download the evidence bundle" link on any batch or receipt
+// page, or `curl -s .../api/hub/<project>/batch/<batchId>/bundle > bundle.json`) in one run: the
+// bundle's own hash is checked and printed FIRST — a mismatch means the file was altered or
+// truncated after it was built, and every receipt is still reproduced and reported regardless.
+// Exits 0 only if the hash matched AND every receipt reproduced to MATCH; 2 if any receipt
+// MISMATCHed; 3 if the hash failed to verify or any receipt was MISSING_INPUTS (and nothing
+// MISMATCHed); 1 on a missing/unreadable file.
+//
+// Exit codes (all other forms): 0 MATCH, 2 MISMATCH, 3 MISSING_INPUTS (the message names the
+// missing input), 1 usage or a fetch that could not be completed at all.
 
 const fs = require("fs");
 const path = require("path");
 const { reproduce, reproduceBuyCompRow } = require("../lib/hub/reproduce");
+const { splitBundle, verifyBundleHash } = require("../lib/hub/bundle");
 
 const DEFAULT_HOST = "https://clucknorris.app";
 const RECEIPT_URL_RE = /^\/(?:api\/)?hub\/([a-z0-9-]{1,32})\/r\/([1-9A-HJ-NP-Za-km-z]{60,100})\/?$/;
@@ -32,8 +43,10 @@ const RECEIPT_URL_RE = /^\/(?:api\/)?hub\/([a-z0-9-]{1,32})\/r\/([1-9A-HJ-NP-Za-
 function usage() {
   console.error([
     "usage: node scripts/reproduce-receipt.cjs <receipt url | project batch wallet> [--offline <dir>]",
+    "       node scripts/reproduce-receipt.cjs --bundle <file>",
     "  <receipt url>          e.g. https://clucknorris.app/hub/cuna/r/<sig>",
     "  <project batch wallet> e.g. cuna hb_1a2b3c4d 4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs",
+    "  --bundle <file>        reproduce every receipt in a saved evidence bundle (AA2)",
   ].join("\n"));
 }
 
@@ -107,8 +120,45 @@ async function reproduceBuyComp({ host, project, receiptBody, offlineDir }) {
   process.exit(result.status === "MATCH" ? 0 : result.status === "MISMATCH" ? 2 : 3);
 }
 
+// AA2: reproduce every receipt in a saved evidence bundle. Prints the bundle-hash check first
+// (never blocks the rest — a mismatched file is still worth knowing what it reproduces to), then
+// one report per receipt, then a batch-level summary line.
+function reproduceBundleFile(file) {
+  const raw = readJson(file);
+  if (!raw) { console.error(`could not read or parse ${file} as JSON`); process.exit(1); }
+  const hashCheck = verifyBundleHash(raw);
+  console.log(`bundle hash: ${hashCheck.ok ? "MATCHES" : "DOES NOT MATCH"}${hashCheck.reason ? " — " + hashCheck.reason : ""}`);
+  if (!hashCheck.ok && !hashCheck.reason) console.log(`  declared: ${hashCheck.declared}\n  computed: ${hashCheck.computed}`);
+  if (raw.settled === false) console.log(`note: ${raw.note || "this batch has not been settled yet"}`);
+  const { receipts, batchInputs, programVersion } = splitBundle(raw);
+  let matches = 0, mismatches = 0, missing = 0;
+  for (const rb of receipts) {
+    const wallet = rb && rb.receipt ? rb.receipt.wallet : null;
+    const entry = wallet && batchInputs.wallets ? batchInputs.wallets[wallet] : null;
+    const receiptForCore = { amountRaw: entry ? entry.amountRaw : (rb && rb.receipt ? rb.receipt.amountRaw : null) };
+    const inputsForCore = entry ? { periods: entry.periods, priorPaidRaw: entry.priorPaidRaw, priorReservedRaw: entry.priorReservedRaw } : null;
+    const result = reproduce({ programVersion, inputs: inputsForCore, receipt: receiptForCore });
+    if (!entry) result.missing.push("the bundle's batch inputs do not carry this wallet");
+    if (result.status === "MATCH") matches++; else if (result.status === "MISMATCH") mismatches++; else missing++;
+    console.log("");
+    report({ project: raw.project && raw.project.id, batchId: raw.batch && raw.batch.id, wallet, result });
+  }
+  console.log(`\n${matches} of ${receipts.length} receipt${receipts.length === 1 ? "" : "s"} in this batch reproduce${receipts.length === 1 ? "s" : ""} to MATCH${mismatches ? `, ${mismatches} MISMATCH` : ""}${missing ? `, ${missing} MISSING_INPUTS` : ""}.`);
+  if (mismatches > 0) process.exit(2);
+  if (!hashCheck.ok || missing > 0) process.exit(3);
+  process.exit(0);
+}
+
 async function main() {
-  const { rest, offlineDir } = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const bundleIdx = argv.indexOf("--bundle");
+  if (bundleIdx !== -1) {
+    const file = argv[bundleIdx + 1];
+    if (!file) { usage(); process.exit(1); }
+    reproduceBundleFile(file);
+    return;
+  }
+  const { rest, offlineDir } = parseArgs(argv);
   if (rest.length !== 1 && rest.length !== 3) { usage(); process.exit(1); }
 
   let project, sig = null, batchId = null, wallet = null, host = DEFAULT_HOST;

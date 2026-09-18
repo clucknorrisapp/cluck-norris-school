@@ -249,7 +249,10 @@
     var line = esc(r.reproduced) + ' of ' + esc(r.total) + ' receipt' + (r.total === 1 ? '' : 's') +
       (r.period ? ' in the ' + esc(r.period) + ' payout' : '') + ' reproduce' + (r.total === 1 ? 's' : '') +
       (r.missingInputs ? '; ' + esc(r.missingInputs) + ' ' + (r.missingInputs === 1 ? 'has' : 'have') + ' missing inputs' : '') + '.';
-    return '<div class="fact" style="margin-top:6px">' + line + ' <a href="/api/hub/' + esc(r.projectId) + '/batch/' + esc(r.batchId) + '/inputs">inputs</a> · re-derive it yourself with <span class="mono">scripts/reproduce-receipt.cjs</span>.</div>';
+    // AA2 (docs/COLOSSEUM_ROADMAP.md §11): one download that carries the inputs above PLUS every
+    // receipt in this batch and the program version it paid under — what HUB_VERIFY.md tells a
+    // reader to save first, and what /hub/verify accepts dropped in one move.
+    return '<div class="fact" style="margin-top:6px">' + line + ' <a href="/api/hub/' + esc(r.projectId) + '/batch/' + esc(r.batchId) + '/inputs">inputs</a> · <a href="/api/hub/' + esc(r.projectId) + '/batch/' + esc(r.batchId) + '/bundle">download the evidence bundle</a> · re-derive it yourself with <span class="mono">scripts/reproduce-receipt.cjs</span>.</div>';
   }
   function stakeCard(p, sym, batchRepro) {
     var tot = p.totals || {}, a = p.accrual || {};
@@ -462,6 +465,9 @@
       '<div class="sec-title" data-clkn-avoid="1">Verify it yourself</div><div class="fact">Send this to any Solana RPC. A <span class="mono">confirmationStatus</span> of <span class="mono">confirmed</span> or <span class="mono">finalized</span> with no <span class="mono">err</span> means the transfer is on the chain.</div><pre class="proof">' + esc(proof) + '</pre>' +
       explainBlock(x) +
       '<div class="small" data-clkn-avoid="1" style="margin-top:12px"><a href="/hub/verify?receipt=' + encodeURIComponent(location.origin + '/hub/' + r.projectId + '/r/' + x.sig) + '">Reproduce this receipt in your browser →</a></div>' +
+      // AA2: only where a batch id is known (lock-to-earn receipts carry one; a buy-comp receipt
+      // reproduces from the sealed standings instead and has no batch to bundle).
+      (x.batchId ? '<div class="small" data-clkn-avoid="1" style="margin-top:6px"><a href="/api/hub/' + esc(r.projectId) + '/batch/' + esc(x.batchId) + '/bundle">Download the evidence bundle →</a></div>' : '') +
       '<div class="small" data-clkn-avoid="1" style="margin-top:6px"><a href="/hub/' + esc(r.projectId) + '#p-' + esc(p.id) + '">← all receipts for ' + esc(p.label || p.kind) + '</a></div></div>';
     document.getElementById('verifyBtn').addEventListener('click', verifyAll);
   }
