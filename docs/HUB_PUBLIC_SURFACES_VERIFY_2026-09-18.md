@@ -231,6 +231,11 @@ and dodged it with `/api/hub-apply`; the page side was never given the matching 
 from `approveProject` and `server.js`'s `reserved()`, with a test that greps `server.js` for the
 literal `/hub/<segment>` routes it must cover.
 
+**Not implemented here (2026-09-18 fix round):** the journal branch `claude/hub-settlement-journal`
+(#342) already carries `RESERVED_PROJECT_IDS` and is merging soon — a second copy written here
+would conflict with it on merge. Left open on purpose; port this fix from #342 once it lands, don't
+re-derive it.
+
 ### P2-06 · The holders Compare panel mixes whole-token and base-unit values in one card
 
 `public/token-holders.html:681` (`const dec = lastSnapshot ? lastSnapshot.decimals : undefined`),
