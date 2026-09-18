@@ -13,15 +13,22 @@ function canonicalJson(v) {
 }
 
 // What lib/hub/project.js's verifyVersionHash hashes, minus the actual hashing — `effectiveTo`
-// is bookkeeping added after a version is superseded and `commitment` is bookkeeping added after
-// on-chain publish (Addendum B5); neither was ever part of what versionRecord() hashed (see
-// project.js's own comment on verifyVersionHash). Returns { hash, canon }: `hash` is the value to
-// compare a computed digest against (or null when the version carries none — CUNA's pre-Hub
-// programme, HUB_VERIFY.md §d), `canon` is the exact string a sha256 must be taken over. The
-// caller supplies its own hasher — Node's node:crypto (sync) or the browser's crypto.subtle
-// (async) — and compares the result to `hash` itself; this module never hashes anything.
+// is bookkeeping added after a version is superseded, `commitment` is bookkeeping added after
+// on-chain publish (Addendum B5), and `$schema` is bookkeeping a SERVING ROUTE stamps on afterward
+// (E4, `withSchema()` in lib/hub/routes.js and server.js) so a reader knows where to validate the
+// shape — none of the three was ever part of what versionRecord() hashed (see project.js's own
+// comment on verifyVersionHash). Stripping `$schema` here, once, is what lets EVERY consumer of a
+// served program-version document — the admin/desk views, the self-serve preview, the FULL shape
+// (AA2 bug fix) served by the program/:version route, the evidence bundle and a batch's inputs —
+// carry it without each one having to remember to strip it again before hashing; the AA2 bug this
+// fixes was exactly a served document silently disagreeing with what was hashed. Returns
+// { hash, canon }: `hash` is the value to compare a computed digest against (or null when the
+// version carries none — CUNA's pre-Hub programme, HUB_VERIFY.md §d), `canon` is the exact string
+// a sha256 must be taken over. The caller supplies its own hasher — Node's node:crypto (sync) or
+// the browser's crypto.subtle (async) — and compares the result to `hash` itself; this module
+// never hashes anything.
 function versionHashInput(v) {
-  const { hash, effectiveTo, commitment, ...body } = v || {};
+  const { hash, effectiveTo, commitment, $schema, ...body } = v || {};
   return { hash: typeof hash === "string" ? hash : null, canon: canonicalJson({ ...body, effectiveTo: null }) };
 }
 

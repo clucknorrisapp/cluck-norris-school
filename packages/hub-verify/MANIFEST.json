@@ -20,7 +20,7 @@
     {
       "source": "lib/hub/canonical.js",
       "dest": "lib/hub/canonical.js",
-      "sha256": "2f044e9f97ce1d8771d5c879f819287db03a404a795bb8958e31fb4876e30396"
+      "sha256": "26a140662e11d3384d5a15b5dc1e36ba6c9358defc7e68193e9c7f3541398bcd"
     },
     {
       "source": "lib/hub/reproduce.js",
@@ -45,7 +45,7 @@
     {
       "source": "lib/hub/schema/program-version.schema.json",
       "dest": "schema/program-version.schema.json",
-      "sha256": "2c089a100333333ee1c543b771efb65a24ed0ea7f80ec030821c147840b25c1e"
+      "sha256": "6c252939b71d12b7f9a578e6734edde75da2b64bbcbee72ed8adb20fb27a585c"
     },
     {
       "source": "lib/hub/schema/project-public.schema.json",
