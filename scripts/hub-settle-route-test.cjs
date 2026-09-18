@@ -903,6 +903,22 @@ t("a dryRun project's &send= and &void= are both refused before any store read",
   assert.strictEqual(voidRes.statusCode, 403); assert.ok(/DRY RUN/.test(voidRes.body.error));
 });
 
+section("21. adv P2-6 — a signature with stray whitespace is trimmed consistently, not opted out of the journal");
+
+t("a submitted signature with a leading/trailing space still verifies and journals — the untrimmed lookup used to silently keep it legacy-only", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "xi24", W.MINT1);
+  store.write(kv, "xi24", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000" }) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "xi24" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  const sent = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "xi24" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: "  " + SIG(95) + "  " }]), batch: batchId } });
+  assert.deepStrictEqual(sent.body.sent.recorded, [W.A]);
+  assert.strictEqual(sent.body.sent.journal[0].journaled, true, JSON.stringify(sent.body.sent.journal));
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1);
+  assert.strictEqual(store.read(kv, "xi24", "batches", {})[batchId].sent[W.A].sig, SIG(95), "the stored signature is the trimmed one");
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
