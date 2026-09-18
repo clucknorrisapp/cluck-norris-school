@@ -4182,5 +4182,6 @@
   "Only if the multiplier is above 1x": "Solo si el multiplicador es superior a 1x",
   "A lock is a public promise not to move tokens for a period — an on-chain escrow you can go open and inspect yourself. It is not a transfer of ownership or a swap for something else. You remain the owner the entire time; you've only committed not to touch them until the date, which is exactly what makes the promise checkable in the first place.": "Un bloqueo es una promesa pública de no mover tokens durante un período — un depósito en garantía en la cadena que puedes abrir e inspeccionar tú mismo. No es una transferencia de propiedad ni un canje por otra cosa. Sigues siendo el dueño todo el tiempo; solo te has comprometido a no tocarlos hasta la fecha, que es precisamente lo que hace que la promesa sea verificable.",
   "Open a real receipt and check it, line by line": "Abre un recibo real y compruébalo, línea por línea",
-  "Reproduce it yourself, in your own browser": "Reprodúcelo tú mismo, en tu propio navegador"
+  "Reproduce it yourself, in your own browser": "Reprodúcelo tú mismo, en tu propio navegador",
+  "See what none of this proves": "Mira lo que nada de esto demuestra"
 }

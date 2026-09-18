@@ -63,6 +63,13 @@ jobs:
       # curriculum held 70 and 7. Hand-typed public counts rot silently; this catches the mirror.
       - name: curriculum count-drift guard
         run: node scripts/check-counts.js
+      # check-counts.js above only pins per-course LESSON COUNTS. This catches content drift the
+      # counts alone would miss: extractor rewritten 2026-09-18 (docs/COLOSSEUM_ROADMAP.md §12
+      # BB1) after the old one only read src/App.jsx and silently dropped the LP Lab and Deep
+      # Dive courses on a re-run. --check re-extracts from the real sources (esbuild-compiled,
+      # not regex-scanned) and fails if data/curriculum.json was not committed with them.
+      - name: curriculum extraction freshness (data/curriculum.json)
+        run: node scripts/extract-curriculum.js --check
       # Seven languages are promised (CLAUDE.md); six are curated dicts keyed on the English
       # source string itself (no en.json — see the script header). Cross-language key diffs and
       # placeholder drift are real bugs and gate; the base/school source-scan stays informational
@@ -248,12 +255,26 @@ jobs:
       # project view's holders fact line appears only when a snapshot exists.
       - name: Holder snapshot history (append-only, hashed, read-only)
         run: node scripts/holders-snapshot-test.cjs
+      # Colosseum roadmap §11 AA3: the snapshot diff — entered/exited/held over the RECORDED
+      # top-25 only (never a full holder-base diff, per lib/holders-snapshot.js's own header). A
+      # self-diff is empty, the BigInt sums reconcile, and the route (400/404/200) matches its
+      # snapshot-route siblings.
+      - name: Holder snapshot diff (entered/exited/held over the recorded top-25 + route)
+        run: SNAPDIFF_TEST_PORT=3247 node scripts/holders-snapshot-diff-test.cjs
       # E1 (docs/COLOSSEUM_ROADMAP.md §1 "the number"): a receipt's amount re-derived from the
       # batch's own published inputs (periods, prior paid, prior reserved), reconstructed purely
       # from durable timestamps — MATCH, a tampered MISMATCH, and an honest MISSING_INPUTS naming
       # what is missing; the reproducibility ratio; the CLI script's --offline mode with no server.
       - name: Hub receipt reproduction (the number — MATCH/MISMATCH/MISSING_INPUTS, --offline)
         run: node scripts/reproduce-receipt-test.cjs
+      # BB3 (Colosseum roadmap §12): the shields.io-shaped reproducibility badge
+      # (/api/hub/badge.json + /hub/badge.svg) sums the SAME projectReproducibility every
+      # non-demo project — a fresh install says "no receipts yet"/lightgrey rather than "0 of 0",
+      # a seeded batch reports the exact singular/plural ratio text, a dry-run/zero-receipt
+      # project never inflates the "K projects" count, demo 404s, and the SVG is well-formed XML
+      # with no <script. Boots a real server but drives no browser, so it runs here.
+      - name: Hub reproducibility badge (computed endpoint-badge JSON + SVG)
+        run: HUB_BADGE_TEST_PORT=3276 node scripts/hub-badge-test.cjs
       # Colosseum roadmap §7 (the W4 deferred item): the public Buy Special standings page.
       # Unsealed publishes rules only (no results/review/payouts key at all); sealed publishes the
       # full view plus a stable resultsHash; hold-through is held/sold/moved-out/locked-not-a-sell
@@ -431,7 +452,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -561,6 +582,22 @@ jobs:
       # would not otherwise touch a page or the game.
       - name: HUB_VERIFY.md matches the code it tells judges to run (X2)
         run: node scripts/hub-verify-doc-test.cjs
+      # AA5 (docs/COLOSSEUM_ROADMAP.md §11): the trust-boundary page (/hub/trust) cannot silently
+      # drift from HUB_VERIFY.md §(g) — every "not verifiable yet" bullet there carries a
+      # `<!-- boundary: ... -->` marker matched to a `data-boundary` element on the page (both
+      # directions, and the bullet count itself), the page never uses a forbidden word (verified /
+      # safe / guaranteed / APR / APY / yield), and every relative link on it resolves to a
+      # registered server.js route. Static, no server boot — always runs, like X2 above.
+      - name: hub-trust.html matches HUB_VERIFY.md §(g), no forbidden words (AA5)
+        run: node scripts/hub-trust-doc-test.cjs
+      # AA4 (docs/COLOSSEUM_ROADMAP.md §11): public/hub-judge.html (the judge's fifteen minutes)
+      # cannot silently drift from docs/JUDGE_GUIDE.md — regenerating the doc via
+      # scripts/build-judge-page.cjs must produce the exact committed page, the doc never uses a
+      # forbidden word or mentions Normie Quest/Wallet Watch, and every scripts/*.cjs, docs/*.md
+      # and relative URL it names exists / matches a registered route. Static, no server boot —
+      # always runs, like X2 and AA5 above.
+      - name: hub-judge.html matches docs/JUDGE_GUIDE.md, no drift, no forbidden words (AA4)
+        run: node scripts/hub-judge-doc-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)
@@ -613,6 +650,17 @@ jobs:
       - name: Hub status — /api/build and /hub/status
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-status-test.cjs
+      # AA4 (docs/COLOSSEUM_ROADMAP.md §11): the doc-drift test above only proves a URL's SHAPE
+      # matches a registered route (static, no boot). This is the live half — boots the real
+      # server with NO BUILD (dist/ never generated) on port 3268 and GETs every relative URL
+      # docs/JUDGE_GUIDE.md tells a judge to open, asserting 200. Every route it names has an
+      # explicit app.get reading public/ or lib/hub/schema/ directly (like hub-trust.html and
+      # hub-status.html above), so this must pass with no `npm run build` step run first.
+      - name: Hub judge guide — every URL it names answers 200 on a no-build boot (AA4)
+        if: steps.gate.outputs.run == 'true'
+        env:
+          HUB_JUDGE_LINK_TEST_PORT: "3268"
+        run: node scripts/hub-judge-link-test.cjs
       # Y1 (docs/COLOSSEUM_ROADMAP.md §9): /hub/verify reproduces a Hub receipt IN THE BROWSER —
       # a second vite build (vite.hubverify.config.js) bundles the exact same pure
       # lib/hub/reproduce.js + lib/hub/schema-validate.js + lib/hub/canonical.js the Node script
@@ -625,6 +673,16 @@ jobs:
         run: |
           test -f public/hub-verify.bundle.js || npm run build:hubverify
           node scripts/hub-verify-page-test.cjs
+      # AA2 (docs/COLOSSEUM_ROADMAP.md §11): the offline evidence bundle — GET
+      # /api/hub/:project/batch/:batchId/bundle (and the demo-fixture mirror), lib/hub/bundle.js's
+      # own pure SHA-256 in isolation, the Node CLI's `--bundle` flag, and Chromium dropping a
+      # bundle file on /hub/verify. Same reason this rides the Y1 gate: it shares the browser
+      # bundle build and the exact same fixture-agreement discipline.
+      - name: Hub evidence bundle — hash integrity, route, CLI and /hub/verify (AA2)
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          test -f public/hub-verify.bundle.js || npm run build:hubverify
+          node scripts/hub-bundle-test.cjs
       # Colosseum roadmap §9 Y4 — shareable Hub pages. Boots its own server (a hostile-label
       # registry project pre-seeded into DATA_DIR) and drives /hub, a real project page, the demo
       # fixture (project/program/receipt) and /for-projects: server-rendered Open Graph/Twitter
@@ -635,6 +693,17 @@ jobs:
       - name: Hub shareable pages — Open Graph / Twitter Card meta (Y4)
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-og-test.cjs
+      # Colosseum roadmap §11 AA1 — one wallet, every project. Boots its own server (two registry
+      # projects pre-seeded into DATA_DIR, a buy competition on each, the same fixture wallet
+      # qualifying and paid in one, disqualified with a reason on record in the other) and drives
+      # GET /api/hub/wallet/:wallet and the /hub/wallet[/:wallet] page: composed only from
+      # hubPublic.walletLookup per project, no private field on the wire, a malformed address is
+      # 400, an unseen valid address is an honest 200/seenIn:0, a demo/fixture project never
+      # appears, "wallet" is refused as a real project id, and the page carries none of the
+      # banned yield/APR/APY/verified/safe/guaranteed language.
+      - name: Hub wallet look-up — one wallet, every project (AA1)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-wallet-test.cjs
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the

@@ -211,6 +211,15 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 9** — `/hub/verify`: the pure reproduce + schema-validate core bundled for
+  the browser, so a holder re-derives a receipt's amount on their own machine, offline once loaded,
+  with a test that the browser bundle and the Node script agree on every fixture; the 15th school
+  lesson, "Read a payout receipt", in seven languages, ending on the demo receipt; server-rendered
+  Open Graph cards on every Hub page (one static image, DRY RUN named in the description where it
+  applies); the weekly update built from `git log` rather than memory, update #1 regenerated and
+  Arena drafts round 2 (all held until promoted); `/hub/status` with `GET /api/build` (what is
+  live, where, how reproducible, which commit); ETags, cache tiers, rate limits and parameter shape
+  checks on the new public reads; roadmap Extension 5. PR #347.
 - **Colosseum batch 8** — the phone and accessibility pass on the public Hub pages with a CI gate
   (and the no-build-boot fix it exposed: the sitewide nav, i18n, read-aloud and theme files now have
   explicit routes); the demo storyboard with 20 real captures; Launch Readiness (Addendum A: a

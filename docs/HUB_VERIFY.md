@@ -26,6 +26,7 @@ Railway auto-deploys both branches; the owner promotes `develop` → `main` by h
 | `GET /api/hub-pricing` | `GET /hub/demo`, `GET /api/hub-demo*` (the no-wallet fixture walkthrough) |
 | `/hub`, `/hub/:project` pages | `GET /api/hub/:project/p/:compId/standings` (Buy Special), `GET /api/airdrop/r/:dropId` |
 | | `GET /api/hub/:project/readiness` (Launch Readiness), on-chain commit routes, the POKEAHOE branded page |
+| | `GET /api/hub/:project/batch/:batchId/bundle` and `GET /api/hub-demo/:project/batch/:batchId/bundle` (AA2, the evidence bundle above) |
 
 **Practically: every step below needs `staging.clucknorris.app` today.** Production has real Hub
 data you can browse (`GET /api/hub/:project`, receipts by signature), but the schema, the
@@ -38,6 +39,31 @@ with no edits needed.
 ```bash
 export HOST=https://staging.clucknorris.app   # or https://clucknorris.app once promoted
 ```
+
+## Save the evidence bundle first
+
+The fastest way to check a settlement, and what every batch/receipt page now links to
+("download the evidence bundle"): one JSON download that carries the program version, the
+batch's published inputs, and every settled receipt in it — save it once, verify it forever, with
+no further `curl`s needed for this batch (AA2, `docs/COLOSSEUM_ROADMAP.md` §11).
+
+```bash
+curl -s "$HOST/api/hub/cuna/batch/<batchId>/bundle" > bundle.json
+```
+
+Verify it two ways, both fully offline once you have the file:
+
+- **The script:** `node scripts/reproduce-receipt.cjs --bundle bundle.json` — prints whether the
+  file's own hash still matches what is printed inside it (a mismatch means the file was altered
+  or truncated after it was built — the script still reproduces every receipt in it regardless),
+  then one MATCH / MISMATCH / MISSING_INPUTS line per receipt in the batch, and a batch-level
+  count at the end.
+- **The page:** drop `bundle.json` straight onto [`/hub/verify`](https://clucknorris.app/hub/verify)'s
+  "From saved files (offline)" tab — the exact same two checks, in your own browser, no terminal.
+
+A batch that has not been settled yet still downloads — the bundle says `settled:false` and gives
+a plain-words note (never a fabricated receipt). A bundle's matching hash proves the file is
+intact, not that the program itself was fair — that is exactly what (d) and (e) below are for.
 
 ## (a) Fetch a project's public JSON and validate it against its own schema
 
@@ -172,18 +198,23 @@ counters — a dry run adds nothing to any number this doc or the submission cit
 
 ## (g) What is honestly NOT verifiable yet
 
-Say this plainly rather than let a reader assume more than what's built:
+Say this plainly rather than let a reader assume more than what's built. The plain-words version
+of every bullet below is on the trust-boundary page, `/hub/trust` (AA5) — the `<!-- boundary: … -->`
+markers pin that the two never drift apart (`scripts/hub-trust-doc-test.cjs`).
 
+<!-- boundary: hash-served-by-server -->
 - **A program-version hash is served by the same server that computes the payout.** Recomputing
   it (§d) proves the server didn't change the terms out from under you after publishing them —
   it does not prove the server omitted no qualifying escrow from the calculation in the first
   place. That second guarantee is exactly what (e)'s on-chain commitment is for, and it isn't live
   for any real program yet.
+<!-- boundary: giveaway-not-reproducible -->
 - **Giveaway rows (the CUNA sealed-draw giveaway) do not reproduce.** `reproduce-receipt.cjs`
   handles `lock-to-earn` and `buy-comp` receipt kinds only; a giveaway kind reports
   `MISSING_INPUTS` naming that reproduction isn't implemented for it, rather than guessing at a
   number. The legacy Buy Special *draw* (pre-Hub, paid through the airdropper) carries the same
   honest note on its own page: no receipts were journaled for it.
+<!-- boundary: journal-not-live -->
 - **The Addendum-B settlement journal isn't the live payout path yet.** Every receipt you can
   fetch today (including through this doc) is still the pre-journal shape — a single payout row,
   not the append-only per-transfer ledger `receipt.schema.json` documents. The journal is built
@@ -191,6 +222,7 @@ Say this plainly rather than let a reader assume more than what's built:
   wired into the live route (`lib/hub/README.md` §5, §6); the review found real gaps (a transfer's
   *source* is never checked, and a lost-write race under concurrent requests) that block it from
   merging as-is. Nothing above is affected — none of it depends on that PR.
+<!-- boundary: ratio-incomplete -->
 - **The reproducibility ratio doesn't yet cover every program kind.** `GET
   /api/hub/:project/reproducibility` counts lock-to-earn and buy-comp rows; giveaway rows are
   named as not implemented rather than silently excluded from the denominator.
@@ -198,5 +230,7 @@ Say this plainly rather than let a reader assume more than what's built:
 ---
 
 Related reading: [`lib/hub/README.md`](../lib/hub/README.md) (the entities and invariants in
-plain words), [`docs/COLOSSEUM_ROADMAP.md`](COLOSSEUM_ROADMAP.md) §7/§8 (E1–E10, X1–X7),
-[`docs/PRE_EVENT_STATE.md`](PRE_EVENT_STATE.md) (what predates the hackathon window).
+plain words), [`docs/COLOSSEUM_ROADMAP.md`](COLOSSEUM_ROADMAP.md) §7/§8/§11 (E1–E10, X1–X7, AA5),
+[`docs/PRE_EVENT_STATE.md`](PRE_EVENT_STATE.md) (what predates the hackathon window), and
+[`/hub/trust`](https://clucknorris.app/hub/trust) — this file's §(g) in plain words, for a holder
+rather than a judge running commands.

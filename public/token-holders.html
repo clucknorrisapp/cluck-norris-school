@@ -210,6 +210,15 @@ body{background:transparent;font-family:var(--body);}
   #historySpark svg{display:block;width:100%}
   .hash-copy{background:none;border:1px solid var(--border);border-radius:6px;color:var(--sub);font-family:var(--mono);font-size:11px;padding:2px 7px;margin-left:6px;cursor:pointer;min-height:26px}
   .hash-copy:hover{border-color:var(--orange);color:var(--text)}
+  /* Snapshot compare panel (Colosseum roadmap §11 AA3) — entered/exited/held over the recorded
+     top-25, not a full holder-base diff (the panel says so, and so does every heading here). */
+  .compare-select{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:12.5px;color:var(--text);min-height:44px}
+  .compare-select:focus{outline:none;border-color:var(--accent)}
+  .compare-btn{width:100%;margin-top:12px;min-height:44px;padding:12px 16px;background:var(--orange);border:none;border-radius:8px;font-family:var(--disp);font-size:13px;color:#fff;letter-spacing:2px;cursor:pointer}
+  .compare-btn:hover{opacity:.9}
+  .compare-hashline{font-family:var(--mono);font-size:11.5px;color:var(--subtext);text-align:left;margin-top:6px;line-height:1.6;word-break:break-word}
+  .compare-summary{font-family:var(--mono);font-size:12px;color:var(--body-text);text-align:left;margin-top:10px;line-height:1.6}
+  .compare-sub{margin-top:16px;font-family:var(--disp);font-size:11px;letter-spacing:1.8px;color:var(--sub)}
 </style>
   <meta name="theme-color" content="#0b0c10">
   <meta property="og:url" content="https://clucknorris.app/holders">
@@ -358,6 +367,26 @@ body{background:transparent;font-family:var(--body);}
       <div id="historySpark"></div>
       <table class="holders-table" id="historyTable"></table>
       <div class="meta-line" id="historyMeta"></div>
+    </div>
+
+    <!-- Compare (Colosseum roadmap §11 AA3): entered/exited/held-through wallets between any two
+         recorded snapshots of this mint. Hidden until at least two snapshots exist — a diff needs
+         two points. Free to read, same as the history card above. -->
+    <div class="card" id="compareCard" style="display:none">
+      <div class="card-title" data-clkn-avoid="1">COMPARE SNAPSHOTS</div>
+      <div class="view-note" data-clkn-avoid="1">Compares the 25 largest holders recorded in each snapshot; the full list is hashed, not stored.</div>
+      <div class="filter-row" style="margin-top:12px">
+        <div class="filter">
+          <label for="compareFrom">FROM</label>
+          <select class="compare-select" id="compareFrom"></select>
+        </div>
+        <div class="filter">
+          <label for="compareTo">TO</label>
+          <select class="compare-select" id="compareTo"></select>
+        </div>
+      </div>
+      <button type="button" class="compare-btn" id="compareBtn" onclick="runCompare()">COMPARE</button>
+      <div id="compareResult" style="margin-top:6px"></div>
     </div>
   </div>
 
@@ -534,13 +563,22 @@ async function runSnapshot() {
 // has no history; the panel stays hidden rather than showing an empty table.
 async function loadHolderHistory(mint) {
   const card = document.getElementById('historyCard');
+  const compareCard = document.getElementById('compareCard');
   try {
     const res = await fetch(`/api/holders/snapshots?mint=${encodeURIComponent(mint)}`);
     const data = await res.json();
-    if (!data.ok || !Array.isArray(data.snapshots) || !data.snapshots.length) { card.style.display = 'none'; return; }
+    if (!data.ok || !Array.isArray(data.snapshots) || !data.snapshots.length) {
+      card.style.display = 'none';
+      compareCard.style.display = 'none';
+      return;
+    }
     renderHolderHistory(data.snapshots, mint);
     card.style.display = 'block';
-  } catch (e) { card.style.display = 'none'; }
+    setupCompare(data.snapshots, mint);
+  } catch (e) {
+    card.style.display = 'none';
+    compareCard.style.display = 'none';
+  }
 }
 
 function renderHolderHistory(points, mint) {
@@ -567,6 +605,109 @@ function copyHolderHash(btn) {
     btn.textContent = ok ? '✓' : '⚠';
     setTimeout(() => { btn.textContent = prev; }, 1400);
   });
+}
+
+// ── Compare (Colosseum roadmap §11 AA3) ──────────────────────────────────────────────────────
+// Entered / exited / held-through wallets between any two recorded snapshots — over the top-25
+// each one recorded, never a full holder-base diff (see lib/holders-snapshot.js's own header).
+// Needs at least two snapshots; defaults to the two most recent.
+function setupCompare(points, mint) {
+  const compareCard = document.getElementById('compareCard');
+  if (!Array.isArray(points) || points.length < 2) { compareCard.style.display = 'none'; return; }
+  compareCard.dataset.mint = mint;
+  const newestFirst = points.slice().reverse();
+  const optionsHtml = newestFirst.map((p) => {
+    const day = new Date(p.at).toISOString().slice(0, 10);
+    return `<option value="${esc(p.id)}">${esc(day)} — ${esc(p.id)}</option>`;
+  }).join('');
+  const fromSel = document.getElementById('compareFrom');
+  const toSel = document.getElementById('compareTo');
+  fromSel.innerHTML = optionsHtml;
+  toSel.innerHTML = optionsHtml;
+  fromSel.value = newestFirst[1].id;   // second-most-recent
+  toSel.value = newestFirst[0].id;     // most recent
+  document.getElementById('compareResult').innerHTML = '';
+  compareCard.style.display = 'block';
+}
+
+async function runCompare() {
+  const compareCard = document.getElementById('compareCard');
+  const mint = compareCard.dataset.mint || '';
+  const idA = document.getElementById('compareFrom').value;
+  const idB = document.getElementById('compareTo').value;
+  const out = document.getElementById('compareResult');
+  if (!idA || !idB) return;
+  if (idA === idB) { out.innerHTML = `<div class="view-note warn">Pick two different snapshots to compare.</div>`; return; }
+  out.innerHTML = `<div class="view-note">Comparing…</div>`;
+  try {
+    const res = await fetch(`/api/holders/snapshots/${encodeURIComponent(idA)}/diff/${encodeURIComponent(idB)}?mint=${encodeURIComponent(mint)}`);
+    const data = await res.json();
+    if (!data.ok || !data.diff) {
+      out.innerHTML = `<div class="view-note warn">${esc(data.error === 'no_such_snapshot' ? 'One of those snapshots could not be found.' : 'Could not load that comparison.')}</div>`;
+      return;
+    }
+    renderCompare(data.diff);
+  } catch (e) {
+    out.innerHTML = `<div class="view-note warn">Network error: ${esc(e.message)}</div>`;
+  }
+}
+
+function compareHashChip(hash) {
+  const h = String(hash || '');
+  return `<span class="cat-cell">${esc(h.slice(0, 12))}…<button type="button" class="hash-copy" data-hash="${esc(h)}" onclick="copyHolderHash(this)" aria-label="Copy full hash">⧉</button></span>`;
+}
+
+function compareWalletLink(wallet) {
+  return `<a href="https://solscan.io/account/${esc(wallet)}" target="_blank" rel="noreferrer" style="color:var(--blue);text-decoration:underline;">${esc(shortAddr(wallet))}</a>`;
+}
+
+function compareRowsTable(rows, cols, rowFn) {
+  if (!rows.length) return `<div class="view-note">None.</div>`;
+  return `<table class="holders-table"><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>` +
+    rows.map(rowFn).join('') + `</tbody></table>`;
+}
+
+function renderCompare(diff) {
+  const dec = lastSnapshot ? lastSnapshot.decimals : undefined;
+  const out = document.getElementById('compareResult');
+  const day = (ts) => new Date(ts).toISOString().slice(0, 10);
+
+  const holderDeltaTxt = (diff.holderCountDelta > 0 ? '+' : '') + diff.holderCountDelta.toLocaleString();
+  let supplyDeltaTxt = '—';
+  if (diff.supplyDelta != null) {
+    try {
+      const d = BigInt(diff.supplyDelta);
+      supplyDeltaTxt = (d > 0n ? '+' : '') + d.toString();
+    } catch (e) { supplyDeltaTxt = diff.supplyDelta; }
+  }
+
+  const summary =
+    `<div class="compare-hashline">FROM ${esc(diff.from.id)} · ${esc(day(diff.from.at))} · ${compareHashChip(diff.from.listHash)}</div>` +
+    `<div class="compare-hashline">TO &nbsp;&nbsp;${esc(diff.to.id)} · ${esc(day(diff.to.at))} · ${compareHashChip(diff.to.listHash)}</div>` +
+    `<div class="compare-summary">Holder count: ${diff.from.holderCount.toLocaleString()} → ${diff.to.holderCount.toLocaleString()} (${esc(holderDeltaTxt)}) · Total supply change: ${esc(supplyDeltaTxt)}</div>` +
+    `<div class="compare-summary">${diff.sameFullList ? 'Full list: unchanged (hash matches)' : 'Full list: changed (hash differs)'}</div>`;
+
+  const entered = diff.top.entered || [];
+  const exited = diff.top.exited || [];
+  const held = diff.top.held || [];
+
+  const enteredTbl = compareRowsTable(entered, ['RANK', 'WALLET', 'AMOUNT'], (r) =>
+    `<tr><td>#${r.rank}</td><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.amountRaw), dec)}</td></tr>`);
+  const exitedTbl = compareRowsTable(exited, ['PREV RANK', 'WALLET', 'AMOUNT'], (r) =>
+    `<tr><td>#${r.prevRank}</td><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.amountRaw), dec)}</td></tr>`);
+  const heldTbl = compareRowsTable(held, ['WALLET', 'FROM', 'TO', 'CHANGE'], (r) => {
+    let grew;
+    try { grew = BigInt(r.deltaRaw) > 0n; } catch (e) { grew = Number(r.deltaRaw) > 0; }
+    return `<tr><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.fromRaw), dec)}</td><td>${fmtNum(Number(r.toRaw), dec)}</td>` +
+      `<td class="cat-cell">${grew ? 'GREW' : 'SHRANK'} <span data-i18n-skip="1">(${esc(r.deltaRaw)})</span></td></tr>`;
+  });
+
+  const subHead = (label, n) => `<div class="compare-sub" data-clkn-avoid="1">${label} <span class="cat-cell" data-i18n-skip="1">(${n})</span></div>`;
+
+  out.innerHTML = summary +
+    subHead('ENTERED TOP 25', entered.length) + enteredTbl +
+    subHead('EXITED TOP 25', exited.length) + exitedTbl +
+    subHead('HELD — BALANCE CHANGED', held.length) + heldTbl;
 }
 
 // A dependency-free inline SVG sparkline — no chart library for one line. Position-only (no
