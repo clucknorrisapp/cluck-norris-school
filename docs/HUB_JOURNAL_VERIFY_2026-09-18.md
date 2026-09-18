@@ -490,3 +490,76 @@ mutating-get-guard-test      | all passed        (GUARD_TEST_PORT=3324)
 `HUB_VERIFY_TEST_PORT=3323 node scripts/hub-verify-page-test.cjs` — **SKIPPED, cannot run in this worktree**: neither `scripts/hub-verify-page-test.cjs` nor `hub-verify-src/` nor a `build:hubverify` npm script exists on this branch (`package.json` scripts are exactly `start, dev, build, preview, test:fast, test`). All three live on `origin/develop` (batch 9, commit f9a5182) and will arrive at merge; I verified the compatibility question by inspection instead — see item 4.
 
 Merge-ready: yes.
+
+
+---
+
+## Round 5 — narrow re-check of fix round 4 (one Opus lens, read-only, 2026-09-18 ~16:05 UTC)
+
+Verdict: N-1, N-2, N-3 CLOSED as asked; merge-ready on the P0/P1 rule. New: NEW-1 (P2, a regression from the
+round-4 alert change — check → await → set races, one message per row), NEW-2 (P2, a waive frees the partition but not
+`owedNow`, so the remedy is inert until the batch is cancelled), NEW-3 (P3, an id re-issue carries access, milestones and
+the allowlist). NEW-1 and NEW-2 are fixed in fix round 5 before the develop merge; NEW-3 with them.
+
+READ-ONLY adversarial re-check, round 5 (NARROW). Worktree `…/scratchpad/journal`, branch `claude/hub-settlement-journal`. **⚠️ HEAD moved under me mid-run**: the branch is now `af9eccf`, two commits past the five listed (`8a702f1` hub-demo-fixture-test wording; `af9eccf` `lib/airdrop-receipt.js` — passes `nowUnix` into `rowPaidBy`). `git diff 4c2b3c4..af9eccf` touches only those two files, so nothing in the hub/settlement paths changed; all probes and all test runs below are at `af9eccf`. No file was edited, nothing committed or pushed. Probes in `…/scratchpad/verify5/q1–q5.cjs` (harness reused from verify4; needs `NODE_PATH=/home/user/cluck-norris-school/node_modules` — the worktree has no `node_modules`).
+
+## 1. N-1 (alert dedupe) — CLOSED for every attack asked, but see NEW-1
+
+- **Failed send leaves the watermark unset** — CLOSED. `server.js:8836-8847`. `cunaOpsAlert` → `tgSend` (`server.js` ~7290) returns `result ? result.message_id : null`; it can never return `{ok:false}` (that is `postToX`). Probe: null return → next call retries (2 sends); message_id → repeat suppressed (1 send). A truthy `{ok:false}` *would* be taken as a success, but no code path produces one.
+- **Cross-project / cross-batch keys** — CLOSED. `lib/hub/alert-key.js:21-23`. Keys are `sha256(projectId|batchId|kind)`, so two projects sharing a batch id, two batches of one project, and the three kinds are all distinct even at the 32-char id limit (`ID_RE`, `lib/hub/store.js:36`). `|`-injection is unreachable (`ID_RE` is `[a-z0-9-]`). Partial meta falls back to the old 40-char text key; `null` message does not throw.
+- **`cunaOpsAlert` byte-for-byte unchanged** — CLOSED. `server.js:12772-12787`; extracted at `c1079da` and at HEAD, `diff` is empty (16 lines, sha256 `a2e4625abc544c10`). The four `cunaOpsAlert` hits in the server.js diff are three comment lines plus the new `hubAlert` call; every CUNA caller still passes its own dedupeKey.
+- **Non-summary alerts / flood** — dedupe is unchanged-but-coarse and *sane* in kind: `routes.js:263` (payoutSources) keys on `<id>: payoutSources changed by the owner t…`, i.e. one alert per project per 6 h regardless of the new list — a second change inside 6 h is silent (pre-existing). The one unauthenticated flood source is `POST /api/hub-apply` (`routes.js:654`, 12/min/IP, `MAX_PENDING` 200) — already documented as open in README N-5. `HUB_ALERT_SEEN` is unbounded, same shape as `CUNA_ALERT_SEEN` (P3).
+
+## 2. N-2 (suspended-id takeover) — CLOSED, two namespaces not covered (see NEW-3)
+
+`storeIsEmptyFor` (`lib/hub/store.js:92-104`) covers: all five PARTS (`state`/`ledger`/`days`/`paid`/`batches`, incl. the `cuna` legacy aliases) and every `hub:settle:*` entry tagged with the id. **Not** covered: `hub:waive:<id>:<batch>:<wallet>` (new this round, `routes.js:1099`) and `hub:quotes:<id>` (`routes.js:672`). `hublock:<id>:*` correctly does not count (ephemeral); no `hub:repro:*` keys exist on this branch (reproducibility is computed); milestones/access live on the registry row, which is replaced. Neither miss lets a stranger's *ledger* carry over — both are only reachable after the owner has cleared the PARTS the 409 names — see NEW-3 for what does carry.
+
+- Self-serve (`requireNew`, `lib/hub/apply.js:80`) can no longer approve onto a suspended id (`project_exists`) nor re-register a suspended project's mint under a new id (`project.js:186,190`). ✔
+- Owner path keeps both exemptions; **un-suspending the SAME (id, mint) still works** end-to-end through `POST /api/hub-registry?id=` (200, status→approved). ✔
+- Route guard (`routes.js:282`) refuses a suspended id + populated store + new mint with 409 and leaves the registry row untouched; with an emptied store the re-issue is allowed. ✔
+- Consistency nit (P3): `/api/hub-apply` still *accepts* an application for a suspended id/mint (`routes.js:645-646` exempt suspended), which `apply.approve` can now never approve — the owner gets a permanently dead application.
+
+## 3. N-3 (`&waive=`) — CLOSED on authorisation and journal hygiene; OPEN on effect (NEW-2)
+
+CLOSED: operator token → 403 (`routes.js:779`); unauthenticated → 404; GET → 405 (`routes.js:767`, guard test covers it); dryRun project → 403 (`routes.js:786`, `mutating` now includes `b.waive`); second waive of the same row → refused ("nothing remaining"); wallet not in batch → `row_not_in_batch`; unknown batch → refused; the waive is **never** read as a settlement (`readJournal` scans only `hub:settle:`, and `looksLikeJournalEntry` needs `xferKey`/`amountRaw`/`appliedRaw` — the waive entry has neither); the persisted batch is *not* stamped `projectId`; a `&sent=` for a waived row is refused (`amount_mismatch`, expected `0`) and journals nothing. `reason` is CR/LF-collapsed and capped at 200 chars; it is stored raw (HTML + NUL survive) but reaches **no** public surface — `pub.stakeView` builds its batch rows field-by-field and never carries `waived`/`reason`; the only live public receipt path is `pub.findReceipt` (which hardcodes `waivedRaw:"0"` and only shows `sent` rows). `ledger.receipt` is called only by `lib/hub/demo-fixture.js`.
+OPEN: what a waive actually does — NEW-2.
+
+## 4. Sweep
+
+`git diff c1079da..4c2b3c4 --stat` = exactly the 9 files of the five listed commits (README, alert-key, project, routes, store, three test scripts, server.js); no `.claude/`, no `docs/`. Worktree clean. **Two later commits exist** (see header) — one of them, `af9eccf`, is a real `lib/airdrop-receipt.js` change outside the listed set.
+`lib/hub/README.md` §5c is accurate on: refusal-everywhere (PASS 2/3 only record what PASS 1 settled), the batch never reaching `sent`, the one-summary-alert signal, `&cancel=` semantics, remainder-based verification, owner-only waive, and the `hub:waive:` prefix. **One sentence is wrong against the code**: "this only stops the batch holding it in permanent limbo" — it does not, until the batch is also cancelled (NEW-2). §6/N-5 figures (12/min, `MAX_PENDING` 200, optional `applicantWallet`) check out.
+
+## NEW findings (3)
+
+**NEW-1 (P2, regression introduced by `b0b59ac`) — same-key alert burst is no longer deduped: one operator-room message per row instead of one per request.** `hubAlert` (`server.js:8836`) is check → `await` send → set, so every call in one synchronous loop passes the 6 h check before any send resolves. Reproduction (`verify5/q5.cjs`, real route + real `hubAlert` source): project id `partner-lock-to-earn` (21 chars, so the wallet falls past the 40-char slice), three lockers, one signature paying each in two instructions (net delta exact → `verifyBatchRows` passes and `recordSent` records; `locateTransferInstruction` cannot attribute → the per-row alert at `routes.js:1021`, which passes **no** meta). Result: **3 Telegram sends sharing 1 dedupe key**; the same input at `c1079da` sent 1 (`verify5/q1.cjs` §(d)/(e): 50 → 50 now, 50 → 1 before). `&sent=` is operator-reachable and takes up to 500 rows at 30 req/min, so a project operator can push the operator room into Telegram's rate limiter — which would silence CUNA accrual/burn/watchdog alerts too. Not a money bug; no row is mis-settled.
+
+**NEW-2 (P2) — a waive frees the remainder for the desk but not for the holder view or the next batch, so the documented remedy does nothing until the batch is also cancelled.** `lib/hub/ledger.js:228` clears `remaining` via `batch.waived`, which `reservedByWallet`/`partition` honour — but `pay.owedNow` (`lib/cuna-payout.js:118-120`) holds a row purely on `!b.sent[w] && b.state === "pending"` and never looks at `waived`. Reproduction (`verify5/q3.cjs` §3, `q4.cjs`): partial row 400m applied of 1000m → waive 600m → `partition.availableRaw = 600000000` while `owedNow = 0`; `/api/hub/:project/desk` (partition, `routes.js:177`) and the holder view (`engine.js:247` → `owedNow`) now disagree — the exact crash-P1-4 class this branch closed elsewhere. `L.batchView` also reports the still-`pending` batch as `sent` and the row as `paid` (`rowState`: `remaining===0 && applied>0`). After a later `&cancel=` everything agrees again (`owedNow = 600000000`). Same applies to a never-settled row: it can be waived in full, partition frees it, `owedNow` reads 0. No money moves wrongly and nothing is double-payable (a `&sent=` on a waived row is refused).
+
+**NEW-3 (P3) — re-issuing an id to a new mint carries more than `storeIsEmptyFor` checks.** `proj.approveProject:199-204` keeps the previous row's `access` (`paidThroughUnix` + the whole `payments` list) and `milestones`, and `routes.js:277` carries `payoutSources`/`payoutSourcesHistory` (and `vaultProject`) forward when they are not named — so a brand-new mint under a reused id inherits the old project's paid Hub months, its onboarding clock, and its settlement-source allowlist; and the 409's own remedy ("clear it before re-issuing") leaves `hub:waive:<id>:*` and `hub:quotes:<id>` behind. Verified in `verify5/q2.cjs`. Owner-driven only; nothing reads `hub:waive:*` back, and a stale quote still needs `access.payerAllowed` against the *new* operator wallets.
+
+## Test verdicts (verbatim tail, at `af9eccf`)
+
+```
+hub-settle-route-test      all passed (77 passed) [exit 0]
+hub-core-test              all passed (34 passed) [exit 0]
+hub-apply-test             all passed (17 passed) [exit 0]
+hub-public-test            all passed [exit 0]
+hub-schema-test            all passed [exit 0]
+broadcast-integrity-test   all passed [exit 0]
+telegram-rooms-test        all passed (13 passed) [exit 0]
+payout-verify-test         all passed (11 passed) [exit 0]
+cuna-payout-test           all passed (33 passed) [exit 0]
+hub-receipt-page-test      all passed (3 passed) [exit 0]
+reproduce-receipt-test     all passed (33 passed) [exit 0]
+mutating-get-guard-test    all passed [exit 0]   (GUARD_TEST_PORT=3377)
+```
+
+## Suggestions (one line each, no fixes applied)
+
+- NEW-1: set `HUB_ALERT_SEEN` synchronously before the send and delete the key when the send returns falsy, so the check-and-claim is atomic within one event-loop turn.
+- NEW-1b: give the per-row alert at `routes.js:1021` the same `meta` treatment, or collect it into the existing end-of-branch summary like the fraud refusals.
+- NEW-2: make `pay.owedNow` subtract `b.waived[w]` from the `held` amount (and `rowState` report `partial-waived` rather than `paid`), then correct the §5c sentence.
+- NEW-3: add `hub:waive:<id>:` and `hub:quotes:<id>` to `storeIsEmptyFor`, and reset `access`/`milestones`/`payoutSources` when `approveProject` sees a mint change.
+- Minor: in the `&waive=` block, assign `batches` only after `writeManyVerifiedMixed` returns true, so a throwing kv cannot leave a waive reported `ok:false` in memory for a later branch's `saveMoney()` to persist.
+
+Merge-ready: yes.
