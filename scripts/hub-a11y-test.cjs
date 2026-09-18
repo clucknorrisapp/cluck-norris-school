@@ -126,6 +126,7 @@ const PAGES = [
   { path: "/hub/wallet/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", name: "Hub wallet look-up, pre-filled (AA1)" },
   { path: "/hub/trust", name: "Hub trust boundary (AA5 — what this doesn't prove)" },
   { path: "/hub/judge", name: "Hub judge guide (AA4 — the judge's fifteen minutes)" },
+  { path: "/hub/glossary", name: "Hub glossary (EE2 — every term and reason code, in plain words)" },
   { path: "/holders", name: "Holders (CC3 — empty state, no snapshot history yet)" },
   { path: `/holders?mint=${SEED_MINT}`, name: "Holders (CC3 — X7 history + AA3 Compare, seeded)" },
   { path: `/hub/${A11Y_PRINT_PROJECT}/r/${A11Y_PRINT_SIG}?print=1`, name: "Hub receipt print sheet (DD4 — a receipt you can print)" },

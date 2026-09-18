@@ -94,7 +94,10 @@
   function amt(v, sym) { if (v == null || v === '') return '—'; var n = Number(v); var s = isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: 6 }) : String(v); return s + (sym ? ' ' + esc(sym) : ''); }
   function acct(a) { return '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/account/' + encodeURIComponent(a) + '">' + esc(shortAddr(a, 5, 4)) + '</a>'; }
   function txLink(sig) { return sig ? '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(sig) + '">' + esc(shortAddr(sig, 6, 6)) + '</a>' : ''; }
-  function pill(cls, label) { return '<span class="pill ' + cls + '">' + esc(label) + '</span>'; }
+  function pill(cls, label, code) {
+    var text = code ? '<a href="/hub/glossary#' + encodeURIComponent(code) + '">' + esc(label) + '</a>' : esc(label);
+    return '<span class="pill ' + cls + '">' + text + '</span>';
+  }
 
   // One row of one program (server-composed from hubPublic.walletLookup — the page adds no
   // number of its own): role "paid" is what arrived, with its own transaction; "winner"/
@@ -111,8 +114,8 @@
         (row.note ? '<div class="fact">' + esc(row.note) + '</div>' : '') + '</li>';
     }
     // A reviewed, non-qualifying status (e.g. "dq" or "manual") — the observed fact the record
-    // already carries, never a motive.
-    return '<li><div class="row-flex"><b class="small" style="color:var(--text)">Excluded</b> ' + pill('bad', String(row.role || '').replace(/-/g, ' ')) + '</div>' +
+    // already carries, never a motive. EE2: both codes have a glossary entry (kind: "reason").
+    return '<li><div class="row-flex"><b class="small" style="color:var(--text)">Excluded</b> ' + pill('bad', String(row.role || '').replace(/-/g, ' '), row.role) + '</div>' +
       (row.fact ? '<div class="fact">' + esc(row.fact) + '</div>' : '') + '</li>';
   }
 

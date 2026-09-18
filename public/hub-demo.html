@@ -112,7 +112,9 @@
   function holderCard(h, dec, sym) {
     var verdict = h.qualifies
       ? '<span class="pill ok">QUALIFIES</span> <b>' + esc(h.termLabel) + '</b> · <span class="mono">' + esc(h.multiplier) + 'x</span> the base rate'
-      : '<span class="pill bad">DOES NOT QUALIFY</span> ' + (h.reasons || []).map(function (r) { return '<span class="mono">' + esc(r.code) + '</span> — ' + esc(r.text); }).join('; ');
+      // EE2: every code here is a glossary reason entry (kind: "reason", the same list
+      // lib/hub/eligibility.js REASON_CODES exports) — link it rather than just printing it.
+      : '<span class="pill bad">DOES NOT QUALIFY</span> ' + (h.reasons || []).map(function (r) { return '<a class="mono" href="/hub/glossary#' + encodeURIComponent(r.code) + '">' + esc(r.code) + '</a> — ' + esc(r.text); }).join('; ');
     var lines = '<div class="fact" style="margin-top:6px">Locked <b>' + esc(whole(h.numbers.atRiskRaw, dec)) + ' ' + esc(sym) + '</b> · term ' + esc(h.termLabel) +
       ' · locked since ' + esc(new Date(h.numbers.firstSeenAt * 1000).toISOString().slice(0, 10)) +
       (h.qualifies ? ' · accrued so far <b>' + esc(whole(h.accruedRaw, dec)) + ' ' + esc(sym) + '</b>' : '') + '</div>';
@@ -205,8 +207,10 @@
     out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Funding</div>' + fundingBlock(d.funding, dec, sym) + '</div>';
     out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Batch ' + esc(d.batch.id) + '</div>' + batchTable(d.batch, dec, sym) + '</div>';
     if (d.teach) {
+      // EE2: a.key (what_happens/can_i_sell/where_reward/how_much/risks/why_lock) is a glossary
+      // term id — link the question itself, next to the existing "Learn more" lesson link.
       out += '<div class="card lessons"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Six questions, answered from the program itself</div>' +
-        d.teach.answers.map(function (a) { return '<div class="fact" style="padding:6px 0"><b style="color:var(--text)">' + esc(a.question) + '</b><br>' + esc(a.text) + ' <a href="' + esc(a.lesson.href) + '">Learn more →</a></div>'; }).join('') + '</div>';
+        d.teach.answers.map(function (a) { return '<div class="fact" style="padding:6px 0"><b style="color:var(--text)"><a href="/hub/glossary#' + encodeURIComponent(a.key) + '">' + esc(a.question) + '</a></b><br>' + esc(a.text) + ' <a href="' + esc(a.lesson.href) + '">Learn more →</a></div>'; }).join('') + '</div>';
     }
     out += '<div class="fact" data-clkn-avoid="1" style="text-align:center">Raw data: <a class="mono" href="/api/hub-demo/' + esc(projectId) + '">/api/hub-demo/' + esc(projectId) + '</a></div>' +
       '<div class="fact" data-clkn-avoid="1" style="text-align:center;margin-top:6px"><a href="/hub/demo">← back to the walkthrough</a></div>';
