@@ -1625,5 +1625,14 @@
   "share of pool": "占奖池比例",
   "no locks yet": "尚无锁仓",
   "Estimate ready.": "估算已完成。",
-  "previewing…": "正在预览……"
+  "previewing…": "正在预览……",
+  "A browser-signed payout is {state} for this batch — reload to check its progress.": "本批次有一笔浏览器签名的付款处于 {state} 状态——刷新以查看进度。",
+  "Requesting the transfer instructions to sign…": "正在请求需要签名的转账指令……",
+  "Nothing left on this batch to sign.": "本批次已没有待签名的内容。",
+  "Nothing broadcast — check the progress line above.": "未广播任何交易——请查看上方的进度提示。",
+  "Observing what you broadcast…": "正在核实你广播的内容……",
+  "Settled — every row this batch named is fully paid.": "已结清——本批次的所有行都已全额支付。",
+  "Broadcast recorded — {n} row(s) still owed.": "已记录广播——还有 {n} 行仍未结清。",
+  "{n} row(s) could not be recorded: {reasons}": "{n} 行未能记录：{reasons}",
+  "Sign {n} row(s) totalling {amount} from {wallet} using your own wallet? Your wallet builds and broadcasts every transaction; the server only ever observes the signatures you report back.": "用你自己的钱包签署 {n} 行、共计 {amount}，来自 {wallet}？你的钱包负责构建并广播每一笔交易；服务器只核实你回报的签名。"
 }

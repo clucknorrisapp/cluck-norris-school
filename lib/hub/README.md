@@ -123,6 +123,58 @@ with a LIVE (`signing`/`submitted`) attempt from the actual browser-sign flow is
 either stamp — see `lib/hub/attempts.js`'s own comment for the one exception (a stamp's own prior
 `submitted` transitioning to its own `settled` is not "clobbering a different attempt").
 
+### 3a. X6/CC5 — the browser-signed BATCH payout (`sign-request` / `observe`)
+
+Landed with a real UI (`public/hub-desk.html`'s SIGN AND SEND FROM MY WALLET button), but as a
+**batch-level** two-step, not the per-row `lib/hub/attempts.js` machine described above — that
+machine (`registerAttempt`/`recordSignature`/`reconcile`, one row at a time, tracking a
+`recentBlockhash`/`lastValidBlockHeight`) is still unwired to any route. This is a coarser
+sibling, tracked on `batch.browserSign` (not `batch.state`, which keeps the existing
+pending/sent/cancelled/closed vocabulary every other route reads):
+
+```
+POST …/batch/:batchId/sign-request        POST …/batch/:batchId/observe
+  pending ────────────────────▶ signing ──(sigs fetched, some/none settle)──▶ submitted
+                                    │                                              │
+                                    │                                   (every named row's
+                                    │                                    remaining reaches 0)
+                                    ▼                                              ▼
+                              (stays signing until observed)                  settled
+```
+
+- `sign-request` (owner or operator, POST-only, `hubheavy`-limited, refused for a `dryRun`
+  project before any write) computes each still-owed row's exact remaining amount
+  (`ledger.rowState`), derives its destination ATA server-side (`lib/solana-addr.js deriveAta` —
+  no `@solana/web3.js` needed for this), and returns `{ mint, decimals, tokenProgram,
+  fundingWallet, rows: [{wallet, source, destination, amountRaw}], nonce, idempotencyKey }` — a
+  description the browser reuses `public/airdrop-engine.js`'s existing `splToken.*` helpers to
+  build from (never `SystemProgram.transfer()`/`toBufferLE` — CLAUDE.md). It stamps
+  `batch.browserSign = {state:"signing", wallets:[...], ...}` in one persist and refuses a second
+  call while a prior one is `submitted` (a broadcast already exists; observe it first).
+- `observe` reads back the signature(s) the browser broadcast (`public/hub-desk.html` reuses
+  `CluckAirdrop.send()` unchanged — the same `provider.signAndSendTransaction` path the pre-existing
+  self-signed `&sent=` report already drives, not the stricter `signTransaction`-only /
+  server-broadcasts invariant `lib/hub/attempts.js` implements) and settles them through the
+  **exact same** `lib/hub/settle.js settleAndPersist()` + `lib/cuna-payout.js recordSent()`
+  pipeline `/payout`'s `&sent=` branch uses — same settlement journal, same
+  `settle:<sig>:<instructionIndex>[:<innerIndex>]` idempotency key, same funding-wallet-sourced
+  check (adv P0-1), same cross-project consumed-set check (adv P0-2a). A signature that verifies
+  nothing, or the wrong amount, settles that row NOT AT ALL — recorded in
+  `batch.browserSign.failed[wallet]` with why, never as paid. Observing the same signature twice
+  is exactly as idempotent as reporting it to `&sent=` twice.
+- **The residual risk design §4 names is NOT closed by this feature** — a tab lost between the
+  wallet signing and this browser reaching `observe` is possible, exactly as it always was for the
+  self-signed `&sent=` report (a transaction that landed can always be re-observed later by
+  signature; nothing here can lose a real payment, but the desk cannot always immediately SHOW it
+  settled). Closing that residual for real needs the `lib/hub/attempts.js` `signTransaction`-only
+  flow above, wired to a route — still not done.
+- **Vice versa with the managed payer**: `browserSignIsLive(bt)` (`signing`/`submitted`) refuses
+  `/payout`'s `&send=` branch outright, and both `sign-request`/`observe` acquire the SAME
+  per-project `hublock:<id>:payout` lock `/payout` already does, so a managed send mid-flight
+  refuses a concurrent `sign-request` with `busy` even before the state check would matter.
+- Fault-injection: `scripts/hub-browser-sign-test.cjs` (crash between the two calls, a bad
+  signature, observing the same signature twice, an RPC outage, a dry-run project, no auth, GET).
+
 ## 4. What is served over HTTP today
 
 Public, no wallet needed, `Cache-Control: public`:

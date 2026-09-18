@@ -129,15 +129,17 @@
       </div>
       <div class="card">
         <div class="k">SEND — signed in your wallet</div>
-        <p class="muted">The connected operator wallet pays. Each transaction that confirms is recorded on the server immediately, row by row, with its signature, after the server checks it on-chain. If anything fails part-way, the rows that landed are paid and the rest stay owed — press SEND again to send only what is left.</p>
+        <p class="muted">The connected operator wallet pays. Each transaction that confirms is recorded on the server immediately, row by row, with its signature, after the server checks it on-chain. If anything fails part-way, the rows that landed are paid and the rest stay owed — press SEND again to send only what is left. SIGN AND SEND FROM MY WALLET is the same idea through a two-step handshake: the server hands back the exact transfer parameters first (holding the batch so nothing else can touch it meanwhile), your wallet signs and broadcasts, and the server only ever observes the signatures you report back — it never holds a key that could move this.</p>
         <div id="walletChecks" style="margin-top:8px"></div>
         <div class="progress"><i id="bar"></i></div>
         <div class="muted" id="progressText">&nbsp;</div>
         <div class="btns">
           <button id="send" disabled>SEND REMAINING ROWS</button>
+          <button class="ghost" id="signSend" disabled>SIGN AND SEND FROM MY WALLET</button>
           <button class="ghost" id="reload">RELOAD</button>
           <button class="ghost" id="close">CLOSE BATCH — return unsent rows to owed</button>
         </div>
+        <div class="muted" id="signSendStatus" style="margin-top:6px">&nbsp;</div>
       </div>
       <div class="card">
         <div class="k">ROWS</div>
@@ -223,6 +225,26 @@
   var KEY = null, TOKEN = null, DESK = null, BATCH = null, MINT = null, DEC = 9, SYM = "";
   var WALLET = null, PROVIDER = null, WALLET_BAL = null;
   var SENDING = false, ABORT = false;
+  var SIGN_SENDING = false;
+
+  // ── i18n for the strings THIS SCRIPT builds (X6/CC5's own copy only — every other string on
+  // this page predates this feature and is left exactly as it was, translated live by i18n.js's
+  // sitewide DOM walker + machine-translation fallback like the rest of the page). `t()`/`tf()`
+  // are the same small page-local lookup public/hub-verify.html and public/hub-glossary.html use
+  // over the curated dictionaries i18n.js already loaded (`window.CLKN_I18N.dict`) — no second
+  // translation system, English literal on a miss, `{token}` substitution for a value so a
+  // translator can reorder words around it. (renderTermsForm() below has its own unrelated
+  // function-scoped `var t` holding a program version's terms object — shadows this inside that
+  // one function only, never calls it, and never leaks out of it.)
+  function t(s) {
+    try { var d = window.CLKN_I18N && window.CLKN_I18N.dict; if (d && d[s]) return d[s]; } catch (_) {}
+    return s;
+  }
+  function tf(s, vars) {
+    var out = t(s);
+    if (vars) for (var k in vars) out = out.split("{" + k + "}").join(String(vars[k]));
+    return out;
+  }
   var ROW_STATUS = {};
   function statusKey() { return "hub_desk_rows_" + PID + "_" + (BATCH && BATCH.id); }
   function saveStatus() { try { localStorage.setItem(statusKey(), JSON.stringify(ROW_STATUS)); } catch (_) {} }
@@ -511,14 +533,20 @@
   }
   function refreshSendButton() {
     var need = BATCH ? Number(BATCH.remainingRaw) / Math.pow(10, DEC) : 0;
-    var ok = !SENDING && BATCH && BATCH.state === "pending" && BATCH.remainingCount > 0 && WALLET && PROVIDER && WALLET_BAL != null && WALLET_BAL >= need;
+    // X6/CC5: a live browser-signed flow (SIGN_SENDING, this tab's own in-flight call, or
+    // BATCH.browserSign read back from the server) keeps this button off too — the two send paths
+    // must never race the same rows, mirroring the server's own browserSignIsLive refusal on &send=.
+    var bsLive = BATCH && BATCH.browserSign && (BATCH.browserSign.state === "signing" || BATCH.browserSign.state === "submitted");
+    var ok = !SENDING && !SIGN_SENDING && !bsLive && BATCH && BATCH.state === "pending" && BATCH.remainingCount > 0 && WALLET && PROVIDER && WALLET_BAL != null && WALLET_BAL >= need;
     $("send").disabled = !ok; $("close").disabled = SENDING || !BATCH || BATCH.state !== "pending";
     $("bWalletBal").textContent = WALLET ? (WALLET_BAL == null ? "could not read" : WALLET_BAL.toLocaleString() + " " + SYM) : "no wallet";
     var why = [];
     if (BATCH && BATCH.state !== "pending") why.push("batch is " + BATCH.state); else if (BATCH && !BATCH.remainingCount) why.push("nothing left to send");
+    else if (bsLive) why.push("a browser-signed payout is " + BATCH.browserSign.state + " for this batch");
     if (!WALLET) why.push("no wallet connected (the owner key can read, only a wallet can sign)");
     else if (WALLET_BAL == null) why.push("could not read the wallet's " + SYM + " balance"); else if (BATCH && WALLET_BAL < need) why.push("wallet holds less " + SYM + " than the remaining total");
     $("walletChecks").innerHTML = why.length ? '<div class="warn">Send is off: ' + esc(why.join("; ")) + "</div>" : '<div class="ok">Ready to send.</div>';
+    refreshSignSendButton();
   }
   async function readWalletBal() {
     WALLET_BAL = null; if (!WALLET || !MINT) return;
@@ -567,6 +595,63 @@
     readWalletBal().then(refreshSendButton);
   }
   function fail(e) { $("progressText").innerHTML = '<span class="bad">' + esc((e && e.message) || String(e)) + "</span>"; SENDING = false; refreshSendButton(); }
+
+  // ── X6/CC5: browser-signed batch payout — sign-request/observe (design §4), alongside the
+  // self-signed report above. The wallet still signs first and the server still never holds a key
+  // that could move funds; the difference is the server FREEZES the batch into `signing` before any
+  // signature exists (refusing the managed payer for as long as that lasts — the /payout route's
+  // &send= branch checks it) and OBSERVES every signature this browser reports through the exact
+  // same settlement journal the self-signed &sent= report and the managed payer already use.
+  // Building the transactions themselves reuses CluckAirdrop.send() unchanged (public/
+  // airdrop-engine.js) — the SAME splToken.createTransferCheckedInstruction /
+  // createAssociatedTokenAccountIdempotentInstruction path the SEND button above already drives,
+  // never SystemProgram.transfer() (CLAUDE.md — no Buffer polyfill in a browser page) and never a
+  // second signer: this wallet is the only one that ever touches these transactions.
+  function refreshSignSendButton() {
+    var need = BATCH ? Number(BATCH.remainingRaw) / Math.pow(10, DEC) : 0;
+    var bs = BATCH && BATCH.browserSign;
+    var live = !!(bs && (bs.state === "signing" || bs.state === "submitted"));
+    var ok = !SENDING && !SIGN_SENDING && BATCH && BATCH.state === "pending" && BATCH.remainingCount > 0 && WALLET && PROVIDER && WALLET_BAL != null && WALLET_BAL >= need;
+    $("signSend").disabled = !ok;
+    if (live && !SIGN_SENDING) $("signSendStatus").innerHTML = '<span class="warn">' + esc(tf("A browser-signed payout is {state} for this batch — reload to check its progress.", { state: bs.state })) + "</span>";
+  }
+  async function signAndSend() {
+    if ($("signSend").disabled) return;
+    SIGN_SENDING = true; ABORT = false; $("send").disabled = true; refreshSignSendButton();
+    $("signSendStatus").textContent = t("Requesting the transfer instructions to sign…");
+    try {
+      var sr = await call("/batch/" + encodeURIComponent(BATCH.id) + "/sign-request", {}, "POST");
+      if (!sr.rows || !sr.rows.length) { $("signSendStatus").textContent = t("Nothing left on this batch to sign."); return; }
+      var recipients = sr.rows.map(function (r) { return { addr: r.wallet, amount: whole(r.amountRaw, sr.decimals) }; });
+      var sigs = [];
+      await CluckAirdrop.send({
+        rpc: rpc, mint: sr.mint, recipients: recipients, walletPubkey: WALLET, provider: PROVIDER,
+        memo: SYM + " lock-to-earn (browser-signed) " + BATCH.id,
+        onProgress: function (msg, pct) { $("progressText").textContent = msg; $("bar").style.width = Math.max(0, Math.min(100, pct)) + "%"; },
+        shouldContinue: function () { return !ABORT; },
+        onResult: function (r) { if (r.status === "sent" && r.sig) sigs.push(r.sig); },
+      });
+      if (!sigs.length) { $("signSendStatus").innerHTML = '<span class="bad">' + esc(t("Nothing broadcast — check the progress line above.")) + "</span>"; return; }
+      $("signSendStatus").textContent = t("Observing what you broadcast…");
+      var ob = await call("/batch/" + encodeURIComponent(BATCH.id) + "/observe", { sigs: sigs }, "POST");
+      var bs = ob.browserSign || {};
+      var failedWallets = Object.keys(bs.failed || {});
+      var lines = [];
+      lines.push(bs.state === "settled" ? t("Settled — every row this batch named is fully paid.") : tf("Broadcast recorded — {n} row(s) still owed.", { n: (ob.remainingWallets || []).length }));
+      if (failedWallets.length) lines.push(tf("{n} row(s) could not be recorded: {reasons}", { n: failedWallets.length, reasons: failedWallets.map(function (w) { return CluckUtil.shortAddr(w) + " (" + bs.failed[w].why + ")"; }).join("; ") }));
+      $("signSendStatus").innerHTML = '<span class="' + (bs.state === "settled" ? "ok" : "warn") + '">' + esc(lines.join(" ")) + "</span>";
+    } catch (e) {
+      $("signSendStatus").innerHTML = '<span class="bad">' + esc((e && e.message) || String(e)) + "</span>";
+    } finally {
+      SIGN_SENDING = false;
+      await loadBatch(BATCH.id).catch(function () {});
+      readWalletBal().then(function () { refreshSendButton(); refreshSignSendButton(); });
+    }
+  }
+  $("signSend").addEventListener("click", function () {
+    if (!BATCH) return;
+    askConfirm(tf("Sign {n} row(s) totalling {amount} from {wallet} using your own wallet? Your wallet builds and broadcasts every transaction; the server only ever observes the signatures you report back.", { n: BATCH.remainingCount, amount: amt(BATCH.remainingRaw), wallet: CluckUtil.shortAddr(WALLET) }), $("signSend")).then(function (yes) { if (yes) signAndSend(); });
+  });
 
   $("create").addEventListener("click", function () {
     askConfirm("Create a batch for everything owed? Its amounts are held aside from this moment.", $("create")).then(function (yes) {
