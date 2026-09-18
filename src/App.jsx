@@ -198,13 +198,16 @@ function HubDemoDoor(){
 // (Y1, /hub/verify) so the lesson's own worked example is one click away, not a promise to go
 // find it later. Only ever shown on this one lesson. STORE carries no Hub at all, so this folds
 // out entirely at build time — same `STORE ? null : …` pattern as HubBridge/HubDemoDoor.
+// BB5: each link fires the SAME `hub_bridge_click` event with {from:"receipt", to:…} — a fixed
+// allowlist enforced server-side (lib/traction.js HUB_BRIDGE_FROM/HUB_BRIDGE_TO) — instead of
+// three ad hoc event names, so the counts show up as one measured funnel in the traction report.
 function ReceiptLessonBridge({lesson:l}){
   if(l.id!=="receipt") return null;
   return STORE ? null : (
     <div style={{background:"rgba(103,232,249,0.05)",border:"1px solid rgba(103,232,249,0.16)",borderRadius:12,padding:"10px 14px",margin:"0 0 14px",textAlign:"left",display:"flex",flexDirection:"column",gap:6}}>
-      <a href="/hub/demo/r/rcpt-a" onClick={()=>track("hub_door_click:receipt_lesson")} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"Open a real receipt and check it, line by line"} →</a>
-      <a href="/hub/verify" onClick={()=>track("hub_verify_click:receipt_lesson")} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"Reproduce it yourself, in your own browser"} →</a>
-      <a href="/hub/trust" onClick={()=>track("hub_trust_click:receipt_lesson")} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"See what none of this proves"} →</a>
+      <a href="/hub/demo/r/rcpt-a" onClick={()=>track("hub_bridge_click",{from:"receipt",to:"demo-receipt"})} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"Open a real receipt and check it, line by line"} →</a>
+      <a href="/hub/verify" onClick={()=>track("hub_bridge_click",{from:"receipt",to:"verify"})} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"Reproduce it yourself, in your own browser"} →</a>
+      <a href="/hub/trust" onClick={()=>track("hub_bridge_click",{from:"receipt",to:"trust"})} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"See what none of this proves"} →</a>
     </div>
   );
 }
@@ -1945,11 +1948,13 @@ export default function App(){
     // minutes again. The server keeps the first sighting and records the re-pass separately.
     if(passed) trackId("lesson_complete",id);
     // E6: the one Educate→Earn number we can show honestly — a real learner who arrived from a
-    // Hub project's page finished one of the six lessons that teach locking, before any decision
-    // to lock. Fires on every pass, not only the first (the server dedupes per project/day/sid;
-    // re-reading counts too, same as lesson_complete above), and never in the STORE edition
-    // (which carries no Hub, so hubFrom can never be set there anyway).
-    if(!STORE&&passed&&hubFrom&&LOCK_LESSON_IDS.has(id)) track("hub_lesson_read:"+hubFrom,{lessonId:id});
+    // Hub project's page finished one of the seven lessons that teach locking, before any
+    // decision to lock. Fires on every pass, not only the first (the server dedupes per
+    // project/day/sid; re-reading counts too, same as lesson_complete above), and never in the
+    // STORE edition (which carries no Hub, so hubFrom can never be set there anyway). BB5: the
+    // `lesson` field lets lib/traction.js also break the total down per lesson (server-bounded to
+    // LOCK_LESSON_IDS — see lib/traction.js KNOWN_LOCK_LESSON_IDS — so anything else is dropped).
+    if(!STORE&&passed&&hubFrom&&LOCK_LESSON_IDS.has(id)) track("hub_lesson_read:"+hubFrom,{lesson:id});
     if(passed&&!completed.includes(id)){
       const next=[...completed,id];
       setCompleted(next);

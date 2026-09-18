@@ -46,6 +46,15 @@ const ARG_BASE = process.argv.find((a) => /^https?:\/\//.test(a)) || null;
 const PORT = Number(process.env.A11Y_TEST_PORT || 3204);
 const BASE = ARG_BASE || `http://127.0.0.1:${PORT}`;
 
+// Holders (Colosseum roadmap §12 CC3 — the X7 history + AA3 Compare panels join the gate).
+// SEED_MINT is a fixture address (same shape scripts/holders-snapshot-diff-test.cjs uses, not a
+// real mint) with two snapshots seeded directly through lib/holders-snapshot.js's appendSnapshot
+// (see the DATA_DIR setup below) so both panels render without a live RPC crawl, which this
+// throwaway boot can't do (FALLBACK_RPC_URL points nowhere on purpose). The empty-state URL
+// (no history/compare yet — a mint nobody has ever crawled) stays in the list too, since it's a
+// different render path (both cards are `display:none` until at least one/two snapshots exist).
+const SEED_MINT = "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc";
+
 const PAGES = [
   { path: "/hub", name: "Hub index" },
   // A real branded project page (hero, dry-run badge, social pills) — the index alone never
@@ -61,6 +70,8 @@ const PAGES = [
   { path: "/hub/wallet/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", name: "Hub wallet look-up, pre-filled (AA1)" },
   { path: "/hub/trust", name: "Hub trust boundary (AA5 — what this doesn't prove)" },
   { path: "/hub/judge", name: "Hub judge guide (AA4 — the judge's fifteen minutes)" },
+  { path: "/holders", name: "Holders (CC3 — empty state, no snapshot history yet)" },
+  { path: `/holders?mint=${SEED_MINT}`, name: "Holders (CC3 — X7 history + AA3 Compare, seeded)" },
 ];
 const WIDTHS = [
   { width: 360, height: 780, label: "360×780" },
@@ -210,6 +221,21 @@ async function auditPage(browser, pagePath, pageName) {
   let srv = null, DIR = null;
   if (!ARG_BASE) {
     DIR = fs.mkdtempSync(path.join(os.tmpdir(), "hub-a11y-"));
+
+    // Seed two holder snapshots for SEED_MINT directly through the real kv module +
+    // appendSnapshot, pointed at the same DATA_DIR the server is about to boot with — the same
+    // durable-write seeding scripts/holders-snapshot-diff-test.cjs uses, so /holders?mint=... has
+    // both the X7 history table and the AA3 Compare panel populated without a live RPC crawl.
+    process.env.DATA_DIR = DIR;
+    delete require.cache[require.resolve("../lib/kvstore")];
+    const kv = require("../lib/kvstore");
+    const holdersSnapshot = require("../lib/holders-snapshot");
+    const W = (n) => `Wallet${String(n).padStart(6, "0")}xxxxxxxxxxxxxxxxxxxxxxxxxxxx`.slice(0, 44);
+    const fromTop = [{ wallet: W(0), amount: 500 }, { wallet: W(1), amount: 300 }, { wallet: W(2), amount: 100 }];
+    const toTop = [{ wallet: W(0), amount: 650 }, { wallet: W(1), amount: 300 }, { wallet: W(3), amount: 50 }];
+    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now() - 86400000, holderCount: 10, top: fromTop, totalSupplyRaw: "10000", fullList: fromTop });
+    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now(), holderCount: 11, top: toTop, totalSupplyRaw: "10200", fullList: toTop });
+
     const env = { ...process.env, PORT: String(PORT), DATA_DIR: DIR, TOOLGATE_OFF: "1",
       TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", HELIUS_API_KEY: "", MM_OPERATOR_SECRET: "", MM_OPERATOR_SECRET_TREASURY: "",
       FALLBACK_RPC_URL: "http://127.0.0.1:9" };

@@ -186,7 +186,7 @@
   .meta-line { font-family: var(--mono); font-size: 11px; color: var(--subtext); margin-top: 12px; text-align: center; }
   .truncated-banner { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 12px; color: #FCA5A5; margin-bottom: 14px; }
 
-  .footer-link { display: block; text-align: center; margin-top: 24px; font-family: var(--disp); font-size: 12px; color: var(--sub); letter-spacing: 2px; text-decoration: none; }
+  .footer-link { display: flex; align-items: center; justify-content: center; min-height: 44px; text-align: center; margin-top: 24px; font-family: var(--disp); font-size: 12px; color: var(--sub); letter-spacing: 2px; text-decoration: none; }
   .footer-link:hover { color: var(--accent); }
 
   /* Desktop — wider container so the page fills a larger screen */
@@ -208,7 +208,9 @@ body{background:transparent;font-family:var(--body);}
   /* Holder history panel (X7) — a sparkline + a dated table, each row linking its own snapshot */
   #historySpark{margin-bottom:12px}
   #historySpark svg{display:block;width:100%}
-  .hash-copy{background:none;border:1px solid var(--border);border-radius:6px;color:var(--sub);font-family:var(--mono);font-size:11px;padding:2px 7px;margin-left:6px;cursor:pointer;min-height:26px}
+  /* 44x44 real tap target (WCAG 2.5.5) — the glyph stays the same small pill it always was;
+     display:inline-flex + min-width/min-height grows the button's own hit box symmetrically. */
+  .hash-copy{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);font-family:var(--mono);font-size:13px;padding:0 10px;margin-left:6px;cursor:pointer;vertical-align:middle}
   .hash-copy:hover{border-color:var(--orange);color:var(--text)}
   /* Snapshot compare panel (Colosseum roadmap §11 AA3) — entered/exited/held over the recorded
      top-25, not a full holder-base diff (the panel says so, and so does every heading here). */
@@ -228,7 +230,7 @@ body{background:transparent;font-family:var(--body);}
   <meta name="twitter:image" content="https://clucknorris.app/cluck-norris.png">
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:12px;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
@@ -358,40 +360,44 @@ body{background:transparent;font-family:var(--body);}
       <div class="card-title" id="tableTitle">TOP HOLDERS PREVIEW</div>
       <table class="holders-table" id="holdersTable"></table>
     </div>
+  </div>
 
-    <!-- History (X7): every finished owners-snapshot crawl of this mint, dated and hashed. Free
-         to read — no pass, no wallet — it is history of a public on-chain fact. Hidden until a
-         mint has at least one recorded snapshot. -->
-    <div class="card" id="historyCard" style="display:none">
-      <div class="card-title" data-clkn-avoid="1">HOLDER COUNT HISTORY</div>
-      <div id="historySpark"></div>
-      <table class="holders-table" id="historyTable"></table>
-      <div class="meta-line" id="historyMeta"></div>
-    </div>
+  <!-- History (X7): every finished owners-snapshot crawl of this mint, dated and hashed. Free
+       to read — no pass, no wallet — it is history of a public on-chain fact. Hidden until a
+       mint has at least one recorded snapshot. Deliberately OUTSIDE #result (which stays
+       display:none until a live ANALYZE HOLDERS crawl finishes): this reads a separate,
+       read-only endpoint and must render from a shared ?mint= link on its own, with no live
+       crawl involved — see loadHolderHistory()'s own call on page load below. -->
+  <div class="card" id="historyCard" style="display:none">
+    <div class="card-title" data-clkn-avoid="1">HOLDER COUNT HISTORY</div>
+    <div id="historySpark"></div>
+    <table class="holders-table" id="historyTable"></table>
+    <div class="meta-line" id="historyMeta"></div>
+  </div>
 
-    <!-- Compare (Colosseum roadmap §11 AA3): entered/exited/held-through wallets between any two
-         recorded snapshots of this mint. Hidden until at least two snapshots exist — a diff needs
-         two points. Free to read, same as the history card above. -->
-    <div class="card" id="compareCard" style="display:none">
-      <div class="card-title" data-clkn-avoid="1">COMPARE SNAPSHOTS</div>
-      <div class="view-note" data-clkn-avoid="1">Compares the 25 largest holders recorded in each snapshot; the full list is hashed, not stored.</div>
-      <div class="filter-row" style="margin-top:12px">
-        <div class="filter">
-          <label for="compareFrom">FROM</label>
-          <select class="compare-select" id="compareFrom"></select>
-        </div>
-        <div class="filter">
-          <label for="compareTo">TO</label>
-          <select class="compare-select" id="compareTo"></select>
-        </div>
+  <!-- Compare (Colosseum roadmap §11 AA3): entered/exited/held-through wallets between any two
+       recorded snapshots of this mint. Hidden until at least two snapshots exist — a diff needs
+       two points. Free to read, same as the history card above; same reason it lives outside
+       #result. -->
+  <div class="card" id="compareCard" style="display:none">
+    <div class="card-title" data-clkn-avoid="1">COMPARE SNAPSHOTS</div>
+    <div class="view-note" data-clkn-avoid="1">Compares the 25 largest holders recorded in each snapshot; the full list is hashed, not stored.</div>
+    <div class="filter-row" style="margin-top:12px">
+      <div class="filter">
+        <label for="compareFrom">FROM</label>
+        <select class="compare-select" id="compareFrom"></select>
       </div>
-      <button type="button" class="compare-btn" id="compareBtn" onclick="runCompare()">COMPARE</button>
-      <div id="compareResult" style="margin-top:6px"></div>
+      <div class="filter">
+        <label for="compareTo">TO</label>
+        <select class="compare-select" id="compareTo"></select>
+      </div>
     </div>
+    <button type="button" class="compare-btn" id="compareBtn" onclick="runCompare()">COMPARE</button>
+    <div id="compareResult" style="margin-top:6px"></div>
   </div>
 
   <a class="footer-link" href="/">← BACK TO CLUCKNORRIS.APP</a>
-</div>
+</main>
 
 <script src="/market-header.js"></script>
 <script src="/cluck-util.js"></script>
@@ -426,12 +432,16 @@ function toggleTeamExclude(e) {
   cb.checked = !cb.checked;
 }
 
-// Pre-fill mint from ?mint= URL param if present
+// Pre-fill mint from ?mint= URL param if present. The history (X7) and Compare (AA3) panels
+// read a separate, read-only endpoint (no live RPC crawl, no pass) — load them straight away so
+// a shared /holders?mint=... link shows a mint's recorded snapshot history without anyone
+// clicking ANALYZE HOLDERS first.
 const urlParams = new URLSearchParams(location.search);
 const presetMint = urlParams.get('mint');
 if (presetMint) {
   mintInput.value = presetMint.trim();
   updateRunBtn();
+  loadHolderHistory(presetMint.trim());
 }
 
 function showErr(msg) {

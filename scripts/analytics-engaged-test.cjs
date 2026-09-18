@@ -61,6 +61,15 @@ t("a hub_lesson_read:<project> event (E6) is recorded like any other funnel even
   assert.strictEqual(A.summary(1).funnel["hub_lesson_read:acme"], 1);
 });
 
+// BB5: the receipt lesson's own finish-card bridge posts a bare "hub_bridge_click" (no colon
+// suffix — from/to travel as separate JSON fields, validated server-side in lib/traction.js, not
+// baked into the event name). Worth pinning that a name with no suffix at all still passes
+// FUNNEL_RE, same as any other generic funnel event. No request passed, same reasoning as above.
+t("a bare hub_bridge_click event (BB5) is recorded like any other funnel event", () => {
+  A.trackFunnel("hub_bridge_click");
+  assert.strictEqual(A.summary(1).funnel.hub_bridge_click, 1);
+});
+
 t("views are keyed by the raw Host header — the game domain's / is not the homepage's /", () => {
   A.trackView(req({ headers: { "user-agent": "Mozilla/5.0 (iPhone) Safari", host: "normiequest.app" } }));
   A.trackView(req({ headers: { "user-agent": "Mozilla/5.0 (iPhone) Safari", host: "www.staking.cunatoken.com:443" } }));

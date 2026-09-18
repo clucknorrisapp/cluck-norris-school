@@ -2548,6 +2548,7 @@ function tgCommandReply(cmd, arg) {
         "🌐 /website (or /app) — clucknorris.app\n" +
         "💵 /price — CLKN price, market cap &amp; volume\n" +
         "🔒 /lock — locked supply + Jupiter Lock proof\n" +
+        "🧾 /receipt <code>&lt;signature&gt;</code> — check a Hub settlement receipt against the published rule\n" +
         "🩻 /walletxray <code>&lt;wallet&gt;</code> — full wallet deep dive\n" +
         "🔍 /trace <code>&lt;wallet&gt;</code> — wallet × token history\n" +
         "👥 /holders <code>&lt;mint&gt;</code> — true holders vs LP, locks &amp; programs + CSV\n" +
@@ -2641,10 +2642,33 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","projectburn","burn","lprescue","rescue","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+// /receipt <signature> — BB4 (Colosseum roadmap §12): looks a settlement signature up across
+// every registered, non-demo Hub project and replies with the reproduce() verdict for it. Pulled
+// out to lib/hub/receipt-command.js so scripts/telegram-receipt-command-test.cjs can exercise the
+// real logic directly; this wiring only supplies the live pieces (the project registry, kv,
+// tgSend). The OnlyRose refusal is NOT special-cased here — it fires inside tgSend/tgApi exactly
+// like every other command's reply (lib/telegram-rooms.js; owner 2026-09-17: never add an allow).
+// hubProjects/hubProjectView/hubPublic/hubStore/hubReproduce/hubProject/kv are all defined further
+// down in this file (next to the /api/hub/* routes) — safe to reference here because this function
+// only runs once a Telegram update arrives, long after the whole module (and those consts) has
+// finished loading, same pattern every other cross-referencing function in this monolith already
+// relies on.
+const hubReceiptCommand = require("./lib/hub/receipt-command");
+function receiptCommandReply(chatId, replyTo, arg) {
+  return hubReceiptCommand.handleReceiptCommand({
+    arg, chatId, replyToId: replyTo, send: tgSend,
+    hubProjects, hubProjectView, hubPublic, hubStore, hubReproduce, hubProject, kv,
+    publicBase: TG_PUBLIC_BASE,
+  }).catch((e) => console.warn("[TELEGRAM] /receipt error:", e.message));
+}
+
+const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","projectburn","burn","lprescue","rescue","bags","tools","liquidity","price","receipt","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
-const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","buyspecial","chatid"];
+// /receipt is included: a project room's own community is exactly who a Hub receipt lookup is
+// for. The OnlyRose room itself still gets nothing — not from this gate (ROSE IS a project room),
+// but from the tgSend/tgApi choke point (lib/telegram-rooms.js) the reply attempt runs into.
+const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","buyspecial","chatid","receipt"];
 // /buyspecial is an on-demand board drop; this keeps a room from being spammed with them.
 const TG_BUYSPECIAL_COOLDOWN_MS = 90 * 1000;
 const lbCooldown = new Map();      // chatId -> last LIVE pull ts (quota guard)
@@ -3298,6 +3322,13 @@ function handleTelegramUpdate(update) {
     // /price → quick market snapshot (price, MC, change, volume, organic score).
     if (cmd === "price") {
       priceReply(msg.chat.id, msg.message_id);
+      return;
+    }
+    // /receipt <sig> → BB4: look up a Hub settlement signature across every registered project
+    // and reply with the reproduce() verdict. Fire-and-forget like every other command here;
+    // receiptCommandReply already swallows and logs its own errors.
+    if (cmd === "receipt") {
+      receiptCommandReply(msg.chat.id, msg.message_id, arg);
       return;
     }
     // /lock → on-demand locked-supply report (same data as the daily message) + Jupiter Lock proof link.
@@ -18197,15 +18228,29 @@ app.post("/api/track", (req, res) => {
     const m = /^lesson_complete:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
     if (m && b.sid) schoolProgress.mark(b.sid, m[1], { backfill: b.bf === 1 || b.bf === "1" });
     // E6: the school → Hub bridge. The client only sends this after a learner who arrived via a
-    // Hub project's lessonHref (lib/hub/teach.js, public/hub.html) FINISHES one of the six
+    // Hub project's lessonHref (lib/hub/teach.js, public/hub.html) FINISHES one of the seven
     // locking lessons — see LOCK_LESSON_IDS in src/App.jsx. Anonymous sid only, never a wallet.
+    // BB5: an optional `lesson` field breaks the total down per lesson (e.g. "receipt") —
+    // lib/traction.js drops anything outside its own known-id set, so passing it through
+    // unvalidated here is safe; nothing untrusted ever becomes a stored key.
     const hlrM = /^hub_lesson_read:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
-    if (hlrM && b.sid) { try { traction.recordHubLessonRead(kv, { project: hlrM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
+    if (hlrM && b.sid) {
+      const lesson = typeof b.lesson === "string" ? b.lesson.toLowerCase().slice(0, 48) : undefined;
+      try { traction.recordHubLessonRead(kv, { project: hlrM[1], sid: b.sid, lesson }); } catch (_) { /* counter only */ }
+    }
     // W9 part 2: the two "existing traffic → Hub" doors (COLOSSEUM_ROADMAP.md §W9 part 2).
     // "school" fires from the school landing/lesson-finish HubDemoDoor (src/App.jsx); "home"
     // fires from the homepage's project-operator tile (public/home.html). Anonymous sid only.
     const hdcM = /^hub_door_click:(school|home)$/.exec(String(b.event || "").toLowerCase());
     if (hdcM && b.sid) { try { traction.recordHubDoorClick(kv, { source: hdcM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
+    // BB5: the receipt lesson's OWN finish-screen bridge (ReceiptLessonBridge, src/App.jsx) —
+    // `from`/`to` are checked against a fixed allowlist inside lib/traction.js, so an
+    // unrecognized value is dropped, not stored. Anonymous sid only, never a wallet.
+    if (String(b.event || "").toLowerCase() === "hub_bridge_click" && b.sid) {
+      const from = typeof b.from === "string" ? b.from.toLowerCase().slice(0, 48) : "";
+      const to = typeof b.to === "string" ? b.to.toLowerCase().slice(0, 48) : "";
+      try { traction.recordHubBridgeClick(kv, { from, to, sid: b.sid }); } catch (_) { /* counter only */ }
+    }
   } catch (_) {}
   return res.status(204).end();
 });

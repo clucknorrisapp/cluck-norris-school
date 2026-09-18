@@ -211,6 +211,16 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 10** — one wallet across every project (`/hub/wallet/<address>`: what each
+  program qualified or excluded it for, each receipt with its settlement signature, owed against
+  arrived); the evidence bundle (one downloadable JSON per settled batch with a canonical hash, and
+  `/hub/verify` accepts it in one move — a hash-stability bug found and fixed on the way); the holder
+  snapshot diff over the recorded top holders, labelled as such; the judge's fifteen minutes
+  (`docs/JUDGE_GUIDE.md` rendered into `/hub/judge`, every URL link-checked on a no-build boot);
+  `/hub/trust`, what the Hub does not prove, in seven languages with a doc-drift test; the Live
+  Classroom's curriculum regenerated from the real sources after three months stale, with a
+  freshness check in CI; a reproducibility badge computed from the record; roadmap Extension 6.
+  PR #348.
 - **Colosseum batch 9** — `/hub/verify`: the pure reproduce + schema-validate core bundled for
   the browser, so a holder re-derives a receipt's amount on their own machine, offline once loaded,
   with a test that the browser bundle and the Node script agree on every fixture; the 15th school
@@ -222,7 +232,9 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
   checks on the new public reads; roadmap Extension 5. PR #347.
 - **Colosseum batch 8** — the phone and accessibility pass on the public Hub pages with a CI gate
   (and the no-build-boot fix it exposed: the sitewide nav, i18n, read-aloud and theme files now have
-  explicit routes); the demo storyboard with 20 real captures; Launch Readiness (Addendum A: a
+  explicit routes); the demo storyboard with 22 real captures (`docs/DEMO_STORYBOARD.md`'s own
+  inventory count, grown since first written — see that doc's "Capture inventory" table);
+  Launch Readiness (Addendum A: a
   derived checklist and reward-budget planner, and a known funding shortfall can no longer be armed);
   airdrop per-drop receipts with every row verified against the chain, including the transfer's
   source; the public Buy Special standings and hold-through proof (sealed lists hashed, unsealed

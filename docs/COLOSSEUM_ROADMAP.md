@@ -477,7 +477,7 @@ secret, or a live engine. Every number is fetched from a route the reader can op
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke.
 
-## 12. Extension 6 — 2026-09-18 evening (AA1, AA3, AA5 landed on batch 10; AA2, AA4 in flight)
+## 12. Extension 6 — 2026-09-18 evening (AA1–AA5, BB1, BB3 landed on batch 10; BB2, BB4, BB5 on batch 11)
 
 The Hub's public record is now readable by a holder (AA1), a judge (AA4), a skeptic (AA5) and a
 script (AA2). Extension 6 closes the loop back to the two pillars the record depends on: the
@@ -492,6 +492,24 @@ claim we cannot recompute. Nothing here needs a wallet, a new secret or a live e
 | **BB3** | **A reproducibility badge that is computed, not typed.** `GET /api/hub/badge.json` (shields.io endpoint schema: `schemaVersion`, `label`, `message`, `color`) and `GET /hub/badge.svg` (a small server-rendered SVG, numbers only, escaped) reporting "receipts reproducible: N of M across K projects" from the same `projectReproducibility` the status page uses, demo projects excluded, cached like the other public reads. The README's badge row gets it, pointed at production, so the number on GitHub is the live one. | Insight, Traction | The JSON validates against shields' endpoint schema (a test); the SVG contains no unescaped input; a fresh install shows "no receipts yet" rather than 0/0; the README line is true. |
 | **BB4** | **`/receipt <signature>` in Telegram.** The Cluck bot answers a `/receipt` command in any room it may post in (never the OnlyRose room — `lib/telegram-rooms.js` already refuses it at the choke point) with the reproduce verdict for that settlement signature (MATCH / MISMATCH / MISSING_INPUTS, the project, the amount the rule computes) and the link to the receipt page, built from the same public view functions as `/api/hub/:project/r/:sig`. Silent by default. A signature the Hub has never seen gets a plain "no Hub receipt carries that signature". | Build (communities), Insight | The reply is composed only from public fields; a test drives the command handler with a fixture receipt and asserts the OnlyRose refusal still holds; no send advances any durable state. |
 | **BB5** | **The receipt lesson, measured.** The school's `hub_lesson_read` counter (E6) grows a per-lesson breakdown so the traction report shows how many learners reached the "Read a payout receipt" finish card and how many clicked through to `/hub/demo`, `/hub/verify` or `/hub/trust` from it, with the same per-install salt and no per-user tracking. | Traction | Counts appear in `scripts/traction-report.cjs` output with the page views as the denominator; the analytics test covers the new event names; nothing identifies a learner. |
+
+**Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
+terms; the Sep 20 recording; the real-wallet smoke.
+
+## 13. Extension 7 — 2026-09-18 evening (AA1–AA5, BB1, BB3 on batch 10; BB2, BB4, BB5 in flight)
+
+Extension 7 is about the two readers we have served least well so far: the holder who wants to
+know **what changed in the rules** between two program versions, and the non-English reader on
+the one Hub page (`/hub/verify`) that was never wired to translation. It also closes two gaps the
+builders themselves reported (no accessibility gate on the holders page; a badge with no history).
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **CC1** | **What changed in the rules: `/hub/<project>/programs/compare`.** Two program versions side by side (default: the two most recent), each with its hash and published date, and a field-by-field diff of the terms in plain words (term, multiplier, eligibility rule, period, budget), computed in the browser from the two public `/api/hub/:project/program/:version` documents — nothing new is served. A holder who was paid under v1 can see exactly what v2 changed before deciding whether to stay locked. Linked from the programs page and every receipt that names a superseded version. | Insight, Product | Diffing a version with itself is empty; every diffed field is one the public document already exposes; seven languages; a11y page list; a test with two fixture versions. |
+| **CC2** | **`/hub/verify` in seven languages.** The one Hub page whose copy lives in JavaScript strings was never translated (E8 covered the markup pages). Route its dynamic strings through a small `t()` over the same `public/i18n/<lang>.json` dictionaries `cluck-nav.js` loads, add the page to `i18n-audit.cjs`'s gated `HUB_FILES` (with a source scan for the JS strings), and translate every string. | Product (Educate) | The audit gates the page with zero gaps; the verify-page browser test passes in `es` and `zh` as well as `en`; verdict words (MATCH / MISMATCH / MISSING_INPUTS) stay untranslated codes with a translated explanation beside them. |
+| **CC3** | **The holders page in the accessibility gate.** `/holders` (with the X7 history and AA3 Compare panels) joins `scripts/hub-a11y-test.cjs`'s page list at 360 and 390 px; whatever fails is fixed (tap targets, contrast, focus order, the floating-pill avoid markers). | Product | a11y suite green with the page included; no visual regression on the existing panels (a screenshot pair in the report). |
+| **CC4** | **Reproducibility over time.** A daily append-only record per project of `{reproduced, total, missingInputs}` (written by the same scheduler tick that refreshes the status cache, kept 90 days, hashed like the holder snapshots), served as `GET /api/hub/:project/reproducibility/history` and drawn as a small sparkline on `/hub/status` and the project page, so the badge has a trend and a regression is visible the day it happens. | Traction, Insight | The record is append-only (a test tries to overwrite a day); a missing day is a gap, never interpolated; demo projects excluded; the sparkline renders in the a11y job. |
+| **CC5** | **X6 browser-signed payout** — carried from Extension 2, still blocked on #342 merging: the operator signs the settlement batch in the browser (the wallet signs first, then extra signers, per the multi-signer rule), the server observes and journals. Not started until the journal is the live path. | Product, Viability | Two Opus lenses on its own PR, as for every money path. |
 
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke.
