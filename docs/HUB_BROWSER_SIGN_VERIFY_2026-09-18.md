@@ -705,3 +705,152 @@ New this round: **R3-1 (P1)**, **R3-2 (P2)**, **R3-3 (P2)**, **R3-4 (P2)**, **R3
 
 **Merge-ready: no** — `&waive=` is the one lever into the F2 double-pay window that never got the guard `&cancel=` and `&confirm=` now have, and `lib/hub/README.md:244-245` still names it as safe to use while a flow is live; **[probe P2]** waives a handed-out, broadcast, unobserved row and re-exports the identical amount into a fresh batch with no warning, no alert and no trace. That is one line of code and one line of README. Everything else is recoverable: R3-2/R3-4 brick the state machine behind an owner `clear=1` without losing money, R3-3 makes a paid batch *read* failed, and the rest is copy and hygiene. N1 and N3–N8 are genuinely implemented and genuinely test-backed — every named test goes red when I revert its fix — and the server-side verification core (nonce, frozen parameters, single persist, journal, exact-amount, funding-wallet source, bounded cross product, lock-after-fetch) remains solid.
 
+
+---
+
+## Round 3, lens 2 (adversary and browser) — head 801e00f
+
+# X6 lens 2, round 3 — adversary and browser
+
+Read-only re-review of `origin/claude/hub-browser-sign` @ `801e00f`. All line numbers are at that revision. I extracted the branch with `git archive` into the scratchpad (work tree never touched), ran both suites (`hub-browser-sign-test.cjs` **47/47**, `hub-desk-sign-page-test.cjs` **23/23**), ran **ten negative mutations** to prove each round-2 fix is test-backed, and ran two adversarial probes against the real route closures. Probe output is quoted, not reasoned.
+
+---
+
+## Part 1 — are P1-1 … P3-10 closed?
+
+Mutation results (remove the fix → which suite fails):
+
+| mutation | server suite | page suite |
+|---|---|---|
+| M1 P2-5 403 → `if (false)` | **FAIL** | pass |
+| M2 P2-7 `&confirm=` guard → `if (false)` | **FAIL** | pass |
+| M3 N1 clear `confirm=abandon-broadcast` guard → `if (false)` | **FAIL** | pass |
+| M4 N3 partial-observe → back to all-or-nothing | **FAIL** | pass |
+| M5 P1-1 `unconfirmed` dropped from `unrecordedSent()` | pass | **FAIL** |
+| M6 P2-4 `payoutSources` dropped from `acceptedWallets()` | pass | **FAIL** |
+| M7 P3-10 OBSERVE button → `canObserve = false` | pass | **FAIL** |
+| M8 P3-9 wording reverted to "this batch" | pass | **FAIL** |
+| M9 N7 24h age check → `if (false)` | **FAIL** | pass |
+| M10 `observeAll` pending-retry → `if (false)` | pass | **FAIL** |
+| M11 `clearedBrowserSign = null` (P2-6a) | **FAIL** | pass |
+| M12 `observedSigs: []` on re-request (P2-6b) | **FAIL** | pass |
+
+Every claimed fix bites. Details:
+
+- **P1-1 — CLOSED.** `public/hub-desk.html:609` now `(l.status === "sent" || l.status === "unconfirmed")`; the `send()` pre-flight purge keeps `unconfirmed` too (`:620`).
+- **P1-2 — CLOSED.** `lib/hub/routes.js:1770` 503s only when *none* resolved; `:1955` never advances past `submitted` while `notYetIndexed.length`; `pending`/`retry:true` in the 200 body; `hub-desk.html:691-705` `observeAll()` retries only the outstanding set, 3 attempts, 300/600 ms backoff, and re-throws any non-`retry` error (`call()` copies `retry`/`pending` onto the Error at `:274-277`). Bounded — it cannot hammer the RPC amplifier.
+- **P1-3 — PARTIAL.** The merge forward happened (`386c759`, merge-base `b3ca3e2`), but `origin/develop` has since moved to `62d2051` (PR #357) and the branch is **one commit behind again**. See new **P2-D**.
+- **P2-4 — CLOSED, and correct against a tampered response.** `hub-desk.html:560-566` (`acceptedWallets`/`walletIsAccepted`/`acceptedWalletsText`), used at `:580`, `:614`, `:669`, `:739`. The `sr.payoutSources` check at `:751-752` is an **AND** on top of the project-record check, not an OR — a tampered/widened `sr.payoutSources` cannot make a wrong wallet sign; it can only narrow. Server freezes and echoes `payoutSources` (`routes.js:1656`, `:1668`).
+- **P2-5 — CLOSED and unspoofable.** `routes.js:1596`. `who` comes from `authOf` → `operator.operatorOf` → HMAC-verified token whose `wallet` must be base58 (`B58` test, so the literal `"owner"` can never pass) *and* present in `project.operatorWallets`. A `payoutSources` wallet being allowed is correct (it is a wallet the project pays **from**).
+- **P2-6 — CLOSED.** `routes.js:1532-1577` (at-risk set, 409 unless `confirm=abandon-broadcast`, `{state:"cleared", clearedAt, nonce, observedSigs, wallets, failed}`), `:1661` carries `observedSigs` through a `force=1`. The clear branch is behind `who !== "owner"` → 403 *before* anything is computed, so the 409/200 echo (`atRisk`, `observedSigs`, `failed`, `nonce`) **leaks nothing to an operator**.
+- **P2-7 — CLOSED.** `routes.js:1213`.
+- **P3-8 — CLOSED.** `lib/hub/README.md:126-250` now states the state machine (incl. `cleared`), the P2-5 caller gate, what is blocked while live (with `&confirm=`), and N5's settled stamp. Accurate against the code.
+- **P3-9 — CLOSED.** `hub-desk.html:716`.
+- **P3-10 — CLOSED** (see new P3-E/P3-F for what it opened). Button at `:677-681`, recovery path `:724-733`, `t()` routing at `:743`.
+
+**i18n — clean.** Programmatic check: the 19 `t()`/`tf()` literals in `hub-desk.html` are present in all six dictionaries (es/hi/it/pt/vi/zh, 1649 keys each, equal counts); placeholders `{state} {n} {reasons} {amount} {wallet} {wallets}` match one-for-one; none left identical to English; no APR/APY/yield/guaranteed language. The **5 removed keys are genuinely dead** — grepped across `public/`, `src/`, `scripts/`, `lib/`, `server.js`: zero references (only a comment quoting the old wording at `hub-desk.html:673`).
+
+**Escaping — clean.** All 14 new `innerHTML` assignments go through `CluckUtil.esc` (`hub-desk.html:128,173,176,211,222,232,236,245,249,250,254,255,282,293` of the diff). The OBSERVE button's markup is static plus `esc(t(...))`; `askConfirm` sets its message with `textContent` (`:546`). No new unescaped sink.
+
+**The OBSERVE button, specifically.** `ROW_STATUS` is keyed `hub_desk_rows_<PID>_<BATCH.id>` (`:255`) and `loadStatus()` runs inside `loadBatch()` after `BATCH` is set — so it **cannot** carry another batch's or another project's signatures. It cannot observe anything the operator did not broadcast in a way that matters: the payload is signatures only, and `observe` re-verifies each on chain against the frozen wallets/mint/funding wallet/exact remaining. Concurrency is serialised by the per-project payout lock.
+
+---
+
+## Part 2 — new findings
+
+### P1-A — the desk's own `observe` call is refused (400) for any real-size batch, *after* the money has been broadcast; the page never chunks
+`lib/hub/routes.js:1738` vs `public/hub-desk.html:794` (`observeAll(sigs, sr.nonce)`) and `public/airdrop-engine.js:176,218-227`
+
+`CluckAirdrop.planBatches` packs **16 recipients per transaction** (8 when recipients need an ATA created), so a sign-request of *N* rows produces `ceil(N/16)` distinct signatures. F7's bound refuses `wallets × sigs > 500`. That crosses at **N ≈ 84 rows** (N ≈ 63 when ATAs are needed). `signAndSend()` posts the whole set in one call and never slices; the OBSERVE button posts the same set.
+
+**Probe A (verbatim, real route closures, 90-row batch):**
+```
+PROBE A — sign-request rows: 90 status 200
+PROBE A — observe(6 sigs for 90 wallets): 400
+  {"ok":false,"error":"too many wallet×signature combinations to verify in one call
+   (90 wallet(s) × 6 signature(s)) — observe fewer signatures at a time"}
+   n=5 -> (accepted)     n=6 -> 400     n=7 -> 400
+```
+**Scenario:** a 90-locker payout. The wallet signs and broadcasts six real transactions, then the observe is hard-refused with a message the operator cannot act on from the UI; `browserSign` stays `signing`, the managed payer stays blocked, `&cancel=`/`&confirm=` stay blocked, and the only route left is 90 individual per-row "record on server" clicks — the *less* guarded `&sent=` path this feature exists to replace. Nothing in either suite uses a batch above two wallets, so this is invisible to CI. The README (§3a) states the bound as a safety property without noting that the browser's own output exceeds it.
+*Minimal fix:* chunk in `observeAll()` — `per = Math.max(1, Math.min(40, wallets + 5, Math.floor(500 / wallets)))`, loop the slices, merge the reports (the server is already idempotent per signature). Add a ≥90-row case to `hub-browser-sign-test.cjs`.
+
+### P1-B — any operator can lock a batch with one POST, and round 2's own clear-guard turned the owner's escape into a false-alarm override
+`lib/hub/routes.js:1675-1682` (no caller gate on `observe`), `:136` (`deskBatch` spreads the whole `browserSign`, nonce included), `:1611` (`submitted` refuses even `force=1`), `:1955`, `:1560-1566`
+
+P2-5 gated `sign-request` but **not** `observe`, and the ordinary batch view hands every operator the live `nonce`. Any resolvable mainnet signature flips `signing → submitted` (`:1955` — `stillOwed` is true, so the state advances even when *nothing* was recorded).
+
+**Probe B (verbatim):**
+```
+PROBE B — funding wallet sign-request: 200  nonce e7c288dc
+PROBE B — griefer sign-request: 403 only the project's funding wallet (9WzDXwBbmkg8…
+PROBE B — nonce readable from /payout?batch= by the griefer: e7c288dc… YES
+PROBE B — griefer observe: 200  browserSign.state -> submitted  recorded []
+PROBE B — funding wallet re-sign-request: 409 …already broadcast and is still being observed…
+PROBE B — with force=1:                   409 …already broadcast and is still being observed…
+PROBE B — owner clear=1: 409 1 wallet(s) this sign-request handed out may already have a real,
+          unobserved broadcast on chain for the full row amount…  atRisk ["4Gccq9pESbf…"]
+```
+`force=1` covers `signing` only, so the legitimate funding wallet has no lever at all. The owner's only exit is `&confirm=abandon-broadcast` — an assertion that *"I have verified none of these actually landed"* — in a case where nothing was ever broadcast and the owner has no way to know that. Round 2 correctly hardened `clear=1`; the unguarded `observe` turns that hardening into a griefing amplifier.
+*Minimal fix:* two lines. (1) Apply P2-5's gate to `observe` (`who === "owner" || who === p.fundingWallet || payoutSources.includes(who)`). (2) Do not advance `signing → submitted` when this pass attributed nothing to any wallet in the batch (`if (!r.recorded.length && !Object.keys(failedNow).length) keep "signing"`). Either alone closes the probe; both is right.
+
+### P2-C — the live `nonce` and `idempotencyKey` are handed to every operator session
+`lib/hub/routes.js:136` (`return { ...bt, rows, … }`)
+
+`deskBatch` spreads the raw batch, so `/payout?batch=` returns `browserSign.{nonce, idempotencyKey, observedSigs, wallets, fundingWallet, payoutSources}` to any operator token. F9's stated property is that the nonce binds a call to one sign-request generation; P2-5 now withholds sign-request from most operators while this hands them its nonce anyway — which is what makes P1-B a one-request attack instead of a guess.
+*Minimal fix:* in `deskBatch`, redact `nonce`/`idempotencyKey` unless the caller is the owner or an accepted payout wallet (the desk page only needs the nonce in exactly that case — the OBSERVE button belongs to a wallet that can sign).
+
+### P2-D — the merge hazard is back: the branch would delete PR #356's disclosure entry
+`docs/PRE_EVENT_STATE.md`, `docs/HANDOFF_2026-09-18.md`
+
+`origin/develop` is at `62d2051` (PR #357, docs-only); the branch's merge-base is `b3ca3e2`. `git diff origin/develop..branch` therefore shows `docs/PRE_EVENT_STATE.md | 7 -` — a clean **deletion of the "Colosseum batch 17 … PR #356" bullet** from the Colosseum disclosure document — plus a revert of `docs/HANDOFF_2026-09-18.md`. CLAUDE.md's standing conflict rule ("keep the branch side — it is the superset") is false here again, and the file it would silently revert is the hackathon disclosure.
+*Minimal fix:* merge `origin/develop` (one commit) before the PR is merged or re-read; confirm `docs/PRE_EVENT_STATE.md` still carries the #356 bullet afterwards.
+
+### P3-E — the OBSERVE button re-labels an older generation's signatures with the batch's *current* nonce, so F9's claim is now stronger than the code
+`public/hub-desk.html:677-681`, `:724-733` vs `lib/hub/routes.js:1642-1647` and `README.md:195-198`
+
+The button posts signatures from `ROW_STATUS` (which has no nonce attached) under `BATCH.browserSign.nonce`, whatever generation that is. After a `force=1` re-request or a clear-and-re-request, the old generation's signatures are observed under the new nonce — precisely the conflation the comment and §3a say "can never" happen. It is money-safe (the chain re-verification, the exact-remaining match and `duplicate_settlement_candidate` still decide), and it is the recovery the operator needs, but the documented control is now advisory.
+*Minimal fix:* store the nonce alongside each broadcast in `ROW_STATUS` (`{status, sig, nonce}`) and post that one; or reword the comment and §3a to say the nonce binds a call to the batch's *current* generation, not to the generation that issued the signatures.
+
+### P3-F — N7's 24-hour expiry has no way out from the page
+`lib/hub/routes.js:1728-1731`, `public/hub-desk.html:670`, `:677-681`
+
+Past 24 h a `signing` flow's OBSERVE button answers 409 ("more than 24 hours old"), SIGN AND SEND is disabled by `!live`, CLOSE BATCH is disabled, `&confirm=` and the managed payer are 409, and the desk exposes no `force=1` control. The only exits are the per-row record buttons or an owner clear — for a flow whose signatures may be perfectly good.
+*Minimal fix:* on that specific 409, offer a "start a fresh sign-request" action that POSTs `force=1` (the carried-forward `observedSigs` already makes it safe), and say in §3a that a >24 h flow is recovered that way.
+
+### P3-G — `browserSign.observedSigs` is unbounded and rewrites the whole `batches` blob on every observe
+`lib/hub/routes.js:1956`
+
+`observedSigs: [...new Set([...prev, ...resolvedSigs])]` never caps and is never cleared, including after `settled`. An operator can add up to `min(40, wallets+5, floor(500/wallets))` resolvable signatures per call at 30 calls/min (`hubheavy`), each call re-persisting the full project `batches` object to the volume. Slow, but it is unbounded growth on a money record driven by an untrusted caller, and each signature also costs a Helius `getTransaction`.
+*Minimal fix:* keep the last ~100 (`.slice(-100)`), or only union signatures that actually settled or failed a named wallet.
+
+### P3-H — `sign-request` names `source: p.fundingWallet` on every row even when an allowlisted `payoutSources` wallet is the caller
+`lib/hub/routes.js:1637`
+
+After P2-4/P2-5 the signer may legitimately be a `payoutSources` wallet, but each row still declares the funding wallet as its source. `hub-desk.html` ignores `source` (it builds from `walletPubkey`), so nothing breaks today — but the field is now a lie for that caller, and any second client that honoured it would build a transfer from a wallet it cannot sign for.
+*Minimal fix:* `source: (who === "owner" ? p.fundingWallet : who)`, or drop the field and state in §3a that the source is whichever accepted wallet connects.
+
+### P3-I — the round translated one of three sibling guard strings
+`public/hub-desk.html:743` (`t(...)`) vs `:615` and `:824` (raw English), and `:586` (raw) vs `:683` (`tf(...)`)
+
+`signAndSend()`'s "Record the SENT — NOT RECORDED rows first…" now renders in all seven languages; the identical guard on SEND and on CLOSE BATCH, and `refreshSendButton`'s live-flow reason line, stay English. The two `Record the SENT…` strings pre-date this branch, so this is an inconsistency introduced by fixing only one of them, not a regression.
+*Minimal fix:* route `:615`, `:824` and `:586` through `t()`/`tf()` and add the two keys to all six dictionaries (the third is already there).
+
+---
+
+## Per-finding table
+
+| # | verdict | evidence |
+|---|---|---|
+| P1-1 | **CLOSED** | `hub-desk.html:609`, `:620`; M5 → page suite fails |
+| P1-2 | **CLOSED** | `routes.js:1770,1955` + `pending/retry` body; `hub-desk.html:691-705`; M4 and M10 both fail |
+| P1-3 | **PARTIAL** | merged at `386c759`, but one commit behind `62d2051` again → **P2-D** |
+| P2-4 | **CLOSED** | `hub-desk.html:560-566,580,614,669,739,751-752`; `routes.js:1656,1668`; M6 fails; response widening impossible (AND, not OR) |
+| P2-5 | **CLOSED** | `routes.js:1596`; M1 fails; `who` HMAC-bound + `operatorWallets` + base58 — unspoofable. Gap is `observe`, not this route → **P1-B** |
+| P2-6 | **CLOSED** | `routes.js:1532-1577,1661`; M11 and M12 both fail; owner-only, no operator-visible leak |
+| P2-7 | **CLOSED** | `routes.js:1213`; M2 fails |
+| P3-8 | **CLOSED** | `lib/hub/README.md:126-250`, accurate against the code |
+| P3-9 | **CLOSED** | `hub-desk.html:716`; M8 fails |
+| P3-10 | **CLOSED** | `hub-desk.html:677-681,724-733,743`; M7 fails; per-batch `ROW_STATUS` key, everything escaped — see **P3-E/P3-F** |
+
+**Merge-ready: no** — **P1-A** makes the happy path fail for any batch above ~84 rows *after real money has left the wallet* (probe A: 90 rows → the desk's own observe is 400ed, and the page never chunks), and **P1-B** lets any operator lock a batch with one POST while round 2's new clear-guard turns the owner's only escape into a "confirm nothing landed" override of a broadcast that never happened (probe B, end to end, `force=1` included). Both fixes are small and local — a chunking loop in `observeAll()`, and P2-5's gate copied onto `observe`. Everything P1-1…P3-10 claimed is genuinely implemented and genuinely test-backed (twelve negative mutations, every one caught), the i18n and escaping are clean, and the server-side verification half remains good work.
+
