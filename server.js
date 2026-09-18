@@ -7847,6 +7847,7 @@ const hubPublic = require("./lib/hub/public");
 const HUB_SCHEMA_DIR = join(__dirname, "lib", "hub", "schema");
 const HUB_SCHEMA_NAMES = new Set(["program-version", "batch", "receipt", "project-public"]);
 function HUB_SCHEMA_URL(name) { return `https://clucknorris.app/hub/schema/${name}.json`; }
+const hubProject = require("./lib/hub/project");
 function hubProjects() {
   const built = {
     clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9, rewardMint: CLKN_MINT, rewardDecimals: 9 },
@@ -7860,7 +7861,10 @@ function hubProjects() {
     // The reward asset can differ from the locked token (a project may pay in another mint);
     // its decimals are what the public totals must be formatted with (deep dive P1-036).
     built[id] = { id, label: String(p.label || id).slice(0, 64), symbol: String(p.symbol || id.toUpperCase()).slice(0, 12), mint: String(p.mint), decimals,
-      rewardMint: String(p.rewardMint || p.mint), rewardDecimals: Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : decimals };
+      rewardMint: String(p.rewardMint || p.mint), rewardDecimals: Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : decimals,
+      // dryRun/brand (Colosseum E10) — carried through so the public page can show the DRY RUN
+      // badge and the project's logo/accent/tagline. Generic for any registry project.
+      dryRun: p.dryRun === true, brand: p.brand || null };
   }
   return built;
 }
@@ -7892,7 +7896,10 @@ app.get("/api/hub", (req, res) => {
   try {
     const projects = Object.values(hubProjects()).map((p) => {
       const v = hubProjectView(p);
-      return { id: p.id, label: p.label, symbol: p.symbol, mint: p.mint, programs: v.totals.programs, receipts: v.totals.receipts };
+      // Dry runs (Colosseum E10) are LISTED, with the badge, so the owner can show the team the
+      // page — never hidden — but their programs/receipts are always 0 (they can never arm), so
+      // they add nothing to anyone reading the numbers across the list.
+      return { id: p.id, label: p.label, symbol: p.symbol, mint: p.mint, programs: v.totals.programs, receipts: v.totals.receipts, dryRun: p.dryRun === true, brand: p.brand || null };
     });
     return res.status(200).json({ ok: true, projects });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
@@ -14279,6 +14286,44 @@ for (const [id, feed] of Object.entries(SUPPLY_FEEDS)) {
   });
 }
 
+// ── Hub: seed the POKEAHOE dry run (Colosseum E10; owner 2026-09-18: "pokeahoe will be our dry
+// run or next project to use the lock and earn ... make it special for them"). Terms and a
+// funding wallet are NOT agreed with the team yet, so this seeds ONLY a labelled placeholder:
+// dryRun:true, no funding wallet, no program version — which lib/hub/engine.js refuses to arm and
+// lib/hub/routes.js refuses to pay, regardless of this seed. Idempotent (only writes if "poke" is
+// not already a registry row), placed here because SUPPLY_FEEDS above must exist first for the
+// reserved-mint guard. Generic branding fields only — no POKE-only code path elsewhere.
+(function seedPokeDryRun() {
+  try {
+    const reg = hubStore.readRegistry(kv) || {};
+    if (reg.poke) return; // already seeded, or an owner has since approved it for real — never overwrite
+    const mintInfo = { decimals: 6, tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", extensions: [] }; // pump.fun mint, classic SPL Token program
+    const project = hubProject.validateProject({
+      id: "poke", label: "POKEAHOE", symbol: "POKE", mint: POKE_MINT,
+      dryRun: true,
+      brand: {
+        // Real logo, fetched from DexScreener's public token metadata for this mint (see
+        // public/brand/poke/README.md for the source URL and how to refresh it) and committed
+        // locally — never fetched at request time.
+        logo: "/brand/poke/logo.jpg",
+        accent: "#F5A623", accent2: "#171923",
+        tagline: "The Hub's second Lock to Earn project — a dry run while terms are agreed with the POKEAHOE team.",
+        // Project-provided socials (same DexScreener metadata) — rendered "project-provided",
+        // never as an endorsement.
+        socials: { x: "https://x.com/pokeahoesol", telegram: "https://t.me/pokeahoecommunity", website: "https://pkhoe.com" },
+      },
+      accessTier: "comped", accessNote: "dry run — platform access does not apply until real terms are agreed",
+    }, mintInfo);
+    const next = hubProject.approveProject(reg, project, {
+      nowUnix: Math.floor(Date.now() / 1000),
+      reserved: { clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint },
+    });
+    const landed = typeof kv.setVerified === "function" ? kv.setVerified(hubStore.REGISTRY_KEY, next) === true : (hubStore.writeRegistry(kv, next), true);
+    if (!landed) { console.warn("[hub] POKE dry-run seed did not persist — check DATA_DIR; will retry on next boot"); return; }
+    console.log("[hub] seeded POKEAHOE as a DRY RUN project (dryRun:true, no funding wallet, no program version)");
+  } catch (e) { console.warn("[hub] POKE dry-run seed skipped: " + (e && e.message)); }
+})();
+
 // -- GeckoTerminal liquidity/price fallback (shared by /api/token-overview) --
 // DexScreener stops indexing a pair ~24h after its last trade, which makes a
 // quiet-but-real token look like it has zero liquidity. GeckoTerminal indexes
@@ -17513,6 +17558,12 @@ app.use((req, res, next) => {
 // -- Vendored libraries (served from same origin so tracking-prevention browsers
 // don't block third-party CDN scripts that the airdrop tool depends on) --
 app.use("/vendor", express.static(join(__dirname, "public", "vendor"), { maxAge: "30d", immutable: true }));
+
+// -- Hub project branding (logos) — explicit mount so it works on a no-build boot too (public/ is
+// otherwise only reachable through the vite dist copy, CLAUDE.md's "public/ is NOT mounted
+// directly" trap). Local files only; lib/hub/brand.js refuses any brand.logo value that is not a
+// path under here.
+app.use("/brand", express.static(join(__dirname, "public", "brand"), { maxAge: "1d" }));
 
 // -- Homepage: a lightweight front door at / (learn + build + token story). The
 // Preview/fire the school credential watcher manually: /api/grad-alert-test?key=…[&run=1].

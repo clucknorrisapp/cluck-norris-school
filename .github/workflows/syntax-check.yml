@@ -231,6 +231,10 @@ jobs:
       # one hour of accrual, the tick over the project's own keys, the holder view.
       - name: Hub engine (Lock to Earn for any project)
         run: node scripts/hub-engine-test.cjs
+      # Project branding (logo/accent/tagline/socials — validated, never a remote URL) and the
+      # dryRun placeholder (Colosseum E10, POKEAHOE): cannot be armed, excluded from traction.
+      - name: Hub branding + dry-run projects (POKEAHOE)
+        run: node scripts/hub-brand-test.cjs
       # Platform access tiers: standard / small / comped, price resolved at the payment instant,
       # the CLKN alternative priced at that block, comped needs a reason, unpaid cannot arm.
       - name: Hub access tiers (0.5 / 0.25 SOL a month, comped)

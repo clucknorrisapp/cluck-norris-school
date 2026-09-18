@@ -71,6 +71,20 @@
   .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
   .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
   .proj-link { display:block; text-decoration:none; color:inherit; }
+  /* Project branding (Colosseum E10) — accent applied through a CSS custom property set from a
+     validated hex value only (never innerHTML); default falls back to the theme's own orange so
+     an unbranded project renders exactly as before. */
+  .wrap { --proj-accent: var(--orange); }
+  .badge-dryrun { display:inline-flex; align-items:center; gap:6px; font-family:var(--disp); font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#FCA5A5; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.35); border-radius:999px; padding:5px 12px; margin-bottom:12px; }
+  .proj-hero { display:flex; gap:14px; align-items:center; padding:18px; margin-bottom:14px; border-radius:14px; border:1px solid var(--border); background:linear-gradient(135deg, color-mix(in srgb, var(--proj-accent) 22%, var(--card)), var(--card)); }
+  .proj-hero img.logo { width:56px; height:56px; border-radius:12px; object-fit:cover; flex-shrink:0; border:1px solid var(--border); background:#000; }
+  .proj-hero .htext h2 { font-family:var(--disp); font-weight:400; font-size:20px; color:var(--text); }
+  .proj-hero .htext .tagline { font-size:12.5px; color:var(--subtext, #9CA3AF); margin-top:3px; line-height:1.5; }
+  .card-logo { width:22px; height:22px; border-radius:6px; object-fit:cover; vertical-align:middle; margin-right:6px; border:1px solid var(--border); background:#000; }
+  .socials-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .social-pill { font-size:11px; letter-spacing:.5px; padding:4px 10px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-decoration:none; }
+  .social-pill:hover { color:var(--text); border-color:var(--proj-accent); }
+  .funding-note { font-size:11px; color:var(--sub); text-align:center; margin-top:2px; }
   .lessons a { color:var(--cyan, #67E8F9); text-decoration:none; }
   .small { font-size:12px; color:var(--sub); }
   pre.proof { background:rgba(0,0,0,.35); border:1px solid var(--border); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11.5px; color:#D1D5DB; overflow-x:auto; white-space:pre; }
@@ -277,12 +291,52 @@
     } catch (e) { out.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
   }
 
+  // ── branding (Colosseum E10) — logo is always a repo-local path (lib/hub/brand.js refuses a
+  // remote URL at write time); accent is applied through a CSS custom property, never innerHTML.
+  function brandLogo(brand, cls) { return brand && brand.logo ? '<img class="' + cls + '" src="' + esc(brand.logo) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"/>' : ''; }
+  function dryRunBadge() { return '<div class="badge-dryrun">DRY RUN — terms not yet agreed, nothing accrues or pays</div>'; }
+  function socialsRow(brand) {
+    if (!brand || !brand.socials) return '';
+    var labels = { x: 'X', telegram: 'Telegram', website: 'Website' };
+    var links = Object.keys(labels).filter(function (k) { return brand.socials[k]; })
+      .map(function (k) { return '<a class="social-pill" target="_blank" rel="noopener" href="' + esc(brand.socials[k]) + '">' + esc(labels[k]) + '</a>'; });
+    if (!links.length) return '';
+    return '<div class="socials-row">' + links.join('') + '<span class="small" style="align-self:center">project-provided, not an endorsement</span></div>';
+  }
+  // A hero for a branded project's own page: logo + accent gradient, tagline, the "three funding
+  // numbers" (obligations / reserved / observed) — all dashes with "not yet funded" while
+  // dryRun, since a dry-run project has no funding wallet and never accrues — and the reviewed
+  // socials, labelled project-provided. Renders nothing for a project with no brand (every
+  // existing project is unaffected).
+  function heroBlock(v) {
+    if (!v.brand && !v.dryRun) return '';
+    var inner = '';
+    if (v.dryRun) inner += dryRunBadge();
+    if (v.brand) {
+      inner += '<div class="proj-hero">' + brandLogo(v.brand, 'logo') +
+        '<div class="htext"><h2>' + esc(v.label) + '</h2>' +
+        (v.brand.tagline ? '<div class="tagline">' + esc(v.brand.tagline) + '</div>' : '') + '</div></div>';
+    }
+    if (v.dryRun) {
+      inner += statTiles([['Obligations', '—'], ['Reserved', '—'], ['Observed balance', '—']]) +
+        '<div class="funding-note">Not yet funded — terms and a funding wallet are still being agreed with the team.</div>';
+    }
+    inner += socialsRow(v.brand);
+    return inner ? '<div class="card">' + inner + '</div>' : '';
+  }
+
   // ── views ─────────────────────────────────────────────────────────────────────────────────
   async function renderIndex() {
     var r = await fetch('/api/hub').then(function (x) { return x.json(); });
     if (!r.ok) throw new Error(r.error || 'could not load');
     app.innerHTML = '<div class="card"><div class="intro">Every project here has a public record: <b>what it promised its holders, who qualified, and the transaction that paid each one</b>. Nothing on these pages needs a wallet, and every signature can be re-checked against Solana from the page itself.</div><div class="small" style="margin-top:10px">Run a project? <a href="/for-projects" style="color:var(--cyan)">Start at the guided front door →</a></div></div>' +
-      r.projects.map(function (p) { return '<a class="card proj-link" href="/hub/' + esc(p.id) + '"><div class="prog-head"><h2>' + esc(p.label) + ' <span class="small">' + esc(p.symbol) + '</span></h2><div class="chips"><span class="chip">' + p.programs + ' program' + (p.programs === 1 ? '' : 's') + '</span><span class="chip ' + (p.receipts ? 'ok' : '') + '">' + p.receipts + ' receipt' + (p.receipts === 1 ? '' : 's') + '</span></div></div><div class="mono">' + esc(p.mint) + '</div></a>'; }).join('');
+      r.projects.map(function (p) {
+        return '<a class="card proj-link" href="/hub/' + esc(p.id) + '">' +
+          (p.dryRun ? dryRunBadge() : '') +
+          '<div class="prog-head"><h2>' + brandLogo(p.brand, 'card-logo') + esc(p.label) + ' <span class="small">' + esc(p.symbol) + '</span></h2><div class="chips"><span class="chip">' + p.programs + ' program' + (p.programs === 1 ? '' : 's') + '</span><span class="chip ' + (p.receipts ? 'ok' : '') + '">' + p.receipts + ' receipt' + (p.receipts === 1 ? '' : 's') + '</span></div></div>' +
+          (p.brand && p.brand.tagline ? '<div class="small" style="margin-bottom:6px">' + esc(p.brand.tagline) + '</div>' : '') +
+          '<div class="mono">' + esc(p.mint) + '</div></a>';
+      }).join('');
   }
   // One program per page (owner, 2026-09-16: a lock-to-earn link must show lock-to-earn and nothing
   // else). /hub/:project is the lock-to-earn page when the project runs one; every other program
@@ -291,6 +345,9 @@
     var r = await fetch('/api/hub/' + encodeURIComponent(projectId)).then(function (x) { return x.json(); });
     if (!r.ok) throw new Error(r.error || 'could not load');
     var v = r.project, sym = v.symbol;
+    // Accent colour, scoped to this page's container, set from the validated hex value only —
+    // never through innerHTML (Colosseum E10).
+    if (v.brand && v.brand.accent) document.querySelector('.wrap').style.setProperty('--proj-accent', v.brand.accent);
     var lte = v.programs.filter(function (p) { return p.kind === 'lock-to-earn'; })[0] || null;
     var one = programId ? (v.programs.filter(function (p) { return p.id === programId; })[0] || null) : (programsIndex ? null : lte);
     if (programId && !one) throw new Error('no such program');
@@ -301,8 +358,9 @@
     var tokenLine = '<div class="row-flex" style="margin-top:10px"><span class="small">Token</span> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(v.mint) + '">' + esc(v.mint) + '</a></div>';
     if (!one) {
       // Program index — names and counts only; the details live on each program's own page.
-      app.innerHTML = '<div class="card"><div class="intro">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + tokenLine + '</div>' +
-        (v.programs.length ? v.programs.map(function (p) { var n = (p.payouts || []).filter(function (x) { return x.sig; }).length; return '<a class="card proj-link" href="/hub/' + esc(v.id) + '/p/' + encodeURIComponent(p.id) + '"><div class="prog-head"><h2>' + esc(p.label || p.kind) + '</h2><div class="chips"><span class="chip kind">' + esc(String(p.kind).replace(/-/g, ' ')) + '</span><span class="chip ' + (n ? 'ok' : '') + '">' + n + ' receipt' + (n === 1 ? '' : 's') + '</span></div></div></a>'; }).join('') : '<div class="card"><div class="fact">No programs on record for this project yet.</div></div>');
+      app.innerHTML = heroBlock(v) +
+        '<div class="card"><div class="intro">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + tokenLine + '</div>' +
+        (v.programs.length ? v.programs.map(function (p) { var n = (p.payouts || []).filter(function (x) { return x.sig; }).length; return '<a class="card proj-link" href="/hub/' + esc(v.id) + '/p/' + encodeURIComponent(p.id) + '"><div class="prog-head"><h2>' + esc(p.label || p.kind) + '</h2><div class="chips"><span class="chip kind">' + esc(String(p.kind).replace(/-/g, ' ')) + '</span><span class="chip ' + (n ? 'ok' : '') + '">' + n + ' receipt' + (n === 1 ? '' : 's') + '</span></div></div></a>'; }).join('') : '<div class="card"><div class="fact">No programs on record for this project yet.' + (v.dryRun ? ' This is a dry run — see the note above.' : '') + '</div></div>');
       return;
     }
     var intro = one.kind === 'lock-to-earn'
@@ -317,7 +375,7 @@
         if (rr && rr.ok) { batchRepro = {}; rr.batches.forEach(function (b) { if (b.kind === 'lock-to-earn') batchRepro[b.batchId] = { projectId: v.id, batchId: b.batchId, total: b.total, reproduced: b.reproduced, missingInputs: b.missingInputs, period: b.period }; }); }
       } catch (e) { /* omit the line rather than guess */ }
     }
-    app.innerHTML =
+    app.innerHTML = heroBlock(v) +
       '<div class="card"><div class="intro">' + intro + '</div>' + tokenLine +
       '<div class="verify-bar"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote">' + receipts + ' receipt' + (receipts === 1 ? '' : 's') + ' on this page. Press to re-check every signature against Solana, from your browser.</span></div></div>' +
       '<div class="card"><div class="sec-title" style="margin-top:0">Check a wallet</div><div class="fact">Paste any address to see what it received in this program, with the transaction' + (one.kind === 'lock-to-earn' ? '' : ' — and, if it was disqualified, the fact that decided it') + '.</div><div class="input-row"><input class="addr-input" id="walletIn" placeholder="Solana wallet address" autocomplete="off" spellcheck="false"/><button class="btn ghost" id="walletBtn">CHECK</button></div><div id="walletOut"></div></div>' +
@@ -349,10 +407,11 @@
     var r = await fetch('/api/hub/' + encodeURIComponent(projectId) + '/r/' + encodeURIComponent(receiptSig)).then(function (x) { return x.json(); });
     if (!r.ok) throw new Error(r.error || 'no such receipt');
     var p = r.program, x = r.receipt, sym = p.ticker || r.symbol;
+    if (r.brand && r.brand.accent) document.querySelector('.wrap').style.setProperty('--proj-accent', r.brand.accent);
     document.getElementById('title').textContent = 'Receipt';
     document.getElementById('subtitle').textContent = (p.label || p.kind).toUpperCase() + ' · ' + String(r.projectId).toUpperCase();
     var proof = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getSignatureStatuses', params: [[x.sig], { searchTransactionHistory: true }] }, null, 2);
-    app.innerHTML =
+    app.innerHTML = (r.dryRun ? '<div class="card">' + dryRunBadge() + '</div>' : '') +
       '<div class="card">' + statTiles([['Amount', amt(x.amountUi, sym)], ['State', esc(x.state)], ['Submitted', ts(x.at)]]) +
       '<div class="terms"><div><b>To</b> ' + acct(x.wallet) + '</div><div><b>Token</b> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(p.prizeMint || p.mint) + '">' + esc(shortAddr(p.prizeMint || p.mint, 6, 4)) + '</a></div><div><b>Program</b> ' + esc(p.label || p.kind) + '</div>' + (p.termsHash ? '<div><b>Terms hash</b> <span class="mono">' + esc(p.termsHash.slice(0, 16)) + '…</span></div>' : '') + '</div>' +
       '<div class="sec-title">Transaction</div><div class="mono"><a target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(x.sig) + '">' + esc(x.sig) + '</a></div>' +
