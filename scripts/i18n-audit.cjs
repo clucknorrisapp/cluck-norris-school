@@ -81,6 +81,20 @@
  *   node scripts/i18n-audit.cjs --strict         also fail on (C)
  *   node scripts/i18n-audit.cjs --json           machine-readable dump on stdout, same exit code
  *   node scripts/i18n-audit.cjs --warn-only      print everything, always exit 0 (CI wiring)
+ *
+ * LESSON COVERAGE BY ID (school family only)
+ * -------------------------------------------
+ * The cross-language key diff above (A) only catches a string missing from SOME language
+ * while present in at least one other — it structurally cannot see a lesson added to
+ * src/App.jsx's LESSONS array whose translatable strings never made it into ANY of the six
+ * dictionaries (this happened for real: `seedphrase` and `inheritance` shipped with zero
+ * entries in all six .school.json files). This check extracts the LESSONS array straight out
+ * of src/App.jsx (same balanced-bracket-slice-and-eval technique as
+ * scripts/extract-curriculum.js — it is pure data, no JSX/functions inside) and, for every
+ * lesson's title/quote/intro/concept terms+defs/question q+options+explanations, confirms the
+ * string exists as a key in EVERY language's school dictionary. A missing lesson fails the
+ * audit (gating) and names the lesson id, the language, and the missing strings — so this
+ * exact class of gap cannot recur silently.
  */
 'use strict';
 
@@ -247,6 +261,62 @@ function scanJsxDir(dir) {
 function isCandidateGap(key) { return looksLikeInterfaceText(key) && !isAllowlistNoise(key); }
 
 // ---------------------------------------------------------------------------
+// LESSON array extraction (src/App.jsx) — same technique as extract-curriculum.js:
+// string-slice the balanced-bracket array literal, then eval it (pure data, no JSX/fns).
+// ---------------------------------------------------------------------------
+function extractArrayLiteral(src, name) {
+  const decl = `const ${name} = [`;
+  const start = src.indexOf(decl);
+  if (start < 0) return { error: `"${decl}" not found in src/App.jsx` };
+  let i = start + decl.length - 1; // at the '['
+  let depth = 0, inStr = null, esc = false;
+  for (; i < src.length; i++) {
+    const c = src[i];
+    if (esc) { esc = false; continue; }
+    if (inStr) {
+      if (c === '\\') esc = true;
+      else if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { inStr = c; continue; }
+    if (c === '[') depth++;
+    else if (c === ']') { depth--; if (depth === 0) { i++; break; } }
+  }
+  const slice = src.slice(start + decl.length - 1, i);
+  try {
+    // eslint-disable-next-line no-eval
+    return eval('(' + slice + ')');
+  } catch (e) {
+    return { error: `eval of ${name} failed: ${e.message}` };
+  }
+}
+
+// Every translatable string a lesson contributes to the school dictionaries: title, quote,
+// intro, each concept's term+def, each question's q+options+explanation. Mirrors exactly what
+// LESSONS objects carry in src/App.jsx (see the id: "seedphrase"/"inheritance" lessons for the
+// shape this was built to catch). Filtered through the same isCandidateGap test the rest of
+// this script uses to decide what counts as "translatable" — a bare ticker/acronym term
+// ("AMM", "MEV", "APY") or a pure number/percent ("0.1%") is deliberately left identical to
+// English everywhere in these dicts (see the identical-to-en heuristic's TICKER_WORDS
+// allowlist above), so it would never belong in the gating "missing" set here either.
+function lessonTranslatableStrings(lesson) {
+  const strs = [];
+  if (typeof lesson.title === 'string') strs.push(lesson.title);
+  if (typeof lesson.quote === 'string') strs.push(lesson.quote);
+  if (typeof lesson.intro === 'string') strs.push(lesson.intro);
+  for (const c of lesson.concepts || []) {
+    if (typeof c.term === 'string') strs.push(c.term);
+    if (typeof c.def === 'string') strs.push(c.def);
+  }
+  for (const q of lesson.questions || []) {
+    if (typeof q.q === 'string') strs.push(q.q);
+    for (const o of q.options || []) if (typeof o === 'string') strs.push(o);
+    if (typeof q.explanation === 'string') strs.push(q.explanation);
+  }
+  return strs.filter((s) => s.length > 0 && isCandidateGap(s));
+}
+
+// ---------------------------------------------------------------------------
 // load dictionaries
 // ---------------------------------------------------------------------------
 function loadFamily(suffix) {
@@ -332,6 +402,35 @@ for (const fam of FAMILIES) {
     const usedNotInAnyDict = candidates.filter((k) => !REFERENCE.has(k)).sort();
     scanResult = { files: files.map((f) => path.join('src', f)), candidateCount: candidates.length, usedNotInAnyDict, gating: false };
     if (usedNotInAnyDict.length) hasWarnFindings = true;
+
+    // lesson coverage by id — see header. Gating: a lesson missing from a language's school
+    // dictionary is exactly the class of bug the cross-language diff above cannot see.
+    const appJsxSrc = safeRead(path.join(ROOT, 'src', 'App.jsx'));
+    const LESSONS = appJsxSrc ? extractArrayLiteral(appJsxSrc, 'LESSONS') : { error: 'could not read src/App.jsx' };
+    let lessonCoverage;
+    if (!Array.isArray(LESSONS)) {
+      lessonCoverage = { error: LESSONS.error || 'could not extract LESSONS array from src/App.jsx' };
+      hasGatingFindings = true;
+    } else {
+      const perLessonMissing = {}; // lessonId -> lang -> [missing strings]
+      for (const lesson of LESSONS) {
+        const id = String(lesson.id);
+        const strings = lessonTranslatableStrings(lesson);
+        for (const lang of LANGS) {
+          if (perLang[lang] === null) continue; // load error already reported above
+          const dict = perLang[lang];
+          const missingStrings = strings.filter((s) => !(s in dict));
+          if (missingStrings.length) {
+            if (!perLessonMissing[id]) perLessonMissing[id] = {};
+            perLessonMissing[id][lang] = missingStrings;
+          }
+        }
+      }
+      const failingLessons = Object.keys(perLessonMissing).sort();
+      lessonCoverage = { lessonCount: LESSONS.length, failingLessons, details: perLessonMissing };
+      if (failingLessons.length) hasGatingFindings = true;
+    }
+    famReport.lessonCoverage = lessonCoverage;
   } else {
     const { keys: htmlKeys, files: htmlFiles } = scanHtmlDir(path.join(ROOT, 'public'));
     const { keys: jsxKeys, files: jsxFiles } = scanJsxDir(path.join(ROOT, 'src'));
@@ -381,9 +480,24 @@ if (OPT.json) {
     const s = f.sourceScan;
     console.log(`  source-scan (${s.gating ? 'GATING' : 'informational'}): ${s.candidateCount} candidate strings across ${s.files.length} file(s); ${s.usedNotInAnyDict.length} used in code, in NO language's dictionary`);
     if (s.usedNotInAnyDict.length) console.log('      examples (up to 10): ' + s.usedNotInAnyDict.slice(0, 10).map((k) => JSON.stringify(k)).join(', '));
+    if (f.lessonCoverage) {
+      const lc = f.lessonCoverage;
+      if (lc.error) {
+        console.log(`  lesson coverage (GATING): could not check — ${lc.error}`);
+      } else {
+        console.log(`  lesson coverage (GATING): ${lc.lessonCount} lessons in LESSONS × ${LANGS.length} languages; ${lc.failingLessons.length} lesson(s) with a gap`);
+        for (const id of lc.failingLessons) {
+          for (const lang of LANGS) {
+            const miss = lc.details[id][lang];
+            if (!miss) continue;
+            console.log(`      lesson "${id}" missing ${miss.length} string(s) in ${lang}: ` + miss.slice(0, 3).map((k) => JSON.stringify(k)).join(', ') + (miss.length > 3 ? ', …' : ''));
+          }
+        }
+      }
+    }
     console.log('');
   }
-  console.log(`gating findings (missing keys / placeholder mismatch / locker source-gap${OPT.strict ? ' / identical-to-en (strict)' : ''}): ${hasGatingFindings ? 'YES' : 'none'}`);
+  console.log(`gating findings (missing keys / placeholder mismatch / locker source-gap / school lesson-coverage${OPT.strict ? ' / identical-to-en (strict)' : ''}): ${hasGatingFindings ? 'YES' : 'none'}`);
   console.log(`warning-only findings (extra/stale keys, identical-to-en, base/school source-scan): ${hasWarnFindings ? 'YES' : 'none'}`);
   console.log('exit code: ' + exitCode + (OPT.warnOnly ? ' (--warn-only forces 0)' : ''));
 }
