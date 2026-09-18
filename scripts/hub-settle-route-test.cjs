@@ -1743,6 +1743,31 @@ t("a mint change on a suspended, EMPTY-STORE id resets access, milestones, payou
   assert.strictEqual(after.vaultProject, null, "the vault-sweep wallet does not carry to a different escrow either");
 });
 
+section("37. Minor (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 5) — a throwing kv on &waive= must not poison a later persist in the SAME request");
+
+t("a waive that THROWS mid-persist leaves the outer `batches` unpoisoned, so a later &send= in the same request never writes the failed waive to disk", async () => {
+  const kv = store.memoryKv({}, { failOn: (k) => k.startsWith("hub:waive:") });
+  seedProject(kv, "nu36", W.MINT1);
+  store.write(kv, "nu36", "days", days({ [W.A]: "1000000000", [W.B]: "1000000000" }));
+  const app = mountFor({ kv, adminAuthOK: () => true, vault: fakeVault() });
+  let r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "nu36" }, query: { export: "1" } });
+  const id = r.body.created.id;   // ONE batch, both W.A and W.B
+  // A pre-existing journal entry gives W.A a real partial row (400 of 1000 applied) so the waive
+  // has a genuine remainder to write off, and give it something to fail ON: the kv above throws
+  // on ANY `hub:waive:` key, which is exactly what &waive='s own persist writes.
+  const pre = { xferKey: "settle:" + SIG(470) + ":0", sig: SIG(470), instructionIndex: 0, innerIndex: null, projectId: "nu36", batchId: id, rowId: W.A, wallet: W.A, amountRaw: "400000000", appliedRaw: "400000000", excessRaw: "0", sourceWallet: W.FUND, slot: 31, at: NOW, verifiedBy: "getTransaction" };
+  kv.set(store.journalEntryKey(pre.xferKey), pre);
+  // ONE request: &waive= (throws, caught locally, never a `return`) followed by &send= on the SAME
+  // batch (a LATER branch that legitimately reads and rewrites the closure's `batches` variable).
+  r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "nu36" },
+    query: { batch: id, waive: W.A, reason: "should never land", send: id, from: "treasury", run: "1" } });
+  assert.strictEqual(r.body.waive.ok, false, JSON.stringify(r.body.waive));
+  assert.strictEqual(r.body.send.action, "paid", JSON.stringify(r.body.send));
+  const persisted = store.read(kv, "nu36", "batches", {})[id];
+  assert.ok(persisted.sent && persisted.sent[W.A] && persisted.sent[W.B], "the later &send= did land, for both rows — " + JSON.stringify(persisted));
+  assert.ok(!persisted.waived || !persisted.waived[W.A], "the failed waive must never reach disk via a later branch's own persist in the same request — " + JSON.stringify(persisted.waived));
+});
+
 (async () => {
   for (const [n, f] of queue) {
     if (!f) { console.log("\n" + n); continue; }
