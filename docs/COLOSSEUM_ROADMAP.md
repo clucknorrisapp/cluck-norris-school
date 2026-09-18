@@ -554,7 +554,7 @@ limits assert but nothing measures.
 terms; the Sep 20 recording; the real-wallet smoke; the npm publish for DD1; the go for EE4.
 
 
-## 16. Extension 10 — 2026-09-18 night (batch 14 merged with EE1–EE3, EE5 and the DD5 fixes; X6 building on its own PR)
+## 16. Extension 10 — 2026-09-18 night (FF1, FF2 landed on batch 15; FF3, FF4 on batch 16; FF5 = X6 on PR #354 under two lenses)
 
 With #342 the settlement journal becomes the live payout path, and the Hub's public record is
 finally what the pitch says it is. Extension 10 is the rehearsal before anyone real is on the
@@ -573,3 +573,25 @@ staging with a dry-run flag so the night it happens for real is not the first ti
 **Owner-side, unchanged:** promote (after batch 14 closes the lens's P1s); the first on-chain
 commitment; the interviews and POKEAHOE terms; the Sep 20 recording; the real-wallet smoke; the npm
 publish for the verifier; the go for the weekly-update routine.
+
+## 17. Extension 11 — 2026-09-18 night (Extension 10 in flight on batch 16 and PR #354)
+
+Fifteen batches and the first money-path PR under its lenses. The public side has been through
+one adversarial pass (DD5) and the journal through five; the **operator side** — the desk, the
+application, the pay page, the preview, the terms writes — has had none, and it is where an
+operator's mistake or a hostile operator's move would land. Extension 11 closes that, turns the
+rehearsal's confusion list into fixes, gives a holder a way to follow their own receipts, and
+executes the Sep 19 refresh the calendar owes.
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **GG1** | **The Sep 19 refresh, executed.** `docs/ARENA_POSTS.md` round 4 for #352–#355; `docs/WEEKLY_UPDATE_2026-09-20.md` regenerated from the record by `scripts/weekly-update-draft.cjs` the night before, with the owner's three bullets left as the only blanks; the E9 checklist ticked line by line. | Founder Communication | Every shipped item named in the drafts exists on `develop`; no yield language; nothing about Normie Quest terms. |
+| **GG2** | **Operator-surfaces lens.** A read-only Opus pass over the desk, `/hub/apply`, the pay page, the preview route, Launch Readiness and every terms/brand write: auth boundaries (operator A on project B), lapsed handling, token and secret leakage, what the browser is trusted with, escape-before-innerHTML, rate limits. Report to `docs/HUB_OPERATOR_SURFACES_VERIFY_2026-09-18.md`; P0/P1 fixed with regression tests before the next promote ask; P2/P3 listed, never verified twice. | Viability, Product | Zero open P0/P1 on the report; each fix line names its test. |
+| **GG3** | **Desk fix round from the rehearsal.** Every "what confused" line in `docs/POKEAHOE_REHEARSAL_2026-09.md` becomes a fix on the desk, the readiness card or the preview card (a label, a default, an extra click), or a one-line reason it stays. Seven languages where copy changes. | Product | The rehearsal doc's confusion list carries a resolution per line; `hub-preview-test` and `hub-readiness-test` green. |
+| **GG4** | **Follow your own receipts.** `GET /api/hub/wallet/:wallet/feed.json` and `/hub/wallet/:wallet/feed.xml` — the holder's receipts and settled rows across every project, from the public view only, same bounds and caching as the project feeds; a "follow this wallet" link on `/hub/wallet/:wallet`; a test that the feed never carries a project that is dry-run or a row that is not settled. | Product, Potential Impact | Feed validates; the wallet page links it; seven languages for the one new label. |
+| **GG5** | **The holder on-ramp strip.** On every `/hub/:project` page, one strip — "Check this yourself" — linking the receipt lesson, `/hub/verify`, the glossary, the wallet roll-up and the project feed, in seven languages, phone-first, in the a11y gate. | Educate (the theme), UX | The strip renders on the demo and the POKEAHOE dry run; a11y green; the storyboard gains one capture. |
+
+**Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
+terms; the Sep 20 recording; the real-wallet smoke; the npm publish for the verifier; the go for
+the weekly-update routine.
+
