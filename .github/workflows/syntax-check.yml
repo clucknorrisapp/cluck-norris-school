@@ -63,6 +63,13 @@ jobs:
       # curriculum held 70 and 7. Hand-typed public counts rot silently; this catches the mirror.
       - name: curriculum count-drift guard
         run: node scripts/check-counts.js
+      # check-counts.js above only pins per-course LESSON COUNTS. This catches content drift the
+      # counts alone would miss: extractor rewritten 2026-09-18 (docs/COLOSSEUM_ROADMAP.md §12
+      # BB1) after the old one only read src/App.jsx and silently dropped the LP Lab and Deep
+      # Dive courses on a re-run. --check re-extracts from the real sources (esbuild-compiled,
+      # not regex-scanned) and fails if data/curriculum.json was not committed with them.
+      - name: curriculum extraction freshness (data/curriculum.json)
+        run: node scripts/extract-curriculum.js --check
       # Seven languages are promised (CLAUDE.md); six are curated dicts keyed on the English
       # source string itself (no en.json — see the script header). Cross-language key diffs and
       # placeholder drift are real bugs and gate; the base/school source-scan stays informational
