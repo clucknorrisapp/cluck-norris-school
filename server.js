@@ -7947,10 +7947,14 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
     try { traction.recordReceiptOpen(kv, { project: p.id, sig }); } catch (_) { /* counter only */ }
     // The Addendum-B3 shape (settlements[]) validates against receipt.schema.json on its own — an
     // `ok` sibling would not (additionalProperties:false), so it is nested under `receipt` and
-    // stamped there, exactly as `project` is nested for GET /api/hub/:project. The legacy shape is
-    // unchanged: spread flat alongside `ok`, no $schema (it does not validate that schema — see
-    // scripts/hub-schema-test.cjs E4/"the legacy body does not").
-    if (r && Array.isArray(r.settlements)) return res.status(200).json({ ok: true, receipt: { ...r, $schema: HUB_SCHEMA_URL("receipt") } });
+    // stamped there, exactly as `project` is nested for GET /api/hub/:project. adv P1-4
+    // (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): findReceipt now wraps BOTH shapes in the same
+    // {projectId, symbol, dryRun, brand, program, receipt} envelope — the legacy shape is spread
+    // flat alongside `ok` exactly as before (its `receipt` sub-object carries no $schema — it does
+    // not validate that schema, see scripts/hub-schema-test.cjs E4/"the legacy body does not"); the
+    // journal-backed shape stamps $schema onto `receipt` only, so `r.program`/`r.symbol`/`r.dryRun`
+    // are always where public/hub.html's renderReceipt already reads them.
+    if (r && r.receipt && Array.isArray(r.receipt.settlements)) return res.status(200).json({ ok: true, ...r, receipt: { ...r.receipt, $schema: HUB_SCHEMA_URL("receipt") } });
     return res.status(200).json({ ok: true, ...r });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
@@ -8158,7 +8162,12 @@ hubRoutes.mount(app, {
   // the fixture's routes.
   reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null }),
   getTx: async (sig) => {
-    const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
+    // crash P2-9 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): the settlement journal has no
+    // "unconsume" — a confirmed-but-later-forked transaction would be journaled permanently.
+    // `finalized` closes the fork-depth window this read is used for (both the platform-access
+    // payment check above and every settlement journal write in lib/hub/routes.js); the small
+    // extra latency is paid once, at settlement time, never on every read of a project's numbers.
+    const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "finalized" }]);
     return r && r.result;
   },
 });
@@ -11702,6 +11711,11 @@ app.get("/api/cuna-stake/wallet", async (req, res) => {
       if (!b || b.state !== "pending" || !b.amounts || !b.amounts[addr] || (b.sent && b.sent[addr])) continue;
       try { pendingRaw += BigInt(b.amounts[addr]); } catch (_) {}
     }
+    // No `journal`/`projectId` here on purpose: this is the dedicated CUNA desk (crash P1-4 /
+    // CLAUDE.md "CUNA on the Hub — HELD, owner 2026-09-17: do not duplicate cuna yet"). It reads
+    // the raw cunaStake* keys directly rather than going through a registry project, and its own
+    // payout route (below) never writes a settlement journal entry — passing one here would just
+    // consult an empty set. Leave this desk exactly as it is until CUNA is registered.
     const owedRaw = pay.owedNow({ days, paid: paidMap, pending: batchMap })[addr] || 0n;
     const claim = s.claimableFor({ accruedRaw: owedRaw.toString(), locks: mine, nowUnix });
     let earningRaw = 0n, readyRaw = 0n, totalRaw = 0n;
@@ -12480,6 +12494,9 @@ async function cunaPayoutChecks(batch, { days, paid, batches }) {
 
   // 1. Conservation: everything ever credited == owed + held in pending batches + paid. This is
   //    the check the old verifier script compared to itself; here it compares to the ledger.
+  //    No `journal`/`projectId`: this is the dedicated, pre-registry CUNA payout desk (CLAUDE.md
+  //    "CUNA on the Hub — HELD, owner 2026-09-17") — it never writes a settlement journal entry,
+  //    so consulting one here would compare against an empty set for no benefit.
   const owed = pay.owedNow({ days, paid, pending: batches });
   let held = 0n;
   for (const b of Object.values(batches)) if (b && b.state === "pending") held += sum(pay.remainingOf(b));
@@ -12685,6 +12702,8 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       }
     }
 
+    // No `journal`/`projectId`: the dedicated CUNA payout desk (CLAUDE.md "CUNA on the Hub —
+    // HELD") never writes a settlement journal entry — see the comment on cunaPayoutChecks above.
     const owed = pay.owedNow({ days, paid, pending: batches });
 
     let created = null, note = null;
