@@ -136,8 +136,8 @@
   function receiptBlock(r, dec, sym) {
     return '<div class="row-flex" style="margin-bottom:6px"><b>' + esc(r.holderLabel) + '</b> ' + acct(r.wallet) + '</div>' +
       stats([['Amount', whole(r.totals.appliedRaw, dec) + ' ' + sym], ['State', r.state]]) +
-      '<div class="terms"><div><b>Program</b> v' + esc(r.programVersion) + ' <span class="mono">' + esc(String(r.programHash).slice(0, 12)) + '…</span></div><div><b>Batch</b> ' + esc(r.batchId) + '</div></div>' +
-      '<div class="sec-title">Transaction</div><div class="fact"><span class="pill warn">dry run</span> ' + esc(r.settlement.note) + '</div>';
+      '<div class="terms" data-clkn-avoid-kids="1"><div><b>Program</b> v' + esc(r.programVersion) + ' <span class="mono">' + esc(String(r.programHash).slice(0, 12)) + '…</span></div><div><b>Batch</b> ' + esc(r.batchId) + '</div></div>' +
+      '<div class="sec-title" data-clkn-avoid="1">Transaction</div><div class="fact"><span class="pill warn">dry run</span> ' + esc(r.settlement.note) + '</div>';
   }
 
   // ── the stepper (default view) ────────────────────────────────────────────────────────────
@@ -147,12 +147,19 @@
     var A = d.holders[0], B = d.holders[1], C = d.holders[2];
     document.getElementById('title').textContent = 'Hub Demo Walkthrough';
     document.getElementById('subtitle').textContent = 'A SINGLE-HOLDER STORY, START TO FINISH';
+    // NOTE on pill-avoidance markers: this stepper stacks several short-looking regions (intro,
+    // step title, a fact line, a terms grid, a hash line) in the first ~800px of the page — mark
+    // ALL of them and the floating pill's climb-until-clear loop (__clknDockFloat in
+    // cluck-nav.js) has nothing but marked ground to retreat to and walks all the way up into the
+    // site's own top nav bar (worse than the original overlap). So only the ONE region that is
+    // actually at the pill's default landing spot is marked here — the trailing hash/link line —
+    // leaving the rest of the step unmarked on purpose.
     var out = '<div class="card"><div class="intro">This is the same math and the same public pages a real Cluck Norris Hub project runs — walked through here on a fixture project, <b>' + esc(d.project.label) + '</b> (' + esc(sym) + '), so a judge can see the whole loop without connecting a wallet or moving anything. Every number below comes from the real qualification, accrual and settlement code (<span class="mono">lib/hub/*.js</span>) run over made-up addresses. Each step links to the real page for that surface.</div></div>';
 
-    out += step('A', 'The program version', '<div class="fact">A program version is immutable once effective and carries a sha256 hash of its own terms — anyone can recompute it from the JSON.</div>' +
-      '<div class="terms"><div><b>Version</b> v' + esc(v.version) + '</div><div><b>Effective from</b> ' + esc(v.effectiveFrom) + '</div><div><b>Term range</b> ' + esc(v.terms.minDurationDays) + '–' + esc(v.terms.maxTermDays) + ' days</div><div><b>Payout schedule</b> ' + esc(v.terms.payoutSchedule) + '</div></div>' +
-      '<div class="fact"><b>Hash</b> <span class="mono">' + esc(v.hash) + '</span></div>' +
-      '<div class="step-links"><a href="/hub/' + esc(projectId) + '/p/' + esc(lte) + '">Open the full program record →</a></div>');
+    out += step('A', 'The program version', '<div class="fact" data-clkn-avoid="1">A program version is immutable once effective and carries a sha256 hash of its own terms — anyone can recompute it from the JSON.</div>' +
+      '<div class="terms" data-clkn-avoid-kids="1"><div><b>Version</b> v' + esc(v.version) + '</div><div><b>Effective from</b> ' + esc(v.effectiveFrom) + '</div><div><b>Term range</b> ' + esc(v.terms.minDurationDays) + '–' + esc(v.terms.maxTermDays) + ' days</div><div><b>Payout schedule</b> ' + esc(v.terms.payoutSchedule) + '</div></div>' +
+      '<div class="fact" data-clkn-avoid="1"><b>Hash</b> <span class="mono">' + esc(v.hash) + '</span></div>' +
+      '<div class="step-links" data-clkn-avoid="1"><a href="/hub/' + esc(projectId) + '/p/' + esc(lte) + '">Open the full program record →</a></div>');
 
     out += step('B', 'Who qualifies, and why', '<div class="fact">Two holders lock the exact same amount for different committed terms — the tier ceiling shows up as a real 6x difference in what accrues, computed by the engine, not typed in. A third holder is excluded by the same public rule, with its reason code.</div>' +
       holderCard(A, dec, sym) + holderCard(B, dec, sym) + holderCard(C, dec, sym) +
@@ -186,20 +193,20 @@
     var v = d.version, sym = d.project.symbol, dec = d.project.decimals;
     document.getElementById('title').textContent = d.project.label + ' · Lock to Earn';
     document.getElementById('subtitle').textContent = 'PROGRAM RECORD · REWARDS FOR LOCKED WALLETS';
-    var out = '<div class="card"><div class="intro">' + esc(d.project.label) + '\'s Lock to Earn program, in full: the version holders qualify under, the funding status, the batch and its receipts. Nothing here needs a wallet.</div>' +
+    var out = '<div class="card"><div class="intro" data-clkn-avoid="1">' + esc(d.project.label) + '\'s Lock to Earn program, in full: the version holders qualify under, the funding status, the batch and its receipts. Nothing here needs a wallet.</div>' +
       '<div class="mono" style="margin-top:10px">Mint ' + esc(d.project.mint) + '</div></div>';
-    out += '<div class="card"><div class="sec-title" style="margin-top:0">Program version ' + esc(v.version) + '</div>' +
-      '<div class="terms"><div><b>Effective from</b> ' + esc(v.effectiveFrom) + '</div><div><b>Term range</b> ' + esc(v.terms.minDurationDays) + '–' + esc(v.terms.maxTermDays) + ' days</div><div><b>Cancelable locks</b> ' + (v.terms.cancelableAllowed ? 'allowed' : 'not allowed') + '</div><div><b>Payout schedule</b> ' + esc(v.terms.payoutSchedule) + '</div></div>' +
-      '<div class="fact"><b>Hash</b> <span class="mono">' + esc(v.hash) + '</span></div></div>';
-    out += '<div class="card"><div class="sec-title" style="margin-top:0">Lockers and eligibility</div>' + d.holders.map(function (h) { return holderCard(h, dec, sym); }).join('') + '</div>';
-    out += '<div class="card"><div class="sec-title" style="margin-top:0">Funding</div>' + fundingBlock(d.funding, dec, sym) + '</div>';
-    out += '<div class="card"><div class="sec-title" style="margin-top:0">Batch ' + esc(d.batch.id) + '</div>' + batchTable(d.batch, dec, sym) + '</div>';
+    out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Program version ' + esc(v.version) + '</div>' +
+      '<div class="terms" data-clkn-avoid-kids="1"><div><b>Effective from</b> ' + esc(v.effectiveFrom) + '</div><div><b>Term range</b> ' + esc(v.terms.minDurationDays) + '–' + esc(v.terms.maxTermDays) + ' days</div><div><b>Cancelable locks</b> ' + (v.terms.cancelableAllowed ? 'allowed' : 'not allowed') + '</div><div><b>Payout schedule</b> ' + esc(v.terms.payoutSchedule) + '</div></div>' +
+      '<div class="fact" data-clkn-avoid="1"><b>Hash</b> <span class="mono">' + esc(v.hash) + '</span></div></div>';
+    out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Lockers and eligibility</div>' + d.holders.map(function (h) { return holderCard(h, dec, sym); }).join('') + '</div>';
+    out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Funding</div>' + fundingBlock(d.funding, dec, sym) + '</div>';
+    out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Batch ' + esc(d.batch.id) + '</div>' + batchTable(d.batch, dec, sym) + '</div>';
     if (d.teach) {
-      out += '<div class="card lessons"><div class="sec-title" style="margin-top:0">Six questions, answered from the program itself</div>' +
+      out += '<div class="card lessons"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Six questions, answered from the program itself</div>' +
         d.teach.answers.map(function (a) { return '<div class="fact" style="padding:6px 0"><b style="color:var(--text)">' + esc(a.question) + '</b><br>' + esc(a.text) + ' <a href="' + esc(a.lesson.href) + '">Learn more →</a></div>'; }).join('') + '</div>';
     }
-    out += '<div class="fact" style="text-align:center">Raw data: <a class="mono" href="/api/hub-demo/' + esc(projectId) + '">/api/hub-demo/' + esc(projectId) + '</a></div>' +
-      '<div class="fact" style="text-align:center;margin-top:6px"><a href="/hub/demo">← back to the walkthrough</a></div>';
+    out += '<div class="fact" data-clkn-avoid="1" style="text-align:center">Raw data: <a class="mono" href="/api/hub-demo/' + esc(projectId) + '">/api/hub-demo/' + esc(projectId) + '</a></div>' +
+      '<div class="fact" data-clkn-avoid="1" style="text-align:center;margin-top:6px"><a href="/hub/demo">← back to the walkthrough</a></div>';
     app.innerHTML = out;
   }
 
@@ -211,18 +218,18 @@
     document.getElementById('title').textContent = 'Receipt';
     document.getElementById('subtitle').textContent = (r.holderLabel || '').toUpperCase() + ' · ' + esc(d.project.label).toUpperCase();
     app.innerHTML = '<div class="card">' + receiptBlock(r, dec, sym) +
-      '<div class="sec-title">Verify it yourself</div><div class="fact">This receipt is a labelled dry run: no transaction was ever sent, so there is nothing to look up on Solana for it. A real project\'s receipt page carries a signature here that anyone can check against the chain from their own browser — see <a href="/hub/' + esc(projectId) + '/p/lock-to-earn">the real program page</a> for how that looks with a real signature.</div>' +
-      '<div class="fact" style="margin-top:12px"><a href="/hub/demo">← back to the walkthrough</a></div></div>';
+      '<div class="sec-title" data-clkn-avoid="1">Verify it yourself</div><div class="fact">This receipt is a labelled dry run: no transaction was ever sent, so there is nothing to look up on Solana for it. A real project\'s receipt page carries a signature here that anyone can check against the chain from their own browser — see <a href="/hub/' + esc(projectId) + '/p/lock-to-earn">the real program page</a> for how that looks with a real signature.</div>' +
+      '<div class="fact" data-clkn-avoid="1" style="margin-top:12px"><a href="/hub/demo">← back to the walkthrough</a></div></div>';
   }
 
   function renderDemoB(db) {
     var sym = db.project.symbol, dec = db.project.decimals;
     document.getElementById('title').textContent = db.project.label;
     document.getElementById('subtitle').textContent = 'ISOLATION CHECK · A SEPARATE FIXTURE PROJECT';
-    app.innerHTML = '<div class="card"><div class="intro">' + esc(db.isolationNote) + '</div><div class="mono" style="margin-top:10px">Mint ' + esc(db.project.mint) + '</div></div>' +
-      '<div class="card"><div class="sec-title" style="margin-top:0">The only holder here</div>' + holderCard(db.holders[0], dec, sym) + '</div>' +
-      '<div class="fact" style="text-align:center">Raw data: <a class="mono" href="/api/hub-demo/demo-b">/api/hub-demo/demo-b</a></div>' +
-      '<div class="fact" style="text-align:center;margin-top:6px"><a href="/hub/demo">← back to the walkthrough</a> · <a href="/hub/demo/p/lock-to-earn">compare with demo\'s own holders →</a></div>';
+    app.innerHTML = '<div class="card"><div class="intro" data-clkn-avoid="1">' + esc(db.isolationNote) + '</div><div class="mono" style="margin-top:10px">Mint ' + esc(db.project.mint) + '</div></div>' +
+      '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">The only holder here</div>' + holderCard(db.holders[0], dec, sym) + '</div>' +
+      '<div class="fact" data-clkn-avoid="1" style="text-align:center">Raw data: <a class="mono" href="/api/hub-demo/demo-b">/api/hub-demo/demo-b</a></div>' +
+      '<div class="fact" data-clkn-avoid="1" style="text-align:center;margin-top:6px"><a href="/hub/demo">← back to the walkthrough</a> · <a href="/hub/demo/p/lock-to-earn">compare with demo\'s own holders →</a></div>';
   }
 
   (async function () {

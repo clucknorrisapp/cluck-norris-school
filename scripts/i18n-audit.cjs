@@ -444,6 +444,44 @@ for (const fam of FAMILIES) {
       gating: false,
     };
     if (usedNotInAnyDict.length) hasWarnFindings = true;
+
+    // Hub Colosseum E8 (docs/COLOSSEUM_ROADMAP.md §7): unlike the rest of `base` (informational —
+    // most of the site leans on machine translation, per i18n.js's own comment), the five Project
+    // Hub pages are held to the same GATING bar as locker-room.html — a static/template string
+    // used on one of them with no entry in ANY of the six base dictionaries fails the audit,
+    // naming the exact key and every language it is missing from. Scoped to just these five files
+    // (not all of `public/`) so this doesn't drag the hundreds of un-curated tool pages into
+    // gating — that would make CI red for pages nobody has curated on purpose.
+    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html'];
+    const hubKeys = new Set();
+    const hubFilesRead = [];
+    for (const f of HUB_FILES) {
+      const raw = safeRead(path.join(ROOT, 'public', f));
+      if (raw == null) continue;
+      hubFilesRead.push(path.join('public', f));
+      for (const k of extractMarkupText(raw, { bodyOnly: true })) hubKeys.add(k);
+    }
+    const hubCandidates = [...hubKeys].filter(isCandidateGap);
+    const hubUsedNotInAnyDict = hubCandidates.filter((k) => !REFERENCE.has(k)).sort();
+    // Per-language view of the same gap: for a key that IS in some language's dict (added for one
+    // language but missed for another) the cross-language diff above already gates it — this
+    // block additionally names, for each Hub-sourced candidate, which specific languages lack it,
+    // so "missing from ANY of the six" reads the same way the task asks for it.
+    const hubMissingByLang = {};
+    for (const lang of LANGS) {
+      if (perLang[lang] === null) continue;
+      const own = keySets[lang];
+      const missingForLang = hubCandidates.filter((k) => !own.has(k));
+      if (missingForLang.length) hubMissingByLang[lang] = missingForLang.sort();
+    }
+    famReport.hubCoverage = {
+      files: hubFilesRead,
+      candidateCount: hubCandidates.length,
+      usedNotInAnyDict: hubUsedNotInAnyDict,
+      missingByLang: hubMissingByLang,
+      gating: true,
+    };
+    if (hubUsedNotInAnyDict.length) hasGatingFindings = true;
   }
   famReport.sourceScan = scanResult;
 
@@ -495,9 +533,18 @@ if (OPT.json) {
         }
       }
     }
+    if (f.hubCoverage) {
+      const hc = f.hubCoverage;
+      console.log(`  Hub pages coverage (GATING, ${hc.files.length} file(s)): ${hc.candidateCount} candidate strings; ${hc.usedNotInAnyDict.length} used on a Hub page, in NO language's dictionary`);
+      if (hc.usedNotInAnyDict.length) console.log('      examples (up to 10): ' + hc.usedNotInAnyDict.slice(0, 10).map((k) => JSON.stringify(k)).join(', '));
+      for (const lang of Object.keys(hc.missingByLang)) {
+        const miss = hc.missingByLang[lang];
+        console.log(`      missing from ${lang}.json (up to 5): ` + miss.slice(0, 5).map((k) => JSON.stringify(k)).join(', ') + (miss.length > 5 ? ', …' : ''));
+      }
+    }
     console.log('');
   }
-  console.log(`gating findings (missing keys / placeholder mismatch / locker source-gap / school lesson-coverage${OPT.strict ? ' / identical-to-en (strict)' : ''}): ${hasGatingFindings ? 'YES' : 'none'}`);
+  console.log(`gating findings (missing keys / placeholder mismatch / locker source-gap / school lesson-coverage / Hub page source-gap${OPT.strict ? ' / identical-to-en (strict)' : ''}): ${hasGatingFindings ? 'YES' : 'none'}`);
   console.log(`warning-only findings (extra/stale keys, identical-to-en, base/school source-scan): ${hasWarnFindings ? 'YES' : 'none'}`);
   console.log('exit code: ' + exitCode + (OPT.warnOnly ? ' (--warn-only forces 0)' : ''));
 }
