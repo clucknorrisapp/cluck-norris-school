@@ -530,3 +530,506 @@ the code.
 Same five steps as round 1's checklist above, plus: for item 16 (`/hub/verify`), confirm it has an
 actual PR number before treating any "HOLD" language here as ready — as of this draft it is
 unmerged code on a session branch, not yet a pull request.
+
+---
+
+# Round 3 — batches 9–12 (#347–#350), everything without a draft yet
+
+Drafted 2026-09-18. Rounds 1–2 (above) covered the kickoff, W1–W3, W5, E1/E2/E4/E5/E7, E3/E6/E8,
+Launch Readiness, airdrop receipts, Buy Special standings, the merged engine timeline, holder
+snapshots, and `/hub/verify` (Y1, item 16). This round drafts everything else merged in batches
+9–12 that had no draft yet: the receipt lesson (Y2, flagged "not drafted" at the end of round 2 —
+it has since been built), share cards (Y4), the weekly-update generator (Z1), `/hub/status` +
+`/api/build` (Z2), route hygiene (Z3), `/hub/wallet` (AA1), the evidence bundle (AA2), snapshot
+diff (AA3), `/hub/judge` (AA4), `/hub/trust` (AA5), the classroom curriculum fix (BB1), the
+computed badge (BB3), `/receipt` in Telegram (BB4), the receipt lesson measured (BB5), the holders
+a11y gate (CC3), `/hub/verify` in all seven languages (CC2), the compare page (CC1),
+reproducibility history (CC4), and the `npx` verifier package (DD1).
+
+**Status check before writing this round:** the repo's own history (`origin/main`, five most
+recent commits) shows `main` at `cfb2ce0` (PR #337, "meme-queue POST-only + LP Lab CI step
+self-build") — the same commit rounds 1–2 found. **Nothing from batches 2–12 (PRs #339–#350) is on
+production.** Everything in this round is code on `develop` only, merged via #347 (batch 9), #348
+(batch 10), #349 (batch 11) or #350 (batch 12). **Every draft below is HOLD** — do not post any of
+it until the owner has explicitly promoted `develop` → `main` for the PR it names (CLAUDE.md
+"Branching": never automatic, never inferred) — re-check the actual state of `main` immediately
+before posting, not this table.
+
+None of the 19 items below is a security-messaging post in the CLAUDE.md sense (a RootCrak
+finding we acted on) — so none carries the RootCrak credit + referral. If a future draft ever
+does describe a RootCrak-sourced finding, add both per that rule; none of the round-3 items are
+that kind of post, so none is added here. Every draft was checked against the code on this branch
+before writing — the "source:" line under each names the exact file(s). None claims a yield
+figure, an APR/APY, a guarantee, anything about Normie Quest reward terms, or anything about
+Wallet Watch. None calls a project, a wallet, or a number "verified" or "safe" — verbs like
+"reproduce" / "check" / "recompute" are used instead, on purpose. The demo project and POKEAHOE
+are labelled a dry run wherever mentioned.
+
+---
+
+## 18. The receipt lesson — "Read a Payout Receipt" (Y2)
+
+**Status: HOLD.** On PR #347 (batch 9). Round 2 flagged this item "not built" and left it
+undrafted; it has since shipped. Seventh lesson on the Lock to Earn track (`src/App.jsx`, belt
+BURSAR), with its own finish-card that links to a real dry-run receipt, `/hub/verify`, and
+`/hub/trust`.
+
+source: `src/App.jsx` (the `receipt` lesson entry and `ReceiptLessonBridge`)
+
+### Arena
+
+> A new lesson closes the loop the other six open: "Read a Payout Receipt" teaches what a program
+> version and its hash actually mean, what a settlement entry is (and why a partial payment's
+> remainder carries forward instead of being written off), and how to reproduce the arithmetic
+> yourself from the published inputs. The finish card doesn't just say "go try it" — it links to
+> an actual receipt on our labelled dry-run fixture, the browser tool that reproduces it, and the
+> page that states plainly what none of this proves. Educate feeding directly into the part of
+> Earn we can actually show.
+
+### X
+
+> New lesson: "Read a Payout Receipt" — what a program version's hash means, what a settlement
+> entry is, how a partial payment's remainder carries forward instead of vanishing, and how to
+> reproduce the number yourself. Finish card links to a real dry-run receipt, the reproduce tool,
+> and what none of it proves.
+
+---
+
+## 19. Share cards for every Hub page (Y4)
+
+**Status: HOLD.** On PR #347 (batch 9). One static branded image, server-rendered per-page title
+and description built only from the same public view functions the JSON routes already call.
+
+source: `docs/HUB_SHARE_CARDS.md`
+
+### Arena
+
+> Paste a Hub link into X or Telegram now and you get a real card — the project or receipt it
+> points to, not a bare URL or a stale generic title. One static branded image, one implementation
+> path: the title and description come from the exact same public functions the JSON routes
+> already serve, HTML-escaped before they reach the page, so a hostile project label can't break
+> the card. A dry-run project or the demo fixture gets a plain DRY RUN mention in the description,
+> and a missing or mistyped link still serves a working generic card instead of looking broken.
+
+### X
+
+> Hub links now unfurl properly on X and Telegram: a real title and description per project or
+> receipt, built from the same public data the page itself shows, escaped so a hostile label can't
+> break it. Dry-run pages say so right in the card.
+
+---
+
+## 20. Weekly updates, built from `git log` instead of memory (Z1)
+
+**Status: HOLD.** On PR #347 (batch 9). Meta: this is the tool this file's companion doc,
+`docs/WEEKLY_UPDATE_2026-09-20.md`, is generated with.
+
+source: `scripts/weekly-update-draft.cjs`
+
+### Arena
+
+> Colosseum asks for a weekly video on what shipped and what was hard. Ours starts from a script,
+> not a memory: `scripts/weekly-update-draft.cjs` reads the commit record on our own `develop` and
+> `main` branches for the week's window, keeps only real squash-merged PRs, checks each one
+> against the full history of `main` to say whether it's actually live or still on staging, and
+> writes a draft — reconciled by hand afterward, same as every other draft here, but never
+> starting from a blank page or a guess.
+
+### X
+
+> Our weekly Colosseum update script pulls straight from the commit record — real merged PRs,
+> checked against main to say what's actually live vs. staging — instead of writing from memory.
+> Reconciled by hand, but nothing in the first draft is invented.
+
+---
+
+## 21. `/hub/status` — every project's public numbers on one page (Z2)
+
+**Status: HOLD.** On PR #347 (batch 9). `public/hub-status.html`, fed only by routes already
+public (`/api/hub`, the reproducibility route, the holder-snapshot series); `GET /api/build`
+answers with this container's own git sha/branch/build time.
+
+source: `scripts/hub-status-test.cjs` (page and route contract; the page's own file is
+`public/hub-status.html`)
+
+### Arena
+
+> One page now lists every registered Hub project next to its own public numbers — programs
+> published, receipts issued, the reproduce ratio, the latest holder snapshot — pulled from
+> routes that were already public, not new ones. A dry-run project shows its badge instead of a
+> ratio it hasn't earned, and one that hasn't issued a receipt yet says exactly that instead of
+> printing "0 of 0". A small companion route, `GET /api/build`, answers with the exact commit
+> and branch this server is actually running — so "what's live" stops being a question anyone has
+> to ask us.
+
+### X
+
+> New: `/hub/status` — every Hub project's public numbers (programs, receipts, reproduce ratio,
+> latest holder snapshot) on one page, fed by routes that were already public. Plus `GET
+> /api/build`, which answers with the exact commit this server is running.
+
+---
+
+## 22. Route hygiene on every new public read (Z3)
+
+**Status: HOLD.** On PR #347 (batch 9). Internal hardening, not a feature to demo — one line, no
+Arena/X draft.
+
+source: `scripts/public-route-hygiene-test.cjs`
+
+Every public Hub read route added this batch gets a matching ETag/cache tier, the routes that do
+real per-request work get a dedicated rate limit, and wallet/signature/mint parameters are shape-
+checked before any store lookup so a malformed one 400s instead of triggering a full scan.
+
+---
+
+## 23. `/hub/wallet` — one wallet, every project (AA1)
+
+**Status: HOLD.** On PR #348 (batch 10). `public/hub-wallet.html` + `GET
+/api/hub/wallet/:wallet`, composed only from each project's own public `walletLookup`.
+
+source: `public/hub-wallet.html`
+
+### Arena
+
+> Paste a wallet address and see every Hub program it has been part of, across every registered
+> project, on one page — what it qualified for, what excluded it, and what actually arrived on
+> chain. No wallet connect needed, and a clean wallet with nothing recorded gets an honest empty
+> result, not an error. The strongest honest version of "Earn" we have: not a promise, a lookup
+> you can run on yourself.
+
+### X
+
+> New: `/hub/wallet` — paste any address, see every Hub program it's been part of across every
+> project, what it qualified for, what excluded it, and what arrived. No wallet connect needed.
+> An honest empty result for a clean wallet, not an error.
+
+---
+
+## 24. Download the evidence, check it later (AA2)
+
+**Status: HOLD.** On PR #348 (batch 10). `lib/hub/bundle.js`; a downloadable JSON bundle carrying
+everything the reproduce tools need, plus a `/hub/verify` tab that accepts a dropped bundle
+instead of a live URL.
+
+source: `lib/hub/bundle.js`
+
+### Arena
+
+> Reproducing a receipt today means fetching a few small JSON files from our server, live. Now you
+> can download all of them at once as one evidence bundle and check it later — offline, or after
+> we've gone quiet, or a year from now. The bundle carries its own hash so you can confirm the file
+> you saved is the one you downloaded, and `/hub/verify` now has a second tab that accepts a
+> dropped bundle file instead of a URL. Same arithmetic, same code, just decoupled from us still
+> being reachable at the moment you check it.
+
+### X
+
+> New: download a Hub batch's whole evidence set as one file — everything `/hub/verify` needs to
+> reproduce every receipt in it, checkable offline, later, without us. The bundle carries its own
+> hash so you know the file wasn't altered after you saved it.
+
+---
+
+## 25. Holder-count history, now with a diff (AA3)
+
+**Status: HOLD.** On PR #348 (batch 10). Extends the append-only hashed holder snapshots (round 2,
+item 15) with a route that diffs two of them.
+
+source: `scripts/holders-snapshot-diff-test.cjs`
+
+### Arena
+
+> Last round we shipped append-only, hashed holder-count history. Now you can diff two snapshots
+> of the same project and see exactly who entered, who exited, who grew and who shrank — the
+> numbers reconcile exactly (the totals moving between the two snapshots equal the sum of every
+> individual change), and the result always names its own scope honestly: this is a diff of the
+> recorded top-25, not a claim about every holder. Read-only, no gate beyond the crawl the
+> snapshot itself already runs.
+
+### X
+
+> New: diff two holder snapshots and see exactly who entered, exited, grew or shrank — the numbers
+> reconcile exactly. Always labelled for what it is: a diff of the recorded top-25, not every
+> holder.
+
+---
+
+## 26. A judge's fifteen minutes, generated from one doc (AA4)
+
+**Status: HOLD.** On PR #348 (batch 10). `/hub/judge`, built byte-for-byte from
+`docs/JUDGE_GUIDE.md` so the page and the repo doc can't drift.
+
+source: `docs/JUDGE_GUIDE.md` and `scripts/build-judge-page.cjs`
+
+### Arena
+
+> We wrote the shortest honest path through the Project Hub, organised by Colosseum's own six
+> judging criteria rather than our own site headings, and it's the same text whether you read it
+> in the repo (`docs/JUDGE_GUIDE.md`) or on the live page (`/hub/judge`) — the page is generated
+> from the doc, not a second copy someone could forget to update, and a build step checks they
+> stay byte-identical. Every step names a URL that needs no wallet and no login, and the test file
+> that pins the exact claim it makes.
+
+### X
+
+> New: `/hub/judge` — the shortest honest path through the Project Hub, organised by Colosseum's
+> actual judging criteria. Generated straight from the repo doc so the page and the doc can never
+> drift apart. No wallet, no login, every step names its own test.
+
+---
+
+## 27. `/hub/trust` — what none of this proves (AA5)
+
+**Status: HOLD.** On PR #348 (batch 10). A dedicated page stating the trust boundary in plain
+words, now in all seven languages.
+
+source: `public/hub-trust.html`
+
+### Arena
+
+> Every other Hub page shows what you CAN check yourself. This one names what you still can't: a
+> receipt checks that the arithmetic matched published inputs, not that those inputs were honest
+> in the first place; a hash checks a document wasn't altered, not that it was ever independently
+> witnessed; a dry run is fixture data, never a real payment. We'd rather a reader find this page
+> and know exactly where our claims stop than assume we're claiming more than we are.
+
+### X
+
+> New: `/hub/trust` — what the Project Hub does NOT prove, in plain words. A receipt checks
+> arithmetic, not honesty of inputs. A hash checks a document wasn't altered, not that anyone
+> independently witnessed it. Dry runs are fixture data. We'd rather say this than let you assume it.
+
+---
+
+## 28. Fixing our own curriculum-generation blind spot (BB1)
+
+**Status: HOLD.** On PR #348 (batch 10). Internal tooling fix — the Live Classroom's server-side
+curriculum extractor had been silently dropping two whole courses.
+
+source: `scripts/extract-curriculum.js`
+
+### Arena
+
+> We found a real gap in our own tooling: the script that feeds the server-side Live Classroom its
+> lesson content only ever looked at one source file, so when two courses (LP Lab, Deep Dive) moved
+> into their own files during a refactor, the script kept "succeeding" while silently teaching from
+> nothing for those two courses. Rewritten to actually load and run each real source file instead
+> of pattern-matching one file's text, and a `--check` mode now fails the build if the generated
+> file ever goes stale again.
+
+### X
+
+> Found and fixed: our Live Classroom curriculum generator was silently dropping two whole courses
+> after a refactor moved their source files — it kept reporting success. Rewritten to run the real
+> source instead of pattern-matching one file, with a CI check against ever going stale again.
+
+---
+
+## 29. A reproducibility badge you can embed (BB3)
+
+**Status: HOLD.** On PR #348 (batch 10). `GET /api/hub/badge.json` (shields.io endpoint-badge
+shape) and `GET /hub/badge.svg`, both computed from the same function the reproduce ratio and
+`/hub/status` already use.
+
+source: `scripts/hub-badge-test.cjs`
+
+### Arena
+
+> A small badge, computed rather than typed: "N of M receipts reproduce across K projects," or an
+> honest "no receipts yet" on a fresh install, from the exact same function every other reproduce
+> number on the site already runs. Two routes — a shields.io-shaped JSON endpoint and a small
+> server-rendered SVG — so a partner project or a judge's own README can embed the live number
+> instead of a screenshot of one.
+
+### X
+
+> New: an embeddable reproducibility badge (JSON + SVG), computed from the same function every
+> other reproduce number on the site uses — "no receipts yet" on a fresh install, never a fake
+> "0 of 0."
+
+---
+
+## 30. `/receipt <signature>` — check a payout from Telegram (BB4)
+
+**Status: HOLD.** On PR #349 (batch 11). A bot command that composes its reply from the same
+public receipt view the web route already reads; follows the same room policy as every other
+message the bot sends.
+
+source: `lib/hub/receipt-command.js`
+
+### Arena
+
+> You can now ask our Telegram bot directly: `/receipt <signature>` and it replies with what the
+> record shows — the amount, the program version, a shortened signature, and links to check it
+> further — built from the exact same public function the receipt page itself calls, nothing typed
+> by hand. Same honesty rules as everywhere else: it states what the record shows, never why, and
+> it follows the same per-room sending policy every other message from the bot already does.
+
+### X
+
+> New Telegram command: `/receipt <signature>` — replies with what the record shows (amount,
+> program version, links to check it) from the same public data the receipt page reads. No
+> guesswork, no private data.
+
+---
+
+## 31. The receipt lesson, measured (BB5)
+
+**Status: HOLD.** On PR #349 (batch 11). `hub_lesson_read` and `hub_bridge_click` now break out
+per-lesson in the traction report; the store-edition build separately refuses to ship any Hub
+string into the education-only app bundle.
+
+source: `scripts/analytics-engaged-test.cjs` (the "engaged visitor" definition this figure builds
+on) and the batch-11 commit message for the `hub_lesson_read`/`hub_bridge_click` breakdown
+
+### Arena
+
+> Last batch's "school teaches you into the Hub" bridge (E6) now has its own numbers instead of one
+> combined count: how many people actually finished the receipt lesson, and, separately, how many
+> clicked through to the Hub from it — anonymous, aggregate, no wallet involved. And because our
+> Google Play app is a pinned, education-only bundle, its build now refuses outright to ship any
+> Hub-related string into that package — a mistake there can't happen quietly.
+
+### X
+
+> The receipt lesson now has its own numbers: how many finished it, and how many clicked through
+> to the Hub, separately and anonymously. Also: our education-only app build now refuses to ship
+> any Hub string at all — enforced at build time, not by memory.
+
+---
+
+## 32. Phones and screen readers on the public Hub pages (CC3)
+
+**Status: HOLD.** On PR #349 (batch 11). `scripts/hub-a11y-test.cjs` gates five public pages
+(`/hub`, `/hub/demo`, `/for-projects`, `/hub/apply`, a project's pay page) at two phone widths; a
+real hidden-panels bug on the holders tool was found and fixed in the same batch.
+
+source: `scripts/hub-a11y-test.cjs`
+
+### Arena
+
+> Judges click these pages on their phones, so we now gate five of the public Hub pages against a
+> real accessibility check on every push: no page can scroll sideways, every real tap target is at
+> least 44×44 pixels, every image has alt text, every icon-only button has a name a screen reader
+> can announce, and heading order never skips a level. Building this surfaced a real bug on the
+> holders tool — a set of panels that were supposed to be hidden weren't — and that's fixed now too.
+
+### X
+
+> New CI gate: five public Hub pages checked on real phone widths for tap-target size, alt text,
+> icon-button names and heading order, on every push. Building it caught and fixed a real bug on
+> the holders page — some panels weren't actually hidden.
+
+---
+
+## 33. `/hub/verify`, now in all seven languages (CC2)
+
+**Status: HOLD.** On PR #350 (batch 12). Extends item 16's `/hub/verify` (round 2) with the same
+seven-language dictionary pattern the rest of the site uses, served on a no-build boot; also fixes
+a real bug in the evidence bundle's program-version hash check that this same tool surfaced.
+
+source: `scripts/hub-verify-page-test.cjs`, `scripts/i18n-audit.cjs` (the `HUB_FILES` gate list)
+
+### Arena
+
+> `/hub/verify` (round 2) now speaks all seven languages the school does, through the same
+> dictionary pattern and the same CI check that fails the build if a key is ever missed. Along the
+> way we found and fixed a real bug: the evidence bundle's embedded program version was missing
+> several fields the hash is actually computed over, so a completely correct, untouched bundle
+> could print a false "does not match" on that one line. Fixed at the source — the bundle now
+> carries every field the hash needs — and the check that would have caught this earlier is now
+> part of the test.
+
+### X
+
+> `/hub/verify` now works in all 7 languages. Also: found and fixed a real bug where a correct,
+> untouched evidence bundle could print a false "doesn't match" on the program-version check —
+> the bundle was missing fields the hash needed. Fixed at the source.
+
+---
+
+## 34. See exactly what changed between two program versions (CC1)
+
+**Status: HOLD.** On PR #350 (batch 12). `/hub/:project/programs/compare`, a field-by-field diff
+computed in the browser from the two public program-version documents already served.
+
+source: `scripts/hub-compare-test.cjs`
+
+### Arena
+
+> When a project publishes a new program version, you shouldn't have to read two hash-stamped
+> documents side by side yourself to know what changed. `/hub/<project>/programs/compare` diffs the
+> two most recent versions field by field, right in the browser, from the same public documents the
+> site already serves — nothing new is computed server-side, and every unchanged field collapses so
+> the two or three that actually moved stand out.
+
+### X
+
+> New: `/hub/<project>/programs/compare` — a field-by-field diff between a project's two most
+> recent program versions, computed in your browser from the public documents already served.
+> Nothing hidden, nothing new server-side.
+
+---
+
+## 35. A trend line for the reproduce ratio (CC4)
+
+**Status: HOLD.** On PR #350 (batch 12). `lib/reproducibility-history.js`, a daily, append-only,
+hashed record per project, same shape as the holder snapshots.
+
+source: `lib/reproducibility-history.js`
+
+### Arena
+
+> The reproduce ratio on a project's badge is a snapshot of right now. We now also keep a daily,
+> append-only, hashed history of it per project — so a regression is visible the day it happens
+> instead of being invisible until someone happens to check, and a day's number, once written,
+> never moves. Same append-only, hashed pattern as the holder-count history we shipped earlier —
+> the second table in the codebase built this way, on purpose, not a new idea each time.
+
+### X
+
+> New: a daily, hashed, append-only history of each project's reproduce ratio — so a regression
+> shows up the day it happens, not whenever someone checks. Once written, a day's number never
+> moves.
+
+---
+
+## 36. One command to reproduce a receipt (DD1)
+
+**Status: HOLD, and the package is NOT yet published to the npm registry.** On PR #350 (batch 12).
+Built and tested in this repo on every commit that touches it; publishing it to the npm registry
+is pending the owner's own act. **Do not post the plain `npx @clkn/hub-verify` line until that
+publish has actually happened** — until then, the honest form of this post uses the git-ref
+command or points at the repo script directly, exactly as the drafts below do.
+
+source: `packages/hub-verify/README.md`
+
+### Arena
+
+> `scripts/reproduce-receipt.cjs` needed a clone of our repo. The exact same code — copied
+> byte-for-byte by our own build script, not retyped — is now a small, dependency-free package
+> meant to run with one command, no clone, no build. It isn't on the npm registry yet — that
+> publish is the owner's call, still pending — so for now the honest way to run it is straight
+> from the repo: a git-ref `npx` command against this repository, or `node
+> scripts/reproduce-receipt.cjs` in a clone. Same arithmetic, same result, either way. The full
+> command forms are in `packages/hub-verify/README.md`.
+
+### X
+
+> New: the receipt reproducer as a standalone package, `@clkn/hub-verify` — one command, no clone,
+> no build, same code the browser tool and the repo script already run. Not on the npm registry
+> yet (owner's call, pending); today it runs straight from a git ref or the repo script — see
+> packages/hub-verify/README.md.
+
+---
+
+## Posting checklist (round 3)
+
+Same five steps as round 1's checklist above, plus:
+1. Re-check the actual current tip of `main` immediately before posting anything from this round —
+   this whole round was drafted against `main` at `cfb2ce0` (PR #337); a promotion after this
+   draft changes the status line for every item here at once.
+2. For item 36 (the `npx` verifier), confirm the package has actually been published to the npm
+   registry before using the plain `npx @clkn/hub-verify` line — if it hasn't, use the git-ref
+   form or point at the repo script instead, exactly as the draft above does.
