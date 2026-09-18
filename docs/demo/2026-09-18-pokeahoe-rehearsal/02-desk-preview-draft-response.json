@@ -1,0 +1,159 @@
+{
+    "ok": true,
+    "as": "35qfLLSKC1XE9uejUCVnAyr5jAR3L62KCc2XmWXuVCHP",
+    "project": {
+        "id": "poke",
+        "label": "POKEAHOE",
+        "symbol": "POKE",
+        "mint": "HRvw81mktEraX9gZLTHKeYGaFygCSNKuAwNLVE6Tpump",
+        "decimals": 6,
+        "rewardMint": "HRvw81mktEraX9gZLTHKeYGaFygCSNKuAwNLVE6Tpump",
+        "rewardDecimals": 6,
+        "fundingWallet": "HLPXmFGi2WjZaSmM2pjzV9vMZTZCuim8wxSKSdSDJURc",
+        "operatorWallets": [
+            "35qfLLSKC1XE9uejUCVnAyr5jAR3L62KCc2XmWXuVCHP"
+        ],
+        "status": "approved",
+        "approvedAt": 1789753776,
+        "payoutSources": [],
+        "dryRun": true,
+        "brand": {
+            "logo": "/brand/poke/logo.jpg",
+            "accent": "#F5A623",
+            "accent2": "#171923",
+            "tagline": "The Hub's second Lock to Earn project \u2014 a dry run while terms are agreed with the POKEAHOE team.",
+            "socials": {
+                "x": "https://x.com/pokeahoesol",
+                "telegram": "https://t.me/pokeahoecommunity",
+                "website": "https://pkhoe.com"
+            }
+        },
+        "access": {
+            "tier": "comped",
+            "state": "comped",
+            "paidThroughUnix": null,
+            "daysLeft": null
+        }
+    },
+    "effectiveFrom": "2026-09-18",
+    "version": {
+        "hash": "c241be90c0fbb79eda7fdcd4db307dc5ccfc5be5474a2a7f22fded507f868887",
+        "terms": {
+            "poolDailyRaw": "1000000000",
+            "sharePct": 5,
+            "maxSharePct": 25,
+            "minDurationDays": 30,
+            "maxTermDays": 365,
+            "minLockRaw": "100000000",
+            "maxWalletSharePct": 0,
+            "cancelableAllowed": false,
+            "fundedBy": [
+                "HLPXmFGi2WjZaSmM2pjzV9vMZTZCuim8wxSKSdSDJURc"
+            ],
+            "excludeWallets": [
+                "HLPXmFGi2WjZaSmM2pjzV9vMZTZCuim8wxSKSdSDJURc"
+            ],
+            "backdateCapDays": 30,
+            "backdateNotBefore": 0,
+            "payoutSchedule": "weekly",
+            "vesting": "any"
+        }
+    },
+    "wallets": [
+        {
+            "wallet": "8KBWkLZafQQNwvRCTtryqWX14vfS7UvmhigLuESnmtWg",
+            "qualified": true,
+            "reason": null,
+            "reasonText": null,
+            "accrualRaw": "737137068",
+            "shareOfPool": 0.737137
+        },
+        {
+            "wallet": "BWezDQhAVreExqN7wHeNQnzZ6eqFVWS7VtfFvqZQeEAw",
+            "qualified": true,
+            "reason": null,
+            "reasonText": null,
+            "accrualRaw": "149702331",
+            "shareOfPool": 0.149702
+        },
+        {
+            "wallet": "2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8",
+            "qualified": true,
+            "reason": null,
+            "reasonText": null,
+            "accrualRaw": "59567329",
+            "shareOfPool": 0.059567
+        },
+        {
+            "wallet": "DnkTEVbyhRUT8qKGoupX6XmvH4jNosPGYP7SdByb6e8x",
+            "qualified": true,
+            "reason": null,
+            "reasonText": null,
+            "accrualRaw": "34511688",
+            "shareOfPool": 0.034511
+        },
+        {
+            "wallet": "DD3SwRWMp4JXV8n3ekSx6Ktk6uLZABosZYABkuDoqKhA",
+            "qualified": true,
+            "reason": null,
+            "reasonText": null,
+            "accrualRaw": "17713368",
+            "shareOfPool": 0.017713
+        },
+        {
+            "wallet": "96p335d8qFRGfPg5We2STFkd5GPvNtjCBSjF1rXZMACM",
+            "qualified": true,
+            "reason": null,
+            "reasonText": null,
+            "accrualRaw": "1368216",
+            "shareOfPool": 0.001368
+        },
+        {
+            "wallet": "8UxC6d8exdsRZuSXZrFx4enTncds76A3wqkiT2TaEG6A",
+            "qualified": false,
+            "reason": "term_too_short",
+            "reasonText": "no tokens locked for 30 days or more",
+            "accrualRaw": "0",
+            "shareOfPool": 0
+        },
+        {
+            "wallet": "8Cy6DU3JnrCYGKCYfR5avFrxcG5njJHPtrDMqQhopcyF",
+            "qualified": false,
+            "reason": "term_too_short",
+            "reasonText": "no tokens locked for 30 days or more",
+            "accrualRaw": "0",
+            "shareOfPool": 0
+        }
+    ],
+    "totals": {
+        "qualified": 6,
+        "excluded": 2,
+        "dailyPoolRaw": "1000000000"
+    },
+    "budget": {
+        "startUnix": 1789750800,
+        "periods": [
+            {
+                "period": 0,
+                "fromUnix": 1789750800,
+                "obligationRaw": "1000000000",
+                "cumulativeRaw": "1000000000"
+            },
+            {
+                "period": 1,
+                "fromUnix": 1789837200,
+                "obligationRaw": "1000000000",
+                "cumulativeRaw": "2000000000"
+            },
+            {
+                "period": 2,
+                "fromUnix": 1789923600,
+                "obligationRaw": "1000000000",
+                "cumulativeRaw": "3000000000"
+            }
+        ],
+        "totalRaw": "3000000000",
+        "dailyRaw": "1000000000"
+    },
+    "dryRun": true
+}
