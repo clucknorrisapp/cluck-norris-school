@@ -13,16 +13,33 @@ it needs a wallet, a login, or anything from us beyond an HTTP request.
 Written 2026-09-18. Re-read the note below before you start — some of these commands run against
 production today, and some still run only on staging, honestly labelled either way.
 
-**The reviewer's path, in order.** If you have fifteen minutes rather than two, this is the
+**The reviewer's path, in order.** (Every page in this paragraph is on **staging** today —
+`https://staging.clucknorris.app` — and reaches production only on the owner's promote; the
+links use the production host so they stay right after that. See the table below.) If you have
+fifteen minutes rather than two, this is the
 sequence a judge or a second reviewer should actually click through, each stop building on the
 last: [`/hub/judge`](https://clucknorris.app/hub/judge) (the map — which URL answers which
 judging criterion, and the test that pins each claim) → [`/hub/status`](https://clucknorris.app/hub/status)
-(what is live, on which host, at which commit, and how reproducible today) →
+(what is live, on which host, at which commit, and how reproducible today — with a small sparkline
+of the reproducibility ratio over time, from `GET /api/hub/:project/reproducibility/history`, and
+`GET /api/hub/badge.json` / [`/hub/badge.svg`](https://clucknorris.app/hub/badge.svg) if you just
+want the one number as a shields.io-shaped badge to embed) →
 [`/hub/demo`](https://clucknorris.app/hub/demo) (the whole loop once, no wallet, on a labelled
 dry-run fixture) → [`/hub/verify`](https://clucknorris.app/hub/verify) (reproduce one receipt
-yourself) → **the evidence bundle** (§ below — the same reproduction, saved once, checked
-offline forever) → [`/hub/wallet`](https://clucknorris.app/hub/wallet) (the same public record,
-read by address instead of by project) → [`/hub/trust`](https://clucknorris.app/hub/trust) (what
+yourself — the same check also ships as a standalone command, `npx @clkn/hub-verify <receipt-url>`,
+built from `packages/hub-verify`; **not yet published to npm** — publishing is the owner's own go
+— so until then run it from a git ref or this repo, §b below shows both) → **the evidence bundle**
+(§ below — the same reproduction, saved once, checked offline forever) →
+[`/hub/wallet`](https://clucknorris.app/hub/wallet) (the same public record, read by address
+instead of by project) → `/hub/:project/programs/compare` (what changed between two program
+versions, diffed field by field in your own browser from the same public JSON the pages above
+already serve) → [`/hub/glossary`](https://clucknorris.app/hub/glossary) (every term and reason
+code the receipts, the compare page, the wallet view and the lesson use, defined once, in plain
+words, in seven languages) → a receipt you can print (append `?print=1` to any receipt URL — the
+amount, the rule, the signature as text and as a QR code, and the trust-boundary line, formatted
+to keep) → follow a project with no wallet at all (`GET /api/hub/:project/feed.json`, a JSON Feed,
+and `/hub/:project/feed.xml`, its RSS twin — every program version published, batch settled,
+holder snapshot taken and commitment observed, newest first) → [`/hub/trust`](https://clucknorris.app/hub/trust) (what
 none of the above proves, stated plainly). Everything after this paragraph is the detailed,
 runnable version of the middle two stops (`/hub/verify` and the bundle) for a reader who wants to
 run the commands themselves rather than click through the pages.
@@ -41,6 +58,8 @@ Railway auto-deploys both branches; the owner promotes `develop` → `main` by h
 | `/hub`, `/hub/:project` pages | `GET /api/hub/:project/p/:compId/standings` (Buy Special), `GET /api/airdrop/r/:dropId` |
 | | `GET /api/hub/:project/readiness` (Launch Readiness), on-chain commit routes, the POKEAHOE branded page |
 | | `GET /api/hub/:project/batch/:batchId/bundle` and `GET /api/hub-demo/:project/batch/:batchId/bundle` (AA2, the evidence bundle above) |
+| | `/hub/wallet`, `/hub/trust`, `/hub/judge`, `/hub/status`, `/hub/verify`, `/hub/glossary` — every page named in the reviewer's path above — plus `GET /api/hub/wallet/:wallet`, `GET /api/hub/badge.json`, `/hub/badge.svg`, `GET /api/hub/:project/reproducibility/history`, `GET /api/hub/:project/feed.json`, `/hub/:project/feed.xml`, `/hub/:project/programs/compare` and `?print=1` on any receipt page (batches 9–14) |
+| | The Addendum-B settlement journal itself (§g below) — `lib/hub/settle.js`, merged batch 14 (PR #342) |
 
 **Practically: every step below needs `staging.clucknorris.app` today.** Production has real Hub
 data you can browse (`GET /api/hub/:project`, receipts by signature), but the schema, the
@@ -246,13 +265,19 @@ markers pin that the two never drift apart (`scripts/hub-trust-doc-test.cjs`).
   number. The legacy Buy Special *draw* (pre-Hub, paid through the airdropper) carries the same
   honest note on its own page: no receipts were journaled for it.
 <!-- boundary: journal-not-live -->
-- **The Addendum-B settlement journal isn't the live payout path yet.** Every receipt you can
-  fetch today (including through this doc) is still the pre-journal shape — a single payout row,
-  not the append-only per-transfer ledger `receipt.schema.json` documents. The journal is built
-  and unit-tested but sits on its own money-path pull request under two-lens review before it is
-  wired into the live route (`lib/hub/README.md` §5, §6); the review found real gaps (a transfer's
-  *source* is never checked, and a lost-write race under concurrent requests) that block it from
-  merging as-is. Nothing above is affected — none of it depends on that PR.
+- **The Addendum-B settlement journal is now the live payout path for `POST
+  /api/hub/:project/payout`** (merged 2026-09-18, PR #342, five read-only verification rounds in
+  `docs/HUB_JOURNAL_VERIFY_2026-09-18.md` — the source-wallet and cross-project reuse gaps that
+  earlier rounds found are closed; settlement is exact-amount-only, so a transfer either fully
+  matches what a row still owes or nothing is recorded). A receipt paid through that route now
+  carries the newer append-only `settlements[]` shape; the schema change is additive, so an older
+  reader still validates it. **CUNA's own payouts — the platform's only real money moving
+  today — still run through the separate, older `/api/cuna-stake/payout` handler** (`CLAUDE.md`,
+  "CUNA on the Hub — HELD": duplicating CUNA onto a generic Hub project is a later phase, not yet
+  done), which does not write to the journal. So every CUNA receipt you can actually fetch today
+  is still the single-row legacy shape `reproduce-receipt.cjs` already handles — the journal
+  changes nothing you can observe on a real CUNA receipt yet, only on a project settled through
+  the generic Hub route.
 <!-- boundary: ratio-incomplete -->
 - **The reproducibility ratio doesn't yet cover every program kind.** `GET
   /api/hub/:project/reproducibility` counts lock-to-earn and buy-comp rows; giveaway rows are

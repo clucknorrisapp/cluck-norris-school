@@ -96,7 +96,7 @@
     <!-- boundary: giveaway-not-reproducible -->
     <div class="fact" data-clkn-avoid="1" data-boundary="giveaway-not-reproducible">Giveaway rows — a sealed-draw giveaway, and the older, pre-Hub Buy Special draw — don't reproduce today. The reproduce tool handles lock-to-earn and buy-competition receipts only; a giveaway kind says so plainly rather than guessing at a number.</div>
     <!-- boundary: journal-not-live -->
-    <div class="fact" data-clkn-avoid="1" data-boundary="journal-not-live">Every receipt on the Hub today is still the older, single-row payout shape, not the newer per-transfer settlement journal the Hub's own schema documents. That journal is built and tested, but it sits on its own pull request under review before it is wired into a live route — nothing you can read today depends on it.</div>
+    <div class="fact" data-clkn-avoid="1" data-boundary="journal-not-live">The newer per-transfer settlement journal is now the live path for a project paid through the Hub's own payout route — a receipt from that route carries the fuller record the schema documents. CUNA's own payouts, the only real money moving through this today, still run on a separate, older handler that doesn't use it — so the one real receipt you can currently fetch is still the older, single-row shape, and that stays true until CUNA is moved onto the same route.</div>
   </div>
 
   <div class="card">
