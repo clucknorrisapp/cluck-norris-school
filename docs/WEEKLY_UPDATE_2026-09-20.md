@@ -54,3 +54,31 @@ dashboard evidence classes — confirm merged before citing.
 Colosseum Arena (the project's update thread) and X from the CLKN account (X Premium, no 280 limit).
 The pre-window disclosure line, if asked: "everything before Sep 14 13:00 UTC is listed in
 docs/PRE_EVENT_STATE.md in the repo."
+
+## Refresh on Sep 19 checklist (before recording)
+
+Confirm these before finalizing the script and picking the demo URL to show on camera. Don't
+assume from this file — re-check on the day.
+
+- [ ] `git log origin/develop` — confirm PR #339 (Colosseum batch 2: `/for-projects`, traction
+      counters, roadmap extension E1–E9, weekly-update script) is merged. It is, as of this
+      writing (`83e5b11`).
+- [ ] Confirm whether PR #340 (batch 3: E1 reproduce-a-receipt, E2 `/hub/demo`, E4 settlement
+      schemas + README, E5 receipt-teaches, E7 onboarding clock, W5 engine dashboard evidence
+      classes, and the seven-language parity fix for the seedphrase/inheritance lessons) has
+      merged to `develop`. As of 2026-09-18 it has not — it's still on the
+      `claude/normie-quest-sprite-swap-gljw2i` branch.
+- [ ] `git log origin/main` — confirm which of the above is actually **promoted** (owner's
+      explicit go; never assumed). As of 2026-09-18, `main` is at PR #337 — the Hub core, public
+      pages, apply/pay/desk and generalised Lock to Earn engine (W1–W3) are live in production;
+      the front door, traction counters, W5, and every extension item (E1/E2/E4/E5/E7) are on
+      staging only, not yet promoted.
+- [ ] Pick the demo URL to show on camera based on what's actually promoted at recording time:
+      - If only W1–W3 are promoted: show `clucknorris.app/hub` and a real project page
+        (`clucknorris.app/hub/cuna`) — the live, working settlement flow.
+      - If PR #340 is merged and promoted by recording day: show `clucknorris.app/hub/demo` (the
+        no-wallet, DRY-RUN-labelled single-holder walkthrough) instead — it's the cleaner demo
+        surface and needs no wallet on camera.
+      - Never show a `develop`/staging URL as if it were the live product.
+- [ ] Re-read `docs/ARENA_POSTS.md`'s status table immediately before posting anything from it —
+      it is a snapshot from 2026-09-18 and will be stale by the time PR #340 lands.

@@ -211,6 +211,15 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 2** — the disclosure file caught up to every in-window PR; the roadmap
+  extension §7 (E1–E9: reproduce-a-receipt, the no-wallet `/hub/demo` walkthrough, on-chain
+  commitment of the program hash dry-run first, the settlement library as a schema'd public module,
+  receipts that teach, the school→Hub bridge, the operator onboarding clock, Hub pages in seven
+  languages, Arena cadence); the `/for-projects` guided front door with a per-mint checklist over
+  the public feeds; `lib/traction.js` outcome counters derived from durable stores with an
+  owner-only read endpoint and a reproducible report script (honest zeros: Hatchery fee revenue is
+  not reproducible, and the journal/attempt counters read 0 until the settlement journal is wired
+  into the live payout route); the Sep 20 weekly-update script. PR #339.
 - **Whole-repo simplification pass** — consolidated the address regex, the Node-side HTML escaper
   (fixing a missing single-quote escape on token-metadata-derived HTML the same drift class
   CLAUDE.md already documents), and the RPC client to one memoised instance per endpoint;

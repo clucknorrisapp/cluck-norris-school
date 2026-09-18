@@ -104,6 +104,13 @@
       <div class="card"><h3>What the engine would do now</h3><div id="decision"></div></div>
       <div class="card"><h3>The JVP profile on this token</h3><div id="profile"></div></div>
     </div>
+
+    <h2>Evidence, kept separate</h2>
+    <p class="muted">Three different kinds of proof, never mixed. Each is labelled with what it actually is.</p>
+    <p class="note" id="earningsFlag" hidden></p>
+    <div class="card"><h3>Historical transfers (what moved, not why)</h3><p class="muted">Backfilled from Helius for this project's own operator wallet — not a client's wallet. The chain shows what moved; it never shows why. No wallet address is shown here, including ours — the signature alone is enough to look a transfer up on Solscan.</p><div id="transfers"><p class="muted">Loading…</p></div></div>
+    <div class="card" style="margin-top:14px"><h3>Decision log (retained events)</h3><p class="muted">A bounded, retained record of what the engine's own tick has actually decided — distinct from the illustrative replay above and the simulator below. While the engine is paused, nothing is decided, so nothing is logged.</p><div id="decisionLog"><p class="muted">Loading…</p></div></div>
+    <div class="card" style="margin-top:14px"><h3>Illustrative simulator runs (recorded incidents, not live)</h3><p class="muted">Real incidents replayed against the same production decision gates as <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/scripts/engine-sim-test.cjs" target="_blank" rel="noopener noreferrer">the simulator</a> — a fixed reference table, not a trace of this project's own history.</p><div id="simulator"><p class="muted">Loading…</p></div></div>
   </div>
 
   <h2>The hard questions</h2>
@@ -298,6 +305,54 @@
     $('profile').innerHTML = html;
   }
 
+  // ── Evidence class 1: historical transfers — "what moved, not why" ────────────
+  function renderTransfers(p) {
+    var t = p && p.transfers;
+    var el = $('transfers');
+    if (!t) { el.innerHTML = '<p class="muted">Loading…</p>'; return; }
+    if (!t.available || !t.rows || !t.rows.length) { el.innerHTML = '<p class="muted">no data retained for this period</p>'; return; }
+    var html = '<div class="tblwrap"><table><thead><tr><th>time (UTC)</th><th>direction</th><th>token</th><th class="num">amount</th><th>verify</th></tr></thead><tbody>';
+    t.rows.forEach(function (r) {
+      html += '<tr><td>' + esc(r.t ? new Date(r.t).toUTCString() : '—') + '</td><td>' + esc(r.direction === 'in' ? 'in' : 'out') + '</td><td>' + esc(r.symbol || 'TOKEN') + '</td>'
+        + '<td class="num">' + esc(num(r.amount)) + '</td><td>' + (r.signature ? '<a href="https://solscan.io/tx/' + esc(r.signature) + '" target="_blank" rel="noopener noreferrer">' + esc(r.signature.slice(0, 8)) + '…↗</a>' : '—') + '</td></tr>';
+    });
+    html += '</tbody></table></div><p class="stale">' + esc(String(t.rows.length)) + ' most recent transfer(s)' + (t.freshness && t.freshness.stale ? ' · served from cache (refresh failing)' : '') + '.</p>';
+    el.innerHTML = html;
+  }
+  // ── Evidence class 2: retained decision events ────────────────────────────────
+  function renderDecisionLog(p) {
+    var d = p && p.decisionLog;
+    var el = $('decisionLog');
+    if (!d) { el.innerHTML = '<p class="muted">Loading…</p>'; return; }
+    if (!d.retained || !d.rows || !d.rows.length) { el.innerHTML = '<p class="muted">' + esc(d.note || 'no data retained for this period') + '</p>'; return; }
+    var html = '<div class="tblwrap"><table><thead><tr><th>when</th><th>action</th><th>why</th><th class="num">price</th></tr></thead><tbody>';
+    d.rows.slice().reverse().forEach(function (r) {
+      html += '<tr><td>' + esc(rel(r.t)) + '</td><td>' + esc(r.action) + '</td><td>' + esc(r.reason || '—') + '</td><td class="num">' + (r.price == null ? '—' : esc(price(r.price))) + '</td></tr>';
+    });
+    html += '</tbody></table></div><p class="stale">' + esc(String(d.retained)) + ' retained decision(s), most recent first.</p>';
+    el.innerHTML = html;
+  }
+  function renderEarningsFlag(p) {
+    var el = $('earningsFlag');
+    if (p && p.earningsSuspect) { el.hidden = false; el.textContent = 'A stored earnings counter for this project failed a sanity check and is excluded — never shown, and never guessed at.'; }
+    else { el.hidden = true; el.textContent = ''; }
+  }
+  // ── Evidence class 3: illustrative simulator runs ─────────────────────────────
+  function renderSimulator(p) {
+    var s = p && p.simulatorScenarios;
+    var el = $('simulator');
+    if (!s) { el.innerHTML = '<p class="muted">Loading…</p>'; return; }
+    if (!s.length) { el.innerHTML = '<p class="muted">no data retained for this period</p>'; return; }
+    var html = '<div class="tblwrap"><table><thead><tr><th>incident</th><th>window</th><th>decision</th><th>why</th></tr></thead><tbody>';
+    s.forEach(function (row) {
+      var dec = row.decision || {};
+      html += '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.incidentWindow || '—') + '</td><td>' + esc(dec.action || '—') + (dec.urgent ? ' <span class="pill out">urgent</span>' : '') + '</td>'
+        + '<td>' + esc(dec.reason || (dec.fromSym ? 'buy with ' + dec.fromSym : '—')) + '</td></tr>';
+    });
+    html += '</tbody></table></div><p class="stale">Recomputed from the same pure gates as the simulator on every load — never a hardcoded result.</p>';
+    el.innerHTML = html;
+  }
+
   function select(id) {
     SELECTED = id;
     if (OVERVIEW) renderFleet(OVERVIEW);
@@ -308,12 +363,14 @@
     var bf = base.freshness || {};
     $('detailSub').textContent = base.tokenMint + ' · ' + base.venue + (bf.summary === 'stale' ? ' · some panels served from cache (refresh failing)' : bf.summary === 'partial' ? ' · some reads unavailable' : '');
     renderPoolMap(base); renderSplit(base); renderOrganic(base); renderDecision(base); renderProfile(base);
+    renderDecisionLog(base); renderTransfers(base); renderSimulator(base); renderEarningsFlag(base);
     $('volumeChart').innerHTML = '<p class="muted">Loading hourly volume…</p>';
     try { history.replaceState(null, '', '?p=' + encodeURIComponent(id)); } catch (e) {}
     fetch('/api/jvp/project/' + encodeURIComponent(id)).then(function (r) { return r.json(); }).then(function (j) {
       if (!j || !j.success || SELECTED !== id) return;
       renderPoolMap(j.project); renderVolume(j.project); renderOrganic(j.project); renderDecision(j.project); renderProfile(j.project); renderSplit(j.project);
-    }).catch(function () { $('volumeChart').innerHTML = '<p class="err">Hourly volume unavailable right now.</p>'; });
+      renderDecisionLog(j.project); renderTransfers(j.project); renderSimulator(j.project); renderEarningsFlag(j.project);
+    }).catch(function () { $('volumeChart').innerHTML = '<p class="err">Hourly volume unavailable right now.</p>'; $('transfers').innerHTML = '<p class="err">Unavailable right now.</p>'; $('simulator').innerHTML = '<p class="err">Unavailable right now.</p>'; });
   }
 
   fetch('/api/jvp/overview').then(function (r) { return r.json(); }).then(function (o) {

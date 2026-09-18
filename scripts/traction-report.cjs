@@ -56,6 +56,34 @@ for (const [name, c] of Object.entries(out.counters)) {
   if (c.bySource) console.log(`    by source: ${JSON.stringify(c.bySource)}`);
 }
 
+// ── operator onboarding clock (Colosseum E7 / W6b "observed setup time") ──────────────────────
+function fmtDur(sec) {
+  if (sec == null) return "—";
+  const s = Number(sec);
+  if (!Number.isFinite(s)) return "—";
+  const sign = s < 0 ? "-" : "";
+  const a = Math.abs(Math.round(s));
+  if (a < 3600) return `${sign}${Math.round(a / 60)}m`;
+  if (a < 86400) return `${sign}${(a / 3600).toFixed(1)}h`;
+  return `${sign}${(a / 86400).toFixed(1)}d`;
+}
+if (out.onboarding && out.onboarding.length) {
+  console.log("\nOperator onboarding clock — observed setup time (W6b):\n");
+  const obRows = out.onboarding.map((o) => ({
+    project: o.project,
+    "apply→approve": fmtDur(o.deltas.applyToApprove),
+    "approve→v1": fmtDur(o.deltas.approveToFirstVersion),
+    "v1→armed": fmtDur(o.deltas.firstVersionToFirstArm),
+    "armed→batch": fmtDur(o.deltas.firstArmToFirstBatch),
+    label: o.label,
+  }));
+  const obCols = ["project", "apply→approve", "approve→v1", "v1→armed", "armed→batch", "label"];
+  const obWidths = obCols.map((c) => Math.max(c.length, ...obRows.map((r) => String(r[c]).length)));
+  console.log(obCols.map((c, i) => pad(c, obWidths[i])).join("  "));
+  console.log(obWidths.map((w) => "-".repeat(w)).join("  "));
+  for (const r of obRows) console.log(obCols.map((c, i) => pad(r[c], obWidths[i])).join("  "));
+}
+
 if (out.caveats && out.caveats.length) {
   console.log("\nCaveats (say these out loud before quoting a number above):\n");
   for (const c of out.caveats) console.log("  - " + c);

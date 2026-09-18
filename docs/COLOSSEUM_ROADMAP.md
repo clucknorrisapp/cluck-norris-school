@@ -334,6 +334,12 @@ Each line: the question · our default · Codex's recommendation · the risk of 
    an operator who agrees, a funded wallet, a published version and then *elapsed time* before
    there are receipts worth showing. Decided Sep 17, there is time for real usage. Decided in
    the Sep 22–26 block as revision 2 had it, the entry ships with a dry run and no users.
+   ✅ **DECIDED 2026-09-18 (owner): POKEAHOE.** "pokeahoe will be our dry run or next project to
+   use the lock and earn, we will build them a page just with their logos and make it special for
+   them." So the second project is POKE (mint `HRvw81mktEraX9gZLTHKeYGaFygCSNKuAwNLVE6Tpump`, the
+   community the engine work already served). It ships as a **labelled dry run** until the POKE
+   team agrees terms and a funding wallet — nothing accrues or pays before that — with a branded
+   project page (their logo and colours, "project-provided", never endorsement). Item **E10** in §7.
 2. **Program funding rule.** Default: shortfall shown, not required. Codex: **require a fresh
    funding check for the next period before initial arming**, plus explicit shortfall and
    outage behaviour. Risk of the default: obligations grow with no demonstrated ability to pay.
@@ -402,6 +408,8 @@ the published inputs, offline, without trusting us."*
 | **E7** | **Operator onboarding clock.** Setup time measured automatically from `apply` → first program version published → first batch signed, per project, stored with the project record, printed by the W9 report as the W6b "observed setup time" column. | Build | Viability | The timestamps exist for every new project; the report prints the three deltas; CUNA (pre-window) is labelled n/a. |
 | **E8** | **Hub pages in seven languages.** `/hub`, project, program, receipt, apply and pay through the tool-page dictionary pattern (`public/i18n/*.json`), and the i18n audit extended to the Hub pages so a missing key fails CI. | Educate | Product | Audit passes for all seven; the owner eyeballs es + zh on a phone. |
 | **E9** | **Arena + X cadence.** The four W10 updates, plus one Arena post per shipped extension item (draft in `docs/ARENA_POSTS.md`, owner posts). No post before Sep 14 kickoff was the rule; after it, cadence is the cheapest visible traction. | Build (with others) | Founder Communication | Drafts exist for E1–E8 as each merges; the owner posts. |
+
+| **E10** | **POKEAHOE, the second project — branded and dry-run first (owner, 2026-09-18).** Project branding on the Hub record (`brand: { logo, accent, tagline }` — reviewed, project-provided, rendered with the "project-provided" label), a special POKE project page and lock site carrying their logo and colours, seeded as a **dry run** (`dryRun: true`, excluded from counts, "terms to be agreed with the POKEAHOE team" on the page) so the owner can show it to the team and flip it to live once terms and a funding wallet exist. | Build (with others) | Traction, Founder+Market Fit | Renders at `/hub/poke` with the badge; nothing accrues or pays; the brand fields are the only project-specific code path (no POKE-only template). |
 
 **Order:** E1 → E2 → E4 → E5 → E3 → E6 → E7 → E8, with E9 alongside. E1 and E2 start
 2026-09-18 (batch 3). E3 is the only item that needs the owner's hand (a signature) and ships

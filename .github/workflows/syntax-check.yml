@@ -122,6 +122,19 @@ jobs:
       # lesson the block links to still exists in src/App.jsx LESSONS (C4).
       - name: Project Hub — teach the button (Addendum C, tests 15–17)
         run: node scripts/hub-teach-test.cjs
+      # The Colosseum judges' demo (roadmap W7 acceptance target, E2): every number under /hub/demo
+      # is derived by the real Hub libs from fixture inputs (not hand-typed), the batch/receipts are
+      # labelled dry runs, and the fixture is invisible to the real registry, the public index and
+      # the accrual scheduler — "demo"/"demo-b" can never be approved as real project ids.
+      - name: Project Hub — Colosseum demo fixture (derivation + exclusion)
+        run: node scripts/hub-demo-fixture-test.cjs
+      # Roadmap extension E5 ("the receipt teaches"): a settled receipt's walkthrough sums to its
+      # own amount via accruedByWallet (the SAME function the ledger uses), a partial payment is
+      # explained as partial, missing inputs never produce a fabricated walkthrough, and no
+      # APR/APY/per-year language or the word "owed" reaches the module's output or the rendered
+      # hub.html page.
+      - name: Project Hub — the receipt teaches (E5)
+        run: node scripts/hub-explain-test.cjs
       # Analytics: a visitor counts as ENGAGED only after a second page or a funnel event, and
       # views are keyed by the real Host header. Since 2026-08-16 the site records ~4,500
       # one-page, no-referrer "visitors" a day that BOT_RE cannot see; this is what stops that
@@ -208,10 +221,20 @@ jobs:
       # reach /api/hub — and hash the terms a program ran under.
       - name: Hub public views (no private fields, stable terms hash, honest totals)
         run: node scripts/hub-public-test.cjs
+      # E1 (docs/COLOSSEUM_ROADMAP.md §1 "the number"): a receipt's amount re-derived from the
+      # batch's own published inputs (periods, prior paid, prior reserved), reconstructed purely
+      # from durable timestamps — MATCH, a tampered MISMATCH, and an honest MISSING_INPUTS naming
+      # what is missing; the reproducibility ratio; the CLI script's --offline mode with no server.
+      - name: Hub receipt reproduction (the number — MATCH/MISMATCH/MISSING_INPUTS, --offline)
+        run: node scripts/reproduce-receipt-test.cjs
       # The per-project Lock to Earn engine: config from the version in force, the two new rules,
       # one hour of accrual, the tick over the project's own keys, the holder view.
       - name: Hub engine (Lock to Earn for any project)
         run: node scripts/hub-engine-test.cjs
+      # Project branding (logo/accent/tagline/socials — validated, never a remote URL) and the
+      # dryRun placeholder (Colosseum E10, POKEAHOE): cannot be armed, excluded from traction.
+      - name: Hub branding + dry-run projects (POKEAHOE)
+        run: node scripts/hub-brand-test.cjs
       # Platform access tiers: standard / small / comped, price resolved at the payment instant,
       # the CLKN alternative priced at that block, comped needs a reason, unpaid cannot arm.
       - name: Hub access tiers (0.5 / 0.25 SOL a month, comped)
@@ -468,6 +491,15 @@ jobs:
       # throwaway key and no secrets.
       - name: admin mutation discipline (405 on GET, explicit project, pool allowlist)
         run: node scripts/mutating-get-guard-test.cjs
+      # Colosseum roadmap E4: the settlement library's public contract. Every schema in
+      # lib/hub/schema/ validates a real fixture built the same way lib/hub/project.js,
+      # lib/hub/ledger.js and lib/hub/public.js build one (including the exact wire subset
+      # routes.js puts on the wire for a program version), GET /hub/schema/:name.json serves
+      # each file byte-identical to disk with a cache header and 404s an unknown name, and
+      # GET /api/hub/clkn's live body validates end to end. Boots the real server, so it lives
+      # here rather than in node-check.
+      - name: Hub settlement-library JSON Schemas (lib/hub/schema, E4)
+        run: node scripts/hub-schema-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)

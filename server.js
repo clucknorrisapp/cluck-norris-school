@@ -6795,6 +6795,25 @@ let _engineProofCache = null, _engineProofAt = 0;
 // pause, roll or sign, and the responses carry no operator pubkey, float or P&L. The treasury
 // vault is CLKN's own book, not a client, so it is not part of the public story.
 const JVP_PUBLIC_PROJECTS = ["clkn", "poke", "cuna", "dnc", "rose"];
+// One page of enhanced history for a project's OPERATOR wallet — the "historical transfers"
+// evidence class (W5). Same shape/pattern as owners-snapshot's `enhancedAddress` dependency:
+// bounded, timed-out, non-throwing on a bad status. Injected into lib/jvp-dashboard.js so that
+// pure layer never makes a network call of its own; jvp-dashboard sanitizes the result (no
+// wallet addresses, no operator pubkey — only signature/direction/symbol/amount/time) and
+// memo() there serves last-good on a failed refresh, same as the Jupiter/GeckoTerminal feeds.
+async function jvpOperatorHistory(wallet, { limit = 50 } = {}) {
+  const key = process.env.HELIUS_API_KEY;
+  if (!key || !wallet) return [];
+  const u = new URL(`https://api.helius.xyz/v0/addresses/${wallet}/transactions`);
+  u.searchParams.set("api-key", key);
+  u.searchParams.set("limit", String(Math.max(1, Math.min(100, Number(limit) || 50))));
+  try { heliusUsage.note("getEnhancedTransactionsByAddress", "jvp-dashboard", "api.helius.xyz"); } catch (_) {}
+  const r = await fetch(u, { signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(`helius addresses ${r.status}`);
+  const a = await r.json();
+  return Array.isArray(a) ? a : [];
+}
+const JVP_HELIUS = { fetchAddressHistory: jvpOperatorHistory };
 app.get("/api/jvp/overview", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   try {
@@ -6808,7 +6827,7 @@ app.get("/api/jvp/project/:id", async (req, res) => {
   if (!JVP_PUBLIC_PROJECTS.includes(id)) return res.status(404).json({ success: false, error: "not_found" });
   try {
     const hours = Math.max(24, Math.min(720, parseInt(req.query.hours, 10) || 168));
-    const out = await jvpDashboard.projectDetail({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, id, hours });
+    const out = await jvpDashboard.projectDetail({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, id, hours, helius: JVP_HELIUS });
     if (!out) return res.status(404).json({ success: false, error: "not_found" });
     return res.status(200).json({ success: true, updatedAt: Date.now(), project: out });
   } catch (e) { console.warn("[jvp] project failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
@@ -7821,6 +7840,14 @@ app.all("/api/buycomp/send", async (req, res) => {
 // browser — the page proves itself rather than asking to be believed.
 const hubStore = require("./lib/hub/store");
 const hubPublic = require("./lib/hub/public");
+// The settlement library's public contract (Colosseum roadmap E4, lib/hub/README.md): the wire
+// shapes of a program version, a batch and a receipt are documented as JSON Schema and served
+// read-only so a second product can validate a Hub JSON body without reading this file. Shared by
+// every place a body gets stamped with $schema (this file and lib/hub/routes.js).
+const HUB_SCHEMA_DIR = join(__dirname, "lib", "hub", "schema");
+const HUB_SCHEMA_NAMES = new Set(["program-version", "batch", "receipt", "project-public"]);
+function HUB_SCHEMA_URL(name) { return `https://clucknorris.app/hub/schema/${name}.json`; }
+const hubProject = require("./lib/hub/project");
 function hubProjects() {
   const built = {
     clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9, rewardMint: CLKN_MINT, rewardDecimals: 9 },
@@ -7834,7 +7861,10 @@ function hubProjects() {
     // The reward asset can differ from the locked token (a project may pay in another mint);
     // its decimals are what the public totals must be formatted with (deep dive P1-036).
     built[id] = { id, label: String(p.label || id).slice(0, 64), symbol: String(p.symbol || id.toUpperCase()).slice(0, 12), mint: String(p.mint), decimals,
-      rewardMint: String(p.rewardMint || p.mint), rewardDecimals: Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : decimals };
+      rewardMint: String(p.rewardMint || p.mint), rewardDecimals: Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : decimals,
+      // dryRun/brand (Colosseum E10) — carried through so the public page can show the DRY RUN
+      // badge and the project's logo/accent/tagline. Generic for any registry project.
+      dryRun: p.dryRun === true, brand: p.brand || null };
   }
   return built;
 }
@@ -7846,7 +7876,11 @@ function hubProjectView(project) {
     const days = hubStore.read(kv, project.id, "days", null);
     if (days && Object.keys(days).length) {
       stake = hubPublic.stakeView({ days, paid: hubStore.read(kv, project.id, "paid", {}), batches: hubStore.read(kv, project.id, "batches", {}),
-        decimals: Number.isInteger(project.rewardDecimals) ? project.rewardDecimals : (project.decimals || 9) });   // reward-asset decimals, not the locked token's (P1-036)
+        decimals: Number.isInteger(project.rewardDecimals) ? project.rewardDecimals : (project.decimals || 9),   // reward-asset decimals, not the locked token's (P1-036)
+        // Additive (roadmap E5, "the receipt teaches"): lets each receipt attribute its own hourly
+        // accrual slices and the program version they ran under. Missing or unreadable state just
+        // degrades every row's `explanation` to "not retained" — never a fabricated walkthrough.
+        project, programState: hubStore.read(kv, project.id, "state", null) });
     }
   } catch (_) { /* a project without a programme store is not an error */ }
   if (project.id === "cuna") {
@@ -7862,7 +7896,10 @@ app.get("/api/hub", (req, res) => {
   try {
     const projects = Object.values(hubProjects()).map((p) => {
       const v = hubProjectView(p);
-      return { id: p.id, label: p.label, symbol: p.symbol, mint: p.mint, programs: v.totals.programs, receipts: v.totals.receipts };
+      // Dry runs (Colosseum E10) are LISTED, with the badge, so the owner can show the team the
+      // page — never hidden — but their programs/receipts are always 0 (they can never arm), so
+      // they add nothing to anyone reading the numbers across the list.
+      return { id: p.id, label: p.label, symbol: p.symbol, mint: p.mint, programs: v.totals.programs, receipts: v.totals.receipts, dryRun: p.dryRun === true, brand: p.brand || null };
     });
     return res.status(200).json({ ok: true, projects });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
@@ -7871,7 +7908,9 @@ app.get("/api/hub/:project", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=30");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
-  try { return res.status(200).json({ ok: true, project: hubProjectView(p) }); }
+  // $schema is stamped here (never inside lib/hub/public.js's pure projectView) so the library
+  // stays free of a hardcoded, deployment-specific URL — see lib/hub/README.md §4/E4.
+  try { return res.status(200).json({ ok: true, project: { ...hubProjectView(p), $schema: HUB_SCHEMA_URL("project-public") } }); }
   catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 app.get("/api/hub/:project/wallet/:wallet", (req, res) => {
@@ -7897,6 +7936,95 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
     return res.status(200).json({ ok: true, ...r });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// ── Colosseum judges' demo (roadmap W7 acceptance target / design §6, E2): a fixture project
+// "demo" (+ "demo-b" to prove isolation), fully derived from the real Hub libs over fabricated
+// addresses — no wallet needed, no chain call, no real registry entry, never mixed with the real
+// hub, the Lock of Fame, traction counters or the accrual scheduler (all three read from
+// hubStore's real registry / kv; this module never writes to either). Every JSON body here carries
+// dryRun:true. See lib/hub/demo-fixture.js for how the numbers are derived.
+const hubDemoFixture = require("./lib/hub/demo-fixture");
+app.get("/api/hub-demo", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const d = hubDemoFixture.get();
+    const summarize = (p) => ({ id: p.project.id, label: p.project.label, symbol: p.project.symbol, mint: p.project.mint,
+      holders: p.holders.length, qualifying: p.holders.filter((h) => h.qualifies).length, dryRun: true });
+    return res.status(200).json({ ok: true, dryRun: true, projects: [summarize(d.demo), summarize(d["demo-b"])] });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/hub-demo/:project", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const id = String(req.params.project || "").toLowerCase();
+  try {
+    const p = hubDemoFixture.get()[id];
+    if (!p) return res.status(404).json({ ok: false, error: "no such demo project" });
+    return res.status(200).json({ ok: true, project: p });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/hub-demo/:project/r/:id", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const id = String(req.params.project || "").toLowerCase();
+  try {
+    const p = hubDemoFixture.get()[id];
+    if (!p) return res.status(404).json({ ok: false, error: "no such demo project" });
+    const r = (p.receipts || {})[String(req.params.id || "")];
+    if (!r) return res.status(404).json({ ok: false, error: "no such receipt" });
+    return res.status(200).json({ ok: true, dryRun: true, projectId: id, receipt: r });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
+// ── E1: reproduce a receipt from the published inputs (Colosseum roadmap §1 "the number") ─────
+// lib/hub/reproduce.js is the pure core scripts/reproduce-receipt.cjs runs on a reader's own
+// machine; these two routes publish exactly what it needs and nothing else. Read-only, no wallet,
+// no key. The lock-to-earn payout (lib/cuna-payout.js, CUNA aliased onto it — lib/hub/store.js)
+// carries no program-version hash of its own today, so `programVersion`/`hash` come back null —
+// reported honestly rather than invented (see the file header for why).
+const hubReproduce = require("./lib/hub/reproduce");
+app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const batches = hubStore.read(kv, p.id, "batches", {}) || {};
+    const bt = batches[String(req.params.batchId || "")];
+    if (!bt) return res.status(404).json({ ok: false, error: "no such batch" });
+    const days = hubStore.read(kv, p.id, "days", {}) || {};
+    const dec = Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : (Number.isInteger(p.decimals) ? p.decimals : 9);
+    // Only wallets already SENT in this batch are built — the same public/private line
+    // lib/hub/public.js draws (a batch row with no signature is never public). Optional
+    // ?wallet= narrows to one, so a reader reproducing a single receipt fetches one small file.
+    const wanted = String(req.query.wallet || "").trim();
+    const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
+    if (wanted) {
+      if (!all[wanted]) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
+      return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: all[wanted] } });
+    }
+    return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: all });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// { batches: [{batchId, total, reproduced, mismatched, missingInputs, period}], overall } —
+// every settled row of every batch, reproduced from the inputs the route above publishes. In-memory
+// 5-minute cache (this is real work over the whole ledger, not a lookup) on top of the HTTP cache
+// header, same pattern as the other Hub read routes.
+const HUB_REPRO_CACHE = new Map();   // projectId -> { at, data }
+const HUB_REPRO_CACHE_MS = 5 * 60 * 1000;
+app.get("/api/hub/:project/reproducibility", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const id = String(req.params.project || "").toLowerCase();
+  const p = hubProjects()[id];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const cached = HUB_REPRO_CACHE.get(id);
+    if (cached && Date.now() - cached.at < HUB_REPRO_CACHE_MS) return res.status(200).json(cached.data);
+    const batches = hubStore.read(kv, id, "batches", {}) || {};
+    const days = hubStore.read(kv, id, "days", {}) || {};
+    const otherPrograms = hubProjectView(p).programs.filter((pr) => pr.kind !== "lock-to-earn");
+    const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms });
+    const data = { ok: true, project: id, batches: rep.batches, overall: rep.overall };
+    HUB_REPRO_CACHE.set(id, { at: Date.now(), data });
+    return res.status(200).json(data);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 // Live platform-access pricing for the pre-registration apply page (hub-apply.html) — the
 // per-project quote at /api/hub/:project/access needs an already-registered project, but a
 // prospective applicant has none yet. This reads the same append-only schedule
@@ -7909,10 +8037,27 @@ app.get("/api/hub-pricing", (req, res) => {
     return res.status(200).json({ ok: true, standardSol: hubAccess.priceLamports("standard", now) / 1e9, smallSol: hubAccess.priceLamports("small", now) / 1e9 });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// Read-only JSON Schema for the settlement library's wire entities (E4) — no directory listing,
+// an explicit allowlist of names, 404 for anything else. Each file's own $id already matches the
+// URL it is served at, so a consumer never has to be told the mapping out of band.
+app.get("/hub/schema/:name.json", (req, res) => {
+  const name = String(req.params.name || "");
+  if (!HUB_SCHEMA_NAMES.has(name)) return res.status(404).json({ ok: false, error: "not_found" });
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("application/schema+json");
+  res.sendFile(join(HUB_SCHEMA_DIR, `${name}.schema.json`));
+});
 // Explicit routes so the page works on a no-build boot (CI) and gets normal cache headers.
 app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
 app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
 app.get("/hub/:project/desk", (req, res) => { res.sendFile(join(__dirname, "public", "hub-desk.html")); });
+// Registered BEFORE the generic /hub/:project pattern below so a literal "demo" / "demo-b" always
+// hits the fixture page, never the real one — a pasted /hub/demo link can never resolve to a real
+// project id later reusing that name (store.js's ID_RE would allow "demo" to be registered for
+// real; this ordering plus the fixture never touching the real registry is the actual guarantee).
+app.get(["/hub/demo", "/hub/demo/p/:program", "/hub/demo/r/:id", "/hub/demo-b"], (req, res) => {
+  res.sendFile(join(__dirname, "public", "hub-demo.html"));
+});
 app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:program", "/hub/:project/r/:sig"], (req, res) => {
   res.sendFile(join(__dirname, "public", "hub.html"));
 });
@@ -7968,6 +8113,9 @@ hubRoutes.mount(app, {
   kv, adminAuthOK, publicErrMsg, vault: whirlpoolMM.vault,
   connection: () => require("./lib/rpc").connection("confirmed"),
   scanDeps: async () => hubScanDeps, alert: hubAlert,
+  // E4: stamp $schema onto a program-version or batch body wherever routes.js builds one, so a
+  // consumer never has to be told the mapping out of band — see lib/hub/README.md §4.
+  schemaUrl: HUB_SCHEMA_URL,
   // Platform access payments (0.5 / 0.25 SOL a month, or the CLKN equivalent quoted at the
   // moment of payment). SOL lands where the tools pass collects it, CLKN where the Hatchery
   // does; both are lazy because those constants are declared further down this file.
@@ -7978,7 +8126,10 @@ hubRoutes.mount(app, {
   // The built-in programmes are not registry rows, so the duplicate-mint guard could not see them:
   // a second project was approvable on CUNA's live mint (deep dive P1-030). Lazy — SUPPLY_FEEDS is
   // declared further down.
-  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint }),
+  // "demo" / "demo-b" are the Colosseum fixture ids (lib/hub/demo-fixture.js, /hub/demo) — reserved
+  // by id (not mint) so a real project can never be approved under either name and collide with
+  // the fixture's routes.
+  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null }),
   getTx: async (sig) => {
     const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
     return r && r.result;
@@ -14135,6 +14286,44 @@ for (const [id, feed] of Object.entries(SUPPLY_FEEDS)) {
   });
 }
 
+// ── Hub: seed the POKEAHOE dry run (Colosseum E10; owner 2026-09-18: "pokeahoe will be our dry
+// run or next project to use the lock and earn ... make it special for them"). Terms and a
+// funding wallet are NOT agreed with the team yet, so this seeds ONLY a labelled placeholder:
+// dryRun:true, no funding wallet, no program version — which lib/hub/engine.js refuses to arm and
+// lib/hub/routes.js refuses to pay, regardless of this seed. Idempotent (only writes if "poke" is
+// not already a registry row), placed here because SUPPLY_FEEDS above must exist first for the
+// reserved-mint guard. Generic branding fields only — no POKE-only code path elsewhere.
+(function seedPokeDryRun() {
+  try {
+    const reg = hubStore.readRegistry(kv) || {};
+    if (reg.poke) return; // already seeded, or an owner has since approved it for real — never overwrite
+    const mintInfo = { decimals: 6, tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", extensions: [] }; // pump.fun mint, classic SPL Token program
+    const project = hubProject.validateProject({
+      id: "poke", label: "POKEAHOE", symbol: "POKE", mint: POKE_MINT,
+      dryRun: true,
+      brand: {
+        // Real logo, fetched from DexScreener's public token metadata for this mint (see
+        // public/brand/poke/README.md for the source URL and how to refresh it) and committed
+        // locally — never fetched at request time.
+        logo: "/brand/poke/logo.jpg",
+        accent: "#F5A623", accent2: "#171923",
+        tagline: "The Hub's second Lock to Earn project — a dry run while terms are agreed with the POKEAHOE team.",
+        // Project-provided socials (same DexScreener metadata) — rendered "project-provided",
+        // never as an endorsement.
+        socials: { x: "https://x.com/pokeahoesol", telegram: "https://t.me/pokeahoecommunity", website: "https://pkhoe.com" },
+      },
+      accessTier: "comped", accessNote: "dry run — platform access does not apply until real terms are agreed",
+    }, mintInfo);
+    const next = hubProject.approveProject(reg, project, {
+      nowUnix: Math.floor(Date.now() / 1000),
+      reserved: { clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint },
+    });
+    const landed = typeof kv.setVerified === "function" ? kv.setVerified(hubStore.REGISTRY_KEY, next) === true : (hubStore.writeRegistry(kv, next), true);
+    if (!landed) { console.warn("[hub] POKE dry-run seed did not persist — check DATA_DIR; will retry on next boot"); return; }
+    console.log("[hub] seeded POKEAHOE as a DRY RUN project (dryRun:true, no funding wallet, no program version)");
+  } catch (e) { console.warn("[hub] POKE dry-run seed skipped: " + (e && e.message)); }
+})();
+
 // -- GeckoTerminal liquidity/price fallback (shared by /api/token-overview) --
 // DexScreener stops indexing a pair ~24h after its last trade, which makes a
 // quiet-but-real token look like it has zero liquidity. GeckoTerminal indexes
@@ -17369,6 +17558,12 @@ app.use((req, res, next) => {
 // -- Vendored libraries (served from same origin so tracking-prevention browsers
 // don't block third-party CDN scripts that the airdrop tool depends on) --
 app.use("/vendor", express.static(join(__dirname, "public", "vendor"), { maxAge: "30d", immutable: true }));
+
+// -- Hub project branding (logos) — explicit mount so it works on a no-build boot too (public/ is
+// otherwise only reachable through the vite dist copy, CLAUDE.md's "public/ is NOT mounted
+// directly" trap). Local files only; lib/hub/brand.js refuses any brand.logo value that is not a
+// path under here.
+app.use("/brand", express.static(join(__dirname, "public", "brand"), { maxAge: "1d" }));
 
 // -- Homepage: a lightweight front door at / (learn + build + token story). The
 // Preview/fire the school credential watcher manually: /api/grad-alert-test?key=…[&run=1].
