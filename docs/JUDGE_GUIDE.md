@@ -111,3 +111,9 @@ cites — `docs/HUB_VERIFY.md` §(f) states the rule.
 
 Codex reviews every pull request against `docs/CODEX_REVIEWER_BRIEF.md` before it merges — a
 second, independent set of eyes on the money paths and the claims above, not a rewrite.
+
+## The glossary
+
+`/hub/glossary` — every term and reason code the pages above use (a program's own fields, a
+disqualify code, a settlement status), defined in plain English, anchorable, and linked from
+wherever the code itself appears. Pinned by `scripts/hub-glossary-test.cjs`.

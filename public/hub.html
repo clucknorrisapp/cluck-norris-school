@@ -169,12 +169,18 @@
   function amt(v, sym) { if (v == null || v === '') return '—'; var n = Number(v); var s = isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: 6 }) : String(v); return s + (sym ? ' ' + esc(sym) : ''); }
   function acct(a) { return '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/account/' + encodeURIComponent(a) + '">' + esc(shortAddr(a, 5, 4)) + '</a>'; }
   function txLink(sig) { return sig ? '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(sig) + '">' + esc(shortAddr(sig, 6, 6)) + '</a>' : '<span class="small">—</span>'; }
+  // EE2: the handful of these pill values that are actual glossary reason codes — not every
+  // state (e.g. "paid"/"settled") is a code, and "cancelled" here is a batch's own state, not the
+  // eligibility code of the same spelling, so it is deliberately left off this set rather than
+  // risk linking to the wrong definition.
+  var GLOSSARY_PILL_CODES = { dq: 1, manual: 1, sold: 1, 'moved-out': 1, 'locked-not-a-sell': 1, unverified: 1, tx_error: 1, operator_unpay: 1 };
   function pill(state) {
     // held/sold/moved-out/locked-not-a-sell/unverified: the hold-through classification (PR #298
     // — a lock is not a sell, so it is a warn, never a bad, alongside a genuine "still verifying").
     var m = { settled: 'ok', paid: 'ok', qualified: 'ok', eligible: 'ok', confirmed: 'ok', held: 'ok', submitted: 'warn', manual: 'warn', pending: 'warn', 'locked-not-a-sell': 'warn', unverified: 'warn', dq: 'bad', cancelled: 'bad', sold: 'bad', 'moved-out': 'bad' };
     var label = { 'no-receipt': 'no receipt on file', 'confirmed-manually': 'confirmed by hand', dq: 'disqualified', manual: 'reviewed by hand', 'moved-out': 'moved the bag out', 'locked-not-a-sell': 'locked — not a sell', unverified: 'not verified' }[state] || String(state || '').replace(/-/g, ' ');
-    return '<span class="pill ' + (m[state] || '') + '">' + esc(label) + '</span>';
+    var text = GLOSSARY_PILL_CODES[state] ? '<a href="/hub/glossary#' + encodeURIComponent(state) + '">' + esc(label) + '</a>' : esc(label);
+    return '<span class="pill ' + (m[state] || '') + '">' + text + '</span>';
   }
   function verifyCell(sig) { return sig ? '<span class="verify" data-sig="' + esc(sig) + '"><span class="small">not checked</span></span>' : '<span class="small">—</span>'; }
 
@@ -523,7 +529,10 @@
       return '<details class="explain"><summary>How this number was computed</summary><div class="fact">The inputs for this receipt were not retained' + (why ? ' (' + why + ')' : '') + ', so no walkthrough can be shown here — the amount above is still the one that was actually sent, on the transaction below.</div></details>';
     }
     var rows = e.steps.map(function (s) {
-      return '<li><div class="fact"><b>' + esc(s.label) + ':</b> ' + esc(s.value) + '</div><div class="fact" style="margin-top:2px">' + esc(s.rule) + (s.lesson && s.lesson.href ? ' <a href="' + esc(s.lesson.href) + '">Learn this →</a>' : '') + '</div></li>';
+      // EE2: every step key here (term_rule, accrual_window, pro_rata_share, subtotal,
+      // prior_payments, place_rule, what_was_bought, computed) is a glossary term id.
+      var label = s.key ? '<a href="/hub/glossary#' + encodeURIComponent(s.key) + '">' + esc(s.label) + '</a>' : esc(s.label);
+      return '<li><div class="fact"><b>' + label + ':</b> ' + esc(s.value) + '</div><div class="fact" style="margin-top:2px">' + esc(s.rule) + (s.lesson && s.lesson.href ? ' <a href="' + esc(s.lesson.href) + '">Learn this →</a>' : '') + '</div></li>';
     }).join('');
     return '<details class="explain"><summary>How this number was computed' + (e.matchesReceipt ? '' : ' (could not be fully re-checked)') + '</summary><ul class="facts">' + rows + '</ul></details>';
   }

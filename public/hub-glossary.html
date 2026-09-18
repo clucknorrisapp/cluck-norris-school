@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>The Hub Glossary</title>
+<meta name="description" content="Every term and reason code the Project Hub's receipts, wallet look-up, compare page and standings use, defined in plain words, each linked to the lesson that teaches it."/>
+<meta property="og:title" content="The Hub Glossary — Cluck Norris"/>
+<meta property="og:description" content="Every term and reason code the Project Hub's receipts, wallet look-up, compare page and standings use, defined in plain words, each linked to the lesson that teaches it."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/hub/glossary"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="The Hub Glossary — Cluck Norris"/>
+<meta name="twitter:description" content="Every term and reason code the Project Hub's receipts, wallet look-up, compare page and standings use, defined in plain words, each linked to the lesson that teaches it."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:28px; letter-spacing:.5px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2.5px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .intro b { color:var(--text); }
+  .sec-title { font-family:var(--disp); font-size:15px; letter-spacing:2px; margin:0 0 10px; color:var(--gold); text-transform:uppercase; }
+  .search-input { width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:11px 13px; color:var(--text); font-family:var(--body); font-size:14px; outline:none; min-height:44px; }
+  .search-input:focus { border-color:var(--accent); }
+  .kind-group { margin-top:6px; }
+  .kind-group h2 { font-family:var(--disp); font-size:13px; letter-spacing:2px; color:var(--gold); text-transform:uppercase; margin:18px 0 8px; }
+  .kind-group h2:first-child { margin-top:0; }
+  .entry { border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); padding:12px 0; scroll-margin-top:16px; }
+  .entry:first-of-type { border-top:none; padding-top:0; }
+  .entry-head { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .entry-head h3 { font-family:var(--disp); font-weight:400; font-size:16px; color:var(--text); }
+  .entry-code { font-family:var(--mono); font-size:11.5px; color:#D1D5DB; }
+  .copy-link { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:32px; padding:2px 8px; background:transparent; border:1px solid var(--border); border-radius:6px; color:var(--sub); font-size:11px; letter-spacing:1px; cursor:pointer; }
+  .copy-link:hover { color:var(--cyan, #67E8F9); border-color:var(--cyan, #67E8F9); }
+  .definition { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.65; margin-top:6px; }
+  .meta-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .chip { font-family:var(--disp); font-size:10.5px; letter-spacing:1.5px; padding:3px 8px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; }
+  a.mono, .mono a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  .small { font-size:12px; color:var(--sub); }
+  .small a, .fact a, a.small { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+  .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
+  .no-match { font-size:13px; color:var(--sub); padding:10px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/hub">← PROJECT HUB</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">The Hub Glossary</h1>
+    <p data-clkn-avoid="1">EVERY TERM AND REASON CODE, IN PLAIN WORDS</p>
+  </div>
+
+  <div class="card">
+    <div class="intro" data-clkn-avoid="1">A receipt, the wallet look-up, the compare page and the standings all use the same short vocabulary — a field name, or a machine-checkable reason code. This page is the one place all of it is defined in plain English, so a reader never has to guess what a code in the record actually means.</div>
+  </div>
+
+  <div class="card" data-clkn-avoid-kids="1">
+    <input class="search-input" id="searchIn" type="search" placeholder="Search terms and reason codes" aria-label="Search the glossary" autocomplete="off"/>
+  </div>
+
+  <div id="result" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+
+  <div class="small" data-clkn-avoid="1" style="text-align:center">Judging or just skeptical? <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/HUB_VERIFY.md" target="_blank" rel="noopener">Verify it yourself →</a></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var resultEl = document.getElementById('result');
+  var searchIn = document.getElementById('searchIn');
+
+  // ── i18n for the strings THIS SCRIPT builds ─────────────────────────────────────────────────
+  // Every term/definition below comes from GET /api/hub/glossary — a live-fetched, server-
+  // authored English string, not markup — so i18n.js's DOM walker (loaded sitewide by
+  // cluck-nav.js) never sees it as source text; #result also carries data-i18n-skip so the walker
+  // doesn't then try to re-translate our own rendered output as if it were fresh English. `t()` is
+  // the same small page-local lookup public/hub-verify.html uses: the curated dictionaries i18n.js
+  // already loaded (`window.CLKN_I18N.dict`), no machine-translation fallback, English literal on
+  // a miss. scripts/i18n-audit.cjs's Hub-pages gate scans this file's <script> block for every
+  // literal passed to t() and requires it in all six dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 4000)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  var ALL_ENTRIES = [];
+
+  function copyLink(id) {
+    var url = location.origin + '/hub/glossary#' + encodeURIComponent(id);
+    CluckUtil.copyText(url).then(function (ok) {
+      var btn = document.querySelector('[data-copy="' + id + '"]');
+      if (btn) { var was = btn.textContent; btn.textContent = ok ? t('Copied') : t('Copy failed'); setTimeout(function () { btn.textContent = was; }, 1400); }
+    });
+  }
+  // Exposed for the inline onclick below — every id is a fixed identifier this page's own module
+  // produced (never chain/URL-supplied text), so this is not an XSS surface.
+  window.__hubGlossaryCopy = copyLink;
+
+  // Reason-code ids stay LITERAL — they are codes, the same way lib/hub/eligibility.js's own
+  // codes are never humanized (public/hub-demo.html shows them verbatim too). Only a "term"
+  // entry's own display name translates; only every entry's DEFINITION translates. A literal
+  // switch (not `t(u)` on a variable) so scripts/i18n-audit.cjs's regex — which only ever sees a
+  // literal string immediately inside t(...) — can gate these five labels the same as everything
+  // else on this page.
+  function usedOnLabel(u) {
+    if (u === 'receipt') return t('a receipt');
+    if (u === 'wallet') return t('the wallet look-up');
+    if (u === 'compare') return t('the compare page');
+    if (u === 'standings') return t('the standings');
+    if (u === 'lesson') return t('the lesson');
+    return u;
+  }
+  function entryTerm(e) { return e.kind === 'term' ? t(e.term) : e.term; }
+
+  function entryHtml(e) {
+    var lessonLink = e.lesson && e.lesson.href ? ' <a href="' + esc(e.lesson.href) + '">' + esc(t('Learn this →')) + '</a>' : '';
+    var usedOnChips = (e.usedOn || []).map(function (u) { return '<span class="chip">' + esc(usedOnLabel(u)) + '</span>'; }).join('');
+    return '<div class="entry" id="' + esc(e.id) + '">' +
+      '<div class="entry-head"><h3>' + esc(entryTerm(e)) + '</h3><span class="entry-code">' + esc(e.id) + '</span>' +
+      '<button class="copy-link" type="button" data-copy="' + esc(e.id) + '" onclick="window.__hubGlossaryCopy(\'' + esc(e.id).replace(/'/g, "\\'") + '\')" aria-label="' + esc(t('Copy link to this entry')) + '">' + esc(t('Copy link')) + '</button></div>' +
+      '<div class="definition">' + esc(t(e.definition)) + lessonLink + '</div>' +
+      (usedOnChips ? '<div class="meta-row">' + usedOnChips + '</div>' : '') +
+      '</div>';
+  }
+
+  function render(filterText) {
+    var q = (filterText || '').trim().toLowerCase();
+    var terms = [], reasons = [];
+    for (var i = 0; i < ALL_ENTRIES.length; i++) {
+      var e = ALL_ENTRIES[i];
+      if (q && (entryTerm(e) + ' ' + e.id + ' ' + t(e.definition)).toLowerCase().indexOf(q) === -1) continue;
+      (e.kind === 'reason' ? reasons : terms).push(e);
+    }
+    if (!terms.length && !reasons.length) { resultEl.innerHTML = '<div class="card"><div class="no-match">' + esc(t('No terms or reason codes match that search.')) + '</div></div>'; return; }
+    var html = '<div class="card" data-clkn-avoid-kids="1">';
+    if (terms.length) html += '<div class="kind-group"><h2>' + esc(t('Terms')) + '</h2>' + terms.map(entryHtml).join('') + '</div>';
+    if (reasons.length) html += '<div class="kind-group"><h2>' + esc(t('Reason codes')) + '</h2>' + reasons.map(entryHtml).join('') + '</div>';
+    html += '</div>';
+    resultEl.innerHTML = html;
+  }
+
+  function scrollToHash() {
+    var id = decodeURIComponent((location.hash || '').replace(/^#/, ''));
+    if (!id) return;
+    var el = document.getElementById(id);
+    if (el) el.scrollIntoView({ block: 'start' });
+  }
+
+  // Every "term" entry's display name, and every entry's definition, from lib/hub/glossary.js —
+  // listed here as LITERAL t() calls purely so scripts/i18n-audit.cjs's regex (which can only see
+  // a literal string immediately inside t(...), documented in its own header) gates this page's
+  // data-driven copy the same way it gates every other Hub page's static copy. The actual render
+  // path above calls t(e.term)/t(e.definition) on values fetched from the API at runtime — this
+  // array is never rendered and never called; scripts/hub-glossary-test.cjs cross-checks it stays
+  // a superset of lib/hub/glossary.js's own strings, so an entry added there with no line added
+  // here fails that test rather than silently shipping untranslated. Reason-code ids are not
+  // listed — they stay literal, never translated (see usedOnLabel's comment above).
+  function __glossaryGatedStrings() { return [
+    t("Fixed daily pool"), t("The exact amount of the reward token a program version pays out across every qualifying locker each day, before the pro-rata split."), t("Share of the funding wallet's own daily unlock"),
+    t("Instead of a fixed daily amount, this program version pays a fixed percentage of whatever the funding wallet's own tokens unlock that day."), t("Ceiling on that share"), t("The most a day's payout can be, as a percentage of the funding wallet's own unlock, even when the plain percentage would compute more."),
+    t("Shortest lock term admitted"), t("The fewest days a lock must still be committed for a locker to qualify at all — and the term that earns the base 1× multiplier."), t("Term length at the top rate"),
+    t("The number of committed days at which a locker reaches this program's highest multiplier. Committing longer earns no more."), t("Minimum amount locked to qualify"), t("The smallest amount a single lock must hold. Below this, a lock does not qualify regardless of its term."),
+    t("Per-wallet cap on the pool's share"), t("The most of one day's pool a single wallet's locks can be credited, as a percentage — a ceiling that can bind even when a wallet's own pro-rata share would compute more."), t("Payout cadence"),
+    t("How often the program builds a batch and sends accrued rewards to lockers, for example weekly."), t("Which lock shapes qualify"), t("Which release shapes of a Jupiter Lock escrow — a single release, a vesting schedule, or either — this program's terms accept."),
+    t("Cancelable locks admitted"), t("Whether a lock its own creator can cancel and reclaim early is allowed to qualify for this program at all."), t("Wallets whose own unlock feeds the pool"),
+    t("The wallets whose own scheduled unlocks are read to compute a percentage-based daily pool, used together with the share-of-unlock term."), t("Wallets excluded from the pool (Rule B)"), t("Wallet addresses excluded from this program by recipient or by creator, regardless of what their own lock's terms would otherwise qualify for."),
+    t("How far back a late-seen lock backdates"), t("The most days a lock's counted term can be backdated when the program first sees it later than the lock was actually created."), t("Earliest a lock may ever backdate to"),
+    t("A floor date before which no lock's counted term is ever backdated, however late the program first saw it."), t("What happens to my tokens?"), t("Where locked tokens sit while committed — a Jupiter Lock escrow, an on-chain account anyone can open — and when the published schedule releases them."),
+    t("Can I sell during the lock?"), t("Whether the locked tokens can be moved, sold, or used by anyone — the locker, the project, or the platform — before the lock's own unlock date."), t("Where does the reward come from?"),
+    t("The project's own funding wallet a program's rewards are paid from, and what is currently known about what it owes against what it holds."), t("How much will I get?"), t("A locker's pro-rata share of a shared pool that others locking or unlocking changes over time — computed from the amount locked and the term committed to, never a promised rate."),
+    t("What are the risks?"), t("The plain facts about what can go wrong while locked: tokens are frozen for the committed term regardless of price, and funding coverage or a differing reward asset can change what actually arrives."), t("Why lock at all?"),
+    t("A lock is a public, checkable, time-limited promise not to sell — the reason a project or a holder uses one, independent of any specific program's own terms."), t("The term rule your lock was measured against"), t("The published day range a receipt's multiplier was computed under — the same range shown before the lock was made."),
+    t("Hourly slices accrued"), t("The specific span of hourly accrual periods a receipt's amount was built from, read straight from the ledger's own record."), t("Your share of each hour's pool"),
+    t("What a wallet's own credited amount was in each accrued hour, and what percentage of that hour's total pool it represented."), t("Added up"), t("The exact sum of every hour's share listed in the walkthrough — the number a reader can check by hand against the receipt's total."),
+    t("Prior payments applied"), t("How much of what was owed on a row had already been paid or waived by an earlier settlement — shown only when it changes the picture."), t("Rank's published prize"),
+    t("The prize this competition published for a given rank before its window opened — a flat amount, or a percentage of the winner's own qualifying buy."), t("What the scan counted for this wallet"), t("The wallet's own qualifying buy volume from the window-scoped scan — the same figure the public standings show for that wallet."),
+    t("Computed"), t("The amount this walkthrough's own arithmetic produces from the published rule and the observed inputs listed above it."), t("The account is not a Jupiter Lock escrow for this program's token, so it was never eligible."),
+    t("The escrow locks a different token than this program's own mint, so it does not qualify."), t("The lock lets its creator cancel it and take the tokens back before the unlock date. This program does not count a cancelable lock unless its terms explicitly allow one."), t("The lock has already been cancelled on-chain — its tokens were returned before the unlock date, so nothing remains locked to earn against."),
+    t("The lock has not yet been seen by the index this program reads from. It may still appear on a later scan."), t("The lock already existed on-chain before this program's window began, so its term is not counted from the program's own start date."), t("The escrow carries no unlock schedule the program can read, so a term cannot be measured."),
+    t("No portion of this lock remains committed for at least the program's minimum term."), t("Every token in this escrow has already unlocked or been released — nothing remains locked."), t("The amount locked is under this program's minimum lock size."),
+    t("The escrow names no recipient wallet this program can credit."), t("The recipient wallet is on this program's exclusion list (Rule B), so it is never credited regardless of what its own lock's terms would otherwise qualify for."), t("The wallet that created this lock is on this program's exclusion list (Rule B), so a lock it created is never credited regardless of its own terms."),
+    t("This lock's release shape — a vesting schedule — is not one this program's terms admit."), t("This lock releases everything in a single event with no vesting, which this program's terms do not admit."), t("A disqualifying condition not yet given its own code here. The record still carries the original plain-language reason text alongside it."),
+    t("No program version was in force for this project when this record was read, so nothing could be evaluated against a published rule."), t("The wallet's qualifying buy was sold on-chain during the competition window or its hold period."), t("The wallet moved its qualifying buy out — to another wallet or a venue — during the window or hold period, without an on-chain sale being what was actually observed."),
+    t("The wallet's whole qualifying buy went into a lock escrow during the hold period. That is the opposite of an exit, so it is not treated as a disqualification — just recorded plainly."), t("A lookup gap — a coverage or RPC miss — left nothing observed either way for this wallet during the hold period."), t("The automated review found this wallet did not qualify. Where a more specific fact was recorded (sold, or moved the bag out), that is shown alongside this status."),
+    t("This wallet's status for this program was set by an operator by hand, rather than decided by the automatic scan."), t("The settlement transaction sent for this row failed or errored on-chain, so the payout was voided — the amount was not actually delivered."), t("An operator manually voided this row after it had been marked paid. The record was corrected by hand, not by a transaction failure."),
+    t("This project's access is comped. No payment is owed for it and none is ever collected."), t("No payment matching this access request has been recorded yet."), t("A payment was recorded, but its amount is less than the quoted or published price."),
+    t("No price quote was on file to check this payment against."), t("The payment transaction has not yet reached finality on-chain. The record settles once it does."), t("The payment landed after its price quote had already expired."),
+  ]; }
+
+  searchIn.addEventListener('input', function () { render(searchIn.value); });
+
+  waitForI18n(2500).then(function () {
+    return fetch('/api/hub/glossary').then(function (r) { return r.json(); });
+  }).then(function (r) {
+    ALL_ENTRIES = (r && r.entries) || [];
+    render('');
+    // The deep-link target only exists once the fetch above has rendered it.
+    setTimeout(scrollToHash, 0);
+  }).catch(function (e) {
+    resultEl.innerHTML = '<div class="err">' + esc(e.message || String(e)) + '</div>';
+  });
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

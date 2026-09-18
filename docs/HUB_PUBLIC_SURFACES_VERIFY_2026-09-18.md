@@ -231,6 +231,12 @@ and dodged it with `/api/hub-apply`; the page side was never given the matching 
 from `approveProject` and `server.js`'s `reserved()`, with a test that greps `server.js` for the
 literal `/hub/<segment>` routes it must cover.
 
+**Update (roadmap EE2, same day):** `/hub/glossary` + `/api/hub/glossary` shipped after this audit
+was written, registered ahead of the catch-alls the same way `verify`/`status`/`trust`/`judge`
+already are — so `glossary` is now a sixth id with exactly this same hazard. It is NOT in the
+journal branch's thirteen-entry `RESERVED_PROJECT_IDS` list quoted above either; when that list
+lands with #342, `glossary` must be added to it in the same change, not left for a second pass.
+
 ### P2-06 · The holders Compare panel mixes whole-token and base-unit values in one card
 
 `public/token-holders.html:681` (`const dec = lastSnapshot ? lastSnapshot.decimals : undefined`),

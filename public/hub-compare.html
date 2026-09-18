@@ -148,10 +148,16 @@
       (doc.commitment ? '<div class="small" style="margin-top:4px"><a class="mono" target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(doc.commitment.sig) + '">' + esc(shortAddr(doc.commitment.sig, 6, 6)) + '</a></div>' : '') +
       '</div>';
   }
+  // EE2: every key in ORDER above is also a glossary term id — link the field label to its
+  // definition. A key this page has never heard of (LABEL[k] falls back to the key itself,
+  // per the ORDER comment above) has no glossary entry either, so it stays a plain cell.
+  function fieldLabel(r) {
+    return (r.key in LABEL) ? '<a href="/hub/glossary#' + encodeURIComponent(r.key) + '">' + esc(r.label) + '</a>' : esc(r.label);
+  }
   function diffTable(rows, sym, dec) {
     return '<div class="tscroll"><table><thead><tr><th>Field</th><th>Version A</th><th>Version B</th></tr></thead><tbody>' +
       rows.map(function (r) {
-        return '<tr' + (r.changed ? ' class="changedRow"' : '') + '><td class="field">' + esc(r.label) + '</td>' +
+        return '<tr' + (r.changed ? ' class="changedRow"' : '') + '><td class="field">' + fieldLabel(r) + '</td>' +
           '<td>' + esc(fmtVal(r.key, r.va, sym, dec)) + '</td><td>' + esc(fmtVal(r.key, r.vb, sym, dec)) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }

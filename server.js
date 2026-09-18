@@ -8070,6 +8070,9 @@ function HUB_SCHEMA_URL(name) { return `https://clucknorris.app/hub/schema/${nam
 const HUB_SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{60,100}$/;
 const hubProject = require("./lib/hub/project");
 const hubFeed = require("./lib/hub/feed");
+// EE2 (docs/COLOSSEUM_ROADMAP.md §15): the public glossary — pure, no per-request computation,
+// so its route below needs no ledger walk and gets a long cache like a schema file.
+const hubGlossary = require("./lib/hub/glossary");
 function hubProjects() {
   const built = {
     clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9, rewardMint: CLKN_MINT, rewardDecimals: 9 },
@@ -8188,6 +8191,16 @@ app.get("/api/hub/badge.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 
     if (projectId && !b) return res.status(404).json({ ok: false, error: "no such project" });
     return res.status(200).json({ schemaVersion: 1, label: "receipts reproducible", message: b.message, color: b.color, cacheSeconds: 300 });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// EE2: every term and reason code a public Hub surface renders, one source of truth
+// (lib/hub/glossary.js). Registered BEFORE /api/hub/:project below, same reason
+// /api/hub/wallet/:wallet and /api/hub/badge.json are — "glossary" is a 1-segment path the
+// :project pattern would otherwise swallow as a (nonexistent) project id. A light public read
+// over a pure, in-memory module (no ledger walk, no chain read), so it gets the same long cache a
+// schema file gets rather than the 30s a per-project computation gets.
+app.get("/api/hub/glossary", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  return res.status(200).json({ ok: true, entries: hubGlossary.entries() });
 });
 app.get("/api/hub/:project", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=30");
@@ -8730,6 +8743,16 @@ app.get("/hub/trust", (req, res) => { res.sendFile(join(__dirname, "public", "hu
 // it must serve on a no-build boot), so this is a plain sendFile like hub-trust.html's, not a
 // build-time dependency check.
 app.get("/hub/judge", (req, res) => { res.sendFile(join(__dirname, "public", "hub-judge.html")); });
+
+// EE2 (docs/COLOSSEUM_ROADMAP.md §15): the public glossary page — every term and reason code a
+// receipt, the wallet look-up, the compare page, the standings or a lesson can show, defined in
+// plain words. Same ordering reason as /hub/verify, /hub/wallet, /hub/trust and /hub/judge above:
+// registered BEFORE the generic /hub/:project pattern below, or "glossary" would be read as a
+// project id and served hub.html instead. NOTE (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md
+// P2-05): "glossary" is not yet in a RESERVED_PROJECT_IDS list on this tree — that list lands with
+// the settlement-journal branch's merge, and "glossary" must join it then, the same way
+// verify/status/trust/judge/apply already should.
+app.get("/hub/glossary", (req, res) => { res.sendFile(join(__dirname, "public", "hub-glossary.html")); });
 
 // ── Y4: shareable Hub pages — server-rendered Open Graph / Twitter Card meta (Colosseum roadmap
 // §9). One static branded image (public/og/hub-card.png, 1200x630 — no dynamic image generation,

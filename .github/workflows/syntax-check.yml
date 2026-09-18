@@ -142,6 +142,18 @@ jobs:
       # hub.html page.
       - name: Project Hub — the receipt teaches (E5)
         run: node scripts/hub-explain-test.cjs
+      # EE2 (docs/COLOSSEUM_ROADMAP.md §15): lib/hub/glossary.js is the one source of truth for
+      # every term and reason code a public Hub surface renders. Drift (every eligibility.js
+      # REASON_CODES code, plus the access/void/hold-through literals, has a glossary entry; every
+      # entry's optional lessonId resolves — same C4 discipline as hub-teach-test above) and route
+      # (GET /api/hub/glossary + GET /hub/glossary, both ahead of their catch-alls) always run
+      # here; this job installs no Chromium, so the same script's rendered-page checks skip
+      # gracefully (playwright-core not resolvable) exactly like
+      # scripts/reproducibility-history-test.cjs's own render section — the smoke-test job below
+      # re-runs this same script, gated on the render diff, where Chromium IS installed, for real
+      # rendered-page coverage.
+      - name: Project Hub — the glossary (EE2) — drift + route
+        run: node scripts/hub-glossary-test.cjs
       # Addendum B5 / roadmap E3: the on-chain memo format is byte-diffed against a hand-built
       # Uint8Array before it ships; verifyCommitTx never trusts the client (wrong payer, wrong or
       # missing memo, more than one memo, a failed or unconfirmed tx are all refused); a version's
@@ -680,6 +692,14 @@ jobs:
       - name: Hub pages — accessibility + phone polish
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-a11y-test.cjs
+      # EE2: this job has Chromium installed (the step above), so re-running the glossary test
+      # here (its drift + route sections re-verify cheaply; node-check above is where they're
+      # REQUIRED to run) also exercises the rendered-page section for real: the page renders, the
+      # #below_min_lock anchor scrolls to its section, the search box filters, and none of the
+      # forbidden words appear.
+      - name: Project Hub — the glossary (EE2) — rendered page (Chromium)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-glossary-test.cjs
       # Z2 (docs/COLOSSEUM_ROADMAP.md §10): GET /api/build (the git sha/branch this container is
       # actually running) and /hub/status (public/hub-status.html) — the page that renders it next
       # to every project's own public numbers (programs, receipts, the reproducibility ratio, the
