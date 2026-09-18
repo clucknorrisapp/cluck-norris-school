@@ -124,5 +124,32 @@ for (const p of allPaths) {
   ok(clean + " matches a registered route", hit, hit ? "" : "no server.js route has the same segment shape");
 }
 
+// ── 7. P2-07 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): renderInline's link scheme allowlist
+console.log("\n7. renderInline() only turns a same-host/relative/anchor URL into a live <a> href\n");
+{
+  const buildJudge = require("./build-judge-page.cjs");
+  const cases = [
+    { md: "[go](javascript:alert(document.domain))", why: "javascript: scheme" },
+    { md: "[go](data:text/html,<script>alert(1)</script>)", why: "data: scheme" },
+    { md: "[go](//evil.example/x)", why: "protocol-relative — resolves to a DIFFERENT host" },
+    { md: "[go](http://evil.example/x)", why: "http: to a different host" },
+    { md: '[x](" onmouseover=alert(1) x=")', why: "attribute-breakout payload (also not a safe scheme)" },
+  ];
+  for (const c of cases) {
+    const out = buildJudge.renderInline(c.md);
+    ok(`${c.why}: no <a href> emitted`, !/<a\s+href=/i.test(out), out);
+  }
+  const safeCases = [
+    { md: "[docs](https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/HUB_VERIFY.md)", why: "https:" },
+    { md: "[home](/hub)", why: "root-relative path" },
+    { md: "[jump](#section)", why: "in-page anchor" },
+    { md: "[us](http://clucknorris.app/hub)", why: "http: to our OWN host" },
+  ];
+  for (const c of safeCases) {
+    const out = buildJudge.renderInline(c.md);
+    ok(`${c.why}: DOES emit a live <a href>`, /<a\s+href=/i.test(out), out);
+  }
+}
+
 console.log(failures ? `\n${failures} FAILED\n` : "\nall passed\n");
 process.exit(failures ? 1 : 0);
