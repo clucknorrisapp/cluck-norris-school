@@ -222,6 +222,43 @@
           "description": "the window the count covers, e.g. \"30d\"."
         }
       }
+    },
+    "holders": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "at",
+        "holderCount",
+        "listHash"
+      ],
+      "description": "Colosseum roadmap §8 X7: the latest dated, hashed holder-count record from an owners-snapshot crawl of this project's mint (lib/holders-snapshot.js `latest()`). A fact line only — never wallets, never a top list, never a judgement (\"growing\"/\"healthy\"). null when this mint has never been crawled.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "the snapshot's own id — GET /api/holders/snapshots/<id>?mint=<mint> reads the full record, including its capped top list."
+        },
+        "at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "ms epoch the crawl that produced this snapshot finished."
+        },
+        "holderCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "how many wallets the crawl counted as holders (non-contract owners with a balance)."
+        },
+        "listHash": {
+          "type": "string",
+          "description": "sha256 over the canonical JSON of the full holder list that run produced — a reader can recompute it with scripts/holders-snapshot-verify.cjs."
+        }
+      }
     }
   }
 }

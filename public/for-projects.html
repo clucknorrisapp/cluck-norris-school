@@ -15,7 +15,7 @@
   * { box-sizing:border-box; margin:0; padding:0; }
   body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
   .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
-  .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
   .header { text-align:center; margin-bottom:18px; }
   .header h1 { font-family:var(--disp); font-size:32px; letter-spacing:1px; color:var(--gold); font-weight:400; }
   .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
@@ -35,9 +35,11 @@
   .input-row { display:flex; gap:8px; margin-top:12px; }
   .addr-input { flex:1; min-width:0; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:11px 13px; color:var(--text); font-family:var(--mono); font-size:13px; outline:none; }
   .addr-input:focus { border-color:var(--accent); }
-  .btn { flex-shrink:0; background:var(--orange); border:none; border-radius:8px; padding:11px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#fff; cursor:pointer; font-family:var(--body); }
+  .btn { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; min-height:44px; background:var(--orange); border:none; border-radius:8px; padding:11px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#fff; cursor:pointer; font-family:var(--body); }
   .btn.ghost { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); }
-  .btn:disabled { background:var(--grey); color:var(--muted); cursor:not-allowed; }
+  /* --grey is aliased to --muted in theme.css, so background:var(--grey) + color:var(--muted)
+     is background == text — invisible disabled-button copy. Dark text on the grey reads fine. */
+  .btn:disabled { background:var(--grey); color:var(--bg); cursor:not-allowed; }
   .checklist { margin-top:14px; }
   .citem { display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--border-soft); }
   .citem:last-child { border-bottom:none; }
@@ -48,15 +50,19 @@
   .cbody { flex:1; min-width:0; }
   .cbody .clabel { font-family:var(--disp); font-size:13.5px; letter-spacing:.5px; color:var(--text); }
   .cbody .cfact { font-size:12.5px; color:var(--subtext); line-height:1.5; margin-top:2px; }
-  .cbody a.cta { display:inline-block; margin-top:6px; font-family:var(--disp); font-size:10.5px; letter-spacing:1.5px; color:var(--orange); text-decoration:none; }
+  /* Standalone one-line CTA (not a word in a sentence) — invisible tap-area padding brings the
+     hit box toward 44px tall; the margin is set to (original margin) minus (added padding) on
+     each side so the visible text lands in exactly the same pixel position as before. */
+  .cbody a.cta { display:inline-block; padding:14px 3px; margin:-8px -3px -14px; font-family:var(--disp); font-size:10.5px; letter-spacing:1.5px; color:var(--orange); text-decoration:none; }
   .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:12px 0; }
   .err { background:var(--redbg); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
   .small { font-size:12px; color:var(--sub); }
   @media (max-width:520px) { .header h1 { font-size:26px; } .step { padding:14px; gap:10px; } }
+  @media (prefers-reduced-motion: reduce) { .step { transition:none; } .step:hover { transform:none; } }
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <a class="back-home" href="/">← CLUCK NORRIS</a>
   <div class="header">
     <h1 data-clkn-avoid="1">For Projects</h1>
@@ -123,14 +129,14 @@
   <div class="card">
     <div class="intro">Paste your token's mint. We re-read the public record for each of these — no wallet, nothing saved — and link straight to whichever step you haven't done yet.</div>
     <div class="input-row">
-      <input class="addr-input" id="mintIn" placeholder="Token mint address" autocomplete="off" spellcheck="false"/>
+      <input class="addr-input" id="mintIn" placeholder="Token mint address" aria-label="Token mint address" autocomplete="off" spellcheck="false"/>
       <button class="btn" id="mintBtn">CHECK</button>
     </div>
     <div id="checkOut"></div>
   </div>
 
   <div class="small" data-clkn-avoid="1" style="text-align:center">Running a Hub program already? <a href="/hub" style="color:var(--cyan)">See every project's receipts →</a></div>
-</div>
+</main>
 
 <script src="/cluck-util.js"></script>
 <script>

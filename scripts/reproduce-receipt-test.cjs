@@ -114,14 +114,16 @@ t("a program-version hash, when one exists, is carried through untouched", () =>
 
 section("3. projectReproducibility — the ratio, batch by batch");
 
-t("counts MATCH/MISMATCH/MISSING_INPUTS across every lock-to-earn batch plus every other program's payouts", () => {
+t("counts MATCH/MISMATCH/MISSING_INPUTS across every lock-to-earn batch plus every other (still-unimplemented-kind) program's payouts", () => {
   const days = { "2026-09-17T00": { at: 1000, credits: { [W.A]: "60", [W.B]: "60" } } };
   const good = mkBatch({ id: "good", at: 3000, amounts: { [W.A]: "60", [W.B]: "60" }, sentAt: 3100 });
   // batch2's recorded amount does not match what the periods actually add up to — a real bug this
   // ratio exists to catch, not a fixture bug: the amount is deliberately wrong.
   const bad = mkBatch({ id: "bad", at: 4000, amounts: { [W.A]: "999" }, sentAt: 4100 });
   const batches = { good, bad };
-  const otherPrograms = [{ id: "bc_1", kind: "buy-comp", payouts: [{ wallet: W.A, sig: SIG }, { wallet: W.B, sig: SIG }] }, { id: "bc_2", kind: "buy-comp", payouts: [{ wallet: W.A, sig: null }] }];
+  // "giveaway" here (not "buy-comp" — that kind got its own real reproduction below, X3) pins the
+  // still-generic fallback path for a kind this file does not (yet) reproduce.
+  const otherPrograms = [{ id: "bc_1", kind: "giveaway", payouts: [{ wallet: W.A, sig: SIG }, { wallet: W.B, sig: SIG }] }, { id: "bc_2", kind: "giveaway", payouts: [{ wallet: W.A, sig: null }] }];
   const rep = R.projectReproducibility({ batches, days, otherPrograms });
   const good1 = rep.batches.find((b) => b.batchId === "good"), bad1 = rep.batches.find((b) => b.batchId === "bad"), other = rep.batches.find((b) => b.batchId === "bc_1");
   assert.strictEqual(good1.total, 2); assert.strictEqual(good1.reproduced, 2); assert.strictEqual(good1.mismatched, 0);
@@ -210,12 +212,131 @@ t("--offline: missing batch-inputs.json is MISSING_INPUTS, exit 3, and names wha
 t("--offline, receipt-url form: an unsupported program kind is MISSING_INPUTS naming the kind, not silently skipped", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reproduce-test-"));
   try {
-    fs.writeFileSync(path.join(dir, "receipt.json"), JSON.stringify({ ok: true, program: { kind: "buy-comp" }, receipt: { wallet: W.A, amountUi: "10" } }));
+    // "giveaway" — buy-comp got its own reproduction path below (Colosseum roadmap §7); this
+    // pins that a kind still not covered (the CUNA giveaway) keeps naming itself honestly rather
+    // than silently falling through to a wrong reproduction.
+    fs.writeFileSync(path.join(dir, "receipt.json"), JSON.stringify({ ok: true, program: { kind: "giveaway" }, receipt: { wallet: W.A, amountUi: "10" } }));
     const url = `https://clucknorris.app/hub/rose/r/${SIG}`;
     const r = run(["--offline", dir, url]);
     assert.strictEqual(r.status, 3, r.out);
-    assert.ok(/not implemented yet for kind "buy-comp"/.test(r.out), r.out);
+    assert.ok(/not implemented yet for kind "giveaway"/.test(r.out), r.out);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+section("6. buy-comp reproduction (Colosseum roadmap §7 — the standings page)");
+
+const COMP_TERMS = { id: "bc_1", mint: "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc", ticker: "ROSE", pctPrize: true, places: [{ rank: 1, amount: 10 }, { rank: 2, amount: 5 }] };
+
+t("reproduceBuyCompRow: MATCH — the split reproduces the published amount exactly", () => {
+  const r = R.reproduceBuyCompRow({ terms: COMP_TERMS, rank: 1, tokensBought: 137224.2, valueSol: null, published: 13722.42 });
+  assert.strictEqual(r.status, "MATCH", JSON.stringify(r)); assert.strictEqual(r.reproduced, "13722.42");
+});
+
+t("reproduceBuyCompRow: MISMATCH — an operator-overridden amount does not match the automatic split", () => {
+  const r = R.reproduceBuyCompRow({ terms: COMP_TERMS, rank: 1, tokensBought: 137224.2, valueSol: null, published: 99999 });
+  assert.strictEqual(r.status, "MISMATCH"); assert.strictEqual(r.published, "99999"); assert.strictEqual(r.reproduced, "13722.42");
+});
+
+t("reproduceBuyCompRow: SOL-terms row reproduces from valueSol when no token amount was published", () => {
+  const r = R.reproduceBuyCompRow({ terms: COMP_TERMS, rank: 2, tokensBought: 0, valueSol: 12, published: 0.6 });
+  assert.strictEqual(r.status, "MATCH", JSON.stringify(r));
+});
+
+t("reproduceBuyCompRow: MISSING_INPUTS — no rank published", () => {
+  const r = R.reproduceBuyCompRow({ terms: COMP_TERMS, rank: null, tokensBought: 1, valueSol: null, published: 1 });
+  assert.strictEqual(r.status, "MISSING_INPUTS"); assert.ok(r.missing.some((m) => /rank/.test(m)));
+});
+
+t("reproduceBuyCompRow: MISSING_INPUTS — a percentage prize with no qualifying volume published for this wallet", () => {
+  const r = R.reproduceBuyCompRow({ terms: COMP_TERMS, rank: 1, tokensBought: null, valueSol: null, published: 1 });
+  assert.strictEqual(r.status, "MISSING_INPUTS"); assert.ok(r.missing.some((m) => /qualifying volume/.test(m)));
+});
+
+t("reproduceBuyCompRow: MISSING_INPUTS — no published amount to check against", () => {
+  const r = R.reproduceBuyCompRow({ terms: COMP_TERMS, rank: 1, tokensBought: 100, valueSol: null, published: null });
+  assert.strictEqual(r.status, "MISSING_INPUTS"); assert.ok(r.missing.some((m) => /published amount/.test(m)));
+});
+
+t("CLI --offline, receipt-url form: a buy-comp receipt reproduces MATCH from the sealed standings", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reproduce-test-"));
+  try {
+    fs.writeFileSync(path.join(dir, "receipt.json"), JSON.stringify({ ok: true, program: { kind: "buy-comp", id: "bc_1" }, receipt: { wallet: W.A, amountUi: 13722.42, sig: SIG } }));
+    const standings = { ok: true, comp: { sealed: true, terms: COMP_TERMS, results: [{ rank: 1, wallet: W.A, amount: 13722.42 }], review: [{ wallet: W.A, tokensBought: 137224.2, value: 12 }] } };
+    fs.writeFileSync(path.join(dir, "standings.json"), JSON.stringify(standings));
+    const url = `https://clucknorris.app/hub/rose/r/${SIG}`;
+    const r = run(["--offline", dir, url]);
+    assert.strictEqual(r.status, 0, r.out);
+    assert.ok(/status:\s*MATCH/.test(r.out), r.out);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+t("CLI --offline, receipt-url form: a buy-comp receipt from an UNSEALED competition is MISSING_INPUTS, never guessed", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reproduce-test-"));
+  try {
+    fs.writeFileSync(path.join(dir, "receipt.json"), JSON.stringify({ ok: true, program: { kind: "buy-comp", id: "bc_1" }, receipt: { wallet: W.A, amountUi: 13722.42, sig: SIG } }));
+    fs.writeFileSync(path.join(dir, "standings.json"), JSON.stringify({ ok: true, comp: { sealed: false, terms: COMP_TERMS } }));
+    const url = `https://clucknorris.app/hub/rose/r/${SIG}`;
+    const r = run(["--offline", dir, url]);
+    assert.strictEqual(r.status, 3, r.out);
+    assert.ok(/not sealed/.test(r.out), r.out);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+section("7. X3 (docs/COLOSSEUM_ROADMAP.md §8) — the aggregate ratio counts sealed buy-comp rows too");
+
+// The shape hubProjectView(p).programs hands back for one buy-comp program (lib/hub/public.js
+// compView()) — the exact fields buyCompProgramRow() reads: sealed, terms, results (winners),
+// review (this wallet's rank inputs), payouts (an actual paid transaction).
+function sealedCompProgram({ id = "bc_1", amount = 13722.42, published = amount, sig = SIG } = {}) {
+  return {
+    id, kind: "buy-comp", sealed: true, terms: COMP_TERMS,
+    results: [{ rank: 1, wallet: W.A, amount }],
+    review: [{ wallet: W.A, tokensBought: 137224.2, value: null }],
+    payouts: sig ? [{ wallet: W.A, amountUi: published, sig }] : [],
+  };
+}
+
+t("a project with one lock-to-earn batch and one sealed comp — the ratio's total is both, and both reproduce", () => {
+  const days = { "2026-09-17T00": { at: 1000, credits: { [W.A]: "60" } } };
+  const batches = { good: mkBatch({ id: "good", at: 3000, amounts: { [W.A]: "60" }, sentAt: 3100 }) };
+  const otherPrograms = [sealedCompProgram()];
+  const rep = R.projectReproducibility({ batches, days, otherPrograms });
+  const lte = rep.batches.find((b) => b.batchId === "good"), comp = rep.batches.find((b) => b.batchId === "bc_1");
+  assert.strictEqual(lte.total, 1); assert.strictEqual(lte.reproduced, 1);
+  assert.strictEqual(comp.kind, "buy-comp"); assert.strictEqual(comp.total, 1); assert.strictEqual(comp.reproduced, 1); assert.strictEqual(comp.mismatched, 0);
+  assert.ok(!comp.note, "a sealed, reproducing comp carries no note");
+  assert.strictEqual(rep.overall.total, 2); assert.strictEqual(rep.overall.reproduced, 2);
+});
+
+t("a tampered comp row (the paid receipt disagrees with the sealed split) counts as mismatched, never smoothed over", () => {
+  const otherPrograms = [sealedCompProgram({ published: 99999 })];
+  const rep = R.projectReproducibility({ batches: {}, days: {}, otherPrograms });
+  const comp = rep.batches.find((b) => b.batchId === "bc_1");
+  assert.strictEqual(comp.total, 1); assert.strictEqual(comp.reproduced, 0); assert.strictEqual(comp.mismatched, 1);
+  assert.strictEqual(rep.overall.total, 1); assert.strictEqual(rep.overall.reproduced, 0);
+});
+
+t("an unsealed comp's rows are missingInputs \"not sealed\" — never run through the split at all", () => {
+  const p = sealedCompProgram(); p.sealed = false;
+  const rep = R.projectReproducibility({ batches: {}, days: {}, otherPrograms: [p] });
+  const comp = rep.batches.find((b) => b.batchId === "bc_1");
+  assert.strictEqual(comp.total, 1); assert.strictEqual(comp.reproduced, 0); assert.strictEqual(comp.missingInputs, 1);
+  assert.strictEqual(comp.note, "not sealed");
+  assert.strictEqual(rep.overall.total, 1); assert.strictEqual(rep.overall.reproduced, 0);
+});
+
+t("a sealed comp winner not yet paid still counts (sealing, not payment, is the reproducibility gate) and reproduces from the sealed claim itself", () => {
+  const p = sealedCompProgram({ sig: null });   // no payout row at all — the sealed result is the published claim
+  const rep = R.projectReproducibility({ batches: {}, days: {}, otherPrograms: [p] });
+  const comp = rep.batches.find((b) => b.batchId === "bc_1");
+  assert.strictEqual(comp.total, 1); assert.strictEqual(comp.reproduced, 1); assert.strictEqual(comp.missingInputs, 0);
+});
+
+t("a comp with zero winners contributes nothing to the ratio (never a phantom zero-of-zero row)", () => {
+  const p = sealedCompProgram(); p.results = [];
+  const rep = R.projectReproducibility({ batches: {}, days: {}, otherPrograms: [p] });
+  assert.strictEqual(rep.batches.find((b) => b.batchId === "bc_1"), undefined);
+  assert.deepStrictEqual(rep.overall, { total: 0, reproduced: 0 });
 });
 
 (async () => {

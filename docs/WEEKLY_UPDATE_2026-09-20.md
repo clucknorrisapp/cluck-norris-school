@@ -82,3 +82,7 @@ assume from this file — re-check on the day.
       - Never show a `develop`/staging URL as if it were the live product.
 - [ ] Re-read `docs/ARENA_POSTS.md`'s status table immediately before posting anything from it —
       it is a snapshot from 2026-09-18 and will be stale by the time PR #340 lands.
+- [ ] **Demo captures:** `docs/DEMO_STORYBOARD.md` is the shot-by-shot demo script and the pitch
+      outline, with real screenshots (phone + desktop) in `docs/demo/2026-09-18/`. Re-screenshot
+      before the actual recording if the Hub pages have changed since 2026-09-18 — the storyboard
+      links each shot to a specific file, so a stale capture is easy to spot.

@@ -144,8 +144,14 @@
         "}";
       document.head.appendChild(st);
     }
-    var bar = document.createElement("div");
+    // <nav>, not <div> — this bar is the page's persistent navigation on every page it renders
+    // on (Home / All Tools / Ask Cluck), and it was the only candidate for a real <nav> landmark
+    // on the pages that have no navigation of their own (a page-local back link duplicating it
+    // gets hidden by the CSS just below). Semantics only — a <nav> is block-level exactly like a
+    // <div>, so this changes nothing visually anywhere it renders (2026-09-18 Hub a11y pass).
+    var bar = document.createElement("nav");
     bar.id = "cluck-nav-bar";
+    bar.setAttribute("aria-label", "Cluck Norris");
     bar.style.cssText = ["position:fixed", "top:calc(12px + env(safe-area-inset-top,0px))", "left:50%", "transform:translateX(-50%)",
       "z-index:2147483000", "display:flex", "gap:8px", "align-items:center", "flex-wrap:nowrap",
       "justify-content:center", "max-width:96vw"].join(";");

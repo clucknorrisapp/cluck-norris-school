@@ -527,6 +527,17 @@
     <button id="retryBtn" class="retry-btn" style="display:none" disabled onclick="retryUnresolved()">↻ RETRY FAILED / UNRESOLVED</button>
     <button id="exportRecordBtn" onclick="exportAirdropRecord()" style="display:none;width:100%;margin-top:10px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-family:var(--disp);font-size:13.5px;font-weight:700;color:var(--body-text);letter-spacing:2px;cursor:pointer">📋 EXPORT AIRDROP RECORD</button>
     <div id="recordPanel" style="display:none;margin-top:8px"></div>
+    <!-- Public per-drop receipt (Colosseum roadmap §W4/Extension) — a durable, shareable page a
+         recipient (or anyone) can open to see this drop's rows checked against the chain. Filled
+         in by recordDropRows() as batches confirm; see sendAirdrop()/runSendBatches() below. -->
+    <div id="receiptPanel" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:8px;font-size:13px;color:var(--body-text)"></div>
+  </div>
+
+  <!-- Recent drops this browser has recorded a receipt for (localStorage ids only — there is no
+       server-side listing by operator, which would need an identity we do not want to store). -->
+  <div class="card" id="myDropsCard" style="display:none">
+    <div class="card-title">YOUR RECENT DROPS</div>
+    <div id="myDropsList" style="font-size:13px;line-height:2"></div>
   </div>
 
   </div><!-- /#airdropTool -->
@@ -1029,6 +1040,13 @@ function removeRecipient(idx) {
 // whenever there is anything unresolved to reconcile (see runSendBatches / renderResultGroups).
 var reconcileDone = false;
 
+// ── Public per-drop receipt (Colosseum roadmap §W4/Extension) ────────────────────────────────
+// One dropId ties together every batch of ONE airdrop session, first send through any retries —
+// it is minted by the server on the first successful record and reused for every call after
+// that, so a retry's late-landing rows join the SAME receipt instead of starting a new one.
+var currentDropId = null;
+var currentDropCreatedAt = null;
+
 async function sendAirdrop() {
   if (!walletPubkey) { showError('Connect a wallet first.'); return; }
   if (!currentMint) { showError('Please select a token.'); return; }
@@ -1049,10 +1067,84 @@ async function sendAirdrop() {
   document.getElementById('reconcileBtn').style.display = 'none';
   document.getElementById('retryBtn').style.display = 'none';
   reconcileDone = false;
+  currentDropId = null;
+  currentDropCreatedAt = null;
+  document.getElementById('receiptPanel').style.display = 'none';
 
   await runSendBatches(active);
   document.getElementById('sendBtn').disabled = false;
 }
+
+// Posts one batch's just-confirmed rows to the public receipt (POST /api/airdrop/record). Never
+// throws and never blocks the send — a receipt-recording hiccup must not look like a failed
+// airdrop; the tokens already landed. Runs through CluckGate.fetch so the pass proof (the same
+// one RUN/SEND already required) rides along as x-clkn-pass.
+async function recordDropRows(rowsForBatch) {
+  if (!rowsForBatch || !rowsForBatch.length) return;
+  if (!currentDropCreatedAt) currentDropCreatedAt = Date.now();
+  const panel = document.getElementById('receiptPanel');
+  try {
+    const r = await CluckGate.fetch('/api/airdrop/record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dropId: currentDropId || undefined,
+        mint: currentMint, decimals: currentDecimals, createdAt: currentDropCreatedAt,
+        rows: rowsForBatch.map(function (r) { return { wallet: r.addr, amount: String(r.amount), sig: r.sig }; }),
+      }),
+    });
+    const j = await r.json().catch(function () { return null; });
+    if (!j || !j.success) {
+      panel.style.display = 'block';
+      panel.style.background = 'rgba(239,68,68,0.08)'; panel.style.borderColor = 'rgba(239,68,68,0.3)'; panel.style.color = '#FCA5A5';
+      panel.textContent = 'Receipt recording failed for one batch (' + ((j && (j.detail || j.error)) || 'unknown error') + ') — the tokens still sent; the receipt just won\'t list those rows.';
+      return;
+    }
+    currentDropId = j.dropId;
+    renderReceiptPanel();
+    saveDropLocally(j.dropId, currentMint);
+  } catch (e) {
+    panel.style.display = 'block';
+    panel.style.background = 'rgba(239,68,68,0.08)'; panel.style.borderColor = 'rgba(239,68,68,0.3)'; panel.style.color = '#FCA5A5';
+    panel.textContent = 'Could not reach the receipt service for one batch — the tokens still sent; the receipt just won\'t list those rows.';
+  }
+}
+
+function renderReceiptPanel() {
+  if (!currentDropId) return;
+  const panel = document.getElementById('receiptPanel');
+  panel.style.display = 'block';
+  panel.style.background = 'rgba(16,185,129,0.08)'; panel.style.borderColor = 'rgba(16,185,129,0.3)'; panel.style.color = 'var(--body-text)';
+  panel.innerHTML = '✅ Public receipt for this drop → <a href="/airdrop/r/' + encodeURIComponent(currentDropId) + '" target="_blank" style="color:#6EE7B7;font-weight:700">/airdrop/r/' + esc(currentDropId) + '</a>';
+}
+
+// localStorage only — there is no server-side listing by operator wallet, which would need an
+// identity we deliberately do not store (see lib/airdrop-receipt.js). Newest first, capped so
+// the list stays small; de-duped by dropId since every batch of the same drop calls this again.
+function saveDropLocally(dropId, mint) {
+  var LIST_KEY = 'airdropMyDrops';
+  var list = [];
+  try { list = JSON.parse(localStorage.getItem(LIST_KEY) || '[]'); if (!Array.isArray(list)) list = []; } catch (e) {}
+  list = list.filter(function (d) { return d && d.dropId !== dropId; });
+  list.unshift({ dropId: dropId, mint: mint, at: Date.now() });
+  list = list.slice(0, 20);
+  try { localStorage.setItem(LIST_KEY, JSON.stringify(list)); } catch (e) {}
+  renderMyDrops();
+}
+
+function renderMyDrops() {
+  var card = document.getElementById('myDropsCard'), list = document.getElementById('myDropsList');
+  var drops = [];
+  try { drops = JSON.parse(localStorage.getItem('airdropMyDrops') || '[]'); if (!Array.isArray(drops)) drops = []; } catch (e) {}
+  if (!drops.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  list.innerHTML = drops.map(function (d) {
+    var when = d.at ? new Date(d.at).toLocaleDateString() : '';
+    return '<div><a href="/airdrop/r/' + encodeURIComponent(d.dropId) + '" target="_blank">/airdrop/r/' + esc(d.dropId) + '</a>' +
+      ' <span style="color:var(--sub);font-size:11.5px">— ' + esc(shortAddr(d.mint || '')) + (when ? ' · ' + esc(when) : '') + '</span></div>';
+  }).join('');
+}
+renderMyDrops();
 
 // The actual batch-send loop, shared by the first send and by retryUnresolved() — identical
 // build/sign/send/confirm path either way, just handed a different (smaller) recipient list.
@@ -1161,11 +1253,13 @@ async function runSendBatches(active) {
         let confirmed = false, confirmFailed = false;
         try { confirmed = await confirmTransaction(signature, lastValidBlockHeight); }
         catch(_) { confirmFailed = true; }
+        const confirmedThisBatch = [];
         for (const recipient of batch) {
           if (confirmed) {
             sent++;
             recipient.skipReason = 'Sent';
             addResult(recipient.addr, recipient.amount, 'sent', signature, null, recipient);
+            confirmedThisBatch.push({ addr: recipient.addr, amount: recipient.amount, sig: signature });
           } else if (confirmFailed) {
             // Provably failed on-chain — re-arm for retry so it isn't silently dropped.
             failed++;
@@ -1180,6 +1274,9 @@ async function runSendBatches(active) {
             addResult(recipient.addr, recipient.amount, 'unconfirmed', signature, null, recipient);
           }
         }
+        // Public receipt (Colosseum roadmap §W4/Extension): record THIS batch's confirmed rows
+        // now, one call per confirmed transaction — never blocks the send loop above.
+        await recordDropRows(confirmedThisBatch);
 
       } catch(batchErr) {
         console.error('Batch error:', batchErr);
@@ -1315,6 +1412,7 @@ async function reconcileStatus() {
       statusBySig[sig] = undefined;   // the check itself failed — this signature stays ambiguous
     }
   }
+  const confirmedByReconcile = [];
   for (const r of unresolved) {
     const s = r.sig ? statusBySig[r.sig] : null;
     if (s === undefined) continue;   // couldn't check right now — leave it, Reconcile again later
@@ -1325,12 +1423,16 @@ async function reconcileStatus() {
     } else if (s && (s.confirmationStatus === 'confirmed' || s.confirmationStatus === 'finalized')) {
       r.status = 'sent';
       if (r.recipient) { r.recipient.skip = true; r.recipient.skipReason = 'Sent (confirmed by Reconcile)'; }
+      confirmedByReconcile.push({ addr: r.addr, amount: r.amount, sig: r.sig });
     }
     // else: RPC found nothing / still pending — remains 'unconfirmed', i.e. still unresolved.
   }
   reconcileDone = true;
   btn.disabled = false; btn.textContent = '🔄 RECONCILE STATUS';
   renderResultGroups();
+  // These rows never made it into a record call at send time (they were unconfirmed then) — now
+  // that Reconcile found them landed, the public receipt should carry them too.
+  await recordDropRows(confirmedByReconcile);
 }
 
 // Sends only what's left to send: FAILED rows, plus whatever is still UNRESOLVED after a
@@ -1387,6 +1489,7 @@ function exportAirdropRecord() {
   txt += '\n' + sent + ' confirmed, ' + failed + ' failed' +
     (unresolved ? ', ' + unresolved + ' unresolved (reconcile before resending)' : '') +
     ', ' + rows.length + ' total.\n';
+  if (currentDropId) txt += '\nPublic receipt: ' + location.origin + '/airdrop/r/' + currentDropId + '\n';
   const panel = document.getElementById('recordPanel');
   panel.style.display = 'block';
   panel.innerHTML =

@@ -53,6 +53,7 @@ const kv = require("./lib/kvstore");
 const { freshSince } = require("./lib/sig-cursor"); // shared "fresh sigs since the durable cursor" walk — see the ROSE/generic buy bots + burn watcher below
 const tgRooms = require("./lib/telegram-rooms"); // room policy: the Cluck bot never posts in the OnlyRose room (owner, 2026-09-17) — enforced in tgApi and the direct senders
 const payoutVerify = require("./lib/payout-verify");
+const airdropReceipt = require("./lib/airdrop-receipt"); // per-drop public receipt (Colosseum roadmap §W4/Extension) — see the file header
 const engineRatchet = require("./lib/engine-ratchet"); // pure merge/diff shared by the four liquidity-engine config ratchets below
 const { redeemPaidPass } = require("./lib/tool-pass-redeem");
 const recap = require("./lib/recap");
@@ -1999,6 +2000,10 @@ async function xBlitzTick() {
 // for the run of a token buy competition. The board is explicitly PROVISIONAL —
 // it can't fully filter wash-trading in real time; official winners come from the
 // retroactive Rose scan after the hold period. State is volume-backed (survives redeploys).
+// The pure half (split arithmetic, payout journal guards) — shared by buyCompVerify() below and
+// the /api/buycomp/send route, so both ever run the SAME split function, never two copies that
+// could drift.
+const buycompPayout = require("./lib/buycomp-payout");
 const BUYCOMP_KEY = "buyComps";
 let buyCompRunning = false;
 function buyCompsAll() { return kv.get(BUYCOMP_KEY, {}); }
@@ -2121,7 +2126,10 @@ async function walletPositionMulti(wallet, mint, { fromMs = null, toMs = null } 
     const h = await getWalletTokenPositionHelius(wallet, mint, {
       heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched, txCache: BC_ENH_CACHE, fromMs, toMs,
     });
-    if (h) return { sells: h.sells, balance: h.balance, transfersOut: h.transfersOut, source: "helius" };
+    // sellSig/transferOutSig/lockSig/locks: the on-chain evidence a hold-through call was made
+    // on (Colosseum roadmap §7, the public standings page) — the first transaction of each class,
+    // never a motive, just the signature a reader can open on Solscan themselves.
+    if (h) return { sells: h.sells, balance: h.balance, transfersOut: h.transfersOut, locks: h.locks, sellSig: h.sellSig || null, transferOutSig: h.transferOutSig || null, lockSig: h.lockSig || null, source: "helius" };
   } catch (e) { console.warn("[BUY] helius position failed:", e.message); }
   try {
     const pos = premiumForensics.parseStPosition(await solanaTracker.getWalletTokenPosition(wallet, mint));
@@ -2256,20 +2264,28 @@ async function buyCompVerify(c) {
   const candidates = standings.slice(0, c.places.length + 6);   // buffer for DQs
   const results = [];
   for (const s of candidates) {
-    let status = "qualified", note = "still holding";
+    let status = "qualified", note = "still holding", evidenceSig = null, locksSeen = 0;
     try {
       // Sells are scoped to comp-start onward (through the hold period — no toMs):
       // dumping pre-comp bags doesn't DQ, selling the comp buys does. Matches the
       // live board's in-window filter so a wallet shown live can't be DQ'd for
       // ancient history at payout.
       const pos = await walletPositionMulti(s.wallet, c.mint, { fromMs: c.startTs });
+      locksSeen = (pos && pos.locks) || 0;
       if (!pos) { status = "manual"; note = "no position data — verify by hand (Trace)"; }
-      else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold on-chain (${pos.sells} sell${pos.sells > 1 ? "s" : ""})`; }
-      else if ((pos.transfersOut || 0) > 0) { status = "dq"; note = `moved the bag out during the hold (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""} out) — not eligible`; }
-      else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0 but the scan saw no sell and no transfer — coverage gap or RPC miss; verify by hand (a confirmed transfer out = not eligible)"; }
+      else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold on-chain (${pos.sells} sell${pos.sells > 1 ? "s" : ""})`; evidenceSig = pos.sellSig || null; }
+      else if ((pos.transfersOut || 0) > 0) { status = "dq"; note = `moved the bag out during the hold (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""} out) — not eligible`; evidenceSig = pos.transferOutSig || null; }
+      else if ((pos.balance || 0) <= 0) {
+        // A LOCK is not a sell (PR #298) — a wallet whose whole buy went into a Jupiter Lock
+        // escrow shows balance 0 with no sell and no transfer, and used to fall into the same
+        // "manual — coverage gap or RPC miss" bucket as a genuine scan failure. Say what was
+        // actually observed instead: the tokens are immobilised, not moved out.
+        if (locksSeen > 0) { status = "manual"; note = `holds 0 — the scan saw ${locksSeen} lock transfer${locksSeen > 1 ? "s" : ""} (a lock is not a sell) and no sell or transfer out; verify by hand that the lock covers the whole buy`; evidenceSig = pos.lockSig || null; }
+        else { status = "manual"; note = "holds 0 but the scan saw no sell and no transfer — coverage gap or RPC miss; verify by hand (a confirmed transfer out = not eligible)"; }
+      }
       else { status = "qualified"; note = `holds ${Math.round(pos.balance).toLocaleString()}, no sells`; }
     } catch (e) { status = "manual"; note = "lookup failed — verify by hand"; }
-    results.push({ wallet: s.wallet, value: s[key] || 0, tokensBought: Number(s.tokensBought) || 0, status, note });
+    results.push({ wallet: s.wallet, value: s[key] || 0, tokensBought: Number(s.tokensBought) || 0, status, note, evidenceSig, locksSeen });
   }
   // Auto-pay ONLY affirmatively-qualified holders. "manual" (no-data / lookup-failed) wallets
   // are surfaced in verifyResults for the operator to check by hand — never auto-included in
@@ -2279,17 +2295,12 @@ async function buyCompVerify(c) {
   // be percentage of ROSE that they bought, not a rated ROSE"), so the amount is in the comp
   // token and pastes straight into the airdropper. The Helius scan carries tokensBought; the
   // GeckoTerminal / Solana Tracker fallbacks only carry SOL volume, in which case the amount
-  // is still SOL-terms and amountUnit says so — never silently mix the two.
+  // is still SOL-terms and amountUnit says so — never silently mix the two. The split itself is
+  // lib/buycomp-payout.js's verifiedRow() — the exact function the public standings page's "how
+  // this number was computed" walkthrough and reproduce-a-receipt call too, never a copy that
+  // could drift from what was actually paid.
   const eligible = results.filter(r => r.status === "qualified");
-  c.verified = eligible.slice(0, c.places.length).map((r, i) => {
-    const pct = c.places[i].amount;
-    const tok = r.tokensBought > 0;
-    const amount = !c.pctPrize ? pct : tok ? +((r.tokensBought * pct) / 100).toFixed(2) : +((r.value || 0) * pct / 100).toFixed(4);
-    const extra = !c.pctPrize ? {} : tok
-      ? { amountUnit: "token", amountNote: `${pct}% of ${Math.round(r.tokensBought).toLocaleString()} ${c.ticker || "tokens"} bought` }
-      : { amountUnit: "sol", amountNote: `${pct}% of ${(r.value || 0).toFixed(2)} SOL bought (SOL terms — the buy source had no token amounts; operator converts/pays manually)` };
-    return { rank: i + 1, wallet: r.wallet, amount, ...extra, status: r.status, note: r.note };
-  });
+  c.verified = eligible.slice(0, c.places.length).map((r, i) => buycompPayout.verifiedRow(c, r, i));
   c.verifyResults = results;
   c.verifiedAt = Date.now();
   if (!c.payoutToken) c.payoutToken = randomBytes(8).toString("hex");
@@ -6832,6 +6843,20 @@ app.get("/api/jvp/project/:id", async (req, res) => {
     return res.status(200).json({ success: true, updatedAt: Date.now(), project: out });
   } catch (e) { console.warn("[jvp] project failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
 });
+// X5: the three evidence classes merged into one time-ordered, capped array, with a pure
+// replay of the retained decision rows against the real gates. Read-only, same GET-only shape
+// as the two routes above — no flag on this route can arm, pause, roll or sign anything.
+app.get("/api/jvp/project/:id/timeline", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const id = String(req.params.id || "").toLowerCase();
+  if (!JVP_PUBLIC_PROJECTS.includes(id)) return res.status(404).json({ success: false, error: "not_found" });
+  try {
+    const hours = Math.max(1, Math.min(720, parseInt(req.query.hours, 10) || 168));
+    const out = await jvpDashboard.timeline({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, id, hours, helius: JVP_HELIUS });
+    if (!out) return res.status(404).json({ success: false, error: "not_found" });
+    return res.status(200).json({ success: true, updatedAt: Date.now(), id, ...out });
+  } catch (e) { console.warn("[jvp] timeline failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
+});
 
 app.get("/api/engine-proof", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=120");
@@ -7609,6 +7634,71 @@ app.get("/api/airdrop-handoff", (req, res) => {
   return res.status(200).json({ ok: true, ...h.payload });
 });
 
+// ── Airdrop per-drop public receipt (Colosseum roadmap §W4/§Extension) ──────────────────────────
+// See lib/airdrop-receipt.js for the design. The airdrop page (public/airdrop.html) posts here
+// as each send batch confirms; the drop id it gets back is what makes /airdrop/r/<id> public and
+// reproducible without ever showing who the operator was.
+app.use("/api/airdrop/record", rateLimit("airdropRecord", { windowMs: 60000, max: 30 }));
+app.post("/api/airdrop/record", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  // Same gate the airdropper's send already runs through client-side — this is the SERVER side of
+  // it, checked again here because the record is what a stranger will later read as "this landed".
+  // (Not requireToolPass()'s one-liner — that would need a second toolPassGate call just to learn
+  // the operator's wallet, and a holder check re-reads the chain, so it is done once here.)
+  const g = await toolPassGate(req);
+  if (!g.ok) { const { status, ...body } = g; return res.status(status || 403).json({ success: false, ...body }); }
+  const b = req.body || {};
+  const rows = Array.isArray(b.rows) ? b.rows : null;
+  if (!rows || !rows.length) return res.status(400).json({ success: false, error: "rows must be a non-empty list of {wallet, amount, sig}" });
+  if (rows.length > airdropReceipt.MAX_ROWS_PER_DROP) return res.status(400).json({ success: false, error: `send at most ${airdropReceipt.MAX_ROWS_PER_DROP} rows per call` });
+  const rpcCall = heliusRpcCall(tokenMetaRpcUrl());
+  const getTx = async (sig) => {
+    const r = await rpcCall("airdrop-record", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
+    return (r && r.result) || null;
+  };
+  let r;
+  try {
+    r = await airdropReceipt.recordDrop({
+      kv, dropId: b.dropId ? String(b.dropId) : undefined,
+      mint: String(b.mint || ""), decimals: b.decimals, createdAt: b.createdAt,
+      rows, operator: g.wallet || null, getTx,
+    });
+  } catch (e) { return res.status(400).json({ success: false, error: String((e && e.message) || e) }); }
+  if (!r.ok) return res.status(r.status || 400).json({ success: false, error: r.error });
+  return res.status(200).json({ success: true, dropId: r.dropId, url: `/airdrop/r/${r.dropId}`, recorded: r.results, totals: r.totals });
+});
+// Same route, GET refused — see the mutating-GET-guard rule (CLAUDE.md): every admin/record route
+// that writes answers 405 on a GET.
+app.get("/api/airdrop/record", (req, res) => res.status(405).json({ success: false, error: "method_not_allowed" }));
+
+// Public: the drop's full receipt. No operator identity anywhere in the body — the dropId (random,
+// unguessable, in the URL) is the only handle a reader has.
+app.get("/api/airdrop/r/:dropId", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const drop = airdropReceipt.loadDrop(kv, String(req.params.dropId || ""));
+  if (!drop) return res.status(404).json({ success: false, error: "not_found" });
+  let symbol = null;
+  try { const meta = await tokenOverviewData(drop.mint); symbol = burnSymbolSafe(meta && meta.symbol); } catch (_) {}
+  return res.status(200).json({ success: true, ...airdropReceipt.publicDrop(drop, { symbol }) });
+});
+// Public: one recipient's row within a drop.
+app.get("/api/airdrop/r/:dropId/:wallet", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const drop = airdropReceipt.loadDrop(kv, String(req.params.dropId || ""));
+  if (!drop) return res.status(404).json({ success: false, error: "not_found" });
+  const wallet = String(req.params.wallet || "");
+  const row = Object.values(drop.rows || {}).find((r) => r.wallet === wallet);
+  if (!row) return res.status(404).json({ success: false, error: "no row for that wallet in this drop" });
+  let symbol = null;
+  try { const meta = await tokenOverviewData(drop.mint); symbol = burnSymbolSafe(meta && meta.symbol); } catch (_) {}
+  return res.status(200).json({ success: true, dropId: drop.dropId, mint: drop.mint, symbol, decimals: drop.decimals, createdAt: drop.createdAt, row: airdropReceipt.publicRow(row) });
+});
+// The receipt page itself — explicit route (public/ is only reachable through the vite dist copy,
+// CLAUDE.md — a route with no app.get 404s on a no-build boot).
+app.get("/airdrop/r/:dropId", (req, res) => {
+  res.sendFile(join(__dirname, "public", "airdrop-receipt.html"));
+});
+
 // PUBLIC price + decimals for any mint (Jupiter Price v3). The Buy Special tool
 // needs both: the price to convert a "% of what you bought" prize into a DIFFERENT
 // reward token, and the decimals so payout amounts are rounded at the right
@@ -7891,7 +7981,12 @@ function hubProjectView(project) {
   }
   let lessonReads = null;
   try { lessonReads = traction.lessonReadsForProject(kv, project.id); } catch (_) { /* the line just doesn't render */ }
-  return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads });
+  // X7 (Colosseum roadmap §8): the latest owners-snapshot holder-count record for this project's
+  // mint, if one has ever been crawled. Read-only lookup; a project that's never been snapshotted
+  // just has no holders fact line.
+  let holderSnapshot = null;
+  try { holderSnapshot = require("./lib/holders-snapshot").latest(kv, project.mint); } catch (_) { /* no snapshot yet */ }
+  return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads, holderSnapshot });
 }
 app.get("/api/hub", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
@@ -7956,6 +8051,30 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
     // are always where public/hub.html's renderReceipt already reads them.
     if (r && r.receipt && Array.isArray(r.receipt.settlements)) return res.status(200).json({ ok: true, ...r, receipt: { ...r.receipt, $schema: HUB_SCHEMA_URL("receipt") } });
     return res.status(200).json({ ok: true, ...r });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── E-buycomp: the public Buy Special standings + hold-through proof page (Colosseum roadmap
+// §7, the W4 deferred item — built ahead of the integration gate on the coordinator's ask since
+// it touches no engine and moves no money). Distinct from the whole-project view above: this is
+// the lean, GATED contract for one competition. No wallet, no tools pass, no admin key.
+//   - unsealed (status !== "verified", i.e. still live or closed-awaiting-verify): rules ONLY —
+//     no results, no review, not even empty arrays that could be mistaken for "nobody qualified
+//     yet". A live board here would let a whale time the last minute off this route.
+//   - sealed: the full compView (rank, wallet, qualifying volume, hold-through status with its
+//     on-chain evidence signature, the payout/receipt state, terms as published) plus `sealedAt`
+//     and a sha256 of exactly the sealed (rank, wallet, amount, status) list, so a reader can
+//     tell if it ever changes under them.
+// Cached 60s — a comp's standings don't need to be fresher than that once sealed, and while live
+// this route deliberately shows nothing that would benefit from being fresh.
+app.get("/api/hub/:project/p/:compId/standings", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  const compId = String(req.params.compId || "");
+  const c = Object.values(buyCompsAll()).find((x) => x && x.id === compId && x.mint === p.mint);
+  if (!c) return res.status(404).json({ ok: false, error: "no such buy competition" });
+  try {
+    return res.status(200).json({ ok: true, project: { id: p.id, label: p.label, symbol: p.symbol, mint: p.mint }, comp: hubPublic.compStandingsView(c) });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // ── Colosseum judges' demo (roadmap W7 acceptance target / design §6, E2): a fixture project
@@ -16792,6 +16911,25 @@ app.get("/cluck-wallet.js", (req, res) => {
   res.sendFile(join(__dirname, "public", "cluck-wallet.js"));
 });
 
+// The sitewide browser runtime every page loads (the floating nav + its i18n and read-aloud
+// loaders, and the theme sheet) had NO explicit route: they were reachable only through the vite
+// build's copy in dist/, so a no-build boot (the CI a11y gate, `node server.js` on a fresh clone)
+// served every page without its nav landmark, language toggle or Listen button — exactly the
+// public/-is-not-mounted trap CLAUDE.md describes. Found by scripts/hub-a11y-test.cjs on
+// 2026-09-18: green with dist/, 24 failures without it. Same no-cache posture as the modules above.
+for (const f of ["cluck-nav.js", "i18n.js", "read-aloud.js"]) {
+  app.get("/" + f, (req, res) => {
+    res.setHeader("Cache-Control", "no-cache, must-revalidate");
+    res.type("application/javascript");
+    res.sendFile(join(__dirname, "public", f));
+  });
+}
+app.get("/theme.css", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("text/css");
+  res.sendFile(join(__dirname, "public", "theme.css"));
+});
+
 // Unified tools pass (owner, 2026-08-18, for the app-store transition): hold $50 worth of
 // CLKN → every heavy tool free; else 0.05 SOL buys a 7-day ALL-TOOLS pass. One client module
 // drives the gate on X-Ray / Holders / Trace / Airdrop / Buy Special; quick safety tools and
@@ -17440,6 +17578,32 @@ app.get("/api/owners-snapshot/admin", adminGuarded(ADMIN_404, { noStore: true })
   res.json({ ok: true, running: ownersSnapshot.running, queueLength: ownersSnapshot.queueLength, recent: ownersSnapshot.listRecent(30) });
 });
 
+// ── Holder snapshot history (Colosseum roadmap §8 X7) ────────────────────────────────────────
+// A dated, hashed record of each finished owners-snapshot run (lib/holders-snapshot.js), so a
+// project can show holder-count history and a reader can recompute the hash from the published
+// list. Read-only history of a public on-chain fact — NO tools-pass gate here (the crawl that
+// produced it is already holder-gated; this just serves what was recorded). Never wallets on
+// the series endpoint; the single-snapshot endpoint carries the capped top list only.
+const holdersSnapshot = require("./lib/holders-snapshot");
+app.get("/api/holders/snapshots", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const mint = String(req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  try { return res.json({ ok: true, mint, snapshots: holdersSnapshot.series(kv, mint) }); }
+  catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/holders/snapshots/:id", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const mint = String(req.query.mint || "").trim();
+  const id = String(req.params.id || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  try {
+    const snap = holdersSnapshot.getSnapshot(kv, mint, id);
+    if (!snap) return res.status(404).json({ ok: false, error: "no_such_snapshot" });
+    return res.json({ ok: true, snapshot: snap });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
 app.get("/trace", (req, res) => {
   res.sendFile(join(__dirname, "public", "trace.html"));
 });
@@ -17493,6 +17657,11 @@ app.post("/api/track", (req, res) => {
     // locking lessons — see LOCK_LESSON_IDS in src/App.jsx. Anonymous sid only, never a wallet.
     const hlrM = /^hub_lesson_read:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
     if (hlrM && b.sid) { try { traction.recordHubLessonRead(kv, { project: hlrM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
+    // W9 part 2: the two "existing traffic → Hub" doors (COLOSSEUM_ROADMAP.md §W9 part 2).
+    // "school" fires from the school landing/lesson-finish HubDemoDoor (src/App.jsx); "home"
+    // fires from the homepage's project-operator tile (public/home.html). Anonymous sid only.
+    const hdcM = /^hub_door_click:(school|home)$/.exec(String(b.event || "").toLowerCase());
+    if (hdcM && b.sid) { try { traction.recordHubDoorClick(kv, { source: hdcM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
   } catch (_) {}
   return res.status(204).end();
 });

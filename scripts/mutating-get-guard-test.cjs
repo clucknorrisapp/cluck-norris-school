@@ -133,6 +133,17 @@ function raw(method, p, headers) {
   r = await call("POST", "/api/meme-queue?done=abc&art=%7B%22image%22%3A%22x%22%7D"); ok("POST /api/meme-queue?done=&art= goes through", r.status === 200 && r.body && r.body.ok === true, JSON.stringify(r.body).slice(0, 120));
   r = await call("GET", "/api/meme-queue?done=abc", false); ok("meme-queue stays 404 without the key", r.status === 404);
 
+  // ── airdrop per-drop receipt (Colosseum roadmap §W4/Extension): recording a row is a POST-only
+  // write, gated by the tools pass, not the admin key — a GET is refused before the pass is even
+  // checked. The public receipt reads (/api/airdrop/r/:dropId[/:wallet]) are unauthenticated GETs
+  // and stay that way; they are exercised by scripts/airdrop-receipt-test.cjs, not here.
+  r = await call("GET", "/api/airdrop/record", false);
+  ok("GET /api/airdrop/record is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/airdrop/record?dropId=x", false);
+  ok("GET /api/airdrop/record with query params is still refused with 405", r.status === 405);
+  r = await call("POST", "/api/airdrop/record", false);
+  ok("POST /api/airdrop/record with no pass is refused (402/403), never a silent 200", [402, 403].includes(r.status), JSON.stringify(r.body));
+
   // ── buy-comp server payout: run / sweep / unpay / set on a GET → 405, decided BEFORE the comp
   // lookup so a pasted link is refused before it touches anything; the flag-less GET is the read.
   r = await call("GET", "/api/buycomp/send?id=nope&run=1");
@@ -167,6 +178,8 @@ function raw(method, p, headers) {
   ok("GET /api/hub/:project/desk/session is refused with 405 (POST-only)", r.status === 405, JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/desk", false);
   ok("/api/hub/:project/desk without a key or operator token is 404", r.status === 404);
+  r = await call("GET", "/api/hub/nope/readiness", false);
+  ok("/api/hub/:project/readiness without a key or operator token is 404 (it is a read, but an operator-gated one — it reveals a funding balance)", r.status === 404);
   r = await call("GET", "/api/hub/nope/admin", false);
   ok("/api/hub/:project/admin without a key or operator token is 404 (no project-exists hint)", r.status === 404 && !(r.body && /no such project/.test(String(r.body.error))), JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/access?sig=x&quote=y", false);

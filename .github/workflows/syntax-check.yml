@@ -233,6 +233,11 @@ jobs:
         run: node scripts/kvstore-verified-test.cjs
       - name: payout row verification (a sent row needs a real transfer, after the batch, unused elsewhere)
         run: node scripts/payout-verify-test.cjs
+      # Colosseum roadmap §W4/Extension: the airdropper's per-drop public receipt. Reuses
+      # lib/payout-verify's on-chain-delta check (same as CUNA/Hub payouts) so a row is recorded
+      # paid only when the chain actually shows the transfer — never on a bare confirmed signature.
+      - name: airdrop per-drop receipt (verify-before-record, idempotent on sig, daily/row caps)
+        run: node scripts/airdrop-receipt-test.cjs
       # Shared "fresh sigs since the durable cursor" walk used by the ROSE/generic buy bots and
       # the burn watcher (lib/sig-cursor.js) — pure, so this runs standalone with no server boot.
       - name: signature cursor walk (buy/burn watchers' shared fresh-since-cursor logic)
@@ -246,12 +251,25 @@ jobs:
       # reach /api/hub — and hash the terms a program ran under.
       - name: Hub public views (no private fields, stable terms hash, honest totals)
         run: node scripts/hub-public-test.cjs
+      # Colosseum roadmap §8 X7: holder snapshot history is append-only (a second run adds, never
+      # edits), the 90-per-mint cap drops the oldest first, the hash recomputes from a holder list
+      # and changes on a one-unit change, the dated series carries no wallets, and the Hub
+      # project view's holders fact line appears only when a snapshot exists.
+      - name: Holder snapshot history (append-only, hashed, read-only)
+        run: node scripts/holders-snapshot-test.cjs
       # E1 (docs/COLOSSEUM_ROADMAP.md §1 "the number"): a receipt's amount re-derived from the
       # batch's own published inputs (periods, prior paid, prior reserved), reconstructed purely
       # from durable timestamps — MATCH, a tampered MISMATCH, and an honest MISSING_INPUTS naming
       # what is missing; the reproducibility ratio; the CLI script's --offline mode with no server.
       - name: Hub receipt reproduction (the number — MATCH/MISMATCH/MISSING_INPUTS, --offline)
         run: node scripts/reproduce-receipt-test.cjs
+      # Colosseum roadmap §7 (the W4 deferred item): the public Buy Special standings page.
+      # Unsealed publishes rules only (no results/review/payouts key at all); sealed publishes the
+      # full view plus a stable resultsHash; hold-through is held/sold/moved-out/locked-not-a-sell
+      # (PR #298 — a lock is not a sell) with its on-chain evidence signature; the split is the one
+      # function buyCompVerify, the walkthrough and reproduce-a-receipt all share.
+      - name: Hub public Buy Special standings + hold-through proof (Colosseum §7)
+        run: node scripts/hub-buycomp-public-test.cjs
       # The per-project Lock to Earn engine: config from the version in force, the two new rules,
       # one hour of accrual, the tick over the project's own keys, the holder view.
       - name: Hub engine (Lock to Earn for any project)
@@ -272,6 +290,12 @@ jobs:
       # revoked the moment the wallet leaves the operator list.
       - name: Hub operator sessions (project desk)
         run: node scripts/hub-operator-test.cjs
+      # Launch Readiness (design Addendum A): the checklist (ok/warn/block, every item derived —
+      # tests 11, 13), the reward-budget planner (same accrual function as the live engine, by
+      # construction — test 12), the arm-time refusal on a known shortfall or a dry run, the
+      # public body carrying no readiness data, and the desk section's rate/badge-language guard.
+      - name: Hub launch readiness (checklist + reward-budget planner)
+        run: node scripts/hub-readiness-test.cjs
       - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
         run: node scripts/cuna-announce-test.cjs
       # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC
@@ -416,7 +440,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -525,6 +549,13 @@ jobs:
       # here rather than in node-check.
       - name: Hub settlement-library JSON Schemas (lib/hub/schema, E4)
         run: node scripts/hub-schema-test.cjs
+      # X2 (docs/HUB_VERIFY.md): a static check, no server boot — asserts every script, lib file,
+      # relative link and $HOST route the doc tells a judge to paste actually exists in this repo,
+      # so the doc cannot silently drift from the code it describes. Always runs (like the schema
+      # test above), never diff-gated: a route rename anywhere is exactly the kind of change that
+      # would not otherwise touch a page or the game.
+      - name: HUB_VERIFY.md matches the code it tells judges to run (X2)
+        run: node scripts/hub-verify-doc-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)
@@ -555,6 +586,18 @@ jobs:
       - name: wallet standard discovery
         if: steps.gate.outputs.run == 'true'
         run: node scripts/wallet-standard-test.cjs
+      # Colosseum roadmap §7 — "accessibility and phone polish on the public pages" — judges click
+      # these on phones. Boots its own server and drives /hub, /hub/<project>, /hub/demo,
+      # /for-projects, /hub/apply and /hub/<project>/pay at 360 and 390px with a real Chromium:
+      # no horizontal overflow, every real tap target >= 44x44 (inline-in-prose links, compact
+      # mono data links and table cells are the standard, accepted exceptions), every <img> has
+      # alt, icon-only controls have an accessible name, heading order is sane, <main>/<nav>
+      # landmarks exist, and long mono strings never overflow their box. Not a full WCAG audit —
+      # contrast and the language toggle's lang attribute were checked by hand for this batch (see
+      # the PR) and aren't re-derived here.
+      - name: Hub pages — accessibility + phone polish
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-a11y-test.cjs
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the

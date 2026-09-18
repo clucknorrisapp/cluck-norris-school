@@ -188,7 +188,7 @@ that gets read.
 
 ---
 
-## 1. Product description (paste-ready, ~250 words)
+## 1. Product description (paste-ready, ~310 words — trim if the form caps lower)
 
 **Cluck Norris** (clucknorris.app) is a free Solana crypto school wrapped around real research and
 operator tools. What we are working toward: educate, build, earn.
@@ -214,6 +214,14 @@ directly on the open-source Jupiter Lock program, Token-2022 included.
 The rule across every tool: a claim has to be backed by something you can open yourself — a
 transaction, an account, a launchpad API. We label a wallet "creator" or "team" only when a
 launchpad confirms it, never on inference.
+
+On top of that sits the **Project Hub**, our entry for this window: project-owned reward
+programs whose terms, eligibility and payouts a holder can check without trusting us. A program's
+terms and every wallet's eligibility (with a reason code, not a bare yes/no) are public; a
+settled receipt explains its own number; and a receipt is reproducible offline — run
+`scripts/reproduce-receipt.cjs` against the published inputs and re-derive the amount yourself, no
+server call, no wallet. `/hub/demo` walks the whole loop, including a second project proving
+isolation, with no wallet at all.
 
 The business model is a token that does work instead of begging you to buy it. Learning and safety
 stay free for everyone. The heavy tools are free to anyone holding about $50 of CLKN (live-priced),
@@ -297,11 +305,24 @@ Judges weight traction and revenue. These are all verifiable on-chain or on the 
 | Partner tokens on our infrastructure | 4 — POKE, CUNA, DNC, ROSE: locking, verification, buy comps, and (paused) liquidity engine service | JVP runbook, `docs/CLKN_JUP_VERIFICATION_PROTOCOL.md` |
 | Lock-to-earn — mechanism proof | First weekly payout landed 2026-09-09: 13 wallets, one transaction (proves the mechanism runs end-to-end; not a dollar claim) | tx `37hhsCCh…Z2bVkiP` |
 | CLKN locks — our own supply, via our own tooling | 73 locks, 48.8% of supply (488M CLKN) | `/api/locks?mint=DW6DF2…BAGS` |
+| **Project Hub — outcome counters (W9)** | Instrumented, not yet a headline figure: wallets connected, programs published, program versions, receipts issued/opened, batches signed, repeat operators and revenue are each derived from a durable store and reproducible by re-running the script — never hand-typed. **[measured by `scripts/traction-report.cjs` on \<date\>]** | `scripts/traction-report.cjs`; owner-only `GET /api/traction` |
+| Project Hub — second project | POKEAHOE (`/hub/poke`) is seeded as a clearly labelled **dry run** — branded, `dryRun:true`, excluded from every count — while terms and a funding wallet are agreed with that team; the no-wallet walkthrough at `/hub/demo` (and `/hub/demo-b`, proving isolation) is fixture data, also excluded from every count. Neither is presented as a live program. | `/hub/poke`, `/hub/demo` |
 | Live product, public | clucknorris.app, since 2025; Seeker dApp Store listing; education-only Google Play build shipped 2026-09-11 | site |
 | Curriculum | 35 lessons, 7 languages, read-aloud, plus the LP Lab and reference Library | `/`, `/lp-lab` |
 | Services model | verification, lock-to-earn, buy comps, engine — priced per project `[OWNER]` | this doc §5 |
 | Community | `[OWNER — Telegram members, X followers]` | |
 | Security | Cloudflare WAF cutover + origin lockdown live since 2026-08-04, from findings by our scan partner RootCrak (@ro0TCr4k, https://rootcrak.com/?ref=clucknorris) | README |
+
+**Validation.** The traction table above says *what* happened; `docs/VALIDATION_2026-09.md`
+(W6b) says *who independently pays for it and why they'd return* — the question none of these
+counters answer on their own. Every claim of adoption there is sorted into one of three columns
+before it is allowed near this submission: **founder-operated** (CLKN Productions ran the setup
+or payout on the project's behalf), **dry run** (wired up, labelled, nothing accrues or pays —
+e.g. the POKEAHOE Hub page), or **independent** (a project operator ran it themselves, through
+their own signed operator-desk session, with no founder in the loop). `[measured on <date>]`:
+of the four partner projects (POKE, CUNA, DNC, ROSE), `[N] of 4` fall in founder-operated, `[N]
+of 4` in dry run, and `[N] of 4` in independent — see `docs/VALIDATION_2026-09.md` §(a) for the
+per-project breakdown and §(d) for the honest headline it produced.
 
 ---
 
@@ -354,23 +375,28 @@ have a number; otherwise this stands.]`
 ## 6. Three-minute product demo — script and shot list
 
 Record at 1080p, desktop browser, plus one phone insert. Screen capture with voiceover; no
-slides. Every screen below is live today. Keep a wallet with ~$50 of CLKN connected so the gate
-resolves "free" on camera. **Do not open Normie Quest prize pages and do not mention Wallet Watch.**
+slides. Every screen below is live today. The Hub segment needs no wallet at all (it runs on
+`/hub/demo`'s fixture data); if a live-wallet cutaway is added later, keep a wallet with ~$50 of
+CLKN connected so the tools-pass gate resolves "free" on camera. **Do not open Normie Quest prize
+pages and do not mention Wallet Watch.** This is the roadmap's W7 acceptance target (§1, §W7): the
+single-holder Hub story, with the pre-window tool tour compressed to one 30-second aside.
 
 | t | Shot | Voiceover |
 |---|---|---|
-| 0:00–0:15 | Landing page, slow scroll. "Where do I start?" concierge visible. | "Cluck Norris is a free crypto school on Solana, wrapped around the tools people actually need once they're in. Nothing that teaches costs anything." |
-| 0:15–0:45 | Open a lesson. Switch language to Español, then हिन्दी. Tap read-aloud. Ask Cluck a question in the lesson. | "Courses from your first day through advanced, in multiple languages, read aloud, with an AI tutor in every lesson. No signup, no wallet." |
-| 0:45–1:05 | `/transcript` page of a graduate; the on-chain NFT on an explorer. | "Finish the course, drop an address, and you get a permanent transcript and an on-chain graduation NFT. A server-side ledger gates it, so the credential is earned, not clicked." |
-| 1:05–1:30 | `/wallet-checkup`: paste a wallet with a lingering delegate approval. Show the revoke button. | "Wallet Checkup finds what actually drains people: delegate approvals, honeypots, tokens the dev can still mint or freeze. Find one on your own wallet and revoke it right there. Free, read-only, no account." |
-| 1:30–1:55 | `/wallet-xray`: paste an address. Show the funding origin trace and the behaviour read. | "X-Ray tells any wallet's whole story, traced back to its first transaction — and every line of it is a transaction you can open yourself." |
-| 1:55–2:20 | `/holders`: a token. Toggle humans-only concentration. Export a slice to the airdropper. `/airdrop` with the CSV loaded, pre-flight shown. | "Holders separates humans from pools and escrows and hands any slice straight to the airdropper, with a wallet pre-flight so you check the numbers before your wallet asks." |
-| 2:20–2:45 | `/locker-room`: start a lock. Show the plain-English field explanations. Cut to a Lock of Fame page and the lock celebration post on X. | "The Locker Room locks any Solana token on Jupiter Lock, free, non-custodial, Token-2022 included, every field explained before you sign. Each lock gets a public page and announces itself." |
-| 2:45–3:00 | Phone insert: `/cuna-payout` receipt or the lock-to-earn page; then the GitHub repo. | "On top of locks, lock-to-earn pays holders weekly for keeping supply locked. First payout landed this week. All of it open source, MIT." |
+| 0:00–0:10 | Landing page, one beat, cut to `/hub`. | "Cluck Norris is a free crypto school wrapped around real tools — and this window, we built the Project Hub: reward programs a holder can check without trusting us." |
+| 0:10–0:35 | `/hub/demo` — the program version card: pool size, term tiers, exclusions, DRY RUN badge visible throughout. | "Every program publishes its terms as a versioned record. This one's a fixture — clearly labelled, dry run — but the code path is the same one a real project runs on." |
+| 0:35–1:00 | Same page: a holder's lock shows "qualifies, 3-month term, 1×" with the exact rule that decided it; then a second, disqualified holder with its reason code (`below_min_lock` or similar) shown, not a bare no. | "Eligibility isn't a yes or no — it's a rule you can read, with a reason code when it says no." |
+| 1:00–1:20 | Funding coverage panel: obligations vs. reserved vs. observed balance. | "Before anything pays, the page shows whether the funding wallet can actually cover what's owed — shortfall shown, never hidden." |
+| 1:20–1:40 | The batch and a settled receipt (`/hub/demo/r/<id>`), then expand "How this number was computed." | "A batch pays under one program version, and every receipt explains its own number — the holder's own term and share, walked through, not asserted." |
+| 1:40–2:05 | Terminal: `node scripts/reproduce-receipt.cjs <receipt-url>` running against a live receipt (or the fixture), printing MATCH; cut to the "N of M receipts reproduce" line on a program page. | "Anyone can re-run this math themselves, offline, from the published inputs — no server call, no trust required. This page states the measured ratio, never an asserted one." |
+| 2:05–2:25 | `/hub/demo-b` — the second fixture project, showing its own program and receipts. | "A second project's data can never leak into the first's — same libraries, fully isolated, proven here rather than promised." |
+| 2:25–2:55 | 30-second aside: quick cuts across the pre-window platform — a lesson with a language switch, Wallet Checkup's revoke button, `/wallet-xray`'s trace, `/locker-room`'s lock flow and a Lock of Fame page. | "All of this sits on a school and a tool set that was already live before the window — free education, forensics, and non-custodial locking on Jupiter Lock." |
+| 2:55–3:00 | GitHub repo, MIT license visible. | "Open source, MIT. clucknorris.app." |
 
-**Shot list checklist.** Landing · lesson with language switch · transcript + NFT on explorer ·
-Wallet Checkup with a real approval · X-Ray trace · Holders → airdropper hand-off · Locker Room
-form + Lock of Fame + X post · phone insert · repo page. Nine captures, each under 30 seconds.
+**Shot list checklist.** `/hub/demo` program version + DRY RUN badge · a qualifying holder with
+its rule · a disqualified holder with its reason code · funding coverage panel · batch + receipt +
+"how this number was computed" · `reproduce-receipt.cjs` run to MATCH · the reproducibility ratio
+line · `/hub/demo-b` isolation · the 30-second pre-window aside · repo page.
 
 ---
 
@@ -384,12 +410,16 @@ this is the video where the owner talks, not the product.
 2. **0:20–0:45 — The problem.** People lose money because nobody told them the truth plainly.
    Education is either a shill or a textbook. Tools assume you already know what you're doing.
 3. **0:45–1:15 — The product.** A free school in multiple languages with an AI tutor, wrapped around
-   forensic tools that say what is on-chain and never why, and a free lock room any project can
-   use to prove it can't dump. Guardrails before power: first-timers get warned before they can
-   hurt themselves.
+   forensic tools that say what is on-chain and never why, a free lock room any project can
+   use to prove it can't dump, and — built this window — the **Project Hub**: a project-owned
+   reward program whose terms, eligibility and payouts a holder can check without trusting us. A
+   receipt explains its own number, and it's reproducible offline from published inputs — the
+   proof leg of Educate → Build → Earn. Guardrails before power: first-timers get warned before
+   they can hurt themselves.
 4. **1:15–1:45 — Traction.** Live since 2025. 73 locks and nearly half of CLKN supply locked
    through our own tooling. Lock-to-earn live for a partner token with its first payout on-chain
-   this week. Four partner tokens running our infrastructure. Seeker dApp Store. `[OWNER —
+   this week. Four partner tokens running our infrastructure, with a second brought onto the Hub
+   as a labelled dry run while terms are agreed. Seeker dApp Store. `[OWNER —
    graduates and community numbers.]`
 5. **1:45–2:15 — Business.** A token that does work: hold it and the heavy tools are free;
    otherwise a small SOL pass. Mint fees, trade fees, per-project services. Learning stays free
@@ -455,6 +485,11 @@ re-run any of these searches.
 
 ## 8. Pre-submission checklist
 
+- [ ] **Videos** — scripts are written and word-for-word: the 2–3 minute presentation video is
+      `docs/PITCH_SCRIPT.md` (415 words, timed to 2:46), the ≤3 minute demo video's narration is
+      `docs/DEMO_NARRATION.md` (aligned to `docs/DEMO_STORYBOARD.md`'s shot list). Re-check both
+      against `develop` immediately before recording — they're dated 2026-09-18 and note which
+      lines depend on `develop` → `main` promotion.
 - [ ] Owner registers on colosseum.com before **Sep 14**; confirms the track/prize category on the
       live site (the pasted schedule was out of date — the event is the Crypto World's Fair).
 - [x] Settle the Liquidity Engine / JVP wording — README, `/about`, `/liquidity-engine` and this

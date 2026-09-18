@@ -171,6 +171,20 @@
       <div class="btns" style="margin-top:10px"><button class="ghost" id="commitBtn">COMMIT LATEST VERSION ON-CHAIN</button></div>
       <div class="muted" id="commitNote" style="margin-top:8px"></div>
     </div>
+
+    <!-- LAUNCH READINESS (design Addendum A) — begin. New, self-contained section: its own ids
+         (rdy*), its own load call, no changes to any card above. -->
+    <div class="card" id="rdyCard">
+      <div class="k">LAUNCH READINESS <span class="small">— every line below is derived from the numbers above, never a single pass/fail summary for the project</span></div>
+      <div style="overflow-x:auto"><table id="rdyTable"><thead><tr><th>check</th><th>status</th><th>what it found</th></tr></thead><tbody></tbody></table></div>
+      <div class="muted" style="margin-top:8px">A "block" here refuses ARM specifically (see the ARM button above) — it does not touch a program already running. A "warn" is shown so you can decide; it never blocks anything on its own.</div>
+    </div>
+    <div class="card" id="rdyBudgetCard">
+      <div class="k">REWARD BUDGET <span class="small">— next 4 periods, holding today's locks constant</span></div>
+      <div style="overflow-x:auto"><table id="rdyBudgetTable"><thead><tr><th>period</th><th class="num">projected obligation</th><th class="num">cumulative</th></tr></thead><tbody></tbody></table></div>
+      <div class="muted" style="margin-top:8px" id="rdyBudgetNote">A projection, not a promise: it assumes nobody locks or unlocks between now and then, and runs the exact accrual math the engine uses each hour — never a second formula.</div>
+    </div>
+    <!-- LAUNCH READINESS (design Addendum A) — end -->
   </div>
 </div>
 
@@ -212,6 +226,7 @@
   }
   var admin = function (p, m) { return call("/admin", p, m); };
   var payout = function (p, m) { return call("/payout", p, m); };
+  var readiness = function (p, m) { return call("/readiness", p, m); };
   async function rpc(method, params) {
     var r = await fetch("/api/helius-rpc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: method, params: params }) });
     var j = await r.json(); if (j.error) throw new Error(j.error.message || "rpc error"); return j.result;
@@ -286,7 +301,7 @@
     $("fWallet").textContent = f.wallet || "—"; $("fObl").textContent = amt(f.obligationsRaw || "0");
     $("fObs").textContent = f.observedBalanceRaw == null ? "could not read" : amt(f.observedBalanceRaw);
     $("fShort").innerHTML = f.shortfallRaw == null ? "—" : Number(f.shortfallRaw) > 0 ? '<span class="bad">' + esc(amt(f.shortfallRaw)) + ' SHORT</span>' : '<span class="ok">none</span>';
-    renderLockers(); renderTermsForm();
+    renderLockers(); renderTermsForm(); loadReadiness();
     $("authCard").hidden = true; $("app").hidden = false;
     var pending = (DESK.pendingBatches || [])[0];
     if (pending) { await loadBatch(pending.id); }
@@ -525,7 +540,38 @@
   });
   $("accrue").addEventListener("click", function () { admin({ accrue: "1" }, "POST").then(function (a) { var r = a.ran || {}; $("ctNote").textContent = r.ok ? "Accrued " + r.slice + ": " + r.eligible + " earning." : "Accrual: " + (r.reason || r.error || "nothing to do"); return load(); }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; }); });
   $("rescan").addEventListener("click", function () { $("ctNote").textContent = "rescanning…"; call("/desk", { rescan: "1" }).then(function () { return load(); }).then(function () { $("ctNote").textContent = "Rescanned."; }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; }); });
+
+  // ── LAUNCH READINESS (design Addendum A) — self-contained: its own fetch, its own render,
+  // never blocks the rest of the desk if it fails. Every line is derived server-side (lib/hub/
+  // readiness.js); this only paints what the route returns.
+  function renderReadinessRows(items) {
+    var tb = $("rdyTable").querySelector("tbody");
+    tb.innerHTML = (items || []).map(function (it) {
+      var cls = it.status === "ok" ? "yes" : it.status === "block" ? "no" : "owed";
+      var label = it.status === "ok" ? "OK" : it.status === "block" ? "BLOCK" : "WARN";
+      return '<tr><td>' + esc(it.label || it.key) + '</td><td><span class="pill ' + cls + '">' + label + '</span></td><td class="small">' + esc(it.detail || "") + '</td></tr>';
+    }).join("") || '<tr><td colspan="3" class="muted">—</td></tr>';
+  }
+  function renderBudgetRows(plan) {
+    var tb = $("rdyBudgetTable").querySelector("tbody");
+    var rows = (plan && plan.periods) || [];
+    tb.innerHTML = rows.map(function (row, i) {
+      return '<tr><td>' + esc(String(i + 1)) + '</td><td class="num">' + esc(amt(row.obligationRaw)) + '</td><td class="num">' + esc(amt(row.cumulativeRaw)) + '</td></tr>';
+    }).join("") || '<tr><td colspan="3" class="muted">no program version in force yet</td></tr>';
+  }
+  async function loadReadiness() {
+    try {
+      var r = await readiness();
+      renderReadinessRows(r.readiness && r.readiness.items);
+      renderBudgetRows(r.plan);
+    } catch (e) {
+      var msg = '<tr><td colspan="3" class="bad">' + esc((e && e.message) || String(e)) + '</td></tr>';
+      $("rdyTable").querySelector("tbody").innerHTML = msg;
+      $("rdyBudgetTable").querySelector("tbody").innerHTML = msg;
+    }
+  }
 })();
 </script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
 </body>
 </html>
