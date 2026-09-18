@@ -1490,5 +1490,6 @@
   "{label}: {n} schema error(s) against {url}.": "{label}：相对于 {url} 有 {n} 个 schema 错误。",
   "{total} receipt(s) in this batch:": "此批次中共 {total} 张收据：",
   "— it fetches only public JSON, re-derives the amount on your own machine, and never sends your inputs anywhere. Once the page has loaded, the offline path needs no network at all.": "——它只获取公开的 JSON，在你自己的设备上重新算出金额，绝不会把你的输入发送到任何地方。页面加载完成后，离线方式完全不需要网络。",
-  "A hash commits to the published terms, not to intent.": "哈希只证明已发布的条款，并不证明意图。"
+  "A hash commits to the published terms, not to intent.": "哈希只证明已发布的条款，并不证明意图。",
+  "Follow this project": "关注此项目"
 }

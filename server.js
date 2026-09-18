@@ -8069,6 +8069,7 @@ function HUB_SCHEMA_URL(name) { return `https://clucknorris.app/hub/schema/${nam
 // to a scan or a 500.
 const HUB_SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{60,100}$/;
 const hubProject = require("./lib/hub/project");
+const hubFeed = require("./lib/hub/feed");
 function hubProjects() {
   const built = {
     clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9, rewardMint: CLKN_MINT, rewardDecimals: 9 },
@@ -8508,6 +8509,49 @@ app.get("/api/hub/:project/reproducibility/history", rateLimit("hubheavy", { win
     return res.status(200).json({ ok: true, project: id, days, chainOk: chain.ok });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// ── DD2 (Colosseum roadmap §14): "Follow a project without a wallet" — a JSON Feed + RSS listing
+// of what happened in this project's public record, newest first. lib/hub/feed.js is the pure
+// item builder + serializers; everything handed to it here is already a public view this file
+// composes for its OTHER Hub read routes (hubProjectView, hubReproducibilityFor's per-batch
+// rows — the exact numbers /api/hub/:project/reproducibility publishes — and
+// holdersSnapshot.series/reproHistory.series, both defined further down this file and safe to
+// reference here for the same reason hubReceiptCommand/reproHistory already are above: this only
+// runs inside a request handler, long after the whole module has finished loading). `versions`
+// here are the FULL public docs (programVersionView with `full:true`), never the trimmed
+// {version,hash,publishedAt} index projectView.versions carries — the feed needs each version's
+// `commitment` too, and lib/hub/feed.js derives its commitment items from exactly that field.
+function hubFeedItemsFor(id, p, req) {
+  const projectView = hubProjectView(p);
+  const state = hubStore.read(kv, id, "state", {}) || {};
+  const versions = Array.isArray(state.versions) ? state.versions.map((v) => hubPublic.programVersionView(v, { full: true })) : [];
+  const batches = hubStore.read(kv, id, "batches", {}) || {};
+  const repData = hubReproducibilityFor(id, p);
+  const receiptsByBatch = {};
+  for (const b of (repData && repData.batches) || []) receiptsByBatch[b.batchId] = b;
+  let snapshots = [];
+  try { snapshots = holdersSnapshot.series(kv, p.mint); } catch (_) { /* no crawl yet */ }
+  let history = [];
+  try { history = reproHistory.series(kv, id); } catch (_) { /* accepted, unused today */ }
+  const base = `${req.protocol}://${req.get("host")}`;
+  return hubFeed.buildFeedItems({ projectView, versions, batches, receiptsByBatch, snapshots, history, base });
+}
+app.get("/api/hub/:project/feed.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const id = String(req.params.project || "").toLowerCase();
+  const p = hubProjects()[id];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const base = `${req.protocol}://${req.get("host")}`;
+    const items = hubFeedItemsFor(id, p, req);
+    const body = hubFeed.toJsonFeed(items, {
+      title: `${p.label} — Hub feed`,
+      home_page_url: `${base}/hub/${encodeURIComponent(id)}`,
+      feed_url: `${base}/api/hub/${encodeURIComponent(id)}/feed.json`,
+    });
+    res.setHeader("Content-Type", "application/feed+json; charset=utf-8");
+    return res.status(200).json(body);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 // ── BB3 (Colosseum roadmap §12): a reproducibility badge that is COMPUTED, not typed. Both
 // routes below sum hubReproducibilityFor() over every registered, non-demo project — the exact
 // same set /api/hub lists and hub-status.html walks (hubProjects() never contains "demo"/"demo-b";
@@ -8613,6 +8657,30 @@ app.get("/hub/schema/:name.json", (req, res) => {
 app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
 app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
 app.get("/hub/:project/desk", (req, res) => { res.sendFile(join(__dirname, "public", "hub-desk.html")); });
+// DD2 (Colosseum roadmap §14): the RSS twin of GET /api/hub/:project/feed.json — same ordering
+// reason as /pay and /desk above, registered BEFORE the /hub/:project catch-all further down (a
+// literal 3rd segment, "feed.xml", never collides with any of that array's own patterns, but this
+// is still verified against the real, running route table by scripts/hub-feed-test.cjs, not
+// assumed from reading the file top to bottom). hubFeedItemsFor is defined above, next to the
+// JSON route it shares its computation with.
+app.get("/hub/:project/feed.xml", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const id = String(req.params.project || "").toLowerCase();
+  const p = hubProjects()[id];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const base = `${req.protocol}://${req.get("host")}`;
+    const items = hubFeedItemsFor(id, p, req);
+    const xml = hubFeed.toRss(items, {
+      title: `${p.label} — Hub feed`,
+      description: `Published program versions, settled batches, holder snapshots and on-chain commitments for ${p.label} on the Cluck Norris Project Hub.`,
+      home_page_url: `${base}/hub/${encodeURIComponent(id)}`,
+      feed_url: `${base}/hub/${encodeURIComponent(id)}/feed.xml`,
+    });
+    res.setHeader("Content-Type", "application/rss+xml; charset=utf-8");
+    return res.status(200).send(xml);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 // CC1 (Colosseum roadmap §13): "what changed in the rules" between two program versions. Same
 // ordering reason as /pay and /desk above — registered BEFORE the /hub/:project/programs and
 // /hub/:project catch-all patterns further down, or Express would need to match a LONGER path
@@ -8696,6 +8764,15 @@ function renderHubOgHtml(rawHtml, meta) {
   const t = escHtml(ogClamp(meta.title, 70));
   const d = escHtml(ogClamp(meta.desc, 200));
   const u = escHtml(String(meta.url || HUB_OG_BASE));
+  // DD2 (Colosseum roadmap §14): feed discovery tags, only when this request actually resolved to
+  // a real, registered project (`meta.feedProjectId` — set by hubOgFor, never by HUB_OG_DEFAULT or
+  // the demo fixture's own hubDemoOgFor, so the generic /hub index and a demo page never advertise
+  // a feed that 404s). Two `<link rel="alternate">`s, the same pair a feed reader's autodiscovery
+  // looks for: JSON Feed at /api/hub/:project/feed.json, RSS at /hub/:project/feed.xml.
+  const feedLinks = meta.feedProjectId ? [
+    `<link rel="alternate" type="application/feed+json" title="${t} feed" href="${HUB_OG_BASE.replace(/\/hub$/, "/api/hub")}/${encodeURIComponent(meta.feedProjectId)}/feed.json">`,
+    `<link rel="alternate" type="application/rss+xml" title="${t} feed" href="${HUB_OG_BASE}/${encodeURIComponent(meta.feedProjectId)}/feed.xml">`,
+  ].join("\n") : "";
   const block = [
     `<meta property="og:title" content="${t}">`,
     `<meta property="og:description" content="${d}">`,
@@ -8708,7 +8785,8 @@ function renderHubOgHtml(rawHtml, meta) {
     `<meta name="twitter:title" content="${t}">`,
     `<meta name="twitter:description" content="${d}">`,
     `<meta name="twitter:image" content="${HUB_OG_IMAGE}">`,
-  ].join("\n");
+    feedLinks,
+  ].filter(Boolean).join("\n");
   return rawHtml
     .replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${t}</title>`)
     .replace(/<meta name="description"[^>]*>/i, () => `<meta name="description" content="${d}">`)
@@ -8726,10 +8804,15 @@ function hubOgFor(projectId, kind, sub) {
   // dryRun (E10, e.g. POKE): a plain, generic label — no project-specific wording, so this is
   // never a second code path per project.
   const dryNote = v.dryRun === true ? " DRY RUN — terms not yet agreed with the project team; nothing here is live." : "";
+  // DD2: `feedProjectId` is carried on EVERY branch below once `p` is known to be a real,
+  // registered project (the exact set GET /api/hub/:project/feed.json and /hub/:project/feed.xml
+  // resolve too) — renderHubOgHtml uses it to add the <link rel="alternate"> discovery tags. A
+  // dry-run project (E10) still gets one: its feed is just honestly empty (no batch/version/
+  // commitment/snapshot can exist for it), never a broken link.
   if (kind === "receipt") {
     const url = `${base}/r/${encodeURIComponent(sub || "")}`;
     let rec; try { rec = hubPublic.findReceipt(v, sub); } catch (_) { rec = null; }
-    if (!rec) return { ...HUB_OG_DEFAULT, url };
+    if (!rec) return { ...HUB_OG_DEFAULT, url, feedProjectId: p.id };
     const row = rec.receipt || {};
     const amt = row.amountUi != null ? row.amountUi : "?";
     // "committed on-chain" only when the program object itself carries an observed commitment
@@ -8741,24 +8824,24 @@ function hubOgFor(projectId, kind, sub) {
     return {
       title: `${amt} ${v.symbol} receipt — ${v.label}`,
       desc: `${v.label} paid ${amt} ${v.symbol} through ${progLabel} — ${claim}.${dryNote}`,
-      url,
+      url, feedProjectId: p.id,
     };
   }
   if (kind === "program") {
     const url = `${base}/p/${encodeURIComponent(sub || "")}`;
     const prog = (v.programs || []).find((pr) => pr && pr.id === sub);
-    if (!prog) return { ...HUB_OG_DEFAULT, url };
+    if (!prog) return { ...HUB_OG_DEFAULT, url, feedProjectId: p.id };
     return {
       title: `${prog.label} — ${v.label} — Project Hub`,
       desc: `${prog.label} for ${v.label} ($${v.symbol}) on the Project Hub — ${HUB_OG_REPRO_LINE}.${dryNote}`,
-      url,
+      url, feedProjectId: p.id,
     };
   }
   const n = v.totals || {};
   return {
     title: `${v.label} ($${v.symbol}) — Project Hub`,
     desc: `${v.label}: ${n.receipts || 0} receipt${n.receipts === 1 ? "" : "s"} across ${n.programs || 0} program${n.programs === 1 ? "" : "s"} — ${HUB_OG_REPRO_LINE}.${dryNote}`,
-    url: base,
+    url: base, feedProjectId: p.id,
   };
 }
 // The Colosseum judges' demo fixture (E2) — same treatment, labelled DRY RUN — fixture data

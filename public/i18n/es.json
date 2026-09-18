@@ -1490,5 +1490,6 @@
   "{label}: {n} schema error(s) against {url}.": "{label}: {n} error(es) de schema frente a {url}.",
   "{total} receipt(s) in this batch:": "{total} recibo(s) en este lote:",
   "— it fetches only public JSON, re-derives the amount on your own machine, and never sends your inputs anywhere. Once the page has loaded, the offline path needs no network at all.": "— solo obtiene JSON público, recalcula la cantidad en tu propia máquina, y nunca envía tus entradas a ningún sitio. Una vez que la página ha cargado, la vía sin conexión no necesita red en absoluto.",
-  "A hash commits to the published terms, not to intent.": "Un hash da fe de los términos publicados, no de la intención."
+  "A hash commits to the published terms, not to intent.": "Un hash da fe de los términos publicados, no de la intención.",
+  "Follow this project": "Sigue este proyecto"
 }
