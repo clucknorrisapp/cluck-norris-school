@@ -53,6 +53,13 @@ const ok = (name, cond, detail) => {
   else { failures++; console.log("  ✗ " + name + (detail ? "\n      " + detail : "")); }
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// `page.textContent("body")` returns raw DOM textContent, which walks INTO <script> elements too
+// (a script tag's source is stored as a text-node child) — on this page that means every English
+// literal passed to t()/tf() is "found in the body" simply because it sits in the inline module
+// script, independent of what actually rendered. `innerText` is the rendered/visible text only
+// (CSS-aware, skips script/style), which is what "does this leak on screen" actually means; the
+// language-guard and i18n checks below both need that distinction or they pass for the wrong reason.
+const innerText = (pg) => pg.evaluate(() => document.body.innerText).catch(() => "");
 
 // ── fixture data — a REAL project registered in the hub kv registry, not the demo fixture ──────
 const WALLET = "4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs";
@@ -221,7 +228,7 @@ async function main() {
     await page.waitForSelector(".verdict .badge", { timeout: 10000 }).catch(() => {});
     let badge = await page.textContent(".verdict .badge").catch(() => null);
     ok("?receipt= query param auto-runs and shows MATCH", badge === "MATCH", "got: " + badge);
-    allBodyText += (await page.textContent("body").catch(() => "")) + " ";
+    allBodyText += (await innerText(page)) + " ";
 
     // 4b. typed into the URL field + button click — the interactive path
     await page.goto(`${BASE}/hub/verify`, { waitUntil: "networkidle", timeout: 20000 });
@@ -230,7 +237,7 @@ async function main() {
     await page.waitForSelector(".verdict .badge", { timeout: 10000 }).catch(() => {});
     badge = await page.textContent(".verdict .badge").catch(() => null);
     ok("typed URL + REPRODUCE shows MISMATCH for the tampered batch", badge === "MISMATCH", "got: " + badge);
-    allBodyText += (await page.textContent("body").catch(() => "")) + " ";
+    allBodyText += (await innerText(page)) + " ";
 
     ok("no uncaught page errors", pageErrors.length === 0, pageErrors.join("\n"));
 
@@ -255,11 +262,53 @@ async function main() {
       badge = await page.textContent(".verdict .badge").catch(() => null);
       ok("offline path from saved files shows MATCH (same as the CLI)", badge === "MATCH", "got: " + badge);
     }
-    allBodyText += (await page.textContent("body").catch(() => "")) + " ";
+    allBodyText += (await innerText(page)) + " ";
     fs.rmSync(tmp, { recursive: true, force: true });
 
     console.log("\n6. language guard — no verified-project/safe badge, no APR anywhere on the page\n");
     languageGuard(allBodyText);
+
+    // ── 7. CC2 (docs/COLOSSEUM_ROADMAP.md Extension 7): the page's own t()/tf() strings must
+    // actually render in the visitor's chosen language, not fall through to English. `clkn_lang`
+    // (the same localStorage key i18n.js reads — see public/i18n.js's own `detect()`) is set via
+    // `addInitScript` BEFORE the page's first script runs, in a fresh context per language so it
+    // never leaks between runs. Three sample strings per language: one from the static markup
+    // (curated via i18n.js's own DOM walker) and two this page's own `t()` builds at render time
+    // — covering both translation paths this CC2 change touches. The verdict CODE (MATCH) must
+    // stay the literal, untranslated string in every language — only the prose beside it changes.
+    async function runLanguageCheck(lang, expectSamples) {
+      console.log(`\n7. /hub/verify in "${lang}" — curated strings render translated, not English\n`);
+      const ctx = await browser.newContext();
+      await ctx.addInitScript((l) => { try { localStorage.setItem("clkn_lang", l); } catch (_) {} }, lang);
+      const p = await ctx.newPage();
+      try {
+        await p.goto(`${BASE}/hub/verify?receipt=${encodeURIComponent(urlMatch)}`, { waitUntil: "networkidle", timeout: 20000 });
+        await p.waitForSelector(".verdict .badge", { timeout: 10000 }).catch(() => {});
+        const badge = await p.textContent(".verdict .badge").catch(() => null);
+        ok(`[${lang}] verdict code stays the literal "MATCH" (never translated)`, badge === "MATCH", "got: " + badge);
+        // Case-insensitive: some of these labels sit under CSS `text-transform:uppercase` (the
+        // `.steps .lbl` rule), so the rendered text is e.g. "CANTIDAD PUBLICADA" while the curated
+        // dictionary value (and the sample below) is sentence case — that's a CSS presentation
+        // detail, not a translation gap, and the check should not care about it either way.
+        const body = (await innerText(p)).toLowerCase();
+        for (const s of expectSamples) {
+          ok(`[${lang}] renders "${s.slice(0, 44)}${s.length > 44 ? "…" : ""}"`, body.includes(s.toLowerCase()), "page body did not contain the expected " + lang + " string: " + s);
+        }
+        ok(`[${lang}] does not fall back to the raw English verdict explanation`, !body.includes("this amount is exactly reproducible from the inputs the server published."));
+      } finally {
+        await ctx.close();
+      }
+    }
+    await runLanguageCheck("es", [
+      "Reproducir un recibo",                  // markup (h1) — i18n.js's own curated-dict path
+      "Cantidad publicada",                    // this page's t() — a plain label
+      "Esta cantidad es exactamente reproducible a partir de las entradas que publicó el servidor.", // this page's t() — the MATCH explanation sentence
+    ]);
+    await runLanguageCheck("zh", [
+      "复现一张收据",           // markup (h1) — i18n.js's own curated-dict path
+      "已公布金额",             // this page's t() — a plain label
+      "该金额可由服务器公布的输入精确复现。", // this page's t() — the MATCH explanation sentence
+    ]);
   } finally {
     await browser.close();
     if (srv) { try { srv.kill("SIGKILL"); } catch (_) {} }
