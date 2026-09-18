@@ -1634,5 +1634,13 @@
   "Settled — every row this batch named is fully paid.": "已结清——本批次的所有行都已全额支付。",
   "Broadcast recorded — {n} row(s) still owed.": "已记录广播——还有 {n} 行仍未结清。",
   "{n} row(s) could not be recorded: {reasons}": "{n} 行未能记录：{reasons}",
-  "Sign {n} row(s) totalling {amount} from {wallet} using your own wallet? Your wallet builds and broadcasts every transaction; the server only ever observes the signatures you report back.": "用你自己的钱包签署 {n} 行、共计 {amount}，来自 {wallet}？你的钱包负责构建并广播每一笔交易；服务器只核实你回报的签名。"
+  "Sign {n} row(s) totalling {amount} from {wallet} using your own wallet? Your wallet builds and broadcasts every transaction; the server only ever observes the signatures you report back.": "用你自己的钱包签署 {n} 行、共计 {amount}，来自 {wallet}？你的钱包负责构建并广播每一笔交易；服务器只核实你回报的签名。",
+  "connect the project's FUNDING wallet ({wallet}) to send — not just any operator wallet": "连接项目的资金（FUNDING）钱包（{wallet}）以发送 — 不能是任意运营者钱包",
+  "Connect the project's FUNDING wallet ({wallet}) to send — not just any operator wallet.": "连接项目的资金（FUNDING）钱包（{wallet}）以发送 — 不能是任意运营者钱包。",
+  "Connect the project's FUNDING wallet ({wallet}) to sign — not just any operator wallet.": "连接项目的资金（FUNDING）钱包（{wallet}）以签名 — 不能是任意运营者钱包。",
+  "The server's funding wallet does not match your connected wallet — reload and try again.": "服务器的资金钱包与您连接的钱包不一致 — 请刷新后重试。",
+  "The server returned a different token mint than this batch's — refusing to sign.": "服务器返回的代币与此批次不同 — 拒绝签名。",
+  "The server returned different decimals than this batch's — refusing to sign.": "服务器返回的小数位数与此批次不同 — 拒绝签名。",
+  "The server offered a wallet that is not part of this batch — refusing to sign.": "服务器提供了一个不属于此批次的钱包 — 拒绝签名。",
+  "The server asked for more than this batch's own row — refusing to sign.": "服务器请求的金额超过此批次该行本身的额度 — 拒绝签名。"
 }

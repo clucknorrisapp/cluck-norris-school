@@ -15,6 +15,7 @@ const proj = require("../lib/hub/project");
 const ledger = require("../lib/hub/ledger");
 const routes = require("../lib/hub/routes");
 const payoutVerify = require("../lib/payout-verify");
+const operator = require("../lib/hub/operator");
 
 let pass = 0, fail = 0;
 const queue = [];
@@ -28,6 +29,14 @@ const W = {
 };
 const TOK = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const SIG = (n) => "5" + Array.from({ length: 87 }, (_, i) => "abcdefghjkmnpqrstuvwxyz"[(i * 7 + n) % 23]).join("");
+const B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+// A distinct, valid-SHAPE (and validly base58-decodable) wallet address for bulk/bound tests —
+// section 16 needs many DIFFERENT wallets, not just many signatures. Hashed, not a linear index
+// formula, so it does not wrap into duplicates over a few dozen values (a linear one did).
+const WALLETN = (n) => {
+  const h = require("crypto").createHash("sha256").update("hub-browser-sign-test-wallet:" + n).digest();
+  return Array.from(h.slice(0, 32), (byte) => B58_ALPHABET[byte % 58]).join("");
+};
 const NOW = 1_800_000_000;
 const days = (credits, key = "2026-09-17T00") => ({ [key]: { credits, at: NOW - 3600 } });
 
@@ -46,6 +55,21 @@ function txWrongAmount({ wallet = W.A, amountRaw = "1", slot = 43, sourceOwner =
 }
 function txWrongSource({ wallet = W.A, amountRaw = "1000000000", slot = 44, sourceOwner = W.DEST2 } = {}) {
   return txSingle({ wallet, amountRaw, slot, sourceOwner });
+}
+// P2-7 (lens 1): the token DELTA (rowPaidBy, the legacy `&sent=`-style check) sums across BOTH
+// instructions and matches the row's full remaining exactly — accepted — but
+// locateTransferInstruction (the journal's OWN attribution) finds TWO instructions crediting the
+// same destination account in this one signature and refuses to guess which one is "the" transfer
+// — ambiguous, never attributed. This is the real, reproducible shape of `ATTRIBUTION_FAILURE_WHY`
+// on a row that DOES get legacy-recorded (paid) despite never journaling.
+function txAmbiguousAttribution({ wallet = W.A, amountRaw = "1000000000", slot = 45, sourceOwner = W.FUND } = {}) {
+  const half = (BigInt(amountRaw) / 2n).toString();
+  const rest = (BigInt(amountRaw) - BigInt(half)).toString();
+  return {
+    slot, blockTime: NOW,
+    meta: { err: null, preTokenBalances: [bal(0, sourceOwner, "999999999999999"), bal(1, wallet, 0)], postTokenBalances: [bal(1, wallet, amountRaw)] },
+    transaction: { message: { accountKeys: [SRC_ATA, W.DEST1], instructions: [tokenTransfer(W.DEST1, half), tokenTransfer(W.DEST1, rest)] } },
+  };
 }
 
 // ── fake Express, same shape as scripts/hub-settle-route-test.cjs ──────────────────────────────
@@ -91,8 +115,7 @@ function seedProject(kv, id, mint, over = {}) {
   store.write(kv, id, "state", state);
   return reg[id];
 }
-async function exportBatch(app, project, credits) {
-  const kv = arguments; // unused, kept for readability
+async function exportBatch(app, project) {
   const r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project }, query: { export: "1" } });
   return r.body.created.id;
 }
@@ -104,6 +127,15 @@ function setup(id = "browsersign", mint = W.MINT1, credits = { [W.A]: "100000000
 }
 const SR = "/api/hub/:project/batch/:batchId/sign-request";
 const OB = "/api/hub/:project/batch/:batchId/observe";
+// F9: observe() now REQUIRES the nonce sign-request handed out — every test below drives the two
+// routes through this pair of helpers so a real sign-request's nonce always reaches observe().
+async function signRequest(app, project, batchId, query = {}) {
+  return call(app, SR, { method: "POST", params: { project, batchId }, query });
+}
+async function observe(app, project, batchId, nonce, sigOrQuery) {
+  const query = typeof sigOrQuery === "string" ? { sig: sigOrQuery } : (sigOrQuery || {});
+  return call(app, OB, { method: "POST", params: { project, batchId }, query: { ...query, nonce } });
+}
 
 section("1. sign-request — happy path: unsigned transfer parameters for the batch's owed rows");
 
@@ -128,12 +160,24 @@ t("returns mint/destination/amount/decimals/fundingWallet per row, a nonce and a
   assert.strictEqual(bt.state, "pending", "bt.state itself is untouched — only browserSign carries the new states");
 });
 
-t("a second sign-request while `signing` (nothing broadcast yet) is allowed and issues a fresh nonce", async () => {
+t("F3: a second sign-request while `signing` is REFUSED (409) — nothing durable proves nothing was already broadcast", async () => {
   const kv = setup("alpha2");
   const app = mountFor({ kv });
   const batchId = await exportBatch(app, "alpha2");
-  const first = await call(app, SR, { method: "POST", params: { project: "alpha2", batchId } });
-  const second = await call(app, SR, { method: "POST", params: { project: "alpha2", batchId } });
+  const first = await signRequest(app, "alpha2", batchId);
+  const second = await signRequest(app, "alpha2", batchId);
+  assert.strictEqual(second.statusCode, 409, JSON.stringify(second.body));
+  assert.ok(/observe the signatures you already broadcast first/.test(second.body.error), second.body.error);
+  const bt = store.read(kv, "alpha2", "batches", {})[batchId];
+  assert.strictEqual(bt.browserSign.nonce, first.body.nonce, "unchanged — the refused call issued no fresh nonce");
+});
+
+t("F3: force=1 explicitly abandons a `signing` sign-request and issues a fresh nonce", async () => {
+  const kv = setup("alpha3");
+  const app = mountFor({ kv });
+  const batchId = await exportBatch(app, "alpha3");
+  const first = await signRequest(app, "alpha3", batchId);
+  const second = await signRequest(app, "alpha3", batchId, { force: "1" });
   assert.strictEqual(second.statusCode, 200, JSON.stringify(second.body));
   assert.notStrictEqual(second.body.nonce, first.body.nonce);
 });
@@ -162,8 +206,8 @@ t("a valid signature settles the row, marks browserSign 'settled', and records t
   const kv = setup("gamma1");
   const app = mountFor({ kv, getTx: async (sig) => (sig === SIG(1) ? txSingle({ wallet: W.A, amountRaw: "1000000000" }) : null) });
   const batchId = await exportBatch(app, "gamma1");
-  await call(app, SR, { method: "POST", params: { project: "gamma1", batchId } });
-  const r = await call(app, OB, { method: "POST", params: { project: "gamma1", batchId }, query: { sig: SIG(1) } });
+  const sr = await signRequest(app, "gamma1", batchId);
+  const r = await observe(app, "gamma1", batchId, sr.body.nonce, SIG(1));
   assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
   assert.strictEqual(r.body.browserSign.state, "settled");
   assert.deepStrictEqual(r.body.recorded, [W.A]);
@@ -186,8 +230,8 @@ t("a signature carrying the wrong AMOUNT settles nothing — the row is reported
   const kv = setup("delta1");
   const app = mountFor({ kv, getTx: async () => txWrongAmount({ wallet: W.A, amountRaw: "1" }) });
   const batchId = await exportBatch(app, "delta1");
-  await call(app, SR, { method: "POST", params: { project: "delta1", batchId } });
-  const r = await call(app, OB, { method: "POST", params: { project: "delta1", batchId }, query: { sig: SIG(2) } });
+  const sr = await signRequest(app, "delta1", batchId);
+  const r = await observe(app, "delta1", batchId, sr.body.nonce, SIG(2));
   assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
   assert.strictEqual(r.body.browserSign.state, "submitted", "not settled — the row is still owed");
   assert.ok(r.body.browserSign.failed[W.A], "the wallet is recorded as a failed observe attempt");
@@ -202,8 +246,8 @@ t("a signature sourced from a wallet that is NOT the funding wallet settles noth
   const kv = setup("delta2");
   const app = mountFor({ kv, getTx: async () => txWrongSource({ wallet: W.A }) });
   const batchId = await exportBatch(app, "delta2");
-  await call(app, SR, { method: "POST", params: { project: "delta2", batchId } });
-  const r = await call(app, OB, { method: "POST", params: { project: "delta2", batchId }, query: { sig: SIG(3) } });
+  const sr = await signRequest(app, "delta2", batchId);
+  const r = await observe(app, "delta2", batchId, sr.body.nonce, SIG(3));
   assert.strictEqual(r.body.browserSign.state, "submitted");
   assert.strictEqual(r.body.browserSign.failed[W.A].why, "transfer_not_from_funding_wallet");
   const bt = store.read(kv, "delta2", "batches", {})[batchId];
@@ -216,14 +260,37 @@ t("the second observe of an already-settled signature reports 'already settled' 
   const kv = setup("epsilon1");
   const app = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000", slot: 50 }) });
   const batchId = await exportBatch(app, "epsilon1");
-  await call(app, SR, { method: "POST", params: { project: "epsilon1", batchId } });
-  const first = await call(app, OB, { method: "POST", params: { project: "epsilon1", batchId }, query: { sig: SIG(4) } });
+  const sr = await signRequest(app, "epsilon1", batchId);
+  const first = await observe(app, "epsilon1", batchId, sr.body.nonce, SIG(4));
   assert.strictEqual(first.body.browserSign.state, "settled");
   const journalAfterFirst = Object.keys(store.readJournal(kv)).length;
-  const second = await call(app, OB, { method: "POST", params: { project: "epsilon1", batchId }, query: { sig: SIG(4) } });
+  const second = await observe(app, "epsilon1", batchId, sr.body.nonce, SIG(4));
   assert.strictEqual(second.statusCode, 200, JSON.stringify(second.body));
   assert.strictEqual(second.body.already, true, JSON.stringify(second.body));
   assert.strictEqual(Object.keys(store.readJournal(kv)).length, journalAfterFirst, "no new journal entry from the repeat observe");
+});
+
+t("P2-8 (lens 1): a TWO-wallet batch — one settles, the state stays open, and re-observing that same signature hits the ledger's OWN consumed check (not just the settled short-circuit)", async () => {
+  const kv = setup("epsilon2", W.MINT1, { [W.A]: "1000000000", [W.B]: "2000000000" });
+  const app = mountFor({ kv, getTx: async (sig) => (sig === SIG(41) ? txSingle({ wallet: W.A, amountRaw: "1000000000", slot: 51 }) : null) });
+  const batchId = await exportBatch(app, "epsilon2");
+  const sr = await signRequest(app, "epsilon2", batchId);
+  const first = await observe(app, "epsilon2", batchId, sr.body.nonce, SIG(41));
+  assert.strictEqual(first.statusCode, 200, JSON.stringify(first.body));
+  assert.strictEqual(first.body.browserSign.state, "submitted", "B still owed — the batch stays open, so the top-level `already` short-circuit cannot fire on the next call");
+  assert.deepStrictEqual(first.body.recorded, [W.A]);
+  const journalAfterFirst = Object.keys(store.readJournal(kv)).length;
+  // Re-observe the SAME signature. `browserSign.state` is `submitted`, not settled, so this call
+  // reaches the real verification pipeline again — it must be `ledger.settle`'s own already-
+  // consumed check (or PASS 1's `remaining === 0n` -> amount_mismatch) that stops a second credit,
+  // not the route's top-level short-circuit.
+  const second = await observe(app, "epsilon2", batchId, sr.body.nonce, SIG(41));
+  assert.strictEqual(second.statusCode, 200, JSON.stringify(second.body));
+  assert.ok(!second.body.already, "reached the real pipeline, not the settled short-circuit");
+  assert.deepStrictEqual(second.body.recorded, [], "A is not recorded a second time");
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, journalAfterFirst, "no new journal entry");
+  const bt = store.read(kv, "epsilon2", "batches", {})[batchId];
+  assert.ok(bt.sent[W.A] && !bt.sent[W.B], "A stays paid once; B is still unpaid");
 });
 
 section("6. fault: RPC down during observe");
@@ -232,15 +299,32 @@ t("a getTx failure answers `unavailable` (503) and changes NOTHING — never set
   const kv = setup("zeta1");
   const app = mountFor({ kv, getTx: async () => { throw new Error("connection reset"); } });
   const batchId = await exportBatch(app, "zeta1");
-  await call(app, SR, { method: "POST", params: { project: "zeta1", batchId } });
+  const sr = await signRequest(app, "zeta1", batchId);
   const before = JSON.stringify(store.read(kv, "zeta1", "batches", {}));
-  const r = await call(app, OB, { method: "POST", params: { project: "zeta1", batchId }, query: { sig: SIG(5) } });
+  const r = await observe(app, "zeta1", batchId, sr.body.nonce, SIG(5));
   assert.strictEqual(r.statusCode, 503, JSON.stringify(r.body));
   assert.strictEqual(r.body.retry, true);
   const after = JSON.stringify(store.read(kv, "zeta1", "batches", {}));
   assert.strictEqual(before, after, "the batch (including browserSign.state, still 'signing') is byte-identical after an RPC outage");
   const bt = store.read(kv, "zeta1", "batches", {})[batchId];
   assert.strictEqual(bt.browserSign.state, "signing", "still signing — never advanced to submitted, settled, or a failure");
+});
+
+t("P1-4/P1-5 (lens 1): getTx resolving NULL (not yet indexed) is the SAME class as an RPC outage — 503, retry, nothing advances", async () => {
+  const kv = setup("zeta2");
+  const app = mountFor({ kv, getTx: async () => null });
+  const batchId = await exportBatch(app, "zeta2");
+  const sr = await signRequest(app, "zeta2", batchId);
+  const before = JSON.stringify(store.read(kv, "zeta2", "batches", {}));
+  const r = await observe(app, "zeta2", batchId, sr.body.nonce, SIG(51));
+  assert.strictEqual(r.statusCode, 503, JSON.stringify(r.body));
+  assert.strictEqual(r.body.retry, true);
+  assert.deepStrictEqual(r.body.pending, [SIG(51)]);
+  const after = JSON.stringify(store.read(kv, "zeta2", "batches", {}));
+  assert.strictEqual(before, after, "byte-identical — a not-yet-indexed signature must never write `failed` or advance the state");
+  const bt = store.read(kv, "zeta2", "batches", {})[batchId];
+  assert.strictEqual(bt.browserSign.state, "signing");
+  assert.deepStrictEqual(bt.browserSign.failed, {}, "never permanently marked failed for a transaction the chain simply hasn't indexed yet");
 });
 
 section("7. dry-run project — refused before any write, on both routes");
@@ -333,6 +417,197 @@ t("sign-request on a batch the managed payer already fully sent is refused — t
   const r = await call(app, SR, { method: "POST", params: { project: "kappa1", batchId } });
   assert.strictEqual(r.statusCode, 400, JSON.stringify(r.body));
   assert.ok(/batch is sent, not pending/.test(r.body.error), r.body.error);
+});
+
+section("12. F2: a browser-signed flow blocks &cancel=, and observe() independently refuses a non-pending batch");
+
+t("F2: &cancel= is refused (409) while browserSign is live — no double-pay window through cancel + re-export", async () => {
+  const kv = setup("nu1");
+  const app = mountFor({ kv });
+  const batchId = await exportBatch(app, "nu1");
+  await signRequest(app, "nu1", batchId);
+  const r = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "nu1" }, query: { cancel: batchId } });
+  assert.strictEqual(r.statusCode, 409, JSON.stringify(r.body));
+  assert.ok(/browser-signed payout is signing/.test(r.body.error), r.body.error);
+  const bt = store.read(kv, "nu1", "batches", {})[batchId];
+  assert.strictEqual(bt.state, "pending", "never cancelled");
+});
+
+t("F2: observe() independently refuses a batch that is not `pending` — defense in depth even if a cancel is ever reached some other way", async () => {
+  const kv = setup("nu2");
+  const app = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000", slot: 60 }) });
+  const batchId = await exportBatch(app, "nu2");
+  const sr = await signRequest(app, "nu2", batchId);
+  // Simulate a state a bypassed cancel would have produced — the route's OWN check on `bt.state`
+  // inside observe() (not just the &cancel= guard) must still catch it.
+  const batches = store.read(kv, "nu2", "batches", {});
+  store.write(kv, "nu2", "batches", { ...batches, [batchId]: { ...batches[batchId], state: "cancelled" } });
+  const r = await observe(app, "nu2", batchId, sr.body.nonce, SIG(61));
+  assert.strictEqual(r.statusCode, 400, JSON.stringify(r.body));
+  assert.ok(/batch is cancelled, not pending/.test(r.body.error), r.body.error);
+});
+
+section("13. F4: an owner-only reset clears a stuck browserSign without touching amounts, the journal or the legacy state");
+
+t("an operator cannot clear; the owner can, and a fresh sign-request works afterwards with no force needed", async () => {
+  const kv = setup("xi1");
+  const app = mountFor({ kv, getTx: async () => null });
+  const batchId = await exportBatch(app, "xi1");
+  await signRequest(app, "xi1", batchId);
+  const appOperator = mountFor({ kv, adminAuthOK: () => false });
+  const opToken = operator.issueToken("test-secret", { projectId: "xi1", wallet: W.A });
+  const opAttempt = await call(appOperator, SR, { method: "POST", params: { project: "xi1", batchId }, query: { clear: "1" }, headers: { "x-clkn-operator": opToken } });
+  assert.strictEqual(opAttempt.statusCode, 403, JSON.stringify(opAttempt.body));
+  assert.ok(store.read(kv, "xi1", "batches", {})[batchId].browserSign, "unchanged by the refused operator attempt");
+  const cleared = await signRequest(app, "xi1", batchId, { clear: "1" });
+  assert.strictEqual(cleared.statusCode, 200, JSON.stringify(cleared.body));
+  assert.strictEqual(cleared.body.cleared, true);
+  const bt = store.read(kv, "xi1", "batches", {})[batchId];
+  assert.strictEqual(bt.browserSign, null);
+  assert.strictEqual(bt.state, "pending", "amounts/state untouched — only browserSign was reset");
+  const fresh = await signRequest(app, "xi1", batchId);
+  assert.strictEqual(fresh.statusCode, 200, JSON.stringify(fresh.body), "no force=1 needed — the reset, not a force, is what cleared `signing`");
+});
+
+t("an owner reset on a batch with no browserSign in progress is a no-op (200, cleared:false)", async () => {
+  const kv = setup("xi2");
+  const app = mountFor({ kv });
+  const batchId = await exportBatch(app, "xi2");
+  const r = await signRequest(app, "xi2", batchId, { clear: "1" });
+  assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
+  assert.strictEqual(r.body.cleared, false);
+});
+
+section("14. P0-1 (lens 1): sign-request never re-offers a row the managed payer already broadcast, even before it journals");
+
+t("a managed-send row broadcast with pending:true is NOT re-offered by sign-request; the other still-owed wallet is", async () => {
+  const kv = setup("omicron1", W.MINT1, { [W.A]: "1000000000", [W.B]: "2000000000" });
+  const vault = {
+    payoutSpl: async ({ recipients, onPaid }) => {
+      const rowA = recipients.find((rr) => rr.wallet === W.A);
+      const rowB = recipients.find((rr) => rr.wallet === W.B);
+      if (rowA) onPaid({ wallet: W.A, sig: SIG(70), pending: true });   // broadcast — legacy-sent, not yet confirmed or journaled
+      return { action: "partial", paid: [], pending: rowA ? [{ wallet: W.A, sig: SIG(70) }] : [], failed: rowB ? [{ wallet: W.B, error: "simulated failure" }] : [] };
+    },
+  };
+  const app = mountFor({ kv, vault, getTx: async () => null });
+  const batchId = await exportBatch(app, "omicron1");
+  const sent = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "omicron1" }, query: { send: batchId, from: "some-vault", run: "1" } });
+  assert.strictEqual(sent.statusCode, 200, JSON.stringify(sent.body));
+  const bt0 = store.read(kv, "omicron1", "batches", {})[batchId];
+  assert.ok(bt0.sent && bt0.sent[W.A] && bt0.sent[W.A].pending, "A is legacy-recorded as sent (pending), not yet journaled");
+  assert.ok(!bt0.sent[W.B], "B never landed");
+  assert.strictEqual(bt0.state, "pending", "not every row sent yet, so the batch itself is still pending");
+  const sr = await signRequest(app, "omicron1", batchId);
+  assert.strictEqual(sr.statusCode, 200, JSON.stringify(sr.body));
+  const offered = sr.body.rows.map((rr) => rr.wallet);
+  assert.ok(!offered.includes(W.A), "A must NOT be offered again — it may already be broadcast on chain");
+  assert.ok(offered.includes(W.B));
+  assert.ok(sr.body.skipped.some((rr) => rr.wallet === W.A), "A is named in `skipped`, with a reason");
+});
+
+section("15. P2-9 (lens 1): cross-project auth, and the reverse busy case the README claims");
+
+t("an operator token valid for project A is refused (404) on project B", async () => {
+  const kv = store.memoryKv();
+  const MINT2 = "8kQTLwvxJd8ZoEHVEmz8AzE5cVQyMYccUFEbEg5xJ5CZ";
+  seedProject(kv, "pi1", W.MINT1);
+  seedProject(kv, "pi2", MINT2);
+  store.write(kv, "pi1", "days", days({ [W.A]: "1000000000" }));
+  store.write(kv, "pi2", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, adminAuthOK: () => false });
+  const appOwner = mountFor({ kv });
+  const batchIdB = await exportBatch(appOwner, "pi2");
+  const tokenForA = operator.issueToken("test-secret", { projectId: "pi1", wallet: W.A });
+  const r = await call(app, SR, { method: "POST", params: { project: "pi2", batchId: batchIdB }, headers: { "x-clkn-operator": tokenForA } });
+  assert.strictEqual(r.statusCode, 404, JSON.stringify(r.body));
+  assert.strictEqual(r.body.error, "not_found");
+});
+
+t("a sign-request mid a concurrent managed &send= is refused `busy` — the two paths share the SAME per-project payout lock", async () => {
+  const kv = setup("rho1");
+  let releaseVault;
+  const vault = { payoutSpl: () => new Promise((resolve) => { releaseVault = () => resolve({ action: "would-pay", paid: [], pending: [], failed: [] }); }) };
+  const app = mountFor({ kv, vault });
+  const batchId = await exportBatch(app, "rho1");
+  const sendPromise = call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "rho1" }, query: { send: batchId, from: "some-vault", run: "1" } });
+  await new Promise((resolve) => setImmediate(resolve));   // let the send request acquire the lock first
+  const sr = await signRequest(app, "rho1", batchId);
+  assert.strictEqual(sr.statusCode, 409, JSON.stringify(sr.body));
+  assert.strictEqual(sr.body.error, "busy", JSON.stringify(sr.body));
+  releaseVault();
+  await sendPromise;
+});
+
+section("16. F9: observe() requires the sign-request's own nonce, and answers 409 on a mismatch");
+
+t("no nonce at all is refused (409), before any RPC read", async () => {
+  const kv = setup("tau1");
+  const app = mountFor({ kv, getTx: async () => { throw new Error("must not be called"); } });
+  const batchId = await exportBatch(app, "tau1");
+  await signRequest(app, "tau1", batchId);
+  const r = await call(app, OB, { method: "POST", params: { project: "tau1", batchId }, query: { sig: SIG(90) } });   // no nonce=
+  assert.strictEqual(r.statusCode, 409, JSON.stringify(r.body));
+  assert.ok(/nonce/.test(r.body.error), r.body.error);
+});
+
+t("a WRONG nonce (a superseded sign-request's) is refused (409), not silently conflated with the fresh one", async () => {
+  const kv = setup("tau2");
+  const app = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000", slot: 70 }) });
+  const batchId = await exportBatch(app, "tau2");
+  const stale = await signRequest(app, "tau2", batchId);
+  const fresh = await signRequest(app, "tau2", batchId, { force: "1" });
+  assert.notStrictEqual(stale.body.nonce, fresh.body.nonce);
+  const r = await observe(app, "tau2", batchId, stale.body.nonce, SIG(91));
+  assert.strictEqual(r.statusCode, 409, JSON.stringify(r.body));
+  assert.ok(/nonce/.test(r.body.error), r.body.error);
+  // The CORRECT (current) nonce still works.
+  const ok = await observe(app, "tau2", batchId, fresh.body.nonce, SIG(91));
+  assert.strictEqual(ok.statusCode, 200, JSON.stringify(ok.body));
+  assert.strictEqual(ok.body.browserSign.state, "settled");
+});
+
+section("17. F7: the wallets×signatures cross product is bounded, matching &sent='s 500-pair cap");
+
+t("observe refuses a call whose wallets×signatures product exceeds 500", async () => {
+  const wallets = Array.from({ length: 60 }, (_, i) => WALLETN(i));
+  const credits = {}; for (const w of wallets) credits[w] = "1000000000";
+  const kv = setup("sigma1", W.MINT1, credits);
+  const app = mountFor({ kv });
+  const batchId = await exportBatch(app, "sigma1");
+  const sr = await signRequest(app, "sigma1", batchId);
+  assert.ok(sr.body.rows.length >= 60, "a large batch, on purpose");
+  const manySigs = Array.from({ length: 9 }, (_, i) => SIG(80 + i));   // 60 wallets x 9 sigs = 540 > 500
+  const r = await observe(app, "sigma1", batchId, sr.body.nonce, { sigs: manySigs });
+  assert.strictEqual(r.statusCode, 400, JSON.stringify(r.body));
+  assert.ok(/too many/.test(r.body.error), r.body.error);
+});
+
+section("18. P2-7 (lens 1): failed[wallet] is written only from a real refusal of that wallet's OWN candidate, and cleared for any RECORDED wallet — not just journaled ones");
+
+t("wallet A settles through the attribution-failure path (paid, never journaled) and is NOT marked failed; wallet B genuinely fails and IS, with its own real reason (never the cross-product 'no mint reached this wallet' noise)", async () => {
+  const kv = setup("upsilon1", W.MINT1, { [W.A]: "1000000000", [W.B]: "2000000000" });
+  const SIG_A = SIG(95), SIG_B = SIG(96);
+  const app = mountFor({
+    kv,
+    getTx: async (sig) => {
+      if (sig === SIG_A) return txAmbiguousAttribution({ wallet: W.A, amountRaw: "1000000000" });
+      if (sig === SIG_B) return txWrongAmount({ wallet: W.B, amountRaw: "1" });
+      return null;
+    },
+  });
+  const batchId = await exportBatch(app, "upsilon1");
+  const sr = await signRequest(app, "upsilon1", batchId);
+  const r = await observe(app, "upsilon1", batchId, sr.body.nonce, { sigs: [SIG_A, SIG_B] });
+  assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
+  assert.deepStrictEqual(r.body.recorded, [W.A], "A is legacy-recorded (paid) despite the ambiguous attribution");
+  const bt = store.read(kv, "upsilon1", "batches", {})[batchId];
+  assert.ok(bt.sent && bt.sent[W.A], "A really is paid");
+  const journal = store.readJournal(kv);
+  assert.strictEqual(Object.values(journal).filter((e) => e.projectId === "upsilon1").length, 0, "…but never journaled — the attribution genuinely failed");
+  assert.ok(!r.body.browserSign.failed[W.A], "A must NOT be in `failed` — it is paid, not failed");
+  assert.ok(r.body.browserSign.failed[W.B], "B genuinely never paid and IS in `failed`");
+  assert.ok(!/no .+ reached this wallet/.test(r.body.browserSign.failed[W.B].why), "B's reason is its OWN refusal (wrong amount), never the cross-product noise from A's signature: " + r.body.browserSign.failed[W.B].why);
 });
 
 (async () => {
