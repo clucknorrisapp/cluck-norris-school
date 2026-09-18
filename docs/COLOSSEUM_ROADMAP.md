@@ -448,7 +448,7 @@ the theme. Same rules: nothing arms, nothing pays, Earn is capability.
 
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE terms; the Sep 20 recording; the real-wallet smoke.
 
-## 10. Extension 4 — 2026-09-18 afternoon (Y1, Y3 landed; Y2, Y4 in flight)
+## 10. Extension 4 — 2026-09-18 afternoon (Y1, Y3, Y4 landed; Y2, Z1–Z3 in flight)
 
 | # | Item | Criterion | Definition of done |
 |---|---|---|---|
@@ -457,3 +457,22 @@ the theme. Same rules: nothing arms, nothing pays, Earn is capability.
 | **Z3** | **Public-route hygiene.** The new public read routes (standings, snapshots, reproducibility, batch inputs, receipts, the verify bundle, schemas) get ETags + `Cache-Control` consistent with the existing Hub reads, a per-IP rate limit on the heavier ones (reproducibility computes over the whole ledger), and a cap on `hours`/`limit` query params; `scripts/public-route-hygiene-test.cjs` pins the headers and the limits. | Viability | Headers present on every listed route; the limiter refuses a burst and never affects a normal page load; nothing else changes. |
 
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE terms; the Sep 20 recording; the real-wallet smoke.
+
+## 11. Extension 5 — 2026-09-18 evening (Y1, Y3, Y4 landed; Y2, Z1–Z3 in flight)
+
+The Hub now answers "what was this holder paid and can I re-derive it" per project. Extension 5
+turns the same public record toward the three readers we still serve badly: the **holder** who
+belongs to more than one project, the **judge** who has fifteen minutes and needs a map, and the
+**skeptic** who wants to know what the Hub does *not* prove. Nothing here needs a wallet, a new
+secret, or a live engine. Every number is fetched from a route the reader can open themselves.
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **AA1** | **One wallet, every project: `/hub/wallet/<address>`.** A typed address (no connect) returns, across every registered Hub project, each program the wallet qualified for or was excluded from (with the reason code), each receipt with its settlement signature, and — where a batch has been settled — what it was owed against what the chain shows arriving. This is the strongest honest form of "Earn" in `CLAUDE.md`: a holder who can check what they were owed and what arrived. Backed by `GET /api/hub/wallet/:wallet` composed only from `hubPublic.walletLookup` per project (no private field, demo projects excluded from the roll-up as everywhere else). | Insight, Product | Renders in the smoke and a11y jobs; a malformed address is a 400 with a plain reason; an unknown wallet is an honest "no Hub program has seen this wallet" page, not an error; a test drives a fixture wallet across two projects. |
+| **AA2** | **The evidence bundle.** `GET /api/hub/:project/batch/:batchId/bundle` returns one JSON document (program version, the batch's published inputs, the receipts, the schema versions and a canonical hash of the whole) with a `Content-Disposition` download name, and `/hub/verify` accepts a dropped bundle in one move where today it needs the separate files. The same bundle is what a holder keeps offline and what `docs/HUB_VERIFY.md` tells a reviewer to save first. | Insight, Viability | The bundle re-verifies to MATCH in `/hub/verify` for every demo fixture (a test does the round trip through the browser bundle); the hash is reproducible by the Node script; a bundle for an unsettled batch says so instead of pretending. |
+| **AA3** | **Snapshot diff: who came, who left, who held.** Between any two X7 holder snapshots of a project, a public read (`GET /api/holders/snapshots/:a/diff/:b`) and a panel on the history page list entered / exited / held-through wallets and the balance deltas, with the two snapshot hashes on the panel so the diff itself is reproducible. This is the hold-through story the Buy Special standings tell for one comp, told for the whole holder base. | Traction, Insight | Diff of a snapshot with itself is empty; the panel renders in the a11y job; the sums reconcile to the two snapshots' totals in a test; wallets are shortened on the page and full in the JSON. |
+| **AA4** | **The judge's fifteen minutes: `docs/JUDGE_GUIDE.md` + `/hub/judge`.** One page mapping each of the five judging criteria to the exact URLs to open (in order, with what to look for on each) and the test file that pins it, then the one-paragraph "what was here before the window" pointer to `PRE_EVENT_STATE.md`. The public page is the same content rendered from the markdown at build time, so the two cannot drift (a test compares them). | Founder Communication | Every URL on the page returns 200 on a no-build boot in CI (a link-check step); every claim names a route or a test; no yield language; the dry-run labels are named where they apply. |
+| **AA5** | **What the Hub does not prove: `/hub/trust`.** The trust-boundary page in plain words: the chain shows *what*, never *why*; the funding wallet is the project's, not ours; a program hash commits to terms, not to intent; a receipt proves a payment matched a rule, not that the rule was fair; what a DRY RUN is and is not; what a reproducibility ratio below 1.0 means and what to do about it; the four things that still need a human (the owner-side list). Linked from every Hub page footer and from the school's receipt lesson. | Insight, Founder Communication | Rendered in seven languages through the existing Hub i18n path; the a11y job passes; a doc-drift test keeps `HUB_VERIFY.md`'s boundary list and the page's in step. |
+
+**Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
+terms; the Sep 20 recording; the real-wallet smoke.
