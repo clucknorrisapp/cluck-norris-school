@@ -72,6 +72,10 @@ below works with no wallet connected:
   during this window, and the i18n audit now checks lesson coverage by id so the gap can't recur
   silently.
 
+- **[`/hub/status`](https://clucknorris.app/hub/status)** — every project's programs, receipts,
+  reproducibility ratio and latest holder count in one place, plus which git commit and branch
+  the running server was actually built from (`GET /api/build`) — fed only by the public routes
+  above, with a plain-words box on what the page proves and what it doesn't.
 - **The school points at the Hub, and the Hub points back** — the six lock lessons end on a
   "Ready to lock?" card that carries the project a learner arrived from, and a project page shows
   how many anonymous visitors read the lock lessons before reaching it (only when above zero).

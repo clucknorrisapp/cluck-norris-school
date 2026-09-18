@@ -431,7 +431,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -589,6 +589,16 @@ jobs:
       - name: Hub pages — accessibility + phone polish
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-a11y-test.cjs
+      # Z2 (docs/COLOSSEUM_ROADMAP.md §10): GET /api/build (the git sha/branch this container is
+      # actually running) and /hub/status (public/hub-status.html) — the page that renders it next
+      # to every project's own public numbers (programs, receipts, the reproducibility ratio, the
+      # latest holder snapshot), fed only by routes already public. Seeds a throwaway registry with
+      # a dry-run project and a real one with a sent batch so both the dry-run badge and the
+      # reproducibility ratio actually render, then checks the rendered page carries neither a
+      # judgement word nor an APR/APY claim.
+      - name: Hub status — /api/build and /hub/status
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-status-test.cjs
       # Y1 (docs/COLOSSEUM_ROADMAP.md §9): /hub/verify reproduces a Hub receipt IN THE BROWSER —
       # a second vite build (vite.hubverify.config.js) bundles the exact same pure
       # lib/hub/reproduce.js + lib/hub/schema-validate.js + lib/hub/canonical.js the Node script

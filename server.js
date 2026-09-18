@@ -3351,6 +3351,75 @@ app.disable("x-powered-by");
 // block deploys for reasons that have nothing to do with whether the app can serve.
 app.get("/healthz", (req, res) => res.status(200).type("text/plain").send("ok"));
 
+// ── /api/build — the git sha/branch this container is actually running (Colosseum roadmap §10
+// Z2). Computed ONCE at boot, never re-read per request: a git sha cannot change under a running
+// process, so there is nothing to gain from re-reading disk on every hit, only latency. Nothing
+// secret — a commit sha and a branch name are already public on GitHub.
+//   1. Railway sets RAILWAY_GIT_COMMIT_SHA / RAILWAY_GIT_BRANCH on every deploy from a connected
+//      repo (Railway's own docs; this repo had no prior reader for them — grepped for RAILWAY_
+//      and found none — so this is the first). Preferred when present: it is what Railway itself
+//      believes it deployed, with zero disk reads.
+//   2. Otherwise fall back to reading `.git/HEAD` (+ the ref it points at) directly — covers a
+//      local `node server.js` and a no-build CI boot, where Railway's env vars don't exist. This
+//      handles a plain clone's `.git/HEAD` ("ref: refs/heads/<branch>" or a bare sha for a detached
+//      checkout) and a git WORKTREE's `.git` file (a `gitdir: <path>` pointer, never the ref
+//      itself, so a worktree's own HEAD lives at `<that path>/HEAD`).
+//   3. Env is derived from the branch, never from Railway's own environment name (this project's
+//      two Railway services and its `main`/`develop` branches are already the source of truth —
+//      CLAUDE.md "Branching"): `main` -> production, `develop` -> staging, anything else -> local.
+function readGitHeadInfo() {
+  try {
+    let gitDir = join(__dirname, ".git");
+    const st = fs.statSync(gitDir);
+    if (!st.isDirectory()) {
+      // A worktree checkout: `.git` is a text file, "gitdir: /path/to/main/.git/worktrees/<name>".
+      const pointer = fs.readFileSync(gitDir, "utf8").trim();
+      const m = /^gitdir:\s*(.+)$/.exec(pointer);
+      if (!m) return null;
+      gitDir = m[1];
+    }
+    const head = fs.readFileSync(join(gitDir, "HEAD"), "utf8").trim();
+    const refMatch = /^ref:\s*(\S+)$/.exec(head);
+    if (refMatch) {
+      const branch = refMatch[1].replace(/^refs\/heads\//, "");
+      let sha = null;
+      // Try the loose ref file first, then packed-refs (a ref just merged/fetched with no loose
+      // file yet — a worktree's own dir won't have this, so check the common dir it points at too).
+      for (const dir of [gitDir, join(gitDir, "..", "..")]) {
+        try { sha = fs.readFileSync(join(dir, refMatch[1]), "utf8").trim(); break; } catch (_) {}
+      }
+      if (!sha) {
+        for (const dir of [gitDir, join(gitDir, "..", "..")]) {
+          try {
+            const packed = fs.readFileSync(join(dir, "packed-refs"), "utf8");
+            const line = packed.split("\n").find((l) => l.endsWith(" " + refMatch[1]));
+            if (line) { sha = line.split(" ")[0]; break; }
+          } catch (_) {}
+        }
+      }
+      return { sha: sha || null, branch };
+    }
+    // Detached HEAD: the file itself is the sha, no branch name available.
+    if (/^[0-9a-f]{40}$/i.test(head)) return { sha: head, branch: null };
+    return null;
+  } catch (_) { return null; }
+}
+const BUILD_INFO = (() => {
+  const envSha = String(process.env.RAILWAY_GIT_COMMIT_SHA || "").trim();
+  const envBranch = String(process.env.RAILWAY_GIT_BRANCH || "").trim();
+  let sha = envSha || null, branch = envBranch || null;
+  if (!sha || !branch) {
+    const git = readGitHeadInfo();
+    if (git) { sha = sha || git.sha; branch = branch || git.branch; }
+  }
+  const env = branch === "main" ? "production" : branch === "develop" ? "staging" : "local";
+  return { sha: sha || null, branch: branch || null, builtAt: Date.now(), env };
+})();
+app.get("/api/build", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  return res.status(200).json({ ok: true, ...BUILD_INFO });
+});
+
 // gzip/brotli-style compression for every response (HTML, JS bundle, and the
 // large i18n dictionaries). Cuts the school dict from ~700KB to ~150KB on the
 // wire — a big win on mobile/Seeker. Safe: standard middleware, no streaming here.
@@ -8338,6 +8407,9 @@ app.get("/og/hub-card.png", (req, res) => {
   res.type("png");
   res.sendFile(join(__dirname, "public", "og", "hub-card.png"));
 });
+// Registered BEFORE the generic /hub/:project pattern below for the same reason — or "status"
+// would be read as a project id (Colosseum roadmap §10 Z2).
+app.get("/hub/status", (req, res) => { res.sendFile(join(__dirname, "public", "hub-status.html")); });
 // Registered BEFORE the generic /hub/:project pattern below so a literal "demo" / "demo-b" always
 // hits the fixture page, never the real one — a pasted /hub/demo link can never resolve to a real
 // project id later reusing that name (store.js's ID_RE would allow "demo" to be registered for
