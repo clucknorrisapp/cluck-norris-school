@@ -1498,5 +1498,7 @@
   "Not retained for this receipt — see below.": "No se conservó para este recibo — ver abajo.",
   "Program version": "Versión del programa",
   "Not recorded for this receipt": "No se registró para este recibo",
-  "Settlement signature": "Firma de liquidación"
+  "Settlement signature": "Firma de liquidación",
+  "This page only reproduces receipts served by clucknorris.app — for another host, save the files and use the offline tab.": "Esta página solo reproduce recibos servidos por clucknorris.app — para otro servidor, guarda los archivos y usa la pestaña sin conexión.",
+  "This page only fetches from its own origin and from": "Esta página solo hace peticiones a su propio origen y a"
 }

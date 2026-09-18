@@ -1498,5 +1498,7 @@
   "Not retained for this receipt — see below.": "此收据未保留该数据——见下文。",
   "Program version": "程序版本",
   "Not recorded for this receipt": "此收据未记录",
-  "Settlement signature": "结算签名"
+  "Settlement signature": "结算签名",
+  "This page only reproduces receipts served by clucknorris.app — for another host, save the files and use the offline tab.": "此页面仅能复现由 clucknorris.app 提供的收据 —— 如需其他主机，请保存文件并使用离线选项卡。",
+  "This page only fetches from its own origin and from": "此页面仅从自身来源和"
 }

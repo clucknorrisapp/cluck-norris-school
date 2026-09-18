@@ -269,6 +269,24 @@ async function main() {
 
     ok("no uncaught page errors", pageErrors.length === 0, pageErrors.join("\n"));
 
+    // 4c. P1-01: a `?receipt=` pointing at a cross-origin host must be refused BEFORE any fetch —
+    // otherwise a shared link can render a green MATCH on our own origin for a payment that never
+    // happened, because the attacker also controls the "published"/"reproduced" inputs on their own
+    // host. Route interception proves the negative: no request to evil.example is ever issued, not
+    // just that the page doesn't show a verdict for it.
+    console.log("\n4c. /hub/verify — a cross-origin ?receipt= link is refused, never fetched (P1-01)\n");
+    const evilHits = [];
+    const evilPage = await browser.newPage();
+    await evilPage.route("https://evil.example/**", (route) => { evilHits.push(route.request().url()); route.abort(); });
+    const evilUrl = `https://evil.example/hub/${PROJECT}/r/${SIG_MATCH}`;
+    await evilPage.goto(`${BASE}/hub/verify?receipt=${encodeURIComponent(evilUrl)}`, { waitUntil: "networkidle", timeout: 20000 });
+    await evilPage.waitForTimeout(500); // give a wrongly-issued fetch time to fire before we assert
+    const evilErrText = ((await evilPage.textContent(".err").catch(() => "")) || "").toLowerCase();
+    ok("cross-origin receipt link issues NO request to that host", evilHits.length === 0, JSON.stringify(evilHits));
+    ok("the page renders a plain refusal instead of a verdict", !(await evilPage.$(".verdict .badge")));
+    ok('the refusal (in the ".err" box) names clucknorris.app as the only host it reproduces from', evilErrText.includes("clucknorris.app"), "got: " + evilErrText);
+    await evilPage.close();
+
     console.log("\n5. /hub/verify — the offline (saved files) path\n");
     const receiptJson = await fetch(`${BASE}/api/hub/${PROJECT}/r/${SIG_MATCH}`).then((r) => r.text());
     const receiptBody = JSON.parse(receiptJson);
