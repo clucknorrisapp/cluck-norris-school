@@ -75,8 +75,8 @@
   // BigInt-safe amount formatting. `Number(rawString)` silently loses precision the moment a raw
   // on-chain amount (a lock weight, a large token balance) passes Number.MAX_SAFE_INTEGER — this
   // does the base-units → decimal conversion and thousands-grouping with string/BigInt math only,
-  // exact at any size, matching the "string surgery, never division" rule lib/hub/public.js's
-  // rawToUi already follows server-side.
+  // exact at any size, matching the "string surgery, never division" rule the Project Hub's
+  // server-side public-view module's rawToUi already follows (lib.hub.public.js).
   function rawAmount(raw, decimals, maxFrac) {
     decimals = decimals > 0 ? decimals : 0;
     maxFrac = maxFrac == null ? 2 : maxFrac;

@@ -18228,15 +18228,29 @@ app.post("/api/track", (req, res) => {
     const m = /^lesson_complete:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
     if (m && b.sid) schoolProgress.mark(b.sid, m[1], { backfill: b.bf === 1 || b.bf === "1" });
     // E6: the school → Hub bridge. The client only sends this after a learner who arrived via a
-    // Hub project's lessonHref (lib/hub/teach.js, public/hub.html) FINISHES one of the six
+    // Hub project's lessonHref (lib/hub/teach.js, public/hub.html) FINISHES one of the seven
     // locking lessons — see LOCK_LESSON_IDS in src/App.jsx. Anonymous sid only, never a wallet.
+    // BB5: an optional `lesson` field breaks the total down per lesson (e.g. "receipt") —
+    // lib/traction.js drops anything outside its own known-id set, so passing it through
+    // unvalidated here is safe; nothing untrusted ever becomes a stored key.
     const hlrM = /^hub_lesson_read:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
-    if (hlrM && b.sid) { try { traction.recordHubLessonRead(kv, { project: hlrM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
+    if (hlrM && b.sid) {
+      const lesson = typeof b.lesson === "string" ? b.lesson.toLowerCase().slice(0, 48) : undefined;
+      try { traction.recordHubLessonRead(kv, { project: hlrM[1], sid: b.sid, lesson }); } catch (_) { /* counter only */ }
+    }
     // W9 part 2: the two "existing traffic → Hub" doors (COLOSSEUM_ROADMAP.md §W9 part 2).
     // "school" fires from the school landing/lesson-finish HubDemoDoor (src/App.jsx); "home"
     // fires from the homepage's project-operator tile (public/home.html). Anonymous sid only.
     const hdcM = /^hub_door_click:(school|home)$/.exec(String(b.event || "").toLowerCase());
     if (hdcM && b.sid) { try { traction.recordHubDoorClick(kv, { source: hdcM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
+    // BB5: the receipt lesson's OWN finish-screen bridge (ReceiptLessonBridge, src/App.jsx) —
+    // `from`/`to` are checked against a fixed allowlist inside lib/traction.js, so an
+    // unrecognized value is dropped, not stored. Anonymous sid only, never a wallet.
+    if (String(b.event || "").toLowerCase() === "hub_bridge_click" && b.sid) {
+      const from = typeof b.from === "string" ? b.from.toLowerCase().slice(0, 48) : "";
+      const to = typeof b.to === "string" ? b.to.toLowerCase().slice(0, 48) : "";
+      try { traction.recordHubBridgeClick(kv, { from, to, sid: b.sid }); } catch (_) { /* counter only */ }
+    }
   } catch (_) {}
   return res.status(204).end();
 });
