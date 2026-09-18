@@ -26,7 +26,14 @@
   // days elapsed between two records; it only ever draws the records it actually has, in order.
   function render(days, opts) {
     opts = opts || {};
-    var esc = opts.esc || function (s) { return String(s); };
+    // P3-08 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): this used to fall back to an
+    // identity "escaper" that did not escape anything. Both current callers (public/hub.html,
+    // public/hub-status.html) already pass CluckUtil.esc, and the only value that reaches
+    // <title>/aria-label today is a server-generated YYYY-MM-DD day key — but a shared renderer
+    // whose default is "do not escape" is one forgetful call site away from an SVG injection.
+    // Require it instead of silently rendering unescaped text.
+    if (typeof opts.esc !== "function") throw new Error("HubSparkline.render requires opts.esc (e.g. CluckUtil.esc) — no identity-escaper fallback");
+    var esc = opts.esc;
     var h = opts.height || 30;
     var list = Array.isArray(days) ? days : [];
     var n = Math.max(list.length, 1);
