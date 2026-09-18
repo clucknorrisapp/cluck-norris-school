@@ -53,6 +53,7 @@ const kv = require("./lib/kvstore");
 const { freshSince } = require("./lib/sig-cursor"); // shared "fresh sigs since the durable cursor" walk — see the ROSE/generic buy bots + burn watcher below
 const tgRooms = require("./lib/telegram-rooms"); // room policy: the Cluck bot never posts in the OnlyRose room (owner, 2026-09-17) — enforced in tgApi and the direct senders
 const payoutVerify = require("./lib/payout-verify");
+const airdropReceipt = require("./lib/airdrop-receipt"); // per-drop public receipt (Colosseum roadmap §W4/Extension) — see the file header
 const engineRatchet = require("./lib/engine-ratchet"); // pure merge/diff shared by the four liquidity-engine config ratchets below
 const { redeemPaidPass } = require("./lib/tool-pass-redeem");
 const recap = require("./lib/recap");
@@ -7607,6 +7608,71 @@ app.get("/api/airdrop-handoff", (req, res) => {
   if (!h || !t || h.t !== t) return res.status(404).json({ ok: false, error: "not_found" });
   if (Date.now() - (h.createdAt || 0) > AIRDROP_HANDOFF_TTL_MS) return res.status(404).json({ ok: false, error: "expired" });
   return res.status(200).json({ ok: true, ...h.payload });
+});
+
+// ── Airdrop per-drop public receipt (Colosseum roadmap §W4/§Extension) ──────────────────────────
+// See lib/airdrop-receipt.js for the design. The airdrop page (public/airdrop.html) posts here
+// as each send batch confirms; the drop id it gets back is what makes /airdrop/r/<id> public and
+// reproducible without ever showing who the operator was.
+app.use("/api/airdrop/record", rateLimit("airdropRecord", { windowMs: 60000, max: 30 }));
+app.post("/api/airdrop/record", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  // Same gate the airdropper's send already runs through client-side — this is the SERVER side of
+  // it, checked again here because the record is what a stranger will later read as "this landed".
+  // (Not requireToolPass()'s one-liner — that would need a second toolPassGate call just to learn
+  // the operator's wallet, and a holder check re-reads the chain, so it is done once here.)
+  const g = await toolPassGate(req);
+  if (!g.ok) { const { status, ...body } = g; return res.status(status || 403).json({ success: false, ...body }); }
+  const b = req.body || {};
+  const rows = Array.isArray(b.rows) ? b.rows : null;
+  if (!rows || !rows.length) return res.status(400).json({ success: false, error: "rows must be a non-empty list of {wallet, amount, sig}" });
+  if (rows.length > airdropReceipt.MAX_ROWS_PER_DROP) return res.status(400).json({ success: false, error: `send at most ${airdropReceipt.MAX_ROWS_PER_DROP} rows per call` });
+  const rpcCall = heliusRpcCall(tokenMetaRpcUrl());
+  const getTx = async (sig) => {
+    const r = await rpcCall("airdrop-record", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
+    return (r && r.result) || null;
+  };
+  let r;
+  try {
+    r = await airdropReceipt.recordDrop({
+      kv, dropId: b.dropId ? String(b.dropId) : undefined,
+      mint: String(b.mint || ""), decimals: b.decimals, createdAt: b.createdAt,
+      rows, operator: g.wallet || null, getTx,
+    });
+  } catch (e) { return res.status(400).json({ success: false, error: String((e && e.message) || e) }); }
+  if (!r.ok) return res.status(r.status || 400).json({ success: false, error: r.error });
+  return res.status(200).json({ success: true, dropId: r.dropId, url: `/airdrop/r/${r.dropId}`, recorded: r.results, totals: r.totals });
+});
+// Same route, GET refused — see the mutating-GET-guard rule (CLAUDE.md): every admin/record route
+// that writes answers 405 on a GET.
+app.get("/api/airdrop/record", (req, res) => res.status(405).json({ success: false, error: "method_not_allowed" }));
+
+// Public: the drop's full receipt. No operator identity anywhere in the body — the dropId (random,
+// unguessable, in the URL) is the only handle a reader has.
+app.get("/api/airdrop/r/:dropId", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const drop = airdropReceipt.loadDrop(kv, String(req.params.dropId || ""));
+  if (!drop) return res.status(404).json({ success: false, error: "not_found" });
+  let symbol = null;
+  try { const meta = await tokenOverviewData(drop.mint); symbol = burnSymbolSafe(meta && meta.symbol); } catch (_) {}
+  return res.status(200).json({ success: true, ...airdropReceipt.publicDrop(drop, { symbol }) });
+});
+// Public: one recipient's row within a drop.
+app.get("/api/airdrop/r/:dropId/:wallet", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const drop = airdropReceipt.loadDrop(kv, String(req.params.dropId || ""));
+  if (!drop) return res.status(404).json({ success: false, error: "not_found" });
+  const wallet = String(req.params.wallet || "");
+  const row = Object.values(drop.rows || {}).find((r) => r.wallet === wallet);
+  if (!row) return res.status(404).json({ success: false, error: "no row for that wallet in this drop" });
+  let symbol = null;
+  try { const meta = await tokenOverviewData(drop.mint); symbol = burnSymbolSafe(meta && meta.symbol); } catch (_) {}
+  return res.status(200).json({ success: true, dropId: drop.dropId, mint: drop.mint, symbol, decimals: drop.decimals, createdAt: drop.createdAt, row: airdropReceipt.publicRow(row) });
+});
+// The receipt page itself — explicit route (public/ is only reachable through the vite dist copy,
+// CLAUDE.md — a route with no app.get 404s on a no-build boot).
+app.get("/airdrop/r/:dropId", (req, res) => {
+  res.sendFile(join(__dirname, "public", "airdrop-receipt.html"));
 });
 
 // PUBLIC price + decimals for any mint (Jupiter Price v3). The Buy Special tool

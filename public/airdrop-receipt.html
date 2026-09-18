@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Airdrop receipt — Cluck Norris</title>
+<meta name="description" content="A public, per-recipient receipt for one airdrop: every row was checked against the chain before it is shown here."/>
+<meta name="robots" content="noindex"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:720px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:1px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .stat-row { display:flex; flex-wrap:wrap; gap:10px; }
+  .stat { flex:1 1 120px; text-align:center; }
+  .stat .big { font-family:var(--disp); font-size:22px; letter-spacing:1px; color:var(--text); }
+  .stat .lbl { font-size:10.5px; letter-spacing:1.5px; color:var(--sub); margin-top:2px; }
+  .small { font-size:12px; color:var(--sub); line-height:1.6; }
+  .mono { font-family:var(--mono); font-size:12px; color:#D1D5DB; word-break:break-all; }
+  input#search { width:100%; padding:10px 12px; margin-bottom:10px; background:rgba(0,0,0,.3); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--mono); font-size:13px; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { font-size:10px; letter-spacing:1.5px; color:var(--sub); font-weight:700; }
+  td.addr, td.sig { font-family:var(--mono); font-size:11.5px; word-break:break-all; }
+  .chip { display:inline-block; font-family:var(--disp); font-size:10.5px; letter-spacing:1px; padding:3px 8px; border-radius:999px; border:1px solid var(--border); }
+  .chip.ok { color:var(--green); border-color:rgba(16,185,129,.35); }
+  .chip.no { color:var(--sub); border-color:var(--border); }
+  .reason { font-size:11px; color:var(--sub); margin-top:2px; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:40px 0; }
+  .err { background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:12px 14px; font-size:13px; color:#FCA5A5; }
+  .btn { background:rgba(255,255,255,.06); border:1px solid var(--border); border-radius:8px; padding:9px 14px; font-size:12px; font-weight:700; letter-spacing:1px; color:var(--text); cursor:pointer; font-family:var(--body); }
+  a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  .share-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-home" href="/airdrop">← AIRDROP TOOL</a>
+  <div class="header">
+    <h1 id="title">Airdrop receipt</h1>
+    <p>EVERY ROW CHECKED AGAINST THE CHAIN</p>
+  </div>
+  <div id="app"><div class="status">LOADING…</div></div>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc, $ = function (id) { return document.getElementById(id); };
+  var m = location.pathname.match(/^\/airdrop\/r\/([A-Za-z0-9_-]{6,40})\/?$/);
+  var dropId = m && m[1];
+  var app = $("app");
+  var DATA = null;
+
+  function fail(msg) { app.innerHTML = '<div class="card err">' + esc(msg) + '</div>'; }
+
+  function rowHtml(r) {
+    var badge = r.verified
+      ? '<span class="chip ok">✓ OBSERVED ON-CHAIN</span>'
+      : '<span class="chip no">NOT VERIFIED</span>';
+    var reason = (!r.verified && r.reason) ? '<div class="reason">' + esc(r.reason) + '</div>' : '';
+    return '<tr data-wallet="' + esc(r.wallet.toLowerCase()) + '">' +
+      '<td class="addr">' + esc(r.wallet) + '</td>' +
+      '<td>' + esc(r.amount) + '</td>' +
+      '<td>' + badge + reason + '</td>' +
+      '<td class="sig">' + (r.sig ? '<a href="https://solscan.io/tx/' + esc(r.sig) + '" target="_blank" rel="noopener">' + esc(r.sig.slice(0, 10)) + '…</a>' : '—') + '</td>' +
+      '</tr>';
+  }
+
+  function render(d) {
+    DATA = d;
+    var symbol = d.symbol ? esc(d.symbol) : d.mint.slice(0, 6) + '…';
+    document.title = 'Airdrop receipt — ' + symbol + ' — Cluck Norris';
+    $('title').textContent = symbol + ' airdrop receipt';
+    var when = d.createdAt ? new Date(d.createdAt).toUTCString() : 'unknown time';
+    var shareUrl = location.origin + '/airdrop/r/' + encodeURIComponent(d.dropId);
+
+    app.innerHTML =
+      '<div class="card">' +
+        '<div class="stat-row">' +
+          '<div class="stat"><div class="big">' + d.count + '</div><div class="lbl">RECIPIENTS</div></div>' +
+          '<div class="stat"><div class="big">' + d.verifiedCount + '</div><div class="lbl">OBSERVED ON-CHAIN</div></div>' +
+          '<div class="stat"><div class="big">' + esc(d.total) + '</div><div class="lbl">' + symbol + ' PAID</div></div>' +
+        '</div>' +
+        '<div class="small" style="margin-top:12px">' +
+          'Mint <span class="mono">' + esc(d.mint) + '</span><br>' +
+          'Created ' + esc(when) + '<br><br>' +
+          'Each row below is <b>a signature the airdrop tool sent, checked against the chain</b>: the ' +
+          'transaction it names actually moved this many ' + symbol + ' to this wallet. "Not verified" ' +
+          'means the chain did not show that transfer landing — the row is shown anyway, with why. This ' +
+          'page never says a project or wallet is "safe" — only what the chain shows.' +
+        '</div>' +
+        '<div class="share-row">' +
+          '<button class="btn" id="shareBtn">📋 SHARE THIS RECEIPT</button>' +
+          '<span class="mono small" id="shareLink">' + esc(shareUrl) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<input id="search" type="text" placeholder="Search by wallet address…" autocomplete="off">' +
+        '<div style="overflow-x:auto"><table id="rowsTable"><thead><tr>' +
+          '<th>WALLET</th><th>AMOUNT</th><th>STATUS</th><th>TX</th>' +
+        '</tr></thead><tbody>' + d.rows.map(rowHtml).join('') + '</tbody></table></div>' +
+        (d.rows.length === 0 ? '<div class="small" style="margin-top:10px">No rows recorded yet.</div>' : '') +
+      '</div>';
+
+    $('shareBtn').onclick = function () {
+      var done = function (t) { $('shareBtn').textContent = t; setTimeout(function () { $('shareBtn').textContent = '📋 SHARE THIS RECEIPT'; }, 1800); };
+      try { navigator.clipboard.writeText(shareUrl).then(function () { done('✓ COPIED'); }, function () { done('COPY FAILED'); }); }
+      catch (e) { done('COPY FAILED'); }
+    };
+    $('search').addEventListener('input', function (e) {
+      var q = e.target.value.trim().toLowerCase();
+      var rows = document.querySelectorAll('#rowsTable tbody tr');
+      for (var i = 0; i < rows.length; i++) {
+        rows[i].style.display = (!q || rows[i].getAttribute('data-wallet').indexOf(q) !== -1) ? '' : 'none';
+      }
+    });
+  }
+
+  if (!dropId) { fail('No drop id in the URL.'); return; }
+  fetch('/api/airdrop/r/' + encodeURIComponent(dropId))
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.body || !res.body.success) { fail('This receipt could not be found — the link may be wrong, or the drop was never recorded.'); return; }
+      render(res.body);
+    })
+    .catch(function () { fail('Could not reach the receipt service — try again shortly.'); });
+})();
+</script>
+<script defer src="/cluck-nav.js"></script>
+</body>
+</html>

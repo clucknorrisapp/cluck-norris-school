@@ -217,6 +217,11 @@ jobs:
         run: node scripts/kvstore-verified-test.cjs
       - name: payout row verification (a sent row needs a real transfer, after the batch, unused elsewhere)
         run: node scripts/payout-verify-test.cjs
+      # Colosseum roadmap §W4/Extension: the airdropper's per-drop public receipt. Reuses
+      # lib/payout-verify's on-chain-delta check (same as CUNA/Hub payouts) so a row is recorded
+      # paid only when the chain actually shows the transfer — never on a bare confirmed signature.
+      - name: airdrop per-drop receipt (verify-before-record, idempotent on sig, daily/row caps)
+        run: node scripts/airdrop-receipt-test.cjs
       # Shared "fresh sigs since the durable cursor" walk used by the ROSE/generic buy bots and
       # the burn watcher (lib/sig-cursor.js) — pure, so this runs standalone with no server boot.
       - name: signature cursor walk (buy/burn watchers' shared fresh-since-cursor logic)
