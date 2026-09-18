@@ -127,6 +127,11 @@ jobs:
       # validates against receipt.schema.json.
       - name: Project Hub — W3 settlement journal dual-write (integration gate)
         run: node scripts/hub-settle-route-test.cjs
+      # The public receipt page must render BOTH receipt shapes (legacy and Addendum-B3): a
+      # journal-backed receipt threw a TypeError in the page's own script until the wrapper fix
+      # (adv P1-4 in docs/HUB_JOURNAL_VERIFY_2026-09-18.md). Runs hub.html's real inline script in a vm.
+      - name: Project Hub — receipt page renders both shapes
+        run: node scripts/hub-receipt-page-test.cjs
       # Addendum C: the six answers a holder gets before locking are DERIVED from the program's
       # entities (15), the differing-reward-asset warning is mandatory and not operator-controlled
       # (16), no string anywhere in the block carries APR / APY / per-year language (17), and every
