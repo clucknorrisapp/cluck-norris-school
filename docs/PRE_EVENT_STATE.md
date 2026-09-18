@@ -82,15 +82,153 @@ code, not the creation of new work, and it is not claimed as in-window.
 
 ## Built inside the window (filled in as it ships; each line links a PR merged after Sep 14)
 
-- **Buy-comp hold check: a lock is not a sell** — a Jupiter Lock escrow is a PDA and therefore
-  off-curve, so the hold check scored every lock as a pool sale and would have disqualified any
-  entrant who locked their bag during a competition window. Destinations are now resolved to
-  their owning program and classified three ways. PR #298.
+Grouped by area; every promotion of `develop` → `main` (owner's explicit go, per CLAUDE.md) is the
+release mechanism for the feature/fix PRs below it and is not listed as a separate line.
+
+### Project Hub / Lock to Earn — the entry
+
 - **Colosseum roadmap revision 3, and the entry stated publicly** — judging criteria read
   directly from Colosseum rather than from a summary; traction (W9) and weekly updates (W10)
   added as workstreams; the dry-run project decision promoted to a dated blocker; a real-wallet
   smoke pulled forward out of the rehearsal; README and `/about` updated to state the entry and
-  link this disclosure.
+  link this disclosure. PR #299.
+- **Official Rules PDF read in full** — the contest window corrected by two hours (opens 13:00
+  UTC, not 11:00; no in-window PR is affected — the earliest, #298, still lands after 13:00), and
+  the six real judging criteria recorded from §8 (open-source and composability are scored; the
+  "Traction" language the team had been optimising for is website-only, not in the contract). PR #302.
+- **Submission copy as entered** — the Colosseum form's fields captured verbatim in
+  `docs/COLOSSEUM_2026_SUBMISSION.md`, and README + `/about` updated to the final project name and
+  description. PR #303.
+- **CUNA lock-scan reliability** — Helius began refusing a plain `getProgramAccounts` on the
+  Jupiter Lock program as CUNA's escrow count grew, silently skipping an hour of lock-to-earn
+  accrual; the scanner now walks `getProgramAccountsV2` pages first and never writes a partial
+  day. Fixes a reliability gap in the **pre-window CUNA lock-to-earn handler** that the Hub's
+  engine (below) later generalises. PR #306.
+- **Project Hub W1 core** — the pure settlement library the Hub is built on: project records,
+  program versions with hashes, the ledger partition (accrued/available/reserved/paid), public
+  eligibility reason codes, and the payout attempt state machine. No routes yet; **CUNA migrates
+  onto the store by aliasing its existing kv keys**, so the pre-window CUNA ledger becomes the
+  first Hub-shaped ledger. PR #307.
+- **Hub Addendum C — teach the button before you offer it** — derives the six answers a holder
+  should have before locking (what happens to my tokens, can I sell, where the reward comes from,
+  the risks) purely from the program's own data; no project-authored copy can reach the page and
+  no APR/APY figure can ever be produced. Adds a `#lesson=` deep link to the school. PR #308.
+- **The public Project Hub, and lock-to-earn pays itself** — `/hub`, `/hub/:project` and receipt
+  pages render what a project promised, who qualified, and the transaction that paid each winner,
+  with no wallet needed; and the **pre-window CUNA lock-to-earn payout** gains a server-signed
+  send that journals every row pending before broadcast and verifies the write to disk before it
+  counts. PR #315.
+- **Vault dry-run serialisation fix** — the first lock-to-earn server-send dry run on production
+  crashed trying to serialise a BigInt to JSON; nothing moved. PR #317.
+- **Hub page scoping + honest "owed"** — a project's Hub page had mixed every program together and
+  listed 21 buy-comp winners settled before the Hub existed as "owed" with no real debt behind it;
+  now one program renders per page, and the CUNA lock site (holder-facing) shows every payment
+  received and days left on each lock. PR #319.
+- **Lock to Earn engine, generalised** — lifts the machinery that has run **the pre-window CUNA
+  lock-to-earn program** since launch (accrual, arm/disarm, lock scanning, holder view) into a
+  project-agnostic library any Hub project can use; CUNA's own 68 rule tests pass unchanged
+  against the generalised version. PR #321.
+- **Per-project Lock to Earn routes + platform access tiers** — the generalised engine (#321) gets
+  an HTTP surface (admin, holder view, payout, a 10-minute scheduler) so a second project can be
+  armed and paid without touching CUNA's legacy loop; access tiers (standard / small / comped)
+  priced live in SOL or CLKN. PR #322.
+- **Platform access payments** — a project pays its monthly access tier in SOL or in CLKN priced
+  at the instant of payment, verified on-chain before the paid period extends. PR #323.
+- **Self-serve onboarding** — `/hub/apply` lets a project submit its mint and terms for owner
+  approval (validated exactly as approval validates, so a broken draft is refused up front), and
+  `/hub/:project/pay` lets it pay its first month from its own wallet. PR #324.
+- **The project desk** — an operator wallet listed on the project record signs a one-line nonce to
+  get a scoped session and runs its own Lock to Earn program (terms, arm/disarm, batches signed in
+  its own wallet) without the owner in the loop; editing the operator list revokes the session
+  immediately. PR #325.
+- **CUNA-onto-the-engine migration held** — the dedicated pre-window CUNA payout handler stays as
+  the live path for now; owner decision 2026-09-16 to defer folding CUNA onto the new engine
+  (Phase 1b). Docs only, no code change. PR #326.
+
+### Payouts and money-path hardening
+
+- **Buy-comp hold check: a lock is not a sell** — a Jupiter Lock escrow is a PDA and therefore
+  off-curve, so the hold check scored every lock as a pool sale and would have disqualified any
+  entrant who locked their bag during a competition window. Destinations are now resolved to
+  their owning program and classified three ways. PR #298.
+- **`/api/buycomp/send` — server-signed payout** — a verified buy-competition winner list can now
+  be paid directly from the operator's own key on Railway instead of pasted into the browser
+  airdropper; recipients can only come from the comp's own sealed list, and every transfer is
+  journalled before it counts. PR #311.
+- **Payout hardening** — four blockers a second reviewer found before the first live server-signed
+  send: the cap check now replays the sender's own arithmetic instead of a rounded total (the
+  rounded total had refused a real payout that was actually under cap), a row is journalled
+  pending before broadcast instead of after (closing a double-pay window on a timeout), "not found
+  after 5 minutes" no longer voids a row that may have actually landed on a lagging RPC, and a
+  journal write is verified on disk before the batch continues. PR #313.
+
+### School and education
+
+- **Report card links to a real tool and a Library piece** — every core lesson's report card now
+  points at the tool that shows its concept live and the Library piece that goes deeper, plus a
+  `/school#library=` deep link and a `quiz_start` event to see where lesson 1 loses people. PR #309.
+- **Honest visitor counting** — the school's page-view figure had been counting roughly 4,500/day
+  of one-page, no-referrer automated traffic since 2026-08-16 that was about to be quoted to
+  judges; analytics now report "engaged" visitors (a second page or a learning-funnel event)
+  alongside the raw counts, and split views by host so the game's and staking site's traffic stop
+  landing in the homepage's numbers. PR #310.
+- **School Q&A + LP Lab audit** — all 189 quiz questions and the 14 LP Lab lessons checked against
+  how Orca, Raydium CLMM, Meteora DLMM and DAMM v2 actually work; fixed a ticks-vs-bins confusion,
+  a DAMM v2 mislabel (called concentrated liquidity; it is the dynamic-fee constant-product AMM),
+  an MEV understatement, and a tick-spacing mismatch, with the corrected strings re-keyed in all
+  seven languages. PR #328.
+
+### Security deep dive (2026-09-17)
+
+- **Platform deep dive, P0 batch** — a 32-finder review surfaced 152 unverified findings; the 12
+  P0s were hand-verified and nine confirmed. Closed: mutating admin GETs that could draw a
+  giveaway, send prize tokens, move Meteora liquidity or arm an engine from a pasted link; the
+  tools pass enforced server-side on Buy Special's data endpoints (the page's own gate had been
+  theatre); a corrupt kv file no longer boots as an empty, healthy-looking store; and Hub access
+  payments bound to the paying wallet. PR #329.
+- **Platform deep dive, P1 batch + Codex round 1** — eleven more confirmed findings plus nine
+  issues Codex found in #329 itself, fixed together: engines can no longer re-arm themselves from
+  an environment variable after a bad kv mount (the kv arm key is now the only switch for
+  cuna/dnc/rose); a payout row is only recorded against a real, matching on-chain transfer; the
+  same payment signature could no longer unlock both a Hub month and a tools pass; and more admin
+  GETs (`x-announce`, `x-post-test`, classroom actions) became POST-only. PR #330.
+- **Owner decisions, 2026-09-17** — every graduation-gate block is now journalled with a reason a
+  learner can act on instead of one generic message; `/api/tg-test` made POST-only; a new test
+  boots the real server three times to prove no engine re-arms from an environment variable; and
+  several behaviour-preserving refactors (one admin-guard middleware, one Telegram send helper,
+  shared ratchet/cursor logic). PR #333.
+- **Codex round 2 on #333** — four more fixes before promotion: a learner could get stuck because
+  only a lesson's *first* pass counted toward the anti-farm timing check (a genuine later re-pass
+  now counts too); the offline beacon retry queue could drop entries before they were confirmed
+  sent; a failed Telegram treasury recap was silently reporting success and advancing its
+  snapshot; and a short Telegram upload was misrouted to the wrong send path. PR #334.
+- **OnlyRose room lockdown** — a disarmed buy bot's plain status-check GET had been running a full
+  poll and replayed a backlog of old buys into the room in a row; the flag-less GET is now a pure
+  status read (the poll needs an explicit `POST ?run=1`) and both buy bots skip anything older
+  than 15 minutes after a pause. Separately, every Telegram send in the app now passes through one
+  policy point that refuses any post to the OnlyRose room by default, closing a class of leaks
+  patched individually three times this month. PR #338.
+
+### Operations / hygiene
+
+- **Whole-repo simplification pass** — consolidated the address regex, the Node-side HTML escaper
+  (fixing a missing single-quote escape on token-metadata-derived HTML the same drift class
+  CLAUDE.md already documents), and the RPC client to one memoised instance per endpoint;
+  behaviour-preserving only, with money-path and owner-call items explicitly left for separate
+  review. PR #331.
+- **`/api/meme-queue` made POST-only** — the last GET-only admin mutation on the surface; the meme
+  routine now POSTs its write. PR #336.
+- **Traction claim corrected to on-chain-only numbers** — the submission's judges note and
+  traction table stopped citing the 161k-page-view figure once it was traced to the same automated
+  one-page traffic PR #310 later fixed in the analytics, and now cite on-chain graduate counts and
+  the 90-day funnel instead. Commits `a28a471` and `f9ee792`, both 2026-09-15 — docs only, no PR
+  number, reviewed like code because the claim was public.
+
+**On the Store edition iOS release specifically.** `store-ios-v1.0.3` was published 2026-09-18,
+inside the window, but points at the exact same commit (`dd115d2`, PR #296, 2026-09-13) as
+`store-google-v1.0.3`, published pre-window on 2026-09-13. It is a re-publication of pre-window
+code to a second distribution channel, not new work, and is **not** claimed as hackathon work
+despite its publish timestamp falling inside the window.
 
 ## How to read the delta
 

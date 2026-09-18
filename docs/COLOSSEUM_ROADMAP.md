@@ -51,6 +51,29 @@ suggested (§6 below).
 
 ## 0. Where we stand on the eve
 
+### Status as of 2026-09-18
+
+Derived from what has actually merged (`git log`, `docs/PRE_EVENT_STATE.md` "Built inside the
+window"), not from intent.
+
+| Workstream | Status | Note |
+|---|---|---|
+| W1 — Hub core (settlement protocol) | **Shipped** | #307 (pure gate). |
+| W2 — Hub public surfaces | **Shipped** | #315 (first cut), #319 (page scoping + honest "owed"). |
+| W3 — Operator desk | **Shipped** | #325 (wallet-signed operator session). |
+| — Apply / pay (self-serve onboarding) | **Shipped** | #323 (payments), #324 (apply + pay pages). |
+| — Lock to Earn engine (generalised) | **Shipped** | #321 (engine), #322 (per-project routes + tiers). |
+| W4 — `/for-projects` front door | **Not started** | No `/for-projects` route in `server.js`. Being built now. |
+| W5 — Engine dashboard evidence boundaries | **Not started** | No `engineLog:<project>` ring buffer or illustrative/historical/retained split in code yet. |
+| W6 — Credibility and truth pass | **Partial** | Repo description fixed (no more "Bags Hackathon" / Cluck Score — confirmed live). F4 (seedphrase/inheritance lessons in the six translated bundles) still **open** — `grep -c seedphrase public/i18n/<lang>.school.json` = 0 in all six. F12 (traction table order) **done** — the table now leads with Learners, cites the on-chain funnel, and the page-view figure was removed (commits `a28a471`/`f9ee792`, PR #310 fixed the analytics behind it). |
+| W6b — Validation (operator interviews, one pilot) | **Not started** | No `docs/VALIDATION_2026-09.md`. Owner-led. |
+| W7 — Story: demo, pitch, submission | **Not started** | Submission copy landed (#303) but the demo cut, pitch recording and filing have not. |
+| W9 — Traction: instrument + create | **Part 1 being built now** | No outcome counters (wallets connected, programs created, receipts issued, etc.) in `lib/analytics.js` yet; no `docs/TRACTION_2026-09.md`. |
+| W10 — Weekly updates | **First update due Sep 20** | None posted yet; the calendar's first Sunday slot has not arrived. |
+| §4 item 1 — dry-run second project | **Still undecided, overdue** | Was "decide by Sep 17"; today is Sep 18 and no second project has been named in the roadmap or the code. This is the longest pole in the traction plan (§4 item 1, §1). |
+
+---
+
 **Already live or on `develop` (pre-window, disclosed, not claimed):** the engine dashboard P0
 at `/liquidity-engine`, the Lock of Fame index, the quiz-free `/curriculum`, project-team
 navigation (#282); the tools pass as a signed session, server-enforced (#283; #284 carries the
