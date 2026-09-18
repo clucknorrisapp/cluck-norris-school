@@ -343,3 +343,74 @@ Do **not** merge as-is. Two blockers, both small:
 2. **`lib/cuna-payout.js` binary** — replace the three raw NULs with `" "`, so the owedNow money change can actually be reviewed before it ships. This one matters on its own: the PR is currently asking for a sign-off on a diff nobody can see.
 
 Then the owner's call on #3 (`fundedBy` as an operator-settable payment-source allowlist) and #4 (managed-payer receipts) — neither loses money, but #4 silently kills receipts on the managed path and #3 leaves the original P0-1 outcome reachable by the actor the finding named.
+
+
+---
+
+## Round 3 — re-verification of fix round 2 (one Opus lens, read-only, 2026-09-18 ~14:40 UTC)
+
+Verdict: item 1 (phantom excess) OPEN as P1 — the fix is order-dependent; items 2–5 CLOSED; item 6 journal half
+CLOSED, page-shadowing half OPEN as P3. Three new P2 findings (N1–N3), two P3 (N4–N5). Fix round 3 follows.
+
+READ-ONLY re-verification of PR #342 (`claude/hub-settlement-journal`, fixes `15f2bb0..7f547e6`). Nothing edited, committed or pushed; `git status --porcelain` in the worktree is unchanged (only the pre-existing `node_modules` symlink). All probes in `/tmp/claude-0/-home-user-cluck-norris-school/bcde813f-e57f-5571-b70a-272b73ac59d7/scratchpad/verify3/` (`h.cjs` copied from verify2, `p1.cjs`, `p1x.cjs`, `p25.cjs`, `p3.cjs`, `p456.cjs`), driving the REAL `routes.mount` closures through a fake Express with synthetic jsonParsed transactions. Only port 3260 was used (the guard test).
+
+## THE SIX
+
+### 1. adv P1-3 single-request phantom excess — **OPEN (P1)**
+The fix closes the *applied:0 second entry*, not the reported harm. **Swap the order of the two rows in the same `&sent=` array and the original outcome comes back verbatim.**
+
+Repro (`verify3/p1.cjs` §1b, run): project `alpha`, holder W owed 1.0; two genuine funding-wallet transfers to W exist — `sig_good` = 1.0, `sig_extra` = 50.0 (an unrelated transfer, e.g. an OTC sale or giveaway from the funding wallet).
+```
+POST /api/hub/alpha/payout?batch=<id>&sent=[{W,sig_extra},{W,sig_good}]     ← extra FIRST
+→ journal: [{sig:5xenvc, amt:50000000000, applied:1000000000, excess:49000000000}]
+→ receipt totals: {owedRaw:1000000000, appliedRaw:1000000000, excessRaw:49000000000}
+→ partition:      {accruedRaw:1000000000, paidTotalRaw:50000000000, excessRaw:49000000000, availableRaw:0}
+→ ignored: [{wallet:W, sig:sig_good, why:"row_already_settled"}]      ← the REAL payment is now permanently unjournalable
+```
+Why: PASS 1 (`lib/hub/routes.js:791-806`) walks `vr.accepted` **in the caller's order**, carrying `trialJournal`; the first row wins the row, the `remaining === 0n` refusal at `lib/hub/ledger.js:171` then kills the genuine one. `recordSent` records `sig_extra` as the row's signature, so the new per-(wallet,sig) guard at `routes.js:828-829` happily journals it. The shipped regression test (`scripts/hub-settle-route-test.cjs:942-966`) pins **only** the good-sig-first ordering — swapping the two array elements in that test fails it.
+
+Worse, `verify3/p1x.cjs` (run): after 7 more days of accrual the partition reads `{accruedRaw:8000000000, paidTotalRaw:50000000000, excessRaw:42000000000, availableRaw:0}` while the legacy desk `owedNow` still says `7000000000` — the excess permanently absorbs ~49 tokens of that holder's future accrual in the Addendum-B view and the two witnesses now disagree. `owedNow` is unaffected (no double-pay), so this is receipt/ledger forgery + a holder-facing denial, reachable by any project **operator** (`&sent=` is operator-or-owner).
+
+Same outcome with a single row and no stapling at all (`p1.cjs` §1f): one oversized genuine transfer reported as the row's settlement gives the identical `excessRaw:49000000000` receipt. So the "no phantom excess" claim only holds for one of three request shapes.
+
+Attacks that did NOT work (all run): good-sig-first (§1a, 1 entry, excess 0); same sig twice (§1c, one entry, `paid` counted once); one signature split across two instructions to the same wallet (§1d, attribution failure, nothing journaled); leading/trailing whitespace variants of the sig (§1e, still one entry); the two-request variant (§1g, `row_already_settled`); `owedNow` never re-offers (§1h, `0`).
+
+### 2. `lib/cuna-payout.js` NUL → `" "` — **CLOSED**
+`file` reports UTF-8 text, `grep -rlP '\x00' lib/ server.js` is empty. The composite key is built in exactly two places and parsed in one, all in this file, all `" "`: `lib/cuna-payout.js:77` (`String(e.batchId) + " " + String(e.wallet)`), `:87` (`String(b.id) + " " + w`), `:107` (`rowKey.slice(rowKey.indexOf(" ") + 1)`). No other module builds or consumes it (the journal stores `batchId`/`wallet` separately). Byte-identical for the same row (`verify3/p25.cjs` §2a). Collision needs a space in a batch id or a wallet: batch ids are generated only at `lib/hub/routes.js:1004` (`hb_`+hex), `server.js:12712` (`cb_`+hex) and `lib/hub/demo-fixture.js:128` (`demo-batch-1`) — never caller-supplied (`b.batch` only *looks up*); wallets are base58 keys of `batch.amounts`. See new finding N5 for the residual.
+
+### 3. `payoutSources` allowlist — **CLOSED** (for the stated attack)
+- The round-2 operator attack is dead: an operator publishing `?terms=1&fundedBy=<FUND>,<STRANGER>` still gets 200, but the stranger's transfer is now refused `transfer_not_from_funding_wallet` and alerted (`p3.cjs` §3a) — `routes.js:711` reads `p.payoutSources`, never the version term.
+- A self-serve application cannot declare it: `lib/hub/project.js:100` hard-sets `payoutSources: []`, so `apply.validateApplication` and `apply.approve` both produce `[]` even when the applicant sends `payoutSources` at project and terms level (`p3.cjs` §3b).
+- Owner path only: `/api/hub-registry` 404s an operator token (`p3.cjs` §3f); the whole handler is behind `adminAuthOK` (`routes.js:153`). Set/clear works, alerts, and grows `payoutSourcesHistory` (`routes.js:211-218`); an unrelated owner edit with no `&payoutSources=` carries it forward unchanged (`routes.js:219-220`, verified §3c). No `/admin`, access-payment, suspend or milestone write drops it (they all spread `reg[p.id]`).
+- `fundingWallet` is owner-only and a change **fails closed** on in-flight batches — the open batch's settlements are then refused `transfer_not_from_funding_wallet` (`p3.cjs` §3g), never widened.
+Two residuals are filed as new findings N2 (the one path that *does* wipe it) and N3 (it is invisible in every API read).
+
+### 4. Managed-payer allowance — **CLOSED**
+`p456.cjs`, all run: `&send=` journals its own broadcast (§4a); `&send=&from=treasury` does **not** accept a different vault project's operator wallet (§4b, refused + alerted) — `routes.js:977` adds only `vaultOperatorPubkey(from)`; no `&sent=` shape reaches the allowance, including `&sent=…&from=treasury` and `&sent=…&send=&sweep=` in one request (§4c) — `routes.js:793` passes the narrow `fundedBy`. `vault.operatorPubkeys()` (`lib/whirlpool-vault.js:295-298`) derives only from `Keypair.fromSecretKey(process.env[proj.operatorEnv])`, so it is env-only, never kv- or attacker-supplied (`registerProject` sets `operatorEnv` but cannot create the secret). With no key loaded (`MM_OPERATOR_SECRET` unset) `operatorPubkey()` is null → the journal refuses and the operator is alerted (§4e); a throwing `operatorPubkey` is caught by `routes.js:723-724` and the request still 200s (§4f). Residual widening on `&sweep=` filed as N4.
+
+### 5. Fraud alerts — **CLOSED** (with one caveat, and see N1)
+Both named `why` values now fire: `transfer_not_from_funding_wallet` (`p3.cjs` §3a) and the PASS-1 refusals (`routes.js:772-776` runs before PASS 1, on `vr.rejected`). A refused row advances **no** durable state: the only kv keys touched by a fully-refused request are `program:alpha:batches` and `program:alpha:paid` gaining empty `sent:{}`/`{}`, no journal entry, and `milestones.firstBatchSignedAt` stays null (`p25.cjs` §5c). The alert's return value is **not** checked (`try { alert(...) } catch(_) {}`, and `hubAlert`→`cunaOpsAlert`→`tgSend` swallows) — acceptable under CLAUDE.md only because nothing durable is gated on it: an `alert` that throws neither fails the request nor records the refused row (`p456.cjs` §5a). The lost-signal risk is silent, and the volume problem is N1.
+
+### 6. Lock-key prefix collision — **OPEN (P3)**, journal half closed
+Journal half is genuinely closed: the payout lock is `hublock:alpha:payout` and the only key under `hub:settle:` is the real entry (`p456.cjs` §6b); a lock row parked under the prefix is skipped by `looksLikeJournalEntry` (`lib/hub/store.js:102-109`); the shape check does **not** drop legitimate data — a real entry round-trips through the legacy `JOURNAL_KEY` blob, and `git log -p lib/hub/ledger.js` shows the entry shape (`xferKey`/`projectId`/`batchId`/`wallet`/`amountRaw`/`appliedRaw`) unchanged since `55db277`, so no upgrade can lose an entry. `"settle"` is refused by `lib/hub/project.js:31,136`.
+What is still open is the other half of the question — **page shadowing**. `reserved()` (`server.js:8160`) covers only `clkn/cuna/rose/demo/demo-b`, and `RESERVED_PROJECT_IDS` only `settle`. Repro (`p456.cjs` §6a): `approveProject` **allows** the ids `apply`, `verify`, `status`, `wallet`, `trust`, `judge`, `schema`, `registry`, `hub`. On this branch `app.get("/hub/apply")` (`server.js:8082`) is registered before `/hub/:project` (`:8092`), so a project approved as `apply` has no public page — its receipts and program page 200 with the application form. On `origin/claude/colosseum-batch-9` the same is true for `verify` (`:8319`) and `status` (`:8463`) ahead of `/hub/:project` (`:8477`). No money effect; availability/trust only.
+
+## NEW FINDINGS (ranked)
+
+**N1 (P2) — one operator-room alert per refused row, no cap, no rate limit.** `p456.cjs` §5b: a single `&sent=` with 23 stranger-sourced rows raised **23** alerts. `&sent=` accepts up to 500 rows (`routes.js:757`), `/api/hub/:project/payout` is not rate-limited (`limited()` is applied only at `routes.js:309, 319, 514, 568`), and `cunaOpsAlert`'s 6h dedupe key is `"hub:" + msg.slice(0,40)`, which differs per wallet — so one request can push 500 distinct Telegram messages into the operator room, repeatable. Cap the per-request fraud alerts to one summary line.
+
+**N2 (P2) — approving an application over an existing project takes it over and wipes the allowlist.** `p25.cjs` §3h + `p3.cjs` §3d: `proj.approveProject` returns `{...project}` (`lib/hub/project.js:154`), preserving only `access`/`milestones`, and `apply.approve` builds `project` from the applicant's own fields. An application submitted with an existing project's `id` **and** `mint` (both checks at `project.js:139-146` pass) replaces `fundingWallet` and `operatorWallets` with the applicant's and resets `payoutSources`/`payoutSourcesHistory` to `[]` — so the allowlist history is not append-only across this path. Gated by the owner's click and by `routes.js:170-172` (409 once the project has program versions), so it only bites a registry-seeded, not-yet-termed project; it fails closed on the allowlist but fails **open** on who owns the project.
+
+**N3 (P2) — the allowlist is invisible and the receipt still names the funding wallet.** `publicProject` (`routes.js:71-78`) omits `payoutSources`, so no API read — not even the owner's own `/api/hub-registry` response — echoes it (`p3.cjs` §3c); the only trace is the set-time alert and console line. Meanwhile `L.receipt` returns `fundingWallet: project.fundingWallet` (`lib/hub/ledger.js:245`) and the journal entry records no source at all (`p3.cjs` §3e: entry keys are `xferKey,sig,instructionIndex,innerIndex,projectId,batchId,rowId,wallet,amountRaw,appliedRaw,excessRaw,slot,at,verifiedBy`) — so a settlement paid by an allowlisted third wallet is publicly indistinguishable from one paid by the funding wallet. Echo `payoutSources` in `publicProject` and record the verified `sourceOwner` on the entry.
+
+**N4 (P3) — `&sweep=` accepts *any* vault project's operator wallet.** `routes.js:899` (`fundedByForSweep = [...fundedBy, ...vaultOperatorPubkeys()]`): `p456.cjs` §4d journals a row for project `alpha` against a transfer signed by an unrelated vault project's operator wallet. Only `&send=` (owner-only) can create the pending row a sweep acts on, so it is owner-gated in practice — but combined with N3 the resulting receipt cannot be audited for it.
+
+**N5 (P3) — the orphan-journal parse is asymmetric with the builders.** `lib/cuna-payout.js:107` splits on the **first** `" "` while `:77`/`:87` append it; `p25.cjs` §2b: a journal row whose batch was purged and whose `batchId` contains a space is attributed to a non-existent wallet, and `owedNow` then re-offers the full `1000` instead of `0`. Unreachable today only because every batch id is generated `hb_`/`cb_` hex, and nothing asserts that invariant (the same asymmetry existed with NUL).
+
+## TEST VERDICTS (verbatim last line of each run)
+- `node scripts/hub-settle-route-test.cjs` → `all passed (59 passed)`
+- `node scripts/hub-core-test.cjs` → `all passed (34 passed)`
+- `node scripts/payout-verify-test.cjs` → `all passed (11 passed)`
+- `node scripts/traction-test.cjs` → `all passed (39 passed)`
+- `node scripts/cuna-payout-test.cjs` → `all passed (30 passed)`
+- `GUARD_TEST_PORT=3260 node scripts/mutating-get-guard-test.cjs` → `all passed`
