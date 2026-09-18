@@ -5,8 +5,9 @@ Two separate deliverables, per `docs/COLOSSEUM_OFFICIAL_RULES_NOTES.md`'s submis
 target 2:30)** that is never screen-recorded. Captures for the demo live in
 `docs/demo/2026-09-18/` — real screenshots of the real, running app (`npm run build` then
 `node server.js`), captured with Playwright at phone width (390×844) and desktop (1280×800). File
-sizes: 42–295 KB each, all under the 300 KB target; the full set (Part 1's 23 files plus Part 3's
-14 reference captures, BB2) totals under 5 MB.
+sizes: 42–295 KB each, all under the 300 KB target; the full set (Part 1's 25 files, Part 3's 14
+reference captures (BB2), and Part 4's 14 further reference captures (FF2)) totals 53 files, under
+6 MB.
 
 **Every screen in this storyboard carries a visible DRY RUN badge, and every reference to the
 demo project or to POKEAHOE says "dry run" — neither ships a program version a real fund could be
@@ -297,10 +298,86 @@ this docs/capture task, matching the precedent set by the 1970-timestamp finding
 
 ---
 
+## Part 4 — reference captures, the second batch of reviewer-path pages (FF2, `docs/COLOSSEUM_ROADMAP.md` §§13–15)
+
+Not part of either video — like Part 3, these are pages a second reviewer or a judge would open
+next: what changed between two program versions, a receipt kept on paper, the shared vocabulary
+behind every reason code, following a project without a wallet, and one wallet checked across
+every project it has ever touched. Same rules as Parts 1 and 3: real, running app (`npm run build`
+then `node server.js`, a fresh temp `DATA_DIR` on a port in 3480–3489), Playwright at 390×844 and
+1280×800, `type: 'png'`, clipped or full-page where noted to stay under the size budget. Every
+fixture below is built through the repo's own real Hub libraries (`lib/hub/project.js`,
+`lib/hub/commit.js`, `lib/holders-snapshot.js`) with the exact same construction the matching
+committed test already uses (named per shot) — nothing on any of these screens is hand-typed.
+Continuing the shot numbering after Part 3's seventeen.
+
+**Shot 18 — `/hub/<project>/programs/compare`, two versions (CC1).** Captures:
+`hub-compare.desktop.png` / `.mobile.png`. Fixture: a throwaway `cmptest` project with two
+published program versions differing in exactly two fields (shortest lock term admitted, payout
+cadence), built the same way `scripts/hub-compare-test.cjs` seeds it. What it shows: both
+versions' hash and published date, a two-row "what changed" table, and the unchanged-fields
+toggle collapsed by default — the trust-boundary line ("a hash commits to the published terms, not
+to intent") at the bottom of the page.
+
+**Shot 19 — the print sheet, `?print=1` on a receipt (DD4).** Captures:
+`hub-print-sheet.desktop.png` / `.mobile.png`. Fixture: a throwaway `hbprint` project with a real
+program version and two hours of accrual settled into one sent batch, the same shape
+`scripts/hub-print-test.cjs` seeds. What it shows: the amount that arrived next to the amount the
+rule computed, the program-version hash, the settlement signature in full (as text and as a QR
+code encoding the public receipt URL), and the trust-boundary line — nav, pills and buttons hidden
+by the print stylesheet, exactly what a holder would see on a printed page.
+
+**Shot 20 — `/hub/glossary` (EE2).** Captures: `hub-glossary.desktop.png` / `.mobile.png`. No
+fixture needed — the glossary is static content served straight from `lib/hub/glossary.js`. What
+it shows: the search box and the first terms, each with its field-name/reason-code label and a
+"Learn this →" link back to the page that uses it.
+
+**Shot 21 — the JSON feed, `/api/hub/<project>/feed.json` (DD2).** Captures:
+`hub-feed-json.desktop.png` / `.mobile.png`, rendered exactly as Chromium's own JSON viewer shows
+a `feed+json` response — no page chrome, because there is none to capture; this is the raw
+response a "Follow" link opens. Fixture: a throwaway `feedtest` project with two program versions
+(one carrying an applied on-chain commitment), a sent batch and two holder snapshots, the same
+shape `scripts/hub-feed-test.cjs` seeds. What it shows: one JSON Feed 1.1 item per version
+published, batch settled, snapshot recorded and commitment observed, newest first, each linking
+its own public page.
+
+**Shot 22 — the RSS feed, `/hub/<project>/feed.xml` (DD2).** Captures:
+`hub-feed-rss.desktop.png` / `.mobile.png`, the same `feedtest` fixture and the same events as
+Shot 21, rendered as RSS 2.0 — proof the two feeds carry identical items in identical order, just
+two formats of the same append-only record.
+
+**Shot 23 — `/hub/wallet/<address>`, a wallet seen in two real projects (AA1).** Captures:
+`hub-wallet-two-projects.desktop.png` / `.mobile.png`, full page (not clipped to the viewport) so
+both project cards render completely rather than being cut mid-card. Fixture: two throwaway
+projects, `walltest1` and `walltest2`, each running a buy competition, with the SAME wallet
+qualifying and paid in one and disqualified with a reason code in the other — the identical
+fixture `scripts/hub-wallet-test.cjs` drives (`4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs`, its
+own comment calls out as "seen in BOTH projects"). What it shows: "Seen in 2 projects," Wall Test
+One's owed/arrived pair with a settlement signature, and Wall Test Two's exclusion with its reason
+in plain words ("moved the bag out during the hold (2 transfers) — not eligible") — composed
+entirely from `GET /api/hub/wallet/:wallet`, no wallet connect.
+
+**Shot 24 — the reproducibility badge on `/hub/status` (BB3).** Captures:
+`hub-status-badge.desktop.png` / `.mobile.png`, a normal viewport capture of the page's header and
+badge card (the per-project DRY RUN pills further down the same page were already captured in
+Part 3's `hub-status.*.png` — this shot is the badge specifically). Fixture: a real,
+non-dry-run `hstest` project with one sent batch, the same shape `scripts/hub-status-test.cjs`
+seeds — captured on the same server boot as Shots 18–23 above, so the badge honestly aggregates
+every real (non-dry-run, non-buy-comp-excluded) sent batch already on the box: `hbprint` (1),
+`feedtest` (2), `hstest` (1) and `walltest1`'s buy competition (1), confirmed against
+`GET /api/hub/:project/reproducibility` for each. What it shows: the `GET /hub/badge.svg` image
+reading **"5 of 5 across 4 projects"** — computed live by the same `projectReproducibility`
+function the status page itself calls, next to the Markdown snippet a project would embed in its
+own README, with the number never typed in by hand.
+
+---
+
 ## Capture inventory
 
-All files in `docs/demo/2026-09-18/` (24 PNGs + 1 terminal PNG = 25 files, 42–295 KB each) plus 14
-new reference captures for BB2's reviewer-path shots (Shots 11–17 above, all under 300 KB):
+All files in `docs/demo/2026-09-18/`: Part 1's 24 PNGs + 1 terminal PNG = 25 files, plus 14
+reference captures for BB2's reviewer-path shots (Shots 11–17), plus 14 further reference captures
+for FF2's second reviewer-path batch (Shots 18–24) — **53 files total, 42–295 KB each, all under
+the 300 KB target:**
 
 | File | Viewport | What it shows |
 |---|---|---|
@@ -325,6 +402,13 @@ new reference captures for BB2's reviewer-path shots (Shots 11–17 above, all u
 | `hub-wallet-clkn.{mobile,desktop}.png` | both, viewport | `/hub/wallet/<CLKN mint>` — the honest "no program has seen this wallet" example (Shot 15) |
 | `hub-verify-bundle.{mobile,desktop}.png` | both, viewport, scrolled to the result | `/hub/verify` with the demo evidence bundle dropped (Shot 16) — see the incidental finding above |
 | `holders-compare.{mobile,desktop}.png` | both, clipped to `#compareCard` | `/holders` Compare panel over two seeded snapshots (Shot 17) |
+| `hub-compare.{mobile,desktop}.png` | both, viewport | `/hub/cmptest/programs/compare` — two program versions, exactly two changed fields (Shot 18) |
+| `hub-print-sheet.{mobile,desktop}.png` | both, viewport | `/hub/hbprint/r/<sig>?print=1` — the printable receipt sheet with its QR code (Shot 19) |
+| `hub-glossary.{mobile,desktop}.png` | both, viewport | `/hub/glossary` (Shot 20) |
+| `hub-feed-json.{mobile,desktop}.png` | both, viewport | `/api/hub/feedtest/feed.json`, rendered as Chromium's own JSON viewer shows it (Shot 21) |
+| `hub-feed-rss.{mobile,desktop}.png` | both, viewport | `/hub/feedtest/feed.xml`, rendered as Chromium shows raw XML (Shot 22) |
+| `hub-wallet-two-projects.{mobile,desktop}.png` | both, full page | `/hub/wallet/<seen-in-both address>` — qualifies+paid in one project, disqualified in the other (Shot 23) |
+| `hub-status-badge.{mobile,desktop}.png` | both, viewport | `/hub/status`'s live-computed reproducibility badge, "5 of 5 across 4 projects" (Shot 24) |
 
 **How the extra receipt was produced (for the record).** `/hub/demo`'s own fixture receipt page
 (`public/hub-demo.html`) does not implement the "How this number was computed" `<details>` element
@@ -338,3 +422,13 @@ screen is genuinely computed, not typed in. It was captured in a **separate serv
 every other screenshot specifically so it never appears in the `/hub` or `/for-projects` listings
 (confirmed: `hub-index.*.png` lists only clkn/cuna/rose/poke). Nothing from this seed was committed
 to the real app; the scratch `DATA_DIR` was discarded after the capture.
+
+**How Part 4's fixtures were produced (for the record).** Shots 18–24 were captured on ONE server
+boot against ONE throwaway `DATA_DIR`, seeded with six small, independent throwaway projects
+(`cmptest`, `hbprint`, `feedtest`, `hstest`, `walltest1`, `walltest2`, plus a `demo-status-row`
+dry-run row) — each built by copying the exact fixture-construction code its matching committed
+test already uses (`scripts/hub-compare-test.cjs`, `-print-test.cjs`, `-feed-test.cjs`,
+`-status-test.cjs`, `-wallet-test.cjs`), never hand-typed data. Sharing one boot is why Shot 24's
+badge honestly reports every real batch already on the box rather than a single isolated number
+(see Shot 24's note). None of these ids are real or reused; the `DATA_DIR` was discarded after the
+capture, and nothing from it reached the real app.

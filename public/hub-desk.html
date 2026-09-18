@@ -155,6 +155,12 @@
 
     <div class="card">
       <div class="k">TERMS — a change creates a new version; periods already accrued keep the old one</div>
+      <!-- POKEAHOE rehearsal §4 (docs/POKEAHOE_REHEARSAL_2026-09.md): a fresh/dry-run project needs
+           a funding wallet set on the registry (an owner-only, /api/hub-registry action, not part
+           of this desk) BEFORE terms can be published at all — undocumented before this, so SAVE
+           just threw a raw "fundedBy entry is not an address: null". Said here, up front, with the
+           exact next step, instead of waiting for that error. -->
+      <div class="muted bad" id="fundingWarn" style="margin-bottom:10px" hidden></div>
       <div class="grid2">
         <div><label>Daily pool (whole reward tokens)</label><input type="number" id="tPool" min="0" step="any"/></div>
         <div><label>Minimum amount (whole tokens)</label><input type="number" id="tMin" min="0" step="any"/></div>
@@ -364,6 +370,12 @@
   function whole(raw, dec) { var s = String(raw || "0"); while (s.length <= dec) s = "0" + s; var ip = s.slice(0, s.length - dec), fp = s.slice(s.length - dec).replace(/0+$/, ""); return fp ? ip + "." + fp : ip; }
   function toRaw(v, dec) { var s = String(v || "0").trim(); if (!/^\d*(\.\d*)?$/.test(s)) throw new Error("not a number: " + s); var parts = s.split("."), ip = parts[0] || "0", fp = (parts[1] || "").slice(0, dec); while (fp.length < dec) fp += "0"; return (ip + fp).replace(/^0+(?=\d)/, "") || "0"; }
   function renderTermsForm() {
+    // POKEAHOE rehearsal §4: say the funding-wallet prerequisite up front, with the exact next
+    // step, rather than letting SAVE/PREVIEW fail with a raw validation error first.
+    var noFunding = !(DESK.project && DESK.project.fundingWallet);
+    $("fundingWarn").hidden = !noFunding;
+    if (noFunding) $("fundingWarn").textContent = "This project has no funding wallet on its registry record yet — terms cannot be published until the owner sets one: POST /api/hub-registry?id=" + PID + "&fundingWallet=<the project's own wallet>.";
+    $("saveTerms").disabled = noFunding; $("previewTerms").disabled = noFunding;
     var v = (DESK.versions || [])[DESK.versions.length - 1]; var t = v ? v.terms : {};
     $("tPool").value = t.poolDailyRaw != null ? whole(t.poolDailyRaw, DEC) : ""; $("tMin").value = t.minLockRaw != null ? whole(t.minLockRaw, DESK.project.decimals) : "0";
     $("tMinDays").value = t.minDurationDays || 30; $("tMaxDays").value = t.maxTermDays || 365;

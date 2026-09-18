@@ -211,6 +211,27 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 16** — the POKEAHOE rehearsal end to end with `dryRun` kept on (the dry-run
+  project taken from placeholder terms through preview, Launch Readiness, the refusal at export
+  and send, and every public page, against a local boot of the merged tree; the write-up names
+  the staging URLs, what confused, the sequence for the real go with the arming step named and
+  not performed, and a terms-sheet template with no numbers); roadmap Extension 11; the
+  2026-09-18 handoff. PR #355.
+- **Colosseum batch 15** — roadmap Extension 10 (the rehearsal before anyone real is on the other
+  side); docs drift round 4 (the Codex brief through #350–#352 and the journal's rounds 3–5; the
+  reviewer's path in `docs/HUB_VERIFY.md` names every public surface since batch 9; the trust page
+  and the verify doc corrected: the settlement journal IS the live path for Hub payouts since #342,
+  while CUNA's own payouts still run on the older dedicated handler); storyboard Part 4 with
+  fourteen real captures and an inventory test in CI. PR #353.
+- **Colosseum batch 14** — the four P1s from the public-surfaces lens closed with regression tests
+  (`/hub/verify` refuses receipt URLs from any origin but our own; amounts in token units; the
+  heaviest Hub reads rate-limited with a bounded wallet-lookup cache; `/api/track` no longer mints
+  per-project keys for unknown ids); `/hub/glossary` — every term and reason code from one source
+  in seven languages, with a drift test; a load proof for the public reads (fixture generator,
+  `scripts/hub-load-smoke.cjs`, before/after numbers in `docs/HUB_LOAD_2026-09-18.md`, a reduced
+  run in CI); the validation doc filled from milestone timestamps; and preview-before-publish on
+  the operator desk — a draft's terms run through the same validate/version/accrue code the real
+  publish uses, showing who would qualify today, with nothing written. PR #352.
 - **The settlement journal as the live payout path (#342, the W3 integration gate)** — on its
   own PR because it is a money path: journal-first settlement with exact-amount matching (a
   transfer settles a row only when its amount equals what the row is owed), the transfer source

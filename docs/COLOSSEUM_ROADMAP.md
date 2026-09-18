@@ -533,7 +533,7 @@ lens). Nothing here needs a wallet, a new secret or a live engine.
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke; the npm publish for DD1.
 
-## 15. Extension 9 — 2026-09-18 evening (DD1–DD5 landed on batches 12–13; EE2, EE3, EE5 building; EE1 after #342; EE4 on the owner's go)
+## 15. Extension 9 — 2026-09-18 evening (EE1, EE2, EE3, EE5 landed on batch 14; EE4 on the owner's go)
 
 Twelve batches in. The holder side is covered (read, reproduce, share, print, follow); the
 judge side is covered (guide, status, trust, badge); the money path is under its fourth lens.
@@ -552,3 +552,46 @@ limits assert but nothing measures.
 
 **Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
 terms; the Sep 20 recording; the real-wallet smoke; the npm publish for DD1; the go for EE4.
+
+
+## 16. Extension 10 — 2026-09-18 night (FF1, FF2 landed on batch 15; FF3, FF4 on batch 16; FF5 = X6 on PR #354 under two lenses)
+
+With #342 the settlement journal becomes the live payout path, and the Hub's public record is
+finally what the pitch says it is. Extension 10 is the rehearsal before anyone real is on the
+other side: the docs that describe the code have to catch up with fourteen batches, the demo has
+to show the pages that exist now, and the first real program has to be walked end to end on
+staging with a dry-run flag so the night it happens for real is not the first time.
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **FF1** | **Docs drift round 4.** `docs/CODEX_REVIEWER_BRIEF.md` Round 4 for #351–#352 and the journal's rounds 3–5 (what to read, the pinning test, the reviewer's questions); `docs/HUB_VERIFY.md` names the feeds, the glossary, the print sheet, the compare page and the `npx` verifier in the reviewer's path; `docs/JUDGE_GUIDE.md` (and the regenerated `/hub/judge`) points at them per criterion; every drift test stays green. | Founder Communication | All three drift tests green; every claim checked against the merged tree; no yield language. |
+| **FF2** | **Storyboard Part 4.** Real captures (390×844 and 1280×800, under 300 KB) of the compare page, the print sheet, the glossary, a feed rendered in a reader, the wallet roll-up with a seeded two-project fixture, and the badge on `/hub/status`; matching narration lines; the capture inventory count corrected. | Founder Communication | Every capture is of the merged tree with DRY RUN labels visible where they apply; the storyboard's inventory equals the folder listing (a test). |
+| **FF3** | **The pitch and demo scripts, refreshed to the second.** `docs/PITCH_SCRIPT.md` and `docs/DEMO_NARRATION.md` re-timed against the final surface set (verify, wallet, compare, print, glossary, feeds, the journal as the live path), the disclosure paragraph updated to the batch count, every claim re-checked against `develop`; a one-page "what to click, in order" for the recording session. | Founder Communication | Every claim true on `develop`; the timings sum to under three minutes for the demo and under three for the pitch; nothing promised about Normie Quest terms or yields. |
+| **FF4** | **The POKEAHOE rehearsal, end to end on staging.** With `dryRun` kept on (nothing pays, nothing counts): publish a real-shaped program version for POKEAHOE from the operator desk, run Launch Readiness, let the accrual tick create credits from the dry-run holder set, build a batch and watch the dry-run refusal at `&send=`, open the resulting public pages (program, compare, wallet, feed, receipt-less batch), and write `docs/POKEAHOE_REHEARSAL_2026-09.md` with what worked, what confused, and the exact sequence for the real go, plus the terms sheet template the owner fills with the POKEAHOE team. | Founder+Market Fit, Product | Every step captured; the doc names each surface's URL on staging; no real transfer is possible by construction (dry run asserted before every write); the terms template has no numbers in it. |
+| **FF5** | **X6 / CC5 browser-signed payout** — building on its own PR now that #342 and batch 14 are in; two Opus lenses before merge, as for every money path. | Viability | As in §8 X6. |
+
+**Owner-side, unchanged:** promote (after batch 14 closes the lens's P1s); the first on-chain
+commitment; the interviews and POKEAHOE terms; the Sep 20 recording; the real-wallet smoke; the npm
+publish for the verifier; the go for the weekly-update routine.
+
+## 17. Extension 11 — 2026-09-18 night (Extension 10 in flight on batch 16 and PR #354)
+
+Fifteen batches and the first money-path PR under its lenses. The public side has been through
+one adversarial pass (DD5) and the journal through five; the **operator side** — the desk, the
+application, the pay page, the preview, the terms writes — has had none, and it is where an
+operator's mistake or a hostile operator's move would land. Extension 11 closes that, turns the
+rehearsal's confusion list into fixes, gives a holder a way to follow their own receipts, and
+executes the Sep 19 refresh the calendar owes.
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **GG1** | **The Sep 19 refresh, executed.** `docs/ARENA_POSTS.md` round 4 for #352–#355; `docs/WEEKLY_UPDATE_2026-09-20.md` regenerated from the record by `scripts/weekly-update-draft.cjs` the night before, with the owner's three bullets left as the only blanks; the E9 checklist ticked line by line. | Founder Communication | Every shipped item named in the drafts exists on `develop`; no yield language; nothing about Normie Quest terms. |
+| **GG2** | **Operator-surfaces lens.** A read-only Opus pass over the desk, `/hub/apply`, the pay page, the preview route, Launch Readiness and every terms/brand write: auth boundaries (operator A on project B), lapsed handling, token and secret leakage, what the browser is trusted with, escape-before-innerHTML, rate limits. Report to `docs/HUB_OPERATOR_SURFACES_VERIFY_2026-09-18.md`; P0/P1 fixed with regression tests before the next promote ask; P2/P3 listed, never verified twice. | Viability, Product | Zero open P0/P1 on the report; each fix line names its test. |
+| **GG3** | **Desk fix round from the rehearsal.** Every "what confused" line in `docs/POKEAHOE_REHEARSAL_2026-09.md` becomes a fix on the desk, the readiness card or the preview card (a label, a default, an extra click), or a one-line reason it stays. Seven languages where copy changes. | Product | The rehearsal doc's confusion list carries a resolution per line; `hub-preview-test` and `hub-readiness-test` green. |
+| **GG4** | **Follow your own receipts.** `GET /api/hub/wallet/:wallet/feed.json` and `/hub/wallet/:wallet/feed.xml` — the holder's receipts and settled rows across every project, from the public view only, same bounds and caching as the project feeds; a "follow this wallet" link on `/hub/wallet/:wallet`; a test that the feed never carries a project that is dry-run or a row that is not settled. | Product, Potential Impact | Feed validates; the wallet page links it; seven languages for the one new label. |
+| **GG5** | **The holder on-ramp strip.** On every `/hub/:project` page, one strip — "Check this yourself" — linking the receipt lesson, `/hub/verify`, the glossary, the wallet roll-up and the project feed, in seven languages, phone-first, in the a11y gate. | Educate (the theme), UX | The strip renders on the demo and the POKEAHOE dry run; a11y green; the storyboard gains one capture. |
+
+**Owner-side, unchanged:** promote; the first on-chain commitment; the interviews and POKEAHOE
+terms; the Sep 20 recording; the real-wallet smoke; the npm publish for the verifier; the go for
+the weekly-update routine.
+

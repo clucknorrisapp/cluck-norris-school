@@ -20,6 +20,10 @@ being true.
    inputs, with no server call once the page has loaded. Pinned by `scripts/hub-verify-page-test.cjs`.
 4. `/hub/schema/receipt.json` — the exact JSON Schema a receipt's own wire shape validates
    against, served byte-identical to the file in this repo. Pinned by `scripts/hub-schema-test.cjs`.
+5. `/hub/cuna/programs/compare` — two program versions diffed field by field (term, multiplier,
+   eligibility rule, period, budget) in plain words, computed in the browser from the same public
+   JSON the pages above already serve — nothing new on the wire. Pinned by
+   `scripts/hub-compare-test.cjs`.
 
 ## Potential Impact
 
@@ -33,6 +37,10 @@ being true.
    gated behind a key. Pinned by `scripts/hub-public-test.cjs`.
 4. `/hub/status` — every project's programs, receipts and reproducibility ratio in one place, next
    to the exact git commit the running server was built from. Pinned by `scripts/hub-status-test.cjs`.
+5. `/api/hub/cuna/feed.json` and `/hub/cuna/feed.xml` — every program version published, batch
+   settled, holder snapshot taken and commitment observed, newest first, so a project's own
+   community can follow the record with an RSS/JSON-Feed reader instead of a wallet. Pinned by
+   `scripts/hub-feed-test.cjs`.
 
 ## Novelty
 
@@ -59,6 +67,10 @@ being true.
    wallet or a payment is ever asked for. Pinned by `scripts/hub-apply-test.cjs`.
 4. `/hub/trust` on a phone — tap targets, heading order and no horizontal scroll on the page a
    judge is most likely to open on a phone first. Pinned by `scripts/hub-a11y-test.cjs`.
+5. `/hub/demo/r/rcpt-a?print=1` — the same receipt rendered as one printable page: the amount, the
+   rule, the settlement signature as text and as a QR code, and the trust-boundary line, so a
+   holder can keep a paper copy without needing this site again. Pinned by
+   `scripts/hub-print-test.cjs`.
 
 ## Open-source and composability
 
@@ -90,6 +102,12 @@ being true.
    named, never polished to look complete. Pinned by `scripts/hub-status-test.cjs`.
 4. `/api/build` — the exact git commit and branch behind everything above, so nothing here is a
    mockup a judge is being asked to take on faith. Pinned by `scripts/hub-status-test.cjs`.
+5. `/api/hub/cuna/reproducibility/history` — the reproducibility ratio recorded daily, not just
+   read fresh today, so a regression would be visible the day it happened rather than smoothed
+   into a single current number. The same public reads were driven at a 50-project x 200-receipt
+   load and measured against a stated latency budget (`docs/HUB_LOAD_2026-09-18.md`) rather than
+   asserted to scale. Pinned by `scripts/reproducibility-history-test.cjs` and
+   `scripts/hub-load-smoke.cjs`.
 
 ## What was here before the window
 

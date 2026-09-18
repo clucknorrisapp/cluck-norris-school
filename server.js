@@ -8849,10 +8849,9 @@ app.get("/hub/judge", (req, res) => { res.sendFile(join(__dirname, "public", "hu
 // receipt, the wallet look-up, the compare page, the standings or a lesson can show, defined in
 // plain words. Same ordering reason as /hub/verify, /hub/wallet, /hub/trust and /hub/judge above:
 // registered BEFORE the generic /hub/:project pattern below, or "glossary" would be read as a
-// project id and served hub.html instead. NOTE (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md
-// P2-05): "glossary" is not yet in a RESERVED_PROJECT_IDS list on this tree — that list lands with
-// the settlement-journal branch's merge, and "glossary" must join it then, the same way
-// verify/status/trust/judge/apply already should.
+// project id and served hub.html instead. "glossary" is also in lib/hub/project.js
+// RESERVED_PROJECT_IDS (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md P2-05, landed with #342), so
+// no project can ever be created under that id; scripts/hub-reserved-ids-test.cjs pins it.
 app.get("/hub/glossary", (req, res) => { res.sendFile(join(__dirname, "public", "hub-glossary.html")); });
 
 // ── Y4: shareable Hub pages — server-rendered Open Graph / Twitter Card meta (Colosseum roadmap
