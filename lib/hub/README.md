@@ -45,8 +45,15 @@ see **What is NOT independently verified yet** below.
 - **Receipts** (`lib/hub/ledger.js` `receipt`) — Addendum B3: an **append-only aggregate** per
   (batch, wallet) with one immutable `settlements[]` entry per journal event. A 100-owed row paid
   as 40 + 40 + 20 carries three entries; `totals.appliedRaw` is their sum, never any one of them.
-  Overpayment is shown as `totals.excessRaw`, never floored away and never credited toward another
-  row or wallet. `receipt.schema.json`.
+  The pure ledger's `settle()` can still compute `excessRaw` (capping an oversized transfer's
+  applied amount and reporting the rest as excess) — this is exercised only by its own unit tests
+  now. Every LIVE route call (`lib/hub/settle.js` `settleAndPersist`, used by every branch of
+  `POST /api/hub/:project/payout`) settles with `exactOnly: true`, so a settlement is recorded only
+  when its verified amount equals the row's remaining EXACTLY — an oversized or undersized transfer
+  is refused (`amount_mismatch`) rather than partially applied (Round 3, docs/
+  HUB_JOURNAL_VERIFY_2026-09-18.md #1). `totals.excessRaw`/`settlements[].excessRaw` are therefore
+  always `"0"` on anything a live request ever writes; `paidFrom` names the verified source wallet
+  when it differs from `fundingWallet` (Round 3 N3). `receipt.schema.json`.
 
 ## 2. The invariants (Addendum B — do not relax these without a design PR first)
 
@@ -61,9 +68,14 @@ see **What is NOT independently verified yet** below.
    ambiguous/batched transaction — see §5) is not "already journaled" and can still be voided.
    Voiding is otherwise unchanged: the exact signature is required, the amount comes off `paid`,
    and a completed batch reopens for a re-send of that one row.
-2. **Overpayment is kept as `excess`, never netted across wallets.** `paidApplied =
-   min(paidTotal, accrued)`; `excess = paidTotal − paidApplied`. Wallet A's excess can never hide
-   wallet B's unpaid amount — obligations are `Σ(accrued − paidApplied)`, a per-wallet sum.
+2. **Overpayment is kept as `excess`, never netted across wallets — and, on the live route path,
+   never reachable at all.** `paidApplied = min(paidTotal, accrued)`; `excess = paidTotal −
+   paidApplied` remains true of the pure ledger arithmetic and its own unit tests. Every live
+   settlement goes through `settle()`'s `exactOnly` mode (Round 3 #1), which refuses
+   (`amount_mismatch`) rather than caps a transfer that is not exactly the row's remaining, so a
+   route-written entry's `excessRaw` is always `"0"`. Wallet A's excess (where it can still occur,
+   in a direct pure-ledger caller) can never hide wallet B's unpaid amount — obligations are
+   `Σ(accrued − paidApplied)`, a per-wallet sum.
 3. **Settlement entries are append-only, per transfer.** Nothing on a receipt is ever rewritten or
    removed; a partial payment narrows what remains, it never replaces what already landed.
 4. **Terms are measured forward from our own `firstSeenAt`, never from `vesting_start_time`.** This

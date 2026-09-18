@@ -474,9 +474,15 @@
           return '<li><div class="fact">' + txLink(s.sig) + ' — ' + amt(rawAmount(s.appliedRaw, raw.rewardDecimals, 9), sym) + ' · ' + ts(s.at * 1000) + '</div></li>';
         }).join('') + '</ul>'
       : '';
+    // N3 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 3): a settlement can land from an
+    // allowlisted `payoutSources` wallet other than the project's own funding wallet — show it
+    // rather than let the receipt look indistinguishable from a funding-wallet payment. Only the
+    // journal-backed (Addendum B3) shape carries `paidFrom`; the legacy shape never sets it.
+    var paidFromLine = (isJournal && raw.paidFrom && raw.fundingWallet && raw.paidFrom !== raw.fundingWallet)
+      ? '<div><b>Paid from</b> ' + acct(raw.paidFrom) + '</div>' : '';
     app.innerHTML = (r.dryRun ? '<div class="card">' + dryRunBadge() + '</div>' : '') +
       '<div class="card">' + statTiles([['Amount', amt(x.amountUi, sym)], ['State', esc(x.state)], ['Submitted', ts(x.at)]]) +
-      '<div class="terms" data-clkn-avoid-kids="1"><div><b>To</b> ' + acct(x.wallet) + '</div><div><b>Token</b> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(p.prizeMint || p.mint) + '">' + esc(shortAddr(p.prizeMint || p.mint, 6, 4)) + '</a></div><div><b>Program</b> ' + esc(p.label || p.kind) + '</div>' + (p.termsHash ? '<div><b>Terms hash</b> <span class="mono">' + esc(p.termsHash.slice(0, 16)) + '…</span></div>' : '') + '</div>' +
+      '<div class="terms" data-clkn-avoid-kids="1"><div><b>To</b> ' + acct(x.wallet) + '</div><div><b>Token</b> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(p.prizeMint || p.mint) + '">' + esc(shortAddr(p.prizeMint || p.mint, 6, 4)) + '</a></div><div><b>Program</b> ' + esc(p.label || p.kind) + '</div>' + paidFromLine + (p.termsHash ? '<div><b>Terms hash</b> <span class="mono">' + esc(p.termsHash.slice(0, 16)) + '…</span></div>' : '') + '</div>' +
       '<div class="sec-title" data-clkn-avoid="1">Transaction</div><div class="mono"><a target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(x.sig) + '">' + esc(x.sig) + '</a></div>' +
       settlementsBlock +
       '<div class="verify-bar" data-clkn-avoid="1"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote"><span class="verify" data-sig="' + esc(x.sig) + '"><span class="small">not checked</span></span></span></div>' +
