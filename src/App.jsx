@@ -172,6 +172,22 @@ function HubBridge({lesson:l,hubFrom}){
   );
 }
 
+// Colosseum W9 part 2: the generic front door to the Hub demo — shown on the school landing
+// AND every lesson's finish screen, unlike HubBridge above which only bridges the six locking
+// lessons to a real project's page. This one point at the no-wallet DRY RUN fixture (/hub/demo,
+// E2) so a learner who hasn't reached a locking lesson yet — or never will — still sees the
+// Educate → Earn bridge once. Fires `hub_door_click:school` (POST /api/track, lib/traction.js
+// recordHubDoorClick) so W9's report can count learners who crossed over, denominated against
+// /school's own page views. STORE carries no Hub at all, so this folds out entirely at build
+// time — same `STORE ? null : …` pattern as HubBridge/LESSON_TOOLS.
+function HubDemoDoor(){
+  return STORE ? null : (
+    <div style={{background:"rgba(103,232,249,0.05)",border:"1px solid rgba(103,232,249,0.16)",borderRadius:12,padding:"10px 14px",margin:"0 0 14px",textAlign:"left"}}>
+      <a href="/hub/demo" onClick={()=>track("hub_door_click:school")} style={{display:"block",color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"See how a project's rewards are actually paid"} →</a>
+    </div>
+  );
+}
+
 const LESSONS = [
   // ── EXISTING (expanded questions) ──────────────────────────
 
@@ -1280,6 +1296,11 @@ function Landing({onStart,onIncubator,onStartHere,onClaim,completed}){
         </>)}
       </div>
 
+      {/* Colosseum W9 part 2: the front door to the Hub demo for existing learners — see
+          HubDemoDoor's own comment above. Sits on the landing so it reaches everyone, not
+          only learners who finish a lesson. */}
+      <HubDemoDoor/>
+
       {/* Incubator — beginners */}
       <button onClick={onIncubator} style={{width:"100%",boxSizing:"border-box",background:"rgba(255,122,24,0.08)",border:"2px solid rgba(255,122,24,0.4)",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FF7A18",letterSpacing:2,cursor:"pointer",marginBottom:4}}>
         🥚 CLKN INCUBATOR — NEW? START HERE
@@ -1442,6 +1463,7 @@ function Lesson({lesson:l,onComplete,onBack,hubFrom}){
       </div>
       <LessonLinks lesson={l}/>
       <HubBridge lesson={l} hubFrom={hubFrom}/>
+      <HubDemoDoor/>
       <div style={{display:"flex",gap:10}}>
         {!passed&&<button onClick={retry} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,color:"#D1D5DB",cursor:"pointer",letterSpacing:2}}>↩ RETAKE</button>}
         <button onClick={()=>onComplete(l.id,passed)} style={{flex:2,background:passed?`#FF7A18`:"rgba(239,68,68,0.2)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:2,boxShadow:passed?`0 0 20px ${l.glow}`:"none"}}>
