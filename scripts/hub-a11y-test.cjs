@@ -292,8 +292,11 @@ async function auditPage(browser, pagePath, pageName) {
     const W = (n) => `Wallet${String(n).padStart(6, "0")}xxxxxxxxxxxxxxxxxxxxxxxxxxxx`.slice(0, 44);
     const fromTop = [{ wallet: W(0), amount: 500 }, { wallet: W(1), amount: 300 }, { wallet: W(2), amount: 100 }];
     const toTop = [{ wallet: W(0), amount: 650 }, { wallet: W(1), amount: 300 }, { wallet: W(3), amount: 50 }];
-    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now() - 86400000, holderCount: 10, top: fromTop, totalSupplyRaw: "10000", fullList: fromTop });
-    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now(), holderCount: 11, top: toTop, totalSupplyRaw: "10200", fullList: toTop });
+    // P2-06 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): decimals seeded on both snapshots so
+    // the Compare panel's supply-delta conversion has what it needs without a live crawl — the
+    // exact gap that finding closed.
+    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now() - 86400000, holderCount: 10, top: fromTop, totalSupplyRaw: "10000", fullList: fromTop, decimals: 9 });
+    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now(), holderCount: 11, top: toTop, totalSupplyRaw: "10200", fullList: toTop, decimals: 9 });
 
     const env = { ...process.env, PORT: String(PORT), DATA_DIR: DIR, TOOLGATE_OFF: "1",
       TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", HELIUS_API_KEY: "", MM_OPERATOR_SECRET: "", MM_OPERATOR_SECRET_TREASURY: "",

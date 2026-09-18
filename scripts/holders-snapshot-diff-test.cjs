@@ -75,37 +75,37 @@ const W = (n) => `Wallet${String(n).padStart(6, "0")}xxxxxxxxxxxxxxxxxxxxxxxxxxx
   });
   t("W3 entered at its rank in `to`", () => {
     assert.strictEqual(fixtureDiff.top.entered.length, 1);
-    assert.deepStrictEqual(fixtureDiff.top.entered[0], { wallet: W(3), amountRaw: "50", rank: 3 });
+    assert.deepStrictEqual(fixtureDiff.top.entered[0], { wallet: W(3), amountUi: "50", rank: 3 });
   });
   t("W2 exited at its rank in `from`", () => {
     assert.strictEqual(fixtureDiff.top.exited.length, 1);
-    assert.deepStrictEqual(fixtureDiff.top.exited[0], { wallet: W(2), amountRaw: "100", prevRank: 3 });
+    assert.deepStrictEqual(fixtureDiff.top.exited[0], { wallet: W(2), amountUi: "100", prevRank: 3 });
   });
   t("W0 held with a positive delta (grew), W1 excluded (unchanged)", () => {
     assert.strictEqual(fixtureDiff.top.held.length, 1);
-    assert.deepStrictEqual(fixtureDiff.top.held[0], { wallet: W(0), fromRaw: "500", toRaw: "650", deltaRaw: "150", fromRank: 1, toRank: 1 });
+    assert.deepStrictEqual(fixtureDiff.top.held[0], { wallet: W(0), fromUi: "500", toUi: "650", deltaUi: "150", fromRank: 1, toRank: 1 });
   });
   t("holderCountDelta and supplyDelta are correct signed strings/numbers", () => {
     assert.strictEqual(fixtureDiff.holderCountDelta, 1);
     assert.strictEqual(fixtureDiff.supplyDelta, "200");
   });
-  t("a shrinking wallet gets a negative deltaRaw", () => {
+  t("a shrinking wallet gets a negative deltaUi", () => {
     const shrinkFrom = [{ wallet: W(9), amount: 1000 }];
     const shrinkTo = [{ wallet: W(9), amount: 400 }];
     const d = holders.diffSnapshots(
       { id: "a", at: 1, listHash: "h1", holderCount: 1, totalSupplyRaw: "1", top: shrinkFrom },
       { id: "b", at: 2, listHash: "h2", holderCount: 1, totalSupplyRaw: "1", top: shrinkTo },
     );
-    assert.strictEqual(d.top.held[0].deltaRaw, "-600");
+    assert.strictEqual(d.top.held[0].deltaUi, "-600");
   });
 
   section("diffSnapshots — reconciliation (BigInt sums)");
   t("sum(to.top) - sum(from.top) == sum(entered) - sum(exited) + sum(held deltas)", () => {
     const sumTop = (top) => top.reduce((s, h) => s + BigInt(Math.round(h.amount)), 0n);
     const sumFrom = sumTop(fromTop), sumTo = sumTop(toTop);
-    const sumEntered = fixtureDiff.top.entered.reduce((s, r) => s + BigInt(r.amountRaw), 0n);
-    const sumExited = fixtureDiff.top.exited.reduce((s, r) => s + BigInt(r.amountRaw), 0n);
-    const sumHeldDelta = fixtureDiff.top.held.reduce((s, r) => s + BigInt(r.deltaRaw), 0n);
+    const sumEntered = fixtureDiff.top.entered.reduce((s, r) => s + BigInt(r.amountUi), 0n);
+    const sumExited = fixtureDiff.top.exited.reduce((s, r) => s + BigInt(r.amountUi), 0n);
+    const sumHeldDelta = fixtureDiff.top.held.reduce((s, r) => s + BigInt(r.deltaUi), 0n);
     assert.strictEqual((sumTo - sumFrom).toString(), (sumEntered - sumExited + sumHeldDelta).toString());
   });
   t("the identity still holds when an unchanged wallet is present (W1, excluded from held)", () => {
@@ -136,8 +136,27 @@ const W = (n) => `Wallet${String(n).padStart(6, "0")}xxxxxxxxxxxxxxxxxxxxxxxxxxx
     assert.strictEqual(holders.diffSnapshots(a, b).supplyDelta, null);
   });
   t("from/to carry the honest head fields only", () => {
-    assert.deepStrictEqual(Object.keys(fixtureDiff.from).sort(), ["at", "holderCount", "id", "listHash", "totalSupplyRaw"].sort());
-    assert.deepStrictEqual(Object.keys(fixtureDiff.to).sort(), ["at", "holderCount", "id", "listHash", "totalSupplyRaw"].sort());
+    assert.deepStrictEqual(Object.keys(fixtureDiff.from).sort(), ["at", "decimals", "holderCount", "id", "listHash", "totalSupplyRaw"].sort());
+    assert.deepStrictEqual(Object.keys(fixtureDiff.to).sort(), ["at", "decimals", "holderCount", "id", "listHash", "totalSupplyRaw"].sort());
+  });
+
+  section("P2-06 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md) — decimals carried on the record");
+  t("appendSnapshot records the mint's decimals when given one", () => {
+    const kv = memoryKv();
+    const top = [{ wallet: W(0), amount: 500 }];
+    const { record } = holders.appendSnapshot(kv, { mint: MINT, at: 1000, holderCount: 1, top, totalSupplyRaw: "10000", fullList: top, decimals: 9 });
+    assert.strictEqual(record.decimals, 9);
+    const diff = holders.diffSnapshots(record, record);
+    assert.strictEqual(diff.from.decimals, 9);
+    assert.strictEqual(diff.to.decimals, 9);
+  });
+  t("a snapshot recorded with no decimals (pre-fix, or a caller that never learned them) reports null, never a guess", () => {
+    const kv = memoryKv();
+    const top = [{ wallet: W(0), amount: 500 }];
+    const { record } = holders.appendSnapshot(kv, { mint: MINT, at: 1000, holderCount: 1, top, totalSupplyRaw: "10000", fullList: top });
+    assert.strictEqual(record.decimals, null);
+    const diff = holders.diffSnapshots(record, record);
+    assert.strictEqual(diff.from.decimals, null);
   });
 })();
 

@@ -63,6 +63,25 @@ t("a mint registered twice is refused", () => {
   assert.throws(() => proj.approveProject(reg, B, { nowUnix: NOW }), /already registered as project "alpha"/);
 });
 
+section("1b. P3-09 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md) — label strips bidi/format overrides");
+
+t("a Unicode bidi override (RLO) prefixing a label is stripped before length/emptiness checks run", () => {
+  const rlo = "‮"; // RIGHT-TO-LEFT OVERRIDE — invisible in almost every editor/approval UI
+  const p = proj.validateProject({ id: "rlotest", label: rlo + "evil", symbol: "RLO", mint: W.MINT1, fundingWallet: W.FUND }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  assert.strictEqual(p.label, "evil", "the override character must not survive into the stored label");
+  assert.ok(!p.label.includes(rlo));
+});
+
+t("a label that is ONLY bidi/format characters is refused as empty, not silently approved", () => {
+  const onlyBidi = "​‮⁩﻿"; // zero-width space, RLO, PDI, BOM
+  assert.throws(() => proj.validateProject({ id: "emptylabel", label: onlyBidi, symbol: "EMP", mint: W.MINT1, fundingWallet: W.FUND }, { decimals: 9, tokenProgram: TOK, extensions: [] }), /label is required/);
+});
+
+t("a bidi character embedded mid-label is stripped too, not just a leading one", () => {
+  const p = proj.validateProject({ id: "midbidi", label: "Good" + "‪" + "Label", symbol: "MID", mint: W.MINT1, fundingWallet: W.FUND }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  assert.strictEqual(p.label, "GoodLabel");
+});
+
 section("2. decimals");
 
 t("decimals come from the mint read, never typed; 6- and 9-decimal projects carry their own", () => {
