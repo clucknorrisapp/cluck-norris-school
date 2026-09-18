@@ -578,6 +578,229 @@ merged to `develop`). Summarising only — this pass did not re-verify anything 
 - `node scripts/weekly-update-draft-test.cjs` → all passed (13 passed)
 - `node scripts/check-counts.js` → curriculum counts consistent — 15 classes, 7 beginner lessons, 14 LP Lab lessons
 
+## Round 4 — 2026-09-18 (FF1, docs drift round 4): batches 12–14 and #342's journal rounds 3–5
+
+Written from the merged tree (`claude/colosseum-batch-14`, which carries `#342`'s five verification
+rounds and everything through batch 14). One correction to the roadmap's own batch labelling before
+the detail: **DD1 (the npx verifier) shipped in batch 12 (PR #350), not batch 13** — `git log
+origin/develop` shows `4a1475b` ("… @clkn/hub-verify npx package (DD1) (#350)") landing before
+`2be6afb` ("Colosseum batch 13: follow-a-project feeds (DD2) … (#351)"). `docs/COLOSSEUM_ROADMAP.md`
+§14's own heading already says as much ("DD1 landed on batch 12"); only the loose shorthand of
+grouping "DD1–DD5" under one line invites the mix-up. Batch 14 itself has not been squash-merged to
+`develop` as a numbered PR yet at the time of this pass (`origin/develop` HEAD is still `34c7ecc`,
+the journal merge) — everything below it is reviewed on the open branch.
+
+### PR #350 — batch 12 (DD1 npx verifier, CC1 program compare, CC2 `/hub/verify` ×7 languages,
+CC4 reproducibility history, the evidence-bundle program-hash fix)
+
+**DD1 — `packages/hub-verify`.** Read `packages/hub-verify/package.json`, `bin/hub-verify.cjs`,
+and `scripts/build-hub-verify-package.cjs` (the script that copies `lib/hub/reproduce.js` etc. into
+the package rather than hand-duplicating them — confirm it is a copy step, not a second
+implementation). Pinned by `scripts/hub-verify-package-test.cjs` (asserts the CLI, the repo script
+and the browser bundle agree on every fixture) and `scripts/hub-verify-doc-test.cjs`/§(b) of
+`docs/HUB_VERIFY.md`, which now documents it as **not yet published to npm** — the owner's own go.
+Questions: is there any drift point between the three copies (`lib/hub/`, `packages/hub-verify/lib/hub/`,
+the vite-bundled `public/hub-verify.bundle.js`) that the byte-agreement test would miss because it
+only checks *output* on fixtures rather than the *source* files themselves — e.g. a fourth receipt
+kind added to one copy and not the others would still pass today's fixture set silently?
+
+**CC1 — `/hub/:project/programs/compare`.** Read `public/hub-compare.html` and the two
+`GET /api/hub/:project/program/:version` calls it makes client-side (no new server route). Pinned
+by `scripts/hub-compare-test.cjs`. Question: the roadmap DoD says "diffing a version with itself is
+empty" and "every diffed field is one the public document already exposes" — confirm the second
+half holds for a project whose reward asset differs from its locked mint (`rewardMint`/`rewardDecimals`
+fields programVersionView's `{full:true}` shape carries): does the compare page render those two
+fields at all, or would a project that changes its reward asset between versions show no diff line
+for the one field that actually matters most to a holder?
+
+**CC2 — `/hub/verify` in seven languages.** Read `hub-verify-src/entry.js`'s `t()` wrapper and the
+new `HUB_FILES` entry in `scripts/i18n-audit.cjs`. Question: `c98ec35` (the same-day DD5 fix,
+below) changed `/hub/verify` to render UI units instead of raw base units — was that fix applied
+to the ALREADY-TRANSLATED strings (i.e., does a non-English locale still show the corrected units),
+or could a translated string template have hardcoded the old raw-unit phrasing in a way English
+alone got fixed?
+
+**CC4 — reproducibility history + the evidence-bundle hash fix.** Read
+`GET /api/hub/:project/reproducibility/history` (`server.js`, the append-only day-record writer)
+and its sparkline embed on `/hub/status`. Pinned by `scripts/reproducibility-history-test.cjs` and
+`scripts/hub-sparkline-test.cjs`. Separately, this PR also carries `docs/HUB_VERIFY.md`'s own
+documented fix (§d: "Fixed 2026-09-18" — `program/:version` and the bundle route now serve the FULL
+version shape) — confirm that fix and CC4's history feature didn't ship in a way where the history
+route's own hash-of-the-day computation reads the OLD (plain) version shape internally, which would
+make the append-only record itself silently wrong from day one even though the live route serving
+`program/:version` is now correct.
+
+### PR #351 — batch 13 (DD2 feeds, DD3 Arena drafts + weekly update #2, DD4 printable receipt,
+DD5 public-surfaces lens + its own same-day fix round)
+
+**DD2 — `GET /api/hub/:project/feed.json` + `/hub/:project/feed.xml`.** Read `lib/hub/feed.js`
+`buildFeedItems`/`toJsonFeed`/`toRss` and the two routes in `server.js` (~8652, ~8780). Pinned by
+`scripts/hub-feed-test.cjs`. Questions: item ids must be stable across fetches (the roadmap DoD) —
+is an item's id derived from content that can change after publication (e.g. a holder-snapshot
+item keyed on `at` alone vs. one that also folds in `holderCount`, where a later re-crawl at the
+same timestamp — unlikely but not impossible on a fast re-run — would mint a duplicate rather than
+update in place)? Does the feed exclude demo/dry-run projects the same way every other public count
+does (`hubProjects()` never returns `demo`/`demo-b` — confirm `poke`, which IS a real registered id
+with `dryRun:true`, still appears in its own feed, since the dry-run exclusion is about *counts*,
+not about *existing*)?
+
+**DD3 — Arena drafts round 3 + `docs/WEEKLY_UPDATE_2026-09-27.md`.** Read `docs/ARENA_POSTS.md`'s
+"Posting checklist (round 3)" (items 23–36, AA1 through DD1) and `scripts/weekly-update-draft.cjs`'s
+output for the Sep 20→27 window. Pinned by `scripts/weekly-update-draft-test.cjs` (re-ran green,
+below). Question: `docs/WEEKLY_UPDATE_2026-09-27.md` is dated and written on 2026-09-18, **before
+its own covered week has happened** — the doc says so plainly ("that window has not happened yet").
+Is every HOLD-status draft in `ARENA_POSTS.md` round 3 (items 23–36) still actually unposted on
+whatever social surface, or could an item have been posted out of band since this doc was written,
+leaving the doc's own "HOLD" claim stale rather than the code?
+
+**DD4 — the printable receipt.** Read the `#printSheet` block in `public/hub.html` (CSS in the
+`<style>`, the QR draw in `public/hub-qr.js`) and confirm `?print=1` and `@media print` render
+identically (the file's own comment says they must, "CSS has no media-print-OR-this-class
+combinator"). Pinned by `scripts/hub-print-test.cjs`. Questions: the QR encodes the public receipt
+URL only (roadmap DoD) — confirm no query string or fragment from the *viewing* page (e.g. a stray
+`?print=1` or an analytics param) leaks into the encoded URL itself; and confirm the print
+stylesheet's `body > *:not(#printSheet) { display:none }` selector can't be defeated by a project
+label/tagline string containing markup that closes the `#printSheet` div early (the same class of
+bug CC3/AA3 already found elsewhere — CLAUDE.md's "Verification" section).
+
+**DD5 — the public-surfaces lens + its own fix round, same day.** Read
+`docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md` in full — 10 findings (P0: 0, P1: 4, P2: 3, P3: 3),
+every one marked Fixed the same day, including P2-05 which was **deliberately not fixed in this
+report's own pass** because the fix (`RESERVED_PROJECT_IDS`) was already landing via `#342` and a
+second copy would have conflicted — confirmed merged: `lib/hub/project.js` now carries
+`RESERVED_PROJECT_IDS` including `glossary` (added when EE2 shipped after this report was written;
+`server.js`'s own comment at the `/hub/glossary` route still says "not yet in a RESERVED_PROJECT_IDS
+list on this tree" — a stale comment now that the merge landed, worth a one-line cleanup, not a
+finding). The four P1s: **P1-01** (`/hub/verify?receipt=` would fetch and render a verdict from ANY
+origin the link named — trust-surface spoofing on the site's own domain), **P1-02** (raw base units
+printed instead of UI units), **P1-03** (`/api/hub`, `/api/hub/wallet/:wallet`, `/api/hub/:project`
+and the `/hub/:project` share page carried no rate limiter at all — confirmed separately in
+`docs/HUB_LOAD_2026-09-18.md`'s before/after numbers, see below), **P1-04** (`POST /api/track` let
+anyone mint unbounded `hub_lesson_read` project keys and move the traction number). All four have
+their own "Fixed: `<sha>`" line naming the exact commit and test. Your question, since this is the
+adversarial pass reviewing its own fixes on the same day: for P1-01's fix (`c9956f9`,
+`/hub/verify` only reproduces from a trusted origin), does the origin allowlist correctly cover
+BOTH the production and staging hosts (`CLAUDE.md`'s "what's live where" split means a judge could
+be looking at either), or would a staging-hosted receipt link fail the origin check the fix
+introduced?
+
+### Batch 14 (open — EE1 preview-before-publish, EE2 glossary, EE3 load proof, EE5 validation rows)
+
+**EE1 — `POST /api/hub/:project/desk/preview`.** Read `lib/hub/preview.js`'s header (the "not a
+second formula" design: it calls the SAME `proj.createVersion`, `eng.accrueSlice`/`planBudget`, and
+`elig.eligibilityRecord` the live write and Launch Readiness already call, never a reimplementation)
+and the route in `lib/hub/routes.js` (~493–533: same lapsed-project/`mayOperate` gate as the real
+terms write, `limited("hubheavy", …)`). Pinned by `scripts/hub-preview-test.cjs` (22 cases,
+including "app-state.json is byte-identical after ten previews" — a real disk-backed kv, not a
+mock). Your question, as the roadmap item itself asks for: is there any input shape where
+`previewTerms` and the live route's actual next-batch computation could disagree *silently* rather
+than the preview visibly failing — in particular, `previewTerms` "holds today's locks CONSTANT" and
+starts accrual from the draft's own `effectiveFrom` (never re-litigating whether a lock the real
+programme already accepted would still be accepted under the draft) — could a draft that TIGHTENS
+eligibility (not widens it) produce a preview that shows fewer exclusions than a real publish
+actually would, because the constant-locks assumption never re-runs `disqualify()` against locks
+that qualified under the OLD terms but wouldn't be freshly indexed under the new ones?
+
+**EE2 — `/hub/glossary`.** Read `lib/hub/glossary.js` (pure, no operator free text — every entry
+imported from or commented next to the module that emits the code) and `public/hub-glossary.html`.
+Pinned by `scripts/hub-glossary-test.cjs` (544 assertions, re-ran green — see below). The roadmap
+DoD says "a drift test fails if a reason code exists in code without a glossary entry" — your
+question: does that coverage check walk every `disqualify()` branch in `lib/hub/eligibility.js`
+(the actual source of exclusion reason codes a holder sees on `/hub/wallet`), or only the codes
+`glossary.js` itself already lists — i.e., could a NEW reason code added to `eligibility.js` in a
+future PR ship with no glossary entry and no test failure, because the coverage check reads
+`glossary.js`'s own list rather than re-deriving the full set from `eligibility.js` independently?
+
+**EE3 — the load proof.** Read `docs/HUB_LOAD_2026-09-18.md` in full — it is unusually candid: the
+FIRST run (50 projects × 9,832 receipts, before any fix) reports **FAIL**, 7 of 11 routes over
+budget, `/healthz` spiking to **52 seconds** under a 70-wide burst on the three unlimited routes
+(the same P1-03 gap DD5 found and fixed the same day). The AFTER table (same fix round, reduced
+10×516 CI-scale fixture) reports **PASS**, every route inside its 500ms p95 budget, `/healthz` at
+402–422ms — and the CI budget was correspondingly loosened from 250ms to 1000ms for `/healthz`,
+with the doc's own stated reasoning (a burst-queue tail, not the original stalled-event-loop shape).
+Pinned by `scripts/hub-load-fixture.cjs` + `scripts/hub-load-smoke.cjs`, wired into
+`.github/workflows/syntax-check.yml` at the `10 --receipts 50` scale. Your question: the doc is
+explicit that the full 50×200-scale numbers were taken BEFORE the fix and never re-measured after
+it (only the reduced CI-scale fixture was re-run post-fix) — is the reduced fixture's improvement
+(1,400ms → 400ms `/healthz`) representative of what the full-scale fixture would show post-fix, or
+could the per-project view cache the fix added still degrade non-linearly at 50 projects in a way
+the 10-project re-run can't reveal? The doc names this gap itself ("this report does not implement
+that fix" / "no claim is made about... a distribution across hardware") — asking whether that gap
+is acceptable to leave unresolved before the fifteen-minute judge walkthrough, or worth one more
+measurement at the full scale.
+
+**EE5 — validation rows.** Read the new rows in `docs/VALIDATION_2026-09.md` and confirm each
+timestamp traces to a real `/api/traction` milestone rather than a written estimate — the roadmap
+DoD's own bar ("every number traces to a milestone timestamp; the doc names what is still
+unfilled"). No test file pins this one (it's a docs-only item over the traction store); worth
+confirming by hand rather than assuming green.
+
+### #342 (the settlement journal) — rounds 3, 4 and 5, on top of Round 3's summary of rounds 1–2
+
+Round 3 (recorded in `docs/HUB_JOURNAL_VERIFY_2026-09-18.md`) closed the NUL-byte and
+`payoutSources`-allowlist items from round 2 but left **P1-3, the phantom-excess receipt forgery,
+OPEN** — the round-2 fix only closed the ordering where the genuine transfer is submitted first;
+swapping the order in the same `&sent=` array reproduced the exact same forged-`excess` outcome.
+Five new lower-severity findings (N1–N5) came out of round 3: unbounded per-row fraud alerts on one
+request, a suspended-project id takeover, an invisible payout-source allowlist, `&sweep=` accepting
+any vault project's operator wallet, and an orphan-journal key-parsing asymmetry.
+
+**Round 4** (re-verification of round 3's fix) reports the fix as an **exact-amount rule** — a
+settlement now only records when the transfer's amount equals the row's exact remaining balance,
+never a partial-apply-and-staple — and confirms `excessRaw !== "0"` is now unreachable on the live
+route (the only two `L.settle()` callers without `exactOnly` are unwired — `attempts.reconcile`, no
+route calls it, and the in-memory demo fixture). All seven round-3 items CLOSED. Three new findings:
+**N-1** (P2) — the one-summary-alert dedupe watermark was written BEFORE the send resolved, so a
+burst inside one synchronous loop sent one Telegram message per row instead of per request, and
+separately the dedupe key was only 40 characters of free text, collapsing distinct batches (even
+distinct PROJECTS) once a project id ran past ~19 characters; **N-2** (P2) — a suspended, never-
+termed project id was re-issuable via self-serve application and the new owner inherited the OLD
+project's `days`/`paid` ledger (the store-emptiness guard didn't know about the new id-tagged kv
+namespaces the round-3 fix introduced); **N-3** (P3, latent) — a partial row (only reachable via a
+hand-written/backfilled journal entry, not the live path) is permanently unsettleable because
+`&sent=` verification uses the row's FULL amount as `minRaw` while the journal's `exactOnly`
+compares against `remaining`, and the documented owner remedy (`ledger.waiveRemainder`) is wired to
+no route.
+
+**Round 5** (narrow re-check) confirms N-1, N-2 and N-3 all CLOSED on the merged tree — verified
+directly against this tree's code, not just the doc's own claim: `server.js` (~9097–9134) now
+claims the watermark SYNCHRONOUSLY before the async send and deletes it on a falsy result (the
+NEW-1 regression round 5 itself found and fixed the same day — a check→await→set race that briefly
+made the N-1 fix worse, one message per row again); `lib/cuna-payout.js:127` now subtracts
+`b.waived[w]` from the held amount so `owedNow` agrees with the freed partition (NEW-2's fix); and
+`lib/hub/store.js:106-107` now also checks `hub:waive:<id>:` and `hub:quotes:<id>` before declaring
+a project's store empty for re-issue (NEW-3's fix). Three more new findings came out of round 5
+itself (NEW-1, the alert race just described; NEW-2, a waive freeing the desk partition but not
+`owedNow` until the batch is also cancelled — since fixed per the above; NEW-3, an id re-issue
+carrying forward `access`/`milestones`/`payoutSources` from the previous project under that id —
+since fixed per the above). Round 5's own verdict: **merge-ready**, and the journal is in fact now
+merged (see PR #342's own summary line, "five lens rounds, all P0/P1 closed"). Confirmed on this
+tree: `34c7ecc` (the commit `origin/develop` actually carries) has a SINGLE parent (`2be6afb`, the
+batch-13 commit) — it is a squash merge, so the round-by-round commits on `claude/hub-settlement-journal`
+(`55db277`, `332a79c`, `1091ff9`, `41b59ae`, `ae7d80e`, `af9eccf`, …) are not ancestors of it and
+never became `develop`'s HEAD on their own; `develop` went straight from batch-13 to the
+fully-round-5-fixed state in one commit. So there was no window where an intermediate, still-open
+finding (P1-3's phantom excess, N-1's alert-per-row regression, etc.) was live on `develop`. Your
+question, since these five rounds happened in a single day on a moving HEAD (round 5's own header
+notes "HEAD moved under me mid-run" — two more commits landed between rounds 4 and 5, one of them
+a real change to `lib/airdrop-receipt.js` outside the settlement-journal path itself): does anything about squashing five rounds of adversarial review into one commit make the
+individual rounds' own repro steps harder for a future reader to re-run against a specific historical
+state (each round's harness was pinned to a specific pre-squash sha that no longer exists on
+`develop`'s own history), or does `docs/HUB_JOURNAL_VERIFY_2026-09-18.md` itself carry enough
+(commit hashes on the source branch, not `develop`) to still re-run each round exactly?
+
+### Drift tests re-run on this branch (verbatim last line of each)
+
+- `node scripts/hub-verify-doc-test.cjs` → all passed
+- `node scripts/hub-trust-doc-test.cjs` → all passed
+- `node scripts/hub-judge-doc-test.cjs` → all passed
+- `node scripts/hub-judge-link-test.cjs` (live no-build boot) → PASS — 0 failing assertions
+- `node scripts/hub-glossary-test.cjs` → all passed (544 passed)
+- `node scripts/weekly-update-draft-test.cjs` → all passed (13 passed)
+- `node scripts/hub-preview-test.cjs` → all passed (22 passed)
+
+Findings, not rewrites, same rule as every other round.
+
 ## Open questions the owner would like your opinion on
 - Is lock-to-earn on Jupiter Lock the right headline mechanism for a Consumer Apps entry, or is
   the read-only engine dashboard a stronger single story?
