@@ -17479,6 +17479,18 @@ app.get("/theme.css", (req, res) => {
   res.type("text/css");
   res.sendFile(join(__dirname, "public", "theme.css"));
 });
+// The translation dictionaries (public/i18n/<lang>[.school|.locker].json) are fetched by i18n.js at
+// runtime on every page; with no explicit route they exist only through the vite build's copy in
+// dist/, so a no-build boot (the CI render job, `node server.js` on a fresh clone) served 404 and
+// every Hub page silently fell back to English — CC2's es/zh browser test caught it in CI on
+// 2026-09-18. Same trap and same fix as the nav/i18n/read-aloud/theme files above. The name is
+// allowlisted by regex, never taken from the request as a path.
+app.get(/^\/i18n\/([a-z]{2})(\.school|\.locker)?\.json$/, (req, res) => {
+  const name = req.params[0] + (req.params[1] || "") + ".json";
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.type("application/json");
+  res.sendFile(join(__dirname, "public", "i18n", name), (err) => { if (err && !res.headersSent) res.status(404).json({ ok: false, error: "not_found" }); });
+});
 
 // Unified tools pass (owner, 2026-08-18, for the app-store transition): hold $50 worth of
 // CLKN → every heavy tool free; else 0.05 SOL buys a 7-day ALL-TOOLS pass. One client module
