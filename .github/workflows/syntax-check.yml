@@ -489,6 +489,13 @@ jobs:
       # reached, plus the honest empty-template output for a DATA_DIR with no registry at all.
       - name: Validation rows — onboarding-clock table is derived, never guessed (EE5)
         run: node scripts/validation-rows-test.cjs
+      # FF2 (docs/DEMO_STORYBOARD.md Part 4): a dependency-free drift guard — the "Capture
+      # inventory" table's filenames (expanding every {mobile,desktop} pattern) and its own stated
+      # total file count must equal the real listing of docs/demo/2026-09-18/, in both directions
+      # (a file the doc names but the folder lacks, or a file in the folder the doc never
+      # mentions, both fail), and every real file must be at or under the 300 KB budget.
+      - name: Demo storyboard inventory — the doc's capture table matches the real folder (FF2)
+        run: node scripts/demo-storyboard-inventory-test.cjs
 
   # Renders the actual app. The checks above are all static — they cannot see a component that
   # compiles fine and throws on mount, which is how the LP Lab shipped blank to production.

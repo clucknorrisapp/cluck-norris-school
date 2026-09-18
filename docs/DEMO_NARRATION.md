@@ -91,6 +91,21 @@ real, live finding (a structural gap in what the bundle route embeds, not tamper
 `docs/DEMO_STORYBOARD.md`'s incidental-finding note and flagged in `docs/CODEX_REVIEWER_BRIEF.md`
 Round 3, not yet fixed.
 
+## Reference captures — the second batch (FF2, not part of the ≤3:00 video)
+
+`docs/DEMO_STORYBOARD.md` Part 4's Shots 18–24 aren't in the demo video either — the same
+reviewer's-path idea, one line per shot, for whoever narrates a screen-share of this second batch:
+
+| Shot | Screen | Line |
+|---|---|---|
+| 18 | `/hub/<project>/programs/compare` | *"Two program versions, side by side — their hashes, their published dates, and exactly what changed between them in plain words. A holder paid under the old one can see what the new one changes before deciding whether to stay locked."* |
+| 19 | The print sheet, `?print=1` on a receipt | *"The same receipt, laid out to keep on paper — the amount, the settlement signature as text and as a QR code, the program hash. Nothing here needs a screen to check later."* |
+| 20 | `/hub/glossary` | *"Every term and reason code the receipts, the compare page and the wallet view use, defined once, in plain words, and linked from wherever the code actually appears."* |
+| 21 | `/api/hub/<project>/feed.json` | *"A JSON feed of every version published, batch settled and snapshot recorded — so a project can be followed with a feed reader, no wallet, no visit to the site at all."* |
+| 22 | `/hub/<project>/feed.xml` | *"The same events as RSS — the same append-only record, in whichever format a reader's tools already understand."* |
+| 23 | `/hub/wallet/<address>` | *"One wallet, checked against every project on the platform at once — qualified and paid in one, excluded with a reason in another. Nothing here needed the wallet to connect."* |
+| 24 | `/hub/status`, the badge | *"And the number behind all of it, computed live and embeddable anywhere: receipts reproducible, right now, across every project running today."* |
+
 ## Related
 
 - Shot list, capture filenames, and the honesty notes behind each line: `docs/DEMO_STORYBOARD.md`
