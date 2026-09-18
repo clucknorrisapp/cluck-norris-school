@@ -153,12 +153,16 @@ function LessonLinks({lesson:l}){
 }
 
 // E6: the school → Hub bridge — the one Educate→Earn number we can show honestly (a real learner
-// reading real material before a real decision, not a promise of anything paid). These six ids
+// reading real material before a real decision, not a promise of anything paid). Six of these ids
 // are the LESSONS ids lib/hub/teach.js LESSON_MAP maps its six pre-lock questions onto; kept as a
 // literal set here (rather than importing the CommonJS lib into the Vite bundle) and pinned by
 // scripts/hub-teach-test.cjs's C4 guard, which fails the build if any of those ids stops
 // resolving to a real lesson. Update both places together if the lesson map ever changes.
-const LOCK_LESSON_IDS=new Set(["tokenomics","wallets","staking","lp","volatility","rugs"]);
+// Y2 adds a seventh, "receipt" — the post-payment mirror of the other six: they explain what a
+// holder should know BEFORE locking, this one explains what a holder should know AFTER being
+// paid. It is not one of teach.js's six pre-lock questions (nothing to explain before a receipt
+// exists), so it stays out of LESSON_MAP; it only needs the same finish-screen bridge.
+const LOCK_LESSON_IDS=new Set(["tokenomics","wallets","staking","lp","volatility","rugs","receipt"]);
 // The report-card card that offers the bridge. STORE carries no Hub (no wallet, no on-chain
 // programs there) so it folds out entirely at build time — same `STORE ? null : …` pattern
 // src/edition.js documents for LESSON_TOOLS, so the excluded href can't survive into that bundle.
@@ -184,6 +188,22 @@ function HubDemoDoor(){
   return STORE ? null : (
     <div style={{background:"rgba(103,232,249,0.05)",border:"1px solid rgba(103,232,249,0.16)",borderRadius:12,padding:"10px 14px",margin:"0 0 14px",textAlign:"left"}}>
       <a href="/hub/demo" onClick={()=>track("hub_door_click:school")} style={{display:"block",color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"See how a project's rewards are actually paid"} →</a>
+    </div>
+  );
+}
+
+// Y2: the receipt lesson's OWN finish-screen card — on top of the generic HubBridge/HubDemoDoor
+// above, a learner who just finished "Read a Payout Receipt" gets a direct link into an actual
+// DRY RUN receipt (E2's no-wallet fixture, /hub/demo) and into the browser-side reproduce tool
+// (Y1, /hub/verify) so the lesson's own worked example is one click away, not a promise to go
+// find it later. Only ever shown on this one lesson. STORE carries no Hub at all, so this folds
+// out entirely at build time — same `STORE ? null : …` pattern as HubBridge/HubDemoDoor.
+function ReceiptLessonBridge({lesson:l}){
+  if(l.id!=="receipt") return null;
+  return STORE ? null : (
+    <div style={{background:"rgba(103,232,249,0.05)",border:"1px solid rgba(103,232,249,0.16)",borderRadius:12,padding:"10px 14px",margin:"0 0 14px",textAlign:"left",display:"flex",flexDirection:"column",gap:6}}>
+      <a href="/hub/demo/r/rcpt-a" onClick={()=>track("hub_door_click:receipt_lesson")} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"Open a real receipt and check it, line by line"} →</a>
+      <a href="/hub/verify" onClick={()=>track("hub_verify_click:receipt_lesson")} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"Reproduce it yourself, in your own browser"} →</a>
     </div>
   );
 }
@@ -501,6 +521,31 @@ const LESSONS = [
       { q: "Which step do people most often skip, and most regret skipping?", options: ["Buying a hardware wallet", "Actually telling someone the crypto exists and checking they could reach it", "Diversifying across several blockchains", "Writing the phrase on metal rather than paper"], correct: 1, explanation: "A perfect backup in a safe nobody knows about is the same as no backup. The plan has to survive contact with a grieving family who may not know crypto exists at all. Tell someone it exists, tell them where the instructions are, and walk them through a restore while you still can." },
     ],
   },
+
+  // COLOSSEUM Y2: what a real rewards receipt actually is, drawn straight from the Project Hub
+  // entities (lib/hub/teach.js, lib/hub/explain.js) rather than authored copy about a hypothetical.
+  // Earn only ever means capability here: nothing in this lesson promises a rate or a return.
+  {
+    id: "receipt", belt: "BURSAR", icon: "🧾", title: "Read a Payout Receipt",
+    quote: "Cluck Norris doesn't take anyone's word for it. He runs the numbers himself.",
+    color: "#67E8F9", glow: "rgba(103,232,249,0.4)",
+    intro: "A payout receipt is not a promise — it's a record of money that already moved, with the numbers behind it published so nobody has to take your word, our word, or the project's word for it. A real one names which rules paid it, why the wallet qualified, what its term earned, and the exact transaction that sent it. If a receipt's own math does not add up to the number it claims to pay, that mismatch is the whole story — and the point of publishing everything is that a stranger can find it, not just us.",
+    concepts: [
+      { term: "Program Version & Hash", def: "Every payout runs under a published program version — the exact term rules in force at the time. Its hash is a fingerprint of those rules: change one number in the terms and the hash changes too. A receipt names the version that paid it, so you check the rules that actually applied, not whatever the page shows today." },
+      { term: "Eligibility & Reason Codes", def: "Before anything accrues, the program checks whether a lock actually qualifies — right token, non-cancelable, term long enough. Each check leaves a reason code behind it, so 'why didn't this hour pay me' has a checkable answer instead of a shrug." },
+      { term: "Term & Multiplier", def: "How long you committed decides your rate: 1x at the minimum term, rising toward the top rate at the maximum. That multiplier is fixed by the published rule the day you locked — not chosen after the fact, and not the day you got paid." },
+      { term: "Pro-Rata Share of a Period", def: "Every hour, that hour's pool splits across everyone who qualified — your share is your locked amount times your term, divided by everyone else's. It moves: down when more people lock, up when locks end. Nobody promised a fixed number, because the pool is shared, not fixed." },
+      { term: "Settlement Entry", def: "The actual transaction that sent the tokens — look it up on any explorer yourself. A real receipt separates what was OWED for a period from what was actually APPLIED to it; a partial payment's difference carries forward as a remainder, never quietly written off as excess." },
+      { term: "Reproduce It Yourself", def: "The program version, the accrual periods, and the ledger behind a receipt are all published. A script on your own machine — or a page in your own browser — can re-run that arithmetic from those published inputs and land on the same number, offline, without asking anyone to be trusted." },
+    ],
+    questions: [
+      { q: "You re-run a receipt's published inputs yourself and get a different total than the receipt claims. What does that mismatch mean?", options: ["Rounding — safe to ignore", "Nothing — the amount was adjusted afterward and that's fine", "A real finding: something in the published inputs or the receipt does not reconcile, and it should be reported, not assumed correct", "The receipt automatically becomes void on-chain"], correct: 2, explanation: "A mismatch is a genuine signal, not noise. It means what actually shipped doesn't reconcile with the inputs published for it — a bug, a bad input, or worse. The entire point of publishing the raw materials is that a stranger can catch this instead of taking the number on faith." },
+      { q: "A program page says its receipts are \"reproducible from published inputs.\" What does that specific claim mean?", options: ["The same thing as \"independently verified\" — an outside party already confirmed it", "Anyone can run the same public numbers through the same public method and land on the same answer, without trusting anyone's word for it", "The Cluck Norris team personally checked every receipt by hand", "It is mathematically impossible for the receipt to ever be wrong"], correct: 1, explanation: "\"Reproducible\" is a narrower, more honest claim than \"verified.\" It means the inputs and the method are both public, so you can run it yourself instead of trusting someone's say-so. It only upgrades to \"independently committed\" once something outside the project — like an on-chain memo — has actually observed the commitment. That is a stronger, later claim, never assumed in advance." },
+      { q: "A receipt shows a reason code next to an hour that earned nothing. What is a reason code actually telling you?", options: ["A random error the system generated", "Which specific published eligibility rule that hour's check failed or passed — an audit trail, not a guess", "The current market price of the reward token", "How much the settlement transaction cost in fees"], correct: 1, explanation: "Every eligibility check the program runs — right token, non-cancelable, term met — leaves a code behind its outcome. That turns \"why didn't this hour pay me\" into an answer you can check against the published rule yourself, not a mystery someone has to explain to you." },
+      { q: "What does a program version's hash actually commit to?", options: ["The current price of the reward token", "The exact term rules in force when your accrual ran — edit the terms even slightly and the hash changes too", "Your wallet's balance at the moment you locked", "How many other wallets are currently locked"], correct: 1, explanation: "The hash fingerprints the rules themselves — the term range, the multiplier curve, everything a program version fixes. It has nothing to do with balances or prices. Naming a receipt's version and hash lets you check the rules that actually applied to it, not the ones a page happens to show today." },
+      { q: "You lock tokens into a rewards program. Is locking the same thing as selling them?", options: ["Yes — once locked, they're effectively gone", "No — a lock immobilizes tokens for a set time under published terms; nothing is sold, and you own them the whole time", "It depends on which reward token you're paid in", "Only if the multiplier is above 1x"], correct: 1, explanation: "A lock is a public promise not to move tokens for a period — an on-chain escrow you can go open and inspect yourself. It is not a transfer of ownership or a swap for something else. You remain the owner the entire time; you've only committed not to touch them until the date, which is exactly what makes the promise checkable in the first place." },
+    ],
+  },
 ];
 
 
@@ -517,8 +562,8 @@ function shuffleOptions(question) {
   return { ...question, options: newOptions, correct: newCorrect };
 }
 
-const BELT_BG   = { "FRESHMAN":"#F0F0F0","SOPHOMORE":"#FFB627","JUNIOR":"#FF7A18","SENIOR":"#10B981","GRADUATE":"#06B6D4","POST-GRAD":"#92400E","TENURED":"#DC2626","HEADMASTER":"#1a0f08","PROFESSOR":"#14B8A6","DEAN":"#84CC16","CHANCELLOR":"#FF7A18","EMERITUS":"#A855F7","LAUREATE":"#C026D3","LEGACY":"#7C3AED" };
-const BELT_TEXT = { "FRESHMAN":"#1a0f08","SOPHOMORE":"#1a0f08","JUNIOR":"#fff","SENIOR":"#fff","GRADUATE":"#fff","POST-GRAD":"#fff","TENURED":"#fff","HEADMASTER":"#FFB627","PROFESSOR":"#fff","DEAN":"#1a0f08","CHANCELLOR":"#fff","EMERITUS":"#fff","LAUREATE":"#fff","LEGACY":"#fff" };
+const BELT_BG   = { "FRESHMAN":"#F0F0F0","SOPHOMORE":"#FFB627","JUNIOR":"#FF7A18","SENIOR":"#10B981","GRADUATE":"#06B6D4","POST-GRAD":"#92400E","TENURED":"#DC2626","HEADMASTER":"#1a0f08","PROFESSOR":"#14B8A6","DEAN":"#84CC16","CHANCELLOR":"#FF7A18","EMERITUS":"#A855F7","LAUREATE":"#C026D3","LEGACY":"#7C3AED","BURSAR":"#67E8F9" };
+const BELT_TEXT = { "FRESHMAN":"#1a0f08","SOPHOMORE":"#1a0f08","JUNIOR":"#fff","SENIOR":"#fff","GRADUATE":"#fff","POST-GRAD":"#fff","TENURED":"#fff","HEADMASTER":"#FFB627","PROFESSOR":"#fff","DEAN":"#1a0f08","CHANCELLOR":"#fff","EMERITUS":"#fff","LAUREATE":"#fff","LEGACY":"#fff","BURSAR":"#1a0f08" };
 function Belt({belt,small}){return(<span data-read-skip="1" style={{display:"inline-block",background:BELT_BG[belt],color:BELT_TEXT[belt],fontFamily:"'Anton',sans-serif",fontSize:small?9:10,fontWeight:700,letterSpacing:1.5,padding:small?"2px 6px":"3px 10px",borderRadius:3,border:"none",textTransform:"uppercase"}}>{belt}</span>);}
 
 
@@ -1463,6 +1508,7 @@ function Lesson({lesson:l,onComplete,onBack,hubFrom}){
       </div>
       <LessonLinks lesson={l}/>
       <HubBridge lesson={l} hubFrom={hubFrom}/>
+      <ReceiptLessonBridge lesson={l}/>
       <HubDemoDoor/>
       <div style={{display:"flex",gap:10}}>
         {!passed&&<button onClick={retry} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,color:"#D1D5DB",cursor:"pointer",letterSpacing:2}}>↩ RETAKE</button>}

@@ -308,7 +308,7 @@ Judges weight traction and revenue. These are all verifiable on-chain or on the 
 | **Project Hub — outcome counters (W9)** | Instrumented, not yet a headline figure: wallets connected, programs published, program versions, receipts issued/opened, batches signed, repeat operators and revenue are each derived from a durable store and reproducible by re-running the script — never hand-typed. **[measured by `scripts/traction-report.cjs` on \<date\>]** | `scripts/traction-report.cjs`; owner-only `GET /api/traction` |
 | Project Hub — second project | POKEAHOE (`/hub/poke`) is seeded as a clearly labelled **dry run** — branded, `dryRun:true`, excluded from every count — while terms and a funding wallet are agreed with that team; the no-wallet walkthrough at `/hub/demo` (and `/hub/demo-b`, proving isolation) is fixture data, also excluded from every count. Neither is presented as a live program. | `/hub/poke`, `/hub/demo` |
 | Live product, public | clucknorris.app, since 2025; Seeker dApp Store listing; education-only Google Play build shipped 2026-09-11 | site |
-| Curriculum | 35 lessons, 7 languages, read-aloud, plus the LP Lab and reference Library | `/`, `/lp-lab` |
+| Curriculum | 36 lessons, 7 languages, read-aloud, plus the LP Lab and reference Library | `/`, `/lp-lab` |
 | Services model | verification, lock-to-earn, buy comps, engine — priced per project `[OWNER]` | this doc §5 |
 | Community | `[OWNER — Telegram members, X followers]` | |
 | Security | Cloudflare WAF cutover + origin lockdown live since 2026-08-04, from findings by our scan partner RootCrak (@ro0TCr4k, https://rootcrak.com/?ref=clucknorris) | README |
