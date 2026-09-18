@@ -51,6 +51,29 @@ suggested (§6 below).
 
 ## 0. Where we stand on the eve
 
+### Status as of 2026-09-18
+
+Derived from what has actually merged (`git log`, `docs/PRE_EVENT_STATE.md` "Built inside the
+window"), not from intent.
+
+| Workstream | Status | Note |
+|---|---|---|
+| W1 — Hub core (settlement protocol) | **Shipped** | #307 (pure gate). |
+| W2 — Hub public surfaces | **Shipped** | #315 (first cut), #319 (page scoping + honest "owed"). |
+| W3 — Operator desk | **Shipped** | #325 (wallet-signed operator session). |
+| — Apply / pay (self-serve onboarding) | **Shipped** | #323 (payments), #324 (apply + pay pages). |
+| — Lock to Earn engine (generalised) | **Shipped** | #321 (engine), #322 (per-project routes + tiers). |
+| W4 — `/for-projects` front door | **Not started** | No `/for-projects` route in `server.js`. Being built now. |
+| W5 — Engine dashboard evidence boundaries | **Not started** | No `engineLog:<project>` ring buffer or illustrative/historical/retained split in code yet. |
+| W6 — Credibility and truth pass | **Partial** | Repo description fixed (no more "Bags Hackathon" / Cluck Score — confirmed live). F4 (seedphrase/inheritance lessons in the six translated bundles) still **open** — `grep -c seedphrase public/i18n/<lang>.school.json` = 0 in all six. F12 (traction table order) **done** — the table now leads with Learners, cites the on-chain funnel, and the page-view figure was removed (commits `a28a471`/`f9ee792`, PR #310 fixed the analytics behind it). |
+| W6b — Validation (operator interviews, one pilot) | **Not started** | No `docs/VALIDATION_2026-09.md`. Owner-led. |
+| W7 — Story: demo, pitch, submission | **Not started** | Submission copy landed (#303) but the demo cut, pitch recording and filing have not. |
+| W9 — Traction: instrument + create | **Part 1 being built now** | No outcome counters (wallets connected, programs created, receipts issued, etc.) in `lib/analytics.js` yet; no `docs/TRACTION_2026-09.md`. |
+| W10 — Weekly updates | **First update due Sep 20** | None posted yet; the calendar's first Sunday slot has not arrived. |
+| §4 item 1 — dry-run second project | **Still undecided, overdue** | Was "decide by Sep 17"; today is Sep 18 and no second project has been named in the roadmap or the code. This is the longest pole in the traction plan (§4 item 1, §1). |
+
+---
+
 **Already live or on `develop` (pre-window, disclosed, not claimed):** the engine dashboard P0
 at `/liquidity-engine`, the Lock of Fame index, the quiz-free `/curriculum`, project-team
 navigation (#282); the tools pass as a signed session, server-enforced (#283; #284 carries the
@@ -354,3 +377,33 @@ State the key-person limit honestly. Commit and CI counts are supporting provena
 traction. The strength of this story is accountable judgement and fast response to actual users;
 it becomes a liability the moment an agent count is offered in place of ownership, availability
 or verification.
+
+---
+
+## 7. Extension — 2026-09-18 (owner: "get creative, take our narrative of educate, build, earn and let's win the hackathon")
+
+Written in-window. Everything W1–W10 stands; this adds the items that turn the thesis from
+"a rewards program you can check" into **a rewards program a stranger can re-derive**, and puts
+the owner's theme on every surface a judge touches. Each item names the criterion it moves.
+Nothing here arms an engine, moves money, or promises a yield.
+
+The one-sentence pitch this extension is built to make true: *"Learn how locking works, lock
+with a project that published its terms, and get a receipt you can reproduce yourself — from
+the published inputs, offline, without trusting us."*
+
+| # | Item | Theme leg | Criterion | Definition of done |
+|---|---|---|---|---|
+| **E1** | **Reproduce-a-receipt, holder side.** `scripts/reproduce-receipt.cjs <receipt-url \| batch/wallet>` fetches the public JSON mirrors (program version, the batch's published inputs, the receipt) and re-derives the amount with the pure libs — no server call to "verify", the arithmetic runs on the reader's machine. Plus `GET /api/hub/:project/reproducibility` and a line on every program page: **"N of M receipts in <batch> reproduce; K have missing inputs"** — the roadmap's headline number (§1), measured by the script, never asserted. | Earn (prove) | Insight, Product | The script reproduces every settled row in the live CUNA batches the page lists, or names the row and the missing input; the page number equals the script's; `scripts/reproduce-receipt-test.cjs` in CI with a tampered fixture that must FAIL to reproduce. |
+| **E2** | **The demo walkthrough, no wallet: `/hub/demo`.** A clearly labelled **DRY RUN** fixture project (badge on every screen, `dryRun:true` in every JSON body, excluded from every count and feed) that carries the single-holder story of §W7 end to end: program version → a holder's lock "qualifies, 3-month term, 1×" with the rule that decided it → funding coverage vs shortfall → a signed batch → the receipt → reproduce it (E1) → a second project proving isolation. The judges click it; the video records it. | Build | Product, Founder Communication | Renders in the smoke test; every fixture number is derived by the real libs from the fixture inputs (nothing hand-typed); test 14 (no "safe" badge), 15–17 (no APR) still pass; the fixture is invisible to `/api/hub`, the Lock of Fame and the traction counters. |
+| **E3** | **Independent commitment of the program hash (Addendum B §B5).** At publish, the desk builds an unsigned memo transaction carrying the program-version hash for the operator to sign from the funding wallet; the program page shows the signature and a reader can check the memo on any explorer. Repo mirror: `docs/hub/commitments.md`, appended by the same path. Ships as **dry-run** until the owner signs the first real one; the page says which it is. | Earn (prove) | Insight, Viability | Unsigned tx bytes diffed against the library in Node before shipping (CLAUDE.md rule); the desk shows "committed on-chain" only after the memo is observed on-chain by the server; the public claim wording upgrades from "reproducible from published inputs" to "independently committed" only on that observation. |
+| **E4** | **The settlement library as a public, composable module.** `lib/hub/README.md` (the contract in plain words), JSON Schemas for `ProgramVersion`, `Batch`, `Receipt` under `lib/hub/schema/`, every public JSON body validated against them in the test, and the receipt JSON carrying `$schema`. Open-source and composability are scored in the Official Rules (§302 notes). | Build | Product, Potential Market | Schemas exist, public bodies validate, README explains how a second product would consume a receipt. |
+| **E5** | **The receipt teaches.** Every receipt page gets "how this number was computed" — the holder's own term, multiplier and pro-rata share walked through with their own numbers, derived by the libs (the post-payment mirror of Addendum C's pre-lock block). Educate inside Earn, personalised by data, never authored copy. | Educate | Insight | Renders for every settled receipt; the walkthrough's total equals the receipt's amount by construction (same function); no APR anywhere (test 17). |
+| **E6** | **School → Hub bridge.** The Lock-to-Earn lessons end on a "Ready to lock?" card that deep-links to `/hub` (and to the project page when arrived from one); a project page shows, anonymously and in aggregate, how many visitors read the lock lessons before the lock action (a `hub_lesson_read` funnel event, no wallet). It is the one Educate→Earn number we can show honestly. | Educate | Traction, Founder+Market Fit | The card renders in the school (seven languages via the dictionary); the count appears on the project page with its period and denominator; W9's report script prints it. |
+| **E7** | **Operator onboarding clock.** Setup time measured automatically from `apply` → first program version published → first batch signed, per project, stored with the project record, printed by the W9 report as the W6b "observed setup time" column. | Build | Viability | The timestamps exist for every new project; the report prints the three deltas; CUNA (pre-window) is labelled n/a. |
+| **E8** | **Hub pages in seven languages.** `/hub`, project, program, receipt, apply and pay through the tool-page dictionary pattern (`public/i18n/*.json`), and the i18n audit extended to the Hub pages so a missing key fails CI. | Educate | Product | Audit passes for all seven; the owner eyeballs es + zh on a phone. |
+| **E9** | **Arena + X cadence.** The four W10 updates, plus one Arena post per shipped extension item (draft in `docs/ARENA_POSTS.md`, owner posts). No post before Sep 14 kickoff was the rule; after it, cadence is the cheapest visible traction. | Build (with others) | Founder Communication | Drafts exist for E1–E8 as each merges; the owner posts. |
+
+**Order:** E1 → E2 → E4 → E5 → E3 → E6 → E7 → E8, with E9 alongside. E1 and E2 start
+2026-09-18 (batch 3). E3 is the only item that needs the owner's hand (a signature) and ships
+dry-run first so nothing waits on it. Everything else is buildable without the owner and lands
+on `develop` on green CI; promotion stays the owner's "promote".

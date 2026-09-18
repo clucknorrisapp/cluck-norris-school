@@ -267,7 +267,7 @@
   async function renderIndex() {
     var r = await fetch('/api/hub').then(function (x) { return x.json(); });
     if (!r.ok) throw new Error(r.error || 'could not load');
-    app.innerHTML = '<div class="card"><div class="intro">Every project here has a public record: <b>what it promised its holders, who qualified, and the transaction that paid each one</b>. Nothing on these pages needs a wallet, and every signature can be re-checked against Solana from the page itself.</div></div>' +
+    app.innerHTML = '<div class="card"><div class="intro">Every project here has a public record: <b>what it promised its holders, who qualified, and the transaction that paid each one</b>. Nothing on these pages needs a wallet, and every signature can be re-checked against Solana from the page itself.</div><div class="small" style="margin-top:10px">Run a project? <a href="/for-projects" style="color:var(--cyan)">Start at the guided front door →</a></div></div>' +
       r.projects.map(function (p) { return '<a class="card proj-link" href="/hub/' + esc(p.id) + '"><div class="prog-head"><h2>' + esc(p.label) + ' <span class="small">' + esc(p.symbol) + '</span></h2><div class="chips"><span class="chip">' + p.programs + ' program' + (p.programs === 1 ? '' : 's') + '</span><span class="chip ' + (p.receipts ? 'ok' : '') + '">' + p.receipts + ' receipt' + (p.receipts === 1 ? '' : 's') + '</span></div></div><div class="mono">' + esc(p.mint) + '</div></a>'; }).join('');
   }
   // One program per page (owner, 2026-09-16: a lock-to-earn link must show lock-to-earn and nothing

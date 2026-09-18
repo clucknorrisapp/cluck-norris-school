@@ -128,6 +128,14 @@ jobs:
       # number being quoted as people.
       - name: Analytics — engaged visitors and host split
         run: node scripts/analytics-engaged-test.cjs
+      # Colosseum W9 part 1: traction is measured, not asserted. Every counter in lib/traction.js
+      # is DERIVED from a durable store (or a minimal, salted, PII-free event this change adds at
+      # a choke point that recorded nothing before) — journal receipts vs. the live `batch.sent`
+      # mechanism vs. CUNA's pre-Hub payout stay separate, revenue is lamports/count only (never a
+      # USD figure that was not stored), and an unreproducible source (Hatchery fees) says so
+      # instead of guessing.
+      - name: Traction — outcome counters are derived and reproducible
+        run: node scripts/traction-test.cjs
       # The staking domain's origin-lockdown exemption, read out of server.js itself. That
       # exemption is the one place a request can skip the WAF, so the allowlist must stay
       # exhaustive and anchored at both ends — a single "^/api/" entry would be a hole through to
