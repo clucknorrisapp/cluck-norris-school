@@ -411,6 +411,62 @@ t("with no project record carrying dryRun today, the caveat says the filter excl
   assert.ok(out.caveats.some((c) => /dryRun/.test(c) && /no-op/.test(c)));
 });
 
+section("hub door clicks — W9 part 2, the school landing/lesson doors and the homepage door");
+
+t("recordHubDoorClick dedups the same (source, sid) within a day; a different day counts again", () => {
+  const kv = store.memoryKv();
+  traction.recordHubDoorClick(kv, { source: "school", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubDoorClick(kv, { source: "school", sid: "sid-1", nowMs: dayMs("2026-09-16") + 1000 });
+  traction.recordHubDoorClick(kv, { source: "school", sid: "sid-1", nowMs: dayMs("2026-09-17") });
+  const raw = traction.readHubDoorClicks(kv);
+  assert.strictEqual(raw["2026-09-16"].school.length, 1);
+  assert.strictEqual(raw["2026-09-17"].school.length, 1);
+  assert.ok(!JSON.stringify(raw).includes("sid-1"), "the raw sid must never be stored");
+});
+t("school and home are independent buckets — a click on one source never counts toward the other", () => {
+  const kv = store.memoryKv();
+  traction.recordHubDoorClick(kv, { source: "school", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubDoorClick(kv, { source: "home", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  const raw = traction.readHubDoorClicks(kv);
+  assert.strictEqual(raw["2026-09-16"].school.length, 1);
+  assert.strictEqual(raw["2026-09-16"].home.length, 1);
+});
+t("recordHubDoorClick is a no-op without a source or a sid", () => {
+  const kv = store.memoryKv();
+  traction.recordHubDoorClick(kv, { source: "school", nowMs: dayMs("2026-09-16") });
+  traction.recordHubDoorClick(kv, { sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  assert.deepStrictEqual(traction.readHubDoorClicks(kv), {});
+});
+t("compute()'s hubDoorClicksSchool counts in-period clicks; denominator is /school's own analytics_v1 page views, null when no bucket exists", () => {
+  const kv = store.memoryKv();
+  traction.recordHubDoorClick(kv, { source: "school", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubDoorClick(kv, { source: "school", sid: "sid-2", nowMs: dayMs("2026-09-01") }); // outside the window
+  const noDenom = traction.compute({ kv, from: "2026-09-14", to: "2026-09-18" });
+  assert.strictEqual(noDenom.counters.hubDoorClicksSchool.value, 1);
+  assert.strictEqual(noDenom.counters.hubDoorClicksSchool.denominator, null);
+  const day = traction.dayKeyOf(dayMs("2026-09-16"));
+  kv.set("analytics_v1", { days: { [day]: { paths: { "/school": 200, "/": 50 } } } });
+  const withDenom = traction.compute({ kv, from: "2026-09-14", to: "2026-09-18" });
+  assert.strictEqual(withDenom.counters.hubDoorClicksSchool.value, 1);
+  assert.strictEqual(withDenom.counters.hubDoorClicksSchool.denominator, 200);
+  assert.strictEqual(withDenom.counters.hubDoorClicksSchool.label, "independent");
+});
+t("compute()'s hubDoorClicksHome reads the \"home\" bucket only, denominator is / page views", () => {
+  const kv = store.memoryKv();
+  const day = traction.dayKeyOf(dayMs("2026-09-16"));
+  kv.set("analytics_v1", { days: { [day]: { paths: { "/school": 200, "/": 50 } } } });
+  traction.recordHubDoorClick(kv, { source: "home", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  traction.recordHubDoorClick(kv, { source: "school", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  const out = traction.compute({ kv, from: "2026-09-14", to: "2026-09-18" });
+  assert.strictEqual(out.counters.hubDoorClicksHome.value, 1);
+  assert.strictEqual(out.counters.hubDoorClicksHome.denominator, 50);
+});
+t("pageViewsInPeriod is null (never a guessed zero) when analytics_v1 has no bucket for that path", () => {
+  const kv = store.memoryKv();
+  kv.set("analytics_v1", { days: { [traction.dayKeyOf(dayMs("2026-09-16"))]: { paths: { "/other": 9 } } } });
+  assert.strictEqual(traction.pageViewsInPeriod(kv, "/school", "2026-09-14", "2026-09-18"), null);
+});
+
 section("compute() itself");
 
 t("refuses a kv with no get()", () => {

@@ -17449,6 +17449,11 @@ app.post("/api/track", (req, res) => {
     // locking lessons — see LOCK_LESSON_IDS in src/App.jsx. Anonymous sid only, never a wallet.
     const hlrM = /^hub_lesson_read:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
     if (hlrM && b.sid) { try { traction.recordHubLessonRead(kv, { project: hlrM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
+    // W9 part 2: the two "existing traffic → Hub" doors (COLOSSEUM_ROADMAP.md §W9 part 2).
+    // "school" fires from the school landing/lesson-finish HubDemoDoor (src/App.jsx); "home"
+    // fires from the homepage's project-operator tile (public/home.html). Anonymous sid only.
+    const hdcM = /^hub_door_click:(school|home)$/.exec(String(b.event || "").toLowerCase());
+    if (hdcM && b.sid) { try { traction.recordHubDoorClick(kv, { source: hdcM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
   } catch (_) {}
   return res.status(204).end();
 });

@@ -4134,5 +4134,6 @@
   "AMM-style DEXs (most of them) use liquidity pools instead of a traditional order book — though a few on-chain DEXs like OpenBook and Phoenix still run one.": "Los DEX de estilo AMM (la mayoría) usan pools de liquidez en lugar de un libro de órdenes tradicional — aunque algunos DEX on-chain como OpenBook y Phoenix todavía usan uno.",
   "Seed Phrase Survival": "Supervivencia de la frase semilla",
   "READY TO LOCK?": "¿LISTO PARA BLOQUEAR?",
-  "See a project's published terms and receipts": "Ve los términos publicados de un proyecto y sus recibos"
+  "See a project's published terms and receipts": "Ve los términos publicados de un proyecto y sus recibos",
+  "See how a project's rewards are actually paid": "Mira cómo se pagan realmente las recompensas de un proyecto"
 }

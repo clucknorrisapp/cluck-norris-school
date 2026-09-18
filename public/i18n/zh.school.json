@@ -4134,5 +4134,6 @@
   "Most Solana DEXs (Jupiter routes, Raydium, Orca) are AMMs: every trade pulls from a Liquidity Pool — a smart contract holding two tokens — instead of matching an order book. LP providers earn fees from every swap. A few on-chain DEXs (OpenBook, Phoenix) still use order books, but you keep your own keys either way.": "大多数Solana上的DEX（Jupiter的路由、Raydium、Orca）都是AMM：每一笔交易都从一个流动性池——一个持有两种代币的智能合约——中提取，而不是撮合订单簿。LP提供者从每一次兑换中赚取手续费。少数链上DEX（OpenBook、Phoenix）仍然使用订单簿，但无论哪种方式，你都掌握着自己的密钥。",
   "AMM-style DEXs (most of them) use liquidity pools instead of a traditional order book — though a few on-chain DEXs like OpenBook and Phoenix still run one.": "AMM式的DEX（大多数都是）使用流动性池，而不是传统的订单簿——不过像OpenBook和Phoenix这样的少数链上DEX仍然运行着订单簿。",
   "READY TO LOCK?": "准备好锁仓了吗？",
-  "See a project's published terms and receipts": "查看某个项目公开的条款和收据"
+  "See a project's published terms and receipts": "查看某个项目公开的条款和收据",
+  "See how a project's rewards are actually paid": "看看一个项目的奖励是如何真正发放的"
 }
