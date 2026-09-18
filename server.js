@@ -3721,6 +3721,11 @@ app.use((req, res, next) => {
 // as the in-memory Telegram trackers). Railway sits behind a proxy, so trust
 // X-Forwarded-For for the real client IP rather than the proxy's.
 app.set("trust proxy", true);
+// Explicit, not just relying on Express's default: weak ETags on every res.json/res.send body,
+// so the Hub's public read routes (Colosseum roadmap Z3) answer a matching If-None-Match with a
+// bare 304 for free — no per-route code needed, Express's own `fresh` check does it inside
+// res.send(). scripts/public-route-hygiene-test.cjs pins this against a real conditional request.
+app.set("etag", "weak");
 
 // Last-resort guards: on Node ≥15 an unhandled promise rejection (e.g. a throw inside an
 // un-.catch'd setInterval tick) terminates the process, taking down every scheduler AND the
@@ -3775,7 +3780,7 @@ function clientIp(req) {
 // that long — so introducing one day-long limiter would quietly make all fifteen minute-long ones
 // retain a day of timestamps each. The sweep now trims each key by its own window.
 const RL_WINDOWS = new Map();   // bucket -> windowMs
-function rateLimit(bucket, { windowMs, max, message, onLimit }) {
+function rateLimit(bucket, { windowMs, max, message, onLimit, cors }) {
   RL_WINDOWS.set(bucket, Math.max(RL_WINDOWS.get(bucket) || 0, windowMs));
   if (windowMs > RL_MAX_WINDOW_MS) RL_MAX_WINDOW_MS = windowMs;   // fallback for un-prefixed keys
   return (req, res, next) => {
@@ -3792,8 +3797,16 @@ function rateLimit(bucket, { windowMs, max, message, onLimit }) {
       const retryAfter = Math.ceil((windowMs - (now - arr[0])) / 1000);
       if (typeof onLimit === "function") { try { onLimit(ip, req); } catch (_) {} }
       res.setHeader("Retry-After", Math.max(1, retryAfter));
-      return res.status(429).json({ success: false,
-        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter) });
+      // `cors: true` for a limiter mounted on a route that itself answers with
+      // Access-Control-Allow-Origin (Colosseum roadmap Z3 — the Hub's cross-origin public
+      // reads): the 429 short-circuits BEFORE the route handler ever runs, so without this the
+      // limited response would carry no CORS header and a cross-origin caller (e.g. /hub/verify
+      // reproducing a receipt published on another host) would see an opaque network error
+      // instead of a readable 429. Never used for the store-edition contract routes — see
+      // STORE_API_RE and the store-CORS middleware above, which this is mounted after.
+      if (cors) { res.setHeader("Access-Control-Allow-Origin", "*"); }
+      return res.status(429).json({ success: false, ok: false,
+        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter), retryAfter: Math.max(1, retryAfter) });
     }
     arr.push(now);
     next();
@@ -6915,7 +6928,9 @@ app.get("/api/jvp/project/:id", async (req, res) => {
 // X5: the three evidence classes merged into one time-ordered, capped array, with a pure
 // replay of the retained decision rows against the real gates. Read-only, same GET-only shape
 // as the two routes above — no flag on this route can arm, pause, roll or sign anything.
-app.get("/api/jvp/project/:id/timeline", async (req, res) => {
+// Rate-limited (Z3): unlike /overview and /project (bounded lookups), this one fans out to the
+// paid Helius history endpoint for up to 720 hours of evidence per call.
+app.get("/api/jvp/project/:id/timeline", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   const id = String(req.params.id || "").toLowerCase();
   if (!JVP_PUBLIC_PROJECTS.includes(id)) return res.status(404).json({ success: false, error: "not_found" });
@@ -6923,7 +6938,12 @@ app.get("/api/jvp/project/:id/timeline", async (req, res) => {
     const hours = Math.max(1, Math.min(720, parseInt(req.query.hours, 10) || 168));
     const out = await jvpDashboard.timeline({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, id, hours, helius: JVP_HELIUS });
     if (!out) return res.status(404).json({ success: false, error: "not_found" });
-    return res.status(200).json({ success: true, updatedAt: Date.now(), id, ...out });
+    // Z3: `updatedAt` is floored to the Cache-Control window, not a raw Date.now() — a literal
+    // live timestamp embedded in the body would give this route a fresh ETag on every single
+    // call, so a matching If-None-Match could never actually 304 no matter how unchanged the
+    // underlying rows were. Flooring to the 60s window it's already cached for means two calls
+    // in the same minute (the only case a real revalidation would ever hit) hash identically.
+    return res.status(200).json({ success: true, updatedAt: Math.floor(Date.now() / 60000) * 60000, id, ...out });
   } catch (e) { console.warn("[jvp] timeline failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
 });
 
@@ -7742,8 +7762,11 @@ app.get("/api/airdrop/record", (req, res) => res.status(405).json({ success: fal
 
 // Public: the drop's full receipt. No operator identity anywhere in the body — the dropId (random,
 // unguessable, in the URL) is the only handle a reader has.
+// Cache-Control (Z3): a per-project-style read, same 60s tier as the Hub's own receipt/batch
+// reads — this was `no-store` only because nobody had gotten to it yet, not because a drop's
+// rows change so often that a minute of staleness would mislead anyone reading it.
 app.get("/api/airdrop/r/:dropId", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=60");
   const drop = airdropReceipt.loadDrop(kv, String(req.params.dropId || ""));
   if (!drop) return res.status(404).json({ success: false, error: "not_found" });
   let symbol = null;
@@ -7752,10 +7775,13 @@ app.get("/api/airdrop/r/:dropId", async (req, res) => {
 });
 // Public: one recipient's row within a drop.
 app.get("/api/airdrop/r/:dropId/:wallet", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const wallet = String(req.params.wallet || "");
+  // Shape-check BEFORE loading the drop or scanning its rows (Z3): a malformed wallet is a 400,
+  // never a scan over every row in the drop just to come back empty.
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "bad wallet" });
   const drop = airdropReceipt.loadDrop(kv, String(req.params.dropId || ""));
   if (!drop) return res.status(404).json({ success: false, error: "not_found" });
-  const wallet = String(req.params.wallet || "");
   const row = Object.values(drop.rows || {}).find((r) => r.wallet === wallet);
   if (!row) return res.status(404).json({ success: false, error: "no row for that wallet in this drop" });
   let symbol = null;
@@ -8006,6 +8032,11 @@ const hubPublic = require("./lib/hub/public");
 const HUB_SCHEMA_DIR = join(__dirname, "lib", "hub", "schema");
 const HUB_SCHEMA_NAMES = new Set(["program-version", "batch", "receipt", "project-public"]);
 function HUB_SCHEMA_URL(name) { return `https://clucknorris.app/hub/schema/${name}.json`; }
+// Shared signature shape (Colosseum roadmap Z3, public-route hygiene) — the same bounds used
+// throughout server.js/lib for a Solana transaction signature. Checked BEFORE any store read on
+// a param named sig/wallet/mint so a malformed value 400s immediately rather than falling through
+// to a scan or a 500.
+const HUB_SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{60,100}$/;
 const hubProject = require("./lib/hub/project");
 function hubProjects() {
   const built = {
@@ -8096,8 +8127,11 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  const sig = String(req.params.sig || "");
+  // Shape-check BEFORE the lookup (Z3): a malformed sig is a 400, never handed to findReceipt to
+  // scan every program's payout rows just to fail the regex it already runs internally.
+  if (!HUB_SIG_RE.test(sig)) return res.status(400).json({ ok: false, error: "bad sig" });
   try {
-    const sig = String(req.params.sig || "");
     const r = hubPublic.findReceipt(hubProjectView(p), sig);
     if (!r) return res.status(404).json({ ok: false, error: "no receipt with that signature" });
     // Traction "receipts opened by a holder" (lib/traction.js) — this route recorded nothing
@@ -8119,7 +8153,10 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
 //     tell if it ever changes under them.
 // Cached 60s — a comp's standings don't need to be fresher than that once sealed, and while live
 // this route deliberately shows nothing that would benefit from being fresh.
-app.get("/api/hub/:project/p/:compId/standings", (req, res) => {
+// Rate-limited (Z3): this walks every result/winner/review/payout row of the comp on each call,
+// so it is a "heavy" read next to the plain per-project view — `cors: true` keeps the 429 itself
+// readable by a cross-origin caller, since the 200 below always carries the same ACAO.
+app.get("/api/hub/:project/p/:compId/standings", rateLimit("hubheavy", { windowMs: 60000, max: 60, cors: true }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
@@ -8138,8 +8175,12 @@ app.get("/api/hub/:project/p/:compId/standings", (req, res) => {
 // hubStore's real registry / kv; this module never writes to either). Every JSON body here carries
 // dryRun:true. See lib/hub/demo-fixture.js for how the numbers are derived.
 const hubDemoFixture = require("./lib/hub/demo-fixture");
+// Cache headers (Z3): the fixture is built once per process (hubDemoFixture.get() memoises), so
+// there is nothing per-visitor or per-request to keep fresh — these three were `no-store` only
+// because nobody had gotten to them yet, not because the content is ever different between two
+// calls in the same deploy. Same tiers as the real Hub reads: per-project 60s, one receipt 300s.
 app.get("/api/hub-demo", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=60");
   try {
     const d = hubDemoFixture.get();
     const summarize = (p) => ({ id: p.project.id, label: p.project.label, symbol: p.project.symbol, mint: p.project.mint,
@@ -8148,7 +8189,7 @@ app.get("/api/hub-demo", (req, res) => {
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 app.get("/api/hub-demo/:project", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=60");
   const id = String(req.params.project || "").toLowerCase();
   try {
     const p = hubDemoFixture.get()[id];
@@ -8157,7 +8198,7 @@ app.get("/api/hub-demo/:project", (req, res) => {
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 app.get("/api/hub-demo/:project/r/:id", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=300");
   const id = String(req.params.project || "").toLowerCase();
   try {
     const p = hubDemoFixture.get()[id];
@@ -8175,11 +8216,19 @@ app.get("/api/hub-demo/:project/r/:id", (req, res) => {
 // carries no program-version hash of its own today, so `programVersion`/`hash` come back null —
 // reported honestly rather than invented (see the file header for why).
 const hubReproduce = require("./lib/hub/reproduce");
-app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
+// Rate-limited (Z3): both routes below replay real ledger data (a whole batch, or every batch in
+// the project) on each miss, well past what "load a page" needs — `cors: true` on the one that
+// carries ACAO so its 429 is still readable cross-origin (batch/inputs is what /hub/verify, Y1,
+// fetches from a possibly different host than it's loaded on).
+app.get("/api/hub/:project/batch/:batchId/inputs", rateLimit("hubheavy", { windowMs: 60000, max: 60, cors: true }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  // Shape-check ?wallet= BEFORE it is used to index the built map (Z3) — a malformed value 400s
+  // instead of silently missing (or, worse, hitting an inherited key like "__proto__").
+  const wanted = String(req.query.wallet || "").trim();
+  if (wanted && !SOL_ADDR_RE.test(wanted)) return res.status(400).json({ ok: false, error: "bad wallet" });
   try {
     const batches = hubStore.read(kv, p.id, "batches", {}) || {};
     const bt = batches[String(req.params.batchId || "")];
@@ -8189,10 +8238,9 @@ app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
     // Only wallets already SENT in this batch are built — the same public/private line
     // lib/hub/public.js draws (a batch row with no signature is never public). Optional
     // ?wallet= narrows to one, so a reader reproducing a single receipt fetches one small file.
-    const wanted = String(req.query.wallet || "").trim();
     const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
     if (wanted) {
-      if (!all[wanted]) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
+      if (!Object.prototype.hasOwnProperty.call(all, wanted)) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
       return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: all[wanted] } });
     }
     return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: all });
@@ -8204,7 +8252,7 @@ app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
 // header, same pattern as the other Hub read routes.
 const HUB_REPRO_CACHE = new Map();   // projectId -> { at, data }
 const HUB_REPRO_CACHE_MS = 5 * 60 * 1000;
-app.get("/api/hub/:project/reproducibility", (req, res) => {
+app.get("/api/hub/:project/reproducibility", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300");
   const id = String(req.params.project || "").toLowerCase();
   const p = hubProjects()[id];
@@ -8259,7 +8307,10 @@ app.get("/hub-verify.bundle.js", (req, res) => {
   if (!fs.existsSync(HUB_VERIFY_BUNDLE_PATH)) {
     return res.status(404).json({ ok: false, error: "hub-verify.bundle.js has not been built yet — run `npm run build` (or `npm run build:hubverify`) first" });
   }
-  res.setHeader("Cache-Control", "public, max-age=300");
+  // Z3: same 3600s tier as /hub/schema/*.json — a built bundle only ever changes on a new
+  // deploy, same as a schema file, so it gets the same long cache rather than the 300s a live
+  // computation (reproducibility) gets.
+  res.setHeader("Cache-Control", "public, max-age=3600");
   res.type("application/javascript");
   res.sendFile(HUB_VERIFY_BUNDLE_PATH);
 });
@@ -17792,7 +17843,9 @@ app.get("/api/owners-snapshot/admin", adminGuarded(ADMIN_404, { noStore: true })
 // produced it is already holder-gated; this just serves what was recorded). Never wallets on
 // the series endpoint; the single-snapshot endpoint carries the capped top list only.
 const holdersSnapshot = require("./lib/holders-snapshot");
-app.get("/api/holders/snapshots", (req, res) => {
+// Rate-limited (Z3): the series read walks every retained snapshot for a mint (up to KEEP=90
+// rows each), heavier than the single-snapshot lookup below which is a direct match on one id.
+app.get("/api/holders/snapshots", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   const mint = String(req.query.mint || "").trim();
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
