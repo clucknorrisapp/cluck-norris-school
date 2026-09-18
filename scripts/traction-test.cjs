@@ -278,6 +278,81 @@ t("Hatchery revenue is reported as NOT reproducible, never guessed from the life
   assert.ok(out.caveats.some((c) => /not reproducible/.test(c)));
 });
 
+section("operator onboarding clock (Colosseum E7) — observed setup time");
+
+function withMilestones(kv, id, milestones) {
+  const reg = store.readRegistry(kv) || {};
+  store.writeRegistry(kv, { ...reg, [id]: { ...reg[id], milestones } });
+}
+
+t("a full apply→approve→version→arm→batch sequence produces all four deltas, in seconds", () => {
+  const kv = store.memoryKv();
+  approve(kv, "acme", MINT_A, "2026-09-10");
+  withMilestones(kv, "acme", {
+    appliedAt: dayMs("2026-09-01") / 1000,
+    approvedAt: dayMs("2026-09-03") / 1000,
+    firstPaidAt: dayMs("2026-09-03") / 1000,
+    firstVersionPublishedAt: dayMs("2026-09-05") / 1000,
+    firstArmedAt: dayMs("2026-09-08") / 1000,
+    firstBatchSignedAt: dayMs("2026-09-15") / 1000,
+  });
+  const out = traction.compute({ kv, from: "2026-09-01", to: "2026-09-18" });
+  const row = out.onboarding.find((o) => o.project === "acme");
+  assert.ok(row, "acme appears in onboarding");
+  assert.strictEqual(row.deltas.applyToApprove, 2 * 86400);
+  assert.strictEqual(row.deltas.approveToFirstVersion, 2 * 86400);
+  assert.strictEqual(row.deltas.firstVersionToFirstArm, 3 * 86400);
+  assert.strictEqual(row.deltas.firstArmToFirstBatch, 7 * 86400);
+  assert.strictEqual(row.label, "independent");
+});
+
+t("a missing milestone is null, never a made-up number — a project seeded directly has no appliedAt and no later step either", () => {
+  const kv = store.memoryKv();
+  approve(kv, "beta", MINT_B, "2026-09-10"); // approve() calls proj.approveProject with no appliedAt and never sets a version milestone
+  const out = traction.compute({ kv, from: "2026-09-01", to: "2026-09-18" });
+  const row = out.onboarding.find((o) => o.project === "beta");
+  assert.ok(row);
+  assert.strictEqual(row.deltas.applyToApprove, null, "no appliedAt on a directly-approved project");
+  assert.strictEqual(row.deltas.approveToFirstVersion, null, "this fixture never wrote firstVersionPublishedAt");
+  assert.strictEqual(row.deltas.firstVersionToFirstArm, null);
+  assert.strictEqual(row.deltas.firstArmToFirstBatch, null);
+});
+
+t("milestones are set once and never overwritten — proj.setMilestoneOnce keeps the first value even if fed a later one", () => {
+  const kv = store.memoryKv();
+  approve(kv, "gamma", MINT_A, "2026-09-10");
+  const reg = store.readRegistry(kv);
+  const m1 = proj.setMilestoneOnce(reg.gamma.milestones, "firstArmedAt", dayMs("2026-09-05") / 1000);
+  const m2 = proj.setMilestoneOnce(m1, "firstArmedAt", dayMs("2026-09-12") / 1000);
+  assert.strictEqual(m2.firstArmedAt, dayMs("2026-09-05") / 1000, "the first value wins, always");
+});
+
+t("CUNA is labelled n/a (pre-window), never a false zero — it predates the Hub's onboarding milestones entirely", () => {
+  const kv = store.memoryKv();
+  const out = traction.compute({ kv, from: "2026-09-01", to: "2026-09-18" });
+  const cuna = out.onboarding.find((o) => o.project === "cuna");
+  assert.ok(cuna, "cuna is always reported even with an empty registry — it is not a registry row");
+  assert.strictEqual(cuna.label, "n/a (pre-window)");
+  assert.deepStrictEqual(cuna.deltas, { applyToApprove: null, approveToFirstVersion: null, firstVersionToFirstArm: null, firstArmToFirstBatch: null });
+});
+
+t("a project flagged dryRun:true is excluded from onboarding entirely", () => {
+  const kv = store.memoryKv();
+  approve(kv, "acme", MINT_A, "2026-09-10");
+  const reg = store.readRegistry(kv);
+  store.writeRegistry(kv, { ...reg, acme: { ...reg.acme, dryRun: true } });
+  const out = traction.compute({ kv, from: "2026-09-01", to: "2026-09-18" });
+  assert.ok(!out.onboarding.some((o) => o.project === "acme"), "dryRun:true is excluded");
+});
+
+t("with no project record carrying dryRun today, the caveat says the filter excluded nothing (never silently drops a real project)", () => {
+  const kv = store.memoryKv();
+  approve(kv, "acme", MINT_A, "2026-09-10");
+  const out = traction.compute({ kv, from: "2026-09-01", to: "2026-09-18" });
+  assert.ok(out.onboarding.some((o) => o.project === "acme"));
+  assert.ok(out.caveats.some((c) => /dryRun/.test(c) && /no-op/.test(c)));
+});
+
 section("compute() itself");
 
 t("refuses a kv with no get()", () => {

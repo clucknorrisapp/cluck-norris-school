@@ -113,5 +113,30 @@ console.log("reserved built-in programmes (deep dive 2026-09-17 P1-030)");
   });
 }
 
+console.log("onboarding clock (Colosseum E7): milestones set once, never overwritten");
+{
+  const proj = require("../lib/hub/project");
+  t("approving a self-serve application sets appliedAt from its submittedAt, approvedAt at approval, and firstVersionPublishedAt at that same moment — the draft becomes v1 immediately", () => {
+    const a = A.validateApplication(base(), MI, { nowUnix: NOW, id });
+    const book = A.addToBook({}, a);
+    const r = A.approve(book, {}, a.id, { nowUnix: NOW + 500, freshMintInfo: MI });
+    assert.deepStrictEqual(r.project.milestones, { appliedAt: NOW, approvedAt: NOW + 500, firstPaidAt: null, firstVersionPublishedAt: NOW + 500, firstArmedAt: null, firstBatchSignedAt: null });
+    assert.strictEqual(r.registry[a.projectId].milestones.appliedAt, NOW, "the registry the caller persists carries the same milestones");
+  });
+  t("a project the owner seeds directly (proj.approveProject, no appliedAt) has no appliedAt — the honest null", () => {
+    const seeded = proj.validateProject({ id: "seeded", label: "Seeded", symbol: "SEED", mint: W.MINT2, fundingWallet: W.FUND, accessTier: "standard" }, MI);
+    const reg = proj.approveProject({}, seeded, { nowUnix: NOW });
+    assert.strictEqual(reg.seeded.milestones.appliedAt, null);
+    assert.strictEqual(reg.seeded.milestones.approvedAt, NOW);
+  });
+  t("re-approving the same project later never moves approvedAt or appliedAt", () => {
+    const a = A.validateApplication(base({ id: "gamma", mint: W.MINT2 }), MI, { nowUnix: NOW, id });
+    const r = A.approve(A.addToBook({}, a), {}, a.id, { nowUnix: NOW, freshMintInfo: MI });
+    const again = proj.approveProject(r.registry, r.project, { nowUnix: NOW + 99999 });
+    assert.strictEqual(again.gamma.milestones.approvedAt, NOW);
+    assert.strictEqual(again.gamma.milestones.appliedAt, NOW);
+  });
+}
+
 console.log(`\n${fail ? "FAILED" : "all passed"} (${pass} passed${fail ? `, ${fail} failed` : ""})`);
 process.exit(fail ? 1 : 0);
