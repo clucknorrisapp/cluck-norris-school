@@ -467,6 +467,69 @@ t("pageViewsInPeriod is null (never a guessed zero) when analytics_v1 has no buc
   assert.strictEqual(traction.pageViewsInPeriod(kv, "/school", "2026-09-14", "2026-09-18"), null);
 });
 
+section("salt (finding #3, batch 8) — no longer a hardcoded literal, persisted per install");
+
+t("with no env var, a fresh kv gets its own random salt, persisted under kv traction:salt_v1", () => {
+  const savedA = process.env.ANALYTICS_SALT, savedP = process.env.PREMIUM_ACCESS_KEY;
+  delete process.env.ANALYTICS_SALT; delete process.env.PREMIUM_ACCESS_KEY;
+  try {
+    const kv = store.memoryKv();
+    traction.recordWalletConnect(kv, { source: "toolpass", wallet: WALLET_1, nowMs: dayMs("2026-09-16") });
+    const saved = kv.get(traction.STORED_SALT_KEY, null);
+    assert.ok(typeof saved === "string" && /^[0-9a-f]{64}$/.test(saved), "a 32-byte hex salt is generated and stored, got " + JSON.stringify(saved));
+  } finally {
+    if (savedA !== undefined) process.env.ANALYTICS_SALT = savedA;
+    if (savedP !== undefined) process.env.PREMIUM_ACCESS_KEY = savedP;
+  }
+});
+t("two calls sharing the same kv (i.e. two processes against the same persisted store) derive the SAME hash", () => {
+  const savedA = process.env.ANALYTICS_SALT, savedP = process.env.PREMIUM_ACCESS_KEY;
+  delete process.env.ANALYTICS_SALT; delete process.env.PREMIUM_ACCESS_KEY;
+  try {
+    const kv = store.memoryKv();
+    const h1 = traction.hashOf(kv, "wallet", "toolpass", WALLET_1); // "process 1" — mints and persists the salt
+    delete require.cache[require.resolve("../lib/traction")];
+    const traction2 = require("../lib/traction"); // "process 2" — a fresh module instance, same kv
+    const h2 = traction2.hashOf(kv, "wallet", "toolpass", WALLET_1);
+    assert.strictEqual(h1, h2, "the same input against the same kv must hash identically across a fresh require — the salt was read back, not regenerated");
+  } finally {
+    if (savedA !== undefined) process.env.ANALYTICS_SALT = savedA;
+    if (savedP !== undefined) process.env.PREMIUM_ACCESS_KEY = savedP;
+  }
+});
+t("a fresh kv (a different install) derives a DIFFERENT hash for the identical input", () => {
+  const savedA = process.env.ANALYTICS_SALT, savedP = process.env.PREMIUM_ACCESS_KEY;
+  delete process.env.ANALYTICS_SALT; delete process.env.PREMIUM_ACCESS_KEY;
+  try {
+    const kvOne = store.memoryKv(), kvTwo = store.memoryKv();
+    const h1 = traction.hashOf(kvOne, "wallet", "toolpass", WALLET_1);
+    const h2 = traction.hashOf(kvTwo, "wallet", "toolpass", WALLET_1);
+    assert.notStrictEqual(h1, h2, "two installs with no shared kv must never land on the same salt/hash");
+    assert.notStrictEqual(kvOne.get(traction.STORED_SALT_KEY, null), kvTwo.get(traction.STORED_SALT_KEY, null));
+  } finally {
+    if (savedA !== undefined) process.env.ANALYTICS_SALT = savedA;
+    if (savedP !== undefined) process.env.PREMIUM_ACCESS_KEY = savedP;
+  }
+});
+t("the old hardcoded fallback literal no longer appears in lib/traction.js or lib/analytics.js", () => {
+  const fs = require("fs");
+  const tractionSrc = fs.readFileSync(require.resolve("../lib/traction"), "utf8");
+  const analyticsSrc = fs.readFileSync(require.resolve("../lib/analytics"), "utf8");
+  assert.ok(!tractionSrc.includes("clkn-traction-salt"), "lib/traction.js must not carry the old reversible literal");
+  assert.ok(!analyticsSrc.includes("clkn-analytics-salt"), "lib/analytics.js must not carry the old reversible literal");
+});
+t("ANALYTICS_SALT still wins over the stored salt when set (env is not being ignored)", () => {
+  const savedA = process.env.ANALYTICS_SALT;
+  process.env.ANALYTICS_SALT = "explicit-env-salt-for-this-test";
+  try {
+    const kv = store.memoryKv();
+    traction.hashOf(kv, "wallet", "toolpass", WALLET_1);
+    assert.strictEqual(kv.get(traction.STORED_SALT_KEY, null), null, "an explicit env salt must never trigger generating/storing a kv salt");
+  } finally {
+    if (savedA === undefined) delete process.env.ANALYTICS_SALT; else process.env.ANALYTICS_SALT = savedA;
+  }
+});
+
 section("compute() itself");
 
 t("refuses a kv with no get()", () => {

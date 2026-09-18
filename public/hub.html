@@ -15,7 +15,7 @@
   * { box-sizing:border-box; margin:0; padding:0; }
   body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
   .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
-  .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
   .header { text-align:center; margin-bottom:18px; }
   .header h1 { font-family:var(--disp); font-size:32px; letter-spacing:1px; color:var(--gold); font-weight:400; }
   .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
@@ -28,9 +28,11 @@
   .input-row { display:flex; gap:8px; margin-top:12px; }
   .addr-input { flex:1; min-width:0; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:11px 13px; color:var(--text); font-family:var(--mono); font-size:13px; outline:none; }
   .addr-input:focus { border-color:var(--accent); }
-  .btn { flex-shrink:0; background:var(--orange); border:none; border-radius:8px; padding:11px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#fff; cursor:pointer; }
+  .btn { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; min-height:44px; background:var(--orange); border:none; border-radius:8px; padding:11px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#fff; cursor:pointer; }
   .btn.ghost { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); }
-  .btn:disabled { background:var(--grey, #4B5563); color:var(--muted); cursor:not-allowed; }
+  /* --grey is aliased to --muted in theme.css, so background:var(--grey) + color:var(--muted)
+     is background == text — invisible disabled-button copy. Dark text on the grey reads fine. */
+  .btn:disabled { background:var(--grey, #4B5563); color:var(--bg); cursor:not-allowed; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; }
   .chip { font-family:var(--disp); font-size:11px; letter-spacing:1.5px; padding:4px 9px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; }
   .chip.kind { color:var(--gold); border-color:rgba(252,211,77,.35); }
@@ -82,24 +84,27 @@
   .proj-hero .htext .tagline { font-size:12.5px; color:var(--subtext, #9CA3AF); margin-top:3px; line-height:1.5; }
   .card-logo { width:22px; height:22px; border-radius:6px; object-fit:cover; vertical-align:middle; margin-right:6px; border:1px solid var(--border); background:#000; }
   .socials-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-  .social-pill { font-size:11px; letter-spacing:.5px; padding:4px 10px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-decoration:none; }
+  .social-pill { display:inline-flex; align-items:center; justify-content:center; min-height:44px; min-width:44px; font-size:11px; letter-spacing:.5px; padding:8px 14px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-decoration:none; }
   .social-pill:hover { color:var(--text); border-color:var(--proj-accent); }
   .funding-note { font-size:11px; color:var(--sub); text-align:center; margin-top:2px; }
-  .lessons a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  /* Standalone one-line CTA links (each is the sole content of its row, not a word inside a
+     sentence) get invisible tap-area padding — the negative margin cancels the padding's visual
+     footprint, so the link looks identical but its hit box grows toward 44px tall. */
+  .lessons a, .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
   .small { font-size:12px; color:var(--sub); }
   pre.proof { background:rgba(0,0,0,.35); border:1px solid var(--border); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11.5px; color:#D1D5DB; overflow-x:auto; white-space:pre; }
   @media (max-width:520px) { .prog-head h2 { font-size:19px; } td, th { padding:6px 4px; } }
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <a class="back-home" href="/">← CLUCK NORRIS</a>
   <div class="header">
     <h1 id="title" data-clkn-avoid="1">Project Hub</h1>
     <p id="subtitle" data-clkn-avoid="1">RECEIPTS YOU CAN VERIFY · NO WALLET NEEDED</p>
   </div>
   <div id="app"><div class="status">LOADING…</div></div>
-</div>
+</main>
 
 <script src="/cluck-util.js"></script>
 <script>
@@ -120,8 +125,10 @@
   function acct(a) { return '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/account/' + encodeURIComponent(a) + '">' + esc(shortAddr(a, 5, 4)) + '</a>'; }
   function txLink(sig) { return sig ? '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(sig) + '">' + esc(shortAddr(sig, 6, 6)) + '</a>' : '<span class="small">—</span>'; }
   function pill(state) {
-    var m = { settled: 'ok', paid: 'ok', qualified: 'ok', eligible: 'ok', confirmed: 'ok', submitted: 'warn', manual: 'warn', pending: 'warn', dq: 'bad', cancelled: 'bad' };
-    var label = { 'no-receipt': 'no receipt on file', 'confirmed-manually': 'confirmed by hand', dq: 'disqualified', manual: 'reviewed by hand' }[state] || String(state || '').replace(/-/g, ' ');
+    // held/sold/moved-out/locked-not-a-sell/unverified: the hold-through classification (PR #298
+    // — a lock is not a sell, so it is a warn, never a bad, alongside a genuine "still verifying").
+    var m = { settled: 'ok', paid: 'ok', qualified: 'ok', eligible: 'ok', confirmed: 'ok', held: 'ok', submitted: 'warn', manual: 'warn', pending: 'warn', 'locked-not-a-sell': 'warn', unverified: 'warn', dq: 'bad', cancelled: 'bad', sold: 'bad', 'moved-out': 'bad' };
+    var label = { 'no-receipt': 'no receipt on file', 'confirmed-manually': 'confirmed by hand', dq: 'disqualified', manual: 'reviewed by hand', 'moved-out': 'moved the bag out', 'locked-not-a-sell': 'locked — not a sell', unverified: 'not verified' }[state] || String(state || '').replace(/-/g, ' ');
     return '<span class="pill ' + (m[state] || '') + '">' + esc(label) + '</span>';
   }
   function verifyCell(sig) { return sig ? '<span class="verify" data-sig="' + esc(sig) + '"><span class="small">not checked</span></span>' : '<span class="small">—</span>'; }
@@ -171,11 +178,24 @@
     return scrollable('<table><thead><tr>' + (withRank ? '<th>#</th>' : '') + '<th>Wallet</th><th style="text-align:right">Amount</th><th>State</th><th>Transaction</th><th>Chain check</th></tr></thead><tbody>' +
       rows.map(function (r) { return '<tr>' + (withRank ? '<td class="num">' + esc(r.rank == null ? '' : r.rank) + '</td>' : '') + '<td>' + acct(r.wallet) + '</td><td class="num">' + amt(r.amountUi, sym) + '</td><td>' + pill(r.state) + '</td><td>' + txLink(r.sig) + '</td><td>' + verifyCell(r.sig) + '</td></tr>'; }).join('') + '</tbody></table>');
   }
+  // The hold-through evidence link (Colosseum roadmap §7): the FIRST transaction that actually
+  // decided a "sold" / "moved out" / "locked" call, opened on Solscan — a reader checks the fact
+  // themselves rather than taking the page's word for it.
+  function evidenceLink(sig) { return sig ? '<span class="row-flex" style="margin-top:2px"><span class="small">on-chain evidence</span> ' + txLink(sig) + '</span>' : ''; }
   function reviewList(review, results) {
     var rows = (review || []).filter(function (r) { return r.status !== 'qualified' && r.status !== 'eligible'; });
     if (!rows.length) return '';
     return '<details><summary>' + rows.length + ' wallet' + (rows.length > 1 ? 's' : '') + ' reviewed and not paid — the observed fact for each</summary><ul class="facts">' +
-      rows.map(function (r) { return '<li><div class="row-flex">' + acct(r.wallet) + ' ' + pill(r.status) + (r.tokensBought ? '<span class="small">bought ' + amt(r.tokensBought) + '</span>' : '') + '</div><div class="fact">' + esc(r.fact) + '</div></li>'; }).join('') + '</ul></details>';
+      rows.map(function (r) { return '<li><div class="row-flex">' + acct(r.wallet) + ' ' + (r.holdThrough ? pill(r.holdThrough) : pill(r.status)) + (r.tokensBought ? '<span class="small">bought ' + amt(r.tokensBought) + '</span>' : '') + '</div><div class="fact">' + esc(r.fact) + '</div>' + evidenceLink(r.evidenceSig) + '</li>'; }).join('') + '</ul></details>';
+  }
+  // The E5 "how this number was computed" pattern (Colosseum roadmap), for a buy comp's own
+  // winners: each result row carries its own `explanation` (lib/hub/public.js, built by
+  // lib/hub/explain.js explainBuyCompRow — the exact split function buyCompVerify used, never a
+  // re-typed copy). Rendered as one collapsible per winner, reusing explainBlock() below.
+  function winnersExplainSection(results) {
+    var rows = (results || []).filter(function (r) { return r.explanation; });
+    if (!rows.length) return '';
+    return rows.map(function (r) { return '<div style="margin-top:4px">' + acct(r.wallet) + ' <span class="small">#' + esc(r.rank) + '</span>' + explainBlock(r) + '</div>'; }).join('');
   }
   function compCard(p, sym) {
     var t = p.terms || {}, tot = p.totals || {};
@@ -187,11 +207,13 @@
       '<div class="prog-head" data-clkn-avoid-kids="1"><h2>' + esc(p.label || 'Buy competition') + '</h2><div class="chips"><span class="chip kind">buy competition</span><span class="chip ' + (p.status === 'verified' || p.status === 'closed' ? 'ok' : '') + '">' + esc(p.status) + '</span>' + (p.verifiedBy === 'operator' ? '<span class="chip warn">list set by operator</span>' : '') + '</div></div>' +
       timeline(p) +
       '<div class="terms" data-clkn-avoid-kids="1"><div><b>Metric</b> ' + esc(t.metric === 'single' ? 'largest single buy' : 'cumulative buys') + '</div><div><b>Prizes</b> ' + prizes + '</div><div><b>Hold</b> ' + esc(t.holdHours) + ' h after close</div>' + (t.minVolSol ? '<div><b>Min volume</b> ' + esc(t.minVolSol) + ' SOL</div>' : '') + (t.exclude && t.exclude.length ? '<div><b>Excluded wallets</b> ' + t.exclude.length + '</div>' : '') +
-      '<div><b>Terms hash</b> <span class="mono" title="sha256 of the terms this competition ran under — recompute it from the JSON at /api/hub/' + esc(projectId) + '">' + esc(String(p.termsHash || '').slice(0, 16)) + '…</span></div></div>' +
+      '<div><b>Terms hash</b> <span class="mono" title="sha256 of the terms this competition ran under — recompute it from the JSON at /api/hub/' + esc(projectId) + '">' + esc(String(p.termsHash || '').slice(0, 16)) + '…</span></div>' +
+      (p.sealed ? '<div><b>Sealed</b> ' + ts(p.sealedAt) + ' · <span class="mono" title="sha256 of the sealed (rank, wallet, amount, status) list — recompute it yourself to check it never changed">' + esc(String(p.resultsHash || '').slice(0, 16)) + '…</span></div>' : '') +
+      '</div>' +
       statTiles([['Sealed total', amt(tot.sealedUi)], ['Receipted', amt(tot.paidUi)], ['Settled', tot.settled], ['Submitted', tot.submitted || null], ['Winners', tot.winners], ['Disqualified', tot.disqualified]]) +
       (p.payoutNote ? '<div class="fact" style="margin-bottom:8px">' + esc(p.payoutNote) + '</div>' : '') +
       (p.listHistory && p.listHistory.length ? '<div class="fact" style="margin-bottom:8px">The sealed list was replaced by the operator ' + p.listHistory.length + ' time' + (p.listHistory.length > 1 ? 's' : '') + ': <b>' + esc(p.listHistory[p.listHistory.length - 1].note || 'no note') + '</b> (' + ts(p.listHistory[p.listHistory.length - 1].at) + ').</div>' : '') +
-      '<div class="sec-title" data-clkn-avoid="1">Winners and receipts</div>' + (winners.length ? payoutTable(winners, sym, true) : '<div class="fact">Not verified yet — the hold period runs ' + esc(t.holdHours) + ' hours past the close.</div>') +
+      '<div class="sec-title" data-clkn-avoid="1">Winners and receipts</div>' + (winners.length ? payoutTable(winners, sym, true) + winnersExplainSection(p.results) : '<div class="fact">Not verified yet — standings are sealed at the window\'s end, after the ' + esc(t.holdHours) + '-hour hold-through check runs.</div>') +
       reviewList(p.review) +
       (p.voids && p.voids.length ? '<details><summary>' + p.voids.length + ' voided transfer record' + (p.voids.length > 1 ? 's' : '') + '</summary><ul class="facts">' + p.voids.map(function (v) { return '<li><div class="row-flex">' + acct(v.wallet) + ' ' + txLink(v.sig) + ' ' + pill(v.reason || 'void') + '</div></li>'; }).join('') + '</ul></details>' : '') +
       '</div>';
@@ -347,7 +369,7 @@
     // top nav bar, worse than the original overlap). Only the SHORT trailing line inside each
     // card (its mint address) is marked, so a pill landing on any one card only has to clear that
     // one line, never the whole card.
-    app.innerHTML = '<div class="card"><div class="intro" data-clkn-avoid="1">Every project here has a public record: <b>what it promised its holders, who qualified, and the transaction that paid each one</b>. Nothing on these pages needs a wallet, and every signature can be re-checked against Solana from the page itself.</div><div class="small" style="margin-top:10px" data-clkn-avoid="1">Run a project? <a href="/for-projects" style="color:var(--cyan)">Start at the guided front door →</a></div></div>' +
+    app.innerHTML = '<div class="card"><div class="intro" data-clkn-avoid="1">Every project here has a public record: <b>what it promised its holders, who qualified, and the transaction that paid each one</b>. Nothing on these pages needs a wallet, and every signature can be re-checked against Solana from the page itself.</div><div class="small" style="margin-top:10px" data-clkn-avoid="1">Run a project? <a href="/for-projects" style="color:var(--cyan)">Start at the guided front door →</a></div><div class="small" style="margin-top:6px" data-clkn-avoid="1">Judging or just skeptical? <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/HUB_VERIFY.md" style="color:var(--cyan)" target="_blank" rel="noopener">Verify it yourself — a two-minute checklist →</a></div></div>' +
       r.projects.map(function (p) {
         return '<a class="card proj-link" href="/hub/' + esc(p.id) + '">' +
           (p.dryRun ? dryRunBadge() : '') +
@@ -374,10 +396,14 @@
     document.getElementById('subtitle').textContent = one ? (one.kind === 'lock-to-earn' ? 'REWARDS FOR LOCKED WALLETS · RECEIPTS YOU CAN VERIFY' : 'RECEIPTS YOU CAN VERIFY · NO WALLET NEEDED') : 'PROGRAMS ON RECORD';
     document.title = (one ? (one.kind === 'lock-to-earn' ? v.label + ' Lock to Earn' : one.label) : v.label) + ' — receipts you can verify';
     var tokenLine = '<div class="row-flex" style="margin-top:10px"><span class="small">Token</span> <a class="mono" target="_blank" rel="noopener" href="https://solscan.io/token/' + encodeURIComponent(v.mint) + '">' + esc(v.mint) + '</a></div>';
+    // X7 (Colosseum roadmap §8): a fact line, never a judgement — what the last owners-snapshot
+    // crawl counted and its hash, not "growing"/"healthy" (CLAUDE.md: say what's on-chain, never
+    // why). Absent entirely when this mint has never been crawled.
+    var holdersLine = (v.holders && v.holders.id) ? '<div class="row-flex" style="margin-top:6px"><span class="small">Holders</span> <a class="mono" target="_blank" rel="noopener" href="/api/holders/snapshots/' + encodeURIComponent(v.holders.id) + '?mint=' + encodeURIComponent(v.mint) + '">' + Number(v.holders.holderCount || 0).toLocaleString() + ' (snapshot ' + ts(v.holders.at) + ', hash ' + esc(String(v.holders.listHash || '').slice(0, 16)) + '…)</a></div>' : '';
     if (!one) {
       // Program index — names and counts only; the details live on each program's own page.
       app.innerHTML = heroBlock(v) +
-        '<div class="card"><div class="intro" data-clkn-avoid="1">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + tokenLine + '</div>' +
+        '<div class="card"><div class="intro" data-clkn-avoid="1">Programs <b>' + esc(v.label) + '</b> has run with its holders. Each one has its own page with the terms, the outcome and the transactions.</div>' + tokenLine + holdersLine + '</div>' +
         (v.programs.length ? v.programs.map(function (p) { var n = (p.payouts || []).filter(function (x) { return x.sig; }).length; return '<a class="card proj-link" href="/hub/' + esc(v.id) + '/p/' + encodeURIComponent(p.id) + '"><div class="prog-head" data-clkn-avoid-kids="1"><h2>' + esc(p.label || p.kind) + '</h2><div class="chips"><span class="chip kind">' + esc(String(p.kind).replace(/-/g, ' ')) + '</span><span class="chip ' + (n ? 'ok' : '') + '">' + n + ' receipt' + (n === 1 ? '' : 's') + '</span></div></div></a>'; }).join('') : '<div class="card"><div class="fact">No programs on record for this project yet.' + (v.dryRun ? ' This is a dry run — see the note above.' : '') + '</div></div>');
       return;
     }
@@ -394,9 +420,9 @@
       } catch (e) { /* omit the line rather than guess */ }
     }
     app.innerHTML = heroBlock(v) +
-      '<div class="card"><div class="intro" data-clkn-avoid="1">' + intro + '</div>' + tokenLine +
+      '<div class="card"><div class="intro" data-clkn-avoid="1">' + intro + '</div>' + tokenLine + holdersLine +
       '<div class="verify-bar" data-clkn-avoid="1"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote">' + receipts + ' receipt' + (receipts === 1 ? '' : 's') + ' on this page. Press to re-check every signature against Solana, from your browser.</span></div></div>' +
-      '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Check a wallet</div><div class="fact">Paste any address to see what it received in this program, with the transaction' + (one.kind === 'lock-to-earn' ? '' : ' — and, if it was disqualified, the fact that decided it') + '.</div><div class="input-row"><input class="addr-input" id="walletIn" placeholder="Solana wallet address" autocomplete="off" spellcheck="false"/><button class="btn ghost" id="walletBtn">CHECK</button></div><div id="walletOut"></div></div>' +
+      '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Check a wallet</div><div class="fact">Paste any address to see what it received in this program, with the transaction' + (one.kind === 'lock-to-earn' ? '' : ' — and, if it was disqualified, the fact that decided it') + '.</div><div class="input-row"><input class="addr-input" id="walletIn" placeholder="Solana wallet address" aria-label="Solana wallet address" autocomplete="off" spellcheck="false"/><button class="btn ghost" id="walletBtn">CHECK</button></div><div id="walletOut"></div></div>' +
       programCard(one, sym, batchRepro) +
       lessons(one.kind === 'lock-to-earn' ? 'lock-to-earn' : '', v.lessonReads) +
       '<div class="small" data-clkn-avoid="1" style="text-align:center">Raw data: <a class="mono" href="/api/hub/' + esc(v.id) + '">/api/hub/' + esc(v.id) + '</a> · generated ' + ts(v.generatedAt) + '</div>';

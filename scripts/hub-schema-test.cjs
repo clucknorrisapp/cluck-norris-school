@@ -22,44 +22,16 @@ const proj = require("../lib/hub/project");
 const L = require("../lib/hub/ledger");
 const pub = require("../lib/hub/public");
 const store = require("../lib/hub/store");
+// The minimal JSON-Schema-subset validator lives in lib/hub/schema-validate.js so this test and
+// a judge's own `scripts/hub-validate.cjs <url>` (docs/HUB_VERIFY.md, X2) run the identical
+// check — no second hand-written copy to drift out of step with this one.
+const { validate } = require("../lib/hub/schema-validate");
 
 let failures = 0;
 const ok = (name, cond, detail) => { if (cond) console.log("  ✓ " + name); else { failures++; console.log("  ✗ " + name + (detail ? "\n      " + detail : "")); } };
 
 console.log("\nProject Hub — settlement library JSON Schemas (E4)\n");
 
-// ── the minimal validator ─────────────────────────────────────────────────────────────────────
-function typeOf(v) {
-  if (v === null) return "null";
-  if (Array.isArray(v)) return "array";
-  if (Number.isInteger(v)) return "integer";
-  return typeof v;
-}
-function typeOk(t, v) {
-  if (t === "integer") return Number.isInteger(v);
-  if (t === "number") return typeof v === "number" && Number.isFinite(v);
-  return typeOf(v) === t || (t === "number" && typeof v === "number");
-}
-function validate(schema, data, at = "$", errors = []) {
-  if (!schema || typeof schema !== "object") return errors;
-  if (schema.type) {
-    const types = Array.isArray(schema.type) ? schema.type : [schema.type];
-    if (!types.some((t) => typeOk(t, data))) { errors.push(`${at}: expected ${types.join("|")}, got ${typeOf(data)}`); return errors; }
-  }
-  if (schema.enum && !schema.enum.includes(data)) errors.push(`${at}: ${JSON.stringify(data)} not in ${JSON.stringify(schema.enum)}`);
-  if (schema.pattern && typeof data === "string" && !new RegExp(schema.pattern).test(data)) errors.push(`${at}: "${data}" fails /${schema.pattern}/`);
-  if (data && typeof data === "object" && !Array.isArray(data)) {
-    for (const req of schema.required || []) if (!Object.prototype.hasOwnProperty.call(data, req)) errors.push(`${at}: missing required "${req}"`);
-    if (schema.properties) {
-      for (const [k, v] of Object.entries(data)) {
-        if (Object.prototype.hasOwnProperty.call(schema.properties, k)) validate(schema.properties[k], v, `${at}.${k}`, errors);
-        else if (schema.additionalProperties === false) errors.push(`${at}.${k}: additional property not allowed`);
-      }
-    }
-  }
-  if (Array.isArray(data) && schema.items) data.forEach((item, i) => validate(schema.items, item, `${at}[${i}]`, errors));
-  return errors;
-}
 function validOk(name, schema, data) {
   const errors = validate(schema, data);
   ok(name, errors.length === 0, errors.join("\n      "));

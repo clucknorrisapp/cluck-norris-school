@@ -211,6 +211,12 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 7** — W9 part 2, real usage without a single automated post: a "see how a
+  project's rewards are actually paid" door on the school landing and every lesson's finish
+  screen → `/hub/demo` (folded out of the store edition), a second line under the homepage's
+  project tile → `/hub`, both counted per day with their own page views as the denominator in the
+  traction report; Telegram invitation drafts for the four partner projects the owner sends by
+  hand; a note on the one-line lesson-tweet CTA change that stays the owner's call. PR #345.
 - **Colosseum batch 6** — the W6b validation kit: `docs/VALIDATION_2026-09.md` (the
   founder-operated / dry-run / independent rule applied per partner project, interview records,
   the consented POKEAHOE dry-run pilot timeline, every number and quote left to be filled) and the
