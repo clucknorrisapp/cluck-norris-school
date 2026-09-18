@@ -1406,5 +1406,6 @@
   "Could not load that comparison.": "No se pudo cargar esa comparación.",
   "RANK": "RANGO",
   "PREV RANK": "RANGO ANTERIOR",
-  "CHANGE": "CAMBIO"
+  "CHANGE": "CAMBIO",
+  "Embed this — the number is computed live, the same way this page is:": "Insértalo — el número se calcula en vivo, igual que esta página:"
 }
