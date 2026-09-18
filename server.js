@@ -17687,6 +17687,15 @@ app.get("/hub-sparkline.js", (req, res) => {
   res.sendFile(join(__dirname, "public", "hub-sparkline.js"));
 });
 
+// The Hub print sheet's QR encoder (Colosseum roadmap DD4) — a pure, no-network, no-library QR
+// generator (public/hub-qr.js) used by hub.html's ?print=1 mode. Same no-build-boot trap as the
+// modules above — an explicit route is required or a fresh clone 404s it before `npm run build`.
+app.get("/hub-qr.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "hub-qr.js"));
+});
+
 // Shared airdrop machinery. Explicit routes (rather than relying on the vite
 // publicDir copy into dist/) because the SPA catch-all otherwise answers an
 // unmatched .js path with the React shell — the browser then refuses it for a

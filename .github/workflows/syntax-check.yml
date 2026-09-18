@@ -492,7 +492,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -756,6 +756,21 @@ jobs:
       - name: Hub compare — what changed between two program versions (CC1)
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-compare-test.cjs
+      # DD4 (docs/COLOSSEUM_ROADMAP.md §14) — "a receipt you can print." Two independent checks:
+      # public/hub-qr.js (a pure, no-network, no-library QR encoder) is unit-tested in Node —
+      # finder/timing/format-info structure, the module-count invariant that caught a real
+      # placement bug during development, and a byte-mode Reed-Solomon round trip on the actual
+      # codewords a real encode produces (encode -> corrupt up to the max correctable count ->
+      # decode -> recover exactly; one error past that never silently "recovers"). Then a real
+      # Chromium loads /hub/<project>/r/<sig>?print=1 against a seeded receipt with a real
+      # walkthrough behind it: the signature in full, the program-version hash, the amount, the
+      # trust-boundary line, and an svg[role=img] whose aria-label is the exact receipt URL, plus
+      # @media print emulation proving nav/pills/buttons/footer are hidden and the sheet itself is
+      # print-safe (white background). No forbidden word (verified/audited/APR/APY, Normie Quest,
+      # Wallet Watch) anywhere the feature renders.
+      - name: Hub print sheet — QR encoder + Reed-Solomon + the print page (DD4)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-print-test.cjs
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the
