@@ -7840,6 +7840,13 @@ app.all("/api/buycomp/send", async (req, res) => {
 // browser — the page proves itself rather than asking to be believed.
 const hubStore = require("./lib/hub/store");
 const hubPublic = require("./lib/hub/public");
+// The settlement library's public contract (Colosseum roadmap E4, lib/hub/README.md): the wire
+// shapes of a program version, a batch and a receipt are documented as JSON Schema and served
+// read-only so a second product can validate a Hub JSON body without reading this file. Shared by
+// every place a body gets stamped with $schema (this file and lib/hub/routes.js).
+const HUB_SCHEMA_DIR = join(__dirname, "lib", "hub", "schema");
+const HUB_SCHEMA_NAMES = new Set(["program-version", "batch", "receipt", "project-public"]);
+function HUB_SCHEMA_URL(name) { return `https://clucknorris.app/hub/schema/${name}.json`; }
 function hubProjects() {
   const built = {
     clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9, rewardMint: CLKN_MINT, rewardDecimals: 9 },
@@ -7890,7 +7897,9 @@ app.get("/api/hub/:project", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=30");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
-  try { return res.status(200).json({ ok: true, project: hubProjectView(p) }); }
+  // $schema is stamped here (never inside lib/hub/public.js's pure projectView) so the library
+  // stays free of a hardcoded, deployment-specific URL — see lib/hub/README.md §4/E4.
+  try { return res.status(200).json({ ok: true, project: { ...hubProjectView(p), $schema: HUB_SCHEMA_URL("project-public") } }); }
   catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 app.get("/api/hub/:project/wallet/:wallet", (req, res) => {
@@ -7965,6 +7974,16 @@ app.get("/api/hub-pricing", (req, res) => {
     return res.status(200).json({ ok: true, standardSol: hubAccess.priceLamports("standard", now) / 1e9, smallSol: hubAccess.priceLamports("small", now) / 1e9 });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
+// Read-only JSON Schema for the settlement library's wire entities (E4) — no directory listing,
+// an explicit allowlist of names, 404 for anything else. Each file's own $id already matches the
+// URL it is served at, so a consumer never has to be told the mapping out of band.
+app.get("/hub/schema/:name.json", (req, res) => {
+  const name = String(req.params.name || "");
+  if (!HUB_SCHEMA_NAMES.has(name)) return res.status(404).json({ ok: false, error: "not_found" });
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("application/schema+json");
+  res.sendFile(join(HUB_SCHEMA_DIR, `${name}.schema.json`));
+});
 // Explicit routes so the page works on a no-build boot (CI) and gets normal cache headers.
 app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
 app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
@@ -8031,6 +8050,9 @@ hubRoutes.mount(app, {
   kv, adminAuthOK, publicErrMsg, vault: whirlpoolMM.vault,
   connection: () => require("./lib/rpc").connection("confirmed"),
   scanDeps: async () => hubScanDeps, alert: hubAlert,
+  // E4: stamp $schema onto a program-version or batch body wherever routes.js builds one, so a
+  // consumer never has to be told the mapping out of band — see lib/hub/README.md §4.
+  schemaUrl: HUB_SCHEMA_URL,
   // Platform access payments (0.5 / 0.25 SOL a month, or the CLKN equivalent quoted at the
   // moment of payment). SOL lands where the tools pass collects it, CLKN where the Hatchery
   // does; both are lazy because those constants are declared further down this file.

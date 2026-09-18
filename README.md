@@ -44,6 +44,18 @@ eligibility and payments a holder can check *without trusting us*. Versioned pro
 per-recipient receipts, and a calculation anyone can reproduce from published inputs. The school
 is the front door; the rest of the tools below are the same stack, already live.
 
+The Hub's settlement library (`lib/hub/`) is documented as a public, composable contract, not just
+an internal module: [`lib/hub/README.md`](lib/hub/README.md) spells out the entities, the
+Addendum-B settlement invariants, and exactly which shapes are live on which route today (and
+which are pure, tested libraries not yet wired to one — that gap is stated plainly, not glossed
+over). The wire shapes are published as JSON Schema at
+[`clucknorris.app/hub/schema/project-public.json`](https://clucknorris.app/hub/schema/project-public.json),
+[`.../program-version.json`](https://clucknorris.app/hub/schema/program-version.json),
+[`.../batch.json`](https://clucknorris.app/hub/schema/batch.json) and
+[`.../receipt.json`](https://clucknorris.app/hub/schema/receipt.json) — a second product can
+validate a Hub JSON body against these without reading this repo. Reproducing a receipt's amount
+from its published inputs is covered separately — see **reproduce-receipt**.
+
 No prizes are claimed and no result is predicted here. Everything on this page that predates
 2026-09-14 is disclosed as such.
 

@@ -474,6 +474,15 @@ jobs:
       # throwaway key and no secrets.
       - name: admin mutation discipline (405 on GET, explicit project, pool allowlist)
         run: node scripts/mutating-get-guard-test.cjs
+      # Colosseum roadmap E4: the settlement library's public contract. Every schema in
+      # lib/hub/schema/ validates a real fixture built the same way lib/hub/project.js,
+      # lib/hub/ledger.js and lib/hub/public.js build one (including the exact wire subset
+      # routes.js puts on the wire for a program version), GET /hub/schema/:name.json serves
+      # each file byte-identical to disk with a cache header and 404s an unknown name, and
+      # GET /api/hub/clkn's live body validates end to end. Boots the real server, so it lives
+      # here rather than in node-check.
+      - name: Hub settlement-library JSON Schemas (lib/hub/schema, E4)
+        run: node scripts/hub-schema-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)
