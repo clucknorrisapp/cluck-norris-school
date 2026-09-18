@@ -126,6 +126,7 @@ const PAGES = [
   { path: "/hub/wallet/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", name: "Hub wallet look-up, pre-filled (AA1)" },
   { path: "/hub/trust", name: "Hub trust boundary (AA5 — what this doesn't prove)" },
   { path: "/hub/judge", name: "Hub judge guide (AA4 — the judge's fifteen minutes)" },
+  { path: "/hub/glossary", name: "Hub glossary (EE2 — every term and reason code, in plain words)" },
   { path: "/holders", name: "Holders (CC3 — empty state, no snapshot history yet)" },
   { path: `/holders?mint=${SEED_MINT}`, name: "Holders (CC3 — X7 history + AA3 Compare, seeded)" },
   { path: `/hub/${A11Y_PRINT_PROJECT}/r/${A11Y_PRINT_SIG}?print=1`, name: "Hub receipt print sheet (DD4 — a receipt you can print)" },
@@ -291,8 +292,11 @@ async function auditPage(browser, pagePath, pageName) {
     const W = (n) => `Wallet${String(n).padStart(6, "0")}xxxxxxxxxxxxxxxxxxxxxxxxxxxx`.slice(0, 44);
     const fromTop = [{ wallet: W(0), amount: 500 }, { wallet: W(1), amount: 300 }, { wallet: W(2), amount: 100 }];
     const toTop = [{ wallet: W(0), amount: 650 }, { wallet: W(1), amount: 300 }, { wallet: W(3), amount: 50 }];
-    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now() - 86400000, holderCount: 10, top: fromTop, totalSupplyRaw: "10000", fullList: fromTop });
-    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now(), holderCount: 11, top: toTop, totalSupplyRaw: "10200", fullList: toTop });
+    // P2-06 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): decimals seeded on both snapshots so
+    // the Compare panel's supply-delta conversion has what it needs without a live crawl — the
+    // exact gap that finding closed.
+    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now() - 86400000, holderCount: 10, top: fromTop, totalSupplyRaw: "10000", fullList: fromTop, decimals: 9 });
+    holdersSnapshot.appendSnapshot(kv, { mint: SEED_MINT, at: Date.now(), holderCount: 11, top: toTop, totalSupplyRaw: "10200", fullList: toTop, decimals: 9 });
 
     const env = { ...process.env, PORT: String(PORT), DATA_DIR: DIR, TOOLGATE_OFF: "1",
       TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", HELIUS_API_KEY: "", MM_OPERATOR_SECRET: "", MM_OPERATOR_SECRET_TREASURY: "",

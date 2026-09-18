@@ -56,6 +56,15 @@ function addDaySlice(kv, projectId, sliceKey) {
   const days = store.read(kv, projectId, "days", {}) || {};
   store.write(kv, projectId, "days", { ...days, [sliceKey]: { credits: { [WALLET_1]: "1" } } });
 }
+// P1-04: recordHubLessonRead now bounds `project` to a registered (or built-in) Hub project —
+// same class of check `lesson`/`from`/`to` already got — so any test exercising it needs the id
+// actually present in the registry. A bare `{ id }` row is enough; these tests never read the
+// project's other fields.
+function registerIds(kv, ...ids) {
+  const reg = store.readRegistry(kv) || {};
+  for (const id of ids) reg[id] = reg[id] || { id };
+  store.writeRegistry(kv, reg);
+}
 
 section("labelFor / the founder / dry-run / independent split");
 
@@ -192,10 +201,67 @@ t("hubReceiptsOpened denominator is every receipt issued to date, across all thr
   assert.strictEqual(out.counters.hubReceiptsOpened.denominator, 3);
 });
 
+section("P1-04 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md) — project id bound, day pruning");
+
+t("60 unauthenticated attempts with made-up project ids create ZERO keys — none ever counted", () => {
+  const kv = store.memoryKv();
+  for (let i = 0; i < 60; i++) traction.recordHubLessonRead(kv, { project: "zzattack" + i, sid: "sid-" + i, nowMs: dayMs("2026-09-16") });
+  assert.deepStrictEqual(traction.readHubLessonReads(kv), {}, "not one of the 60 made-up ids should ever create a key");
+});
+t("a real, registered project id still counts (the bound doesn't break the legitimate path)", () => {
+  const kv = store.memoryKv();
+  registerIds(kv, "acme");
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  const raw = traction.readHubLessonReads(kv);
+  assert.strictEqual(raw["2026-09-16"].acme.length, 1);
+});
+t("a built-in project id (clkn/cuna/rose) is accepted even with an empty registry", () => {
+  const kv = store.memoryKv();
+  traction.recordHubLessonRead(kv, { project: "clkn", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  const raw = traction.readHubLessonReads(kv);
+  assert.strictEqual(raw["2026-09-16"].clkn.length, 1);
+});
+t("hub_lesson_reads_v1 is pruned by day on write — a day far older than KEEP_DAYS is dropped", () => {
+  const kv = store.memoryKv();
+  registerIds(kv, "acme");
+  const ancientDay = "2020-01-01"; // far more than KEEP_DAYS (400) before the write below
+  kv.set("traction:hub_lesson_reads_v1", { [ancientDay]: { acme: ["deadbeef"] } });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  const raw = traction.readHubLessonReads(kv);
+  assert.ok(!(ancientDay in raw), "a day far older than KEEP_DAYS must be pruned on the next write");
+  assert.strictEqual(raw["2026-09-16"].acme.length, 1);
+});
+t("hub_lesson_reads_by_lesson_v1 is pruned by day on write too", () => {
+  const kv = store.memoryKv();
+  registerIds(kv, "acme");
+  const ancientDay = "2020-01-01";
+  kv.set("traction:hub_lesson_reads_by_lesson_v1", { [ancientDay]: { receipt: ["deadbeef"] } });
+  traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "receipt", nowMs: dayMs("2026-09-16") });
+  const raw = traction.readHubLessonReadsByLesson(kv);
+  assert.ok(!(ancientDay in raw));
+});
+t("hub_door_clicks_v1 is pruned by day on write too (same gap the report named)", () => {
+  const kv = store.memoryKv();
+  const ancientDay = "2020-01-01";
+  kv.set("traction:hub_door_clicks_v1", { [ancientDay]: { school: ["deadbeef"] } });
+  traction.recordHubDoorClick(kv, { source: "school", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  const raw = traction.readHubDoorClicks(kv);
+  assert.ok(!(ancientDay in raw));
+});
+t("hub_bridge_clicks_v1 is pruned by day on write too (same gap the report named)", () => {
+  const kv = store.memoryKv();
+  const ancientDay = "2020-01-01";
+  kv.set("traction:hub_bridge_clicks_v1", { [ancientDay]: { receipt: { verify: ["deadbeef"] } } });
+  traction.recordHubBridgeClick(kv, { from: "receipt", to: "verify", sid: "sid-1", nowMs: dayMs("2026-09-16") });
+  const raw = traction.readHubBridgeClicks(kv);
+  assert.ok(!(ancientDay in raw));
+});
+
 section("hub lesson reads — E6, the school → Hub bridge, same durable-event shape as receipt opens");
 
 t("finishing the same locking lesson twice in a day for the same sid counts once; a different day counts again", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme");
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") });
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") + 1000 });
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-17") });
@@ -206,6 +272,7 @@ t("finishing the same locking lesson twice in a day for the same sid counts once
 });
 t("a different sid the same day is counted separately", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme");
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") });
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-2", nowMs: dayMs("2026-09-16") });
   const raw = traction.readHubLessonReads(kv);
@@ -213,6 +280,7 @@ t("a different sid the same day is counted separately", () => {
 });
 t("compute()'s hubLessonReads counts in-period reads and reports the lifetime total as the denominator", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme");
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") });
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-2", nowMs: dayMs("2026-09-01") }); // outside the window
   const out = traction.compute({ kv, from: "2026-09-14", to: "2026-09-18" });
@@ -222,6 +290,7 @@ t("compute()'s hubLessonReads counts in-period reads and reports the lifetime to
 });
 t("lessonReadsForProject counts only the named project, defaults to the trailing 30 days, and denominator is null when analytics has no bucket for that path", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme", "other");
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: Date.now() });
   traction.recordHubLessonRead(kv, { project: "other", sid: "sid-1", nowMs: Date.now() });
   const r = traction.lessonReadsForProject(kv, "acme");
@@ -231,6 +300,7 @@ t("lessonReadsForProject counts only the named project, defaults to the trailing
 });
 t("lessonReadsForProject's denominator is that project's own /hub/<id> page views from the analytics store, never another project's or another path's", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme");
   const day = traction.dayKeyOf(dayMs("2026-09-16"));
   kv.set("analytics_v1", { days: { [day]: { paths: { "/hub/acme": 42, "/hub/other": 999, "/hub": 5 } } } });
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", nowMs: dayMs("2026-09-16") });
@@ -482,6 +552,7 @@ section("BB5 — hub_lesson_read per-lesson breakdown, bounded to the known lock
 
 t("a known lesson id (e.g. \"receipt\") is recorded in BOTH the per-project total and the per-lesson breakdown", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme");
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "receipt", nowMs: dayMs("2026-09-16") });
   const byProject = traction.readHubLessonReads(kv);
   const byLesson = traction.readHubLessonReadsByLesson(kv);
@@ -490,6 +561,7 @@ t("a known lesson id (e.g. \"receipt\") is recorded in BOTH the per-project tota
 });
 t("an unknown lesson id is rejected from the per-lesson breakdown, but the per-project total still counts (old rows / callers with no lesson field keep working)", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme");
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "made-up-lesson", nowMs: dayMs("2026-09-16") });
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-2", nowMs: dayMs("2026-09-16") }); // no lesson field at all
   const byProject = traction.readHubLessonReads(kv);
@@ -499,6 +571,7 @@ t("an unknown lesson id is rejected from the per-lesson breakdown, but the per-p
 });
 t("every one of the seven ids the school can actually send is accepted; nothing else is", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme");
   let i = 0;
   for (const id of traction.KNOWN_LOCK_LESSON_IDS) traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-" + (i++), lesson: id, nowMs: dayMs("2026-09-16") });
   const byLesson = traction.readHubLessonReadsByLesson(kv);
@@ -507,6 +580,7 @@ t("every one of the seven ids the school can actually send is accepted; nothing 
 });
 t("dedups per (day, lesson, sid); a different sid or a different day counts again", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme");
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "receipt", nowMs: dayMs("2026-09-16") });
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "receipt", nowMs: dayMs("2026-09-16") + 1000 });
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-2", lesson: "receipt", nowMs: dayMs("2026-09-16") });
@@ -517,6 +591,7 @@ t("dedups per (day, lesson, sid); a different sid or a different day counts agai
 });
 t("compute()'s hubLessonReadsReceipt counts in-period receipt-lesson reads; denominator is /school page views, null when no bucket exists", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme");
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-1", lesson: "receipt", nowMs: dayMs("2026-09-16") });
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-2", lesson: "wallets", nowMs: dayMs("2026-09-16") }); // a different lesson — must not count
   traction.recordHubLessonRead(kv, { project: "acme", sid: "sid-3", lesson: "receipt", nowMs: dayMs("2026-09-01") }); // outside the window
@@ -532,6 +607,7 @@ t("compute()'s hubLessonReadsReceipt counts in-period receipt-lesson reads; deno
 });
 t("no field on a stored hub_lesson_read-by-lesson row identifies a learner", () => {
   const kv = store.memoryKv();
+  registerIds(kv, "acme");
   traction.recordHubLessonRead(kv, { project: "acme", sid: "a-very-identifying-sid-123", lesson: "receipt", nowMs: dayMs("2026-09-16") });
   const raw = JSON.stringify(traction.readHubLessonReadsByLesson(kv));
   assert.ok(!raw.includes("a-very-identifying-sid-123"), "the raw sid must never be stored");

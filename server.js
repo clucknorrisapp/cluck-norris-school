@@ -2655,9 +2655,12 @@ async function priceReply(chatId, replyTo) {
 // relies on.
 const hubReceiptCommand = require("./lib/hub/receipt-command");
 function receiptCommandReply(chatId, replyTo, arg) {
+  // P3-10: hubProjectViewCached, not the raw hubProjectView — see its own comment beside the
+  // definition. findHubReceiptBySig walks every registered project per lookup; this keeps a burst
+  // of /receipt commands across rooms from repeating that walk more than once a minute per project.
   return hubReceiptCommand.handleReceiptCommand({
     arg, chatId, replyToId: replyTo, send: tgSend,
-    hubProjects, hubProjectView, hubPublic, hubStore, hubReproduce, hubProject, kv,
+    hubProjects, hubProjectView: hubProjectViewCached, hubPublic, hubStore, hubReproduce, hubProject, kv,
     publicBase: TG_PUBLIC_BASE,
   }).catch((e) => console.warn("[TELEGRAM] /receipt error:", e.message));
 }
@@ -8070,6 +8073,9 @@ function HUB_SCHEMA_URL(name) { return `https://clucknorris.app/hub/schema/${nam
 const HUB_SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{60,100}$/;
 const hubProject = require("./lib/hub/project");
 const hubFeed = require("./lib/hub/feed");
+// EE2 (docs/COLOSSEUM_ROADMAP.md §15): the public glossary — pure, no per-request computation,
+// so its route below needs no ledger walk and gets a long cache like a schema file.
+const hubGlossary = require("./lib/hub/glossary");
 function hubProjects() {
   const built = {
     clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9, rewardMint: CLKN_MINT, rewardDecimals: 9 },
@@ -8125,11 +8131,37 @@ function hubProjectView(project) {
   const versions = (projectState && Array.isArray(projectState.versions)) ? projectState.versions : [];
   return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads, holderSnapshot, versions });
 }
-app.get("/api/hub", (req, res) => {
+// P3-10 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): a 60s per-project cache over the SAME
+// hubProjectView() walk the routes right below already found too expensive to run unlimited
+// (P1-03) — reused here for lib/hub/receipt-command.js's findHubReceiptBySig, which calls
+// hubProjectView() once per registered project until it finds a signature, behind only a 10s
+// per-chat cooldown (so N Telegram rooms running /receipt gives N/10 full-ledger walks a second
+// with the raw function). Callers that need the guaranteed-fresh view (the /api/hub/:project
+// routes) keep calling hubProjectView() directly; this wrapper is for read paths where a few
+// seconds of staleness is a fine trade against repeating the whole computation.
+const HUB_PROJECT_VIEW_CACHE = new Map(); // projectId -> { at, view }
+const HUB_PROJECT_VIEW_CACHE_MS = 60 * 1000;
+function hubProjectViewCached(project) {
+  const cached = HUB_PROJECT_VIEW_CACHE.get(project.id);
+  if (cached && Date.now() - cached.at < HUB_PROJECT_VIEW_CACHE_MS) return cached.view;
+  const view = hubProjectView(project);
+  HUB_PROJECT_VIEW_CACHE.set(project.id, { at: Date.now(), view });
+  return view;
+}
+// P1-03 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): this route calls hubProjectView() once
+// PER REGISTERED PROJECT — the same full stakeView + per-receipt explanation walk the
+// reproducibility/badge routes below already gate with the "hubheavy" limiter — but it carried no
+// limiter of its own. Ten concurrent hits measured the Node event loop pinned for ~10s, stalling
+// every other route on the box (the school, the tools, the store-edition contract endpoints).
+// Same shared bucket as the other heavy reads: a burst here also counts against them.
+app.get("/api/hub", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   try {
     const projects = Object.values(hubProjects()).map((p) => {
-      const v = hubProjectView(p);
+      // EE3 (docs/HUB_LOAD_2026-09-18.md): the list is identical for every viewer, so it reads
+      // the same 60-second per-project view cache the receipt command and the share page use —
+      // a burst at the limiter's ceiling computes each project once, not sixty times.
+      const v = hubProjectViewCached(p);
       // Dry runs (Colosseum E10) are LISTED, with the badge, so the owner can show the team the
       // page — never hidden — but their programs/receipts are always 0 (they can never arm), so
       // they add nothing to anyone reading the numbers across the list.
@@ -8157,19 +8189,56 @@ function hubWalletGroupPrograms(entries) {
   }
   return order;
 }
-app.get("/api/hub/wallet/:wallet", (req, res) => {
+// P1-03: this route re-walks EVERY registered project's full ledger for a wallet the caller
+// controls in the URL, so no HTTP cache tier can ever absorb a repeat the way `/api/hub`'s
+// `public, max-age=60` can — it is `no-store` on purpose (the report a wallet sees must never be
+// another wallet's stale cache). A 60s in-memory cache keyed by wallet closes that gap without
+// giving up the no-store *response* header: the expensive per-project walk is memoised, but
+// `generatedAt` is still stamped fresh on every response, cache hit or not. Bounded to ~500
+// wallets with LRU-ish eviction (a Map preserves insertion order; re-touching a hit moves it to
+// the end, and the oldest entry is dropped once the cap is exceeded) so a burst of one-off
+// addresses can't grow this unbounded.
+const HUB_WALLET_CACHE = new Map();   // wallet -> { at, data: { projects, seenIn } }
+const HUB_WALLET_CACHE_MS = 60 * 1000;
+const HUB_WALLET_CACHE_MAX = 500;
+function hubWalletCacheGet(wallet) {
+  const e = HUB_WALLET_CACHE.get(wallet);
+  if (!e) return null;
+  if (Date.now() - e.at >= HUB_WALLET_CACHE_MS) { HUB_WALLET_CACHE.delete(wallet); return null; }
+  HUB_WALLET_CACHE.delete(wallet); HUB_WALLET_CACHE.set(wallet, e);   // touch -> most-recently-used
+  return e.data;
+}
+function hubWalletCacheSet(wallet, data) {
+  HUB_WALLET_CACHE.set(wallet, { at: Date.now(), data });
+  while (HUB_WALLET_CACHE.size > HUB_WALLET_CACHE_MAX) {
+    const oldest = HUB_WALLET_CACHE.keys().next().value;
+    HUB_WALLET_CACHE.delete(oldest);
+  }
+}
+app.get("/api/hub/wallet/:wallet", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const wallet = String(req.params.wallet || "");
   if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ ok: false, error: "not a Solana address" });
   try {
-    const projects = [];
-    for (const p of Object.values(hubProjects())) {
-      let r;
-      try { r = hubPublic.walletLookup(hubProjectView(p), wallet); } catch (_) { continue; }
-      if (!r.ok || !r.entries.length) continue;
-      projects.push({ id: p.id, label: p.label, brand: p.brand ? { logo: p.brand.logo || null, accent: p.brand.accent || null, tagline: p.brand.tagline || null } : null, programs: hubWalletGroupPrograms(r.entries) });
+    let cacheHit = true;
+    let cached = hubWalletCacheGet(wallet);
+    if (!cached) {
+      cacheHit = false;
+      const projects = [];
+      for (const p of Object.values(hubProjects())) {
+        let r;
+        try { r = hubPublic.walletLookup(hubProjectView(p), wallet); } catch (_) { continue; }
+        if (!r.ok || !r.entries.length) continue;
+        projects.push({ id: p.id, label: p.label, brand: p.brand ? { logo: p.brand.logo || null, accent: p.brand.accent || null, tagline: p.brand.tagline || null } : null, programs: hubWalletGroupPrograms(r.entries) });
+      }
+      cached = { projects, seenIn: projects.length };
+      hubWalletCacheSet(wallet, cached);
     }
-    return res.status(200).json({ ok: true, wallet, projects, seenIn: projects.length, generatedAt: Date.now() });
+    // Test-only visibility into the cache (never present outside NODE_ENV=test) — lets
+    // scripts/hub-wallet-test.cjs assert a second lookup within 60s served from cache without
+    // depending on timing.
+    if (process.env.NODE_ENV === "test") res.setHeader("x-hub-wallet-cache", cacheHit ? "hit" : "miss");
+    return res.status(200).json({ ok: true, wallet, projects: cached.projects, seenIn: cached.seenIn, generatedAt: Date.now() });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // BB3 (Colosseum roadmap §12) — shields.io "endpoint badge" schema exactly
@@ -8189,7 +8258,19 @@ app.get("/api/hub/badge.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 
     return res.status(200).json({ schemaVersion: 1, label: "receipts reproducible", message: b.message, color: b.color, cacheSeconds: 300 });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
-app.get("/api/hub/:project", (req, res) => {
+// EE2: every term and reason code a public Hub surface renders, one source of truth
+// (lib/hub/glossary.js). Registered BEFORE /api/hub/:project below, same reason
+// /api/hub/wallet/:wallet and /api/hub/badge.json are — "glossary" is a 1-segment path the
+// :project pattern would otherwise swallow as a (nonexistent) project id. A light public read
+// over a pure, in-memory module (no ledger walk, no chain read), so it gets the same long cache a
+// schema file gets rather than the 30s a per-project computation gets.
+app.get("/api/hub/glossary", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  return res.status(200).json({ ok: true, entries: hubGlossary.entries() });
+});
+// P1-03: same unbounded hubProjectView() cost as /api/hub above, per-request, with no limiter —
+// closed the same way, same shared bucket.
+app.get("/api/hub/:project", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=30");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
@@ -8764,6 +8845,16 @@ app.get("/hub/trust", (req, res) => { res.sendFile(join(__dirname, "public", "hu
 // build-time dependency check.
 app.get("/hub/judge", (req, res) => { res.sendFile(join(__dirname, "public", "hub-judge.html")); });
 
+// EE2 (docs/COLOSSEUM_ROADMAP.md §15): the public glossary page — every term and reason code a
+// receipt, the wallet look-up, the compare page, the standings or a lesson can show, defined in
+// plain words. Same ordering reason as /hub/verify, /hub/wallet, /hub/trust and /hub/judge above:
+// registered BEFORE the generic /hub/:project pattern below, or "glossary" would be read as a
+// project id and served hub.html instead. NOTE (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md
+// P2-05): "glossary" is not yet in a RESERVED_PROJECT_IDS list on this tree — that list lands with
+// the settlement-journal branch's merge, and "glossary" must join it then, the same way
+// verify/status/trust/judge/apply already should.
+app.get("/hub/glossary", (req, res) => { res.sendFile(join(__dirname, "public", "hub-glossary.html")); });
+
 // ── Y4: shareable Hub pages — server-rendered Open Graph / Twitter Card meta (Colosseum roadmap
 // §9). One static branded image (public/og/hub-card.png, 1200x630 — no dynamic image generation,
 // the roadmap line, and served below with a long cache) shared by every route; only the <title>/
@@ -8877,6 +8968,23 @@ function hubOgFor(projectId, kind, sub) {
     url: base, feedProjectId: p.id,
   };
 }
+// P1-03 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): the `/hub/:project` share-page route
+// below calls hubOgFor() on EVERY request — the exact same hubProjectView() walk /api/hub/:project
+// just gained a limiter for — purely to fill in <meta> tags for a link-unfurl crawler. That page
+// route must always render 200 for a real browser (never 429 a person clicking a shared link), so
+// it gets a cache instead of a limiter: the computed OG meta is memoised per (project, kind, sub)
+// for 60s. A stale meta line for up to a minute after a payout lands is a fine trade against
+// recomputing the whole ledger on every Discord/Twitter unfurl of a popular link.
+const HUB_OG_CACHE = new Map();   // "projectId:kind:sub" -> { at, meta }
+const HUB_OG_CACHE_MS = 60 * 1000;
+function hubOgForCached(projectId, kind, sub) {
+  const key = `${projectId || ""}:${kind}:${sub || ""}`;
+  const cached = HUB_OG_CACHE.get(key);
+  if (cached && Date.now() - cached.at < HUB_OG_CACHE_MS) return cached.meta;
+  const meta = hubOgFor(projectId, kind, sub);
+  HUB_OG_CACHE.set(key, { at: Date.now(), meta });
+  return meta;
+}
 // The Colosseum judges' demo fixture (E2) — same treatment, labelled DRY RUN — fixture data
 // rather than the real dryNote above (there is no "project team" to agree terms with here).
 function hubDemoOgFor(projectId, kind, sub) {
@@ -8939,9 +9047,9 @@ app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:pr
   try {
     const projectId = req.params.project ? String(req.params.project).toLowerCase() : null;
     const meta = !projectId ? { ...HUB_OG_DEFAULT, url: HUB_OG_BASE }
-      : req.params.sig ? hubOgFor(projectId, "receipt", req.params.sig)
-      : req.params.program ? hubOgFor(projectId, "program", req.params.program)
-      : hubOgFor(projectId, "project", null);
+      : req.params.sig ? hubOgForCached(projectId, "receipt", req.params.sig)
+      : req.params.program ? hubOgForCached(projectId, "program", req.params.program)
+      : hubOgForCached(projectId, "project", null);
     res.type("html").send(renderHubOgHtml(hubOgShell(), meta));
   } catch (e) { res.sendFile(join(__dirname, "public", "hub.html")); }
 });

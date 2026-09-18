@@ -31,6 +31,24 @@ const ROOT = path.join(__dirname, "..");
 const DOC_PATH = path.join(ROOT, "docs", "JUDGE_GUIDE.md");
 const OUT_PATH = path.join(ROOT, "public", "hub-judge.html");
 
+// P2-07 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): `renderInline` below blocked attribute
+// breakout (escapeHtml runs first) but never checked the URL's SCHEME, so a markdown link in
+// docs/JUDGE_GUIDE.md could become a live `javascript:`/`data:` href on the committed, publicly
+// served public/hub-judge.html. Only a genuine same-host reference or a fragment becomes a link;
+// anything else renders as plain text, never a dead/edited anchor.
+const SAME_HOST = "clucknorris.app"; // the canonical host this file already hardcodes below (OG meta)
+function linkIsSafe(url) {
+  const u = String(url == null ? "" : url);
+  if (/^https:\/\//i.test(u)) return true;
+  if (/^http:\/\//i.test(u)) {
+    try { return new URL(u).hostname.toLowerCase() === SAME_HOST; } catch (_) { return false; }
+  }
+  if (u.startsWith("#")) return true;                    // an in-page anchor
+  if (u.startsWith("/") && !u.startsWith("//")) return true; // a root-relative path — NOT "//host/…",
+  // which a browser resolves as protocol-relative to a DIFFERENT host, not a same-site path.
+  return false;
+}
+
 // ── inline markdown: `code` and [text](url), nested (a link's text may itself hold `code`) ──────
 function escapeHtml(s) {
   return String(s == null ? "" : s)
@@ -48,7 +66,12 @@ function renderInline(raw) {
   // already-escaped content.
   let s = escapeHtml(raw);
   s = s.replace(/`([^`]+)`/g, (_m, code) => `<code>${code}</code>`);
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => `<a href="${url}">${text}</a>`);
+  // P2-07: `url` here is already HTML-escaped (escapeHtml ran on the whole line above, before
+  // markdown syntax was recognised) — none of the characters it escapes (& < > " ') appear in a
+  // scheme or a well-formed host, so testing the escaped string is equivalent to testing the raw
+  // one. A link whose scheme/host isn't allowed renders as its own text, dropping the anchor
+  // rather than emitting a dead or dangerous href.
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => (linkIsSafe(url) ? `<a href="${url}">${text}</a>` : text));
   return s;
 }
 

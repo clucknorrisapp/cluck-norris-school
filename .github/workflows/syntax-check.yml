@@ -158,6 +158,18 @@ jobs:
       # hub.html page.
       - name: Project Hub — the receipt teaches (E5)
         run: node scripts/hub-explain-test.cjs
+      # EE2 (docs/COLOSSEUM_ROADMAP.md §15): lib/hub/glossary.js is the one source of truth for
+      # every term and reason code a public Hub surface renders. Drift (every eligibility.js
+      # REASON_CODES code, plus the access/void/hold-through literals, has a glossary entry; every
+      # entry's optional lessonId resolves — same C4 discipline as hub-teach-test above) and route
+      # (GET /api/hub/glossary + GET /hub/glossary, both ahead of their catch-alls) always run
+      # here; this job installs no Chromium, so the same script's rendered-page checks skip
+      # gracefully (playwright-core not resolvable) exactly like
+      # scripts/reproducibility-history-test.cjs's own render section — the smoke-test job below
+      # re-runs this same script, gated on the render diff, where Chromium IS installed, for real
+      # rendered-page coverage.
+      - name: Project Hub — the glossary (EE2) — drift + route
+        run: node scripts/hub-glossary-test.cjs
       # Addendum B5 / roadmap E3: the on-chain memo format is byte-diffed against a hand-built
       # Uint8Array before it ships; verifyCommitTx never trusts the client (wrong payer, wrong or
       # missing memo, more than one memo, a failed or unconfirmed tx are all refused); a version's
@@ -364,6 +376,13 @@ jobs:
       # public body carrying no readiness data, and the desk section's rate/badge-language guard.
       - name: Hub launch readiness (checklist + reward-budget planner)
         run: node scripts/hub-readiness-test.cjs
+      # Colosseum roadmap EE1: "who would this pay today?" for DRAFT terms — a read (nothing
+      # written, armed or sent). Proves the preview reproduces planBudget's own next-day
+      # obligation byte for byte, a wider draft flips exclusions and the hash, an invalid draft
+      # throws the same error a real publish would, app-state.json is untouched by ten previews,
+      # and the lapsed-project / auth / GET-405 gates match the terms write exactly.
+      - name: Hub preview before publish (draft terms, no writes)
+        run: node scripts/hub-preview-test.cjs
       - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
         run: node scripts/cuna-announce-test.cjs
       # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC
@@ -462,6 +481,14 @@ jobs:
           node normie-quest/src/build.js
           git diff --exit-code normie-quest/public/normie-quest-platformer.html \
             || (echo "::error::served HTML is stale — run node normie-quest/src/build.js and commit" && exit 1)
+      # EE5 (docs/COLOSSEUM_ROADMAP.md §15): the "onboarding clock, from the record" table
+      # docs/VALIDATION_2026-09.md quotes is a SCRIPT's output, not typed numbers — this seeds a
+      # temp DATA_DIR with a two-project fixture built through lib/hub/project.js (one project with
+      # every milestone reached, one registered-only), runs scripts/validation-rows.cjs as a real
+      # subprocess against it, and asserts every delta and the "—" dash for whatever was never
+      # reached, plus the honest empty-template output for a DATA_DIR with no registry at all.
+      - name: Validation rows — onboarding-clock table is derived, never guessed (EE5)
+        run: node scripts/validation-rows-test.cjs
 
   # Renders the actual app. The checks above are all static — they cannot see a component that
   # compiles fine and throws on mount, which is how the LP Lab shipped blank to production.
@@ -696,6 +723,14 @@ jobs:
       - name: Hub pages — accessibility + phone polish
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-a11y-test.cjs
+      # EE2: this job has Chromium installed (the step above), so re-running the glossary test
+      # here (its drift + route sections re-verify cheaply; node-check above is where they're
+      # REQUIRED to run) also exercises the rendered-page section for real: the page renders, the
+      # #below_min_lock anchor scrolls to its section, the search box filters, and none of the
+      # forbidden words appear.
+      - name: Project Hub — the glossary (EE2) — rendered page (Chromium)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-glossary-test.cjs
       # Z2 (docs/COLOSSEUM_ROADMAP.md §10): GET /api/build (the git sha/branch this container is
       # actually running) and /hub/status (public/hub-status.html) — the page that renders it next
       # to every project's own public numbers (programs, receipts, the reproducibility ratio, the
@@ -787,6 +822,26 @@ jobs:
       - name: Hub print sheet — QR encoder + Reed-Solomon + the print page (DD4)
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-print-test.cjs
+      # EE3 (docs/COLOSSEUM_ROADMAP.md §15) — "load proof for the public reads." Builds a
+      # deterministic 10-project x 50-receipt fixture (scripts/hub-load-fixture.cjs — the reduced
+      # scale this CI job uses; the full 50x200 numbers live in docs/HUB_LOAD_2026-09-18.md) and
+      # drives every heavy Hub read (reproducibility, its history, buy-comp standings, the
+      # evidence bundle, the badge, both feeds, the wallet roll-up) plus the two plain reads P1-03
+      # flagged as carrying no rate limiter (`/api/hub`, `/api/hub/:project`) and the `/hub/:project`
+      # share page, at/over the `hubheavy` ceiling, from scripts/hub-load-smoke.cjs. Reports p50/p95
+      # per route and the worst `/healthz` latency observed while the burst runs — the exact
+      # event-loop-stall shape the P1-03 finding measured. Not diff-gated: a route or a limiter
+      # here never touches a rendered page, so the render-diff gate would never see it change.
+      # Always-run per the roadmap item's own budgets. The P1-03 fix round (limiter + per-project
+      # view cache) landed in the same batch; the after-picture in docs/HUB_LOAD_2026-09-18.md
+      # measures every route under the 500ms p95 budget and `/healthz` at ~400ms max while sixty
+      # requests land on one event loop at once (it was 1.3s before the fix, 52s on the 50x200
+      # fixture). The /healthz budget here is 1000ms — a real stall regression (the P1-03 shape is
+      # seconds, not hundreds of milliseconds) still trips it; a slow CI runner does not.
+      - name: Hub load proof — heavy public reads under a rate-limit-ceiling burst (Colosseum §15 EE3)
+        run: |
+          node scripts/hub-load-fixture.cjs --projects 10 --receipts 50
+          HUB_LOAD_TEST_PORT=3420 node scripts/hub-load-smoke.cjs --healthz-ms 1000
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the

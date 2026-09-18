@@ -165,12 +165,32 @@
       </div>
       <label>Wallets that never earn (comma-separated; the funding wallet is always excluded)</label>
       <input type="text" id="tExclude"/>
-      <div class="btns"><button class="ghost" id="saveTerms">SAVE AS A NEW VERSION (from tomorrow)</button></div>
+      <div class="btns">
+        <button class="ghost" id="saveTerms">SAVE AS A NEW VERSION (from tomorrow)</button>
+        <button class="ghost" id="previewTerms">PREVIEW WHO THIS WOULD PAY TODAY</button>
+      </div>
       <div class="muted" id="termsNote" style="margin-top:8px"></div>
       <details><summary>VERSION HISTORY</summary><pre id="versions" class="mono" style="white-space:pre-wrap;max-height:220px;overflow:auto"></pre></details>
       <div class="btns" style="margin-top:10px"><button class="ghost" id="commitBtn">COMMIT LATEST VERSION ON-CHAIN</button></div>
       <div class="muted" id="commitNote" style="margin-top:8px"></div>
     </div>
+
+    <!-- PREVIEW BEFORE PUBLISH (Colosseum roadmap EE1) — begin. Hidden until the operator asks for
+         it; this card never fetches on its own and never persists anything. -->
+    <div class="card" id="previewCard" hidden>
+      <div class="k">PREVIEW — WHO THIS DRAFT WOULD PAY TODAY <span class="small" id="previewDryBadge"></span></div>
+      <div class="muted">An estimate from today's locks — never a promise.</div>
+      <div class="grid2" style="margin-top:8px">
+        <div class="row"><span>Qualify today</span><b id="pvQualified">—</b></div>
+        <div class="row"><span>Excluded</span><b id="pvExcluded">—</b></div>
+        <div class="row"><span>Today's pool</span><b id="pvPool">—</b></div>
+        <div class="row"><span>period</span><b id="pvBudgetPeriod">—</b></div>
+      </div>
+      <div style="overflow-x:auto;margin-top:8px"><table id="pvTable"><thead><tr><th>wallet</th><th>status</th><th>reason</th><th class="num">would earn today</th><th class="num">share of pool</th></tr></thead><tbody></tbody></table></div>
+      <div class="muted" id="previewNote" style="margin-top:8px"></div>
+      <div class="muted" style="margin-top:8px">Publishing is a separate step; nothing was saved by this preview.</div>
+    </div>
+    <!-- PREVIEW BEFORE PUBLISH (Colosseum roadmap EE1) — end -->
 
     <!-- LAUNCH READINESS (design Addendum A) — begin. New, self-contained section: its own ids
          (rdy*), its own load call, no changes to any card above. -->
@@ -227,6 +247,7 @@
   var admin = function (p, m) { return call("/admin", p, m); };
   var payout = function (p, m) { return call("/payout", p, m); };
   var readiness = function (p, m) { return call("/readiness", p, m); };
+  var previewDraft = function (p) { return call("/desk/preview", p, "POST"); };
   async function rpc(method, params) {
     var r = await fetch("/api/helius-rpc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: method, params: params }) });
     var j = await r.json(); if (j.error) throw new Error(j.error.message || "rpc error"); return j.result;
@@ -392,17 +413,52 @@
       });
     });
   });
+  // Shared by SAVE and PREVIEW so a preview can never show anything but exactly what SAVE would
+  // submit — one body builder, not two that could drift apart.
+  function buildTermsBody() {
+    return { terms: "1", poolDailyRaw: toRaw($("tPool").value, DEC), minLockRaw: toRaw($("tMin").value, DESK.project.decimals), minDurationDays: $("tMinDays").value, maxTermDays: $("tMaxDays").value,
+      cancelableAllowed: $("tCancel").value, vesting: $("tVesting").value, payoutSchedule: $("tSched").value, maxWalletSharePct: $("tCap").value,
+      excludeWallets: $("tExclude").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean) };
+  }
   $("saveTerms").addEventListener("click", function () {
     askConfirm("Save these terms as a new version effective tomorrow? Hours already accrued keep the old version.", $("saveTerms")).then(function (yes) {
       if (!yes) return;
       var body;
-      try {
-        body = { terms: "1", poolDailyRaw: toRaw($("tPool").value, DEC), minLockRaw: toRaw($("tMin").value, DESK.project.decimals), minDurationDays: $("tMinDays").value, maxTermDays: $("tMaxDays").value,
-          cancelableAllowed: $("tCancel").value, vesting: $("tVesting").value, payoutSchedule: $("tSched").value, maxWalletSharePct: $("tCap").value,
-          excludeWallets: $("tExclude").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean) };
-      } catch (e) { $("termsNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; return; }
+      try { body = buildTermsBody(); } catch (e) { $("termsNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; return; }
       admin(body, "POST").then(function () { $("termsNote").innerHTML = '<span class="ok">Saved.</span>'; return load(); }).catch(function (e) { $("termsNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; });
     });
+  });
+
+  // ── PREVIEW BEFORE PUBLISH (Colosseum roadmap EE1) — a read: POSTs the same draft SAVE would
+  // submit to /desk/preview, which validates and projects it but writes nothing. Renders the
+  // wallets it would pay today, their reason codes when excluded, and the same budget planner
+  // Launch Readiness uses below — never a second number.
+  function renderPreviewRows(wallets) {
+    var tb = $("pvTable").querySelector("tbody");
+    tb.innerHTML = (wallets || []).map(function (w) {
+      var pill = w.qualified ? '<span class="pill yes">QUALIFIES</span>' : '<span class="pill no">DOES NOT QUALIFY</span>';
+      var reason = w.qualified ? "—" : '<a href="/hub/glossary#' + encodeURIComponent(w.reason || "other") + '">' + esc(w.reasonText || w.reason || "other") + "</a>";
+      var share = w.qualified && w.shareOfPool ? (Math.round(w.shareOfPool * 10000) / 100) + "%" : "—";
+      return '<tr><td class="mono">' + esc(CluckUtil.shortAddr(w.wallet)) + '</td><td>' + pill + '</td><td class="small">' + reason + '</td><td class="num">' + esc(amt(w.accrualRaw)) + '</td><td class="num">' + share + '</td></tr>';
+    }).join("") || '<tr><td colspan="5" class="muted">no locks yet</td></tr>';
+  }
+  $("previewTerms").addEventListener("click", function () {
+    var btn = $("previewTerms"); var body;
+    try { body = buildTermsBody(); } catch (e) { $("termsNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; return; }
+    btn.disabled = true; $("previewNote").textContent = "previewing…"; $("previewCard").hidden = false;
+    previewDraft(body).then(function (r) {
+      $("pvQualified").textContent = String(r.totals.qualified);
+      $("pvExcluded").textContent = String(r.totals.excluded);
+      $("pvPool").textContent = amt(r.totals.dailyPoolRaw);
+      var p0 = r.budget && r.budget.periods && r.budget.periods[0];
+      $("pvBudgetPeriod").textContent = p0 ? amt(p0.obligationRaw) : "—";
+      $("previewDryBadge").innerHTML = r.dryRun ? '<span class="warn">DRY RUN — terms not yet agreed, nothing accrues or pays</span>' : "";
+      renderPreviewRows(r.wallets);
+      $("previewNote").innerHTML = '<span class="ok">Estimate ready.</span>';
+    }).catch(function (e) {
+      $("previewNote").innerHTML = '<span class="bad">' + esc((e && e.message) || String(e)) + '</span>';
+      $("pvTable").querySelector("tbody").innerHTML = "";
+    }).then(function () { btn.disabled = false; });
   });
 
   // ── batch ─────────────────────────────────────────────────────────────────────────────────

@@ -677,18 +677,46 @@ function compareRowsTable(rows, cols, rowFn) {
     rows.map(rowFn).join('') + `</tbody></table>`;
 }
 
+// P2-06 fix: raw base-unit string -> UI string, exact string surgery (never float division) —
+// same technique the Hub verify page's fmtAmount uses. `diff.supplyDelta` is the ONE field here
+// that is genuinely raw base units (lib/holders-snapshot.js's own header comment); everything in
+// `diff.top.*` is already UI-scale.
+function rawToUiStr(raw, decimals) {
+  if (raw == null || !Number.isFinite(decimals)) return null;
+  let s = String(raw); const neg = s.startsWith('-'); if (neg) s = s.slice(1);
+  if (s.length <= decimals) s = '0'.repeat(decimals - s.length + 1) + s;
+  const whole = s.slice(0, s.length - decimals), frac = s.slice(s.length - decimals).replace(/0+$/, '');
+  return (neg ? '-' : '') + whole + (frac ? '.' + frac : '');
+}
+
 function renderCompare(diff) {
-  const dec = lastSnapshot ? lastSnapshot.decimals : undefined;
+  // P2-06: prefer the decimals the snapshot pair itself carries (added going forward — see
+  // lib/holders-snapshot.js appendSnapshot) so this panel renders correctly on a bare `?mint=`
+  // deep link that never ran a gated live crawl; fall back to that live crawl's own value
+  // (`lastSnapshot`) when present, for a snapshot recorded before this field existed.
+  const dec = Number.isInteger(diff.to && diff.to.decimals) ? diff.to.decimals
+    : Number.isInteger(diff.from && diff.from.decimals) ? diff.from.decimals
+    : (lastSnapshot ? lastSnapshot.decimals : undefined);
+  const decKnown = Number.isFinite(dec);
   const out = document.getElementById('compareResult');
   const day = (ts) => new Date(ts).toISOString().slice(0, 10);
 
   const holderDeltaTxt = (diff.holderCountDelta > 0 ? '+' : '') + diff.holderCountDelta.toLocaleString();
+  // P2-06: supplyDelta is true raw base units — convert it into the SAME unit the holder deltas
+  // below render in, instead of printing the raw string next to numbers already in whole tokens.
+  // When the decimals are genuinely unknown (an old snapshot with no `decimals` field, and no live
+  // crawl this session), say "units" honestly rather than guess a scale.
   let supplyDeltaTxt = '—';
   if (diff.supplyDelta != null) {
-    try {
-      const d = BigInt(diff.supplyDelta);
-      supplyDeltaTxt = (d > 0n ? '+' : '') + d.toString();
-    } catch (e) { supplyDeltaTxt = diff.supplyDelta; }
+    if (decKnown) {
+      const ui = rawToUiStr(diff.supplyDelta, dec);
+      supplyDeltaTxt = (ui && !ui.startsWith('-') && ui !== '0' ? '+' : '') + (ui != null ? ui : diff.supplyDelta);
+    } else {
+      try {
+        const d = BigInt(diff.supplyDelta);
+        supplyDeltaTxt = (d > 0n ? '+' : '') + d.toString() + ' base units (decimals unknown)';
+      } catch (e) { supplyDeltaTxt = diff.supplyDelta + ' base units (decimals unknown)'; }
+    }
   }
 
   const summary =
@@ -702,14 +730,14 @@ function renderCompare(diff) {
   const held = diff.top.held || [];
 
   const enteredTbl = compareRowsTable(entered, ['RANK', 'WALLET', 'AMOUNT'], (r) =>
-    `<tr><td>#${r.rank}</td><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.amountRaw), dec)}</td></tr>`);
+    `<tr><td>#${r.rank}</td><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.amountUi), dec)}</td></tr>`);
   const exitedTbl = compareRowsTable(exited, ['PREV RANK', 'WALLET', 'AMOUNT'], (r) =>
-    `<tr><td>#${r.prevRank}</td><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.amountRaw), dec)}</td></tr>`);
+    `<tr><td>#${r.prevRank}</td><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.amountUi), dec)}</td></tr>`);
   const heldTbl = compareRowsTable(held, ['WALLET', 'FROM', 'TO', 'CHANGE'], (r) => {
     let grew;
-    try { grew = BigInt(r.deltaRaw) > 0n; } catch (e) { grew = Number(r.deltaRaw) > 0; }
-    return `<tr><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.fromRaw), dec)}</td><td>${fmtNum(Number(r.toRaw), dec)}</td>` +
-      `<td class="cat-cell">${grew ? 'GREW' : 'SHRANK'} <span data-i18n-skip="1">(${esc(r.deltaRaw)})</span></td></tr>`;
+    try { grew = BigInt(r.deltaUi) > 0n; } catch (e) { grew = Number(r.deltaUi) > 0; }
+    return `<tr><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.fromUi), dec)}</td><td>${fmtNum(Number(r.toUi), dec)}</td>` +
+      `<td class="cat-cell">${grew ? 'GREW' : 'SHRANK'} <span data-i18n-skip="1">(${esc(r.deltaUi)})</span></td></tr>`;
   });
 
   const subHead = (label, n) => `<div class="compare-sub" data-clkn-avoid="1">${label} <span class="cat-cell" data-i18n-skip="1">(${n})</span></div>`;
