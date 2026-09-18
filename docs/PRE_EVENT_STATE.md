@@ -211,6 +211,12 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 16** — the POKEAHOE rehearsal end to end with `dryRun` kept on (the dry-run
+  project taken from placeholder terms through preview, Launch Readiness, the refusal at export
+  and send, and every public page, against a local boot of the merged tree; the write-up names
+  the staging URLs, what confused, the sequence for the real go with the arming step named and
+  not performed, and a terms-sheet template with no numbers); roadmap Extension 11; the
+  2026-09-18 handoff. PR #355.
 - **Colosseum batch 15** — roadmap Extension 10 (the rehearsal before anyone real is on the other
   side); docs drift round 4 (the Codex brief through #350–#352 and the journal's rounds 3–5; the
   reviewer's path in `docs/HUB_VERIFY.md` names every public surface since batch 9; the trust page

@@ -292,6 +292,11 @@ OK — dryRun still true at the end of the rehearsal
   that differs between the *outward* concept ("access tier") and the *query param* the route
   actually reads (`tier=`) is an easy trap for anyone driving this route by hand rather than
   through the desk UI, which presumably always sends the right key.
+  **Resolved (GG3, docs/COLOSSEUM_ROADMAP.md §17):** `POST /api/hub-registry` now accepts
+  `accessTier=` as an alias for `tier=` (`lib/hub/routes.js`), and — the more general fix — the
+  route now refuses ANY field name it does not read with `400` and the full accepted-field list,
+  instead of returning `ok: true` while quietly doing nothing. `scripts/hub-registry-test.cjs`
+  pins both halves.
 - **The wallet roll-up's "no program has seen this wallet" reads, on first glance, like the
   preview/scan found nothing** — it doesn't distinguish "this wallet was never eligible" from
   "this wallet is eligible right now but nothing has ever been paid, so nothing was ever
@@ -299,6 +304,11 @@ OK — dryRun still true at the end of the rehearsal
   roll-up page, expecting to see "qualifies for POKEAHOE," would see a blank page instead and could
   reasonably wonder if the two features are connected at all. The distinction ("this page shows
   history, not live eligibility") is not stated anywhere on the page itself.
+  **Resolved (GG3):** `/hub/wallet/:wallet`'s empty state (`public/hub-wallet.html` `renderEmpty`)
+  now says, right under "No Hub program has seen this wallet yet": "This page shows what has
+  already been recorded for this wallet — whether it qualifies for a program today is shown on
+  that program's own page." — curated in all seven languages via the page's own `t()` (the same
+  small helper `hub-verify.html`/`hub-glossary.html` use) and `public/i18n/*.json`.
 - **There is no dedicated per-program page for a project with a published version but no completed
   payout program** — `/hub/poke/p/:id` simply doesn't exist yet for POKEAHOE, and nothing on the
   project root page says "programs" here means something narrower than "anything ever configured."
@@ -306,11 +316,20 @@ OK — dryRun still true at the end of the rehearsal
   terms have been set" when in fact two versions of terms *are* set — "program" and "program
   version" are two different nouns in this codebase and the public page doesn't spell out the
   difference.
+  **Resolved (GG3):** the project page's program-index card (`public/hub.html`, both the populated
+  and the "No programs on record" state) now carries one line, always: "A published version is
+  this project's terms; a program is a version that has actually run and paid its holders." —
+  curated in all seven languages the same way. A dedicated per-program page for a project with no
+  completed program is unchanged (still correctly absent — see §8): that's not a bug, only the
+  wording around it was.
 - **This rehearsal drove the desk's JSON API directly rather than the `/hub/poke/desk` HTML page.**
   The desk page's own client-side JS (how it turns a form submission into these exact query
   params, how it surfaces the readiness checklist visually) was out of scope for this pass — worth
   a follow-up rehearsal that clicks through the actual desk UI rather than curling its endpoints,
   since that is what a real POKEAHOE operator will actually use.
+  **Stays** — this is a note about what THIS rehearsal exercised, not a product defect; there is
+  nothing on the desk to fix in response to it. It stands as the explicit follow-up item it already
+  names (a rehearsal that clicks through the actual `/hub/poke/desk` page).
 - **An extra click that will matter on the real go:** getting from "seeded dry-run project" to
   "can publish terms at all" required first giving the project a funding wallet and an operator
   wallet through the *owner*-gated registry route (`/api/hub-registry`) — a step that isn't part of
@@ -318,6 +337,13 @@ OK — dryRun still true at the end of the rehearsal
   this will be one deliberate owner action (setting POKEAHOE's real funding wallet once it's
   agreed), but it's worth naming explicitly in the sequence below so it isn't skipped or assumed
   automatic.
+  **Resolved (GG3):** publishing terms on a project with no funding wallet on file now fails with
+  an actionable message naming the exact next step (`lib/hub/project.js` `createVersion`), instead
+  of the raw `"fundedBy entry is not an address: null"`; the desk (`public/hub-desk.html`) also
+  says so up front on the TERMS card, before SAVE/PREVIEW is even tried, and disables both buttons
+  until a funding wallet is set. The operator-wallet prerequisite is unchanged by design — an
+  operator wallet must already be on the registry before that wallet can even open a desk session
+  at all (`/desk/challenge` 403s otherwise), so there is no "silent" version of that gap to fix.
 
 ## 5. The exact sequence for the real go
 

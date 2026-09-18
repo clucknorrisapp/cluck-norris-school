@@ -358,6 +358,11 @@ jobs:
       # dryRun placeholder (Colosseum E10, POKEAHOE): cannot be armed, excluded from traction.
       - name: Hub branding + dry-run projects (POKEAHOE)
         run: node scripts/hub-brand-test.cjs
+      # GG3 fix 1 (docs/COLOSSEUM_ROADMAP.md §17, docs/POKEAHOE_REHEARSAL_2026-09.md §4):
+      # POST /api/hub-registry accepts accessTier as an alias for tier (its own field name), and
+      # refuses any other unrecognized field with 400 instead of silently doing nothing.
+      - name: Hub registry — accessTier alias + unknown-field refusal
+        run: node scripts/hub-registry-test.cjs
       # Platform access tiers: standard / small / comped, price resolved at the payment instant,
       # the CLKN alternative priced at that block, comped needs a reason, unpaid cannot arm.
       - name: Hub access tiers (0.5 / 0.25 SOL a month, comped)

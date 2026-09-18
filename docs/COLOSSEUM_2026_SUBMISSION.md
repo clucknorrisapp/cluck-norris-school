@@ -486,7 +486,7 @@ re-run any of these searches.
 ## 8. Pre-submission checklist
 
 - [ ] **Videos** — scripts are written and word-for-word: the 2–3 minute presentation video is
-      `docs/PITCH_SCRIPT.md` (415 words, timed to 2:46), the ≤3 minute demo video's narration is
+      `docs/PITCH_SCRIPT.md` (436 words, timed to 2:54), the ≤3 minute demo video's narration is
       `docs/DEMO_NARRATION.md` (aligned to `docs/DEMO_STORYBOARD.md`'s shot list). Re-check both
       against `develop` immediately before recording — they're dated 2026-09-18 and note which
       lines depend on `develop` → `main` promotion.
