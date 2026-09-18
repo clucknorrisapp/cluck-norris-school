@@ -17,6 +17,7 @@ const settle = require("../lib/hub/settle");
 const payoutVerify = require("../lib/payout-verify");
 const pay = require("../lib/cuna-payout");
 const routes = require("../lib/hub/routes");
+const eng = require("../lib/hub/engine");
 
 let pass = 0, fail = 0;
 const queue = [];
@@ -37,73 +38,81 @@ const mkProject = (id, mint, over = {}) => proj.approveProject({}, proj.validate
 const mkVersion = (project) => proj.createVersion({}, project, { poolDailyRaw: "1000000000000" }, { effectiveFrom: "2026-09-17", todayKey: "2026-09-17" });
 
 // ── synthetic jsonParsed transactions (the RPC shape getTransaction returns) ────────────────────
-const tokenTransfer = (destination, amount, extra = {}) => ({ program: "spl-token", parsed: { type: "transfer", info: { source: "SrcAta1111111111111111111111111111111", destination, authority: W.PAYER, amount: String(amount) } }, ...extra });
+// SRC_ATA: the token account every fixture transfer is SOURCED from. Its OWNER (never the mere
+// "authority" on the instruction, which can be a delegate) is what adv P0-1 requires to equal the
+// project's funding wallet (W.FUND, which is also W.PAYER's value in this file) or a listed
+// fundedBy wallet — see lib/payout-verify.js transfersIntoWallet. `sourceOwner` lets a test build
+// the ATTACK shape: the same instruction, but sourced from a wallet that is NOT the funding wallet.
+const SRC_ATA = "SrcAta1111111111111111111111111111111";
+const tokenTransfer = (destination, amount, extra = {}) => ({ program: "spl-token", parsed: { type: "transfer", info: { source: SRC_ATA, destination, authority: W.PAYER, amount: String(amount) } }, ...extra });
 const bal = (accountIndex, owner, amount, mint = W.MINT1) => ({ accountIndex, mint, owner, uiTokenAmount: { amount: String(amount) } });
 // One recipient, one top-level transfer instruction — the exact shape lib/whirlpool-vault.js
 // payoutSpl (prepareOne) and, usually, the airdropper construct.
-function txSingle({ wallet = W.A, amountRaw = "1000000000", slot = 42, err = null } = {}) {
+function txSingle({ wallet = W.A, amountRaw = "1000000000", slot = 42, err = null, sourceOwner = W.FUND } = {}) {
   return {
     slot, blockTime: NOW,
-    meta: { err, preTokenBalances: [bal(1, wallet, 0)], postTokenBalances: [bal(1, wallet, amountRaw)] },
-    transaction: { message: { accountKeys: [W.PAYER, W.DEST1], instructions: [tokenTransfer(W.DEST1, amountRaw)] } },
+    meta: { err, preTokenBalances: [bal(0, sourceOwner, "999999999999999"), bal(1, wallet, 0)], postTokenBalances: [bal(1, wallet, amountRaw)] },
+    transaction: { message: { accountKeys: [SRC_ATA, W.DEST1], instructions: [tokenTransfer(W.DEST1, amountRaw)] } },
   };
 }
 // Two recipients, two top-level instructions, ONE signature — the airdropper's batched-transaction
 // shape (public/airdrop-engine.js planBatches).
-function txBatched({ a = { wallet: W.A, amountRaw: "1000000000" }, b = { wallet: W.B, amountRaw: "2000000000" } } = {}) {
+function txBatched({ a = { wallet: W.A, amountRaw: "1000000000" }, b = { wallet: W.B, amountRaw: "2000000000" }, sourceOwner = W.FUND } = {}) {
   return {
     slot: 43, blockTime: NOW,
-    meta: { err: null, preTokenBalances: [bal(1, a.wallet, 0), bal(2, b.wallet, 0)], postTokenBalances: [bal(1, a.wallet, a.amountRaw), bal(2, b.wallet, b.amountRaw)] },
-    transaction: { message: { accountKeys: [W.PAYER, W.DEST1, W.DEST2], instructions: [tokenTransfer(W.DEST1, a.amountRaw), tokenTransfer(W.DEST2, b.amountRaw)] } },
+    meta: { err: null, preTokenBalances: [bal(0, sourceOwner, "999999999999999"), bal(1, a.wallet, 0), bal(2, b.wallet, 0)], postTokenBalances: [bal(1, a.wallet, a.amountRaw), bal(2, b.wallet, b.amountRaw)] },
+    transaction: { message: { accountKeys: [SRC_ATA, W.DEST1, W.DEST2], instructions: [tokenTransfer(W.DEST1, a.amountRaw), tokenTransfer(W.DEST2, b.amountRaw)] } },
   };
 }
 // A CPI-wrapped transfer: the top-level instruction is some other program; the actual SPL transfer
-// is an inner instruction.
-function txInner({ wallet = W.A, amountRaw = "1000000000" } = {}) {
+// is an inner instruction. This is also the "DEX-shaped" fixture: an AMM's own inner instruction
+// crediting the holder from ITS pool account (sourceOwner defaults to a wallet that is NOT the
+// funding wallet — a real DEX buy the holder made herself), used by adv-P0-1's test.
+function txInner({ wallet = W.A, amountRaw = "1000000000", sourceOwner = W.DEST2 } = {}) {
   return {
     slot: 44, blockTime: NOW,
-    meta: { err: null, preTokenBalances: [bal(2, wallet, 0)], postTokenBalances: [bal(2, wallet, amountRaw)],
+    meta: { err: null, preTokenBalances: [bal(0, sourceOwner, "999999999999999"), bal(2, wallet, 0)], postTokenBalances: [bal(2, wallet, amountRaw)],
       innerInstructions: [{ index: 0, instructions: [tokenTransfer(W.DEST1, amountRaw)] }] },
-    transaction: { message: { accountKeys: [W.PAYER, "SomeOtherProgram1111111111111111111111111", W.DEST1], instructions: [{ program: "some-wrapper", parsed: null }] } },
+    transaction: { message: { accountKeys: [SRC_ATA, "SomeOtherProgram1111111111111111111111111", W.DEST1], instructions: [{ program: "some-wrapper", parsed: null }] } },
   };
 }
 // Two transfers into two DIFFERENT token accounts both owned by the SAME wallet, in one signature —
 // ambiguous: which one is "this row's" payment cannot be told apart from chain data alone.
-function txAmbiguous({ wallet = W.A } = {}) {
+function txAmbiguous({ wallet = W.A, sourceOwner = W.FUND } = {}) {
   return {
     slot: 45, blockTime: NOW,
-    meta: { err: null, preTokenBalances: [bal(1, wallet, 0), bal(2, wallet, 0)], postTokenBalances: [bal(1, wallet, "50"), bal(2, wallet, "50")] },
-    transaction: { message: { accountKeys: [W.PAYER, W.DEST1, W.DEST2], instructions: [tokenTransfer(W.DEST1, "50"), tokenTransfer(W.DEST2, "50")] } },
+    meta: { err: null, preTokenBalances: [bal(0, sourceOwner, "999999999999999"), bal(1, wallet, 0), bal(2, wallet, 0)], postTokenBalances: [bal(1, wallet, "50"), bal(2, wallet, "50")] },
+    transaction: { message: { accountKeys: [SRC_ATA, W.DEST1, W.DEST2], instructions: [tokenTransfer(W.DEST1, "50"), tokenTransfer(W.DEST2, "50")] } },
   };
 }
 
 section("1. locateTransferInstruction — the chain's own identity, never a guessed index");
 
 t("a single-recipient transaction locates instructionIndex 0, innerIndex null", () => {
-  const r = payoutVerify.locateTransferInstruction(txSingle({ wallet: W.A, amountRaw: "1000000000" }), { mint: W.MINT1, wallet: W.A });
+  const r = payoutVerify.locateTransferInstruction(txSingle({ wallet: W.A, amountRaw: "1000000000" }), { mint: W.MINT1, wallet: W.A, nowUnix: NOW });
   assert.deepStrictEqual(r, { instructionIndex: 0, innerIndex: null, amountRaw: "1000000000", slot: 42 });
 });
 
 t("a batched (two-recipient) transaction locates each wallet's OWN instruction — no cross-contamination", () => {
   const tx = txBatched({ a: { wallet: W.A, amountRaw: "1000000000" }, b: { wallet: W.B, amountRaw: "2000000000" } });
-  const ra = payoutVerify.locateTransferInstruction(tx, { mint: W.MINT1, wallet: W.A });
-  const rb = payoutVerify.locateTransferInstruction(tx, { mint: W.MINT1, wallet: W.B });
+  const ra = payoutVerify.locateTransferInstruction(tx, { mint: W.MINT1, wallet: W.A, nowUnix: NOW });
+  const rb = payoutVerify.locateTransferInstruction(tx, { mint: W.MINT1, wallet: W.B, nowUnix: NOW });
   assert.strictEqual(ra.instructionIndex, 0); assert.strictEqual(ra.amountRaw, "1000000000");
   assert.strictEqual(rb.instructionIndex, 1); assert.strictEqual(rb.amountRaw, "2000000000");
 });
 
 t("a CPI (inner-instruction) transfer locates instructionIndex + innerIndex", () => {
-  const r = payoutVerify.locateTransferInstruction(txInner({ wallet: W.A, amountRaw: "777" }), { mint: W.MINT1, wallet: W.A });
+  const r = payoutVerify.locateTransferInstruction(txInner({ wallet: W.A, amountRaw: "777" }), { mint: W.MINT1, wallet: W.A, nowUnix: NOW });
   assert.deepStrictEqual(r, { instructionIndex: 0, innerIndex: 0, amountRaw: "777", slot: 44 });
 });
 
 t("two transfers to the same wallet in one signature are AMBIGUOUS — never a guess, returns null", () => {
-  assert.strictEqual(payoutVerify.locateTransferInstruction(txAmbiguous({ wallet: W.A }), { mint: W.MINT1, wallet: W.A }), null);
+  assert.strictEqual(payoutVerify.locateTransferInstruction(txAmbiguous({ wallet: W.A }), { mint: W.MINT1, wallet: W.A, nowUnix: NOW }), null);
 });
 
 t("a failed transaction, or no match, returns null — never a fabricated identity", () => {
   assert.strictEqual(payoutVerify.locateTransferInstruction(txSingle({ err: { InstructionError: [0, "Custom"] } }), { mint: W.MINT1, wallet: W.A }), null);
-  assert.strictEqual(payoutVerify.locateTransferInstruction(txSingle({ wallet: W.A, amountRaw: "1000000000" }), { mint: W.MINT1, wallet: W.B }), null);
+  assert.strictEqual(payoutVerify.locateTransferInstruction(txSingle({ wallet: W.A, amountRaw: "1000000000" }), { mint: W.MINT1, wallet: W.B, nowUnix: NOW }), null);
   assert.strictEqual(payoutVerify.locateTransferInstruction(null, { mint: W.MINT1, wallet: W.A }), null);
 });
 
@@ -237,24 +246,42 @@ function fakeVault(outcomes = {}) {
 // process crash mid-write, used above for the "the whole request errors out, nothing lands"
 // cases) — this wraps a real memoryKv to exercise the OTHER production path: the route's own
 // `if (!writeManyVerifiedMixed(...))` / `else { alert(...) }` graceful-degradation handling.
-function flakyKv(kv, { failOnKeys }) {
+function flakyKv(kv, { failOnKeys, failOnPrefix } = {}) {
   return {
     ...kv,
-    setManyVerified: (entries) => (Object.keys(entries).some((k) => failOnKeys.has(k)) ? false : kv.setManyVerified(entries)),
+    setManyVerified: (entries) => {
+      const keys = Object.keys(entries);
+      const bad = (failOnKeys && keys.some((k) => failOnKeys.has(k))) || (failOnPrefix && keys.some((k) => k.startsWith(failOnPrefix)));
+      return bad ? false : kv.setManyVerified(entries);
+    },
   };
 }
 
-function mountFor({ kv, getTx = async () => null, vault = fakeVault(), alerts = [] } = {}) {
+function mountFor({ kv, getTx = async () => null, vault = fakeVault(), alerts = [], nowUnix = () => NOW, scanDeps = async () => ({ scan: async () => [] }) } = {}) {
   const app = fakeApp();
   routes.mount(app, {
     kv, adminAuthOK: () => true, publicErrMsg: (e) => (e && e.message) || String(e),
     vault, connection: () => ({ getSignatureStatuses: async () => ({ value: [] }), getParsedTokenAccountsByOwner: async () => ({ value: [] }) }),
-    scanDeps: async () => ({}), getTx, alert: (m) => alerts.push(m),
+    scanDeps, getTx, alert: (m) => alerts.push(m),
+    // The route's own clock, injected so a fixture's fabricated `blockTime: NOW` agrees with "now"
+    // (adv P0-1's future-blockTime refusal in lib/payout-verify.js compares against it).
+    nowUnix,
   });
   return app;
 }
 function seedProject(kv, id, mint, over = {}) {
   const p = proj.validateProject({ id, label: id.toUpperCase(), symbol: id.toUpperCase().slice(0, 6), mint, fundingWallet: W.FUND, operatorWallets: [W.A], ...over }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  const reg = proj.approveProject(store.readRegistry(kv) || {}, p, { nowUnix: NOW });
+  store.writeRegistry(kv, reg);
+  const state = proj.createVersion({}, reg[id], { poolDailyRaw: "1000000000000" }, { effectiveFrom: "2026-09-17", todayKey: "2026-09-17" });
+  store.write(kv, id, "state", state);
+  return reg[id];
+}
+// Two projects, DIFFERENT locked mints (approveProject enforces uniqueness on `mint`, not
+// `rewardMint`), SAME reward mint — the adv-P0-2(a) shape: one transfer of the shared reward
+// asset can be aimed at either project's row.
+function seedProjectReward(kv, id, mint, rewardMint, over = {}) {
+  const p = proj.validateProject({ id, label: id.toUpperCase(), symbol: id.toUpperCase().slice(0, 6), mint, rewardMint, rewardMintInfo: { decimals: 9, tokenProgram: TOK, extensions: [] }, fundingWallet: W.FUND, operatorWallets: [W.A], ...over }, { decimals: 9, tokenProgram: TOK, extensions: [] });
   const reg = proj.approveProject(store.readRegistry(kv) || {}, p, { nowUnix: NOW });
   store.writeRegistry(kv, reg);
   const state = proj.createVersion({}, reg[id], { poolDailyRaw: "1000000000000" }, { effectiveFrom: "2026-09-17", todayKey: "2026-09-17" });
@@ -269,7 +296,9 @@ t("a dryRun:true project refuses EVERY mutating payout action, before touching d
   const p = seedProject(kv, "poke", W.MINT1, { dryRun: true });
   store.write(kv, "poke", "days", days({ [W.A]: "1000000000" }));
   const app = mountFor({ kv });
-  for (const q of [{ export: "1" }, { sent: JSON.stringify([{ wallet: W.A, sig: SIG(1) }]), batch: "x" }, { sweep: "1", batch: "x" }, { confirm: "x" }, { cancel: "x" }]) {
+  // scripts/hub-settle-route-test.cjs coverage gap (verify report, "windows the test does not
+  // cover"): the original loop covered export/sent/sweep/confirm/cancel only — send and void join it.
+  for (const q of [{ export: "1" }, { sent: JSON.stringify([{ wallet: W.A, sig: SIG(1) }]), batch: "x" }, { sweep: "1", batch: "x" }, { confirm: "x" }, { cancel: "x" }, { send: "x", from: "poke-vault", run: "1" }, { void: W.A, sig: SIG(1), batch: "x" }]) {
     const res = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "poke" }, query: q });
     assert.strictEqual(res.statusCode, 403, JSON.stringify(q));
     assert.ok(/DRY RUN/.test(res.body.error), JSON.stringify(res.body));
@@ -313,9 +342,11 @@ t("crash between the legacy write and the journal write: the row is reserved and
   // Simulate the crash: a volume that reports FALSE (never throws — lib/kvstore.js's real
   // contract) for exactly the write that would land BOTH the legacy sent row and the journal
   // entry. The route's own `if (!writeManyVerifiedMixed(...))` catches this and answers 500 with a
-  // clear message — never a generic error, never a partial write.
+  // clear message — never a generic error, never a partial write. Since crash P0-1/P1-1, the
+  // journal lands at its OWN per-transfer key (store.journalEntryKey), never the old whole-blob key.
+  const xferKey11 = L.xferKeyOf({ sig: SIG(11), instructionIndex: 0, innerIndex: null });
   const kv1raw = store.memoryKv(dump);
-  const kv1 = flakyKv(kv1raw, { failOnKeys: new Set([store.JOURNAL_KEY]) });
+  const kv1 = flakyKv(kv1raw, { failOnKeys: new Set([store.journalEntryKey(xferKey11)]) });
   const app1 = mountFor({ kv: kv1, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000" }) });
   const crashed = await call(app1, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(11) }]), batch: batchId } });
   assert.strictEqual(crashed.statusCode, 500, JSON.stringify(crashed.body));
@@ -432,8 +463,11 @@ t("a lost journal write after a landed managed-payer send never loses the paymen
   // persist (onPaid's own legacy pending/paid write, a 2-key writeManyVerified with no journal key
   // in it) must go through untouched. Never-throws (flakyKv), matching the real volume's contract —
   // this is the route's own `else { alert(...) }` graceful path, not the outer catch-all.
+  // The managed-payer's own signature is generated inside fakeVault from a shared counter, so its
+  // exact value is not known ahead of time here — fail on ANY per-transfer journal key instead of
+  // one exact xferKey (crash P0-1/P1-1: every journal write now lands at its own key under this prefix).
   const kvFaultRaw = store.memoryKv(kv.dump());
-  const kvFault = flakyKv(kvFaultRaw, { failOnKeys: new Set([store.JOURNAL_KEY]) });
+  const kvFault = flakyKv(kvFaultRaw, { failOnPrefix: store.JOURNAL_PREFIX });
   const app = mountFor({ kv: kvFault, vault, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000" }), alerts });
   const sent = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "beta" }, query: { send: batchId, from: "beta-vault", run: "1" } });
   assert.strictEqual(sent.statusCode, 200, "the payout itself is NOT failed by a journal-only write problem");
@@ -466,6 +500,7 @@ t("a row confirmed by a sweep after a prior request left it pending is journaled
     kv, adminAuthOK: () => true, publicErrMsg: (e) => (e && e.message) || String(e), vault,
     connection: () => ({ getSignatureStatuses: async () => ({ value: [{ err: null, confirmationStatus: "finalized" }] }) }),
     scanDeps: async () => ({}), getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000" }),
+    nowUnix: () => NOW,
   });
   const swept = await call(app3, "/api/hub/:project/payout", { method: "POST", params: { project: "gamma" }, query: { sweep: "1", batch: batchId } });
   assert.strictEqual(swept.statusCode, 200, JSON.stringify(swept.body));
@@ -489,10 +524,29 @@ t("findReceipt serves the Addendum-B3 shape once a journal event exists, and it 
     const pub = require("../lib/hub/public");
     const project = store.readRegistry(kv).delta;
     const view = pub.projectView({ project, stake: pub.stakeView({ days: store.read(kv, "delta", "days", {}), paid: store.read(kv, "delta", "paid", {}), batches: store.read(kv, "delta", "batches", {}), decimals: 9 }) });
-    const rec = pub.findReceipt(view, SIG(30), { journal: store.readJournal(kv), batches: store.read(kv, "delta", "batches", {}), project, programState: store.read(kv, "delta", "state", {}) });
-    assert.ok(rec && Array.isArray(rec.settlements), "the Addendum-B shape was served");
+    const wrapped = pub.findReceipt(view, SIG(30), { journal: store.readJournal(kv), batches: store.read(kv, "delta", "batches", {}), project, programState: store.read(kv, "delta", "state", {}) });
+    // adv P1-4: findReceipt now wraps the B3 shape in the SAME envelope the legacy shape uses
+    // ({projectId, symbol, dryRun, brand, program, receipt}) — public/hub.html's renderReceipt
+    // reads `r.program`/`r.symbol`/`r.dryRun`/`r.brand`/`r.receipt` regardless of which shape
+    // `r.receipt` turns out to be; assert every field it reads is actually present.
+    assert.ok(wrapped && wrapped.receipt && Array.isArray(wrapped.receipt.settlements), "the Addendum-B shape was served, wrapped");
+    const rec = wrapped.receipt;
     assert.strictEqual(rec.settlements.length, 1);
     assert.strictEqual(rec.totals.appliedRaw, "1000000000");
+    assert.strictEqual(typeof wrapped.symbol, "string");
+    assert.strictEqual(wrapped.dryRun, false);
+    assert.ok("brand" in wrapped);
+    assert.ok(wrapped.program && typeof wrapped.program.label === "string" && typeof wrapped.program.kind === "string");
+    assert.ok(wrapped.program.ticker); assert.ok(wrapped.program.mint); assert.ok(wrapped.program.prizeMint);
+    assert.ok(wrapped.program.termsHash, "termsHash is the receipt's own programHash, not null");
+    // Exactly what public/hub.html's renderReceipt reads off `x` (= wrapped.receipt) for the B
+    // shape: wallet, state, and per-settlement sig/at (there is no single top-level amountUi/sig/at
+    // on this shape — the page derives them from totals + the last settlement, see its own code).
+    assert.strictEqual(rec.wallet, W.A);
+    assert.ok(["pending", "partial", "paid", "waived"].includes(rec.state));
+    assert.strictEqual(typeof rec.settlements[0].sig, "string");
+    assert.strictEqual(typeof rec.settlements[0].at, "number");
+    assert.strictEqual(typeof rec.rewardDecimals, "number");
 
     // Minimal validator, matching scripts/hub-schema-test.cjs's own (kept self-contained on
     // purpose — this file must not depend on another test file's internals).
@@ -514,6 +568,339 @@ t("findReceipt serves the Addendum-B3 shape once a journal event exists, and it 
     const errors = validate(schema, rec);
     assert.deepStrictEqual(errors, []);
   })();
+});
+
+// ── everything below is new coverage from docs/HUB_JOURNAL_VERIFY_2026-09-18.md (two-lens
+// adversarial verification, PR #342 blocked on its P0/P1 findings) — each section names the
+// finding(s) it closes. ─────────────────────────────────────────────────────────────────────────
+
+const MINT_B = "5zro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc"; // a distinct LOCKED mint for the shared-reward-mint tests below
+
+section("10. adv P0-1 — a transfer must be SOURCED from the project's funding wallet (or a listed fundedBy wallet)");
+
+t("a DEX-shaped inner-CPI transfer (source owned by a stranger) is refused, never legacy-recorded, never journaled", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "alpha10", W.MINT1);
+  store.write(kv, "alpha10", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, getTx: async () => txInner({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.DEST2 }) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha10" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  const sent = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha10" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(40) }]), batch: batchId } });
+  assert.strictEqual(sent.statusCode, 200, JSON.stringify(sent.body));
+  assert.deepStrictEqual(sent.body.sent.recorded, []);
+  assert.ok(sent.body.sent.ignored.some((x) => x.why === "transfer_not_from_funding_wallet"), JSON.stringify(sent.body.sent.ignored));
+  assert.deepStrictEqual(store.read(kv, "alpha10", "batches", {})[batchId].sent, {});
+  assert.deepStrictEqual(store.readJournal(kv), {});
+});
+
+t("a top-level airdrop-shaped transfer from a stranger wallet is refused the same way", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "alpha10b", W.MINT1);
+  store.write(kv, "alpha10b", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.DEST2 }) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha10b" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  const sent = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha10b" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(41) }]), batch: batchId } });
+  assert.deepStrictEqual(sent.body.sent.recorded, []);
+  assert.ok(sent.body.sent.ignored.some((x) => x.why === "transfer_not_from_funding_wallet"));
+  assert.deepStrictEqual(store.readJournal(kv), {});
+});
+
+t("a genuine funding-wallet transfer, even via an inner CPI instruction, is accepted and journaled", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "alpha10c", W.MINT1);
+  store.write(kv, "alpha10c", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, getTx: async () => txInner({ wallet: W.A, amountRaw: "1000000000", sourceOwner: W.FUND }) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha10c" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  const sent = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha10c" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(42) }]), batch: batchId } });
+  assert.deepStrictEqual(sent.body.sent.recorded, [W.A]);
+  assert.strictEqual(sent.body.sent.journal[0].journaled, true);
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1);
+});
+
+t("a transaction with a blockTime more than 10 minutes in the future is refused, source aside", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "alpha10d", W.MINT1);
+  store.write(kv, "alpha10d", "days", days({ [W.A]: "1000000000" }));
+  const futureTx = { ...txSingle({ wallet: W.A, amountRaw: "1000000000" }), blockTime: NOW + 700 };
+  const app = mountFor({ kv, getTx: async () => futureTx });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha10d" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  const sent = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha10d" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(43) }]), batch: batchId } });
+  assert.deepStrictEqual(sent.body.sent.recorded, []);
+  assert.ok(sent.body.sent.ignored.some((x) => /blockTime/.test(x.why)), JSON.stringify(sent.body.sent.ignored));
+});
+
+section("11. adv P0-2 — a journal refusal REJECTS the row; the journal is the cross-project reuse guard");
+
+t("two projects sharing a reward mint: the same signature settles the FIRST project's row; the second is refused with NOTHING written, legacy or journal", async () => {
+  const kv = store.memoryKv();
+  seedProjectReward(kv, "alpha11", W.MINT1, W.MINT1);
+  seedProjectReward(kv, "beta11", MINT_B, W.MINT1);
+  store.write(kv, "alpha11", "days", days({ [W.A]: "1000000000" }));
+  store.write(kv, "beta11", "days", days({ [W.A]: "1000000000" }));
+  const tx = txSingle({ wallet: W.A, amountRaw: "1000000000" });
+  const app = mountFor({ kv, getTx: async () => tx });
+  const eA = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha11" }, query: { export: "1" } });
+  const eB = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "beta11" }, query: { export: "1" } });
+  const first = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha11" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(50) }]), batch: eA.body.created.id } });
+  assert.deepStrictEqual(first.body.sent.recorded, [W.A]);
+  const second = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "beta11" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(50) }]), batch: eB.body.created.id } });
+  assert.deepStrictEqual(second.body.sent.recorded, [], "the second project's row is REJECTED, not legacy-recorded");
+  // Caught cross-project by the legacy sigAlreadyUsed check (now journal-aware — adv P0-2's own
+  // suggested fix) BEFORE it would even reach the journal's own "transfer_already_consumed" —
+  // belt-and-suspenders: either wording is a correct refusal, this just asserts SOME refusal fires.
+  assert.ok(second.body.sent.ignored.some((x) => /already[ _]consumed|already paid/.test(x.why)), JSON.stringify(second.body.sent.ignored));
+  assert.deepStrictEqual(store.read(kv, "beta11", "batches", {})[eB.body.created.id].sent, {}, "nothing legacy-written for beta11");
+  assert.deepStrictEqual(Object.values(store.readJournal(kv)).filter((e) => e.projectId === "beta11"), [], "no journal entry for beta11");
+  // Cancel beta11's now-untouched batch and confirm the full amount is still owed — proving
+  // nothing was actually settled for it despite the money having "existed" in a pending batch.
+  await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "beta11" }, query: { cancel: eB.body.created.id } });
+  const owedBeta = pay.owedNow({ days: store.read(kv, "beta11", "days", {}), paid: store.read(kv, "beta11", "paid", {}), pending: store.read(kv, "beta11", "batches", {}), journal: store.readJournal(kv), projectId: "beta11" });
+  assert.strictEqual(owedBeta[W.A].toString(), "1000000000", "beta11's obligation is untouched — still fully owed");
+});
+
+t("void + cancel + resubmit the same signature is refused — closed at the void step, because the row is already journaled (crash P1-2)", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "alpha12", W.MINT1);
+  store.write(kv, "alpha12", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000" }) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha12" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha12" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(51) }]), batch: batchId } });
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1);
+  const voided = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha12" }, query: { void: W.A, sig: SIG(51), batch: batchId } });
+  assert.strictEqual(voided.body.void.ok, false);
+  assert.match(voided.body.void.error, /cannot be voided/);
+  // The row is UNCHANGED — still recorded sent, journal intact — so there is nothing for a
+  // cancel+resubmit of the same signature to reopen anywhere else.
+  assert.strictEqual(store.read(kv, "alpha12", "batches", {})[batchId].sent[W.A].sig, SIG(51));
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1);
+});
+
+t("void on a legacy-recorded row that never journaled (attribution failure) still works — only a JOURNALED row is refused", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "alpha13", W.MINT1);
+  store.write(kv, "alpha13", "days", days({ [W.A]: "50" }));
+  const app = mountFor({ kv, getTx: async () => txAmbiguous({ wallet: W.A }) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha13" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  const sent = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha13" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(72) }]), batch: batchId } });
+  assert.deepStrictEqual(sent.body.sent.recorded, [W.A]);
+  assert.strictEqual(sent.body.sent.journal[0].journaled, false);
+  assert.deepStrictEqual(store.readJournal(kv), {});
+  const voided = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha13" }, query: { void: W.A, sig: SIG(72), batch: batchId } });
+  assert.strictEqual(voided.body.void.ok, true, JSON.stringify(voided.body));
+});
+
+section("12. crash P0-1/P1-1 — the journal is append-only per transfer; interleaved requests across two projects both survive");
+
+t("project alpha stalls on getTx while beta completes and journals — beta's entry survives the interleave", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "alpha14", W.MINT1);
+  seedProjectReward(kv, "beta14", MINT_B, W.MINT1); // distinct LOCKED mint (uniqueness), reward mint matches the txSingle fixture
+  store.write(kv, "alpha14", "days", days({ [W.A]: "1000000000" }));
+  store.write(kv, "beta14", "days", days({ [W.B]: "2000000000" }));
+  let release; const gate = new Promise((r) => { release = r; });
+  let first = true;
+  const appAlpha = mountFor({ kv, getTx: async () => { if (first) { first = false; await gate; } return txSingle({ wallet: W.A, amountRaw: "1000000000" }); } });
+  const appBeta = mountFor({ kv, getTx: async () => txSingle({ wallet: W.B, amountRaw: "2000000000" }) });
+  const eA = await call(appAlpha, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha14" }, query: { export: "1" } });
+  const eB = await call(appBeta, "/api/hub/:project/payout", { method: "POST", params: { project: "beta14" }, query: { export: "1" } });
+  const pA = call(appAlpha, "/api/hub/:project/payout", { method: "POST", params: { project: "alpha14" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(60) }]), batch: eA.body.created.id } });
+  await new Promise((r) => setImmediate(r));
+  const rB = await call(appBeta, "/api/hub/:project/payout", { method: "POST", params: { project: "beta14" }, query: { sent: JSON.stringify([{ wallet: W.B, sig: SIG(61) }]), batch: eB.body.created.id } });
+  assert.strictEqual(rB.body.sent.recorded.length, 1, "beta completed while alpha was still stalled");
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1, "beta's journal entry is durable the moment it lands");
+  release();
+  const rA = await pA;
+  assert.strictEqual(rA.body.sent.recorded.length, 1);
+  // BOTH entries survive — the old whole-blob journal would have had alpha's persist (built from a
+  // pre-beta snapshot) silently erase beta's entry here (durability lens P1-1).
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 2);
+  const jr = store.readJournal(kv);
+  assert.ok(Object.values(jr).some((e) => e.projectId === "alpha14"));
+  assert.ok(Object.values(jr).some((e) => e.projectId === "beta14"));
+  // The cross-project consumed guard holds after the interleave: neither entry can settle the
+  // OTHER project's row for the same identity.
+  const s = L.settle({ journal: jr, projectId: "alpha14", batch: { id: eA.body.created.id, projectId: "alpha14", amounts: { [W.A]: "1000000000" } }, wallet: W.B, transfer: { sig: SIG(61), instructionIndex: 0, innerIndex: null, amountRaw: "1000000000", slot: 1 }, nowUnix: NOW });
+  assert.strictEqual(s.ok, false); assert.strictEqual(s.error, "transfer_already_consumed");
+});
+
+section("13. crash P0-1 — the payout route is serialised per project; a second concurrent mutating request gets 409, never a lost write");
+
+t("two overlapping &sent= requests for DIFFERENT wallets on the SAME project: the second waits (409 busy) instead of racing the first's read-modify-write", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "gamma15", W.MINT1);
+  store.write(kv, "gamma15", "days", days({ [W.A]: "1000000000", [W.B]: "2000000000" }));
+  const seedApp = mountFor({ kv });
+  const exp = await call(seedApp, "/api/hub/:project/payout", { method: "POST", params: { project: "gamma15" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  let release; const gate = new Promise((r) => { release = r; });
+  let first = true;
+  const appA = mountFor({ kv, getTx: async () => { if (first) { first = false; await gate; } return txSingle({ wallet: W.A, amountRaw: "1000000000" }); } });
+  const appB = mountFor({ kv, getTx: async () => txSingle({ wallet: W.B, amountRaw: "2000000000" }) });
+  const pA = call(appA, "/api/hub/:project/payout", { method: "POST", params: { project: "gamma15" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(62) }]), batch: batchId } });
+  await new Promise((r) => setImmediate(r));
+  const rB = await call(appB, "/api/hub/:project/payout", { method: "POST", params: { project: "gamma15" }, query: { sent: JSON.stringify([{ wallet: W.B, sig: SIG(63) }]), batch: batchId } });
+  assert.strictEqual(rB.statusCode, 409, JSON.stringify(rB.body));
+  assert.strictEqual(rB.body.error, "busy");
+  release();
+  const rA = await pA;
+  assert.strictEqual(rA.statusCode, 200, JSON.stringify(rA.body));
+  assert.strictEqual(rA.body.sent.recorded.length, 1);
+  // B was never lost — it simply never ran; a caller retries once the lock clears.
+  const retryB = await call(appB, "/api/hub/:project/payout", { method: "POST", params: { project: "gamma15" }, query: { sent: JSON.stringify([{ wallet: W.B, sig: SIG(63) }]), batch: batchId } });
+  assert.strictEqual(retryB.statusCode, 200, JSON.stringify(retryB.body));
+  assert.strictEqual(retryB.body.sent.recorded.length, 1);
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 2);
+  // A non-mutating GET is never blocked by the lock.
+  const read = await call(appB, "/api/hub/:project/payout", { method: "GET", params: { project: "gamma15" }, query: {} });
+  assert.strictEqual(read.statusCode, 200);
+});
+
+section("14. adv P1-3 — a stranger's transfer stapled to an already-settled row is not journaled");
+
+t("row settled at 1.0; a second, unrelated 50-token transfer to the SAME wallet in the SAME batch is not journaled — no phantom excess", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "eps16", W.MINT1);
+  store.write(kv, "eps16", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, getTx: async (sig) => (sig === SIG(70) ? txSingle({ wallet: W.A, amountRaw: "1000000000" }) : txSingle({ wallet: W.A, amountRaw: "50000000000", slot: 99 })) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "eps16" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  const first = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "eps16" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(70) }]), batch: batchId } });
+  assert.strictEqual(first.body.sent.recorded.length, 1);
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1);
+  const second = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "eps16" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(71) }]), batch: batchId } });
+  assert.deepStrictEqual(second.body.sent.recorded, [], "already recorded — the stapled transfer records nothing new");
+  assert.strictEqual(second.body.sent.journal.length, 1);
+  assert.strictEqual(second.body.sent.journal[0].journaled, false, "the extra transfer is NOT journaled against a finished row");
+  assert.strictEqual(Object.keys(store.readJournal(kv)).length, 1, "still exactly one journal entry — no phantom excess, no second settlement");
+});
+
+section("15. crash P1-3 (durability lens) — owedNow takes the per-ROW union, not the per-wallet max of totals");
+
+t("wallet accrued 200 across two batches: batch1 settled journal-only (legacy voided), batch2 settled legacy-only (journal lost) — owedNow reads 0, not 100", () => {
+  const b1 = { id: "b1", amounts: { [W.A]: "100" } };                                     // legacy voided: no sent[w]
+  const b2 = { id: "b2", amounts: { [W.A]: "100" }, sent: { [W.A]: { sig: SIG(80) } } };   // journal write lost
+  const journal = { k1: { projectId: "eta17", batchId: "b1", wallet: W.A, appliedRaw: "100" } };
+  const owed = pay.owedNow({ days: days({ [W.A]: "200" }), paid: {}, pending: { b1, b2 }, journal, projectId: "eta17" });
+  assert.strictEqual(owed[W.A].toString(), "0", "200 genuinely left the wallet across the two rows — nothing left to re-offer");
+});
+
+t("a journal row whose batch is no longer present in the batches map still counts (an orphaned/purged batch is not lost money)", () => {
+  const journal = { k1: { projectId: "theta18", batchId: "gone", wallet: W.A, appliedRaw: "300" } };
+  const owed = pay.owedNow({ days: days({ [W.A]: "300" }), paid: {}, pending: {}, journal, projectId: "theta18" });
+  assert.strictEqual(owed[W.A].toString(), "0");
+});
+
+section("16. crash P1-4 — the public holder view (GET /api/hub/:project/holder) agrees with the payout desk");
+
+t("the holder view's owedRaw drops to 0 once the row is journaled, even if `paid` never got the write", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "iota19", W.MINT1);
+  store.write(kv, "iota19", "days", days({ [W.A]: "1000000000" }));
+  const app = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000" }) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "iota19" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "iota19" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(90) }]), batch: batchId } });
+  const holder = await call(app, "/api/hub/:project/holder", { method: "GET", params: { project: "iota19" }, query: { address: W.A } });
+  assert.strictEqual(holder.statusCode, 200, JSON.stringify(holder.body));
+  assert.strictEqual(holder.body.owedRaw, "0", "the holder view must agree with the desk — the row is journaled and legacy-recorded");
+});
+
+section("17. adv P1-5 / crash P2-1 — the journal's amount is the LOCATED INSTRUCTION's own amount, floored at a positive net delta");
+
+t("an instruction moves 1.0 to the wallet while the wallet separately sends 0.4 elsewhere in the same signature — the journal names 1.0, not the 0.6 net delta", () => {
+  const tx = {
+    slot: 77, blockTime: NOW,
+    meta: {
+      err: null,
+      preTokenBalances: [bal(0, W.FUND, "999999999999999"), bal(1, W.A, "400000000")],
+      postTokenBalances: [bal(1, W.A, "1000000000")],   // net delta across the tx: +1.0 in, -0.4 out elsewhere = +0.6 net
+    },
+    transaction: { message: { accountKeys: [SRC_ATA, W.DEST1], instructions: [tokenTransfer(W.DEST1, "1000000000")] } },
+  };
+  const r = payoutVerify.locateTransferInstruction(tx, { mint: W.MINT1, wallet: W.A, nowUnix: NOW });
+  assert.ok(r && !r.refused, JSON.stringify(r));
+  assert.strictEqual(r.amountRaw, "1000000000", "the instruction's own amount, not the net delta");
+});
+
+t("a transaction that nets to zero or negative for the wallet is refused regardless of what any instruction claims (the floor)", () => {
+  const tx = {
+    slot: 78, blockTime: NOW,
+    meta: {
+      err: null,
+      preTokenBalances: [bal(0, W.FUND, "999999999999999"), bal(1, W.A, "1000000000")],
+      postTokenBalances: [bal(1, W.A, "1000000000")],   // instruction claims +1.0 in, but the wallet's balance for this mint did not move at all
+    },
+    transaction: { message: { accountKeys: [SRC_ATA, W.DEST1], instructions: [tokenTransfer(W.DEST1, "1000000000")] } },
+  };
+  assert.strictEqual(payoutVerify.locateTransferInstruction(tx, { mint: W.MINT1, wallet: W.A, nowUnix: NOW }), null);
+});
+
+section("18. crash P2-2 — GET /api/hub/:project/reconcile rebuilds the consumed set and reports divergence, read-only");
+
+t("reports a legacy-sent row with no journal entry as divergent, and a fully-agreeing row as not — never writes anything", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "kappa20", W.MINT1);
+  store.write(kv, "kappa20", "days", days({ [W.A]: "1000000000", [W.B]: "50" }));
+  const app = mountFor({ kv, getTx: async (sig) => (sig === SIG(91) ? txSingle({ wallet: W.A, amountRaw: "1000000000" }) : txAmbiguous({ wallet: W.B })) });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "kappa20" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "kappa20" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(91) }, { wallet: W.B, sig: SIG(92) }]), batch: batchId } });
+  const before = kv.dump();
+  const r = await call(app, "/api/hub/:project/reconcile", { method: "GET", params: { project: "kappa20" }, query: {} });
+  assert.strictEqual(r.statusCode, 200, JSON.stringify(r.body));
+  assert.strictEqual(r.body.divergentCount, 1, JSON.stringify(r.body.divergent));
+  assert.strictEqual(r.body.divergent[0].wallet, W.B, "B's transfer never attributed to one instruction — legacy sent, no journal entry");
+  assert.strictEqual(r.body.divergent[0].legacySent, true);
+  assert.strictEqual(r.body.divergent[0].journalSettled, false);
+  assert.deepStrictEqual(kv.dump(), before, "reconcile writes nothing");
+});
+
+section("19. crash P2-3/P2-4 — journaled:false and a genuine throw both alert, never silently swallowed");
+
+t("a landed, legacy-recorded row that could not be journaled (attribution failure) alerts the operator", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "lambda21", W.MINT1);
+  store.write(kv, "lambda21", "days", days({ [W.A]: "50" }));
+  const alerts = [];
+  const app = mountFor({ kv, getTx: async () => txAmbiguous({ wallet: W.A }), alerts });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "lambda21" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "lambda21" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(93) }]), batch: batchId } });
+  assert.ok(alerts.some((m) => /recorded sent but not journaled/.test(m)), JSON.stringify(alerts));
+});
+
+t("a genuine THROW mid-request (not a graceful false) still alerts, not just a silent 400", async () => {
+  const kv = store.memoryKv({}, { failOn: (k) => k.startsWith(store.JOURNAL_PREFIX) });
+  seedProject(kv, "mu22", W.MINT1);
+  store.write(kv, "mu22", "days", days({ [W.A]: "1000000000" }));
+  const alerts = [];
+  const app = mountFor({ kv, getTx: async () => txSingle({ wallet: W.A, amountRaw: "1000000000" }), alerts });
+  const exp = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "mu22" }, query: { export: "1" } });
+  const batchId = exp.body.created.id;
+  const res = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "mu22" }, query: { sent: JSON.stringify([{ wallet: W.A, sig: SIG(94) }]), batch: batchId } });
+  assert.strictEqual(res.statusCode, 400, JSON.stringify(res.body));
+  assert.ok(alerts.some((m) => /payout request threw/.test(m)), JSON.stringify(alerts));
+  // The lock is released even on a throw (the route's `finally`) — a following mutating request
+  // is never stuck behind a stale lock left by the crash (409 would mean the finally didn't run).
+  const retry = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "mu22" }, query: { export: "1" } });
+  assert.strictEqual(retry.statusCode, 200, JSON.stringify(retry.body));
+});
+
+section("20. dryRun (Colosseum E10) never reaches send or void either");
+
+t("a dryRun project's &send= and &void= are both refused before any store read", async () => {
+  const kv = store.memoryKv();
+  seedProject(kv, "nu23", W.MINT1, { dryRun: true });
+  const app = mountFor({ kv });
+  const send = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "nu23" }, query: { send: "x", from: "nu23-vault", run: "1" } });
+  assert.strictEqual(send.statusCode, 403); assert.ok(/DRY RUN/.test(send.body.error));
+  const voidRes = await call(app, "/api/hub/:project/payout", { method: "POST", params: { project: "nu23" }, query: { void: W.A, sig: SIG(1), batch: "x" } });
+  assert.strictEqual(voidRes.statusCode, 403); assert.ok(/DRY RUN/.test(voidRes.body.error));
 });
 
 (async () => {
