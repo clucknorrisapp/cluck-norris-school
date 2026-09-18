@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clucknorris.app/hub/schema/program-version.json",
+  "title": "Hub program version",
+  "description": "The wire projection of a Program Version (design §2, as amended by Addendum B): immutable once effective, its `hash` is a sha256 of the canonical JSON of the FULL record (lib/hub/project.js versionRecord/canonicalJson) so it can be recomputed off the published `terms` alone. This schema pins the subset actually put on the wire today by lib/hub/routes.js's admin/desk responses (`versions[]`) and by the self-serve preview at POST /api/hub-apply?preview=1 (`version`): { version, effectiveFrom, effectiveTo, hash, terms }. The full canonical record lib/hub/project.js hashes also carries `projectId`, `mint`, `rewardMint`, `rewardDecimals`, `rewardTokenProgram`, `fundingResponsibility`, `signer` and `exclusions: { rule, wallets }` — those are implied by the project id in the URL and by `terms.excludeWallets` and are not repeated on the wire; a reproduction needs the project's own record (project-public.schema.json) alongside this one. Editing terms never edits a version: it creates the next one, effective the next UTC day, and the version it replaces gains `effectiveTo` but keeps its own hash and stays byte-stable. Addendum B5: today this hash is server-served, so a reader can rerun the arithmetic over server-supplied inputs — that is reproducible, not independently verified, until the funding wallet's on-chain memo commitment (B5) and the repository mirror both exist for the version.",
+  "type": "object",
+  "required": ["version", "effectiveFrom", "hash", "terms"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string", "description": "present when the serving route stamps it — points back at this file's served URL." },
+    "version": { "type": "integer", "minimum": 1, "description": "1-based, monotonically increasing per project. The FK other entities (a batch, a receipt, a holder view) call `programVersion`." },
+    "effectiveFrom": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "UTC day (YYYY-MM-DD) this version takes effect, at 00:00 UTC. A period never straddles two versions." },
+    "effectiveTo": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "set once the NEXT version supersedes this one (bookkeeping only — never part of what `hash` covers, so verifying a closed version means hashing it with effectiveTo forced back to null). Present and possibly null on the admin/desk wire shape; today's POST /api/hub-apply?preview=1 response omits this key entirely for a not-yet-created draft — treat its absence there the same as null (a found inconsistency between the two call sites, not yet reconciled)." },
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256 hex of the canonical JSON of the full version record (with effectiveTo forced to null) — verify with lib/hub/project.js verifyVersionHash or its own re-derivation from `terms` plus the project record's own fields." },
+    "terms": {
+      "type": "object",
+      "required": ["poolDailyRaw", "sharePct", "maxSharePct", "minDurationDays", "maxTermDays", "minLockRaw", "maxWalletSharePct", "cancelableAllowed", "fundedBy", "excludeWallets", "backdateCapDays", "backdateNotBefore", "payoutSchedule", "vesting"],
+      "additionalProperties": false,
+      "description": "the output of lib/hub/project.js validateTerms() — every field that decides who qualifies and how much they earn. This is the object `hash` is taken over (inside the full version record).",
+      "properties": {
+        "poolDailyRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "a fixed daily reward pool, raw base units of `rewardMint` (0 if the pool is instead a share of the funding wallet's own vesting unlock — see sharePct)." },
+        "sharePct": { "type": "number", "minimum": 0.01, "maximum": 100, "description": "percent of the funding wallet's OWN daily vesting unlock that funds the pool that day, when there is such a stream." },
+        "maxSharePct": { "type": "number", "minimum": 1, "maximum": 100, "description": "ceiling on sharePct's effect — the share-of-unlock pool can never exceed this fraction of the day's unlock." },
+        "minDurationDays": { "type": "integer", "minimum": 1, "maximum": 3650, "description": "shortest lock term (from the lock's own firstSeenAt) this program admits." },
+        "maxTermDays": { "type": "integer", "minimum": 1, "maximum": 3650, "description": "term length at the top multiplier tier." },
+        "minLockRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "minimum amount still locked (raw base units of the locked mint) to qualify." },
+        "maxWalletSharePct": { "type": "number", "minimum": 0, "description": "per-wallet cap on the pool's share, as a percent; 0 means off." },
+        "cancelableAllowed": { "type": "boolean", "description": "whether a lock the CREATOR can still cancel qualifies. False unless a program version says otherwise (design §4)." },
+        "fundedBy": { "type": "array", "items": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$" }, "description": "wallets whose own vesting unlock feeds the daily pool (defaults to the project's fundingWallet)." },
+        "excludeWallets": { "type": "array", "items": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$" }, "description": "Rule B: every wallet excluded as a lock's owner OR creator — always includes the funding wallet and every `fundedBy` wallet, shown here so a holder can see why a founder's own locks are excluded." },
+        "backdateCapDays": { "type": "integer", "minimum": 0, "maximum": 3650, "description": "how far back a lock's on-chain creation time may backdate its firstSeenAt when the scanner sees it late." },
+        "backdateNotBefore": { "type": "integer", "minimum": 0, "description": "unix seconds — a lock's firstSeenAt is never backdated earlier than this, whatever the chain says." },
+        "payoutSchedule": { "type": "string", "enum": ["daily", "weekly", "monthly", "at-unlock", "manual"], "description": "cadence a batch is expected to be raised on (owner, 2026-09-16). `at-unlock` pays each wallet when ITS OWN lock finishes releasing; accrual itself is unaffected — only the payout cadence changes." },
+        "vesting": { "type": "string", "enum": ["any", "cliff-only", "vesting-only"], "description": "which lock SHAPES are admitted: `cliff-only` = a single release at the cliff (\"no vesting\"), `vesting-only` = periodic releases, `any` = either." }
+      }
+    },
+    "commitment": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["sig", "slot", "observedAt"],
+      "description": "Addendum B5 (roadmap E3): present once the funding wallet's own on-chain memo committing THIS version's hash has been independently OBSERVED by the server (lib/hub/commit.js) — never on a client's say-so. Null, or the key absent entirely, means the public wording stays \"the calculation is reproducible from the published inputs,\" never \"independently verified\" or \"independently committed.\"",
+      "properties": {
+        "sig": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{60,100}$", "description": "the memo transaction's own signature — check it, and the memo it carries, on any explorer." },
+        "slot": { "type": ["integer", "null"], "minimum": 0, "description": "the slot the memo transaction landed in, when the RPC reported one." },
+        "observedAt": { "type": "integer", "minimum": 0, "description": "unix seconds this SERVER verified the memo on-chain — not the transaction's own block time." }
+      }
+    }
+  }
+}

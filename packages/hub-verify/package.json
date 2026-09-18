@@ -1,0 +1,30 @@
+{
+  "name": "@clkn/hub-verify",
+  "version": "0.1.0",
+  "description": "Reproduce a Cluck Norris Project Hub receipt's amount from its published inputs, offline, with no server call trusted — the same verifier the site's own /hub/verify page and reproduce-a-receipt script run.",
+  "license": "MIT",
+  "bin": {
+    "hub-verify": "./bin/hub-verify.cjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "schema",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/clucknorrisapp/cluck-norris-school.git",
+    "directory": "packages/hub-verify"
+  },
+  "keywords": [
+    "solana",
+    "verification",
+    "receipts",
+    "transparency"
+  ]
+}

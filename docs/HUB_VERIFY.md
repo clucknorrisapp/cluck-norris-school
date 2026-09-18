@@ -104,8 +104,14 @@ a `wallet` lookup, a `standings`/`readiness` body — none of those are schema'd
 
 ## (b) Reproduce a receipt's amount from the published inputs
 
+No clone, no build — `npx @clkn/hub-verify` is the same verifier, packaged as a standalone
+command (DD1, `packages/hub-verify`). Publishing to npm is pending the owner's own go; until
+then run it from a git ref or from this repo, both shown below:
+
 ```bash
 curl -s "$HOST/api/hub/cuna" | grep -o '"sig":"[^"]*"' | head -1   # grab a settled signature
+npx @clkn/hub-verify "$HOST/hub/cuna/r/<sig>"                      # once published to npm
+# or, right now, from this repo (identical output):
 node scripts/reproduce-receipt.cjs "$HOST/hub/cuna/r/<sig>"
 ```
 

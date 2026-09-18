@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clucknorris.app/hub/schema/receipt.json",
+  "title": "Hub settlement receipt",
+  "description": "The Addendum-B3 receipt built by lib/hub/ledger.js receipt(): an APPEND-ONLY aggregate per (batch, wallet), never a single amount/signature pair. `settlements[]` holds one immutable entry per settlement-journal event (Addendum B1: `settle:<sig>:<instructionIndex>[:<innerIndex>]`, the chain's own identity of the transfer and nothing else) — a 100-owed row paid as 40 + 40 + 20 carries three entries and `totals.appliedRaw` is their sum, never any one of them. Two claims are kept distinct and MUST be shown separately: `claims.paymentVerified` (a transfer exists on-chain and matches this row) and `claims.calculationReproducible` (the reproduce export reruns to `totals.owedRaw` — set by that export, never assumed true here; see reproduce-receipt for how a second product reruns it). Overpayment is never floored away and never nets across wallets or projects: a transfer larger than what remained applies only the remainder and reports the rest as `excessRaw`, on this receipt and on the wallet's own funding-status excess, never credited as future accrual and never reducing another wallet's obligation. STATUS: this shape is implemented and unit-tested (scripts/hub-core-test.cjs §7, Addendum B3) but is NOT YET served by any HTTP route — the live GET /api/hub/<project>/r/<sig> route today returns a different, pre-Addendum-B receipt shape from lib/hub/public.js findReceipt() (a buy-competition / Buy Special draw / giveaway / legacy lock-to-earn payout row: { projectId, symbol, program, receipt: { wallet, amountUi, sig, at, state, confirmedAt } }), predating the settlement journal. The design's own `/receipt/<batchId>/<wallet>` route (§5) — the one meant to serve THIS shape — has not shipped; see lib/hub/README.md.",
+  "type": "object",
+  "required": ["projectId", "batchId", "programVersion", "programHash", "rewardMint", "rewardDecimals", "periods", "wallet", "state", "totals", "settlements", "claims", "fundingWallet"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string", "description": "present when the serving route stamps it — points back at this file's served URL." },
+    "projectId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,31}$", "description": "the project this receipt belongs to." },
+    "batchId": { "type": "string", "description": "the batch (see batch.schema.json) this row was paid from." },
+    "programVersion": { "type": "integer", "minimum": 1, "description": "the program-version.schema.json `version` the batch paid under — copied from the batch, not re-looked-up." },
+    "programHash": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "that version's hash, so the terms that decided this amount are pinned even if the program has since moved to a later version." },
+    "rewardMint": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$", "description": "the mint every raw amount on this receipt is denominated in." },
+    "rewardDecimals": { "type": "integer", "minimum": 0, "maximum": 18, "description": "decimals of `rewardMint`." },
+    "periods": { "type": "array", "items": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2})?$" }, "description": "the accrual periods the batch (and so this row) covers." },
+    "wallet": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$", "description": "the recipient wallet this receipt is for." },
+    "state": { "type": "string", "enum": ["pending", "partial", "paid", "waived"], "description": "this row's own settlement state: pending = nothing applied yet; partial = some but not all of `owedRaw` has landed; paid = fully applied; waived = the owner released the remainder (still owed — the next batch draws it)." },
+    "totals": {
+      "type": "object",
+      "required": ["owedRaw", "appliedRaw", "excessRaw", "remainingRaw", "waivedRaw"],
+      "additionalProperties": false,
+      "description": "the row's amounts, all raw base-unit decimal strings. owedRaw = appliedRaw + remainingRaw + waivedRaw always; excessRaw is separate — it is money received ABOVE owedRaw and is never subtracted from owedRaw or credited toward it.",
+      "properties": {
+        "owedRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "the row's amount reserved on the batch — what this receipt is FOR." },
+        "appliedRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "sum of every settlement's appliedRaw for this row — the part of owedRaw actually settled." },
+        "excessRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "sum of every settlement's excessRaw — money verified on-chain to this wallet for this row ABOVE owedRaw. Never negative, never nets against another wallet or another row, never becomes future accrual." },
+        "remainingRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "owedRaw − appliedRaw − waivedRaw. Stays reserved on this row (never returns to the wallet's `available`) until it is settled or the owner waives it." },
+        "waivedRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "amount the OWNER explicitly released from this row back to the wallet's `available` (still owed; the next batch draws it) — zero unless lib/hub/ledger.js waiveRemainder was called." }
+      }
+    },
+    "settlements": {
+      "type": "array",
+      "description": "append-only, one immutable entry per settlement-journal event that applied to this row, in the order they were recorded. Never rewritten or removed; a later settlement never edits an earlier entry.",
+      "items": {
+        "type": "object",
+        "required": ["xferKey", "sig", "instructionIndex", "innerIndex", "slot", "at", "amountRaw", "appliedRaw", "excessRaw", "verifiedBy"],
+        "additionalProperties": false,
+        "properties": {
+          "xferKey": { "type": "string", "pattern": "^settle:[1-9A-HJ-NP-Za-km-z]{60,100}:[0-9]+(:[0-9]+)?$", "description": "the settlement journal's own key — the chain's identity of the transfer (`settle:<sig>:<instructionIndex>[:<innerIndex>]`) and nothing else. Globally unique across every project; this is what makes a settlement idempotent and un-reusable across wallets or projects (Addendum B1)." },
+          "sig": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{60,100}$", "description": "the transaction signature that carried this transfer." },
+          "instructionIndex": { "type": "integer", "minimum": 0, "description": "which instruction in the transaction carried this transfer." },
+          "innerIndex": { "type": ["integer", "null"], "minimum": 0, "description": "which inner (CPI) instruction, when the transfer was not a top-level instruction; null otherwise. Distinguishes two transfers inside one signature." },
+          "slot": { "type": "integer", "minimum": 0, "description": "the slot the transaction landed in." },
+          "at": { "type": "integer", "minimum": 0, "description": "unix seconds this settlement was recorded." },
+          "amountRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "the FULL verified transfer amount — before splitting into applied/excess." },
+          "appliedRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "the part of `amountRaw` applied to this row's remaining owed amount at the moment of settlement (min(amountRaw, remaining-before-this-entry))." },
+          "excessRaw": { "type": "string", "pattern": "^[0-9]+$", "description": "amountRaw − appliedRaw for this one entry." },
+          "verifiedBy": { "type": "string", "description": "how the transfer was verified against this row, e.g. \"getTransaction\"." }
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "required": ["paymentVerified", "calculationReproducible"],
+      "additionalProperties": false,
+      "description": "two DISTINCT claims — never collapse them into one \"verified\" badge (design §2, test 14: no route or copy may show a \"safe\"/\"verified project\" badge).",
+      "properties": {
+        "paymentVerified": { "type": "boolean", "description": "true once `settlements.length > 0` — at least one on-chain transfer has been matched to this row." },
+        "calculationReproducible": { "type": ["boolean", "null"], "description": "whether re-running the reproduce export over the published inputs reproduces `totals.owedRaw`. Always null from lib/hub/ledger.js receipt() itself — it is set by the reproduce step (see reproduce-receipt), never assumed here. A version whose inputs were not retained reports this false with \"inputs: missing\", never fabricates a value." }
+      }
+    },
+    "fundingWallet": { "type": ["string", "null"], "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$", "description": "the project's funding wallet at the time the receipt was built (from the Project record passed in) — null if the caller did not supply a project record." }
+  }
+}

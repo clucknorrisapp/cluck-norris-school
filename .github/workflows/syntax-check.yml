@@ -283,6 +283,22 @@ jobs:
       # what is missing; the reproducibility ratio; the CLI script's --offline mode with no server.
       - name: Hub receipt reproduction (the number — MATCH/MISMATCH/MISSING_INPUTS, --offline)
         run: node scripts/reproduce-receipt-test.cjs
+      # DD1 (docs/COLOSSEUM_ROADMAP.md §14): packages/hub-verify (the `npx @clkn/hub-verify`
+      # standalone CLI) is a BUILD OUTPUT of scripts/build-hub-verify-package.cjs, never a second
+      # hand-typed copy of the repo's verifier. This asserts a fresh rebuild is byte-identical to
+      # the committed package, that the repo lib / packaged lib / browser bundle agree on every
+      # fixture scripts/hub-verify-page-test.cjs uses, that the packaged CLI's output matches
+      # scripts/reproduce-receipt.cjs's against a real ephemeral fixture server, that `npm pack
+      # --dry-run` stays under 200 KB with only allowlisted files, and that the package's lib/
+      # requires resolve from a directory outside this repo entirely. Needs the small hub-verify
+      # bundle (not the full React build), which this step builds itself when missing — same
+      # pattern the Y1/AA2 smoke-test steps below use.
+      - name: Hub verify standalone package — build determinism, fixture parity, npm pack, no repo-relative requires (DD1)
+        env:
+          HUB_VERIFY_PKG_TEST_PORT: "3339"
+        run: |
+          test -f public/hub-verify.bundle.js || npm run build:hubverify
+          node scripts/hub-verify-package-test.cjs
       # BB3 (Colosseum roadmap §12): the shields.io-shaped reproducibility badge
       # (/api/hub/badge.json + /hub/badge.svg) sums the SAME projectReproducibility every
       # non-demo project — a fresh install says "no receipts yet"/lightgrey rather than "0 of 0",
