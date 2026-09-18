@@ -210,6 +210,40 @@ ledger.js buildBatch()` itself is complete, pure, and covered by CI (`hub-core-t
 (`lib/hub/ledger.js settle()`, via `lib/hub/settle.js`) without switching the whole batch-building
 step onto it; that remains design work ahead, not something this change does silently.
 
+## 5b. The payment-source allowlist — who a settlement may come from
+
+**Round 2 #3/#4 (`docs/HUB_JOURNAL_VERIFY_2026-09-18.md`).** A journal entry only ever names a
+transfer that was SOURCED (`meta.preTokenBalances`' source-account owner, never the instruction's
+`authority`, which can be a delegate) from a wallet on the allowed list for that branch of the
+payout route. There are two, deliberately different, lists:
+
+- **`&sent=` (holder/operator-supplied signatures)** — the narrowest list: the project's
+  `fundingWallet`, plus `payoutSources` (below). This is the one branch adv P0-1 targets — a
+  wallet or operator hands the route a signature they found on chain, so the route must not trust
+  anything about where the money came from beyond what the project itself controls.
+- **`&send=` / `&sweep=` (our own broadcasts)** — the `&sent=` list, PLUS the wallet(s) that
+  actually signed the broadcast: `whirlpoolMM.vault.operatorPubkey(<vault project id>)` for
+  `&send=` (which names the vault project explicitly via `from=`) and
+  `whirlpoolMM.vault.operatorPubkeys()` (every vault project's operator wallet) for `&sweep=`
+  (which reconciles whatever a project's batches already record as pending, with no `from=` to say
+  which one signed a given row). Our own signature is already trusted the moment we broadcast it —
+  refusing to journal our own payout (Round 2 #4's finding) does not protect anyone, it only kills
+  the receipt for a legitimately managed-payer project.
+
+**`payoutSources`** is a small (≤5 wallets), PROJECT-RECORD field — distinct from `fundedBy`, a
+program-version TERM with its own documented meaning ("wallets whose own vesting unlock feeds the
+daily pool", `schema/program-version.schema.json`). `fundedBy` used to double as the payment-source
+allowlist too (the original P0-1 fix) — but a desk operator can publish a new program version
+through `/api/hub/:project/admin?terms=` any time the project's platform access is current, which
+let an operator widen who may pay a holder by the SAME lever that changes the pool's daily
+arithmetic (Round 2 #3, narrowed rather than closed by that first fix). `payoutSources` is settable
+ONLY through the owner-gated `/api/hub-registry?id=&payoutSources=` admin path (the whole route
+requires `adminAuthOK` — never a desk operator's terms), via `lib/hub/project.js
+withPayoutSources()`, which is append-only-audited: a project record carries `payoutSources` (the
+current list) and `payoutSourcesHistory` (`[{payoutSources, at}]`, grown only on an actual change)
+and every change alerts the operator room. Omitting `&payoutSources=` on an otherwise-ordinary
+project edit carries the existing value forward unchanged.
+
 ## 6. What is NOT independently verified yet
 
 A program-version `hash` served by the same server that computes the payout lets a reader rerun
