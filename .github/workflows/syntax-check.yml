@@ -245,6 +245,13 @@ jobs:
       # no direct send exists outside the audited functions.
       - name: Telegram room policy (nothing lands in the OnlyRose room)
         run: node scripts/telegram-rooms-test.cjs
+      # BB4 (Colosseum roadmap §12): the /receipt <signature> command — found across every
+      # registered project via the same public findReceipt(), reproduced the same way the
+      # reproducibility/bundle routes are, replied through the audited tgSend choke point (the
+      # OnlyRose refusal fires there, unmodified). Exercises lib/hub/receipt-command.js directly
+      # against a real seeded batch — no server boot.
+      - name: Telegram /receipt command (BB4 — verdict reply, OnlyRose refusal, rate limit)
+        run: node scripts/telegram-receipt-command-test.cjs
       # The public Hub views whitelist their fields — a comp's payout token or chat id must never
       # reach /api/hub — and hash the terms a program ran under.
       - name: Hub public views (no private fields, stable terms hash, honest totals)

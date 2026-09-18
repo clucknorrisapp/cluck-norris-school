@@ -2548,6 +2548,7 @@ function tgCommandReply(cmd, arg) {
         "🌐 /website (or /app) — clucknorris.app\n" +
         "💵 /price — CLKN price, market cap &amp; volume\n" +
         "🔒 /lock — locked supply + Jupiter Lock proof\n" +
+        "🧾 /receipt <code>&lt;signature&gt;</code> — check a Hub settlement receipt against the published rule\n" +
         "🩻 /walletxray <code>&lt;wallet&gt;</code> — full wallet deep dive\n" +
         "🔍 /trace <code>&lt;wallet&gt;</code> — wallet × token history\n" +
         "👥 /holders <code>&lt;mint&gt;</code> — true holders vs LP, locks &amp; programs + CSV\n" +
@@ -2641,10 +2642,33 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","projectburn","burn","lprescue","rescue","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+// /receipt <signature> — BB4 (Colosseum roadmap §12): looks a settlement signature up across
+// every registered, non-demo Hub project and replies with the reproduce() verdict for it. Pulled
+// out to lib/hub/receipt-command.js so scripts/telegram-receipt-command-test.cjs can exercise the
+// real logic directly; this wiring only supplies the live pieces (the project registry, kv,
+// tgSend). The OnlyRose refusal is NOT special-cased here — it fires inside tgSend/tgApi exactly
+// like every other command's reply (lib/telegram-rooms.js; owner 2026-09-17: never add an allow).
+// hubProjects/hubProjectView/hubPublic/hubStore/hubReproduce/hubProject/kv are all defined further
+// down in this file (next to the /api/hub/* routes) — safe to reference here because this function
+// only runs once a Telegram update arrives, long after the whole module (and those consts) has
+// finished loading, same pattern every other cross-referencing function in this monolith already
+// relies on.
+const hubReceiptCommand = require("./lib/hub/receipt-command");
+function receiptCommandReply(chatId, replyTo, arg) {
+  return hubReceiptCommand.handleReceiptCommand({
+    arg, chatId, replyToId: replyTo, send: tgSend,
+    hubProjects, hubProjectView, hubPublic, hubStore, hubReproduce, hubProject, kv,
+    publicBase: TG_PUBLIC_BASE,
+  }).catch((e) => console.warn("[TELEGRAM] /receipt error:", e.message));
+}
+
+const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","projectburn","burn","lprescue","rescue","bags","tools","liquidity","price","receipt","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
-const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","buyspecial","chatid"];
+// /receipt is included: a project room's own community is exactly who a Hub receipt lookup is
+// for. The OnlyRose room itself still gets nothing — not from this gate (ROSE IS a project room),
+// but from the tgSend/tgApi choke point (lib/telegram-rooms.js) the reply attempt runs into.
+const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","buyspecial","chatid","receipt"];
 // /buyspecial is an on-demand board drop; this keeps a room from being spammed with them.
 const TG_BUYSPECIAL_COOLDOWN_MS = 90 * 1000;
 const lbCooldown = new Map();      // chatId -> last LIVE pull ts (quota guard)
@@ -3298,6 +3322,13 @@ function handleTelegramUpdate(update) {
     // /price → quick market snapshot (price, MC, change, volume, organic score).
     if (cmd === "price") {
       priceReply(msg.chat.id, msg.message_id);
+      return;
+    }
+    // /receipt <sig> → BB4: look up a Hub settlement signature across every registered project
+    // and reply with the reproduce() verdict. Fire-and-forget like every other command here;
+    // receiptCommandReply already swallows and logs its own errors.
+    if (cmd === "receipt") {
+      receiptCommandReply(msg.chat.id, msg.message_id, arg);
       return;
     }
     // /lock → on-demand locked-supply report (same data as the daily message) + Jupiter Lock proof link.
