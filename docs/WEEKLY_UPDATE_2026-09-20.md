@@ -1,9 +1,13 @@
 # Colosseum weekly update #1 — Sunday 2026-09-20 (W10)
 
 Colosseum strongly recommends a ~1-minute video each week on what shipped and what was hard.
-This is the founder's script for update #1, covering **Sep 14 13:00 UTC → Sep 20**. Drafted
-2026-09-18 from the merged in-window PRs in `docs/PRE_EVENT_STATE.md`; **refresh the shipped list
-on Sep 19 evening** (anything merged after this draft: batch 2 = PR #339) before recording.
+This is the founder's script for update #1, covering **Sep 14 13:00 UTC → Sep 20**.
+
+Regenerated 2026-09-18 with `node scripts/weekly-update-draft.cjs --from 2026-09-14 --to
+2026-09-18` (Colosseum roadmap §10 Z1 — the shipped list is a run, not a rewrite) and reconciled
+by hand for prose and grouping; the script's own labels (production vs. staging, PR numbers) were
+kept as-is, not retyped. **Re-run the script with `--to` set to the actual day before recording** —
+anything merged after 2026-09-18 (batch 9 and later) belongs in this list too and isn't in it yet.
 
 Rules for the recording (from `docs/COLOSSEUM_ROADMAP.md` §W10 and CLAUDE.md): phone, one take,
 no slides needed; name what shipped with a link; "Earn" is capability, never a promise; nothing
@@ -15,40 +19,72 @@ about Normie Quest prize terms; nothing about Wallet Watch; no APR/APY figures a
    can now publish a lock-to-earn program with versioned terms, holders can see exactly why they
    qualify or don't, and every payout is a receipt with the transaction that paid it — no wallet
    needed to check. Projects onboard themselves at /hub/apply, pay their month from their own
-   wallet, and run their own program from a desk their operator wallet signs into. The whole
-   school's quiz bank and LP Lab were audited against how Orca, Raydium, Meteora DLMM and DAMM v2
-   actually work, and the two lessons that were missing from six of our seven languages are in."
-2. **What was hard.** "Money paths. A second AI reviewer found four blockers before our first
-   server-signed payout — a rounded total that refused a real payout, a double-pay window on a
-   timeout — and a platform-wide security pass closed nine P0s, including admin links that could
-   have moved liquidity from a pasted URL. None of that is visible on a demo, all of it is the
-   reason a holder can trust the receipt."
-3. **What's next.** "The dry-run second project and the first real receipts a holder can
-   reproduce — that's the number we'll show: receipts that reproduce, over receipts issued.
-   Then the operator console end to end on a phone with a real wallet."
+   wallet, and run their own program from a desk their operator wallet signs into. On staging, not
+   live yet: a holder can now reproduce their own receipt from the published numbers — on their own
+   machine, or right in the browser — a no-wallet walkthrough of the whole flow, an on-chain
+   witness for a program's terms (dry run until the owner signs the first real one), the Hub in
+   all seven languages, a launch-readiness checklist before a project can arm, public receipts for
+   airdrops and Buy Special standings with hold-through proof, and a history of holder-count
+   snapshots a reader can re-hash themselves."
+2. **What was hard.** "Money paths and their own review. A second AI reviewer found four blockers
+   before our first server-signed payout — a rounded total that refused a real payout, a
+   double-pay window on a timeout — and a platform-wide security pass closed nine P0s, including
+   admin links that could have moved liquidity or paid a giveaway from a pasted URL. A day later a
+   disarmed buy bot's own status check turned out to still run a full poll and replayed a backlog
+   of buys into a partner's Telegram room in a row — fixed the same day, and every Telegram send in
+   the app now goes through one policy point instead of relying on each call site getting it right.
+   None of that is visible on a demo, all of it is the reason a holder can trust the receipt."
+3. **What's next.** "Getting the reproducibility work off staging: the owner's explicit promote
+   is still the gate, never automatic. Then the first real on-chain commitment (the owner's
+   signature), POKEAHOE's terms as our second project, and the operator console end to end on a
+   phone with a real wallet."
 
 ## Shipped this week (paste-ready, with links)
 
-Project Hub — the entry:
-- Hub W1 core: project records, program versions with hashes, ledger partition, settlement journal — #307
-- Public Hub pages + receipts; lock-to-earn pays itself (server-signed, journalled before broadcast) — #315, #319
-- Lock to Earn engine generalised to any project; per-project routes + access tiers — #321, #322
-- Platform access payments in SOL or CLKN, verified on-chain — #323
-- Self-serve onboarding `/hub/apply` and the pay page — #324
-- The project desk: operator wallet signs a nonce, runs its own program — #325
-- Addendum C: the six answers a holder needs before locking, derived from the program's own data — #308
+**Production today (`main`, PR #337):** Hub W1 core — project records, program versions with
+hashes, ledger partition, settlement journal (#307); Addendum C, the six answers a holder needs
+before locking (#308); public Hub pages + receipts, lock-to-earn pays itself, server-signed and
+journalled before broadcast (#315, #319); buy-comp server payout (#311) and four reviewer
+blockers fixed before it shipped (#313); a lock is not a sell (#298); report cards link to a real
+tool (#309); honest visitor counting (#310); the CUNA lock-scan reliability fix (#306); the vault
+BigInt serialisation fix (#317); the Colosseum entry stated publicly and the Official Rules
+correction (#299, #302, #303).
 
-Money-path hardening: buy-comp server payout — #311; four reviewer blockers fixed — #313; a lock is
-not a sell — #298.
+**Staging only (`develop`) — not yet promoted, per CLAUDE.md "promote only on an explicit owner
+go":**
+- **Project Hub, generalised:** the Lock to Earn engine lifted to any project, per-project routes
+  and a 10-minute scheduler, platform access tiers priced live in SOL or CLKN, self-serve
+  `/hub/apply` and pay page, the operator desk with a wallet-signed session — #321, #322, #323,
+  #324, #325 (CUNA-onto-the-engine migration held by owner decision — #326).
+- **Colosseum roadmap extension, batches 2–8** (#339, #340, #341, #343, #344, #345, #346):
+  `/for-projects` front door and traction outcome counters; reproduce-a-receipt on the reader's
+  own machine and the live "N of M receipts reproduce" line (now covering buy-comp rows too); the
+  no-wallet `/hub/demo` walkthrough on a labelled dry-run fixture; the settlement library
+  published as a schema'd public contract; receipts that explain their own number; the operator
+  onboarding clock; Hub pages in all seven languages; the school→Hub bridge and lesson-read
+  funnel; the on-chain program-hash commitment (Addendum B §B5, dry run until the owner signs the
+  first real one); the public engine dashboard's three separated evidence classes, now with a
+  merged, replayable timeline; Launch Readiness (Addendum A) before a program can arm; per-drop
+  airdrop receipts verified against the chain; the public Buy Special standings + hold-through
+  proof page; append-only hashed holder-count snapshots; the W6b validation kit and operator
+  interview script; an accessibility pass on the public Hub pages with a CI gate; `HUB_VERIFY.md`
+  for judges.
+- **School:** the Q&A + LP Lab audit against how Orca, Raydium CLMM, Meteora DLMM and DAMM v2
+  actually work, with the corrections re-keyed in all seven languages — #328; the last GET-only
+  admin mutation (`/api/meme-queue`) made POST-only — #336.
+- **Security:** the platform deep dive — 9 confirmed P0s (mutating admin GETs that could draw a
+  giveaway, move liquidity or arm an engine from a pasted link) and 11 more P1s plus a Codex round
+  — #329, #330; the owner-decisions batch (graduation-gate blocks now journalled with a reason a
+  learner can act on, `/api/tg-test` made POST-only) and a second Codex round — #333, #334; the
+  **OnlyRose room lockdown** — a disarmed buy bot's plain status GET turned out to still run a full
+  poll and replayed old buys into the room; every Telegram send in the app now passes through one
+  refusal point for that room by default — #338.
+- **Whole-repo simplification pass** (one address regex, one HTML escaper, one memoised RPC
+  client) — #331.
 
-School: report cards link to a real tool — #309; honest visitor counting — #310; Q&A + LP Lab
-audit, seven languages re-keyed — #328; F4 two lessons in six languages — #339 (batch 2).
-
-Security: platform deep dive P0 + P1, Codex rounds — #329, #330, #333, #334; OnlyRose room
-lockdown — #338.
-
-Front door and evidence (batch 2, #339): `/for-projects`, traction outcome counters, engine
-dashboard evidence classes — confirm merged before citing.
+**Not yet a PR (batch 9, in flight as of 2026-09-18):** reproducing a receipt directly in the
+browser at `/hub/verify`, offline-capable once loaded; this weekly-update script itself. Re-run
+the script once batch 9 lands to pick these up with their own PR numbers.
 
 ## Where to post
 Colosseum Arena (the project's update thread) and X from the CLKN account (X Premium, no 280 limit).
@@ -60,28 +96,25 @@ docs/PRE_EVENT_STATE.md in the repo."
 Confirm these before finalizing the script and picking the demo URL to show on camera. Don't
 assume from this file — re-check on the day.
 
-- [ ] `git log origin/develop` — confirm PR #339 (Colosseum batch 2: `/for-projects`, traction
-      counters, roadmap extension E1–E9, weekly-update script) is merged. It is, as of this
-      writing (`83e5b11`).
-- [ ] Confirm whether PR #340 (batch 3: E1 reproduce-a-receipt, E2 `/hub/demo`, E4 settlement
-      schemas + README, E5 receipt-teaches, E7 onboarding clock, W5 engine dashboard evidence
-      classes, and the seven-language parity fix for the seedphrase/inheritance lessons) has
-      merged to `develop`. As of 2026-09-18 it has not — it's still on the
-      `claude/normie-quest-sprite-swap-gljw2i` branch.
+- [ ] Re-run `node scripts/weekly-update-draft.cjs --from 2026-09-14 --to <today>` and diff its
+      output against this file's "Shipped this week" section — anything new (batch 9 or later)
+      belongs in the list before recording.
+- [ ] `git log origin/develop` — confirm every PR named above is actually merged, and note any
+      new ones the script's re-run surfaced.
 - [ ] `git log origin/main` — confirm which of the above is actually **promoted** (owner's
-      explicit go; never assumed). As of 2026-09-18, `main` is at PR #337 — the Hub core, public
-      pages, apply/pay/desk and generalised Lock to Earn engine (W1–W3) are live in production;
-      the front door, traction counters, W5, and every extension item (E1/E2/E4/E5/E7) are on
-      staging only, not yet promoted.
+      explicit go; never assumed). As of 2026-09-18, `main` is still at PR #337 — only the Hub
+      core, public pages, apply/pay/desk and generalised Lock to Earn engine (W1–W3) plus the
+      items listed under "Production today" above are live; every Colosseum roadmap extension
+      item (batches 2–9) is on staging only, not yet promoted.
 - [ ] Pick the demo URL to show on camera based on what's actually promoted at recording time:
-      - If only W1–W3 are promoted: show `clucknorris.app/hub` and a real project page
-        (`clucknorris.app/hub/cuna`) — the live, working settlement flow.
-      - If PR #340 is merged and promoted by recording day: show `clucknorris.app/hub/demo` (the
-        no-wallet, DRY-RUN-labelled single-holder walkthrough) instead — it's the cleaner demo
-        surface and needs no wallet on camera.
+      - If only the "Production today" list is promoted: show `clucknorris.app/hub` and a real
+        project page (`clucknorris.app/hub/cuna`) — the live, working settlement flow.
+      - If the extension batches are merged and promoted by recording day: show
+        `clucknorris.app/hub/demo` (the no-wallet, DRY-RUN-labelled single-holder walkthrough) and
+        `/hub/verify` instead — the cleaner demo surface, and neither needs a wallet on camera.
       - Never show a `develop`/staging URL as if it were the live product.
 - [ ] Re-read `docs/ARENA_POSTS.md`'s status table immediately before posting anything from it —
-      it is a snapshot from 2026-09-18 and will be stale by the time PR #340 lands.
+      it is a snapshot from 2026-09-18 and will be stale by the time later batches land and promote.
 - [ ] **Demo captures:** `docs/DEMO_STORYBOARD.md` is the shot-by-shot demo script and the pitch
       outline, with real screenshots (phone + desktop) in `docs/demo/2026-09-18/`. Re-screenshot
       before the actual recording if the Hub pages have changed since 2026-09-18 — the storyboard

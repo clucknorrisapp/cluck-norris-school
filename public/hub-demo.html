@@ -6,8 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Hub Demo Walkthrough</title>
 <meta name="description" content="A guided, no-wallet walkthrough of the Project Hub's single-holder story — a program version, who qualifies and why, funding coverage, a batch, and a receipt. Fixture data, nothing on-chain."/>
-<meta property="og:title" content="Project Hub — demo walkthrough"/>
-<meta property="og:description" content="See how a Lock to Earn program qualifies holders, covers its funding and pays a receipt — walked through on fixture data, no wallet needed."/>
+<!-- OG -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
@@ -180,9 +179,9 @@
     out += step('E', "Holder A's receipt", receiptBlock(rA, dec, sym) +
       '<div class="step-links"><a href="/hub/' + esc(projectId) + '/r/' + esc(A.receiptId) + '">Open the receipt page →</a></div>');
 
-    out += step('F', 'Reproduce it yourself', '<div class="fact">The reproduction export (design §2) bundles the dated inputs an accrual actually used — every eligible escrow that period, the exclusion list, the pool and the rounding rule — so a developer can rerun it independently:</div>' +
-      '<pre class="proof">node scripts/reproduce-receipt.cjs &lt;export.json&gt;</pre>' +
-      '<div class="fact"><i>This script is being built alongside this walkthrough (see docs/DESIGN_PROJECT_HUB_2026-09-10.md §2, "Reproduction export") — it is not wired up yet, so this step names the command rather than linking a working page.</i></div>');
+    out += step('F', 'Reproduce it yourself', '<div class="fact">A LIVE lock-to-earn or buy-competition receipt can be re-derived from the published inputs, on your own machine, with no server call — this fixture predates that wiring (it runs the newer Addendum-B settlement journal, not yet on a live route; see HUB_VERIFY.md §g), so this step names the tool rather than reproducing itself:</div>' +
+      '<pre class="proof">node scripts/reproduce-receipt.cjs &lt;receipt-url&gt;</pre>' +
+      '<div class="fact" style="margin-top:8px">Or paste any real receipt link into <a href="/hub/verify">the browser version</a> — the exact same code, no terminal needed, and it works offline once loaded.</div>');
 
     out += step('G', 'A second project never sees this one', '<div class="fact">A different fixture project, <b>' + esc(db.project.label) + '</b> (' + esc(db.project.symbol) + '), has its own store, its own ledger and its own holder. ' + esc(db.isolationNote) + '</div>' +
       holderCard(db.holders[0], db.project.decimals, db.project.symbol) +

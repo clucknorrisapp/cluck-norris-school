@@ -6,8 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Project Hub — receipts you can verify</title>
 <meta name="description" content="What a project promised its holders, who qualified, and the transaction that paid each one — re-checked against Solana in your browser. No wallet needed."/>
-<meta property="og:title" content="Project Hub — Cluck Norris"/>
-<meta property="og:description" content="What a project promised its holders, who qualified, and the transaction that paid each one. Verify it yourself."/>
+<!-- OG -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
@@ -369,7 +368,7 @@
     // top nav bar, worse than the original overlap). Only the SHORT trailing line inside each
     // card (its mint address) is marked, so a pill landing on any one card only has to clear that
     // one line, never the whole card.
-    app.innerHTML = '<div class="card"><div class="intro" data-clkn-avoid="1">Every project here has a public record: <b>what it promised its holders, who qualified, and the transaction that paid each one</b>. Nothing on these pages needs a wallet, and every signature can be re-checked against Solana from the page itself.</div><div class="small" style="margin-top:10px" data-clkn-avoid="1">Run a project? <a href="/for-projects" style="color:var(--cyan)">Start at the guided front door →</a></div><div class="small" style="margin-top:6px" data-clkn-avoid="1">Judging or just skeptical? <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/HUB_VERIFY.md" style="color:var(--cyan)" target="_blank" rel="noopener">Verify it yourself — a two-minute checklist →</a></div></div>' +
+    app.innerHTML = '<div class="card"><div class="intro" data-clkn-avoid="1">Every project here has a public record: <b>what it promised its holders, who qualified, and the transaction that paid each one</b>. Nothing on these pages needs a wallet, and every signature can be re-checked against Solana from the page itself.</div><div class="small" style="margin-top:10px" data-clkn-avoid="1">Run a project? <a href="/for-projects" style="color:var(--cyan)">Start at the guided front door →</a></div><div class="small" style="margin-top:6px" data-clkn-avoid="1">Judging or just skeptical? <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/HUB_VERIFY.md" style="color:var(--cyan)" target="_blank" rel="noopener">Verify it yourself — a two-minute checklist →</a></div><div class="small" style="margin-top:6px" data-clkn-avoid="1">Want the numbers in one place? <a href="/hub/status" style="color:var(--cyan)">Hub Status — what is live, where →</a></div></div>' +
       r.projects.map(function (p) {
         return '<a class="card proj-link" href="/hub/' + esc(p.id) + '">' +
           (p.dryRun ? dryRunBadge() : '') +
@@ -462,7 +461,8 @@
       '<div class="verify-bar" data-clkn-avoid="1"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote"><span class="verify" data-sig="' + esc(x.sig) + '"><span class="small">not checked</span></span></span></div>' +
       '<div class="sec-title" data-clkn-avoid="1">Verify it yourself</div><div class="fact">Send this to any Solana RPC. A <span class="mono">confirmationStatus</span> of <span class="mono">confirmed</span> or <span class="mono">finalized</span> with no <span class="mono">err</span> means the transfer is on the chain.</div><pre class="proof">' + esc(proof) + '</pre>' +
       explainBlock(x) +
-      '<div class="small" data-clkn-avoid="1" style="margin-top:12px"><a href="/hub/' + esc(r.projectId) + '#p-' + esc(p.id) + '">← all receipts for ' + esc(p.label || p.kind) + '</a></div></div>';
+      '<div class="small" data-clkn-avoid="1" style="margin-top:12px"><a href="/hub/verify?receipt=' + encodeURIComponent(location.origin + '/hub/' + r.projectId + '/r/' + x.sig) + '">Reproduce this receipt in your browser →</a></div>' +
+      '<div class="small" data-clkn-avoid="1" style="margin-top:6px"><a href="/hub/' + esc(r.projectId) + '#p-' + esc(p.id) + '">← all receipts for ' + esc(p.label || p.kind) + '</a></div></div>';
     document.getElementById('verifyBtn').addEventListener('click', verifyAll);
   }
 

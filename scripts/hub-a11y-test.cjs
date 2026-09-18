@@ -55,6 +55,8 @@ const PAGES = [
   { path: "/for-projects", name: "For Projects" },
   { path: "/hub/apply", name: "Hub apply (lock-to-earn form)" },
   { path: "/hub/cuna/pay", name: "Hub pay" },
+  { path: "/hub/verify", name: "Hub verify (Y1 — reproduce a receipt in the browser)" },
+  { path: "/hub/status", name: "Hub status (Z2 — what is live, where, and how reproducible)" },
 ];
 const WIDTHS = [
   { width: 360, height: 780, label: "360×780" },

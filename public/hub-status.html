@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Hub Status — what is live, where</title>
+<meta name="description" content="Every Project Hub number in one place, fetched from the same public routes anyone can open: programs, receipts, how many reproduce, the latest holder count, and which build is actually running."/>
+<meta property="og:title" content="Hub Status — Cluck Norris"/>
+<meta property="og:description" content="What is live, where, and how reproducible — every number here comes from a route you can open yourself."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:28px; letter-spacing:1px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .intro b { color:var(--text); }
+  .mono { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; word-break:break-all; }
+  a.mono, .mono a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  .build-line { font-family:var(--mono); font-size:12.5px; color:var(--sub); text-align:center; margin-bottom:14px; }
+  .build-line b { color:var(--text); }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .proof-box { display:grid; gap:10px; }
+  .proof-box .col b { color:var(--text); }
+  .proof-box .col { font-size:12.5px; color:var(--subtext, #9CA3AF); line-height:1.6; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px; margin:12px 0; }
+  .stat { background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; padding:10px 12px; text-align:center; }
+  .stat .v { font-family:var(--mono); font-size:17px; font-weight:700; color:var(--text); }
+  .stat .l { font-size:9.5px; color:var(--sub); letter-spacing:2px; margin-top:4px; text-transform:uppercase; }
+  .prog-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap; margin-bottom:6px; }
+  .prog-head h2 { font-family:var(--disp); font-weight:400; font-size:20px; letter-spacing:.5px; color:var(--text); }
+  .chip { font-family:var(--disp); font-size:11px; letter-spacing:1.5px; padding:4px 9px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; white-space:nowrap; }
+  .badge-dryrun { display:inline-flex; align-items:center; gap:6px; font-family:var(--disp); font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#FCA5A5; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.35); border-radius:999px; padding:5px 12px; margin-bottom:10px; }
+  .fact { font-size:12.5px; color:var(--subtext, #9CA3AF); line-height:1.55; margin-top:6px; }
+  .fact b { color:var(--text); }
+  .row-flex { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .small { font-size:12px; color:var(--sub); }
+  .small a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  /* Standalone one-line CTA links get invisible tap-area padding so the hit box reaches 44px
+     tall without changing how the link looks (CLAUDE.md a11y convention, matches hub.html). */
+  .small a, .proj-more a { display:inline-block; padding:14px 3px; margin:-14px -3px; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+  .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
+  .footer-links { text-align:center; font-size:12px; color:var(--sub); margin-top:6px; }
+  .footer-links a { color:var(--cyan, #67E8F9); text-decoration:none; display:inline-block; padding:14px 3px; margin:-14px -3px; }
+  @media (max-width:520px) { .prog-head h2 { font-size:18px; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/hub">← PROJECT HUB</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">Hub Status</h1>
+    <p data-clkn-avoid="1">WHAT IS LIVE, WHERE, AND HOW REPRODUCIBLE</p>
+  </div>
+  <div id="app"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var app = document.getElementById('app');
+
+  function ts(ms) { if (ms == null) return '—'; var d = new Date(Number(ms)); if (isNaN(d)) return '—'; return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'; }
+  function num(n) { return Number(n || 0).toLocaleString('en-US'); }
+
+  function buildLine(b) {
+    if (!b) return '';
+    var sha = b.sha ? String(b.sha).slice(0, 7) : 'unknown';
+    var branch = b.branch || 'unknown';
+    var env = b.env || 'local';
+    return '<div class="build-line" data-clkn-avoid="1">This build: <b class="mono" style="font-size:12.5px">' + esc(sha) + '</b> on <b>' + esc(branch) + '</b> (' + esc(env) + ')</div>';
+  }
+
+  // Plain words, no assertion this page can't back — CLAUDE.md ("say what's on-chain, never
+  // why") and docs/HUB_VERIFY.md §g ("what is honestly NOT verifiable yet"). This is the box a
+  // judge should read before trusting anything below it.
+  function proofBox() {
+    return '<div class="card"><div class="sec-title" data-clkn-avoid="1">What this page proves — and does not</div><div class="proof-box">' +
+      '<div class="col"><b>Proves:</b> every number below comes from a route anyone can open directly — <a class="mono" href="/api/hub">/api/hub</a>, <span class="mono">/api/hub/:project/reproducibility</span>, <span class="mono">/api/holders/snapshots</span> — computed the same way whether this page asks or you do. A receipt marked as reproducing was re-derived from the published inputs on a machine other than the one that paid it.</div>' +
+      '<div class="col"><b>Does not prove:</b> that the server omitted no qualifying wallet from the calculation in the first place — that is what an on-chain commitment of a program version\'s hash would add, and none has been signed for real yet (see below). And a receipt is a transaction already sent, never a promise of ones to come.</div>' +
+      '</div></div>';
+  }
+
+  function commitmentLine() {
+    // Addendum B5 (docs/hub/commitments.md): the repository mirror is append-only and empty of
+    // real rows today — no project has had its funding wallet sign the on-chain memo yet. This
+    // is a fact about the whole Hub today, not a per-project figure served by any public route
+    // (only the operator-gated desk carries a version's commitment field), so it is one line
+    // here rather than a guess repeated per row. Update this the day the first row lands.
+    return '<div class="fact"><b>On-chain commitment</b> — none committed yet for any project. ' +
+      '<a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/hub/commitments.md" target="_blank" rel="noopener">the append-only mirror</a> is still empty; a program page\'s numbers are reproducible from the published inputs, not yet independently committed.</div>';
+  }
+
+  function reproLine(rep) {
+    if (!rep) return '<div class="fact">Reproducibility: could not be fetched right now.</div>';
+    var o = rep.overall || { total: 0, reproduced: 0 };
+    if (!o.total) return '<div class="fact"><b>Reproducibility</b> — no receipts yet.</div>';
+    var missing = (rep.batches || []).reduce(function (t, b) { return t + (b.missingInputs || 0); }, 0);
+    var line = num(o.reproduced) + ' of ' + num(o.total) + ' receipt' + (o.total === 1 ? '' : 's') + ' reproduce' + (o.total === 1 ? 's' : '');
+    if (missing) line += ', ' + num(missing) + ' missing input' + (missing === 1 ? '' : 's');
+    return '<div class="fact"><b>Reproducibility</b> — ' + line + '. <a href="/hub/verify">Reproduce one yourself →</a></div>';
+  }
+
+  function holdersLine(snap) {
+    if (!snap) return '';
+    return '<div class="fact"><b>Holders</b> — ' + num(snap.holderCount) + ' as of the snapshot taken ' + ts(snap.at) + '.</div>';
+  }
+
+  function projectCard(p, rep, snap) {
+    var n = Number(p.programs || 0), r = Number(p.receipts || 0);
+    return '<div class="card" id="proj-' + esc(p.id) + '">' +
+      (p.dryRun ? '<div class="badge-dryrun" data-clkn-avoid="1">DRY RUN — terms not yet agreed, nothing accrues or pays</div>' : '') +
+      '<div class="prog-head" data-clkn-avoid-kids="1"><h2>' + esc(p.label) + ' <span class="small">' + esc(p.symbol) + '</span></h2><div class="chip">' + esc(p.id) + '</div></div>' +
+      '<div class="stats">' +
+      '<div class="stat"><div class="v">' + num(n) + '</div><div class="l">Program' + (n === 1 ? '' : 's') + '</div></div>' +
+      '<div class="stat"><div class="v">' + num(r) + '</div><div class="l">Receipt' + (r === 1 ? '' : 's') + '</div></div>' +
+      '</div>' +
+      reproLine(rep) + holdersLine(snap) + commitmentLine() +
+      '<div class="proj-more" style="margin-top:8px"><a href="/hub/' + esc(p.id) + '">Open ' + esc(p.label) + '’s page →</a></div>' +
+      '</div>';
+  }
+
+  async function j(url) { try { var r = await fetch(url); var d = await r.json(); return (d && d.ok) ? d : null; } catch (e) { return null; } }
+
+  (async function () {
+    try {
+      var build = await j('/api/build');
+      var hub = await j('/api/hub');
+      if (!hub) throw new Error('could not load the project list');
+      var projects = hub.projects || [];
+      var repAndSnap = await Promise.all(projects.map(function (p) {
+        return Promise.all([
+          j('/api/hub/' + encodeURIComponent(p.id) + '/reproducibility'),
+          j('/api/holders/snapshots?mint=' + encodeURIComponent(p.mint)),
+        ]);
+      }));
+      var html = buildLine(build) + proofBox() +
+        '<div class="small" style="text-align:center;margin-bottom:14px" data-clkn-avoid="1">Verify any of this yourself: <a href="/hub/verify">reproduce a receipt in your browser</a> · <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/HUB_VERIFY.md" target="_blank" rel="noopener">the two-minute checklist on GitHub</a></div>' +
+        projects.map(function (p, i) {
+          var rep = repAndSnap[i][0];
+          var snapAll = repAndSnap[i][1];
+          var snap = snapAll && snapAll.snapshots && snapAll.snapshots.length ? snapAll.snapshots[snapAll.snapshots.length - 1] : null;
+          return projectCard(p, rep, snap);
+        }).join('') +
+        (projects.length ? '' : '<div class="card"><div class="fact">No projects on record yet.</div></div>') +
+        '<div class="footer-links" data-clkn-avoid="1"><a href="/hub">← all projects</a></div>';
+      app.innerHTML = html;
+    } catch (e) {
+      app.innerHTML = '<div class="card"><div class="err">' + esc(e.message || String(e)) + '</div><div class="small" style="margin-top:10px"><a href="/hub">← Project Hub</a></div></div>';
+    }
+  })();
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

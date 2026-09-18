@@ -58,7 +58,7 @@ const LP_LESSONS = extractArray(lpSrc, "LP_LESSONS") || [];
 
 // ── Count-drift guard (mirrors scripts/check-counts.js's philosophy: fail loud, never
 // silently render a wrong number on public-facing copy) ────────────────────────────────
-const EXPECTED = { LESSONS: 14, INCUBATOR_LESSONS: 7, LP_LESSONS: 14 };
+const EXPECTED = { LESSONS: 15, INCUBATOR_LESSONS: 7, LP_LESSONS: 14 };
 const actual = { LESSONS: LESSONS.length, INCUBATOR_LESSONS: INCUBATOR_LESSONS.length, LP_LESSONS: LP_LESSONS.length };
 const drift = Object.keys(EXPECTED).filter((k) => actual[k] !== EXPECTED[k]);
 if (drift.length) {
@@ -188,7 +188,7 @@ const jsonLd = {
   "@type": "ItemList",
   name: "School of Crypto Hard Knocks — Curriculum",
   itemListElement: [
-    { "@type": "Course", position: 1, name: "Belt Course", description: "14 belt-ranked lessons on wallets, tokens, DEXs, rugs, market cap and on-chain basics.", provider: { "@type": "Organization", name: "Cluck Norris" } },
+    { "@type": "Course", position: 1, name: "Belt Course", description: "15 belt-ranked lessons on wallets, tokens, DEXs, rugs, market cap and on-chain basics.", provider: { "@type": "Organization", name: "Cluck Norris" } },
     { "@type": "Course", position: 2, name: "Crypto 101 (Incubator)", description: "7 absolute-beginner lessons on wallets, tokens, on-ramps, DEXs and liquidity.", provider: { "@type": "Organization", name: "Cluck Norris" } },
     { "@type": "Course", position: 3, name: "LP Lab", description: "14 lessons on AMMs, impermanent loss, concentrated liquidity and LP strategy.", provider: { "@type": "Organization", name: "Cluck Norris" } },
   ],

@@ -211,6 +211,17 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 8** — the phone and accessibility pass on the public Hub pages with a CI gate
+  (and the no-build-boot fix it exposed: the sitewide nav, i18n, read-aloud and theme files now have
+  explicit routes); the demo storyboard with 20 real captures; Launch Readiness (Addendum A: a
+  derived checklist and reward-budget planner, and a known funding shortfall can no longer be armed);
+  airdrop per-drop receipts with every row verified against the chain, including the transfer's
+  source; the public Buy Special standings and hold-through proof (sealed lists hashed, unsealed
+  boards never exposed, the payout split extracted to one pure function); the Codex reviewer brief
+  caught up and `docs/HUB_VERIFY.md` for judges with a doc-drift test; buy-comp rows counted in the
+  reproducibility ratio; the new surfaces in seven languages; the engine timeline with decision
+  replay against the pure gate; append-only hashed holder snapshots; a per-install analytics salt;
+  the pitch and demo scripts to the second. PR #346.
 - **Colosseum batch 7** — W9 part 2, real usage without a single automated post: a "see how a
   project's rewards are actually paid" door on the school landing and every lesson's finish
   screen → `/hub/demo` (folded out of the store edition), a second line under the homepage's

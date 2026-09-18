@@ -453,7 +453,7 @@ for (const fam of FAMILIES) {
     // it is missing from. Scoped to just these files (not all of `public/`) so this doesn't drag
     // the hundreds of un-curated tool pages into gating — that would make CI red for pages nobody
     // has curated on purpose.
-    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html'];
+    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html'];
     const hubKeys = new Set();
     const hubFilesRead = [];
     for (const f of HUB_FILES) {

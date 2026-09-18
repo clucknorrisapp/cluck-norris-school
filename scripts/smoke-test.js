@@ -57,7 +57,7 @@ const SCREENS = [
 //              lessons 1..N-1 as completed. Clicking blind here hits "← BACK" and navigates
 //              away, which is exactly the false failure the first version of this test produced.
 const CURRICULA = [
-  { hash: "select", label: "curriculum", count: 14, nav: "tiles", storageKey: "clkn_completed", idsFrom: "LESSONS" },
+  { hash: "select", label: "curriculum", count: 15, nav: "tiles", storageKey: "clkn_completed", idsFrom: "LESSONS" },
   { hash: "incubator", label: "incubator", count: 7, nav: "linear", storageKey: "incubator_progress", idsFrom: "INCUBATOR_LESSONS" },
   { hash: "lplab", label: "LP lab", count: 14, nav: "tiles" },
 ];

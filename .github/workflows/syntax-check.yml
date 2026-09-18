@@ -158,6 +158,13 @@ jobs:
       # instead of guessing.
       - name: Traction — outcome counters are derived and reproducible
         run: node scripts/traction-test.cjs
+      # Colosseum roadmap §10 Z1: the Sunday W10 update is a `git log` run, not a rewrite.
+      # Exercises grouping (Hub/School/Security/Operations by keyword), production-vs-staging
+      # labelling (a real, non-squash "Promote develop -> main" merge the way this repo's own
+      # promotions work) and PR-number extraction against a disposable fixture repo — never this
+      # repo's own history, so the test can't drift when new PRs land.
+      - name: Weekly update draft — shipped-PR grouping, production/staging, PR extraction
+        run: node scripts/weekly-update-draft-test.cjs
       # The staking domain's origin-lockdown exemption, read out of server.js itself. That
       # exemption is the one place a request can skip the WAF, so the allowlist must stay
       # exhaustive and anchored at both ends — a single "^/api/" entry would be a hole through to
@@ -424,7 +431,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -524,6 +531,20 @@ jobs:
       # throwaway key and no secrets.
       - name: admin mutation discipline (405 on GET, explicit project, pool allowlist)
         run: node scripts/mutating-get-guard-test.cjs
+      # Colosseum roadmap §10 Z3: the Hub's newer public read routes (reproducibility,
+      # batch/inputs, buy-comp standings, a receipt, the holders-snapshot series and one
+      # snapshot, the airdrop receipt routes, the JVP timeline, the JSON Schemas and the built
+      # hub-verify bundle) carry an ETag and a Cache-Control tier consistent with the rest of the
+      # Hub's public reads, the five that do real per-request work get a dedicated per-IP rate
+      # limit that never touches the light per-page reads or a store-edition contract route, and
+      # wallet/sig/mint query/path params are shape-checked before any store read. Always runs
+      # (not diff-gated), like the schema test below — a route or a limiter here is exactly the
+      # kind of change that would not otherwise touch a page or the game. Needs the small
+      # hub-verify bundle (not the full React build) to check its own cache header/ETag.
+      - name: Public-route hygiene — ETags, cache headers, rate limits, param caps (Z3)
+        run: |
+          test -f public/hub-verify.bundle.js || npm run build:hubverify
+          HYGIENE_TEST_PORT=3225 node scripts/public-route-hygiene-test.cjs
       # Colosseum roadmap E4: the settlement library's public contract. Every schema in
       # lib/hub/schema/ validates a real fixture built the same way lib/hub/project.js,
       # lib/hub/ledger.js and lib/hub/public.js build one (including the exact wire subset
@@ -582,6 +603,38 @@ jobs:
       - name: Hub pages — accessibility + phone polish
         if: steps.gate.outputs.run == 'true'
         run: node scripts/hub-a11y-test.cjs
+      # Z2 (docs/COLOSSEUM_ROADMAP.md §10): GET /api/build (the git sha/branch this container is
+      # actually running) and /hub/status (public/hub-status.html) — the page that renders it next
+      # to every project's own public numbers (programs, receipts, the reproducibility ratio, the
+      # latest holder snapshot), fed only by routes already public. Seeds a throwaway registry with
+      # a dry-run project and a real one with a sent batch so both the dry-run badge and the
+      # reproducibility ratio actually render, then checks the rendered page carries neither a
+      # judgement word nor an APR/APY claim.
+      - name: Hub status — /api/build and /hub/status
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-status-test.cjs
+      # Y1 (docs/COLOSSEUM_ROADMAP.md §9): /hub/verify reproduces a Hub receipt IN THE BROWSER —
+      # a second vite build (vite.hubverify.config.js) bundles the exact same pure
+      # lib/hub/reproduce.js + lib/hub/schema-validate.js + lib/hub/canonical.js the Node script
+      # (scripts/reproduce-receipt.cjs) runs, so the two must agree on every fixture, not just
+      # "look similar". `npm run build:hubverify` is not part of the earlier `npm run build` gate
+      # in this job (that one only runs when the render gate needs it), so this step builds it
+      # itself when missing.
+      - name: Hub verify — browser bundle reproduces the same fixtures as the Node script (Y1)
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          test -f public/hub-verify.bundle.js || npm run build:hubverify
+          node scripts/hub-verify-page-test.cjs
+      # Colosseum roadmap §9 Y4 — shareable Hub pages. Boots its own server (a hostile-label
+      # registry project pre-seeded into DATA_DIR) and drives /hub, a real project page, the demo
+      # fixture (project/program/receipt) and /for-projects: server-rendered Open Graph/Twitter
+      # Card meta is present, escaped (an XSS-shaped project label never reaches the page raw),
+      # <=70/<=200 char, carries the reproducibility line, a missing project/receipt still serves
+      # 200 with the generic Hub meta, the demo pages carry "DRY RUN — fixture data", and the one
+      # static branded card serves as image/png with a long cache header.
+      - name: Hub shareable pages — Open Graph / Twitter Card meta (Y4)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-og-test.cjs
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the
