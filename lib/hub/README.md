@@ -91,8 +91,18 @@ pending ──attempt──▶ signing ──signature registered──▶ submi
 Reconcile is **by that signature only** — never by payer/recipient/mint/amount — so a shared
 funding wallet or a second project paying the same person the same amount can never be mistaken
 for this attempt. This state machine is complete and unit-tested
-(`scripts/hub-attempts-test.cjs`, six fault cases plus the earlier concurrency set) but — see
-§5 below — has no HTTP route calling it yet.
+(`scripts/hub-attempts-test.cjs`, six fault cases plus the earlier concurrency set), but the FULL
+`pending → signing → submitted` flow above is for a browser wallet's own `signTransaction` — no
+route drives it end to end yet (that needs a UI that never calls `signAndSendTransaction`, per
+`/locker-room`'s pattern). What the live payout route DOES use, since W3: two narrower, pure
+after-the-fact stamps — `stampSubmitted` (the managed payer has signed and is about to broadcast —
+`lib/whirlpool-vault.js`'s own "journal before broadcast" moment, which has no client-supplied
+blockhash to register through `registerAttempt`) and `stampSettled` (a row's transfer has been
+verified and journaled, by either payout path) — landing on the SAME `batch.attempts[wallet]` field
+so the desk and `lib/traction.js`'s "batches signed" counter read it identically either way. A row
+with a LIVE (`signing`/`submitted`) attempt from the actual browser-sign flow is never clobbered by
+either stamp — see `lib/hub/attempts.js`'s own comment for the one exception (a stamp's own prior
+`submitted` transitioning to its own `settled` is not "clobbering a different attempt").
 
 ## 4. What is served over HTTP today
 
@@ -103,7 +113,7 @@ Public, no wallet needed, `Cache-Control: public`:
 | `GET /api/hub` | `{ ok, projects: [{id,label,symbol,mint,programs,receipts}] }` | — (a thin index; not schema'd separately) |
 | `GET /api/hub/:project` | `{ ok, project }` — `lib/hub/public.js projectView()` | `project-public.schema.json` |
 | `GET /api/hub/:project/wallet/:wallet` | every role a wallet had in the project (winner/paid/disqualified/…) | — |
-| `GET /api/hub/:project/r/:sig` | a payout row found by signature | see **the receipt gap**, below |
+| `GET /api/hub/:project/r/:sig` | a payout row found by signature — the Addendum-B3 shape once a journal event exists for it, else the legacy shape | see **the receipt gap**, below |
 | `GET /api/hub/:project/holder?address=` | one wallet's lock-to-earn view: `programVersion`, `programHash`, locks, accrued/paid/owed | — |
 | `GET /api/hub-pricing` | live platform-access pricing | — |
 | `GET /hub/schema/:name.json` | one of the four schemas below, verbatim | itself |
@@ -126,40 +136,64 @@ for why: the one live route that returns something called a "batch" (`POST
 documents, and stamping `$schema` on a body that would fail its own schema is worse than leaving
 it unstamped.
 
-## 5. The receipt gap — read this before building against `receipt.schema.json`
+## 5. The receipt gap — CLOSED for a row settled since W3, still open for one that predates it
 
-`receipt.schema.json` documents `lib/hub/ledger.js receipt()` — the Addendum B3 shape, with
-`settlements[]` and the `totals`/`claims` split. It is implemented and unit-tested
-(`scripts/hub-core-test.cjs` §7) but **has no HTTP route today.** The live
-`GET /api/hub/:project/r/:sig` route instead serves `lib/hub/public.js findReceipt()`'s
-pre-Addendum-B shape — a single payout row from a buy competition, a Buy Special draw, the CUNA
-giveaway, or the legacy lock-to-earn payout table:
+**Updated (W3, `docs/COLOSSEUM_ROADMAP.md` §W3):** `receipt.schema.json` documents
+`lib/hub/ledger.js receipt()` — the Addendum B3 shape, with `settlements[]` and the
+`totals`/`claims` split. It is implemented and unit-tested (`scripts/hub-core-test.cjs` §7) and is
+now REACHABLE from `GET /api/hub/:project/r/:sig`: the route serves it, `$schema`-stamped, for any
+row the settlement journal already has an event for. A row with no journal event — either a legacy
+payout sent before this change, or one W3's dual-write could not attribute to a specific chain
+instruction (see below) — still gets `lib/hub/public.js findReceipt()`'s pre-Addendum-B shape, a
+single payout row from a buy competition, a Buy Special draw, the CUNA giveaway, or the legacy
+lock-to-earn payout table:
 
 ```json
 { "projectId": "...", "symbol": "...", "program": { "kind": "...", "id": "...", "label": "...", "ticker": "...", "mint": "...", "prizeMint": "...", "termsHash": "..." },
   "receipt": { "wallet": "...", "amountUi": 0, "sig": "...", "at": 0, "state": "settled", "confirmedAt": 0 } }
 ```
 
-This is not schema'd here — do not validate it against `receipt.schema.json`, the shapes are
-unrelated. The design's own `/receipt/<batchId>/<wallet>` route (§5), the one meant to serve the
-settlement-journal shape, has not shipped. Whoever ships it should route it through
-`lib/hub/ledger.js receipt()` and reuse `receipt.schema.json` as-is; **do not invent a third
-shape.** For reproducing the amount on either kind of receipt once that work lands, see
-**reproduce-receipt** (`lib/hub/reproduce.js` + a `/reproducibility` route — being built in
-parallel; not part of this change).
+This legacy body is still not schema'd — do not validate it against `receipt.schema.json`, the
+shapes are unrelated, and it never carries `$schema` (it would not validate against
+`receipt.schema.json`, per `scripts/hub-schema-test.cjs`'s own fixture proving exactly that). The
+design's own `/receipt/<batchId>/<wallet>` route (§5) — a separate, dedicated URL rather than
+`GET /api/hub/:project/r/:sig` sniffing which shape to serve — has still not shipped; when it does,
+it should route through `lib/hub/ledger.js receipt()` and reuse `receipt.schema.json` as-is (do not
+invent a third shape). For reproducing the amount, see **reproduce-receipt**
+(`lib/hub/reproduce.js` + `/api/hub/:project/reproducibility`), which since W3 also carries the real
+program-version `hash` for a row with a journal event.
+
+**Why a settled row can still lack a journal event.** The Addendum-B1 identity is
+`settle:<sig>:<instructionIndex>[:<innerIndex>]` — the CHAIN's own identity of the transfer, never a
+fabricated one. `lib/payout-verify.js locateTransferInstruction` locates it by matching the parsed
+SPL-Token transfer/transferChecked instruction (top-level or inner/CPI) whose destination token
+account is owned by the recipient wallet; when that match is not exactly one (the transaction could
+not be read, or — a batched airdropper transaction — two transfers land on the same wallet in one
+signature and neither can be told apart from chain data alone) the row is recorded in the legacy
+`batches[].sent[wallet]`/`paid` ledger exactly as before, **because the transfer genuinely did
+land**, but the journal entry is skipped rather than guessed; `lib/hub/routes.js` reports this per
+row (`journaled:false`, with `why`) in the payout route's own response, and it never affects
+`owedNow` (the legacy row already excludes it from being offered again). A row already sent BEFORE
+W3 shipped has no journal event and never will on its own —
+`scripts/hub-journal-backfill-preview.cjs --project <id>` prints what a backfill WOULD derive from
+existing `batches[].sent` rows (signature, wallet, amount, at) but writes nothing; applying one
+(which still needs a chain read per signature, exactly like a live payout) is a separate, owner-run
+step this repository does not build yet.
 
 Similarly, `batch.schema.json` documents `lib/hub/ledger.js buildBatch()`, the Addendum-B batch —
-but the currently-wired `GET/POST /api/hub/:project/payout` route still runs on the *older*
-`lib/cuna-payout.js` batch/paid model: `{ id, state, at, amounts, skippedBelowFloor, totalRaw,
-count }`, with `sent: {wallet: {sig, at, pending}}` recorded separately in `paid`. That shape is
-missing every field this schema requires beyond `id`/`state`/`amounts`/`skippedBelowFloor`/
-`totalRaw`/`count` — no `projectId`, `programVersion`, `programHash`, `rewardMint`,
-`rewardDecimals`, `periods`, `reservedFundingRaw` or `waived` — so it would fail validation against
-`batch.schema.json` outright; this change does not stamp `$schema` there. `lib/hub/ledger.js` and
-`lib/hub/attempts.js` are complete, pure, and covered by CI (`hub-core-test.cjs`,
-`hub-attempts-test.cjs`) but have **zero HTTP callers today** — wiring the payout route onto them
-is design work still ahead (tracked as part of W3 in `docs/COLOSSEUM_ROADMAP.md`), not something
-this change does silently.
+but the currently-wired `GET/POST /api/hub/:project/payout` route still BUILDS a batch with the
+*older* `lib/cuna-payout.js` batch/paid model: `{ id, state, at, amounts, skippedBelowFloor,
+totalRaw, count }`, with `sent: {wallet: {sig, at, pending}}` recorded separately in `paid` (now
+joined, since W3, by an OPTIONAL `attempts: {wallet: {...}}` field — see `lib/hub/attempts.js`
+`stampSubmitted`/`stampSettled` — which `batch.schema.json` already documents as optional). That
+core shape is still missing every field this schema REQUIRES beyond `id`/`state`/`amounts`/
+`skippedBelowFloor`/`totalRaw`/`count` — no `projectId`, `programVersion`, `programHash`,
+`rewardMint`, `rewardDecimals`, `periods`, `reservedFundingRaw` or `waived` — so it would still fail
+validation against `batch.schema.json` outright; `$schema` is still not stamped there. `lib/hub/
+ledger.js buildBatch()` itself is complete, pure, and covered by CI (`hub-core-test.cjs`) but has
+**zero HTTP callers today** — the payout route settles individual ROWS through it
+(`lib/hub/ledger.js settle()`, via `lib/hub/settle.js`) without switching the whole batch-building
+step onto it; that remains design work ahead, not something this change does silently.
 
 ## 6. What is NOT independently verified yet
 

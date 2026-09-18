@@ -116,6 +116,17 @@ jobs:
       # outage changes nothing. The six fault cases and the earlier concurrency set.
       - name: Project Hub — payout attempts and reconcile fault cases
         run: node scripts/hub-attempts-test.cjs
+      # W3 integration gate (docs/COLOSSEUM_ROADMAP.md §W3, closing lib/hub/README.md's "receipt
+      # gap"): the settlement journal dual-write in POST /api/hub/:project/payout, both the
+      # self-signed &sent= and managed-payer &send= branches (plus &sweep=). The chain's own
+      # identity of a transfer (never a guessed instruction index), a fault at the journal write
+      # for each branch (the row stays reserved and is never re-offered; a resume settles it), the
+      # same signature submitted twice producing one event, a dryRun project refused before any
+      # write, a registry project's payout never touching the dedicated CUNA keys, an overpaid
+      # transfer recording excess without touching accrued, and a journal-backed receipt that
+      # validates against receipt.schema.json.
+      - name: Project Hub — W3 settlement journal dual-write (integration gate)
+        run: node scripts/hub-settle-route-test.cjs
       # Addendum C: the six answers a holder gets before locking are DERIVED from the program's
       # entities (15), the differing-reward-asset warning is mandatory and not operator-controlled
       # (16), no string anywhere in the block carries APR / APY / per-year language (17), and every

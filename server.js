@@ -7928,11 +7928,27 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
   try {
     const sig = String(req.params.sig || "");
-    const r = hubPublic.findReceipt(hubProjectView(p), sig);
+    // W3: the settlement journal + the raw registry record (fundingWallet) + the project's own
+    // program-version state — additive context so findReceipt can serve the Addendum-B3 receipt
+    // (lib/hub/README.md "the receipt gap") once a journal event exists for this row; absent for a
+    // built-in project (clkn/cuna/rose) with no registry row, in which case findReceipt degrades to
+    // exactly the legacy shape it always served.
+    let journal = {}, batches = {}, reg = null, programState = null;
+    try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
+    try { batches = hubStore.read(kv, p.id, "batches", {}) || {}; } catch (_) {}
+    try { reg = (hubStore.readRegistry(kv) || {})[p.id] || null; } catch (_) {}
+    try { programState = hubStore.read(kv, p.id, "state", null); } catch (_) {}
+    const r = hubPublic.findReceipt(hubProjectView(p), sig, { journal, batches, project: reg, programState });
     if (!r) return res.status(404).json({ ok: false, error: "no receipt with that signature" });
     // Traction "receipts opened by a holder" (lib/traction.js) — this route recorded nothing
     // durable before this change.
     try { traction.recordReceiptOpen(kv, { project: p.id, sig }); } catch (_) { /* counter only */ }
+    // The Addendum-B3 shape (settlements[]) validates against receipt.schema.json on its own — an
+    // `ok` sibling would not (additionalProperties:false), so it is nested under `receipt` and
+    // stamped there, exactly as `project` is nested for GET /api/hub/:project. The legacy shape is
+    // unchanged: spread flat alongside `ok`, no $schema (it does not validate that schema — see
+    // scripts/hub-schema-test.cjs E4/"the legacy body does not").
+    if (r && Array.isArray(r.settlements)) return res.status(200).json({ ok: true, receipt: { ...r, $schema: HUB_SCHEMA_URL("receipt") } });
     return res.status(200).json({ ok: true, ...r });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
@@ -7994,7 +8010,13 @@ app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
     // lib/hub/public.js draws (a batch row with no signature is never public). Optional
     // ?wallet= narrows to one, so a reader reproducing a single receipt fetches one small file.
     const wanted = String(req.query.wallet || "").trim();
-    const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
+    // W3: journal + programState are additive — a row with a journal event gets its real
+    // program-version hash (lib/hub/reproduce.js buildInputsForWallet); one without still reports
+    // hash: null, exactly as before this change.
+    let journal = {}, programState = null;
+    try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
+    try { programState = hubStore.read(kv, p.id, "state", null); } catch (_) {}
+    const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches, journal, programState });
     if (wanted) {
       if (!all[wanted]) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
       return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: all[wanted] } });
@@ -8019,7 +8041,10 @@ app.get("/api/hub/:project/reproducibility", (req, res) => {
     const batches = hubStore.read(kv, id, "batches", {}) || {};
     const days = hubStore.read(kv, id, "days", {}) || {};
     const otherPrograms = hubProjectView(p).programs.filter((pr) => pr.kind !== "lock-to-earn");
-    const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms });
+    let journal = {}, programState = null;
+    try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
+    try { programState = hubStore.read(kv, id, "state", null); } catch (_) {}
+    const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms, journal, programState });
     const data = { ok: true, project: id, batches: rep.batches, overall: rep.overall };
     HUB_REPRO_CACHE.set(id, { at: Date.now(), data });
     return res.status(200).json(data);
