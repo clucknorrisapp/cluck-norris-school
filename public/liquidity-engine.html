@@ -350,9 +350,9 @@
     var el = $('decisionLog');
     if (!d) { el.innerHTML = '<p class="muted">Loading…</p>'; return; }
     if (!d.retained || !d.rows || !d.rows.length) { el.innerHTML = '<p class="muted">' + esc(d.note || 'no data retained for this period') + '</p>'; return; }
-    var html = '<div class="tblwrap"><table><thead><tr><th>when</th><th>action</th><th>why</th><th class="num">price</th></tr></thead><tbody>';
+    var html = '<div class="tblwrap"><table><thead><tr><th>when</th><th>sleeve</th><th>action</th><th>why</th><th class="num">price</th></tr></thead><tbody>';
     d.rows.slice().reverse().forEach(function (r) {
-      html += '<tr><td>' + esc(rel(r.t)) + '</td><td>' + esc(r.action) + '</td><td>' + esc(r.reason || '—') + '</td><td class="num">' + (r.price == null ? '—' : esc(price(r.price))) + '</td></tr>';
+      html += '<tr><td>' + esc(rel(r.t)) + '</td><td>' + esc(r.source || '—') + '</td><td>' + esc(r.action) + '</td><td>' + esc(r.reason || '—') + '</td><td class="num">' + (r.price == null ? '—' : esc(price(r.price))) + '</td></tr>';
     });
     html += '</tbody></table></div><p class="stale">' + esc(String(d.retained)) + ' retained decision(s), most recent first.</p>';
     el.innerHTML = html;
@@ -402,7 +402,7 @@
       var v = (r.direction === 'in' ? 'received' : 'sent') + ' ' + esc(num(r.amount)) + ' ' + esc(r.symbol || 'TOKEN');
       return v + (r.signature ? ' — <a href="https://solscan.io/tx/' + esc(r.signature) + '" target="_blank" rel="noopener noreferrer">verify ↗</a>' : '');
     }
-    if (r.cls === 'decision') return esc(r.action) + (r.reason ? ' — ' + esc(r.reason) : '') + (r.price != null ? ' <span class="stale">@ ' + esc(price(r.price)) + '</span>' : '');
+    if (r.cls === 'decision') return (r.source ? '<span class="pill">' + esc(r.source) + '</span> ' : '') + esc(r.action) + (r.reason ? ' — ' + esc(r.reason) : '') + (r.price != null ? ' <span class="stale">@ ' + esc(price(r.price)) + '</span>' : '');
     var dec = r.decision || {};
     return esc(r.name) + ' — <span class="stale">' + esc(dec.action || '—') + (dec.reason ? ' · ' + esc(dec.reason) : '') + '</span>';
   }

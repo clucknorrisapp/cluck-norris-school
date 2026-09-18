@@ -136,7 +136,15 @@ console.log("\nJVP dashboard — freshness and fleet state\n");
       ok("a paused no-op tick is never recorded", kvReal.get(TESTKEY, []).length === 0);
       vault.recordDecision("__w5test__", { action: "roll", reason: "deploying staged", price: 0.00035, operator: "SHOULD-NOT-APPEAR", floatUsdc: 999999 });
       const rec = kvReal.get(TESTKEY, [])[0];
-      ok("a real decision is recorded as {t,action,reason,price} only — nothing else passed through", rec && rec.action === "roll" && rec.reason === "deploying staged" && rec.price === 0.00035 && typeof rec.t === "number" && !("operator" in rec) && !("floatUsdc" in rec), JSON.stringify(rec));
+      ok("a real decision is recorded as {t,action,reason,price,source} only — nothing else passed through", rec && rec.action === "roll" && rec.reason === "deploying staged" && rec.price === 0.00035 && typeof rec.t === "number" && rec.source === null && !("operator" in rec) && !("floatUsdc" in rec), JSON.stringify(rec));
+
+      // batch 8: a per-sleeve tick (tickAskWall/tickSol/tickBtc/tickJup/tickTreasury/concentrate)
+      // now records too, tagged with WHICH sleeve decided — the base tick wrapper is no longer
+      // the only choke point that writes this log.
+      kvReal.set(TESTKEY, []);
+      vault.recordDecision("__w5test__", { action: "would-roll", reason: "ask-wall out of range", price: 0.5 }, "askWall");
+      const askWallRec = kvReal.get(TESTKEY, [])[0];
+      ok("a per-sleeve decision carries its own source label", askWallRec && askWallRec.action === "would-roll" && askWallRec.source === "askWall");
     } finally {
       kvReal.set(TESTKEY, prior === undefined ? [] : prior); // leave the store as found (or a harmless empty ring)
     }
@@ -149,9 +157,12 @@ console.log("\nJVP dashboard — freshness and fleet state\n");
     ok("empty log + paused → retained 0, names the pause", paused.retained === 0 && paused.rows.length === 0 && /engine is paused/.test(paused.note));
     const notPaused = d.decisionLog(emptyKv, "cuna", false);
     ok("empty log + not paused → the generic missing-data note, not the pause note", notPaused.retained === 0 && /no data retained/.test(notPaused.note) && !/paused/.test(notPaused.note));
-    const withRows = { get: (k, d) => (k === "engineLog:cuna" ? [{ t: 1700000000000, action: "roll", reason: "x", price: 2 }, { score: 1 }, { t: 2 }] : d) };
+    const withRows = { get: (k, d) => (k === "engineLog:cuna" ? [{ t: 1700000000000, action: "roll", reason: "x", price: 2, source: "sol" }, { score: 1 }, { t: 2 }] : d) };
     const dl = d.decisionLog(withRows, "cuna", true);
     ok("rows missing t/action are dropped; a real row survives", dl.retained === 1 && dl.rows[0].action === "roll" && dl.rows[0].price === 2);
+    ok("a row's source sleeve carries through", dl.rows[0].source === "sol");
+    const withNoSource = { get: (k, d) => (k === "engineLog:cuna" ? [{ t: 1700000000000, action: "roll", reason: "x", price: 2 }] : d) };
+    ok("a pre-batch-8 row with no source reads as null, never fabricated", d.decisionLog(withNoSource, "cuna", true).rows[0].source === null);
   }
 
   console.log("\nW5 — historical transfers: sanitized shape, no wallet addresses, symbol resolution\n");
@@ -244,9 +255,9 @@ console.log("\nJVP dashboard — freshness and fleet state\n");
     ok("a row with the full input set replays the SAME gate and matches by construction",
       replayedFull.gate === "rollGate" && replayedFull.replayed && replayedFull.replayed.action === "hold" && replayedFull.matches === true, JSON.stringify(replayedFull));
 
-    // The real production shape — {t,action,reason,price} only (recordDecision's allow-list) —
-    // never carries enough to replay. This is the honest common case, not an edge case.
-    const thinRow = { t: Date.now(), action: "roll", reason: "deploying staged", price: 0.00035 };
+    // The real production shape — {t,action,reason,price,source} only (recordDecision's
+    // allow-list) — never carries enough to replay. This is the honest common case, not an edge case.
+    const thinRow = { t: Date.now(), action: "roll", reason: "deploying staged", price: 0.00035, source: "base" };
     const [replayedThin] = d.replayDecisions([thinRow]);
     ok("a real (thin) retained row can never be replayed — inputs not retained, no fabricated match",
       replayedThin.replayed === null && replayedThin.note === "inputs not retained" && replayedThin.matches === undefined, JSON.stringify(replayedThin));
@@ -272,7 +283,7 @@ console.log("\nJVP dashboard — freshness and fleet state\n");
       { signature: "SIGRECENT", timestamp: Math.floor((now - 3600_000) / 1000), nativeTransfers: [{ amount: 1_000_000_000, fromUserAccount: "X", toUserAccount: "OPWALLETDNC" }], tokenTransfers: [] },
       { signature: "SIGOLD", timestamp: Math.floor((now - 200 * 3600_000) / 1000), nativeTransfers: [{ amount: 2_000_000_000, fromUserAccount: "Y", toUserAccount: "OPWALLETDNC" }], tokenTransfers: [] },
     ] };
-    const decisionRows = [{ t: now - 7200_000, action: "roll", reason: "deploying staged", price: 0.002 }];
+    const decisionRows = [{ t: now - 7200_000, action: "roll", reason: "deploying staged", price: 0.002, source: "treasury" }];
     const kvFake = { get: (k, def) => (k === "engineLog:dnc" ? decisionRows : def) };
     const tl = await d.timeline({ vault: fakeVault, kv: kvFake, clknMint: "MCLKN", id: "dnc", hours: 168, helius: fakeHelius });
     const tlJson = JSON.stringify(tl);
@@ -282,6 +293,7 @@ console.log("\nJVP dashboard — freshness and fleet state\n");
     ok("the 200h-old transfer is outside the 168h window and dropped", !tl.rows.some((r) => r.cls === "transfer" && r.signature === "SIGOLD"));
     ok("every illustrative row keeps the exact replay label", tl.rows.filter((r) => r.cls === "illustrative").every((r) => r.label === "illustrative — replayed from a recorded incident, not live"));
     ok("the retained decision row carries a replay verdict (honestly null — thin production shape)", tl.rows[1].replayed === null && tl.rows[1].note === "inputs not retained");
+    ok("the timeline row carries the decision's source sleeve through to the merged view", tl.rows[1].source === "treasury");
     ok("no wallet address reaches a timeline row", !tlJson.includes("OPWALLETDNC"));
     for (const field of ["operator", "floatUsdc", "pnl"]) ok(`no forbidden field '${field}' in any timeline row`, !new RegExp(`"${field}"`).test(tlJson));
 

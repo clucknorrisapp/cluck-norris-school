@@ -81,6 +81,67 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     assert.strictEqual(r.results[0].verified, false);
   });
 
+  // ── Finding #1 (Codex brief, Round 2, batch 8): rowPaidBy alone matches mint + destination
+  // owner + amount, never WHO paid — so a stranger's unrelated transfer of the same mint to the
+  // same recipient, or a DEX routing the mint through an inner CPI, would record as this
+  // operator's airdrop. sourceIsOperator() closes that; these three pin it. (The fix lives here,
+  // never in lib/payout-verify.js — a separate branch, PR #342, adds its own funding-wallet check
+  // there for the CUNA/Hub settlement journal.)
+  await tAsync("finding #1: a transfer FROM the drop's operator verifies", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const t1 = tx({ pre: [bal(PAYER, MINT, 5_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 4_000_000_000n), bal(A, MINT, 1_000_000_000n)] });
+    const r = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
+    assert.strictEqual(r.results[0].verified, true, JSON.stringify(r.results));
+    assert.strictEqual(r.results[0].reason, null);
+  });
+
+  await tAsync("finding #1: the SAME mint/wallet/amount moved by a STRANGER is unverified, not credited as the operator's drop", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const STRANGER = B; // not the drop's operator (PAYER)
+    const t1 = tx({ pre: [bal(STRANGER, MINT, 5_000_000_000n), bal(A, MINT, 0n)], post: [bal(STRANGER, MINT, 4_000_000_000n), bal(A, MINT, 1_000_000_000n)] });
+    const r = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
+    assert.strictEqual(r.results[0].verified, false, "a stranger's transfer must never verify as this operator's airdrop");
+    assert.strictEqual(r.results[0].reason, AR.SOURCE_MISMATCH_REASON);
+    const drop = AR.loadDrop(kv, r.dropId);
+    assert.strictEqual(drop.rows[sig].verified, false);
+    assert.strictEqual(drop.rows[sig].reason, AR.SOURCE_MISMATCH_REASON);
+  });
+
+  await tAsync("finding #1: an inner-CPI transfer routed through a DEX pool (not the operator) is unverified", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const DEX_POOL_OWNER = "H8UekPGwePSmQ3ttuYGPU1szyFfjZR4N53rymSFwpLPm"; // the pool's own token-account owner
+    const DEX_POOL_AUTHORITY = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1"; // the CPI's signing authority — neither is PAYER
+    const SRC_TOKEN_ACCOUNT = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"; // the pool's token account (an address, not a wallet)
+    const t1 = {
+      meta: {
+        err: null,
+        preTokenBalances: [
+          { accountIndex: 0, owner: DEX_POOL_OWNER, mint: MINT, uiTokenAmount: { amount: "5000000000" } },
+          { accountIndex: 1, owner: A, mint: MINT, uiTokenAmount: { amount: "0" } },
+        ],
+        postTokenBalances: [
+          { accountIndex: 0, owner: DEX_POOL_OWNER, mint: MINT, uiTokenAmount: { amount: "4000000000" } },
+          { accountIndex: 1, owner: A, mint: MINT, uiTokenAmount: { amount: "1000000000" } },
+        ],
+        // The transfer that actually moves the mint is nested under a DEX/swap instruction, not a
+        // top-level one — exactly the "inner-CPI" shape rowPaidBy's pre/post-balance check already
+        // handles correctly (it reads net effect, not instruction depth); this pins that the NEW
+        // source check reaches the same conclusion by parsed-instruction authority too.
+        innerInstructions: [{ index: 0, instructions: [
+          { programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", parsed: { type: "transfer", info: { source: SRC_TOKEN_ACCOUNT, destination: "11111111111111111111111111111111", authority: DEX_POOL_AUTHORITY, amount: "1000000000" } } },
+        ] }],
+      },
+      transaction: { message: { accountKeys: [SRC_TOKEN_ACCOUNT, "11111111111111111111111111111111"] } },
+      blockTime: Math.floor(NOW / 1000),
+    };
+    const r = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
+    assert.strictEqual(r.results[0].verified, false, "a DEX-routed inner-CPI transfer must not verify as the operator's drop");
+    assert.strictEqual(r.results[0].reason, AR.SOURCE_MISMATCH_REASON);
+  });
+
   await tAsync("a transaction predating the drop cannot be its payment (notBefore)", async () => {
     const kv = memoryKv();
     const sig = fakeSig();
@@ -96,7 +157,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
   await tAsync("replaying an already-verified sig is a no-op — getTx is not called again", async () => {
     const kv = memoryKv();
     const sig = fakeSig();
-    const t1 = tx({ pre: [bal(A, MINT, 0n)], post: [bal(A, MINT, 1_000_000_000n)] });
+    const t1 = tx({ pre: [bal(PAYER, MINT, 2_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 1_000_000_000n), bal(A, MINT, 1_000_000_000n)] });
     let calls = 0;
     const getTx = async (s) => { calls++; if (s === sig) return t1; throw new Error("unmocked"); };
     const r1 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx, now: NOW });
@@ -112,7 +173,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     const kv = memoryKv();
     const sig = fakeSig();
     let fail = true;
-    const getTx = async () => { if (fail) throw new Error("RPC unavailable"); return tx({ pre: [bal(A, MINT, 0n)], post: [bal(A, MINT, 1_000_000_000n)] }); };
+    const getTx = async () => { if (fail) throw new Error("RPC unavailable"); return tx({ pre: [bal(PAYER, MINT, 2_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 1_000_000_000n), bal(A, MINT, 1_000_000_000n)] }); };
     const r1 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx, now: NOW });
     assert.strictEqual(r1.results[0].verified, false);
     fail = false;
@@ -179,7 +240,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
   await tAsync("the public body carries no operator wallet anywhere", async () => {
     const kv = memoryKv();
     const sig = fakeSig();
-    const t1 = tx({ pre: [bal(A, MINT, 0n)], post: [bal(A, MINT, 1_000_000_000n)] });
+    const t1 = tx({ pre: [bal(PAYER, MINT, 2_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 1_000_000_000n), bal(A, MINT, 1_000_000_000n)] });
     const r = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
     const pub = AR.publicDrop(AR.loadDrop(kv, r.dropId), { symbol: "TEST" });
     const json = JSON.stringify(pub);

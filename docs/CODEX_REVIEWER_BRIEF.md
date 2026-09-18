@@ -337,6 +337,42 @@ in an environment where `.env`/Railway variables are present, or are they confir
 Findings, not rewrites, same as every other round. Money paths first if your time is short: #342,
 then #346's three sub-questions, then #341.
 
+## Round 2 — Codex brief reading pass, batch 8
+
+Three findings from a source read of the batch-8 diff (airdrop receipts, the engine decision log,
+and the traction/analytics salt), each fixed the same day it was found, on the
+`claude/colosseum-batch-8` branch. Findings, not rewrites, still applies below.
+
+1. **`lib/airdrop-receipt.js` — the transfer's source was never checked.** `rowPaidBy` only
+   matched mint + destination owner + amount, so a stranger's unrelated transfer of the same mint
+   to the recipient, or a DEX-routed inner-CPI transfer, would record as this operator's airdrop
+   with `verified:true`. **Fixed on batch 8 (commit `ee8e679, cherry-picked onto batch 8`):** `sourceIsOperator()`
+   now additionally requires the funding wallet — read from the pre/postTokenBalances decrease, or
+   a parsed `transfer`/`transferChecked` instruction's `authority`/`source` owner — to equal the
+   drop's own operator wallet before a row can verify; a mismatch records
+   `verified:false, reason:"transfer_not_from_operator"`. Lives entirely in
+   `lib/airdrop-receipt.js`, never `lib/payout-verify.js` (PR #342's own funding-wallet check for
+   the CUNA/Hub settlement journal is a separate, non-overlapping change). Test:
+   `scripts/airdrop-receipt-test.cjs` (the three "finding #1" cases).
+2. **`lib/whirlpool-vault.js` — the engine decision log was incomplete.** Only the base `tick`
+   wrapper called `recordDecision`; `tickAskWall`, `tickSol`, `tickBtc`, `tickJup`, `tickTreasury`
+   and `concentrate` all make `{action, reason}` decisions that never reached the public "Decision
+   log (retained events)" on `/liquidity-engine`, so it understated what the engine actually
+   decided. **Fixed on batch 8 (commit `ee8e679, cherry-picked onto batch 8`):** every per-project tick wrapper now
+   records its own decision, tagged with a new `source` field
+   (`"base"|"askWall"|"sol"|"btc"|"jup"|"treasury"|"concentrate"`) added to `recordDecision`'s
+   allow-list and to the sanitised public row shape in `lib/jvp-dashboard.js`. Test:
+   `scripts/jvp-dashboard-test.cjs` (the per-sleeve `source` cases); `scripts/engine-sim-test.cjs`
+   passes unchanged — no engine started.
+3. **`lib/traction.js` (and the same shape in `lib/analytics.js`) — the salt fallback was a
+   hardcoded literal.** With `ANALYTICS_SALT`/`PREMIUM_ACCESS_KEY` both unset, the salt fell back
+   to a fixed string baked into the repo, making the "PII-free" per-day wallet/visitor hash
+   reversible against a public holder list. **Fixed on batch 8 (commit `ee8e679, cherry-picked onto batch 8`):** a
+   fresh install with no env var mints its own `crypto.randomBytes(32)` salt once and persists it
+   under the shared kv key `traction:salt_v1` (both files read the same stored salt), read back on
+   every later call, never logged. Test: `scripts/traction-test.cjs` (the "salt (finding #3, batch
+   8)" section) and `scripts/analytics-engaged-test.cjs` (the "salt: with no env var…" test).
+
 ## Open questions the owner would like your opinion on
 - Is lock-to-earn on Jupiter Lock the right headline mechanism for a Consumer Apps entry, or is
   the read-only engine dashboard a stronger single story?
