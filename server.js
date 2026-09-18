@@ -8278,8 +8278,15 @@ hubRoutes.mount(app, {
   // declared further down.
   // "demo" / "demo-b" are the Colosseum fixture ids (lib/hub/demo-fixture.js, /hub/demo) — reserved
   // by id (not mint) so a real project can never be approved under either name and collide with
-  // the fixture's routes.
-  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null }),
+  // the fixture's routes. Item 5 / Round 3 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): every other
+  // page-shadowing id (apply/verify/status/wallet/trust/judge/schema/registry/hub/settle/badge) is
+  // ALSO merged in by lib/hub/routes.js's own `reserved()` from hubProject.RESERVED_PROJECT_IDS —
+  // spelled out here too, explicitly, as the second of the two places this finding named.
+  reservedMints: () => {
+    const base = { clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null };
+    for (const id of hubProject.RESERVED_PROJECT_IDS) if (!(id in base)) base[id] = null;
+    return base;
+  },
   getTx: async (sig) => {
     // crash P2-9 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): the settlement journal has no
     // "unconsume" — a confirmed-but-later-forked transaction would be journaled permanently.
