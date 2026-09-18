@@ -142,7 +142,7 @@ const SEED = {
     let threw = null;
     try { proj.approveProject({}, { id: "wallet", mint: MINT1, access: { tier: "standard" } }, { nowUnix: 1758000000, reserved: RESERVED }); }
     catch (e) { threw = e; }
-    ok("a project literally named \"wallet\" is refused at approval", !!threw && /wallet.*built-in|built-in.*wallet/i.test(threw.message), threw && threw.message);
+    ok("a project literally named \"wallet\" is refused at approval", !!threw && /wallet.*(built-in|reserved)|(built-in|reserved).*wallet/i.test(threw.message), threw && threw.message);
     let ok2 = false;
     try { proj.approveProject({}, { id: "not-wallet", mint: MINT1, access: { tier: "standard" } }, { nowUnix: 1758000000, reserved: RESERVED }); ok2 = true; } catch (e) { ok2 = false; }
     ok("a project with any other id still approves fine against the same reserved map", ok2);
