@@ -114,6 +114,15 @@ console.log("\n2. program-version.schema.json — the wire SUBSET routes.js/appl
   const badShape = { ...wire, extraField: "nope" };
   const errs = validate(schemas["program-version"], badShape);
   ok("additionalProperties:false rejects a field the entity does not have", errs.some((e) => /extraField/.test(e)));
+  // B5 (roadmap E3): commitment is optional and, when present, PUBLIC-SAFE — only sig/slot/
+  // observedAt, never the memo text (scripts/hub-commit-test.cjs pins the pure projection this
+  // wire shape mirrors, lib/hub/public.js commitmentView).
+  validOk("a version with no commitment yet still validates (the key can be absent entirely)", schemas["program-version"], wire);
+  const committed = { ...wire, commitment: { sig: SIG(1), slot: 123456, observedAt: NOW } };
+  validOk("a version with an observed commitment validates", schemas["program-version"], committed);
+  const withMemo = { ...wire, commitment: { sig: SIG(1), slot: 123456, observedAt: NOW, memo: "clkn-hub:v1:alpha:1:" + v1.hash } };
+  const memoErrs = validate(schemas["program-version"], withMemo);
+  ok("a commitment carrying `memo` is rejected — the public shape is sig/slot/observedAt only", memoErrs.some((e) => /memo/.test(e)));
 }
 
 console.log("\n3. batch.schema.json — lib/hub/ledger.js buildBatch()\n");
