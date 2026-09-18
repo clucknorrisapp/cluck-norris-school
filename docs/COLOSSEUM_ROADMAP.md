@@ -417,3 +417,22 @@ the published inputs, offline, without trusting us."*
 2026-09-18 (batch 3). E3 is the only item that needs the owner's hand (a signature) and ships
 dry-run first so nothing waits on it. Everything else is buildable without the owner and lands
 on `develop` on green CI; promotion stays the owner's "promote".
+
+## 8. Extension 2 — 2026-09-18 evening (the list ran out; owner: "never idle because the list ran out")
+
+Everything in §7 except the owner's own acts (E3's first real signature, E9's posting, W6b's
+interviews, W10's recordings) is merged or on a PR by the end of 2026-09-18. These are the next
+items, in order, each still inside the thesis (a rewards program a stranger can re-derive) and
+the theme. Same rules: nothing arms, nothing pays, Earn is capability.
+
+| # | Item | Criterion | Definition of done |
+|---|---|---|---|
+| **X1** | **Codex reviewer brief caught up.** `docs/CODEX_REVIEWER_BRIEF.md` lists every in-window PR since #338 with the one question each needs answered (the money-path PR #342 first), so the owner's terminal Codex pass starts from a list, not a diff. | Product | The brief names #339–#346 and #342 with review questions; findings land as fixes on the next batch. |
+| **X2** | **"Verify it yourself" for judges.** `docs/HUB_VERIFY.md`: the two-minute reproduction a judge runs — curl the public JSON, validate against the served schema, run `reproduce-receipt.cjs --offline`, check a memo on an explorer once one exists — every command copy-pasteable against production, with the dry-run caveats. Linked from README, `/about` and the Hub index footer. | Founder Communication | Every command in the doc runs against staging in the smoke job (a script asserts the doc's commands are the ones the test runs). |
+| **X3** | **The aggregate reproducibility ratio includes buy-comp rows.** `/api/hub/:project/reproducibility` counts sealed buy-comp rows via `reproduceBuyCompRow`; the "N of M" line on a project page therefore covers every program kind that has published inputs; giveaway rows stay "not implemented" and are named as such. | Insight | The ratio's denominator is every settled row of every kind with published inputs; a tampered buy-comp fixture counts as a mismatch. |
+| **X4** | **New surfaces in seven languages.** The airdrop receipt page, the standings table, the readiness desk section and the door lines get curated dictionary keys and pass the Hub i18n coverage gate. | Product | Audit gating clean; the owner eyeballs es + zh on a phone. |
+| **X5** | **Engine timeline UI (deferred W5), read-only.** The three evidence classes on `/liquidity-engine` become a single time-ordered strip per project — transfers, retained decisions, illustrative runs — each row keeping its label; a replay control steps through the retained decisions against the recorded inputs with the pure gate (`lib/engine-decisions.js`) so a reader sees what the gate decided and why, never a live engine. | Product, Insight | Renders with the labels intact; `engine-sim-test` unchanged; no engine started to satisfy any check. |
+| **X6** | **Browser-signed payout (design §4), after #342 merges.** The operator signs a batch in the desk with the connected wallet (wallet signs first, no `SystemProgram.transfer` in the page), the server observes the signature and journals it through the same `settle.js` path the managed payer uses — pending → signing → submitted → settled, one persist per transition. Money path: two verifier lenses, own PR, Codex. | Viability | Fault-injection tests for every transition; the same idempotency key as #342; the dry-run project refused first. |
+| **X7** | **Holders historical snapshots (deferred).** The owners-snapshot tool keeps a dated, hashed snapshot per run so a project can show holder-count history with the hash a reader can recompute from the published list. | Traction | Snapshots are append-only, hashed, and served read-only; the Hub project page links the latest. |
+
+**Owner-side, still open:** promote `develop` → `main` (nothing from batches 2–8 is on production until then); the first real on-chain commitment (E3); the four operator interviews (W6b) and the POKEAHOE terms; the Sep 20 recording (W10); the real-wallet smoke on staging.
