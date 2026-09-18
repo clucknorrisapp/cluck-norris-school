@@ -72,16 +72,23 @@ below works with no wallet connected:
   during this window, and the i18n audit now checks lesson coverage by id so the gap can't recur
   silently.
 
+- **The school points at the Hub, and the Hub points back** — the six lock lessons end on a
+  "Ready to lock?" card that carries the project a learner arrived from, and a project page shows
+  how many anonymous visitors read the lock lessons before reaching it (only when above zero).
+- **The Hub pages in all seven languages**, with the same CI coverage gate as the school.
+
 **What isn't true yet, stated plainly.** A program version's `hash` is served by the same server
 that computes the payout — that lets a reader *re-derive* the arithmetic from the published
-inputs; it does not prove the server omitted no qualifying escrow. An independent on-chain
-commitment (the funding wallet signing a memo transaction over that hash) is designed and ships
-**dry-run first**, but that code is not on this branch — until it lands, every Hub surface says
-"reproducible from the published inputs," never "independently verified." Separately, the
-Addendum-B settlement journal (the full append-only-per-transfer shape `receipt.schema.json`
-documents) is built and unit-tested but has **no live HTTP route yet** — today's live payout and
-receipt routes still run on the earlier CUNA payout model. `lib/hub/README.md` §5 states the exact
-gap rather than glossing over it.
+inputs; it does not prove the server omitted no qualifying escrow. The independent on-chain
+commitment (the funding wallet signs a memo transaction over that hash; the server writes the
+commitment only after it observes the memo on-chain) is **built and ships dry-run**: no program
+has been committed yet, so every Hub surface still says "reproducible from the published inputs,"
+never "independently verified," and the wording upgrades per program only on observation.
+Separately, the Addendum-B settlement journal (the full append-only-per-transfer shape
+`receipt.schema.json` documents) is built, unit-tested and wired into the payout route on a
+pull request under money-path review; until it merges, today's live payout and receipt routes
+still run on the earlier CUNA payout model. `lib/hub/README.md` §5 states the exact gap rather
+than glossing over it.
 
 The school is the front door; the rest of the tools below are the same stack, already live. No
 prizes are claimed and no result is predicted here. Everything on this page that predates
