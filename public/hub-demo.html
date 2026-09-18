@@ -57,7 +57,10 @@
   .holder-card.no { border-color:rgba(239,68,68,.3); background:rgba(239,68,68,.04); }
   .holder-card.yes { border-color:rgba(16,185,129,.25); background:rgba(16,185,129,.03); }
   .step-links { display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:11.5px; }
-  .step-links a { color:var(--cyan, #67E8F9); text-decoration:none; letter-spacing:.5px; }
+  /* Each link is the sole content of its row, not a word in a sentence — invisible tap-area
+     padding (cancelled by an equal negative margin, so nothing shifts visually) brings the hit
+     box toward 44px tall without changing how the row looks. */
+  .step-links a { display:inline-block; padding:14px 2px; margin:-14px -2px; color:var(--cyan, #67E8F9); text-decoration:none; letter-spacing:.5px; }
   pre.proof { background:rgba(0,0,0,.35); border:1px solid var(--border); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11.5px; color:#D1D5DB; overflow-x:auto; white-space:pre-wrap; word-break:break-all; }
   .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
   .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
@@ -67,7 +70,7 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <a class="back-home" href="/hub">← PROJECT HUB</a>
   <div class="header">
     <h1 id="title">Hub Demo Walkthrough</h1>
@@ -75,7 +78,7 @@
   </div>
   <div class="dryrun"><span class="dot"></span> DRY RUN — fixture data, nothing on-chain</div>
   <div id="app"><div class="status">LOADING…</div></div>
-</div>
+</main>
 
 <script src="/cluck-util.js"></script>
 <script>

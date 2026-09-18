@@ -400,7 +400,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -539,6 +539,18 @@ jobs:
       - name: wallet standard discovery
         if: steps.gate.outputs.run == 'true'
         run: node scripts/wallet-standard-test.cjs
+      # Colosseum roadmap §7 — "accessibility and phone polish on the public pages" — judges click
+      # these on phones. Boots its own server and drives /hub, /hub/<project>, /hub/demo,
+      # /for-projects, /hub/apply and /hub/<project>/pay at 360 and 390px with a real Chromium:
+      # no horizontal overflow, every real tap target >= 44x44 (inline-in-prose links, compact
+      # mono data links and table cells are the standard, accepted exceptions), every <img> has
+      # alt, icon-only controls have an accessible name, heading order is sane, <main>/<nav>
+      # landmarks exist, and long mono strings never overflow their box. Not a full WCAG audit —
+      # contrast and the language toggle's lang attribute were checked by hand for this batch (see
+      # the PR) and aren't re-derived here.
+      - name: Hub pages — accessibility + phone polish
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-a11y-test.cjs
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the

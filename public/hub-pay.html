@@ -28,11 +28,15 @@
   .chip.gold { color:var(--gold); border-color:rgba(252,211,77,.35); }
   .big { font-family:var(--disp); font-size:26px; letter-spacing:1px; color:var(--text); }
   .row-flex { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:14px; }
-  .btn { background:var(--orange); border:none; border-radius:8px; padding:12px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#000; cursor:pointer; font-family:var(--body); }
+  .btn { display:inline-flex; align-items:center; justify-content:center; min-height:44px; background:var(--orange); border:none; border-radius:8px; padding:12px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#000; cursor:pointer; font-family:var(--body); }
   .btn.ghost { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); }
-  .btn:disabled { background:var(--grey, #4B5563); color:var(--muted); cursor:not-allowed; }
+  /* --grey is aliased to --muted in theme.css, so background:var(--grey) + color:var(--muted)
+     is background == text — invisible disabled-button copy. Dark text on the grey reads fine. */
+  .btn:disabled { background:var(--grey, #4B5563); color:var(--bg); cursor:not-allowed; }
   .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
   .ok-box { background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.3); border-radius:8px; padding:12px 14px; font-size:13px; color:var(--text); margin-top:12px; line-height:1.6; }
+  /* Standalone link on its own line after a <br> — invisible tap-area padding, no visual change. */
+  .ok-box a { display:inline-block; padding:14px 2px; margin:-14px -2px; }
   .small { font-size:12px; color:var(--sub); line-height:1.55; }
   .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:12px 0; }
   .opt { border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:10px; }
@@ -41,14 +45,14 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <a class="back-home" id="back" href="/hub">← PROJECT HUB</a>
   <div class="header">
     <h1 id="title" data-clkn-avoid="1">Pay for a month</h1>
     <p id="subtitle" data-clkn-avoid="1">PLATFORM ACCESS · VERIFIED ON-CHAIN</p>
   </div>
   <div id="app"><div class="status">LOADING…</div></div>
-</div>
+</main>
 
 <script src="/cluck-util.js"></script>
 <script src="/cluck-wallet.js"></script>
@@ -103,7 +107,7 @@
     else h += '<div class="small" style="margin-top:8px">CLKN pricing is unavailable right now, so only SOL is offered for this quote.</div>';
     h += '</div><div id="out"></div></div>';
     h += '<div class="card"><p class="small">Or pay by hand: send ' + esc(String(QUOTE.sol)) + ' SOL to <span class="mono">' + esc(PAYTO.sol) + '</span>' + (QUOTE.clknRaw ? ' or ' + esc(QUOTE.clknUi) + ' CLKN to <span class="mono">' + esc(PAYTO.clkn) + '</span>' : '') + ' within the quote window, then submit the signature below.</p>';
-    h += '<div class="row-flex"><input type="text" id="sigIn" class="mono" placeholder="transaction signature" style="flex:1;min-width:0;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text)"/><button class="btn ghost" id="sigGo">SUBMIT</button></div><div id="out2"></div></div>';
+    h += '<div class="row-flex"><input type="text" id="sigIn" class="mono" placeholder="transaction signature" aria-label="Transaction signature" style="flex:1;min-width:0;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text)"/><button class="btn ghost" id="sigGo">SUBMIT</button></div><div id="out2"></div></div>';
     app.innerHTML = h;
     $("connect").addEventListener("click", onConnect);
     $("paySol").addEventListener("click", function () { pay("sol"); });

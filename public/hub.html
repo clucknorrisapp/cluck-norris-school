@@ -28,9 +28,11 @@
   .input-row { display:flex; gap:8px; margin-top:12px; }
   .addr-input { flex:1; min-width:0; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:11px 13px; color:var(--text); font-family:var(--mono); font-size:13px; outline:none; }
   .addr-input:focus { border-color:var(--accent); }
-  .btn { flex-shrink:0; background:var(--orange); border:none; border-radius:8px; padding:11px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#fff; cursor:pointer; }
+  .btn { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; min-height:44px; background:var(--orange); border:none; border-radius:8px; padding:11px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#fff; cursor:pointer; }
   .btn.ghost { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); }
-  .btn:disabled { background:var(--grey, #4B5563); color:var(--muted); cursor:not-allowed; }
+  /* --grey is aliased to --muted in theme.css, so background:var(--grey) + color:var(--muted)
+     is background == text — invisible disabled-button copy. Dark text on the grey reads fine. */
+  .btn:disabled { background:var(--grey, #4B5563); color:var(--bg); cursor:not-allowed; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; }
   .chip { font-family:var(--disp); font-size:11px; letter-spacing:1.5px; padding:4px 9px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; }
   .chip.kind { color:var(--gold); border-color:rgba(252,211,77,.35); }
@@ -82,24 +84,27 @@
   .proj-hero .htext .tagline { font-size:12.5px; color:var(--subtext, #9CA3AF); margin-top:3px; line-height:1.5; }
   .card-logo { width:22px; height:22px; border-radius:6px; object-fit:cover; vertical-align:middle; margin-right:6px; border:1px solid var(--border); background:#000; }
   .socials-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-  .social-pill { font-size:11px; letter-spacing:.5px; padding:4px 10px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-decoration:none; }
+  .social-pill { display:inline-flex; align-items:center; justify-content:center; min-height:44px; min-width:44px; font-size:11px; letter-spacing:.5px; padding:8px 14px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-decoration:none; }
   .social-pill:hover { color:var(--text); border-color:var(--proj-accent); }
   .funding-note { font-size:11px; color:var(--sub); text-align:center; margin-top:2px; }
-  .lessons a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  /* Standalone one-line CTA links (each is the sole content of its row, not a word inside a
+     sentence) get invisible tap-area padding — the negative margin cancels the padding's visual
+     footprint, so the link looks identical but its hit box grows toward 44px tall. */
+  .lessons a, .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
   .small { font-size:12px; color:var(--sub); }
   pre.proof { background:rgba(0,0,0,.35); border:1px solid var(--border); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11.5px; color:#D1D5DB; overflow-x:auto; white-space:pre; }
   @media (max-width:520px) { .prog-head h2 { font-size:19px; } td, th { padding:6px 4px; } }
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <a class="back-home" href="/">← CLUCK NORRIS</a>
   <div class="header">
     <h1 id="title" data-clkn-avoid="1">Project Hub</h1>
     <p id="subtitle" data-clkn-avoid="1">RECEIPTS YOU CAN VERIFY · NO WALLET NEEDED</p>
   </div>
   <div id="app"><div class="status">LOADING…</div></div>
-</div>
+</main>
 
 <script src="/cluck-util.js"></script>
 <script>
@@ -396,7 +401,7 @@
     app.innerHTML = heroBlock(v) +
       '<div class="card"><div class="intro" data-clkn-avoid="1">' + intro + '</div>' + tokenLine +
       '<div class="verify-bar" data-clkn-avoid="1"><button class="btn" id="verifyBtn">VERIFY ON-CHAIN</button><span class="verify-note" id="verifyNote">' + receipts + ' receipt' + (receipts === 1 ? '' : 's') + ' on this page. Press to re-check every signature against Solana, from your browser.</span></div></div>' +
-      '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Check a wallet</div><div class="fact">Paste any address to see what it received in this program, with the transaction' + (one.kind === 'lock-to-earn' ? '' : ' — and, if it was disqualified, the fact that decided it') + '.</div><div class="input-row"><input class="addr-input" id="walletIn" placeholder="Solana wallet address" autocomplete="off" spellcheck="false"/><button class="btn ghost" id="walletBtn">CHECK</button></div><div id="walletOut"></div></div>' +
+      '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Check a wallet</div><div class="fact">Paste any address to see what it received in this program, with the transaction' + (one.kind === 'lock-to-earn' ? '' : ' — and, if it was disqualified, the fact that decided it') + '.</div><div class="input-row"><input class="addr-input" id="walletIn" placeholder="Solana wallet address" aria-label="Solana wallet address" autocomplete="off" spellcheck="false"/><button class="btn ghost" id="walletBtn">CHECK</button></div><div id="walletOut"></div></div>' +
       programCard(one, sym, batchRepro) +
       lessons(one.kind === 'lock-to-earn' ? 'lock-to-earn' : '', v.lessonReads) +
       '<div class="small" data-clkn-avoid="1" style="text-align:center">Raw data: <a class="mono" href="/api/hub/' + esc(v.id) + '">/api/hub/' + esc(v.id) + '</a> · generated ' + ts(v.generatedAt) + '</div>';
