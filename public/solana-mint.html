@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>What A Token Mint Is</title>
+<meta name="description" content="A token isn't 'on' a website or an exchange — the mint account is the token. A real example: two Solana mints sharing a name, one Jupiter-verified with ~45,800 holders, one with 4 — and the impersonator is what a search turns up first."/>
+<meta property="og:title" content="What A Token Mint Is — Cluck Norris"/>
+<meta property="og:description" content="A token isn't 'on' a website or an exchange — the mint account is the token. A real example: two Solana mints sharing a name, one Jupiter-verified with ~45,800 holders, one with 4 — and the impersonator is what a search turns up first."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana/mint"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="What A Token Mint Is — Cluck Norris"/>
+<meta name="twitter:description" content="A token isn't 'on' a website or an exchange — the mint account is the token. A real example: two Solana mints sharing a name, one Jupiter-verified with ~45,800 holders, one with 4 — and the impersonator is what a search turns up first."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:.3px; color:var(--gold); font-weight:400; line-height:1.25; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact + .fact { margin-top:10px; }
+  .fact b, .fact code { color:var(--text); }
+  .fact code { font-family:var(--mono); font-size:.92em; background:rgba(255,255,255,.06); padding:1px 5px; border-radius:4px; word-break:break-word; }
+  /* the impersonation example and the legitimacy guardrail get the same real visual weight the
+     rent page gives its scam card — a distinct red card, not a tucked-away footnote. */
+  .card.scam { background:var(--redbg, rgba(232,30,14,.14)); border:1px solid rgba(232,30,14,.4); }
+  .scam .sec-title { color:#FCA5A5; }
+  .scam .fact { color:#FBD5D0; }
+  .scam .fact b { color:#FEE2E0; }
+  .scam .stage-row { border-top-color:rgba(255,255,255,.08); }
+  .stage-row { padding:12px 0; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .stage-row:first-of-type { border-top:none; padding-top:0; }
+  .stage-name { font-family:var(--disp); font-weight:400; font-size:15px; color:var(--text); margin-bottom:8px; }
+  .stage-vals { display:flex; flex-wrap:wrap; gap:10px 20px; }
+  .stage-val { min-width:150px; flex:1 1 150px; }
+  .stage-label { display:block; font-size:11px; letter-spacing:1px; color:var(--sub); text-transform:uppercase; margin-bottom:2px; }
+  .stage-num { font-family:var(--mono); font-size:14px; color:var(--text); word-break:break-word; }
+  .footnote { font-size:12.5px; color:var(--sub); line-height:1.6; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  /* a footnote link is often the sole content of its div — not inline in a sentence, so it
+     needs a real 44px tap target. Same expand-with-negative-margin trick as .small a. */
+  .footnote a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .links-card { display:flex; flex-direction:column; }
+  .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
+  .small { font-size:12px; color:var(--sub); }
+  /* a standalone link inside a .small line still needs a real 44px tap target — same
+     expand-with-negative-margin trick public/hub-glossary.html / solana-rent.html use. */
+  .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/solana" data-clkn-avoid="1">← THE SOLANA ROOM</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">What a token mint is</h1>
+    <p data-clkn-avoid="1">THE ONE ADDRESS THAT DEFINES A TOKEN</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as
+  // public/hub-glossary.html / public/solana-room.html / public/solana-rent.html: a curated dict
+  // lookup over window.CLKN_I18N.dict, English literal on a miss, no machine-translation fallback.
+  // scripts/i18n-audit.cjs's Hub-pages gate and scripts/solana-room-test.cjs both scan this file's
+  // <script> block for every literal passed to t() and require it in all six dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  // ── The two real mint addresses this page's example depends on — verbatim, checked twice.
+  // A typo'd mint address on a page whose whole point is "check the address, not the name" would
+  // be its own disaster (see scripts/solana-room-test.cjs's exact-match assertion on both).
+  var SKR_REAL_MINT = "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3";
+  var SKR_FAKE_MINT = "79dd8EvWuGjPTnTMMBoY6Nqtdw5u1cXaGh4azuLGjiAj";
+
+  function render() {
+    var html = '';
+
+    html += '<div class="card"><div class="intro">' + esc(t("A token isn't \"on\" Jupiter, or \"on\" a chart site, the way an app is on your phone's home screen. Every token on Solana has exactly one place its identity actually lives: an account called the mint. Here's what that account holds, what it doesn't prove, and a real example of two tokens sharing a name.")) + '</div></div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('The mint account is the token')) + '</div>';
+    html += '<div class="fact">' + esc(t("A mint is an account — the same kind of thing your own wallet address is, just one whose job is defining a token instead of holding a personal balance. Its own address, one long string, is the token's actual identity on-chain.")) + '</div>';
+    html += '<div class="fact">' + esc(t('Every exchange, wallet, and chart site keys off that one address behind the scenes. The name and picture you see next to a price are just what a listing chose to display beside it.')) + '</div>';
+    html += '<div class="footnote"><a href="/solana/wallet">' + esc(t('What an account actually is, covered on the previous page →')) + '</a></div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Name and symbol are metadata — and metadata is just a label')) + '</div>';
+    html += '<div class="fact">' + esc(t("A token's name, ticker symbol, and logo are stored as metadata: information anyone holding a few cents of SOL can attach to a brand-new mint, worded however they like. Nothing on Solana checks it against anything real.")) + '</div>';
+    html += '<div class="fact">' + esc(t('That means two completely unrelated mints — different addresses, different creators, zero connection to each other — can legitimately display the identical name and the identical ticker symbol. The chain has no rule against it, and that is exactly how impersonation works.')) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="impersonation-example">';
+    html += '<div class="sec-title">' + esc(t('A real example: two mints, one name')) + '</div>';
+    html += '<div class="fact">' + esc(t('At the time this was written, a plain web search for the SKR token turned up exactly this situation.')) + '</div>';
+    html += '<div class="stage-row"><div class="stage-name">' + esc(t('SKR — the official mint')) + '</div>' +
+      '<div class="stage-vals">' +
+      '<div class="stage-val"><span class="stage-label">' + esc(t('Mint address')) + '</span><span class="stage-num">' + esc(SKR_REAL_MINT) + '</span></div>' +
+      '<div class="stage-val"><span class="stage-label">' + esc(t('Registry status')) + '</span><span class="stage-num">' + esc(t('Jupiter-verified')) + '</span></div>' +
+      '<div class="stage-val"><span class="stage-label">' + esc(t('Holders')) + '</span><span class="stage-num">' + esc('~45,800') + '</span></div>' +
+      '</div></div>';
+    html += '<div class="stage-row"><div class="stage-name">' + esc(t('"Seeker | Solana Mobile👇" — an impersonator mint')) + '</div>' +
+      '<div class="stage-vals">' +
+      '<div class="stage-val"><span class="stage-label">' + esc(t('Mint address')) + '</span><span class="stage-num">' + esc(SKR_FAKE_MINT) + '</span></div>' +
+      '<div class="stage-val"><span class="stage-label">' + esc(t('Registry status')) + '</span><span class="stage-num">' + esc(t('Unverified, no market cap')) + '</span></div>' +
+      '<div class="stage-val"><span class="stage-label">' + esc(t('Holders')) + '</span><span class="stage-num">' + esc('4') + '</span></div>' +
+      '</div></div>';
+    html += '<div class="fact" style="margin-top:2px">' + esc(t("The impersonator mint is the one that came up first in a plain web search — not the real one. This isn't a claim that either mint is worth buying; it's the clearest publicly checkable proof that a name proves nothing. Only the mint address does.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Decimals')) + '</div>';
+    html += '<div class="fact">' + esc(t("Decimals set how finely a token divides — how many places sit to the right of the decimal point in its smallest unit. It's fixed once, at creation, and it's purely a display and math setting. It says nothing about whether a token is legitimate: the SKR mint above uses 6 decimals, and plenty of established tokens use 6, 8, or 9.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Supply and mint authority — can more be created?')) + '</div>';
+    html += '<div class="fact">' + esc(t('Supply is how many units of a token currently exist, read straight off the mint account. Whether that number can grow is a separate question, answered by a different field: the mint authority.')) + '</div>';
+    html += '<div class="fact">' + esc(t("The mint authority is whichever account is allowed to create more of a token, at any time, with no announcement required. If a mint's authority has been permanently given up, no more of that token can ever be created — and that's checkable on-chain. If it hasn't, more can be minted whenever that authority chooses, no matter what a description or a website says.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Freeze authority')) + '</div>';
+    html += '<div class="fact">' + esc(t('A mint can also carry a freeze authority: an account allowed to freeze any individual token account for that mint, blocking that holder from moving their tokens — without touching total supply or anyone else\'s balance.')) + '</div>';
+    html += '<div class="fact">' + esc(t('Like the mint authority, this is a flag on the mint account, invisible in a name, a logo, or a price chart. The only way to know whether one exists, or who holds it, is to read the mint account itself.')) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="legitimacy-guardrail">';
+    html += '<div class="sec-title">' + esc(t("A token's legitimacy is never provable from its metadata")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t('None of this — a name, a logo, a slick website, a big number next to "market cap" — proves who controls a mint\'s authorities, who holds the supply, or whether the token in front of you is the one you meant to buy. The chain shows what these values are. It doesn\'t show who\'s behind them, unless a launchpad or registry says so directly — and even then, that\'s the registry\'s claim, not a guarantee.')) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card links-card">';
+    html += '<a href="/wallet-checkup">' + esc(t("Check a mint's authorities and your own approvals — free, read-only, no signup →")) + '</a>';
+    html += '<a href="/autopsy">' + esc(t('A deeper forensic read on any mint → Token Autopsy')) + '</a>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Sources')) + '</div>';
+    html += '<div class="small"><a href="https://solana.com/docs/tokens/basics" target="_blank" rel="noopener">' + esc(t('SPL Token Basics — what a mint account is, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/docs/tokens/basics/create-mint" target="_blank" rel="noopener">' + esc(t('Create a Token Mint — decimals, mint authority, freeze authority, on solana.com →')) + '</a></div>';
+    html += '</div>';
+
+    html += '<div class="small" style="text-align:center"><a href="/solana">' + esc(t('Back to the Solana Room →')) + '</a></div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

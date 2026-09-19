@@ -1,22 +1,26 @@
 #!/usr/bin/env node
 "use strict";
 // The Solana Room (CLAUDE.md) — a public, no-wallet reference room on how Solana actually works.
-// This increment ships the room shell (/solana) plus one full page, the rent page (/solana/rent,
-// "The deposit you didn't know you made"). Boots the REAL server with a throwaway DATA_DIR on a
-// no-build boot (no `npm run build` has run — CLAUDE.md: public/ is only served through the vite
-// build's copy in dist/, so both pages need their own explicit app.get route or they 404 here)
-// and asserts:
+// Ships the room shell (/solana) plus three full pages: the rent page (/solana/rent, "The
+// deposit you didn't know you made"), the wallet page (/solana/wallet, "What your wallet
+// actually holds") and the mint page (/solana/mint, "What a token mint is"). Boots the REAL
+// server with a throwaway DATA_DIR on a no-build boot (no `npm run build` has run — CLAUDE.md:
+// public/ is only served through the vite build's copy in dist/, so every page needs its own
+// explicit app.get route or they 404 here) and asserts:
 //
-//   (a) both routes serve 200 on a no-build boot;
-//   (b) the room page links to the rent page;
+//   (a) all four routes serve 200 on a no-build boot;
+//   (b) the room page links to all three topic pages;
 //   (c) the rent page carries a distinct scam-warning block and the "not an airdrop" statement;
-//   (d) every literal string passed to this page's own t() i18n helper, on EITHER page, exists
-//       in all six curated dictionaries (public/i18n/<lang>.json) — extracted the same way
-//       scripts/i18n-audit.cjs's Hub-pages gate does (a literal string immediately inside a
-//       t(...)/tf(...) call, scoped to <script> blocks);
-//   (e) no forbidden word/phrase appears on either page: no yield/APR/APY framing, nothing about
-//       Normie Quest or Wallet Watch, no mention of Nomadz, and nothing about the Solana
-//       Foundation or ETFs (this increment's explicit scope limits).
+//   (d) every literal string passed to this page's own t() i18n helper, on ANY of the four
+//       pages, exists in all six curated dictionaries (public/i18n/<lang>.json) — extracted the
+//       same way scripts/i18n-audit.cjs's Hub-pages gate does (a literal string immediately
+//       inside a t(...)/tf(...) call, scoped to <script> blocks);
+//   (e) no forbidden word/phrase appears on any of the four pages: no yield/APR/APY framing,
+//       nothing about Normie Quest or Wallet Watch, no mention of Nomadz, and nothing about the
+//       Solana Foundation or ETFs (this increment's explicit scope limits);
+//   (f) the mint page's two example mint addresses (the real SKR mint and its impersonator)
+//       appear byte-for-byte exactly as given — a typo'd address on a page about impersonation
+//       would be its own disaster.
 //
 // Usage: node scripts/solana-room-test.cjs [baseUrl]
 // Env:   SOLANA_ROOM_TEST_PORT (default 3601, inside the reserved 3600-3609 test-server range)
@@ -68,8 +72,16 @@ function extractJsTFCalls(raw) {
   return keys;
 }
 
-const PAGE_FILES = ["solana-room.html", "solana-rent.html"];
+const PAGE_FILES = ["solana-room.html", "solana-rent.html", "solana-wallet.html", "solana-mint.html"];
 const LANGS = ["es", "hi", "it", "pt", "vi", "zh"];
+
+// The mint page's real, verifiable example (task brief, verified against docs/SEEKER_APP_PLAN.md
+// §7): the official SKR mint (Jupiter-verified, ~45.8k holders) and the impersonator mint that a
+// plain web search surfaced first (unverified, 4 holders, no market cap). Exact-match, not a
+// substring/case-insensitive check — a single swapped character here would defeat the page's
+// entire point.
+const SKR_REAL_MINT = "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3";
+const SKR_FAKE_MINT = "79dd8EvWuGjPTnTMMBoY6Nqtdw5u1cXaGh4azuLGjiAj";
 
 // FORBIDDEN — this increment's explicit scope limits (task brief, not the broader hub-trust
 // list): no yield/APR/APY framing, nothing about Normie Quest reward terms, never mention Wallet
@@ -110,9 +122,9 @@ const FORBIDDEN = [
 
   console.log(`\nThe Solana Room — ${BASE}\n`);
 
-  // ── (a) both routes serve 200 on a no-build boot ─────────────────────────────────────────────
-  console.log("(a) both routes serve 200 on a no-build boot\n");
-  let roomText = "", rentText = "";
+  // ── (a) all four routes serve 200 on a no-build boot ─────────────────────────────────────────
+  console.log("(a) all four routes serve 200 on a no-build boot\n");
+  let roomText = "", rentText = "", walletText = "", mintText = "";
   {
     const r = await fetch(`${BASE}/solana`);
     ok("GET /solana -> 200", r.status === 200, "got " + r.status);
@@ -125,10 +137,29 @@ const FORBIDDEN = [
     rentText = await r.text();
     ok("GET /solana/rent body is non-trivial HTML", rentText.length > 500 && /<html/i.test(rentText));
   }
+  {
+    const r = await fetch(`${BASE}/solana/wallet`);
+    ok("GET /solana/wallet -> 200", r.status === 200, "got " + r.status);
+    walletText = await r.text();
+    ok("GET /solana/wallet body is non-trivial HTML", walletText.length > 500 && /<html/i.test(walletText));
+  }
+  {
+    const r = await fetch(`${BASE}/solana/mint`);
+    ok("GET /solana/mint -> 200", r.status === 200, "got " + r.status);
+    mintText = await r.text();
+    ok("GET /solana/mint body is non-trivial HTML", mintText.length > 500 && /<html/i.test(mintText));
+  }
 
-  // ── (b) the room links to the rent page ─────────────────────────────────────────────────────
-  console.log("\n(b) the room page links to the rent page\n");
-  ok('room page contains href="/solana/rent"', /href=["']\/solana\/rent["']/.test(roomText));
+  // ── (b) the room links to all three topic pages ─────────────────────────────────────────────
+  // The room page renders its "available now" cards from an AVAILABLE_NOW array (each entry's
+  // `href` field feeds the anchor tag at render time), so the literal attribute text
+  // `href="/solana/rent"` never appears in the unrendered source the way a hand-written anchor
+  // would — this checks the array's own href fields instead, which is what actually drives the
+  // rendered link.
+  console.log("\n(b) the room page links to all three topic pages\n");
+  ok("room page's AVAILABLE_NOW array points at /solana/rent", /href:\s*['"]\/solana\/rent['"]/.test(roomText));
+  ok("room page's AVAILABLE_NOW array points at /solana/wallet", /href:\s*['"]\/solana\/wallet['"]/.test(roomText));
+  ok("room page's AVAILABLE_NOW array points at /solana/mint", /href:\s*['"]\/solana\/mint['"]/.test(roomText));
 
   // ── (c) the rent page carries the scam-warning block and the "not an airdrop" statement ─────
   console.log('\n(c) the rent page carries the scam-warning block and the "not an airdrop" statement\n');
@@ -141,6 +172,45 @@ const FORBIDDEN = [
   ok("rent page links to /firepit as the honest next step for closing an account", /href=["']\/firepit["']/.test(rentText));
   ok("rent page cites solana.com/upgrades/reduced-rent", rentText.includes("https://solana.com/upgrades/reduced-rent"));
   ok("rent page cites solana.com/docs/tokens/advanced/withdraw-excess-lamports", rentText.includes("https://solana.com/docs/tokens/advanced/withdraw-excess-lamports"));
+
+  // ── the wallet page and the mint page carry their required content ─────────────────────────
+  console.log("\nthe wallet page and the mint page carry their required content\n");
+  ok('wallet page has a data-section="seed-phrase" block', /data-section=["']seed-phrase["']/.test(walletText));
+  ok('wallet page has a data-section="connecting" block', /data-section=["']connecting["']/.test(walletText));
+  ok("wallet page cites solana.com/docs/core/accounts", walletText.includes("https://solana.com/docs/core/accounts"));
+  ok("wallet page cites solana.com/docs/core/transactions", walletText.includes("https://solana.com/docs/core/transactions"));
+  ok("wallet page links to /wallet-checkup", /href=["']\/wallet-checkup["']/.test(walletText));
+  ok("wallet page links back to /solana/rent", /href=["']\/solana\/rent["']/.test(walletText));
+  ok('mint page has a data-section="impersonation-example" block', /data-section=["']impersonation-example["']/.test(mintText));
+  ok('mint page has a data-section="legitimacy-guardrail" block', /data-section=["']legitimacy-guardrail["']/.test(mintText));
+  ok("mint page cites solana.com/docs/tokens/basics", mintText.includes("https://solana.com/docs/tokens/basics"));
+  ok("mint page cites solana.com/docs/tokens/basics/create-mint", mintText.includes("https://solana.com/docs/tokens/basics/create-mint"));
+  ok("mint page links to /wallet-checkup", /href=["']\/wallet-checkup["']/.test(mintText));
+  ok("mint page links to /autopsy", /href=["']\/autopsy["']/.test(mintText));
+  ok("mint page links back to /solana/wallet", /href=["']\/solana\/wallet["']/.test(mintText));
+
+  // ── (f) the mint page's two example mint addresses appear exactly as given ─────────────────
+  console.log("\n(f) the mint page's two example mint addresses appear exactly as given\n");
+  ok("mint page contains the real SKR mint address, byte-for-byte", mintText.includes(SKR_REAL_MINT));
+  ok("mint page contains the impersonator mint address, byte-for-byte", mintText.includes(SKR_FAKE_MINT));
+  ok("the two example mint addresses are not the same string", SKR_REAL_MINT !== SKR_FAKE_MINT);
+
+  // ── the room page moved both new topics out of "coming next" ───────────────────────────────
+  // Parses the two source arrays directly (AVAILABLE_NOW / COMING_NEXT) rather than eyeballing
+  // string position, so this can't be fooled by an unrelated literal occurring earlier in the
+  // file — it checks which ARRAY each topic's title literal actually sits inside.
+  console.log('\nthe room page moved both new topics into "available now", not "coming next"\n');
+  {
+    const availableBlock = (/var AVAILABLE_NOW = \[([\s\S]*?)\n\s*\];/.exec(roomText) || [])[1] || "";
+    const comingBlock = (/var COMING_NEXT = \[([\s\S]*?)\n\s*\];/.exec(roomText) || [])[1] || "";
+    ok("room page source has a parseable AVAILABLE_NOW array", availableBlock.length > 0);
+    ok("room page source has a parseable COMING_NEXT array", comingBlock.length > 0);
+    ok('"What your wallet actually holds" is in AVAILABLE_NOW', availableBlock.includes("What your wallet actually holds"));
+    ok('"What a token mint is" is in AVAILABLE_NOW', availableBlock.includes("What a token mint is"));
+    ok('"What your wallet actually holds" is NOT in COMING_NEXT', !comingBlock.includes("What your wallet actually holds"));
+    ok('"What a token mint is" is NOT in COMING_NEXT', !comingBlock.includes("What a token mint is"));
+    ok('three topics remain in COMING_NEXT', (comingBlock.match(/title:/g) || []).length === 3, "found " + (comingBlock.match(/title:/g) || []).length);
+  }
 
   // ── the rent numbers — re-derived independently here too, not just eyeballed ────────────────
   console.log("\nrent numbers (re-derived independently)\n");
@@ -164,8 +234,8 @@ const FORBIDDEN = [
   ok("step 2 surplus is 550,840 lamports", surplus2 === 550840, String(surplus2));
   ok("all-five surplus is 1,835,352 lamports", surplusAll === 1835352, String(surplusAll));
 
-  // ── (d) every t() key on both pages exists in all six dictionaries ──────────────────────────
-  console.log("\n(d) every t() key on both pages exists in all six curated dictionaries\n");
+  // ── (d) every t() key on all four pages exists in all six dictionaries ──────────────────────
+  console.log("\n(d) every t() key on all four pages exists in all six curated dictionaries\n");
   const dicts = {};
   for (const lang of LANGS) {
     try { dicts[lang] = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${lang}.json`), "utf8")); }
@@ -176,7 +246,7 @@ const FORBIDDEN = [
     const raw = fs.readFileSync(path.join(ROOT, "public", f), "utf8");
     for (const k of extractJsTFCalls(raw)) allKeys.add(k);
   }
-  ok("at least one t() key was found across both pages", allKeys.size > 30, String(allKeys.size));
+  ok("at least one t() key was found across all four pages", allKeys.size > 30, String(allKeys.size));
   let keyGaps = 0;
   for (const key of allKeys) {
     for (const lang of LANGS) {
@@ -189,9 +259,14 @@ const FORBIDDEN = [
   }
   ok(`every t() key (${allKeys.size} unique) exists in all six dictionaries`, keyGaps === 0, keyGaps + " gap(s)");
 
-  // ── (e) no forbidden word/phrase on either page ─────────────────────────────────────────────
-  console.log("\n(e) no forbidden word or phrase appears on either page\n");
-  for (const { fileText, label } of [{ fileText: roomText, label: "/solana" }, { fileText: rentText, label: "/solana/rent" }]) {
+  // ── (e) no forbidden word/phrase on any of the four pages ───────────────────────────────────
+  console.log("\n(e) no forbidden word or phrase appears on any of the four pages\n");
+  for (const { fileText, label } of [
+    { fileText: roomText, label: "/solana" },
+    { fileText: rentText, label: "/solana/rent" },
+    { fileText: walletText, label: "/solana/wallet" },
+    { fileText: mintText, label: "/solana/mint" },
+  ]) {
     for (const { name, re } of FORBIDDEN) {
       const m = fileText.match(re);
       ok(`${label}: no "${name}"`, !m, m ? "found near: " + fileText.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, " ") : "");

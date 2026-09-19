@@ -110,8 +110,13 @@ already exist (hold CLKN, or pay the SOL pass). Owner's call, same evening.
   impersonator — unverified, 4 holders, no market cap, organic score 0, and it is what surfaced
   first in a web search. The real one is Jupiter-verified with ~45.8k holders. **Never take a mint
   from a search result; check the registry and the chain.**
-  Factual note, no interpretation: on-chain supply is ~10.6B and the mint authority is still set,
-  where the public description says a fixed 10B. Irrelevant to a holdings check; know it anyway.
+  ⚠️ **Correction, 2026-09-19:** an earlier version of this doc said SKR's public description
+  claims a "fixed 10B" supply while the chain shows ~10.6B with an active mint authority, implying
+  a discrepancy. **There is none.** solanamobile.com/skr states an *initial* total supply of 10
+  billion and publishes a linear inflation schedule (10% in year one, decaying 25% annually,
+  terminal 2%). ~10.6B in circulation with an active mint authority is exactly what that predicts.
+  The "fixed" wording came from a search summary, not from Solana Mobile, and was wrong. It was
+  also about to ship onto a public page; it did not.
 - **$50 worth, live-priced, never hardcoded** — same rule as the CLKN threshold.
 - **Same comp criteria as the existing hold**: re-checked at use, fails open when pricing is down.
   No new behaviour to reason about.

@@ -129,6 +129,8 @@ const PAGES = [
   { path: "/hub/glossary", name: "Hub glossary (EE2 — every term and reason code, in plain words)" },
   { path: "/solana", name: "The Solana Room — public reference room shell" },
   { path: "/solana/rent", name: "The Solana Room — rent, explained (the deposit you didn't know you made)" },
+  { path: "/solana/wallet", name: "The Solana Room — what your wallet actually holds" },
+  { path: "/solana/mint", name: "The Solana Room — what a token mint is" },
   { path: "/holders", name: "Holders (CC3 — empty state, no snapshot history yet)" },
   { path: `/holders?mint=${SEED_MINT}`, name: "Holders (CC3 — X7 history + AA3 Compare, seeded)" },
   { path: `/hub/${A11Y_PRINT_PROJECT}/r/${A11Y_PRINT_SIG}?print=1`, name: "Hub receipt print sheet (DD4 — a receipt you can print)" },

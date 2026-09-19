@@ -33,6 +33,8 @@
   .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 10px; color:var(--gold); text-transform:uppercase; }
   .sec-lede { font-size:13px; color:var(--sub); line-height:1.6; margin:-4px 0 12px; }
   .topic-live { display:flex; flex-direction:column; gap:4px; padding:14px 0; }
+  .topic-live:first-of-type { padding-top:0; }
+  .topic-live:not(:first-of-type) { border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
   .topic-live h2 { font-family:var(--disp); font-weight:400; font-size:18px; color:var(--text); }
   .topic-live p { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.6; }
   .topic-live a.cta { display:inline-flex; align-items:center; min-height:44px; margin-top:4px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; font-weight:700; }
@@ -87,25 +89,29 @@
     });
   }
 
-  // The one page shipped this increment, plus the mechanics topics still to come — listed
-  // honestly as "coming next" rather than dead links (CLAUDE.md: public docs must match the
-  // code). Add a topic here, and give it its own page + route, to grow this room.
+  // The pages shipped so far, plus the mechanics topics still to come — listed honestly as
+  // "coming next" rather than dead links (CLAUDE.md: public docs must match the code). Add a
+  // topic here, and give it its own page + route, to grow this room.
+  var AVAILABLE_NOW = [
+    { title: "The deposit you didn't know you made", blurb: 'Solana just started giving back part of a deposit that\'s baked into every token account you own. What it actually is, and the scam it\'s about to invite.', href: '/solana/rent' },
+    { title: "What your wallet actually holds", blurb: "A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why.", href: '/solana/wallet' },
+    { title: 'What a token mint is', blurb: "The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it.", href: '/solana/mint' },
+  ];
   var COMING_NEXT = [
-    { title: 'What your wallet actually holds', blurb: "A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why." },
-    { title: 'What a token mint is', blurb: "The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it." },
     { title: 'What happens when you buy', blurb: 'The accounts, instructions and swaps that run behind one tap of a buy button.' },
     { title: 'What a transfer really does', blurb: 'Why sending someone a token can silently create a brand-new account for them — and who ends up paying for it.' },
     { title: "What you're actually paying for in fees", blurb: 'Base fee, priority fee, and rent are three different charges wearing one name. Here\'s which is which.' },
   ];
 
-  // COMING_NEXT's title/blurb strings are read through a variable above (t(topic.title)), which
-  // the regex-based audits (scripts/i18n-audit.cjs's Hub-pages gate, scripts/solana-room-test.cjs)
-  // cannot see — they only ever match a LITERAL string immediately inside t(...), documented in
-  // i18n-audit.cjs's own header. This function lists every one of those same strings as literal
-  // t() calls purely so the gate sees them; it is never called. Same technique as hub-glossary.html's
-  // __glossaryGatedStrings — keep this in step with COMING_NEXT above.
+  // AVAILABLE_NOW's and COMING_NEXT's title/blurb strings are read through a variable above
+  // (t(topic.title)), which the regex-based audits (scripts/i18n-audit.cjs's Hub-pages gate,
+  // scripts/solana-room-test.cjs) cannot see — they only ever match a LITERAL string immediately
+  // inside t(...), documented in i18n-audit.cjs's own header. This function lists every one of
+  // those same strings as literal t() calls purely so the gate sees them; it is never called.
+  // Same technique as hub-glossary.html's __glossaryGatedStrings — keep this in step with
+  // AVAILABLE_NOW/COMING_NEXT above.
   function __solanaRoomGatedStrings() { return [
-    t('What your wallet actually holds'), t("A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why."),
+    t("What your wallet actually holds"), t("A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why."),
     t('What a token mint is'), t("The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it."),
     t('What happens when you buy'), t('The accounts, instructions and swaps that run behind one tap of a buy button.'),
     t('What a transfer really does'), t('Why sending someone a token can silently create a brand-new account for them — and who ends up paying for it.'),
@@ -120,11 +126,15 @@
 
     html += '<div class="card">';
     html += '<div class="sec-title">' + esc(t('Available now')) + '</div>';
-    html += '<div class="topic-live">';
-    html += '<h2>' + esc(t("The deposit you didn't know you made")) + '</h2>';
-    html += '<p>' + esc(t('Solana just started giving back part of a deposit that\'s baked into every token account you own. What it actually is, and the scam it\'s about to invite.')) + '</p>';
-    html += '<a class="cta" href="/solana/rent">' + esc(t('Read it →')) + '</a>';
-    html += '</div></div>';
+    for (var j = 0; j < AVAILABLE_NOW.length; j++) {
+      var live = AVAILABLE_NOW[j];
+      html += '<div class="topic-live">';
+      html += '<h2>' + esc(t(live.title)) + '</h2>';
+      html += '<p>' + esc(t(live.blurb)) + '</p>';
+      html += '<a class="cta" href="' + esc(live.href) + '">' + esc(t('Read it →')) + '</a>';
+      html += '</div>';
+    }
+    html += '</div>';
 
     html += '<div class="card">';
     html += '<div class="sec-title">' + esc(t('Coming next to this room')) + '</div>';
