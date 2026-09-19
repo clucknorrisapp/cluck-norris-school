@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-18T14:38:01.036Z",
+  "generatedAt": "2026-09-19T21:12:02.251Z",
   "courses": [
     {
       "id": "fundamentals",
@@ -906,6 +906,71 @@
               "q": "You lock tokens into a rewards program. Is locking the same thing as selling them?",
               "answer": "No — a lock immobilizes tokens for a set time under published terms; nothing is sold, and you own them the whole time",
               "why": "A lock is a public promise not to move tokens for a period — an on-chain escrow you can go open and inspect yourself. It is not a transfer of ownership or a swap for something else. You remain the owner the entire time; you've only committed not to touch them until the date, which is exactly what makes the promise checkable in the first place."
+            }
+          ]
+        },
+        {
+          "id": "rent",
+          "title": "The Deposit You Didn't Know You Made",
+          "icon": "🏦",
+          "belt": "REGISTRAR",
+          "intro": "Open a token account and your wallet balance drops by a fraction of a SOL, before you've bought anything. That's not a fee. It's a rent-exempt deposit — Solana requires it so the account's data stays paid for, and it comes back to you when you're done with the account. Nobody explains this the first time it happens, so it feels like money vanishing into the network. It never left. It's still yours.",
+          "concepts": [
+            {
+              "term": "Rent-Exempt Deposit",
+              "def": "A refundable amount of SOL locked when an account is created — not a fee, not spent. It's sized to the account's data, and it's returned to you when the account is closed."
+            },
+            {
+              "term": "Billable Bytes",
+              "def": "What actually gets priced: a standard SPL token account holds 165 bytes of data, plus a fixed 128-byte account-overhead allowance Solana also charges rent on — 293 billable bytes in total."
+            },
+            {
+              "term": "SIMD-0437 (Reduced Rent)",
+              "def": "The network upgrade cutting the per-byte rate in stages — live on mainnet since Sep 3, 2026, with the remaining steps expected around November 2026 — heading toward roughly a 90% cut from the original rate."
+            },
+            {
+              "term": "Closing an Account",
+              "def": "Returns the account's ENTIRE current rent-exempt deposit to its owner. It only makes sense once you're actually finished holding that token — you'd need to pay the deposit again to reopen it."
+            },
+            {
+              "term": "WithdrawExcessLamports",
+              "def": "A newer instruction that pulls out only the surplus above today's required minimum, without closing the account or touching your token balance. The account owner signs it, and it can never take the account below the current minimum."
+            },
+            {
+              "term": "The 'Free SOL' Scam",
+              "def": "A predictable wave of fake claim sites cashing in on real news about the rent cut. Nobody needs your seed phrase, a token delegate approval, or a SOL 'unlock fee' to hand back a deposit that was always yours."
+            }
+          ],
+          "questions": [
+            {
+              "q": "You open a fresh token account and a small amount of SOL leaves your wallet immediately, before any trade happens. What is that SOL?",
+              "answer": "A refundable rent-exempt deposit sized to the account's data",
+              "why": "It's a rent-exempt deposit, not a fee — the network requires it so the account's data stays paid for. It's sized to the account, and it's still yours: you get it back when you close the account."
+            },
+            {
+              "q": "A standard SPL token account holds 165 bytes of data. Why is the rent-exempt deposit actually priced on 293 bytes?",
+              "answer": "Solana also charges rent on a fixed 128-byte account-overhead allowance, on top of the 165 bytes of data",
+              "why": "165 bytes of token-account data plus a fixed 128-byte account-overhead allowance Solana also charges rent on equals 293 billable bytes — the number the deposit is actually calculated against."
+            },
+            {
+              "q": "Solana is cutting the rent-exempt rate in stages. A headline says 'hundreds of thousands of SOL unlocked.' What is that number actually counting?",
+              "answer": "The whole network's accounts added together — your own share is a fraction of a cent",
+              "why": "Nothing new is being created. The rate drop applies across every token account on the network, and adding all of that up produces a big-sounding total — your own share of it is currently a fraction of a cent per account."
+            },
+            {
+              "q": "You're completely done with a token and will never hold it again. What does closing that account return to you?",
+              "answer": "The account's entire current rent-exempt deposit",
+              "why": "Closing an account you're finished with returns the WHOLE rent-exempt deposit it's currently holding — worth more per account than only pulling out the surplus."
+            },
+            {
+              "q": "You still hold a token and want the account to stay open, but rates have dropped since you opened it. What does WithdrawExcessLamports actually do?",
+              "answer": "Moves out only the surplus above today's required minimum, without closing the account or touching your token balance",
+              "why": "It's a narrower tool than closing an account: it withdraws only the surplus above the current minimum, leaves the account open, never touches your token balance, and can never take the account below what's currently required. The account owner has to sign it."
+            },
+            {
+              "q": "A site tells you to sign a message and approve a token delegate to 'claim your reduced-rent refund.' What is actually happening?",
+              "answer": "This is the exact scam the rent cut invites — nobody needs your seed phrase, a delegate approval, or an 'unlock fee' to return a deposit that was already yours",
+              "why": "This is the predictable next wave — the same way every past airdrop bred a wave of fake claim pages. Real amounts today are fractions of a cent per account. Anything asking for a delegate, a seed phrase, or SOL up front to 'unlock' your own money is lying. Close the tab."
             }
           ]
         }
