@@ -50,6 +50,9 @@
   .stage-label { display:block; font-size:11px; letter-spacing:1px; color:var(--sub); text-transform:uppercase; margin-bottom:2px; }
   .stage-num { font-family:var(--mono); font-size:14px; color:var(--text); word-break:break-word; }
   .footnote { font-size:12.5px; color:var(--sub); line-height:1.6; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  /* a footnote link is often the sole content of its div — not inline in a sentence, so it
+     needs a real 44px tap target. Same expand-with-negative-margin trick as .small a. */
+  .footnote a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
   .links-card { display:flex; flex-direction:column; }
   .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
   .small { font-size:12px; color:var(--sub); }
@@ -114,7 +117,7 @@
     html += '<div class="sec-title">' + esc(t('The mint account is the token')) + '</div>';
     html += '<div class="fact">' + esc(t("A mint is an account — the same kind of thing your own wallet address is, just one whose job is defining a token instead of holding a personal balance. Its own address, one long string, is the token's actual identity on-chain.")) + '</div>';
     html += '<div class="fact">' + esc(t('Every exchange, wallet, and chart site keys off that one address behind the scenes. The name and picture you see next to a price are just what a listing chose to display beside it.')) + '</div>';
-    html += '<div class="footnote"><a href="/solana/wallet" style="color:var(--cyan,#67E8F9);text-decoration:none">' + esc(t('What an account actually is, covered on the previous page →')) + '</a></div>';
+    html += '<div class="footnote"><a href="/solana/wallet">' + esc(t('What an account actually is, covered on the previous page →')) + '</a></div>';
     html += '</div>';
 
     html += '<div class="card">';
