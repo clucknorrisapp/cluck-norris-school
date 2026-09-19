@@ -17186,6 +17186,15 @@ app.get("/solana/wallet", (req, res) => {
 app.get("/solana/mint", (req, res) => {
   res.sendFile(join(__dirname, "public", "solana-mint.html"));
 });
+app.get("/solana/buying", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-buying.html"));
+});
+app.get("/solana/transfers", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-transfers.html"));
+});
+app.get("/solana/fees", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-fees.html"));
+});
 
 // ── Project Burn — burn PART of your own supply, on purpose, with a public receipt ──
 // ============================== LP RESCUE ====================================

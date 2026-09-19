@@ -1,26 +1,31 @@
 #!/usr/bin/env node
 "use strict";
 // The Solana Room (CLAUDE.md) — a public, no-wallet reference room on how Solana actually works.
-// Ships the room shell (/solana) plus three full pages: the rent page (/solana/rent, "The
-// deposit you didn't know you made"), the wallet page (/solana/wallet, "What your wallet
-// actually holds") and the mint page (/solana/mint, "What a token mint is"). Boots the REAL
-// server with a throwaway DATA_DIR on a no-build boot (no `npm run build` has run — CLAUDE.md:
-// public/ is only served through the vite build's copy in dist/, so every page needs its own
-// explicit app.get route or they 404 here) and asserts:
+// Ships the room shell (/solana) plus six full pages: the rent page (/solana/rent, "The deposit
+// you didn't know you made"), the wallet page (/solana/wallet, "What your wallet actually
+// holds"), the mint page (/solana/mint, "What a token mint is"), the buying page (/solana/buying,
+// "What actually happens when you buy"), the transfers page (/solana/transfers, "Sending tokens,
+// and why the first one costs extra") and the fees page (/solana/fees, "What a transaction
+// actually costs"). Boots the REAL server with a throwaway DATA_DIR on a no-build boot (no
+// `npm run build` has run — CLAUDE.md: public/ is only served through the vite build's copy in
+// dist/, so every page needs its own explicit app.get route or they 404 here) and asserts:
 //
-//   (a) all four routes serve 200 on a no-build boot;
-//   (b) the room page links to all three topic pages;
+//   (a) all seven routes (the room + six topic pages) serve 200 on a no-build boot;
+//   (b) the room page links to all six topic pages, and COMING_NEXT is now empty (all six
+//       tier-1 topics have shipped);
 //   (c) the rent page carries a distinct scam-warning block and the "not an airdrop" statement;
-//   (d) every literal string passed to this page's own t() i18n helper, on ANY of the four
+//   (d) every literal string passed to this page's own t() i18n helper, on ANY of the seven
 //       pages, exists in all six curated dictionaries (public/i18n/<lang>.json) — extracted the
 //       same way scripts/i18n-audit.cjs's Hub-pages gate does (a literal string immediately
 //       inside a t(...)/tf(...) call, scoped to <script> blocks);
-//   (e) no forbidden word/phrase appears on any of the four pages: no yield/APR/APY framing,
+//   (e) no forbidden word/phrase appears on any of the seven pages: no yield/APR/APY framing,
 //       nothing about Normie Quest or Wallet Watch, no mention of Nomadz, and nothing about the
 //       Solana Foundation or ETFs (this increment's explicit scope limits);
 //   (f) the mint page's two example mint addresses (the real SKR mint and its impersonator)
 //       appear byte-for-byte exactly as given — a typo'd address on a page about impersonation
-//       would be its own disaster.
+//       would be its own disaster;
+//   (g) the buying, transfers and fees pages each carry their required content blocks and cite
+//       solana.com for their factual claims.
 //
 // Usage: node scripts/solana-room-test.cjs [baseUrl]
 // Env:   SOLANA_ROOM_TEST_PORT (default 3601, inside the reserved 3600-3609 test-server range)
@@ -72,7 +77,7 @@ function extractJsTFCalls(raw) {
   return keys;
 }
 
-const PAGE_FILES = ["solana-room.html", "solana-rent.html", "solana-wallet.html", "solana-mint.html"];
+const PAGE_FILES = ["solana-room.html", "solana-rent.html", "solana-wallet.html", "solana-mint.html", "solana-buying.html", "solana-transfers.html", "solana-fees.html"];
 const LANGS = ["es", "hi", "it", "pt", "vi", "zh"];
 
 // The mint page's real, verifiable example (task brief, verified against docs/SEEKER_APP_PLAN.md
@@ -122,9 +127,9 @@ const FORBIDDEN = [
 
   console.log(`\nThe Solana Room — ${BASE}\n`);
 
-  // ── (a) all four routes serve 200 on a no-build boot ─────────────────────────────────────────
-  console.log("(a) all four routes serve 200 on a no-build boot\n");
-  let roomText = "", rentText = "", walletText = "", mintText = "";
+  // ── (a) all seven routes serve 200 on a no-build boot ────────────────────────────────────────
+  console.log("(a) all seven routes serve 200 on a no-build boot\n");
+  let roomText = "", rentText = "", walletText = "", mintText = "", buyingText = "", transfersText = "", feesText = "";
   {
     const r = await fetch(`${BASE}/solana`);
     ok("GET /solana -> 200", r.status === 200, "got " + r.status);
@@ -149,17 +154,38 @@ const FORBIDDEN = [
     mintText = await r.text();
     ok("GET /solana/mint body is non-trivial HTML", mintText.length > 500 && /<html/i.test(mintText));
   }
+  {
+    const r = await fetch(`${BASE}/solana/buying`);
+    ok("GET /solana/buying -> 200", r.status === 200, "got " + r.status);
+    buyingText = await r.text();
+    ok("GET /solana/buying body is non-trivial HTML", buyingText.length > 500 && /<html/i.test(buyingText));
+  }
+  {
+    const r = await fetch(`${BASE}/solana/transfers`);
+    ok("GET /solana/transfers -> 200", r.status === 200, "got " + r.status);
+    transfersText = await r.text();
+    ok("GET /solana/transfers body is non-trivial HTML", transfersText.length > 500 && /<html/i.test(transfersText));
+  }
+  {
+    const r = await fetch(`${BASE}/solana/fees`);
+    ok("GET /solana/fees -> 200", r.status === 200, "got " + r.status);
+    feesText = await r.text();
+    ok("GET /solana/fees body is non-trivial HTML", feesText.length > 500 && /<html/i.test(feesText));
+  }
 
-  // ── (b) the room links to all three topic pages ─────────────────────────────────────────────
+  // ── (b) the room links to all six topic pages ────────────────────────────────────────────────
   // The room page renders its "available now" cards from an AVAILABLE_NOW array (each entry's
   // `href` field feeds the anchor tag at render time), so the literal attribute text
   // `href="/solana/rent"` never appears in the unrendered source the way a hand-written anchor
   // would — this checks the array's own href fields instead, which is what actually drives the
   // rendered link.
-  console.log("\n(b) the room page links to all three topic pages\n");
+  console.log("\n(b) the room page links to all six topic pages\n");
   ok("room page's AVAILABLE_NOW array points at /solana/rent", /href:\s*['"]\/solana\/rent['"]/.test(roomText));
   ok("room page's AVAILABLE_NOW array points at /solana/wallet", /href:\s*['"]\/solana\/wallet['"]/.test(roomText));
   ok("room page's AVAILABLE_NOW array points at /solana/mint", /href:\s*['"]\/solana\/mint['"]/.test(roomText));
+  ok("room page's AVAILABLE_NOW array points at /solana/buying", /href:\s*['"]\/solana\/buying['"]/.test(roomText));
+  ok("room page's AVAILABLE_NOW array points at /solana/transfers", /href:\s*['"]\/solana\/transfers['"]/.test(roomText));
+  ok("room page's AVAILABLE_NOW array points at /solana/fees", /href:\s*['"]\/solana\/fees['"]/.test(roomText));
 
   // ── (c) the rent page carries the scam-warning block and the "not an airdrop" statement ─────
   console.log('\n(c) the rent page carries the scam-warning block and the "not an airdrop" statement\n');
@@ -189,28 +215,83 @@ const FORBIDDEN = [
   ok("mint page links to /autopsy", /href=["']\/autopsy["']/.test(mintText));
   ok("mint page links back to /solana/wallet", /href=["']\/solana\/wallet["']/.test(mintText));
 
+  // ── the buying page carries its required content ────────────────────────────────────────────
+  console.log("\nthe buying page carries its required content\n");
+  ok('buying page has a data-section="not-a-store" block', /data-section=["']not-a-store["']/.test(buyingText));
+  ok('buying page has a data-section="slippage" block', /data-section=["']slippage["']/.test(buyingText));
+  ok('buying page has a data-section="impact-vs-fee" block', /data-section=["']impact-vs-fee["']/.test(buyingText));
+  ok('buying page has a data-section="failed-swap-cost" block', /data-section=["']failed-swap-cost["']/.test(buyingText));
+  ok('buying page has a data-section="tradeable-not-endorsement" block', /data-section=["']tradeable-not-endorsement["']/.test(buyingText));
+  ok("buying page mentions slippage", /slippage/i.test(buyingText));
+  ok("buying page mentions price impact", /price impact/i.test(buyingText));
+  ok("buying page says a failed swap still costs a fee", /still charge|isn't free to attempt|not free to attempt/i.test(buyingText));
+  ok("buying page links to /lp-lab", /href=["']\/lp-lab["']/.test(buyingText));
+  ok("buying page links to /wallet-checkup", /href=["']\/wallet-checkup["']/.test(buyingText));
+  ok("buying page links to /autopsy", /href=["']\/autopsy["']/.test(buyingText));
+  ok("buying page links back to /solana", /href=["']\/solana["']/.test(buyingText));
+  ok("buying page cites solana.com/docs/core/transactions", buyingText.includes("https://solana.com/docs/core/transactions"));
+  ok("buying page cites solana.com/docs/core/fees", buyingText.includes("https://solana.com/docs/core/fees"));
+
+  // ── the transfers page carries its required content ─────────────────────────────────────────
+  console.log("\nthe transfers page carries its required content\n");
+  ok('transfers page has a data-section="account-to-account" block', /data-section=["']account-to-account["']/.test(transfersText));
+  ok('transfers page has a data-section="sol-vs-spl" block', /data-section=["']sol-vs-spl["']/.test(transfersText));
+  ok('transfers page has a data-section="first-transfer-cost" block', /data-section=["']first-transfer-cost["']/.test(transfersText));
+  ok('transfers page has a data-section="memo-warning" block', /data-section=["']memo-warning["']/.test(transfersText));
+  ok('transfers page has a data-section="no-undo" block', /data-section=["']no-undo["']/.test(transfersText));
+  ok("transfers page mentions memo", /memo/i.test(transfersText));
+  ok("transfers page says a transfer is irreversible", /cannot be taken back|is final/i.test(transfersText));
+  ok("transfers page links to /solana/rent", /href=["']\/solana\/rent["']/.test(transfersText));
+  ok("transfers page links back to /solana/wallet or /solana", /href=["'](\/solana\/wallet|\/solana)["']/.test(transfersText));
+  ok("transfers page cites solana.com/docs/tokens/basics/transfer-tokens", transfersText.includes("https://solana.com/docs/tokens/basics/transfer-tokens"));
+  ok("transfers page cites solana.com/docs/tokens/basics/create-token-account", transfersText.includes("https://solana.com/docs/tokens/basics/create-token-account"));
+  ok("transfers page cites solana.com/docs/tokens/extensions", transfersText.includes("https://solana.com/docs/tokens/extensions"));
+
+  // ── the fees page carries its required content ──────────────────────────────────────────────
+  console.log("\nthe fees page carries its required content\n");
+  ok('fees page has a data-section="base-fee" block', /data-section=["']base-fee["']/.test(feesText));
+  ok('fees page has a data-section="priority-fee" block', /data-section=["']priority-fee["']/.test(feesText));
+  ok('fees page has a data-section="compute-units" block', /data-section=["']compute-units["']/.test(feesText));
+  ok('fees page has a data-section="failed-tx-fee" block', /data-section=["']failed-tx-fee["']/.test(feesText));
+  ok('fees page has a data-section="need-sol-to-move-tokens" block', /data-section=["']need-sol-to-move-tokens["']/.test(feesText));
+  ok("fees page states the base fee is 5,000 lamports per signature", /5,000 lamports/.test(feesText));
+  ok("fees page states the compute unit default of 200,000", /200,000/.test(feesText));
+  ok("fees page states the compute unit max of 1,400,000", /1,400,000/.test(feesText));
+  ok("fees page says a failed transaction still costs a fee", /still charged|still cost/i.test(feesText));
+  ok("fees page links back to /solana/rent", /href=["']\/solana\/rent["']/.test(feesText));
+  ok("fees page cites solana.com/docs/core/fees", feesText.includes("https://solana.com/docs/core/fees"));
+  ok("fees page cites solana.com/docs/core/transactions", feesText.includes("https://solana.com/docs/core/transactions"));
+
   // ── (f) the mint page's two example mint addresses appear exactly as given ─────────────────
   console.log("\n(f) the mint page's two example mint addresses appear exactly as given\n");
   ok("mint page contains the real SKR mint address, byte-for-byte", mintText.includes(SKR_REAL_MINT));
   ok("mint page contains the impersonator mint address, byte-for-byte", mintText.includes(SKR_FAKE_MINT));
   ok("the two example mint addresses are not the same string", SKR_REAL_MINT !== SKR_FAKE_MINT);
 
-  // ── the room page moved both new topics out of "coming next" ───────────────────────────────
+  // ── the room page moved all six topics into "available now"; COMING_NEXT is now empty ───────
   // Parses the two source arrays directly (AVAILABLE_NOW / COMING_NEXT) rather than eyeballing
   // string position, so this can't be fooled by an unrelated literal occurring earlier in the
   // file — it checks which ARRAY each topic's title literal actually sits inside.
-  console.log('\nthe room page moved both new topics into "available now", not "coming next"\n');
+  console.log('\nthe room page has all six topics in "available now"; COMING_NEXT is empty\n');
   {
     const availableBlock = (/var AVAILABLE_NOW = \[([\s\S]*?)\n\s*\];/.exec(roomText) || [])[1] || "";
-    const comingBlock = (/var COMING_NEXT = \[([\s\S]*?)\n\s*\];/.exec(roomText) || [])[1] || "";
+    const comingBlock = (/var COMING_NEXT = (\[[\s\S]*?\]);/.exec(roomText) || [])[1] || "";
     ok("room page source has a parseable AVAILABLE_NOW array", availableBlock.length > 0);
     ok("room page source has a parseable COMING_NEXT array", comingBlock.length > 0);
     ok('"What your wallet actually holds" is in AVAILABLE_NOW', availableBlock.includes("What your wallet actually holds"));
     ok('"What a token mint is" is in AVAILABLE_NOW', availableBlock.includes("What a token mint is"));
-    ok('"What your wallet actually holds" is NOT in COMING_NEXT', !comingBlock.includes("What your wallet actually holds"));
-    ok('"What a token mint is" is NOT in COMING_NEXT', !comingBlock.includes("What a token mint is"));
-    ok('three topics remain in COMING_NEXT', (comingBlock.match(/title:/g) || []).length === 3, "found " + (comingBlock.match(/title:/g) || []).length);
+    ok('"What actually happens when you buy" is in AVAILABLE_NOW', availableBlock.includes("What actually happens when you buy"));
+    ok('"Sending tokens, and why the first one costs extra" is in AVAILABLE_NOW', availableBlock.includes("Sending tokens, and why the first one costs extra"));
+    ok('"What a transaction actually costs" is in AVAILABLE_NOW', availableBlock.includes("What a transaction actually costs"));
+    ok("six topics are in AVAILABLE_NOW", (availableBlock.match(/title:/g) || []).length === 6, "found " + (availableBlock.match(/title:/g) || []).length);
+    ok("COMING_NEXT is now an empty array", /^\[\s*\]$/.test(comingBlock.trim()), "got " + JSON.stringify(comingBlock.trim().slice(0, 60)));
   }
+  // The "coming next" section itself must not render when COMING_NEXT is empty — an empty card
+  // with a title and lede but nothing underneath would be its own small bug. This is a static
+  // fetch of the unexecuted page source (no headless browser here), so the literal copy is
+  // always present in the script text regardless of runtime state; what this actually checks is
+  // that render() gates the whole card behind a length check rather than always emitting it.
+  ok('room page guards the "Coming next" card on COMING_NEXT.length > 0', /COMING_NEXT\.length > 0/.test(roomText));
 
   // ── the rent numbers — re-derived independently here too, not just eyeballed ────────────────
   console.log("\nrent numbers (re-derived independently)\n");
@@ -234,8 +315,8 @@ const FORBIDDEN = [
   ok("step 2 surplus is 550,840 lamports", surplus2 === 550840, String(surplus2));
   ok("all-five surplus is 1,835,352 lamports", surplusAll === 1835352, String(surplusAll));
 
-  // ── (d) every t() key on all four pages exists in all six dictionaries ──────────────────────
-  console.log("\n(d) every t() key on all four pages exists in all six curated dictionaries\n");
+  // ── (d) every t() key on all seven pages exists in all six dictionaries ─────────────────────
+  console.log("\n(d) every t() key on all seven pages exists in all six curated dictionaries\n");
   const dicts = {};
   for (const lang of LANGS) {
     try { dicts[lang] = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${lang}.json`), "utf8")); }
@@ -246,7 +327,7 @@ const FORBIDDEN = [
     const raw = fs.readFileSync(path.join(ROOT, "public", f), "utf8");
     for (const k of extractJsTFCalls(raw)) allKeys.add(k);
   }
-  ok("at least one t() key was found across all four pages", allKeys.size > 30, String(allKeys.size));
+  ok("at least one t() key was found across all seven pages", allKeys.size > 30, String(allKeys.size));
   let keyGaps = 0;
   for (const key of allKeys) {
     for (const lang of LANGS) {
@@ -259,13 +340,16 @@ const FORBIDDEN = [
   }
   ok(`every t() key (${allKeys.size} unique) exists in all six dictionaries`, keyGaps === 0, keyGaps + " gap(s)");
 
-  // ── (e) no forbidden word/phrase on any of the four pages ───────────────────────────────────
-  console.log("\n(e) no forbidden word or phrase appears on any of the four pages\n");
+  // ── (e) no forbidden word/phrase on any of the seven pages ──────────────────────────────────
+  console.log("\n(e) no forbidden word or phrase appears on any of the seven pages\n");
   for (const { fileText, label } of [
     { fileText: roomText, label: "/solana" },
     { fileText: rentText, label: "/solana/rent" },
     { fileText: walletText, label: "/solana/wallet" },
     { fileText: mintText, label: "/solana/mint" },
+    { fileText: buyingText, label: "/solana/buying" },
+    { fileText: transfersText, label: "/solana/transfers" },
+    { fileText: feesText, label: "/solana/fees" },
   ]) {
     for (const { name, re } of FORBIDDEN) {
       const m = fileText.match(re);

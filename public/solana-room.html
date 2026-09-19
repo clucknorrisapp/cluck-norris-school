@@ -89,33 +89,33 @@
     });
   }
 
-  // The pages shipped so far, plus the mechanics topics still to come — listed honestly as
-  // "coming next" rather than dead links (CLAUDE.md: public docs must match the code). Add a
-  // topic here, and give it its own page + route, to grow this room.
+  // The pages shipped so far. Add a topic here, and give it its own page + route, to grow this
+  // room. COMING_NEXT held the mechanics topics that hadn't been written yet (CLAUDE.md: public
+  // docs must match the code) — the last three moved in here 2026-09-19, so COMING_NEXT is empty
+  // for now; render() below hides that section entirely rather than showing an empty card.
   var AVAILABLE_NOW = [
     { title: "The deposit you didn't know you made", blurb: 'Solana just started giving back part of a deposit that\'s baked into every token account you own. What it actually is, and the scam it\'s about to invite.', href: '/solana/rent' },
     { title: "What your wallet actually holds", blurb: "A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why.", href: '/solana/wallet' },
     { title: 'What a token mint is', blurb: "The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it.", href: '/solana/mint' },
+    { title: 'What actually happens when you buy', blurb: "Clicking \"buy\" swaps against a liquidity pool, not a store. Why a big trade moves the price against you, and what a failed swap still costs.", href: '/solana/buying' },
+    { title: 'Sending tokens, and why the first one costs extra', blurb: 'A transfer moves between token accounts, not wallets — and the first send to someone new can mean creating an account for them.', href: '/solana/transfers' },
+    { title: 'What a transaction actually costs', blurb: "Base fee, priority fee, and compute units are three different things wearing one name. Here's which is which.", href: '/solana/fees' },
   ];
-  var COMING_NEXT = [
-    { title: 'What happens when you buy', blurb: 'The accounts, instructions and swaps that run behind one tap of a buy button.' },
-    { title: 'What a transfer really does', blurb: 'Why sending someone a token can silently create a brand-new account for them — and who ends up paying for it.' },
-    { title: "What you're actually paying for in fees", blurb: 'Base fee, priority fee, and rent are three different charges wearing one name. Here\'s which is which.' },
-  ];
+  var COMING_NEXT = [];
 
-  // AVAILABLE_NOW's and COMING_NEXT's title/blurb strings are read through a variable above
-  // (t(topic.title)), which the regex-based audits (scripts/i18n-audit.cjs's Hub-pages gate,
+  // AVAILABLE_NOW's title/blurb strings are read through a variable above (t(topic.title)),
+  // which the regex-based audits (scripts/i18n-audit.cjs's Hub-pages gate,
   // scripts/solana-room-test.cjs) cannot see — they only ever match a LITERAL string immediately
   // inside t(...), documented in i18n-audit.cjs's own header. This function lists every one of
   // those same strings as literal t() calls purely so the gate sees them; it is never called.
   // Same technique as hub-glossary.html's __glossaryGatedStrings — keep this in step with
-  // AVAILABLE_NOW/COMING_NEXT above.
+  // AVAILABLE_NOW above.
   function __solanaRoomGatedStrings() { return [
     t("What your wallet actually holds"), t("A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why."),
     t('What a token mint is'), t("The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it."),
-    t('What happens when you buy'), t('The accounts, instructions and swaps that run behind one tap of a buy button.'),
-    t('What a transfer really does'), t('Why sending someone a token can silently create a brand-new account for them — and who ends up paying for it.'),
-    t("What you're actually paying for in fees"), t("Base fee, priority fee, and rent are three different charges wearing one name. Here's which is which."),
+    t('What actually happens when you buy'), t("Clicking \"buy\" swaps against a liquidity pool, not a store. Why a big trade moves the price against you, and what a failed swap still costs."),
+    t('Sending tokens, and why the first one costs extra'), t('A transfer moves between token accounts, not wallets — and the first send to someone new can mean creating an account for them.'),
+    t('What a transaction actually costs'), t("Base fee, priority fee, and compute units are three different things wearing one name. Here's which is which."),
   ]; }
 
   function render() {
@@ -136,15 +136,21 @@
     }
     html += '</div>';
 
-    html += '<div class="card">';
-    html += '<div class="sec-title">' + esc(t('Coming next to this room')) + '</div>';
-    html += '<div class="sec-lede">' + esc(t("These aren't dead links — they're what gets written next, each one getting the same plain-words treatment as the rent page below.")) + '</div>';
-    for (var i = 0; i < COMING_NEXT.length; i++) {
-      var topic = COMING_NEXT[i];
-      html += '<div class="topic"><div class="topic-head"><h2>' + esc(t(topic.title)) + '</h2><span class="badge">' + esc(t('COMING NEXT')) + '</span></div>';
-      html += '<p>' + esc(t(topic.blurb)) + '</p></div>';
+    // COMING_NEXT is empty now that all six topics have shipped — an empty "coming next" card
+    // would just be a section title and lede with nothing under them, so it's skipped outright
+    // rather than rendered awkwardly empty. Add a topic to COMING_NEXT and this section comes
+    // back on its own.
+    if (COMING_NEXT.length > 0) {
+      html += '<div class="card">';
+      html += '<div class="sec-title">' + esc(t('Coming next to this room')) + '</div>';
+      html += '<div class="sec-lede">' + esc(t("These aren't dead links — they're what gets written next, each one getting the same plain-words treatment as the rent page below.")) + '</div>';
+      for (var i = 0; i < COMING_NEXT.length; i++) {
+        var topic = COMING_NEXT[i];
+        html += '<div class="topic"><div class="topic-head"><h2>' + esc(t(topic.title)) + '</h2><span class="badge">' + esc(t('COMING NEXT')) + '</span></div>';
+        html += '<p>' + esc(t(topic.blurb)) + '</p></div>';
+      }
+      html += '</div>';
     }
-    html += '</div>';
 
     contentEl.innerHTML = html;
   }
