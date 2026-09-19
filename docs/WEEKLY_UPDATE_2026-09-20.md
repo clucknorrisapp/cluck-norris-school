@@ -3,11 +3,13 @@
 Colosseum strongly recommends a ~1-minute video each week on what shipped and what was hard.
 This is the founder's script for update #1, covering **Sep 14 13:00 UTC → Sep 20**.
 
-Regenerated 2026-09-18 with `node scripts/weekly-update-draft.cjs --from 2026-09-14 --to
-2026-09-18` (Colosseum roadmap §10 Z1 — the shipped list is a run, not a rewrite) and reconciled
+Refreshed 2026-09-19 with `node scripts/weekly-update-draft.cjs --from 2026-09-14 --to
+2026-09-19` (Colosseum roadmap §10 Z1 — the shipped list is a run, not a rewrite) and reconciled
 by hand for prose and grouping; the script's own labels (production vs. staging, PR numbers) were
-kept as-is, not retyped. **Re-run the script with `--to` set to the actual day before recording** —
-anything merged after 2026-09-18 (batch 9 and later) belongs in this list too and isn't in it yet.
+kept as-is, not retyped. Raw output: `docs/weekly-update-raw-2026-09-19.md`. This is the
+night-before refresh the roadmap calls for, so the list below is complete through PR #357. **If
+anything merges between now and the recording, re-run with `--to` set to that day** — the shipped
+list is only as current as its last run.
 
 Rules for the recording (from `docs/COLOSSEUM_ROADMAP.md` §W10 and CLAUDE.md): phone, one take,
 no slides needed; name what shipped with a link; "Earn" is capability, never a promise; nothing
@@ -86,6 +88,22 @@ go":**
   reproduce ratio; and the reproducer packaged as a standalone `npx` command — not yet published
   to the npm registry, which is the owner's own act. Arena/X drafts for all of the above:
   `docs/ARENA_POSTS.md` round 3.
+- **Colosseum roadmap extension, batches 13–18** (#351, #352, #353, #355, #356, #357 — merged
+  2026-09-18, after the previous refresh): following a project without a wallet, as a JSON Feed
+  and an RSS feed of versions published, batches settled, holder snapshots and observed
+  commitments; a receipt you can print, carrying a QR of its own public URL; a read-only
+  adversarial pass over every public Hub surface built since batch 9, and the same-day fix round
+  that closed all four of its P1 findings with regression tests; `/hub/glossary`, every term and
+  reason code the receipts and the wallet view use, from one source, in seven languages, with a
+  test that fails if a code exists without an entry; a load proof for the public reads, with
+  before-and-after numbers and a reduced run in CI; preview-before-publish on the operator desk,
+  so an operator can see who a draft's terms would pay today before anything is written; docs
+  drift round 4 and the second half of the demo storyboard with fourteen fresh captures; the
+  POKEAHOE dry run walked end to end with the dry-run flag kept on, written up with what confused
+  and the exact sequence for a real go; the pitch and demo scripts re-timed to the final surface
+  set with a one-page click sheet for the recording; and the desk fixes that rehearsal turned up.
+  Arena/X drafts through batch 12 are in `docs/ARENA_POSTS.md` round 3; batches 13–18 are not
+  drafted yet.
 - **School:** the Q&A + LP Lab audit against how Orca, Raydium CLMM, Meteora DLMM and DAMM v2
   actually work, with the corrections re-keyed in all seven languages — #328; the last GET-only
   admin mutation (`/api/meme-queue`) made POST-only — #336.
@@ -99,13 +117,13 @@ go":**
 - **Whole-repo simplification pass** (one address regex, one HTML escaper, one memoised RPC
   client) — #331.
 
-**Not yet a PR: nothing, as of this refresh (2026-09-18).** Batch 9 (previously "in flight" in this
-file's first draft) landed as PR #347 the same day, and batches 10–12 followed as #348–#350. This
-refresh was generated with
-`node scripts/weekly-update-draft.cjs --from 2026-09-14 --to 2026-09-18 --develop-ref
-origin/develop --main-ref origin/main --no-fetch` (raw output: `docs/weekly-update-raw-2026-09-18.md`)
-and reconciled by hand the same way the first draft was — **re-run with `--to` set to the actual
-day before recording**; anything merged after 2026-09-18 still belongs in this list too.
+**Open, not yet merged, as of this refresh (2026-09-19):** one pull request — #354, the
+browser-signed payout. It is a money path, so it is held to the two-lens rule: three review rounds
+and three fix rounds so far, CI green, and it does not merge while a lens still reports an open
+finding. It is deliberately absent from the shipped list above, because it has not shipped.
+
+Everything else in this window is merged. `main` is still at PR #337, so every roadmap extension
+item above is on staging only and none of it is promoted.
 
 ## Where to post
 Colosseum Arena (the project's update thread) and X from the CLKN account (X Premium, no 280 limit).
@@ -117,13 +135,13 @@ docs/PRE_EVENT_STATE.md in the repo."
 Confirm these before finalizing the script and picking the demo URL to show on camera. Don't
 assume from this file — re-check on the day.
 
-- [ ] Re-run `node scripts/weekly-update-draft.cjs --from 2026-09-14 --to <today>` and diff its
-      output against this file's "Shipped this week" section — anything new (batch 9 or later)
-      belongs in the list before recording.
-- [ ] `git log origin/develop` — confirm every PR named above is actually merged, and note any
-      new ones the script's re-run surfaced.
-- [ ] `git log origin/main` — confirm which of the above is actually **promoted** (owner's
-      explicit go; never assumed). As of 2026-09-18, `main` is still at PR #337 — only the Hub
+- [x] **Done 2026-09-19.** Re-ran `node scripts/weekly-update-draft.cjs --from 2026-09-14 --to
+      2026-09-19` and diffed it against "Shipped this week": batches 13–18 (#351–#357) were
+      missing and are now listed.
+- [x] **Done 2026-09-19.** `git log origin/develop` confirms every PR named above is merged;
+      `develop` is at #357. The re-run surfaced #351–#357.
+- [x] `git log origin/main` — confirm which of the above is actually **promoted** (owner's
+      explicit go; never assumed). **Re-checked 2026-09-19: `main` is still at PR #337** — only the Hub
       core, public pages, apply/pay/desk and generalised Lock to Earn engine (W1–W3) plus the
       items listed under "Production today" above are live; every Colosseum roadmap extension
       item (batches 2–9) is on staging only, not yet promoted.
@@ -135,7 +153,8 @@ assume from this file — re-check on the day.
         `/hub/verify` instead — the cleaner demo surface, and neither needs a wallet on camera.
       - Never show a `develop`/staging URL as if it were the live product.
 - [ ] Re-read `docs/ARENA_POSTS.md`'s status table immediately before posting anything from it —
-      it is a snapshot from 2026-09-18 and will be stale by the time later batches land and promote.
+      it is a snapshot from 2026-09-18 and is already behind: it stops at batch 12, and batches
+      13–18 have since merged.
 - [ ] **Demo captures:** `docs/DEMO_STORYBOARD.md` is the shot-by-shot demo script and the pitch
       outline, with real screenshots (phone + desktop) in `docs/demo/2026-09-18/`. Re-screenshot
       before the actual recording if the Hub pages have changed since 2026-09-18 — the storyboard
