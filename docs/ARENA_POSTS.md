@@ -1074,7 +1074,19 @@ before posting, not this table.
 
 None of the items below is a security-messaging post in the CLAUDE.md sense (a RootCrak finding
 we acted on) — DD5's adversarial pass is our own internal review, not a RootCrak-sourced finding —
-so none carries the RootCrak credit + referral. Every draft was checked against the code on
+so none carries the RootCrak credit + referral.
+
+> ⚠️ **OPEN — the owner's ruling, raised 2026-09-19, not yet given.** That is the narrow reading.
+> CLAUDE.md's rule is written broadly: *"Whenever we talk about security publicly — X, Telegram,
+> the site, investor/grant copy — credit RootCrak and include our referral link."* It does not say
+> "only a RootCrak-sourced finding". Item 39 below announces a security review of our own public
+> surfaces, which is talking about security publicly on the broad reading. **If the owner reads it
+> broadly, item 39 — and any future draft describing a review, an audit or a security fix — gets
+> `@ro0TCr4k` credited and `https://rootcrak.com/?ref=clucknorris` appended before it is posted.**
+> Every draft here is HOLD anyway, so nothing ships on the wrong reading; do not post item 39 until
+> this is settled.
+
+Every draft was checked against the code on
 `develop` before writing — the "source:" line under each names the exact file(s). None claims a
 yield figure, an APR/APY, a guarantee, anything about Normie Quest reward or prize terms, or
 anything about Wallet Watch. None calls a project, a wallet, or a number "verified" or "safe" —
