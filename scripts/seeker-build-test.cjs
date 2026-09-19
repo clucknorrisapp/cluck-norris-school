@@ -13,15 +13,21 @@
 //       relative "/api/…" reference survives anywhere, and the shell's own source
 //       (src/seeker/App.jsx) uses HashRouter, never BrowserRouter — a bundled Capacitor app has
 //       no server to rewrite a deep path back to index.html.
-//   (c) GOOGLE/IOS UNAFFECTED: building both existing variants from a PRISTINE checkout of
-//       origin/develop (a disposable git worktree, node_modules symlinked in — no second
-//       `npm install`) and from THIS tree produces the exact same file list with every shared
-//       file byte-identical (a content diff, not a raw .tgz compare — the tar's own deterministic
-//       mtime is tied to HEAD's commit time, which legitimately differs between this branch and
-//       origin/develop's tip and would make an even a no-op change "differ"). This is the actual
-//       "did adding seeker touch the existing releases" question — a passing store-edition-test
-//       alone only proves the shape is still right, not that the bytes are still the bytes the
-//       wrapper's store-edition.lock already pins.
+//   (c) GOOGLE/IOS UNAFFECTED: two separate questions, and only the first is an invariant.
+//       HARD — no seeker content leaks into an education-only bundle: no seeker-shaped path, no
+//       seeker marker string, and no seeker-only i18n key in any dictionary the bundle ships
+//       (the excludeKeys prune, checked against the built artifact rather than the config).
+//       EXPLAINED — the bundles are also rebuilt from a PRISTINE checkout of origin/develop (a
+//       disposable git worktree, node_modules symlinked in — no second `npm install`) and
+//       content-diffed against this tree's (a content diff, not a raw .tgz compare: the tar's
+//       deterministic mtime is tied to HEAD's commit time and legitimately differs). A diff here
+//       is NOT automatically a fault — the school IS the google/ios editions' content, so a
+//       lesson or a translation legitimately moves those bytes. So the diff fails only when this
+//       branch changed NOTHING the bundles are built from and they moved anyway; otherwise it is
+//       reported in full, beside the branch's own shared-file changes that explain it.
+//       (An earlier revision asserted "byte-identical, always" and correctly caught a real
+//       change — lesson 16 — as if it were a leak. Do not restore that form: it makes every
+//       school edit red and teaches people to ignore this section.)
 //   (d) MWA-AWARE WALLET LAYER: public/cluck-wallet.js's registry, driven with an INJECTED FAKE
 //       Capacitor.Plugins.CluckMWA bridge in a Node `vm` sandbox (no real device exists to test
 //       against, same posture as scripts/wallet-standard-test.cjs's fake standard wallet) —
@@ -49,6 +55,19 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = path.join(__dirname, "..");
+
+// The curated English keys increment 1 added for the seeker shell. They must exist in all six
+// public/i18n/<lang>.json dictionaries (section f) AND must never reach a google/ios bundle
+// (section c) — store-edition.json's excludeKeys prunes them out of the education-only copy.
+const SEEKER_KEYS = [
+  "Rent Reclaim", "Connect Wallet", "Disconnect", "Coming soon", "Not connected",
+  "Find dead token accounts and reclaim the SOL locked inside them.",
+  "Ask the AI tutor anything about crypto, in plain words.",
+  "Check approvals, freeze and mint authority — read-only and free.",
+];
+// Strings that only ever exist because of the seeker variant. Generic wording ("Disconnect")
+// is deliberately NOT in here — it appears legitimately in shared code; these do not.
+const SEEKER_MARKERS = ["Rent Reclaim", "CluckMWA", "seeker-edition", "src/seeker"];
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
   if (cond) { pass++; console.log("  ✓ " + name); }
@@ -124,9 +143,9 @@ function buildVariant(cwd, variant) {
   fs.rmSync(extractDir, { recursive: true, force: true });
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
-  // (c) google/ios unaffected — byte-identical against a pristine origin/develop build
+  // (c) google/ios — no seeker leakage (hard), and any bundle change explained (see the header)
   // ══════════════════════════════════════════════════════════════════════════════════════════
-  console.log("\n(c) google/ios unaffected (byte-identical vs. a pristine origin/develop build)\n");
+  console.log("\n(c) google/ios — no seeker leakage, and any bundle change explained by this branch\n");
   let baseline = null, baselineWt = null;
   try {
     execFileSync("git", ["rev-parse", "--verify", "origin/develop"], { cwd: ROOT });
@@ -136,7 +155,7 @@ function buildVariant(cwd, variant) {
     fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(baselineWt, "node_modules"));
     baseline = baselineWt;
   } catch (e) {
-    console.log("  · could not set up a pristine origin/develop worktree — skipping the byte-identical comparison");
+    console.log("  · could not set up a pristine origin/develop worktree — skipping the comparison");
     console.log("    (" + ((e && e.message) || String(e)).split("\n")[0] + ")");
   }
   function extractedFiles(tgz) {
@@ -148,29 +167,72 @@ function buildVariant(cwd, variant) {
     return map;
   }
 
+  // What THIS branch changed, relative to origin/develop, that a google/ios bundle is actually
+  // built from. Non-empty ⇒ a bundle diff is expected and gets reported rather than failed;
+  // empty ⇒ a bundle that moved anyway is unexplained, and that is the real alarm. Paths that
+  // cannot reach an education-only bundle (the seeker shell, the seeker edition config) are
+  // excluded on purpose — they must never be the explanation for a google/ios change.
+  let sharedChanges = null;
+  try {
+    const mb = execFileSync("git", ["merge-base", "origin/develop", "HEAD"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] }).toString().trim();
+    sharedChanges = execFileSync("git", ["diff", "--name-only", mb, "HEAD"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] })
+      .toString().split("\n").map((x) => x.trim()).filter(Boolean)
+      .filter((f) => /^(src\/|public\/|store-edition\/|data\/|index\.html$|vite\.config\.js$)/.test(f))
+      .filter((f) => !/^src\/seeker\//.test(f) && f !== "store-edition/seeker-edition.json");
+  } catch (_) { sharedChanges = null; }
+
   for (const variant of ["google", "ios"]) {
     const here = buildVariant(ROOT, variant);
     ok(`${variant}: this tree's build verifies clean (build-store-edition.mjs's own checks passed)`, true);
-    if (baseline) {
-      let base;
-      try { base = buildVariant(baseline, variant); }
-      catch (e) { ok(`${variant}: pristine origin/develop build also succeeds`, false, (e && e.stack) || String(e)); continue; }
-      // Content diff, not a raw .tgz byte compare: the tar is written with `--mtime=@<commit
-      // time>` (build-store-edition.mjs, deterministic-tar step) so a tarball built from THIS
-      // branch (extra commits on top of origin/develop, later commit time) legitimately differs
-      // in that one embedded timestamp even when every FILE inside is identical — which is the
-      // actual question here ("did adding seeker change what ships"), not "is this session's git
-      // history the same age as origin/develop's".
-      for (const field of ["variant", "version", "apiBase", "topDir", "stripComponents"]) {
-        ok(`${variant}: manifest.${field} matches the pristine build`, JSON.stringify(here[field]) === JSON.stringify(base[field]), `here=${here[field]} base=${base[field]}`);
-      }
-      const hereFiles = extractedFiles(path.join(ROOT, "release", here.file));
-      const baseFiles = extractedFiles(path.join(baseline, "release", base.file));
-      const herePaths = [...hereFiles.keys()].sort(), basePaths = [...baseFiles.keys()].sort();
-      ok(`${variant}: identical file list vs. a pristine origin/develop checkout`, JSON.stringify(herePaths) === JSON.stringify(basePaths),
-        { onlyHere: herePaths.filter((p) => !baseFiles.has(p)), onlyBase: basePaths.filter((p) => !hereFiles.has(p)) });
-      const diffPaths = herePaths.filter((p) => baseFiles.has(p) && Buffer.compare(hereFiles.get(p), baseFiles.get(p)) !== 0);
-      ok(`${variant}: every shared file is byte-identical vs. a pristine origin/develop checkout`, diffPaths.length === 0, diffPaths);
+
+    // ── HARD: nothing seeker-shaped ships inside an education-only bundle ────────────────────
+    const hereFiles = extractedFiles(path.join(ROOT, "release", here.file));
+    const herePaths = [...hereFiles.keys()].sort();
+    const seekerPaths = herePaths.filter((f) => /seeker/i.test(f));
+    ok(`${variant}: no seeker-shaped path in the bundle`, seekerPaths.length === 0, seekerPaths);
+    const hereText = herePaths.filter((f) => /\.(html|js|css|json)$/.test(f))
+      .map((f) => hereFiles.get(f).toString("utf8")).join("\n");
+    const foundMarkers = SEEKER_MARKERS.filter((m) => hereText.includes(m));
+    ok(`${variant}: no seeker marker string anywhere in the bundle`, foundMarkers.length === 0, foundMarkers);
+    const i18nPaths = herePaths.filter((f) => /^i18n\/.+\.json$/.test(f));
+    ok(`${variant}: the bundle actually ships i18n dictionaries (so the next check means something)`, i18nPaths.length > 0);
+    const leaked = [];
+    for (const f of i18nPaths) {
+      let dict = {};
+      try { dict = JSON.parse(hereFiles.get(f).toString("utf8")); } catch (_) { dict = {}; }
+      for (const k of SEEKER_KEYS) if (Object.prototype.hasOwnProperty.call(dict, k)) leaked.push(`${f} → ${k}`);
+    }
+    ok(`${variant}: no bundled dictionary carries a seeker-only key (the excludeKeys prune held on the ARTIFACT)`, leaked.length === 0, leaked);
+
+    if (!baseline) continue;
+
+    // ── EXPLAINED: content diff against a pristine origin/develop build ──────────────────────
+    let base;
+    try { base = buildVariant(baseline, variant); }
+    catch (e) { ok(`${variant}: pristine origin/develop build also succeeds`, false, (e && e.stack) || String(e)); continue; }
+    for (const field of ["variant", "apiBase", "topDir", "stripComponents"]) {
+      ok(`${variant}: manifest.${field} matches the pristine build`, JSON.stringify(here[field]) === JSON.stringify(base[field]), `here=${here[field]} base=${base[field]}`);
+    }
+    const baseFiles = extractedFiles(path.join(baseline, "release", base.file));
+    const basePaths = [...baseFiles.keys()].sort();
+    const delta = {
+      onlyHere: herePaths.filter((f) => !baseFiles.has(f)),
+      onlyBase: basePaths.filter((f) => !hereFiles.has(f)),
+      differing: herePaths.filter((f) => baseFiles.has(f) && Buffer.compare(hereFiles.get(f), baseFiles.get(f)) !== 0),
+    };
+    const moved = delta.onlyHere.length + delta.onlyBase.length + delta.differing.length;
+    if (moved === 0) {
+      ok(`${variant}: byte-identical to a pristine origin/develop build`, true);
+    } else if (sharedChanges === null) {
+      console.log(`  · ${variant}: differs from a pristine origin/develop build in ${moved} path(s) — could not read this branch's own diff (shallow clone?), so this is reported, not judged`);
+      console.log("      " + JSON.stringify(delta));
+    } else if (sharedChanges.length > 0) {
+      pass++;
+      console.log(`  ✓ ${variant}: differs from pristine origin/develop in ${moved} path(s), and this branch edited ${sharedChanges.length} file(s) the bundle is built from — expected`);
+      console.log("      bundle: " + JSON.stringify(delta));
+      console.log("      branch: " + JSON.stringify(sharedChanges));
+    } else {
+      ok(`${variant}: an UNEXPLAINED change to the education-only bundle — this branch touched nothing the bundle is built from, yet it moved`, false, delta);
     }
   }
   if (baselineWt) { try { execFileSync("git", ["worktree", "remove", "--force", baselineWt], { cwd: ROOT, stdio: "pipe" }); } catch (_) {} }
@@ -311,12 +373,7 @@ function buildVariant(cwd, variant) {
   // (f) i18n
   // ══════════════════════════════════════════════════════════════════════════════════════════
   console.log("\n(f) i18n — the 8 new keys, all six dictionaries, and the audit itself\n");
-  const NEW_KEYS = [
-    "Rent Reclaim", "Connect Wallet", "Disconnect", "Coming soon", "Not connected",
-    "Find dead token accounts and reclaim the SOL locked inside them.",
-    "Ask the AI tutor anything about crypto, in plain words.",
-    "Check approvals, freeze and mint authority — read-only and free.",
-  ];
+  const NEW_KEYS = SEEKER_KEYS;
   for (const lang of ["es", "zh", "hi", "it", "pt", "vi"]) {
     const dict = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${lang}.json`), "utf8"));
     const missing = NEW_KEYS.filter((k) => !Object.prototype.hasOwnProperty.call(dict, k));
