@@ -4,6 +4,18 @@ Paste-ready drafts for the Colosseum Arena project-update thread and the CLKN X 
 Premium — no 280-character limit, but kept short anyway; plain words, one idea per sentence, no
 hype adjectives). One post per shipped item, plus a kickoff post stating the thesis.
 
+**File status — updated 2026-09-19, after round 4.** Four rounds of drafts exist in this file,
+covering everything merged from the kickoff through batch 18 (PR #357): round 1 (kickoff +
+W1–W3/W5 + E1/E2/E4/E5/E7), round 2 (E3/E6/E8, Launch Readiness, airdrop receipts, Buy Special
+standings, the merged engine timeline, holder snapshots, `/hub/verify`), round 3 (batches 9–12,
+`#347`–`#350`), and round 4, appended below round 3 (batches 13–18, `#351`–`#357`). **Every draft
+in every round is still HOLD — none of them has been posted anywhere yet.** `main` is still at
+`cfb2ce0` (PR #337, the Hub W1–W3 core only); `develop` is at PR #357/#358. Re-check
+`git log origin/main` yourself immediately before posting anything from any round — this
+paragraph goes stale the moment the owner promotes, and each round's own status table below is a
+snapshot from the day it was drafted, not a live read. Once a draft is actually posted, log it
+under "Posting history" at the very end of this file (append, don't edit this paragraph).
+
 **Read this before posting anything.** As of 2026-09-18, the status is:
 
 | Item | Where the code lives | Live on `clucknorris.app` (production/`main`)? |
@@ -1033,3 +1045,366 @@ Same five steps as round 1's checklist above, plus:
 2. For item 36 (the `npx` verifier), confirm the package has actually been published to the npm
    registry before using the plain `npx @clkn/hub-verify` line — if it hasn't, use the git-ref
    form or point at the repo script instead, exactly as the draft above does.
+
+---
+
+# Round 4 — batches 13–18 (#351–#357), everything without a draft yet
+
+Drafted 2026-09-19. Rounds 1–3 (above) covered the kickoff through batch 12 (`#347`–`#350`). This
+round drafts what merged since: following a project without a wallet (DD2), a printable receipt
+with a QR of its own URL (DD4), a read-only adversarial pass over the public Hub surfaces and the
+fix round that closed its four P1 findings (DD5), preview-before-publish on the operator desk
+(EE1), the Hub glossary in seven languages (EE2), a load proof for the public reads with
+before/after numbers (EE3), docs drift round 4 and the operator-interview validation rows (FF1,
+EE5 — hygiene, no Arena/X draft), the demo storyboard's second half with fourteen fresh captures
+(FF2), the POKEAHOE dry-run rehearsal walked end to end (FF4), the pitch and demo scripts re-timed
+with a one-page click sheet (FF3), and the desk fixes that rehearsal produced (GG3). Batch 18
+(`#357`) is a disclosure-line and handoff-doc update only — no product surface, so it gets no
+Arena/X draft either.
+
+**Status check before writing this round:** `git log origin/main` still shows `main` at `cfb2ce0`
+(PR #337) — unchanged since round 3. `git log origin/develop` shows `develop` at PR #357 (batch
+18; PR #358 on top of it is this file's own round-4 status note and the weekly-update refresh,
+not a product change). **Nothing from batches 2–18 (PRs #339–#357) is on production.** Everything
+in this round is code on `develop` only, merged via #351 (batch 13), #352 (batch 14), #353 (batch
+15), #355 (batch 16), or #356 (batch 17). **Every draft below is HOLD** — do not post any of it
+until the owner has explicitly promoted `develop` → `main` for the PR it names (CLAUDE.md
+"Branching": never automatic, never inferred) — re-check the actual state of `main` immediately
+before posting, not this table.
+
+None of the items below is a security-messaging post in the CLAUDE.md sense (a RootCrak finding
+we acted on) — DD5's adversarial pass is our own internal review, not a RootCrak-sourced finding —
+so none carries the RootCrak credit + referral.
+
+> ⚠️ **OPEN — the owner's ruling, raised 2026-09-19, not yet given.** That is the narrow reading.
+> CLAUDE.md's rule is written broadly: *"Whenever we talk about security publicly — X, Telegram,
+> the site, investor/grant copy — credit RootCrak and include our referral link."* It does not say
+> "only a RootCrak-sourced finding". Item 39 below announces a security review of our own public
+> surfaces, which is talking about security publicly on the broad reading. **If the owner reads it
+> broadly, item 39 — and any future draft describing a review, an audit or a security fix — gets
+> `@ro0TCr4k` credited and `https://rootcrak.com/?ref=clucknorris` appended before it is posted.**
+> Every draft here is HOLD anyway, so nothing ships on the wrong reading; do not post item 39 until
+> this is settled.
+
+Every draft was checked against the code on
+`develop` before writing — the "source:" line under each names the exact file(s). None claims a
+yield figure, an APR/APY, a guarantee, anything about Normie Quest reward or prize terms, or
+anything about Wallet Watch. None calls a project, a wallet, or a number "verified" or "safe" —
+"reproduce" / "check" / "recompute" are used instead, on purpose. The demo project and POKEAHOE
+are labelled a dry run wherever mentioned; POKEAHOE has not been armed and no arm flag has ever
+been sent.
+
+---
+
+## 37. Follow a project without a wallet (DD2)
+
+**Status: HOLD.** On PR #351 (batch 13). `GET /api/hub/:project/feed.json` (JSON Feed) and
+`GET /hub/:project/feed.xml` (RSS), both on the `hubheavy` limiter with a 300s cache; the demo
+fixture is never registered in `hubProjects()` so it can't appear in either feed.
+
+source: `lib/hub/feed.js`, `scripts/hub-feed-test.cjs`
+
+### Arena
+
+> You don't need a wallet, or us, to follow what a Hub project does. `/api/hub/:project/feed.json`
+> (JSON Feed) and `/hub/:project/feed.xml` (RSS) list, newest first: every program version
+> published (with its hash), every on-chain terms commitment observed, every batch settled (with
+> that batch's own receipt count and reproduce ratio), and every holder snapshot taken — each item
+> linking to its own public page. Read-only, cached like every other public read, built only from
+> views the site already serves; the demo fixture is excluded. Every project page now has a
+> "Follow this project" line with both links.
+
+### X
+
+> New: follow any Hub project without a wallet. `/api/hub/:project/feed.json` (JSON Feed) and
+> `/hub/:project/feed.xml` (RSS) — program versions, on-chain commitments, settled batches with
+> their reproduce ratio, holder snapshots. Read-only, built from data the site already shows.
+
+---
+
+## 38. A receipt you can print (DD4)
+
+**Status: HOLD.** On PR #351 (batch 13). `/hub/<project>/r/<sig>?print=1`; the QR is generated by
+`public/hub-qr.js`, a pure, dependency-free, no-network encoder served on its own explicit route
+(the no-build-boot trap CLAUDE.md warns about).
+
+source: `public/hub-qr.js`, `scripts/hub-print-test.cjs`
+
+### Arena
+
+> Every Hub receipt now has a print view: `/hub/<project>/r/<sig>?print=1` lays out the amount,
+> the rule that computed it, the settlement signature as text AND as a QR code, the program-version
+> hash, the reproduce steps, and our own trust-boundary line, on one page with nav and buttons
+> hidden. The QR encodes nothing but the receipt's own public URL — generated by a small,
+> dependency-free encoder we wrote ourselves, no network call, no third-party library. Seven
+> languages, same as the rest of the Hub. A holder can keep a paper copy of exactly what the
+> record says.
+
+### X
+
+> New: a printable Hub receipt. `?print=1` on any receipt URL — amount, the rule, the settlement
+> signature as text and QR, the program hash, reproduce steps. QR encodes only the receipt's own
+> URL, made with our own no-network encoder. Seven languages.
+
+---
+
+## 39. A second lens on the public surfaces, and the fix round it produced (DD5)
+
+**Status: HOLD.** The read-only pass is on PR #351 (batch 13); its four P1 fixes are on PR #352
+(batch 14). Report: `docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md` — **P0: 0 · P1: 4** across the
+nine surfaces added since batch 9.
+
+source: `docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md`
+
+### Arena
+
+> We ran a read-only adversarial pass over every public Hub page and route added since batch 9 —
+> `/hub/verify`, `/hub/status`, `/hub/wallet`, `/hub/trust`, `/hub/judge`, the compare page, the
+> holders Compare panel, the badge routes, and the new feeds — looking for a private field on the
+> wire, a spoofable trust surface, a route with no limit on it. Zero P0s, four P1s, and all four
+> closed the same week with regression tests: `/hub/verify` no longer fetches or renders a verdict
+> from an origin other than our own; it prints amounts in token units instead of raw base units;
+> the heaviest reads (a wallet lookup, the project list, a project page) got a rate limiter and a
+> cache instead of none at all; and `POST /api/track` can no longer mint unbounded tracking keys
+> that move a real traction number. Full report in the repo.
+
+### X
+
+> Ran a read-only adversarial pass over every new public Hub surface: /hub/verify, /hub/status,
+> /hub/wallet, /hub/trust, /hub/judge, compare, badges, feeds. Zero P0, four P1 — all four fixed
+> the same week with regression tests (a trust-surface spoof, raw units on screen, unlimited
+> reads, an unbounded tracking key). Report's in the repo.
+
+---
+
+## 40. Preview before publish (EE1)
+
+**Status: HOLD.** On PR #352 (batch 14). `POST /api/hub/:project/desk/preview`, gated the same as
+the terms write itself; `previewTerms()` writes nothing.
+
+source: `lib/hub/preview.js`, `scripts/hub-preview-test.cjs`
+
+### Arena
+
+> Before an operator publishes new terms, our desk now shows "who would this pay today?" for the
+> draft — a read, nothing written, nothing sent. It runs the exact same eligibility and accrual
+> functions the live scheduler runs, against the current locks, and shows per wallet
+> qualified/excluded with the reason code, plus the funding-budget line from Launch Readiness. A
+> test proves the preview for an already-published version equals what the live route actually
+> computes on the same data — so the number an operator sees before publishing is never a second,
+> hand-written estimate.
+
+### X
+
+> New on the operator desk: preview draft terms before publishing. Same eligibility and accrual
+> code the live engine runs, applied to today's real locks — who'd qualify, who's excluded, the
+> budget line. Read-only, nothing written. A test proves it matches the live route exactly.
+
+---
+
+## 41. The Hub glossary (EE2)
+
+**Status: HOLD.** On PR #352 (batch 14). `/hub/glossary`, seven languages, each entry anchorable
+and linked from the receipt, compare, wallet and lesson pages that use the term.
+
+source: `lib/hub/glossary.js`, `scripts/hub-glossary-test.cjs`
+
+### Arena
+
+> `/hub/glossary` — every term and reason code our receipts, the compare page, the wallet lookup
+> and the pre-lock lesson use, defined once in plain words, in all seven languages, each one
+> anchorable and linked from wherever it appears. A drift test fails the build the moment a reason
+> code ships in the actual settlement code with no glossary entry, so the definitions can't
+> quietly fall behind what the code does.
+
+### X
+
+> New: /hub/glossary — every term and reason code the receipts, compare page, wallet lookup and
+> lesson use, in one place, in all 7 languages. A CI test fails the build if a code ever ships
+> with no glossary entry.
+
+---
+
+## 42. A load proof for the public reads (EE3)
+
+**Status: HOLD.** On PR #352 (batch 14). Fixture + smoke: `scripts/hub-load-fixture.cjs` +
+`scripts/hub-load-smoke.cjs`; before/after numbers in `docs/HUB_LOAD_2026-09-18.md`; a reduced run
+is in CI.
+
+source: `docs/HUB_LOAD_2026-09-18.md`
+
+### Arena
+
+> We load-tested our own public Hub reads against a 50-project, ~9,800-receipt fixture and found a
+> real problem: four routes — the project list, a wallet lookup, a project page, and the share
+> page — had no rate limiter and no cache, and a 70-request burst against them pushed our own
+> `/healthz` from sub-millisecond to 52 seconds. Fixed the same week: a rate limiter plus a short
+> per-project cache on all four. On the CI-scale fixture, `/healthz`'s worst latency under the same
+> burst went from 1,273–1,400ms before the fix to 402–422ms after, and every one of the eleven
+> public routes we measure now lands inside its 500ms budget. Before-and-after numbers, the box's
+> specs, and the exact commands are all in the repo.
+
+### X
+
+> Load-tested our public Hub reads and found a real gap: 4 routes with no rate limit or cache let
+> a burst push /healthz to 52 seconds. Fixed the same week. On the CI fixture, worst /healthz
+> latency under the same burst: 1,273–1,400ms before the fix, 402–422ms after. All 11 measured
+> routes now land inside budget.
+
+---
+
+## 43. Validation rows from the record (EE5)
+
+**Status: HOLD.** On PR #352 (batch 14). Internal, owner-facing document, not a public surface —
+`docs/VALIDATION_2026-09.md` gains onboarding-clock rows fed by real milestone timestamps; the
+operator-interview rows themselves stay marked `[to be filled]` until the owner actually runs
+those interviews.
+
+source: `scripts/validation-rows.cjs`, `docs/VALIDATION_2026-09.md`
+
+No Arena/X draft — this is the founder's own working document for the judges' "who pays you and
+why do they come back" question, not a product to demo, and it names its own unfilled cells
+rather than a claim that's ready to post.
+
+---
+
+## 44. Docs drift round 4 (FF1)
+
+**Status: HOLD.** On PR #353 (batch 15). Internal documentation hygiene, not a feature —
+`docs/CODEX_REVIEWER_BRIEF.md` Round 4 for #351–#352 and the settlement journal's own verification
+rounds 3–5; `docs/HUB_VERIFY.md` and the regenerated `/hub/judge` extended to name the feeds, the
+glossary, the print sheet and the compare page in the reviewer's own reading path.
+
+source: `docs/CODEX_REVIEWER_BRIEF.md` Round 4, `docs/HUB_VERIFY.md`, `docs/JUDGE_GUIDE.md`
+
+No Arena/X draft — this keeps the reviewer's reading path in sync with what actually shipped;
+nothing here is a claim worth posting on its own.
+
+---
+
+## 45. The demo storyboard, second half (FF2)
+
+**Status: HOLD.** On PR #353 (batch 15). Fourteen further captures (Shots 18–24, desktop +
+mobile) in `docs/demo/2026-09-18/`; `scripts/demo-storyboard-inventory-test.cjs` checks the
+storyboard's own inventory count against the folder on disk.
+
+source: `docs/DEMO_STORYBOARD.md` (Part 4), `scripts/demo-storyboard-inventory-test.cjs`
+
+### Arena
+
+> Fourteen more real screen captures — desktop and phone — added to our demo storyboard: the
+> compare page, the print sheet, the glossary, a feed rendered in an actual reader, the wallet
+> roll-up across two projects, and the reproducibility badge on `/hub/status`. Same rule as every
+> earlier batch: real running app, real fixtures built the same way the matching test seeds them,
+> DRY RUN visible wherever it applies, and a CI test that checks the storyboard's own inventory
+> count against the folder on disk so the list can't silently drift from what's actually there.
+
+### X
+
+> 14 more real captures (desktop + phone) in our demo storyboard: compare page, print sheet,
+> glossary, a feed in an actual reader, the wallet roll-up, the /hub/status badge. Real app, real
+> fixtures, DRY RUN visible where it applies. A CI test checks the inventory matches the folder.
+
+---
+
+## 46. The POKEAHOE rehearsal, dry run throughout (FF4)
+
+**Status: HOLD.** On PR #355 (batch 16). `docs/POKEAHOE_REHEARSAL_2026-09.md`; run against a
+throwaway local `DATA_DIR`, never the real one; `dryRun` asserted `true` before the first write
+and re-asserted `true` after the last one; no arm flag (`&arm=1&confirm=go-live`) was ever sent.
+
+source: `docs/POKEAHOE_REHEARSAL_2026-09.md`
+
+### Arena
+
+> We rehearsed onboarding a second real project, POKEAHOE, end to end — publishing terms from the
+> desk, previewing them, Launch Readiness, letting accrual run, attempting a batch — with the
+> dry-run flag kept on throughout and no arm flag ever sent. Every write happened against a
+> throwaway local database, never the real one. The write-up names what actually confused a
+> first-time operator and the exact sequence for the real go, so the night we actually onboard a
+> second project isn't the first time anyone has seen these screens.
+
+### X
+
+> Rehearsed onboarding a second project (POKEAHOE) end to end — terms, preview, Launch Readiness,
+> accrual, a batch attempt — dry-run flag on throughout, no arm flag ever sent, against a
+> throwaway database. Write-up names what confused a first-timer and the exact steps for the real
+> go.
+
+---
+
+## 47. The pitch and demo scripts, re-timed to what actually exists (FF3)
+
+**Status: HOLD.** On PR #356 (batch 17). `docs/PITCH_SCRIPT.md`, `docs/DEMO_NARRATION.md`, and the
+new `docs/DEMO_CLICK_SHEET.md`; every claim in both scripts re-checked against `develop` before
+the re-time.
+
+source: `docs/PITCH_SCRIPT.md`, `docs/DEMO_NARRATION.md`, `docs/DEMO_CLICK_SHEET.md`
+
+### Arena
+
+> Re-timed our pitch script and demo narration to the surfaces that actually exist today — the
+> settlement journal as the live payout path, `/hub/verify`, the wallet roll-up, compare, print,
+> feeds, the glossary — and re-checked every claim in both against the actual code first. We also
+> corrected a couple of our own stale lines in the process: a claim that something had taken "four
+> weeks" when it had actually been about four days, and a bug we'd still called "not yet fixed"
+> after it had shipped a batch earlier. A new one-page click sheet lists exactly what to open, in
+> order, for the recording session.
+
+### X
+
+> Re-timed our pitch and demo scripts to what actually exists on develop today, re-checking every
+> claim against the code. Fixed two of our own stale lines along the way (an overstated timeframe,
+> a bug we still called "not fixed" after it had shipped). New one-page click sheet for the
+> recording.
+
+---
+
+## 48. Desk fixes from the rehearsal (GG3)
+
+**Status: HOLD.** On PR #356 (batch 17). Every "what confused" line in
+`docs/POKEAHOE_REHEARSAL_2026-09.md` §4 resolved with a fix or a recorded reason it stays; seven
+languages where the copy changed.
+
+source: `lib/hub/project.js`, `lib/hub/routes.js`, `scripts/hub-registry-test.cjs`
+
+### Arena
+
+> Rehearsing POKEAHOE's onboarding turned up four real rough edges on the operator desk, and we
+> fixed all four the same day: the registry endpoint now accepts the field name the desk actually
+> sends and refuses any other unrecognized field with a clear error instead of silently doing
+> nothing; the wallet lookup's empty state now says plainly it shows past records, not live
+> eligibility; the project page spells out "program" versus "program version" in one line; and
+> publishing terms with no funding wallet on file now names the exact next step instead of
+> surfacing a raw internal error. All in seven languages where the copy changed.
+
+### X
+
+> POKEAHOE's rehearsal found 4 real rough edges on the operator desk — fixed same day: a registry
+> endpoint that silently no-op'd on a wrong field name, an ambiguous "past records vs live
+> eligibility" label, unclear program vs program-version wording, and a raw internal error when no
+> funding wallet is set. All 7 languages where copy changed.
+
+---
+
+**Batch 18 (`#357`) — nothing to draft.** It is a disclosure-line and handoff-document update only
+(`docs/PRE_EVENT_STATE.md`, `docs/HANDOFF_2026-09-18.md`) — no product surface shipped, so no
+Arena/X item is drafted for it.
+
+## Posting checklist (round 4)
+
+Same five steps as round 1's checklist above, plus:
+1. Re-check the actual current tip of `main` immediately before posting anything from this round —
+   this whole round was drafted against `main` at `cfb2ce0` (PR #337), the same tip round 3 saw; a
+   promotion after this draft changes the status line for every item here at once.
+2. Items 43 and 44 (EE5, FF1) and the batch-18 note above are internal hygiene with no Arena/X
+   draft — don't invent one; there is nothing product-facing there to post.
+
+---
+
+## Posting history
+
+Nothing from this file has been posted yet, in any round, as of 2026-09-19. When the owner
+actually posts a draft, append a line here — date, round + item number, Arena and/or X, and the
+live link — rather than editing any status line above. An empty section below this point means
+exactly that: no draft in this file has gone out the door.
