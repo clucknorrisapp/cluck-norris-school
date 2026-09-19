@@ -2020,5 +2020,12 @@
   "What none of these can tell you": "这些工具都无法告诉你的事",
   "The chain shows what happened. It never shows why. An explorer can show you a wallet sold — it can't tell you that was the team, that it was a rug, or that it was a mistake.": "链上显示的是发生了什么。它从不显示为什么。一个区块浏览器能告诉你某个钱包卖出了——它没法告诉你那是团队干的、那是一次 rug，还是一次失误。",
   "Anyone telling you the chain proves motive is selling you something.": "任何告诉你链上数据能证明动机的人，都是在向你推销什么。",
-  "Check a wallet for the warning signs we do know how to check →": "去检查一个钱包身上那些我们确实知道怎么查的警示信号 →"
+  "Check a wallet for the warning signs we do know how to check →": "去检查一个钱包身上那些我们确实知道怎么查的警示信号 →",
+  "BASE FEE, PRIORITY FEE AND COMPUTE — UNTANGLED": "Base fee、priority fee 和 compute——理清",
+  "CONFERENCES, HACKATHONS, MEETUPS — AND THE FAKE VERSION OF EACH": "大会、黑客松、线下聚会——以及每一种的假版本",
+  "THE HONEST ANSWER FIRST, THEN WHAT ELSE IS REAL": "先说老实的答案，再看什么才是真的",
+  "THE OFFICIAL DOMAINS — TYPE THEM, DON'T CLICK A LINK": "官方域名——自己输入，不要点链接",
+  "THREE WAYS TO HOLD IT, THREE DIFFERENT THINGS": "持有它的三种方式，三种不同的东西",
+  "WHO PAYS TO OPEN THE DOOR ON THE OTHER END": "谁付钱在对方那端打开这扇门",
+  "YOU'RE SWAPPING AGAINST A POOL, NOT BUYING FROM A SITE": "你是在跟一个 pool 做 swap，而不是在网站上购买"
 }
