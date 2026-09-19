@@ -497,7 +497,10 @@ for (const fam of FAMILIES) {
     // it is missing from. Scoped to just these files (not all of `public/`) so this doesn't drag
     // the hundreds of un-curated tool pages into gating — that would make CI red for pages nobody
     // has curated on purpose.
-    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html', 'hub-trust.html', 'hub-verify.html', 'hub-compare.html', 'hub-glossary.html'];
+    // solana-room.html / solana-rent.html (the Solana Room — CLAUDE.md) joined this list on
+    // creation: same "curated, not machine-translated" bar as the rest of the school's public
+    // reference pages, same t()/tf() page-local helper as hub-glossary.html.
+    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html', 'hub-trust.html', 'hub-verify.html', 'hub-compare.html', 'hub-glossary.html', 'solana-room.html', 'solana-rent.html'];
     const hubKeys = new Set();
     // JS-built strings (see the "JS-BUILT STRINGS ON HUB_FILES" header comment): every literal
     // passed to a page-local t()/tf() call is an explicit "translate this" signal from whoever

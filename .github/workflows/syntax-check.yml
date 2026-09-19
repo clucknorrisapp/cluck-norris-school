@@ -170,6 +170,14 @@ jobs:
       # rendered-page coverage.
       - name: Project Hub — the glossary (EE2) — drift + route
         run: node scripts/hub-glossary-test.cjs
+      # The Solana Room (CLAUDE.md) — a public, no-wallet reference room. This increment ships
+      # the room shell (/solana) plus one full page, the rent page (/solana/rent). No-build boot
+      # (both routes need their own explicit app.get route — see server.js), room links to rent,
+      # the rent page carries the scam-warning block and the "not an airdrop" statement, every
+      # t() key on both pages exists in all six curated dictionaries, and no forbidden word
+      # (yield/APR/APY, Normie Quest, Wallet Watch, Nomadz, Solana Foundation, ETF) appears.
+      - name: The Solana Room — rent page (route, scam warning, i18n coverage, forbidden words)
+        run: node scripts/solana-room-test.cjs
       # Addendum B5 / roadmap E3: the on-chain memo format is byte-diffed against a hand-built
       # Uint8Array before it ships; verifyCommitTx never trusts the client (wrong payer, wrong or
       # missing memo, more than one memo, a failed or unconfirmed tx are all refused); a version's
