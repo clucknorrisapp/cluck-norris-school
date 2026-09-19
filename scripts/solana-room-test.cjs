@@ -152,7 +152,11 @@ const FORBIDDEN_TIER1 = [
 // words "financial advice", and that disclaimer is a line we WANT on the markets page.
 const FORBIDDEN_ADVICE = [
   { name: "good investment", re: /\bgood investment\b/i },
-  { name: "worth buying", re: /\bworth (?:buying|it to buy)\b/i },
+  // "worth buying" is DELIBERATELY not here. This school uses it constantly in the negative —
+  // "this isn't a claim that either mint is worth buying", "being swappable says nothing about
+  // being worth buying" — and a substring rule cannot tell the refutation from the claim. Same
+  // trap as "not financial advice" containing "financial advice". The six patterns that remain
+  // have no honest negative use on these pages.
   { name: "you should buy", re: /\byou should (?:buy|sell|hold|invest)\b/i },
   { name: "we recommend", re: /\bwe recommend\b/i },
   { name: "price target", re: /\bprice target\b/i },
@@ -204,7 +208,13 @@ const FORBIDDEN_ADVICE = [
   for (const page of TOPIC_PAGES) {
     ok(`room page points at ${page.route}`, new RegExp("href:\\s*['\"]" + page.route + "['\"]").test(roomText));
   }
+  // The two section headings are passed to the local section() helper, which runs them through
+  // t() itself — so the literal sits inside section(...), not inside t(...). Both spellings are
+  // pinned: the call that renders them, and their presence in __solanaRoomGatedStrings() so the
+  // regex-based i18n gates can see them at all (they are invisible to a t()-literal scan).
   ok("room page renders both sections (The mechanics / The bigger picture)",
+    /section\(['"]The mechanics['"]/.test(roomText) && /section\(['"]The bigger picture['"]/.test(roomText));
+  ok("both section headings are listed in __solanaRoomGatedStrings so the i18n gate sees them",
     /t\(['"]The mechanics['"]\)/.test(roomText) && /t\(['"]The bigger picture['"]\)/.test(roomText));
 
   // ── (c) the rent page carries the scam-warning block and the "not an airdrop" statement ─────
@@ -288,29 +298,32 @@ const FORBIDDEN_ADVICE = [
   ok("mint page contains the impersonator mint address, byte-for-byte", mintText.includes(SKR_FAKE_MINT));
   ok("the two example mint addresses are not the same string", SKR_REAL_MINT !== SKR_FAKE_MINT);
 
-  // ── the room page moved all six topics into "available now"; COMING_NEXT is now empty ───────
-  // Parses the two source arrays directly (AVAILABLE_NOW / COMING_NEXT) rather than eyeballing
+  // ── the room page's two topic arrays, parsed from source ────────────────────────────────────
+  // Parses the arrays directly (MECHANICS / BIGGER_PICTURE / COMING_NEXT) rather than eyeballing
   // string position, so this can't be fooled by an unrelated literal occurring earlier in the
-  // file — it checks which ARRAY each topic's title literal actually sits inside.
-  console.log('\nthe room page has all six topics in "available now"; COMING_NEXT is empty\n');
+  // file — it checks which ARRAY each topic's title literal actually sits inside. A tier-2 title
+  // sitting in MECHANICS (or vice versa) would render the room under the wrong heading.
+  console.log("\nthe room page's two topic arrays hold the right topics; COMING_NEXT is empty\n");
   {
-    const availableBlock = (/var AVAILABLE_NOW = \[([\s\S]*?)\n\s*\];/.exec(roomText) || [])[1] || "";
+    const grab = (name) => (new RegExp("var " + name + " = \\[([\\s\\S]*?)\\n\\s*\\];").exec(roomText) || [])[1] || "";
+    const mechBlock = grab("MECHANICS"), bigBlock = grab("BIGGER_PICTURE");
     const comingBlock = (/var COMING_NEXT = (\[[\s\S]*?\]);/.exec(roomText) || [])[1] || "";
-    ok("room page source has a parseable AVAILABLE_NOW array", availableBlock.length > 0);
+    ok("room page source has a parseable MECHANICS array", mechBlock.length > 0);
+    ok("room page source has a parseable BIGGER_PICTURE array", bigBlock.length > 0);
     ok("room page source has a parseable COMING_NEXT array", comingBlock.length > 0);
-    ok('"What your wallet actually holds" is in AVAILABLE_NOW', availableBlock.includes("What your wallet actually holds"));
-    ok('"What a token mint is" is in AVAILABLE_NOW', availableBlock.includes("What a token mint is"));
-    ok('"What actually happens when you buy" is in AVAILABLE_NOW', availableBlock.includes("What actually happens when you buy"));
-    ok('"Sending tokens, and why the first one costs extra" is in AVAILABLE_NOW', availableBlock.includes("Sending tokens, and why the first one costs extra"));
-    ok('"What a transaction actually costs" is in AVAILABLE_NOW', availableBlock.includes("What a transaction actually costs"));
-    ok("six topics are in AVAILABLE_NOW", (availableBlock.match(/title:/g) || []).length === 6, "found " + (availableBlock.match(/title:/g) || []).length);
+    for (const title of ["The deposit you didn't know you made", "What your wallet actually holds",
+      "What a token mint is", "What actually happens when you buy",
+      "Sending tokens, and why the first one costs extra", "What a transaction actually costs"]) {
+      ok(`"${title}" is in MECHANICS, and not in BIGGER_PICTURE`, mechBlock.includes(title) && !bigBlock.includes(title));
+    }
+    for (const title of ["What Solana is actually used for", "Buying SOL, ETFs, and what you actually own",
+      "Where the Solana world actually meets", "Where to look things up"]) {
+      ok(`"${title}" is in BIGGER_PICTURE, and not in MECHANICS`, bigBlock.includes(title) && !mechBlock.includes(title));
+    }
+    ok("six topics in MECHANICS", (mechBlock.match(/title:/g) || []).length === 6, "found " + (mechBlock.match(/title:/g) || []).length);
+    ok("four topics in BIGGER_PICTURE", (bigBlock.match(/title:/g) || []).length === 4, "found " + (bigBlock.match(/title:/g) || []).length);
     ok("COMING_NEXT is now an empty array", /^\[\s*\]$/.test(comingBlock.trim()), "got " + JSON.stringify(comingBlock.trim().slice(0, 60)));
   }
-  // The "coming next" section itself must not render when COMING_NEXT is empty — an empty card
-  // with a title and lede but nothing underneath would be its own small bug. This is a static
-  // fetch of the unexecuted page source (no headless browser here), so the literal copy is
-  // always present in the script text regardless of runtime state; what this actually checks is
-  // that render() gates the whole card behind a length check rather than always emitting it.
   ok('room page guards the "Coming next" card on COMING_NEXT.length > 0', /COMING_NEXT\.length > 0/.test(roomText));
 
   // ── the rent numbers — re-derived independently here too, not just eyeballed ────────────────
@@ -364,8 +377,11 @@ const FORBIDDEN_ADVICE = [
   console.log("\n(e) no forbidden word or phrase\n");
   for (const page of ALL_PAGES) {
     const text = body[page.route];
-    const isTier2 = BIGGER_PICTURE_PAGES.some((x) => x.route === page.route);
-    const rules = FORBIDDEN_ALL.concat(FORBIDDEN_ADVICE).concat(isTier2 ? [] : FORBIDDEN_TIER1);
+    // The ETF ban skips the tier-2 pages and the room index; the index gets its own narrower
+    // check just below (every hit must sit inside the markets entry's title), and /solana/markets
+    // is the carve-out by definition.
+    const etfExempt = BIGGER_PICTURE_PAGES.some((x) => x.route === page.route) || page.route === "/solana";
+    const rules = FORBIDDEN_ALL.concat(FORBIDDEN_ADVICE).concat(etfExempt ? [] : FORBIDDEN_TIER1);
     for (const { name, re } of rules) {
       const m = text.match(re);
       ok(`${page.route}: no "${name}"`, !m, m ? "found near: " + text.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, " ") : "");
@@ -373,6 +389,15 @@ const FORBIDDEN_ADVICE = [
   }
   // ETF stays banned everywhere EXCEPT the one page whose subject it is — pinned explicitly so
   // the carve-out can never silently widen to the other three tier-2 pages.
+  // The room INDEX has to be able to name the page it links to ("Buying SOL, ETFs, and what you
+  // actually own"), so its occurrences are allowed — but only inside that one entry, checked
+  // below, never loose in the index's own copy.
+  {
+    const idx = body["/solana"];
+    const hits = [...idx.matchAll(/\betfs?\b/gi)];
+    const allInTitle = hits.every((m) => /Buying SOL, ETFs, and what you actually own/.test(idx.slice(Math.max(0, m.index - 60), m.index + 60)));
+    ok(`/solana: every "ETF" on the index sits inside the markets entry's own title (${hits.length} found)`, hits.length > 0 && allInTitle);
+  }
   for (const page of BIGGER_PICTURE_PAGES.filter((x) => x.route !== "/solana/markets")) {
     const m = body[page.route].match(/\betfs?\b/i);
     ok(`${page.route}: no "ETF" (the carve-out is /solana/markets only)`, !m,

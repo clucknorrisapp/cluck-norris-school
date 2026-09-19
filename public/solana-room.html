@@ -127,6 +127,10 @@
     t('Buying SOL, ETFs, and what you actually own'), t('Three ways people hold it, and three very different things they actually hold. Not advice — just what ends up in your hands each way.'),
     t('Where the Solana world actually meets'), t('Conferences, hackathons and meetups — and how to tell a real one from the fake ticket page built to drain you.'),
     t('Where to look things up'), t('The real domains for explorers, docs, status pages and wallets. Type them; never reach one from a DM.'),
+    // The two section headings and their ledes are passed to section(), which calls t() on them
+    // itself — so they are invisible to a t()-literal scan too. Listed here for the same reason.
+    t('The mechanics'), t('How the machine actually works, one part at a time.'),
+    t('The bigger picture'), t("What it's actually used for, what you own when you hold it three different ways, where the ecosystem meets, and where to look things up without getting phished."),
   ]; }
 
   function render() {
