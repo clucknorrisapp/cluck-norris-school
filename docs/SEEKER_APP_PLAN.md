@@ -97,15 +97,63 @@ contradictory published scoring schemes and the eligibility rules, is in
 **Gate at day 3:** a real wallet connects on the owner's Seeker. If that does not happen, the plan
 changes rather than the deadline.
 
-## 7. Open, and the owner's to decide
+## 7. Decided (owner, 2026-09-19)
+
+### SKR — an additional door, never a gate
+
+**Hold ~$50 of SKR → the heavy tools are free in the Seeker app**, alongside the two doors that
+already exist (hold CLKN, or pay the SOL pass). Owner's call, same evening.
+
+- **Mint: `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`** — SPL Token, 6 decimals.
+  ⚠️ **Verified before use, and this mattered:** a second mint also calls itself SKR
+  (`79dd8EvWuGjPTnTMMBoY6Nqtdw5u1cXaGh4azuLGjiAj`, name "Seeker | Solana Mobile👇") and is an
+  impersonator — unverified, 4 holders, no market cap, organic score 0, and it is what surfaced
+  first in a web search. The real one is Jupiter-verified with ~45.8k holders. **Never take a mint
+  from a search result; check the registry and the chain.**
+  Factual note, no interpretation: on-chain supply is ~10.6B and the mint authority is still set,
+  where the public description says a fixed 10B. Irrelevant to a holdings check; know it anyway.
+- **$50 worth, live-priced, never hardcoded** — same rule as the CLKN threshold.
+- **Same comp criteria as the existing hold**: re-checked at use, fails open when pricing is down.
+  No new behaviour to reason about.
+- **Seeker app only.** The web, Google Play and iOS editions are unchanged.
+- ⛔ **Nothing is gated behind SKR** — least of all Rent Reclaim. Charging someone to get their own
+  money back is wrong, and a token purchase in front of the hero flow would wreck the stickiness
+  score we are chasing. No swap prompt either: steering people into a token cuts against
+  "say what's on-chain, never what to buy."
+
+### Entry: SOLO
+
+Registered as a solo participant, not a team. Consequences to keep in mind: switching to a team
+later requires deleting the solo registration first; once a submission is made the entrant is
+locked for the rest of the hackathon; and the 1st prize's "a Seeker for each team member" is one
+device. One submission per contestant — multiple entries forfeit.
+
+### Registration mechanics (checked against the site, 2026-09-19)
+
+- **There is no separate sign-up deadline.** The event record carries only `signUpOpenDate`
+  (Sep 8) and `submissionCloseDate` (Oct 9 06:59 UTC), and the site's registration logic gates on
+  exactly those two. The FAQ's "register before the sign-up deadline" resolves to the submission
+  deadline.
+- **Submissions have a DRAFT state.** *"You may edit your submission at any time before the
+  deadline whilst it is in draft. However you may not edit your submission if you have completed
+  the final submission agreement."* So: register, open the draft early, keep editing it, and
+  ⛔ **do not complete the final submission agreement until the work is done.** It locks.
+- **Grant judges GitHub access before submitting** — they review weeks after the deadline.
+
+## 8. Still open
 
 1. **appId** — ship under a new one (zero risk to the live listing) or replace the live app.
-2. **SKR** — one published scheme makes SKR integration 20% of the main score, the other makes it a
-   separate $10k bonus. **Ask in the CLOCK IN office hours before deciding to skip it.**
-3. **What gives** — the Colosseum Hub extension roadmap (GG2/GG4/GG5 and beyond) is the proposed
+2. **Which repo the submission names.** The app source is here and this repo is public; the APK is
+   built in `CLKN-SEEKER`. Recommendation: point judges here and describe the packaging repo in the
+   writeup — but "technical depth (GitHub commits)" is scored, and the hackathon work is a handful
+   of PRs inside a large history, so the writeup must name the exact PRs and this document.
+3. **SKR's weight** — one published scheme makes SKR integration 20% of the main score, the other a
+   separate $10k bonus, and they may mean on-chain activity rather than holdings. **Ask in office
+   hours (Wednesdays 18:30 UTC, Discord) before assuming the holdings shape is enough.**
+4. **What gives** — the Colosseum Hub extension roadmap (GG2/GG4/GG5 and beyond) is the proposed
    pause. Colosseum itself continues; their FAQ explicitly allows both hackathons.
 
-## 8. Needs doing regardless of any of the above
+## 9. Needs doing regardless of any of the above
 
 The live dApp Store listing advertises **Cluck Score, Survival Simulator and the Ultimate
 Challenge** — all deleted — and the retired CLKN-micropayment model. A judge who opens our store
