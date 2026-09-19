@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>What A Transaction Actually Costs</title>
+<meta name="description" content="Base fee, priority fee, compute units and rent are different charges wearing similar names. What each one is, why a failed transaction can still cost you, and why a wallet needs a little SOL even to move a token it already holds — in plain words."/>
+<meta property="og:title" content="What A Transaction Actually Costs — Cluck Norris"/>
+<meta property="og:description" content="Base fee, priority fee, compute units and rent are different charges wearing similar names. What each one is, why a failed transaction can still cost you, and why a wallet needs a little SOL even to move a token it already holds — in plain words."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana/fees"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="What A Transaction Actually Costs — Cluck Norris"/>
+<meta name="twitter:description" content="Base fee, priority fee, compute units and rent are different charges wearing similar names. What each one is, why a failed transaction can still cost you, and why a wallet needs a little SOL even to move a token it already holds — in plain words."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:.3px; color:var(--gold); font-weight:400; line-height:1.25; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact + .fact { margin-top:10px; }
+  .fact b, .fact code { color:var(--text); }
+  .fact code { font-family:var(--mono); font-size:.92em; background:rgba(255,255,255,.06); padding:1px 5px; border-radius:4px; word-break:break-word; }
+  /* the failed-transaction-still-costs warning gets the same real visual weight the rent page
+     gives its scam card — a distinct red card, not a tucked-away footnote. */
+  .card.scam { background:var(--redbg, rgba(232,30,14,.14)); border:1px solid rgba(232,30,14,.4); }
+  .scam .sec-title { color:#FCA5A5; }
+  .scam .fact { color:#FBD5D0; }
+  .scam .fact b { color:#FEE2E0; }
+  .stage-row { padding:12px 0; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .stage-row:first-of-type { border-top:none; padding-top:0; }
+  .stage-name { font-family:var(--disp); font-weight:400; font-size:15px; color:var(--text); margin-bottom:8px; }
+  .stage-vals { display:flex; flex-wrap:wrap; gap:10px 20px; }
+  .stage-val { min-width:150px; flex:1 1 150px; }
+  .stage-label { display:block; font-size:11px; letter-spacing:1px; color:var(--sub); text-transform:uppercase; margin-bottom:2px; }
+  .stage-num { font-family:var(--mono); font-size:14px; color:var(--text); word-break:break-word; }
+  .footnote { font-size:12.5px; color:var(--sub); line-height:1.6; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  /* a footnote link is often the sole content of its div — not inline in a sentence, so it
+     needs a real 44px tap target. Same expand-with-negative-margin trick as .small a. */
+  .footnote a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .links-card { display:flex; flex-direction:column; }
+  .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
+  .small { font-size:12px; color:var(--sub); }
+  /* a standalone link inside a .small line still needs a real 44px tap target — same
+     expand-with-negative-margin trick public/hub-glossary.html / solana-rent.html use. */
+  .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/solana" data-clkn-avoid="1">← THE SOLANA ROOM</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">What a transaction actually costs</h1>
+    <p data-clkn-avoid="1">BASE FEE, PRIORITY FEE AND COMPUTE — UNTANGLED</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as
+  // public/hub-glossary.html / public/solana-room.html / public/solana-rent.html: a curated dict
+  // lookup over window.CLKN_I18N.dict, English literal on a miss, no machine-translation fallback.
+  // scripts/i18n-audit.cjs's Hub-pages gate and scripts/solana-room-test.cjs both scan this file's
+  // <script> block for every literal passed to t() and require it in all six dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  function render() {
+    var html = '';
+
+    html += '<div class="card"><div class="intro">' + esc(t('"Solana fees" isn\'t one number. A base fee, an optional priority fee, and the rent-exempt deposit covered elsewhere in this room are three different charges that get lumped together under one word. Here\'s which is which, in lamports — the smallest unit of SOL, one billionth of one.')) + '</div></div>';
+
+    html += '<div class="card" data-section="base-fee">';
+    html += '<div class="sec-title">' + esc(t('The base fee: 5,000 lamports per signature')) + '</div>';
+    html += '<div class="fact">' + esc(t("Every transaction pays a base fee of 5,000 lamports for each signature it needs — this compensates validators for the cryptographic work of checking that signature. It isn't negotiable or optional, and half of it is burned outright rather than paid to anyone.")) + '</div>';
+    html += '<div class="fact">' + esc(t("5,000 lamports is a fixed, stable number written into the protocol. What that's worth in your own currency moves with SOL's price, so quoting it in cents would go stale — the lamport figure is the part that doesn't.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="priority-fee">';
+    html += '<div class="sec-title">' + esc(t('Priority fees: paying to matter more when block space is contested')) + '</div>';
+    html += '<div class="fact">' + esc(t("Block space is limited and, at busy moments, contested — many transactions want into the same block. A priority fee is an optional extra payment, on top of the base fee, that makes your transaction more attractive to include and order sooner. It's zero by default.")) + '</div>';
+    html += '<div class="fact">' + esc(t('It\'s calculated as your chosen "price" per compute unit, multiplied by how many compute units your transaction is allowed to use, converted from millionths of a lamport into lamports. Every lamport of it goes to the validator, not to the protocol.')) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="compute-units">';
+    html += '<div class="sec-title">' + esc(t("Compute units: the meter your transaction runs on")) + '</div>';
+    html += '<div class="fact">' + esc(t("Every instruction in a transaction consumes compute units as it runs — a budget for how much computation the network will do for it. An instruction gets 200,000 compute units by default, a transaction can request up to 1,400,000 in total, and Solana's own built-in instructions default to a much smaller 3,000.")) + '</div>';
+    html += '<div class="fact">' + esc(t("A transaction with several instructions, like a multi-step swap, may need more compute than the default gives it — and because the priority fee is calculated from the compute-unit limit you request, asking for exactly what you need, not the maximum, keeps that fee honest.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="failed-tx-fee">';
+    html += '<div class="sec-title">' + esc(t('A failed transaction can still cost you')) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("If any instruction in a transaction fails, the whole transaction fails and every state change in it reverts — but the fee is still charged. A swap that missed its slippage tolerance, or a transaction that ran out of compute, still cost you the base fee, and any priority fee you attached, even though nothing else about it happened.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="need-sol-to-move-tokens">';
+    html += '<div class="sec-title">' + esc(t("Why a wallet needs a little SOL, even to move a token it already holds")) + '</div>';
+    html += '<div class="fact">' + esc(t("Every transaction fee — the base fee and any priority fee — is paid in lamports, straight out of whichever account is named as the fee payer. There's no other currency the base protocol accepts for it.")) + '</div>';
+    html += '<div class="fact">' + esc(t("So a wallet holding plenty of some other token but zero SOL can't sign and send anything at all — not even a plain transfer of a token it already owns — until it has at least a small amount of SOL to pay that fee with.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card links-card">';
+    html += '<a href="/solana/rent">' + esc(t("Rent is a different charge — the refundable deposit behind every account →")) + '</a>';
+    html += '<a href="/solana/transfers">' + esc(t('Why the first transfer of a token to someone new costs extra →')) + '</a>';
+    html += '<a href="/solana/buying">' + esc(t('What actually happens when you buy →')) + '</a>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Sources')) + '</div>';
+    html += '<div class="small"><a href="https://solana.com/docs/core/fees" target="_blank" rel="noopener">' + esc(t('Fees — the base fee, priority fees and compute unit limits, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/docs/core/transactions" target="_blank" rel="noopener">' + esc(t('Transactions — why fees are still charged when a transaction fails, on solana.com →')) + '</a></div>';
+    html += '</div>';
+
+    html += '<div class="small" style="text-align:center"><a href="/solana">' + esc(t('Back to the Solana Room →')) + '</a></div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>
