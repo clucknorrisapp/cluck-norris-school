@@ -9,6 +9,7 @@
     "theme.css",
     "cluck-util.js",
     "cluck-wallet.js",
+    "rent-math.js",
     "i18n.js",
     "icon.svg",
     "cluck-norris.png"
