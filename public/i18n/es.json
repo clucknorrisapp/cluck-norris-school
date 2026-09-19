@@ -1754,5 +1754,7 @@
   "Check a mint's authorities and your own approvals — free, read-only, no signup →": "Revisa las authorities de un mint y tus propias aprobaciones — gratis, solo lectura, sin registro →",
   "A deeper forensic read on any mint → Token Autopsy": "Un análisis forense más profundo de cualquier mint → Token Autopsy",
   "SPL Token Basics — what a mint account is, on solana.com →": "SPL Token Basics — qué es una cuenta mint, en solana.com →",
-  "Create a Token Mint — decimals, mint authority, freeze authority, on solana.com →": "Create a Token Mint — decimals, mint authority, freeze authority, en solana.com →"
+  "Create a Token Mint — decimals, mint authority, freeze authority, on solana.com →": "Create a Token Mint — decimals, mint authority, freeze authority, en solana.com →",
+  "WHAT'S REALLY ON-CHAIN UNDER YOUR ADDRESS": "LO QUE REALMENTE HAY EN LA CADENA BAJO TU DIRECCIÓN",
+  "THE ONE ADDRESS THAT DEFINES A TOKEN": "LA ÚNICA DIRECCIÓN QUE DEFINE UN TOKEN"
 }

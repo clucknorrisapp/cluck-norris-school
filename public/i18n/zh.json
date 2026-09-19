@@ -1754,5 +1754,7 @@
   "Check a mint's authorities and your own approvals — free, read-only, no signup →": "自己动手查一个 mint 的各项 authority，以及你自己都批准过什么——免费、只读、无需注册 →",
   "A deeper forensic read on any mint → Token Autopsy": "对任意一个 mint 做更深入的法医式分析 → Token Autopsy",
   "SPL Token Basics — what a mint account is, on solana.com →": "SPL Token Basics——什么是 mint 账户，solana.com →",
-  "Create a Token Mint — decimals, mint authority, freeze authority, on solana.com →": "Create a Token Mint——decimals、mint authority、freeze authority，solana.com →"
+  "Create a Token Mint — decimals, mint authority, freeze authority, on solana.com →": "Create a Token Mint——decimals、mint authority、freeze authority，solana.com →",
+  "WHAT'S REALLY ON-CHAIN UNDER YOUR ADDRESS": "你的地址背后链上到底是什么",
+  "THE ONE ADDRESS THAT DEFINES A TOKEN": "定义一个 TOKEN 的唯一地址"
 }

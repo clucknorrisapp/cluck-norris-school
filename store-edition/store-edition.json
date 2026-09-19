@@ -98,7 +98,9 @@
     "Check a mint's authorities and your own approvals — free, read-only, no signup →",
     "A deeper forensic read on any mint → Token Autopsy",
     "SPL Token Basics — what a mint account is, on solana.com →",
-    "Create a Token Mint — decimals, mint authority, freeze authority, on solana.com →"
+    "Create a Token Mint — decimals, mint authority, freeze authority, on solana.com →",
+    "WHAT'S REALLY ON-CHAIN UNDER YOUR ADDRESS",
+    "THE ONE ADDRESS THAT DEFINES A TOKEN"
   ],
   "dirs": [
     "i18n"
