@@ -6,21 +6,16 @@
 // Capacitor app with no server behind it to rewrite a deep path back to index.html, so every
 // route must resolve client-side off the `#` fragment (CLKN-SEEKER's DELIVERY-CONTRACT.md).
 //
-// Three placeholder panes only — Rent Reclaim, Ask Cluck, Wallet Checkup — per the plan's
-// increment-1 scope. The wallet control in the header exercises the shared, MWA-aware registry
-// (public/cluck-wallet.js) end to end (connect/disconnect through window.CluckWallet), but the
-// three features themselves are not built here.
+// Increment 2 (docs/SEEKER_APP_PLAN.md): Rent Reclaim is now the real, read-side pane
+// (RentReclaim.jsx) — enumerate + classify only, no signing (that's increment 3). Ask Cluck and
+// Wallet Checkup stay the increment-1 placeholder. The wallet control in the header exercises the
+// shared, MWA-aware registry (public/cluck-wallet.js) end to end (connect/disconnect through
+// window.CluckWallet) and now feeds the connected address to Rent Reclaim's scan.
 import React from "react";
 import { HashRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
 import { t, useI18nReady } from "./i18n.js";
-
-function shortAddr(address) {
-  try {
-    if (window.CluckUtil && typeof window.CluckUtil.shortAddr === "function") return window.CluckUtil.shortAddr(address);
-  } catch (_) {}
-  const a = String(address || "");
-  return a.length > 10 ? `${a.slice(0, 4)}…${a.slice(-4)}` : a;
-}
+import { shortAddr } from "./addr.js";
+import RentReclaimPane from "./RentReclaim.jsx";
 
 // Anywhere a user can connect a wallet, they must be able to disconnect (CLAUDE.md) — this is
 // the one control surface, so both live in the same place with the provider's own disconnect()
@@ -112,10 +107,7 @@ export default function App() {
         <main className="seeker-main">
           <Routes>
             <Route path="/" element={<Navigate to="/rent" replace />} />
-            <Route
-              path="/rent"
-              element={<Pane icon="💰" title="Rent Reclaim" blurb="Find dead token accounts and reclaim the SOL locked inside them." />}
-            />
+            <Route path="/rent" element={<RentReclaimPane wallet={wallet} />} />
             <Route
               path="/ask"
               element={<Pane icon="🐔" title="Ask Cluck" blurb="Ask the AI tutor anything about crypto, in plain words." />}

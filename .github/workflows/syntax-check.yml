@@ -195,6 +195,17 @@ jobs:
         run: |
           git fetch origin develop --depth=1 --quiet || true
           node scripts/seeker-build-test.cjs
+      # Rent Reclaim, READ SIDE (increment 2, docs/SEEKER_APP_PLAN.md) — GET /api/seeker/
+      # reclaimable (lib/rent-reclaim.js) and its pane (src/seeker/RentReclaim.jsx). Both token
+      # programs are enumerated; an account holding a balance is never classed reclaimable;
+      # wrapped SOL is refused outright; the reported total matches an independent re-derivation
+      # of the fixture; an RPC failure (network error, non-OK status, or a JSON-RPC-level error)
+      # surfaces as a failure, never an empty/zero result; more accounts than the cap are flagged
+      # `truncated`, never silently cut; the 16 new i18n keys land in all six dictionaries and are
+      # excluded from the google/ios bundle; the new controls meet the 44px tap-target floor.
+      # Dependency-free — stubs global.fetch, no live RPC call in CI.
+      - name: Seeker app — Rent Reclaim read side (both token programs, honest classification, unavailable-not-zero, i18n)
+        run: node scripts/seeker-reclaim-test.cjs
       # Addendum B5 / roadmap E3: the on-chain memo format is byte-diffed against a hand-built
       # Uint8Array before it ships; verifyCommitTx never trusts the client (wrong payer, wrong or
       # missing memo, more than one memo, a failed or unconfirmed tx are all refused); a version's

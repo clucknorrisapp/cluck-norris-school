@@ -62,6 +62,7 @@ const credentials = require("./lib/credentials");
 const jvpDashboard = require("./lib/jvp-dashboard");
 const curriculumPage = require("./lib/curriculum"); // lesson COUNTS only — the SEO mirror page was removed 2026-07-29
 const rpc = require("./lib/rpc"); // resilient RPC: primary Helius + automatic failover
+const { scanReclaimable } = require("./lib/rent-reclaim"); // Rent Reclaim, READ SIDE ONLY — Seeker app increment 2
 const {
   SOL_ADDR_RE, base58Decode, base58Encode, isOnCurveBytes, isOnCurve, deriveAta,
   DEX_PROGRAMS, LOCKER_PROGRAMS, TOKEN_PROGRAMS, PROGRAM_LABELS,
@@ -3960,6 +3961,9 @@ app.use("/api/token-card", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 // class. Both were covered only by the global 150/min cap — 10x looser than their siblings. (sec M3)
 app.use("/api/burn-scan", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/wallet-checkup", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+// Rent Reclaim (Seeker app, read side): 2 billed getTokenAccountsByOwner reads per request,
+// unauthenticated — same "forensic" budget as its siblings above, for the same reason (sec M3).
+app.use("/api/seeker/reclaimable", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 // Owners Snapshot: /start queues an hours-long paced crawl, so it gets its own tight cap; the
 // status/result/history reads are cheap file reads and only need the global /api cap.
 app.use("/api/owners-snapshot/start", rateLimit("ownersstart", { windowMs: 3600000, max: 6 }));
@@ -14685,6 +14689,30 @@ app.get("/api/burn-scan", async (req, res) => {
   }
 });
 
+// ── Rent Reclaim — Seeker app increment 2, READ SIDE ONLY ───────────────────────────────────
+// Powers the Rent Reclaim pane in src/seeker. FREE and ungated — never put behind the tools pass
+// (this is safety/education-adjacent, same posture as Wallet Checkup, not a heavy forensic tool).
+// No auth, no wallet signature: it reads public chain state, so a connected signature buys
+// nothing a plain GET doesn't already have. lib/rent-reclaim.js has the full classification and
+// RPC-failure posture; this route only validates input and maps its result/errors onto HTTP.
+//
+// ⛔ Nothing here builds or signs a transaction. Signing is increment 3.
+app.get("/api/seeker/reclaimable", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, status: "error", error: "Invalid wallet address" });
+  try {
+    const result = await scanReclaimable(wallet);
+    return res.status(200).json({ success: true, status: "ok", ...result });
+  } catch (e) {
+    // An RPC failure must read as "unavailable", never as "nothing reclaimable" — CLAUDE.md's
+    // rule for the tool gate applies just as hard to money-adjacent reads. Never a 200 here.
+    console.error("[seeker-reclaimable]", e.message);
+    return res.status(503).json({ success: false, status: "unavailable", wallet, error: "Could not read the chain right now — try again shortly." });
+  }
+});
+
 app.get("/api/claims", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -17842,6 +17870,17 @@ app.get("/cluck-wallet.js", (req, res) => {
   res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.type("application/javascript");
   res.sendFile(join(__dirname, "public", "cluck-wallet.js"));
+});
+
+// public/rent-math.js — pure rent-math constants + formatting, shared by /solana/rent
+// (public/solana-rent.html) and the Seeker app's Rent Reclaim pane (src/seeker) as a single
+// source of truth (see that file's header for why it also gets require()'d server-side,
+// lib/rent-reclaim.js). Same no-cache posture as the other shared browser modules above so a fix
+// reaches every page on its next load, not up to 4h later.
+app.get("/rent-math.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "rent-math.js"));
 });
 
 // The sitewide browser runtime every page loads (the floating nav + its i18n and read-aloud

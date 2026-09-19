@@ -1682,5 +1682,21 @@
   "Not connected": "No conectado",
   "Find dead token accounts and reclaim the SOL locked inside them.": "Encuentra cuentas de token muertas y recupera el SOL bloqueado dentro de ellas.",
   "Ask the AI tutor anything about crypto, in plain words.": "Pregúntale al tutor de IA cualquier cosa sobre cripto, en palabras simples.",
-  "Check approvals, freeze and mint authority — read-only and free.": "Revisa aprobaciones, autoridad de congelación y acuñación — solo lectura y gratis."
+  "Check approvals, freeze and mint authority — read-only and free.": "Revisa aprobaciones, autoridad de congelación y acuñación — solo lectura y gratis.",
+  "Connect your wallet to scan for reclaimable rent.": "Conecta tu wallet para buscar rent reclamable.",
+  "Scanning your wallet…": "Escaneando tu wallet…",
+  "Could not read the chain right now. Try again shortly.": "No se pudo leer la cadena en este momento. Intenta de nuevo en breve.",
+  "Try again": "Intentar de nuevo",
+  "Total reclaimable": "Total reclamable",
+  "More accounts exist in this wallet than are shown here.": "Existen más cuentas en esta wallet de las que se muestran aquí.",
+  "Reclaim": "Reclamar",
+  "Signing is coming in the next build.": "La firma llega en la próxima versión.",
+  "Reclaimable": "Reclamable",
+  "No reclaimable rent found in this wallet right now.": "No se encontró rent reclamable en esta wallet por ahora.",
+  "Holds a balance": "Tiene saldo",
+  "Refused": "Rechazada",
+  "Rescan": "Volver a escanear",
+  "No balance — safe to close.": "Sin saldo — segura para cerrar.",
+  "Still holds tokens — won't be closed.": "Todavía tiene tokens — no se cerrará.",
+  "Wrapped SOL — not handled here.": "SOL envuelto (wSOL) — no se maneja aquí."
 }

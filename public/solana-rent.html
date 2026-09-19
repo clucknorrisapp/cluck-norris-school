@@ -70,6 +70,7 @@
 </main>
 
 <script src="/cluck-util.js"></script>
+<script src="/rent-math.js"></script>
 <script>
 (function () {
   var esc = CluckUtil.esc;
@@ -105,20 +106,15 @@
   // billableBytes * lamports_per_byte (the "per byte" figure already folds in the 2-year
   // exemption threshold, same convention SIMD-0437 and solana.com/upgrades/reduced-rent use).
   //   293 * 6960 = 2,039,280   293 * 6333 = 1,855,569   293 * 5080 = 1,488,440   293 * 696 = 203,928
-  // Every value below is computed from BILLABLE_BYTES and LAMPORTS_PER_BYTE at load time — never
-  // a typed-in number that could silently drift from the byte math above it.
-  var BILLABLE_BYTES = 293; // 165 (token account data) + 128 (account overhead)
-  var LAMPORTS_PER_SOL = 1e9;
-  var STAGES = [
-    { name: 'Original', lamportsPerByte: 6960 },
-    { name: 'Step 1 — live on mainnet since Sep 3, 2026', lamportsPerByte: 6333 },
-    { name: 'Step 2 — mainnet expected mid-September 2026', lamportsPerByte: 5080 },
-    { name: 'All five steps — expected around November 2026', lamportsPerByte: 696 },
-  ];
-  var ORIGINAL_LAMPORTS = BILLABLE_BYTES * STAGES[0].lamportsPerByte;
-  function fmtSol(lamports) {
-    return (lamports / LAMPORTS_PER_SOL).toFixed(8).replace(/0+$/, '').replace(/\.$/, '.0') + ' SOL';
-  }
+  // BILLABLE_BYTES/STAGES/fmtSol live in lib/rent-math.js (served at /rent-math.js) — the ONE
+  // source of truth this page shares with the Seeker app's Rent Reclaim pane, so neither can
+  // silently drift from the byte math above it (CLAUDE.md's "duplicated implementations" trap).
+  var RM = window.CluckRentMath;
+  var BILLABLE_BYTES = RM.BILLABLE_BYTES;
+  var LAMPORTS_PER_SOL = RM.LAMPORTS_PER_SOL;
+  var STAGES = RM.STAGES;
+  var fmtSol = RM.fmtSol;
+  var ORIGINAL_LAMPORTS = RM.minimumLamports(STAGES[0].lamportsPerByte);
   function fmtSurplus(lamports) {
     var diff = ORIGINAL_LAMPORTS - lamports;
     if (diff <= 0) return '—';
@@ -134,7 +130,7 @@
   ]; }
 
   function stageRowHtml(stage) {
-    var lamports = BILLABLE_BYTES * stage.lamportsPerByte;
+    var lamports = RM.minimumLamports(stage.lamportsPerByte);
     return '<div class="stage-row"><div class="stage-name">' + esc(t(stage.name)) + '</div>' +
       '<div class="stage-vals">' +
       '<div class="stage-val"><span class="stage-label">' + esc(t('Deposit required')) + '</span><span class="stage-num">' + esc(fmtSol(lamports)) + '</span></div>' +

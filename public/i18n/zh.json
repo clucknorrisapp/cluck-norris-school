@@ -1682,5 +1682,21 @@
   "Not connected": "未连接",
   "Find dead token accounts and reclaim the SOL locked inside them.": "找到已废弃的代币账户，取回其中锁定的 SOL。",
   "Ask the AI tutor anything about crypto, in plain words.": "用简单的话向 AI 导师提问任何关于加密货币的问题。",
-  "Check approvals, freeze and mint authority — read-only and free.": "检查授权、冻结权限和铸造权限——只读且免费。"
+  "Check approvals, freeze and mint authority — read-only and free.": "检查授权、冻结权限和铸造权限——只读且免费。",
+  "Connect your wallet to scan for reclaimable rent.": "连接钱包以扫描可回收的租金。",
+  "Scanning your wallet…": "正在扫描你的钱包…",
+  "Could not read the chain right now. Try again shortly.": "暂时无法读取链上数据，请稍后重试。",
+  "Try again": "重试",
+  "Total reclaimable": "可回收总额",
+  "More accounts exist in this wallet than are shown here.": "此钱包中还有更多账户未在此显示。",
+  "Reclaim": "回收",
+  "Signing is coming in the next build.": "签名功能将在下一版本推出。",
+  "Reclaimable": "可回收",
+  "No reclaimable rent found in this wallet right now.": "此钱包目前没有可回收的租金。",
+  "Holds a balance": "有余额",
+  "Refused": "已拒绝",
+  "Rescan": "重新扫描",
+  "No balance — safe to close.": "余额为零——可以安全关闭。",
+  "Still holds tokens — won't be closed.": "仍持有代币——不会被关闭。",
+  "Wrapped SOL — not handled here.": "包装 SOL（wSOL）——此处不处理。"
 }
