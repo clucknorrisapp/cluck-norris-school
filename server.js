@@ -17180,6 +17180,12 @@ app.get("/solana", (req, res) => {
 app.get("/solana/rent", (req, res) => {
   res.sendFile(join(__dirname, "public", "solana-rent.html"));
 });
+app.get("/solana/wallet", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-wallet.html"));
+});
+app.get("/solana/mint", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-mint.html"));
+});
 
 // ── Project Burn — burn PART of your own supply, on purpose, with a public receipt ──
 // ============================== LP RESCUE ====================================
