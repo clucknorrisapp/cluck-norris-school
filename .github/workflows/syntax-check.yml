@@ -134,6 +134,22 @@ jobs:
       # validates against receipt.schema.json.
       - name: Project Hub — W3 settlement journal dual-write (integration gate)
         run: node scripts/hub-settle-route-test.cjs
+      # X6/CC5: the browser-signed BATCH payout (sign-request/observe, design §4, alongside the
+      # self-signed &sent= and managed-payer &send= branches above). Never diff-gated — this is a
+      # money path. Every transition and fault: crash between sign-request and observe leaves the
+      # batch `signing` and refuses the managed payer (and vice versa); a bad signature fails that
+      # row without settling it; observing the same signature twice settles once; an RPC outage
+      # answers `unavailable` and changes nothing; a dry-run project is refused before any write;
+      # unauthenticated is 404; GET is 405.
+      - name: Project Hub — X6/CC5 browser-signed batch payout (fault injection)
+        run: node scripts/hub-browser-sign-test.cjs
+      # F10 (docs/HUB_BROWSER_SIGN_VERIFY_2026-09-18.md): the fix round above closed real UI gaps
+      # (F1 wrong-wallet, F3 stale-live button, F5 lost signatures, F6 unvalidated sign-request
+      # response) that the server-only suite above cannot see by construction — it never runs
+      # public/hub-desk.html's own script. Runs that REAL inline script in a vm, CluckAirdrop.send
+      # stubbed. Never diff-gated — this is a money path, same as the step above.
+      - name: Project Hub — browser-signed desk page (signAndSend guards)
+        run: node scripts/hub-desk-sign-page-test.cjs
       # The public receipt page must render BOTH receipt shapes (legacy and Addendum-B3): a
       # journal-backed receipt threw a TypeError in the page's own script until the wrapper fix
       # (adv P1-4 in docs/HUB_JOURNAL_VERIFY_2026-09-18.md). Runs hub.html's real inline script in a vm.

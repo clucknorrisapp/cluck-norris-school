@@ -205,6 +205,20 @@ function raw(method, p, headers) {
   ok("GET /api/hub/:project/payout?waive= is refused with 405", r.status === 405);
   r = await call("GET", "/api/hub/nope/payout", false);
   ok("/api/hub/:project/payout without the key is 404", r.status === 404);
+  // X6/CC5: the browser-signed batch payout — POST-only, before the project lookup, exactly like
+  // every other route on this surface (scripts/hub-browser-sign-test.cjs covers the money logic).
+  r = await call("GET", "/api/hub/nope/batch/x/sign-request");
+  ok("GET /api/hub/:project/batch/:batchId/sign-request is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/batch/x/observe?sig=x");
+  ok("GET /api/hub/:project/batch/:batchId/observe is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("POST", "/api/hub/nope/batch/x/sign-request");
+  ok("POST /api/hub/:project/batch/:batchId/sign-request for an unknown project is 404", r.status === 404);
+  r = await call("POST", "/api/hub/nope/batch/x/observe?sig=x");
+  ok("POST /api/hub/:project/batch/:batchId/observe for an unknown project is 404", r.status === 404);
+  r = await call("POST", "/api/hub/nope/batch/x/sign-request", false);
+  ok("POST /api/hub/:project/batch/:batchId/sign-request without the key is 404 (no project-exists hint)", r.status === 404 && !(r.body && /no such project/.test(String(r.body.error))), JSON.stringify(r.body));
+  r = await call("POST", "/api/hub/nope/batch/x/observe?sig=x", false);
+  ok("POST /api/hub/:project/batch/:batchId/observe without the key is 404 (no project-exists hint)", r.status === 404 && !(r.body && /no such project/.test(String(r.body.error))), JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/holder?address=4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs", false);
   ok("the public holder view answers 404 for an unknown project (no key needed)", r.status === 404 && !!r.body && /no such project/.test(String(r.body.error)));
 
