@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Where The Solana World Actually Meets</title>
+<meta name="description" content="Conferences, hackathons and meetups are where a new standard, a fee change or a wallet feature usually gets announced first — and watching is free. What each one actually is, and the six ways a fake version tries to wear the real one's name."/>
+<meta property="og:title" content="Where The Solana World Actually Meets — Cluck Norris"/>
+<meta property="og:description" content="Conferences, hackathons and meetups are where a new standard, a fee change or a wallet feature usually gets announced first — and watching is free. What each one actually is, and the six ways a fake version tries to wear the real one's name."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana/events"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="Where The Solana World Actually Meets — Cluck Norris"/>
+<meta name="twitter:description" content="Conferences, hackathons and meetups are where a new standard, a fee change or a wallet feature usually gets announced first — and watching is free. What each one actually is, and the six ways a fake version tries to wear the real one's name."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:.3px; color:var(--gold); font-weight:400; line-height:1.25; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact + .fact { margin-top:10px; }
+  .fact b, .fact code { color:var(--text); }
+  .fact code { font-family:var(--mono); font-size:.92em; background:rgba(255,255,255,.06); padding:1px 5px; border-radius:4px; word-break:break-word; }
+  /* the six scam patterns get the same real visual weight the rent page gives its scam card —
+     a distinct red card each, not a tucked-away footnote. */
+  .card.scam { background:var(--redbg, rgba(232,30,14,.14)); border:1px solid rgba(232,30,14,.4); }
+  .scam .sec-title { color:#FCA5A5; }
+  .scam .fact { color:#FBD5D0; }
+  .scam .fact b { color:#FEE2E0; }
+  .links-card { display:flex; flex-direction:column; }
+  .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
+  .small { font-size:12px; color:var(--sub); }
+  /* a standalone link inside a .small line still needs a real 44px tap target — same
+     expand-with-negative-margin trick public/hub-glossary.html / solana-fees.html use. */
+  .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/solana" data-clkn-avoid="1">← THE SOLANA ROOM</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">Where the Solana world actually meets</h1>
+    <p data-clkn-avoid="1">CONFERENCES, HACKATHONS, MEETUPS — AND THE FAKE VERSION OF EACH</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as
+  // public/hub-glossary.html / public/solana-room.html / public/solana-fees.html: a curated dict
+  // lookup over window.CLKN_I18N.dict, English literal on a miss, no machine-translation fallback.
+  // scripts/i18n-audit.cjs's Hub-pages gate and scripts/solana-room-test.cjs both scan this file's
+  // <script> block for every literal passed to t() and require it in all six dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  function render() {
+    var html = '';
+
+    html += '<div class="card" data-section="why-it-matters"><div class="intro">' + esc(t("The things that later change your wallet — a new token standard, a fee change, a wallet feature — usually get announced at one of these first: a conference talk, a hackathon demo, a community call. You don't need a ticket or a wallet to watch any of it. This page covers what each one actually is, and near the bottom, how to tell the real one from the scam wearing its name.")) + '</div></div>';
+
+    html += '<div class="card" data-section="conferences">';
+    html += '<div class="sec-title">' + esc(t('The big conferences')) + '</div>';
+    html += '<div class="fact">' + esc(t("Solana's flagship annual conference is called Breakpoint. The 2026 edition runs November 15 to 17 at Olympia in London — the first time it's been held in the UK. Events like this bring together the people building wallets, exchanges and infrastructure to show what changed and what's coming next.")) + '</div>';
+    html += '<div class="fact">' + esc(t("You don't have to buy a ticket to get the substance. Past editions have posted every talk publicly once the event ended — all 199 talks from the 2025 edition went up afterward. The paid ticket buys the room and the hallway conversations, not the information.")) + '</div>';
+    html += '<div class="fact">' + esc(t("Breakpoint isn't the only one. Smaller, regional conferences run through the year in different cities — solana.com/events is the closest thing to one place that lists what's coming next, alongside local meetups.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card links-card" data-section="conferences-links">';
+    html += '<a href="https://solana.com/breakpoint" target="_blank" rel="noopener noreferrer">' + esc(t('Breakpoint 2026 — dates, venue and agenda →')) + '</a>';
+    html += '<a href="https://solana.com/events" target="_blank" rel="noopener noreferrer">' + esc(t("solana.com/events — what's coming up, in your region →")) + '</a>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="hackathons">';
+    html += '<div class="sec-title">' + esc(t('Hackathons')) + '</div>';
+    html += '<div class="fact">' + esc(t("A hackathon here isn't a weekend of pizza and no sleep — the ones run through Colosseum are four-week online sprints where a team builds a real product from wherever they are. Entering costs nothing.")) + '</div>';
+    html += '<div class="fact">' + esc(t("You don't need to have shipped anything before. A non-engineer can enter paired with a technical co-founder, a solo builder can compete alone, and teams that haven't met yet form in public through the event's own cofounder-matching tool and community chat during the event.")) + '</div>';
+    html += '<div class="fact">' + esc(t("Real projects have started this way. Colosseum's own hackathon page names Ore and Reflect Protocol as products still running today that began as a hackathon submission, and Unruggable as a grand-prize winner that entered four hackathons before it won.")) + '</div>';
+    html += '<div class="fact">' + esc(t('One is running right now: the Crypto World\'s Fair, a cross-ecosystem online hackathon with a dedicated Solana track, open from September 14, 2026, with submissions due October 12, 2026.') + ' ' + esc(t('Full disclosure, because this school does not get to skip its own rule: Cluck Norris is entered in that one. We are telling you it exists, not asking you to vote for anything.'))) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card links-card" data-section="hackathons-links">';
+    html += '<a href="https://colosseum.com/hackathon" target="_blank" rel="noopener noreferrer">' + esc(t('What a Colosseum hackathon actually is →')) + '</a>';
+    html += '<a href="https://colosseum.com/worldsfair" target="_blank" rel="noopener noreferrer">' + esc(t('The hackathon running right now →')) + '</a>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="meetups">';
+    html += '<div class="sec-title">' + esc(t('Local meetups and community calls')) + '</div>';
+    html += '<div class="fact">' + esc(t("Below the big conferences are smaller, often free, in-person meetups run by local community members — a room of people, a few short talks, time to ask questions. Some are organized under a regional Superteam chapter, others are independent groups that just use Meetup.")) + '</div>';
+    html += '<div class="fact">' + esc(t("To find a real one: check solana.com/events for what's listed near you, look up your region on Meetup's own Solana group listings, or search for your country or city's Superteam chapter directly. A real meetup has an organizer with a history of past events and meets at a named, findable venue — not a wallet-only chat link with no history behind it.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card links-card" data-section="meetups-links">';
+    html += '<a href="https://superteam.fun" target="_blank" rel="noopener noreferrer">' + esc(t('superteam.fun — find your regional chapter →')) + '</a>';
+    html += '<a href="https://www.meetup.com/topics/solana/" target="_blank" rel="noopener noreferrer">' + esc(t("Meetup's own Solana group listings →")) + '</a>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="scam-intro">';
+    html += '<div class="sec-title">' + esc(t('How to tell the real event from the scam version')) + '</div>';
+    html += '<div class="fact">' + esc(t("Every fake version below borrows the shape of something real. Here's what each one looks like, and the one line that gives it away.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="scam-fake-ticket">';
+    html += '<div class="sec-title">' + esc(t('The fake ticket page')) + '</div>';
+    html += '<div class="fact">' + esc(t("A site selling \"tickets\" to a real conference, priced in crypto and paid straight to a wallet address instead of through a normal ticketing platform — sometimes a convincing clone of the event's own site, sometimes just a resale listing with no ticketing platform behind it.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("The rule that defeats it: buy a ticket only through the link the event's own official site gives you, never a link a stranger sent you or an ad. A real conference doesn't sell entry for crypto sent to a bare wallet address.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="scam-cloned-site">';
+    html += '<div class="sec-title">' + esc(t('The cloned site on a lookalike domain')) + '</div>';
+    html += '<div class="fact">' + esc(t("A near-identical copy of the real event's site on a domain that's one letter off, or the same name with a different ending — .net where the real one is .com. It can even outrank the real site in a search result or a paid ad.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("The rule that defeats it: go to the address from the event's own official social account or a link you already trust, never from a search ad or a link someone forwarded you. Check the domain in your address bar before you connect anything or enter a card number.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="scam-livestream-airdrop">';
+    html += '<div class="sec-title">' + esc(t('"Livestream airdrop — connect your wallet to claim"')) + '</div>';
+    html += '<div class="fact">' + esc(t("Real footage, sometimes lifted from the actual stream, replayed on a copycat channel or embedded on a fake site with an overlay laid over it: a QR code or a button telling you to connect your wallet to claim tokens \"live\" during the event.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("The rule that defeats it: no legitimate conference stream has ever asked a viewer to connect a wallet to keep watching or to claim anything. Watching is free and asks nothing of your wallet, ever.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="scam-speaker-dm">';
+    html += '<div class="sec-title">' + esc(t('The DM invite to a "speaker call"')) + '</div>';
+    html += '<div class="fact">' + esc(t("An unsolicited direct message saying you've been selected to speak or host a session, with a link to \"confirm\" your slot or join a scheduling call — the link leads to a page built to steal a wallet approval or an account login.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("The rule that defeats it: a real speaker invitation follows an application and arrives by email from the event's own domain, never as a cold DM out of nowhere. If you never applied, you weren't invited.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="scam-qr-code">';
+    html += '<div class="sec-title">' + esc(t('The QR code on a poster or a screen')) + '</div>';
+    html += '<div class="fact">' + esc(t("A QR code taped over a real one on a venue poster, or flashed briefly on a stream overlay, pointing to a page that asks you to \"verify,\" \"claim,\" or connect a wallet — it borrows the trust of the real venue or the real broadcast.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("The rule that defeats it: never scan a QR code at an event or on a stream to claim or verify anything. Go to the official site yourself by typing an address you already know.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="scam-support-dm">';
+    html += '<div class="sec-title">' + esc(t('The Telegram or Discord "event support" account that messages you first')) + '</div>';
+    html += '<div class="fact">' + esc(t("An account with an official-looking name and logo messages you offering to help with a ticket problem or a registration error you never reported — then asks for a seed phrase, a \"verification\" transfer, or remote access to fix it.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("The rule that defeats it: real support doesn't open a conversation with you first. You go to them, through a channel listed on the official site — never the other way around.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="scam-golden-rule">';
+    html += '<div class="sec-title">' + esc(t('The one rule that covers all six')) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("A real event never needs your wallet to sign anything just to let you watch it, and it never messages you first. If either one happens, it isn't the real event.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="not-affiliated">';
+    html += '<div class="sec-title">' + esc(t("We don't run any of this")) + '</div>';
+    html += '<div class="fact">' + esc(t("Cluck Norris does not organize, host, sponsor or run any of the conferences, hackathons or meetups named on this page, and we're not affiliated with any of them. Nothing here is an endorsement, a recommendation, or an invitation to attend, submit to, or pay for anything — it's a reference page, free to read for the same reason everything in this room is.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Sources')) + '</div>';
+    html += '<div class="small"><a href="https://solana.com/breakpoint" target="_blank" rel="noopener noreferrer">' + esc(t('Breakpoint 2026 dates and venue, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://www.youtube.com/playlist?list=PLilwLeBwGuK53OUOcc_GsCcbqcU5V4H9Z" target="_blank" rel="noopener noreferrer">' + esc(t('All 199 Breakpoint 2025 talks, free on YouTube — the archive behind "you do not need a ticket to get the substance" →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/events" target="_blank" rel="noopener noreferrer">' + esc(t('The Solana events hub, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://colosseum.com/hackathon" target="_blank" rel="noopener noreferrer">' + esc(t('What a Colosseum hackathon is, who can enter, and its named alumni, on colosseum.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://colosseum.com/worldsfair" target="_blank" rel="noopener noreferrer">' + esc(t('The Crypto World\'s Fair hackathon and its Solana track, on colosseum.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://superteam.fun" target="_blank" rel="noopener noreferrer">' + esc(t('Superteam\'s regional chapter network, on superteam.fun →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://www.meetup.com/topics/solana/" target="_blank" rel="noopener noreferrer">' + esc(t('Solana group listings, on meetup.com →')) + '</a></div>';
+    html += '</div>';
+
+    html += '<div class="small" style="text-align:center">' + esc(t('Last checked 19 September 2026 · maintained by Cluck Norris')) + '</div>';
+
+    html += '<div class="small" style="text-align:center;margin-top:6px"><a href="/solana">' + esc(t('Back to the Solana Room →')) + '</a></div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

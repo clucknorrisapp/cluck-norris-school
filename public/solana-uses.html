@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>What Solana Is Actually Used For</title>
+<meta name="description" content="Most of what happens on Solana today is trading and speculation — this school says so plainly. What else is real: stablecoins that settle in under a second, compressed NFTs, DePIN networks that pay for real hardware, phones that hold keys locally, and the network's own outage history, dated and sourced."/>
+<meta property="og:title" content="What Solana Is Actually Used For — Cluck Norris"/>
+<meta property="og:description" content="Most of what happens on Solana today is trading and speculation — this school says so plainly. What else is real: stablecoins that settle in under a second, compressed NFTs, DePIN networks that pay for real hardware, phones that hold keys locally, and the network's own outage history, dated and sourced."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana/uses"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="What Solana Is Actually Used For — Cluck Norris"/>
+<meta name="twitter:description" content="Most of what happens on Solana today is trading and speculation — this school says so plainly. What else is real: stablecoins that settle in under a second, compressed NFTs, DePIN networks that pay for real hardware, phones that hold keys locally, and the network's own outage history, dated and sourced."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:.3px; color:var(--gold); font-weight:400; line-height:1.25; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .intro + .intro { margin-top:10px; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact + .fact { margin-top:10px; }
+  .fact b { color:var(--text); }
+  .links-card { display:flex; flex-direction:column; }
+  .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
+  .small { font-size:12px; color:var(--sub); }
+  /* a standalone link inside a .small line still needs a real 44px tap target — same
+     expand-with-negative-margin trick public/solana-fees.html / hub-glossary.html use. */
+  .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .footnote { font-size:12.5px; color:var(--sub); line-height:1.6; text-align:center; margin-top:6px; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/solana" data-clkn-avoid="1">← THE SOLANA ROOM</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">What Solana is actually used for</h1>
+    <p data-clkn-avoid="1">THE HONEST ANSWER FIRST, THEN WHAT ELSE IS REAL</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as
+  // public/solana-fees.html / public/solana-room.html: a curated dict lookup over
+  // window.CLKN_I18N.dict, English literal on a miss, no machine-translation fallback.
+  // scripts/i18n-audit.cjs's Hub-pages gate and scripts/solana-room-test.cjs both scan this
+  // file's <script> block for every literal passed to t() and require it in all six dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  function render() {
+    var html = '';
+
+    html += '<div class="card" data-section="honest-answer">';
+    html += '<div class="intro">' + esc(t("Here's the honest answer, first: most of what actually happens on Solana today, transaction by transaction, is trading and speculation — swaps, meme tokens, and the bots and traders around all of it. This school doesn't soften that, because pretending otherwise is exactly the kind of thing that gets people hurt.")) + '</div>';
+    html += '<div class="intro">' + esc(t("That's not the whole picture, though. Underneath the trading, a few genuinely different things are being built and used on Solana today. Here's what each one actually is — not what it's hoped to become.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="stablecoins">';
+    html += '<div class="sec-title">' + esc(t('Stablecoins and payments')) + '</div>';
+    html += '<div class="fact">' + esc(t("Circle issues USDC directly on Solana as a native token, not a bridged copy of a coin minted somewhere else — Solana is the second-largest home for USDC after Ethereum. Paxos issues PayPal's PYUSD on Solana too, live since May 2024.")) + '</div>';
+    html += '<div class="fact">' + esc(t("The appeal for moving money is speed and cost: a Solana transaction settles in well under a second, for a fraction of a cent. That's what makes it workable to move small amounts of a dollar-pegged token around, not only large ones.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("None of that changes what happens once a transfer is sent. A stablecoin payment confirms fast and then it's final — there's no bank to call and no chargeback if you send it to the wrong address, exactly like any other transfer on Solana.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="nfts">';
+    html += '<div class="sec-title">' + esc(t('Collectibles and NFTs')) + '</div>';
+    html += '<div class="fact">' + esc(t("An NFT on Solana isn't a special kind of object — it's the same token mint covered elsewhere in this room, just with its supply capped at exactly one, plus metadata describing what it's a claim on.")) + '</div>';
+    html += '<div class="fact">' + esc(t("Minting used to mean paying full rent for every single NFT. State compression changed that: storing 100 million compressed NFTs on-chain costs around 50 SOL total, against roughly 1,200,000 SOL for the uncompressed equivalent — each one after the first costs about as much as a single ordinary transaction.")) + '</div>';
+    html += '<div class="fact">' + esc(t('None of that creates a buyer. Most NFTs, on Solana or any other chain, have no market at all — minting one is not the same thing as anyone else wanting it.')) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="depin">';
+    html += '<div class="sec-title">' + esc(t('DePIN: paid for real infrastructure')) + '</div>';
+    html += '<div class="fact">' + esc(t("DePIN — decentralized physical infrastructure — networks pay people in the network's own token for supplying real hardware, not for holding anything. Helium hotspots are small wireless radios, registered on Solana as compressed NFTs, that give low-power devices long-range coverage and, in a growing list of US cities, 5G coverage.")) + '</div>';
+    html += '<div class="fact">' + esc(t('Hivemapper works the same way for maps: contributors mount a dashcam on their car and drive their normal routes, and the imagery it captures builds a street-level map. Hivemapper says the network has covered roughly a third of the world\'s roads this way.')) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="mobile">';
+    html += '<div class="sec-title">' + esc(t('Consumer and mobile apps')) + '</div>';
+    html += '<div class="fact">' + esc(t("Solana Mobile's Seed Vault is a system-level service, built into its phones, that holds a wallet's keys inside the device's own secure hardware. The keys never leave that secure environment — an app hands it a transaction to sign and gets a signed result back, never the keys themselves.")) + '</div>';
+    html += '<div class="fact">' + esc(t("That's what it means for a phone to hold your keys: signing happens locally, on hardware you're physically holding, instead of on a remote server or inside a browser extension you have to trust separately.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="tradeoffs">';
+    html += '<div class="sec-title">' + esc(t("What Solana is genuinely good at, and what it isn't")) + '</div>';
+    html += '<div class="fact">' + esc(t("Solana is built around one global ledger that every participant sees at once, with new blocks roughly every 400 milliseconds and fees usually a fraction of a cent. Cheap, fast, one shared state — that combination is genuinely what it's good at.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t('It is not private. Every wallet address, every balance, and every transaction is public and permanent — visible to anyone who looks, forever. A stablecoin payment on Solana is not a private one.')) + '</b></div>';
+    html += '<div class="fact"><b>' + esc(t("It is not reversible. Once a transaction is confirmed there's no bank, no support line, and no undo — a mistake and a mistake sent on purpose look identical once they've landed.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="outage-history">';
+    html += '<div class="sec-title">' + esc(t('It has also gone down, more than once')) + '</div>';
+    html += '<div class="fact">' + esc(t("On September 14, 2021, a flood of bot transactions during a token launch crashed enough validators that Solana's mainnet was down for about 17 hours before a coordinated restart brought it back.")) + '</div>';
+    html += '<div class="fact">' + esc(t("On February 6, 2024, a bug in how validators cached compiled programs sent the whole network into the same stuck block for close to five hours before a patched restart.")) + '</div>';
+    html += '<div class="fact">' + esc(t('Since then, a second, independently written validator client has started running real stake on mainnet alongside the original one, specifically so a bug in one codebase no longer has to be a bug the whole network shares.')) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card links-card">';
+    html += '<a href="/solana/buying">' + esc(t('What actually happens when you buy →')) + '</a>';
+    html += '<a href="/solana/fees">' + esc(t('What a transaction actually costs →')) + '</a>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Sources')) + '</div>';
+    html += '<div class="small"><a href="https://www.circle.com/multi-chain-usdc/solana" target="_blank" rel="noopener noreferrer">' + esc(t('USDC on Solana — native issuance, ~400ms settlement, sub-cent fees, on circle.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/pyusd" target="_blank" rel="noopener noreferrer">' + esc(t("PayPal USD on Solana, on solana.com →")) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/docs/core/transactions" target="_blank" rel="noopener noreferrer">' + esc(t('Transactions — why a confirmed transfer is final, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/docs/tokens/basics" target="_blank" rel="noopener noreferrer">' + esc(t('SPL Token Basics — what a mint account is, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/news/state-compression-compressed-nfts-solana" target="_blank" rel="noopener noreferrer">' + esc(t('State compression brings down the cost of minting NFTs, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/news/case-study-helium" target="_blank" rel="noopener noreferrer">' + esc(t('Case Study: Helium brings real-world networks on Solana, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://hivemapper.com/" target="_blank" rel="noopener noreferrer">' + esc(t('Hivemapper — the official site')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://docs.solanamobile.com/additional-sdks/seedvault_intro" target="_blank" rel="noopener noreferrer">' + esc(t('Seed Vault SDK — keys never leave the secure environment, on docs.solanamobile.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/docs/core/accounts" target="_blank" rel="noopener noreferrer">' + esc(t('Accounts — the ledger is public and permanent, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/news/9-14-network-outage-initial-overview" target="_blank" rel="noopener noreferrer">' + esc(t('9-14 Network Outage — the official overview, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/news/02-06-24-solana-mainnet-beta-outage-report" target="_blank" rel="noopener noreferrer">' + esc(t('02-06-24 Solana Mainnet Beta Outage Report, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://docs.firedancer.io/guide/firedancer.html" target="_blank" rel="noopener noreferrer">' + esc(t('Why a second validator client removes a single point of failure, on docs.firedancer.io →')) + '</a></div>';
+    html += '</div>';
+
+    html += '<div class="footnote">' + esc(t('Last checked 19 September 2026 · maintained by Cluck Norris')) + '</div>';
+
+    html += '<div class="small" style="text-align:center; margin-top:10px"><a href="/solana">' + esc(t('Back to the Solana Room →')) + '</a></div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

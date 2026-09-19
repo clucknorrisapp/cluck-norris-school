@@ -89,11 +89,13 @@
     });
   }
 
-  // The pages shipped so far. Add a topic here, and give it its own page + route, to grow this
-  // room. COMING_NEXT held the mechanics topics that hadn't been written yet (CLAUDE.md: public
-  // docs must match the code) — the last three moved in here 2026-09-19, so COMING_NEXT is empty
-  // for now; render() below hides that section entirely rather than showing an empty card.
-  var AVAILABLE_NOW = [
+  // The pages shipped so far, in two groups. THE MECHANICS is how the machine works — the six
+  // tier-1 topics. THE BIGGER PICTURE is the four tier-2 topics: what the chain is used for,
+  // what you actually own, where the ecosystem meets, and the safe copy of the domains people
+  // get phished on. Add a topic to one of these lists, give it its own page + route, and it
+  // shows up here. COMING_NEXT is empty for now; render() hides that section entirely rather
+  // than showing an empty card (CLAUDE.md: public docs must match the code).
+  var MECHANICS = [
     { title: "The deposit you didn't know you made", blurb: 'Solana just started giving back part of a deposit that\'s baked into every token account you own. What it actually is, and the scam it\'s about to invite.', href: '/solana/rent' },
     { title: "What your wallet actually holds", blurb: "A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why.", href: '/solana/wallet' },
     { title: 'What a token mint is', blurb: "The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it.", href: '/solana/mint' },
@@ -101,21 +103,30 @@
     { title: 'Sending tokens, and why the first one costs extra', blurb: 'A transfer moves between token accounts, not wallets — and the first send to someone new can mean creating an account for them.', href: '/solana/transfers' },
     { title: 'What a transaction actually costs', blurb: "Base fee, priority fee, and compute units are three different things wearing one name. Here's which is which.", href: '/solana/fees' },
   ];
+  var BIGGER_PICTURE = [
+    { title: 'What Solana is actually used for', blurb: "Most of what happens on Solana is trading. That's the honest answer — and here's everything else that's genuinely real.", href: '/solana/uses' },
+    { title: 'Buying SOL, ETFs, and what you actually own', blurb: 'Three ways people hold it, and three very different things they actually hold. Not advice — just what ends up in your hands each way.', href: '/solana/markets' },
+    { title: 'Where the Solana world actually meets', blurb: 'Conferences, hackathons and meetups — and how to tell a real one from the fake ticket page built to drain you.', href: '/solana/events' },
+    { title: 'Where to look things up', blurb: 'The real domains for explorers, docs, status pages and wallets. Type them; never reach one from a DM.', href: '/solana/links' },
+  ];
   var COMING_NEXT = [];
 
-  // AVAILABLE_NOW's title/blurb strings are read through a variable above (t(topic.title)),
-  // which the regex-based audits (scripts/i18n-audit.cjs's Hub-pages gate,
-  // scripts/solana-room-test.cjs) cannot see — they only ever match a LITERAL string immediately
-  // inside t(...), documented in i18n-audit.cjs's own header. This function lists every one of
-  // those same strings as literal t() calls purely so the gate sees them; it is never called.
-  // Same technique as hub-glossary.html's __glossaryGatedStrings — keep this in step with
-  // AVAILABLE_NOW above.
+  // The title/blurb strings above are read through a variable (t(topic.title)), which the
+  // regex-based audits (scripts/i18n-audit.cjs's Hub-pages gate, scripts/solana-room-test.cjs)
+  // cannot see — they only ever match a LITERAL string immediately inside t(...), documented in
+  // i18n-audit.cjs's own header. This function lists every one of those strings as a literal
+  // t() call purely so the gate sees them; it is never called. Same technique as
+  // hub-glossary.html's __glossaryGatedStrings — keep it in step with the two lists above.
   function __solanaRoomGatedStrings() { return [
     t("What your wallet actually holds"), t("A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why."),
     t('What a token mint is'), t("The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it."),
     t('What actually happens when you buy'), t("Clicking \"buy\" swaps against a liquidity pool, not a store. Why a big trade moves the price against you, and what a failed swap still costs."),
     t('Sending tokens, and why the first one costs extra'), t('A transfer moves between token accounts, not wallets — and the first send to someone new can mean creating an account for them.'),
     t('What a transaction actually costs'), t("Base fee, priority fee, and compute units are three different things wearing one name. Here's which is which."),
+    t('What Solana is actually used for'), t("Most of what happens on Solana is trading. That's the honest answer — and here's everything else that's genuinely real."),
+    t('Buying SOL, ETFs, and what you actually own'), t('Three ways people hold it, and three very different things they actually hold. Not advice — just what ends up in your hands each way.'),
+    t('Where the Solana world actually meets'), t('Conferences, hackathons and meetups — and how to tell a real one from the fake ticket page built to drain you.'),
+    t('Where to look things up'), t('The real domains for explorers, docs, status pages and wallets. Type them; never reach one from a DM.'),
   ]; }
 
   function render() {
@@ -124,17 +135,22 @@
     html += '<div class="intro">' + esc(t("You already own tokens. Nobody ever sat you down and explained what any of this actually is — what a wallet really holds, what a mint is, what happens when you buy, or what you're paying for in fees. This room is that explanation, one mechanic at a time, in plain words. No wallet, no signup, free.")) + '</div>';
     html += '</div>';
 
-    html += '<div class="card">';
-    html += '<div class="sec-title">' + esc(t('Available now')) + '</div>';
-    for (var j = 0; j < AVAILABLE_NOW.length; j++) {
-      var live = AVAILABLE_NOW[j];
-      html += '<div class="topic-live">';
-      html += '<h2>' + esc(t(live.title)) + '</h2>';
-      html += '<p>' + esc(t(live.blurb)) + '</p>';
-      html += '<a class="cta" href="' + esc(live.href) + '">' + esc(t('Read it →')) + '</a>';
-      html += '</div>';
+    function section(title, lede, list) {
+      var out = '<div class="card">';
+      out += '<div class="sec-title">' + esc(t(title)) + '</div>';
+      out += '<div class="sec-lede">' + esc(t(lede)) + '</div>';
+      for (var j = 0; j < list.length; j++) {
+        var live = list[j];
+        out += '<div class="topic-live">';
+        out += '<h2>' + esc(t(live.title)) + '</h2>';
+        out += '<p>' + esc(t(live.blurb)) + '</p>';
+        out += '<a class="cta" href="' + esc(live.href) + '">' + esc(t('Read it →')) + '</a>';
+        out += '</div>';
+      }
+      return out + '</div>';
     }
-    html += '</div>';
+    html += section('The mechanics', 'How the machine actually works, one part at a time.', MECHANICS);
+    html += section('The bigger picture', "What it's actually used for, what you own when you hold it three different ways, where the ecosystem meets, and where to look things up without getting phished.", BIGGER_PICTURE);
 
     // COMING_NEXT is empty now that all six topics have shipped — an empty "coming next" card
     // would just be a section title and lede with nothing under them, so it's skipped outright
