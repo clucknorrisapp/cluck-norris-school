@@ -1674,5 +1674,13 @@
   "Sources": "信息来源",
   "Reduced Rent — SIMD-0437, on solana.com →": "Reduced Rent — SIMD-0437,在 solana.com →",
   "Withdraw Excess Lamports — the instruction, on solana.com →": "Withdraw Excess Lamports — 该指令说明,在 solana.com →",
-  "Back to the Solana Room →": "返回 Solana 知识室 →"
+  "Back to the Solana Room →": "返回 Solana 知识室 →",
+  "Rent Reclaim": "租金找回",
+  "Connect Wallet": "连接钱包",
+  "Disconnect": "断开连接",
+  "Coming soon": "即将推出",
+  "Not connected": "未连接",
+  "Find dead token accounts and reclaim the SOL locked inside them.": "找到已废弃的代币账户，取回其中锁定的 SOL。",
+  "Ask the AI tutor anything about crypto, in plain words.": "用简单的话向 AI 导师提问任何关于加密货币的问题。",
+  "Check approvals, freeze and mint authority — read-only and free.": "检查授权、冻结权限和铸造权限——只读且免费。"
 }

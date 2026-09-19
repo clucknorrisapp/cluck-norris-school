@@ -18,6 +18,16 @@
     "cluck-norris.png",
     "icon.svg"
   ],
+  "excludeKeys": [
+    "Rent Reclaim",
+    "Connect Wallet",
+    "Disconnect",
+    "Coming soon",
+    "Not connected",
+    "Find dead token accounts and reclaim the SOL locked inside them.",
+    "Ask the AI tutor anything about crypto, in plain words.",
+    "Check approvals, freeze and mint authority — read-only and free."
+  ],
   "dirs": [
     "i18n"
   ],

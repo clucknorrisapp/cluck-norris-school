@@ -1674,5 +1674,13 @@
   "Sources": "Fuentes",
   "Reduced Rent — SIMD-0437, on solana.com →": "Reduced Rent — SIMD-0437, en solana.com →",
   "Withdraw Excess Lamports — the instruction, on solana.com →": "Withdraw Excess Lamports — la instrucción, en solana.com →",
-  "Back to the Solana Room →": "Volver a la Sala Solana →"
+  "Back to the Solana Room →": "Volver a la Sala Solana →",
+  "Rent Reclaim": "Rent Reclaim",
+  "Connect Wallet": "Conectar Wallet",
+  "Disconnect": "Desconectar",
+  "Coming soon": "Próximamente",
+  "Not connected": "No conectado",
+  "Find dead token accounts and reclaim the SOL locked inside them.": "Encuentra cuentas de token muertas y recupera el SOL bloqueado dentro de ellas.",
+  "Ask the AI tutor anything about crypto, in plain words.": "Pregúntale al tutor de IA cualquier cosa sobre cripto, en palabras simples.",
+  "Check approvals, freeze and mint authority — read-only and free.": "Revisa aprobaciones, autoridad de congelación y acuñación — solo lectura y gratis."
 }
