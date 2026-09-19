@@ -17141,6 +17141,18 @@ app.get("/firepit", (req, res) => {
   res.sendFile(join(__dirname, "public", "firepit.html"));
 });
 
+// ── The Solana Room — a browsable, public, no-wallet reference room on how Solana actually
+// works (school section, not a tool). Explicit routes because public/ is only served through
+// the vite build's copy in dist/ — without these both 404 on a no-build boot. Static/free like
+// the rest of the school: no tools-pass gate, no wallet, no signup. Registered here (not under
+// /hub) because this room teaches Solana mechanics generally, independent of the Project Hub.
+app.get("/solana", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-room.html"));
+});
+app.get("/solana/rent", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-rent.html"));
+});
+
 // ── Project Burn — burn PART of your own supply, on purpose, with a public receipt ──
 // ============================== LP RESCUE ====================================
 // Find and recover DLMM liquidity that exists on-chain but is invisible in
