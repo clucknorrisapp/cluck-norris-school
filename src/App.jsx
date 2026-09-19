@@ -212,6 +212,26 @@ function ReceiptLessonBridge({lesson:l}){
   );
 }
 
+// The rent lesson's own finish-screen card — same pattern as ReceiptLessonBridge above. Two
+// destinations rather than one, and neither is a Library topic or the generic "go look at a
+// real tool" slot (LESSON_TOOLS/LESSON_READ), so it gets its own tiny component instead of
+// overloading those maps: the full-mechanics explainer (/solana/rent — the byte math, the
+// SIMD-0437 rollout schedule, the sources) and the actual close-an-account tool (/firepit).
+// Tracked as its own funnel event (not hub_bridge_click — that name is reserved for the
+// Educate→Hub bridge and its server-side from/to allowlist, lib/traction.js) so a click here
+// can't be silently dropped by a check meant for a different funnel. STORE carries no wallet
+// tools, so this folds out entirely at build time — same `STORE ? null : …` pattern as the
+// other lesson bridges.
+function RentLessonBridge({lesson:l}){
+  if(l.id!=="rent") return null;
+  return STORE ? null : (
+    <div style={{background:"rgba(103,232,249,0.05)",border:"1px solid rgba(103,232,249,0.16)",borderRadius:12,padding:"10px 14px",margin:"0 0 14px",textAlign:"left",display:"flex",flexDirection:"column",gap:6}}>
+      <a href="/solana/rent" onClick={()=>track("rent_lesson_link:mechanics")} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"See the full mechanics — the byte math, the rollout schedule, the sources"} →</a>
+      <a href="/firepit" onClick={()=>track("rent_lesson_link:firepit")} style={{color:"#67E8F9",textDecoration:"none",fontSize:14,lineHeight:1.5}}>{"Close an account you're finished with, safely"} →</a>
+    </div>
+  );
+}
+
 const LESSONS = [
   // ── EXISTING (expanded questions) ──────────────────────────
 
@@ -550,6 +570,34 @@ const LESSONS = [
       { q: "You lock tokens into a rewards program. Is locking the same thing as selling them?", options: ["Yes — once locked, they're effectively gone", "No — a lock immobilizes tokens for a set time under published terms; nothing is sold, and you own them the whole time", "It depends on which reward token you're paid in", "Only if the multiplier is above 1x"], correct: 1, explanation: "A lock is a public promise not to move tokens for a period — an on-chain escrow you can go open and inspect yourself. It is not a transfer of ownership or a swap for something else. You remain the owner the entire time; you've only committed not to touch them until the date, which is exactly what makes the promise checkable in the first place." },
     ],
   },
+
+  // Solana's reduced-rent rollout (SIMD-0437) landed in stages through 2026-09; the facts and
+  // numbers here are the SAME single source of truth as public/solana-rent.html and
+  // public/rent-math.js (BILLABLE_BYTES=293, the STAGES schedule) — never re-derived. The point
+  // of the lesson is the two things a headline gets wrong: it's a refund of your OWN deposit,
+  // not free money, and the "claim it" scam wave is exactly as predictable as every past one.
+  {
+    id: "rent", belt: "REGISTRAR", icon: "🏦", title: "The Deposit You Didn't Know You Made",
+    quote: "Cluck Norris doesn't pay rent. He collects the deposit back.",
+    color: "#FBBF24", glow: "rgba(251,191,36,0.4)",
+    intro: "Open a token account and your wallet balance drops by a fraction of a SOL, before you've bought anything. That's not a fee. It's a rent-exempt deposit — Solana requires it so the account's data stays paid for, and it comes back to you when you're done with the account. Nobody explains this the first time it happens, so it feels like money vanishing into the network. It never left. It's still yours.",
+    concepts: [
+      { term: "Rent-Exempt Deposit", def: "A refundable amount of SOL locked when an account is created — not a fee, not spent. It's sized to the account's data, and it's returned to you when the account is closed." },
+      { term: "Billable Bytes", def: "What actually gets priced: a standard SPL token account holds 165 bytes of data, plus a fixed 128-byte account-overhead allowance Solana also charges rent on — 293 billable bytes in total." },
+      { term: "SIMD-0437 (Reduced Rent)", def: "The network upgrade cutting the per-byte rate in stages — live on mainnet since Sep 3, 2026, with the remaining steps expected around November 2026 — heading toward roughly a 90% cut from the original rate." },
+      { term: "Closing an Account", def: "Returns the account's ENTIRE current rent-exempt deposit to its owner. It only makes sense once you're actually finished holding that token — you'd need to pay the deposit again to reopen it." },
+      { term: "WithdrawExcessLamports", def: "A newer instruction that pulls out only the surplus above today's required minimum, without closing the account or touching your token balance. The account owner signs it, and it can never take the account below the current minimum." },
+      { term: "The 'Free SOL' Scam", def: "A predictable wave of fake claim sites cashing in on real news about the rent cut. Nobody needs your seed phrase, a token delegate approval, or a SOL 'unlock fee' to hand back a deposit that was always yours." },
+    ],
+    questions: [
+      { q: "You open a fresh token account and a small amount of SOL leaves your wallet immediately, before any trade happens. What is that SOL?", options: ["A network fee that's gone for good", "A refundable rent-exempt deposit sized to the account's data", "A tip paid to the token's creator", "A charge from the wallet app, not the network"], correct: 1, explanation: "It's a rent-exempt deposit, not a fee — the network requires it so the account's data stays paid for. It's sized to the account, and it's still yours: you get it back when you close the account." },
+      { q: "A standard SPL token account holds 165 bytes of data. Why is the rent-exempt deposit actually priced on 293 bytes?", options: ["165 bytes was outdated, and 293 is the corrected figure", "Solana also charges rent on a fixed 128-byte account-overhead allowance, on top of the 165 bytes of data", "293 bytes includes a safety buffer added by wallet apps", "128 bytes is unrelated metadata with no connection to the deposit"], correct: 1, explanation: "165 bytes of token-account data plus a fixed 128-byte account-overhead allowance Solana also charges rent on equals 293 billable bytes — the number the deposit is actually calculated against." },
+      { q: "Solana is cutting the rent-exempt rate in stages. A headline says 'hundreds of thousands of SOL unlocked.' What is that number actually counting?", options: ["SOL created out of nothing by the upgrade", "The whole network's accounts added together — your own share is a fraction of a cent", "Only accounts that were about to be deleted", "A one-time bonus paid out to validators"], correct: 1, explanation: "Nothing new is being created. The rate drop applies across every token account on the network, and adding all of that up produces a big-sounding total — your own share of it is currently a fraction of a cent per account." },
+      { q: "You're completely done with a token and will never hold it again. What does closing that account return to you?", options: ["Nothing — the deposit is gone once the account exists", "Only the difference between the old rate and today's rate", "The account's entire current rent-exempt deposit", "Half the deposit, with the rest kept by validators"], correct: 2, explanation: "Closing an account you're finished with returns the WHOLE rent-exempt deposit it's currently holding — worth more per account than only pulling out the surplus." },
+      { q: "You still hold a token and want the account to stay open, but rates have dropped since you opened it. What does WithdrawExcessLamports actually do?", options: ["Closes the account and returns everything", "Moves out only the surplus above today's required minimum, without closing the account or touching your token balance", "Converts the surplus into more of the token automatically", "Requires selling your token balance first"], correct: 1, explanation: "It's a narrower tool than closing an account: it withdraws only the surplus above the current minimum, leaves the account open, never touches your token balance, and can never take the account below what's currently required. The account owner has to sign it." },
+      { q: "A site tells you to sign a message and approve a token delegate to 'claim your reduced-rent refund.' What is actually happening?", options: ["Normal procedure — sites need a delegate to send a refund", "This is the exact scam the rent cut invites — nobody needs your seed phrase, a delegate approval, or an 'unlock fee' to return a deposit that was already yours", "It's fine as long as the site looks professional", "You should send a small amount of SOL first to prove you're not a bot"], correct: 1, explanation: "This is the predictable next wave — the same way every past airdrop bred a wave of fake claim pages. Real amounts today are fractions of a cent per account. Anything asking for a delegate, a seed phrase, or SOL up front to 'unlock' your own money is lying. Close the tab." },
+    ],
+  },
 ];
 
 
@@ -566,8 +614,8 @@ function shuffleOptions(question) {
   return { ...question, options: newOptions, correct: newCorrect };
 }
 
-const BELT_BG   = { "FRESHMAN":"#F0F0F0","SOPHOMORE":"#FFB627","JUNIOR":"#FF7A18","SENIOR":"#10B981","GRADUATE":"#06B6D4","POST-GRAD":"#92400E","TENURED":"#DC2626","HEADMASTER":"#1a0f08","PROFESSOR":"#14B8A6","DEAN":"#84CC16","CHANCELLOR":"#FF7A18","EMERITUS":"#A855F7","LAUREATE":"#C026D3","LEGACY":"#7C3AED","BURSAR":"#67E8F9" };
-const BELT_TEXT = { "FRESHMAN":"#1a0f08","SOPHOMORE":"#1a0f08","JUNIOR":"#fff","SENIOR":"#fff","GRADUATE":"#fff","POST-GRAD":"#fff","TENURED":"#fff","HEADMASTER":"#FFB627","PROFESSOR":"#fff","DEAN":"#1a0f08","CHANCELLOR":"#fff","EMERITUS":"#fff","LAUREATE":"#fff","LEGACY":"#fff","BURSAR":"#1a0f08" };
+const BELT_BG   = { "FRESHMAN":"#F0F0F0","SOPHOMORE":"#FFB627","JUNIOR":"#FF7A18","SENIOR":"#10B981","GRADUATE":"#06B6D4","POST-GRAD":"#92400E","TENURED":"#DC2626","HEADMASTER":"#1a0f08","PROFESSOR":"#14B8A6","DEAN":"#84CC16","CHANCELLOR":"#FF7A18","EMERITUS":"#A855F7","LAUREATE":"#C026D3","LEGACY":"#7C3AED","BURSAR":"#67E8F9","REGISTRAR":"#FBBF24" };
+const BELT_TEXT = { "FRESHMAN":"#1a0f08","SOPHOMORE":"#1a0f08","JUNIOR":"#fff","SENIOR":"#fff","GRADUATE":"#fff","POST-GRAD":"#fff","TENURED":"#fff","HEADMASTER":"#FFB627","PROFESSOR":"#fff","DEAN":"#1a0f08","CHANCELLOR":"#fff","EMERITUS":"#fff","LAUREATE":"#fff","LEGACY":"#fff","BURSAR":"#1a0f08","REGISTRAR":"#1a0f08" };
 function Belt({belt,small}){return(<span data-read-skip="1" style={{display:"inline-block",background:BELT_BG[belt],color:BELT_TEXT[belt],fontFamily:"'Anton',sans-serif",fontSize:small?9:10,fontWeight:700,letterSpacing:1.5,padding:small?"2px 6px":"3px 10px",borderRadius:3,border:"none",textTransform:"uppercase"}}>{belt}</span>);}
 
 
@@ -1513,6 +1561,7 @@ function Lesson({lesson:l,onComplete,onBack,hubFrom}){
       <LessonLinks lesson={l}/>
       <HubBridge lesson={l} hubFrom={hubFrom}/>
       <ReceiptLessonBridge lesson={l}/>
+      <RentLessonBridge lesson={l}/>
       <HubDemoDoor/>
       <div style={{display:"flex",gap:10}}>
         {!passed&&<button onClick={retry} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,color:"#D1D5DB",cursor:"pointer",letterSpacing:2}}>↩ RETAKE</button>}
