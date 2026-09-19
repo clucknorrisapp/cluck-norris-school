@@ -565,7 +565,6 @@
   "Contract & Links": "合约与链接",
   "The School": "学校",
   "\"No participation trophies. No hand-holding. Just hard knocks.\"": "「没有安慰奖，没人扶你走，只有硬道理。」",
-  "🏫 Start the 15-Class Course": "🏫 开始 15 节课程",
   "📚 Continue Class": "📚 继续上课",
   "12 CLASSES • 72 EXAMS • NO EXTRA CREDIT": "12 节课 • 72 道考题 • 没有补考",
   "🎓 Prefer a live teacher? Take it in the Classroom →": "🎓 想要真人老师？去课堂上课 →",
@@ -1820,5 +1819,6 @@
   "Why the first transfer of a token to someone new costs extra →": "为什么把一个 token 第一次转给一个新的人会更贵 →",
   "What actually happens when you buy →": "当你购买时，实际发生了什么 →",
   "Fees — the base fee, priority fees and compute unit limits, on solana.com →": "Fees——base fee、priority fee 和 compute unit 的限额，详见 solana.com →",
-  "Transactions — why fees are still charged when a transaction fails, on solana.com →": "Transactions——为什么一笔交易失败了，费用依然会被收取，详见 solana.com →"
+  "Transactions — why fees are still charged when a transaction fails, on solana.com →": "Transactions——为什么一笔交易失败了，费用依然会被收取，详见 solana.com →",
+  "🏫 Start the 16-Class Course": "🏫 开始 16 节课程"
 }
