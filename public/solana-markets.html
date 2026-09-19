@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Buying SOL, ETFs, and what you actually own</title>
+<meta name="description" content="An exchange balance, a self-custody wallet and a fund share can show the same number on screen and still be three different things to hold. What each one actually gives you, and what it doesn't, in plain words."/>
+<meta property="og:title" content="Buying SOL, ETFs, and what you actually own — Cluck Norris"/>
+<meta property="og:description" content="An exchange balance, a self-custody wallet and a fund share can show the same number on screen and still be three different things to hold. What each one actually gives you, and what it doesn't, in plain words."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana/markets"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="Buying SOL, ETFs, and what you actually own — Cluck Norris"/>
+<meta name="twitter:description" content="An exchange balance, a self-custody wallet and a fund share can show the same number on screen and still be three different things to hold. What each one actually gives you, and what it doesn't, in plain words."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:.3px; color:var(--gold); font-weight:400; line-height:1.25; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact + .fact { margin-top:10px; }
+  .fact b, .fact code { color:var(--text); }
+  .stage-row { padding:12px 0; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .stage-row:first-of-type { border-top:none; padding-top:0; }
+  .stage-name { font-family:var(--disp); font-weight:400; font-size:15px; color:var(--text); margin-bottom:8px; }
+  .stage-vals { display:flex; flex-wrap:wrap; gap:10px 20px; }
+  .stage-val { min-width:150px; flex:1 1 150px; }
+  .stage-label { display:block; font-size:11px; letter-spacing:1px; color:var(--sub); text-transform:uppercase; margin-bottom:2px; }
+  .stage-num { font-family:var(--body); font-size:13.5px; color:var(--text); line-height:1.5; }
+  .footnote { font-size:12.5px; color:var(--sub); line-height:1.6; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .links-card { display:flex; flex-direction:column; }
+  .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
+  .small { font-size:12px; color:var(--sub); }
+  /* a standalone link inside a .small line still needs a real 44px tap target — same
+     expand-with-negative-margin trick as public/solana-fees.html / solana-rent.html. */
+  .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .maintained { text-align:center; font-size:11.5px; color:var(--sub); letter-spacing:.5px; margin:6px 0 4px; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/solana" data-clkn-avoid="1">← THE SOLANA ROOM</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">Buying SOL, ETFs, and what you actually own</h1>
+    <p data-clkn-avoid="1">THREE WAYS TO HOLD IT, THREE DIFFERENT THINGS</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as
+  // public/solana-room.html / public/solana-fees.html: a curated dict lookup over
+  // window.CLKN_I18N.dict, English literal on a miss, no machine-translation fallback.
+  // scripts/i18n-audit.cjs's Hub-pages gate and scripts/solana-room-test.cjs both scan this
+  // file's <script> block for every literal passed to t() and require it in all six dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  // The comparison table below is built from an array so the three-column layout only has to be
+  // written once — which means the axis names and the per-case answers are variables at render
+  // time, not literals sitting directly inside a t(...) call, so the audit script's static scan
+  // (a literal string immediately inside t(...)/tf(...)) can't see them on its own. This function
+  // is never called by render(); it exists only so every one of those strings also appears as a
+  // literal t(...) call somewhere in this file, which is what makes the audit require it in all
+  // six dictionaries. Same pattern and same reason as __solanaRoomGatedStrings in solana-room.html.
+  function __solanaMarketsGatedStrings() { return [
+    t('Who holds the keys'), t('Can you use it on-chain'), t('Can it be frozen'),
+    t('Can it be recovered if you lose access'), t('When can you trade it'), t('What it costs to hold'),
+    t('The exchange'), t('You'), t("The fund's custodian"),
+    t('No — not until you withdraw it'), t('Yes'), t('No'),
+    t('Yes, by the exchange'), t('No — nobody has the power to'), t('Trading can be halted by the exchange it lists on'),
+    t("Through the exchange's own account-recovery process"), t('No — there is no recovery process for a lost key'), t("Through the brokerage's own account-recovery process"),
+    t('Whenever the exchange is open, close to 24/7'), t('24/7, whenever the network itself is running'), t("Only during that exchange's own market hours"),
+    t('Varies by exchange — some charge nothing to hold, some charge custody or inactivity fees'), t('Nothing to hold — a network fee only when you actually use it'), t('A management fee, charged continuously as a percentage of assets, on top of any fee the exchange or broker charges you'),
+  ]; }
+
+  var AXES = [
+    { axis: 'Who holds the keys', exch: 'The exchange', self: 'You', fund: "The fund's custodian" },
+    { axis: 'Can you use it on-chain', exch: 'No — not until you withdraw it', self: 'Yes', fund: 'No' },
+    { axis: 'Can it be frozen', exch: 'Yes, by the exchange', self: 'No — nobody has the power to', fund: 'Trading can be halted by the exchange it lists on' },
+    { axis: 'Can it be recovered if you lose access', exch: "Through the exchange's own account-recovery process", self: 'No — there is no recovery process for a lost key', fund: "Through the brokerage's own account-recovery process" },
+    { axis: 'When can you trade it', exch: 'Whenever the exchange is open, close to 24/7', self: '24/7, whenever the network itself is running', fund: "Only during that exchange's own market hours" },
+    { axis: 'What it costs to hold', exch: 'Varies by exchange — some charge nothing to hold, some charge custody or inactivity fees', self: 'Nothing to hold — a network fee only when you actually use it', fund: 'A management fee, charged continuously as a percentage of assets, on top of any fee the exchange or broker charges you' },
+  ];
+  var COL_LABEL = { exch: 'On an exchange', self: 'Self-custody', fund: 'Fund / ETF' };
+
+  function render() {
+    var html = '';
+
+    html += '<div class="card"><div class="intro">' + esc(t("This page doesn't tell you what to buy. It tells you what you actually hold in each of three common cases — an exchange balance, a self-custody wallet, or a share of a fund — because most people who own any of the three have never been told the difference, and the difference is exactly what matters the day something goes wrong.")) + '</div></div>';
+
+    html += '<div class="card" data-section="on-exchange">';
+    html += '<div class="sec-title">' + esc(t('On an exchange: you hold an entry in their database')) + '</div>';
+    html += '<div class="fact">' + esc(t("Buy SOL on a centralized exchange and leave it there, and what you hold is a line in that exchange's own internal ledger saying you're owed a certain amount. The exchange holds the actual keys, pooled together with everyone else's balances.")) + '</div>';
+    html += '<div class="fact">' + esc(t("That works exactly as expected while the exchange is solvent and operating normally — the balance shows up, you can trade it, and you can usually withdraw it. It stops working the moment the exchange freezes withdrawals, restricts an account, or becomes insolvent, because your claim on that SOL was only ever a promise from the exchange, not the asset itself.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("Withdrawing it to a wallet only you control is the step that turns that promise into the real thing.")) + '</b> ' + esc(t("The SOL moves from the exchange's keys to keys only you hold. Until that step happens, what you hold is a claim on SOL, not SOL.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="self-custody">';
+    html += '<div class="sec-title">' + esc(t('Self-custody: you hold the keys')) + '</div>';
+    html += '<div class="fact">' + esc(t("In a wallet where you hold the private key — a hardware wallet, a seed phrase kept in a wallet app, whatever the form — the SOL sits on-chain under an address only you can sign for. Nobody else holds a matching claim on it.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t('Nobody can freeze it, and nobody can recover it for you.')) + '</b> ' + esc(t("Those are the same fact seen from two directions. There's no admin key and no support line built into the protocol — the same design that stops anyone from freezing your funds is what means there's no one to call if you lose the key yourself.")) + '</div>';
+    html += '<div class="fact">' + esc(t("This is also the only one of the three cases where you can actually use SOL on-chain: send it to someone else, pay a transaction fee with it, or move it into a stake account and delegate it to a validator yourself (solana.com's own staking overview, linked below, walks through that last one). A fund share or an exchange balance can't do any of that directly.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="fund-etf">';
+    html += '<div class="sec-title">' + esc(t('A fund, ETP or ETF: you hold a share of a fund that holds the asset')) + '</div>';
+    html += '<div class="fact">' + esc(t("The first US spot Solana exchange-traded product began trading on the NYSE on 28 October 2025 — its issuer's own launch announcement is linked below — and others have followed since. \"Spot\" means the fund actually holds SOL rather than tracking it with contracts. What you buy is a share of that fund. It gives you exposure to SOL's price. It does not give you SOL.")) + '</div>';
+    html += '<div class="fact">' + esc(t("You cannot send it and you cannot use it on-chain — there's no wallet address behind a brokerage position, and nothing for you to delegate to a validator. Whether a given fund stakes the SOL it holds and passes any of that reward back into the fund is specific to that product and is stated in its own prospectus and fact sheet. Check those documents, not a headline about the category.")) + '</div>';
+    html += '<div class="fact">' + esc(t("There is a management fee, charged as a percentage of the fund's assets over time regardless of how the price moves. And because the fund only trades during that exchange's market hours while SOL itself trades everywhere, all the time, the fund's share price and the underlying SOL price can drift apart — most visibly overnight or over a weekend — and settle back into line once the market reopens.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="comparison-table">';
+    html += '<div class="sec-title">' + esc(t('The same three cases, side by side')) + '</div>';
+    for (var i = 0; i < AXES.length; i++) {
+      var row = AXES[i];
+      html += '<div class="stage-row"><div class="stage-name">' + esc(t(row.axis)) + '</div><div class="stage-vals">';
+      ['exch', 'self', 'fund'].forEach(function (key) {
+        html += '<div class="stage-val"><span class="stage-label">' + esc(t(COL_LABEL[key])) + '</span><span class="stage-num">' + esc(t(row[key])) + '</span></div>';
+      });
+      html += '</div></div>';
+    }
+    html += '</div>';
+
+    html += '<div class="card" data-section="institutional-interest">';
+    html += '<div class="sec-title">' + esc(t("What institutional interest does and doesn't tell you")) + '</div>';
+    html += '<div class="fact">' + esc(t("When a bank, a fund manager or a public company holds SOL, files paperwork for a fund built around it, or lists a product that trades it, that's a fact about products and capital flows: legal, custody and compliance work happened, and a new channel now exists for money to move in or out.")) + '</div>';
+    html += '<div class="fact">' + esc(t("It is not a statement about price, and it is not a signal about whether holding SOL is right for you personally. A headline about institutional interest tells you the category got bigger and more accessible, in plain terms. It does not tell you what happens to the price next, and this school will not pretend it does.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="intro">' + esc(t("Nothing on this page is investment advice, and nothing here recommends buying, holding or avoiding SOL, an exchange, or any fund. It describes what you're holding once you've already decided — the decision itself is yours to make, and to make with money you understand.")) + '</div>';
+    html += '<div class="footnote">' + esc(t("Whichever of the three you choose, the safety basics underneath it are the same, and they're free either way.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card links-card">';
+    html += '<a href="/wallet-checkup">' + esc(t('Wallet Checkup — a free safety read on any address, no wallet or signup needed →')) + '</a>';
+    html += '<a href="/solana">' + esc(t('The Solana Room — how the rest of it actually works →')) + '</a>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Sources')) + '</div>';
+    html += '<div class="small"><a href="https://bitwiseinvestments.com/newsroom/bitwise-launches-bsol-first-spot-solana-etp-in-us" target="_blank" rel="noopener noreferrer">' + esc(t('The first US spot Solana ETP\'s own launch announcement — the source for the 28 October 2025 date above. Linked as evidence for a date, not as a suggestion to buy anything →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://www.fidelity.com/learning-center/trading-investing/spot-solana-ETP" target="_blank" rel="noopener noreferrer">' + esc(t("What is a spot Solana ETP? — trading hours, tracking and fees, on fidelity.com →")) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/docs/references/staking" target="_blank" rel="noopener noreferrer">' + esc(t('Staking on Solana — moving SOL into a stake account and delegating it, on solana.com →')) + '</a></div>';
+    html += '</div>';
+
+    html += '<div class="maintained">' + esc(t('Last checked 19 September 2026 · maintained by Cluck Norris')) + '</div>';
+
+    html += '<div class="small" style="text-align:center"><a href="/solana">' + esc(t('Back to the Solana Room →')) + '</a></div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

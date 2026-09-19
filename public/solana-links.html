@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Where To Look Things Up</title>
+<meta name="description" content="The official domains for Solana's block explorers, network status, documentation, wallets and market-data tools — written out in plain text so you can type them instead of clicking a link."/>
+<meta property="og:title" content="Where To Look Things Up — Cluck Norris"/>
+<meta property="og:description" content="The official domains for Solana's block explorers, network status, documentation, wallets and market-data tools — written out in plain text so you can type them instead of clicking a link."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana/links"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="Where To Look Things Up — Cluck Norris"/>
+<meta name="twitter:description" content="The official domains for Solana's block explorers, network status, documentation, wallets and market-data tools — written out in plain text so you can type them instead of clicking a link."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:.3px; color:var(--gold); font-weight:400; line-height:1.25; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .group-lede { font-size:13px; color:var(--sub); line-height:1.6; margin:-2px 0 12px; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact + .fact { margin-top:10px; }
+  .fact b { color:var(--text); }
+  /* same real visual weight the fees/rent pages give a warning — a distinct red card, never a
+     tucked-away footnote, and this page opens with one before any link appears. */
+  .card.scam { background:var(--redbg, rgba(232,30,14,.14)); border:1px solid rgba(232,30,14,.4); }
+  .scam .sec-title { color:#FCA5A5; }
+  .scam .fact { color:#FBD5D0; }
+  .scam .fact b { color:#FEE2E0; }
+  .warn-block { background:var(--redbg, rgba(232,30,14,.14)); border:1px solid rgba(232,30,14,.4); border-radius:10px; padding:12px 14px; margin:-2px 0 14px; font-size:13px; color:#FBD5D0; line-height:1.6; }
+  .warn-block b { color:#FEE2E0; }
+  .link-row { padding:14px 0; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .link-row:first-of-type { border-top:none; padding-top:0; }
+  .link-name { display:block; font-family:var(--disp); font-weight:400; font-size:16px; color:var(--text); margin-bottom:2px; }
+  /* the domain is the link's own visible text — plain characters, not a disguised label, so it
+     can be read and typed as easily as it can be clicked. Negative margin keeps a real 44px tap
+     target without shoving the row's layout around. */
+  .link-domain { display:inline-flex; align-items:center; min-height:44px; margin:0 0 4px -3px; padding:0 3px; font-family:var(--mono); font-size:13px; color:var(--cyan, #67E8F9); text-decoration:none; word-break:break-all; }
+  .link-for, .link-wont { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.6; }
+  .link-for b, .link-wont b { color:var(--text); }
+  .link-wont { margin-top:4px; }
+  .links-card { display:flex; flex-direction:column; }
+  .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
+  .small { font-size:12px; color:var(--sub); }
+  .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/solana" data-clkn-avoid="1">← THE SOLANA ROOM</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">Where to look things up</h1>
+    <p data-clkn-avoid="1">THE OFFICIAL DOMAINS — TYPE THEM, DON'T CLICK A LINK</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as the rest of the
+  // Solana Room (public/solana-room.html, solana-fees.html, …): a curated dict lookup over
+  // window.CLKN_I18N.dict, English literal on a miss, no machine-translation fallback. The room's
+  // own test scans this file's <script> block for every literal passed to t() and requires it in
+  // all six dictionaries. Domain names and URLs are never passed through t() — they don't get
+  // translated, and rendering them outside t() is what lets someone read/type the real address.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  // The curated directory. Every domain below was checked resolving to the entity named, on the
+  // date in the ownership line at the bottom of the page — a wrong domain here would be the worst
+  // possible defect on a page whose whole job is to be the safe copy of these addresses.
+  var GROUPS = [
+    {
+      id: 'explorers',
+      title: 'Block explorers',
+      lede: 'For looking up a transaction, an address or a token.',
+      items: [
+        { name: 'Solana Explorer', domain: 'explorer.solana.com', href: 'https://explorer.solana.com',
+          for: 'Looking up any transaction, wallet address, token or block directly on the Solana network.',
+          wont: "It shows what happened on-chain. It won't tell you whether the wallet on the other end is trustworthy." },
+        { name: 'Solscan', domain: 'solscan.io', href: 'https://solscan.io',
+          for: 'The same kind of lookup, with more detail on token holders, transfers and account history.',
+          wont: "It won't tell you whether a large holder is the founding team, an exchange, or a stranger." },
+      ]
+    },
+    {
+      id: 'network-status',
+      title: 'Network status and health',
+      lede: 'For "is it me, or is the network having a bad day."',
+      items: [
+        { name: 'Solana Status', domain: 'status.solana.com', href: 'https://status.solana.com',
+          for: "Checking whether Solana's own infrastructure is degraded or down right now.",
+          wont: "It won't tell you why your own wallet, app or RPC provider is misbehaving if the network itself shows all clear." },
+        { name: 'Validators.app', domain: 'validators.app', href: 'https://validators.app',
+          for: 'Seeing how the validators that process transactions and secure the network are performing.',
+          wont: "It won't tell you whether a specific slow or failed transaction of yours was caused by network conditions." },
+      ]
+    },
+    {
+      id: 'official-docs',
+      title: 'Official documentation',
+      lede: 'For what a thing actually does, in the words of the people who built it.',
+      items: [
+        { name: 'Solana Docs', domain: 'solana.com/docs', href: 'https://solana.com/docs',
+          for: 'How accounts, transactions, tokens, fees and rent actually work, from the source.',
+          wont: "It won't tell you whether any particular app or token built on Solana is safe to use." },
+      ]
+    },
+    {
+      id: 'wallets',
+      title: 'Wallets',
+      lede: "A wallet is the single most impersonated category on this page. Only ever download one from its own domain below, or from the platform's own official app store listing — never from a link in a search ad, a DM, or a post.",
+      items: [
+        { name: 'Phantom', domain: 'phantom.com', href: 'https://phantom.com',
+          for: 'A wallet extension and app that holds Solana along with several other networks.',
+          wont: "It won't stop you approving a transaction you don't understand — read what you're signing yourself." },
+        { name: 'Solflare', domain: 'solflare.com', href: 'https://solflare.com',
+          for: 'A wallet extension and app built specifically for Solana.',
+          wont: 'Same as any wallet: it can flag some risks, but the decision to approve is still yours.' },
+        { name: 'Backpack', domain: 'backpack.app', href: 'https://backpack.app',
+          for: 'A wallet and exchange app that supports Solana along with other networks.',
+          wont: "It won't tell you whether a token sitting in your wallet is legitimate." },
+      ]
+    },
+    {
+      id: 'market-data',
+      title: 'Token and market data',
+      lede: "For what a token is trading at and where its liquidity sits. None of these tell you whether a token is safe — that isn't what they were built to answer.",
+      items: [
+        { name: 'GeckoTerminal', domain: 'geckoterminal.com', href: 'https://www.geckoterminal.com',
+          for: 'Live price charts, trading volume and liquidity for a token, pulled from the pools trading it.',
+          wont: "It won't tell you whether that liquidity can be pulled out from under you." },
+        { name: 'DexScreener', domain: 'dexscreener.com', href: 'https://dexscreener.com',
+          for: 'The same kind of live chart and liquidity data, across many chains and exchanges at once.',
+          wont: "It won't tell you who controls a pool, or whether it's locked." },
+        { name: 'Birdeye', domain: 'birdeye.so', href: 'https://birdeye.so',
+          for: 'Live Solana token prices, charts and wallet-level trading activity.',
+          wont: "It won't tell you whether a wallet's activity belongs to the founding team or a stranger." },
+      ]
+    },
+  ];
+
+  // GROUPS' title/lede/item strings are read through variables at render time (t(g.title),
+  // t(item.for), …), which the regex-based i18n audits can't see — they only match a LITERAL
+  // string immediately inside t(...). This function lists every one of those same strings as
+  // literal t() calls purely so the gate sees them; it is never called. Same technique as
+  // public/solana-room.html's __solanaRoomGatedStrings — keep this in step with GROUPS above.
+  function __solanaLinksGatedStrings() { return [
+    t('Block explorers'), t('For looking up a transaction, an address or a token.'),
+    t('Solana Explorer'), t('Looking up any transaction, wallet address, token or block directly on the Solana network.'), t("It shows what happened on-chain. It won't tell you whether the wallet on the other end is trustworthy."),
+    t('Solscan'), t('The same kind of lookup, with more detail on token holders, transfers and account history.'), t("It won't tell you whether a large holder is the founding team, an exchange, or a stranger."),
+    t('Network status and health'), t('For "is it me, or is the network having a bad day."'),
+    t('Solana Status'), t("Checking whether Solana's own infrastructure is degraded or down right now."), t("It won't tell you why your own wallet, app or RPC provider is misbehaving if the network itself shows all clear."),
+    t('Validators.app'), t('Seeing how the validators that process transactions and secure the network are performing.'), t("It won't tell you whether a specific slow or failed transaction of yours was caused by network conditions."),
+    t('Official documentation'), t('For what a thing actually does, in the words of the people who built it.'),
+    t('Solana Docs'), t('How accounts, transactions, tokens, fees and rent actually work, from the source.'), t("It won't tell you whether any particular app or token built on Solana is safe to use."),
+    t('Wallets'), t("A wallet is the single most impersonated category on this page. Only ever download one from its own domain below, or from the platform's own official app store listing — never from a link in a search ad, a DM, or a post."),
+    t('Phantom'), t('A wallet extension and app that holds Solana along with several other networks.'), t("It won't stop you approving a transaction you don't understand — read what you're signing yourself."),
+    t('Solflare'), t('A wallet extension and app built specifically for Solana.'), t('Same as any wallet: it can flag some risks, but the decision to approve is still yours.'),
+    t('Backpack'), t('A wallet and exchange app that supports Solana along with other networks.'), t("It won't tell you whether a token sitting in your wallet is legitimate."),
+    t('Token and market data'), t("For what a token is trading at and where its liquidity sits. None of these tell you whether a token is safe — that isn't what they were built to answer."),
+    t('GeckoTerminal'), t('Live price charts, trading volume and liquidity for a token, pulled from the pools trading it.'), t("It won't tell you whether that liquidity can be pulled out from under you."),
+    t('DexScreener'), t('The same kind of live chart and liquidity data, across many chains and exchanges at once.'), t("It won't tell you who controls a pool, or whether it's locked."),
+    t('Birdeye'), t('Live Solana token prices, charts and wallet-level trading activity.'), t("It won't tell you whether a wallet's activity belongs to the founding team or a stranger."),
+    t('For:'), t("Won't tell you:"),
+    t('Before you click anything'),
+    t("Type the address into your browser, or use your own bookmark."),
+    t("Don't reach any of these through a link in a DM, a reply under a post, or a search ad."),
+    t("A lookalike domain that takes your seed phrase or a signature is the single most common way people get drained — and it works because the fake looks exactly like the real one."),
+    t('Bookmark this page, or type the domains listed below yourself.'),
+    t('What none of these can tell you'),
+    t("The chain shows what happened. It never shows why. An explorer can show you a wallet sold — it can't tell you that was the team, that it was a rug, or that it was a mistake."),
+    t('Anyone telling you the chain proves motive is selling you something.'),
+    t('Check a wallet for the warning signs we do know how to check →'),
+    t('Back to the Solana Room →'),
+    t('Last checked 19 September 2026 · maintained by Cluck Norris'),
+  ]; }
+
+  function render() {
+    var html = '';
+
+    html += '<div class="card scam" data-section="safety-rule">';
+    html += '<div class="sec-title">' + esc(t('Before you click anything')) + '</div>';
+    html += '<div class="fact">' + esc(t('Type the address into your browser, or use your own bookmark.')) + ' ' + esc(t("Don't reach any of these through a link in a DM, a reply under a post, or a search ad.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("A lookalike domain that takes your seed phrase or a signature is the single most common way people get drained — and it works because the fake looks exactly like the real one.")) + '</b></div>';
+    html += '<div class="fact">' + esc(t('Bookmark this page, or type the domains listed below yourself.')) + '</div>';
+    html += '</div>';
+
+    for (var g = 0; g < GROUPS.length; g++) {
+      var grp = GROUPS[g];
+      html += '<div class="card" data-section="' + esc(grp.id) + '">';
+      html += '<div class="sec-title">' + esc(t(grp.title)) + '</div>';
+      if (grp.id === 'wallets') {
+        html += '<div class="warn-block"><b>' + esc(t(grp.lede)) + '</b></div>';
+      } else {
+        html += '<div class="group-lede">' + esc(t(grp.lede)) + '</div>';
+      }
+      for (var i = 0; i < grp.items.length; i++) {
+        var it = grp.items[i];
+        html += '<div class="link-row">';
+        html += '<span class="link-name">' + esc(t(it.name)) + '</span>';
+        html += '<a class="link-domain" href="' + esc(it.href) + '" target="_blank" rel="noopener noreferrer">' + esc(it.domain) + '</a>';
+        html += '<div class="link-for"><b>' + esc(t('For:')) + '</b> ' + esc(t(it.for)) + '</div>';
+        html += '<div class="link-wont"><b>' + esc(t("Won't tell you:")) + '</b> ' + esc(t(it.wont)) + '</div>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
+    html += '<div class="card" data-section="cant-tell-you">';
+    html += '<div class="sec-title">' + esc(t('What none of these can tell you')) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("The chain shows what happened. It never shows why. An explorer can show you a wallet sold — it can't tell you that was the team, that it was a rug, or that it was a mistake.")) + '</b></div>';
+    html += '<div class="fact">' + esc(t('Anyone telling you the chain proves motive is selling you something.')) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card links-card">';
+    html += '<a href="/wallet-checkup">' + esc(t('Check a wallet for the warning signs we do know how to check →')) + '</a>';
+    html += '<a href="/solana">' + esc(t('Back to the Solana Room →')) + '</a>';
+    html += '</div>';
+
+    html += '<div class="small" style="text-align:center">' + esc(t('Last checked 19 September 2026 · maintained by Cluck Norris')) + '</div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

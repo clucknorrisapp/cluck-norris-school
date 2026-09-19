@@ -1,31 +1,40 @@
 #!/usr/bin/env node
 "use strict";
 // The Solana Room (CLAUDE.md) — a public, no-wallet reference room on how Solana actually works.
-// Ships the room shell (/solana) plus six full pages: the rent page (/solana/rent, "The deposit
-// you didn't know you made"), the wallet page (/solana/wallet, "What your wallet actually
-// holds"), the mint page (/solana/mint, "What a token mint is"), the buying page (/solana/buying,
-// "What actually happens when you buy"), the transfers page (/solana/transfers, "Sending tokens,
-// and why the first one costs extra") and the fees page (/solana/fees, "What a transaction
-// actually costs"). Boots the REAL server with a throwaway DATA_DIR on a no-build boot (no
-// `npm run build` has run — CLAUDE.md: public/ is only served through the vite build's copy in
-// dist/, so every page needs its own explicit app.get route or they 404 here) and asserts:
+// Ships the room shell (/solana) plus ten full pages in two groups.
 //
-//   (a) all seven routes (the room + six topic pages) serve 200 on a no-build boot;
-//   (b) the room page links to all six topic pages, and COMING_NEXT is now empty (all six
-//       tier-1 topics have shipped);
+//   THE MECHANICS (tier 1) — how the machine works: /solana/rent ("The deposit you didn't know
+//   you made"), /solana/wallet, /solana/mint, /solana/buying, /solana/transfers, /solana/fees.
+//   THE BIGGER PICTURE (tier 2) — /solana/uses (what the chain is actually used for),
+//   /solana/markets (what you actually own on an exchange vs. self-custody vs. a fund),
+//   /solana/events (where the ecosystem meets, and the fake-event scams), /solana/links (the
+//   safe copy of the domains people get phished on).
+//
+// Boots the REAL server with a throwaway DATA_DIR on a no-build boot (no `npm run build` has
+// run — CLAUDE.md: public/ is only served through the vite build's copy in dist/, so every page
+// needs its own explicit app.get route or they 404 here) and asserts:
+//
+//   (a) every route (the room + ten topic pages) serves 200 on a no-build boot;
+//   (b) the room page's two topic arrays point at all ten pages, and both section titles render;
 //   (c) the rent page carries a distinct scam-warning block and the "not an airdrop" statement;
-//   (d) every literal string passed to this page's own t() i18n helper, on ANY of the seven
-//       pages, exists in all six curated dictionaries (public/i18n/<lang>.json) — extracted the
-//       same way scripts/i18n-audit.cjs's Hub-pages gate does (a literal string immediately
-//       inside a t(...)/tf(...) call, scoped to <script> blocks);
-//   (e) no forbidden word/phrase appears on any of the seven pages: no yield/APR/APY framing,
-//       nothing about Normie Quest or Wallet Watch, no mention of Nomadz, and nothing about the
-//       Solana Foundation or ETFs (this increment's explicit scope limits);
+//   (d) every literal string passed to a page's own t() i18n helper, on ANY page, exists in all
+//       six curated dictionaries (public/i18n/<lang>.json) — extracted the same way
+//       scripts/i18n-audit.cjs's Hub-pages gate does (a literal string immediately inside a
+//       t(...)/tf(...) call, scoped to <script> blocks);
+//   (e) no forbidden word/phrase, TIERED. FORBIDDEN_ALL (yield/APR/APY framing, Normie Quest,
+//       Wallet Watch, Nomadz, the Solana Foundation) and FORBIDDEN_ADVICE (the phrasings that
+//       turn an explanation into a recommendation) apply to every page. The ETF ban applies to
+//       every page EXCEPT /solana/markets, whose subject it is — and that carve-out is pinned to
+//       that one route so it cannot silently widen;
 //   (f) the mint page's two example mint addresses (the real SKR mint and its impersonator)
 //       appear byte-for-byte exactly as given — a typo'd address on a page about impersonation
 //       would be its own disaster;
 //   (g) the buying, transfers and fees pages each carry their required content blocks and cite
-//       solana.com for their factual claims.
+//       solana.com for their factual claims;
+//   (h) every tier-2 page is DATED AND OWNED — it carries its "last checked" date and who
+//       maintains it, and every external link on it is rel="noopener noreferrer". Tier 2
+//       describes things that go stale (which products exist, when an event is, whether a domain
+//       is still official); saying when it was last checked is what makes that honest.
 //
 // Usage: node scripts/solana-room-test.cjs [baseUrl]
 // Env:   SOLANA_ROOM_TEST_PORT (default 3601, inside the reserved 3600-3609 test-server range)
@@ -77,7 +86,32 @@ function extractJsTFCalls(raw) {
   return keys;
 }
 
-const PAGE_FILES = ["solana-room.html", "solana-rent.html", "solana-wallet.html", "solana-mint.html", "solana-buying.html", "solana-transfers.html", "solana-fees.html"];
+// Every page in the room, in the order the room index lists them. THE MECHANICS (tier 1) is how
+// the machine works; THE BIGGER PICTURE (tier 2) is what it is used for, what you actually own,
+// where the ecosystem meets, and the safe copy of the domains people get phished on. Tier 2
+// pages describe things that can go stale, so each one carries its own dated ownership line —
+// asserted in (h) below.
+const MECHANICS_PAGES = [
+  { route: "/solana/rent", file: "solana-rent.html" },
+  { route: "/solana/wallet", file: "solana-wallet.html" },
+  { route: "/solana/mint", file: "solana-mint.html" },
+  { route: "/solana/buying", file: "solana-buying.html" },
+  { route: "/solana/transfers", file: "solana-transfers.html" },
+  { route: "/solana/fees", file: "solana-fees.html" },
+];
+const BIGGER_PICTURE_PAGES = [
+  { route: "/solana/uses", file: "solana-uses.html" },
+  { route: "/solana/markets", file: "solana-markets.html" },
+  { route: "/solana/events", file: "solana-events.html" },
+  { route: "/solana/links", file: "solana-links.html" },
+];
+const TOPIC_PAGES = MECHANICS_PAGES.concat(BIGGER_PICTURE_PAGES);
+const ALL_PAGES = [{ route: "/solana", file: "solana-room.html" }].concat(TOPIC_PAGES);
+const PAGE_FILES = ALL_PAGES.map((p) => p.file);
+// The dated ownership line every tier-2 page must carry — "dated and owned" is the whole reason
+// these four are allowed to state things that change (owner's scope line for tier 2).
+const TIER2_DATE_LINE = "Last checked 19 September 2026";
+const TIER2_OWNER_LINE = "maintained by Cluck Norris";
 const LANGS = ["es", "hi", "it", "pt", "vi", "zh"];
 
 // The mint page's real, verifiable example (task brief, verified against docs/SEEKER_APP_PLAN.md
@@ -88,12 +122,12 @@ const LANGS = ["es", "hi", "it", "pt", "vi", "zh"];
 const SKR_REAL_MINT = "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3";
 const SKR_FAKE_MINT = "79dd8EvWuGjPTnTMMBoY6Nqtdw5u1cXaGh4azuLGjiAj";
 
-// FORBIDDEN — this increment's explicit scope limits (task brief, not the broader hub-trust
-// list): no yield/APR/APY framing, nothing about Normie Quest reward terms, never mention Wallet
-// Watch (it is private — CLAUDE.md), no Nomadz, nothing about the Solana Foundation or ETFs.
-// "airdrop" and "free" are NOT forbidden — the page legitimately uses both to REFUTE the "claim
-// your free SOL" framing ("It is not an airdrop", "not free money appearing from nowhere").
-const FORBIDDEN = [
+// FORBIDDEN_ALL — applies to EVERY page in the room, tier 1 and tier 2 alike. No yield/APR/APY
+// framing (CLAUDE.md: "Earn" describes capability, never a promise), nothing about Normie Quest
+// reward terms, never mention Wallet Watch (it is private — CLAUDE.md), no Nomadz, nothing about
+// the Solana Foundation. "airdrop" and "free" are NOT forbidden — the rent page legitimately uses
+// both to REFUTE the "claim your free SOL" framing ("It is not an airdrop").
+const FORBIDDEN_ALL = [
   { name: "yield", re: /\byield\b/i },
   { name: "APR", re: /\bapr\b/i },
   { name: "APY", re: /\bapy\b/i },
@@ -102,7 +136,32 @@ const FORBIDDEN = [
   { name: "Wallet Watch", re: /wallet\s*watch/i },
   { name: "Nomadz", re: /nomadz/i },
   { name: "Solana Foundation", re: /solana\s*foundation/i },
+];
+
+// FORBIDDEN_TIER1 — the mechanics pages explain how the machine works and have no business
+// discussing investment products; the ETF ban was written as a scope limit for THAT tier and
+// stays exactly as strict there. /solana/markets is the one page whose whole subject is what you
+// actually own in each case, so it is allowed the word — and pays for it with the much harder
+// advice ban below, which applies everywhere.
+const FORBIDDEN_TIER1 = [
   { name: "ETF", re: /\betfs?\b/i },
+];
+
+// FORBIDDEN_ADVICE — applies to EVERY page. These are the phrasings that turn an explanation
+// into a recommendation. Deliberately positive-form only: "not financial advice" contains the
+// words "financial advice", and that disclaimer is a line we WANT on the markets page.
+const FORBIDDEN_ADVICE = [
+  { name: "good investment", re: /\bgood investment\b/i },
+  // "worth buying" is DELIBERATELY not here. This school uses it constantly in the negative —
+  // "this isn't a claim that either mint is worth buying", "being swappable says nothing about
+  // being worth buying" — and a substring rule cannot tell the refutation from the claim. Same
+  // trap as "not financial advice" containing "financial advice". The six patterns that remain
+  // have no honest negative use on these pages.
+  { name: "you should buy", re: /\byou should (?:buy|sell|hold|invest)\b/i },
+  { name: "we recommend", re: /\bwe recommend\b/i },
+  { name: "price target", re: /\bprice target\b/i },
+  { name: "to the moon", re: /\bto the moon\b/i },
+  { name: "will go up", re: /\bwill (?:go|head|be) (?:up|higher|down|lower)\b/i },
 ];
 
 (async () => {
@@ -127,65 +186,36 @@ const FORBIDDEN = [
 
   console.log(`\nThe Solana Room — ${BASE}\n`);
 
-  // ── (a) all seven routes serve 200 on a no-build boot ────────────────────────────────────────
-  console.log("(a) all seven routes serve 200 on a no-build boot\n");
-  let roomText = "", rentText = "", walletText = "", mintText = "", buyingText = "", transfersText = "", feesText = "";
-  {
-    const r = await fetch(`${BASE}/solana`);
-    ok("GET /solana -> 200", r.status === 200, "got " + r.status);
-    roomText = await r.text();
-    ok("GET /solana body is non-trivial HTML", roomText.length > 500 && /<html/i.test(roomText));
+  // ── (a) every route serves 200 on a no-build boot ───────────────────────────────────────────
+  console.log(`(a) all ${ALL_PAGES.length} routes serve 200 on a no-build boot\n`);
+  const body = {};   // route -> served HTML
+  for (const page of ALL_PAGES) {
+    const r = await fetch(`${BASE}${page.route}`);
+    ok(`GET ${page.route} -> 200`, r.status === 200, "got " + r.status);
+    body[page.route] = await r.text();
+    ok(`GET ${page.route} body is non-trivial HTML`, body[page.route].length > 500 && /<html/i.test(body[page.route]));
   }
-  {
-    const r = await fetch(`${BASE}/solana/rent`);
-    ok("GET /solana/rent -> 200", r.status === 200, "got " + r.status);
-    rentText = await r.text();
-    ok("GET /solana/rent body is non-trivial HTML", rentText.length > 500 && /<html/i.test(rentText));
-  }
-  {
-    const r = await fetch(`${BASE}/solana/wallet`);
-    ok("GET /solana/wallet -> 200", r.status === 200, "got " + r.status);
-    walletText = await r.text();
-    ok("GET /solana/wallet body is non-trivial HTML", walletText.length > 500 && /<html/i.test(walletText));
-  }
-  {
-    const r = await fetch(`${BASE}/solana/mint`);
-    ok("GET /solana/mint -> 200", r.status === 200, "got " + r.status);
-    mintText = await r.text();
-    ok("GET /solana/mint body is non-trivial HTML", mintText.length > 500 && /<html/i.test(mintText));
-  }
-  {
-    const r = await fetch(`${BASE}/solana/buying`);
-    ok("GET /solana/buying -> 200", r.status === 200, "got " + r.status);
-    buyingText = await r.text();
-    ok("GET /solana/buying body is non-trivial HTML", buyingText.length > 500 && /<html/i.test(buyingText));
-  }
-  {
-    const r = await fetch(`${BASE}/solana/transfers`);
-    ok("GET /solana/transfers -> 200", r.status === 200, "got " + r.status);
-    transfersText = await r.text();
-    ok("GET /solana/transfers body is non-trivial HTML", transfersText.length > 500 && /<html/i.test(transfersText));
-  }
-  {
-    const r = await fetch(`${BASE}/solana/fees`);
-    ok("GET /solana/fees -> 200", r.status === 200, "got " + r.status);
-    feesText = await r.text();
-    ok("GET /solana/fees body is non-trivial HTML", feesText.length > 500 && /<html/i.test(feesText));
-  }
+  const roomText = body["/solana"], rentText = body["/solana/rent"], walletText = body["/solana/wallet"],
+        mintText = body["/solana/mint"], buyingText = body["/solana/buying"],
+        transfersText = body["/solana/transfers"], feesText = body["/solana/fees"];
 
-  // ── (b) the room links to all six topic pages ────────────────────────────────────────────────
-  // The room page renders its "available now" cards from an AVAILABLE_NOW array (each entry's
-  // `href` field feeds the anchor tag at render time), so the literal attribute text
+  // ── (b) the room links to every topic page ──────────────────────────────────────────────────
+  // The room page renders its cards from two arrays (MECHANICS and BIGGER_PICTURE — each entry's
+  // `href` field feeds the anchor at render time), so the literal attribute text
   // `href="/solana/rent"` never appears in the unrendered source the way a hand-written anchor
-  // would — this checks the array's own href fields instead, which is what actually drives the
-  // rendered link.
-  console.log("\n(b) the room page links to all six topic pages\n");
-  ok("room page's AVAILABLE_NOW array points at /solana/rent", /href:\s*['"]\/solana\/rent['"]/.test(roomText));
-  ok("room page's AVAILABLE_NOW array points at /solana/wallet", /href:\s*['"]\/solana\/wallet['"]/.test(roomText));
-  ok("room page's AVAILABLE_NOW array points at /solana/mint", /href:\s*['"]\/solana\/mint['"]/.test(roomText));
-  ok("room page's AVAILABLE_NOW array points at /solana/buying", /href:\s*['"]\/solana\/buying['"]/.test(roomText));
-  ok("room page's AVAILABLE_NOW array points at /solana/transfers", /href:\s*['"]\/solana\/transfers['"]/.test(roomText));
-  ok("room page's AVAILABLE_NOW array points at /solana/fees", /href:\s*['"]\/solana\/fees['"]/.test(roomText));
+  // would. This checks the arrays' own href fields, which is what actually drives the link.
+  console.log(`\n(b) the room page links to all ${TOPIC_PAGES.length} topic pages\n`);
+  for (const page of TOPIC_PAGES) {
+    ok(`room page points at ${page.route}`, new RegExp("href:\\s*['\"]" + page.route + "['\"]").test(roomText));
+  }
+  // The two section headings are passed to the local section() helper, which runs them through
+  // t() itself — so the literal sits inside section(...), not inside t(...). Both spellings are
+  // pinned: the call that renders them, and their presence in __solanaRoomGatedStrings() so the
+  // regex-based i18n gates can see them at all (they are invisible to a t()-literal scan).
+  ok("room page renders both sections (The mechanics / The bigger picture)",
+    /section\(['"]The mechanics['"]/.test(roomText) && /section\(['"]The bigger picture['"]/.test(roomText));
+  ok("both section headings are listed in __solanaRoomGatedStrings so the i18n gate sees them",
+    /t\(['"]The mechanics['"]\)/.test(roomText) && /t\(['"]The bigger picture['"]\)/.test(roomText));
 
   // ── (c) the rent page carries the scam-warning block and the "not an airdrop" statement ─────
   console.log('\n(c) the rent page carries the scam-warning block and the "not an airdrop" statement\n');
@@ -268,29 +298,32 @@ const FORBIDDEN = [
   ok("mint page contains the impersonator mint address, byte-for-byte", mintText.includes(SKR_FAKE_MINT));
   ok("the two example mint addresses are not the same string", SKR_REAL_MINT !== SKR_FAKE_MINT);
 
-  // ── the room page moved all six topics into "available now"; COMING_NEXT is now empty ───────
-  // Parses the two source arrays directly (AVAILABLE_NOW / COMING_NEXT) rather than eyeballing
+  // ── the room page's two topic arrays, parsed from source ────────────────────────────────────
+  // Parses the arrays directly (MECHANICS / BIGGER_PICTURE / COMING_NEXT) rather than eyeballing
   // string position, so this can't be fooled by an unrelated literal occurring earlier in the
-  // file — it checks which ARRAY each topic's title literal actually sits inside.
-  console.log('\nthe room page has all six topics in "available now"; COMING_NEXT is empty\n');
+  // file — it checks which ARRAY each topic's title literal actually sits inside. A tier-2 title
+  // sitting in MECHANICS (or vice versa) would render the room under the wrong heading.
+  console.log("\nthe room page's two topic arrays hold the right topics; COMING_NEXT is empty\n");
   {
-    const availableBlock = (/var AVAILABLE_NOW = \[([\s\S]*?)\n\s*\];/.exec(roomText) || [])[1] || "";
+    const grab = (name) => (new RegExp("var " + name + " = \\[([\\s\\S]*?)\\n\\s*\\];").exec(roomText) || [])[1] || "";
+    const mechBlock = grab("MECHANICS"), bigBlock = grab("BIGGER_PICTURE");
     const comingBlock = (/var COMING_NEXT = (\[[\s\S]*?\]);/.exec(roomText) || [])[1] || "";
-    ok("room page source has a parseable AVAILABLE_NOW array", availableBlock.length > 0);
+    ok("room page source has a parseable MECHANICS array", mechBlock.length > 0);
+    ok("room page source has a parseable BIGGER_PICTURE array", bigBlock.length > 0);
     ok("room page source has a parseable COMING_NEXT array", comingBlock.length > 0);
-    ok('"What your wallet actually holds" is in AVAILABLE_NOW', availableBlock.includes("What your wallet actually holds"));
-    ok('"What a token mint is" is in AVAILABLE_NOW', availableBlock.includes("What a token mint is"));
-    ok('"What actually happens when you buy" is in AVAILABLE_NOW', availableBlock.includes("What actually happens when you buy"));
-    ok('"Sending tokens, and why the first one costs extra" is in AVAILABLE_NOW', availableBlock.includes("Sending tokens, and why the first one costs extra"));
-    ok('"What a transaction actually costs" is in AVAILABLE_NOW', availableBlock.includes("What a transaction actually costs"));
-    ok("six topics are in AVAILABLE_NOW", (availableBlock.match(/title:/g) || []).length === 6, "found " + (availableBlock.match(/title:/g) || []).length);
+    for (const title of ["The deposit you didn't know you made", "What your wallet actually holds",
+      "What a token mint is", "What actually happens when you buy",
+      "Sending tokens, and why the first one costs extra", "What a transaction actually costs"]) {
+      ok(`"${title}" is in MECHANICS, and not in BIGGER_PICTURE`, mechBlock.includes(title) && !bigBlock.includes(title));
+    }
+    for (const title of ["What Solana is actually used for", "Buying SOL, ETFs, and what you actually own",
+      "Where the Solana world actually meets", "Where to look things up"]) {
+      ok(`"${title}" is in BIGGER_PICTURE, and not in MECHANICS`, bigBlock.includes(title) && !mechBlock.includes(title));
+    }
+    ok("six topics in MECHANICS", (mechBlock.match(/title:/g) || []).length === 6, "found " + (mechBlock.match(/title:/g) || []).length);
+    ok("four topics in BIGGER_PICTURE", (bigBlock.match(/title:/g) || []).length === 4, "found " + (bigBlock.match(/title:/g) || []).length);
     ok("COMING_NEXT is now an empty array", /^\[\s*\]$/.test(comingBlock.trim()), "got " + JSON.stringify(comingBlock.trim().slice(0, 60)));
   }
-  // The "coming next" section itself must not render when COMING_NEXT is empty — an empty card
-  // with a title and lede but nothing underneath would be its own small bug. This is a static
-  // fetch of the unexecuted page source (no headless browser here), so the literal copy is
-  // always present in the script text regardless of runtime state; what this actually checks is
-  // that render() gates the whole card behind a length check rather than always emitting it.
   ok('room page guards the "Coming next" card on COMING_NEXT.length > 0', /COMING_NEXT\.length > 0/.test(roomText));
 
   // ── the rent numbers — re-derived independently here too, not just eyeballed ────────────────
@@ -340,22 +373,87 @@ const FORBIDDEN = [
   }
   ok(`every t() key (${allKeys.size} unique) exists in all six dictionaries`, keyGaps === 0, keyGaps + " gap(s)");
 
-  // ── (e) no forbidden word/phrase on any of the seven pages ──────────────────────────────────
-  console.log("\n(e) no forbidden word or phrase appears on any of the seven pages\n");
-  for (const { fileText, label } of [
-    { fileText: roomText, label: "/solana" },
-    { fileText: rentText, label: "/solana/rent" },
-    { fileText: walletText, label: "/solana/wallet" },
-    { fileText: mintText, label: "/solana/mint" },
-    { fileText: buyingText, label: "/solana/buying" },
-    { fileText: transfersText, label: "/solana/transfers" },
-    { fileText: feesText, label: "/solana/fees" },
-  ]) {
-    for (const { name, re } of FORBIDDEN) {
-      const m = fileText.match(re);
-      ok(`${label}: no "${name}"`, !m, m ? "found near: " + fileText.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, " ") : "");
+  // ── (e) no forbidden word/phrase, tiered ────────────────────────────────────────────────────
+  console.log("\n(e) no forbidden word or phrase\n");
+  for (const page of ALL_PAGES) {
+    const text = body[page.route];
+    // The ETF ban skips the tier-2 pages and the room index; the index gets its own narrower
+    // check just below (every hit must sit inside the markets entry's title), and /solana/markets
+    // is the carve-out by definition.
+    const etfExempt = BIGGER_PICTURE_PAGES.some((x) => x.route === page.route) || page.route === "/solana";
+    const rules = FORBIDDEN_ALL.concat(FORBIDDEN_ADVICE).concat(etfExempt ? [] : FORBIDDEN_TIER1);
+    for (const { name, re } of rules) {
+      const m = text.match(re);
+      ok(`${page.route}: no "${name}"`, !m, m ? "found near: " + text.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, " ") : "");
     }
   }
+  // ETF stays banned everywhere EXCEPT the one page whose subject it is — pinned explicitly so
+  // the carve-out can never silently widen to the other three tier-2 pages.
+  // The room INDEX has to be able to name the page it links to ("Buying SOL, ETFs, and what you
+  // actually own"), so its occurrences are allowed — but only inside that one entry, checked
+  // below, never loose in the index's own copy.
+  {
+    const idx = body["/solana"];
+    const hits = [...idx.matchAll(/\betfs?\b/gi)];
+    const allInTitle = hits.every((m) => /Buying SOL, ETFs, and what you actually own/.test(idx.slice(Math.max(0, m.index - 60), m.index + 60)));
+    ok(`/solana: every "ETF" on the index sits inside the markets entry's own title (${hits.length} found)`, hits.length > 0 && allInTitle);
+  }
+  for (const page of BIGGER_PICTURE_PAGES.filter((x) => x.route !== "/solana/markets")) {
+    const m = body[page.route].match(/\betfs?\b/i);
+    ok(`${page.route}: no "ETF" (the carve-out is /solana/markets only)`, !m,
+      m ? "found near: " + body[page.route].slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, " ") : "");
+  }
+
+  // ── (h) tier 2 is dated and owned ───────────────────────────────────────────────────────────
+  // The four bigger-picture pages describe things that go stale — which products exist, when an
+  // event is, whether a domain is still the official one. That is only honest if the page says
+  // when it was last checked and who maintains it, on the page, where the reader sees it.
+  console.log("\n(h) every tier-2 page is dated and owned\n");
+  for (const page of BIGGER_PICTURE_PAGES) {
+    const text = body[page.route];
+    ok(`${page.route}: carries "${TIER2_DATE_LINE}"`, text.includes(TIER2_DATE_LINE));
+    ok(`${page.route}: carries "${TIER2_OWNER_LINE}"`, text.includes(TIER2_OWNER_LINE));
+    // Anchors on these pages are built inside JS template strings, so scan for the attribute
+    // itself rather than for a parsed <a> element: every target="_blank" must be immediately
+    // followed by rel="noopener noreferrer". A bare target="_blank" hands the opened page a
+    // live window.opener back into ours.
+    const blanks = [...text.matchAll(/target=["']_blank["']([\s\S]{0,60})/gi)];
+    ok(`${page.route}: every target="_blank" carries rel="noopener noreferrer" (${blanks.length} found)`,
+      blanks.length > 0 && blanks.every((m) => /rel=["']noopener noreferrer["']/.test(m[1])),
+      blanks.length === 0 ? "no external link found at all" : "a target=\"_blank\" without rel=\"noopener noreferrer\"");
+  }
+
+  // ── (i) each tier-2 page carries the blocks it exists for ───────────────────────────────────
+  // Named blocks, not prose matches: the copy will be reworded, the promise the page makes will
+  // not. Every one of these is a thing the owner's scope line for tier 2 asked for.
+  console.log("\n(i) each tier-2 page carries the blocks it exists for\n");
+  const REQUIRED_SECTIONS = {
+    "/solana/uses": ["honest-answer", "stablecoins", "nfts", "depin", "mobile", "tradeoffs", "outage-history"],
+    "/solana/markets": ["on-exchange", "self-custody", "fund-etf", "comparison-table", "institutional-interest"],
+    "/solana/events": ["why-it-matters", "conferences", "hackathons", "meetups", "scam-fake-ticket",
+                       "scam-cloned-site", "scam-livestream-airdrop", "scam-speaker-dm", "scam-qr-code",
+                       "scam-support-dm", "scam-golden-rule", "not-affiliated"],
+    "/solana/links": ["safety-rule", "cant-tell-you"],
+  };
+  for (const [route, sections] of Object.entries(REQUIRED_SECTIONS)) {
+    const missing = sections.filter((id) => !new RegExp('data-section="' + id + '"').test(body[route]));
+    ok(`${route}: all ${sections.length} required blocks present`, missing.length === 0, missing.join(", "));
+  }
+  // The three load-bearing promises, in the page's own words. Each one is the reason its page is
+  // allowed to exist at all, so each is pinned to the literal sentence.
+  ok("/solana/markets opens by refusing to tell anyone what to buy",
+    /does\s*n[o']t tell you what to buy/i.test(body["/solana/markets"]));
+  ok("/solana/markets carries an explicit not-investment-advice line",
+    /(?:nothing|not)[^.]{0,60}(?:investment|financial) advice/i.test(body["/solana/markets"]));
+  ok("/solana/events states we run none of these events and are not affiliated",
+    /not affiliated/i.test(body["/solana/events"]) && /does not (?:organize|organise|host|sponsor|run)/i.test(body["/solana/events"]));
+  ok("/solana/events discloses our own entry in the hackathon it names",
+    /Full disclosure/i.test(body["/solana/events"]) && /Cluck Norris is entered/i.test(body["/solana/events"]));
+  ok("/solana/links leads with type-it-yourself before any link",
+    body["/solana/links"].indexOf('data-section="safety-rule"') < body["/solana/links"].indexOf('data-section="cant-tell-you"'));
+  ok("/solana/uses states plainly that most activity is trading/speculation",
+    /(?:trading|specul)/i.test(body["/solana/uses"]));
+
 
   console.log(fail ? `\n${fail} FAILED, ${pass} passed\n` : `\nall ${pass} passed\n`);
   process.exit(fail ? 1 : 0);

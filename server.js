@@ -17195,6 +17195,22 @@ app.get("/solana/transfers", (req, res) => {
 app.get("/solana/fees", (req, res) => {
   res.sendFile(join(__dirname, "public", "solana-fees.html"));
 });
+// Tier 2 — the bigger picture: what the chain is used for, what you actually own when you hold
+// it three different ways, where the ecosystem meets, and the safe copy of the domains people
+// get phished on. Each of these four pages carries its own "last checked" date because, unlike
+// the mechanics above, what they describe can go stale.
+app.get("/solana/uses", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-uses.html"));
+});
+app.get("/solana/markets", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-markets.html"));
+});
+app.get("/solana/events", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-events.html"));
+});
+app.get("/solana/links", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-links.html"));
+});
 
 // ── Project Burn — burn PART of your own supply, on purpose, with a public receipt ──
 // ============================== LP RESCUE ====================================
