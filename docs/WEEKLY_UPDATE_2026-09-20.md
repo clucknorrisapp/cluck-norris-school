@@ -15,6 +15,21 @@ Rules for the recording (from `docs/COLOSSEUM_ROADMAP.md` §W10 and CLAUDE.md): 
 no slides needed; name what shipped with a link; "Earn" is capability, never a promise; nothing
 about Normie Quest prize terms; nothing about Wallet Watch; no APR/APY figures anywhere.
 
+⚠️ **What you can show on camera — checked against production 2026-09-19 20:4x UTC.** `main` is
+still at **PR #337**. Nothing from the Hub extension work or the Solana Room is live:
+`clucknorris.app/hub/demo`, `/hub/glossary` and `/solana` all return the **React shell**, not the
+page. (They answer HTTP 200, which is why a status-code check is not a check here — the catch-all
+serves the app shell for unknown non-API paths. Verify by content.)
+
+So there are two options, and they are yours:
+- **Record against staging** and say plainly that it is staging and not yet promoted — which is
+  true, consistent with the "promote only on an explicit go" rule, and honest about where the work
+  sits; or
+- **Say "promote"** and this goes to production before you record, so the URLs on camera are the
+  ones a judge can open.
+
+Do not point the camera at a production URL for a page that is not there.
+
 ## The three bullets (≈55 seconds spoken)
 
 1. **What shipped.** "Week one of the Project Hub is live at clucknorris.app/hub. A token project
@@ -26,8 +41,9 @@ about Normie Quest prize terms; nothing about Wallet Watch; no APR/APY figures a
    machine, or right in the browser — a no-wallet walkthrough of the whole flow, an on-chain
    witness for a program's terms (dry run until the owner signs the first real one), the Hub in
    all seven languages, a launch-readiness checklist before a project can arm, public receipts for
-   airdrops and Buy Special standings with hold-through proof, and a history of holder-count
-   snapshots a reader can re-hash themselves."
+   airdrops and Buy Special standings with hold-through proof, a history of holder-count
+   snapshots a reader can re-hash themselves, and a plain-language Solana reference room that
+   starts with what rent actually is and why the "free SOL" posts going around are wrong."
 2. **What was hard.** "Money paths and their own review. A second AI reviewer found four blockers
    before our first server-signed payout — a rounded total that refused a real payout, a
    double-pay window on a timeout — and a platform-wide security pass closed nine P0s, including
@@ -124,6 +140,15 @@ finding. It is deliberately absent from the shipped list above, because it has n
 
 Everything else in this window is merged. `main` is still at PR #337, so every roadmap extension
 item above is on staging only and none of it is promoted.
+
+- **Batches 19–21 (#358, #360, #361, #362, #363, #364, #365 — merged 2026-09-19, after this
+  file's night-before refresh):** the Solana Room — `/solana` and `/solana/rent`, a plain-language
+  explainer of Solana's rent-exempt deposit that says plainly it is **not** an airdrop, separates
+  closing an account from withdrawing the surplus, and carries a scam warning because "claim your
+  free SOL" sites are already appearing; `ARCHITECTURE.md`, which writes down the platform/apps
+  repo boundary; and the first two increments of a **native Solana Mobile app** — a fourth store
+  build variant, a phone-first shell, a Mobile Wallet Adapter-aware wallet layer, and the read side
+  of Rent Reclaim (#367, open). Research and decision docs for that track: #360, #361, #364.
 
 ## Where to post
 Colosseum Arena (the project's update thread) and X from the CLKN account (X Premium, no 280 limit).
