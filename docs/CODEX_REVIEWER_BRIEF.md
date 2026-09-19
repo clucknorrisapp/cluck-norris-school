@@ -808,3 +808,92 @@ Findings, not rewrites, same rule as every other round.
   right default for a product that promises "learning and safety stay free"?
 - The traction table now leads with visitors and learners and labels CLKN's own locks as ours.
   What would you cut or add before a judge reads it?
+
+---
+
+## Round 5 — 2026-09-19: the CLOCK IN Seeker app (a NEW track, not Colosseum)
+
+**Read `docs/SEEKER_APP_PLAN.md` first — it is the decision of record**, and
+`docs/CLOCK_IN_HACKATHON_2026.md` for the event's rules, which were read out of the hackathon
+site's own JS bundle rather than press coverage (press has both the deadline and the prize ladder
+wrong).
+
+New context you do not have: we entered **CLOCK IN, a Solana Mobile hackathon** (Radiants DAO, in
+partnership with Solana Mobile). Submissions close **2026-10-09 06:59 UTC**. Solo entry. Their FAQ
+explicitly permits competing in both this and Colosseum, so Colosseum continues.
+
+The architectural decision, now in `ARCHITECTURE.md`: this repo is the **platform**;
+`clucknorrisapp/CLKN-SEEKER` is the **apps** repo and is packaging-only. The Seeker app's frontend
+is a **fourth store variant built here** and handed over as a pinned, checksummed artifact, exactly
+as `google` and `ios` already are.
+
+### PR #364 — the plan (docs only)
+
+Review the *reasoning*, not the prose. Specifically:
+
+1. **Is the repo split right?** We reversed once already tonight. The case for building the
+   frontend here is that a Capacitor app's UI is a web bundle, and everything it needs (wallet
+   connect, the signed-session tools pass, RPC plumbing, the rent maths, i18n, tests) is here.
+   Argue the other side if you think it holds.
+2. **Is "rebuild the client, keep the platform" the right line?** A live site plus two shipped
+   store apps depend on the current API surface. The hackathon rule is that *"direct ports or PWA
+   wrappers with little mobile optimisation will score poorly."*
+3. **Is Rent Reclaim the right hero?** It has to carry a 3-minute demo and the "reason to return"
+   criterion on its own.
+4. **The SKR door.** $50 worth of SKR as a third comp door alongside CLKN and the SOL pass, Seeker
+   app only, never a gate. Is an *additive* door the right shape, and is there a failure mode where
+   it becomes an effective gate?
+
+### PR #365 — increment 1: the `store-seeker` variant, mobile shell, MWA-aware wallet layer
+
+**Review this one closely. It touches a live release contract.**
+
+1. ⚠️ **`excludeKeys` in `store-edition/store-edition.json`, and the prune step in
+   `scripts/build-store-edition.mjs`.** This is the ONE place increment 1 changes existing pipeline
+   *logic* rather than adding a variant branch. Adding seeker i18n keys to the shared dictionaries
+   **silently leaked 8 entries into the Google Play and iOS bundles** — which are installed,
+   reviewed store apps. The fix is an exact-key prune list. **Questions: is an exact-key list the
+   right mechanism, or should seeker strings be namespaced (`seeker.*`) and pruned by prefix? An
+   exact-key list must be maintained by hand on every future key — what happens when someone
+   forgets?** (The claim is that `scripts/seeker-build-test.cjs` fails loudly because it
+   content-diffs google/ios against a pristine `origin/develop` build. Verify that is true and that
+   it cannot pass while a key leaks.)
+2. **The MWA bridge contract** in `public/cluck-wallet.js` (search "Mobile Wallet Adapter"). It
+   detects a native Android Capacitor platform plus a `CluckMWA` plugin and wraps it in the same
+   Phantom-shaped shim the file already uses for Wallet Standard. **It has only ever been driven by
+   a FAKE bridge — no device, no native plugin exists yet.** Is the shim faithful to real MWA
+   semantics (authorize / reauthorize / deauthorize / signTransactions / signAndSendTransactions /
+   signMessages)? What breaks on a real Seeker that a fake cannot show? This contract is what the
+   apps repo will build its Capacitor plugin against, so an error here costs two repos.
+3. **Do the build assertions prove what they claim?** Self-containment and hash routing are checked
+   partly at source level (`src/seeker/App.jsx` for `HashRouter`), because production minification
+   renames local identifiers. Is that sound, or can a build satisfy the grep and still ship
+   `BrowserRouter` behaviour?
+4. **Regression surface on the web.** The wallet layer is the *shared* registry, not a page-local
+   copy — every tool page uses it. Increment 1 claims web, Capacitor-web and iOS all fall through
+   unchanged. Verify that claim rather than accepting it.
+
+### What is coming, and where to save your energy
+
+- **Increment 2 (building now):** the READ side of Rent Reclaim — `GET /api/seeker/reclaimable`.
+  The two claims that matter: an account **holding a balance is never classed reclaimable**, and an
+  **RPC failure reads as `unavailable`, never as zero or empty**. Both token programs must be
+  enumerated; missing Token-2022 is a recurring bug class here.
+- **Increment 3: the signing path.** This **moves user funds** — closing a token account. Per
+  CLAUDE.md it gets the full money-path treatment. That is where your adversarial attention is
+  worth the most. The rules we are building to: the client builds and signs, the server never signs
+  for a user; never close an account holding a balance; wrapped SOL refused explicitly; a confirm
+  step before every signature.
+
+### Open questions the owner would value your opinion on
+
+1. **Which repo should the submission name?** "Technical depth (GitHub commits)" is a scored
+   criterion, and the hackathon work is a handful of PRs inside a 365-PR history. Recommendation on
+   the table: point judges here (public, holds the app source) and describe the packaging repo in
+   the writeup, with the submission naming exact PRs.
+2. **The published judging criteria contradict each other.** The FAQ says four equal 25% criteria;
+   the platform's own scoring config says AI 20 / SKR 20 / UX 15 / UI 15 / Innovation 15 /
+   Ecosystem Impact 15. We plan to ask in office hours. Is there a build decision that should not
+   wait for that answer?
+3. **What should be paused?** The proposal is the Colosseum Hub extension roadmap (GG2/GG4/GG5 and
+   beyond), keeping Colosseum itself alive. Is that the right cut?
