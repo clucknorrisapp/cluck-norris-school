@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>What The Hub Doesn't Prove</title>
+<meta name="description" content="The Project Hub's trust boundary in plain words: what a receipt proves, what a hash proves, what a dry run is, and the four things that still need a human."/>
+<meta property="og:title" content="What The Hub Doesn't Prove — Cluck Norris"/>
+<meta property="og:description" content="The Project Hub's trust boundary in plain words: what a receipt proves, what a hash proves, what a dry run is, and the four things that still need a human."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/hub/trust"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="What The Hub Doesn't Prove — Cluck Norris"/>
+<meta name="twitter:description" content="The Project Hub's trust boundary in plain words: what a receipt proves, what a hash proves, what a dry run is, and the four things that still need a human."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:28px; letter-spacing:.5px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .intro b { color:var(--text); }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact + .fact { margin-top:10px; }
+  .fact b { color:var(--text); }
+  .mono { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; }
+  a.mono, .mono a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  .needs-human { margin:6px 0 0 0; padding:0; list-style:none; }
+  .needs-human li { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.6; padding:6px 0; border-bottom:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .needs-human li:last-child { border-bottom:none; }
+  .needs-human b { color:var(--text); }
+  .links-card { display:flex; flex-direction:column; }
+  .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
+  .small { font-size:12px; color:var(--sub); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/hub">← PROJECT HUB</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">What This Doesn't Prove</h1>
+    <p data-clkn-avoid="1">THE HUB'S TRUST BOUNDARY · IN PLAIN WORDS</p>
+  </div>
+
+  <div class="card">
+    <div class="intro" data-clkn-avoid="1">The Project Hub shows <b>what a project promised, who qualified, and the transaction that paid each one</b> — re-checked against Solana in your own browser. This page is the other half: what none of that shows, so nobody reads more into a receipt than it actually proves.</div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title" data-clkn-avoid="1">The chain shows what, never why</div>
+    <div class="fact" data-clkn-avoid="1">Solana shows a transfer happened: from which wallet, to which wallet, how much, and when. It never shows intent. We only call a wallet a project's "team" or "creator" when a launchpad's own record confirms it — never from guessing at a pattern.</div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title" data-clkn-avoid="1">The funding wallet is the project's, not ours</div>
+    <div class="fact" data-clkn-avoid="1">Every payout on the Hub comes out of the project's own funding wallet, named on its page. Cluck Norris never holds the reward tokens and never fronts them. If a project's funding wallet runs low, its payouts stop — that is the project's balance, not ours.</div>
+  </div>
+
+  <!-- boundary: hash-served-by-server -->
+  <div class="card" data-boundary="hash-served-by-server">
+    <div class="sec-title" data-clkn-avoid="1">A hash commits to terms, not to intent</div>
+    <div class="fact" data-clkn-avoid="1">A program version's hash is served by the same server that computes the payout. Recomputing it yourself at <a href="/hub/verify">/hub/verify</a> proves the server did not change the terms after publishing them. It does not prove the server left out no qualifying wallet when it first worked out who qualifies. That second guarantee needs the hash to be committed on-chain, independently, by the project's own funding wallet — and as of today, no real program has done that yet.</div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title" data-clkn-avoid="1">A receipt proves a rule was followed, not that it was fair</div>
+    <div class="fact" data-clkn-avoid="1">A match at /hub/verify proves one thing: the amount paid is exactly what the published rule computes for that wallet. It says nothing about whether the rule itself was reasonable, whether the terms were generous, or whether the project is worth locking with in the first place. Read the terms yourself before you decide any of that.</div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title" data-clkn-avoid="1">What a dry run is, and isn't</div>
+    <div class="fact" data-clkn-avoid="1"><a href="/hub/demo">/hub/demo</a> is a fixture: real Hub code running over made-up addresses, labelled DRY RUN everywhere it appears. A dry-run project page — a real, branded page while terms are still being agreed with a team — is the same in substance: nothing on it can be armed or paid. Either way, nothing is paid, and nothing on a dry-run page counts toward any total the Hub reports.</div>
+  </div>
+
+  <!-- boundary: ratio-incomplete -->
+  <div class="card" data-boundary="ratio-incomplete">
+    <div class="sec-title" data-clkn-avoid="1">A reproducibility ratio below 1.0</div>
+    <div class="fact" data-clkn-avoid="1">Each project's reproducibility ratio is the share of its receipts that recompute to the published amount. Below 1.0 does not by itself mean something is wrong — it can mean a receipt kind this tool can't check yet, or inputs that weren't kept on your end. If you see it: open <a href="/hub/verify">/hub/verify</a> on that specific receipt, keep whatever you fetched, and ask the project directly rather than assume the worst.</div>
+    <div class="fact" data-clkn-avoid="1">The ratio also doesn't yet count every receipt kind — a giveaway row is named as not implemented rather than folded quietly into the number.</div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title" data-clkn-avoid="1">What doesn't reproduce yet</div>
+    <!-- boundary: giveaway-not-reproducible -->
+    <div class="fact" data-clkn-avoid="1" data-boundary="giveaway-not-reproducible">Giveaway rows — a sealed-draw giveaway, and the older, pre-Hub Buy Special draw — don't reproduce today. The reproduce tool handles lock-to-earn and buy-competition receipts only; a giveaway kind says so plainly rather than guessing at a number.</div>
+    <!-- boundary: journal-not-live -->
+    <div class="fact" data-clkn-avoid="1" data-boundary="journal-not-live">The newer per-transfer settlement journal is now the live path for a project paid through the Hub's own payout route — a receipt from that route carries the fuller record the schema documents. CUNA's own payouts, the only real money moving through this today, still run on a separate, older handler that doesn't use it — so the one real receipt you can currently fetch is still the older, single-row shape, and that stays true until CUNA is moved onto the same route.</div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title" data-clkn-avoid="1">Four things that still need a human</div>
+    <ul class="needs-human" data-clkn-avoid="1">
+      <li><b>Promotion to production.</b> Some of what this page describes runs on staging today, not yet on the live site.</li>
+      <li><b>The first on-chain commitment.</b> No real program's hash has been committed on-chain by a funding wallet yet.</li>
+      <li><b>Real terms, agreed with a project.</b> A dry-run page is a rehearsal until a team signs off on its own numbers.</li>
+      <li><b>A full run with a real wallet.</b> Locking, qualifying, and getting paid, start to end, with a real wallet.</li>
+    </ul>
+  </div>
+
+  <div class="card links-card" data-clkn-avoid-kids="1">
+    <div class="sec-title" data-clkn-avoid="1">Check it yourself</div>
+    <a href="/hub/verify">Reproduce a receipt in your own browser →</a>
+    <a href="/hub/demo">Walk through a dry run, no wallet needed →</a>
+    <a href="/hub/glossary">Every term and reason code, defined →</a>
+    <a href="/hub">Back to the Project Hub →</a>
+    <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/HUB_VERIFY.md" target="_blank" rel="noopener">Read the full checklist on GitHub →</a>
+  </div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

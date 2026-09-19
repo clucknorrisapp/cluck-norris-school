@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>For Projects — Cluck Norris</title>
+<meta name="description" content="The guided front door for a project team: lock your tokens, run a lock-to-earn program, run a buy competition, airdrop, get listed right, snapshot your holders and burn supply with a receipt — plus a per-mint checklist of what your token has already done."/>
+<meta property="og:title" content="For Projects — Cluck Norris"/>
+<meta property="og:description" content="Every project tool we run, in the order teams actually use them, plus a check of what your token has already done."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/for-projects"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="For Projects — Cluck Norris"/>
+<meta name="twitter:description" content="Every project tool we run, in the order teams actually use them, plus a check of what your token has already done."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:32px; letter-spacing:1px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .card h2 { font-family:var(--disp); font-size:19px; letter-spacing:1px; color:var(--gold); font-weight:400; margin-bottom:8px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext); line-height:1.7; }
+  .intro b { color:var(--text); }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:20px 0 10px; color:var(--gold); text-transform:uppercase; }
+  .step { display:flex; gap:14px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:10px; text-decoration:none; color:inherit; transition:border-color .15s, transform .15s; }
+  .step:hover { border-color:rgba(255,182,39,.5); transform:translateY(-1px); }
+  .num { flex-shrink:0; width:30px; height:30px; border-radius:50%; background:rgba(255,182,39,.12); border:1px solid rgba(255,182,39,.35); color:var(--gold); font-family:var(--disp); font-size:14px; display:flex; align-items:center; justify-content:center; }
+  .step .body { flex:1; min-width:0; }
+  .step .name { font-family:var(--disp); font-size:16px; letter-spacing:.5px; color:var(--text); font-weight:400; margin-bottom:4px; }
+  .step .desc { font-size:12.5px; color:var(--subtext); line-height:1.55; }
+  .step .go { font-family:var(--disp); font-size:10.5px; letter-spacing:1.5px; color:var(--orange); margin-top:8px; }
+  .mono { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; word-break:break-all; }
+  .input-row { display:flex; gap:8px; margin-top:12px; }
+  .addr-input { flex:1; min-width:0; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:11px 13px; color:var(--text); font-family:var(--mono); font-size:13px; outline:none; }
+  .addr-input:focus { border-color:var(--accent); }
+  .btn { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; min-height:44px; background:var(--orange); border:none; border-radius:8px; padding:11px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#fff; cursor:pointer; font-family:var(--body); }
+  .btn.ghost { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); }
+  /* --grey is aliased to --muted in theme.css, so background:var(--grey) + color:var(--muted)
+     is background == text — invisible disabled-button copy. Dark text on the grey reads fine. */
+  .btn:disabled { background:var(--grey); color:var(--bg); cursor:not-allowed; }
+  .checklist { margin-top:14px; }
+  .citem { display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--border-soft); }
+  .citem:last-child { border-bottom:none; }
+  .cico { flex-shrink:0; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; margin-top:1px; }
+  .cico.ok { background:rgba(123,226,107,.15); color:var(--green); }
+  .cico.bad { background:rgba(255,255,255,.06); color:var(--sub); }
+  .cico.unk { background:rgba(255,182,39,.12); color:var(--gold); }
+  .cbody { flex:1; min-width:0; }
+  .cbody .clabel { font-family:var(--disp); font-size:13.5px; letter-spacing:.5px; color:var(--text); }
+  .cbody .cfact { font-size:12.5px; color:var(--subtext); line-height:1.5; margin-top:2px; }
+  /* Standalone one-line CTA (not a word in a sentence) — invisible tap-area padding brings the
+     hit box toward 44px tall; the margin is set to (original margin) minus (added padding) on
+     each side so the visible text lands in exactly the same pixel position as before. */
+  .cbody a.cta { display:inline-block; padding:14px 3px; margin:-8px -3px -14px; font-family:var(--disp); font-size:10.5px; letter-spacing:1.5px; color:var(--orange); text-decoration:none; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:12px 0; }
+  .err { background:var(--redbg); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
+  .small { font-size:12px; color:var(--sub); }
+  @media (max-width:520px) { .header h1 { font-size:26px; } .step { padding:14px; gap:10px; } }
+  @media (prefers-reduced-motion: reduce) { .step { transition:none; } .step:hover { transform:none; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/">← CLUCK NORRIS</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">For Projects</h1>
+    <p data-clkn-avoid="1">ONE GUIDED PATH · EVERY TOOL WE RUN</p>
+  </div>
+
+  <div class="card">
+    <div class="intro" data-clkn-avoid="1">
+      Cluck Norris runs on <b>Educate → Build → Earn</b>: teach people the truth about crypto,
+      build with other projects and communities instead of only for ourselves, and make the
+      earning side honest and provable. This page is the front door for a project team —
+      the tools already live, in the order most teams actually reach for them, plus a check
+      of what your own token has already done.
+    </div>
+  </div>
+
+  <div class="sec-title" data-clkn-avoid="1">The guided flow</div>
+
+  <div data-clkn-avoid-kids="1">
+  <a class="step" href="/locker-room"><div class="num">1</div><div class="body">
+    <div class="name">Lock your tokens</div>
+    <div class="desc">Put team or treasury supply into a public, on-chain lock — free, non-custodial, audited (Jupiter Lock). Usually the first thing a community asks a project to prove.</div>
+    <div class="go">OPEN THE LOCKER ROOM →</div>
+  </div></a>
+
+  <a class="step" href="/hub/apply"><div class="num">2</div><div class="body">
+    <div class="name">Run a lock-to-earn program</div>
+    <div class="desc">Reward the holders who lock, from a public program record anyone can check — the rules, who qualified, and the transaction that paid each one. Apply and we review it by hand.</div>
+    <div class="go">APPLY FOR LOCK TO EARN →</div>
+  </div></a>
+
+  <a class="step" href="/buyspecial"><div class="num">3</div><div class="body">
+    <div class="name">Run a buy competition</div>
+    <div class="desc">Reward every buyer a % of what they bought, or rank the top buyers for prizes — on-chain buyer discovery plus a hold-verified no-sells check, then one click to the airdropper.</div>
+    <div class="go">RUN A COMPETITION →</div>
+  </div></a>
+
+  <a class="step" href="/airdrop"><div class="num">4</div><div class="body">
+    <div class="name">Send an airdrop</div>
+    <div class="desc">Batch-send tokens to hundreds of wallets — automatic token-account creation, size-safe batching, an exportable record with Solscan links. Your keys never leave your wallet.</div>
+    <div class="go">SEND AN AIRDROP →</div>
+  </div></a>
+
+  <a class="step" href="/listing-checkup"><div class="num">5</div><div class="body">
+    <div class="name">Get your listings right</div>
+    <div class="desc">See what CoinGecko, GeckoTerminal, DexScreener, Jupiter and the rest actually show for your contract — correct, wrong or not found, field by field, with the exact page to fix each one.</div>
+    <div class="go">CHECK YOUR LISTINGS →</div>
+  </div></a>
+
+  <a class="step" href="/snapshot"><div class="num">6</div><div class="body">
+    <div class="name">Know your holder list</div>
+    <div class="desc">A wallet-by-wallet snapshot of who holds your token — LP pools and lock escrows separated out, supply concentration, and an exportable CSV of recipient candidates.</div>
+    <div class="go">RUN A SNAPSHOT →</div>
+  </div></a>
+
+  <a class="step" href="/project-burn"><div class="num">7</div><div class="body">
+    <div class="name">Burn supply, on purpose, with proof</div>
+    <div class="desc">Destroy part of your own supply as a tokenomics event and get a shareable, on-chain-verified receipt for your community. Non-custodial, no cut.</div>
+    <div class="go">BURN WITH A RECEIPT →</div>
+  </div></a>
+  </div>
+
+  <div class="sec-title" data-clkn-avoid="1">Check your project</div>
+  <div class="card">
+    <div class="intro">Paste your token's mint. We re-read the public record for each of these — no wallet, nothing saved — and link straight to whichever step you haven't done yet.</div>
+    <div class="input-row">
+      <input class="addr-input" id="mintIn" placeholder="Token mint address" aria-label="Token mint address" autocomplete="off" spellcheck="false"/>
+      <button class="btn" id="mintBtn">CHECK</button>
+    </div>
+    <div id="checkOut"></div>
+  </div>
+
+  <div class="small" data-clkn-avoid="1" style="text-align:center">Running a Hub program already? <a href="/hub" style="color:var(--cyan)">See every project's receipts →</a></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc, fmtUsd = CluckUtil.fmtUsd;
+  var out = document.getElementById('checkOut');
+  var btn = document.getElementById('mintBtn');
+  var input = document.getElementById('mintIn');
+  var MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+  function pct(n) { return (n != null && isFinite(n)) ? (n * 100).toFixed(1) + '%' : null; }
+  function row(state, label, fact, ctaText, ctaHref) {
+    var icon = state === 'ok' ? '<div class="cico ok">✓</div>' : state === 'unk' ? '<div class="cico unk">?</div>' : '<div class="cico bad">–</div>';
+    return '<div class="citem">' + icon + '<div class="cbody"><div class="clabel">' + esc(label) + '</div>' +
+      (fact ? '<div class="cfact">' + esc(fact) + '</div>' : '') +
+      (ctaText ? '<a class="cta" href="' + esc(ctaHref) + '">' + esc(ctaText) + ' →</a>' : '') +
+      '</div></div>';
+  }
+
+  // Each check reads an existing public feed directly from the browser — nothing here is
+  // proxied or re-implemented server-side except the burn lookup, which has no other public,
+  // per-mint feed (burn receipts are keyed by signature, not mint).
+  async function checkLocked(mint) {
+    try {
+      var r = await fetch('/api/locks?mint=' + encodeURIComponent(mint)).then(function (x) { return x.json(); });
+      if (!r || r.success === false) return row('unk', 'Locked on Jupiter Lock', 'Could not read the chain right now — try again shortly.', null, null);
+      var n = r.lockCount || 0;
+      if (n > 0) return row('ok', 'Locked on Jupiter Lock', n + ' lock' + (n === 1 ? '' : 's') + (pct(r.pctOfSupply) ? ', ' + pct(r.pctOfSupply) + ' of supply' : '') + ' on record.', 'See the lock page', '/lock/' + encodeURIComponent(mint));
+      return row('bad', 'Locked on Jupiter Lock', 'No lock found for this mint yet.', 'Lock your tokens', '/locker-room');
+    } catch (e) { return row('unk', 'Locked on Jupiter Lock', 'Could not read the chain right now — try again shortly.', null, null); }
+  }
+  async function checkHub(mint) {
+    try {
+      var r = await fetch('/api/hub').then(function (x) { return x.json(); });
+      if (!r || !r.ok) return row('unk', 'Lock-to-earn on the Hub', 'Could not load the Hub right now.', null, null);
+      var p = (r.projects || []).filter(function (x) { return x.mint === mint; })[0];
+      if (p && p.programs > 0) return row('ok', 'Lock-to-earn on the Hub', p.programs + ' program' + (p.programs === 1 ? '' : 's') + ' on record for ' + p.label + '.', 'See the public receipts', '/hub/' + encodeURIComponent(p.id));
+      return row('bad', 'Lock-to-earn on the Hub', 'No Hub program on record for this mint yet.', 'Apply for lock to earn', '/hub/apply');
+    } catch (e) { return row('unk', 'Lock-to-earn on the Hub', 'Could not load the Hub right now.', null, null); }
+  }
+  async function checkListing(mint) {
+    try {
+      var r = await fetch('/api/listing-checkup/report?mint=' + encodeURIComponent(mint)).then(function (x) { return x.json(); });
+      if (!r || !r.ok) return row('unk', 'Listing Checkup run', 'Could not load that right now.', null, null);
+      var runs = r.runs || [];
+      if (runs.length) return row('ok', 'Listing Checkup run', runs.length + ' run' + (runs.length === 1 ? '' : 's') + ' on file, last one ' + (runs[0].tier || 'preview') + '.', 'See the last report', '/listing/' + encodeURIComponent(mint));
+      return row('bad', 'Listing Checkup run', 'No listing check on file for this mint yet.', 'Check your listings', '/listing-checkup?mint=' + encodeURIComponent(mint));
+    } catch (e) { return row('unk', 'Listing Checkup run', 'Could not load that right now.', null, null); }
+  }
+  async function checkBurn(mint) {
+    try {
+      var r = await fetch('/api/for-projects/burn-check?mint=' + encodeURIComponent(mint)).then(function (x) { return x.json(); });
+      if (!r || !r.ok) return row('unk', 'Burn on record', 'Could not load that right now.', null, null);
+      if (r.count > 0) {
+        var last = r.receipts[0];
+        var usd = fmtUsd ? fmtUsd(last.usdValue) : null;
+        return row('ok', 'Burn on record', r.count + ' verified burn' + (r.count === 1 ? '' : 's') + ' on file' + (usd ? ', most recent ' + usd : '') + '.', 'See the receipt', '/burn/' + encodeURIComponent(last.sig));
+      }
+      return row('bad', 'Burn on record', 'No verified burn on file for this mint yet.', 'Burn with a receipt', '/project-burn');
+    } catch (e) { return row('unk', 'Burn on record', 'Could not load that right now.', null, null); }
+  }
+
+  async function run() {
+    var mint = String(input.value || '').trim();
+    if (!MINT_RE.test(mint)) { out.innerHTML = '<div class="err">That is not a Solana token mint address.</div>'; return; }
+    btn.disabled = true;
+    out.innerHTML = '<div class="status">CHECKING…</div>';
+    var results = await Promise.all([checkLocked(mint), checkHub(mint), checkListing(mint), checkBurn(mint)]);
+    out.innerHTML = '<div class="checklist">' + results.join('') + '</div>';
+    btn.disabled = false;
+  }
+  btn.addEventListener('click', run);
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
+  try {
+    var pre = new URLSearchParams(location.search).get('mint');
+    if (pre) { input.value = pre; run(); }
+  } catch (e) {}
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

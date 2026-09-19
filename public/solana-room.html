@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>The Solana Room</title>
+<meta name="description" content="How Solana actually works, in plain words — for someone who already owns tokens but was never told how any of it works. No wallet, no signup."/>
+<meta property="og:title" content="The Solana Room — Cluck Norris"/>
+<meta property="og:description" content="How Solana actually works, in plain words — for someone who already owns tokens but was never told how any of it works. No wallet, no signup."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="The Solana Room — Cluck Norris"/>
+<meta name="twitter:description" content="How Solana actually works, in plain words — for someone who already owns tokens but was never told how any of it works. No wallet, no signup."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:28px; letter-spacing:.5px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 10px; color:var(--gold); text-transform:uppercase; }
+  .sec-lede { font-size:13px; color:var(--sub); line-height:1.6; margin:-4px 0 12px; }
+  .topic-live { display:flex; flex-direction:column; gap:4px; padding:14px 0; }
+  .topic-live h2 { font-family:var(--disp); font-weight:400; font-size:18px; color:var(--text); }
+  .topic-live p { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.6; }
+  .topic-live a.cta { display:inline-flex; align-items:center; min-height:44px; margin-top:4px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; font-weight:700; }
+  .topic { padding:12px 0; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .topic:first-of-type { border-top:none; padding-top:0; }
+  .topic-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .topic-head h2 { font-family:var(--disp); font-weight:400; font-size:16px; color:var(--text); }
+  .badge { font-family:var(--disp); font-size:10px; letter-spacing:1.5px; padding:3px 8px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; white-space:nowrap; }
+  .topic p { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.6; margin-top:4px; }
+  .small { font-size:12px; color:var(--sub); }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/" data-clkn-avoid="1">← HOME</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">The Solana Room</h1>
+    <p data-clkn-avoid="1">HOW SOLANA ACTUALLY WORKS · NO WALLET NEEDED</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as
+  // public/hub-glossary.html and public/hub-verify.html: a curated dict lookup over
+  // window.CLKN_I18N.dict (loaded sitewide by cluck-nav.js), English literal on a miss, no
+  // machine-translation fallback for this page's own copy. scripts/i18n-audit.cjs's Hub-pages
+  // gate (and scripts/solana-room-test.cjs) scan this file's <script> block for every literal
+  // passed to t() and require it in all six dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  // The one page shipped this increment, plus the mechanics topics still to come — listed
+  // honestly as "coming next" rather than dead links (CLAUDE.md: public docs must match the
+  // code). Add a topic here, and give it its own page + route, to grow this room.
+  var COMING_NEXT = [
+    { title: 'What your wallet actually holds', blurb: "A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why." },
+    { title: 'What a token mint is', blurb: "The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it." },
+    { title: 'What happens when you buy', blurb: 'The accounts, instructions and swaps that run behind one tap of a buy button.' },
+    { title: 'What a transfer really does', blurb: 'Why sending someone a token can silently create a brand-new account for them — and who ends up paying for it.' },
+    { title: "What you're actually paying for in fees", blurb: 'Base fee, priority fee, and rent are three different charges wearing one name. Here\'s which is which.' },
+  ];
+
+  // COMING_NEXT's title/blurb strings are read through a variable above (t(topic.title)), which
+  // the regex-based audits (scripts/i18n-audit.cjs's Hub-pages gate, scripts/solana-room-test.cjs)
+  // cannot see — they only ever match a LITERAL string immediately inside t(...), documented in
+  // i18n-audit.cjs's own header. This function lists every one of those same strings as literal
+  // t() calls purely so the gate sees them; it is never called. Same technique as hub-glossary.html's
+  // __glossaryGatedStrings — keep this in step with COMING_NEXT above.
+  function __solanaRoomGatedStrings() { return [
+    t('What your wallet actually holds'), t("A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why."),
+    t('What a token mint is'), t("The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it."),
+    t('What happens when you buy'), t('The accounts, instructions and swaps that run behind one tap of a buy button.'),
+    t('What a transfer really does'), t('Why sending someone a token can silently create a brand-new account for them — and who ends up paying for it.'),
+    t("What you're actually paying for in fees"), t("Base fee, priority fee, and rent are three different charges wearing one name. Here's which is which."),
+  ]; }
+
+  function render() {
+    var html = '';
+    html += '<div class="card">';
+    html += '<div class="intro">' + esc(t("You already own tokens. Nobody ever sat you down and explained what any of this actually is — what a wallet really holds, what a mint is, what happens when you buy, or what you're paying for in fees. This room is that explanation, one mechanic at a time, in plain words. No wallet, no signup, free.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Available now')) + '</div>';
+    html += '<div class="topic-live">';
+    html += '<h2>' + esc(t("The deposit you didn't know you made")) + '</h2>';
+    html += '<p>' + esc(t('Solana just started giving back part of a deposit that\'s baked into every token account you own. What it actually is, and the scam it\'s about to invite.')) + '</p>';
+    html += '<a class="cta" href="/solana/rent">' + esc(t('Read it →')) + '</a>';
+    html += '</div></div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Coming next to this room')) + '</div>';
+    html += '<div class="sec-lede">' + esc(t("These aren't dead links — they're what gets written next, each one getting the same plain-words treatment as the rent page below.")) + '</div>';
+    for (var i = 0; i < COMING_NEXT.length; i++) {
+      var topic = COMING_NEXT[i];
+      html += '<div class="topic"><div class="topic-head"><h2>' + esc(t(topic.title)) + '</h2><span class="badge">' + esc(t('COMING NEXT')) + '</span></div>';
+      html += '<p>' + esc(t(topic.blurb)) + '</p></div>';
+    }
+    html += '</div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

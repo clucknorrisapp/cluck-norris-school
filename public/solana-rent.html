@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>The Deposit You Didn't Know You Made</title>
+<meta name="description" content="Solana's rent-exempt deposit is being cut ~90% and part of it is coming back to you. What it actually is, what changed, and the scam this invites — in plain words."/>
+<meta property="og:title" content="The Deposit You Didn't Know You Made — Cluck Norris"/>
+<meta property="og:description" content="Solana's rent-exempt deposit is being cut ~90% and part of it is coming back to you. What it actually is, what changed, and the scam this invites — in plain words."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana/rent"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="The Deposit You Didn't Know You Made — Cluck Norris"/>
+<meta name="twitter:description" content="Solana's rent-exempt deposit is being cut ~90% and part of it is coming back to you. What it actually is, what changed, and the scam this invites — in plain words."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:.3px; color:var(--gold); font-weight:400; line-height:1.25; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact + .fact { margin-top:10px; }
+  .fact b, .fact code { color:var(--text); }
+  .fact code { font-family:var(--mono); font-size:.92em; background:rgba(255,255,255,.06); padding:1px 5px; border-radius:4px; word-break:break-word; }
+  /* the scam-warning card gets real visual weight, not a footnote — a distinct red card, not a
+     tucked-away line at the bottom (task requirement: "give it real weight"). */
+  .card.scam { background:var(--redbg, rgba(232,30,14,.14)); border:1px solid rgba(232,30,14,.4); }
+  .scam .sec-title { color:#FCA5A5; }
+  .scam .fact { color:#FBD5D0; }
+  .scam .fact b { color:#FEE2E0; }
+  .stage-row { padding:12px 0; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .stage-row:first-of-type { border-top:none; padding-top:0; }
+  .stage-name { font-family:var(--disp); font-weight:400; font-size:15px; color:var(--text); margin-bottom:8px; }
+  .stage-vals { display:flex; flex-wrap:wrap; gap:10px 20px; }
+  .stage-val { min-width:150px; flex:1 1 150px; }
+  .stage-label { display:block; font-size:11px; letter-spacing:1px; color:var(--sub); text-transform:uppercase; margin-bottom:2px; }
+  .stage-num { font-family:var(--mono); font-size:14px; color:var(--text); word-break:break-word; }
+  .footnote { font-size:12.5px; color:var(--sub); line-height:1.6; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .links-card { display:flex; flex-direction:column; }
+  .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
+  .small { font-size:12px; color:var(--sub); }
+  /* a standalone link inside a .small line still needs a real 44px tap target — same
+     expand-with-negative-margin trick public/hub-glossary.html uses (its ".small a" rule). */
+  .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/solana" data-clkn-avoid="1">← THE SOLANA ROOM</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">The deposit you didn't know you made</h1>
+    <p data-clkn-avoid="1">RENT, EXPLAINED IN PLAIN WORDS</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script src="/rent-math.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as
+  // public/hub-glossary.html / public/hub-verify.html and public/solana-room.html: a curated
+  // dict lookup over window.CLKN_I18N.dict, English literal on a miss, no machine-translation
+  // fallback. scripts/i18n-audit.cjs's Hub-pages gate and scripts/solana-room-test.cjs both scan
+  // this file's <script> block for every literal passed to t() and require it in all six
+  // dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  // ── The rent numbers — re-derived from first principles, not copied from a headline ──
+  // A token account holds 165 bytes of data; Solana also charges rent on a fixed 128-byte
+  // account overhead, so the deposit is priced on 293 billable bytes. minimum_balance =
+  // billableBytes * lamports_per_byte (the "per byte" figure already folds in the 2-year
+  // exemption threshold, same convention SIMD-0437 and solana.com/upgrades/reduced-rent use).
+  //   293 * 6960 = 2,039,280   293 * 6333 = 1,855,569   293 * 5080 = 1,488,440   293 * 696 = 203,928
+  // BILLABLE_BYTES/STAGES/fmtSol live in lib/rent-math.js (served at /rent-math.js) — the ONE
+  // source of truth this page shares with the Seeker app's Rent Reclaim pane, so neither can
+  // silently drift from the byte math above it (CLAUDE.md's "duplicated implementations" trap).
+  var RM = window.CluckRentMath;
+  var BILLABLE_BYTES = RM.BILLABLE_BYTES;
+  var LAMPORTS_PER_SOL = RM.LAMPORTS_PER_SOL;
+  var STAGES = RM.STAGES;
+  var fmtSol = RM.fmtSol;
+  var ORIGINAL_LAMPORTS = RM.minimumLamports(STAGES[0].lamportsPerByte);
+  function fmtSurplus(lamports) {
+    var diff = ORIGINAL_LAMPORTS - lamports;
+    if (diff <= 0) return '—';
+    return '≈' + (diff / LAMPORTS_PER_SOL).toFixed(6) + ' SOL';
+  }
+
+  // STAGES' name strings are read through a variable below (t(stage.name)), which the
+  // regex-based audits cannot see (they only match a literal string immediately inside t(...)).
+  // Listed here as literal calls purely so the gate sees them; never called. Keep in step with
+  // STAGES above.
+  function __solanaRentGatedStrings() { return [
+    t('Original'), t('Step 1 — live on mainnet since Sep 3, 2026'), t('Step 2 — mainnet expected mid-September 2026'), t('All five steps — expected around November 2026'),
+  ]; }
+
+  function stageRowHtml(stage) {
+    var lamports = RM.minimumLamports(stage.lamportsPerByte);
+    return '<div class="stage-row"><div class="stage-name">' + esc(t(stage.name)) + '</div>' +
+      '<div class="stage-vals">' +
+      '<div class="stage-val"><span class="stage-label">' + esc(t('Deposit required')) + '</span><span class="stage-num">' + esc(fmtSol(lamports)) + '</span></div>' +
+      '<div class="stage-val"><span class="stage-label">' + esc(t('Surplus vs. the original')) + '</span><span class="stage-num">' + esc(fmtSurplus(lamports)) + '</span></div>' +
+      '</div></div>';
+  }
+
+  function render() {
+    var html = '';
+
+    html += '<div class="card"><div class="intro">' + esc(t("Every token account on Solana holds a small SOL deposit just so it's allowed to exist — not a fee, a refundable deposit. Solana is now giving part of it back, on a schedule. Here's what that means for you, and the scam it's about to invite.")) + '</div></div>';
+
+    // ── the scam warning — deliberately placed early and styled distinctly, not a footnote ──
+    html += '<div class="card scam" data-section="scam-warning">';
+    html += '<div class="sec-title">' + esc(t('The scam this invites')) + '</div>';
+    html += '<div class="fact">' + esc(t('"Claim your free SOL" sites are the predictable next wave — the same way every past airdrop bred a wave of fake claim pages. This is not free money appearing from nowhere. It is your own deposit, sized down, and it was always yours.')) + '</div>';
+    html += '<div class="fact"><b>' + esc(t('Nobody needs your seed phrase to give you back your own rent. Nobody needs you to approve a token delegate, sign a blank transaction, or send SOL first to "unlock" it. The real amounts are small — fractions of a cent per account today. Any site promising more, or asking for any of that, is lying. Close the tab.')) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="not-an-airdrop">';
+    html += '<div class="sec-title">' + esc(t('It is not an airdrop')) + '</div>';
+    html += '<div class="fact">' + esc(t('Headlines saying "hundreds of thousands of SOL unlocked" are counting the whole network at once — every token account that exists, added together. Your own share of that is currently a fraction of a cent per account, and it grows roughly tenfold once the last steps land. Nothing new is being created. It\'s your own deposit, coming back smaller than it was.')) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('What changed, in lamports')) + '</div>';
+    html += '<div class="fact" style="margin-bottom:10px">' + esc(t('A standard token account holds 165 bytes of data. Solana also charges rent on 128 bytes of bookkeeping overhead, so the deposit is priced on 293 bytes in total.')) + '</div>';
+    for (var i = 0; i < STAGES.length; i++) html += stageRowHtml(STAGES[i]);
+    html += '<div class="footnote">' + esc(t('Steps 3 through 5 are deferred to the Agave 4.4 release, expected around November 2026.')) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Closing an account vs. withdrawing the surplus')) + '</div>';
+    html += '<div class="fact">' + esc(t("If you're completely done with a token — you'll never hold it again — closing the account returns the whole rent-exempt deposit, and that's worth more per account than only withdrawing the surplus.")) + '</div>';
+    html += '<div class="fact">' + esc(t('If you still hold the token and want the account to stay open, a newer instruction called WithdrawExcessLamports moves out only the surplus above what\'s currently required — without closing the account and without touching your token balance. The account owner signs it: the mint authority for a mint account, or enough signers for a multisig. It refuses to run on a wrapped SOL account, and it can never take an account below the current minimum deposit. It ships in the official @solana-program/token client library.')).replace('@solana-program/token', '<code>@solana-program/token</code>') + '</div>';
+    html += '<div class="fact">' + esc(t("There's no page here yet that walks you through withdrawing a surplus from your own accounts — said plainly, rather than pretending one exists.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card links-card">';
+    html += '<a href="/firepit">' + esc(t("Close an account you're finished with, safely, at /firepit →")) + '</a>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Sources')) + '</div>';
+    html += '<div class="small"><a href="https://solana.com/upgrades/reduced-rent" target="_blank" rel="noopener">' + esc(t('Reduced Rent — SIMD-0437, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/docs/tokens/advanced/withdraw-excess-lamports" target="_blank" rel="noopener">' + esc(t('Withdraw Excess Lamports — the instruction, on solana.com →')) + '</a></div>';
+    html += '</div>';
+
+    html += '<div class="small" style="text-align:center"><a href="/solana">' + esc(t('Back to the Solana Room →')) + '</a></div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

@@ -63,6 +63,25 @@ t("a mint registered twice is refused", () => {
   assert.throws(() => proj.approveProject(reg, B, { nowUnix: NOW }), /already registered as project "alpha"/);
 });
 
+section("1b. P3-09 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md) — label strips bidi/format overrides");
+
+t("a Unicode bidi override (RLO) prefixing a label is stripped before length/emptiness checks run", () => {
+  const rlo = "‮"; // RIGHT-TO-LEFT OVERRIDE — invisible in almost every editor/approval UI
+  const p = proj.validateProject({ id: "rlotest", label: rlo + "evil", symbol: "RLO", mint: W.MINT1, fundingWallet: W.FUND }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  assert.strictEqual(p.label, "evil", "the override character must not survive into the stored label");
+  assert.ok(!p.label.includes(rlo));
+});
+
+t("a label that is ONLY bidi/format characters is refused as empty, not silently approved", () => {
+  const onlyBidi = "​‮⁩﻿"; // zero-width space, RLO, PDI, BOM
+  assert.throws(() => proj.validateProject({ id: "emptylabel", label: onlyBidi, symbol: "EMP", mint: W.MINT1, fundingWallet: W.FUND }, { decimals: 9, tokenProgram: TOK, extensions: [] }), /label is required/);
+});
+
+t("a bidi character embedded mid-label is stripped too, not just a leading one", () => {
+  const p = proj.validateProject({ id: "midbidi", label: "Good" + "‪" + "Label", symbol: "MID", mint: W.MINT1, fundingWallet: W.FUND }, { decimals: 9, tokenProgram: TOK, extensions: [] });
+  assert.strictEqual(p.label, "GoodLabel");
+});
+
 section("2. decimals");
 
 t("decimals come from the mint read, never typed; 6- and 9-decimal projects carry their own", () => {
@@ -388,6 +407,34 @@ t("registering cuna in the hub registry is idempotent and refuses a second proje
   const twice = proj.approveProject(once, cuna, { nowUnix: NOW });
   assert.deepStrictEqual(twice, once);
   assert.throws(() => proj.approveProject(twice, mkProject("cuna2", W.MINT1), { nowUnix: NOW }), /already registered/);
+});
+
+section("11. the operator onboarding clock (Colosseum E7) — milestones set once, never overwritten");
+
+t("milestonesInit is all null; setMilestoneOnce sets a null field once and refuses to move it again", () => {
+  const init = proj.milestonesInit();
+  assert.deepStrictEqual(init, { appliedAt: null, approvedAt: null, firstPaidAt: null, firstVersionPublishedAt: null, firstArmedAt: null, firstBatchSignedAt: null });
+  const once = proj.setMilestoneOnce(init, "firstArmedAt", NOW);
+  assert.strictEqual(once.firstArmedAt, NOW);
+  const again = proj.setMilestoneOnce(once, "firstArmedAt", NOW + 5000);
+  assert.strictEqual(again.firstArmedAt, NOW, "already set — never overwritten");
+  assert.strictEqual(proj.setMilestoneOnce(undefined, "approvedAt", NOW).approvedAt, NOW, "works from nothing at all");
+});
+
+t("approveProject stamps approvedAt on first approval and never moves it on a later re-approval; appliedAt is only ever what the caller passed", () => {
+  const alpha = mkProject("alpha11", W.MINT1);
+  const first = proj.approveProject({}, alpha, { nowUnix: NOW, appliedAt: NOW - 3600 });
+  assert.strictEqual(first.alpha11.milestones.appliedAt, NOW - 3600);
+  assert.strictEqual(first.alpha11.milestones.approvedAt, NOW);
+  const later = proj.approveProject(first, { ...alpha, access: first.alpha11.access }, { nowUnix: NOW + 999999 });
+  assert.strictEqual(later.alpha11.milestones.approvedAt, NOW, "re-approval does not move approvedAt");
+  assert.strictEqual(later.alpha11.milestones.appliedAt, NOW - 3600, "re-approval without appliedAt keeps the one already on record");
+});
+
+t("a project approved directly (no appliedAt passed) has appliedAt null — a project seeded by the owner has no application", () => {
+  const seeded = mkProject("seeded11", W.MINT2);
+  const reg = proj.approveProject({}, seeded, { nowUnix: NOW });
+  assert.strictEqual(reg.seeded11.milestones.appliedAt, null);
 });
 
 (async () => {

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Reproduce a Hub receipt</title>
+<meta name="description" content="Paste a Project Hub receipt link, or drop the JSON files you saved, and re-derive the amount right here — no wallet, no server call, works offline once the page has loaded."/>
+<meta property="og:title" content="Reproduce a Hub receipt — Cluck Norris"/>
+<meta property="og:description" content="Re-derive a Project Hub payout from the published inputs in your own browser. No wallet needed."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:30px; letter-spacing:1px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .intro b { color:var(--text); }
+  .mono { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; word-break:break-all; }
+  a.mono, .mono a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .tabs { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .tab { flex:1; min-width:130px; min-height:44px; background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:8px; color:var(--sub); font-family:var(--disp); font-size:11px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; }
+  .tab.active { background:rgba(255,255,255,.08); color:var(--gold); border-color:var(--gold); }
+  .panel { display:none; }
+  .panel.active { display:block; }
+  .input-row { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .addr-input { flex:1; min-width:0; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:11px 13px; color:var(--text); font-family:var(--mono); font-size:13px; outline:none; }
+  .addr-input:focus { border-color:var(--accent); }
+  .btn { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; min-height:44px; background:var(--orange); border:none; border-radius:8px; padding:11px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#fff; cursor:pointer; }
+  .btn.ghost { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); }
+  .btn:disabled { background:var(--grey, #4B5563); color:var(--bg); cursor:not-allowed; }
+  .drop { border:2px dashed var(--border); border-radius:10px; padding:20px 14px; text-align:center; color:var(--sub); font-size:12.5px; margin-top:10px; }
+  .drop.over { border-color:var(--gold); color:var(--gold); }
+  .filelist { margin-top:10px; display:flex; flex-direction:column; gap:6px; }
+  .filerow { display:flex; align-items:center; justify-content:space-between; gap:8px; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:12px; }
+  .filerow .kind { font-family:var(--disp); letter-spacing:1px; color:var(--gold); text-transform:uppercase; font-size:10.5px; }
+  .filerow .name { color:var(--subtext, #9CA3AF); font-family:var(--mono); font-size:11.5px; word-break:break-all; }
+  .small { font-size:12px; color:var(--sub); }
+  .fact { font-size:12.5px; color:var(--subtext, #9CA3AF); line-height:1.55; }
+  .fact b { color:var(--text); }
+  .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+  .verdict { display:flex; align-items:center; gap:12px; padding:16px; border-radius:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .verdict .badge { font-family:var(--disp); font-size:18px; letter-spacing:2px; padding:8px 16px; border-radius:8px; }
+  .verdict.match { background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.35); }
+  .verdict.match .badge { color:var(--green); background:rgba(16,185,129,.12); }
+  .verdict.mismatch { background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.35); }
+  .verdict.mismatch .badge { color:#FCA5A5; background:rgba(239,68,68,.12); }
+  .verdict.missing { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.35); }
+  .verdict.missing .badge { color:var(--amber, #F59E0B); background:rgba(245,158,11,.12); }
+  .verdict .vtext { font-size:12.5px; color:var(--subtext, #9CA3AF); }
+  .steps { list-style:none; margin-top:10px; }
+  .steps li { padding:9px 0; border-bottom:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .steps .lbl { font-size:11px; letter-spacing:1.5px; color:var(--sub); text-transform:uppercase; }
+  .steps .val { font-family:var(--mono); font-size:14px; color:var(--text); margin-top:2px; }
+  .steps li.op { text-align:center; color:var(--sub); font-family:var(--mono); font-size:13px; padding:4px 0; }
+  .steps li.total .val { color:var(--gold); font-size:16px; }
+  .missing-list { margin-top:8px; }
+  .missing-list li { font-size:12.5px; color:#FCA5A5; padding:4px 0; }
+  .proof-box { font-size:12.5px; color:var(--subtext, #9CA3AF); line-height:1.6; margin-top:10px; }
+  .proof-box b { color:var(--text); }
+  .proof-box ul { margin:6px 0 0 18px; }
+  pre.proof { background:rgba(0,0,0,.35); border:1px solid var(--border); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11.5px; color:#D1D5DB; overflow-x:auto; white-space:pre-wrap; word-break:break-all; margin-top:8px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/hub">← PROJECT HUB</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">Reproduce a Receipt</h1>
+    <p data-clkn-avoid="1">RE-DERIVE THE AMOUNT IN YOUR OWN BROWSER · WORKS OFFLINE</p>
+  </div>
+
+  <div class="card">
+    <div class="intro" data-clkn-avoid="1">Paste a receipt link, or drop the JSON files you saved with <span class="mono">curl</span>
+    (<a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/HUB_VERIFY.md" target="_blank" rel="noopener">HUB_VERIFY.md</a>).
+    This page runs the exact same code as <span class="mono">scripts/reproduce-receipt.cjs</span> — it fetches
+    only public JSON, re-derives the amount on your own machine, and never sends your inputs anywhere. Once
+    the page has loaded, the offline path needs no network at all.</div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title" data-clkn-avoid="1">Reproduce</div>
+    <div class="tabs" role="tablist">
+      <button class="tab active" id="tabUrl" role="tab" aria-selected="true">From a URL</button>
+      <button class="tab" id="tabFiles" role="tab" aria-selected="false">From saved files (offline)</button>
+    </div>
+
+    <div class="panel active" id="panelUrl">
+      <div class="fact">A receipt page or its JSON, e.g. <span class="mono">https://clucknorris.app/hub/cuna/r/&lt;sig&gt;</span>.</div>
+      <div class="input-row">
+        <input class="addr-input" id="urlIn" placeholder="Receipt URL" aria-label="Receipt URL" autocomplete="off" spellcheck="false"/>
+        <button class="btn" id="urlBtn">REPRODUCE</button>
+      </div>
+      <div class="small" style="margin-top:8px">This page only fetches from its own origin and from <span class="mono">https://clucknorris.app</span> — a link to any other host is refused before any request is sent. Reproducing a receipt from elsewhere needs the saved-files (offline) tab instead.</div>
+    </div>
+
+    <div class="panel" id="panelFiles">
+      <div class="fact">Drop <span class="mono">receipt.json</span> plus <span class="mono">batch-inputs.json</span> (lock-to-earn) or
+      <span class="mono">standings.json</span> (buy competition) — saved exactly as HUB_VERIFY.md §c shows. A
+      <span class="mono">program-version.json</span> is optional and only used to recompute that version's own hash (§d).
+      Or drop a single <b>evidence bundle</b> (the "download the evidence bundle" link on any batch or receipt
+      page) — it carries all of that in one file and reproduces every receipt in the batch at once.</div>
+      <div class="drop" id="dropZone" tabindex="0" role="button" aria-label="Drop JSON files here, or choose files">
+        Drop JSON files here, or <label style="color:var(--cyan);cursor:pointer;text-decoration:underline">choose files<input type="file" id="fileIn" accept="application/json,.json" multiple style="display:none"/></label>
+      </div>
+      <div class="filelist" id="fileList"></div>
+      <div class="input-row">
+        <button class="btn" id="filesBtn" disabled>REPRODUCE FROM FILES</button>
+        <button class="btn ghost" id="filesClear" disabled>CLEAR</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="result" data-i18n-skip="1"></div>
+
+  <div class="card">
+    <div class="sec-title" data-clkn-avoid="1">What this proves — and does not</div>
+    <div class="proof-box" data-clkn-avoid="1">
+      <div><b>What a MATCH proves:</b> the payout amount is exactly reproducible from inputs the server itself
+      published — the accrual periods, what was already paid or held elsewhere, and (for a buy competition)
+      the sealed terms and this wallet's own reviewed buy. Nobody has to trust a number on a page; it can be
+      recomputed by anyone, offline, forever.</div>
+      <div style="margin-top:8px"><b>What it does not prove:</b> that the server omitted no qualifying wallet from the
+      calculation in the first place, or that the published inputs were never edited before you fetched them.
+      That second guarantee needs the program version's hash to be <b>independently committed on-chain</b> by the
+      project's own funding wallet — reproducible from published inputs is the first rung, not the whole ladder,
+      and no real program has that on-chain commitment live yet.</div>
+    </div>
+    <div class="small" style="margin-top:10px" data-clkn-avoid="1">What does this NOT prove? <a href="/hub/trust" style="color:var(--cyan)">Read the trust boundary →</a></div>
+  </div>
+
+  <div class="small" data-clkn-avoid="1" style="text-align:center">In more than one program? <a href="/hub/wallet">Look up a wallet across every project →</a></div>
+  <div class="small" data-clkn-avoid="1" style="text-align:center;margin-top:6px">Back to <a href="/hub">the Project Hub</a></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script type="module">
+import * as HubVerify from '/hub-verify.bundle.js';
+
+(function () {
+  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
+  var resultEl = document.getElementById('result');
+
+  // ── i18n for the strings THIS SCRIPT builds ─────────────────────────────────────────────────
+  // The static markup above is already covered by i18n.js's own DOM walker (loaded sitewide by
+  // cluck-nav.js) — it walks every text node and machine-translates on demand. But that walker
+  // only ever sees text that is ALREADY in the DOM; text this script assembles into `.innerHTML`
+  // strings (verdicts, errors, missing-input explanations) never goes through it as *source*
+  // text, only as a fait accompli once inserted (and `#result` carries `data-i18n-skip` above so
+  // the walker doesn't then try to re-translate our own output as if it were fresh English).
+  // `t()`/`tf()` are a small, page-local lookup over the SAME curated dictionaries i18n.js loads
+  // (`public/i18n/<lang>.json`, via the `window.CLKN_I18N` object i18n.js publishes once its
+  // fetch resolves) — no second translation system, no machine-translation fallback for this
+  // page's own copy (it is meant to be hand-curated, not queued for a live API call). A miss
+  // just falls back to the English literal. `tf(s, {a:1})` does plain `{a}`-token substitution
+  // so a translator can reorder words around a value instead of us splicing sentence halves.
+  // scripts/i18n-audit.cjs's Hub-pages gate scans this file's <script> block for every literal
+  // passed to t()/tf() and requires it in all six dictionaries — zero gaps, same bar as the
+  // markup strings.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function tf(s, vars) {
+    var out = t(s);
+    if (vars) for (var k in vars) out = out.split('{' + k + '}').join(String(vars[k]));
+    return out;
+  }
+  // i18n.js is loaded by cluck-nav.js off the same defer/module queue as this script, and its
+  // dictionary fetch is async — so on a dead-cold load (e.g. the `?receipt=` auto-run below,
+  // which can fire before either has settled) `t()` could still see no dictionary yet. Every
+  // render path here already awaits a network fetch or a file read first, so in practice the
+  // dictionary is long since loaded; this just makes sure of it rather than trusting the race.
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 4000)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  // ── tabs ─────────────────────────────────────────────────────────────────────────────────
+  var tabUrl = document.getElementById('tabUrl'), tabFiles = document.getElementById('tabFiles');
+  var panelUrl = document.getElementById('panelUrl'), panelFiles = document.getElementById('panelFiles');
+  function selectTab(which) {
+    var url = which === 'url';
+    tabUrl.classList.toggle('active', url); tabUrl.setAttribute('aria-selected', String(url));
+    tabFiles.classList.toggle('active', !url); tabFiles.setAttribute('aria-selected', String(!url));
+    panelUrl.classList.toggle('active', url);
+    panelFiles.classList.toggle('active', !url);
+  }
+  tabUrl.addEventListener('click', function () { selectTab('url'); });
+  tabFiles.addEventListener('click', function () { selectTab('files'); });
+
+  // ── URL parsing — the exact regex scripts/reproduce-receipt.cjs uses ───────────────────────
+  var RECEIPT_URL_RE = /^\/(?:api\/)?hub\/([a-z0-9-]{1,32})\/r\/([1-9A-HJ-NP-Za-km-z]{60,100})\/?$/;
+  function parseReceiptUrl(u) {
+    var url;
+    try { url = new URL(String(u || '').trim(), location.origin); } catch (e) { return null; }
+    var m = url.pathname.match(RECEIPT_URL_RE);
+    if (!m) return null;
+    return { host: url.origin, project: m[1], sig: m[2] };
+  }
+  // ── P1-01 fix: this page must never fetch-and-render a verdict for an origin it does not
+  // trust — a shared `?receipt=https://evil.example/...` link would otherwise render a green
+  // MATCH for a payment that never happened, on OUR origin, because the attacker also controls
+  // the "published" and "reproduced" inputs it fetches from their own host.
+  // /api/build's `env` field (read at server.js ~3446) reports a computed label — "production" /
+  // "staging" / "local" — derived from the deployed branch; it never carries an actual hostname,
+  // so there is no staging host to LEARN from it. The allowlist is therefore just this page's own
+  // origin (covers a fresh clone, a local boot, and a Railway staging service reproducing its own
+  // receipts) plus the one hostname that is fine to name outright without learning it: the production site
+  // itself, so a receipt link copied from clucknorris.app still works when this page happens to be
+  // loaded from somewhere else.
+  var ALLOWED_RECEIPT_ORIGINS = [location.origin, 'https://clucknorris.app'];
+  function originAllowed(origin) { return ALLOWED_RECEIPT_ORIGINS.indexOf(origin) !== -1; }
+
+  async function fetchJson(url) {
+    var r = await fetch(url, { mode: 'cors' });
+    var body = null;
+    try { body = await r.json(); } catch (e) { /* leave null */ }
+    return { ok: r.ok, status: r.status, body: body };
+  }
+
+  // ── schema check — informational only, never blocks a verdict (most live routes carry no
+  // $schema yet — HUB_VERIFY.md §g — so "not published for this shape yet" is the honest, common
+  // case, not an error). ──────────────────────────────────────────────────────────────────────
+  async function schemaLine(label, body) {
+    var L = t(label);
+    if (!body || !body.$schema) return '<div class="fact">' + tf('{label}: no schema published for this shape yet (see HUB_VERIFY.md §g).', { label: esc(L) }) + '</div>';
+    try {
+      var s = await fetchJson(body.$schema);
+      if (!s.ok || !s.body) return '<div class="fact">' + tf('{label}: could not fetch its schema at {url}.', { label: esc(L), url: '<span class="mono">' + esc(body.$schema) + '</span>' }) + '</div>';
+      var errors = HubVerify.validate(s.body, body);
+      return errors.length
+        ? '<div class="fact">' + tf('{label}: {n} schema error(s) against {url}.', { label: esc(L), n: '<span style="color:#FCA5A5">' + errors.length + '</span>', url: '<span class="mono">' + esc(body.$schema) + '</span>' }) + '</div>'
+        : '<div class="fact">' + tf('{label}: valid against its own published schema.', { label: esc(L) }) + '</div>';
+    } catch (e) { return '<div class="fact">' + tf('{label}: schema check failed ({err}).', { label: esc(L), err: esc(e.message) }) + '</div>'; }
+  }
+
+  // ── rendering ────────────────────────────────────────────────────────────────────────────
+  // MATCH / MISMATCH / MISSING_INPUTS are the `reproduce()` verdict codes themselves — they stay
+  // literal in every language (verdictWord() never runs through t()). `verdictExplain()` is the
+  // translated sentence that sits beside the badge, saying what that code means in prose.
+  function verdictClass(status) { return status === 'MATCH' ? 'match' : status === 'MISMATCH' ? 'mismatch' : 'missing'; }
+  function verdictWord(status) { return status === 'MATCH' ? 'MATCH' : status === 'MISMATCH' ? 'MISMATCH' : 'MISSING INPUTS'; }
+  function verdictExplain(status) {
+    if (status === 'MATCH') return t('This amount is exactly reproducible from the inputs the server published.');
+    if (status === 'MISMATCH') return t('This amount does not match what the published inputs reproduce.');
+    return t('Some of the inputs needed to reproduce this are missing or could not be fetched.');
+  }
+  function fmtAmount(raw, decimals) {
+    if (raw == null) return null;
+    if (!Number.isFinite(decimals)) return raw;
+    var s = String(raw); var neg = s.startsWith('-'); if (neg) s = s.slice(1);
+    if (s.length <= decimals) s = '0'.repeat(decimals - s.length + 1) + s;
+    var whole = s.slice(0, s.length - decimals), frac = s.slice(s.length - decimals).replace(/0+$/, '');
+    return (neg ? '-' : '') + whole + (frac ? '.' + frac : '');
+  }
+  // P1-02 fix: `reproduce()`'s published/reproduced fields are raw base units (lib/hub/reproduce.js
+  // — the same value the /r/:sig and /batch/:id/inputs routes carry as amountRaw); the step rows
+  // above already convert with `fmtAmount(raw, decimals)`, so the headline must use the exact same
+  // conversion rather than printing the base-unit string. `reproduceBuyCompRow()` is different — it
+  // is handed `receipt.amountUi` (already UI units) as its `published`/`reproduced` fields, so no
+  // second conversion is correct there; callers pass no `decimals` for that branch and this helper
+  // leaves the value alone. When a conversion did happen, the untouched raw string is kept in the
+  // `title` attribute (a secondary line, never the headline) so it is still there to compare against
+  // an API response by eye.
+  function amountCell(raw, decimals) {
+    if (raw == null) return { text: null, raw: null };
+    if (decimals == null) return { text: String(raw), raw: null };
+    var ui = fmtAmount(raw, decimals);
+    return { text: ui != null ? ui : String(raw), raw: String(raw) };
+  }
+  function stepsForLockToEarn(inputs, decimals) {
+    if (!inputs) return '';
+    var rows = (inputs.periods || []).map(function (p) {
+      return '<li><div class="lbl">' + esc(p.key) + '</div><div class="val">+ ' + esc(fmtAmount(p.creditRaw, decimals) || p.creditRaw) + '</div></li>';
+    }).join('');
+    return '<ul class="steps">' + rows +
+      '<li><div class="lbl">' + esc(t('already paid, other batches')) + '</div><div class="val">− ' + esc(fmtAmount(inputs.priorPaidRaw, decimals) || inputs.priorPaidRaw) + '</div></li>' +
+      '<li><div class="lbl">' + esc(t('held, another pending batch')) + '</div><div class="val">− ' + esc(fmtAmount(inputs.priorReservedRaw, decimals) || inputs.priorReservedRaw) + '</div></li>' +
+      '</ul>';
+  }
+  function renderVerdict(r, opts) {
+    opts = opts || {};
+    var cls = verdictClass(r.status);
+    var html = '<div class="card">' +
+      '<div class="verdict ' + cls + '"><span class="badge">' + esc(verdictWord(r.status)) + '</span>' +
+      '<span class="vtext">' + (opts.projectId ? esc(opts.projectId) + (opts.wallet ? ' · ' + esc(shortAddr(opts.wallet, 5, 4)) : '') : '') + '</span></div>' +
+      '<div class="vtext" style="width:100%;margin-top:-4px">' + esc(verdictExplain(r.status)) + '</div>';
+    if (opts.stepsHtml) html += opts.stepsHtml;
+    var pubCell = amountCell(r.published, opts.decimals), repCell = amountCell(r.reproduced, opts.decimals);
+    html += '<ul class="steps"><li class="op">−</li><li class="total"><div class="lbl">' + esc(t('published amount')) + '</div><div class="val"' + (pubCell.raw != null ? ' title="' + esc(tf('raw: {raw}', { raw: pubCell.raw })) + '"' : '') + '>' + (r.published == null ? esc(t('(unknown)')) : esc(pubCell.text) + (opts.symbol ? ' ' + esc(opts.symbol) : '')) + '</div></li>' +
+      '<li class="total"><div class="lbl">' + esc(t('reproduced amount')) + '</div><div class="val"' + (repCell.raw != null ? ' title="' + esc(tf('raw: {raw}', { raw: repCell.raw })) + '"' : '') + '>' + (r.reproduced == null ? esc(t('(not computed)')) : esc(repCell.text) + (opts.symbol ? ' ' + esc(opts.symbol) : '')) + '</div></li></ul>' +
+      '<div class="fact" style="margin-top:10px"><b>' + esc(t('Program-version hash:')) + '</b> ' + (r.hash ? '<span class="mono">' + esc(r.hash) + '</span>' : esc(t('none published for this program yet'))) + '</div>';
+    if (r.missing && r.missing.length) {
+      html += '<div class="fact" style="margin-top:10px"><b>' + esc(t('Missing:')) + '</b></div><ul class="missing-list">' + r.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
+    }
+    if (opts.schemaLines && opts.schemaLines.length) html += '<div style="margin-top:10px">' + opts.schemaLines.join('') + '</div>';
+    if (opts.versionHash) {
+      html += '<div class="fact" style="margin-top:10px"><b>' + esc(t('Program-version hash recompute:')) + '</b> ' + (opts.versionHash.ok ? '<span style="color:var(--green)">' + esc(t('matches')) + '</span>' : opts.versionHash.reason ? esc(opts.versionHash.reason) : '<span style="color:#FCA5A5">' + esc(tf('does not match — computed {computed}', { computed: opts.versionHash.computed })) + '</span>') + '</div>';
+    }
+    html += '</div>';
+    resultEl.innerHTML = html;
+  }
+  function renderError(msg) { resultEl.innerHTML = '<div class="card"><div class="err">' + esc(msg) + '</div></div>'; }
+  function renderStatus(msg) { resultEl.innerHTML = '<div class="status">' + esc(msg) + '</div>'; }
+
+  // ── URL path ─────────────────────────────────────────────────────────────────────────────
+  async function reproduceFromUrl(raw) {
+    await waitForI18n();
+    var parsed = parseReceiptUrl(raw);
+    if (!parsed) { renderError(t('Not a receipt URL — expected .../hub/<project>/r/<sig> (or the /api/... JSON form).')); return; }
+    if (!originAllowed(parsed.host)) { renderError(t('This page only reproduces receipts served by clucknorris.app — for another host, save the files and use the offline tab.')); return; }
+    renderStatus(t('FETCHING…'));
+    var schemaLines = [];
+    var receiptRes;
+    try { receiptRes = await fetchJson(parsed.host + '/api/hub/' + encodeURIComponent(parsed.project) + '/r/' + encodeURIComponent(parsed.sig)); }
+    catch (e) { renderError(tf('Could not fetch the receipt ({err}) — a cross-origin host must allow this read, or try the offline/file path instead.', { err: e.message })); return; }
+    if (!receiptRes.ok || !receiptRes.body || !receiptRes.body.ok || !receiptRes.body.receipt) { renderError(t('Could not fetch the receipt — check the URL.')); return; }
+    var receiptBody = receiptRes.body;
+    schemaLines.push(await schemaLine('receipt', receiptBody));
+    var kind = receiptBody.program && receiptBody.program.kind;
+    var wallet = receiptBody.receipt.wallet || null;
+    var symbol = (receiptBody.program && receiptBody.program.ticker) || receiptBody.symbol || null;
+
+    if (kind === 'buy-comp') {
+      var compId = receiptBody.program && receiptBody.program.id;
+      var standingsRes;
+      try { standingsRes = await fetchJson(parsed.host + '/api/hub/' + encodeURIComponent(parsed.project) + '/p/' + encodeURIComponent(compId) + '/standings'); }
+      catch (e) { renderVerdict({ status: 'MISSING_INPUTS', published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) : null, reproduced: null, hash: null, missing: [tf('could not fetch the sealed standings ({err})', { err: e.message })] }, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines }); return; }
+      var comp = standingsRes.body && standingsRes.body.ok ? standingsRes.body.comp : null;
+      if (!comp || !comp.sealed) { renderVerdict({ status: 'MISSING_INPUTS', published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) : null, reproduced: null, hash: null, missing: [t('the competition is not sealed yet, or the standings could not be fetched')] }, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines }); return; }
+      var win = (comp.results || []).filter(function (r) { return r.wallet === wallet; })[0];
+      var rev = (comp.review || []).filter(function (r) { return r.wallet === wallet; })[0];
+      var result = HubVerify.reproduceBuyCompRow({ terms: comp.terms, rank: win ? win.rank : null, tokensBought: rev ? rev.tokensBought : null, valueSol: rev ? rev.value : null, published: receiptBody.receipt.amountUi });
+      renderVerdict(result, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines });
+      return;
+    }
+    if (kind && kind !== 'lock-to-earn') { renderVerdict({ status: 'MISSING_INPUTS', published: receiptBody.receipt.amountUi != null ? String(receiptBody.receipt.amountUi) : null, reproduced: null, hash: null, missing: [tf('reproduction is not implemented yet for kind "{kind}" — only "lock-to-earn" and "buy-comp" today', { kind: kind })] }, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines }); return; }
+    var batchId = receiptBody.receipt.batchId || null;
+    if (!batchId || !wallet) { renderVerdict({ status: 'MISSING_INPUTS', published: null, reproduced: null, hash: null, missing: [t('the receipt has no batchId/wallet — not a lock-to-earn payout')] }, { projectId: parsed.project, schemaLines: schemaLines }); return; }
+    var inputsRes;
+    try { inputsRes = await fetchJson(parsed.host + '/api/hub/' + encodeURIComponent(parsed.project) + '/batch/' + encodeURIComponent(batchId) + '/inputs?wallet=' + encodeURIComponent(wallet)); }
+    catch (e) { renderVerdict({ status: 'MISSING_INPUTS', published: null, reproduced: null, hash: null, missing: [tf('could not fetch the batch inputs ({err})', { err: e.message })] }, { projectId: parsed.project, wallet: wallet, schemaLines: schemaLines }); return; }
+    var inputsBody = inputsRes.body;
+    var entry = inputsBody && inputsBody.ok && inputsBody.wallets ? inputsBody.wallets[wallet] : null;
+    var receiptForCore = { amountRaw: entry ? entry.amountRaw : null };
+    var inputsForCore = entry ? { periods: entry.periods, priorPaidRaw: entry.priorPaidRaw, priorReservedRaw: entry.priorReservedRaw } : null;
+    var res2 = HubVerify.reproduce({ programVersion: entry && entry.programVersion ? entry.programVersion : null, inputs: inputsForCore, receipt: receiptForCore });
+    if (!entry) res2.missing.push(t('the fetch for the batch inputs did not return this wallet'));
+    // AA2 bug fix: the batch-inputs response now carries the program version in force for this
+    // batch (when one exists) — recompute its hash here too, the same check the offline-files and
+    // bundle tabs already run, so the URL path has the same evidence.
+    var versionOpt = null;
+    if (entry && entry.programVersion) {
+      try { versionOpt = await HubVerify.verifyVersionHash(entry.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
+    }
+    renderVerdict(res2, { projectId: parsed.project, wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody ? inputsBody.decimals : null), versionHash: versionOpt, decimals: inputsBody ? inputsBody.decimals : null });
+  }
+  document.getElementById('urlBtn').addEventListener('click', function () { reproduceFromUrl(document.getElementById('urlIn').value); });
+  document.getElementById('urlIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') reproduceFromUrl(e.target.value); });
+  var preUrl = new URLSearchParams(location.search).get('receipt');
+  if (preUrl) { document.getElementById('urlIn').value = preUrl; reproduceFromUrl(preUrl); }
+
+  // ── offline file path ────────────────────────────────────────────────────────────────────
+  var loadedFiles = {};   // kind -> { name, body }
+  function classify(body) {
+    if (body && body.kind === HubVerify.BUNDLE_KIND) return 'bundle';
+    if (body && body.receipt && body.program) return 'receipt';
+    if (body && body.wallets) return 'batch-inputs';
+    if (body && body.comp) return 'standings';
+    if (body && body.hash && body.terms && body.projectId != null) return 'program-version';
+    return null;
+  }
+  function renderFileList() {
+    var list = document.getElementById('fileList');
+    var keys = Object.keys(loadedFiles);
+    list.innerHTML = keys.map(function (k) { return '<div class="filerow"><span class="kind">' + esc(k) + '</span><span class="name">' + esc(loadedFiles[k].name) + '</span></div>'; }).join('');
+    var ready = !!(loadedFiles['receipt'] && (loadedFiles['batch-inputs'] || loadedFiles['standings']));
+    document.getElementById('filesBtn').disabled = !ready;
+    document.getElementById('filesClear').disabled = keys.length === 0;
+  }
+  async function addFiles(fileListObj) {
+    for (var i = 0; i < fileListObj.length; i++) {
+      var f = fileListObj[i];
+      try {
+        var text = await f.text();
+        var body = JSON.parse(text);
+        // AA2: a single evidence bundle is everything this tab needs — "accepts a dropped bundle
+        // in one move" — so it reproduces immediately rather than waiting for a second file and a
+        // button click. Any other files dropped in the same action are ignored (a bundle already
+        // carries its own receipts/inputs/program-version; mixing it with loose files would be
+        // ambiguous about which one wins).
+        if (classify(body) === 'bundle') { await reproduceFromBundle(body); return; }
+        var kind = classify(body);
+        if (!kind) continue;
+        loadedFiles[kind] = { name: f.name, body: body };
+      } catch (e) { /* not JSON or unreadable — skipped silently, the list stays honest about what loaded */ }
+    }
+    renderFileList();
+  }
+  var dropZone = document.getElementById('dropZone');
+  dropZone.addEventListener('dragover', function (e) { e.preventDefault(); dropZone.classList.add('over'); });
+  dropZone.addEventListener('dragleave', function () { dropZone.classList.remove('over'); });
+  dropZone.addEventListener('drop', function (e) { e.preventDefault(); dropZone.classList.remove('over'); addFiles(e.dataTransfer.files); });
+  // Snapshot the files into a plain array BEFORE clearing the input's value: `addFiles` is async
+  // (it awaits each File's .text()), and resetting `e.target.value` truncates the SAME live
+  // FileList object mid-iteration — every file after the first silently vanished from the loop.
+  document.getElementById('fileIn').addEventListener('change', function (e) {
+    var files = Array.prototype.slice.call(e.target.files);
+    e.target.value = '';
+    addFiles(files);
+  });
+  document.getElementById('filesClear').addEventListener('click', function () { loadedFiles = {}; renderFileList(); resultEl.innerHTML = ''; });
+
+  async function reproduceFromFiles() {
+    await waitForI18n();
+    var receipt = loadedFiles['receipt'] && loadedFiles['receipt'].body;
+    if (!receipt || !receipt.receipt) { renderError(t('Load a receipt.json first.')); return; }
+    var kind = receipt.program && receipt.program.kind;
+    var wallet = receipt.receipt.wallet || null;
+    var symbol = (receipt.program && receipt.program.ticker) || receipt.symbol || null;
+    var schemaLines = ['<div class="fact">' + tf('{label}: loaded from a local file — schema check needs a network fetch of its $schema, skipped offline.', { label: esc(t('receipt')) }) + '</div>'];
+    var versionOpt = null;
+    if (loadedFiles['program-version']) {
+      var v = loadedFiles['program-version'].body;
+      try { versionOpt = await HubVerify.verifyVersionHash(v); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
+    }
+    if (kind === 'buy-comp') {
+      var standings = loadedFiles['standings'] && loadedFiles['standings'].body;
+      if (!standings || !standings.comp) { renderError(t('Load standings.json for this buy competition.')); return; }
+      var comp = standings.comp;
+      if (!comp.sealed) { renderVerdict({ status: 'MISSING_INPUTS', published: receipt.receipt.amountUi != null ? String(receipt.receipt.amountUi) : null, reproduced: null, hash: null, missing: [t('the competition is not sealed')] }, { wallet: wallet, symbol: symbol, schemaLines: schemaLines, versionHash: versionOpt }); return; }
+      var win = (comp.results || []).filter(function (r) { return r.wallet === wallet; })[0];
+      var rev = (comp.review || []).filter(function (r) { return r.wallet === wallet; })[0];
+      var result = HubVerify.reproduceBuyCompRow({ terms: comp.terms, rank: win ? win.rank : null, tokensBought: rev ? rev.tokensBought : null, valueSol: rev ? rev.value : null, published: receipt.receipt.amountUi });
+      renderVerdict(result, { wallet: wallet, symbol: symbol, schemaLines: schemaLines, versionHash: versionOpt });
+      return;
+    }
+    var inputsBody = loadedFiles['batch-inputs'] && loadedFiles['batch-inputs'].body;
+    if (!inputsBody) { renderError(t('Load batch-inputs.json (GET /api/hub/<project>/batch/<batchId>/inputs?wallet=<wallet>).')); return; }
+    var entry = inputsBody.wallets ? inputsBody.wallets[wallet] : null;
+    var receiptForCore = { amountRaw: entry ? entry.amountRaw : null };
+    var inputsForCore = entry ? { periods: entry.periods, priorPaidRaw: entry.priorPaidRaw, priorReservedRaw: entry.priorReservedRaw } : null;
+    var res2 = HubVerify.reproduce({ programVersion: entry && entry.programVersion ? entry.programVersion : null, inputs: inputsForCore, receipt: receiptForCore });
+    if (!entry) res2.missing.push(t('batch-inputs.json does not carry this wallet'));
+    // A separate program-version.json takes priority (it may be all a reader saved); otherwise
+    // fall back to the version batch-inputs.json now carries inline for its own batch.
+    if (!versionOpt && entry && entry.programVersion) {
+      try { versionOpt = await HubVerify.verifyVersionHash(entry.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
+    }
+    renderVerdict(res2, { wallet: wallet, symbol: symbol, schemaLines: schemaLines, stepsHtml: stepsForLockToEarn(inputsForCore, inputsBody.decimals), versionHash: versionOpt, decimals: inputsBody.decimals });
+  }
+  document.getElementById('filesBtn').addEventListener('click', reproduceFromFiles);
+
+  // ── AA2: the evidence bundle — one dropped file, every receipt in the batch reproduced at once
+  // (docs/COLOSSEUM_ROADMAP.md §11). The bundle's own hash is checked FIRST and shown before
+  // anything else: a mismatch means the file was altered or truncated after it was built, and the
+  // reproduction below still runs (and is still shown) even when it fails — a stale/edited copy
+  // is a fact about the FILE, not a reason to hide what it says.
+  function runBundleReceipt(rb, batchInputs, programVersion) {
+    var wallet = rb && rb.receipt ? rb.receipt.wallet : null;
+    var symbol = (rb && rb.program && rb.program.ticker) || (rb && rb.symbol) || null;
+    var entry = wallet && batchInputs.wallets ? batchInputs.wallets[wallet] : null;
+    var receiptForCore = { amountRaw: entry ? entry.amountRaw : (rb && rb.receipt ? rb.receipt.amountRaw : null) };
+    var inputsForCore = entry ? { periods: entry.periods, priorPaidRaw: entry.priorPaidRaw, priorReservedRaw: entry.priorReservedRaw } : null;
+    var result = HubVerify.reproduce({ programVersion: programVersion, inputs: inputsForCore, receipt: receiptForCore });
+    if (!entry) result.missing.push(t("the bundle's batch inputs do not carry this wallet"));
+    return { wallet: wallet, symbol: symbol, result: result };
+  }
+  function renderBundleResults(bundle, hashCheck, rows, versionOpt, decimals) {
+    var matches = rows.filter(function (r) { return r.result.status === 'MATCH'; }).length;
+    var mismatches = rows.filter(function (r) { return r.result.status === 'MISMATCH'; }).length;
+    var missing = rows.length - matches - mismatches;
+    var hashCls = hashCheck.ok ? 'match' : 'mismatch';
+    var html = '<div class="card">' +
+      '<div class="verdict ' + hashCls + '"><span class="badge">' + esc(hashCheck.ok ? t('BUNDLE HASH: MATCHES') : t('BUNDLE HASH: DOES NOT MATCH')) + '</span>' +
+      '<span class="vtext">' + (hashCheck.ok
+        ? esc(t('This file is byte-for-byte what it was when it was built — intact, not truncated or edited.'))
+        : (hashCheck.reason ? esc(hashCheck.reason) : esc(t('The bytes changed after this bundle was built — reproduction below still ran, but treat this copy as unverified.')))) + '</span></div>';
+    if (bundle && bundle.settled === false) html += '<div class="fact" style="margin-top:6px">' + esc(bundle.note || t('This batch has not been settled yet.')) + '</div>';
+    html += '<div class="fact" style="margin-top:6px"><b>' + esc(t('Project')) + '</b> ' + esc((bundle.project && (bundle.project.label || bundle.project.id)) || t('(unknown)')) +
+      ' · <b>' + esc(t('Batch')) + '</b> <span class="mono">' + esc((bundle.batch && bundle.batch.id) || t('(unknown)')) + '</span></div>';
+    if (versionOpt) {
+      html += '<div class="fact" style="margin-top:4px"><b>' + esc(t('Program-version hash recompute:')) + '</b> ' +
+        (versionOpt.ok ? '<span style="color:var(--green)">' + esc(t('matches')) + '</span>' : (versionOpt.reason ? esc(versionOpt.reason) : '<span style="color:#FCA5A5">' + esc(tf('does not match — computed {computed}', { computed: versionOpt.computed })) + '</span>')) + '</div>';
+    }
+    if (rows.length) {
+      html += '<div class="fact" style="margin-top:8px">' + esc(tf('{total} receipt(s) in this batch:', { total: rows.length })) + ' ' + matches + ' MATCH' +
+        (mismatches ? ', ' + mismatches + ' MISMATCH' : '') + (missing ? ', ' + missing + ' MISSING_INPUTS' : '') + '.</div>';
+    } else {
+      html += '<div class="fact" style="margin-top:8px">' + esc(t('No receipts in this bundle yet.')) + '</div>';
+    }
+    html += '</div>';
+    html += rows.map(function (r) {
+      var cls = verdictClass(r.result.status);
+      var row = '<div class="card"><div class="verdict ' + cls + '"><span class="badge">' + esc(verdictWord(r.result.status)) + '</span>' +
+        '<span class="vtext">' + (r.wallet ? esc(shortAddr(r.wallet, 5, 4)) : '') + '</span></div>' +
+        '<div class="vtext" style="width:100%;margin-top:-4px">' + esc(verdictExplain(r.result.status)) + '</div>';
+      var rPubCell = amountCell(r.result.published, decimals), rRepCell = amountCell(r.result.reproduced, decimals);
+      row += '<ul class="steps"><li class="total"><div class="lbl">' + esc(t('published amount')) + '</div><div class="val"' + (rPubCell.raw != null ? ' title="' + esc(tf('raw: {raw}', { raw: rPubCell.raw })) + '"' : '') + '>' + (r.result.published == null ? esc(t('(unknown)')) : esc(rPubCell.text) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li>' +
+        '<li class="total"><div class="lbl">' + esc(t('reproduced amount')) + '</div><div class="val"' + (rRepCell.raw != null ? ' title="' + esc(tf('raw: {raw}', { raw: rRepCell.raw })) + '"' : '') + '>' + (r.result.reproduced == null ? esc(t('(not computed)')) : esc(rRepCell.text) + (r.symbol ? ' ' + esc(r.symbol) : '')) + '</div></li></ul>';
+      if (r.result.missing && r.result.missing.length) row += '<div class="fact" style="margin-top:10px"><b>' + esc(t('Missing:')) + '</b></div><ul class="missing-list">' + r.result.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
+      return row + '</div>';
+    }).join('');
+    resultEl.innerHTML = html;
+  }
+  async function reproduceFromBundle(bundle) {
+    await waitForI18n();
+    renderStatus(t('CHECKING THE BUNDLE…'));
+    var hashCheck;
+    try { hashCheck = HubVerify.verifyBundleHash(bundle); } catch (e) { hashCheck = { ok: false, reason: e.message }; }
+    var split = HubVerify.splitBundle(bundle);
+    var versionOpt = null;
+    if (split.programVersion) {
+      try { versionOpt = await HubVerify.verifyVersionHash(split.programVersion); } catch (e) { versionOpt = { ok: false, reason: e.message }; }
+    }
+    var rows = split.receipts.map(function (rb) { return runBundleReceipt(rb, split.batchInputs, split.programVersion); });
+    renderBundleResults(bundle, hashCheck, rows, versionOpt, split.batchInputs ? split.batchInputs.decimals : null);
+  }
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

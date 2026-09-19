@@ -63,6 +63,13 @@ jobs:
       # curriculum held 70 and 7. Hand-typed public counts rot silently; this catches the mirror.
       - name: curriculum count-drift guard
         run: node scripts/check-counts.js
+      # check-counts.js above only pins per-course LESSON COUNTS. This catches content drift the
+      # counts alone would miss: extractor rewritten 2026-09-18 (docs/COLOSSEUM_ROADMAP.md §12
+      # BB1) after the old one only read src/App.jsx and silently dropped the LP Lab and Deep
+      # Dive courses on a re-run. --check re-extracts from the real sources (esbuild-compiled,
+      # not regex-scanned) and fails if data/curriculum.json was not committed with them.
+      - name: curriculum extraction freshness (data/curriculum.json)
+        run: node scripts/extract-curriculum.js --check
       # Seven languages are promised (CLAUDE.md); six are curated dicts keyed on the English
       # source string itself (no en.json — see the script header). Cross-language key diffs and
       # placeholder drift are real bugs and gate; the base/school source-scan stays informational
@@ -116,18 +123,119 @@ jobs:
       # outage changes nothing. The six fault cases and the earlier concurrency set.
       - name: Project Hub — payout attempts and reconcile fault cases
         run: node scripts/hub-attempts-test.cjs
+      # W3 integration gate (docs/COLOSSEUM_ROADMAP.md §W3, closing lib/hub/README.md's "receipt
+      # gap"): the settlement journal dual-write in POST /api/hub/:project/payout, both the
+      # self-signed &sent= and managed-payer &send= branches (plus &sweep=). The chain's own
+      # identity of a transfer (never a guessed instruction index), a fault at the journal write
+      # for each branch (the row stays reserved and is never re-offered; a resume settles it), the
+      # same signature submitted twice producing one event, a dryRun project refused before any
+      # write, a registry project's payout never touching the dedicated CUNA keys, an overpaid
+      # transfer recording excess without touching accrued, and a journal-backed receipt that
+      # validates against receipt.schema.json.
+      - name: Project Hub — W3 settlement journal dual-write (integration gate)
+        run: node scripts/hub-settle-route-test.cjs
+      # The public receipt page must render BOTH receipt shapes (legacy and Addendum-B3): a
+      # journal-backed receipt threw a TypeError in the page's own script until the wrapper fix
+      # (adv P1-4 in docs/HUB_JOURNAL_VERIFY_2026-09-18.md). Runs hub.html's real inline script in a vm.
+      - name: Project Hub — receipt page renders both shapes
+        run: node scripts/hub-receipt-page-test.cjs
       # Addendum C: the six answers a holder gets before locking are DERIVED from the program's
       # entities (15), the differing-reward-asset warning is mandatory and not operator-controlled
       # (16), no string anywhere in the block carries APR / APY / per-year language (17), and every
       # lesson the block links to still exists in src/App.jsx LESSONS (C4).
       - name: Project Hub — teach the button (Addendum C, tests 15–17)
         run: node scripts/hub-teach-test.cjs
+      # The Colosseum judges' demo (roadmap W7 acceptance target, E2): every number under /hub/demo
+      # is derived by the real Hub libs from fixture inputs (not hand-typed), the batch/receipts are
+      # labelled dry runs, and the fixture is invisible to the real registry, the public index and
+      # the accrual scheduler — "demo"/"demo-b" can never be approved as real project ids.
+      - name: Project Hub — Colosseum demo fixture (derivation + exclusion)
+        run: node scripts/hub-demo-fixture-test.cjs
+      # Roadmap extension E5 ("the receipt teaches"): a settled receipt's walkthrough sums to its
+      # own amount via accruedByWallet (the SAME function the ledger uses), a partial payment is
+      # explained as partial, missing inputs never produce a fabricated walkthrough, and no
+      # APR/APY/per-year language or the word "owed" reaches the module's output or the rendered
+      # hub.html page.
+      - name: Project Hub — the receipt teaches (E5)
+        run: node scripts/hub-explain-test.cjs
+      # EE2 (docs/COLOSSEUM_ROADMAP.md §15): lib/hub/glossary.js is the one source of truth for
+      # every term and reason code a public Hub surface renders. Drift (every eligibility.js
+      # REASON_CODES code, plus the access/void/hold-through literals, has a glossary entry; every
+      # entry's optional lessonId resolves — same C4 discipline as hub-teach-test above) and route
+      # (GET /api/hub/glossary + GET /hub/glossary, both ahead of their catch-alls) always run
+      # here; this job installs no Chromium, so the same script's rendered-page checks skip
+      # gracefully (playwright-core not resolvable) exactly like
+      # scripts/reproducibility-history-test.cjs's own render section — the smoke-test job below
+      # re-runs this same script, gated on the render diff, where Chromium IS installed, for real
+      # rendered-page coverage.
+      - name: Project Hub — the glossary (EE2) — drift + route
+        run: node scripts/hub-glossary-test.cjs
+      # The Solana Room (CLAUDE.md) — a public, no-wallet reference room. This increment ships
+      # the room shell (/solana) plus one full page, the rent page (/solana/rent). No-build boot
+      # (both routes need their own explicit app.get route — see server.js), room links to rent,
+      # the rent page carries the scam-warning block and the "not an airdrop" statement, every
+      # t() key on both pages exists in all six curated dictionaries, and no forbidden word
+      # (yield/APR/APY, Normie Quest, Wallet Watch, Nomadz, Solana Foundation, ETF) appears.
+      - name: The Solana Room — rent page (route, scam warning, i18n coverage, forbidden words)
+        run: node scripts/solana-room-test.cjs
+      # The Seeker app, increment 1 (docs/SEEKER_APP_PLAN.md) — a third, additive store-edition
+      # variant for the Solana dApp Store. Builds it; asserts the bundle is self-contained and
+      # hash-routed (a bundled Capacitor app has no server to rewrite a deep path); asserts the
+      # existing google/ios variants still build byte-identical to a pristine origin/develop
+      # checkout (the `git fetch` below just makes that ref resolvable — a shallow checkout
+      # otherwise has no origin/develop to compare against; the script itself degrades gracefully
+      # if the fetch is unavailable); drives the shared, MWA-aware wallet registry
+      # (public/cluck-wallet.js) with an injected FAKE Capacitor bridge, since no real device
+      # exists to test against (same posture as scripts/wallet-standard-test.cjs); and checks the
+      # shell's tap targets meet the 44px floor. The rendered-Chromium half of this test (real
+      # bounding boxes, a real tap-through) skips gracefully here, same posture as
+      # hub-glossary-test.cjs above — this job installs no browser — without failing the step;
+      # everything else above still runs and gates on every push/PR.
+      - name: Seeker app — build variant, self-contained + hash-routed bundle, MWA wallet layer, tap targets
+        run: |
+          git fetch origin develop --depth=1 --quiet || true
+          node scripts/seeker-build-test.cjs
+      # Rent Reclaim, READ SIDE (increment 2, docs/SEEKER_APP_PLAN.md) — GET /api/seeker/
+      # reclaimable (lib/rent-reclaim.js) and its pane (src/seeker/RentReclaim.jsx). Both token
+      # programs are enumerated; an account holding a balance is never classed reclaimable;
+      # wrapped SOL is refused outright; the reported total matches an independent re-derivation
+      # of the fixture; an RPC failure (network error, non-OK status, or a JSON-RPC-level error)
+      # surfaces as a failure, never an empty/zero result; more accounts than the cap are flagged
+      # `truncated`, never silently cut; the 16 new i18n keys land in all six dictionaries and are
+      # excluded from the google/ios bundle; the new controls meet the 44px tap-target floor.
+      # Dependency-free — stubs global.fetch, no live RPC call in CI.
+      - name: Seeker app — Rent Reclaim read side (both token programs, honest classification, unavailable-not-zero, i18n)
+        run: node scripts/seeker-reclaim-test.cjs
+      # Addendum B5 / roadmap E3: the on-chain memo format is byte-diffed against a hand-built
+      # Uint8Array before it ships; verifyCommitTx never trusts the client (wrong payer, wrong or
+      # missing memo, more than one memo, a failed or unconfirmed tx are all refused); a version's
+      # own hash is unaffected by attaching a commitment (bookkeeping, like effectiveTo); a
+      # commitment is written ONCE and a later, different-looking observation never overwrites it;
+      # the public projection carries only sig/slot/observedAt, never the memo text; the demo
+      # fixture never carries one, so it shows "not yet committed" honestly rather than by default.
+      - name: Project Hub — independent on-chain commitment (Addendum B5 / E3)
+        run: node scripts/hub-commit-test.cjs
       # Analytics: a visitor counts as ENGAGED only after a second page or a funnel event, and
       # views are keyed by the real Host header. Since 2026-08-16 the site records ~4,500
       # one-page, no-referrer "visitors" a day that BOT_RE cannot see; this is what stops that
       # number being quoted as people.
       - name: Analytics — engaged visitors and host split
         run: node scripts/analytics-engaged-test.cjs
+      # Colosseum W9 part 1: traction is measured, not asserted. Every counter in lib/traction.js
+      # is DERIVED from a durable store (or a minimal, salted, PII-free event this change adds at
+      # a choke point that recorded nothing before) — journal receipts vs. the live `batch.sent`
+      # mechanism vs. CUNA's pre-Hub payout stay separate, revenue is lamports/count only (never a
+      # USD figure that was not stored), and an unreproducible source (Hatchery fees) says so
+      # instead of guessing.
+      - name: Traction — outcome counters are derived and reproducible
+        run: node scripts/traction-test.cjs
+      # Colosseum roadmap §10 Z1: the Sunday W10 update is a `git log` run, not a rewrite.
+      # Exercises grouping (Hub/School/Security/Operations by keyword), production-vs-staging
+      # labelling (a real, non-squash "Promote develop -> main" merge the way this repo's own
+      # promotions work) and PR-number extraction against a disposable fixture repo — never this
+      # repo's own history, so the test can't drift when new PRs land.
+      - name: Weekly update draft — shipped-PR grouping, production/staging, PR extraction
+        run: node scripts/weekly-update-draft-test.cjs
       # The staking domain's origin-lockdown exemption, read out of server.js itself. That
       # exemption is the one place a request can skip the WAF, so the allowlist must stay
       # exhaustive and anchored at both ends — a single "^/api/" entry would be a hole through to
@@ -187,18 +295,110 @@ jobs:
         run: node scripts/kvstore-verified-test.cjs
       - name: payout row verification (a sent row needs a real transfer, after the batch, unused elsewhere)
         run: node scripts/payout-verify-test.cjs
+      # Colosseum roadmap §W4/Extension: the airdropper's per-drop public receipt. Reuses
+      # lib/payout-verify's on-chain-delta check (same as CUNA/Hub payouts) so a row is recorded
+      # paid only when the chain actually shows the transfer — never on a bare confirmed signature.
+      - name: airdrop per-drop receipt (verify-before-record, idempotent on sig, daily/row caps)
+        run: node scripts/airdrop-receipt-test.cjs
       # Shared "fresh sigs since the durable cursor" walk used by the ROSE/generic buy bots and
       # the burn watcher (lib/sig-cursor.js) — pure, so this runs standalone with no server boot.
       - name: signature cursor walk (buy/burn watchers' shared fresh-since-cursor logic)
         run: node scripts/sig-cursor-test.cjs
+      # Room policy (owner, 2026-09-17): the Cluck bot never posts in the OnlyRose room. Pure checks
+      # on lib/telegram-rooms plus source assertions that every Telegram sender consults it and that
+      # no direct send exists outside the audited functions.
+      - name: Telegram room policy (nothing lands in the OnlyRose room)
+        run: node scripts/telegram-rooms-test.cjs
+      # BB4 (Colosseum roadmap §12): the /receipt <signature> command — found across every
+      # registered project via the same public findReceipt(), reproduced the same way the
+      # reproducibility/bundle routes are, replied through the audited tgSend choke point (the
+      # OnlyRose refusal fires there, unmodified). Exercises lib/hub/receipt-command.js directly
+      # against a real seeded batch — no server boot.
+      - name: Telegram /receipt command (BB4 — verdict reply, OnlyRose refusal, rate limit)
+        run: node scripts/telegram-receipt-command-test.cjs
       # The public Hub views whitelist their fields — a comp's payout token or chat id must never
       # reach /api/hub — and hash the terms a program ran under.
       - name: Hub public views (no private fields, stable terms hash, honest totals)
         run: node scripts/hub-public-test.cjs
+      # Colosseum roadmap §8 X7: holder snapshot history is append-only (a second run adds, never
+      # edits), the 90-per-mint cap drops the oldest first, the hash recomputes from a holder list
+      # and changes on a one-unit change, the dated series carries no wallets, and the Hub
+      # project view's holders fact line appears only when a snapshot exists.
+      - name: Holder snapshot history (append-only, hashed, read-only)
+        run: node scripts/holders-snapshot-test.cjs
+      # Colosseum roadmap §13 CC4: the daily reproducibility history behind the badge/ratio — same
+      # append-only, hashed pattern as the holder snapshots above (one record per project per UTC
+      # day, refused on a second write, a hash chain that recomputes end to end, a tampered record
+      # breaks it, the 90-day cap drops the oldest first, a skipped day is a gap, never
+      # interpolated). Also boots a real server (the tick's own env-only fast-interval overrides)
+      # to prove the tick writes today's record exactly once and /hub/status renders the
+      # sparkline with its aria-label.
+      - name: Reproducibility history (append-only daily record, hash chain, sparkline)
+        run: REPRO_HISTORY_TEST_PORT=3317 node scripts/reproducibility-history-test.cjs
+      # Colosseum roadmap §11 AA3: the snapshot diff — entered/exited/held over the RECORDED
+      # top-25 only (never a full holder-base diff, per lib/holders-snapshot.js's own header). A
+      # self-diff is empty, the BigInt sums reconcile, and the route (400/404/200) matches its
+      # snapshot-route siblings.
+      - name: Holder snapshot diff (entered/exited/held over the recorded top-25 + route)
+        run: SNAPDIFF_TEST_PORT=3247 node scripts/holders-snapshot-diff-test.cjs
+      # E1 (docs/COLOSSEUM_ROADMAP.md §1 "the number"): a receipt's amount re-derived from the
+      # batch's own published inputs (periods, prior paid, prior reserved), reconstructed purely
+      # from durable timestamps — MATCH, a tampered MISMATCH, and an honest MISSING_INPUTS naming
+      # what is missing; the reproducibility ratio; the CLI script's --offline mode with no server.
+      - name: Hub receipt reproduction (the number — MATCH/MISMATCH/MISSING_INPUTS, --offline)
+        run: node scripts/reproduce-receipt-test.cjs
+      # DD1 (docs/COLOSSEUM_ROADMAP.md §14): packages/hub-verify (the `npx @clkn/hub-verify`
+      # standalone CLI) is a BUILD OUTPUT of scripts/build-hub-verify-package.cjs, never a second
+      # hand-typed copy of the repo's verifier. This asserts a fresh rebuild is byte-identical to
+      # the committed package, that the repo lib / packaged lib / browser bundle agree on every
+      # fixture scripts/hub-verify-page-test.cjs uses, that the packaged CLI's output matches
+      # scripts/reproduce-receipt.cjs's against a real ephemeral fixture server, that `npm pack
+      # --dry-run` stays under 200 KB with only allowlisted files, and that the package's lib/
+      # requires resolve from a directory outside this repo entirely. Needs the small hub-verify
+      # bundle (not the full React build), which this step builds itself when missing — same
+      # pattern the Y1/AA2 smoke-test steps below use.
+      - name: Hub verify standalone package — build determinism, fixture parity, npm pack, no repo-relative requires (DD1)
+        env:
+          HUB_VERIFY_PKG_TEST_PORT: "3339"
+        run: |
+          test -f public/hub-verify.bundle.js || npm run build:hubverify
+          node scripts/hub-verify-package-test.cjs
+      # BB3 (Colosseum roadmap §12): the shields.io-shaped reproducibility badge
+      # (/api/hub/badge.json + /hub/badge.svg) sums the SAME projectReproducibility every
+      # non-demo project — a fresh install says "no receipts yet"/lightgrey rather than "0 of 0",
+      # a seeded batch reports the exact singular/plural ratio text, a dry-run/zero-receipt
+      # project never inflates the "K projects" count, demo 404s, and the SVG is well-formed XML
+      # with no <script. Boots a real server but drives no browser, so it runs here.
+      - name: Hub reproducibility badge (computed endpoint-badge JSON + SVG)
+        run: HUB_BADGE_TEST_PORT=3276 node scripts/hub-badge-test.cjs
+      # Colosseum roadmap §14 (DD2) — "Follow a project without a wallet": GET
+      # /api/hub/:project/feed.json (JSON Feed 1.1) and GET /hub/:project/feed.xml (RSS 2.0),
+      # composed only from the same public views/computations the routes above already share.
+      # Validates both formats, checks the two list the same stable ids, that two fetches of
+      # each are byte-identical, that a demo/unknown project 404s, and that neither body ever
+      # carries a private field or a forbidden word.
+      - name: Hub project feed — JSON Feed + RSS (Colosseum §14 DD2)
+        run: HUB_FEED_TEST_PORT=3367 node scripts/hub-feed-test.cjs
+      # Colosseum roadmap §7 (the W4 deferred item): the public Buy Special standings page.
+      # Unsealed publishes rules only (no results/review/payouts key at all); sealed publishes the
+      # full view plus a stable resultsHash; hold-through is held/sold/moved-out/locked-not-a-sell
+      # (PR #298 — a lock is not a sell) with its on-chain evidence signature; the split is the one
+      # function buyCompVerify, the walkthrough and reproduce-a-receipt all share.
+      - name: Hub public Buy Special standings + hold-through proof (Colosseum §7)
+        run: node scripts/hub-buycomp-public-test.cjs
       # The per-project Lock to Earn engine: config from the version in force, the two new rules,
       # one hour of accrual, the tick over the project's own keys, the holder view.
       - name: Hub engine (Lock to Earn for any project)
         run: node scripts/hub-engine-test.cjs
+      # Project branding (logo/accent/tagline/socials — validated, never a remote URL) and the
+      # dryRun placeholder (Colosseum E10, POKEAHOE): cannot be armed, excluded from traction.
+      - name: Hub branding + dry-run projects (POKEAHOE)
+        run: node scripts/hub-brand-test.cjs
+      # GG3 fix 1 (docs/COLOSSEUM_ROADMAP.md §17, docs/POKEAHOE_REHEARSAL_2026-09.md §4):
+      # POST /api/hub-registry accepts accessTier as an alias for tier (its own field name), and
+      # refuses any other unrecognized field with 400 instead of silently doing nothing.
+      - name: Hub registry — accessTier alias + unknown-field refusal
+        run: node scripts/hub-registry-test.cjs
       # Platform access tiers: standard / small / comped, price resolved at the payment instant,
       # the CLKN alternative priced at that block, comped needs a reason, unpaid cannot arm.
       - name: Hub access tiers (0.5 / 0.25 SOL a month, comped)
@@ -211,6 +411,19 @@ jobs:
       # revoked the moment the wallet leaves the operator list.
       - name: Hub operator sessions (project desk)
         run: node scripts/hub-operator-test.cjs
+      # Launch Readiness (design Addendum A): the checklist (ok/warn/block, every item derived —
+      # tests 11, 13), the reward-budget planner (same accrual function as the live engine, by
+      # construction — test 12), the arm-time refusal on a known shortfall or a dry run, the
+      # public body carrying no readiness data, and the desk section's rate/badge-language guard.
+      - name: Hub launch readiness (checklist + reward-budget planner)
+        run: node scripts/hub-readiness-test.cjs
+      # Colosseum roadmap EE1: "who would this pay today?" for DRAFT terms — a read (nothing
+      # written, armed or sent). Proves the preview reproduces planBudget's own next-day
+      # obligation byte for byte, a wider draft flips exclusions and the hash, an invalid draft
+      # throws the same error a real publish would, app-state.json is untouched by ten previews,
+      # and the lapsed-project / auth / GET-405 gates match the terms write exactly.
+      - name: Hub preview before publish (draft terms, no writes)
+        run: node scripts/hub-preview-test.cjs
       - name: CUNA lock announcements (public post — sanitised, qualifying only, capped)
         run: node scripts/cuna-announce-test.cjs
       # esc() escapes HTML but not the URL SCHEME, and jupverify-admin.html rendered a PUBLIC
@@ -309,6 +522,21 @@ jobs:
           node normie-quest/src/build.js
           git diff --exit-code normie-quest/public/normie-quest-platformer.html \
             || (echo "::error::served HTML is stale — run node normie-quest/src/build.js and commit" && exit 1)
+      # EE5 (docs/COLOSSEUM_ROADMAP.md §15): the "onboarding clock, from the record" table
+      # docs/VALIDATION_2026-09.md quotes is a SCRIPT's output, not typed numbers — this seeds a
+      # temp DATA_DIR with a two-project fixture built through lib/hub/project.js (one project with
+      # every milestone reached, one registered-only), runs scripts/validation-rows.cjs as a real
+      # subprocess against it, and asserts every delta and the "—" dash for whatever was never
+      # reached, plus the honest empty-template output for a DATA_DIR with no registry at all.
+      - name: Validation rows — onboarding-clock table is derived, never guessed (EE5)
+        run: node scripts/validation-rows-test.cjs
+      # FF2 (docs/DEMO_STORYBOARD.md Part 4): a dependency-free drift guard — the "Capture
+      # inventory" table's filenames (expanding every {mobile,desktop} pattern) and its own stated
+      # total file count must equal the real listing of docs/demo/2026-09-18/, in both directions
+      # (a file the doc names but the folder lacks, or a file in the folder the doc never
+      # mentions, both fail), and every real file must be at or under the 300 KB budget.
+      - name: Demo storyboard inventory — the doc's capture table matches the real folder (FF2)
+        run: node scripts/demo-storyboard-inventory-test.cjs
 
   # Renders the actual app. The checks above are all static — they cannot see a component that
   # compiles fine and throws on mount, which is how the LP Lab shipped blank to production.
@@ -355,7 +583,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -455,6 +683,52 @@ jobs:
       # throwaway key and no secrets.
       - name: admin mutation discipline (405 on GET, explicit project, pool allowlist)
         run: node scripts/mutating-get-guard-test.cjs
+      # Colosseum roadmap §10 Z3: the Hub's newer public read routes (reproducibility,
+      # batch/inputs, buy-comp standings, a receipt, the holders-snapshot series and one
+      # snapshot, the airdrop receipt routes, the JVP timeline, the JSON Schemas and the built
+      # hub-verify bundle) carry an ETag and a Cache-Control tier consistent with the rest of the
+      # Hub's public reads, the five that do real per-request work get a dedicated per-IP rate
+      # limit that never touches the light per-page reads or a store-edition contract route, and
+      # wallet/sig/mint query/path params are shape-checked before any store read. Always runs
+      # (not diff-gated), like the schema test below — a route or a limiter here is exactly the
+      # kind of change that would not otherwise touch a page or the game. Needs the small
+      # hub-verify bundle (not the full React build) to check its own cache header/ETag.
+      - name: Public-route hygiene — ETags, cache headers, rate limits, param caps (Z3)
+        run: |
+          test -f public/hub-verify.bundle.js || npm run build:hubverify
+          HYGIENE_TEST_PORT=3225 node scripts/public-route-hygiene-test.cjs
+      # Colosseum roadmap E4: the settlement library's public contract. Every schema in
+      # lib/hub/schema/ validates a real fixture built the same way lib/hub/project.js,
+      # lib/hub/ledger.js and lib/hub/public.js build one (including the exact wire subset
+      # routes.js puts on the wire for a program version), GET /hub/schema/:name.json serves
+      # each file byte-identical to disk with a cache header and 404s an unknown name, and
+      # GET /api/hub/clkn's live body validates end to end. Boots the real server, so it lives
+      # here rather than in node-check.
+      - name: Hub settlement-library JSON Schemas (lib/hub/schema, E4)
+        run: node scripts/hub-schema-test.cjs
+      # X2 (docs/HUB_VERIFY.md): a static check, no server boot — asserts every script, lib file,
+      # relative link and $HOST route the doc tells a judge to paste actually exists in this repo,
+      # so the doc cannot silently drift from the code it describes. Always runs (like the schema
+      # test above), never diff-gated: a route rename anywhere is exactly the kind of change that
+      # would not otherwise touch a page or the game.
+      - name: HUB_VERIFY.md matches the code it tells judges to run (X2)
+        run: node scripts/hub-verify-doc-test.cjs
+      # AA5 (docs/COLOSSEUM_ROADMAP.md §11): the trust-boundary page (/hub/trust) cannot silently
+      # drift from HUB_VERIFY.md §(g) — every "not verifiable yet" bullet there carries a
+      # `<!-- boundary: ... -->` marker matched to a `data-boundary` element on the page (both
+      # directions, and the bullet count itself), the page never uses a forbidden word (verified /
+      # safe / guaranteed / APR / APY / yield), and every relative link on it resolves to a
+      # registered server.js route. Static, no server boot — always runs, like X2 above.
+      - name: hub-trust.html matches HUB_VERIFY.md §(g), no forbidden words (AA5)
+        run: node scripts/hub-trust-doc-test.cjs
+      # AA4 (docs/COLOSSEUM_ROADMAP.md §11): public/hub-judge.html (the judge's fifteen minutes)
+      # cannot silently drift from docs/JUDGE_GUIDE.md — regenerating the doc via
+      # scripts/build-judge-page.cjs must produce the exact committed page, the doc never uses a
+      # forbidden word or mentions Normie Quest/Wallet Watch, and every scripts/*.cjs, docs/*.md
+      # and relative URL it names exists / matches a registered route. Static, no server boot —
+      # always runs, like X2 and AA5 above.
+      - name: hub-judge.html matches docs/JUDGE_GUIDE.md, no drift, no forbidden words (AA4)
+        run: node scripts/hub-judge-doc-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)
@@ -485,6 +759,137 @@ jobs:
       - name: wallet standard discovery
         if: steps.gate.outputs.run == 'true'
         run: node scripts/wallet-standard-test.cjs
+      # Colosseum roadmap §7 — "accessibility and phone polish on the public pages" — judges click
+      # these on phones. Boots its own server and drives /hub, /hub/<project>, /hub/demo,
+      # /for-projects, /hub/apply and /hub/<project>/pay at 360 and 390px with a real Chromium:
+      # no horizontal overflow, every real tap target >= 44x44 (inline-in-prose links, compact
+      # mono data links and table cells are the standard, accepted exceptions), every <img> has
+      # alt, icon-only controls have an accessible name, heading order is sane, <main>/<nav>
+      # landmarks exist, and long mono strings never overflow their box. Not a full WCAG audit —
+      # contrast and the language toggle's lang attribute were checked by hand for this batch (see
+      # the PR) and aren't re-derived here.
+      - name: Hub pages — accessibility + phone polish
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-a11y-test.cjs
+      # EE2: this job has Chromium installed (the step above), so re-running the glossary test
+      # here (its drift + route sections re-verify cheaply; node-check above is where they're
+      # REQUIRED to run) also exercises the rendered-page section for real: the page renders, the
+      # #below_min_lock anchor scrolls to its section, the search box filters, and none of the
+      # forbidden words appear.
+      - name: Project Hub — the glossary (EE2) — rendered page (Chromium)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-glossary-test.cjs
+      # Z2 (docs/COLOSSEUM_ROADMAP.md §10): GET /api/build (the git sha/branch this container is
+      # actually running) and /hub/status (public/hub-status.html) — the page that renders it next
+      # to every project's own public numbers (programs, receipts, the reproducibility ratio, the
+      # latest holder snapshot), fed only by routes already public. Seeds a throwaway registry with
+      # a dry-run project and a real one with a sent batch so both the dry-run badge and the
+      # reproducibility ratio actually render, then checks the rendered page carries neither a
+      # judgement word nor an APR/APY claim.
+      - name: Hub status — /api/build and /hub/status
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-status-test.cjs
+      # AA4 (docs/COLOSSEUM_ROADMAP.md §11): the doc-drift test above only proves a URL's SHAPE
+      # matches a registered route (static, no boot). This is the live half — boots the real
+      # server with NO BUILD (dist/ never generated) on port 3268 and GETs every relative URL
+      # docs/JUDGE_GUIDE.md tells a judge to open, asserting 200. Every route it names has an
+      # explicit app.get reading public/ or lib/hub/schema/ directly (like hub-trust.html and
+      # hub-status.html above), so this must pass with no `npm run build` step run first.
+      - name: Hub judge guide — every URL it names answers 200 on a no-build boot (AA4)
+        if: steps.gate.outputs.run == 'true'
+        env:
+          HUB_JUDGE_LINK_TEST_PORT: "3268"
+        run: node scripts/hub-judge-link-test.cjs
+      # Y1 (docs/COLOSSEUM_ROADMAP.md §9): /hub/verify reproduces a Hub receipt IN THE BROWSER —
+      # a second vite build (vite.hubverify.config.js) bundles the exact same pure
+      # lib/hub/reproduce.js + lib/hub/schema-validate.js + lib/hub/canonical.js the Node script
+      # (scripts/reproduce-receipt.cjs) runs, so the two must agree on every fixture, not just
+      # "look similar". `npm run build:hubverify` is not part of the earlier `npm run build` gate
+      # in this job (that one only runs when the render gate needs it), so this step builds it
+      # itself when missing.
+      - name: Hub verify — browser bundle reproduces the same fixtures as the Node script (Y1)
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          test -f public/hub-verify.bundle.js || npm run build:hubverify
+          node scripts/hub-verify-page-test.cjs
+      # AA2 (docs/COLOSSEUM_ROADMAP.md §11): the offline evidence bundle — GET
+      # /api/hub/:project/batch/:batchId/bundle (and the demo-fixture mirror), lib/hub/bundle.js's
+      # own pure SHA-256 in isolation, the Node CLI's `--bundle` flag, and Chromium dropping a
+      # bundle file on /hub/verify. Same reason this rides the Y1 gate: it shares the browser
+      # bundle build and the exact same fixture-agreement discipline.
+      - name: Hub evidence bundle — hash integrity, route, CLI and /hub/verify (AA2)
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          test -f public/hub-verify.bundle.js || npm run build:hubverify
+          node scripts/hub-bundle-test.cjs
+      # Colosseum roadmap §9 Y4 — shareable Hub pages. Boots its own server (a hostile-label
+      # registry project pre-seeded into DATA_DIR) and drives /hub, a real project page, the demo
+      # fixture (project/program/receipt) and /for-projects: server-rendered Open Graph/Twitter
+      # Card meta is present, escaped (an XSS-shaped project label never reaches the page raw),
+      # <=70/<=200 char, carries the reproducibility line, a missing project/receipt still serves
+      # 200 with the generic Hub meta, the demo pages carry "DRY RUN — fixture data", and the one
+      # static branded card serves as image/png with a long cache header.
+      - name: Hub shareable pages — Open Graph / Twitter Card meta (Y4)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-og-test.cjs
+      # Colosseum roadmap §11 AA1 — one wallet, every project. Boots its own server (two registry
+      # projects pre-seeded into DATA_DIR, a buy competition on each, the same fixture wallet
+      # qualifying and paid in one, disqualified with a reason on record in the other) and drives
+      # GET /api/hub/wallet/:wallet and the /hub/wallet[/:wallet] page: composed only from
+      # hubPublic.walletLookup per project, no private field on the wire, a malformed address is
+      # 400, an unseen valid address is an honest 200/seenIn:0, a demo/fixture project never
+      # appears, "wallet" is refused as a real project id, and the page carries none of the
+      # banned yield/APR/APY/verified/safe/guaranteed language.
+      - name: Hub wallet look-up — one wallet, every project (AA1)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-wallet-test.cjs
+      # CC1 (docs/COLOSSEUM_ROADMAP.md §13) — "what changed in the rules" between two program
+      # versions. Boots its own server with two fixture program versions seeded directly through
+      # lib/hub/project.js (differing in exactly two term fields) and asserts:
+      # /hub/<project>/programs/compare resolves to the compare page at its literal path (never
+      # the /hub/:project/programs or /hub/:project catch-alls — a longer path a shorter pattern
+      # cannot match), a real Chromium renders exactly those two fields as changed and every other
+      # field as unchanged (collapsed under the toggle), comparing a version with itself is empty,
+      # both versions' hashes are shown and equal the public program-version API's own hashes, an
+      # unknown version answers an honest not-found state, and no forbidden word appears.
+      - name: Hub compare — what changed between two program versions (CC1)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-compare-test.cjs
+      # DD4 (docs/COLOSSEUM_ROADMAP.md §14) — "a receipt you can print." Two independent checks:
+      # public/hub-qr.js (a pure, no-network, no-library QR encoder) is unit-tested in Node —
+      # finder/timing/format-info structure, the module-count invariant that caught a real
+      # placement bug during development, and a byte-mode Reed-Solomon round trip on the actual
+      # codewords a real encode produces (encode -> corrupt up to the max correctable count ->
+      # decode -> recover exactly; one error past that never silently "recovers"). Then a real
+      # Chromium loads /hub/<project>/r/<sig>?print=1 against a seeded receipt with a real
+      # walkthrough behind it: the signature in full, the program-version hash, the amount, the
+      # trust-boundary line, and an svg[role=img] whose aria-label is the exact receipt URL, plus
+      # @media print emulation proving nav/pills/buttons/footer are hidden and the sheet itself is
+      # print-safe (white background). No forbidden word (verified/audited/APR/APY, Normie Quest,
+      # Wallet Watch) anywhere the feature renders.
+      - name: Hub print sheet — QR encoder + Reed-Solomon + the print page (DD4)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/hub-print-test.cjs
+      # EE3 (docs/COLOSSEUM_ROADMAP.md §15) — "load proof for the public reads." Builds a
+      # deterministic 10-project x 50-receipt fixture (scripts/hub-load-fixture.cjs — the reduced
+      # scale this CI job uses; the full 50x200 numbers live in docs/HUB_LOAD_2026-09-18.md) and
+      # drives every heavy Hub read (reproducibility, its history, buy-comp standings, the
+      # evidence bundle, the badge, both feeds, the wallet roll-up) plus the two plain reads P1-03
+      # flagged as carrying no rate limiter (`/api/hub`, `/api/hub/:project`) and the `/hub/:project`
+      # share page, at/over the `hubheavy` ceiling, from scripts/hub-load-smoke.cjs. Reports p50/p95
+      # per route and the worst `/healthz` latency observed while the burst runs — the exact
+      # event-loop-stall shape the P1-03 finding measured. Not diff-gated: a route or a limiter
+      # here never touches a rendered page, so the render-diff gate would never see it change.
+      # Always-run per the roadmap item's own budgets. The P1-03 fix round (limiter + per-project
+      # view cache) landed in the same batch; the after-picture in docs/HUB_LOAD_2026-09-18.md
+      # measures every route under the 500ms p95 budget and `/healthz` at ~400ms max while sixty
+      # requests land on one event loop at once (it was 1.3s before the fix, 52s on the 50x200
+      # fixture). The /healthz budget here is 1000ms — a real stall regression (the P1-03 shape is
+      # seconds, not hundreds of milliseconds) still trips it; a slow CI runner does not.
+      - name: Hub load proof — heavy public reads under a rate-limit-ceiling burst (Colosseum §15 EE3)
+        run: |
+          node scripts/hub-load-fixture.cjs --projects 10 --receipts 50
+          HUB_LOAD_TEST_PORT=3420 node scripts/hub-load-smoke.cjs --healthz-ms 1000
       # Tools pass CLIENT (second reviewer, round 4): a wallet that broadcast but whose callback
       # rejected left no record, so the next tap sent a SECOND transfer. The attempt is now durable
       # before anything can broadcast (sign-first path persists the signature before the send; the

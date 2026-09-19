@@ -153,6 +153,12 @@
 
     <div class="card">
       <div class="k">TERMS — a change creates a new version; periods already accrued keep the old one</div>
+      <!-- POKEAHOE rehearsal §4 (docs/POKEAHOE_REHEARSAL_2026-09.md): a fresh/dry-run project needs
+           a funding wallet set on the registry (an owner-only, /api/hub-registry action, not part
+           of this desk) BEFORE terms can be published at all — undocumented before this, so SAVE
+           just threw a raw "fundedBy entry is not an address: null". Said here, up front, with the
+           exact next step, instead of waiting for that error. -->
+      <div class="muted bad" id="fundingWarn" style="margin-bottom:10px" hidden></div>
       <div class="grid2">
         <div><label>Daily pool (whole reward tokens)</label><input type="number" id="tPool" min="0" step="any"/></div>
         <div><label>Minimum amount (whole tokens)</label><input type="number" id="tMin" min="0" step="any"/></div>
@@ -165,10 +171,46 @@
       </div>
       <label>Wallets that never earn (comma-separated; the funding wallet is always excluded)</label>
       <input type="text" id="tExclude"/>
-      <div class="btns"><button class="ghost" id="saveTerms">SAVE AS A NEW VERSION (from tomorrow)</button></div>
+      <div class="btns">
+        <button class="ghost" id="saveTerms">SAVE AS A NEW VERSION (from tomorrow)</button>
+        <button class="ghost" id="previewTerms">PREVIEW WHO THIS WOULD PAY TODAY</button>
+      </div>
       <div class="muted" id="termsNote" style="margin-top:8px"></div>
       <details><summary>VERSION HISTORY</summary><pre id="versions" class="mono" style="white-space:pre-wrap;max-height:220px;overflow:auto"></pre></details>
+      <div class="btns" style="margin-top:10px"><button class="ghost" id="commitBtn">COMMIT LATEST VERSION ON-CHAIN</button></div>
+      <div class="muted" id="commitNote" style="margin-top:8px"></div>
     </div>
+
+    <!-- PREVIEW BEFORE PUBLISH (Colosseum roadmap EE1) — begin. Hidden until the operator asks for
+         it; this card never fetches on its own and never persists anything. -->
+    <div class="card" id="previewCard" hidden>
+      <div class="k">PREVIEW — WHO THIS DRAFT WOULD PAY TODAY <span class="small" id="previewDryBadge"></span></div>
+      <div class="muted">An estimate from today's locks — never a promise.</div>
+      <div class="grid2" style="margin-top:8px">
+        <div class="row"><span>Qualify today</span><b id="pvQualified">—</b></div>
+        <div class="row"><span>Excluded</span><b id="pvExcluded">—</b></div>
+        <div class="row"><span>Today's pool</span><b id="pvPool">—</b></div>
+        <div class="row"><span>period</span><b id="pvBudgetPeriod">—</b></div>
+      </div>
+      <div style="overflow-x:auto;margin-top:8px"><table id="pvTable"><thead><tr><th>wallet</th><th>status</th><th>reason</th><th class="num">would earn today</th><th class="num">share of pool</th></tr></thead><tbody></tbody></table></div>
+      <div class="muted" id="previewNote" style="margin-top:8px"></div>
+      <div class="muted" style="margin-top:8px">Publishing is a separate step; nothing was saved by this preview.</div>
+    </div>
+    <!-- PREVIEW BEFORE PUBLISH (Colosseum roadmap EE1) — end -->
+
+    <!-- LAUNCH READINESS (design Addendum A) — begin. New, self-contained section: its own ids
+         (rdy*), its own load call, no changes to any card above. -->
+    <div class="card" id="rdyCard">
+      <div class="k">LAUNCH READINESS <span class="small">— every line below is derived from the numbers above, never a single pass/fail summary for the project</span></div>
+      <div style="overflow-x:auto"><table id="rdyTable"><thead><tr><th>check</th><th>status</th><th>what it found</th></tr></thead><tbody></tbody></table></div>
+      <div class="muted" style="margin-top:8px">A "block" here refuses ARM specifically (see the ARM button above) — it does not touch a program already running. A "warn" is shown so you can decide; it never blocks anything on its own.</div>
+    </div>
+    <div class="card" id="rdyBudgetCard">
+      <div class="k">REWARD BUDGET <span class="small">— next 4 periods, holding today's locks constant</span></div>
+      <div style="overflow-x:auto"><table id="rdyBudgetTable"><thead><tr><th>period</th><th class="num">projected obligation</th><th class="num">cumulative</th></tr></thead><tbody></tbody></table></div>
+      <div class="muted" style="margin-top:8px" id="rdyBudgetNote">A projection, not a promise: it assumes nobody locks or unlocks between now and then, and runs the exact accrual math the engine uses each hour — never a second formula.</div>
+    </div>
+    <!-- LAUNCH READINESS (design Addendum A) — end -->
   </div>
 </div>
 
@@ -210,6 +252,8 @@
   }
   var admin = function (p, m) { return call("/admin", p, m); };
   var payout = function (p, m) { return call("/payout", p, m); };
+  var readiness = function (p, m) { return call("/readiness", p, m); };
+  var previewDraft = function (p) { return call("/desk/preview", p, "POST"); };
   async function rpc(method, params) {
     var r = await fetch("/api/helius-rpc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: method, params: params }) });
     var j = await r.json(); if (j.error) throw new Error(j.error.message || "rpc error"); return j.result;
@@ -217,6 +261,7 @@
 
   // ── session ───────────────────────────────────────────────────────────────────────────────
   function b64(u8) { var s = ""; for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); }
+  function b64ToBytes(b64s) { var bin = atob(b64s), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
   async function signIn() {
     $("authNote").textContent = "asking the server for a message to sign…";
     var c = await (await fetch(API + "/desk/challenge?wallet=" + encodeURIComponent(WALLET))).json();
@@ -283,7 +328,7 @@
     $("fWallet").textContent = f.wallet || "—"; $("fObl").textContent = amt(f.obligationsRaw || "0");
     $("fObs").textContent = f.observedBalanceRaw == null ? "could not read" : amt(f.observedBalanceRaw);
     $("fShort").innerHTML = f.shortfallRaw == null ? "—" : Number(f.shortfallRaw) > 0 ? '<span class="bad">' + esc(amt(f.shortfallRaw)) + ' SHORT</span>' : '<span class="ok">none</span>';
-    renderLockers(); renderTermsForm();
+    renderLockers(); renderTermsForm(); loadReadiness();
     $("authCard").hidden = true; $("app").hidden = false;
     var pending = (DESK.pendingBatches || [])[0];
     if (pending) { await loadBatch(pending.id); }
@@ -303,24 +348,129 @@
   function whole(raw, dec) { var s = String(raw || "0"); while (s.length <= dec) s = "0" + s; var ip = s.slice(0, s.length - dec), fp = s.slice(s.length - dec).replace(/0+$/, ""); return fp ? ip + "." + fp : ip; }
   function toRaw(v, dec) { var s = String(v || "0").trim(); if (!/^\d*(\.\d*)?$/.test(s)) throw new Error("not a number: " + s); var parts = s.split("."), ip = parts[0] || "0", fp = (parts[1] || "").slice(0, dec); while (fp.length < dec) fp += "0"; return (ip + fp).replace(/^0+(?=\d)/, "") || "0"; }
   function renderTermsForm() {
+    // POKEAHOE rehearsal §4: say the funding-wallet prerequisite up front, with the exact next
+    // step, rather than letting SAVE/PREVIEW fail with a raw validation error first.
+    var noFunding = !(DESK.project && DESK.project.fundingWallet);
+    $("fundingWarn").hidden = !noFunding;
+    if (noFunding) $("fundingWarn").textContent = "This project has no funding wallet on its registry record yet — terms cannot be published until the owner sets one: POST /api/hub-registry?id=" + PID + "&fundingWallet=<the project's own wallet>.";
+    $("saveTerms").disabled = noFunding; $("previewTerms").disabled = noFunding;
     var v = (DESK.versions || [])[DESK.versions.length - 1]; var t = v ? v.terms : {};
     $("tPool").value = t.poolDailyRaw != null ? whole(t.poolDailyRaw, DEC) : ""; $("tMin").value = t.minLockRaw != null ? whole(t.minLockRaw, DESK.project.decimals) : "0";
     $("tMinDays").value = t.minDurationDays || 30; $("tMaxDays").value = t.maxTermDays || 365;
     $("tCancel").value = t.cancelableAllowed ? "1" : "0"; $("tVesting").value = t.vesting || "any"; $("tSched").value = t.payoutSchedule || "weekly"; $("tCap").value = t.maxWalletSharePct || 0;
     $("tExclude").value = (t.excludeWallets || []).filter(function (w) { return w !== DESK.project.fundingWallet; }).join(", ");
-    $("versions").textContent = (DESK.versions || []).map(function (x) { return "v" + x.version + "  " + x.effectiveFrom + (x.effectiveTo ? " → " + x.effectiveTo : " → now") + "  " + x.hash; }).join("\n") || "(no versions)";
+    $("versions").textContent = (DESK.versions || []).map(function (x) { return "v" + x.version + "  " + x.effectiveFrom + (x.effectiveTo ? " → " + x.effectiveTo : " → now") + "  " + x.hash + (x.commitment ? "  committed:" + x.commitment.sig.slice(0, 10) + "…" : ""); }).join("\n") || "(no versions)";
+    renderCommit(v);
+  }
+  // B5 (Colosseum E3): the LATEST version's on-chain commitment status. Only the FUNDING wallet's
+  // own signature can ever pass server-side verification (commit/observe checks the fee payer), so
+  // the button stays disabled — with the reason said plainly — unless the connected wallet IS that
+  // funding wallet; the server enforces the real rule, this is just not sending the wallet on a
+  // doomed signature request.
+  function renderCommit(v) {
+    var note = $("commitNote"), btn = $("commitBtn");
+    if (!v) { note.textContent = "No program version published yet."; btn.disabled = true; btn.textContent = "COMMIT LATEST VERSION ON-CHAIN"; return; }
+    if (v.commitment && v.commitment.sig) {
+      note.innerHTML = '<span class="ok">Committed on-chain</span> — <a href="https://solscan.io/tx/' + encodeURIComponent(v.commitment.sig) + '" target="_blank" rel="noopener" class="mono">' + esc(CluckUtil.shortAddr(v.commitment.sig)) + '</a> · check the memo yourself on any explorer.';
+      btn.disabled = true; btn.textContent = "v" + v.version + " ALREADY COMMITTED";
+      return;
+    }
+    btn.textContent = "COMMIT v" + v.version + " ON-CHAIN";
+    if (!WALLET) { note.textContent = "Not yet committed on-chain — the hash above is served by this server. Connect the FUNDING wallet to commit it independently."; btn.disabled = true; return; }
+    if (WALLET !== DESK.project.fundingWallet) {
+      note.innerHTML = 'Not yet committed on-chain. To commit, connect the project’s FUNDING wallet itself (<span class="mono">' + esc(CluckUtil.shortAddr(DESK.project.fundingWallet)) + '</span>) — not just any operator wallet; only its signature verifies.';
+      btn.disabled = true; return;
+    }
+    note.textContent = "Not yet committed on-chain — the hash above is served by this server, so it is reproducible from the published inputs, not independently verified. Signing below commits it on-chain from the funding wallet.";
+    btn.disabled = false;
+  }
+  $("commitBtn").addEventListener("click", function () {
+    var btn = $("commitBtn"), note = $("commitNote");
+    var v = (DESK.versions || [])[DESK.versions.length - 1];
+    if (!v || v.commitment) return;
+    askConfirm("Sign a memo transaction from the FUNDING wallet committing v" + v.version + "'s hash on-chain? Small network fee, cannot be undone, and only the funding wallet can sign it.", btn).then(function (yes) {
+      if (!yes) return;
+      if (!PROVIDER || typeof PROVIDER.signTransaction !== "function") { note.innerHTML = '<span class="bad">This wallet cannot sign transactions here.</span>'; return; }
+      btn.disabled = true; note.textContent = "building the transaction…";
+      var signedTx, builtTx;
+      call("/commit/build", { version: v.version }, "POST").then(function (b) {
+        builtTx = window.solanaWeb3.Transaction.from(b64ToBytes(b.txBase64));
+        note.textContent = "sign in your wallet…";
+        return fetch("/api/helius-rpc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "hub-commit-bh", method: "getLatestBlockhash", params: [{ commitment: "confirmed" }] }) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) { var bh = j && j.result && j.result.value && j.result.value.blockhash; if (bh) builtTx.recentBlockhash = bh; return PROVIDER.signTransaction(builtTx); });
+      }).then(function (signed) {
+        signedTx = CluckWallet.asTransaction(signed, builtTx);   // bytes / foreign Transaction / in-place → ours
+        note.textContent = "sending…";
+        return fetch("/api/helius-rpc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "hub-commit-send", method: "sendTransaction", params: [b64(signedTx.serialize()), { encoding: "base64", skipPreflight: true, preflightCommitment: "confirmed", maxRetries: 5 }] }) });
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j.error) throw new Error(j.error.message || "send failed");
+        var sig = j.result;
+        note.textContent = "confirming on-chain… (" + sig.slice(0, 10) + "…)";
+        // The send can return before the RPC we read from has caught up — retry the observe a few
+        // times with a short wait rather than surfacing a scary error for an ordinary confirmation lag.
+        var attempt = function (triesLeft) {
+          return call("/commit/observe", { sig: sig, version: v.version }, "POST").catch(function (e) {
+            if (triesLeft <= 0) throw e;
+            return new Promise(function (res) { setTimeout(res, 2500); }).then(function () { return attempt(triesLeft - 1); });
+          });
+        };
+        return attempt(6);
+      }).then(function () {
+        note.innerHTML = '<span class="ok">Committed on-chain.</span>';
+        return load();
+      }).catch(function (e) {
+        note.innerHTML = '<span class="bad">' + esc((e && e.message) || String(e)) + '</span>';
+        btn.disabled = false;
+      });
+    });
+  });
+  // Shared by SAVE and PREVIEW so a preview can never show anything but exactly what SAVE would
+  // submit — one body builder, not two that could drift apart.
+  function buildTermsBody() {
+    return { terms: "1", poolDailyRaw: toRaw($("tPool").value, DEC), minLockRaw: toRaw($("tMin").value, DESK.project.decimals), minDurationDays: $("tMinDays").value, maxTermDays: $("tMaxDays").value,
+      cancelableAllowed: $("tCancel").value, vesting: $("tVesting").value, payoutSchedule: $("tSched").value, maxWalletSharePct: $("tCap").value,
+      excludeWallets: $("tExclude").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean) };
   }
   $("saveTerms").addEventListener("click", function () {
     askConfirm("Save these terms as a new version effective tomorrow? Hours already accrued keep the old version.", $("saveTerms")).then(function (yes) {
       if (!yes) return;
       var body;
-      try {
-        body = { terms: "1", poolDailyRaw: toRaw($("tPool").value, DEC), minLockRaw: toRaw($("tMin").value, DESK.project.decimals), minDurationDays: $("tMinDays").value, maxTermDays: $("tMaxDays").value,
-          cancelableAllowed: $("tCancel").value, vesting: $("tVesting").value, payoutSchedule: $("tSched").value, maxWalletSharePct: $("tCap").value,
-          excludeWallets: $("tExclude").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean) };
-      } catch (e) { $("termsNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; return; }
+      try { body = buildTermsBody(); } catch (e) { $("termsNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; return; }
       admin(body, "POST").then(function () { $("termsNote").innerHTML = '<span class="ok">Saved.</span>'; return load(); }).catch(function (e) { $("termsNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; });
     });
+  });
+
+  // ── PREVIEW BEFORE PUBLISH (Colosseum roadmap EE1) — a read: POSTs the same draft SAVE would
+  // submit to /desk/preview, which validates and projects it but writes nothing. Renders the
+  // wallets it would pay today, their reason codes when excluded, and the same budget planner
+  // Launch Readiness uses below — never a second number.
+  function renderPreviewRows(wallets) {
+    var tb = $("pvTable").querySelector("tbody");
+    tb.innerHTML = (wallets || []).map(function (w) {
+      var pill = w.qualified ? '<span class="pill yes">QUALIFIES</span>' : '<span class="pill no">DOES NOT QUALIFY</span>';
+      var reason = w.qualified ? "—" : '<a href="/hub/glossary#' + encodeURIComponent(w.reason || "other") + '">' + esc(w.reasonText || w.reason || "other") + "</a>";
+      var share = w.qualified && w.shareOfPool ? (Math.round(w.shareOfPool * 10000) / 100) + "%" : "—";
+      return '<tr><td class="mono">' + esc(CluckUtil.shortAddr(w.wallet)) + '</td><td>' + pill + '</td><td class="small">' + reason + '</td><td class="num">' + esc(amt(w.accrualRaw)) + '</td><td class="num">' + share + '</td></tr>';
+    }).join("") || '<tr><td colspan="5" class="muted">no locks yet</td></tr>';
+  }
+  $("previewTerms").addEventListener("click", function () {
+    var btn = $("previewTerms"); var body;
+    try { body = buildTermsBody(); } catch (e) { $("termsNote").innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; return; }
+    btn.disabled = true; $("previewNote").textContent = "previewing…"; $("previewCard").hidden = false;
+    previewDraft(body).then(function (r) {
+      $("pvQualified").textContent = String(r.totals.qualified);
+      $("pvExcluded").textContent = String(r.totals.excluded);
+      $("pvPool").textContent = amt(r.totals.dailyPoolRaw);
+      var p0 = r.budget && r.budget.periods && r.budget.periods[0];
+      $("pvBudgetPeriod").textContent = p0 ? amt(p0.obligationRaw) : "—";
+      $("previewDryBadge").innerHTML = r.dryRun ? '<span class="warn">DRY RUN — terms not yet agreed, nothing accrues or pays</span>' : "";
+      renderPreviewRows(r.wallets);
+      $("previewNote").innerHTML = '<span class="ok">Estimate ready.</span>';
+    }).catch(function (e) {
+      $("previewNote").innerHTML = '<span class="bad">' + esc((e && e.message) || String(e)) + '</span>';
+      $("pvTable").querySelector("tbody").innerHTML = "";
+    }).then(function () { btn.disabled = false; });
   });
 
   // ── batch ─────────────────────────────────────────────────────────────────────────────────
@@ -458,7 +608,38 @@
   });
   $("accrue").addEventListener("click", function () { admin({ accrue: "1" }, "POST").then(function (a) { var r = a.ran || {}; $("ctNote").textContent = r.ok ? "Accrued " + r.slice + ": " + r.eligible + " earning." : "Accrual: " + (r.reason || r.error || "nothing to do"); return load(); }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; }); });
   $("rescan").addEventListener("click", function () { $("ctNote").textContent = "rescanning…"; call("/desk", { rescan: "1" }).then(function () { return load(); }).then(function () { $("ctNote").textContent = "Rescanned."; }).catch(function (e) { $("ctNote").innerHTML = '<span class="bad">' + esc(e.message) + "</span>"; }); });
+
+  // ── LAUNCH READINESS (design Addendum A) — self-contained: its own fetch, its own render,
+  // never blocks the rest of the desk if it fails. Every line is derived server-side (lib/hub/
+  // readiness.js); this only paints what the route returns.
+  function renderReadinessRows(items) {
+    var tb = $("rdyTable").querySelector("tbody");
+    tb.innerHTML = (items || []).map(function (it) {
+      var cls = it.status === "ok" ? "yes" : it.status === "block" ? "no" : "owed";
+      var label = it.status === "ok" ? "OK" : it.status === "block" ? "BLOCK" : "WARN";
+      return '<tr><td>' + esc(it.label || it.key) + '</td><td><span class="pill ' + cls + '">' + label + '</span></td><td class="small">' + esc(it.detail || "") + '</td></tr>';
+    }).join("") || '<tr><td colspan="3" class="muted">—</td></tr>';
+  }
+  function renderBudgetRows(plan) {
+    var tb = $("rdyBudgetTable").querySelector("tbody");
+    var rows = (plan && plan.periods) || [];
+    tb.innerHTML = rows.map(function (row, i) {
+      return '<tr><td>' + esc(String(i + 1)) + '</td><td class="num">' + esc(amt(row.obligationRaw)) + '</td><td class="num">' + esc(amt(row.cumulativeRaw)) + '</td></tr>';
+    }).join("") || '<tr><td colspan="3" class="muted">no program version in force yet</td></tr>';
+  }
+  async function loadReadiness() {
+    try {
+      var r = await readiness();
+      renderReadinessRows(r.readiness && r.readiness.items);
+      renderBudgetRows(r.plan);
+    } catch (e) {
+      var msg = '<tr><td colspan="3" class="bad">' + esc((e && e.message) || String(e)) + '</td></tr>';
+      $("rdyTable").querySelector("tbody").innerHTML = msg;
+      $("rdyBudgetTable").querySelector("tbody").innerHTML = msg;
+    }
+  }
 })();
 </script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
 </body>
 </html>

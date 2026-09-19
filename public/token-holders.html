@@ -186,7 +186,7 @@
   .meta-line { font-family: var(--mono); font-size: 11px; color: var(--subtext); margin-top: 12px; text-align: center; }
   .truncated-banner { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 12px; color: #FCA5A5; margin-bottom: 14px; }
 
-  .footer-link { display: block; text-align: center; margin-top: 24px; font-family: var(--disp); font-size: 12px; color: var(--sub); letter-spacing: 2px; text-decoration: none; }
+  .footer-link { display: flex; align-items: center; justify-content: center; min-height: 44px; text-align: center; margin-top: 24px; font-family: var(--disp); font-size: 12px; color: var(--sub); letter-spacing: 2px; text-decoration: none; }
   .footer-link:hover { color: var(--accent); }
 
   /* Desktop — wider container so the page fills a larger screen */
@@ -205,6 +205,22 @@ body{background:transparent;font-family:var(--body);}
   .view-note{margin-top:9px;font-family:var(--mono);font-size:12.5px;line-height:1.6;color:#9CA3AF}
   .view-note.warn{color:#FCD34D}
   .cat-cell{font-family:var(--mono);font-size:10.5px;color:#9CA3AF}
+  /* Holder history panel (X7) — a sparkline + a dated table, each row linking its own snapshot */
+  #historySpark{margin-bottom:12px}
+  #historySpark svg{display:block;width:100%}
+  /* 44x44 real tap target (WCAG 2.5.5) — the glyph stays the same small pill it always was;
+     display:inline-flex + min-width/min-height grows the button's own hit box symmetrically. */
+  .hash-copy{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);font-family:var(--mono);font-size:13px;padding:0 10px;margin-left:6px;cursor:pointer;vertical-align:middle}
+  .hash-copy:hover{border-color:var(--orange);color:var(--text)}
+  /* Snapshot compare panel (Colosseum roadmap §11 AA3) — entered/exited/held over the recorded
+     top-25, not a full holder-base diff (the panel says so, and so does every heading here). */
+  .compare-select{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:12.5px;color:var(--text);min-height:44px}
+  .compare-select:focus{outline:none;border-color:var(--accent)}
+  .compare-btn{width:100%;margin-top:12px;min-height:44px;padding:12px 16px;background:var(--orange);border:none;border-radius:8px;font-family:var(--disp);font-size:13px;color:#fff;letter-spacing:2px;cursor:pointer}
+  .compare-btn:hover{opacity:.9}
+  .compare-hashline{font-family:var(--mono);font-size:11.5px;color:var(--subtext);text-align:left;margin-top:6px;line-height:1.6;word-break:break-word}
+  .compare-summary{font-family:var(--mono);font-size:12px;color:var(--body-text);text-align:left;margin-top:10px;line-height:1.6}
+  .compare-sub{margin-top:16px;font-family:var(--disp);font-size:11px;letter-spacing:1.8px;color:var(--sub)}
 </style>
   <meta name="theme-color" content="#0b0c10">
   <meta property="og:url" content="https://clucknorris.app/holders">
@@ -214,7 +230,7 @@ body{background:transparent;font-family:var(--body);}
   <meta name="twitter:image" content="https://clucknorris.app/cluck-norris.png">
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:12px;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
@@ -346,8 +362,42 @@ body{background:transparent;font-family:var(--body);}
     </div>
   </div>
 
+  <!-- History (X7): every finished owners-snapshot crawl of this mint, dated and hashed. Free
+       to read — no pass, no wallet — it is history of a public on-chain fact. Hidden until a
+       mint has at least one recorded snapshot. Deliberately OUTSIDE #result (which stays
+       display:none until a live ANALYZE HOLDERS crawl finishes): this reads a separate,
+       read-only endpoint and must render from a shared ?mint= link on its own, with no live
+       crawl involved — see loadHolderHistory()'s own call on page load below. -->
+  <div class="card" id="historyCard" style="display:none">
+    <div class="card-title" data-clkn-avoid="1">HOLDER COUNT HISTORY</div>
+    <div id="historySpark"></div>
+    <table class="holders-table" id="historyTable"></table>
+    <div class="meta-line" id="historyMeta"></div>
+  </div>
+
+  <!-- Compare (Colosseum roadmap §11 AA3): entered/exited/held-through wallets between any two
+       recorded snapshots of this mint. Hidden until at least two snapshots exist — a diff needs
+       two points. Free to read, same as the history card above; same reason it lives outside
+       #result. -->
+  <div class="card" id="compareCard" style="display:none">
+    <div class="card-title" data-clkn-avoid="1">COMPARE SNAPSHOTS</div>
+    <div class="view-note" data-clkn-avoid="1">Compares the 25 largest holders recorded in each snapshot; the full list is hashed, not stored.</div>
+    <div class="filter-row" style="margin-top:12px">
+      <div class="filter">
+        <label for="compareFrom">FROM</label>
+        <select class="compare-select" id="compareFrom"></select>
+      </div>
+      <div class="filter">
+        <label for="compareTo">TO</label>
+        <select class="compare-select" id="compareTo"></select>
+      </div>
+    </div>
+    <button type="button" class="compare-btn" id="compareBtn" onclick="runCompare()">COMPARE</button>
+    <div id="compareResult" style="margin-top:6px"></div>
+  </div>
+
   <a class="footer-link" href="/">← BACK TO CLUCKNORRIS.APP</a>
-</div>
+</main>
 
 <script src="/market-header.js"></script>
 <script src="/cluck-util.js"></script>
@@ -382,12 +432,16 @@ function toggleTeamExclude(e) {
   cb.checked = !cb.checked;
 }
 
-// Pre-fill mint from ?mint= URL param if present
+// Pre-fill mint from ?mint= URL param if present. The history (X7) and Compare (AA3) panels
+// read a separate, read-only endpoint (no live RPC crawl, no pass) — load them straight away so
+// a shared /holders?mint=... link shows a mint's recorded snapshot history without anyone
+// clicking ANALYZE HOLDERS first.
 const urlParams = new URLSearchParams(location.search);
 const presetMint = urlParams.get('mint');
 if (presetMint) {
   mintInput.value = presetMint.trim();
   updateRunBtn();
+  loadHolderHistory(presetMint.trim());
 }
 
 function showErr(msg) {
@@ -503,12 +557,212 @@ async function runSnapshot() {
     }));
     currentView = 'human';
     renderResult(data);
+    loadHolderHistory(mint);
   } catch (e) {
     stopLoading();
     runBtn.disabled = false;
     updateRunBtn();
     showErr("Network error: " + e.message);
   }
+}
+
+// ── Holder count history (X7) ────────────────────────────────────────────────
+// Independent of the live /api/snapshot read above: this reads the dated, hashed record
+// lib/holders-snapshot.js keeps per finished owners-snapshot crawl (/owners-snapshot). No pass,
+// no gate — it is history of a public on-chain fact. A mint nobody has ever crawled there just
+// has no history; the panel stays hidden rather than showing an empty table.
+async function loadHolderHistory(mint) {
+  const card = document.getElementById('historyCard');
+  const compareCard = document.getElementById('compareCard');
+  try {
+    const res = await fetch(`/api/holders/snapshots?mint=${encodeURIComponent(mint)}`);
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.snapshots) || !data.snapshots.length) {
+      card.style.display = 'none';
+      compareCard.style.display = 'none';
+      return;
+    }
+    renderHolderHistory(data.snapshots, mint);
+    card.style.display = 'block';
+    setupCompare(data.snapshots, mint);
+  } catch (e) {
+    card.style.display = 'none';
+    compareCard.style.display = 'none';
+  }
+}
+
+function renderHolderHistory(points, mint) {
+  document.getElementById('historySpark').innerHTML = holderHistorySpark(points);
+  document.getElementById('historyTable').innerHTML =
+    '<thead><tr><th>DATE</th><th>HOLDERS</th><th>HASH</th></tr></thead><tbody>' +
+    points.slice().reverse().map((p) => {
+      const day = new Date(p.at).toISOString().slice(0, 10);
+      const hash = String(p.listHash || '');
+      const href = `/api/holders/snapshots/${encodeURIComponent(p.id)}?mint=${encodeURIComponent(mint)}`;
+      return `<tr><td><a href="${esc(href)}" target="_blank" rel="noopener">${esc(day)}</a></td>` +
+        `<td>${(p.holderCount || 0).toLocaleString()}</td>` +
+        `<td class="cat-cell">${esc(hash.slice(0, 12))}…<button type="button" class="hash-copy" data-hash="${esc(hash)}" onclick="copyHolderHash(this)" aria-label="Copy full hash">⧉</button></td></tr>`;
+    }).join('') +
+    '</tbody>';
+  document.getElementById('historyMeta').textContent =
+    `${points.length.toLocaleString()} recorded snapshot${points.length === 1 ? '' : 's'} from owners-snapshot crawls of this mint — the hash is sha256 over the full holder list that run produced; recompute it yourself with scripts/holders-snapshot-verify.cjs.`;
+}
+
+function copyHolderHash(btn) {
+  const hash = btn.getAttribute('data-hash') || '';
+  CluckUtil.copyText(hash).then((ok) => {
+    const prev = btn.textContent;
+    btn.textContent = ok ? '✓' : '⚠';
+    setTimeout(() => { btn.textContent = prev; }, 1400);
+  });
+}
+
+// ── Compare (Colosseum roadmap §11 AA3) ──────────────────────────────────────────────────────
+// Entered / exited / held-through wallets between any two recorded snapshots — over the top-25
+// each one recorded, never a full holder-base diff (see lib/holders-snapshot.js's own header).
+// Needs at least two snapshots; defaults to the two most recent.
+function setupCompare(points, mint) {
+  const compareCard = document.getElementById('compareCard');
+  if (!Array.isArray(points) || points.length < 2) { compareCard.style.display = 'none'; return; }
+  compareCard.dataset.mint = mint;
+  const newestFirst = points.slice().reverse();
+  const optionsHtml = newestFirst.map((p) => {
+    const day = new Date(p.at).toISOString().slice(0, 10);
+    return `<option value="${esc(p.id)}">${esc(day)} — ${esc(p.id)}</option>`;
+  }).join('');
+  const fromSel = document.getElementById('compareFrom');
+  const toSel = document.getElementById('compareTo');
+  fromSel.innerHTML = optionsHtml;
+  toSel.innerHTML = optionsHtml;
+  fromSel.value = newestFirst[1].id;   // second-most-recent
+  toSel.value = newestFirst[0].id;     // most recent
+  document.getElementById('compareResult').innerHTML = '';
+  compareCard.style.display = 'block';
+}
+
+async function runCompare() {
+  const compareCard = document.getElementById('compareCard');
+  const mint = compareCard.dataset.mint || '';
+  const idA = document.getElementById('compareFrom').value;
+  const idB = document.getElementById('compareTo').value;
+  const out = document.getElementById('compareResult');
+  if (!idA || !idB) return;
+  if (idA === idB) { out.innerHTML = `<div class="view-note warn">Pick two different snapshots to compare.</div>`; return; }
+  out.innerHTML = `<div class="view-note">Comparing…</div>`;
+  try {
+    const res = await fetch(`/api/holders/snapshots/${encodeURIComponent(idA)}/diff/${encodeURIComponent(idB)}?mint=${encodeURIComponent(mint)}`);
+    const data = await res.json();
+    if (!data.ok || !data.diff) {
+      out.innerHTML = `<div class="view-note warn">${esc(data.error === 'no_such_snapshot' ? 'One of those snapshots could not be found.' : 'Could not load that comparison.')}</div>`;
+      return;
+    }
+    renderCompare(data.diff);
+  } catch (e) {
+    out.innerHTML = `<div class="view-note warn">Network error: ${esc(e.message)}</div>`;
+  }
+}
+
+function compareHashChip(hash) {
+  const h = String(hash || '');
+  return `<span class="cat-cell">${esc(h.slice(0, 12))}…<button type="button" class="hash-copy" data-hash="${esc(h)}" onclick="copyHolderHash(this)" aria-label="Copy full hash">⧉</button></span>`;
+}
+
+function compareWalletLink(wallet) {
+  return `<a href="https://solscan.io/account/${esc(wallet)}" target="_blank" rel="noreferrer" style="color:var(--blue);text-decoration:underline;">${esc(shortAddr(wallet))}</a>`;
+}
+
+function compareRowsTable(rows, cols, rowFn) {
+  if (!rows.length) return `<div class="view-note">None.</div>`;
+  return `<table class="holders-table"><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>` +
+    rows.map(rowFn).join('') + `</tbody></table>`;
+}
+
+// P2-06 fix: raw base-unit string -> UI string, exact string surgery (never float division) —
+// same technique the Hub verify page's fmtAmount uses. `diff.supplyDelta` is the ONE field here
+// that is genuinely raw base units (lib/holders-snapshot.js's own header comment); everything in
+// `diff.top.*` is already UI-scale.
+function rawToUiStr(raw, decimals) {
+  if (raw == null || !Number.isFinite(decimals)) return null;
+  let s = String(raw); const neg = s.startsWith('-'); if (neg) s = s.slice(1);
+  if (s.length <= decimals) s = '0'.repeat(decimals - s.length + 1) + s;
+  const whole = s.slice(0, s.length - decimals), frac = s.slice(s.length - decimals).replace(/0+$/, '');
+  return (neg ? '-' : '') + whole + (frac ? '.' + frac : '');
+}
+
+function renderCompare(diff) {
+  // P2-06: prefer the decimals the snapshot pair itself carries (added going forward — see
+  // lib/holders-snapshot.js appendSnapshot) so this panel renders correctly on a bare `?mint=`
+  // deep link that never ran a gated live crawl; fall back to that live crawl's own value
+  // (`lastSnapshot`) when present, for a snapshot recorded before this field existed.
+  const dec = Number.isInteger(diff.to && diff.to.decimals) ? diff.to.decimals
+    : Number.isInteger(diff.from && diff.from.decimals) ? diff.from.decimals
+    : (lastSnapshot ? lastSnapshot.decimals : undefined);
+  const decKnown = Number.isFinite(dec);
+  const out = document.getElementById('compareResult');
+  const day = (ts) => new Date(ts).toISOString().slice(0, 10);
+
+  const holderDeltaTxt = (diff.holderCountDelta > 0 ? '+' : '') + diff.holderCountDelta.toLocaleString();
+  // P2-06: supplyDelta is true raw base units — convert it into the SAME unit the holder deltas
+  // below render in, instead of printing the raw string next to numbers already in whole tokens.
+  // When the decimals are genuinely unknown (an old snapshot with no `decimals` field, and no live
+  // crawl this session), say "units" honestly rather than guess a scale.
+  let supplyDeltaTxt = '—';
+  if (diff.supplyDelta != null) {
+    if (decKnown) {
+      const ui = rawToUiStr(diff.supplyDelta, dec);
+      supplyDeltaTxt = (ui && !ui.startsWith('-') && ui !== '0' ? '+' : '') + (ui != null ? ui : diff.supplyDelta);
+    } else {
+      try {
+        const d = BigInt(diff.supplyDelta);
+        supplyDeltaTxt = (d > 0n ? '+' : '') + d.toString() + ' base units (decimals unknown)';
+      } catch (e) { supplyDeltaTxt = diff.supplyDelta + ' base units (decimals unknown)'; }
+    }
+  }
+
+  const summary =
+    `<div class="compare-hashline">FROM ${esc(diff.from.id)} · ${esc(day(diff.from.at))} · ${compareHashChip(diff.from.listHash)}</div>` +
+    `<div class="compare-hashline">TO &nbsp;&nbsp;${esc(diff.to.id)} · ${esc(day(diff.to.at))} · ${compareHashChip(diff.to.listHash)}</div>` +
+    `<div class="compare-summary">Holder count: ${diff.from.holderCount.toLocaleString()} → ${diff.to.holderCount.toLocaleString()} (${esc(holderDeltaTxt)}) · Total supply change: ${esc(supplyDeltaTxt)}</div>` +
+    `<div class="compare-summary">${diff.sameFullList ? 'Full list: unchanged (hash matches)' : 'Full list: changed (hash differs)'}</div>`;
+
+  const entered = diff.top.entered || [];
+  const exited = diff.top.exited || [];
+  const held = diff.top.held || [];
+
+  const enteredTbl = compareRowsTable(entered, ['RANK', 'WALLET', 'AMOUNT'], (r) =>
+    `<tr><td>#${r.rank}</td><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.amountUi), dec)}</td></tr>`);
+  const exitedTbl = compareRowsTable(exited, ['PREV RANK', 'WALLET', 'AMOUNT'], (r) =>
+    `<tr><td>#${r.prevRank}</td><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.amountUi), dec)}</td></tr>`);
+  const heldTbl = compareRowsTable(held, ['WALLET', 'FROM', 'TO', 'CHANGE'], (r) => {
+    let grew;
+    try { grew = BigInt(r.deltaUi) > 0n; } catch (e) { grew = Number(r.deltaUi) > 0; }
+    return `<tr><td>${compareWalletLink(r.wallet)}</td><td>${fmtNum(Number(r.fromUi), dec)}</td><td>${fmtNum(Number(r.toUi), dec)}</td>` +
+      `<td class="cat-cell">${grew ? 'GREW' : 'SHRANK'} <span data-i18n-skip="1">(${esc(r.deltaUi)})</span></td></tr>`;
+  });
+
+  const subHead = (label, n) => `<div class="compare-sub" data-clkn-avoid="1">${label} <span class="cat-cell" data-i18n-skip="1">(${n})</span></div>`;
+
+  out.innerHTML = summary +
+    subHead('ENTERED TOP 25', entered.length) + enteredTbl +
+    subHead('EXITED TOP 25', exited.length) + exitedTbl +
+    subHead('HELD — BALANCE CHANGED', held.length) + heldTbl;
+}
+
+// A dependency-free inline SVG sparkline — no chart library for one line. Position-only (no
+// axis labels beyond the surrounding table), so it survives any holder-count range.
+function holderHistorySpark(points) {
+  if (points.length < 2) return '<div class="view-note">Not enough snapshots yet for a trend line — one recorded so far.</div>';
+  const w = 640, h = 56, pad = 6;
+  const vals = points.map((p) => p.holderCount || 0);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = (max - min) || 1;
+  const stepX = points.length > 1 ? (w - pad * 2) / (points.length - 1) : 0;
+  const coords = points.map((p, i) => {
+    const x = pad + i * stepX;
+    const y = h - pad - ((vals[i] - min) / span) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Holder count over time, ${esc(String(min))} to ${esc(String(max))}"><polyline points="${coords.join(' ')}" fill="none" stroke="var(--orange)" stroke-width="2"/></svg>`;
 }
 
 function paintDistRow() {

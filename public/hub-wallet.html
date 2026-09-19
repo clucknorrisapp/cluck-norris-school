@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Look Up a Wallet — Project Hub</title>
+<meta name="description" content="Paste a Solana wallet address and see every Hub program it has been part of, across every registered project — what it qualified for, what excluded it, and what arrived on chain. No wallet connect needed."/>
+<meta property="og:title" content="Look Up a Wallet — Project Hub"/>
+<meta property="og:description" content="One wallet, every project: what it qualified for, what excluded it, and what arrived on chain — the strongest honest form of Earn we can show."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:28px; letter-spacing:1px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2.5px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .intro b { color:var(--text); }
+  .mono { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; word-break:break-all; }
+  a.mono, .mono a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:16px 0 8px; color:var(--gold); text-transform:uppercase; }
+  .input-row { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .addr-input { flex:1; min-width:0; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:11px 13px; color:var(--text); font-family:var(--mono); font-size:13px; outline:none; }
+  .addr-input:focus { border-color:var(--accent); }
+  .btn { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; min-height:44px; background:var(--orange); border:none; border-radius:8px; padding:11px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#fff; cursor:pointer; }
+  .btn:disabled { background:var(--grey, #4B5563); color:var(--bg); cursor:not-allowed; }
+  .row-flex { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-family:var(--disp); font-size:11px; letter-spacing:1.5px; padding:4px 9px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; }
+  .chip.kind { color:var(--gold); border-color:rgba(252,211,77,.35); }
+  .pill { display:inline-block; font-size:10.5px; letter-spacing:1px; padding:2px 7px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; white-space:nowrap; }
+  .pill.ok { color:var(--green); border-color:rgba(16,185,129,.4); }
+  .pill.warn { color:var(--amber, #F59E0B); border-color:rgba(245,158,11,.4); }
+  .pill.bad { color:#FCA5A5; border-color:rgba(239,68,68,.4); }
+  .proj-card .prog-head { display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+  .proj-card h2 { font-family:var(--disp); font-weight:400; font-size:19px; letter-spacing:.5px; color:var(--text); }
+  .card-logo { width:22px; height:22px; border-radius:6px; object-fit:cover; vertical-align:middle; margin-right:6px; border:1px solid var(--border); background:#000; }
+  .badge-dryrun { display:inline-flex; align-items:center; gap:6px; font-family:var(--disp); font-size:10.5px; letter-spacing:1.5px; text-transform:uppercase; color:#FCA5A5; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.35); border-radius:999px; padding:4px 10px; margin-bottom:8px; }
+  .prog-block { border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); padding-top:10px; margin-top:10px; }
+  .prog-block:first-of-type { border-top:none; padding-top:0; margin-top:0; }
+  .prog-block h3 { font-family:var(--disp); font-weight:400; font-size:14px; color:var(--text); }
+  ul.facts { list-style:none; margin-top:6px; }
+  ul.facts li { padding:8px 0; border-bottom:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  ul.facts li:last-child { border-bottom:none; }
+  .fact { font-size:12.5px; color:var(--subtext, #9CA3AF); line-height:1.55; }
+  .fact b { color:var(--text); }
+  .small { font-size:12px; color:var(--sub); }
+  /* Standalone one-line links get invisible tap-area padding — same trick as hub.html — so the
+     link looks identical but its hit box grows toward 44px tall. */
+  .small a, .fact a, a.small { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/hub">← PROJECT HUB</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">One Wallet, Every Project</h1>
+    <p data-clkn-avoid="1">WHAT IT QUALIFIED FOR · WHAT EXCLUDED IT · WHAT ARRIVED ON CHAIN</p>
+  </div>
+
+  <div class="card">
+    <div class="intro" data-clkn-avoid="1">Paste any Solana wallet address to look it up across every project registered on the Hub — every program it qualified for or was excluded from, with the reason on record, every receipt with its settlement signature, and, where a batch has been settled, what the record says was owed next to what the chain shows arriving. No wallet connect, nothing saved.</div>
+  </div>
+
+  <div class="card">
+    <div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Look up a wallet</div>
+    <div class="input-row">
+      <input class="addr-input" id="walletIn" placeholder="Solana wallet address" aria-label="Solana wallet address" autocomplete="off" spellcheck="false"/>
+      <button class="btn" id="walletBtn">LOOK UP</button>
+    </div>
+  </div>
+
+  <div id="result"></div>
+
+  <div class="small" data-clkn-avoid="1" style="text-align:center">Judging or just skeptical? <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/HUB_VERIFY.md" target="_blank" rel="noopener">Verify it yourself →</a></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
+  var resultEl = document.getElementById('result');
+  var walletIn = document.getElementById('walletIn'), walletBtn = document.getElementById('walletBtn');
+
+  // ── i18n for the ONE string this script's empty-state adds ─────────────────────────────────
+  // Everything else this page builds already gets machine-translated live (i18n.js's DOM walker,
+  // loaded sitewide by cluck-nav.js, watches #result for added nodes since it carries no
+  // data-i18n-skip) — that stays as-is. GG3 fix 2 (docs/POKEAHOE_REHEARSAL_2026-09.md §4): the
+  // ONE new sentence below is worth a professional, curated translation rather than a live MT
+  // call, so it goes through the same small page-local `t()` public/hub-verify.html and
+  // public/hub-glossary.html use (the curated dictionaries i18n.js already loaded,
+  // `window.CLKN_I18N.dict`; English literal on a miss) — and its own element carries
+  // data-i18n-skip so the walker never re-translates our already-translated output as if it were
+  // fresh English.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+
+  function ts(ms) { if (ms == null) return '—'; var d = new Date(Number(ms)); if (isNaN(d)) return '—'; return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'; }
+  function amt(v, sym) { if (v == null || v === '') return '—'; var n = Number(v); var s = isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: 6 }) : String(v); return s + (sym ? ' ' + esc(sym) : ''); }
+  function acct(a) { return '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/account/' + encodeURIComponent(a) + '">' + esc(shortAddr(a, 5, 4)) + '</a>'; }
+  function txLink(sig) { return sig ? '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/tx/' + encodeURIComponent(sig) + '">' + esc(shortAddr(sig, 6, 6)) + '</a>' : ''; }
+  function pill(cls, label, code) {
+    var text = code ? '<a href="/hub/glossary#' + encodeURIComponent(code) + '">' + esc(label) + '</a>' : esc(label);
+    return '<span class="pill ' + cls + '">' + text + '</span>';
+  }
+
+  // One row of one program (server-composed from hubPublic.walletLookup — the page adds no
+  // number of its own): role "paid" is what arrived, with its own transaction; "winner"/
+  // "alternate" is the sealed amount the record says this wallet was owed; anything else is an
+  // observed reviewed status with the plain-words reason the record already carries.
+  function rowLine(projectId, ticker, row) {
+    if (row.role === 'paid') {
+      var state = row.state === 'submitted' ? pill('warn', 'submitted, not settled yet') : pill('ok', 'arrived on chain');
+      return '<li><div class="row-flex"><b class="small" style="color:var(--text)">Arrived</b> ' + state + '<span class="mono">' + amt(row.amountUi, ticker) + '</span>' + (row.sig ? ' ' + txLink(row.sig) : '') + '</div>' +
+        (row.sig ? '<div class="fact" style="margin-top:2px"><a href="/hub/' + esc(projectId) + '/r/' + encodeURIComponent(row.sig) + '">Open this receipt →</a></div>' : '') + '</li>';
+    }
+    if (row.role === 'winner' || row.role === 'alternate') {
+      return '<li><div class="row-flex"><b class="small" style="color:var(--text)">Owed</b> ' + pill('', 'sealed' + (row.role === 'alternate' ? ' — alternate' : '')) + (row.rank ? '<span class="small">rank #' + esc(row.rank) + '</span>' : '') + '<span class="mono">' + amt(row.amountUi, row.unit === 'sol' ? 'SOL' : ticker) + '</span></div>' +
+        (row.note ? '<div class="fact">' + esc(row.note) + '</div>' : '') + '</li>';
+    }
+    // A reviewed, non-qualifying status (e.g. "dq" or "manual") — the observed fact the record
+    // already carries, never a motive. EE2: both codes have a glossary entry (kind: "reason").
+    return '<li><div class="row-flex"><b class="small" style="color:var(--text)">Excluded</b> ' + pill('bad', String(row.role || '').replace(/-/g, ' '), row.role) + '</div>' +
+      (row.fact ? '<div class="fact">' + esc(row.fact) + '</div>' : '') + '</li>';
+  }
+
+  function programBlock(projectId, ticker, prog) {
+    return '<div class="prog-block"><h3>' + esc(prog.label || prog.kind) + ' <span class="small">' + esc(String(prog.kind || '').replace(/-/g, ' ')) + '</span></h3>' +
+      '<ul class="facts">' + prog.rows.map(function (r) { return rowLine(projectId, ticker, r); }).join('') + '</ul></div>';
+  }
+
+  function brandLogo(brand) { return brand && brand.logo ? '<img class="card-logo" src="' + esc(brand.logo) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"/>' : ''; }
+
+  function projectBlock(p) {
+    var ticker = null;   // the roll-up carries no top-level symbol per project — each row's own
+                          // amounts already came formatted from the per-project view.
+    return '<div class="card proj-card"><div class="prog-head" data-clkn-avoid-kids="1"><h2>' + brandLogo(p.brand) + esc(p.label) + '</h2><a class="small" href="/hub/' + esc(p.id) + '">open project →</a></div>' +
+      (p.brand && p.brand.tagline ? '<div class="small" style="margin-bottom:8px">' + esc(p.brand.tagline) + '</div>' : '') +
+      p.programs.map(function (pr) { return programBlock(p.id, ticker, pr); }).join('') + '</div>';
+  }
+
+  function renderEmpty(wallet) {
+    // GG3 fix 2 (docs/POKEAHOE_REHEARSAL_2026-09.md §4): this line reads, on its own, like the
+    // preview/scan found nothing — it doesn't say this page shows PAST records, not TODAY's
+    // eligibility. A judge clicking straight from a preview's qualifying-wallet list into this
+    // page, expecting to see "qualifies", would otherwise see a blank page and could reasonably
+    // wonder whether the two features are even connected.
+    resultEl.innerHTML = '<div class="card"><div class="fact" data-clkn-avoid="1"><b>No Hub program has seen this wallet yet.</b></div>' +
+      '<div class="fact" data-i18n-skip="1" style="margin-top:6px">' + esc(t("This page shows what has already been recorded for this wallet — whether it qualifies for a program today is shown on that program's own page.")) + '</div>' +
+      '<div class="small" style="margin-top:8px">' + acct(wallet) + '</div>' +
+      '<div class="small" style="margin-top:10px"><a href="/hub">Browse every project →</a></div>' +
+      '<div class="small" style="margin-top:6px"><a href="/school#lesson=receipt">Read the receipt lesson →</a></div></div>';
+  }
+  function renderError(msg) { resultEl.innerHTML = '<div class="card"><div class="err">' + esc(msg) + '</div></div>'; }
+  function renderStatus(msg) { resultEl.innerHTML = '<div class="status">' + esc(msg) + '</div>'; }
+
+  async function lookup(raw) {
+    var w = String(raw || '').trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) { renderError('That is not a Solana address.'); return; }
+    renderStatus('LOOKING UP ' + w.slice(0, 6) + '…');
+    var r;
+    try { r = await fetch('/api/hub/wallet/' + encodeURIComponent(w)).then(function (x) { return x.json(); }); }
+    catch (e) { renderError('Could not reach the Hub right now (' + e.message + ') — try again shortly.'); return; }
+    if (!r.ok) { renderError(r.error || 'lookup failed'); return; }
+    if (!r.projects || !r.projects.length) { renderEmpty(r.wallet || w); return; }
+    resultEl.innerHTML = '<div class="small" data-clkn-avoid="1" style="margin-bottom:10px">Seen in ' + r.seenIn + ' project' + (r.seenIn === 1 ? '' : 's') + ' · checked ' + ts(r.generatedAt) + '</div>' +
+      r.projects.map(projectBlock).join('');
+  }
+
+  walletBtn.addEventListener('click', function () { lookup(walletIn.value); });
+  walletIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') lookup(e.target.value); });
+
+  var path = location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+  var pre = path[2] ? decodeURIComponent(path[2]) : (new URLSearchParams(location.search).get('wallet') || '');
+  if (pre) { walletIn.value = pre; lookup(pre); }
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

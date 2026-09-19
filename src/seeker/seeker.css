@@ -1,0 +1,286 @@
+/* Cluck Norris — Seeker app shell.
+   Palette + type scale come from theme.css (loaded by seeker.html) — never redefine a token
+   here (CLAUDE.md). Mobile-first, phone-only chrome: safe-area insets top and bottom, a fixed
+   bottom nav, every tap target >=44px (CLAUDE.md "Disabled CTAs go neutral grey" etc. still
+   apply once these panes grow real content). */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#root { min-height: 100vh; min-height: 100dvh; }
+
+.seeker-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.seeker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px calc(16px + env(safe-area-inset-left, 0px));
+  padding-right: calc(16px + env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.seeker-brand {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: .5px;
+  color: var(--gold);
+}
+.seeker-walletzone { display: flex; align-items: center; gap: 8px; }
+.seeker-walletstatus {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--sub);
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seeker-walletbtn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--orange);
+  font-family: var(--disp);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.seeker-walletbtn:active { background: rgba(255, 122, 24, .12); }
+.seeker-walleterr {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--red-soft);
+}
+
+.seeker-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px calc(96px + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(16px + env(safe-area-inset-left, 0px));
+  padding-right: calc(16px + env(safe-area-inset-right, 0px));
+}
+
+.seeker-pane {
+  max-width: 480px;
+  margin: 0 auto;
+  text-align: center;
+  padding-top: 10vh;
+}
+.seeker-paneicon { font-size: 40px; margin-bottom: 10px; }
+.seeker-pane h1 {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 24px;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+.seeker-pane p {
+  font-size: var(--body-text, 15px);
+  color: var(--subtext);
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+.seeker-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--sub);
+  font-family: var(--disp);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.seeker-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  z-index: 5;
+}
+.seeker-navbtn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 56px;
+  min-width: 44px;
+  padding: 6px 4px;
+  text-decoration: none;
+  color: var(--sub);
+}
+.seeker-navbtn.active { color: var(--orange); }
+.seeker-navicon { font-size: 20px; line-height: 1; }
+.seeker-navlabel {
+  font-family: var(--disp);
+  font-size: 10px;
+  letter-spacing: .4px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* A tablet-width Seeker/phone in landscape still gets the phone layout — this shell never grows
+   a desktop nav bar or multi-column chrome. */
+@media (min-width: 720px) {
+  .seeker-main { max-width: 480px; margin: 0 auto; }
+}
+
+/* ── Rent Reclaim (increment 2) — the one pane with real content, so it drops the centered
+   .seeker-pane layout for a normal top-aligned scrolling list. Every interactive control here
+   (.seeker-reclaim-btn, .seeker-reclaim-retrybtn) still meets the >=44px tap-target floor. ── */
+.seeker-reclaim {
+  max-width: 480px;
+  margin: 0 auto;
+}
+.seeker-reclaim-topicon { font-size: 32px; text-align: center; margin-bottom: 4px; }
+.seeker-reclaim-title {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 22px;
+  color: var(--text);
+  text-align: center;
+  margin: 0 0 16px;
+}
+.seeker-reclaim-total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 16px;
+  margin-bottom: 10px;
+}
+.seeker-reclaim-total-label {
+  font-family: var(--disp);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--sub);
+}
+.seeker-reclaim-total-val {
+  font-family: var(--mono);
+  font-size: 26px;
+  color: var(--gold);
+}
+.seeker-reclaim-truncnote {
+  font-size: 12.5px;
+  color: var(--sub);
+  text-align: center;
+  margin: 0 0 10px;
+}
+/* Disabled — signing ships in the next build. Neutral grey, never dimmed orange (CLAUDE.md: a
+   faded accent-color gradient on dark reads as broken, not "not yet"). */
+.seeker-reclaim-btn {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card2, #1d1e26);
+  color: var(--muted);
+  font-family: var(--disp);
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: not-allowed;
+}
+.seeker-reclaim-btnnote {
+  font-size: 12px;
+  color: var(--sub);
+  text-align: center;
+  margin: 6px 0 18px;
+}
+.seeker-reclaim-group { margin-bottom: 16px; }
+.seeker-reclaim-group-title {
+  font-family: var(--disp);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--sub);
+  margin-bottom: 8px;
+}
+.seeker-reclaim-empty {
+  font-size: 13.5px;
+  color: var(--sub);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+.seeker-reclaim-row {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.seeker-reclaim-row-reclaimable { border-left-color: var(--green); }
+.seeker-reclaim-row-holds_balance { border-left-color: var(--gold); }
+.seeker-reclaim-row-refused { border-left-color: var(--red); }
+.seeker-reclaim-row-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+}
+.seeker-reclaim-row-reason {
+  font-size: 12px;
+  color: var(--sub);
+  margin-top: 4px;
+}
+.seeker-reclaim-errtext { color: var(--red-soft); }
+.seeker-reclaim-retrybtn {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  min-width: 44px;
+  margin-top: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--orange);
+  font-family: var(--disp);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.seeker-reclaim-retrybtn:active { background: rgba(255, 122, 24, .12); }

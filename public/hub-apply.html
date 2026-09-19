@@ -15,7 +15,7 @@
   * { box-sizing:border-box; margin:0; padding:0; }
   body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
   .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
-  .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
   .header { text-align:center; margin-bottom:18px; }
   .header h1 { font-family:var(--disp); font-size:30px; letter-spacing:1px; color:var(--gold); font-weight:400; }
   .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
@@ -32,9 +32,11 @@
   select { font-family:var(--body); }
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   @media (max-width:520px) { .grid2 { grid-template-columns:1fr; } }
-  .btn { background:var(--orange); border:none; border-radius:8px; padding:12px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#000; cursor:pointer; font-family:var(--body); }
+  .btn { display:inline-flex; align-items:center; justify-content:center; min-height:44px; background:var(--orange); border:none; border-radius:8px; padding:12px 18px; font-size:12.5px; font-weight:700; letter-spacing:1.5px; color:#000; cursor:pointer; font-family:var(--body); }
   .btn.ghost { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); }
-  .btn:disabled { background:var(--grey, #4B5563); color:var(--muted); cursor:not-allowed; }
+  /* --grey is aliased to --muted in theme.css, so background:var(--grey) + color:var(--muted)
+     is background == text — invisible disabled-button copy. Dark text on the grey reads fine. */
+  .btn:disabled { background:var(--grey, #4B5563); color:var(--bg); cursor:not-allowed; }
   .row-flex { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:14px; }
   .mono { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; word-break:break-all; }
   .chip { display:inline-block; font-family:var(--disp); font-size:11px; letter-spacing:1.5px; padding:4px 9px; border-radius:999px; border:1px solid var(--border); color:var(--sub); margin:4px 4px 0 0; }
@@ -56,21 +58,21 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <a class="back-home" href="/hub">← PROJECT HUB</a>
   <div class="header">
-    <h1>Run Lock to Earn for your token</h1>
-    <p>YOUR RULES · JUPITER LOCK · RECEIPTS ANYONE CAN CHECK</p>
+    <h1 data-clkn-avoid="1">Run Lock to Earn for your token</h1>
+    <p data-clkn-avoid="1">YOUR RULES · JUPITER LOCK · RECEIPTS ANYONE CAN CHECK</p>
   </div>
 
   <div class="card">
-    <p class="intro">Reward the holders who <b>lock your token on Jupiter Lock</b>. Nobody holds their tokens — not you, not us: the escrow is Jupiter's own program. You set the rules below. Our engine reads the chain every hour, works out who qualifies and what they have earned, and pays from <b>your</b> funding wallet on the schedule you choose. Every payout has a transaction any holder can check on the public page.</p>
-    <p class="intro" style="margin-top:10px">This is <b>staking rewards without a staking contract</b> — no contract to audit, no tokens to custody, no risk of a drain. What it costs: <b id="priceStandardIntro">0.5 SOL a month</b> (or <b id="priceSmallIntro">0.25 SOL</b> for a small-cap project), payable in SOL or in CLKN priced at the moment you pay. The reward tokens are yours and stay in your wallet until they are paid out.</p>
+    <p class="intro" data-clkn-avoid="1">Reward the holders who <b>lock your token on Jupiter Lock</b>. Nobody holds their tokens — not you, not us: the escrow is Jupiter's own program. You set the rules below. Our engine reads the chain every hour, works out who qualifies and what they have earned, and pays from <b>your</b> funding wallet on the schedule you choose. Every payout has a transaction any holder can check on the public page.</p>
+    <p class="intro" data-clkn-avoid="1" style="margin-top:10px">This is <b>staking rewards without a staking contract</b> — no contract to audit, no tokens to custody, no risk of a drain. What it costs: <b id="priceStandardIntro">0.5 SOL a month</b> (or <b id="priceSmallIntro">0.25 SOL</b> for a small-cap project), payable in SOL or in CLKN priced at the moment you pay. The reward tokens are yours and stay in your wallet until they are paid out.</p>
   </div>
 
   <form id="f" autocomplete="off">
   <div class="card">
-    <div class="step">STEP 1 — YOUR TOKEN</div>
+    <div class="step" data-clkn-avoid="1">STEP 1 — YOUR TOKEN</div>
     <label for="mint"><b>Token mint address</b></label>
     <div class="row-flex" style="margin-top:0">
       <input type="text" id="mint" placeholder="the mint of the token holders will lock" style="flex:1;min-width:0"/>
@@ -86,7 +88,7 @@
   </div>
 
   <div class="card">
-    <div class="step">STEP 2 — WHO PAYS AND WHO MAY CHANGE THE RULES</div>
+    <div class="step" data-clkn-avoid="1">STEP 2 — WHO PAYS AND WHO MAY CHANGE THE RULES</div>
     <label for="funding"><b>Funding wallet</b> — where the rewards are paid FROM</label>
     <input type="text" id="funding" placeholder="a wallet your project controls"/>
     <p class="hint">Rewards leave this wallet only when a payout batch is signed. Its balance is shown publicly next to what the program owes, so holders can see whether the rewards are covered. Locks from this wallet never earn.</p>
@@ -98,7 +100,7 @@
   </div>
 
   <div class="card">
-    <div class="step">STEP 3 — THE RULES</div>
+    <div class="step" data-clkn-avoid="1">STEP 3 — THE RULES</div>
     <p class="hint">Every rule becomes part of a versioned, hashed program the holders can read. Changing a rule later creates a new version; periods already accrued keep the old one.</p>
     <div class="grid2">
       <div><label for="minDays"><b>Minimum lock</b> (days)</label><input type="number" id="minDays" min="1" max="3650" value="30"/></div>
@@ -128,7 +130,7 @@
   </div>
 
   <div class="card">
-    <div class="step">STEP 4 — THE PLAN</div>
+    <div class="step" data-clkn-avoid="1">STEP 4 — THE PLAN</div>
     <div class="tier">
       <label><input type="radio" name="tier" value="standard" checked/><b>STANDARD</b><span id="priceStandardTier">0.5 SOL</span> a month, or the same value in CLKN priced when you pay.</label>
       <label><input type="radio" name="tier" value="small"/><b>SMALL CAP</b><span id="priceSmallTier">0.25 SOL</span> a month for a young or small project. The owner confirms the tier.</label>
@@ -142,7 +144,7 @@
     <div id="out"></div>
   </div>
   </form>
-</div>
+</main>
 
 <script src="/cluck-util.js"></script>
 <script src="/cluck-wallet.js"></script>

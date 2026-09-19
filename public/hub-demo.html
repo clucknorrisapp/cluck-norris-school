@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Hub Demo Walkthrough</title>
+<meta name="description" content="A guided, no-wallet walkthrough of the Project Hub's single-holder story — a program version, who qualifies and why, funding coverage, a batch, and a receipt. Fixture data, nothing on-chain."/>
+<!-- OG -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:14px; }
+  .header h1 { font-family:var(--disp); font-size:28px; letter-spacing:1px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
+  .dryrun { display:flex; align-items:center; justify-content:center; gap:8px; background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.4); border-radius:999px; padding:7px 14px; font-family:var(--disp); font-size:11px; letter-spacing:1.5px; color:var(--amber,#F59E0B); text-transform:uppercase; margin:0 auto 18px; max-width:fit-content; }
+  .dryrun .dot { width:7px; height:7px; border-radius:50%; background:var(--amber,#F59E0B); flex-shrink:0; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; position:relative; }
+  .step-n { position:absolute; top:-11px; left:14px; background:var(--bg); border:1px solid var(--border); border-radius:999px; padding:2px 10px; font-family:var(--disp); font-size:11px; letter-spacing:1.5px; color:var(--gold); }
+  .step-title { font-family:var(--disp); font-size:17px; letter-spacing:.5px; color:var(--text); font-weight:400; margin:6px 0 8px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.65; }
+  .intro b { color:var(--text); }
+  .mono { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; word-break:break-all; }
+  a.mono, .mono a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  .fact { font-size:12.5px; color:var(--subtext, #9CA3AF); line-height:1.55; }
+  .fact b { color:var(--text); }
+  .row-flex { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-family:var(--disp); font-size:11px; letter-spacing:1.5px; padding:4px 9px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; }
+  .chip.kind { color:var(--gold); border-color:rgba(252,211,77,.35); }
+  .chip.ok { color:var(--green); border-color:rgba(16,185,129,.35); }
+  .chip.warn { color:var(--amber, #F59E0B); border-color:rgba(245,158,11,.4); }
+  .chip.bad { color:#FCA5A5; border-color:rgba(239,68,68,.4); }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin:12px 0; }
+  .stat { background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; padding:10px 12px; text-align:center; }
+  .stat .v { font-family:var(--mono); font-size:16px; font-weight:700; color:var(--text); }
+  .stat .l { font-size:9.5px; color:var(--sub); letter-spacing:1.5px; margin-top:4px; text-transform:uppercase; }
+  .terms { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:6px 14px; font-size:12.5px; color:var(--subtext, #9CA3AF); margin:10px 0; }
+  .terms b { color:var(--text); font-weight:600; }
+  .sec-title { font-family:var(--disp); font-size:12px; letter-spacing:2px; margin:14px 0 8px; color:var(--gold); text-transform:uppercase; }
+  .tscroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 -6px; padding:0 6px; }
+  table { width:100%; min-width:460px; border-collapse:collapse; font-size:12.5px; }
+  th { text-align:left; font-size:9.5px; letter-spacing:2px; color:var(--sub); text-transform:uppercase; padding:6px 6px; border-bottom:1px solid var(--border); }
+  td { padding:8px 6px; border-bottom:1px solid var(--border-soft, rgba(255,255,255,.06)); vertical-align:top; }
+  td.num { font-family:var(--mono); text-align:right; white-space:nowrap; }
+  .pill { display:inline-block; font-size:10.5px; letter-spacing:1px; padding:2px 7px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; white-space:nowrap; }
+  .pill.ok { color:var(--green); border-color:rgba(16,185,129,.4); }
+  .pill.warn { color:var(--amber, #F59E0B); border-color:rgba(245,158,11,.4); }
+  .pill.bad { color:#FCA5A5; border-color:rgba(239,68,68,.4); }
+  .holder-card { border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:10px; }
+  .holder-card.no { border-color:rgba(239,68,68,.3); background:rgba(239,68,68,.04); }
+  .holder-card.yes { border-color:rgba(16,185,129,.25); background:rgba(16,185,129,.03); }
+  .step-links { display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:11.5px; }
+  /* Each link is the sole content of its row, not a word in a sentence — invisible tap-area
+     padding (cancelled by an equal negative margin, so nothing shifts visually) brings the hit
+     box toward 44px tall without changing how the row looks. */
+  .step-links a { display:inline-block; padding:16px 2px; margin:-16px -2px; color:var(--cyan, #67E8F9); text-decoration:none; letter-spacing:.5px; }
+  pre.proof { background:rgba(0,0,0,.35); border:1px solid var(--border); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11.5px; color:#D1D5DB; overflow-x:auto; white-space:pre-wrap; word-break:break-all; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+  .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
+  .btn { display:inline-block; background:var(--orange); border:none; border-radius:8px; padding:9px 16px; font-size:11.5px; font-weight:700; letter-spacing:1px; color:#fff; cursor:pointer; text-decoration:none; }
+  .lessons a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  @media (max-width:520px) { .step-title { font-size:15px; } td, th { padding:6px 4px; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/hub">← PROJECT HUB</a>
+  <div class="header">
+    <h1 id="title">Hub Demo Walkthrough</h1>
+    <p id="subtitle">A SINGLE-HOLDER STORY, START TO FINISH</p>
+  </div>
+  <div class="dryrun"><span class="dot"></span> DRY RUN — fixture data, nothing on-chain</div>
+  <div id="app"><div class="status">LOADING…</div></div>
+  <div class="fact" data-clkn-avoid="1" style="text-align:center;margin-top:14px">What does this NOT prove? <a href="/hub/trust">Read the trust boundary →</a></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
+  var app = document.getElementById('app');
+  var path = location.pathname.replace(/\/+$/, '').split('/').filter(Boolean); // ["hub","demo"] | ["hub","demo","p","lock-to-earn"] | ["hub","demo","r",id] | ["hub","demo-b"]
+  var projectId = path[1] || 'demo';
+  var mode = path[2] || null;      // "p" | "r" | null
+  var sub = path[3] || null;
+
+  function ts(unixMs) { if (unixMs == null) return '—'; var d = new Date(Number(unixMs)); if (isNaN(d)) return '—'; return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'; }
+  function tsUnix(s) { return s == null ? '—' : ts(Number(s) * 1000); }
+  function whole(raw, decimals) {
+    if (raw == null) return '—';
+    var neg = String(raw).charAt(0) === '-'; var s = String(raw).replace('-', '');
+    decimals = decimals || 0;
+    if (s.length <= decimals) s = '0'.repeat(decimals - s.length + 1) + s;
+    var w = s.slice(0, s.length - decimals), f = s.slice(s.length - decimals).replace(/0+$/, '');
+    var wn = Number(w).toLocaleString('en-US');
+    return (neg ? '-' : '') + wn + (f ? '.' + f : '');
+  }
+  function acct(a) { return '<a class="mono" target="_blank" rel="noopener" href="https://solscan.io/account/' + encodeURIComponent(a) + '">' + esc(shortAddr(a, 5, 4)) + '</a>'; }
+  function stats(list) {
+    return '<div class="stats">' + list.filter(function (s) { return s[1] != null; }).map(function (s) { return '<div class="stat"><div class="v">' + s[1] + '</div><div class="l">' + esc(s[0]) + '</div></div>'; }).join('') + '</div>';
+  }
+  function badge() { return '<span class="chip warn">dry run</span>'; }
+  function step(n, title, bodyHtml) {
+    return '<div class="card"><div class="step-n">STEP ' + n + '</div><div class="step-title">' + esc(title) + ' ' + badge() + '</div>' + bodyHtml + '</div>';
+  }
+  function holderCard(h, dec, sym) {
+    var verdict = h.qualifies
+      ? '<span class="pill ok">QUALIFIES</span> <b>' + esc(h.termLabel) + '</b> · <span class="mono">' + esc(h.multiplier) + 'x</span> the base rate'
+      // EE2: every code here is a glossary reason entry (kind: "reason", the same list
+      // lib/hub/eligibility.js REASON_CODES exports) — link it rather than just printing it.
+      : '<span class="pill bad">DOES NOT QUALIFY</span> ' + (h.reasons || []).map(function (r) { return '<a class="mono" href="/hub/glossary#' + encodeURIComponent(r.code) + '">' + esc(r.code) + '</a> — ' + esc(r.text); }).join('; ');
+    var lines = '<div class="fact" style="margin-top:6px">Locked <b>' + esc(whole(h.numbers.atRiskRaw, dec)) + ' ' + esc(sym) + '</b> · term ' + esc(h.termLabel) +
+      ' · locked since ' + esc(new Date(h.numbers.firstSeenAt * 1000).toISOString().slice(0, 10)) +
+      (h.qualifies ? ' · accrued so far <b>' + esc(whole(h.accruedRaw, dec)) + ' ' + esc(sym) + '</b>' : '') + '</div>';
+    return '<div class="holder-card ' + (h.qualifies ? 'yes' : 'no') + '"><div class="row-flex"><b>' + esc(h.label) + '</b> ' + acct(h.wallet) + '</div><div class="fact" style="margin-top:6px">' + verdict + '</div>' + lines + '</div>';
+  }
+  function fundingBlock(f, dec, sym) {
+    var short = f.shortfallRaw != null && Number(f.shortfallRaw) > 0;
+    return stats([
+      ['Obligations (owed)', whole(f.obligationsRaw, dec)],
+      ['Reserved in batches', whole(f.reservedRaw, dec)],
+      ['Observed balance', f.observedBalanceRaw == null ? 'unavailable' : whole(f.observedBalanceRaw, dec)],
+    ]) +
+    '<div class="fact">' + (f.observedBalanceRaw == null ? 'The funding wallet balance could not be read.' :
+      (short ? '<b style="color:#FCA5A5">Short by ' + esc(whole(f.shortfallRaw, dec)) + ' ' + esc(sym) + '.</b>' : 'Fully covered at last read.')) +
+      ' An observed balance is not reserved funding — it can be spent on anything.' + '</div>' +
+    (f.observedIsFixture ? '<div class="fact" style="margin-top:6px"><i>' + esc(f.observedNote) + '</i></div>' : '');
+  }
+  function batchTable(batch, dec, sym) {
+    if (!batch || !batch.rows.length) return '<div class="fact">No batch yet.</div>';
+    return '<div class="tscroll"><table><thead><tr><th>Holder</th><th>Wallet</th><th style="text-align:right">Amount</th><th>State</th><th>Receipt</th></tr></thead><tbody>' +
+      batch.rows.map(function (r) { return '<tr><td>' + esc(r.label) + '</td><td>' + acct(r.wallet) + '</td><td class="num">' + esc(whole(r.amountRaw, dec)) + ' ' + esc(sym) + '</td><td><span class="pill ok">' + esc(r.state) + '</span></td><td>' + (r.receiptId ? '<a class="mono" href="/hub/' + esc(projectId) + '/r/' + esc(r.receiptId) + '">' + esc(r.receiptId) + ' →</a>' : '—') + '</td></tr>'; }).join('') +
+      '</tbody></table></div>';
+  }
+  function receiptBlock(r, dec, sym) {
+    return '<div class="row-flex" style="margin-bottom:6px"><b>' + esc(r.holderLabel) + '</b> ' + acct(r.wallet) + '</div>' +
+      stats([['Amount', whole(r.totals.appliedRaw, dec) + ' ' + sym], ['State', r.state]]) +
+      '<div class="terms" data-clkn-avoid-kids="1"><div><b>Program</b> v' + esc(r.programVersion) + ' <span class="mono">' + esc(String(r.programHash).slice(0, 12)) + '…</span></div><div><b>Batch</b> ' + esc(r.batchId) + '</div></div>' +
+      '<div class="sec-title" data-clkn-avoid="1">Transaction</div><div class="fact"><span class="pill warn">dry run</span> ' + esc(r.settlement.note) + '</div>';
+  }
+
+  // ── the stepper (default view) ────────────────────────────────────────────────────────────
+  function renderStepper(d, db) {
+    var v = d.version, sym = d.project.symbol, dec = d.project.decimals;
+    var lte = 'lock-to-earn';
+    var A = d.holders[0], B = d.holders[1], C = d.holders[2];
+    document.getElementById('title').textContent = 'Hub Demo Walkthrough';
+    document.getElementById('subtitle').textContent = 'A SINGLE-HOLDER STORY, START TO FINISH';
+    // NOTE on pill-avoidance markers: this stepper stacks several short-looking regions (intro,
+    // step title, a fact line, a terms grid, a hash line) in the first ~800px of the page — mark
+    // ALL of them and the floating pill's climb-until-clear loop (__clknDockFloat in
+    // cluck-nav.js) has nothing but marked ground to retreat to and walks all the way up into the
+    // site's own top nav bar (worse than the original overlap). So only the ONE region that is
+    // actually at the pill's default landing spot is marked here — the trailing hash/link line —
+    // leaving the rest of the step unmarked on purpose.
+    var out = '<div class="card"><div class="intro">This is the same math and the same public pages a real Cluck Norris Hub project runs — walked through here on a fixture project, <b>' + esc(d.project.label) + '</b> (' + esc(sym) + '), so a judge can see the whole loop without connecting a wallet or moving anything. Every number below comes from the real qualification, accrual and settlement code (<span class="mono">lib/hub/*.js</span>) run over made-up addresses. Each step links to the real page for that surface.</div></div>';
+
+    out += step('A', 'The program version', '<div class="fact" data-clkn-avoid="1">A program version is immutable once effective and carries a sha256 hash of its own terms — anyone can recompute it from the JSON.</div>' +
+      '<div class="terms" data-clkn-avoid-kids="1"><div><b>Version</b> v' + esc(v.version) + '</div><div><b>Effective from</b> ' + esc(v.effectiveFrom) + '</div><div><b>Term range</b> ' + esc(v.terms.minDurationDays) + '–' + esc(v.terms.maxTermDays) + ' days</div><div><b>Payout schedule</b> ' + esc(v.terms.payoutSchedule) + '</div></div>' +
+      '<div class="fact" data-clkn-avoid="1"><b>Hash</b> <span class="mono">' + esc(v.hash) + '</span></div>' +
+      '<div class="step-links" data-clkn-avoid="1"><a href="/hub/' + esc(projectId) + '/p/' + esc(lte) + '">Open the full program record →</a></div>');
+
+    out += step('B', 'Who qualifies, and why', '<div class="fact">Two holders lock the exact same amount for different committed terms — the tier ceiling shows up as a real 6x difference in what accrues, computed by the engine, not typed in. A third holder is excluded by the same public rule, with its reason code.</div>' +
+      holderCard(A, dec, sym) + holderCard(B, dec, sym) + holderCard(C, dec, sym) +
+      '<div class="step-links"><a href="/hub/' + esc(projectId) + '/p/' + esc(lte) + '">See every locker\'s eligibility →</a></div>');
+
+    out += step('C', 'Is it funded?', '<div class="fact">Three different numbers, on purpose — never one green "funded" badge.</div>' + fundingBlock(d.funding, dec, sym) +
+      '<div class="step-links"><a href="/hub/' + esc(projectId) + '/p/' + esc(lte) + '">See the funding status on the program page →</a></div>');
+
+    out += step('D', 'The batch', '<div class="fact">A batch draws only on what is <b>available</b> (accrued minus already-reserved-or-paid) — never on an estimate.</div>' +
+      '<div class="fact" style="margin-top:6px"><b>' + esc(d.batch.id) + '</b> · ' + esc(d.batch.count) + ' wallets · ' + esc(whole(d.batch.totalRaw, dec)) + ' ' + esc(sym) + ' total · pays under v' + esc(d.batch.programVersion) + '</div>' +
+      batchTable(d.batch, dec, sym) +
+      '<div class="step-links"><a href="/hub/' + esc(projectId) + '/p/' + esc(lte) + '">Open the batch on the program page →</a></div>');
+
+    var rA = d.receipts[A.receiptId];
+    out += step('E', "Holder A's receipt", receiptBlock(rA, dec, sym) +
+      '<div class="step-links"><a href="/hub/' + esc(projectId) + '/r/' + esc(A.receiptId) + '">Open the receipt page →</a></div>');
+
+    out += step('F', 'Reproduce it yourself', '<div class="fact">A LIVE lock-to-earn or buy-competition receipt can be re-derived from the published inputs, on your own machine, with no server call — this fixture predates that wiring (it runs the newer Addendum-B settlement journal, not yet on a live route; see HUB_VERIFY.md §g), so this step names the tool rather than reproducing itself:</div>' +
+      '<pre class="proof">node scripts/reproduce-receipt.cjs &lt;receipt-url&gt;</pre>' +
+      '<div class="fact" style="margin-top:8px">Or paste any real receipt link into <a href="/hub/verify">the browser version</a> — the exact same code, no terminal needed, and it works offline once loaded.</div>');
+
+    out += step('G', 'A second project never sees this one', '<div class="fact">A different fixture project, <b>' + esc(db.project.label) + '</b> (' + esc(db.project.symbol) + '), has its own store, its own ledger and its own holder. ' + esc(db.isolationNote) + '</div>' +
+      holderCard(db.holders[0], db.project.decimals, db.project.symbol) +
+      '<div class="step-links"><a href="/hub/demo-b">Open the isolated project →</a></div>');
+
+    app.innerHTML = out;
+  }
+
+  // ── the "real" program page (leave the rails) ─────────────────────────────────────────────
+  function renderProgram(d) {
+    var v = d.version, sym = d.project.symbol, dec = d.project.decimals;
+    document.getElementById('title').textContent = d.project.label + ' · Lock to Earn';
+    document.getElementById('subtitle').textContent = 'PROGRAM RECORD · REWARDS FOR LOCKED WALLETS';
+    var out = '<div class="card"><div class="intro" data-clkn-avoid="1">' + esc(d.project.label) + '\'s Lock to Earn program, in full: the version holders qualify under, the funding status, the batch and its receipts. Nothing here needs a wallet.</div>' +
+      '<div class="mono" style="margin-top:10px">Mint ' + esc(d.project.mint) + '</div></div>';
+    out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Program version ' + esc(v.version) + '</div>' +
+      '<div class="terms" data-clkn-avoid-kids="1"><div><b>Effective from</b> ' + esc(v.effectiveFrom) + '</div><div><b>Term range</b> ' + esc(v.terms.minDurationDays) + '–' + esc(v.terms.maxTermDays) + ' days</div><div><b>Cancelable locks</b> ' + (v.terms.cancelableAllowed ? 'allowed' : 'not allowed') + '</div><div><b>Payout schedule</b> ' + esc(v.terms.payoutSchedule) + '</div></div>' +
+      '<div class="fact" data-clkn-avoid="1"><b>Hash</b> <span class="mono">' + esc(v.hash) + '</span></div></div>';
+    out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Lockers and eligibility</div>' + d.holders.map(function (h) { return holderCard(h, dec, sym); }).join('') + '</div>';
+    out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Funding</div>' + fundingBlock(d.funding, dec, sym) + '</div>';
+    out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Batch ' + esc(d.batch.id) + '</div>' + batchTable(d.batch, dec, sym) + '</div>';
+    if (d.teach) {
+      // EE2: a.key (what_happens/can_i_sell/where_reward/how_much/risks/why_lock) is a glossary
+      // term id — link the question itself, next to the existing "Learn more" lesson link.
+      out += '<div class="card lessons"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Six questions, answered from the program itself</div>' +
+        d.teach.answers.map(function (a) { return '<div class="fact" style="padding:6px 0"><b style="color:var(--text)"><a href="/hub/glossary#' + encodeURIComponent(a.key) + '">' + esc(a.question) + '</a></b><br>' + esc(a.text) + ' <a href="' + esc(a.lesson.href) + '">Learn more →</a></div>'; }).join('') + '</div>';
+    }
+    out += '<div class="fact" data-clkn-avoid="1" style="text-align:center">Raw data: <a class="mono" href="/api/hub-demo/' + esc(projectId) + '">/api/hub-demo/' + esc(projectId) + '</a></div>' +
+      '<div class="fact" data-clkn-avoid="1" style="text-align:center;margin-top:6px"><a href="/hub/demo">← back to the walkthrough</a></div>';
+    app.innerHTML = out;
+  }
+
+  // ── a receipt page ─────────────────────────────────────────────────────────────────────────
+  function renderReceipt(d, id) {
+    var r = d.receipts[id];
+    if (!r) throw new Error('no such receipt');
+    var sym = d.project.symbol, dec = d.project.decimals;
+    document.getElementById('title').textContent = 'Receipt';
+    document.getElementById('subtitle').textContent = (r.holderLabel || '').toUpperCase() + ' · ' + esc(d.project.label).toUpperCase();
+    app.innerHTML = '<div class="card">' + receiptBlock(r, dec, sym) +
+      '<div class="sec-title" data-clkn-avoid="1">Verify it yourself</div><div class="fact">This receipt is a labelled dry run: no transaction was ever sent, so there is nothing to look up on Solana for it. A real project\'s receipt page carries a signature here that anyone can check against the chain from their own browser — see <a href="/hub/' + esc(projectId) + '/p/lock-to-earn">the real program page</a> for how that looks with a real signature.</div>' +
+      '<div class="fact" data-clkn-avoid="1" style="margin-top:12px"><a href="/hub/demo">← back to the walkthrough</a></div></div>';
+  }
+
+  function renderDemoB(db) {
+    var sym = db.project.symbol, dec = db.project.decimals;
+    document.getElementById('title').textContent = db.project.label;
+    document.getElementById('subtitle').textContent = 'ISOLATION CHECK · A SEPARATE FIXTURE PROJECT';
+    app.innerHTML = '<div class="card"><div class="intro" data-clkn-avoid="1">' + esc(db.isolationNote) + '</div><div class="mono" style="margin-top:10px">Mint ' + esc(db.project.mint) + '</div></div>' +
+      '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">The only holder here</div>' + holderCard(db.holders[0], dec, sym) + '</div>' +
+      '<div class="fact" data-clkn-avoid="1" style="text-align:center">Raw data: <a class="mono" href="/api/hub-demo/demo-b">/api/hub-demo/demo-b</a></div>' +
+      '<div class="fact" data-clkn-avoid="1" style="text-align:center;margin-top:6px"><a href="/hub/demo">← back to the walkthrough</a> · <a href="/hub/demo/p/lock-to-earn">compare with demo\'s own holders →</a></div>';
+  }
+
+  (async function () {
+    try {
+      if (projectId === 'demo-b') {
+        var rb = await fetch('/api/hub-demo/demo-b').then(function (x) { return x.json(); });
+        if (!rb.ok) throw new Error(rb.error || 'could not load');
+        renderDemoB(rb.project);
+        return;
+      }
+      var r = await fetch('/api/hub-demo/demo').then(function (x) { return x.json(); });
+      if (!r.ok) throw new Error(r.error || 'could not load');
+      var d = r.project;
+      if (mode === 'r' && sub) { renderReceipt(d, sub); return; }
+      if (mode === 'p') { renderProgram(d); return; }
+      var rb2 = await fetch('/api/hub-demo/demo-b').then(function (x) { return x.json(); });
+      renderStepper(d, rb2.ok ? rb2.project : { project: { label: 'Demo Community B', symbol: 'DEMOB' }, holders: [{}], isolationNote: '' });
+    } catch (e) {
+      app.innerHTML = '<div class="card"><div class="err">' + esc(e.message || String(e)) + '</div><div class="fact" style="margin-top:10px"><a href="/hub/demo">← restart the walkthrough</a></div></div>';
+    }
+  })();
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

@@ -67,6 +67,26 @@
   .btn.hot { color: #fff; background: #FF7A18; border-color: transparent; }
   .err { color: #FCA5A5; font-family: var(--mono); font-size: 12.5px; }
   .stale { color: var(--sub); font-size: 11.5px; font-family: var(--mono); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { font-family: var(--body); font-weight: 700; font-size: 11.5px; letter-spacing: .8px; text-transform: uppercase; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--sub); cursor: pointer; }
+  .chip[aria-pressed="true"] { color: var(--gold); border-color: rgba(255,182,39,.5); background: rgba(255,182,39,.1); }
+  .chip .n { opacity: .75; margin-left: 4px; }
+  .tlrow { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .tlrow:last-child { border-bottom: none; }
+  .tlrow .tag { flex: 0 0 auto; font-family: var(--body); font-weight: 700; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid; margin-top: 1px; }
+  .tlrow .tag.transfer { color: #60a5fa; border-color: rgba(96,165,250,.5); }
+  .tlrow .tag.decision { color: #6EE7B7; border-color: rgba(110,231,183,.5); }
+  .tlrow .tag.illustrative { color: var(--gold); border-color: rgba(255,182,39,.5); }
+  .tlrow.illustrative { opacity: .82; }
+  .tlrow .tlbody { flex: 1 1 auto; min-width: 0; }
+  .tlrow .tlwhen { font-family: var(--mono); font-size: 11px; color: var(--sub); }
+  .tlrow .tlline { font-family: var(--body); font-size: 13px; color: var(--text); margin-top: 2px; }
+  .tlrow .illlabel { font-family: var(--mono); font-size: 11px; color: var(--gold); margin-top: 2px; }
+  .tlrow details { margin-top: 6px; }
+  .tlrow summary { cursor: pointer; font-family: var(--mono); font-size: 11.5px; color: var(--sub); }
+  .tlrow .replaybox { margin-top: 6px; font-family: var(--mono); font-size: 11.5px; color: var(--sub); background: rgba(255,255,255,.04); border-radius: 8px; padding: 8px 10px; }
+  .tlrow .replaybox b { color: var(--text); }
+  .match-yes { color: #6EE7B7; } .match-no { color: #FCA5A5; }
 </style>
 </head>
 <body>
@@ -104,6 +124,18 @@
       <div class="card"><h3>What the engine would do now</h3><div id="decision"></div></div>
       <div class="card"><h3>The JVP profile on this token</h3><div id="profile"></div></div>
     </div>
+
+    <h2>Evidence, kept separate</h2>
+    <p class="muted">Three different kinds of proof, never mixed. Each is labelled with what it actually is.</p>
+    <p class="note" id="earningsFlag" hidden></p>
+    <div class="card"><h3>Historical transfers (what moved, not why)</h3><p class="muted">Backfilled from Helius for this project's own operator wallet — not a client's wallet. The chain shows what moved; it never shows why. No wallet address is shown here, including ours — the signature alone is enough to look a transfer up on Solscan.</p><div id="transfers"><p class="muted">Loading…</p></div></div>
+    <div class="card" style="margin-top:14px"><h3>Decision log (retained events)</h3><p class="muted">A bounded, retained record of what the engine's own tick has actually decided — distinct from the illustrative replay above and the simulator below. While the engine is paused, nothing is decided, so nothing is logged.</p><div id="decisionLog"><p class="muted">Loading…</p></div></div>
+    <div class="card" style="margin-top:14px"><h3>Illustrative simulator runs (recorded incidents, not live)</h3><p class="muted">Real incidents replayed against the same production decision gates as <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/scripts/engine-sim-test.cjs" target="_blank" rel="noopener noreferrer">the simulator</a> — a fixed reference table, not a trace of this project's own history.</p><div id="simulator"><p class="muted">Loading…</p></div></div>
+
+    <h2 data-clkn-avoid="1">Timeline</h2>
+    <p class="muted">The same three classes above, merged into one time-ordered record so you can see what actually happened, in order — never mixed into one undifferentiated feed. Toggle a class off to isolate it.</p>
+    <div class="chips" id="tlChips"></div>
+    <div class="card" style="margin-top:10px"><div id="timeline"><p class="muted">Loading…</p></div></div>
   </div>
 
   <h2>The hard questions</h2>
@@ -298,6 +330,125 @@
     $('profile').innerHTML = html;
   }
 
+  // ── Evidence class 1: historical transfers — "what moved, not why" ────────────
+  function renderTransfers(p) {
+    var t = p && p.transfers;
+    var el = $('transfers');
+    if (!t) { el.innerHTML = '<p class="muted">Loading…</p>'; return; }
+    if (!t.available || !t.rows || !t.rows.length) { el.innerHTML = '<p class="muted">no data retained for this period</p>'; return; }
+    var html = '<div class="tblwrap"><table><thead><tr><th>time (UTC)</th><th>direction</th><th>token</th><th class="num">amount</th><th>verify</th></tr></thead><tbody>';
+    t.rows.forEach(function (r) {
+      html += '<tr><td>' + esc(r.t ? new Date(r.t).toUTCString() : '—') + '</td><td>' + esc(r.direction === 'in' ? 'in' : 'out') + '</td><td>' + esc(r.symbol || 'TOKEN') + '</td>'
+        + '<td class="num">' + esc(num(r.amount)) + '</td><td>' + (r.signature ? '<a href="https://solscan.io/tx/' + esc(r.signature) + '" target="_blank" rel="noopener noreferrer">' + esc(r.signature.slice(0, 8)) + '…↗</a>' : '—') + '</td></tr>';
+    });
+    html += '</tbody></table></div><p class="stale">' + esc(String(t.rows.length)) + ' most recent transfer(s)' + (t.freshness && t.freshness.stale ? ' · served from cache (refresh failing)' : '') + '.</p>';
+    el.innerHTML = html;
+  }
+  // ── Evidence class 2: retained decision events ────────────────────────────────
+  function renderDecisionLog(p) {
+    var d = p && p.decisionLog;
+    var el = $('decisionLog');
+    if (!d) { el.innerHTML = '<p class="muted">Loading…</p>'; return; }
+    if (!d.retained || !d.rows || !d.rows.length) { el.innerHTML = '<p class="muted">' + esc(d.note || 'no data retained for this period') + '</p>'; return; }
+    var html = '<div class="tblwrap"><table><thead><tr><th>when</th><th>sleeve</th><th>action</th><th>why</th><th class="num">price</th></tr></thead><tbody>';
+    d.rows.slice().reverse().forEach(function (r) {
+      html += '<tr><td>' + esc(rel(r.t)) + '</td><td>' + esc(r.source || '—') + '</td><td>' + esc(r.action) + '</td><td>' + esc(r.reason || '—') + '</td><td class="num">' + (r.price == null ? '—' : esc(price(r.price))) + '</td></tr>';
+    });
+    html += '</tbody></table></div><p class="stale">' + esc(String(d.retained)) + ' retained decision(s), most recent first.</p>';
+    el.innerHTML = html;
+  }
+  function renderEarningsFlag(p) {
+    var el = $('earningsFlag');
+    if (p && p.earningsSuspect) { el.hidden = false; el.textContent = 'A stored earnings counter for this project failed a sanity check and is excluded — never shown, and never guessed at.'; }
+    else { el.hidden = true; el.textContent = ''; }
+  }
+  // ── Evidence class 3: illustrative simulator runs ─────────────────────────────
+  function renderSimulator(p) {
+    var s = p && p.simulatorScenarios;
+    var el = $('simulator');
+    if (!s) { el.innerHTML = '<p class="muted">Loading…</p>'; return; }
+    if (!s.length) { el.innerHTML = '<p class="muted">no data retained for this period</p>'; return; }
+    var html = '<div class="tblwrap"><table><thead><tr><th>incident</th><th>window</th><th>decision</th><th>why</th></tr></thead><tbody>';
+    s.forEach(function (row) {
+      var dec = row.decision || {};
+      html += '<tr><td>' + esc(row.name) + '</td><td>' + esc(row.incidentWindow || '—') + '</td><td>' + esc(dec.action || '—') + (dec.urgent ? ' <span class="pill out">urgent</span>' : '') + '</td>'
+        + '<td>' + esc(dec.reason || (dec.fromSym ? 'buy with ' + dec.fromSym : '—')) + '</td></tr>';
+    });
+    html += '</tbody></table></div><p class="stale">Recomputed from the same pure gates as the simulator on every load — never a hardcoded result.</p>';
+    el.innerHTML = html;
+  }
+
+  // ── X5: the merged timeline and replay ────────────────────────────────────────
+  var TL_FILTER = { transfer: true, decision: true, illustrative: true };
+  var TL_LABEL = { transfer: 'transfer', decision: 'decision', illustrative: 'illustrative' };
+  function renderTlChips(classes) {
+    var c = classes || { transfer: 0, decision: 0, illustrative: 0 };
+    var html = '';
+    ['transfer', 'decision', 'illustrative'].forEach(function (k) {
+      html += '<button type="button" class="chip" data-cls="' + k + '" aria-pressed="' + (TL_FILTER[k] ? 'true' : 'false') + '">' + esc(TL_LABEL[k]) + '<span class="n">' + esc(String(c[k] || 0)) + '</span></button>';
+    });
+    $('tlChips').innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('#tlChips .chip'), function (btn) {
+      btn.addEventListener('click', function () {
+        var k = btn.getAttribute('data-cls');
+        TL_FILTER[k] = !TL_FILTER[k];
+        btn.setAttribute('aria-pressed', TL_FILTER[k] ? 'true' : 'false');
+        renderTimelineRows(LAST_TIMELINE);
+      });
+    });
+  }
+  function tlLine(r) {
+    if (r.cls === 'transfer') {
+      var v = (r.direction === 'in' ? 'received' : 'sent') + ' ' + esc(num(r.amount)) + ' ' + esc(r.symbol || 'TOKEN');
+      return v + (r.signature ? ' — <a href="https://solscan.io/tx/' + esc(r.signature) + '" target="_blank" rel="noopener noreferrer">verify ↗</a>' : '');
+    }
+    if (r.cls === 'decision') return (r.source ? '<span class="pill">' + esc(r.source) + '</span> ' : '') + esc(r.action) + (r.reason ? ' — ' + esc(r.reason) : '') + (r.price != null ? ' <span class="stale">@ ' + esc(price(r.price)) + '</span>' : '');
+    var dec = r.decision || {};
+    return esc(r.name) + ' — <span class="stale">' + esc(dec.action || '—') + (dec.reason ? ' · ' + esc(dec.reason) : '') + '</span>';
+  }
+  function tlReplay(r) {
+    if (r.cls !== 'decision') return '';
+    if (r.replayed == null) return '<p class="stale">replay: ' + esc(r.note || 'inputs not retained') + '</p>';
+    var g = r.replayed;
+    return '<details><summary>replay</summary><div class="replaybox">'
+      + '<div>gate: <b>' + esc(r.gate || '—') + '</b></div>'
+      + '<div>recorded decision: <b>' + esc(r.action) + '</b></div>'
+      + '<div>replayed decision: <b>' + esc(g.action || '—') + '</b>' + (g.reason ? ' <span class="stale">— ' + esc(g.reason) + '</span>' : '') + '</div>'
+      + '<div>match: <b class="' + (r.matches ? 'match-yes' : 'match-no') + '">' + (r.matches ? 'yes' : 'no') + '</b></div>'
+      + '</div></details>';
+  }
+  function renderTimelineRows(tl) {
+    var el = $('timeline');
+    if (!tl) { el.innerHTML = '<p class="muted">Loading…</p>'; return; }
+    var rows = (tl.rows || []).filter(function (r) { return TL_FILTER[r.cls]; });
+    if (!rows.length) { el.innerHTML = '<p class="muted">no data retained for this period</p>'; return; }
+    var html = '';
+    rows.forEach(function (r) {
+      html += '<div class="tlrow' + (r.cls === 'illustrative' ? ' illustrative' : '') + '">'
+        + '<span class="tag ' + esc(r.cls) + '">' + esc(TL_LABEL[r.cls] || r.cls) + '</span>'
+        + '<div class="tlbody">'
+        + '<div class="tlwhen">' + esc(r.t ? new Date(r.t).toUTCString() : (r.incidentWindow ? 'incident window ' + r.incidentWindow : '—')) + '</div>'
+        + '<div class="tlline">' + tlLine(r) + '</div>'
+        + (r.cls === 'illustrative' ? '<div class="illlabel">' + esc(r.label || 'illustrative — replayed from a recorded incident, not live') + '</div>' : '')
+        + tlReplay(r)
+        + '</div></div>';
+    });
+    el.innerHTML = html;
+  }
+  var LAST_TIMELINE = null;
+  function renderTimeline(tl) {
+    LAST_TIMELINE = tl;
+    renderTlChips(tl && tl.classes);
+    renderTimelineRows(tl);
+  }
+  function loadTimeline(id) {
+    renderTimeline(null);
+    fetch('/api/jvp/project/' + encodeURIComponent(id) + '/timeline?hours=168').then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.success || SELECTED !== id) return;
+      renderTimeline(j);
+    }).catch(function () { $('timeline').innerHTML = '<p class="err">Timeline unavailable right now.</p>'; });
+  }
+
   function select(id) {
     SELECTED = id;
     if (OVERVIEW) renderFleet(OVERVIEW);
@@ -308,12 +459,15 @@
     var bf = base.freshness || {};
     $('detailSub').textContent = base.tokenMint + ' · ' + base.venue + (bf.summary === 'stale' ? ' · some panels served from cache (refresh failing)' : bf.summary === 'partial' ? ' · some reads unavailable' : '');
     renderPoolMap(base); renderSplit(base); renderOrganic(base); renderDecision(base); renderProfile(base);
+    renderDecisionLog(base); renderTransfers(base); renderSimulator(base); renderEarningsFlag(base);
     $('volumeChart').innerHTML = '<p class="muted">Loading hourly volume…</p>';
+    loadTimeline(id);
     try { history.replaceState(null, '', '?p=' + encodeURIComponent(id)); } catch (e) {}
     fetch('/api/jvp/project/' + encodeURIComponent(id)).then(function (r) { return r.json(); }).then(function (j) {
       if (!j || !j.success || SELECTED !== id) return;
       renderPoolMap(j.project); renderVolume(j.project); renderOrganic(j.project); renderDecision(j.project); renderProfile(j.project); renderSplit(j.project);
-    }).catch(function () { $('volumeChart').innerHTML = '<p class="err">Hourly volume unavailable right now.</p>'; });
+      renderDecisionLog(j.project); renderTransfers(j.project); renderSimulator(j.project); renderEarningsFlag(j.project);
+    }).catch(function () { $('volumeChart').innerHTML = '<p class="err">Hourly volume unavailable right now.</p>'; $('transfers').innerHTML = '<p class="err">Unavailable right now.</p>'; $('simulator').innerHTML = '<p class="err">Unavailable right now.</p>'; });
   }
 
   fetch('/api/jvp/overview').then(function (r) { return r.json(); }).then(function (o) {

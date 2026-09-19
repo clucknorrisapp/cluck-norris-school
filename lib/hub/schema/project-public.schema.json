@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clucknorris.app/hub/schema/project-public.json",
+  "title": "Hub project — public view",
+  "description": "The public, no-wallet-needed view of one Hub project: GET /api/hub/<projectId> returns { ok, project: <this> }. Built by lib/hub/public.js projectView(), which WHITELISTS every field — nothing on a comp's or a batch's private record (a payout token, a Telegram chat id, a board message id) can reach this shape, because it is never read from the source record at all. `programs[]` is every program the project has run — buy competitions, Buy Special draws, the CUNA giveaway, and its lock-to-earn ledger — newest first. Each program's own shape depends on its `kind`; this schema pins the fields common to all four kinds (compView/drawView/giveawayView/stakeView in lib/hub/public.js) and leaves the rest open, since that union is not a single stable shape.",
+  "type": "object",
+  "required": [
+    "id",
+    "label",
+    "symbol",
+    "mint",
+    "decimals",
+    "rewardMint",
+    "rewardDecimals",
+    "generatedAt",
+    "programs",
+    "versions",
+    "totals"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "present when the serving route stamps it — points back at this file's served URL."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,31}$",
+      "description": "the project id (\"clkn\", \"cuna\", \"rose\", or a Hub-onboarded project's slug)."
+    },
+    "label": {
+      "type": "string",
+      "description": "display name."
+    },
+    "symbol": {
+      "type": "string",
+      "description": "ticker shown next to amounts when a program does not carry its own."
+    },
+    "mint": {
+      "type": "string",
+      "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+      "description": "the locked token's mint address."
+    },
+    "decimals": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 18,
+      "description": "decimals of the locked mint, read from chain at project approval — null if the project record does not carry one."
+    },
+    "rewardMint": {
+      "type": "string",
+      "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+      "description": "the mint a holder is actually paid in for the lock-to-earn program. Equal to `mint` unless the project pays a different asset (design §2 \"one immutable reward asset per project\")."
+    },
+    "rewardDecimals": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 18,
+      "description": "decimals of `rewardMint`; every amount inside a `lock-to-earn` program entry in `programs[]` is formatted with THIS, never `decimals` (P1-036 — a project paying a different asset was once shown with the locked token's decimals)."
+    },
+    "generatedAt": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "ms epoch this view was assembled — not a field on any stored record, so re-fetching always advances it."
+    },
+    "programs": {
+      "type": "array",
+      "description": "one entry per program this project has run, sorted newest-start first. `kind` is the discriminant; see lib/hub/public.js for the full per-kind shape (compView → \"buy-comp\", drawView → \"buy-special-draw\", giveawayView → \"giveaway\", stakeView → \"lock-to-earn\").",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "label",
+          "status",
+          "totals"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "buy-comp",
+              "buy-special-draw",
+              "giveaway",
+              "lock-to-earn"
+            ],
+            "description": "which program view built this entry — decides which of the additional, unpinned fields to expect."
+          },
+          "id": {
+            "type": "string",
+            "description": "the program's own id (a comp id, a draw id, \"giveaway-<round>\", or \"lock-to-earn\")."
+          },
+          "label": {
+            "type": "string",
+            "description": "display label for the program."
+          },
+          "status": {
+            "type": "string",
+            "description": "free-text lifecycle state, meaningful per kind (e.g. a comp: live/verified/closed; lock-to-earn: accruing/not-started)."
+          },
+          "totals": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "per-kind totals — winners/paid/settled/submitted counts and sealed/paid amounts. Never includes the word \"owed\" next to an address: an unsent or unreceipted amount is reported as \"no receipt on file\", never as owed (owner, 2026-09-16)."
+          }
+        }
+      }
+    },
+    "versions": {
+      "type": "array",
+      "description": "Colosseum roadmap CC1: every program version this project has published, oldest first — [] if none yet. NEVER carries `terms`, `effectiveTo` or `commitment`; a reader fetches the full document (including its terms) from GET /api/hub/<projectId>/program/<version>, the one canonical place a version's terms are published. `publishedAt` is the version's own `effectiveFrom` (YYYY-MM-DD) — a program version has no separate wall-clock publish time, it takes effect (and is published) on that UTC day.",
+      "items": {
+        "type": "object",
+        "required": [
+          "version",
+          "hash",
+          "publishedAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "the program-version.schema.json `version` — 1-based, monotonically increasing."
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "that version's own hash — see program-version.schema.json."
+          },
+          "publishedAt": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "the UTC day (YYYY-MM-DD) this version took effect — its `effectiveFrom`."
+          }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "required": [
+        "programs",
+        "receipts",
+        "paidRows"
+      ],
+      "additionalProperties": false,
+      "description": "project-wide rollup across every entry in `programs[]`.",
+      "properties": {
+        "programs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "number of entries in `programs[]`."
+        },
+        "receipts": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "payout rows, across every program, that carry a transaction signature — the only rows publicly shown as paid."
+        },
+        "paidRows": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "every payout row across every program, signed or not."
+        }
+      }
+    },
+    "dryRun": {
+      "type": "boolean",
+      "description": "true for a labelled dry run (a fixture, or a project like POKEAHOE seeded before terms and a funding wallet exist): nothing accrues or pays, it cannot be armed, and it is excluded from every count and feed. Absent or false for a live project."
+    },
+    "brand": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "description": "project-provided branding, validated by lib/hub/brand.js at approval: a repo-local logo path only (never a URL), hex accents, a short plain-text tagline, and reviewed HTTPS socials rendered with a \"project-provided, not an endorsement\" label. null when the project set none.",
+      "properties": {
+        "logo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^/brand/[a-z0-9-]{1,32}/[a-zA-Z0-9_.-]{1,80}\\.(png|svg|jpe?g|webp)$",
+          "description": "repo-local path under /brand/<project>/."
+        },
+        "accent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+        },
+        "accent2": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+        },
+        "tagline": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        },
+        "socials": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "type": "string"
+            },
+            "telegram": {
+              "type": "string"
+            },
+            "website": {
+              "type": "string"
+            }
+          },
+          "description": "x.com / t.me / the project's own https site only."
+        }
+      }
+    },
+    "lessonReads": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "period"
+      ],
+      "description": "E6: how many anonymous visitors read the lock lessons before reaching this project's page in the period — present only when the count is above zero (never a zero brag); no denominator is exposed publicly so it cannot be read as a rate.",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "period": {
+          "type": "string",
+          "description": "the window the count covers, e.g. \"30d\"."
+        }
+      }
+    },
+    "holders": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "at",
+        "holderCount",
+        "listHash"
+      ],
+      "description": "Colosseum roadmap §8 X7: the latest dated, hashed holder-count record from an owners-snapshot crawl of this project's mint (lib/holders-snapshot.js `latest()`). A fact line only — never wallets, never a top list, never a judgement (\"growing\"/\"healthy\"). null when this mint has never been crawled.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "the snapshot's own id — GET /api/holders/snapshots/<id>?mint=<mint> reads the full record, including its capped top list."
+        },
+        "at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "ms epoch the crawl that produced this snapshot finished."
+        },
+        "holderCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "how many wallets the crawl counted as holders (non-contract owners with a balance)."
+        },
+        "listHash": {
+          "type": "string",
+          "description": "sha256 over the canonical JSON of the full holder list that run produced — a reader can recompute it with scripts/holders-snapshot-verify.cjs."
+        }
+      }
+    }
+  }
+}

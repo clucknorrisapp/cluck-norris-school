@@ -419,6 +419,18 @@ served the React shell at 200.
   **attacker-supplied token metadata** to the brand channels, so it hard-sanitizes the symbol to
   `[A-Za-z0-9]` (never the free-form name) and rate-limits itself (per-wallet/mint cooldown + hourly
   cap) so a griefer can't spam our X into a suspension. Don't loosen either without thinking it through.
+- ⛔ **The Cluck bot posts NOTHING in the OnlyRose room (owner, 2026-09-17: "make sure it is not
+  posting anything in rose").** Enforced in code, not by call-site discipline: `lib/telegram-rooms.js`
+  is consulted by `tgApi()` (the one send choke point since the 09-17 consolidation) and by the
+  three direct senders (`/api/tg-test`, the meme uploaders, the vault and swap-desk notifiers); a
+  send whose chat is the OnlyRose room is refused and logged (`[TG] refused: …`). The only
+  allows: the ROSE bot's own `roseTgSend*` path (it is disarmed; arming it is the owner's act),
+  an operator naming the room outright on `/api/tg-test` (`chat=` / `project=`), and a buy comp
+  the owner configured for that room. Everything else — welcomes, `/price`-style command replies,
+  burn celebrations, vault alerts, spotlights — is refused there. Deletes and button acks are not
+  posts and still work. `scripts/telegram-rooms-test.cjs` pins the policy and that no direct
+  Telegram send exists outside the audited functions. History: CLKN welcomes leaked in (09-02),
+  vault alerts (08-31), a replayed window of buy alerts (09-17, `docs/INCIDENT_2026-09-17_ROSE_BUYBOT_REPLAY.md`).
 - **The CLKN X account has X Premium (owner, 2026-09-05), so brand posts may run past 280
   characters** — don't trim an owner-initiated announcement to fit the classic limit. The 280
   counter on the lock-and-earn page's announce card is for LOCKERS' own accounts and stays.
@@ -482,10 +494,19 @@ served the React shell at 200.
   to `curl -X POST` BEFORE the server change, carried a transition GET fallback while the old build
   was live, and had it **removed on 2026-09-17 once #335 was verified on production** — both prompts
   now say "never fall back to a GET". **`/api/meme-queue` `&done=`/`&art=`/`&clear=1` are POST-only
-  too (owner, 2026-09-17, same routine-first sequencing)** — the meme routine POSTs its `done=`
-  write and carries a transition fallback (resend as a GET only on the OLD build's exact 404, the
-  API catch-all's answer to a POST on the GET-only route) that must be **removed from the prompt
-  once this is promoted to `main`**; the list, `history=1` and `all=1` stay GETs. **The burn celebration also has a value floor now**: a verified burn Jupiter
+  too (owner, 2026-09-17, same routine-first sequencing; live on production via #337 the same
+  day)** — the meme routine POSTs its `done=` write, carried a transition GET fallback while the old
+  build was live, and had it removed once #337 was verified; the list, `history=1` and `all=1`
+  stay GETs. With this, **no admin route on the surface writes or sends on a GET** — the guard test
+  is the inventory; add a new admin flag there before you add it to a route. ⚠️ **The one that got
+  through (incident, 2026-09-17 16:11 UTC): `/api/rose-buybot`'s FLAG-LESS GET ran a full poll
+  "even while disarmed"** — the 09-05 audit read it as the harmless read. A status check on a bot
+  disarmed for days walked its whole 100-signature window and posted every buy above the floor
+  into the OnlyRose room, in a row. Fixed the same day: the plain GET is the status read, the poll
+  is `POST ?run=1`, and BOTH buy bots step over anything older than `BUYBOT_REPLAY_MAX_AGE_S`
+  (default 15 min) after any pause — a resume never narrates history. **A "read" that calls the
+  poller is not a read; check what the flag-less path actually does before calling an admin
+  route on production.** **The burn celebration also has a value floor now**: a verified burn Jupiter
   prices under `BURN_BROADCAST_MIN_USD` (default $10; unpriced = skipped) gets its receipt page
   but no auto-post — a stranger's one-unit mint could otherwise force a brand tweet.
 - ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`

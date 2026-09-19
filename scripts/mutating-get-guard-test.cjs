@@ -98,6 +98,15 @@ function raw(method, p, headers) {
   ok("GET /api/buybot?list=1 still lists", r.status === 200 && r.body && Array.isArray(r.body.bots));
   r = await call("GET", "/api/rose-buybot?arm=1");
   ok("GET /api/rose-buybot?arm=1 is refused with 405", r.status === 405);
+  // Incident 2026-09-17: the flag-less GET used to run a full poll "even while disarmed" and, with
+  // a cursor stale from days of disarm, posted a whole window of old buys into the OnlyRose room.
+  // The plain GET is a status read now; the poll is POST ?run=1 only.
+  r = await call("GET", "/api/rose-buybot");
+  ok("GET /api/rose-buybot (flag-less) is the status read — never a poll", r.status === 200 && r.body && r.body.status === true && !("scanned" in r.body) && !("posted" in r.body), JSON.stringify(r.body).slice(0, 160));
+  r = await call("GET", "/api/rose-buybot?run=1");
+  ok("GET /api/rose-buybot?run=1 is refused with 405", r.status === 405, String(r.status));
+  r = await call("POST", "/api/rose-buybot?run=1");
+  ok("POST /api/rose-buybot?run=1 reaches the poll (no token here → dormant, not the status shape)", r.status === 200 && r.body && r.body.status !== true, JSON.stringify(r.body).slice(0, 160));
   // /api/tg-test is POST-only since 2026-09-17 (owner: "convert tg-test too, routine first"): every
   // form of it sends, so the whole GET method is refused — after the key check, which stays 404.
   r = await call("GET", "/api/tg-test?text=hello"); ok("GET /api/tg-test?text= is refused with 405 (POST-only since 2026-09-17)", r.status === 405, JSON.stringify(r.body));
@@ -123,6 +132,17 @@ function raw(method, p, headers) {
   r = await call("GET", "/api/meme-queue?history=1"); ok("GET /api/meme-queue?history=1 still reads the art ledger", r.status === 200 && r.body && Array.isArray(r.body.art), JSON.stringify(r.body).slice(0, 120));
   r = await call("POST", "/api/meme-queue?done=abc&art=%7B%22image%22%3A%22x%22%7D"); ok("POST /api/meme-queue?done=&art= goes through", r.status === 200 && r.body && r.body.ok === true, JSON.stringify(r.body).slice(0, 120));
   r = await call("GET", "/api/meme-queue?done=abc", false); ok("meme-queue stays 404 without the key", r.status === 404);
+
+  // ── airdrop per-drop receipt (Colosseum roadmap §W4/Extension): recording a row is a POST-only
+  // write, gated by the tools pass, not the admin key — a GET is refused before the pass is even
+  // checked. The public receipt reads (/api/airdrop/r/:dropId[/:wallet]) are unauthenticated GETs
+  // and stay that way; they are exercised by scripts/airdrop-receipt-test.cjs, not here.
+  r = await call("GET", "/api/airdrop/record", false);
+  ok("GET /api/airdrop/record is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/airdrop/record?dropId=x", false);
+  ok("GET /api/airdrop/record with query params is still refused with 405", r.status === 405);
+  r = await call("POST", "/api/airdrop/record", false);
+  ok("POST /api/airdrop/record with no pass is refused (402/403), never a silent 200", [402, 403].includes(r.status), JSON.stringify(r.body));
 
   // ── buy-comp server payout: run / sweep / unpay / set on a GET → 405, decided BEFORE the comp
   // lookup so a pasted link is refused before it touches anything; the flag-less GET is the read.
@@ -158,6 +178,18 @@ function raw(method, p, headers) {
   ok("GET /api/hub/:project/desk/session is refused with 405 (POST-only)", r.status === 405, JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/desk", false);
   ok("/api/hub/:project/desk without a key or operator token is 404", r.status === 404);
+  // EE1 (Colosseum roadmap): POST-only because the draft terms are a request BODY — it is a READ
+  // (nothing is written, armed or sent; scripts/hub-preview-test.cjs hashes app-state.json before
+  // and after ten previews to prove it), so unlike every other entry in this file it carries no
+  // mutating flag at all — there is nothing to name here beyond "POST-only".
+  r = await call("GET", "/api/hub/nope/desk/preview");
+  ok("GET /api/hub/:project/desk/preview is refused with 405 (POST-only, not because it mutates)", r.status === 405, JSON.stringify(r.body));
+  r = await call("POST", "/api/hub/nope/desk/preview");
+  ok("POST /api/hub/:project/desk/preview for an unknown project is 404", r.status === 404 && !!r.body && /no such project/.test(String(r.body.error)), JSON.stringify(r.body));
+  r = await call("POST", "/api/hub/nope/desk/preview", false);
+  ok("POST /api/hub/:project/desk/preview without a key or operator token is 404 (no project-exists hint)", r.status === 404 && !(r.body && /no such project/.test(String(r.body.error))), JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/readiness", false);
+  ok("/api/hub/:project/readiness without a key or operator token is 404 (it is a read, but an operator-gated one — it reveals a funding balance)", r.status === 404);
   r = await call("GET", "/api/hub/nope/admin", false);
   ok("/api/hub/:project/admin without a key or operator token is 404 (no project-exists hint)", r.status === 404 && !(r.body && /no such project/.test(String(r.body.error))), JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/access?sig=x&quote=y", false);
@@ -168,10 +200,27 @@ function raw(method, p, headers) {
   ok("GET /api/hub/:project/payout?export=1 is refused with 405", r.status === 405);
   r = await call("GET", "/api/hub/nope/payout?send=x&run=1");
   ok("GET /api/hub/:project/payout?send= is refused with 405", r.status === 405);
+  // N-3 (Round 4, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): ledger.waiveRemainder's owner-only route.
+  r = await call("GET", "/api/hub/nope/payout?waive=4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs&batch=x");
+  ok("GET /api/hub/:project/payout?waive= is refused with 405", r.status === 405);
   r = await call("GET", "/api/hub/nope/payout", false);
   ok("/api/hub/:project/payout without the key is 404", r.status === 404);
   r = await call("GET", "/api/hub/nope/holder?address=4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs", false);
   ok("the public holder view answers 404 for an unknown project (no key needed)", r.status === 404 && !!r.body && /no such project/.test(String(r.body.error)));
+
+  // ── B5 (Colosseum E3): commit/build and commit/observe are POST-only, refused before the
+  // project lookup — a pasted link (or a chat unfurl) must never even attempt to build or observe
+  // an on-chain commitment.
+  r = await call("GET", "/api/hub/nope/commit/build?version=1");
+  ok("GET /api/hub/:project/commit/build is refused with 405 (POST-only)", r.status === 405, JSON.stringify(r.body));
+  r = await call("POST", "/api/hub/nope/commit/build?version=1");
+  ok("POST /api/hub/:project/commit/build for an unknown project is 404", r.status === 404);
+  r = await call("GET", "/api/hub/nope/commit/observe?sig=x");
+  ok("GET /api/hub/:project/commit/observe is refused with 405 (POST-only)", r.status === 405, JSON.stringify(r.body));
+  r = await call("POST", "/api/hub/nope/commit/observe?sig=x");
+  ok("POST /api/hub/:project/commit/observe for an unknown project is 404", r.status === 404);
+  r = await call("GET", "/api/hub/nope/program/1", false);
+  ok("the public program-version view answers 404 for an unknown project (no key needed, no method restriction — it only reads)", r.status === 404);
 
   // ── lock-to-earn server send: send / sweep / void on a GET → 405 like confirm / cancel / export
   r = await call("GET", "/api/cuna-stake/payout?send=nope&run=1");

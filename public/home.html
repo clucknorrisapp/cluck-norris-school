@@ -84,6 +84,11 @@
   .gopt .ol i{display:block;font-style:normal;font-size:12.5px;color:var(--sub);margin-top:2px;}
   .gopt .oar{font-family:var(--disp);color:var(--orange);font-size:18px;flex:none;}
   .gopt:hover .oar{color:#fff;}
+  /* Colosseum W9 part 2: the second, subordinate line under the project-operator tile — not
+     its own tile, so it reads as "also see this" rather than a second competing CTA. */
+  .gopt-wrap{display:grid;}
+  .gopt-sub{display:block;margin:-2px 4px 0;padding:6px 18px 0 68px;font-family:var(--body);font-size:12.5px;color:var(--sub);text-decoration:none;}
+  .gopt-sub:hover{color:var(--orange);}
 
   /* ── simple quick links ── */
   .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:30px;max-width:720px;margin-left:auto;margin-right:auto;}
@@ -171,12 +176,21 @@
            /education. Advanced tools stays because /premium is linked from nowhere else.
            Seventh route added 2026-09-10 ("I run a project or community" -> /tools#for-projects)
            per the owner's "one-stop shop, we meet you where you are" positioning — project
-           tools get their own front door instead of hiding inside research tools. -->
+           tools get their own front door instead of hiding inside research tools.
+           Re-pointed 2026-09-18 (Colosseum W4) to the dedicated /for-projects guided front door
+           + per-mint checklist — /tools#for-projects stays live as the flat tool list. -->
       <a class="gopt" href="/school#incubator"><span class="oic"><img src="/icons/egg.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I'm brand new</b><i>Wallets, keys, safety &mdash; start in the Incubator</i></span><span class="oar">&rarr;</span></a>
       <a class="gopt" href="/education"><span class="oic"><img src="/icons/book.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I want to learn crypto</b><i>Courses, chain-by-chain guides &amp; the Library &mdash; all free</i></span><span class="oar">&rarr;</span></a>
       <a class="gopt" href="/lp-lab"><span class="oic"><img src="/icons/flask.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I want to go deep on LP</b><i>The LP Lab &mdash; ranges, impermanent loss, the real math</i></span><span class="oar">&rarr;</span></a>
       <a class="gopt" href="/tools"><span class="oic"><img src="/icons/glass.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I need research tools</b><i>Check a wallet or token first &mdash; Wallet Checkup is free, then X-Ray, Holders, Trace</i></span><span class="oar">&rarr;</span></a>
-      <a class="gopt" href="/tools#for-projects"><span class="oic"><img src="/icons/lock.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I run a project or community</b><i>Lock tokens, run a buy competition, airdrop holders, get listed right</i></span><span class="oar">&rarr;</span></a>
+      <div class="gopt-wrap">
+        <a class="gopt" href="/for-projects"><span class="oic"><img src="/icons/lock.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I run a project or community</b><i>Lock tokens, run a buy competition, airdrop holders, get listed right</i></span><span class="oar">&rarr;</span></a>
+        <!-- Colosseum W9 part 2 (docs/COLOSSEUM_ROADMAP.md §W9 part 2): the front door for
+             everyone who already lands on THIS tile — see a program already published, not
+             just the guided setup flow. Fires hub_door_click:home (POST /api/track,
+             lib/traction.js recordHubDoorClick) before navigating away. -->
+        <a class="gopt-sub" href="/hub" id="hubDoorHome">See a published program and its receipts &rarr;</a>
+      </div>
       <a class="gopt" href="/premium"><span class="oic"><img src="/icons/tools.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I need advanced / operator tools</b><i>Operator-grade forensics &amp; builder tooling</i></span><span class="oar">&rarr;</span></a>
       <a class="gopt" href="/clkn"><span class="oic"><img class="mascot" src="/cluck-norris-mascot.jpg" alt=""></span><span class="ol"><b>I want to know about CLKN</b><i>The token &mdash; price, holders, chart &amp; where to buy</i></span><span class="oar">&rarr;</span></a>
     </div>
@@ -251,6 +265,28 @@
     function copy(){ if (busy) return; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(CA).then(flash).catch(legacy); else legacy(); }
     el.addEventListener("click", copy);
     el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); copy(); } });
+  })();
+  // Colosseum W9 part 2: fire-and-forget hub_door_click:home (POST /api/track, no PII) —
+  // see lib/traction.js recordHubDoorClick + the CSS/markup above. Reuses the school's own
+  // anonymous per-browser id (localStorage "clkn_sid", src/App.jsx sessionId()) so a visitor
+  // who later reaches a school door counts once in the lifetime set, not twice. Never blocks
+  // the navigation: sendBeacon fires and forgets, with a keepalive-fetch fallback.
+  (function () {
+    var a = document.getElementById("hubDoorHome"); if (!a) return;
+    function sid() {
+      try {
+        var s = localStorage.getItem("clkn_sid");
+        if (!s) { s = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)); localStorage.setItem("clkn_sid", s); }
+        return s;
+      } catch (_) { return ""; }
+    }
+    a.addEventListener("click", function () {
+      try {
+        var body = JSON.stringify({ event: "hub_door_click:home", sid: sid() });
+        if (navigator.sendBeacon) { navigator.sendBeacon("/api/track", new Blob([body], { type: "application/json" })); return; }
+        fetch("/api/track", { method: "POST", headers: { "Content-Type": "application/json" }, body: body, keepalive: true }).catch(function () {});
+      } catch (_) {}
+    });
   })();
   // Buy CLKN — Jupiter Plugin modal (init once, resume to open/reopen). Falls back to
   // opening jup.ag in a new tab if the plugin script didn't load.

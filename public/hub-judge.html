@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>The Judge&#39;s Fifteen Minutes — Cluck Norris</title>
+<meta name="description" content="One page mapping each Colosseum judging criterion to the exact URLs to open, what to look for, and the test that pins it — rendered from docs/JUDGE_GUIDE.md so the two cannot drift."/>
+<meta property="og:title" content="The Judge&#39;s Fifteen Minutes — Cluck Norris"/>
+<meta property="og:description" content="One page mapping each Colosseum judging criterion to the exact URLs to open, what to look for, and the test that pins it — rendered from docs/JUDGE_GUIDE.md so the two cannot drift."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/hub/judge"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="The Judge&#39;s Fifteen Minutes — Cluck Norris"/>
+<meta name="twitter:description" content="One page mapping each Colosseum judging criterion to the exact URLs to open, what to look for, and the test that pins it — rendered from docs/JUDGE_GUIDE.md so the two cannot drift."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:.5px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:6px; }
+  main .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  main .card h2 { font-family:var(--disp); font-size:15px; letter-spacing:1px; margin:0 0 10px; color:var(--gold); text-transform:uppercase; font-weight:400; }
+  main .card h3 { font-family:var(--disp); font-size:13px; letter-spacing:1px; margin:10px 0 6px; color:var(--text); font-weight:400; }
+  main .card p { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; margin:0 0 8px; }
+  main .card ol, main .card ul { margin:0 0 4px; padding-left:20px; }
+  main .card li { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.65; margin-bottom:10px; }
+  main .card li:last-child { margin-bottom:0; }
+  main .card code { font-family:var(--mono); font-size:12.5px; color:#D1D5DB; background:rgba(255,255,255,0.06); border-radius:4px; padding:1px 5px; word-break:break-all; }
+  main .card a { color:var(--cyan, #67E8F9); text-decoration:none; }
+  main .card a code { color:inherit; }
+  .footer-note { text-align:center; font-size:12px; color:var(--sub); margin-top:6px; line-height:1.6; }
+  .footer-note a { color:var(--cyan, #67E8F9); text-decoration:none; display:inline-block; padding:14px 3px; margin:-14px -3px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/hub">← PROJECT HUB</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">The Judge&#39;s Fifteen Minutes</h1>
+    <p data-clkn-avoid="1">WHAT TO OPEN, IN ORDER, PER JUDGING CRITERION</p>
+  </div>
+
+  <!-- Generated from docs/JUDGE_GUIDE.md by scripts/build-judge-page.cjs — do not hand-edit
+       between here and the closing comment; run the build script and commit its output instead.
+       This body is the doc's own English markdown, on purpose (see the generator's file header)
+       and is NOT part of the curated i18n set scripts/i18n-audit.cjs gates. -->
+<div class="card" data-clkn-avoid-kids="1">
+  
+  <p>This is the shortest honest path through the Project Hub, organised by the six criteria Colosseum&#39;s Official Rules §8 actually score (<code>docs/COLOSSEUM_2026_SUBMISSION.md</code>), not the website&#39;s seven guidance headings. Every URL below is relative to <code>clucknorris.app</code> (or <code>staging.clucknorris.app</code> — <code>docs/HUB_VERIFY.md</code> states which host has which route live today) and needs no wallet, no login, and no key. Each step names a <code>scripts/</code> test file that pins the exact thing it shows, so a judge (or a future session) can check the claim never quietly stopped being true.</p>
+</div>
+<div class="card" data-clkn-avoid-kids="1">
+  <h2>Functionality (including code quality)</h2>
+  <ol><li><code>/hub/demo/p/lock-to-earn</code> — a program version&#39;s terms and the sha256 hash computed from them sit on the same screen, so the hash is checkable on the spot rather than asserted. Pinned by <code>scripts/hub-demo-fixture-test.cjs</code> and <code>scripts/hub-core-test.cjs</code>.</li><li><code>/hub/demo</code> — a holder qualifies under the program&#39;s own term rule, and another is refused with a machine-checkable reason code instead of a paragraph of excuses. Pinned by <code>scripts/hub-demo-fixture-test.cjs</code>.</li><li><code>/hub/verify</code> — paste a receipt link and the browser re-derives the payout from the published inputs, with no server call once the page has loaded. Pinned by <code>scripts/hub-verify-page-test.cjs</code>.</li><li><code>/hub/schema/receipt.json</code> — the exact JSON Schema a receipt&#39;s own wire shape validates against, served byte-identical to the file in this repo. Pinned by <code>scripts/hub-schema-test.cjs</code>.</li><li><code>/hub/cuna/programs/compare</code> — two program versions diffed field by field (term, multiplier, eligibility rule, period, budget) in plain words, computed in the browser from the same public JSON the pages above already serve — nothing new on the wire. Pinned by <code>scripts/hub-compare-test.cjs</code>.</li></ol>
+</div>
+<div class="card" data-clkn-avoid-kids="1">
+  <h2>Potential Impact</h2>
+  <ol><li><code>/for-projects</code> — the guided front door a project team opens first: lock, apply for lock-to-earn, run a buy competition, airdrop, get listed right, snapshot holders, burn with a receipt. Pinned by <code>scripts/hub-apply-test.cjs</code>.</li><li><code>/hub/poke</code> — a second, real, branded project already on the same settlement library while its own terms are still being agreed, labelled DRY RUN rather than hidden until it is ready. Pinned by <code>scripts/hub-brand-test.cjs</code>.</li><li><code>/api/hub</code> — the plain JSON index of every program this platform runs today, one call, nothing gated behind a key. Pinned by <code>scripts/hub-public-test.cjs</code>.</li><li><code>/hub/status</code> — every project&#39;s programs, receipts and reproducibility ratio in one place, next to the exact git commit the running server was built from. Pinned by <code>scripts/hub-status-test.cjs</code>.</li><li><code>/api/hub/cuna/feed.json</code> and <code>/hub/cuna/feed.xml</code> — every program version published, batch settled, holder snapshot taken and commitment observed, newest first, so a project&#39;s own community can follow the record with an RSS/JSON-Feed reader instead of a wallet. Pinned by <code>scripts/hub-feed-test.cjs</code>.</li></ol>
+</div>
+<div class="card" data-clkn-avoid-kids="1">
+  <h2>Novelty</h2>
+  <ol><li><code>/hub/trust</code> — the trust boundary stated in plain words: what a hash and a receipt prove, and what they don&#39;t, so nobody reads more into a number than it earns. Pinned by <code>scripts/hub-trust-doc-test.cjs</code>.</li><li><code>/hub/verify</code> — the claim other reward programs don&#39;t make: reproduce the payout yourself, offline once the page has loaded, from data anyone can fetch on their own. Pinned by <code>scripts/hub-verify-page-test.cjs</code>.</li><li><code>/hub/demo/r/rcpt-a</code> — a receipt that names the rule it was paid under, not just a number. Pinned by <code>scripts/hub-demo-fixture-test.cjs</code>.</li><li><code>/hub/schema/program-version.json</code> — a program&#39;s terms are a versioned, hashed, schema&#39;d record, not a pinned message a team could edit quietly later. Pinned by <code>scripts/hub-schema-test.cjs</code>.</li></ol>
+</div>
+<div class="card" data-clkn-avoid-kids="1">
+  <h2>UX for downstream users</h2>
+  <ol><li><code>/hub/wallet/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</code> — one address, every project&#39;s eligibility, no wallet connect and no hunting project by project. Pinned by <code>scripts/hub-wallet-test.cjs</code>.</li><li><code>/hub/demo</code> — the whole loop end to end — program, eligibility, funding, batch, receipt, reproduction — walked with no wallet at all. Pinned by <code>scripts/hub-demo-fixture-test.cjs</code>.</li><li><code>/for-projects</code> — a project operator&#39;s own path onto the platform, in plain language, before a wallet or a payment is ever asked for. Pinned by <code>scripts/hub-apply-test.cjs</code>.</li><li><code>/hub/trust</code> on a phone — tap targets, heading order and no horizontal scroll on the page a judge is most likely to open on a phone first. Pinned by <code>scripts/hub-a11y-test.cjs</code>.</li><li><code>/hub/demo/r/rcpt-a?print=1</code> — the same receipt rendered as one printable page: the amount, the rule, the settlement signature as text and as a QR code, and the trust-boundary line, so a holder can keep a paper copy without needing this site again. Pinned by <code>scripts/hub-print-test.cjs</code>.</li></ol>
+</div>
+<div class="card" data-clkn-avoid-kids="1">
+  <h2>Open-source and composability</h2>
+  <ol><li><code>/hub/schema/project-public.json</code> — the settlement library&#39;s public wire shapes, served at stable URLs a second product could validate against without reading this repo. Pinned by <code>scripts/hub-schema-test.cjs</code>.</li><li><code>/api/hub/cuna/reproducibility</code> — a public, key-free JSON route the reproduction script and this page both call — one algorithm, not two that could quietly drift apart. Pinned by <code>scripts/reproduce-receipt-test.cjs</code>.</li><li><code>/hub/verify</code> — the browser bundle is built straight from the same pure functions (<code>lib/hub/reproduce.js</code>, <code>lib/hub/schema-validate.js</code>) the CLI script and the server route share. Pinned by <code>scripts/hub-verify-page-test.cjs</code>.</li><li><code>/hub/demo-b</code> — a second fixture project proves data never leaks between projects: the same library, fully isolated. Pinned by <code>scripts/hub-demo-fixture-test.cjs</code>.</li><li><code>npx @clkn/hub-verify &lt;receipt-url&gt;</code> — the reproduction script packaged as a standalone command (<code>packages/hub-verify</code>), no clone and no build required. Built from, and byte-checked in CI against, the same repo script and browser bundle above — one verifier, shipped three ways, not three that could quietly drift apart. Publishing to the npm registry is pending the project owner&#39;s own go; until then it runs the same way from a git ref. Pinned by <code>scripts/hub-verify-package-test.cjs</code>.</li></ol>
+</div>
+<div class="card" data-clkn-avoid-kids="1">
+  <h2>Business Plan</h2>
+  <ol><li><code>/api/hub-pricing</code> — the live SOL/CLKN price a project pays for platform access, computed at request time rather than hardcoded into a pitch deck. Pinned by <code>scripts/hub-access-test.cjs</code>.</li><li><code>/hub/apply</code> — a project can register, agree terms and pay its first month without the founder in the loop. Pinned by <code>scripts/hub-apply-test.cjs</code>.</li><li><code>/hub/status</code> — the reproducibility ratio stated as a measured number with its denominator named, never polished to look complete. Pinned by <code>scripts/hub-status-test.cjs</code>.</li><li><code>/api/build</code> — the exact git commit and branch behind everything above, so nothing here is a mockup a judge is being asked to take on faith. Pinned by <code>scripts/hub-status-test.cjs</code>.</li><li><code>/api/hub/cuna/reproducibility/history</code> — the reproducibility ratio recorded daily, not just read fresh today, so a regression would be visible the day it happened rather than smoothed into a single current number. The same public reads were driven at a 50-project x 200-receipt load and measured against a stated latency budget (<code>docs/HUB_LOAD_2026-09-18.md</code>) rather than asserted to scale. Pinned by <code>scripts/reproducibility-history-test.cjs</code> and <code>scripts/hub-load-smoke.cjs</code>.</li></ol>
+</div>
+<div class="card" data-clkn-avoid-kids="1">
+  <h2>What was here before the window</h2>
+  <p>The school, the forensic and locking tools, and CUNA&#39;s lock-to-earn program all predate this window and are disclosed, not claimed, as hackathon work — <code>docs/PRE_EVENT_STATE.md</code> names the two snapshot commits (<code>snapshot/pre-colosseum-2026-09-14-main</code> and <code>-develop</code>) everything above them was built on. The Project Hub — the settlement library, the public pages, the reproduction tooling and the self-serve onboarding above — is what was built inside the window, on top of that platform.</p>
+</div>
+<div class="card" data-clkn-avoid-kids="1">
+  <h2>What is dry run today</h2>
+  <p>Two things on the Hub are always a rehearsal, clearly labelled, and excluded from every count: <code>/hub/demo</code> (and <code>/hub/demo-b</code>), a fixture project over made-up addresses, and <code>/hub/poke</code> (POKEAHOE), a real branded page seeded <code>dryRun: true</code> while terms are still being agreed with that team. Neither can be armed or paid, and neither adds to any number this guide or the submission cites — <code>docs/HUB_VERIFY.md</code> §(f) states the rule.</p>
+</div>
+<div class="card" data-clkn-avoid-kids="1">
+  <h2>The second reviewer</h2>
+  <p>Codex reviews every pull request against <code>docs/CODEX_REVIEWER_BRIEF.md</code> before it merges — a second, independent set of eyes on the money paths and the claims above, not a rewrite.</p>
+</div>
+<div class="card" data-clkn-avoid-kids="1">
+  <h2>The glossary</h2>
+  <p><code>/hub/glossary</code> — every term and reason code the pages above use (a program&#39;s own fields, a disqualify code, a settlement status), defined in plain English, anchorable, and linked from wherever the code itself appears. Pinned by <code>scripts/hub-glossary-test.cjs</code>.</p>
+</div>
+  <!-- /generated -->
+
+  <div class="footer-note" data-clkn-avoid="1">
+    Every claim here is checked against a route this repo registers and a test file in scripts/.<br>
+    <a href="https://github.com/clucknorrisapp/cluck-norris-school/blob/main/docs/JUDGE_GUIDE.md" target="_blank" rel="noopener">Read docs/JUDGE_GUIDE.md on GitHub →</a>
+    <a href="/hub/trust">What the Hub doesn't prove →</a>
+    <a href="/hub">Back to the Project Hub →</a>
+  </div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>
