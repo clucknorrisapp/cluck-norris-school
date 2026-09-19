@@ -1,22 +1,43 @@
 #!/usr/bin/env node
-// Build the STORE edition of the school — the education-only bundle the Google Play / iOS
-// wrapper ships INSIDE the app (docs/STORE_EDITION.md; contract: the wrapper repo's
-// DELIVERY-CONTRACT.md). Usage: node scripts/build-store-edition.mjs [google|ios]
+// Build a STORE-family edition of the school. Usage: node scripts/build-store-edition.mjs
+// [google|ios|seeker]
 //
-// What it does, and why each step exists:
-//   1. `vite build` with STORE_EDITION set → src/edition.js folds STORE=true, the excluded flows
-//      (wallet claim, trade links, token widget, live-site nav) compile OUT, every API call is
-//      absolute to the live backend, and publicDir is off so nothing is copied blindly.
-//   2. Copies an explicit allow-list from public/ (store-edition/store-edition.json): the two
-//      tool pages the edition carries, the shared scripts they need, i18n, images. The pages are
-//      transformed: <!-- STORE:OUT --> … <!-- /STORE:OUT --> blocks (and the /* STORE:OUT */ form)
-//      are REMOVED, <!-- STORE:IN … /STORE:IN --> blocks are REVEALED, and "/api/…" becomes absolute.
-//   3. Verifies the output the way a reviewer would: no forbidden string anywhere (wallet, pass,
-//      swap widget, analytics, links to pages that are not in the bundle), no relative /api ref,
-//      every local src/href resolves inside the bundle, required files present.
+// google/ios — the education-only bundle the Google Play / iOS wrapper ships INSIDE the app
+// (docs/STORE_EDITION.md; contract: the wrapper repo's DELIVERY-CONTRACT.md). UNCHANGED by the
+// addition of the third variant below — same config file (store-edition/store-edition.json),
+// same steps, same output.
+//
+// seeker — the Solana dApp Store variant (docs/SEEKER_APP_PLAN.md), added 2026-09-19. Its own
+// config, store-edition/seeker-edition.json: no wallet/payment ban (the opposite of google/ios —
+// full features, on purpose), a fresh mobile shell entry (seeker.html / src/seeker/*, hash-routed
+// since a bundled Capacitor app has no server to rewrite deep paths) instead of the desktop React
+// school, and its own short forbidden-word list (the hard rules — no Wallet Watch / Nomadz /
+// Solana Foundation mentions, no yield/APR/APY/guaranteed language) rather than the store-edition
+// wallet ban. Reuses every mechanical step below (vite build, copy+transform, verify, tar+manifest)
+// — the seeker-only differences are called out at each step rather than forked into a new file.
+//
+// What each step does, and why it exists (variant-generic; per-variant behaviour comes from cfg):
+//   1. `vite build` with STORE_EDITION set → for google/ios, src/edition.js folds STORE=true and
+//      the excluded flows compile out (unchanged); for seeker, vite.config.js instead swaps the
+//      build ENTRY to seeker.html (vite.config.js's SEEKER branch) — the only vite.config.js
+//      change this variant needed. Every variant gets publicDir off (nothing copied blindly) and
+//      every "/api/…" made absolute to the live backend.
+//   2. Copies an explicit allow-list from public/ (cfg.pages / cfg.files / cfg.dirs): google/ios
+//      carry the two tool pages the edition needs; seeker carries none (cfg.pages: []) and instead
+//      just the shared scripts its shell loads (cluck-util.js, cluck-wallet.js, i18n.js, theme.css,
+//      icon). Any HTML copied this way is transformed: <!-- STORE:OUT --> … blocks removed,
+//      <!-- STORE:IN --> blocks revealed, "/api/…" made absolute — a no-op on seeker's shared .js
+//      files where none of those markers exist, but the same "/api/…" → absolute rewrite still
+//      applies (cluck-util.js's RPC helper and i18n.js's translate fallback both call it).
+//   3. Verifies the output the way a reviewer would: no forbidden string anywhere (cfg.forbidden /
+//      cfg.forbiddenPatterns — the wallet/pass/swap-widget ban for google/ios, the hard-rule words
+//      for seeker), no relative /api ref, every local src/href resolves inside the bundle, every
+//      allowedHosts, required files present, and — seeker only — hash routing (the shell's own
+//      router) and no reliance on a remote server.url load.
 //   4. Tars it as store-edition-<variant>-<version>.tgz with ONE top-level directory (the wrapper
 //      extracts with --strip-components=1), writes the sha256 and a JSON manifest with the source
-//      commit. Deterministic tar flags so the same commit yields the same digest.
+//      commit. Deterministic tar flags so the same commit yields the same digest. Unchanged code
+//      path for every variant.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -24,9 +45,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "store-edition.json"), "utf8"));
 const variant = String(process.argv[2] || "google").toLowerCase();
-if (!cfg.variants.includes(variant)) { console.error(`unknown variant "${variant}" — one of ${cfg.variants.join(", ")}`); process.exit(2); }
+const SEEKER_VARIANTS = ["seeker"];
+const isSeeker = SEEKER_VARIANTS.includes(variant);
+// Each family owns its own config file — google/ios keep reading exactly the file they always
+// did, so nothing about their build can change from seeker existing.
+const cfgFile = isSeeker ? "seeker-edition.json" : "store-edition.json";
+const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", cfgFile), "utf8"));
+if (!cfg.variants.includes(variant)) {
+  const known = [...JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "store-edition.json"), "utf8")).variants, ...SEEKER_VARIANTS];
+  console.error(`unknown variant "${variant}" — one of ${known.join(", ")}`); process.exit(2);
+}
 const OUT = path.join(ROOT, `dist-store-${variant}`);
 const NAME = `store-edition-${variant}-${cfg.version}`;
 const REL = path.join(ROOT, "release");
@@ -36,6 +65,14 @@ const log = (m) => console.log(`[store-edition] ${m}`);
 fs.rmSync(OUT, { recursive: true, force: true });
 execFileSync("npx", ["vite", "build", "--outDir", OUT, "--emptyOutDir"], { cwd: ROOT, stdio: "inherit",
   env: { ...process.env, STORE_EDITION: variant } });
+// seeker builds a DIFFERENT html entry (seeker.html, vite.config.js's SEEKER branch) — the
+// Capacitor wrapper (and this script's own verify/tar steps below) both expect the app's single
+// entry at the bundle root as index.html, same as every other variant.
+if (isSeeker) {
+  const from = path.join(OUT, "seeker.html"), to = path.join(OUT, "index.html");
+  if (!fs.existsSync(from)) throw new Error("vite did not produce seeker.html — check vite.config.js's SEEKER branch");
+  fs.renameSync(from, to);
+}
 
 // 2. allow-listed files, transformed
 const API = cfg.apiBase.replace(/\/+$/, "");
@@ -69,6 +106,16 @@ for (const f of cfg.files) copy(f, /\.(js|css)$/.test(f));
 // translation falling back to English; it can never leak. The verifier below then scans the
 // copied JSON with the same rules as code.
 const forbiddenHit = (t) => cfg.forbidden.some((b) => t.includes(b)) || (cfg.forbiddenPatterns || []).some((p) => new RegExp(p).test(t));
+// EXACT-key exclusion (google/ios only — cfg.excludeKeys is undefined everywhere else),
+// 2026-09-19: the Seeker app's own copy (docs/SEEKER_APP_PLAN.md) is curated into these SAME
+// shared public/i18n/<lang>.json files, per the site-wide convention (same files
+// hub-glossary.html / solana-room.html curate into) — there is no seeker-only dictionary family.
+// Those entries are harmless to carry (neither store-edition page ever renders them) but pruning
+// them by SUBSTRING the way `forbidden` above does would risk collateral damage — e.g. adding the
+// literal word "Disconnect" would also match the existing, unrelated key that CONTAINS
+// "Disconnecting" — so this is an exact, whole-key match instead, keeping google/ios's shipped
+// dictionaries (and their tarball) byte-for-byte unaffected by an unrelated feature's new copy.
+const EXCLUDE_KEYS = new Set(cfg.excludeKeys || []);
 let pruned = 0;
 for (const d of cfg.dirs) for (const f of fs.readdirSync(path.join(ROOT, "public", d))) {
   if (/\.locker\.json$/.test(f)) continue;   // the Locker Room dictionary belongs to a page the bundle does not carry
@@ -76,7 +123,7 @@ for (const d of cfg.dirs) for (const f of fs.readdirSync(path.join(ROOT, "public
   fs.mkdirSync(path.dirname(dst), { recursive: true });
   if (!f.endsWith(".json")) { fs.copyFileSync(src, dst); continue; }
   const dict = JSON.parse(fs.readFileSync(src, "utf8")); const out = {};
-  for (const [k, v] of Object.entries(dict)) { if (forbiddenHit(k) || (typeof v === "string" && forbiddenHit(v))) { pruned++; continue; } out[k] = v; }
+  for (const [k, v] of Object.entries(dict)) { if (EXCLUDE_KEYS.has(k) || forbiddenHit(k) || (typeof v === "string" && forbiddenHit(v))) { pruned++; continue; } out[k] = v; }
   fs.writeFileSync(dst, JSON.stringify(out));
 }
 log(`dictionaries: pruned ${pruned} entries that carried forbidden content`);
@@ -117,7 +164,24 @@ for (const f of textFiles) {
   }
 }
 for (const need of ["index.html", ...cfg.pages, "theme.css", "cluck-util.js", "i18n/es.json"]) if (!fs.existsSync(path.join(OUT, need))) problems.push(`missing required file: ${need}`);
-if (!files.some((f) => /assets[\\/]index-.*\.js$/.test(f))) problems.push("missing the vite entry chunk");
+// google/ios keep the exact original assertion (their chunk is always named "index-*"). seeker's
+// entry is seeker.html, so vite names its chunk after THAT basename instead — checked separately
+// rather than loosening the shared regex, so google/ios can't silently pass a broken build.
+if (isSeeker) {
+  if (!fs.existsSync(path.join(OUT, "cluck-wallet.js"))) problems.push("missing required file: cluck-wallet.js");
+  if (!files.some((f) => /assets[\\/].*\.js$/.test(f))) problems.push("missing the vite entry chunk");
+  // Self-contained + hash-routed (docs/SEEKER_APP_PLAN.md; CLKN-SEEKER's DELIVERY-CONTRACT.md): a
+  // bundled Capacitor app has no server to rewrite a deep path back to index.html, so the shell
+  // must route off the # fragment. Checked against the SOURCE (src/seeker/App.jsx), not the built
+  // chunk — production minification renames local identifiers like `HashRouter` to something
+  // unminifiable-searchable, so a source-level check is the reliable one (and it also means the
+  // check still catches a regression before a single byte gets minified).
+  const appSrc = fs.readFileSync(path.join(ROOT, "src", "seeker", "App.jsx"), "utf8");
+  if (!/\bHashRouter\b/.test(appSrc)) problems.push("src/seeker/App.jsx does not use HashRouter — a bundled app has no server to rewrite deep paths, it must hash-route");
+  if (/\bBrowserRouter\b/.test(appSrc)) problems.push("src/seeker/App.jsx uses BrowserRouter — a bundled app has no server to rewrite deep paths, it must hash-route");
+} else {
+  if (!files.some((f) => /assets[\\/]index-.*\.js$/.test(f))) problems.push("missing the vite entry chunk");
+}
 if (problems.length) { console.error("[store-edition] VERIFICATION FAILED:\n  " + problems.join("\n  ")); process.exit(1); }
 log(`verified ${files.length} files, no forbidden content, no relative /api refs`);
 

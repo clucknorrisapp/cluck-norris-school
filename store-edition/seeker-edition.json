@@ -1,0 +1,59 @@
+{
+  "version": "0.1.0",
+  "variants": [
+    "seeker"
+  ],
+  "apiBase": "https://clucknorris.app",
+  "pages": [],
+  "files": [
+    "theme.css",
+    "cluck-util.js",
+    "cluck-wallet.js",
+    "i18n.js",
+    "icon.svg",
+    "cluck-norris.png"
+  ],
+  "dirs": [
+    "i18n"
+  ],
+  "remotes": [],
+  "forbidden": [
+    "Wallet Watch",
+    "Nomadz",
+    "Solana Foundation"
+  ],
+  "forbiddenPatterns": [
+    "[Gg]uaranteed (return|yield|APR|APY)",
+    "[Ff]ixed (APR|APY)"
+  ],
+  "allowedHosts": [
+    "clucknorris.app",
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
+    "www.w3.org",
+    "reactjs.org",
+    "phantom.app",
+    "solflare.com",
+    "backpack.app",
+    "coinbase.com",
+    "go.cb-w.com",
+    "web3.bitget.com",
+    "bkcode.vip",
+    "magiceden.io",
+    "wallet.magiceden.io",
+    "nightly.app",
+    "okx.com",
+    "web3.okx.com",
+    "link.trustwallet.com",
+    "trustwallet.com",
+    "safepal.com",
+    "coin98.com",
+    "tokenpocket.pro",
+    "mathwallet.org",
+    "glow.app",
+    "exodus.com",
+    "brave.com",
+    "jup.ag",
+    "www.bybit.com"
+  ]
+}

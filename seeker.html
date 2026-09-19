@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="Cluck Norris — the pocket crypto toolkit for Solana Seeker: reclaim rent, ask the AI tutor, check your wallet." />
+    <meta name="theme-color" content="#0b0c0e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="stylesheet" href="/theme.css" />
+    <title>Cluck Norris</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Shared browser modules (CLAUDE.md: "don't re-type these into a page") — plain, blocking
+         scripts so they run before the module below mounts the app. cluck-wallet.js is the
+         MWA-aware registry: MWA inside the Capacitor app, the same legacy/standard detection
+         everywhere else. i18n.js populates window.CLKN_I18N.dict, which the app's own t()
+         (src/seeker/i18n.js) reads — same pattern as public/hub-glossary.html / solana-room.html. -->
+    <script src="/cluck-util.js"></script>
+    <script src="/cluck-wallet.js"></script>
+    <script src="/i18n.js"></script>
+    <script type="module" src="/src/seeker/main.jsx"></script>
+  </body>
+</html>

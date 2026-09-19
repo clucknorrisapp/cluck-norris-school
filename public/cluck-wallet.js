@@ -143,30 +143,35 @@
     return out;
   }
 
+  // Shared by stdProvider (Wallet Standard) and mwaProvider (Mobile Wallet Adapter) below — both
+  // wrap a non-Phantom transport in the same Phantom-shaped shape, so the same wire-format
+  // helpers apply. Pulled out to file scope 2026-09-19 so MWA didn't need its own copy.
+  function mkPk(address) {
+    var W3 = global.solanaWeb3;
+    if (W3 && W3.PublicKey) { try { return new W3.PublicKey(address); } catch (e) {} }
+    return { toString: function () { return address; }, toBase58: function () { return address; } };
+  }
+  function txToBytes(tx) {
+    if (tx instanceof Uint8Array) return tx;
+    // web3.js legacy Transaction: leave room for the wallet's signature; VersionedTransaction
+    // serializes with no options.
+    if (tx && typeof tx.serialize === "function") {
+      return tx.version !== undefined ? tx.serialize() : tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+    }
+    throw new Error("Unsupported transaction object.");
+  }
+  function txFromBytes(bytes, like) {
+    var W3 = global.solanaWeb3;
+    if (like instanceof Uint8Array || !W3) return bytes;
+    if (like && like.version !== undefined && W3.VersionedTransaction) return W3.VersionedTransaction.deserialize(bytes);
+    return W3.Transaction.from(bytes);
+  }
+
   function stdProvider(w) {
     var account = null;
     var pk = null;
-    function mkPk(address) {
-      var W3 = global.solanaWeb3;
-      if (W3 && W3.PublicKey) { try { return new W3.PublicKey(address); } catch (e) {} }
-      return { toString: function () { return address; }, toBase58: function () { return address; } };
-    }
     function need() { if (!account) throw new Error("Connect the wallet first."); return account; }
-    function toBytes(tx) {
-      if (tx instanceof Uint8Array) return tx;
-      // web3.js legacy Transaction: leave room for the wallet's signature; VersionedTransaction
-      // serializes with no options.
-      if (tx && typeof tx.serialize === "function") {
-        return tx.version !== undefined ? tx.serialize() : tx.serialize({ requireAllSignatures: false, verifySignatures: false });
-      }
-      throw new Error("Unsupported transaction object.");
-    }
-    function fromBytes(bytes, like) {
-      var W3 = global.solanaWeb3;
-      if (like instanceof Uint8Array || !W3) return bytes;
-      if (like && like.version !== undefined && W3.VersionedTransaction) return W3.VersionedTransaction.deserialize(bytes);
-      return W3.Transaction.from(bytes);
-    }
+    var toBytes = txToBytes, fromBytes = txFromBytes;
     var p = {
       isWalletStandard: true,
       standardWallet: w,
@@ -270,6 +275,128 @@
     return out;
   }
 
+  // ── Mobile Wallet Adapter (Solana Seeker / Android, inside the Capacitor app) ──────────────
+  // MWA is a native protocol (an Android intent + a local socket) — no page script can speak it
+  // directly, in a webview or otherwise, which is why every legacy/standard detector above finds
+  // nothing when this app runs bundled inside Capacitor. The native side (a Capacitor plugin,
+  // CLKN-SEEKER repo, increment 2 of the Seeker build) is expected to publish a bridge object
+  // under `Capacitor.Plugins.CluckMWA` (Capacitor's own convention for a registered plugin) using
+  // the SAME method names the official MWA client (`@solana-mobile/mobile-wallet-adapter-protocol-web3js`)
+  // exposes inside its `transact(wallet => …)` session — authorize / reauthorize / deauthorize /
+  // signTransactions / signAndSendTransactions / signMessages — because that vocabulary is
+  // documented and real, not invented (same bar as the DEEPLINKS table above): the native plugin
+  // does the actual transact() session and hands this layer plain promise-returning methods.
+  // Contract (all promise-returning; addresses/signatures/transactions are BASE64 strings across
+  // this bridge, base58 only where signAndSendTransactions matches the Phantom shape below):
+  //   authorize({ cluster, identity })                -> { address, authToken }
+  //   reauthorize({ authToken })                       -> { address, authToken }
+  //   deauthorize({ authToken })                       -> {}
+  //   signTransactions({ authToken, transactions })    -> { signedTransactions }        (base64[])
+  //   signAndSendTransactions({ authToken, transactions, options }) -> { signatures }   (base58[])
+  //   signMessages({ authToken, addresses, messages }) -> { signedMessages }            (base64[])
+  // No real device or plugin exists yet, so this is driven in tests by an INJECTED FAKE bridge at
+  // exactly this seam (scripts/seeker-build-test.cjs), the same way wallet-standard-test.cjs
+  // drives stdProvider with a fake standard wallet above.
+  function isCapacitorNative() {
+    try { return !!(global.Capacitor && typeof global.Capacitor.isNativePlatform === "function" && global.Capacitor.isNativePlatform() && global.Capacitor.getPlatform && global.Capacitor.getPlatform() === "android"); }
+    catch (e) { return false; }
+  }
+  // global.CluckMWA is a plain override for anything that wants to hand this layer a bridge
+  // directly (tests; a future non-Capacitor shell) — Capacitor.Plugins.CluckMWA is the real path.
+  function mwaBridge() {
+    try { return global.CluckMWA || (global.Capacitor && global.Capacitor.Plugins && global.Capacitor.Plugins.CluckMWA) || null; }
+    catch (e) { return null; }
+  }
+  function b64encode(bytes) {
+    var s = ""; for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return global.btoa(s);
+  }
+  function b64decode(str) {
+    var bin = global.atob(str), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+  function mwaIdentity() {
+    return { name: "Cluck Norris", uri: (global.location && global.location.origin) || "https://clucknorris.app", icon: "/icon.svg" };
+  }
+  function mwaProvider(bridge) {
+    var authToken = null, address = null, pk = null;
+    function need() { if (!pk) throw new Error("Connect the wallet first."); return pk; }
+    var p = {
+      isMobileWalletAdapter: true,
+      name: "Mobile Wallet Adapter",
+      publicKey: null,
+      connect: function (opts) {
+        var call = (authToken && opts && opts.onlyIfTrusted)
+          ? bridge.reauthorize({ authToken: authToken })
+          : bridge.authorize({ cluster: "mainnet-beta", identity: mwaIdentity() });
+        return Promise.resolve(call).then(function (r) {
+          if (!r || !r.address) throw new Error("Mobile Wallet Adapter returned no address.");
+          authToken = r.authToken || authToken;
+          address = r.address;
+          pk = mkPk(address);
+          p.publicKey = pk;
+          return { publicKey: pk };
+        });
+      },
+      disconnect: function () {
+        var t = authToken; authToken = null; address = null; pk = null; p.publicKey = null;
+        if (!t || !bridge.deauthorize) return Promise.resolve();
+        return Promise.resolve(bridge.deauthorize({ authToken: t })).catch(function () {});
+      },
+      signTransaction: function (tx) {
+        need();
+        return Promise.resolve(bridge.signTransactions({ authToken: authToken, transactions: [b64encode(txToBytes(tx))] })).then(function (r) {
+          var out = r && r.signedTransactions && r.signedTransactions[0];
+          if (!out) throw new Error("Mobile Wallet Adapter returned no signed transaction.");
+          return txFromBytes(b64decode(out), tx);
+        });
+      },
+      signAllTransactions: function (txs) {
+        need();
+        var inputs = (txs || []).map(function (t) { return b64encode(txToBytes(t)); });
+        return Promise.resolve(bridge.signTransactions({ authToken: authToken, transactions: inputs })).then(function (r) {
+          var outs = (r && r.signedTransactions) || [];
+          return outs.map(function (o, i) { return txFromBytes(b64decode(o), txs[i]); });
+        });
+      },
+      signAndSendTransaction: function (tx, options) {
+        need();
+        return Promise.resolve(bridge.signAndSendTransactions({ authToken: authToken, transactions: [b64encode(txToBytes(tx))], options: options || undefined })).then(function (r) {
+          var sig = r && r.signatures && r.signatures[0];
+          if (!sig) throw new Error("Mobile Wallet Adapter returned no signature.");
+          return { signature: sig, publicKey: pk };
+        });
+      },
+      signMessage: function (msg) {
+        need();
+        var bytes = msg instanceof Uint8Array ? msg : new TextEncoder().encode(String(msg));
+        return Promise.resolve(bridge.signMessages({ authToken: authToken, addresses: [address], messages: [b64encode(bytes)] })).then(function (r) {
+          var out = r && r.signedMessages && r.signedMessages[0];
+          if (!out) throw new Error("Mobile Wallet Adapter returned no signed message.");
+          return { signature: b64decode(out), publicKey: pk };
+        });
+      },
+    };
+    return p;
+  }
+  var MWA_PROVIDERS = [];   // one shim per bridge object, same reuse pattern as STD_PROVIDERS
+  function mwaProviderFor(bridge) {
+    for (var i = 0; i < MWA_PROVIDERS.length; i++) if (MWA_PROVIDERS[i].bridge === bridge) return MWA_PROVIDERS[i].provider;
+    var p = mwaProvider(bridge); MWA_PROVIDERS.push({ bridge: bridge, provider: p }); return p;
+  }
+  // Inside the Capacitor Android app with the native plugin present, MWA is the ONLY entry —
+  // there is no browser extension surface in a native webview to also detect, and offering a
+  // stale/incidental window.solana next to it would just be a dead button. Returns null (never an
+  // empty array) so available() can fall through to the legacy/standard/web paths unchanged
+  // everywhere else — the required "falls back to existing providers on the web" behaviour.
+  function mwaEntry() {
+    if (!isCapacitorNative()) return null;
+    var bridge = mwaBridge();
+    if (!bridge) return null;
+    return { id: "mwa", name: "Mobile Wallet Adapter", icon: "📱", provider: mwaProviderFor(bridge), mwa: true };
+  }
+
   var state = { provider: null, pubkey: null, id: null };
 
   // A wallet's OWN in-app browser is the most reliable identity signal there is: it names itself in
@@ -304,6 +431,8 @@
   }
 
   function available() {
+    // Inside the Capacitor Android app with the native MWA plugin present, that IS the wallet.
+    var mw = mwaEntry(); if (mw) return [mw];
     // Inside a wallet's own in-app browser, trust the UA over injected flags — one correct button.
     var bw = browserWallet(); if (bw) return [bw];
     var out = [], seen = [];
@@ -600,7 +729,8 @@
       legacyFlags: flags,
       navigatorWallets: !!(global.navigator && global.navigator.wallets),
       standardWallets: std,
-      available: available().map(function (w) { return w.id + (w.standard ? " (standard)" : ""); }),
+      mobileWalletAdapter: { nativePlatform: isCapacitorNative(), bridgePresent: !!mwaBridge() },
+      available: available().map(function (w) { return w.id + (w.standard ? " (standard)" : w.mwa ? " (mwa)" : ""); }),
     };
   }
 
