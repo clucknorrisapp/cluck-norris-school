@@ -111,7 +111,16 @@ const ALL_PAGES = [{ route: "/solana", file: "solana-room.html" }].concat(TOPIC_
 const PAGE_FILES = ALL_PAGES.map((p) => p.file);
 // The dated ownership line every tier-2 page must carry — "dated and owned" is the whole reason
 // these four are allowed to state things that change (owner's scope line for tier 2).
-const TIER2_DATE_LINE = "Last checked 19 September 2026";
+// Each tier-2 page states the date IT was last checked, which is not one shared constant — the
+// phone page was written a day after the other four and says so. What matters is that every one
+// of them carries a real date and the same owner line, so the date is per-route.
+const TIER2_DATE_BY_ROUTE = {
+  "/solana/uses": "Last checked 19 September 2026",
+  "/solana/markets": "Last checked 19 September 2026",
+  "/solana/events": "Last checked 19 September 2026",
+  "/solana/links": "Last checked 19 September 2026",
+  "/solana/phone": "Last checked 20 September 2026",
+};
 const TIER2_OWNER_LINE = "maintained by Cluck Norris";
 const LANGS = ["es", "hi", "it", "pt", "vi", "zh"];
 
@@ -318,11 +327,12 @@ const FORBIDDEN_ADVICE = [
       ok(`"${title}" is in MECHANICS, and not in BIGGER_PICTURE`, mechBlock.includes(title) && !bigBlock.includes(title));
     }
     for (const title of ["What Solana is actually used for", "Buying SOL, ETFs, and what you actually own",
-      "Where the Solana world actually meets", "Where to look things up"]) {
+      "Where the Solana world actually meets", "Where to look things up",
+      "The Solana phone, and what it actually changes"]) {
       ok(`"${title}" is in BIGGER_PICTURE, and not in MECHANICS`, bigBlock.includes(title) && !mechBlock.includes(title));
     }
     ok("six topics in MECHANICS", (mechBlock.match(/title:/g) || []).length === 6, "found " + (mechBlock.match(/title:/g) || []).length);
-    ok("four topics in BIGGER_PICTURE", (bigBlock.match(/title:/g) || []).length === 4, "found " + (bigBlock.match(/title:/g) || []).length);
+    ok("five topics in BIGGER_PICTURE", (bigBlock.match(/title:/g) || []).length === 5, "found " + (bigBlock.match(/title:/g) || []).length);
     ok("COMING_NEXT is now an empty array", /^\[\s*\]$/.test(comingBlock.trim()), "got " + JSON.stringify(comingBlock.trim().slice(0, 60)));
   }
   ok('room page guards the "Coming next" card on COMING_NEXT.length > 0', /COMING_NEXT\.length > 0/.test(roomText));
@@ -412,7 +422,10 @@ const FORBIDDEN_ADVICE = [
   console.log("\n(h) every tier-2 page is dated and owned\n");
   for (const page of BIGGER_PICTURE_PAGES) {
     const text = body[page.route];
-    ok(`${page.route}: carries "${TIER2_DATE_LINE}"`, text.includes(TIER2_DATE_LINE));
+    const expectedDate = TIER2_DATE_BY_ROUTE[page.route];
+    ok(`${page.route}: has an expected "last checked" date in the test's own table`, !!expectedDate,
+      "add this route to TIER2_DATE_BY_ROUTE when you add a tier-2 page");
+    ok(`${page.route}: carries "${expectedDate}"`, !!expectedDate && text.includes(expectedDate));
     ok(`${page.route}: carries "${TIER2_OWNER_LINE}"`, text.includes(TIER2_OWNER_LINE));
     // Anchors on these pages are built inside JS template strings, so scan for the attribute
     // itself rather than for a parsed <a> element: every target="_blank" must be immediately
@@ -463,8 +476,8 @@ const FORBIDDEN_ADVICE = [
     /no price and no market cap/i.test(body["/solana/phone"]));
   ok("/solana/phone discloses that we publish on that store and are entered in a Solana Mobile hackathon",
     /publish/i.test(body["/solana/phone"]) && /hackathon/i.test(body["/solana/phone"]));
-  ok("/solana/phone says secure hardware protects the key, not the decision",
-    /protects the key/i.test(body["/solana/phone"]) || /not the decision/i.test(body["/solana/phone"]));
+  ok("/solana/phone says the hardware protects the key but not the decision",
+    /protect the key/i.test(body["/solana/phone"]) && /decision you make/i.test(body["/solana/phone"]));
   ok("/solana/uses states plainly that most activity is trading/speculation",
     /(?:trading|specul)/i.test(body["/solana/uses"]));
 
