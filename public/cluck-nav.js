@@ -134,7 +134,19 @@
     if (showHome && !document.getElementById("cluck-nav-css")) {
       var st = document.createElement("style");
       st.id = "cluck-nav-css";
-      st.textContent = "a.back,a.back-home,a.home{display:none!important}" +
+      // ⚠️ SCOPED TO LINKS THAT ACTUALLY POINT HOME. This used to be a bare
+      // "a.back,a.back-home,a.home" and hid EVERY page-local back link on the site — which was
+      // right only while every one of them said "← HOME". It is not right any more: 23 links
+      // across public/ use these classes to go back to a SECTION index, not to the homepage —
+      // ten Solana Room pages (→ /solana), nine Project Hub pages (→ /hub), and the tool pages
+      // that return to /tools, /airdrop and /wallet-xray. All of them rendered at height 0 with
+      // nothing reporting it, so a reader deep in the Hub or the Solana Room had no way back to
+      // where they came from except the browser's own Back button (found 2026-09-20, owner).
+      // Only a link that genuinely duplicates the bar's own Home pill is hidden now.
+      st.textContent = "a.back[href='/'],a.back-home[href='/'],a.home[href='/']," +
+        "a.back[href='./index.html'],a.back-home[href='./index.html'],a.home[href='./index.html']," +
+        "a.back[href='https://clucknorris.app/'],a.back-home[href='https://clucknorris.app/']," +
+        "a.home[href='https://clucknorris.app/']{display:none!important}" +
         ".wrap{padding-top:calc(58px + env(safe-area-inset-top,0px))!important}" +
         "#cluck-nav-bar{flex-wrap:nowrap!important}" +
         "@media (max-width:560px){" +
