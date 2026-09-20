@@ -104,6 +104,7 @@ const BIGGER_PICTURE_PAGES = [
   { route: "/solana/markets", file: "solana-markets.html" },
   { route: "/solana/events", file: "solana-events.html" },
   { route: "/solana/links", file: "solana-links.html" },
+  { route: "/solana/phone", file: "solana-phone.html" },
 ];
 const TOPIC_PAGES = MECHANICS_PAGES.concat(BIGGER_PICTURE_PAGES);
 const ALL_PAGES = [{ route: "/solana", file: "solana-room.html" }].concat(TOPIC_PAGES);
@@ -434,6 +435,8 @@ const FORBIDDEN_ADVICE = [
                        "scam-cloned-site", "scam-livestream-airdrop", "scam-speaker-dm", "scam-qr-code",
                        "scam-support-dm", "scam-golden-rule", "not-affiliated"],
     "/solana/links": ["safety-rule", "cant-tell-you"],
+    "/solana/phone": ["what-it-is", "seed-vault", "mwa", "dapp-store", "skr", "skr-impersonator",
+                      "what-it-doesnt-fix", "disclosure"],
   };
   for (const [route, sections] of Object.entries(REQUIRED_SECTIONS)) {
     const missing = sections.filter((id) => !new RegExp('data-section="' + id + '"').test(body[route]));
@@ -451,6 +454,17 @@ const FORBIDDEN_ADVICE = [
     /Full disclosure/i.test(body["/solana/events"]) && /Cluck Norris is entered/i.test(body["/solana/events"]));
   ok("/solana/links leads with type-it-yourself before any link",
     body["/solana/links"].indexOf('data-section="safety-rule"') < body["/solana/links"].indexOf('data-section="cant-tell-you"'));
+  // The phone page names two live mint addresses and asks the reader to tell them apart. A typo in
+  // either is the single worst defect this page could ship — the same reason the mint page's two
+  // addresses are pinned byte-for-byte in (f). Same treatment here.
+  ok("/solana/phone carries the REAL SKR mint byte-for-byte", body["/solana/phone"].includes(SKR_REAL_MINT));
+  ok("/solana/phone carries the impersonator mint byte-for-byte", body["/solana/phone"].includes(SKR_FAKE_MINT));
+  ok("/solana/phone states outright that it carries no price and no market cap",
+    /no price and no market cap/i.test(body["/solana/phone"]));
+  ok("/solana/phone discloses that we publish on that store and are entered in a Solana Mobile hackathon",
+    /publish/i.test(body["/solana/phone"]) && /hackathon/i.test(body["/solana/phone"]));
+  ok("/solana/phone says secure hardware protects the key, not the decision",
+    /protects the key/i.test(body["/solana/phone"]) || /not the decision/i.test(body["/solana/phone"]));
   ok("/solana/uses states plainly that most activity is trading/speculation",
     /(?:trading|specul)/i.test(body["/solana/uses"]));
 

@@ -17284,6 +17284,12 @@ app.get("/solana/events", (req, res) => {
 app.get("/solana/links", (req, res) => {
   res.sendFile(join(__dirname, "public", "solana-links.html"));
 });
+// The Solana phone (owner ask, 2026-09-20). Dated like the rest of tier 2 — hardware specs, app
+// store terms and a token's supply schedule all go stale, and the impersonator section names two
+// live mint addresses that a reader is expected to check for themselves.
+app.get("/solana/phone", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-phone.html"));
+});
 
 // ── Project Burn — burn PART of your own supply, on purpose, with a public receipt ──
 // ============================== LP RESCUE ====================================
