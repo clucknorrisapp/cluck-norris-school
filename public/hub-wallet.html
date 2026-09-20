@@ -152,6 +152,19 @@
       p.programs.map(function (pr) { return programBlock(p.id, ticker, pr); }).join('') + '</div>';
   }
 
+  // AA1 follow-up (Colosseum roadmap §14 DD2 + §11 AA1): "follow this wallet without a project" —
+  // the wallet-scoped twin of hub.html's own followLine (var followLine there — same markup, same
+  // JSON Feed / RSS pair, same lack of a t() call: this line is plain English, not marked
+  // data-i18n-skip, so it rides the site-wide live-MT DOM walker like everything else this page
+  // builds — see the t() comment above for the ONE string on this page that opted out of that).
+  // Rendered for a wallet regardless of whether it has any activity yet (same as the project
+  // page's followLine, which renders even when a project has zero programs) — following is about
+  // watching for FUTURE activity, not a report on what already happened.
+  function followLine(wallet) {
+    var w = encodeURIComponent(wallet);
+    return '<div class="row-flex" style="margin-top:6px"><span class="small">Follow this wallet</span> <a class="mono" target="_blank" rel="noopener" href="/api/hub/wallet/' + w + '/feed.json">JSON Feed</a> · <a class="mono" target="_blank" rel="noopener" href="/hub/wallet/' + w + '/feed.xml">RSS</a></div>';
+  }
+
   function renderEmpty(wallet) {
     // GG3 fix 2 (docs/POKEAHOE_REHEARSAL_2026-09.md §4): this line reads, on its own, like the
     // preview/scan found nothing — it doesn't say this page shows PAST records, not TODAY's
@@ -160,7 +173,7 @@
     // wonder whether the two features are even connected.
     resultEl.innerHTML = '<div class="card"><div class="fact" data-clkn-avoid="1"><b>No Hub program has seen this wallet yet.</b></div>' +
       '<div class="fact" data-i18n-skip="1" style="margin-top:6px">' + esc(t("This page shows what has already been recorded for this wallet — whether it qualifies for a program today is shown on that program's own page.")) + '</div>' +
-      '<div class="small" style="margin-top:8px">' + acct(wallet) + '</div>' +
+      '<div class="small" style="margin-top:8px">' + acct(wallet) + '</div>' + followLine(wallet) +
       '<div class="small" style="margin-top:10px"><a href="/hub">Browse every project →</a></div>' +
       '<div class="small" style="margin-top:6px"><a href="/school#lesson=receipt">Read the receipt lesson →</a></div></div>';
   }
@@ -176,7 +189,7 @@
     catch (e) { renderError('Could not reach the Hub right now (' + e.message + ') — try again shortly.'); return; }
     if (!r.ok) { renderError(r.error || 'lookup failed'); return; }
     if (!r.projects || !r.projects.length) { renderEmpty(r.wallet || w); return; }
-    resultEl.innerHTML = '<div class="small" data-clkn-avoid="1" style="margin-bottom:10px">Seen in ' + r.seenIn + ' project' + (r.seenIn === 1 ? '' : 's') + ' · checked ' + ts(r.generatedAt) + '</div>' +
+    resultEl.innerHTML = '<div class="small" data-clkn-avoid="1" style="margin-bottom:10px">Seen in ' + r.seenIn + ' project' + (r.seenIn === 1 ? '' : 's') + ' · checked ' + ts(r.generatedAt) + '</div>' + followLine(r.wallet || w) +
       r.projects.map(projectBlock).join('');
   }
 

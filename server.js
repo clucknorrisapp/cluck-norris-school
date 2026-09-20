@@ -8653,6 +8653,36 @@ function hubFeedItemsFor(id, p, req) {
   const base = `${req.protocol}://${req.get("host")}`;
   return hubFeed.buildFeedItems({ projectView, versions, batches, receiptsByBatch, snapshots, history, base });
 }
+// AA1 follow-up (Colosseum roadmap §14 DD2 + §11 AA1): "follow a wallet without a project" — the
+// wallet twin of hubFeedItemsFor above. Scoped to exactly the projects GET /api/hub/wallet/:wallet
+// already resolves this wallet into (hubPublic.walletLookup over hubProjects()) — a project the
+// wallet has never appeared in contributes nothing, same honesty rule that route already keeps.
+// Per project: every published program version + its on-chain commitment (project-wide — the
+// wallet doesn't have to be paid under a version to want the rules), and only the settled batches
+// that actually paid THIS wallet (lib/hub/feed.js's buildWalletFeedItems filters on `b.sent[wallet]`
+// itself, from the same raw `batches` store hubFeedItemsFor already reads). No snapshot items — a
+// holder-count snapshot is a fact about the mint, not about one wallet.
+function hubWalletFeedItemsFor(wallet, req) {
+  const base = `${req.protocol}://${req.get("host")}`;
+  const projects = [];
+  for (const [id, p] of Object.entries(hubProjects())) {
+    let view;
+    try { view = hubProjectView(p); } catch (_) { continue; }
+    let lookup;
+    try { lookup = hubPublic.walletLookup(view, wallet); } catch (_) { continue; }
+    if (!lookup.ok || !lookup.entries.length) continue;   // this wallet never appears in this project
+    const state = hubStore.read(kv, id, "state", {}) || {};
+    const versions = Array.isArray(state.versions) ? state.versions.map((v) => hubPublic.programVersionView(v, { full: true })) : [];
+    const batches = hubStore.read(kv, id, "batches", {}) || {};
+    const receiptsByBatch = {};
+    try {
+      const repData = hubReproducibilityFor(id, p);
+      for (const b of (repData && repData.batches) || []) receiptsByBatch[b.batchId] = b;
+    } catch (_) { /* omit the ratio rather than guess */ }
+    projects.push({ projectId: id, label: p.label, versions, batches, receiptsByBatch });
+  }
+  return hubFeed.buildWalletFeedItems({ wallet, projects, base });
+}
 app.get("/api/hub/:project/feed.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300");
   const id = String(req.params.project || "").toLowerCase();
@@ -8794,6 +8824,49 @@ app.get("/hub/:project/feed.xml", rateLimit("hubheavy", { windowMs: 60000, max: 
       description: `Published program versions, settled batches, holder snapshots and on-chain commitments for ${p.label} on the Cluck Norris Project Hub.`,
       home_page_url: `${base}/hub/${encodeURIComponent(id)}`,
       feed_url: `${base}/hub/${encodeURIComponent(id)}/feed.xml`,
+    });
+    res.setHeader("Content-Type", "application/rss+xml; charset=utf-8");
+    return res.status(200).send(xml);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// AA1 follow-up (Colosseum roadmap §14 DD2 + §11 AA1): "follow a wallet without a project" — the
+// per-wallet twin of the two project-feed routes above, same JSON Feed 1.1 / RSS 2.0 split
+// (/api/…/feed.json vs /hub/…/feed.xml — matching the project feeds' own split, not "fixed").
+// Registered here (a literal 4th/5th path segment, "feed.json"/"feed.xml", never collides with the
+// 3-segment /api/hub/wallet/:wallet or the generic /api/hub/:project pattern regardless of route
+// order — verified with a live boot in scripts/hub-wallet-feed-test.cjs, not assumed). Read-only:
+// this walks the exact same public views GET /api/hub/wallet/:wallet already composes; it writes
+// nothing and arms nothing. `wallet` is shape-checked with the same SOL_ADDR_RE (32-44 char base58,
+// length-capped by the regex itself) BEFORE it ever reaches hubProjects()/walletLookup, same as
+// every other wallet-keyed Hub route.
+app.get("/api/hub/wallet/:wallet/feed.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const wallet = String(req.params.wallet || "");
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ ok: false, error: "not a Solana address" });
+  try {
+    const base = `${req.protocol}://${req.get("host")}`;
+    const items = hubWalletFeedItemsFor(wallet, req);
+    const body = hubFeed.toJsonFeed(items, {
+      title: `Wallet ${wallet} — Hub feed`,
+      home_page_url: `${base}/hub/wallet/${encodeURIComponent(wallet)}`,
+      feed_url: `${base}/api/hub/wallet/${encodeURIComponent(wallet)}/feed.json`,
+    });
+    res.setHeader("Content-Type", "application/feed+json; charset=utf-8");
+    return res.status(200).json(body);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/hub/wallet/:wallet/feed.xml", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const wallet = String(req.params.wallet || "");
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ ok: false, error: "not a Solana address" });
+  try {
+    const base = `${req.protocol}://${req.get("host")}`;
+    const items = hubWalletFeedItemsFor(wallet, req);
+    const xml = hubFeed.toRss(items, {
+      title: `Wallet ${wallet} — Hub feed`,
+      description: `Program-version changes and settled payout batches, across every Cluck Norris Project Hub project this wallet has appeared in.`,
+      home_page_url: `${base}/hub/wallet/${encodeURIComponent(wallet)}`,
+      feed_url: `${base}/hub/wallet/${encodeURIComponent(wallet)}/feed.xml`,
     });
     res.setHeader("Content-Type", "application/rss+xml; charset=utf-8");
     return res.status(200).send(xml);

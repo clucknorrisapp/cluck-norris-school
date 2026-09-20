@@ -379,6 +379,18 @@ jobs:
       # carries a private field or a forbidden word.
       - name: Hub project feed — JSON Feed + RSS (Colosseum §14 DD2)
         run: HUB_FEED_TEST_PORT=3367 node scripts/hub-feed-test.cjs
+      # AA1 follow-up (Colosseum roadmap §14 DD2 + §11 AA1) — "follow a wallet without a project":
+      # the per-wallet twin of the feed test above. GET /api/hub/wallet/:wallet/feed.json (JSON
+      # Feed 1.1) and GET /hub/wallet/:wallet/feed.xml (RSS 2.0), scoped to every project a wallet
+      # actually appears in (never the full registry). Checks program-version/commitment items are
+      # project-wide while batch items are scoped to the batches that actually paid that wallet,
+      # that two projects sharing a batch id or version number never collide (project-prefixed
+      # item ids), that a hostile project label round-trips exactly through a real (non-regex)
+      # hand-rolled XML tree parser's entity decoding, that an unseen wallet gets a valid empty
+      # feed rather than a 404, and that a malformed/oversized address is refused 400 before any
+      # project is ever walked.
+      - name: Hub wallet feed — JSON Feed + RSS across every project a wallet appears in (AA1 follow-up)
+        run: HUB_WALLET_FEED_TEST_PORT=3368 node scripts/hub-wallet-feed-test.cjs
       # Colosseum roadmap §7 (the W4 deferred item): the public Buy Special standings page.
       # Unsealed publishes rules only (no results/review/payouts key at all); sealed publishes the
       # full view plus a stable resultsHash; hold-through is held/sold/moved-out/locked-not-a-sell

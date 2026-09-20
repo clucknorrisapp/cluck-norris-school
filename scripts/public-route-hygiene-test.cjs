@@ -67,6 +67,10 @@ const ROUTES = [
   // reproducibility-class reads above, since a feed walks the same per-batch computation.
   { name: "hub feed.json", path: `/api/hub/clkn/feed.json`, cache: "public, max-age=300" },
   { name: "hub feed.xml", path: `/hub/clkn/feed.xml`, cache: "public, max-age=300" },
+  // AA1 follow-up: the per-wallet twin of the project feed above — same 300s tier, walks the
+  // same per-project per-batch computation, just re-scoped to one wallet across every project.
+  { name: "hub wallet feed.json", path: `/api/hub/wallet/${GOOD_WALLET}/feed.json`, cache: "public, max-age=300" },
+  { name: "hub wallet feed.xml", path: `/hub/wallet/${GOOD_WALLET}/feed.xml`, cache: "public, max-age=300" },
 ];
 
 (async () => {
@@ -149,6 +153,14 @@ const ROUTES = [
     ok("demo project 404s on feed.json", r.status === 404, String(r.status));
     r = await req("GET", `/hub/demo/feed.xml`, { ip: "10.0.2.1" });
     ok("demo project 404s on feed.xml", r.status === 404, String(r.status));
+    // AA1 follow-up: a malformed/oversized wallet on the new per-wallet feed routes is 400
+    // BEFORE any project is ever walked — same shape check GET /api/hub/wallet/:wallet already
+    // runs. A well-formed but never-seen wallet still 200s with an honest, empty feed (proven in
+    // scripts/hub-wallet-feed-test.cjs) rather than a 400/404 here.
+    r = await req("GET", `/api/hub/wallet/${BAD_SHAPE}/feed.json`, { ip: "10.0.2.1" });
+    ok("bad-shape wallet on the wallet feed.json is 400 (never handed to a project walk)", r.status === 400 && /not a Solana address/i.test(String(r.body && r.body.error)), JSON.stringify(r.body));
+    r = await req("GET", `/hub/wallet/${BAD_SHAPE}/feed.xml`, { ip: "10.0.2.1" });
+    ok("bad-shape wallet on the wallet feed.xml is 400 too", r.status === 400 && /not a Solana address/i.test(String(r.body && r.body.error)), JSON.stringify(r.body));
   }
 
   // ── 3) hours cap (jvp timeline): already 1..720 in code — pin it so it can't regress. ─────────
@@ -190,6 +202,11 @@ const ROUTES = [
     ok("feed.json is on the same shared bucket too", feedJsonHeavy.status === 429, String(feedJsonHeavy.status));
     const feedXmlHeavy = await req("GET", `/hub/clkn/feed.xml`, { ip: BURST_IP });
     ok("feed.xml is on the same shared bucket too", feedXmlHeavy.status === 429, String(feedXmlHeavy.status));
+    // AA1 follow-up: the per-wallet feed routes share the same bucket too.
+    const walletFeedJsonHeavy = await req("GET", `/api/hub/wallet/${GOOD_WALLET}/feed.json`, { ip: BURST_IP });
+    ok("wallet feed.json is on the same shared bucket too", walletFeedJsonHeavy.status === 429, String(walletFeedJsonHeavy.status));
+    const walletFeedXmlHeavy = await req("GET", `/hub/wallet/${GOOD_WALLET}/feed.xml`, { ip: BURST_IP });
+    ok("wallet feed.xml is on the same shared bucket too", walletFeedXmlHeavy.status === 429, String(walletFeedXmlHeavy.status));
 
     // P1-03 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): /api/hub, /api/hub/:project and
     // /api/hub/wallet/:wallet each call hubProjectView() once per registered project with no
@@ -242,9 +259,10 @@ const ROUTES = [
     // each called hubProjectView() once per registered project with no limiter at all. The
     // `/hub/:project` HTML share page is NOT in this list on purpose — it got a 60s OG-meta cache
     // instead (hubOgForCached), so a person clicking a shared link is never 429'd; see the
-    // dedicated assertions in section 4 above.
-    // 5 original + bundle + 2 badges + 1 history + 2 feed + 3 (P1-03) = 14.
-    ok("found the 14 heavy routes wired to the dedicated limiter", heavyPaths.length === 14, JSON.stringify(heavyPaths));
+    // dedicated assertions in section 4 above. AA1 follow-up added the two per-wallet feed routes
+    // (feed.json + feed.xml) — the wallet-scoped twin of DD2's project feed, same per-project walk.
+    // 5 original + bundle + 2 badges + 1 history + 2 feed + 3 (P1-03) + 2 (AA1 wallet feed) = 16.
+    ok("found the 16 heavy routes wired to the dedicated limiter", heavyPaths.length === 16, JSON.stringify(heavyPaths));
     for (const p of heavyPaths) ok(`${p} is not a store-edition contract route`, !STORE_API_RE.test(p), p);
 
     // Live confirmation for one representative store-edition route: a burst well under its own
