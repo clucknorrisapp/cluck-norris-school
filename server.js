@@ -452,11 +452,25 @@ function recapTick() {
   }
 }
 
-// ── Daily locked-supply report ───────────────────────────────────────────────
-// PUBLIC community trust signal: how much CLKN is locked (removed from circulation),
-// updated daily with the change since the last report. Reads the real on-chain total
+// ── Locked-supply report ─────────────────────────────────────────────────────
+// How much CLKN is locked (removed from circulation), read from the real on-chain total
 // (Jupiter Lock + Streamflow + self-owned), not the broken owner=program query.
-const LOCK_REPORT_ENABLED = true;
+//
+// ⛔ THE DAILY POST IS RETIRED (owner, 2026-09-20: "I want to quit posting the lock supply
+// to CLKN room daily. No one seems to care."). The scheduler is not registered and the flag
+// is off in code; `LOCK_REPORT_ON=1` in the env brings the daily 16:00 UTC post back without
+// a deploy, for whenever the owner wants it again.
+//
+// What this does NOT turn off — on purpose:
+//   • the NEW-LOCK celebration (lockWatchTick below). That one only fires when a real lock
+//     lands, it is the Locker Room's whole social-proof story, and it keeps its own baseline
+//     (lockWatchTotal) so it is unaffected by this.
+//   • the /lock Telegram command and /lock/<mint> page — both on-demand, someone asked.
+//   • /api/lock-report-test (&post=1) — left working on purpose as a one-off operator lever,
+//     the same way the Wallet Watch manual run is.
+// Turning the daily post off also stops its daily X post: postLockToX is called only from
+// notifyLockReport. New locks still reach X through the celebration path.
+const LOCK_REPORT_ENABLED = process.env.LOCK_REPORT_ON === "1";
 function fmtTokensShort(n) {
   n = Number(n) || 0;
   if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
@@ -7081,8 +7095,10 @@ app.get("/api/recap-test", async (req, res) => {
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
-// Locked-supply report — dry-run the daily post (returns the computed report +
-// message); add &post=1 to actually fire it to the community chat. Gated.
+// Locked-supply report — dry-run it (returns the computed report + message); add &post=1 to
+// actually fire it to the community chat and X. Gated. The DAILY schedule is retired (owner,
+// 2026-09-20) but this lever stays: it is how a locked-supply post goes out when the owner
+// wants one, rather than every day whether or not anyone asked.
 app.get("/api/lock-report-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const KEY = process.env.PREMIUM_ACCESS_KEY;
@@ -21200,7 +21216,9 @@ app.listen(PORT, () => {
     setInterval(marketCheckTick, 60 * 1000);
     // Daily Flow Recap — checked each minute, fires once per day at 00:00 UTC.
     if (RECAP_ENABLED) setInterval(recapTick, 60 * 1000);
-    setInterval(lockReportTick, 60 * 1000);
+    // Daily locked-supply report — RETIRED (owner, 2026-09-20); the scheduler only registers
+    // if LOCK_REPORT_ON=1 is set in the env. The new-lock watcher below is unaffected.
+    if (LOCK_REPORT_ENABLED) setInterval(lockReportTick, 60 * 1000);
     // Lock-change watcher — every 30 min (Helius plan upgraded 2026-07-01; was 2h),
     // auto-post when the locked total increases. First check 90s after boot — with the
     // durable kv baseline this ALSO announces any lock that landed during the deploy gap.
