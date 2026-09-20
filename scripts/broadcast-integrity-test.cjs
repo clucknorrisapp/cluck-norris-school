@@ -117,5 +117,37 @@ ok('/minted no longer takes the announced name/symbol from the request body',
 ok('the built name/symbol are recorded at build time', /hatcheryMeta\.set\(mintAddress/.test(hatchery));
 ok('and that map is bounded', /hatcheryMeta\.size > 5000/.test(hatchery));
 
+console.log('\nC. the daily locked-supply post stays retired\n');
+
+// Owner, 2026-09-20: "I want to quit posting the lock supply to CLKN room daily. No one seems
+// to care." The risk is not that someone argues with that — it is that a later refactor of the
+// scheduler block restores the bare `setInterval(lockReportTick, …)` it replaced and the daily
+// post quietly comes back, in the community chat and on X, without anyone deciding to.
+// Positive assertions: the flag must be env-driven (default off) and the registration must be
+// guarded by it. A negative-only test would pass against the unfixed code.
+ok('the daily report is off unless LOCK_REPORT_ON=1 is set in the env',
+   /const LOCK_REPORT_ENABLED = process\.env\.LOCK_REPORT_ON === "1";/.test(server),
+   'LOCK_REPORT_ENABLED is not the env-gated constant — a hardcoded true brings the daily post back');
+ok('its scheduler only registers when that flag is on',
+   /if \(LOCK_REPORT_ENABLED\) setInterval\(lockReportTick,/.test(server),
+   'setInterval(lockReportTick, …) is registered unguarded');
+ok('and the tick itself still refuses to fire when the flag is off',
+   /function lockReportTick\(\) \{\s*\n\s*if \(!LOCK_REPORT_ENABLED\) return;/.test(server),
+   'lockReportTick lost its own flag check — the guard would then rest on the registration alone');
+
+// What retiring the DAILY post must NOT take with it. Each of these is a different thing: an
+// event-driven celebration that only fires on a real lock, an on-demand command someone typed,
+// and the operator's one-off lever. Retiring a schedule is not retiring the feature.
+ok('the new-lock watcher is untouched (it is the Locker Room\'s social proof)',
+   /const LOCK_WATCH_ENABLED = true;/.test(server) &&
+   /setInterval\(\(\) => lockWatchTick\(\)/.test(server),
+   'the lock-change watcher was disabled along with the daily report');
+ok('the /lock command still answers on demand',
+   /command: "lock", description: "Current locked supply/.test(server));
+ok('the operator can still fire one by hand',
+   /app\.get\("\/api\/lock-report-test"/.test(server) &&
+   /notifyLockReport\(\{ dryRun: req\.query\.post !== "1", note \}\)/.test(server),
+   'the manual lock-report lever was removed rather than left as the on-demand path');
+
 console.log('\n' + (failures ? failures + ' FAILED' : 'all passed') + '\n');
 process.exit(failures ? 1 : 0);
