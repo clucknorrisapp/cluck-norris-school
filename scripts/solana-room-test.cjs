@@ -455,6 +455,64 @@ const FORBIDDEN_ADVICE = [
     /(?:trading|specul)/i.test(body["/solana/uses"]));
 
 
+  // ── (j) the back-to-the-room link is actually VISIBLE ───────────────────────────────────────
+  // This exists because the link was present, correct and INVISIBLE for the whole life of the
+  // room. public/cluck-nav.js injects a fixed nav bar on every deep page and, with it, a rule
+  // hiding the page's own back link as redundant — written when every such link said "← HOME".
+  // The Solana Room's links say "← THE SOLANA ROOM" and point at /solana, and the Project Hub's
+  // say "← PROJECT HUB": 23 section-level back links across public/ rendered at height 0 with
+  // nothing reporting it. A source scan alone cannot catch this (the markup is perfect) and a
+  // rendered check alone cannot explain it, so this checks BOTH — AGENTS.md, "rendered
+  // measurement and source scanning have complementary blind spots. Run both."
+  console.log("\n(j) the back-to-the-room link is present in source AND visible when rendered\n");
+  {
+    const nav = fs.readFileSync(path.join(ROOT, "public", "cluck-nav.js"), "utf8");
+    ok("cluck-nav.js no longer hides back links by class alone", !/a\.back\s*,\s*a\.back-home\s*,\s*a\.home\s*\{/.test(nav));
+    ok("cluck-nav.js scopes its hide rule to links that actually point home", /a\.back-home\[href='\/'\]/.test(nav));
+    for (const page of TOPIC_PAGES) {
+      ok(`${page.route}: its top back link points at /solana`, /<a class="back-home" href="\/solana"/.test(body[page.route]));
+    }
+  }
+  {
+    const pw = resolvePlaywright();
+    if (!pw) {
+      console.log("  · playwright(-core) not resolvable — skipping the rendered visibility check (everything above still ran)");
+    } else {
+      const browser = await pw.chromium.launch(PW_LAUNCH);
+      try {
+        for (const route of ["/solana/rent", "/solana/markets"]) {
+          const pg = await browser.newPage({ viewport: { width: 390, height: 780 } });
+          await pg.goto(BASE + route, { waitUntil: "domcontentloaded" });
+          await pg.waitForTimeout(1500);   // cluck-nav.js injects its bar and CSS on load
+          const seen = await pg.evaluate(() => {
+            const a = document.querySelector("a.back-home");
+            if (!a) return { missing: true };
+            const r = a.getBoundingClientRect();
+            return { href: a.getAttribute("href"), height: Math.round(r.height), text: a.textContent.trim() };
+          });
+          await pg.close();
+          ok(`${route}: the back link RENDERS with real height (not hidden by the nav bar)`,
+            !seen.missing && seen.height > 0 && seen.href === "/solana", JSON.stringify(seen));
+        }
+      } finally { await browser.close(); }
+    }
+  }
+
   console.log(fail ? `\n${fail} FAILED, ${pass} passed\n` : `\nall ${pass} passed\n`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
+
+
+// Playwright is optional here, exactly as in scripts/seeker-build-test.cjs: the node-check job is
+// zero-dependency, so the rendered half of (j) skips gracefully rather than failing a runner that
+// has no browser. The chromium binary lives at PLAYWRIGHT_BROWSERS_PATH in this environment.
+const PW_LAUNCH = fs.existsSync("/opt/pw-browsers/chromium") ? { executablePath: "/opt/pw-browsers/chromium" } : {};
+function resolvePlaywright() {
+  const candidates = [
+    "playwright", "playwright-core",
+    path.join(__dirname, "..", "node_modules", "playwright"),
+    path.join(__dirname, "..", "node_modules", "playwright-core"),
+  ];
+  for (const c of candidates) { try { return require(c); } catch (_) {} }
+  return null;
+}
