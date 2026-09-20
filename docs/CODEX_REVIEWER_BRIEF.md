@@ -897,3 +897,68 @@ Review the *reasoning*, not the prose. Specifically:
    wait for that answer?
 3. **What should be paused?** The proposal is the Colosseum Hub extension roadmap (GG2/GG4/GG5 and
    beyond), keeping Colosseum itself alive. Is that the right cut?
+
+---
+
+## Round 6 — 2026-09-19, POST-PROMOTE: this is on production now
+
+**State change since round 5: `main` moved from PR #337 to #369.** 48 commits, ~30 PRs. Everything
+the Hub extension built, the Solana Room, and the Seeker app foundations are **live on
+clucknorris.app**, not staging. That raises the cost of every finding below — these are not
+proposals any more.
+
+Pre-promote checks that were run (verify them if you doubt them): `WALLET_WATCH_KILLED = true`,
+`JUP_AUTO_REBALANCE_KILLED = true`, `POKE_ENGINE_ON` still requires the env var **and**
+`!IS_STAGING`, and exactly one new scheduler versus the previous production — `hubReproHistoryTick`,
+which makes no Telegram, X or broadcast call. The browser-signed payout (#354) is **not** in this
+promote and stays open.
+
+### Priority 1 — `/solana/rent`, because it is a public factual claim
+
+`public/solana-rent.html`, `public/rent-math.js`, `scripts/solana-room-test.cjs`.
+
+This page exists to correct misinformation about Solana's rent-exempt deposit reduction
+(SIMD-0437). It is live, in seven languages, and carries specific numbers. **If a number or a claim
+is wrong, we are wrong in public on the page people were pointed to for the truth.**
+
+- **Re-derive the numbers independently.** Do not check them against our test — the test and the
+  page were written by the same agent, so it proves internal consistency, not correctness. Check
+  the billable-byte figure, the per-stage rates, and each stage's resulting minimum and surplus
+  against Solana's own documentation.
+- **Is the "not an airdrop" framing accurate and fair?** It is the page's central claim.
+- **Is the closing-vs-withdrawing distinction right?** `WithdrawExcessLamports` — signer, its
+  refusal on wrapped SOL, which program version exposes it.
+- **Does anything read as advice** rather than explanation? CLAUDE.md: the chain shows *what*,
+  never *why*, and we never tell anyone what to buy or do with their money.
+
+### Priority 2 — `GET /api/seeker/reclaimable`, now live
+
+`lib/rent-reclaim.js`, the route in `server.js`, `scripts/seeker-reclaim-test.cjs`.
+
+It tells a person a number about their own wallet. Today it is read-only; **increment 3 turns that
+number into a transaction they sign**, so a misclassification that looks harmless now becomes "we
+told you this account was dead and it was not."
+
+- Can an account **holding a balance** ever be classed `reclaimable`? Token-2022 extensions,
+  frozen accounts, delegated accounts, non-zero-but-dust — try to find a shape that slips through.
+- Is `lamports` the right basis for "what closing returns", in every case?
+- Does any failure mode produce a **200 with zero** instead of `unavailable`? That is the rule the
+  feature is built on.
+- The cap is 300 accounts with a `truncated` flag — is the flag reachable and honest?
+- It is unauthenticated and spends RPC on every call. Limiter is `rateLimit("forensic", 15/min)`.
+  Enough?
+
+### Priority 3 — carried forward from round 5, still open
+
+The `excludeKeys` prune (now protecting **installed** Google Play and iOS apps, so the cost of a
+leak went up), the MWA bridge contract in `public/cluck-wallet.js` that the apps repo will build its
+native plugin against, and — cheapest review available — **the increment-3 signing spec**,
+`docs/SEEKER_RECLAIM_SIGNING_SPEC.md`. Reviewing a design before it is code costs a fraction of
+reviewing it after.
+
+### Also new and unreviewed by you
+
+`docs/OPERATING_MODEL.md` (how the seats and the overnight loop work — your seat is "reviews
+everything, builds nothing"), `ARCHITECTURE.md`, `docs/SEEKER_APP_PLAN.md`,
+`docs/CLOCK_IN_HACKATHON_2026.md`. Opinions welcome on all four; they are decisions of record, so
+say if one is wrong.

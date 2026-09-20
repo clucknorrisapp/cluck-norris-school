@@ -58,7 +58,7 @@ const LP_LESSONS = extractArray(lpSrc, "LP_LESSONS") || [];
 
 // ── Count-drift guard (mirrors scripts/check-counts.js's philosophy: fail loud, never
 // silently render a wrong number on public-facing copy) ────────────────────────────────
-const EXPECTED = { LESSONS: 15, INCUBATOR_LESSONS: 7, LP_LESSONS: 14 };
+const EXPECTED = { LESSONS: 16, INCUBATOR_LESSONS: 7, LP_LESSONS: 14 };
 const actual = { LESSONS: LESSONS.length, INCUBATOR_LESSONS: INCUBATOR_LESSONS.length, LP_LESSONS: LP_LESSONS.length };
 const drift = Object.keys(EXPECTED).filter((k) => actual[k] !== EXPECTED[k]);
 if (drift.length) {

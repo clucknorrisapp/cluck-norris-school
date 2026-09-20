@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>What Actually Happens When You Buy</title>
+<meta name="description" content="Buying a token on Solana isn't buying from a website — it's swapping against a liquidity pool. What a pool is, why a big trade moves the price against you, and what a failed swap still costs — in plain words."/>
+<meta property="og:title" content="What Actually Happens When You Buy — Cluck Norris"/>
+<meta property="og:description" content="Buying a token on Solana isn't buying from a website — it's swapping against a liquidity pool. What a pool is, why a big trade moves the price against you, and what a failed swap still costs — in plain words."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana/buying"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="What Actually Happens When You Buy — Cluck Norris"/>
+<meta name="twitter:description" content="Buying a token on Solana isn't buying from a website — it's swapping against a liquidity pool. What a pool is, why a big trade moves the price against you, and what a failed swap still costs — in plain words."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:.3px; color:var(--gold); font-weight:400; line-height:1.25; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact + .fact { margin-top:10px; }
+  .fact b, .fact code { color:var(--text); }
+  .fact code { font-family:var(--mono); font-size:.92em; background:rgba(255,255,255,.06); padding:1px 5px; border-radius:4px; word-break:break-word; }
+  /* the failed-swap-cost warning gets the same real visual weight the rent page gives its scam
+     card — a distinct red card, not a tucked-away footnote. */
+  .card.scam { background:var(--redbg, rgba(232,30,14,.14)); border:1px solid rgba(232,30,14,.4); }
+  .scam .sec-title { color:#FCA5A5; }
+  .scam .fact { color:#FBD5D0; }
+  .scam .fact b { color:#FEE2E0; }
+  .footnote { font-size:12.5px; color:var(--sub); line-height:1.6; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  /* a footnote link is often the sole content of its div — not inline in a sentence, so it
+     needs a real 44px tap target. Same expand-with-negative-margin trick as .small a. */
+  .footnote a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .links-card { display:flex; flex-direction:column; }
+  .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
+  .small { font-size:12px; color:var(--sub); }
+  /* a standalone link inside a .small line still needs a real 44px tap target — same
+     expand-with-negative-margin trick public/hub-glossary.html / solana-rent.html use. */
+  .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/solana" data-clkn-avoid="1">← THE SOLANA ROOM</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">What actually happens when you buy</h1>
+    <p data-clkn-avoid="1">YOU'RE SWAPPING AGAINST A POOL, NOT BUYING FROM A SITE</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as
+  // public/hub-glossary.html / public/solana-room.html / public/solana-rent.html: a curated dict
+  // lookup over window.CLKN_I18N.dict, English literal on a miss, no machine-translation fallback.
+  // scripts/i18n-audit.cjs's Hub-pages gate and scripts/solana-room-test.cjs both scan this file's
+  // <script> block for every literal passed to t() and require it in all six dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  function render() {
+    var html = '';
+
+    html += '<div class="card"><div class="intro">' + esc(t("Clicking \"buy\" on a token page doesn't purchase it from that website, the way checking out on a store does. It sends a transaction that swaps one token for another against a liquidity pool. Here's what that pool actually is, why a big trade can cost you more than the price you saw, and what happens when a swap fails.")) + '</div></div>';
+
+    html += '<div class="card" data-section="not-a-store">';
+    html += '<div class="sec-title">' + esc(t("A pool sets the price — there's no order book")) + '</div>';
+    html += '<div class="fact">' + esc(t("A liquidity pool is a pair of token balances sitting in one account, put there by whoever supplied them. Its price for one token in terms of the other comes directly from the ratio between those two balances — not from a list of buy and sell orders the way a stock exchange works.")) + '</div>';
+    html += '<div class="fact">' + esc(t("Every swap page, wallet, or aggregator you click through builds the same kind of thing underneath: a transaction that trades against one or more of these pools. The button says \"buy\"; the transaction says \"swap.\"")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="slippage">';
+    html += '<div class="sec-title">' + esc(t('Your own trade moves the price — that\'s slippage')) + '</div>';
+    html += '<div class="fact">' + esc(t("Because the price comes from the ratio between the pool's two balances, your swap changes that ratio while it executes. The bigger your trade is relative to the pool, the further the price moves against you before your swap finishes — that shift is called price impact, and trading against a thin, shallow pool makes it much worse for the same size trade.")) + '</div>';
+    html += '<div class="fact">' + esc(t('Slippage tolerance is the extra room you allow for the price to move between the quote you saw and the moment your swap actually lands on-chain. Set it too tight and normal price movement fails your swap outright. Set it too loose and a thin pool, or someone trading ahead of you, can fill you at a noticeably worse price than the quote ever suggested.')) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="impact-vs-fee">';
+    html += '<div class="sec-title">' + esc(t('Price impact and the swap fee are two different charges')) + '</div>';
+    html += '<div class="fact">' + esc(t("A swap fee is a set cut the pool or the routing app takes, stated as a percentage before you confirm. Price impact isn't a fee anyone collects — it's the price simply moving because your trade changed the pool's ratio. They're easy to mix up, and a swap can carry both at once.")) + '</div>';
+    html += '<div class="fact">' + esc(t("That's also why the amount you actually receive can differ from the quote you were shown: a quote is a snapshot of the pool at the moment it was fetched, and time passes — however briefly — before your transaction confirms. Other trades can land in that gap and move the pool before yours does.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card scam" data-section="failed-swap-cost">';
+    html += '<div class="sec-title">' + esc(t('A failed swap still costs you something')) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("If a swap fails — your price moved past your slippage tolerance, or the pool changed before your transaction landed — every instruction in that transaction reverts and none of the swap happens. But the transaction itself still ran, and Solana still charges its transaction fee even when a transaction fails. A failed swap isn't free to attempt.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="tradeable-not-endorsement">';
+    html += '<div class="sec-title">' + esc(t('Being swappable says nothing about being worth buying')) + '</div>';
+    html += '<div class="fact">' + esc(t("Anyone can create a pool for any token, at any time, with no review from anyone. A working chart, a live price, and a button that successfully swaps prove only that a pool exists for that token — nothing about who made it, why, or whether it's worth your money. This page isn't telling you what to buy; it's telling you what a working \"buy\" button actually did.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card links-card">';
+    html += '<a href="/lp-lab">' + esc(t('Practice pool mechanics hands-on, free — LP Lab →')) + '</a>';
+    html += '<a href="/wallet-checkup">' + esc(t('Check a wallet or a mint before you trust it — free, read-only, no signup →')) + '</a>';
+    html += '<a href="/autopsy">' + esc(t('A deeper forensic read on any mint → Token Autopsy')) + '</a>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Sources')) + '</div>';
+    html += '<div class="small"><a href="https://solana.com/docs/core/transactions" target="_blank" rel="noopener">' + esc(t('Transactions — atomic execution and why a failed transaction still reverts everything, on solana.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solana.com/docs/core/fees" target="_blank" rel="noopener">' + esc(t('Fees — why a failed transaction is still charged, on solana.com →')) + '</a></div>';
+    html += '</div>';
+
+    html += '<div class="small" style="text-align:center"><a href="/solana">' + esc(t('Back to the Solana Room →')) + '</a></div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>
