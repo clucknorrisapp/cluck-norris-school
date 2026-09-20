@@ -501,7 +501,7 @@ for (const fam of FAMILIES) {
     // creation: same "curated, not machine-translated" bar as the rest of the school's public
     // reference pages, same t()/tf() page-local helper as hub-glossary.html. solana-wallet.html
     // and solana-mint.html joined the same way when they shipped.
-    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html', 'hub-trust.html', 'hub-verify.html', 'hub-compare.html', 'hub-glossary.html', 'solana-room.html', 'solana-rent.html', 'solana-wallet.html', 'solana-mint.html', 'solana-buying.html', 'solana-transfers.html', 'solana-fees.html', 'solana-uses.html', 'solana-markets.html', 'solana-events.html', 'solana-links.html'];
+    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html', 'hub-trust.html', 'hub-verify.html', 'hub-compare.html', 'hub-glossary.html', 'hub-wallet.html', 'solana-room.html', 'solana-rent.html', 'solana-wallet.html', 'solana-mint.html', 'solana-buying.html', 'solana-transfers.html', 'solana-fees.html', 'solana-uses.html', 'solana-markets.html', 'solana-events.html', 'solana-links.html'];
     const hubKeys = new Set();
     // JS-built strings (see the "JS-BUILT STRINGS ON HUB_FILES" header comment): every literal
     // passed to a page-local t()/tf() call is an explicit "translate this" signal from whoever
