@@ -254,6 +254,21 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   `/api/whirlpool/vault/status` without `project=` returns the CLKN project, NOT treasury.)
 - **Telegram posts are SILENT by default.** Never `&loud=1` unless the owner says so in the
   moment.
+- 📄 **"Send this to someone" means A PDF. Every time, without being asked** (owner, 2026-09-20,
+  after a session delivered an on-chain report as a Docs link and then a `.md` file: *"I like
+  everything as copy-paste, a PDF. This is nothing new."*). The moment a deliverable is for anyone
+  outside this chat — a partner, a project's CEO, a judge, an investor — the default is:
+  1. **a PDF file, delivered as a file**, named so it reads on its own
+     (`NORMIE-onchain-report-2026-09-20.pdf`, not `report.pdf`); and
+  2. **the text in chat, ready to copy-paste**, when it is short enough to paste.
+  ⛔ Not a claude.ai link, not a Docs page, not a `.md` file, not "here are three options" —
+  those are extra steps between him and sending it. Build it once, hand over the PDF, stop.
+  How: write clean print HTML, then
+  `/opt/pw-browsers/chromium-1234/chrome-linux64/chrome --headless --disable-gpu --no-sandbox
+  --no-pdf-header-footer --print-to-pdf=<name>.pdf report.html` (the binary path moves between
+  Playwright versions — `find /opt/pw-browsers -maxdepth 3 -type f -name chrome`), then
+  `SendUserFile`. Writing the deliverable somewhere he then has to convert or export is the
+  failure, not a smaller version of success.
 - **Never commit secrets**, and don't put a model identifier in committed files.
 - **Tell the truth about what you did.** If a check didn't run, say so. Most of the worst bugs
   here survived because something reported green on the wrong thing.
