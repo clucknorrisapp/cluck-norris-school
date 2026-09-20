@@ -506,7 +506,7 @@ for (const fam of FAMILIES) {
     // none of the six dictionaries, so the highest-traffic page we have was paying a live
     // machine-translation call per string per language on first view and showing English for a
     // beat while it resolved. Same curated-copy bar as everything else in this list.
-    const HUB_FILES = ['home.html', 'hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html', 'hub-trust.html', 'hub-verify.html', 'hub-compare.html', 'hub-glossary.html', 'hub-wallet.html', 'solana-room.html', 'solana-rent.html', 'solana-wallet.html', 'solana-mint.html', 'solana-buying.html', 'solana-transfers.html', 'solana-fees.html', 'solana-uses.html', 'solana-markets.html', 'solana-events.html', 'solana-links.html'];
+    const HUB_FILES = ['home.html', 'hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html', 'hub-trust.html', 'hub-verify.html', 'hub-compare.html', 'hub-glossary.html', 'hub-wallet.html', 'solana-room.html', 'solana-rent.html', 'solana-wallet.html', 'solana-mint.html', 'solana-buying.html', 'solana-transfers.html', 'solana-fees.html', 'solana-uses.html', 'solana-markets.html', 'solana-events.html', 'solana-links.html', 'solana-phone.html'];
     const hubKeys = new Set();
     // JS-built strings (see the "JS-BUILT STRINGS ON HUB_FILES" header comment): every literal
     // passed to a page-local t()/tf() call is an explicit "translate this" signal from whoever

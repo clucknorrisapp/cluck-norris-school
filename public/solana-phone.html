@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>The Solana phone: what's actually different</title>
+<meta name="description" content="Seed Vault, Mobile Wallet Adapter, the dApp Store, and SKR — what a phone built for Solana actually changes about holding keys, and what it changes nothing about. Includes the two SKR mint addresses, since one of them is an impersonator."/>
+<meta property="og:title" content="The Solana phone: what's actually different — Cluck Norris"/>
+<meta property="og:description" content="Seed Vault, Mobile Wallet Adapter, the dApp Store, and SKR — what a phone built for Solana actually changes about holding keys, and what it changes nothing about. Includes the two SKR mint addresses, since one of them is an impersonator."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana/phone"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="The Solana phone: what's actually different — Cluck Norris"/>
+<meta name="twitter:description" content="Seed Vault, Mobile Wallet Adapter, the dApp Store, and SKR — what a phone built for Solana actually changes about holding keys, and what it changes nothing about. Includes the two SKR mint addresses, since one of them is an impersonator."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:26px; letter-spacing:.3px; color:var(--gold); font-weight:400; line-height:1.25; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 8px; color:var(--gold); text-transform:uppercase; }
+  .fact { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .fact + .fact { margin-top:10px; }
+  .fact b, .fact code { color:var(--text); }
+  /* the honest-disclosure and impersonator-warning cards get real visual weight, same technique
+     as the scam card on public/solana-links.html — a distinct card, never a tucked-away footnote. */
+  .card.warn { background:var(--redbg, rgba(232,30,14,.14)); border:1px solid rgba(232,30,14,.4); }
+  .warn .sec-title { color:#FCA5A5; }
+  .warn .fact { color:#FBD5D0; }
+  .warn .fact b { color:#FEE2E0; }
+  .card.note { border-color:rgba(255,255,255,.14); }
+  .stage-row { padding:12px 0; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .stage-row:first-of-type { border-top:none; padding-top:0; }
+  .stage-name { font-family:var(--disp); font-weight:400; font-size:15px; color:var(--text); margin-bottom:8px; }
+  .stage-vals { display:flex; flex-wrap:wrap; gap:10px 20px; }
+  .stage-val { min-width:150px; flex:1 1 150px; }
+  .stage-label { display:block; font-size:11px; letter-spacing:1px; color:var(--sub); text-transform:uppercase; margin-bottom:2px; }
+  .stage-num { font-family:var(--body); font-size:13.5px; color:var(--text); line-height:1.5; }
+  /* the two mint addresses — never translated (an address isn't language), and each one links
+     out to Solana Explorer so the reader can check the chain themselves, exactly the habit this
+     section is trying to build. Negative margin keeps a real 44px tap target, same trick as the
+     domain rows on public/solana-links.html. */
+  .mint-row { padding:12px 0; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .mint-row:first-of-type { border-top:none; padding-top:0; }
+  .mint-label { display:block; font-size:11px; letter-spacing:1px; color:var(--sub); text-transform:uppercase; margin-bottom:4px; }
+  .mint-addr { display:inline-flex; align-items:center; min-height:44px; margin:0 0 0 -3px; padding:0 3px; font-family:var(--mono); font-size:12.5px; color:var(--cyan, #67E8F9); text-decoration:none; word-break:break-all; }
+  .footnote { font-size:12.5px; color:var(--sub); line-height:1.6; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .links-card { display:flex; flex-direction:column; }
+  .links-card a { display:flex; align-items:center; min-height:44px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; }
+  .small { font-size:12px; color:var(--sub); }
+  .small a { display:inline-block; padding:14px 3px; margin:-14px -3px; color:var(--cyan, #67E8F9); text-decoration:none; }
+  .maintained { text-align:center; font-size:11.5px; color:var(--sub); letter-spacing:.5px; margin:6px 0 4px; }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/solana" data-clkn-avoid="1">← THE SOLANA ROOM</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">The Solana phone, and what it actually changes</h1>
+    <p data-clkn-avoid="1">SEED VAULT, MOBILE WALLET ADAPTER, THE DAPP STORE, AND SKR</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as the rest of the
+  // Solana Room (public/solana-room.html, solana-links.html, solana-markets.html): a curated
+  // dict lookup over window.CLKN_I18N.dict, English literal on a miss, no machine-translation
+  // fallback. The room's own test scans this file's <script> block for every literal passed to
+  // t() and requires it in all six dictionaries. Mint addresses are never passed through t() —
+  // an address isn't language, and translating it is how a wrong character could slip in.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  // The real-vs-impersonator comparison table is built from an array so the two-column layout
+  // only has to be written once — which means the axis names and the per-mint answers are
+  // variables at render time, not literals sitting directly inside a t(...) call, so the
+  // regex-based i18n audit (a literal string immediately inside t(...)) can't see them on its
+  // own. This function is never called by render(); it exists only so every one of those strings
+  // also appears as a literal t(...) call somewhere in this file, which is what makes the audit
+  // require it in all six dictionaries. Same technique as __solanaRoomGatedStrings in
+  // solana-room.html and __solanaLinksGatedStrings in solana-links.html — keep this in step with
+  // MINT_AXES below.
+  function __solanaPhoneGatedStrings() { return [
+    t('Verified on Jupiter'), t('Holders (checked today)'), t("Jupiter's organic score"), t('Market'),
+    t('The real SKR'), t('The impersonator'),
+    t('Yes'), t('No'),
+    t('~45,700'), t('4'),
+    t('Actively scored'), t('0 — no real trading activity behind it'),
+    t('Trades across dozens of pools on several exchanges'), t('No market cap, no meaningful liquidity'),
+  ]; }
+
+  var MINT_AXES = [
+    { axis: 'Verified on Jupiter', real: 'Yes', fake: 'No' },
+    { axis: 'Holders (checked today)', real: '~45,700', fake: '4' },
+    { axis: "Jupiter's organic score", real: 'Actively scored', fake: '0 — no real trading activity behind it' },
+    { axis: 'Market', real: 'Trades across dozens of pools on several exchanges', fake: 'No market cap, no meaningful liquidity' },
+  ];
+  var MINT_COL_LABEL = { real: 'The real SKR', fake: 'The impersonator' };
+
+  function render() {
+    var html = '';
+
+    html += '<div class="card"><div class="intro">' + esc(t("A phone built for Solana is still an Android phone — same chain, same rules, same network everyone else is on. What's actually different sits in a few specific places: where a key is stored, how an app asks to sign something, and where you find apps built around a wallet. This page walks through those, plainly, and closes with what none of it changes.")) + '</div></div>';
+
+    html += '<div class="card" data-section="what-it-is">';
+    html += '<div class="sec-title">' + esc(t("An Android phone, not a different internet")) + '</div>';
+    html += '<div class="fact">' + esc(t("Solana Seeker is Solana Mobile's current phone. It's an Android device: a MediaTek Dimensity 7300 chip, 8GB of RAM, 128GB of storage, a 6.36-inch 120Hz AMOLED screen and a 4,500 mAh battery, by Solana Mobile's own published spec sheet.")) + '</div>';
+    html += '<div class="fact">' + esc(t("It's the second phone the company has made. The first, Solana Saga, shipped in 2023. Seeker is described as its second-generation successor and began shipping in August 2025 to buyers in more than 50 countries.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("Everything a Solana app does on Seeker, it can already do on any other phone — it's the same Solana network underneath.")) + '</b> ' + esc(t("What Seeker adds is hardware and software built specifically for holding keys and approving transactions, which the rest of this page is about.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="seed-vault">';
+    html += '<div class="sec-title">' + esc(t('Seed Vault: the genuinely different part')) + '</div>';
+    html += '<div class="fact">' + esc(t("On most phones, a wallet is just an app, and your private key sits somewhere inside that app's own storage. If the app is malicious, gets compromised, or is tricked into handing over what it holds, the key can leave with it.")) + '</div>';
+    html += '<div class="fact">' + esc(t("Seed Vault moves the key out of any app entirely and into a separate, more locked-down part of the phone's hardware — \"the highest privileged environment available on the device,\" in Solana Mobile's own description. Its own documentation states it plainly: \"Your keys, seeds, and secrets never leave the secure execution environment.\"")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("In practice: an app asks the Seed Vault to sign a transaction, the signing happens inside that locked hardware, and only the finished, signed transaction comes back out.")) + '</b> ' + esc(t("The app hands over a request and gets a result. It never holds the one thing that could move your funds on its own.")) + '</div>';
+    html += '<div class="fact">' + esc(t("You still have to approve. Solana Mobile's own description of the Seed Vault Wallet has you review the transaction details, fee, and recipient before you double-tap the side button and confirm with a fingerprint. That approval step is still entirely yours — see the last section on this page for exactly what that means.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="mwa">';
+    html += '<div class="sec-title">' + esc(t('Mobile Wallet Adapter: how an app asks without ever holding the key')) + '</div>';
+    html += '<div class="fact">' + esc(t("Mobile Wallet Adapter (MWA) is the protocol a Solana app on Android uses to ask a wallet app to sign something, instead of building its own key handling.")) + '</div>';
+    html += '<div class="fact">' + esc(t("The flow: the app that wants a signature builds the transaction and sends it over to the wallet app. The wallet app shows it to you, and if you approve, it signs the transaction inside itself and hands back the signed result. The private key never leaves the wallet app at any point in that exchange.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("That's the opposite of typing a seed phrase into a website or an app to \"connect\" a wallet.")) + '</b> ' + esc(t("A seed phrase typed into a form gives that form everything the wallet has ever held or ever will. MWA gives the requesting app nothing but a yes-or-no on one transaction it can see — and it never touches the key.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="dapp-store">';
+    html += '<div class="sec-title">' + esc(t('The dApp Store: a second place to find Android crypto apps')) + '</div>';
+    html += '<div class="fact">' + esc(t("The Solana dApp Store is a separate Android app store, built specifically for apps that use wallets, tokens and other on-chain features. It runs alongside the Google Play Store on Seeker — you keep both — and Solana Mobile's own FAQ says developers do not need a Seeker or a Saga to BUILD for it. Installing it is a different question, and we are not going to guess at it: the store ships preinstalled on Solana Mobile's own phones, and the company has said it is bringing its mobile stack to other Android makers. If you want it on a phone you already own, check Solana Mobile's own pages rather than a download link someone sends you.")) + '</div>';
+    html += '<div class="fact">' + esc(t("The stated difference for developers is the terms. Solana Mobile's FAQ states it does not currently collect any fees on in-app purchases, app purchases or subscriptions. The big stores take a cut on the same things — commonly 15% or 30% depending on the developer's size and the type of sale — so check each store's current published terms rather than a number quoted second-hand, including this one. And wallets, DeFi interfaces and NFT marketplaces — categories that traditional app-store review has made harder to publish under normal terms — are exactly the kind of app it was built to host.")) + '</div>';
+    html += '<div class="fact">' + esc(t("We publish our own school there too — the same free lessons that live at clucknorris.app, wrapped for the dApp Store. Saying so here, in the section where we're describing the store, is the honest way to mention it; the disclosure at the bottom of this page says the same thing again on its own.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="skr">';
+    html += '<div class="sec-title">' + esc(t('SKR, mechanically')) + '</div>';
+    html += '<div class="fact">' + esc(t("SKR is the token of the Solana Mobile ecosystem: an SPL token with 6 decimals, at the mint address")) + ' <code>' + esc('SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3') + '</code>' + esc(t('. It is verified on Jupiter, and its holder count is around 45,700, checked today.')) + '</div>';
+    html += '<div class="fact">' + esc(t("Solana Mobile's own page for it states an initial total supply of 10 billion, plus a published inflation schedule: 10% in the first year, decaying 25% annually after that, down to a terminal rate of 2% per year.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("That schedule is exactly why circulating supply reads higher than 10 billion, with an active mint authority still attached — that's what a running inflation schedule looks like on-chain, not a discrepancy from what Solana Mobile publishes.")) + '</b></div>';
+    html += '<div class="footnote">' + esc(t("No price and no market cap on this page, on purpose. This section describes what SKR is, not what it's worth or whether to hold it.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card warn" data-section="skr-impersonator">';
+    html += '<div class="sec-title">' + esc(t("A second token also calls itself SKR — and it's what search turns up first")) + '</div>';
+    html += '<div class="fact">' + esc(t('A separate mint uses the name "Seeker | Solana Mobile👇" and the same ticker, SKR. Checked today: it is unverified, has 4 holders, and its Jupiter organic score is 0 — no real trading activity behind it. Its own price page carries a "Danger" rating and states plainly that "Multiple tokens can use the same name and symbol."')) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("A plain web search for an SKR price turns up listings for tokens using this exact name before it surfaces the real one. That's not a hypothetical — it's what researching this page turned up.")) + '</b></div>';
+    html += '<div class="mint-row">';
+    html += '<span class="mint-label">' + esc(t('The real SKR mint')) + '</span>';
+    html += '<a class="mint-addr" href="https://explorer.solana.com/address/SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3" target="_blank" rel="noopener noreferrer">SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3</a>';
+    html += '</div>';
+    html += '<div class="mint-row">';
+    html += '<span class="mint-label">' + esc(t('The impersonator mint')) + '</span>';
+    html += '<a class="mint-addr" href="https://explorer.solana.com/address/79dd8EvWuGjPTnTMMBoY6Nqtdw5u1cXaGh4azuLGjiAj" target="_blank" rel="noopener noreferrer">79dd8EvWuGjPTnTMMBoY6Nqtdw5u1cXaGh4azuLGjiAj</a>';
+    html += '</div>';
+    for (var i = 0; i < MINT_AXES.length; i++) {
+      var row = MINT_AXES[i];
+      html += '<div class="stage-row"><div class="stage-name">' + esc(t(row.axis)) + '</div><div class="stage-vals">';
+      ['real', 'fake'].forEach(function (key) {
+        html += '<div class="stage-val"><span class="stage-label">' + esc(t(MINT_COL_LABEL[key])) + '</span><span class="stage-num">' + esc(t(row[key])) + '</span></div>';
+      });
+      html += '</div></div>';
+    }
+    html += '<div class="fact" style="margin-top:12px">' + esc(t("The rule that defeats this: never take a mint address from a search result, a DM, or a reply. A name, a ticker and a logo can be copied by anyone in seconds. A mint address can't be faked into looking like another one — check it against a registry, and check the chain yourself.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card" data-section="what-it-doesnt-fix">';
+    html += '<div class="sec-title">' + esc(t("What secure hardware doesn't fix")) + '</div>';
+    html += '<div class="fact">' + esc(t("Seed Vault and Mobile Wallet Adapter protect the key. They do nothing about the decision you make once a transaction is sitting in front of you.")) + '</div>';
+    html += '<div class="fact">' + esc(t("If a token is a scam, hardware-backed signing doesn't make it safe to hold — it signs the transaction that buys it, exactly as instructed. If you approve a transaction that drains your wallet, secure hardware signs that one too. It has no way to know your approval was a mistake.")) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("A transaction you sign and the network confirms can't be reversed by better hardware, on a Seeker or on any other phone. Same chain, same rules, same consequences as a wallet on any device.")) + '</b></div>';
+    html += '<div class="fact">' + esc(t("What changes on Seeker is where the key lives and how it leaves the phone to get signed — not what a transaction does once you've approved it.")) + '</div>';
+    html += '</div>';
+
+    html += '<div class="card note" data-section="disclosure">';
+    html += '<div class="sec-title">' + esc(t('Where we stand')) + '</div>';
+    html += '<div class="fact">' + esc(t("We publish our own school on the Solana dApp Store described above — the same free lessons that live at clucknorris.app.")) + '</div>';
+    html += '<div class="fact">' + esc(t('Cluck Norris is entered in a Solana Mobile hackathon.')) + '</div>';
+    html += '<div class="fact"><b>' + esc(t("This page describes what the hardware and the store actually do. It isn't asking you to buy a phone, and it isn't telling you SKR, or any token, is worth holding.")) + '</b></div>';
+    html += '</div>';
+
+    html += '<div class="card links-card">';
+    html += '<a href="/solana/mint">' + esc(t('What a token mint is — the one address that defines a token →')) + '</a>';
+    html += '<a href="/wallet-checkup">' + esc(t('Wallet Checkup — a free safety read on any address, no wallet or signup needed →')) + '</a>';
+    html += '<a href="/solana">' + esc(t('The Solana Room — how the rest of it actually works →')) + '</a>';
+    html += '</div>';
+
+    html += '<div class="card">';
+    html += '<div class="sec-title">' + esc(t('Sources')) + '</div>';
+    html += '<div class="small"><a href="https://solanamobile.com/seeker" target="_blank" rel="noopener noreferrer">' + esc(t("Solana Seeker's own product page — hardware spec sheet, Seed Vault Wallet, the dApp Store, on solanamobile.com →")) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://www.theblock.co/post/365600/solana-mobile-seeker-crypto-smartphone" target="_blank" rel="noopener noreferrer">' + esc(t('Seeker as the second-generation device, following Saga, and its August 2025 shipping start — The Block →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://docs.solanamobile.com/developers/seed-vault" target="_blank" rel="noopener noreferrer">' + esc(t('Seed Vault documentation — "keys, seeds, and secrets never leave the secure execution environment," on docs.solanamobile.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solanamobile.com/blog/seed-vault-wallet-solana-seekers-native-mobile-wallet" target="_blank" rel="noopener noreferrer">' + esc(t('What you review and confirm before the Seed Vault Wallet signs — solanamobile.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://docs.solanamobile.com/android-native/using_mobile_wallet_adapter" target="_blank" rel="noopener noreferrer">' + esc(t('Mobile Wallet Adapter — the sign request and response flow, on docs.solanamobile.com →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://docs.solanamobile.com/get-started/faq" target="_blank" rel="noopener noreferrer">' + esc(t("Solana Mobile's own FAQ — 0% platform fees, no Seeker or Saga required to build for or install the dApp Store →")) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://docs.solanamobile.com/additional-sdks/dapp_store_intro" target="_blank" rel="noopener noreferrer">' + esc(t('What the dApp Store is built for, in Solana Mobile\'s own words →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://solanamobile.com/skr" target="_blank" rel="noopener noreferrer">' + esc(t("SKR's own page — initial supply and the published inflation schedule, on solanamobile.com →")) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://jup.ag/tokens/SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3" target="_blank" rel="noopener noreferrer">' + esc(t('The real SKR on Jupiter — verified status and holder count, checked today →')) + '</a></div>';
+    html += '<div class="small" style="margin-top:8px"><a href="https://www.solflare.com/prices/seeker-solana-mobile/79dd8EvWuGjPTnTMMBoY6Nqtdw5u1cXaGh4azuLGjiAj/" target="_blank" rel="noopener noreferrer">' + esc(t('The impersonator mint\'s own price page — flagged "Danger," "Unverified token," on Solflare →')) + '</a></div>';
+    html += '</div>';
+
+    html += '<div class="maintained">' + esc(t('Last checked 20 September 2026 · maintained by Cluck Norris')) + '</div>';
+
+    html += '<div class="small" style="text-align:center"><a href="/solana">' + esc(t('Back to the Solana Room →')) + '</a></div>';
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>
