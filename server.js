@@ -5090,7 +5090,11 @@ async function gatherAlphaData() {
   } catch (_) {}
   try {
     const tp = await lpScanner.topPools({ kind: "trending" });
-    d.hotPools = (tp.pools || []).slice(0, 6).map((p) => ({ pair: p.pair, dex: p.dex, vol: (p.volume && p.volume.h24) || 0, yieldPct: p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay, risk: p.ilRisk && p.ilRisk.level }));
+    // `yieldPct` is fees ÷ TVL per day — a measured ratio (7-day average volume × fee tier ÷ TVL, or the
+    // 24h figure when the scanner has no 7-day read), NOT what an LP earns. Every row says which
+    // period it is (`period`) so no renderer can label a seven-day average "24h" again (Codex, #390).
+    // The key name stays `yieldPct` for the /api/alpha contract (STORE_API_RE).
+    d.hotPools = (tp.pools || []).slice(0, 6).map((p) => ({ pair: p.pair, dex: p.dex, vol: (p.volume && p.volume.h24) || 0, yieldPct: p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay, period: p.feeYield7dPctDay != null ? "7d" : "24h", basis: "feesToTvlPctDay", risk: p.ilRisk && p.ilRisk.level }));
   } catch (_) {}
   try {
     const np = await lpScanner.cgFetch("/networks/solana/new_pools");
@@ -5099,7 +5103,9 @@ async function gatherAlphaData() {
   } catch (_) {}
   try {
     const bc = await lpScanner.topPools({ kind: "bluechip" });
-    d.lpPicks = (bc.pools || []).slice(0, 4).map((p) => ({ pair: p.pair, dex: p.dex, yieldPct: p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay }));
+    // Established-both-sides pools (lib/lp-scanner ESTABLISHED), busiest first. The key is still
+    // `lpPicks` for the payload contract; nothing that renders it may call them picks or blue-chip.
+    d.lpPicks = (bc.pools || []).slice(0, 4).map((p) => ({ pair: p.pair, dex: p.dex, yieldPct: p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay, period: p.feeYield7dPctDay != null ? "7d" : "24h", basis: "feesToTvlPctDay" }));
   } catch (_) {}
   return d;
 }
@@ -5231,7 +5237,7 @@ async function classroomLiveExample(course, lesson) {
     if (/liquid|pool|amm|fee|lp|impermanent|concentrat|yield|slippage|price impact|bonding/.test(t)) {
       const tp = await lpScanner.topPools({ kind: "bluechip" });
       const p = (tp.pools || [])[0];
-      if (p) return `\n\nLIVE EXAMPLE (a real Solana pool RIGHT NOW — weave it in to make the lesson concrete): ${p.pair} on ${p.dex} — TVL $${Math.round(p.tvlUsd).toLocaleString()}, 24h volume $${Math.round((p.volume && p.volume.h24) || 0).toLocaleString()}, fee tier ${p.feeTier}%, ~${p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay}%/day fee yield.`;
+      if (p) return `\n\nLIVE EXAMPLE (a real Solana pool RIGHT NOW — weave it in to make the lesson concrete): ${p.pair} on ${p.dex} — TVL $${Math.round(p.tvlUsd).toLocaleString()}, 24h volume $${Math.round((p.volume && p.volume.h24) || 0).toLocaleString()}, fee tier ${p.feeTier}%, fees ÷ TVL ≈ ${p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay}% per day (${p.feeYield7dPctDay != null ? "7-day average volume" : "24h volume"} × fee tier ÷ TVL — a measured ratio of the pool, NOT what an LP earns; range, impermanent loss and price moves decide that. Teach it as the ratio it is, never as a yield or a return).`;
     }
     if (/market cap|price|token|research|on-?chain|volatil|trading|alpha|stablecoin|tokenomics|solscan/.test(t)) {
       // In-process since the 2026-08-18 review — this was a loopback self-fetch the origin
@@ -16858,10 +16864,12 @@ async function renderLpCard(scan) {
   const pools = (scan.pools || []).filter((p) => p.feeTier != null);
   const best = pools[0];
   if (best) {
-    // Headline: best fee yield
+    // Headline: the best fees ÷ TVL ratio, labelled with its period (a 7-day average when the
+    // scanner has one, else 24h) — never "yield", which is a claim about what an LP earns.
     const yld = best.feeYield7dPctDay != null ? best.feeYield7dPctDay : best.feeYieldPctDay;
+    const yPeriod = best.feeYield7dPctDay != null ? "7D AVG" : "24H";
     ctx.fillStyle = "#6B7280"; ctx.font = "900 18px Oswald, sans-serif";
-    ctx.fillText("TOP FEE YIELD — " + String(best.dex || "").toUpperCase() + " · " + best.feeTier + "% FEE", 60, 248);
+    ctx.fillText("FEES ÷ TVL PER DAY (" + yPeriod + ") — " + String(best.dex || "").toUpperCase() + " · " + best.feeTier + "% FEE", 60, 248);
     ctx.font = "900 130px Oswald, sans-serif";
     const g = ctx.createLinearGradient(60, 280, 520, 420);
     g.addColorStop(0, "#6EE7B7"); g.addColorStop(1, "#10B981");
@@ -16889,7 +16897,7 @@ async function renderLpCard(scan) {
     // Mini ranking of the next pools
     let ry = 452;
     ctx.font = "900 15px Oswald, sans-serif"; ctx.fillStyle = "#6B7280";
-    ctx.fillText(pools.length + " POOLS WITH READ FEES · RANKED BY YIELD", 60, ry); ry += 26;
+    ctx.fillText(pools.length + " POOLS WITH READ FEES · RANKED BY FEES ÷ TVL", 60, ry); ry += 26;
     ctx.font = "18px Oswald, sans-serif";
     for (const p of pools.slice(0, 3)) {
       const py = p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay;
