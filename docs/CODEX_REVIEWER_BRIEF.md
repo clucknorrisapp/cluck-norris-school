@@ -801,6 +801,87 @@ state (each round's harness was pinned to a specific pre-squash sha that no long
 
 Findings, not rewrites, same rule as every other round.
 
+## Round 6 — 2026-09-21: PR #390, the Seeker app on real hardware
+
+**The owner asked for you on this one specifically**, before it merges. It is the first batch
+written after the app ran on his actual Seeker — wallet connect and MWA signing work, which
+closes the oldest "never verified end-to-end" item in AGENTS.md.
+
+PR #390 is large but only two parts need a careful reviewer. The rest is copy and wiring.
+
+### ⚠️ Priority 1 — `src/track.js`: the graduation ledger's only input is now shared
+
+Extracted verbatim out of `src/App.jsx` so the new phone school and the desktop school use one
+implementation. The reason it had to be shared rather than copied: **two copies means two queues,
+two session ids, and lesson marks landing in one and not the other — in front of a treasury-paid
+diploma.**
+
+That code carries incident history including **your own fix on #333** (clearing the queue up front
+lost every entry if the tab closed mid-flight). I moved it without changing its logic. Please check:
+
+- Is the extraction genuinely behaviour-identical? `api` is now imported from `edition.js` rather
+  than closed over in `App.jsx`.
+- **The bit I most expect to be wrong:** the module runs
+  `window.addEventListener("online", flushTrackQueue)` and `setTimeout(flushTrackQueue, 1500)` at
+  import time. Two entry points now import it (`src/App.jsx`, `src/seeker/school/School.jsx`). In
+  the bundles they are separate builds, so it should be once each — but is there any path where one
+  build registers twice, and would a double flush hurt? (I believe not: the server keeps the first
+  sighting, and overlapping flushes are explicitly allowed. Confirm or shoot it down.)
+- `beaconId()` in `School.jsx` must produce the same shape as `trackId()` in `App.jsx`, or a lesson
+  passed on the phone lands on a different ledger row than the same lesson passed on the web.
+
+### ⚠️ Priority 1 — two tests were DEFENDING the bug
+
+`seeker-build-test` asserted the default route redirects to `#/tools`; the boot test asserted four
+nav tabs landing on the Toolkit. Both passed happily against an app **with no school in it at
+all** — the scope doc enumerated fifteen tools, the app was built to it exactly, and the tests
+agreed with the scope doc. The owner found the gap by opening the app on his phone.
+
+The general form is now in AGENTS.md: *a test that encodes a scope doc will defend that scope
+doc's blind spot.* **Worth your eye: are there others?** The same shape would hide anywhere a test
+asserts "the app has exactly N of X" where N came from a planning document rather than from a
+product decision.
+
+### Priority 2 — `lib/explain-findings.js` (payload layer for contextual Ask Cluck)
+
+Not wired to a UI yet; the endpoint and consent sheet are the next PR. It exists so "Explain this
+result" can send a tool's findings to the tutor **without sending the screen's text**, because
+token names are attacker-controlled and an LLM prompt turns that from an XSS class into a prompt
+injection class.
+
+Only finding CODES and COUNTS cross; the server renders English from its own table. The validator
+is the entire defence — `scripts/explain-findings-test.cjs` attacks it (extra keys carrying free
+text, prompts smuggled as codes, `__proto__`/`constructor`/`toString`, malformed counts,
+duplicates used to weight the prompt). **Try to get a string through it that I did not think of.**
+
+Also worth your opinion as a design call: I deliberately departed from the owner's brief, which
+asked for "the exact displayed findings". The cost is that an explanation cannot name a specific
+token. Is that the right trade?
+
+### Priority 3 — claims, and the Daily rebuild
+
+Five surfaces carried claims the code cannot support, found from one owner catch (Firepit's "a
+value guard **stops you** burning anything still worth money"). The others: Launches "read
+straight off the chain" (it is the Bags API), X-Ray's "behavioral signals … straight off the
+chain" (AGENTS.md calls it an activity scanner that undercounts), the **Ask Cluck system prompt**
+listing X-Ray/Holders/Trace as "FREE TOOLS (no wallet connect)" while describing the pass
+correctly further down the same prompt, and the Telegram `/walletxray` help saying "every trade".
+`scripts/ai-prompt-claims-test.cjs` pins it.
+
+The Daily pane was rebuilt after the owner asked what I thought of it: it had a section headed
+"Blue-chip LP picks" with a `%/day` yield, two tabs from an LP Lab that teaches impermanent loss
+and that fee APR is not return. Now it is today's lesson + one question + majors. **The daily
+check deliberately sends no beacon** — a one-tap answer must never reach the graduation ledger.
+
+### What is NOT in this PR, so you do not look for it
+
+The MWA native plugin, the Android CI and the `seeker-dev` unpinned build path are all in
+`clucknorrisapp/CLKN-SEEKER` on `claude/seeker-integration`. Notable there if you have appetite:
+`npm run build:seeker` could never have succeeded — the seeker variant inherited the
+education-only content scan, which forbids the wallet-connect and signing the Seeker edition
+legitimately ships. Measured against a real tarball: five hits. It would have refused its own
+correct artifact on release-tag night.
+
 ## Open questions the owner would like your opinion on
 - Is lock-to-earn on Jupiter Lock the right headline mechanism for a Consumer Apps entry, or is
   the read-only engine dashboard a stronger single story?
