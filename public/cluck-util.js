@@ -32,6 +32,19 @@
   // JSON-RPC through our own proxy (which holds the key and enforces a
   // method allow-list). Throws on a JSON-RPC error so callers can't silently
   // carry on with undefined.
+  //
+  // ⚠️ TWO KINDS OF THROW, AND ON A SEND THEY MEAN OPPOSITE THINGS. This function throws when
+  // the NODE answered with a JSON-RPC error — it received the request and refused it — and it
+  // also throws when the fetch never completed or the body was not JSON (a dropped mobile
+  // connection, a 502 or 524 with an HTML body from the edge). For a read those are the same
+  // "no answer". For `sendTransaction` they are not: the first proves the transaction did not
+  // enter the cluster, the second proves nothing at all — it may well have landed.
+  //
+  // Two independent adversarial reviews found the same P0 built on not distinguishing them: a
+  // transport failure was reported as "nothing was locked / nothing was burned", with a retry
+  // button, after the transaction had landed. So a node-answered error is TAGGED, and callers
+  // that move money branch on the tag (src/seeker/sign.js). Additive: every existing caller sees
+  // the same Error with the same message.
   async function rpc(method, params, url) {
     var r = await fetch(url || "/api/helius-rpc", {
       method: "POST",
@@ -39,7 +52,12 @@
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: method, params: params }),
     });
     var d = await r.json();
-    if (d && d.error) throw new Error(d.error.message || "RPC error");
+    if (d && d.error) {
+      var err = new Error(d.error.message || "RPC error");
+      err.rpcError = true;          // the node answered, and said no
+      err.rpcCode = d.error.code;
+      throw err;
+    }
     return d.result;
   }
 

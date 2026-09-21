@@ -288,20 +288,36 @@ function rpcOk(list) {
     "of",
     "Reclaim these, then rescan for the rest.",
   ];
-  // These must be the exact literals RentReclaim.jsx passes to t(...) — extracted independently
-  // here (a plain t("...") call regex) rather than just re-typing NEW_KEYS a second time, so a
-  // key renamed in the component without updating this list, or vice versa, shows up as a gap.
+  // These must be the exact literals RentReclaim.jsx renders as user-visible text — extracted
+  // independently here rather than just re-typing NEW_KEYS a second time, so a key renamed in the
+  // component without updating this list, or vice versa, shows up as a gap.
+  //
+  // ⚠️ TWO SHAPES, not one. A pane says a string either by calling t("…") itself, or by handing
+  // the English to a shared component that translates it — `<NeedsWallet why="Connect your wallet
+  // to scan for reclaimable rent.">` is the same sentence on the same screen as it was when it
+  // was a bare t() call, and it is still translated (pane.jsx's STRING RULE: the component
+  // translates its own strings). This test scanned for only the first shape, so moving that one
+  // sentence into NeedsWallet — which is what gave it a Connect button it had been missing —
+  // read as a deleted key and failed CI.
+  //
+  // That failure was worth having: chasing it found that scripts/seeker-i18n-keys.cjs had the
+  // same blind spot, and that THIRTEEN prop strings had been rendering in English in every
+  // language since they were written, including the confirm-sheet titles and buttons on the burn,
+  // lock and mint flows. Both extractors know about translated props now. A test that goes red
+  // for a bad reason is still worth reading.
   const jsxSrc = fs.readFileSync(path.join(ROOT, "src", "seeker", "RentReclaim.jsx"), "utf8");
   const extracted = new Set();
-  {
-    const re = /\bt\(\s*(['"])((?:\\.|(?!\1)[\s\S])*)\1/g;
+  for (const re of [
+    /\bt\(\s*(['"])((?:\\.|(?!\1)[\s\S])*)\1/g,                       // t("…")
+    /\b(?:why|title|label|message|confirmLabel)=\{?\s*(")((?:\\.|(?!\1)[^\n])*)\1/g,  // <X why="…">
+  ]) {
     let m;
     while ((m = re.exec(jsxSrc))) extracted.add(m[2].replace(/\\(['"\\])/g, "$1"));
   }
   extracted.delete("Rent Reclaim"); // already an increment-1 key, not new here
   const extractedList = [...extracted].sort();
   const expectedList = [...NEW_KEYS, ...NEW_KEYS_INCREMENT3].sort();
-  ok("the literal t(...) calls extracted from RentReclaim.jsx match this test's known-keys lists exactly",
+  ok("every user-visible string in RentReclaim.jsx — t(...) calls AND translated props — matches this test's known-keys lists exactly",
     JSON.stringify(extractedList) === JSON.stringify(expectedList),
     { extractedOnly: extractedList.filter((k) => !expectedList.includes(k)), listOnly: expectedList.filter((k) => !extracted.has(k)) });
 

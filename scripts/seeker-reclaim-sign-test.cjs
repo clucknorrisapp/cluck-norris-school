@@ -265,14 +265,99 @@ function baseIo(overrides) {
     const byTa = {}; res.rows.forEach((r) => (byTa[r.tokenAccount] = r));
     ok("the account that landed is confirmed", byTa[okAcc.tokenAccount].outcome === "confirmed", byTa[okAcc.tokenAccount]);
     ok("the account that failed on-chain is reported failed, with the signature attached", byTa[failAcc.tokenAccount].outcome === "failed" && byTa[failAcc.tokenAccount].sig === "SIG_1", byTa[failAcc.tokenAccount]);
-    ok("the ambiguous (timed-out) account is reported failed too — NEVER confirmed off a bare submission", byTa[unconfirmedAcc.tokenAccount].outcome === "failed", byTa[unconfirmedAcc.tokenAccount]);
+    // ⚠️ This assertion used to read "reported failed too". That was itself the bug (both
+    // adversarial lenses, 2026-09-21): an ambiguous timeout is NOT a failure. The close may
+    // have landed and the rent may be back. "Failed" tells someone nothing happened when
+    // something may have — and it fed the P1-D retry, which re-signed the same close.
+    ok("⚠️ the ambiguous (timed-out) account is UNCONFIRMED — never confirmed off a bare submission, and never called failed",
+       byTa[unconfirmedAcc.tokenAccount].outcome === "unconfirmed", byTa[unconfirmedAcc.tokenAccount]);
     ok("the ambiguous account's signature is still surfaced so it can be checked before a resend", !!byTa[unconfirmedAcc.tokenAccount].sig, byTa[unconfirmedAcc.tokenAccount]);
     const summary = CRP.summarize(res.rows);
     ok("the reclaimed total counts ONLY the confirmed account's lamports", summary.reclaimedLamports === okAcc.lamports, { got: summary.reclaimedLamports, expected: okAcc.lamports });
-    ok("confirmedCount/failedCount match exactly (1 confirmed, 2 failed)", summary.confirmedCount === 1 && summary.failedCount === 2, summary);
+    ok("the counts keep all three apart (1 confirmed, 1 failed, 1 unconfirmed)",
+       summary.confirmedCount === 1 && summary.failedCount === 1 && summary.unconfirmedCount === 1, summary);
+    ok("⚠️ the unconfirmed lamports are reported separately and NOT added to the reclaimed total",
+       summary.unconfirmedLamports === unconfirmedAcc.lamports && summary.reclaimedLamports === okAcc.lamports, summary);
   }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // Test 6b — THE SUBMIT ITSELF. Tests 6 and 7 both assume signAndSendAll came back with a
+  // signature; this one is about what happens when it did not, and it exists because the two
+  // shapes below were collapsed into one "failed" for the whole life of this file.
+  //
+  //   · TRANSPORT FAILURE — the request never got an answer (dropped mobile connection, a 502
+  //     with an HTML body from the edge). The transaction is SIGNED and may be in the cluster.
+  //     reclaim-sign.js now reports { sig, unconfirmedSubmit: true, error }. Reporting this as
+  //     "failed" told someone "Reclaimed 0 SOL" when the rent may already have been back, and
+  //     then fed the account to the P1-D auto-retry, which re-signed the same close.
+  //   · NODE REFUSED — a well-formed JSON-RPC error came back. Nothing landed, nothing was
+  //     charged, a retry IS safe, and it must stay "failed" so the retry still happens.
+  //
+  // Both carry a signature, so the ORDER of the checks in sendAndConfirmBatches is what keeps
+  // them apart. Get it wrong and a refused transaction goes into the confirm poll and comes out
+  // "unconfirmed" — turning a clean, safely-retryable failure into one nobody may retry.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\nTest 6b — transport failure vs the node refusing it (the two send shapes)\n");
+  {
+    // A transport failure on a 3-account batch. The ONLY confirm answer is the ambiguous one:
+    // we could not tell then and we cannot tell now.
+    // Own fixtures — Test 6's are scoped to its own block.
+    const okAcc = fixtureAccount({ lamports: 1000000 });
+    const failAcc = fixtureAccount({ lamports: 2000000 });
+    const unconfirmedAcc = fixtureAccount({ lamports: 3000000 });
+    let confirmCalls = 0, sendCalls = 0;
+    const ioT = {
+      getFreshBalances: async (tas) => { const o = {}; tas.forEach((t) => (o[t] = { exists: true, amount: "0" })); return o; },
+      getBlockhash: async () => "FakeBlockhash1111111111111111111111111111",
+      signAndSendAll: async (batches) => { sendCalls++; return batches.map(() => ({ sig: "LOCAL_SIG_T", unconfirmedSubmit: true, error: "Failed to fetch" })); },
+      confirmSignature: async () => { confirmCalls++; return false; },
+    };
+    const accs = [okAcc, failAcc, unconfirmedAcc];
+    const rT = await CRP.runReclaimFlow({ accounts: accs, owner: OWNER, closedTokenAccounts: [] }, ioT);
+    const sum = CRP.summarize(rT.rows);
+    ok("⚠️ a transport failure is UNCONFIRMED for every account in the batch, never failed",
+       rT.rows.length === 3 && rT.rows.every((r) => r.outcome === "unconfirmed"), rT.rows);
+    ok("⚠️ and the reclaimed total is zero WITHOUT claiming nothing happened",
+       sum.reclaimedLamports === 0 && sum.unconfirmedCount === 3 && sum.failedCount === 0, sum);
+    ok("every unconfirmed row carries the signature we already hold, so it can be looked up",
+       rT.rows.every((r) => r.sig === "LOCAL_SIG_T"), rT.rows);
+    ok("it still polled for confirmation rather than giving up on the send",
+       confirmCalls > 0, { confirmCalls });
+    ok("⚠️ an unconfirmed batch is NEVER auto-retried — exactly one send round happened",
+       sendCalls === 1, { sendCalls });
+
+    // Same batch, but the transport failure resolves: the poll LANDS it. That is a genuine
+    // confirmation and must be reported as one — the ambiguity was ours, not the chain's.
+    const ioT2 = Object.assign({}, ioT, {
+      signAndSendAll: async (batches) => batches.map(() => ({ sig: "LOCAL_SIG_T2", unconfirmedSubmit: true, error: "Failed to fetch" })),
+      confirmSignature: async () => true,
+    });
+    const rT2 = await CRP.runReclaimFlow({ accounts: accs, owner: OWNER, closedTokenAccounts: [] }, ioT2);
+    const sum2 = CRP.summarize(rT2.rows);
+    ok("a transport failure whose transaction the poll then FINDS is confirmed, and counts",
+       rT2.rows.every((r) => r.outcome === "confirmed") && sum2.reclaimedLamports === accs.reduce((n, a) => n + a.lamports, 0), sum2);
+
+    // The node ANSWERED and refused it — and still handed back a local signature. This is the
+    // ordering trap: checking `sig` first would route it into the poll and mislabel it.
+    let sendCalls3 = 0, confirmCalls3 = 0;
+    const ioR = {
+      getFreshBalances: async (tas) => { const o = {}; tas.forEach((t) => (o[t] = { exists: true, amount: "0" })); return o; },
+      getBlockhash: async () => "FakeBlockhash1111111111111111111111111111",
+      signAndSendAll: async (batches) => { sendCalls3++; return batches.map(() => ({ error: "Blockhash not found", sig: "LOCAL_SIG_R" })); },
+      confirmSignature: async () => { confirmCalls3++; return false; },
+    };
+    const rR = await CRP.runReclaimFlow({ accounts: accs, owner: OWNER, closedTokenAccounts: [] }, ioR);
+    const sumR = CRP.summarize(rR.rows);
+    ok("⚠️ a node-refused send is FAILED even though a signature came back with it",
+       rR.rows.every((r) => r.outcome === "failed") && sumR.unconfirmedCount === 0, rR.rows);
+    ok("the refusal's own reason is reported, not a generic one",
+       rR.rows.every((r) => /Blockhash not found/.test(r.reason || "")), rR.rows);
+    ok("the signature is still surfaced for lookup", rR.rows.every((r) => r.sig === "LOCAL_SIG_R"), rR.rows);
+    ok("⚠️ a refused send is never sent into the confirmation poll", confirmCalls3 === 0, { confirmCalls3 });
+    ok("and because nothing landed, the P1-D retry DOES fire for it", sendCalls3 === 2, { sendCalls3 });
+  }
+
   // Test 7 — idempotency: a re-run after partial failure attempts no already-closed account and
   // never double-counts the reclaimed total.
   // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -708,6 +793,65 @@ function baseIo(overrides) {
       const h = floorPx(selector, "min-height");
       ok(`${label} (${selector}) declares min-height >= 44px`, h !== null && h >= 44, `min-height:${h}px`);
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // Reason-string drift — every reason the plan module can emit must be translatable.
+  //
+  // public/rent-reclaim-plan.js is shared vanilla JS with no dictionary, so it emits English
+  // reasons and RentReclaim.jsx maps them to t() calls at the render boundary. That map is
+  // keyed on the exact English sentence, so editing a reason string in the plan module without
+  // editing the map silently drops that row back to English — in a Spanish or Hindi run, on the
+  // rows where something went wrong with someone's money. Nothing else would catch it: the
+  // build's key check sees the map's OWN keys and is perfectly happy, and the rendered Spanish
+  // check never drives a signing failure. This is a source scan precisely because the rendered
+  // measurement structurally cannot see it (CLAUDE.md: "run both").
+  console.log("\nReason-string drift — the plan module's reasons all have a translation\n");
+  {
+    const planSrc = fs.readFileSync(path.join(ROOT, "public", "rent-reclaim-plan.js"), "utf8");
+    const paneSrc = fs.readFileSync(path.join(ROOT, "src", "seeker", "RentReclaim.jsx"), "utf8");
+
+    // Every string literal a mergeRow() call can end up using as its reason. The third argument
+    // is not always a bare literal — it can be `"prefix: " + err` (captured as the prefix, which
+    // is how reasonText() matches it too) or `r.error || "fallback"`. So take the whole call and
+    // pull every literal out of it, minus the outcome enum in position two. A narrower regex
+    // missed the `|| "could not submit"` fallback, and this check's whole point is that a reason
+    // nobody remembered is exactly the one that reaches a person in the wrong language.
+    const OUTCOMES = new Set(["confirmed", "failed", "unconfirmed", "skipped", "rejected"]);
+    const reasons = new Set();
+    const callRe = /mergeRow\(([^;]*?)\)\s*\)?\s*[;,)]/g;
+    const litRe = /"((?:[^"\\]|\\.)*)"/g;
+    let m;
+    while ((m = callRe.exec(planSrc))) {
+      let lm;
+      litRe.lastIndex = 0;
+      while ((lm = litRe.exec(m[1]))) {
+        const lit = lm[1];
+        if (!lit || OUTCOMES.has(lit)) continue;
+        reasons.add(lit);
+      }
+    }
+    ok("the scan actually found the reason strings (guards against the regex silently matching nothing)",
+       reasons.size >= 6, { found: reasons.size, reasons: [...reasons] });
+
+    // What reasonText() can handle: the keys of its `known` map, plus its one prefix constant.
+    const mapped = new Set();
+    const mapRe = /^\s*"((?:[^"\\]|\\.)*)":\s*t\(/gm;
+    while ((m = mapRe.exec(paneSrc))) mapped.add(m[1]);
+    const prefixRe = /const REASON_PREFIX = "((?:[^"\\]|\\.)*)";/.exec(paneSrc);
+    ok("REASON_PREFIX is still declared in the pane", !!prefixRe, prefixRe);
+    const prefix = prefixRe ? prefixRe[1] : "\u0000no-prefix";
+
+    const unmapped = [...reasons].filter((r) => !mapped.has(r) && r !== prefix && r.indexOf(prefix) !== 0);
+    ok("⚠️ every reason the plan module emits is translated at the render boundary",
+       unmapped.length === 0,
+       unmapped.length ? { unmapped, hint: "add it to the `known` map in RentReclaim.jsx reasonText()" } : null);
+
+    // And the other direction: a mapping for a reason that no longer exists is dead weight that
+    // makes the check above look healthier than it is.
+    const stale = [...mapped].filter((k) => !reasons.has(k));
+    ok("and the map carries no entry for a reason that no longer exists",
+       stale.length === 0, stale.length ? { stale } : null);
   }
 
   console.log(fail ? `\n${fail} FAILED (${pass} passed)` : `\nall passed (${pass} passed)`);

@@ -2742,5 +2742,18 @@
   "What a listing venue will check before it lists a token — run it on yours first.": "一个上市平台在收录代币之前会检查什么——先在你自己的代币上运行一遍。",
   "Who holds a token, how concentrated it is, and how that changed.": "谁持有这个代币、集中度如何，以及这一情况是如何变化的。",
   "{n}h ago": "{n}小时前",
-  "{n}h old": "{n}小时前"
+  "{n}h old": "{n}小时前",
+  "Confirm burn": "确认销毁",
+  "Confirm lock": "确认锁定",
+  "Confirm mint": "确认铸造",
+  "Connect the wallet that holds the tokens you want to burn.": "请连接持有你想销毁的代币的那个钱包。",
+  "Connect the wallet that holds the tokens you want to lock.": "请连接持有你想锁定的代币的那个钱包。",
+  "Connect the wallet that will create and pay for this token.": "请连接将创建并支付这个代币的钱包。",
+  "Connect your wallet to run a checkup.": "连接你的钱包以运行检查。",
+  "Connect your wallet to scan for junk tokens and reclaimable rent.": "连接你的钱包，扫描垃圾代币和可收回的租金。",
+  "Create and sign": "创建并签名",
+  "Primary": "主导航",
+  "Send it": "发送",
+  "Send this drop?": "发送这次空投吗？",
+  "Working…": "处理中…"
 }

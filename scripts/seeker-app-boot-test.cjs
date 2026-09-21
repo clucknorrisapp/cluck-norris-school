@@ -737,6 +737,125 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     }
   }
 
+  // ---- J: a submit that THREW is not proof that nothing landed ----------------------------
+  //
+  // ⚠️ THE P0 TWO INDEPENDENT REVIEWS FOUND SEPARATELY. `CluckUtil.rpc` throws in two situations
+  // that mean opposite things on a send: the node answered with a JSON-RPC error (it refused the
+  // transaction — nothing landed), or the request never completed (a dropped mobile connection,
+  // a 502 from the edge — the transaction may be on chain right now). Collapsing them into one
+  // "failed" told people "Nothing was burned" / "your tokens are where they were" and put a
+  // retry button under it, which burns, closes or locks the same tokens a second time.
+  //
+  // Driven through the Locker Room because it is the app's most irreversible single transaction.
+  // Both branches are asserted: a transport throw must NOT read as failure, and a node refusal
+  // must, because retrying that one is safe and correct.
+  {
+    const MEMO = new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+    const MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+    for (const [label, sendFails, wantUnconfirmed] of [
+      ["transport failure (connection dropped)", "transport", true],
+      ["the node refused it (JSON-RPC error)", "rpc", false],
+    ]) {
+      const SIGNER = web3.Keypair.generate();
+      const BASE = web3.Keypair.generate();
+      let recorded = 0;
+      const FAKE_SIGNING = `(() => {
+        const SECRET = ${JSON.stringify(Array.from(SIGNER.secretKey))};
+        const account = { address: ${JSON.stringify(SIGNER.publicKey.toBase58())}, publicKey: new Uint8Array(32).fill(7),
+          chains: ["solana:mainnet"], features: ["solana:signTransaction"] };
+        const wallet = {
+          version: "1.0.0", name: "Jupiter", icon: "data:image/svg+xml;base64,PHN2Zy8+",
+          chains: ["solana:mainnet"], accounts: [],
+          features: {
+            "standard:connect": { version: "1.0.0", connect: async () => { wallet.accounts = [account]; return { accounts: [account] }; } },
+            "standard:disconnect": { version: "1.0.0", disconnect: async () => { wallet.accounts = []; } },
+            "standard:events": { version: "1.0.0", on: () => () => {} },
+            "solana:signTransaction": { version: "1.0.0", supportedTransactionVersions: ["legacy", 0],
+              signTransaction: async (...inputs) => inputs.map((x) => {
+                const tx = solanaWeb3.Transaction.from(x.transaction);
+                tx.partialSign(solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(SECRET)));
+                return { signedTransaction: tx.serialize({ requireAllSignatures: false, verifySignatures: false }) };
+              }) },
+          },
+        };
+        const cb = ({ register }) => register(wallet);
+        window.addEventListener("wallet-standard:app-ready", (ev) => cb(ev.detail));
+        window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", { detail: cb }));
+      })();`;
+      const unsigned = new web3.Transaction({ feePayer: SIGNER.publicKey, recentBlockhash: web3.Keypair.generate().publicKey.toBase58() })
+        .add(new web3.TransactionInstruction({ keys: [{ pubkey: BASE.publicKey, isSigner: true, isWritable: true }], programId: MEMO, data: Buffer.from("clucknorris") }));
+      const CREATE = {
+        ok: true,
+        txBase64: unsigned.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64"),
+        baseSecret: Buffer.from(BASE.secretKey).toString("base64"),
+        escrow: web3.Keypair.generate().publicKey.toBase58(), escrowToken: web3.Keypair.generate().publicKey.toBase58(),
+        decimals: 6, tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        schedule: { totalRaw: "1000000000", cliffRaw: "1000000000", perPeriodRaw: "0", periods: 0, freqSec: 2592000, cliffTime: 1790000000 },
+        simError: null, tokenSymbol: "CLKN",
+      };
+
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/lock/create-tx*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CREATE) }));
+          await pg.route("**/api/lock/record*", (r) => { recorded++; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) }); });
+          await pg.route("**/api/locks*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, mint: MINT, decimals: 6, supply: 1e9, totalLocked: 0, pctOfSupply: 0, lockCount: 0, breakdown: [], topLocks: [] }) }));
+          await pg.route("**/api/helius-rpc", async (r) => {
+            const body = JSON.parse(r.request().postData() || "{}");
+            if (body.method === "sendTransaction") {
+              // "transport": the edge answers with an HTML error page, so r.json() throws inside
+              // CluckUtil.rpc and nothing tags the error — exactly a 502/524 on a phone.
+              // "rpc": a well-formed JSON-RPC error, which is the node saying it refused it.
+              if (sendFails === "transport") return r.fulfill({ status: 502, contentType: "text/html", body: "<html>bad gateway</html>" });
+              return r.fulfill({ status: 200, contentType: "application/json",
+                body: JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: -32002, message: "Transaction simulation failed: Blockhash not found" } }) });
+            }
+            let result = null;
+            if (body.method === "getSignatureStatuses") result = { value: [null] };   // never resolves
+            else if (body.method === "getLatestBlockhash") result = { value: { blockhash: "11111111111111111111111111111111" } };
+            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result }) });
+          });
+        }, FAKE_SIGNING);
+
+      await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+      await page.waitForTimeout(400);
+      await page.click(".seeker-walletbtn");
+      await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 });
+      await page.evaluate(() => { window.location.hash = "#/tools/lock"; });
+      await page.waitForTimeout(400);
+      await page.evaluate(() => { const b = Array.from(document.querySelectorAll(".seeker-launch-tabbtn")).find((x) => /create/i.test(x.innerText)); b && b.click(); });
+      await page.waitForTimeout(300);
+      await page.fill("#lr-c-mint", MINT);
+      await page.fill("#lr-c-amount", "1000");
+      await page.click(".seeker-listing-runbtn");
+      await page.waitForFunction(() => /Lock tokens/i.test(document.body.innerText), null, { timeout: 20000 });
+      await page.evaluate(() => { const b = Array.from(document.querySelectorAll("button")).find((x) => /^lock tokens$/i.test(x.innerText.trim())); b && b.click(); });
+      await page.waitForFunction(() => /Confirm lock|Confirmar|确认|Xác nhận/i.test(document.body.innerText), null, { timeout: 10000 });
+      await page.click(".seeker-confirm .seeker-btn:not(.seeker-btn-quiet)");
+      await page.waitForFunction(() => /did not go through|not confirmed/i.test(document.body.innerText), null, { timeout: 60000 }).catch(() => {});
+      const body = await text(page);
+
+      if (wantUnconfirmed) {
+        ok(`J · ⚠️ ${label} — reported UNCONFIRMED, never "nothing was locked"`,
+           /not confirmed/i.test(body) && !/did not go through/i.test(body) && !/tokens are where they were/i.test(body), body.slice(0, 400));
+        ok(`J · ${label} — and it hands over the signature to check`,
+           await page.evaluate(() => !!document.querySelector('a[href^="https://solscan.io/tx/"]')));
+        // ⚠️ The whole point: no second lock from a screen that cannot know the first one failed.
+        ok(`J · ⚠️ ${label} — offers NO way to lock again`, await page.evaluate(() =>
+          !Array.from(document.querySelectorAll("button")).some((b) => /^lock tokens$/i.test(b.innerText.trim()))));
+      } else {
+        ok(`J · ${label} — reported FAILED, because the node said it refused it`,
+           /did not go through/i.test(body) && !/not confirmed/i.test(body), body.slice(0, 400));
+        // Retrying a node refusal is correct — nothing landed and nothing was charged.
+        ok(`J · ${label} — and retrying IS offered, because nothing landed`, await page.evaluate(() =>
+          Array.from(document.querySelectorAll("button")).some((b) => /^lock tokens$/i.test(b.innerText.trim()))));
+      }
+      ok(`J · ${label} — the public feed is told nothing either way`, recorded === 0, `recorded ${recorded}`);
+      ok(`J · ${label} — no uncaught exception`, errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+  }
+
   // ---- I: it is not an English-only app -------------------------------------------------
   //
   // The school ships in SEVEN languages (AGENTS.md), and this app is part of the school. An

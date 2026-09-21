@@ -344,12 +344,24 @@ html, body {
   text-align: center;
   margin: 6px 0 14px;
 }
+.seeker-reclaim-unconfirmedtext {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+}
 
 /* Result rows (per-account outcome after a sign, spec §4): same card shape as the scan rows, one
    border-left color per outcome — vocabulary stays closed/reclaimed/refused, never "verified" or
    "safe" about any token. */
 .seeker-reclaim-resultrow-confirmed { border-left-color: var(--green); }
 .seeker-reclaim-resultrow-failed { border-left-color: var(--red); }
+/* Deliberately NOT red. An unconfirmed close is an open question, not a failure, and colouring
+   it like one is the same lie the word "Failed" was. Amber reads as "look at this". */
+.seeker-reclaim-resultrow-unconfirmed { border-left-color: var(--gold); }
 .seeker-reclaim-resultrow-skipped { border-left-color: var(--gold); }
 .seeker-reclaim-resultrow-rejected { border-left-color: var(--sub); }
 .seeker-reclaim-row-outcome {

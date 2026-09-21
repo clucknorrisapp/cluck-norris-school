@@ -62,6 +62,23 @@ const TABLES = [
   { file: path.join(SRC, "passgate.jsx"), re: /^\s{2}[a-z]+:\s*("(?:[^"\\]|\\.)*"),?$/gm },
 ];
 
+// ⚠️ AND THE PROPS THE SHARED COMPONENTS TRANSLATE THEMSELVES. pane.jsx's STRING RULE is that a
+// component translates its own user-visible strings, so a caller passes ENGLISH TEXT as a prop
+// and never wraps it in t() — `<NeedsWallet why="Connect your wallet…">`, `<Pane title="Firepit">`,
+// `<Confirm title="Burn these tokens?" confirmLabel="Burn">`. Those strings reach the screen and
+// need translating exactly like any other, and a scan for `t("…")` cannot see a single one.
+//
+// This was found the same way the registry/passgate tables were — not by reading the extractor,
+// but by a guard going red: moving one sentence from a bare t() into `<NeedsWallet why=…>` broke
+// seeker-reclaim-test's key list, and chasing that turned up the whole class. Third instance of
+// the same lesson in one night: a source scan sees the shape it was written for and nothing else.
+// ⚠️ `placeholder=` is deliberately NOT in this list. Where a placeholder is prose the panes
+// already write `placeholder={t("Paste a wallet address")}` and the t() scan catches it; where it
+// is bare it is an EXAMPLE VALUE — "100", "https://…/logo.png", "discord.gg/…" — and translating
+// those would be wrong. Including it produced eight junk keys on the first run, which is its own
+// small lesson: an extractor that over-reaches sends translators work that should not be done.
+const PROPS = /\b(?:why|title|label|message|confirmLabel)=\{?\s*"((?:[^"\\]|\\.)*)"/g;
+
 function keys() {
   const out = new Set();
   for (const fp of walk(SRC, [])) {
@@ -72,6 +89,18 @@ function keys() {
     while ((m = CALL.exec(src))) {
       let v;
       try { v = JSON.parse(m[1]); } catch (_) { continue; }
+      if (v && v.trim()) out.add(v);
+    }
+  }
+  // Translated props, in the panes and the shell alike.
+  for (const fp of walk(SRC, [])) {
+    const src = fs.readFileSync(fp, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    let m;
+    const re = new RegExp(PROPS.source, "g");
+    while ((m = re.exec(src))) {
+      let v;
+      try { v = JSON.parse('"' + m[1] + '"'); } catch (_) { continue; }
       if (v && v.trim()) out.add(v);
     }
   }

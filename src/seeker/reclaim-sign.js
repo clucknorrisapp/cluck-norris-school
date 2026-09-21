@@ -86,8 +86,8 @@ const GET_MULTIPLE_ACCOUNTS_BATCH = 100;
 // now src/seeker/sign.js's, shared by every tool in this app that touches a wallet, and
 // RE-EXPORTED here so this file's own public surface is unchanged. Read sign.js's header for
 // what each of its four protections costs when it is missing.
-export { confirmSignature, isUserRejection, bytesToBase64, messageBytes, sameBytes } from "./sign.js";
-import { confirmSignature, isUserRejection, bytesToBase64, messageBytes, sameBytes } from "./sign.js";
+export { confirmSignature, isUserRejection, bytesToBase64, messageBytes, sameBytes, submitSigned } from "./sign.js";
+import { confirmSignature, isUserRejection, bytesToBase64, messageBytes, sameBytes, submitSigned } from "./sign.js";
 
 export async function getFreshBalances(rpc, tokenAccounts) {
   if (!tokenAccounts.length) return {};
@@ -183,11 +183,18 @@ export async function signAndSendAll(provider, rpc, descriptorBatches, blockhash
           out.push({ error: "the wallet returned a different transaction than the one you approved" });
           continue;
         }
-        const raw = realTx.serialize();
-        const sig = await rpc("sendTransaction", [bytesToBase64(raw), { encoding: "base64", skipPreflight: false, preflightCommitment: "confirmed" }]);
-        out.push(sig ? { sig } : { error: "wallet/RPC returned no signature" });
+        // ⚠️ P0 (both adversarial lenses, 2026-09-21): this used to inline its own
+        // rpc("sendTransaction") and push { error } on ANY throw — the identical bug that
+        // protection (5) exists for, written a second time and therefore fixed only once.
+        // A dropped connection here meant every account in the batch was reported "failed"
+        // AND fed to the P1-D single-account retry below, which re-signs and re-sends closes
+        // for accounts that may already be closed. submitSigned() is the only submit path.
+        const res = await submitSigned(rpc, realTx, { skipPreflight: false });
+        if (res.transportFailed) out.push({ sig: res.sig, unconfirmedSubmit: true, error: res.error });
+        else if (res.sig && !res.error) out.push({ sig: res.sig });
+        else out.push({ error: res.error || "wallet/RPC returned no signature", sig: res.sig });
       } catch (e) {
-        out.push({ error: (e && e.message) || String(e) });
+        out.push(isUserRejection(e) ? { rejected: true } : { error: (e && e.message) || String(e) });
       }
     }
     return out;

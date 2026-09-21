@@ -266,12 +266,23 @@
   }
 
   // Rule: "never claim success from a submitted signature alone" — reclaimedLamports sums ONLY
-  // outcome === "confirmed" rows. Every other outcome ("failed", "skipped", "rejected") is
-  // reported but contributes nothing to the total.
+  // outcome === "confirmed" rows. Every other outcome contributes nothing to the total.
+  //
+  // ⚠️ FIVE outcomes, and "unconfirmed" is the one that keeps being collapsed away:
+  //   confirmed   — the account closed and the rent is back. The ONLY one that counts.
+  //   failed      — nothing landed. The chain is unchanged. A retry is safe.
+  //   unconfirmed — a signed transaction MAY be on chain. We could not tell. It is NOT failed
+  //                 (that would tell someone "you reclaimed 0 SOL" when they may have reclaimed
+  //                 it) and it is NOT confirmed. It carries its signature so it can be looked
+  //                 up, its lamports are NOT counted, and it is NEVER auto-retried.
+  //   skipped     — never attempted (already closed, still holds tokens, classification said no).
+  //   rejected    — the person declined to sign. Not an error.
   function summarize(rows) {
-    var reclaimedLamports = 0, confirmed = 0, failed = 0, skipped = 0, rejected = 0;
+    var reclaimedLamports = 0, confirmed = 0, failed = 0, unconfirmed = 0, skipped = 0, rejected = 0;
+    var unconfirmedLamports = 0;
     (rows || []).forEach(function (r) {
       if (r.outcome === "confirmed") { reclaimedLamports += Number(r.lamports) || 0; confirmed++; }
+      else if (r.outcome === "unconfirmed") { unconfirmedLamports += Number(r.lamports) || 0; unconfirmed++; }
       else if (r.outcome === "failed") failed++;
       else if (r.outcome === "skipped") skipped++;
       else if (r.outcome === "rejected") rejected++;
@@ -280,6 +291,8 @@
       reclaimedLamports: reclaimedLamports,
       confirmedCount: confirmed,
       failedCount: failed,
+      unconfirmedCount: unconfirmed,
+      unconfirmedLamports: unconfirmedLamports,
       skippedCount: skipped,
       rejectedCount: rejected,
       rows: rows || [],
@@ -372,6 +385,17 @@
         batch.forEach(function (c) { rows.push(mergeRow(c, "rejected", "you declined to sign")); });
         continue;
       }
+      // ⚠️ ORDER IS LOAD-BEARING. A result may carry BOTH an error and a signature: that is the
+      // node ANSWERING and refusing the transaction (bad blockhash, preflight failure). Nothing
+      // landed, so it is "failed" and a retry is safe — the signature is reported only so it can
+      // be looked up. Checking `r.sig` first would send a refused transaction into the confirm
+      // poll and come back "unconfirmed", turning a clean, safely-retryable failure into an
+      // ambiguous one nobody may retry. `r.unconfirmedSubmit` is the opposite case and is
+      // excluded here: there the send never got an answer at all.
+      if (r.error && !r.unconfirmedSubmit) {
+        batch.forEach(function (c) { rows.push(mergeRow(c, "failed", r.error, r.sig ? { sig: r.sig } : null)); });
+        continue;
+      }
       if (!r.sig) {
         batch.forEach(function (c) { rows.push(mergeRow(c, "failed", r.error || "could not submit")); });
         continue;
@@ -379,11 +403,16 @@
       var confirmed = false, confirmError = null;
       try { confirmed = await io.confirmSignature(r.sig); }
       catch (e) { confirmError = (e && e.message) || String(e); }
+      // `r.unconfirmedSubmit` — the submission itself could not be confirmed to have reached a
+      // node (a dropped connection, a 502 with an HTML body). The signature is real and the
+      // transaction may be in the cluster. If the poll then LANDS it, it is genuinely confirmed
+      // and that is the honest answer; if the poll is ambiguous, this row is unconfirmed, not
+      // failed. Only an explicit on-chain error is a failure.
       (function (sig, isConfirmed, err) {
         batch.forEach(function (c) {
           if (isConfirmed) rows.push(mergeRow(c, "confirmed", null, { sig: sig }));
           else if (err) rows.push(mergeRow(c, "failed", "closing transaction failed on-chain: " + err, { sig: sig }));
-          else rows.push(mergeRow(c, "failed", "submitted but unconfirmed after the wait — check the signature before retrying", { sig: sig }));
+          else rows.push(mergeRow(c, "unconfirmed", "submitted but not confirmed — look this signature up before trying again", { sig: sig }));
         });
       })(r.sig, confirmed, confirmError);
     }
@@ -420,12 +449,17 @@
   //                                            owner} } | throws/null
   //   io.getBlockhash()                  -> blockhash string | throws/null
   //   io.signAndSendAll(descriptorBatches, blockhash, owner)
-  //       -> array, one entry per batch, of { sig } | { rejected: true } | { error: string }
+  //       -> array, one entry per batch, of
+  //            { sig }                                   the node accepted the submission
+  //            { sig, unconfirmedSubmit: true, error }   the send got no answer; MAY be on chain
+  //            { error, sig? }                           the node answered and refused it
+  //            { rejected: true }                        the person declined to sign
   //   io.confirmSignature(sig)           -> true (landed) | false (timed out, ambiguous) | throws
   //                                          (failed on-chain)
   //
   // Returns { status: "ok"|"unavailable"|"rejected", reclaimedLamports, confirmedCount,
-  //           failedCount, skippedCount, rejectedCount, rows }. `status` is about the RUN as a
+  //           failedCount, unconfirmedCount, unconfirmedLamports, skippedCount, rejectedCount,
+  //           rows }. `status` is about the RUN as a
   // whole (could the chain be read at all; did the person say no); the per-row outcomes are
   // always the honest per-account record regardless of `status`.
   async function runReclaimFlow(input, io) {
@@ -463,6 +497,13 @@
     // exists, and closing an account twice is a no-op failure on the token program's side, never
     // a double-spend. Batches of exactly one account are skipped here — resending the identical
     // failing transaction gains nothing a single retry of the whole run wouldn't already offer.
+    //
+    // ⚠️ "failed" HERE MEANS FAILED, NOT "not confirmed". This test is the reason the
+    // "unconfirmed" outcome had to exist as its own value. While an ambiguous result was also
+    // recorded as "failed", this block auto-re-signed and re-sent closes for accounts whose
+    // first transaction may already have been in the cluster — a blind retry of a money
+    // operation, triggered by nothing more than a slow node. An unconfirmed row is never
+    // retried by anything; a person looks the signature up and decides.
     var retryAccounts = [];
     batches.forEach(function (b) {
       if (b.length <= 1) return;

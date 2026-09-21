@@ -752,5 +752,10 @@
     deeplinks: deeplinks,
     mobileLinksHTML: mobileLinksHTML,
     watch: watch,
+    // Exported so src/seeker/sign.js can read a SIGNED transaction's own signature before it is
+    // submitted — the signature exists the moment the wallet returns, and a submission that
+    // fails in transport is not proof the transaction did not land. Exported rather than copied:
+    // this is the one base58 implementation, already exercised by wallet-standard-test.cjs.
+    b58encode: b58encode,
   };
 })(typeof globalThis !== "undefined" ? globalThis : window);

@@ -2742,5 +2742,18 @@
   "Slow down a little. Try again in {n} seconds.": "Ve más despacio. Inténtalo de nuevo en {n} segundos.",
   "Try again in {n} seconds.": "Inténtalo de nuevo en {n} segundos.",
   "{n}h ago": "hace {n}h",
-  "{n}h old": "{n}h de antigüedad"
+  "{n}h old": "{n}h de antigüedad",
+  "Confirm burn": "Confirmar quema",
+  "Confirm lock": "Confirmar bloqueo",
+  "Confirm mint": "Confirmar minteo",
+  "Connect the wallet that holds the tokens you want to burn.": "Conecta la billetera que tiene los tokens que quieres quemar.",
+  "Connect the wallet that holds the tokens you want to lock.": "Conecta la billetera que tiene los tokens que quieres bloquear.",
+  "Connect the wallet that will create and pay for this token.": "Conecta la billetera que creará y pagará este token.",
+  "Connect your wallet to run a checkup.": "Conecta tu billetera para hacer un chequeo.",
+  "Connect your wallet to scan for junk tokens and reclaimable rent.": "Conecta tu billetera para escanear tokens basura y rent reclamable.",
+  "Create and sign": "Crear y firmar",
+  "Primary": "Principal",
+  "Send it": "Enviarlo",
+  "Send this drop?": "¿Enviar este drop?",
+  "Working…": "Trabajando…"
 }

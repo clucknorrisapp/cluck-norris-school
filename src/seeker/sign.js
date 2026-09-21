@@ -27,6 +27,12 @@
 //      the same provider. A transaction built for the old account and signed by the new one is
 //      the single most dangerous moment in any of these tools. Refuse on mismatch.
 //
+//   5. A FAILED SUBMISSION IS NOT A FAILED TRANSACTION. The signature is determined when the
+//      wallet signs, not when a node accepts. A dropped connection or a 502 from the edge after
+//      the request left the device leaves a signed, valid transaction that may already be on
+//      chain — reporting that as "nothing happened", with a retry button, burns, closes or locks
+//      the same tokens twice. Only a JSON-RPC error FROM the node proves it did not land.
+//
 //   4. THE MESSAGE BYTES, DIFFED AGAINST WHAT WE BUILT. A wallet that returns its results
 //      reordered or substituted was proved to send successfully — rows silently carrying each
 //      other's signatures. Never trust that what came back is what was approved: compare the
@@ -43,6 +49,18 @@ export function bytesToBase64(bytes) {
   let binary = "";
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
+}
+
+// A signed transaction's own signature, base58, read straight off the transaction. Uses
+// cluck-wallet.js's one base58 implementation rather than a copy (see its export note).
+// Returns null when the transaction is not signed — never a fabricated string.
+export function signatureOf(tx) {
+  try {
+    const CW = typeof window !== "undefined" ? window.CluckWallet : null;
+    const s = tx && tx.signatures && tx.signatures[0] && tx.signatures[0].signature;
+    if (!s || !CW || typeof CW.b58encode !== "function") return null;
+    return CW.b58encode(s) || null;
+  } catch (_) { return null; }
 }
 
 export function messageBytes(tx) {
@@ -131,6 +149,66 @@ export async function latestBlockhash(rpc) {
   return h;
 }
 
+// ⚠️ (5) A SUBMIT THAT THREW IS NOT PROOF THAT NOTHING LANDED — and this is the ONE place that
+// knows it. Every path that puts a signed transaction on chain goes through here.
+//
+// Found by two independent adversarial reviews, separately, on the same day — the same signal
+// that found the original err/confirmationStatus P0. `rpc()` throws in two very different
+// situations, and every caller used to collapse them into one "failed":
+//
+//   · The NODE answered with a JSON-RPC error (`e.rpcError`, tagged by CluckUtil.rpc). It
+//     received the transaction and refused it — bad blockhash, preflight/simulation failure, a
+//     malformed request. Nothing executed and nothing was charged. Reporting "failed" is
+//     correct, and a retry is safe.
+//   · The request never completed, or the body was not JSON: a dropped mobile connection, a 502
+//     or 524 with an HTML body from the edge, a timeout. The node may have received and
+//     forwarded the transaction. It may be on chain right now.
+//
+// The second reported as "failed" is the exact lie this seam exists to prevent, and it came with
+// a retry button: Project Burn said "Nothing was burned", Rent Reclaim said "Reclaimed 0 SOL",
+// the Locker Room said "your tokens are where they were" — and the second signature burns,
+// closes or locks the same tokens again, irreversibly.
+//
+// So on a transport failure we return the signature we ALREADY HOLD (an ed25519 signature over a
+// fully-built transaction is determined the moment the wallet returns it, not when a node
+// accepts it) and let the confirmation poll answer honestly: landed, landed-and-failed, or
+// ambiguous.
+//
+// Returns exactly one of:
+//   { sig }                            — the node accepted the submission
+//   { sig, transportFailed: true, error }
+//                                      — we could not tell. MAY be on chain. Poll `sig`; never
+//                                        report "nothing happened" and never retry blind.
+//   { error }                          — the node refused it, or we never had a signature.
+//                                        Nothing landed; a retry is safe.
+// It NEVER throws for a send failure. A user decline is re-thrown untouched so callers keep
+// their own decline handling.
+export async function submitSigned(rpc, realTx, opts) {
+  const skipPreflight = !!(opts && opts.skipPreflight);
+  const localSig = signatureOf(realTx);
+  let raw;
+  try {
+    raw = realTx.serialize();
+  } catch (e) {
+    return { error: (e && e.message) || String(e) };
+  }
+  try {
+    const sig = await rpc("sendTransaction", [bytesToBase64(raw), { encoding: "base64", skipPreflight: skipPreflight, preflightCommitment: "confirmed" }]);
+    if (sig) return { sig: sig };
+    // A null/empty return is not a transport failure — the call completed and gave us nothing.
+    // The local signature is still the honest answer if we have one.
+    return localSig ? { sig: localSig, transportFailed: true, error: "the node returned no signature" }
+                    : { error: "wallet/RPC returned no signature" };
+  } catch (e) {
+    if (isUserRejection(e)) throw e;
+    if (localSig && !(e && e.rpcError)) {
+      return { sig: localSig, transportFailed: true, error: (e && e.message) || String(e) };
+    }
+    return localSig ? { error: (e && e.message) || String(e), sig: localSig }
+                    : { error: (e && e.message) || String(e) };
+  }
+}
+
 // The one call a pane makes to put a transaction on chain.
 //
 // `build(web3, blockhash, owner)` must return an UNSIGNED web3 Transaction. It is called only
@@ -168,7 +246,11 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
     return { status: "failed", error: (e && e.message) || String(e) };
   }
 
-  let sig = null;
+  // ⚠️ THE SIGNATURE EXISTS BEFORE THE SEND DOES, and that fact is the whole of the fix below.
+  // An ed25519 signature over a fully-built transaction is determined the moment the wallet
+  // returns it — not when a node accepts it. So a submission that fails in TRANSPORT leaves us
+  // holding the exact signature of a transaction that may already be in the cluster.
+  let sig = null, localSig = null;
   try {
     if (typeof provider.signTransaction === "function") {
       // Sign-first, then WE submit. This is the order Phantom's "may be malicious" warning
@@ -181,8 +263,19 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
         return { status: "failed", error: "The wallet returned a different transaction than the one you approved." };
       }
       if (typeof coSign === "function") coSign(realTx, web3);
-      const raw = realTx.serialize();
-      sig = await rpc("sendTransaction", [bytesToBase64(raw), { encoding: "base64", skipPreflight: !!skipPreflight, preflightCommitment: "confirmed" }]);
+      // (5) lives in submitSigned — the one place that knows a thrown submit is not proof that
+      // nothing landed. Never inline an rpc("sendTransaction") next to this.
+      const out = await submitSigned(rpc, realTx, { skipPreflight: !!skipPreflight });
+      localSig = out.sig || null;
+      if (out.transportFailed) {
+        sig = out.sig;                 // MAY have landed — fall through to the poll, which decides
+      } else if (out.sig && !out.error) {
+        sig = out.sig;                 // the node accepted it
+      } else {
+        // The node ANSWERED and refused it. Nothing landed, so this is a real "failed" — even
+        // though we hold a local signature, which is reported only so it can be looked up.
+        return { status: "failed", sig: out.sig || undefined, error: out.error };
+      }
     } else if (typeof coSign === "function") {
       // A wallet that can only signAndSendTransaction cannot be used here at all: the extra
       // signer never gets its turn, and the wallet would be asked to broadcast a transaction
@@ -196,7 +289,11 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
     }
   } catch (e) {
     if (isUserRejection(e)) return { status: "declined" };
-    return { status: "failed", error: (e && e.message) || String(e) };
+    // submitSigned() handles protection (5) and does not throw for a send failure, so anything
+    // arriving here threw BEFORE the transaction reached a node: the wallet prompt itself, the
+    // byte diff, coSign, or a signAndSendTransaction wallet (which never hands us a transaction
+    // to take a local signature from, so "failed" is the only honest answer for that branch).
+    return { status: "failed", sig: localSig || undefined, error: (e && e.message) || String(e) };
   }
   // ⚠️ Never confirm(undefined): it burns the whole 30s poll and reports a transaction that WAS
   // submitted as if it never got a signature (airdrop-engine.js's own note, same trap).

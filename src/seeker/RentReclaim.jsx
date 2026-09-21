@@ -17,7 +17,7 @@
 // signature (a NORMAL outcome, not an error — the user changed their mind), and a result screen
 // with per-account confirmed/failed/skipped rows and a confirmed-only total.
 import React from "react";
-import { t, useI18nReady } from "./i18n.js";
+import { t, tf, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
 import { NeedsWallet } from "./pane.jsx";
 import { runFullReclaim, prepareConfirmation } from "./reclaim-sign.js";
@@ -89,7 +89,42 @@ function outcomeLabel(outcome) {
   if (outcome === "confirmed") return t("Closed");
   if (outcome === "rejected") return t("Declined");
   if (outcome === "skipped") return t("Skipped");
+  // ⚠️ "Not confirmed" is NOT a softer word for "Failed" — it is a different fact. The account
+  // may be closed and the rent may already be back. Reporting it as Failed tells someone
+  // nothing happened when something may have, and invites them to sign the same close again.
+  if (outcome === "unconfirmed") return t("Not confirmed");
   return t("Failed");
+}
+
+// ⚠️ The plan module (public/rent-reclaim-plan.js) is shared vanilla JS with no access to the
+// dictionary, so every `reason` it produces is English. Rendering it raw meant a Spanish run
+// showed a fully translated result screen and then one English sentence — precisely on the rows
+// where something went wrong with someone's money, which is the worst possible place to drop a
+// language. Translate at the render boundary instead: the plan module keeps producing one stable
+// English string per case (which is also what its own tests assert on), and this maps it.
+//
+// The two dynamic ones carry an appended chain error; that error is a node's own text and stays
+// as it is, because inventing a translation for it would be worse than showing it.
+const REASON_PREFIX = "closing transaction failed on-chain: ";
+function reasonText(r) {
+  const raw = r && r.reason;
+  if (!raw) return "";
+  if (raw.indexOf(REASON_PREFIX) === 0) {
+    return t("The closing transaction failed on chain.") + " " + raw.slice(REASON_PREFIX.length);
+  }
+  // A miss falls through to the original English rather than an empty cell — never lose the
+  // reason to a dictionary gap.
+  const known = {
+    "already closed in a previous run": t("Already closed in an earlier run."),
+    "no longer exists — already closed": t("This account no longer exists — it was already closed."),
+    "gained a balance since the scan": t("It gained a balance after the scan, so it was left alone."),
+    "the mint on-chain doesn't match what was scanned — refused": t("The token on chain is not the one that was scanned, so this was refused."),
+    "this account isn't controlled by the connected wallet — refused": t("This account is not controlled by the connected wallet, so this was refused."),
+    "you declined to sign": t("You declined to sign."),
+    "submitted but not confirmed — look this signature up before trying again": t("Submitted, but not confirmed. Look this signature up before trying again."),
+    "could not submit": t("It could not be submitted."),
+  };
+  return known[raw] || raw;
 }
 
 function ResultRow({ r }) {
@@ -100,7 +135,7 @@ function ResultRow({ r }) {
         <span className="seeker-reclaim-row-outcome">{outcomeLabel(r.outcome)}</span>
       </div>
       <div className="seeker-reclaim-row-reason">
-        {r.outcome === "confirmed" ? fmtSol(r.lamports) : (r.reason || "")}
+        {r.outcome === "confirmed" ? fmtSol(r.lamports) : reasonText(r)}
       </div>
       {r.sig ? (
         <a className="seeker-reclaim-siglink" href={`https://solscan.io/tx/${encodeURIComponent(r.sig)}`} target="_blank" rel="noopener noreferrer">
@@ -368,6 +403,14 @@ export default function RentReclaimPane({ wallet }) {
             {/* P3: this is one run's own total, not a lifetime figure — say so. */}
             {t("Reclaimed this run")} · {fmtSol(signResult.reclaimedLamports)}
           </div>
+          {signResult.unconfirmedCount > 0 ? (
+            /* The total above counts ONLY confirmed closes, so it may understate what actually
+               came back. Say that plainly rather than letting the number speak for a run that
+               had an ambiguous outcome — and point at the signature, not at a retry button. */
+            <p className="seeker-reclaim-unconfirmedtext" role="alert">
+              {tf("{n} of these could not be confirmed. They may have gone through — the amount above counts only the confirmed ones. Open the signature to check before you try those again.", { n: signResult.unconfirmedCount })}
+            </p>
+          ) : null}
           {signResult.rows.map((r, i) => <ResultRow key={r.tokenAccount + ":" + i} r={r} />)}
         </div>
       ) : null}
