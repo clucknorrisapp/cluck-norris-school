@@ -277,8 +277,27 @@ function CreateLockTab({ wallet }) {
   function review() {
     const mint = mintInput.trim();
     if (!MINT_RE.test(mint)) { setFormError(t("Enter a valid Solana mint address.")); return; }
-    const amt = parseFloat(String(amount).trim());
-    if (!(amt > 0)) { setFormError(t("Enter an amount greater than zero.")); return; }
+    // ⚠️ NOT parseFloat (adversarial review P2-8, 2026-09-21). parseFloat("1,234.56") is 1 and
+    // parseFloat("1.234,56") is 1.234, silently, with no error — and this pane's own copy says
+    // the result "cannot be retrieved before the dates above, by anyone, including us". A lock is
+    // the single least forgiving place in the app to guess at what a number meant.
+    //
+    // CluckAirdropPlan.parseAmount is the module written for exactly this, already in the
+    // bundle and fixture-tested: it REFUSES an ambiguous format with a reason instead of
+    // coercing it, keeps the amount as an exact decimal STRING (never a float), and normalises
+    // unambiguous grouping. Its reason text is written for a person, so show it as-is.
+    const CAP = typeof window !== "undefined" ? window.CluckAirdropPlan : null;
+    if (!CAP || typeof CAP.parseAmount !== "function") {
+      setFormError(t("The amount checker did not load. Reopen the app and try again."));
+      return;
+    }
+    const parsedAmt = CAP.parseAmount(amount);
+    if (!parsedAmt.ok) {
+      setFormError(t("That amount could not be read:") + " " + parsedAmt.reason);
+      return;
+    }
+    // The normalised decimal string — never String(parseFloat(...)), which would undo the point.
+    const amt = parsedAmt.value;
     const recipient = recipientInput.trim();
     if (recipient && !MINT_RE.test(recipient)) { setFormError(t("Recipient must be a valid Solana wallet address.")); return; }
     const periods = Math.max(1, Math.min(1000, parseInt(duration, 10) || 1));
@@ -298,7 +317,7 @@ function CreateLockTab({ wallet }) {
       headers: { "content-type": "application/json" },
       signal: ctrl.signal,
       body: JSON.stringify({
-        mint, sender: wallet.address, recipient: recipient || undefined, amount: String(amt),
+        mint, sender: wallet.address, recipient: recipient || undefined, amount: amt,
         cliffUnix, cliffPct: pct, periods, interval: intervalUnit,
         cancelable, recipientChangeable,
       }),

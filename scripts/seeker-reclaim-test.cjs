@@ -287,6 +287,22 @@ function rpcOk(list) {
     "Showing",
     "of",
     "Reclaim these, then rescan for the rest.",
+    // Increment 4 (adversarial review, 2026-09-21): the third outcome, and the reason map.
+    // public/rent-reclaim-plan.js is shared vanilla JS with no dictionary, so it emits English
+    // reasons and the pane translates them at the render boundary — see reasonText(). That the
+    // map covers every reason the plan module can emit is pinned separately, in both directions,
+    // by seeker-reclaim-sign-test.cjs's "Reason-string drift" section.
+    "Not confirmed",
+    "{n} of these could not be confirmed. They may have gone through — the amount above counts only the confirmed ones. Open the signature to check before you try those again.",
+    "The closing transaction failed on chain.",
+    "Already closed in an earlier run.",
+    "This account no longer exists — it was already closed.",
+    "It gained a balance after the scan, so it was left alone.",
+    "The token on chain is not the one that was scanned, so this was refused.",
+    "This account is not controlled by the connected wallet, so this was refused.",
+    "You declined to sign.",
+    "Submitted, but not confirmed. Look this signature up before trying again.",
+    "It could not be submitted.",
   ];
   // These must be the exact literals RentReclaim.jsx renders as user-visible text — extracted
   // independently here rather than just re-typing NEW_KEYS a second time, so a key renamed in the
@@ -308,7 +324,11 @@ function rpcOk(list) {
   const jsxSrc = fs.readFileSync(path.join(ROOT, "src", "seeker", "RentReclaim.jsx"), "utf8");
   const extracted = new Set();
   for (const re of [
-    /\bt\(\s*(['"])((?:\\.|(?!\1)[\s\S])*)\1/g,                       // t("…")
+    // ⚠️ BOTH SPELLINGS. `\bt\(` does not match `tf("… {n} …", {n})` — the placeholder helper —
+    // so a string moved from t() to tf() read as a DELETED key here while rendering perfectly in
+    // the app. Same class as the prop blind spot below, found the same way: the test went red
+    // for what looked like a bad reason. `\b(?:t|tf)\(` covers both.
+    /\b(?:t|tf)\(\s*(['"])((?:\\.|(?!\1)[\s\S])*)\1/g,                 // t("…") and tf("…", {…})
     /\b(?:why|title|label|message|confirmLabel)=\{?\s*(")((?:\\.|(?!\1)[^\n])*)\1/g,  // <X why="…">
   ]) {
     let m;

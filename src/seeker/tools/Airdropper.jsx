@@ -50,7 +50,7 @@
 // "Say what's on-chain, never why" applies to the token too: this pane shows the mint's decimals
 // and the sender's balance as the chain reports them and makes no claim about the token itself.
 import React from "react";
-import { t } from "../i18n.js";
+import { t, tf } from "../i18n.js";
 import { Pane, Loading, Unavailable, Confirm, NeedsWallet, useOnline } from "../pane.jsx";
 import { usePass } from "../pass.js";
 import { PassGate } from "../passgate.jsx";
@@ -131,13 +131,16 @@ export default function AirdropperPane({ wallet }) {
   // next wallet prompt rather than keep sending money it cannot account for. A ref, not state —
   // the engine reads it synchronously between batches and a state read would be stale.
   const stopRef = React.useRef(false);
+  // A ref does not re-render, and the done view needs to SAY that the run was stopped
+  // (adversarial review P3-9), so the same fact is mirrored into state.
+  const [stopped, setStopped] = React.useState(false);
   const liveRef = React.useRef(true);
   React.useEffect(() => () => { liveRef.current = false; stopRef.current = true; }, []);
 
   const ready = engine() && plan() && util();
 
   function resetRun() {
-    setResults([]); setReceipt(null); setProgress({ msg: "", pct: 0 }); stopRef.current = false;
+    setResults([]); setReceipt(null); setProgress({ msg: "", pct: 0 }); stopRef.current = false; setStopped(false);
   }
 
   // ── parse + preflight ──────────────────────────────────────────────────────────────────────
@@ -173,19 +176,30 @@ export default function AirdropperPane({ wallet }) {
     // actually afford it. All read-only. An RPC failure here is "unknown", never "free".
     try {
       let dec = 9, txBudget = (engine() && engine().TX_WEIGHT_BUDGET) || 16;
+      let tokenBalanceBaseUnits = null;
       const rows = res.rows.map((r) => ({ ...r }));
       if (!native) {
         const accts = await rpc("getTokenAccountsByOwner", [wallet.address, { mint: mint.trim() }, { encoding: "jsonParsed" }]);
         const first = accts && accts.value && accts.value[0];
         if (!first) {
-          setPhase("review"); setCost(null);
+          // ⚠️ NOT phase "review" (adversarial review P1-4, 2026-09-21). This branch set a form
+          // error AND moved to review with `parsed` already populated — so the Send button
+          // rendered, on a mint this wallet holds no account for, under an error message.
+          // Stay on the form: there is nothing here that can be sent.
+          setPhase("form"); setCost(null); setParsed(null); setDecimals(null);
           setFormError(`${t("Your wallet has no account for that token, so there is nothing to send from.")}`);
           return;
         }
-        const onchain = first.account && first.account.data && first.account.data.parsed
-          && first.account.data.parsed.info && first.account.data.parsed.info.tokenAmount
-          && first.account.data.parsed.info.tokenAmount.decimals;
+        const tokenAmount = first.account && first.account.data && first.account.data.parsed
+          && first.account.data.parsed.info && first.account.data.parsed.info.tokenAmount;
+        const onchain = tokenAmount && tokenAmount.decimals;
         if (Number.isInteger(onchain)) dec = onchain;
+        // ⚠️ The BALANCE, from the response we were already reading the decimals out of
+        // (adversarial review P1-3). It used to be dropped on the floor, so nothing compared
+        // what is being sent against what is held, and a drop that could not finish started
+        // anyway. `amount` is base units as a STRING — keep it a string all the way to
+        // estimateCost, which does the comparison in exact decimal arithmetic.
+        tokenBalanceBaseUnits = (tokenAmount && typeof tokenAmount.amount === "string") ? tokenAmount.amount : null;
         const tokenProgram = (first.account && first.account.owner) || undefined;
         await engine().checkRecipientAtas(rows, mint.trim(), rpc, tokenProgram);
       }
@@ -202,13 +216,26 @@ export default function AirdropperPane({ wallet }) {
         rows, native, weightBudget: txBudget,
         lamportsPerAta, lamportsPerTxFee: (engine() && engine().LAMPORTS_PER_TX_FEE) || 5000,
         solBalanceLamports,
+        // The three the amount check needs. `res.total` is the parser's own exact decimal
+        // string for the whole list — never re-summed here, never a float.
+        sendTotal: res.total, tokenBalanceBaseUnits, decimals: native ? 9 : dec,
       }));
       setPhase("review");
     } catch (_e) {
       if (!liveRef.current) return;
       // The list is still good — only the cost preview failed. Say that, rather than throwing the
       // parsed list away, and do NOT show a zero cost.
+      //
+      // ⚠️ But `decimals` must NOT survive this (adversarial review P1-4). setDecimals runs after
+      // two awaited RPC calls, so one 502 here left the PREVIOUS drop's decimals in state while
+      // the screen showed only "could not read the network cost", which reads as cosmetic. The
+      // chain transfer was still correct (the engine re-reads decimals from the mint), but the
+      // public receipt was posted with the stale figure — and lib/airdrop-receipt.js derives its
+      // verification threshold from it, so every row recorded verified:true against a bar 1000x
+      // too low, or verified:false on a drop that was perfect. null means "we do not know",
+      // which the record path already treats as "do not send a decimals field".
       setCost(null);
+      setDecimals(null);
       setPhase("review");
     }
   }
@@ -234,30 +261,65 @@ export default function AirdropperPane({ wallet }) {
 
     // Record each batch's confirmed rows as they land, not once at the end: an app backgrounded
     // by the OS mid-run (a real thing on a phone) would otherwise take the whole receipt with it.
-    async function record(rows) {
+    // The public handle for a native SOL drop. It is the canonical wrapped-SOL mint address, so
+    // it is a real base58 address that needs no special case in the receipt's storage, URL or
+    // page — and lib/airdrop-receipt.js verifies it from LAMPORT deltas rather than token
+    // balances. Before this, the pane posted the literal string "native", SOL_ADDR_RE rejected
+    // it, and every SOL drop reported "the public receipt did not record them: bad mint"
+    // (adversarial review P2-5).
+    const NATIVE_RECEIPT_MINT = "So11111111111111111111111111111111111111112";
+
+    // ⚠️ A PARTIAL RECEIPT IS NOT "NO RECEIPT" (adversarial review P2-7, 2026-09-21). This used
+    // to `setReceipt({ error })` on the first failed chunk, which REPLACED the whole object and
+    // threw away the url of the chunks that HAD recorded. A 250-row drop whose third chunk hit
+    // the rate limiter reported "the public receipt did not record them" while 200 of them were
+    // on a receipt at a URL the person could no longer see. Keep both facts, and keep the link.
+    // Run-level, NOT per call: record() is now called several times during one drop (see the
+    // flush in onResult), so a per-call counter would make the last flush's numbers look like
+    // the whole run's.
+    let recorded = 0, attempted = 0;
+    async function record(rows, decimalsForReceipt) {
       if (!rows.length) return;
+      attempted += rows.length;
+      const fail = (msg) => {
+        if (!liveRef.current) return;
+        setReceipt((prev) => ({ ...(prev || {}), error: msg, recorded, total: attempted }));
+      };
       for (let i = 0; i < rows.length; i += RECORD_CHUNK) {
         const chunk = rows.slice(i, i + RECORD_CHUNK);
         try {
           const r = await pass.gatedFetch("/api/airdrop/record", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              dropId: dropId || undefined, mint: native ? "native" : mint.trim(),
-              decimals: decimals == null ? undefined : decimals, createdAt: created,
+              dropId: dropId || undefined, mint: native ? NATIVE_RECEIPT_MINT : mint.trim(),
+              decimals: Number.isInteger(decimalsForReceipt) ? decimalsForReceipt : undefined, createdAt: created,
               rows: chunk.map((x) => ({ wallet: x.addr, amount: String(x.amount), sig: x.sig })),
             }),
           });
           const j = await r.json().catch(() => null);
-          if (!j || !j.success) { setReceipt({ error: (j && (j.detail || j.error)) || t("unknown error") }); return; }
+          if (!j || !j.success) { fail((j && (j.detail || j.error)) || t("unknown error")); return; }
           dropId = j.dropId;
-          if (liveRef.current) setReceipt({ url: j.url });
-        } catch (_) { setReceipt({ error: t("could not reach the receipt service") }); return; }
+          recorded += chunk.length;
+          // Clear any earlier error only once a chunk has actually succeeded after it.
+          if (liveRef.current) setReceipt({ url: j.url, recorded, total: attempted });
+        } catch (_) { fail(t("could not reach the receipt service")); return; }
       }
     }
 
     let pendingReceipt = [];
+    let flushing = false;
+    // Starts as the state value and is REPLACED by the engine's own figure the moment the run
+    // returns one. Undefined is a legitimate answer — the receipt route treats a missing
+    // decimals as "not stated" rather than guessing, which is the honest outcome when the only
+    // two sources we trust disagree or neither could be read.
+    let receiptDecimals = decimals;
     try {
-      await E.send({
+      // ⚠️ The engine's RETURN VALUE is the authority on decimals — it re-reads them from the
+      // mint itself before transferring (airdrop-engine.js) and overrides whatever it was
+      // passed. Taking the receipt's figure from React state instead meant the receipt could be
+      // denominated differently from the transfer that actually happened. Keep them the same
+      // number, from the same place.
+      const sendResult = await E.send({
         rpc, provider: wallet.provider, walletPubkey: wallet.address,
         mint: native ? null : mint.trim(), decimals, native,
         recipients: parsed.rows.map((r) => ({ addr: r.addr, amount: r.amount, needsAta: r.needsAta, ataAddress: r.ataAddress })),
@@ -271,16 +333,46 @@ export default function AirdropperPane({ wallet }) {
           // truth yet, and a failed one has none at all — recording either would publish a claim
           // the chain does not support, which is the whole thing the receipt exists to avoid.
           if (r.status === "sent" && r.sig) pendingReceipt.push(r);
+          // ⚠️ RECORD AS THEY LAND, NOT ONCE AT THE END (adversarial review P2-6, 2026-09-21).
+          // The comment above `record()` has always said why, and the code did the opposite: a
+          // single call after the whole run. A 600-wallet drop is ~38 wallet prompts, minutes of
+          // switching between the wallet app and this one on a phone — and when iOS reclaims the
+          // tab at prompt 30, thirty batches of tokens are on chain, `record` never ran, the
+          // receipt does not exist, and there is no path in the pane to build one from rows it
+          // no longer has. Real tokens moved with no public proof and no way to produce it.
+          //
+          // Flushing on a batch boundary keeps at most one batch at risk instead of all of them.
+          // The dropId threading already supports it — that is exactly what the
+          // `dropId: dropId || undefined` continuation is for. A flush in flight is skipped
+          // rather than queued: the next boundary picks up whatever is still pending, and the
+          // final record() after the loop catches the remainder either way.
+          // ⚠️ Only flush when the denomination is KNOWN. `decimals` is null whenever this run's
+          // own chain read failed (see review()'s catch — P1-4), and recordDrop pins mint +
+          // decimals on the FIRST call for a dropId: a flush with the wrong figure would either
+          // be rejected for the rest of the run or, worse, fix the receipt to a denomination the
+          // transfers do not use. When we do not know, everything waits for the final record(),
+          // which takes the engine's own authoritative figure.
+          if (Number.isInteger(receiptDecimals) && pendingReceipt.length >= RECORD_CHUNK && !flushing) {
+            const batch = pendingReceipt;
+            pendingReceipt = [];
+            flushing = true;
+            // Not awaited — onResult must not hold up the next wallet prompt.
+            record(batch, receiptDecimals).finally(() => { flushing = false; });
+          }
         },
       });
+      if (sendResult && Number.isInteger(sendResult.decimals)) receiptDecimals = sendResult.decimals;
     } catch (e) {
       if (liveRef.current) { setErrKind("unavailable"); setErrMsg((e && e.message) || String(e)); }
     }
-    await record(pendingReceipt);
+    await record(pendingReceipt, receiptDecimals);
     if (liveRef.current) setPhase("done");
   }
 
   const counts = results.reduce((a, r) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
+  // Counted off the engine's own reason string rather than arithmetic on totals, so the banner
+  // and the rows can never disagree.
+  const stoppedNotAttempted = results.filter((r) => r.status === "failed" && /stopped by the caller/.test(String(r.error || ""))).length;
   const runDisabled = phase === "checking" || phase === "sending" || pass.status === "loading";
 
   if (!online && phase === "form") {
@@ -302,7 +394,7 @@ export default function AirdropperPane({ wallet }) {
           </div>
           {/* Stopping is always available, and it stops BEFORE the next wallet prompt — batches
               already signed cannot be recalled, and the button says so. */}
-          <button type="button" className="seeker-btn seeker-btn-quiet seeker-drop-stop" onClick={() => { stopRef.current = true; }}>
+          <button type="button" className="seeker-btn seeker-btn-quiet seeker-drop-stop" onClick={() => { stopRef.current = true; setStopped(true); }}>
             {t("Stop before the next batch")}
           </button>
           {results.length ? <div className="seeker-forensic-rows">{results.slice(-12).map((r, i) => <ResultRow key={i} r={r} />)}</div> : null}
@@ -313,6 +405,17 @@ export default function AirdropperPane({ wallet }) {
             <div className="seeker-forensic-stat"><div className="seeker-forensic-stat-label">{t("Sent")}</div><div className="seeker-forensic-stat-value">{counts.sent || 0}</div></div>
             <div className="seeker-forensic-stat"><div className="seeker-forensic-stat-label">{t("Failed")}</div><div className="seeker-forensic-stat-value">{counts.failed || 0}</div></div>
           </div>
+          {/* ⚠️ "Sent 40 · Failed 460" is how a run that went badly wrong reads, not one the
+              operator halted on purpose (adversarial review P3-9). The engine reports every
+              recipient it never reached as failed — defensible per row, and each row does carry
+              the reason — but the two tiles above say nothing about the stop. The rows that were
+              never attempted are counted by the engine's own reason string, so this number can
+              never drift from what the rows themselves say. */}
+          {stopped && stoppedNotAttempted > 0 ? (
+            <div className="seeker-drop-note seeker-drop-note-warn" role="alert">
+              {tf("You stopped this drop. {n} of these wallets were never attempted — nothing was sent to them, and nothing was charged for them.", { n: stoppedNotAttempted })}
+            </div>
+          ) : null}
           {counts.unconfirmed ? (
             <div className="seeker-drop-unconfirmed" role="alert">
               <p className="seeker-tool-notyet-title">⏳ {counts.unconfirmed} {t("unconfirmed")}</p>
@@ -320,11 +423,21 @@ export default function AirdropperPane({ wallet }) {
             </div>
           ) : null}
           {errMsg ? <p className="seeker-tool-note seeker-passgate-err" role="alert">{errMsg}</p> : null}
+          {/* THREE states, not two (P2-7): a full receipt, a PARTIAL one — link and all — and no
+              receipt at all. Collapsing the middle one into the last discards the link to rows
+              that really were recorded. */}
           {receipt && receipt.url ? (
-            <p className="seeker-tool-note">
-              {t("Public receipt:")}{" "}
-              <a className="seeker-forensic-link" href={`https://clucknorris.app${receipt.url}`} target="_blank" rel="noopener noreferrer">{t("open it")}</a>
-            </p>
+            <>
+              <p className="seeker-tool-note">
+                {t("Public receipt:")}{" "}
+                <a className="seeker-forensic-link" href={`https://clucknorris.app${receipt.url}`} target="_blank" rel="noopener noreferrer">{t("open it")}</a>
+              </p>
+              {receipt.error ? (
+                <p className="seeker-tool-note seeker-passgate-err" role="alert">
+                  {tf("Only {done} of {total} rows made it onto the receipt — the rest did not record:", { done: receipt.recorded, total: receipt.total })} {receipt.error}
+                </p>
+              ) : null}
+            </>
           ) : receipt && receipt.error ? (
             <p className="seeker-tool-note seeker-passgate-err" role="alert">
               {t("The tokens sent. The public receipt did not record them:")} {receipt.error}
@@ -448,6 +561,21 @@ export default function AirdropperPane({ wallet }) {
                 <div className="seeker-drop-note seeker-drop-note-warn" role="alert">
                   {t("Your wallet does not hold enough SOL to cover that. Top it up before starting — a drop that runs out part-way pays some wallets and not others.")}
                 </div>
+              ) : null}
+              {/* ⚠️ The warning above is about FEES. This one is about the AMOUNT, and for a long
+                  time it did not exist (adversarial review P1-3) — so the only affordability
+                  check the pane had could never fire for what was actually being sent. Both are
+                  shown: they are different problems and a person can have either, or both. */}
+              {cost && cost.enoughToSend === false ? (
+                <div className="seeker-drop-note seeker-drop-note-warn" role="alert">
+                  {tf("This list sends more than the wallet holds — it is short by {short}. A drop that runs out part-way pays some wallets and not others, and every failed transaction still costs a fee.",
+                      { short: `${cost.shortBy} ${native ? "SOL" : t("tokens")}` })}
+                </div>
+              ) : null}
+              {cost && cost.enoughToSend === null && parsed.rows.length ? (
+                /* Unreadable is not "fine". Say which check could not be made, rather than
+                   letting a silent screen imply both passed. */
+                <p className="seeker-tool-note">{t("Could not read the sending wallet's balance, so this was not checked against the total below.")}</p>
               ) : null}
 
               {phase === "review" && parsed.rows.length ? (

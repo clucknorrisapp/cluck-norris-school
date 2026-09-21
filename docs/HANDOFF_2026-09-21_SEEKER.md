@@ -53,6 +53,52 @@ from, chunks at 100; the chunking was dropped in the copy.
 **Both bugs came from the same habit: copying the send/confirm logic instead of sharing it.**
 See §5.
 
+### Then two adversarial lenses found the same thing again, in the shared seam itself
+
+Two independent read-only reviews ran over the money paths — one asked *"what gets destroyed that
+the person did not agree to destroy"*, the other *"what moves that should not"*. They landed on
+the **same P0, in the same file, on the same line**, separately. That is the strongest signal
+this repo produces; the original `err`/`confirmationStatus` P0 had exactly the same fingerprint.
+
+`rpc()` throws in two completely different situations and `sign.js` collapsed them into one
+"failed":
+
+- **the node answered and refused it** — bad blockhash, a preflight failure. Nothing landed,
+  nothing was charged, and a retry is safe.
+- **the request never completed** — a dropped mobile connection, a 502 with an HTML body from the
+  edge. The transaction is SIGNED and may be in the cluster right now.
+
+The second reported as "failed" is the exact lie the seam exists to prevent, and it came with a
+retry button: Project Burn said *"Nothing was burned"*, Rent Reclaim said *"Reclaimed 0 SOL"*, the
+Locker Room said *"your tokens are where they were"* — and the second signature burns, closes or
+locks the same tokens again, irreversibly.
+
+**An ed25519 signature over a built transaction exists the moment the wallet returns it, not when
+a node accepts it.** So `submitSigned()` keeps the signature it already holds, and the confirmation
+poll answers honestly: landed, landed-and-failed, or ambiguous. It is now the ONE submit path —
+`reclaim-sign.js` had written its own, which is how this would have been fixed once and left
+broken in the other place.
+
+Rent Reclaim had the same shape one level up: an ambiguous confirmation was recorded as `failed`
+and then fed to the auto-retry, which re-signed closes for accounts whose first transaction may
+already have landed. `unconfirmed` is its own outcome now — counted apart, never added to the
+reclaimed total, never retried by anything.
+
+Full record, finding by finding, with what pins each one:
+`docs/SEEKER_MONEY_REVIEW_burn.md` and `docs/SEEKER_MONEY_REVIEW_send.md` (see the **Status**
+table at the top of each).
+
+### And one the reviews could not see
+
+Firepit's `fmtSol` took SOL while all eight of its call sites passed LAMPORTS, so every SOL figure
+in the tool was a billion times too large — a row's rent as `2039280 SOL` instead of
+`0.00204 SOL`, on the action line directly above the Burn button. No source scan can catch that:
+`fmtSol(a.rentLamports)` reads correctly until you read what `fmtSol` does with it. It surfaced
+when a new behavioural test asserted a number that should have been on screen and was not.
+
+That is the third time in this file that **rendered measurement and source scanning turned out to
+have complementary blind spots.** Run both.
+
 ---
 
 ## 2. What is built

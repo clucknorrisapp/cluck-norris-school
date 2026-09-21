@@ -15,6 +15,39 @@ happened, reported as a thing that did not happen, with a retry offered on top.
 
 ---
 
+## Status — what was closed, 2026-09-21 (same day, branch `claude/seeker-selfhost-fonts`)
+
+This section is the only part of this document that is not the original read-only review. It
+records what the fix round actually did, so the report and the code do not drift apart. Every
+entry has a test behind it, and every test was mutation-proved — broken on purpose, watched go
+red, restored. A guard that has never been seen to fail is not known to work.
+
+| # | State | Where it is pinned |
+|---|---|---|
+| P0-1 | **CLOSED** | `submitSigned()` in `src/seeker/sign.js` is the one submit path; a transport failure keeps the signature it already holds and falls through to the poll, a node-refused send stays `failed`. `seeker-app-boot-test.cjs` §J drives both shapes through the Locker Room. |
+| P0-2 | **CLOSED** | `unconfirmed` is its own outcome in `public/rent-reclaim-plan.js`, counted apart, lamports never added to the reclaimed total, and never auto-retried. `seeker-reclaim-sign-test.cjs` §6b. |
+| P1-3 | **CLOSED** | The `Confirm` sheet gained `rows` and `typeToConfirm`; Firepit renders one line per account and requires typing BURN on the desktop's own condition. Boot §L. |
+| P1-4 | **CLOSED** | wSOL lamports are added to the SOL-returning total, given their own line, and the permanence sentence is only shown when something is really burned. Boot §L. |
+| P1-5 | **CLOSED** | Every logo is re-encoded through a canvas (EXIF cannot survive it), PNG stays PNG, and a line above **Review mint** says the upload is permanent and public before it happens. |
+| P1-6 | **CLOSED** | `empty` is derived from the base-unit string in `server.js`, **and** independently in the pane (`isEmpty()`), because the store build is a pinned bundle talking to a live API. Boot §L pre-selection assertion. |
+| P2-7 | **CLOSED** | A failed chunk is re-planned as singles and retried once, then the run carries on; only a decline stops it. |
+| P2-8 | **CLOSED** | `canBurn` requires a readable balance, and "we could not read it" is its own message, never "your balance changed". |
+| P2-9 | **CLOSED for Firepit** | Boot §L is the behavioural test this finding asked for. Project Burn and the Hatchery still have only §B ("it mounts") — see below. |
+| P3-10 | **CLOSED** | Each number on the action row has its own label. |
+
+**Found while fixing, not in this review:** Firepit's `fmtSol` took SOL while all eight of its
+call sites passed LAMPORTS, so every SOL figure in the tool rendered a billion times too large —
+a row's rent as `2039280 SOL` instead of `0.00204 SOL`, including on the action line directly
+above the Burn button and on the confirm sheet. Neither adversarial pass caught it and no source
+scan could: `fmtSol(a.rentLamports)` looks correct until you read what `fmtSol` does with it. It
+was surfaced by §L's wrapped-SOL assertion failing against a number that could not be explained.
+Firepit now delegates to the shared `CluckRentMath.fmtSol`, as Rent Reclaim already did.
+
+**Still open:** P2-9 for Project Burn and the Hatchery — both still have no behavioural test
+beyond "it mounts", and the Hatchery's Arweave upload in particular has no test at all.
+
+---
+
 ## P0-1 · A lost send response tells the user "Nothing was burned", and offers Try again
 
 **Files:** `src/seeker/sign.js:185` and `:197`; `src/seeker/tools/ProjectBurn.jsx:322`, `:122`,

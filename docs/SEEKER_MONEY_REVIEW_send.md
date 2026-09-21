@@ -16,6 +16,29 @@ lists the things a future reader is most likely to suspect wrongly.
 
 ---
 
+## Status — what was closed, 2026-09-21 (same day, branch `claude/seeker-selfhost-fonts`)
+
+Added by the fix round, not part of the original read-only review, so the report and the code do
+not drift apart. Every entry is pinned by a test, and every test was mutation-proved.
+
+| # | State | Where it is pinned |
+|---|---|---|
+| P0-1 | **CLOSED** | `submitSigned()` in `src/seeker/sign.js`. Both lenses found this independently, in the same file. Boot §J. |
+| P1-2 | **CLOSED** | `unconfirmed` is its own outcome and is never auto-retried. `seeker-reclaim-sign-test.cjs` §6b. |
+| P1-3 | **CLOSED** | `estimateCost` now compares the send total against the balance the pane already read — `enoughToSend` / `shortBy`, exact decimal strings via `subDecimal`/`baseUnitsToDecimal`, no float anywhere. `seeker-airdrop-test.cjs`, including the finding's own 100 × 5 SOL from a 2 SOL wallet case. |
+| P1-4 | **CLOSED** | `decimals` is reset on the catch and on the no-account branch (which no longer renders a Send button), and the receipt takes its figure from the engine's return value, not React state. |
+| P2-5 | **CLOSED** | A native drop is recorded under the canonical wrapped-SOL mint and verified from LAMPORT deltas in `lib/airdrop-receipt.js`. `lib/payout-verify.js` — the Hub's shared money verifier — was deliberately **not** widened for this. `airdrop-receipt-test.cjs`. |
+| P2-6 | **CLOSED** | The receipt flushes on batch boundaries during the run, as the comment above it always said, so a backgrounded phone risks one batch rather than the whole receipt. A flush is skipped unless the denomination is known. |
+| P2-7 | **CLOSED** | `url` and `error` live in the same object; a partial receipt keeps its link and says "N of M recorded". |
+| P2-8 | **CLOSED** | The Locker Room parses with `CluckAirdropPlan.parseAmount`, which refuses an ambiguous format instead of coercing it. Boot §K drives the finding's whole table through the real form and reads the amount that reaches the wire. |
+| P3-9 | **CLOSED** | A stopped run says so, and counts the wallets never attempted off the engine's own reason string. |
+
+**Still open:** P3-10 — the Airdropper still runs its own send loop rather than `sign.js`'s, and
+an in-flight run still prompts after the app drops the wallet. It is the largest remaining item
+in this document and is a refactor, not a patch.
+
+---
+
 ## P0-1 — A submit that fails in transport is reported as "failed, nothing was locked", with the retry button still on screen
 
 **Files:** `src/seeker/sign.js:185`, `:197-200` · `src/seeker/tools/LockerRoom.jsx:494`, `:557-562`

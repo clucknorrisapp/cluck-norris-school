@@ -167,5 +167,69 @@ console.log("\n5. cost — the same batching the engine will actually use\n");
      P.estimateCost({ rows }).affordable === null && P.estimateCost({ rows, solBalanceLamports: null }).affordable === null);
 }
 
+{
+  // ── the AMOUNT check (adversarial review P1-3, 2026-09-21) ─────────────────────────────────
+  // `affordable` above is fees and rent only. It could never fire for what was actually being
+  // sent, so a wallet holding 1,000,000 tokens could start a 1,500,000-token drop with no
+  // warning, pay some recipients, fail the rest one fee at a time, and publish the partial list
+  // as a completed drop. These are the numbers the pane already had in hand and never compared.
+  const rows = [{ addr: A, amount: "1000000" }];
+
+  // Token drop. Balance arrives from the chain as BASE UNITS (a string) + decimals.
+  const enough = P.estimateCost({ rows, sendTotal: "1000000", tokenBalanceBaseUnits: "1000000000000000", decimals: 9 });
+  ok("a token balance that exactly covers the list is enough", enough.enoughToSend === true && enough.shortBy === "0");
+  const short = P.estimateCost({ rows: [{ addr: A, amount: "1500000" }], sendTotal: "1500000", tokenBalanceBaseUnits: "1000000000000000", decimals: 9 });
+  ok("⚠️ a token drop bigger than the balance is caught BEFORE the first wallet prompt", short.enoughToSend === false);
+  ok("and it says how much is missing, exactly", short.shortBy === "500000", short.shortBy);
+
+  // ⚠️ The reason this is string arithmetic. 1e15 base units is already past 2^53, so a balance
+  // read through Number() loses the low digits — and the shortfall it reports is wrong in the
+  // direction that matters (it says you have more than you do).
+  const big = P.estimateCost({ rows: [{ addr: A, amount: "9007199.254740993" }], sendTotal: "9007199.254740993",
+                               tokenBalanceBaseUnits: "9007199254740992", decimals: 9 });
+  ok("⚠️ one base unit short of the total is still short — no float anywhere in the comparison",
+     big.enoughToSend === false && big.shortBy === "0.000000001", JSON.stringify(big));
+
+  // SOL drop: fees and rent come OUT of the same balance, so they are subtracted first.
+  // 1 SOL held, 5000 lamports of fee => 0.999995 SOL is actually sendable.
+  const sol = P.estimateCost({ rows: [{ addr: A, amount: "1" }], native: true, sendTotal: "1",
+                               solBalanceLamports: 1e9, lamportsPerTxFee: 5000 });
+  ok("⚠️ a SOL drop cannot send the whole balance — the fee comes out of it first",
+     sol.enoughToSend === false && sol.sendable === "0.999995", JSON.stringify(sol));
+  const solOk = P.estimateCost({ rows: [{ addr: A, amount: "0.5" }], native: true, sendTotal: "0.5",
+                                 solBalanceLamports: 1e9, lamportsPerTxFee: 5000 });
+  ok("and a SOL drop that fits says so", solOk.enoughToSend === true);
+  // The exact case from the finding: 100 wallets x 5 SOL from a 2 SOL wallet reported
+  // affordable:true, because 2 SOL covers the FEES.
+  const trap = P.estimateCost({ rows: Array.from({ length: 100 }, () => ({ addr: A, amount: "5" })), native: true,
+                                sendTotal: "500", solBalanceLamports: 2e9, lamportsPerTxFee: 5000 });
+  ok("⚠️ 500 SOL out of a 2 SOL wallet: affordable stays true (it is about fees) but enoughToSend is false",
+     trap.affordable === true && trap.enoughToSend === false, JSON.stringify(trap));
+
+  // Three answers here too.
+  ok("⚠️ an unreadable token balance is null — never an optimistic true",
+     P.estimateCost({ rows, sendTotal: "1000000" }).enoughToSend === null);
+  ok("a balance that is not an integer string is refused rather than coerced",
+     P.estimateCost({ rows, sendTotal: "1", tokenBalanceBaseUnits: "1.5", decimals: 9 }).enoughToSend === null);
+  ok("and no sendTotal means the check simply was not made",
+     P.estimateCost({ rows, tokenBalanceBaseUnits: "1000", decimals: 0 }).enoughToSend === null);
+}
+{
+  // The two new decimal primitives, exactly.
+  ok("baseUnitsToDecimal inserts the point without touching Number",
+     P.baseUnitsToDecimal("1000000000000000", 9) === "1000000" &&
+     P.baseUnitsToDecimal("1", 9) === "0.000000001" &&
+     P.baseUnitsToDecimal("123", 0) === "123");
+  ok("baseUnitsToDecimal refuses anything that is not a base-unit integer",
+     P.baseUnitsToDecimal("1.5", 9) === null && P.baseUnitsToDecimal("", 9) === null &&
+     P.baseUnitsToDecimal("12", -1) === null && P.baseUnitsToDecimal(null, 9) === null);
+  ok("subDecimal borrows correctly across the point",
+     P.subDecimal("1", "0.000000001") === "0.999999999" &&
+     P.subDecimal("1000000", "1") === "999999" &&
+     P.subDecimal("10", "9.99") === "0.01");
+  ok("⚠️ subDecimal clamps at zero rather than returning a negative",
+     P.subDecimal("1", "2") === "0" && P.subDecimal("5", "5") === "0");
+}
+
 console.log("\n" + (failures ? failures + " FAILED" : "all passed") + "\n");
 process.exit(failures ? 1 : 0);

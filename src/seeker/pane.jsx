@@ -10,7 +10,7 @@
 // state that could serve both. Telling someone their wallet is clean, or that they have no rent
 // to reclaim, when we could not actually look, is a lie about their money.
 import React from "react";
-import { t, useI18nReady } from "./i18n.js";
+import { t, tf, useI18nReady } from "./i18n.js";
 
 // ── connectivity ────────────────────────────────────────────────────────────
 // A phone loses signal in a lift. Every pane that fetches must know, and must recover on its own
@@ -140,9 +140,24 @@ export function NeedsWallet({ why, wallet }) {
 // "Guardrails before power" is the brand, and it is the rule that separates this app from the
 // tools that let a first-timer hurt themselves. Anything irreversible names the exact
 // consequence in plain words BEFORE the signature — the count, the amount, what cannot be undone.
-export function Confirm({ open, title, lines, confirmLabel, onConfirm, onCancel, danger }) {
+// `rows` — an optional per-item list rendered between the summary lines and the buttons. A count
+// is not an account of what is about to happen: "12 accounts affected" tells someone nothing
+// about WHICH twelve, and this sheet can legitimately hold fewer rows than were ticked (a fresh
+// re-read drops anything that stopped qualifying). Each entry is { key, left, right }.
+//
+// `typeToConfirm` — when set, the confirm button stays disabled until this exact word is typed.
+// Carried over from public/firepit.html, where it is the last thing between a mis-tap on a
+// phone and an irreversible burn. It is NOT translated: the word typed must match the word
+// shown, and translating one of them and not the other locks people out of their own tools, so
+// the caller passes a literal and the sheet shows that literal.
+export function Confirm({ open, title, lines, rows, confirmLabel, onConfirm, onCancel, danger, typeToConfirm }) {
   useI18nReady();
+  const [typed, setTyped] = React.useState("");
+  // Clear the box every time the sheet opens, so a previous "BURN" can never carry over and
+  // pre-arm the button on a set the person has not read yet.
+  React.useEffect(() => { if (open) setTyped(""); }, [open]);
   if (!open) return null;
+  const locked = !!typeToConfirm && typed.trim().toUpperCase() !== String(typeToConfirm).toUpperCase();
   return (
     <div className="seeker-confirm-wrap" role="dialog" aria-modal="true" aria-label={t(title)}>
       <div className={"seeker-confirm" + (danger ? " seeker-confirm-danger" : "")}>
@@ -151,9 +166,29 @@ export function Confirm({ open, title, lines, confirmLabel, onConfirm, onCancel,
             counts interpolated, so the caller translates around the values and passes finished
             text. Everything else here is translated by this component. */}
         {(lines || []).map((l, i) => <p key={i}>{l}</p>)}
+        {rows && rows.length ? (
+          <div className="seeker-confirm-rows">
+            {rows.map((r) => (
+              <div className="seeker-confirm-row" key={r.key}>
+                <span className="seeker-confirm-row-left">{r.left}</span>
+                <span className="seeker-confirm-row-right">{r.right}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {typeToConfirm ? (
+          <label className="seeker-confirm-type">
+            <span>{tf("Type {word} to continue", { word: typeToConfirm })}</span>
+            <input
+              type="text" value={typed} onChange={(e) => setTyped(e.target.value)}
+              autoComplete="off" autoCorrect="off" autoCapitalize="characters" spellCheck="false"
+              aria-label={tf("Type {word} to continue", { word: typeToConfirm })}
+            />
+          </label>
+        ) : null}
         <div className="seeker-confirm-actions">
           <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onCancel}>{t("Cancel")}</button>
-          <button type="button" className={"seeker-btn" + (danger ? " seeker-btn-danger" : "")} onClick={onConfirm}>{t(confirmLabel || "Confirm")}</button>
+          <button type="button" className={"seeker-btn" + (danger ? " seeker-btn-danger" : "")} onClick={onConfirm} disabled={locked}>{t(confirmLabel || "Confirm")}</button>
         </div>
       </div>
     </div>

@@ -41,7 +41,7 @@
 // "Say what's on-chain, never why" (CLAUDE.md): this pane reports balances, rent and price facts.
 // It never labels a token safe, verified, scam or worthless — only what it is priced at.
 import React from "react";
-import { t } from "../i18n.js";
+import { t, tf } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
 import { shortAddr } from "../addr.js";
 import { signSendConfirm, splTokenShim } from "../sign.js";
@@ -54,9 +54,26 @@ const WSOL_MINT = "So11111111111111111111111111111111111111112";
 // firepit.html's CHUNK, kept well under the 1232-byte tx limit.
 const CHUNK = 8;
 
-function fmtSol(n) {
-  n = Number(n) || 0;
-  return (n < 0.001 ? n.toFixed(6) : n.toFixed(4)).replace(/0+$/, "").replace(/\.$/, "") + " SOL";
+// ⚠️ THIS TAKES LAMPORTS. It used to take SOL — and every one of its eight call sites in this
+// file passes lamports, so the whole tool was rendering its SOL figures a BILLION times too big:
+// a row's rent showed as "2039280 SOL" instead of "0.00204 SOL", including on the action line
+// directly above the Burn button and on the confirm sheet.
+//
+// Found on 2026-09-21 by the new boot-test section L, whose "the SOL returning includes the
+// wrapped balance" assertion could not match any plausible number — not by either adversarial
+// review pass, and not by any source scan, because nothing about `fmtSol(a.rentLamports)` looks
+// wrong until you read what fmtSol does with it. That is the whole argument for a behavioural
+// test on a surface that states amounts.
+//
+// Rent Reclaim already had this right: delegate to CluckRentMath (the shared, tested converter)
+// and keep a local fallback with the SAME contract for a page where it has not loaded.
+function fmtSol(lamports) {
+  try {
+    if (typeof window !== "undefined" && window.CluckRentMath && typeof window.CluckRentMath.fmtSol === "function") {
+      return window.CluckRentMath.fmtSol(lamports);
+    }
+  } catch (_) {}
+  return (Number(lamports || 0) / 1e9).toFixed(6).replace(/0+$/, "").replace(/\.$/, "") + " SOL";
 }
 function fmtUsd(n) {
   n = Number(n) || 0;
@@ -75,8 +92,27 @@ function fmtBal(n) {
 // NFT floor-price safety is a later phase, same as the desktop tool.
 function actionable(a) { return !a.frozen && !a.isNft; }
 function isWsol(a) { return a.mint === WSOL_MINT; }
+
+// ⚠️ NEVER read `a.empty` directly (adversarial review P1-6, 2026-09-21). The server used to
+// derive that flag from `uiAmount`, which is `f64 | null` in the RPC schema — so any account a
+// node declined to ui-scale (the Token-2022 withheld-transfer-fee case) came back `empty: true`
+// while still holding a balance. This pane PRE-SELECTS every empty row, the only place in the
+// app that pre-selects anything, and then tells the person "these accounts are empty — nothing
+// of value is destroyed".
+//
+// The server side is fixed. This check exists anyway, and is not belt-and-braces: the store
+// build is a PINNED bundle (docs/STORE_EDITION.md) talking to whatever the live API is that day,
+// so an installed app can be older or newer than the server that answers it. A sentence this
+// load-bearing should not depend on which side is which.
+//
+// `amountRaw` is the base-unit integer STRING the same response already carries. Anything that
+// is not a clean integer string is UNREADABLE, and unreadable is not empty.
+function isEmpty(a) {
+  const raw = a && a.amountRaw;
+  return typeof raw === "string" && /^[0-9]+$/.test(raw) && Number(raw) === 0;
+}
 // UNKNOWN value, never zero — see the header note. Only meaningful for a non-empty, non-wSOL row.
-function isUnpriced(a) { return !a.empty && !isWsol(a) && a.priceKnown === false; }
+function isUnpriced(a) { return !isEmpty(a) && !isWsol(a) && a.priceKnown === false; }
 
 function RowTags({ a }) {
   return (
@@ -84,7 +120,7 @@ function RowTags({ a }) {
       {a.frozen ? <span className="seeker-firepit-tag seeker-firepit-tag-frozen">{t("Frozen")}</span> : null}
       {a.isNft ? <span className="seeker-firepit-tag seeker-firepit-tag-nft">{t("NFT — not yet supported here")}</span> : null}
       {isUnpriced(a) ? <span className="seeker-firepit-tag seeker-firepit-tag-unknown">{t("Value unknown")}</span> : null}
-      {!a.empty && !isUnpriced(a) && Number(a.valueUsd) > 0 ? <span className="seeker-firepit-tag seeker-firepit-tag-value">{t("Worth")} {fmtUsd(a.valueUsd)}</span> : null}
+      {!isEmpty(a) && !isUnpriced(a) && Number(a.valueUsd) > 0 ? <span className="seeker-firepit-tag seeker-firepit-tag-value">{t("Worth")} {fmtUsd(a.valueUsd)}</span> : null}
       {isWsol(a) ? <span className="seeker-firepit-tag">{t("Wrapped SOL — unwraps, isn't burned")}</span> : null}
     </>
   );
@@ -108,7 +144,7 @@ function TokenRow({ a, checked, onToggle }) {
           <span className="seeker-firepit-row-rent">{fmtSol(a.rentLamports)}</span>
         </div>
         <div className="seeker-firepit-row-sub">
-          {!a.empty ? <span>{fmtBal(a.uiAmount)} · </span> : null}
+          {!isEmpty(a) ? <span>{fmtBal(a.uiAmount)} · </span> : null}
           <span className="seeker-firepit-row-mint">{shortAddr(a.mint)}</span>
         </div>
         <div className="seeker-firepit-row-tags"><RowTags a={a} /></div>
@@ -196,7 +232,7 @@ export default function FirepitPane({ wallet }) {
       // Pre-select the empty (rent-only) accounts, same as the desktop tool: reclaiming them is
       // risk-free, so the total is meaningful the moment the scan lands. Nothing that could
       // destroy value is ever pre-selected.
-      setSelEmpty(new Set(accounts.filter((a) => a.empty && actionable(a)).map((a) => a.tokenAccount)));
+      setSelEmpty(new Set(accounts.filter((a) => isEmpty(a) && actionable(a)).map((a) => a.tokenAccount)));
       setSelBurn(new Set());
       setPhase("result");
     });
@@ -221,8 +257,8 @@ export default function FirepitPane({ wallet }) {
   }
 
   const accounts = (data && data.accounts) || [];
-  const emptyAccts = accounts.filter((a) => a.empty);
-  const burnAccts = accounts.filter((a) => !a.empty);
+  const emptyAccts = accounts.filter((a) => isEmpty(a));
+  const burnAccts = accounts.filter((a) => !isEmpty(a));
 
   const selEmptyRows = emptyAccts.filter((a) => selEmpty.has(a.tokenAccount) && actionable(a));
   const selBurnRows = burnAccts.filter((a) => selBurn.has(a.tokenAccount) && actionable(a));
@@ -253,9 +289,9 @@ export default function FirepitPane({ wallet }) {
     // Keep the underlying page in step with the same fresh read — never leave it showing an
     // older scan next to a sheet built from a newer one.
     setData(res.data);
-    setSelEmpty((s) => { const ok = new Set(freshAccounts.filter((a) => a.empty && actionable(a)).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
-    setSelBurn((s) => { const ok = new Set(freshAccounts.filter((a) => !a.empty && actionable(a)).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
-    const matched = freshAccounts.filter((a) => ids.has(a.tokenAccount) && actionable(a) && (kind === "reclaim" ? a.empty : !a.empty));
+    setSelEmpty((s) => { const ok = new Set(freshAccounts.filter((a) => isEmpty(a) && actionable(a)).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
+    setSelBurn((s) => { const ok = new Set(freshAccounts.filter((a) => !isEmpty(a) && actionable(a)).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
+    const matched = freshAccounts.filter((a) => ids.has(a.tokenAccount) && actionable(a) && (kind === "reclaim" ? isEmpty(a) : !isEmpty(a)));
     if (!matched.length) { setConfirmPhase("stale"); return; }
     setConfirmSel(matched);
     setConfirmPhase("ready");
@@ -277,42 +313,82 @@ export default function FirepitPane({ wallet }) {
     const chunks = [];
     for (let i = 0; i < sel.length; i += CHUNK) chunks.push(sel.slice(i, i + CHUNK));
 
+    // One builder, used for a full chunk and for a single-account retry alike — a second copy is
+    // how the two would drift apart, and one of them handles money.
+    const buildFor = (group) => (web3, blockhash, owner) => {
+      const { Transaction, PublicKey } = web3;
+      const spl = splTokenShim();
+      const ownerKey = new PublicKey(owner);
+      const tx = new Transaction();
+      group.forEach((a) => {
+        const ta = new PublicKey(a.tokenAccount), mint = new PublicKey(a.mint);
+        // Burn any balance to zero first — but NEVER "burn" wrapped SOL; closing it just
+        // unwraps it back to SOL (header note, and firepit.html by name).
+        if (!isEmpty(a) && !isWsol(a)) {
+          tx.add(spl.createBurnCheckedInstruction(ta, mint, ownerKey, a.amountRaw, a.decimals, a.program));
+        }
+        // Close the (now-empty) account and send its rent to the owner.
+        tx.add(spl.createCloseAccountInstruction(ta, ownerKey, ownerKey, a.program));
+      });
+      tx.feePayer = ownerKey;
+      tx.recentBlockhash = blockhash;
+      return tx;
+    };
+    const signGroup = (group) => signSendConfirm({
+      provider: wallet.provider,
+      owner: wallet.address,
+      skipPreflight: true,   // matches firepit.html — preflight runs at 'finalized' and rejects a fresh 'confirmed' blockhash
+      build: buildFor(group),
+    });
+
+    let declined = false;
     for (let c = 0; c < chunks.length; c++) {
       const chunk = chunks[c];
       setRunMsg(`${t("Approve transaction")} ${c + 1} ${t("of")} ${chunks.length} ${t("in your wallet…")}`);
       // eslint-disable-next-line no-await-in-loop
-      const res = await signSendConfirm({
-        provider: wallet.provider,
-        owner: wallet.address,
-        skipPreflight: true,   // matches firepit.html — preflight runs at 'finalized' and rejects a fresh 'confirmed' blockhash
-        build: (web3, blockhash, owner) => {
-          const { Transaction, PublicKey } = web3;
-          const spl = splTokenShim();
-          const ownerKey = new PublicKey(owner);
-          const tx = new Transaction();
-          chunk.forEach((a) => {
-            const ta = new PublicKey(a.tokenAccount), mint = new PublicKey(a.mint);
-            // Burn any balance to zero first — but NEVER "burn" wrapped SOL; closing it just
-            // unwraps it back to SOL (header note, and firepit.html by name).
-            if (!a.empty && !isWsol(a)) {
-              tx.add(spl.createBurnCheckedInstruction(ta, mint, ownerKey, a.amountRaw, a.decimals, a.program));
-            }
-            // Close the (now-empty) account and send its rent to the owner.
-            tx.add(spl.createCloseAccountInstruction(ta, ownerKey, ownerKey, a.program));
-          });
-          tx.feePayer = ownerKey;
-          tx.recentBlockhash = blockhash;
-          return tx;
-        },
-      });
-      collected.push({ chunk, status: res.status, sig: res.sig, error: res.error });
+      const res = await signGroup(chunk);
+
+      // ⚠️ A CHUNK IS ONE ATOMIC TRANSACTION, so ONE poisoned account fails all eight — and this
+      // loop used to mark all eight "Failed" and then `break`, abandoning every remaining chunk
+      // (adversarial review P2-7, 2026-09-21). With 24 accounts selected and one Token-2022
+      // account carrying withheld fees, 8 rows failed, 16 were "never attempted", nothing
+      // identified the poisoned row, and re-running reproduced it exactly — the only way forward
+      // was bisecting the selection by hand.
+      //
+      // Rent Reclaim already solved this (rent-reclaim-plan.js's P1-D): re-plan a chunk that
+      // failed OUTRIGHT as one transaction per account and retry once. Same rules here:
+      //   · only a FAILED chunk, never a declined one (a decline is a normal "no")
+      //   · and never an UNCONFIRMED one — those may have landed, and re-signing them is the
+      //     double-spend this codebase keeps having to relearn
+      //   · a chunk of one is not re-planned; resending the identical failing transaction gains
+      //     nothing a manual retry would not
+      if (res.status === "declined") {
+        collected.push({ chunk, status: res.status, sig: res.sig, error: res.error });
+        declined = true;
+      } else if (res.status === "failed" && chunk.length > 1) {
+        setRunMsg(t("One of these was refused — retrying them one at a time so the rest still go through…"));
+        // eslint-disable-next-line no-await-in-loop
+        for (const a of chunk) {
+          // eslint-disable-next-line no-await-in-loop
+          const one = await signGroup([a]);
+          collected.push({ chunk: [a], status: one.status, sig: one.sig, error: one.error });
+          setRunResults(collected.flatMap(({ chunk: ch, status, sig, error }) => ch.map((x) => ({ a: x, status, sig, error }))));
+          if (one.status === "declined") { declined = true; break; }
+        }
+      } else {
+        collected.push({ chunk, status: res.status, sig: res.sig, error: res.error });
+      }
       setRunResults(collected.flatMap(({ chunk: ch, status, sig, error }) => ch.map((a) => ({ a, status, sig, error }))));
-      if (res.status === "declined" || res.status === "failed") {
+
+      // A decline is the one thing that still stops the run: the person said no, and asking them
+      // again for every remaining chunk is not a guardrail, it is nagging.
+      if (declined) {
         setRunNotAttempted(sel.length - collected.reduce((n, r) => n + r.chunk.length, 0));
         break;
       }
       // "unconfirmed" continues to the next chunk (matches firepit.html) — it may still land, and
       // stopping the whole run over one ambiguous chunk would leave easy, safe reclaims undone.
+      // A genuinely failed account now continues too: its neighbours are not its fault.
     }
 
     // Only DROP rows we watched actually land (status "sent") — an unconfirmed or failed row is
@@ -328,6 +404,31 @@ export default function FirepitPane({ wallet }) {
     setBusy(false);
   }
 
+  // ⚠️ A COUNT IS NOT AN ACCOUNT OF WHAT IS ABOUT TO HAPPEN (adversarial review P1-3,
+  // 2026-09-21). The burn sheet said "Accounts affected: 12" and named not one symbol, mint or
+  // amount — on the one screen standing between a mis-tap and a permanent, unrecoverable burn.
+  // Worse, openConfirm can legitimately SHRINK the set between the tick and the sheet (a fresh
+  // re-read drops anything that stopped qualifying), so the number could differ from what was
+  // ticked with no row-level account of which rows went.
+  //
+  // public/firepit.html — which this pane's own header claims to carry over faithfully — has had
+  // both this list and the typed gate from the start. They are the two pieces of friction that
+  // were dropped, and they are the two that matter.
+  //
+  // Row text mirrors the desktop's wording per case: reclaim / unwrap / burn, with the amount in
+  // the person's own units and the value beside it, or "value unknown" — never a silent $0 for a
+  // token we simply could not price.
+  function confirmRowFor(a) {
+    const v = Number(a.valueUsd) || 0;
+    let right;
+    if (isEmpty(a)) right = `${t("reclaim")} ${fmtSol(Number(a.rentLamports) || 0)}`;
+    else if (isWsol(a)) right = `${t("unwrap")} ${fmtBal(a.uiAmount)} SOL → ${t("back to you")}`;
+    else if (isUnpriced(a)) right = `${t("burn")} ${fmtBal(a.uiAmount)} · ${t("value unknown")}`;
+    else right = `${t("burn")} ${fmtBal(a.uiAmount)} · ${v > 0 ? fmtUsd(v) : "$0"}`;
+    return { key: a.tokenAccount, left: a.symbol || shortAddr(a.mint), right };
+  }
+  const confirmRows = confirmSel.map(confirmRowFor);
+
   const reclaimLines = confirmKind === "reclaim" ? [
     <span key="c">{t("Accounts to close")}: <strong>{confirmSel.length}</strong></span>,
     <span key="s">{t("SOL returning to your wallet")}: <strong>{fmtSol(confirmSel.reduce((s, a) => s + (Number(a.rentLamports) || 0), 0))}</strong></span>,
@@ -335,14 +436,38 @@ export default function FirepitPane({ wallet }) {
   ] : [];
   const confirmBurnValueUsd = confirmKind === "burn" ? confirmSel.reduce((s, a) => s + (isWsol(a) ? 0 : Number(a.valueUsd) || 0), 0) : 0;
   const confirmBurnUnpriced = confirmKind === "burn" ? confirmSel.filter((a) => isUnpriced(a)) : [];
+  // ⚠️ WRAPPED SOL IS NOT BURNED, AND BOTH NUMBERS ON THIS SHEET USED TO SAY OTHERWISE
+  // (adversarial review P1-4, 2026-09-21). wSOL is non-empty, unfrozen and not an NFT, so it
+  // lands in the Burn group and "Select all" ticks it. onConfirmed builds NO burn for it —
+  // CloseAccount unwraps, and the whole wrapped balance comes back with the rent. But the sheet
+  // counted only the rent, so a 5 wSOL row was announced as "0.00204 SOL returning" and
+  // "this burns the token balance permanently. It cannot be undone" — two false numbers and a
+  // false sentence, on the screen immediately before a signature. (The row tag does say
+  // "unwraps, isn't burned", but the sheet is a full-screen overlay and the tag is behind it.)
+  //
+  // wSOL has 9 decimals, so its base-unit amount IS lamports — no conversion, no float.
+  const wsolSel = confirmKind === "burn" ? confirmSel.filter((a) => isWsol(a)) : [];
+  const wsolLamports = wsolSel.reduce((n, a) => n + (/^[0-9]+$/.test(String(a.amountRaw)) ? Number(a.amountRaw) : 0), 0);
+  // Is anything here actually destroyed? Empty rows close, wSOL unwraps; only a non-empty,
+  // non-wSOL row has a burn instruction built for it (see onConfirmed).
+  const reallyBurning = confirmKind === "burn" ? confirmSel.filter((a) => !isEmpty(a) && !isWsol(a)) : [];
   const burnLines = confirmKind === "burn" ? [
     <span key="c">{t("Accounts affected")}: <strong>{confirmSel.length}</strong></span>,
-    <span key="s">{t("SOL returning to your wallet")}: <strong>{fmtSol(confirmSel.reduce((s, a) => s + (Number(a.rentLamports) || 0), 0))}</strong></span>,
+    <span key="s">{t("SOL returning to your wallet")}: <strong>{fmtSol(confirmSel.reduce((s, a) => s + (Number(a.rentLamports) || 0), 0) + wsolLamports)}</strong></span>,
+    wsolSel.length ? (
+      <span key="w">{tf("{n} of these is wrapped SOL — it is unwrapped, not burned, and the whole balance comes back to you.", { n: wsolSel.length })}</span>
+    ) : null,
     confirmBurnValueUsd > 0 ? <span key="v">{t("Known value being destroyed")}: <strong className="seeker-firepit-destroyval">{fmtUsd(confirmBurnValueUsd)}</strong></span> : null,
     confirmBurnUnpriced.length > 0 ? (
       <span key="u">{confirmBurnUnpriced.length} {confirmBurnUnpriced.length === 1 ? t("token could not be priced — its value is unknown, not zero. It may be worth money.") : t("tokens could not be priced — their value is unknown, not zero. They may be worth money.")}</span>
     ) : null,
-    <span key="p">{t("This burns the token balance permanently. It cannot be undone — the tokens cannot be recovered.")}</span>,
+    // Only claim a permanent burn when one is actually being built. Saying it over a selection
+    // that only unwraps and closes is the same class of lie as the numbers above.
+    reallyBurning.length ? (
+      <span key="p">{t("This burns the token balance permanently. It cannot be undone — the tokens cannot be recovered.")}</span>
+    ) : (
+      <span key="p">{t("Nothing here is burned — these accounts are closed and their SOL comes back to you.")}</span>
+    ),
   ].filter(Boolean) : [];
 
   const counts = runResults.reduce((a, r) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
@@ -430,7 +555,19 @@ export default function FirepitPane({ wallet }) {
                 </div>
                 <div className="seeker-firepit-actionrow">
                   <span className="seeker-firepit-actiontotal">
-                    {burnValueUsd > 0 ? <>{t("Value to destroy")}: <strong className="seeker-firepit-destroyval">{fmtUsd(burnValueUsd)}</strong></> : t("Reclaim")}: <strong>{fmtSol(burnLamports)}</strong>
+                    {/* ⚠️ P3-10: the trailing ": <strong>SOL</strong>" used to sit OUTSIDE the
+                        ternary, so with any known value this line read "Value to destroy: $6.10:
+                        0.0244 SOL" — the SOL figure losing its own label and reading as an
+                        equivalence with the dollar figure, directly above the Burn button. Each
+                        number gets its own label now. */}
+                    {burnValueUsd > 0 ? (
+                      <>
+                        {t("Value to destroy")}: <strong className="seeker-firepit-destroyval">{fmtUsd(burnValueUsd)}</strong>
+                        {" · "}{t("SOL back")}: <strong>{fmtSol(burnLamports)}</strong>
+                      </>
+                    ) : (
+                      <>{t("Reclaim")}: <strong>{fmtSol(burnLamports)}</strong></>
+                    )}
                   </span>
                   <button type="button" className="seeker-btn seeker-btn-danger" disabled={selBurnRows.length === 0 || confirmPhase === "checking"} onClick={() => openConfirm("burn")}>{t("Burn")}</button>
                 </div>
@@ -460,6 +597,7 @@ export default function FirepitPane({ wallet }) {
         open={confirmKind === "reclaim" && confirmPhase === "ready"}
         title="Confirm reclaim"
         lines={reclaimLines}
+        rows={confirmRows}
         confirmLabel="Confirm and sign"
         onConfirm={onConfirmed}
         onCancel={cancelConfirm}
@@ -468,6 +606,13 @@ export default function FirepitPane({ wallet }) {
         open={confirmKind === "burn" && confirmPhase === "ready"}
         title="Confirm burn"
         lines={burnLines}
+        rows={confirmRows}
+        // The desktop's own condition, unchanged: type BURN whenever ANY known value is being
+        // destroyed, or whenever ANY selected token could not be priced. Unpriced is not "worth
+        // nothing" — it is "we could not find out", and that is exactly when someone should be
+        // made to stop and read. Below that bar (every row empty or priced at zero) there is
+        // nothing to lose and no reason to add friction.
+        typeToConfirm={confirmBurnValueUsd > 0 || confirmBurnUnpriced.length > 0 ? "BURN" : null}
         confirmLabel="Confirm and sign"
         onConfirm={onConfirmed}
         onCancel={cancelConfirm}

@@ -216,7 +216,13 @@ export default function ProjectBurnPane({ wallet }) {
   const overBalance = balance != null && amtNum > balance + 1e-12;
   const rawAmt = tok ? scaleToRaw(amount, tok.decimals) : "0";
   const tooSmall = amtNum > 0 && rawAmt === "0";
-  const canBurn = tok && amtNum > 0 && !overBalance && !tooSmall && confirmPhase !== "checking" && !burning;
+  // ⚠️ `balance != null` is REQUIRED, not decorative (adversarial review P2-8, 2026-09-21).
+  // /api/burn-token-info swallows a failed getTokenAccountsByOwner and answers 200 with
+  // walletBalance: null, so `balance` is null, `overBalance` is false (it is guarded on
+  // balance != null), and this used to arm a live Burn button under a card reading
+  // "Your balance: Unknown". A burn is irreversible; arming it on a balance nobody could read
+  // is the opposite of this app's rule that the guardrail comes before the power.
+  const canBurn = tok && balance != null && amtNum > 0 && !overBalance && !tooSmall && confirmPhase !== "checking" && !burning;
 
   function setPct(p) {
     if (!tok || balance == null) return;
@@ -245,7 +251,12 @@ export default function ProjectBurnPane({ wallet }) {
     const fresh = res.data;
     setTok(fresh); // keep the visible card in step with the same fresh read used to sign
     const freshBal = fresh.walletBalance != null ? Number(fresh.walletBalance) : null;
-    if (freshBal == null || typedAmt <= 0 || typedAmt > freshBal + 1e-12) { setConfirmPhase("stale"); return; }
+    // ⚠️ TWO DIFFERENT FACTS, and they were collapsed into one sentence that blamed the person.
+    // An unreadable balance printed "Your balance changed since this page loaded" — a claim
+    // about their wallet the app has no basis for. pane.jsx's own rule: a failed read is never
+    // rendered as the user's fault and never as a number.
+    if (freshBal == null) { setConfirmPhase("unreadable"); return; }
+    if (typedAmt <= 0 || typedAmt > freshBal + 1e-12) { setConfirmPhase("stale"); return; }
     const freshFull = freshBal != null && typedAmt >= freshBal - 1e-12;
     // A full-balance burn uses the EXACT on-chain raw balance (no float path) so nothing rounds
     // and leaves dust; otherwise scale the typed decimal string by the fresh decimals.
@@ -435,6 +446,11 @@ export default function ProjectBurnPane({ wallet }) {
               {confirmPhase === "checking" ? <Loading label={t("Re-checking your balance on-chain before you sign…")} /> : null}
               {confirmPhase === "stale" ? (
                 <p className="seeker-tool-note seeker-passgate-err" role="alert">{t("Your balance changed since this page loaded — reduce the amount or reload, then try again.")}</p>
+              ) : null}
+              {/* The other half of P2-8: we could not READ it. Not the same thing as it having
+                  changed, and not the person's doing. */}
+              {confirmPhase === "unreadable" ? (
+                <p className="seeker-tool-note seeker-passgate-err" role="alert">{t("Could not read your balance just now, so nothing was signed. Try again in a moment.")}</p>
               ) : null}
               {confirmPhase === "error" ? (
                 <p className="seeker-tool-note seeker-passgate-err" role="alert">{t("Could not re-check your balance on-chain. Try again.")}</p>

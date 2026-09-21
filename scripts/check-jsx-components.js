@@ -43,17 +43,55 @@ let tagsChecked = 0;
 // both times for prose. A guard that punishes documentation gets the documentation deleted
 // instead of the bug fixed. Comments and string literals are stripped before the scan.
 //
-// The stripper is deliberately crude (this whole file is a regex scan on purpose — see the header
-// above) and errs toward removing too much: over-stripping can only produce a MISSED use, which
-// is the pre-existing state, while under-stripping produces a false failure, which is worse than
-// no check at all because it teaches people to work around it.
+// It errs toward removing too much: over-stripping can only produce a MISSED use, which is the
+// pre-existing state, while under-stripping produces a false failure, which is worse than no
+// check at all because it teaches people to work around it.
+//
+// ⚠️ It is a SINGLE LEFT-TO-RIGHT SCAN, not a chain of .replace() passes, and that is not a
+// style preference. The chain it replaces ran the block-comment regex over the whole file first,
+// so a `/*` sitting harmlessly INSIDE a line comment opened a block comment that the regex then
+// closed at the next real `*/` — hundreds of lines later. A comment in Hatchery.jsx explaining
+// that the file input uses accept="image/*" silently deleted 433 lines of that file, including
+// the definition of a component used further down, and the guard reported that component as
+// undefined. The same trap exists in reverse (a `//` inside a block comment) and for a quote
+// inside any comment. Only one pass that knows which state it is in can get this right: inside
+// a comment, `/*` and `//` and quotes are just characters.
+//
+// Regex literals are NOT tracked. `/^image\//` contains `//`, so a naive scan would read the
+// rest of that line as a comment — which over-strips, the safe direction, and distinguishing a
+// regex literal from division needs a real parser. Left deliberately.
 function stripNonCode(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, " ")          // /* block */ and JSX {/* block */}
-    .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ")       // // line, without eating https://
-    .replace(/`(?:[^`\\]|\\.)*`/g, "``")         // template literals
-    .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")      // '…'
-    .replace(/"(?:[^"\\\n]|\\.)*"/g, '""');     // "…"
+  let out = "";
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    const d = src[i + 1];
+    if (c === "/" && d === "*") {                 // /* block */ and JSX {/* block */}
+      const end = src.indexOf("*/", i + 2);
+      i = end === -1 ? n : end + 2;
+      out += " ";
+    } else if (c === "/" && d === "/" && src[i - 1] !== ":") {   // // line, without eating https://
+      const end = src.indexOf("\n", i);
+      i = end === -1 ? n : end;
+      out += " ";
+    } else if (c === "`" || c === "'" || c === '"') {
+      const quote = c;
+      i++;
+      while (i < n) {
+        if (src[i] === "\\") { i += 2; continue; }
+        if (src[i] === quote) { i++; break; }
+        // A ' or " string does not span lines; a template literal does.
+        if (quote !== "`" && src[i] === "\n") break;
+        i++;
+      }
+      out += quote === "`" ? "``" : quote + quote;
+    } else {
+      out += c;
+      i++;
+    }
+  }
+  return out;
 }
 
 for (const file of walk(SRC)) {

@@ -115,6 +115,47 @@
     }
     return out || "0";
   }
+  // Subtract two non-negative decimal STRINGS exactly, clamped at zero. Same no-Number() rule as
+  // addDecimal — this feeds a "you are short by X" line, and a float there would report a
+  // shortfall of 0.00000000000001 on two numbers that are actually equal.
+  function subDecimal(a, b) {
+    if (cmpDecimal(a, b) <= 0) return "0";
+    var A = String(a).split("."), B = String(b).split(".");
+    var af = A[1] || "", bf = B[1] || "";
+    var n = Math.max(af.length, bf.length);
+    while (af.length < n) af += "0";
+    while (bf.length < n) bf += "0";
+    var x = ((A[0] || "0") + af).replace(/^0+(?=[0-9])/, "");
+    var y = ((B[0] || "0") + bf).replace(/^0+(?=[0-9])/, "");
+    var diff = subDigits(x, y);
+    if (n === 0) return normalizeDecimal(diff);
+    while (diff.length <= n) diff = "0" + diff;
+    return normalizeDecimal(diff.slice(0, diff.length - n) + "." + diff.slice(diff.length - n));
+  }
+  function subDigits(x, y) {
+    var i = x.length - 1, j = y.length - 1, borrow = 0, out = "";
+    while (i >= 0 || j >= 0) {
+      var d = (i >= 0 ? x.charCodeAt(i--) - 48 : 0) - (j >= 0 ? y.charCodeAt(j--) - 48 : 0) - borrow;
+      if (d < 0) { d += 10; borrow = 1; } else { borrow = 0; }
+      out = String(d) + out;
+    }
+    return out.replace(/^0+(?=[0-9])/, "") || "0";
+  }
+
+  // A chain balance is base units (an integer STRING) plus a decimals count. Turning it into a
+  // comparable decimal must not go through Number: a token with 9 decimals and a large supply
+  // exceeds 2^53 in base units, which is exactly the class of balance an airdropper deals with.
+  // This is pure string surgery — insert a point, pad, normalise.
+  function baseUnitsToDecimal(amount, decimals) {
+    var s = String(amount == null ? "" : amount).trim();
+    if (!/^[0-9]+$/.test(s)) return null;
+    var d = Number(decimals);
+    if (!Number.isInteger(d) || d < 0 || d > 30) return null;
+    if (d === 0) return normalizeDecimal(s);
+    while (s.length <= d) s = "0" + s;
+    return normalizeDecimal(s.slice(0, s.length - d) + "." + s.slice(s.length - d));
+  }
+
   // a >= b, on decimal strings. Used only for the "skip below" filter.
   function cmpDecimal(a, b) {
     var A = String(a).split("."), B = String(b).split(".");
@@ -234,6 +275,21 @@
     if (weight) txCount++;
     var feeLamports = txCount * (opts.lamportsPerTxFee || 5000);
     var rentLamports = newAtas * (opts.lamportsPerAta || 0);
+
+    // What is available to SEND, as an exact decimal string, or null if we could not read it.
+    // For a token drop that is the token balance. For a SOL drop the fees and the rent come out
+    // of the same balance, so they are subtracted first — sending every lamport you hold is not
+    // possible and telling someone it is would be the same lie in a smaller size.
+    var sendable = null;
+    if (native) {
+      if (typeof opts.solBalanceLamports === "number") {
+        var spare = opts.solBalanceLamports - feeLamports - rentLamports;
+        sendable = baseUnitsToDecimal(String(spare > 0 ? spare : 0), 9);
+      }
+    } else if (opts.tokenBalanceBaseUnits != null) {
+      sendable = baseUnitsToDecimal(opts.tokenBalanceBaseUnits, opts.decimals);
+    }
+
     return {
       txCount: txCount, newAtas: newAtas,
       feeLamports: feeLamports, rentLamports: rentLamports,
@@ -243,6 +299,26 @@
       // which is "unknown", never "affordable".
       affordable: typeof opts.solBalanceLamports === "number"
         ? opts.solBalanceLamports >= feeLamports + rentLamports : null,
+      // ⚠️ `affordable` above is about FEES AND RENT ONLY, and for a long time it was the pane's
+      // only pre-send check (adversarial review P1-3, 2026-09-21). It can never fire for the
+      // AMOUNT BEING SENT — so a wallet holding 1,000,000 tokens could start a 1,500,000-token
+      // drop with no warning at all, land the first k batches, and then fail every remaining one
+      // with `insufficient funds`, a wallet prompt and a fee each time. Some recipients paid,
+      // some not, and the public receipt publishes the partial list as a completed drop. A SOL
+      // drop was worse: 100 wallets x 5 SOL from a 2 SOL wallet reported "about 0.000035 SOL"
+      // and `affordable: true`, because 2 SOL comfortably covers the fees.
+      //
+      // The numbers were already in hand — the balance read is in the same RPC response the
+      // decimals come from — they were simply never compared. All of this is decimal-string
+      // arithmetic: a float here would be the very bug this module exists to refuse.
+      //   sendable      what is actually available to send, after fees and rent for a SOL drop
+      //   enoughToSend  true / false / null (null = balance unreadable, which is NOT "enough")
+      //   shortBy       how much is missing, for a sentence a person can act on
+      sendable: sendable,
+      enoughToSend: sendable === null || opts.sendTotal == null ? null
+        : cmpDecimal(sendable, String(opts.sendTotal)) >= 0,
+      shortBy: sendable === null || opts.sendTotal == null ? null
+        : subDecimal(String(opts.sendTotal), sendable),
     };
   }
 
@@ -252,6 +328,8 @@
     normalizeDecimal: normalizeDecimal,
     addDecimal: addDecimal,
     cmpDecimal: cmpDecimal,
+    subDecimal: subDecimal,
+    baseUnitsToDecimal: baseUnitsToDecimal,
     parseRecipients: parseRecipients,
     estimateCost: estimateCost,
   };

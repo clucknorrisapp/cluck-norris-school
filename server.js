@@ -14760,8 +14760,20 @@ app.get("/api/burn-scan", async (req, res) => {
         ...a,
         symbol: p.symbol || null, name: p.name || null, logo: p.logo || null,
         priceUsd, valueUsd, priceKnown,
-        empty: a.uiAmount === 0,
-        isNft: a.decimals === 0 && a.uiAmount === 1,   // rough; NFT phase refines with mint supply
+        // ⚠️ "empty" comes from the BASE-UNIT STRING, never from uiAmount (adversarial review
+        // P1-6, 2026-09-21). `uiAmount` is `f64 | null` in the RPC schema, and `Number(null) || 0`
+        // above is 0 — so any account the node declines to ui-scale (the Token-2022
+        // withheld-transfer-fee case public/rent-reclaim-plan.js already documents by name, and
+        // fixed on that side) was classified EMPTY here. Firepit pre-selects every empty row —
+        // the only place in the app that pre-selects anything — and then tells the person "these
+        // accounts are empty, nothing of value is destroyed" over a bag that may hold a balance.
+        // The token program refuses to close a non-native account with a balance, so nothing was
+        // ever destroyed; what was wrong was the one sentence that is supposed to be
+        // load-bearing. The same rule was applied to the other half of this job and not to this
+        // one. An unreadable amount is NOT empty.
+        empty: /^[0-9]+$/.test(String(a.amountRaw)) && String(a.amountRaw) === "0",
+        // Same reason, same source: with decimals 0 a base-unit amount of "1" IS a uiAmount of 1.
+        isNft: a.decimals === 0 && String(a.amountRaw) === "1",   // rough; NFT phase refines with mint supply
       };
     });
     // Order: empty rent-only accounts first (always safe), then KNOWN values ascending. Non-empty

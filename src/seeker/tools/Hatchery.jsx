@@ -171,14 +171,38 @@ function loadImageFromFile(file) {
 function canvasToBlob(canvas, mime, quality) {
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), mime, quality));
 }
+// ⚠️ EVERY image is re-encoded through a canvas, including one that is already small enough to
+// send as-is (adversarial review P1-5, 2026-09-21).
+//
+// The fast path this replaces passed a ≤100 KiB png/jpeg/webp through byte-for-byte. `accept`
+// on the file input is "image/*", so on a phone that file comes from the camera roll — and a
+// camera JPEG carries EXIF, which routinely includes GPS COORDINATES. It was then uploaded to
+// Arweave: permanent, public, not deletable by us or by them. Someone minting a token with a
+// photo they took would have published where they were standing, forever, with nothing on
+// screen saying so.
+//
+// A canvas re-encode reads pixels only — every EXIF, XMP and ICC block is left behind. The cost
+// is one decode of an image we were going to upload anyway. There is no size at which skipping
+// this is worth it, so there is no fast path.
+// The size the SERVER will see. base64 inflates by 4/3, so checking the encoded string's length
+// is not the same number — decode it. MAX_LOGO_BYTES is restated from hatchery.js by hand, so
+// this is also where a client/server drift surfaces: as a clear message here rather than as a
+// confusing 400 after the person has already tapped Review mint.
+function encodedBytes(base64) {
+  const s = String(base64 || "");
+  const pad = s.endsWith("==") ? 2 : s.endsWith("=") ? 1 : 0;
+  return Math.floor((s.length * 3) / 4) - pad;
+}
+function underServerCap(out) {
+  if (encodedBytes(out.base64) > MAX_LOGO_BYTES) {
+    throw new Error(t("Couldn't compress this image small enough — try a simpler image, or crop it first."));
+  }
+  return out;
+}
+
 async function prepareLogo(file) {
   if (!file) throw new Error(t("Choose a logo image first."));
   if (!/^image\//.test(file.type)) throw new Error(t("That file isn't an image."));
-  const ACCEPTED = file.type === "image/png" || file.type === "image/jpeg" || file.type === "image/webp";
-  if (file.size <= MAX_LOGO_BYTES && ACCEPTED) {
-    const base64 = await blobToBase64(file);
-    return { base64, mime: file.type, resized: false };
-  }
   const { img, url } = await loadImageFromFile(file);
   try {
     const srcMax = Math.max(img.naturalWidth || LOGO_START_DIM, img.naturalHeight || LOGO_START_DIM);
@@ -192,13 +216,26 @@ async function prepareLogo(file) {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
+      // A PNG logo is usually flat colour with transparency, and JPEG would both bloat it and
+      // flatten it onto the white fill below. Try PNG first for a PNG source; fall through to
+      // the JPEG quality ladder if it does not fit. (The white fill stays: a transparent source
+      // that ends up as JPEG must not come out with a black background.)
+      if (file.type === "image/png") {
+        // eslint-disable-next-line no-await-in-loop
+        const png = await canvasToBlob(canvas, "image/png");
+        if (png && png.size <= LOGO_TARGET_BYTES) {
+          // eslint-disable-next-line no-await-in-loop
+          const base64 = await blobToBase64(png);
+          return underServerCap({ base64, mime: "image/png", resized: true });
+        }
+      }
       for (let q = 0.88; q >= 0.35; q -= 0.12) {
         // eslint-disable-next-line no-await-in-loop
         const blob = await canvasToBlob(canvas, "image/jpeg", q);
         if (blob && blob.size <= LOGO_TARGET_BYTES) {
           // eslint-disable-next-line no-await-in-loop
           const base64 = await blobToBase64(blob);
-          return { base64, mime: "image/jpeg", resized: true };
+          return underServerCap({ base64, mime: "image/jpeg", resized: true });
         }
       }
     }
@@ -563,11 +600,23 @@ export default function HatcheryPane({ wallet }) {
           {formError ? <p className="seeker-listing-formerror" role="alert">{formError}</p> : null}
           {buildError ? <p className="seeker-lock-simwarning" role="alert">{buildError}</p> : null}
 
+          {/* ⚠️ Adversarial review P1-5, 2026-09-21. "Review mint" sounds like a preview, and the
+              screen it leads to has a "Start over" button — so everything about this step said
+              nothing had happened yet. It is not a preview: /api/hatchery/build uploads the logo
+              AND the name, symbol and description to Arweave as the first thing it does, before
+              it builds anything. That upload is permanent and public, and backing out afterwards
+              does not remove it. This app's rule is guardrails BEFORE power (CLAUDE.md), so the
+              sentence goes above the button, not in the spinner that appears once it is too
+              late. Its own pane header already recorded that /build is "a REAL, permanent action
+              — this is not a dry-run"; this is that fact reaching the person it concerns. */}
+          <p className="seeker-hatch-permanentnote">
+            {t("Tapping this uploads your logo and token details permanently and publicly. That upload can't be deleted afterwards, even if you stop here.")}
+          </p>
           <button type="button" className="seeker-btn seeker-listing-runbtn" onClick={review}>{t("Review mint")}</button>
         </div>
       ) : null}
 
-      {phase === "building" ? <Loading label={t("Uploading metadata and preparing the mint…")} /> : null}
+      {phase === "building" ? <Loading label={t("Uploading your logo and token details permanently…")} /> : null}
       {phase === "unavailable" ? <Unavailable kind={errKind} onRetry={review} /> : null}
 
       {phase === "reviewed" && plan ? (

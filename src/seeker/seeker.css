@@ -786,3 +786,59 @@ html, body {
   cursor: pointer;
 }
 .seeker-checkup-rescanbtn:active { background: rgba(255, 122, 24, .12); }
+
+/* The Hatchery's before-you-tap warning (adversarial review P1-5). Gold, not red: this is a
+   consequence someone should read before choosing, not an error they have already hit. */
+.seeker-hatch-permanentnote {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 4px 0 12px;
+}
+
+/* Confirm sheet: the per-row account of what is about to happen, and the typed gate in front of
+   an irreversible action (adversarial review P1-3). Both carried over from public/firepit.html —
+   a count is not an account, and on a phone the typed word is the last thing between a mis-tap
+   and a permanent burn. */
+.seeker-confirm-rows {
+  max-height: 34vh;
+  overflow-y: auto;
+  margin: 8px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.seeker-confirm-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.seeker-confirm-row:last-child { border-bottom: 0; }
+.seeker-confirm-row-left { font-family: var(--mono); overflow-wrap: anywhere; }
+.seeker-confirm-row-right { text-align: right; white-space: nowrap; color: var(--sub); }
+.seeker-confirm-type { display: block; margin: 0 0 12px; }
+.seeker-confirm-type span {
+  display: block;
+  font-size: 13px;
+  color: var(--sub);
+  margin-bottom: 6px;
+}
+.seeker-confirm-type input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 16px;            /* 16px or iOS zooms the page on focus */
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.seeker-confirm-type input:focus { border-color: var(--orange); outline: none; }

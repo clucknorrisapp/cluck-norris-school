@@ -856,6 +856,212 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     }
   }
 
+  // ---- K: the amount someone typed is the amount that gets locked ------------------------
+  //
+  // Adversarial review P2-8, 2026-09-21. The Locker Room read its amount with parseFloat, which
+  // does not fail — it truncates and moves on:
+  //
+  //     parseFloat("1,234.56")  === 1        parseFloat("1 000 000") === 1
+  //     parseFloat("1.234,56")  === 1.234
+  //
+  // No error, no warning, and the result is a lock this pane's own copy describes as impossible
+  // to undo "by anyone, including us". public/airdrop-plan.js exists specifically to refuse
+  // these rather than guess at them, was already in this bundle, and was not being used here.
+  //
+  // This section drives the REAL form in the REAL bundle and reads the amount that reaches the
+  // wire, because a unit test of parseAmount() would pass whether or not the pane calls it — the
+  // bug was never in the parser, it was in which function the pane reached for.
+  {
+    const MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+    // Each row: what someone types, and what must happen. `sends` is the exact string that must
+    // arrive at /api/lock/create-tx — null means the request must never be made at all.
+    const CASES = [
+      { typed: "1,234.56",  sends: "1234.56", why: "unambiguous English grouping is normalised, not truncated to 1" },
+      { typed: "1000",      sends: "1000",    why: "a plain number still works" },
+      { typed: "0.000001",  sends: "0.000001", why: "a small decimal keeps every digit" },
+      { typed: "1.234,56",  sends: null,      why: "a European decimal is REFUSED, never read as 1.234" },
+      { typed: "1 000 000", sends: null,      why: "space grouping is REFUSED, never read as 1" },
+      { typed: "1,5",       sends: null,      why: "an ambiguous comma is REFUSED, never read as 1" },
+      { typed: "1e6",       sends: null,      why: "scientific notation is REFUSED rather than expanded for them" },
+    ];
+
+    for (const c of CASES) {
+      let sentAmount = "___NEVER_SENT___";
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+      const page = await ctx.newPage();
+      const errors = [];
+      page.on("pageerror", (e) => errors.push(e.message));
+      await page.route("**/api/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "{}" }));
+      await page.route("**/api/locks*", (r) => r.fulfill({ status: 200, contentType: "application/json",
+        body: JSON.stringify({ success: true, mint: MINT, decimals: 6, supply: 1e9, totalLocked: 0, pctOfSupply: 0, lockCount: 0, breakdown: [], topLocks: [] }) }));
+      await page.route("**/api/lock/create-tx*", (r) => {
+        try { sentAmount = JSON.parse(r.request().postData() || "{}").amount; } catch (_) { sentAmount = "___UNPARSEABLE___"; }
+        // Refuse it — this section is about what left the device, not about signing.
+        r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "not part of this test" }) });
+      });
+      // The module-level FAKE already registers a connect-capable Wallet Standard wallet.
+      // Its signTransaction returns the transaction unsigned, which is fine: this section
+      // asserts on what leaves the device BEFORE any wallet prompt and must never reach one.
+      await page.addInitScript(FAKE);
+      // ⚠️ /index.html, not /seeker.html — the shipped bundle IS the index. Getting this
+      // wrong produced a blank page and a 20s waitForFunction timeout, not a failed
+      // assertion, which is why the whole run died instead of reporting.
+      await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+      await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+      await page.waitForTimeout(400);
+      await page.click(".seeker-walletbtn");
+      await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      await page.evaluate(() => { window.location.hash = "#/tools/lock"; });
+      await page.waitForTimeout(400);
+      await page.evaluate(() => { const b = Array.from(document.querySelectorAll(".seeker-launch-tabbtn")).find((x) => /create/i.test(x.innerText)); b && b.click(); });
+      await page.waitForTimeout(300);
+      await page.fill("#lr-c-mint", MINT);
+      await page.fill("#lr-c-amount", c.typed);
+      await page.click(".seeker-listing-runbtn");
+      await page.waitForTimeout(1200);
+
+      if (c.sends === null) {
+        ok(`K · ⚠️ "${c.typed}" — ${c.why}`, sentAmount === "___NEVER_SENT___",
+           `the app sent amount=${JSON.stringify(sentAmount)} to the chain instead of refusing it`);
+        // A silent refusal is its own bug: the person retypes the same thing forever.
+        const shown = await text(page);
+        ok(`K · "${c.typed}" — and it says why, rather than doing nothing`,
+           /could not be read|unclear format|scientific notation/i.test(shown), shown.slice(0, 300));
+      } else {
+        ok(`K · ⚠️ "${c.typed}" — ${c.why}`, sentAmount === c.sends,
+           `sent ${JSON.stringify(sentAmount)}, expected ${JSON.stringify(c.sends)}`);
+      }
+      ok(`K · "${c.typed}" — no uncaught exception`, errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+  }
+
+  // ---- L: the Firepit burn sheet tells the truth about what it is about to do -------------
+  //
+  // P2-9 of the adversarial review: three of the four irreversible tools had NO behavioural test
+  // at all — Firepit, Project Burn and the Hatchery were covered only by section B, "it mounts".
+  // Every P1 in the burn lens lived in code no test exercised, including the confirm sheet, which
+  // is the exact surface docs/SEEKER_TOOLS_BUILD.md §3.4 stakes the guardrails promise on.
+  //
+  // The fixture is built to trip all three of the sheet's old lies at once:
+  //   · an ordinary token with a known value          → must be listed, and IS really burned
+  //   · 5 wrapped SOL                                 → unwrapped, not burned; its whole balance
+  //                                                     comes back and must be in the SOL total
+  //   · an account whose amountRaw the node could not scale (uiAmount null → the server's old
+  //     `empty` rule said EMPTY)                      → must never be pre-selected as empty
+  {
+    const W = "So11111111111111111111111111111111111111112";
+    const SCAN = {
+      success: true,
+      wallet: ADDR,
+      rentLamportsTotal: 6117840,
+      accounts: [
+        // A real empty account: pre-selected, safe, nothing destroyed.
+        { tokenAccount: "Emp1111111111111111111111111111111111111111", mint: "Mnt111111111111111111111111111111111111111",
+          program: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", amountRaw: "0", decimals: 6, uiAmount: 0,
+          rentLamports: 2039280, frozen: false, delegated: false, symbol: "EMPTY", name: "Empty", logo: null,
+          priceUsd: 0, valueUsd: 0, priceKnown: true, empty: true, isNft: false },
+        // A token genuinely worth money: 1.5 tokens at $4 = $6.00.
+        { tokenAccount: "Val1111111111111111111111111111111111111111", mint: "Mnt222222222222222222222222222222222222222",
+          program: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", amountRaw: "1500000", decimals: 6, uiAmount: 1.5,
+          rentLamports: 2039280, frozen: false, delegated: false, symbol: "WORTH", name: "Worth", logo: null,
+          priceUsd: 4, valueUsd: 6, priceKnown: true, empty: false, isNft: false },
+        // 5 wrapped SOL. amountRaw is lamports (wSOL has 9 decimals).
+        { tokenAccount: "Wso1111111111111111111111111111111111111111", mint: W,
+          program: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", amountRaw: "5000000000", decimals: 9, uiAmount: 5,
+          rentLamports: 2039280, frozen: false, delegated: false, symbol: "wSOL", name: "Wrapped SOL", logo: null,
+          priceUsd: 0, valueUsd: 0, priceKnown: true, empty: false, isNft: false },
+        // ⚠️ The trap. A node that would not ui-scale this account: uiAmount null. The server's
+        // OLD rule (`Number(ta.uiAmount) || 0` === 0) called this EMPTY while it holds 1000 units.
+        // Sent here with empty:true ON PURPOSE — the client must not believe it.
+        { tokenAccount: "Poi1111111111111111111111111111111111111111", mint: "Mnt333333333333333333333333333333333333333",
+          program: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", amountRaw: "1000000", decimals: 6, uiAmount: null,
+          rentLamports: 2039280, frozen: false, delegated: false, symbol: "POISON", name: "Withheld fees", logo: null,
+          priceUsd: 0, valueUsd: 0, priceKnown: false, empty: true, isNft: false },
+      ],
+    };
+
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.route("**/api/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "{}" }));
+    await page.route("**/api/burn-scan*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(SCAN) }));
+    await page.addInitScript(FAKE);
+    await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+    await page.waitForTimeout(400);
+    await page.click(".seeker-walletbtn");
+    await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+    await page.evaluate(() => { window.location.hash = "#/tools/firepit"; });
+    await page.waitForTimeout(1200);
+
+    // ── the poisoned row is not treated as empty ────────────────────────────────────────────
+    // Firepit pre-selects every empty row — the only place in the app that pre-selects anything.
+    const preselected = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).length);
+    ok("L · ⚠️ an account whose amount the node could not read is NOT pre-selected as empty",
+       preselected === 1, `${preselected} rows were pre-ticked; only the one genuinely empty row should be`);
+
+    // ── the burn sheet ──────────────────────────────────────────────────────────────────────
+    // Tick everything in the Burn group, then open the sheet.
+    const clickedAll = await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll("button")).filter((b) => /select all/i.test(b.innerText.trim()));
+      if (btns.length < 2) return btns.length;
+      btns[btns.length - 1].click();      // the Burn group's own Select all
+      return btns.length;
+    });
+    ok("L · the Burn group has its own Select all", clickedAll >= 2, `found ${clickedAll}`);
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      const b = Array.from(document.querySelectorAll("button")).find((x) => /^burn$/i.test(x.innerText.trim()));
+      b && b.click();
+    });
+    const opened = await page.waitForFunction(() => !!document.querySelector(".seeker-confirm"), null, { timeout: 10000 })
+      .then(() => true).catch(() => false);
+    ok("L · the burn sheet opens", opened, await text(page).then((b) => b.slice(0, 300)));
+
+    if (opened) {
+      const sheet = await page.evaluate(() => document.querySelector(".seeker-confirm").innerText);
+
+      // P1-3: a count is not an account of what is about to happen.
+      ok("L · ⚠️ the sheet NAMES each row, not just a count",
+         /WORTH/.test(sheet) && /wSOL/.test(sheet), sheet.slice(0, 500));
+      ok("L · and gives each row its own action and amount",
+         /burn/i.test(sheet) && /unwrap/i.test(sheet), sheet.slice(0, 500));
+
+      // P1-4: wSOL unwraps. Both numbers and the sentence used to say otherwise.
+      ok("L · ⚠️ wrapped SOL is described as an unwrap, not a burn",
+         /unwrapped, not burned|unwrap/i.test(sheet), sheet.slice(0, 500));
+      ok("L · ⚠️ the SOL returning includes the whole wrapped balance, not just the rent",
+         /5\.00/.test(sheet), `sheet never showed ~5.006 SOL returning:\n${sheet.slice(0, 500)}`);
+
+      // P1-3: the typed gate. Value is being destroyed AND a row is unpriced, so it must be armed.
+      const before = await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll(".seeker-confirm button")).find((x) => /confirm and sign/i.test(x.innerText));
+        return b ? b.disabled : null;
+      });
+      ok("L · ⚠️ the confirm button starts DISABLED behind the typed gate", before === true, `disabled=${before}`);
+      ok("L · and the sheet says what to type", /BURN/.test(sheet), sheet.slice(0, 500));
+
+      // Typing the wrong thing must not arm it.
+      await page.fill(".seeker-confirm-type input", "burnn");
+      const wrong = await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll(".seeker-confirm button")).find((x) => /confirm and sign/i.test(x.innerText));
+        return b ? b.disabled : null;
+      });
+      ok("L · a near-miss does not arm it", wrong === true, `disabled=${wrong}`);
+      await page.fill(".seeker-confirm-type input", "burn");
+      const right = await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll(".seeker-confirm button")).find((x) => /confirm and sign/i.test(x.innerText));
+        return b ? b.disabled : null;
+      });
+      ok("L · typing the word (any case) arms it", right === false, `disabled=${right}`);
+    }
+    ok("L · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+    await ctx.close();
+  }
+
   // ---- I: it is not an English-only app -------------------------------------------------
   //
   // The school ships in SEVEN languages (AGENTS.md), and this app is part of the school. An
