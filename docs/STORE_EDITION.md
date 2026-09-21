@@ -177,6 +177,17 @@ nothing left the bundle's origin but `clucknorris.app`.
 yet; it comes back when the shell grows one. iOS is built from the identical config
 (`variants: ["google","ios"]`) and needs its own TestFlight pass.
 
+**The wrapper side (CLKN-SEEKER), found on the first Play-dev APK.** The web bundle has no wallet,
+but the Android wrapper had grown the native Mobile Wallet Adapter bridge (`CluckMWAPlugin`, for
+the Seeker edition) in `src/main`, registered for every target — so the education APK carried the
+whole MWA client library and a merged `<queries>` entry for the `solana-wallet` scheme, in an app
+whose store pages promise no wallet. Inert is not absent: a reviewer sees the library, not our
+intent. Since 2026-09-21 the wallet layer is a Gradle property there: `build:play` and
+`build:play-dev` pass `-PclknWallet=false`, which compiles an education `MainActivity` that
+registers nothing and drops the dependency, and the wrapper's CI reads the produced APK (no
+`MobileWalletAdapter` class, no `solana-wallet` query) with the Seeker build as the positive
+control. The approved v1.0.0 Play release predates the plugin and never carried it.
+
 ## Publishing
 
 ```
