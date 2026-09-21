@@ -380,6 +380,30 @@
 .seeker-launch-down { color: var(--red-soft, var(--red)); }
 .seeker-launch-refresh { display: block; width: 100%; }
 
+/* A pane state that is neither a result nor a failure: a destructive action's confirm step was
+   accepted, but SIGNING ISN'T WIRED UP YET in this build (Firepit.jsx / ProjectBurn.jsx say why
+   in their file headers). Deliberately its own look — not the Unavailable red (nothing failed)
+   and not a success color (nothing happened) — a calm, informational amber so it can never be
+   mistaken for either. */
+.seeker-tool-notyet {
+  text-align: center;
+  padding: 16px;
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  background: rgba(255, 182, 39, .08);
+  margin: 14px 0;
+}
+.seeker-tool-notyet-title {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: .3px;
+  color: var(--gold);
+  margin: 0 0 8px;
+}
+.seeker-tool-notyet p { margin: 0 0 12px; font-size: 13px; color: var(--subtext); line-height: 1.5; }
+.seeker-tool-notyet p:last-of-type { margin-bottom: 12px; }
+
 /* ── 2c. Daily Brief (Alpha) ────────────────────────────────────────────────────────────────── */
 .seeker-brief-date {
   text-align: center;
@@ -442,3 +466,101 @@
 .seeker-brief-yield { color: var(--gold); font-family: var(--mono); font-size: 12.5px; }
 .seeker-brief-disclaimer { text-align: center; font-size: 12px; color: var(--muted); margin: 4px 0 14px; }
 .seeker-brief-refresh { display: block; width: 100%; }
+
+/* ── 2d. Firepit ────────────────────────────────────────────────────────────────────────────── */
+.seeker-firepit-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.seeker-firepit-section-title {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: .3px;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+.seeker-firepit-toolbar { display: flex; gap: 8px; margin: 10px 0; }
+.seeker-firepit-rows { display: flex; flex-direction: column; }
+
+.seeker-firepit-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 4px;
+  border-top: 1px solid var(--border-soft, var(--border));
+  cursor: pointer;
+}
+.seeker-firepit-row:first-child { border-top: none; }
+.seeker-firepit-row-sel { background: rgba(255, 122, 24, .06); border-radius: 8px; }
+.seeker-firepit-row-disabled { opacity: .5; cursor: not-allowed; }
+.seeker-firepit-checkbox { width: 20px; height: 20px; min-width: 20px; margin-top: 2px; accent-color: var(--orange); }
+.seeker-firepit-row-body { flex: 1; min-width: 0; }
+.seeker-firepit-row-top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--text); }
+.seeker-firepit-row-rent { font-family: var(--mono); font-size: 12.5px; color: var(--green); flex: none; }
+.seeker-firepit-row-sub { font-family: var(--mono); font-size: 11.5px; color: var(--sub); margin-top: 2px; word-break: break-word; }
+.seeker-firepit-row-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+.seeker-firepit-tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .2px;
+  border-radius: 999px;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  color: var(--sub);
+}
+.seeker-firepit-tag-frozen { color: var(--muted); border-color: var(--muted); }
+.seeker-firepit-tag-nft { color: var(--sub); }
+.seeker-firepit-tag-unknown { color: #1a0f05; background: var(--gold); border-color: var(--gold); font-weight: 700; }
+.seeker-firepit-tag-value { color: var(--gold); border-color: var(--gold); font-weight: 700; }
+
+.seeker-firepit-actionrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft, var(--border));
+}
+.seeker-firepit-actiontotal { font-size: 13px; color: var(--sub); }
+.seeker-firepit-destroyval { color: var(--red-soft, var(--red)); }
+.seeker-firepit-rescan { display: block; width: 100%; margin-bottom: 10px; }
+
+/* ── 2e. Project Burn ───────────────────────────────────────────────────────────────────────── */
+.seeker-burn-form {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.seeker-burn-tokencard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.seeker-burn-tokenhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.seeker-burn-tokenicon {
+  width: 40px; height: 40px; min-width: 40px;
+  border-radius: 10px;
+  background: var(--card2, #1d1e26);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--disp); font-size: 14px; color: var(--gold);
+}
+.seeker-burn-tokenname { font-size: 15px; color: var(--text); }
+.seeker-burn-pctrow { display: flex; gap: 8px; margin: 10px 0; }
+.seeker-burn-pctrow .seeker-btn { flex: 1; }
+.seeker-burn-live { font-size: 13px; color: var(--subtext); line-height: 1.5; margin: 4px 0 12px; }
+.seeker-burn-live-err { color: var(--red-soft, var(--red)); }
+.seeker-burn-actionbtn { display: block; width: 100%; margin-top: 4px; }
