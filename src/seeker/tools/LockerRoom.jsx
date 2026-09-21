@@ -64,7 +64,7 @@
 // `Empty` and `Unavailable` never collapse into one rendering: a mint with zero on-chain locks and
 // a mint we simply could not read are different answers and get different components.
 import React from "react";
-import { t } from "../i18n.js";
+import { t, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
 import { shortAddr } from "../addr.js";
 import { signSendConfirm } from "../sign.js";
@@ -584,6 +584,9 @@ function LockResult({ result, symbol, amount, onDone }) {
 }
 
 export default function LockerRoomPane({ wallet }) {
+  // Re-render when the dictionary lands. <Pane> subscribes too, but React does not re-render
+  // children it was handed as props, so this pane's own t() strings need their own subscription.
+  useI18nReady();
   const [tab, setTab] = React.useState("view"); // view | create
 
   return (

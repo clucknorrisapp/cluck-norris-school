@@ -50,7 +50,7 @@
 // "Say what's on-chain, never why" applies to the token too: this pane shows the mint's decimals
 // and the sender's balance as the chain reports them and makes no claim about the token itself.
 import React from "react";
-import { t, tf } from "../i18n.js";
+import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Unavailable, Confirm, NeedsWallet, useOnline } from "../pane.jsx";
 import { usePass } from "../pass.js";
 import { PassGate } from "../passgate.jsx";
@@ -102,6 +102,9 @@ function ResultRow({ r }) {
 }
 
 export default function AirdropperPane({ wallet }) {
+  // Re-render when the dictionary lands. <Pane> subscribes too, but React does not re-render
+  // children it was handed as props, so this pane's own t() strings need their own subscription.
+  useI18nReady();
   const online = useOnline();
   const pass = usePass();
 

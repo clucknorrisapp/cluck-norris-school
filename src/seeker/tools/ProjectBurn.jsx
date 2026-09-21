@@ -37,7 +37,7 @@
 // opens. Signing later reads only that frozen snapshot, never a value recomputed at signing time
 // (same discipline as Firepit's confirmSel, firepit.html's own variable of that name).
 import React from "react";
-import { t } from "../i18n.js";
+import { t, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
 import { shortAddr } from "../addr.js";
 import { signSendConfirm, confirmSignature, rpcFn, splTokenShim } from "../sign.js";
@@ -142,6 +142,9 @@ function OutcomeCard({ o, onDismiss, onRetry, onCheckStatus }) {
 }
 
 export default function ProjectBurnPane({ wallet }) {
+  // Re-render when the dictionary lands. <Pane> subscribes too, but React does not re-render
+  // children it was handed as props, so this pane's own t() strings need their own subscription.
+  useI18nReady();
   const online = useOnline();
   const [mintInput, setMintInput] = React.useState("");
   const [formError, setFormError] = React.useState(null);

@@ -74,8 +74,29 @@ function extractVars(relFile, varNames) {
   return result;
 }
 
+// ⚠️ TWO CONSUMERS, TWO SHAPES, ONE OBJECT.
+//
+// `q` / `answer` / `why` is what the AI classroom and the tutor read (server.js) — a flat Q&A
+// grounding, never a quiz. `options` / `correct` / `explanation` is the QUIZ, and it is carried
+// through verbatim so a client can actually render one.
+//
+// The quiz fields were dropped here originally, and on 2026-09-21 the Seeker school was built on
+// this file assuming it carried them: every one of the 200 questions rendered with NO ANSWER
+// BUTTONS, so no lesson could be finished. Found by Codex on PR #390, not by any test — the
+// browser test mounted the pane and never tapped an answer.
+//
+// Exposure note: this adds nothing new. `answer` already carried the correct option's TEXT, so
+// the key was always here. This file is required server-side (server.js ~77) and is not served.
 function mapQuestions(qs) {
-  return (qs || []).map((q) => ({ q: q.q, answer: (q.options || [])[q.correct], why: q.explanation || "" }));
+  return (qs || []).map((q) => ({
+    q: q.q,
+    answer: (q.options || [])[q.correct],
+    why: q.explanation || "",
+    // The quiz, for clients that render one.
+    options: Array.isArray(q.options) ? q.options.slice() : [],
+    correct: Number.isInteger(q.correct) ? q.correct : null,
+    explanation: q.explanation || "",
+  }));
 }
 
 const out = { generatedAt: new Date().toISOString(), courses: [] };

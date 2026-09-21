@@ -328,8 +328,17 @@
 
 .seeker-listing-share { text-align: center; word-break: break-all; margin-top: 6px; }
 
+/* ── 2b. Shared tab + bar + up/down classes (named for the removed Launches pane) ──────────
+   ⚠️ These keep the `seeker-launch-` prefix because FOUR panes use them: the Locker Room
+   (tabs + the lock progress bar), the Hatchery (its SOL/CLKN pay tabs) and the Daily Brief
+   (up/down colours). Launches itself was removed 2026-09-21; deleting the whole block with it
+   silently broke all three, which is why only the genuinely Launches-only rules went. Renaming
+   the prefix is a separate, safe change — do it in one pass across those panes, not here. */
+
 /* ── 2b. Launches (Bags feed) ───────────────────────────────────────────────────────────────── */
 .seeker-launch-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+
+
 .seeker-launch-tabbtn {
   flex: 1;
   min-height: 44px;
@@ -344,65 +353,21 @@
   cursor: pointer;
   padding: 0 6px;
 }
+
+
 .seeker-launch-tabbtn.active { color: var(--orange); border-color: var(--orange); background: rgba(255, 122, 24, .08); }
-.seeker-launch-stale { text-align: center; margin: 0 0 10px; }
 
-.seeker-launch-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
-.seeker-launch-card {
-  display: flex;
-  gap: 12px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 12px;
-}
-.seeker-launch-avatar {
-  width: 44px;
-  height: 44px;
-  flex: none;
-  border-radius: 10px;
-  background: var(--card2, #1d1e26);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  font-size: 20px;
-}
-.seeker-launch-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.seeker-launch-body { flex: 1; min-width: 0; }
-.seeker-launch-top { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-.seeker-launch-name { font-size: 14.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60vw; }
-.seeker-launch-symbol { font-family: var(--mono); font-size: 12px; color: var(--sub); }
+
 .seeker-launch-bar { height: 6px; border-radius: 4px; background: var(--card2, #1d1e26); overflow: hidden; margin: 8px 0 4px; }
-.seeker-launch-bar-fill { height: 100%; background: var(--orange); border-radius: 4px; }
-.seeker-launch-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-family: var(--mono); font-size: 12.5px; color: var(--text); }
-.seeker-launch-up { color: var(--green); }
-.seeker-launch-down { color: var(--red-soft, var(--red)); }
-.seeker-launch-refresh { display: block; width: 100%; }
 
-/* A pane state that is neither a result nor a failure: a destructive action's confirm step was
-   accepted, but SIGNING ISN'T WIRED UP YET in this build (Firepit.jsx / ProjectBurn.jsx say why
-   in their file headers). Deliberately its own look — not the Unavailable red (nothing failed)
-   and not a success color (nothing happened) — a calm, informational amber so it can never be
-   mistaken for either. */
-.seeker-tool-notyet {
-  text-align: center;
-  padding: 16px;
-  border: 1px solid var(--gold);
-  border-radius: 12px;
-  background: rgba(255, 182, 39, .08);
-  margin: 14px 0;
-}
-.seeker-tool-notyet-title {
-  font-family: var(--disp);
-  font-weight: 400;
-  font-size: 14px;
-  letter-spacing: .3px;
-  color: var(--gold);
-  margin: 0 0 8px;
-}
-.seeker-tool-notyet p { margin: 0 0 12px; font-size: 13px; color: var(--subtext); line-height: 1.5; }
-.seeker-tool-notyet p:last-of-type { margin-bottom: 12px; }
+
+.seeker-launch-bar-fill { height: 100%; background: var(--orange); border-radius: 4px; }
+
+
+.seeker-launch-up { color: var(--green); }
+
+
+.seeker-launch-down { color: var(--red-soft, var(--red)); }
 
 /* ── 2c. Daily Brief (Alpha) ────────────────────────────────────────────────────────────────── */
 .seeker-brief-date {
@@ -414,19 +379,8 @@
   color: var(--sub);
   margin-bottom: 10px;
 }
-.seeker-brief-text {
-  white-space: pre-wrap;
-  font-family: var(--body);
-  font-size: 14.5px;
-  line-height: 1.7;
-  color: var(--body-text);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px;
-  margin-bottom: 14px;
-  word-break: break-word;
-}
+/* .seeker-brief-text was the Daily pane's rendering of `payload.brief`, removed with it —
+   see the header of tools/DailyBrief.jsx. Nothing else used the class. */
 .seeker-brief-card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -958,3 +912,18 @@
 .seeker-drop-unconfirmed p { margin: 0 0 6px; }
 .seeker-drop-unconfirmed p:last-child { margin-bottom: 0; }
 
+
+/* ── The Daily pane's school half ────────────────────────────────────────────────────────────
+   It reuses the school's question and option classes on purpose: the daily check IS a school
+   question, and giving it a second look would make it feel like a different product. Only the
+   three things that differ live here. */
+.seeker-daily-lesson { margin-bottom: 14px; }
+.seeker-daily-q { font-size: 16px; margin-top: 4px; }
+.seeker-daily-streak {
+  font-family: var(--disp);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 12px;
+}

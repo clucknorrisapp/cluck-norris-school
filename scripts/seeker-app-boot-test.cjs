@@ -157,12 +157,19 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     ok("A · the four shared scripts all loaded", await page.evaluate(() => !!(window.CluckUtil && window.CluckWallet && window.CluckRentMath && window.CLKN_I18N)));
 
     const tabs = await page.evaluate(() => Array.from(document.querySelectorAll(".seeker-navbtn")).map((a) => a.getAttribute("href")));
-    ok("B · four bottom-nav tabs, all hash routes", tabs.length === 4 && tabs.every((h) => String(h).startsWith("#/")), JSON.stringify(tabs));
-    ok("B · it lands on the Toolkit, not a blank route", /Toolkit/i.test(await text(page)), (await text(page)).slice(0, 160));
+    // ⚠️ FIVE tabs, School first. This asserted four tabs landing on the Toolkit, which is how a
+    // school-less app passed its own front-door test — the scope doc listed tools, the app became
+    // tools, and the test agreed. The owner found the gap on his Seeker. AGENTS.md now records
+    // the flagship list with the school first.
+    ok("B · five bottom-nav tabs, all hash routes", tabs.length === 5 && tabs.every((h) => String(h).startsWith("#/")), JSON.stringify(tabs));
+    ok("B · the FIRST tab is the school", /#\/school$/.test(String(tabs[0])), JSON.stringify(tabs));
+    ok("B · it lands on the School, not the Toolkit and not a blank route",
+       /School of Crypto Hard Knocks/i.test(await text(page)), (await text(page)).slice(0, 160));
 
     for (const [hash, want] of [["#/ask", /Ask Cluck/i], ["#/checkup", /Wallet Checkup/i], ["#/rent", /Rent Reclaim/i],
-                                ["#/tools/listing", /Listing Checkup/i], ["#/tools/bags", /Launches/i],
-                                ["#/tools/alpha", /Daily Brief/i], ["#/tools", /Toolkit/i]]) {
+                                ["#/tools/listing", /Listing Checkup/i],
+                                ["#/tools/alpha", /Today's lesson|Daily/i], ["#/tools", /Toolkit/i],
+                                ["#/school", /School of Crypto Hard Knocks/i]]) {
       await page.evaluate((h) => { window.location.hash = h; }, hash);
       await page.waitForTimeout(250);
       ok(`B · ${hash} renders its own pane`, want.test(await text(page)));
@@ -208,7 +215,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         .filter((el) => el.getBoundingClientRect().height < 44).length,
       overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     }));
-    ok("B · the toolkit grid renders every tool in the registry", grid.cards >= 15, JSON.stringify(grid));
+    ok("B · the toolkit grid renders every tool in the registry", grid.cards >= 14, JSON.stringify(grid));
     ok("B · ⚠️ an unbuilt tool is NEVER a link — no routing to a blank pane", grid.soonAreLinks === 0, JSON.stringify(grid));
     ok("B · built tools are links, so the grid actually navigates", grid.links >= 6, JSON.stringify(grid));
     ok("B · every card clears 44px and nothing overflows at 390px", grid.smallCards === 0 && !grid.overflow, JSON.stringify(grid));
@@ -1383,6 +1390,338 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
        englishLeftOver.length === 0, `still English on screen: ${JSON.stringify(englishLeftOver)}`);
     ok("I · the nav labels are translated too", !/\bToolkit\b/.test(body), body.slice(0, 200));
     ok("I · and nothing throws in a non-English locale", errors.length === 0, errors.join(" | ").slice(0, 300));
+    await ctx.close();
+  }
+
+  // ---- P: THE LEARNER JOURNEY — open a lesson, answer its quiz, check the progress ---------
+  //
+  // ⚠️ THIS SECTION EXISTS BECAUSE EVERYTHING ELSE PASSED WHILE THE SCHOOL DID NOT WORK.
+  //
+  // Section B above navigates to #/school and asserts the pane mounts with the right title. It
+  // was green on a build where NO QUIZ HAD ANY ANSWER BUTTONS — data/curriculum.json carries the
+  // quiz as {q, answer, why} for the AI classroom, the phone school was written against
+  // {options, correct, explanation}, and `(q.options || []).map(...)` rendered nothing. Every one
+  // of the 200 questions was a dead end. It was also green while LP Lab and Deep Dive rendered a
+  // title and a one-line tagline, because their lesson bodies live in `sections` and the model
+  // dropped the field. And it was green while finishing the beginner `dex` lesson also ticked the
+  // Fundamentals lesson of the same id, and while answering every question WRONG completed the
+  // lesson and wrote a mark to the graduation ledger. Four functional breaks, one review
+  // (Codex, PR #390), zero test failures.
+  //
+  // What they have in common: every one of them is invisible to a test that mounts a pane and
+  // reads the title. So this one does what a learner does — opens a substantive lesson, reads it,
+  // answers the questions, and checks what the progress says afterwards.
+  //
+  // The correct answers come from data/curriculum.json ON DISK rather than from the screen, which
+  // makes this a two-sided check: the journey passes only if the BUNDLE'S copy of a lesson agrees
+  // with the repo's, question for question and index for index.
+  {
+    const CURRICULUM = require(path.join(ROOT, "data", "curriculum.json"));
+    const courseOf = (id) => CURRICULUM.courses.find((c) => c.id === id);
+    const lessonOf = (cid, lid) => (courseOf(cid).lessons || []).find((l) => l.id === lid);
+    const passMark = (n) => Math.ceil(n * 2 / 3);
+
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    const beacons = [];     // every /api/track event the app actually sent
+    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("request", (r) => {
+      if (r.url().includes("/api/track")) {
+        try { const b = JSON.parse(r.postData() || "{}"); if (b.event) beacons.push(b.event); } catch (_) {}
+      }
+    });
+    // Nothing in the school needs the network — that is the point of bundling it. Everything is
+    // refused so a passing journey proves the offline claim rather than quietly relying on a fetch.
+    await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+    await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+
+    const go = async (hash) => { await page.evaluate((h) => { window.location.hash = h; }, hash); await page.waitForTimeout(320); };
+    const opts = () => page.evaluate(() => Array.from(document.querySelectorAll(".seeker-school-option")).map((b) => (b.innerText || "").trim()));
+    const doneKeys = () => page.evaluate(() => { try { return JSON.parse(localStorage.getItem("clkn_completed") || "[]"); } catch (_) { return null; } });
+    const progressOf = (cid) => page.evaluate((c) => {
+      const a = document.querySelector(`a.seeker-school-course[href="#/school/${c}"]`);
+      return a ? (a.querySelector(".seeker-school-course-n") || {}).innerText : null;
+    }, cid);
+
+    // ── P1: the lesson BODY is on the screen, not just its title ──────────────────────────
+    // The LP Lab lesson with the most prose. 24 of the 58 lessons are LP Lab's and 11 are Deep
+    // Dive's; between them that is 35 lessons whose entire teaching material is `sections`.
+    {
+      const lp = courseOf("lp").lessons.map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
+        .sort((a, b) => b.chars - a.chars)[0].l;
+      await go(`#/school/lp/${lp.id}`);
+      const seen = await page.evaluate(() => ({
+        heads: Array.from(document.querySelectorAll(".seeker-school-section-h")).map((h) => (h.innerText || "").trim()),
+        bodyChars: Array.from(document.querySelectorAll(".seeker-school-section-body p")).reduce((n, p) => n + (p.innerText || "").length, 0),
+        title: (document.querySelector(".seeker-school-title") || {}).innerText || "",
+      }));
+      ok(`P1 · an LP Lab lesson renders its section headings (${seen.heads.length} of ${(lp.sections || []).length})`,
+         seen.heads.length === (lp.sections || []).length, JSON.stringify(seen.heads).slice(0, 200));
+      ok("P1 · ⚠️ and their BODIES — the lesson is the material, not the title and a tagline",
+         seen.bodyChars > 2000, `only ${seen.bodyChars} characters of body rendered for "${seen.title}"`);
+      const declared = (lp.sections || []).map((s) => s.heading).filter(Boolean);
+      ok("P1 · the headings on screen are the ones the curriculum declares",
+         declared.every((h) => seen.heads.includes(h)), JSON.stringify({ declared, seen: seen.heads }).slice(0, 300));
+    }
+
+    // ── P2: a Deep Dive lesson (prose, no quiz) renders and can be completed ──────────────
+    {
+      const dd = courseOf("deepdive").lessons.find((l) => (l.sections || []).length || l.content);
+      await go(`#/school/deepdive/${dd.id}`);
+      const before = await page.evaluate(() => (document.body.innerText || "").length);
+      ok("P2 · a Deep Dive lesson renders real material", before > 1200, `${before} chars`);
+      const hasMarkRead = await page.evaluate(() => /Mark as read/i.test((document.querySelector(".seeker-school-start") || {}).innerText || ""));
+      ok("P2 · a lesson with no questions offers 'Mark as read' rather than an empty quiz", hasMarkRead);
+      await page.click(".seeker-school-start");
+      await page.waitForTimeout(250);
+      const keys = await doneKeys();
+      ok("P2 · marking it read records the COURSE-SCOPED key", Array.isArray(keys) && keys.includes("deepdive:" + dd.id), JSON.stringify(keys));
+      ok("P2 · and beacons the BARE lesson id, the ledger's own id space",
+         beacons.includes("lesson_complete:" + String(dd.id).toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 48)), JSON.stringify(beacons));
+    }
+
+    // ── P3: the quiz has answers, and answering them all WRONG does not pass ──────────────
+    //
+    // `dex` is deliberate: it exists in BOTH `basics` and `fundamentals`, which is what made the
+    // duplicate-id credit bug possible. The whole journey runs on it so P5 can check the other
+    // course stayed untouched.
+    const DUP = "dex";
+    const basicsDex = lessonOf("basics", DUP);
+    const NEED = passMark(basicsDex.questions.length);
+    {
+      await go(`#/school/basics/${DUP}`);
+      ok(`P3 · the beginner lesson offers its quiz (${basicsDex.questions.length} questions, ${NEED} to pass)`,
+         await page.evaluate(() => !!document.querySelector(".seeker-school-start")));
+      await page.click(".seeker-school-start");
+      await page.waitForTimeout(250);
+
+      const firstOpts = await opts();
+      // ⚠️ THE ONE THAT SHIPPED BROKEN. Zero buttons is what every learner would have met.
+      ok("P3 · ⚠️ the quiz actually renders ANSWER BUTTONS", firstOpts.length >= 2, `rendered ${firstOpts.length} options`);
+      ok("P3 · and they are the options the curriculum declares",
+         JSON.stringify(firstOpts) === JSON.stringify(basicsDex.questions[0].options), JSON.stringify({ screen: firstOpts, data: basicsDex.questions[0].options }).slice(0, 400));
+
+      const beaconsBefore = beacons.length;
+      for (let i = 0; i < basicsDex.questions.length; i++) {
+        const q = basicsDex.questions[i];
+        const onScreen = await page.evaluate(() => ((document.querySelector(".seeker-school-q") || {}).innerText || "").trim());
+        ok(`P3 · question ${i + 1} on screen is the one the curriculum holds`, onScreen === q.q, JSON.stringify({ onScreen, expected: q.q }).slice(0, 300));
+        const wrongIdx = q.options.findIndex((_, k) => k !== q.correct);
+        await page.click(`.seeker-school-option >> nth=${wrongIdx}`);
+        await page.waitForTimeout(160);
+        const verdict = await page.evaluate(() => ((document.querySelector(".seeker-school-explain-verdict") || {}).innerText || "").trim());
+        ok(`P3 · a wrong answer is marked wrong (q${i + 1})`, /Not quite/i.test(verdict), verdict);
+        await page.click(".seeker-school-explain .seeker-btn");
+        await page.waitForTimeout(200);
+      }
+
+      const end = await page.evaluate(() => ({
+        missed: !!document.querySelector(".seeker-school-passed.missed"),
+        text: (document.body.innerText || "").trim(),
+      }));
+      ok("P3 · ⚠️ answering EVERY question wrong does not pass the lesson", end.missed, end.text.slice(0, 200));
+      const keysAfterFail = await doneKeys();
+      ok("P3 · ⚠️ and writes NO local mark", !keysAfterFail.includes("basics:" + DUP), JSON.stringify(keysAfterFail));
+      ok("P3 · ⚠️ and sends NO completion beacon to the graduation ledger",
+         !beacons.slice(beaconsBefore).some((e) => e.startsWith("lesson_complete:")), JSON.stringify(beacons.slice(beaconsBefore)));
+      ok("P3 · the failed screen says the score and what was needed",
+         end.text.includes(String(NEED)) && /0 of|of 3/i.test(end.text), end.text.slice(0, 200));
+      ok("P3 · and offers a retake — nothing is lost", /Retake the quiz/i.test(end.text), end.text.slice(0, 200));
+    }
+
+    // ── P4: the same quiz, answered correctly, passes and records ────────────────────────
+    {
+      // nth=0 deliberately: the missed screen offers TWO buttons (retake, re-read) and a bare
+      // `.seeker-btn` would be a Playwright strict-mode violation rather than a click.
+      await page.click(".seeker-school-passed .seeker-btn >> nth=0");   // Retake the quiz
+      await page.waitForTimeout(250);
+      for (let i = 0; i < basicsDex.questions.length; i++) {
+        const q = basicsDex.questions[i];
+        await page.click(`.seeker-school-option >> nth=${q.correct}`);
+        await page.waitForTimeout(160);
+        const verdict = await page.evaluate(() => ((document.querySelector(".seeker-school-explain-verdict") || {}).innerText || "").trim());
+        ok(`P4 · the curriculum's own \`correct\` index is marked correct on screen (q${i + 1})`, /Correct/i.test(verdict), verdict);
+        await page.click(".seeker-school-explain .seeker-btn");
+        await page.waitForTimeout(200);
+      }
+      const end = await page.evaluate(() => ({
+        passed: !!document.querySelector(".seeker-school-passed") && !document.querySelector(".seeker-school-passed.missed"),
+        text: (document.body.innerText || "").trim(),
+      }));
+      ok("P4 · answering them all right passes the lesson", end.passed, end.text.slice(0, 200));
+      const keys = await doneKeys();
+      ok("P4 · the local mark is the COURSE-SCOPED key", keys.includes("basics:" + DUP), JSON.stringify(keys));
+      ok("P4 · ⚠️ the LEDGER beacon is the BARE lesson id — the id space the website already wrote",
+         beacons.includes("lesson_complete:" + DUP), JSON.stringify(beacons));
+      ok("P4 · ⚠️ the course-scoped key NEVER reaches the ledger (a colon would be stripped to nonsense)",
+         !beacons.some((e) => e.includes("basics") || e.includes(":" + DUP + ":")), JSON.stringify(beacons));
+    }
+
+    // ── P5: the duplicate id credited exactly ONE course ─────────────────────────────────
+    {
+      await go("#/school");
+      const b = await progressOf("basics");
+      const f = await progressOf("fundamentals");
+      const total = courseOf("basics").lessons.length;
+      ok(`P5 · the course that was actually studied advanced (basics ${b})`,
+         String(b).replace(/\s/g, "") === `1/${total}`, String(b));
+      // ⚠️ `dex` and `marketcap` exist in both courses. Keyed by bare lesson id, finishing the
+      // beginner one advanced Fundamentals 0/16 → 1/16 for a lesson nobody opened.
+      ok(`P5 · ⚠️ and the OTHER course holding a lesson of the same id did not (fundamentals ${f})`,
+         String(f).replace(/\s/g, "") === `0/${courseOf("fundamentals").lessons.length}`, String(f));
+      const overall = await page.evaluate(() => ((document.querySelector(".seeker-school-overall-n") || {}).innerText || "").trim());
+      ok(`P5 · the overall counter agrees (${overall})`, /^2\s*\/\s*\d+$/.test(overall), overall);   // deepdive read + basics dex
+    }
+
+    // ── P7: the pass THRESHOLD, at its boundary — exactly enough, and one short ───────────
+    //
+    // P3/P4 tested 0/3 and 3/3. Codex's point: a rule of ceil(n·2/3) is only proven at the edge.
+    // `wallet` has 3 questions, so the edge is 2: two right passes, one right does not.
+    {
+      const L = lessonOf("basics", "wallet");
+      const need = passMark(L.questions.length);
+      const answerRun = async (rightCount) => {
+        // Leave first: setting the hash to the lesson we are already on is not a navigation, so
+        // the missed screen would stay up and there would be no "Take the quiz" to press.
+        await go("#/school");
+        await go(`#/school/basics/${L.id}`);
+        await page.click(".seeker-school-start");
+        await page.waitForTimeout(250);
+        for (let i = 0; i < L.questions.length; i++) {
+          const q = L.questions[i];
+          const idx = i < rightCount ? q.correct : q.options.findIndex((_, k) => k !== q.correct);
+          await page.click(`.seeker-school-option >> nth=${idx}`);
+          await page.waitForTimeout(160);
+          await page.click(".seeker-school-explain .seeker-btn");
+          await page.waitForTimeout(200);
+        }
+        return page.evaluate(() => ({
+          passed: !!document.querySelector(".seeker-school-passed") && !document.querySelector(".seeker-school-passed.missed"),
+          missed: !!document.querySelector(".seeker-school-passed.missed"),
+        }));
+      };
+      const short = await answerRun(need - 1);
+      ok(`P7 · ⚠️ ONE SHORT of the mark (${need - 1} of ${L.questions.length}, need ${need}) does not pass`, short.missed && !short.passed, JSON.stringify(short));
+      ok("P7 · and left no local mark", !(await doneKeys()).includes("basics:" + L.id));
+      const exact = await answerRun(need);
+      ok(`P7 · ⚠️ EXACTLY the mark (${need} of ${L.questions.length}) passes`, exact.passed && !exact.missed, JSON.stringify(exact));
+      ok("P7 · and recorded the course-scoped key", (await doneKeys()).includes("basics:" + L.id));
+    }
+
+    // ── P6: nothing in the whole journey needed the network ─────────────────────────────
+    ok("P6 · ⚠️ the entire journey ran with every API refused — the school is genuinely offline",
+       errors.length === 0, errors.join(" | ").slice(0, 400));
+    ok("P6 · and the only calls it made were beacons, which are allowed to fail",
+       beacons.every((e) => /^lesson_(start|complete):/.test(e)), JSON.stringify(beacons).slice(0, 300));
+
+    await ctx.close();
+  }
+
+  // ---- P8: a lesson BODY in Spanish, offline, from the curated dictionary ------------------
+  //
+  // Section I proves the toolkit's own strings render in Spanish. This is the LESSON MATERIAL,
+  // which is different plumbing: the curated dictionary keys a section by its whole body
+  // (whitespace-collapsed) and the translation keeps its paragraph breaks. The first build split
+  // the English into paragraphs first, so every LP Lab body rendered in English under a Spanish
+  // heading — found by Codex on the APK, with the APIs refused so machine translation could not
+  // paper over it. Same conditions here: Spanish, every /api/** refused, the richest LP lesson.
+  {
+    const ES = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", "es.school.json"), "utf8"));
+    const CURRICULUM = require(path.join(ROOT, "data", "curriculum.json"));
+    const norm = (x) => String(x || "").replace(/\s+/g, " ").trim();
+    const lp = CURRICULUM.courses.find((c) => c.id === "lp").lessons
+      .map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
+      .sort((a, b) => b.chars - a.chars)[0].l;
+    const sec0 = lp.sections[0];
+    const curated = ES[norm(sec0.body)];
+
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+    await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!(window.CLKN_I18N && window.CLKN_I18N.dict && Object.keys(window.CLKN_I18N.dict).length > 100), null, { timeout: 20000 });
+    await page.evaluate((h) => { window.location.hash = h; }, `#/school/lp/${lp.id}`);
+    await page.waitForTimeout(600);
+
+    const got = await page.evaluate(() => {
+      const wrap = document.querySelector(".seeker-school-section-body");
+      return {
+        body: wrap ? wrap.innerText : "",
+        paras: wrap ? wrap.querySelectorAll("p").length : 0,
+        skipped: wrap ? wrap.getAttribute("data-i18n-skip") : null,
+        heading: ((document.querySelector(".seeker-school-section-h") || {}).innerText || "").trim(),
+      };
+    });
+    ok("P8 · the curated Spanish translation of this section exists (or the test proves nothing)", !!curated && curated.length > 200);
+    ok("P8 · the section heading renders in Spanish", got.heading && got.heading !== sec0.heading, JSON.stringify(got.heading));
+    ok("P8 · ⚠️ the section BODY renders in Spanish, offline — not the English under a Spanish heading",
+       norm(got.body) === norm(curated), JSON.stringify({ got: got.body.slice(0, 120), want: String(curated).slice(0, 120) }));
+    ok("P8 · and it is NOT the English body", norm(got.body) !== norm(sec0.body));
+    ok("P8 · the translation's paragraph breaks survived (more than one <p>)", got.paras > 1, String(got.paras));
+    ok("P8 · a curated block is marked data-i18n-skip so the observer never sends Spanish for machine translation", got.skipped === "1", String(got.skipped));
+    ok("P8 · nothing threw", errors.length === 0, errors.join(" | ").slice(0, 300));
+    await ctx.close();
+  }
+
+  // ---- P9: a lesson opened DIRECTLY, before the dictionary arrives, updates when it does ------
+  //
+  // P8 waited for the dictionary before navigating, which is exactly the case that hides this
+  // (Codex, PR #390 round 9). The real sequence on a deep link or a reload: the lesson renders
+  // first, tBlock() finds no dictionary and returns English, the English is split into
+  // paragraphs — and then the dictionary lands. Nothing used to tell the lesson. Worse, the old
+  // readiness hook gave up polling at 1.5 s, so a slow load was missed for good, and the page
+  // observer then machine-translated the English paragraphs it found. Here the dictionaries are
+  // held back for 2.5 s (past that old give-up), the lesson is the INITIAL url, and every API is
+  // refused. The lesson must be English first, then become the curated Spanish on its own.
+  {
+    const ES = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", "es.school.json"), "utf8"));
+    const CURRICULUM = require(path.join(ROOT, "data", "curriculum.json"));
+    const norm = (x) => String(x || "").replace(/\s+/g, " ").trim();
+    const lp = CURRICULUM.courses.find((c) => c.id === "lp").lessons
+      .map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
+      .sort((a, b) => b.chars - a.chars)[0].l;
+    const sec0 = lp.sections[0];
+    const curated = ES[norm(sec0.body)];
+    const DELAY_MS = 2500;
+
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+    // Hold the dictionaries back. Both files — the base pack and the school pack.
+    await page.route("**/i18n/es*.json", async (route) => { await new Promise((r) => setTimeout(r, DELAY_MS)); await route.continue(); });
+    const t0 = Date.now();
+    await page.goto(`${BASE}/index.html#/school/lp/${lp.id}`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!document.querySelector(".seeker-school-section-body"), null, { timeout: 20000 });
+    const early = await page.evaluate(() => ({
+      dict: !!window.CLKN_I18N,
+      body: (document.querySelector(".seeker-school-section-body") || {}).innerText || "",
+    }));
+    ok("P9 · the lesson renders BEFORE the dictionary arrives (the race is real, not simulated)", !early.dict && norm(early.body) === norm(sec0.body), { dict: early.dict, ms: Date.now() - t0, body: early.body.slice(0, 80) });
+
+    await page.waitForFunction(() => !!window.CLKN_I18N, null, { timeout: 20000 });
+    await page.waitForFunction((want) => {
+      const w = document.querySelector(".seeker-school-section-body");
+      return !!w && w.innerText.replace(/\s+/g, " ").trim() === want;
+    }, norm(curated), { timeout: 5000 }).catch(() => {});
+    const late = await page.evaluate(() => {
+      const w = document.querySelector(".seeker-school-section-body");
+      return { body: w ? w.innerText : "", skipped: w ? w.getAttribute("data-i18n-skip") : null, paras: w ? w.querySelectorAll("p").length : 0,
+               heading: ((document.querySelector(".seeker-school-section-h") || {}).innerText || "").trim() };
+    });
+    ok(`P9 · ⚠️ once the dictionary lands (${DELAY_MS} ms, past the old 1.5 s give-up) the lesson BODY becomes the curated Spanish on its own`,
+       norm(late.body) === norm(curated), { got: late.body.slice(0, 120), want: String(curated).slice(0, 120) });
+    ok("P9 · with its paragraph breaks", late.paras > 1, String(late.paras));
+    ok("P9 · marked data-i18n-skip so the observer never sends the Spanish for machine translation", late.skipped === "1", String(late.skipped));
+    ok("P9 · the heading followed too", late.heading && late.heading !== sec0.heading, late.heading);
+    ok("P9 · nothing threw", errors.length === 0, errors.join(" | ").slice(0, 300));
     await ctx.close();
   }
 

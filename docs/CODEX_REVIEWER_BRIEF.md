@@ -801,6 +801,207 @@ state (each round's harness was pinned to a specific pre-squash sha that no long
 
 Findings, not rewrites, same rule as every other round.
 
+## Round 10 — 2026-09-21: #390, the last P2 (a lesson opened before the dictionary stays English)
+
+Confirmed exactly as you described it, and my brief's "the app gates on `useI18nReady`" was
+false — the hook lived in the header and nav only, re-rendered only them, and stopped polling at
+1.5 s. Three changes, one test each:
+
+1. **`public/i18n.js` announces the dictionary**: `window.dispatchEvent(new CustomEvent("clkn:i18n-ready"))`
+   the moment `window.CLKN_I18N` is set. Website and shell share this file; the event is inert
+   anywhere nothing listens.
+2. **`useI18nReady()` is event-driven with no give-up**: the listener stays for the life of the
+   component; a 50 ms poll bounded to 3 s covers the race between the first render's check and
+   the listener attaching. Never a network call.
+3. **Every pane that renders its own strings subscribes**: the three school components, Daily,
+   and each tools pane. `<Pane>` already subscribed, but React does not re-render children it was
+   handed as props, so a wrapper's subscription never reached the pane's own `t()` calls.
+
+**Tests:** `seeker-app-boot-test` **P9** and (and, on #391's branch, `store-shell-boot-test` **G**) — Spanish, every
+`/api/**` refused, BOTH dictionary files held back 2.5 s (past the old give-up), the lesson is
+the INITIAL url. Asserted in order: the lesson is on screen in English while `window.CLKN_I18N`
+is still absent (the race is real, not simulated); then, with no navigation, the section body
+equals the curated `es.school.json` value, keeps its paragraphs, is `data-i18n-skip`, and the
+heading followed. P8 (dictionary first) stays as the steady-state case.
+
+Look hardest at: the 3 s poll bound (is there a path where the event fires before the listener
+attaches AND after the poll stops? — the event is dispatched synchronously after the fetch
+resolves, which is always after the first render's effect has attached the listener, but say if
+you see one), and whether any pane still renders `t()` without subscribing (grep
+`useI18nReady()` per file under `src/seeker`).
+
+## Round 8 — 2026-09-21: PR #390, your three remaining P2s on `19afe6b`
+
+Still held. All three confirmed against the data first; the first one was my own "check every
+form" trap — my earlier check for section bodies in the dictionary was an EXACT match (2/125);
+normalised the way `i18n.js` stores keys it is 107/125, and I had split the English before
+looking anything up.
+
+| # | Your finding | What changed |
+|---|---|---|
+| 1 | LP/Deep Dive bodies still English offline — paragraphs looked up, dictionary keyed by whole section | `tBlock()` in `src/seeker/i18n.js`: collapse whitespace, look up the WHOLE body, return the curated value (which keeps its `\n\n`), THEN `Prose()` splits it. A curated hit is marked `data-i18n-skip` so the observer never sends Spanish for machine translation. Applies to `sections[].body` and `content`. |
+| 2 | `cluckBrief()`'s fallback returns the raw summary with `%/day fee yield` — the prompt cannot protect it | The fee ratio is **gone from the summary entirely** (hot-pools suffix and the picks line). Your "simpler choice". Both paths now carry the same words because the word is not there. `/api/alpha`'s payload and the scanner's own pages (`/lp-scanner`, `/alpha`) are unchanged — noted for the owner below. |
+| 3 | The relabel said "last 24h fees" for `feeYield7dPctDay`, a seven-day average | Moot by #2 — the figure and its label are both removed. |
+
+**Tests:** `ai-prompt-claims-test.cjs` now scopes `alphaDataSummary()` + `cluckBrief()` and refuses
+`%/day`, `yield`, `blue-chip`, `picks`, `last 24h fees` in EMITTED strings (comments excluded),
+and requires the prompt's yield prohibition. `seeker-app-boot-test.cjs` gained **P7** (the
+threshold at its edge: `basics/wallet`, 3 questions, need 2 — one right fails, two right passes)
+and **P8** (Spanish, every `/api/**` refused, the richest LP lesson: the section body on screen
+equals the curated `es.school.json` value normalised, is not the English, keeps >1 paragraph, and
+the wrapper is `data-i18n-skip`).
+
+**Your notes, acted on:** the disclosure is on the school HOME now, under the progress bar, not
+only the finished state. Your fourth design (authenticated claim against the original app
+session, no transfer, no merge) is in `docs/SEEKER_TRANSCRIPT_HANDOFF.md` as the one to evaluate
+first — I agree it is not a bearer credential. The bare-id ledger conflation is written up there
+as a must-settle before the app feeds diploma credit (under-credits today, never over-credits).
+
+**Not done, for the owner:** `public/alpha.html` still renders `%/d` beside hot pools and an LP
+"picks" table from the same `/api/alpha` payload. That is a website page with the exact claim
+problem this round removed from the brief; it is outside this PR and it is the next truth-pass
+item.
+
+**Where to look hardest:** whether `data-i18n-skip` on the wrapper could ever hide a
+NON-translated block from the observer (it is set only on a curated hit).
+
+**Correction (round 10):** I wrote here that "the app gates on `useI18nReady`". It did not —
+the hook was called by the header and the nav only, and it gave up polling at 1.5 s. Codex's
+round-9 finding (a lesson opened directly stays English) was right and the statement above was
+wrong. Fixed in round 10 below.
+
+## Round 7 — 2026-09-21: PR #390, the fix round for YOUR seven findings
+
+**The owner held #390 on your review, and it stays held until you have looked at this.** Every
+finding was confirmed against the data before anything was changed — none was argued with. All
+seven are addressed; one of them (the transcript handoff) is addressed by telling the truth rather
+than by building the feature, and that is deliberate and explained.
+
+| # | Your finding | What changed | Where |
+|---|---|---|---|
+| 1 | P1 — every quiz had no answer buttons | `mapQuestions` in the extractor now carries `options` / `correct` / `explanation` beside the classroom's `q`/`answer`/`why`. `data/curriculum.json` regenerated; 200/200 questions answerable. Exposure note: `answer` already carried the correct option's text, and the file is required server-side, not served. | `scripts/extract-curriculum.js`, `data/curriculum.json` |
+| 2 | P1 — LP Lab and Deep Dive lost their bodies (`sections` discarded) | The model carries `sections`, `content`, `tagline`, `verdict`; the reader renders them OPEN (not accordions — on a phone a collapsed section is a lesson nobody reads). | `src/seeker/school/curriculum.js`, `School.jsx`, `school.css` |
+| 3 | P1 — finishing `basics/dex` credited `fundamentals/dex` | Local progress is keyed by a COURSE-SCOPED `key` (`course:lesson`) everywhere. The LEDGER BEACON deliberately keeps the BARE lesson id — that is the id space the website has always written. Two id spaces, on purpose, documented in the file header. | `curriculum.js`, `School.jsx` `beaconId()` |
+| 4 | P2 — all-wrong answers passed | `passMark(n) = Math.ceil(n * 2/3)`, the website's own rule copied not invented. A miss shows the score, what was needed, and a retake; it writes NO local mark and sends NO completion beacon. | `curriculum.js`, `School.jsx` `advance()` |
+| 5 | P2 — the school dictionary never loaded (pathname vs hash) | The shell DECLARES its packs: `<html data-i18n-packs="school">` on `seeker.html`; `i18n.js` reads the attribute (whitelisted charset) beside its existing pathname rule. Declared, not hash-sniffed, because the app boots at `#/` and redirects after i18n.js has already run. NOT a blanket load — `<lang>.school.json` is ~1MB/356KB gz and the website's homepage must not pay it. The website's own client-nav gap (land on `/`, navigate to `/school`) is pre-existing and is stated in the comment as unfixed. | `seeker.html`, `public/i18n.js` |
+| 6 | P2 — "Claim your transcript on the website" was not true | **Not built.** Every handoff design puts a bearer credential (the sid, or a code minted from it) in front of a treasury-paid mint, and the ledger's live-spread check has to be re-derived for a merged session. That is an owner decision under PLAN ≠ EXECUTE. The copy now says what is true, in seven languages, and the decision is written up with three concrete designs and what each costs. | `School.jsx`, `docs/SEEKER_TRANSCRIPT_HANDOFF.md` |
+| 7 | P2 — `payload.brief` re-imported the LP picks | The pane no longer renders `brief` at all. AND the `cluckBrief()` system prompt in `server.js` no longer asks for "our blue-chip LP yield picks" — it forbids blue-chip/safe/pick language and forbids rendering a fee ratio as a yield or return. That prompt also feeds the public daily Telegram/X post, so leaving it would have meant the brand still said it every day. The `/api/alpha` payload is unchanged. | `DailyBrief.jsx`, `tools.css`, `server.js` ~5115–5124 |
+
+**The missing test you named now exists — `seeker-app-boot-test.cjs` section P**, the learner
+journey: open the richest LP Lab lesson and assert its headings and >2000 chars of body render;
+mark a Deep Dive lesson read; open `basics/dex` (chosen because the id is duplicated), answer
+every question WRONG and assert no pass, no local mark, no ledger beacon; retake answering every
+question RIGHT from the curriculum's own `correct` index and assert pass, the course-scoped local
+key, the bare-id beacon; then assert `basics 1/7` and `fundamentals 0/16`. The whole journey runs
+with every `/api/**` refused, so it also proves the offline claim. **Mutation-proved:** each of the
+four bugs was reintroduced in isolation and the test failed on the right assertion each time
+(P5 printed `fundamentals 1 / 16`, P1 printed `0 of 6`, P3 timed out on a missing option, P3
+reported the false pass). Commit message has the list.
+
+### Where to look hardest
+
+- `School.jsx` `advance()` / `complete()` / the `useEffect` that resets quiz state on a route
+  change. A deep link from the Daily pane into a lesson while another is open must not inherit
+  the previous quiz's `score`.
+- `public/i18n.js` — the attribute path. It is our own markup, but it becomes a URL; the regex
+  is the only guard.
+- `server.js` `cluckBrief` — read the whole prompt, not the diff. Does anything in it still let
+  the model rank or endorse a pool? The data summary line still carries `%/day` as a number; the
+  instruction says never to present it as a return. Is that enough, or should the number go?
+- The eight new dictionary strings (six languages) — placeholder integrity was checked by
+  script; the wording is mine. The two retired keys were removed from all six files with every
+  other byte untouched.
+
+### What was NOT done, and why
+
+- No sid handoff (above). If the owner wants it, the third design in the doc is the one to build.
+- The website's own client-navigation dictionary gap (a pre-existing bug this review surfaced by
+  analogy) is documented in `i18n.js`, not fixed — it needs a lazy merge plus a re-walk of nodes
+  already machine-translated, which is more than a held PR should carry.
+- `/tools/alpha` is still the Daily route's path and the catch-all `*` still lands on `/tools`
+  rather than `/school`. Both are cosmetic and untouched here.
+
+## Round 6 — 2026-09-21: PR #390, the Seeker app on real hardware
+
+**The owner asked for you on this one specifically**, before it merges. It is the first batch
+written after the app ran on his actual Seeker — wallet connect and MWA signing work, which
+closes the oldest "never verified end-to-end" item in AGENTS.md.
+
+PR #390 is large but only two parts need a careful reviewer. The rest is copy and wiring.
+
+### ⚠️ Priority 1 — `src/track.js`: the graduation ledger's only input is now shared
+
+Extracted verbatim out of `src/App.jsx` so the new phone school and the desktop school use one
+implementation. The reason it had to be shared rather than copied: **two copies means two queues,
+two session ids, and lesson marks landing in one and not the other — in front of a treasury-paid
+diploma.**
+
+That code carries incident history including **your own fix on #333** (clearing the queue up front
+lost every entry if the tab closed mid-flight). I moved it without changing its logic. Please check:
+
+- Is the extraction genuinely behaviour-identical? `api` is now imported from `edition.js` rather
+  than closed over in `App.jsx`.
+- **The bit I most expect to be wrong:** the module runs
+  `window.addEventListener("online", flushTrackQueue)` and `setTimeout(flushTrackQueue, 1500)` at
+  import time. Two entry points now import it (`src/App.jsx`, `src/seeker/school/School.jsx`). In
+  the bundles they are separate builds, so it should be once each — but is there any path where one
+  build registers twice, and would a double flush hurt? (I believe not: the server keeps the first
+  sighting, and overlapping flushes are explicitly allowed. Confirm or shoot it down.)
+- `beaconId()` in `School.jsx` must produce the same shape as `trackId()` in `App.jsx`, or a lesson
+  passed on the phone lands on a different ledger row than the same lesson passed on the web.
+
+### ⚠️ Priority 1 — two tests were DEFENDING the bug
+
+`seeker-build-test` asserted the default route redirects to `#/tools`; the boot test asserted four
+nav tabs landing on the Toolkit. Both passed happily against an app **with no school in it at
+all** — the scope doc enumerated fifteen tools, the app was built to it exactly, and the tests
+agreed with the scope doc. The owner found the gap by opening the app on his phone.
+
+The general form is now in AGENTS.md: *a test that encodes a scope doc will defend that scope
+doc's blind spot.* **Worth your eye: are there others?** The same shape would hide anywhere a test
+asserts "the app has exactly N of X" where N came from a planning document rather than from a
+product decision.
+
+### Priority 2 — `lib/explain-findings.js` (payload layer for contextual Ask Cluck)
+
+Not wired to a UI yet; the endpoint and consent sheet are the next PR. It exists so "Explain this
+result" can send a tool's findings to the tutor **without sending the screen's text**, because
+token names are attacker-controlled and an LLM prompt turns that from an XSS class into a prompt
+injection class.
+
+Only finding CODES and COUNTS cross; the server renders English from its own table. The validator
+is the entire defence — `scripts/explain-findings-test.cjs` attacks it (extra keys carrying free
+text, prompts smuggled as codes, `__proto__`/`constructor`/`toString`, malformed counts,
+duplicates used to weight the prompt). **Try to get a string through it that I did not think of.**
+
+Also worth your opinion as a design call: I deliberately departed from the owner's brief, which
+asked for "the exact displayed findings". The cost is that an explanation cannot name a specific
+token. Is that the right trade?
+
+### Priority 3 — claims, and the Daily rebuild
+
+Five surfaces carried claims the code cannot support, found from one owner catch (Firepit's "a
+value guard **stops you** burning anything still worth money"). The others: Launches "read
+straight off the chain" (it is the Bags API), X-Ray's "behavioral signals … straight off the
+chain" (AGENTS.md calls it an activity scanner that undercounts), the **Ask Cluck system prompt**
+listing X-Ray/Holders/Trace as "FREE TOOLS (no wallet connect)" while describing the pass
+correctly further down the same prompt, and the Telegram `/walletxray` help saying "every trade".
+`scripts/ai-prompt-claims-test.cjs` pins it.
+
+The Daily pane was rebuilt after the owner asked what I thought of it: it had a section headed
+"Blue-chip LP picks" with a `%/day` yield, two tabs from an LP Lab that teaches impermanent loss
+and that fee APR is not return. Now it is today's lesson + one question + majors. **The daily
+check deliberately sends no beacon** — a one-tap answer must never reach the graduation ledger.
+
+### What is NOT in this PR, so you do not look for it
+
+The MWA native plugin, the Android CI and the `seeker-dev` unpinned build path are all in
+`clucknorrisapp/CLKN-SEEKER` on `claude/seeker-integration`. Notable there if you have appetite:
+`npm run build:seeker` could never have succeeded — the seeker variant inherited the
+education-only content scan, which forbids the wallet-connect and signing the Seeker edition
+legitimately ships. Measured against a real tarball: five hits. It would have refused its own
+correct artifact on release-tag night.
+
 ## Open questions the owner would like your opinion on
 - Is lock-to-earn on Jupiter Lock the right headline mechanism for a Consumer Apps entry, or is
   the read-only engine dashboard a stronger single story?

@@ -2515,7 +2515,7 @@ function tgCommandReply(cmd, arg) {
     case "dex":
       return `📊 <b>CLKN on DexScreener</b>\nhttps://${CLKN_DEXSCREENER}`;
     case "walletxray":
-      return `🩻 <b>Wallet X-Ray</b> — full wallet deep dive: funding origin, every trade, bot/dumper signals\n${link("/wallet-xray", "wallet")}` + (addr ? "" : "\n\nTip: <code>/walletxray &lt;wallet&gt;</code> pre-fills a wallet.");
+      return `🩻 <b>Wallet X-Ray</b> — wallet deep dive: funding origin and the activity the scan can find\n${link("/wallet-xray", "wallet")}` + (addr ? "" : "\n\nTip: <code>/walletxray &lt;wallet&gt;</code> pre-fills a wallet.");
     case "autopsy":
       return `🪦 <b>Token Autopsy</b> — deep forensic breakdown\n${link("/autopsy", "mint")}` + (addr ? "" : "\n\nTip: <code>/autopsy &lt;mint&gt;</code>.");
     case "trace":
@@ -5110,9 +5110,17 @@ function alphaDataSummary(d) {
   if (d.trending.length) lines.push("TRENDING ON SOLANA (GeckoTerminal): " + d.trending.map((t) => `${t.sym}${t.chg != null ? " " + pct(t.chg) : ""}`).join(", "));
   if (d.gainers.length) lines.push("TOP SOLANA MOVERS ↑ (24h): " + d.gainers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
   if (d.losers.length) lines.push("TOP SOLANA MOVERS ↓ (24h): " + d.losers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
-  if (d.hotPools.length) lines.push("HOTTEST SOLANA POOLS (by volume): " + d.hotPools.map((p) => `${p.pair} on ${p.dex} ($${Math.round(p.vol / 1000)}K 24h vol${p.yieldPct != null ? ", " + p.yieldPct + "%/day fee yield" : ""}${p.risk === "high" ? ", HIGH IL risk" : ""})`).join("; "));
+  // ⚠️ NO FEE-RATIO FIGURE IN THE BRIEF, in either the hot-pools line or the (deleted) "picks"
+  // line. Three reasons, each found separately: "blue-chip"/"picks" is a verdict and a
+  // recommendation (AGENTS.md forbids both); the preferred figure is feeYield7dPctDay — a
+  // SEVEN-DAY average — and the first relabel called it "last 24h", which was simply wrong
+  // (Codex, PR #390); and the prompt cannot protect the FALLBACK path — cluckBrief() returns this
+  // raw summary when the AI call fails, so an instruction to the model never reaches the reader
+  // there. The only wording that survives both paths is the wording that is not here. The
+  // scanner's own pages (/lp-scanner, /alpha) still carry the figure with its period; this is
+  // the brand's daily post and it does not.
+  if (d.hotPools.length) lines.push("BUSIEST SOLANA POOLS (by 24h volume): " + d.hotPools.map((p) => `${p.pair} on ${p.dex} ($${Math.round(p.vol / 1000)}K 24h vol${p.risk === "high" ? ", HIGH IL risk" : ""})`).join("; "));
   if (d.newPools.length) lines.push("BRAND-NEW SOLANA POOLS: " + d.newPools.map((p) => `${tgEsc(p.name)} ($${Math.round(p.vol / 1000)}K vol, $${Math.round(p.liq / 1000)}K liq, ${p.ageH}h old)`).join("; "));
-  if (d.lpPicks.length) lines.push("BLUE-CHIP LP YIELD (our scanner, fees/TVL): " + d.lpPicks.map((p) => `${p.pair} on ${p.dex} ${p.yieldPct}%/day`).join(", "));
   return lines.join("\n");
 }
 async function cluckBrief(d) {
@@ -5124,9 +5132,9 @@ STYLE: punchy, confident, funny, a chicken pun or two, but genuinely informative
 🌡️ THE MOOD — read the majors (BTC/ETH/SOL) in one or two lines.
 🔥 WHAT'S HOT — trending coins + the standout 24h gainers; note if a gainer looks like a pump.
 🌶️ FRESH OFF THE GRILL — the brand-new Solana pools; remind them new pools are high rug risk.
-💧 WHERE THE FEES ARE — the hottest Solana pools and our blue-chip LP yield picks (fee yield = the real LP money metric, not volume).
+💧 WHERE THE ACTION IS — the busiest Solana pools by volume, as plain observation of what already traded. NEVER call a pool or token blue-chip, safe, solid or quality, never present any pool as a pick or a recommendation, and never quote, estimate or imply a yield, a return, an APR or anything anyone will earn — you have no fee data, and this school teaches that volume is not income.
 🎓 CLUCK'S LESSON — one sharp educational takeaway tied to today's data.
-RULES: Never tell anyone to buy/sell or predict prices. Flag risk honestly (memecoins/new pools can go to zero). No markdown asterisks or headers (#). Write tickers plain (BONK, not $BONK) — never put a $ before a ticker. Keep the whole thing under ~320 words. End with: "Not financial advice — now go do your homework. 🐔"`;
+RULES: Never tell anyone to buy/sell or predict prices. Never recommend, rank or endorse a token or pool, and never promise or imply a return. Flag risk honestly (memecoins/new pools can go to zero). No markdown asterisks or headers (#). Write tickers plain (BONK, not $BONK) — never put a $ before a ticker. Keep the whole thing under ~320 words. End with: "Not financial advice — now go do your homework. 🐔"`;
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -15326,12 +15334,26 @@ THE LP LAB (its own tab, not inside the Library):
 - Interactive calculators throughout: impermanent loss, AMM price impact, fee-vs-IL breakeven, capital efficiency, bin visualizer, DCA accumulation, LP-vs-HODL, strategy matcher
 - Shareable directly at clucknorris.app/lp-lab
 
-FREE TOOLS (all read-only, no wallet connect):
-- Wallet X-Ray -- any wallet's funding origin, every trade, and behavior signals
-- Holders -- who really holds a token: real wallets separated from LP pools, locks and program accounts, plus an airdrop-ready CSV
-- Trace -- one wallet's full history with one token
+FREE FOR EVERYONE -- no wallet, no signup:
 - Wallet Checkup -- scan any address for risky approvals, honeypot holdings and live mint/freeze authority, and revoke your own approvals right there (Security Coop merged into it)
 - The Jup Locker Room -- free non-custodial token locking for any Solana project
+- Ask Cluck (this conversation), the whole school, and the Library
+
+HEAVY TOOLS -- these need a CONNECTED WALLET and the unified tools pass (see CLKN TOKEN UTILITY
+below for the terms). Do NOT tell anyone these are free with no wallet; that was true before
+2026-08-18 and is not true now:
+- Wallet X-Ray -- a wallet's funding origin and the activity the scan can find
+- Holders -- who really holds a token: real wallets separated from LP pools, locks and program accounts, plus an airdrop-ready CSV
+- Trace -- one wallet's history with one token
+- The airdropper and Buy Special
+
+HONESTY ABOUT WHAT THESE TOOLS SEE -- this matters more than sounding impressive:
+- X-Ray and Trace are ACTIVITY SCANNERS. They can miss holdings and they do not see everything.
+  Never claim X-Ray sees all of a wallet's trades, or a complete balance -- it does not, and
+  people have been given wrong numbers by assuming it does.
+- The chain shows WHAT happened, never WHY. Report authorities, balances, approvals and lock
+  terms as facts. Never label a token safe, verified, a scam or a rug, and only call a wallet
+  "creator" or "team" when a launchpad API confirms it.
 
 NAVIGATION HELP -- HOW TO DIRECT PEOPLE:
 - Complete beginner? -> Start in the INCUBATOR tab

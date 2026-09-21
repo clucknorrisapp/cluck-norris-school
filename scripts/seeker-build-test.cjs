@@ -590,12 +590,18 @@ async function renderedCheck(pw) {
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle", timeout: 20000 });
     await page.waitForFunction(() => !!(window.CluckWallet && document.querySelector(".seeker-nav")), null, { timeout: 15000 });
 
-    // The toolkit grid is the app's front door now (docs/SEEKER_TOOLS_BUILD.md — owner, 2026-09-21:
-    // "build all the tools into the seeker app appropriately"), with four bottom-nav tabs
-    // (Toolkit, Rent, Ask, Checkup) instead of the original three landing on Rent Reclaim.
-    ok("rendered: default route redirects to #/tools (the toolkit grid, the new front door)", (await page.evaluate(() => location.hash)) === "#/tools");
+    // ⚠️ THE SCHOOL IS THE FRONT DOOR. This assertion previously pinned #/tools, and pinning it
+    // is how the app shipped with no school in it at all: the build scope doc listed fifteen
+    // TOOLS, the toolkit became the whole app, and the test agreed with it. The owner found that
+    // on his Seeker ("where is the whole school? that is the whole major part of the app").
+    // AGENTS.md now records the flagship list, school first. Do not move this back to #/tools
+    // without an owner decision that says so.
+    ok("rendered: default route redirects to #/school (the school leads, AGENTS.md flagships)",
+       (await page.evaluate(() => location.hash)) === "#/school");
     const navCount = await page.locator(".seeker-navbtn").count();
-    ok("rendered: four bottom-nav tabs", navCount === 4, navCount);
+    ok("rendered: five bottom-nav tabs, School first", navCount === 5, navCount);
+    const firstTab = await page.locator(".seeker-navbtn").first().getAttribute("href");
+    ok("rendered: the FIRST nav tab is the school", /#\/school$/.test(String(firstTab)), firstTab);
     const boxes = await page.locator(".seeker-navbtn").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()));
     ok("rendered: every nav tab is actually >=44x44 on screen", boxes.every((b) => b.width >= 44 && b.height >= 44), JSON.stringify(boxes));
     const walletBox = await page.locator(".seeker-walletbtn").boundingBox();

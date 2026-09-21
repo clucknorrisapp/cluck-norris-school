@@ -25,8 +25,8 @@ import RentReclaimPane from "./RentReclaim.jsx";
 import AskCluckPane from "./AskCluck.jsx";
 import WalletCheckupPane from "./WalletCheckup.jsx";
 import ToolsHome from "./ToolsHome.jsx";
+import { SchoolHome, SchoolCourse, SchoolLesson } from "./school/School.jsx";
 import ListingCheckup from "./tools/ListingCheckup.jsx";
-import Launches from "./tools/Launches.jsx";
 import DailyBrief from "./tools/DailyBrief.jsx";
 import Firepit from "./tools/Firepit.jsx";
 import ProjectBurn from "./tools/ProjectBurn.jsx";
@@ -115,7 +115,11 @@ function Header({ wallet }) {
   );
 }
 
+// ⚠️ THE SCHOOL LEADS. AGENTS.md records the owner's flagship list — "the school, the LP lab,
+// the airdropper, the locker room, the fire pit, project burn" — and the school is first. The app
+// shipped landing on /tools with no school in it at all; do not put the toolkit back in front.
 const TABS = [
+  { to: "/school", label: "School", icon: "🎓" },
   { to: "/tools", label: "Toolkit", icon: "🧰" },
   { to: "/rent", label: "Rent", icon: "💰" },
   { to: "/ask", label: "Ask", icon: "🐔" },
@@ -130,7 +134,7 @@ function BottomNav() {
         <NavLink
           key={tab.to}
           to={tab.to}
-          end={tab.to === "/tools"}
+          end={tab.to === "/tools" || tab.to === "/school"}
           className={({ isActive }) => "seeker-navbtn" + (isActive ? " active" : "")}
         >
           <span className="seeker-navicon" aria-hidden="true">{tab.icon}</span>
@@ -149,13 +153,15 @@ export default function App() {
         <Header wallet={wallet} />
         <main className="seeker-main">
           <Routes>
-            <Route path="/" element={<Navigate to="/tools" replace />} />
+            <Route path="/" element={<Navigate to="/school" replace />} />
+            <Route path="/school" element={<SchoolHome />} />
+            <Route path="/school/:courseId" element={<SchoolCourse />} />
+            <Route path="/school/:courseId/:lessonId" element={<SchoolLesson />} />
             <Route path="/tools" element={<ToolsHome />} />
             <Route path="/rent" element={<RentReclaimPane wallet={wallet} />} />
             <Route path="/ask" element={<AskCluckPane />} />
             <Route path="/checkup" element={<WalletCheckupPane wallet={wallet} />} />
             <Route path="/tools/listing" element={<ListingCheckup />} />
-            <Route path="/tools/bags" element={<Launches />} />
             <Route path="/tools/alpha" element={<DailyBrief />} />
             <Route path="/tools/firepit" element={<Firepit wallet={wallet} />} />
             <Route path="/tools/burn" element={<ProjectBurn wallet={wallet} />} />

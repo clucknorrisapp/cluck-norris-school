@@ -12,6 +12,12 @@
 //              ⛔ The amount is NEVER hardcoded anywhere — it renders from /api/tool-gate/config.
 //   "paid"   — priced per use; the figure is computed live by its own config endpoint.
 //
+// `flagship` is the owner's list, 2026-09-21: "the school, the LP lab, the airdropper, the
+// locker room, the fire pit, project burn". The school and the LP Lab live in the school section,
+// so four of the six are tools — and those four lead the grid regardless of their access tier.
+// Grouping by tier alone answered "what does this cost" before "where do I start", which is the
+// question a new user actually has.
+//
 // `ready` is honest status, not aspiration: the grid shows an unbuilt tool as coming rather than
 // routing to a blank pane. Flip it in the same commit that lands the pane.
 export const TOOLS = [
@@ -21,25 +27,23 @@ export const TOOLS = [
     blurb: "Ask anything about crypto in plain words. Free, no wallet, no signup." },
   { id: "checkup",    route: "/checkup",          title: "Wallet Checkup",  icon: "🛡", tier: "free",   ready: true,
     blurb: "Approvals, freeze and mint authority, and what each one actually lets someone do." },
-  { id: "firepit",    route: "/tools/firepit",    title: "Firepit",         icon: "🔥", tier: "wallet", ready: true ,
-    blurb: "Burn worthless junk and reclaim the SOL rent underneath it. A live value guard stops you torching anything still worth money." },
-  { id: "lock",       route: "/tools/lock",       title: "Locker Room",     icon: "🔒", tier: "wallet", ready: true ,
+  { id: "firepit",    route: "/tools/firepit",    title: "Firepit",         icon: "🔥", tier: "wallet", ready: true, flagship: true ,
+    blurb: "Burn worthless junk and reclaim the SOL rent underneath it. Every token is priced first, and anything with value — or that we could not price — is flagged before it can burn." },
+  { id: "lock",       route: "/tools/lock",       title: "Locker Room",     icon: "🔒", tier: "wallet", ready: true, flagship: true ,
     blurb: "Lock tokens on Jupiter Lock, non-custodially, and get public proof you did." },
-  { id: "burn",       route: "/tools/burn",       title: "Project Burn",    icon: "🕯", tier: "wallet", ready: true ,
+  { id: "burn",       route: "/tools/burn",       title: "Project Burn",    icon: "🕯", tier: "wallet", ready: true, flagship: true ,
     blurb: "Burn project supply and get a verifiable receipt for it." },
   { id: "listing",    route: "/tools/listing",    title: "Listing Checkup", icon: "📋", tier: "free",   ready: true,
-    blurb: "What a listing venue will check before it lists a token — run it on yours first." },
-  { id: "bags",       route: "/tools/bags",       title: "Launches",        icon: "🎒", tier: "free",   ready: true,
-    blurb: "Live launches and graduations, read straight off the chain." },
-  { id: "alpha",      route: "/tools/alpha",      title: "Daily Brief",     icon: "📰", tier: "free",   ready: true,
-    blurb: "The flock's read on Solana today: the mood, what's moving, where the fees are." },
+    blurb: "The checks listing venues commonly run on a token — run them on yours first." },
+  { id: "alpha",      route: "/tools/alpha",      title: "Daily",           icon: "📅", tier: "free",   ready: true,
+    blurb: "Today's lesson, one question, and where the majors closed. A reason to come back." },
   { id: "xray",       route: "/tools/xray",       title: "Wallet X-Ray",    icon: "🔎", tier: "pass",   ready: true ,
     blurb: "Follow what a wallet actually did — funding, flows and counterparties." },
   { id: "holders",    route: "/tools/holders",    title: "Holders",         icon: "👥", tier: "pass",   ready: true ,
     blurb: "Who holds a token, how concentrated it is, and how that changed." },
   { id: "trace",      route: "/tools/trace",      title: "Trace",           icon: "🧭", tier: "pass",   ready: true ,
     blurb: "Follow the money between wallets, hop by hop." },
-  { id: "airdrop",    route: "/tools/airdrop",    title: "Airdropper",      icon: "🪂", tier: "pass",   ready: true ,
+  { id: "airdrop",    route: "/tools/airdrop",    title: "Airdropper",      icon: "🪂", tier: "pass",   ready: true, flagship: true ,
     blurb: "Send a token to many wallets at once, with a receipt for every row." },
   { id: "buyspecial", route: "/tools/buyspecial", title: "Buy Special",     icon: "🎯", tier: "pass",   ready: true ,
     blurb: "Run a buy competition with standings anyone can check." },

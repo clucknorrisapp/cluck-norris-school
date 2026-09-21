@@ -29,7 +29,7 @@
 // safe/scam label. A holder is only ever called "creator"/"team" when `bagsTeam` is true — a
 // BAGS-CONFIRMED launchpad fact (CLAUDE.md's recorded rule), never inferred from balance size.
 import React from "react";
-import { t } from "../i18n.js";
+import { t, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, useOnline } from "../pane.jsx";
 import { usePass } from "../pass.js";
 import { PassGate, gatedToolFetch } from "../passgate.jsx";
@@ -81,6 +81,9 @@ function HolderRow({ h, rank, decimals, mint }) {
 }
 
 export default function HoldersPane({ wallet }) {
+  // Re-render when the dictionary lands. <Pane> subscribes too, but React does not re-render
+  // children it was handed as props, so this pane's own t() strings need their own subscription.
+  useI18nReady();
   const online = useOnline();
   const pass = usePass();
   const [input, setInput] = React.useState("");
