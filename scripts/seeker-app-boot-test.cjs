@@ -168,7 +168,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
 
     for (const [hash, want] of [["#/ask", /Ask Cluck/i], ["#/checkup", /Wallet Checkup/i], ["#/rent", /Rent Reclaim/i],
                                 ["#/tools/listing", /Listing Checkup/i],
-                                ["#/tools/alpha", /Daily Brief/i], ["#/tools", /Toolkit/i],
+                                ["#/tools/alpha", /Today's lesson|Daily/i], ["#/tools", /Toolkit/i],
                                 ["#/school", /School of Crypto Hard Knocks/i]]) {
       await page.evaluate((h) => { window.location.hash = h; }, hash);
       await page.waitForTimeout(250);

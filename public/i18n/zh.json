@@ -2807,5 +2807,15 @@
   "The tools, built for this phone. The lessons are in the School tab.": "为这台手机打造的工具。课程在「学校」标签页里。",
   "You missed some on the way — the explanations are worth a second read.": "中途错了几题——解释值得再读一遍。",
   "You've finished every lesson in the app. Claim your transcript on the website.": "你已完成应用内的所有课程。请到网站领取你的成绩单。",
-  "Your progress": "你的进度"
+  "Your progress": "你的进度",
+  "Day {n} in a row.": "连续第 {n} 天。",
+  "No prices in today's read.": "今天的解读里没有价格。",
+  "One lesson and one question a day, plus where the majors closed. Free, no wallet needed.": "每天一课、一题，外加主流币的收盘情况。免费，无需钱包。",
+  "Prices and commentary, not advice. Nothing here is a recommendation to buy, sell or provide liquidity.": "价格与评论，并非建议。此处没有任何内容是买入、卖出或提供流动性的推荐。",
+  "Read the full lesson": "阅读完整课程",
+  "Reading the tape…": "正在读盘…",
+  "Today's check": "今天的小测",
+  "Today's lesson": "今天的课",
+  "Today's lesson, one question, and where the majors closed. A reason to come back.": "今天的课、一道题，以及主流币的收盘情况。一个回来的理由。",
+  "You've already done today's check. Here it is again — it won't change your streak.": "你今天已经做过小测了。这里再放一次——不会改变你的连续天数。"
 }

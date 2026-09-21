@@ -923,3 +923,18 @@
 .seeker-drop-unconfirmed p { margin: 0 0 6px; }
 .seeker-drop-unconfirmed p:last-child { margin-bottom: 0; }
 
+
+/* ── The Daily pane's school half ────────────────────────────────────────────────────────────
+   It reuses the school's question and option classes on purpose: the daily check IS a school
+   question, and giving it a second look would make it feel like a different product. Only the
+   three things that differ live here. */
+.seeker-daily-lesson { margin-bottom: 14px; }
+.seeker-daily-q { font-size: 16px; margin-top: 4px; }
+.seeker-daily-streak {
+  font-family: var(--disp);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 12px;
+}

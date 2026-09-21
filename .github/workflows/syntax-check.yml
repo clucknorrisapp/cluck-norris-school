@@ -790,6 +790,10 @@ jobs:
       # class. This attacks the validator that is the whole defence.
       - name: Explain-this-result payload cannot carry free text to the model
         run: node scripts/explain-findings-test.cjs
+      # The Daily pane's value is that "today's lesson" means the same thing for everyone. A
+      # local-time rollover or a streak that survives a gap would break that invisibly.
+      - name: Daily rotation is UTC, shared, and never beacons the ledger
+        run: node scripts/daily-rotation-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)
         run: node scripts/jvp-dashboard-test.cjs
       # Listing Checkup routes: validation, the offline run → cache → share page with every
