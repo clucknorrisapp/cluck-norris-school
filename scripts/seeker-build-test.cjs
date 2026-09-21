@@ -77,7 +77,9 @@ const WALLET_ONLY_KEYS = SEEKER_KEYS.filter((k) => !EDU_KEYS.has(k));
 // ("Disconnect") is deliberately NOT in here — it appears legitimately in shared code; these do
 // not. "seeker-edition" / "src/seeker" are gone from this list: since v1.1.0 the education
 // bundle is built from src/seeker, and its chunk is named after seeker.html.
-const SEEKER_MARKERS = ["Rent Reclaim", "CluckMWA", "Connect Wallet", "Locker Room", "Firepit"];
+// ⚠️ Not "Locker Room" or "Firepit": both are website pages the shared dictionaries and the
+// curriculum name legitimately ("lock your own tokens free at the Locker Room" is lesson copy).
+const SEEKER_MARKERS = ["Rent Reclaim", "CluckMWA", "Connect Wallet", "Disconnect wallet", "reclaim-sign"];
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
   if (cond) { pass++; console.log("  ✓ " + name); }
@@ -247,8 +249,14 @@ function buildVariant(cwd, variant) {
     let base;
     try { base = buildVariant(baseline, variant); }
     catch (e) { ok(`${variant}: pristine origin/develop build also succeeds`, false, (e && e.stack) || String(e)); continue; }
-    for (const field of ["variant", "apiBase", "topDir", "stripComponents"]) {
+    // topDir is `store-edition-<variant>-<version>`, so it moves with every version bump (1.0.3 →
+    // 1.1.0 here); it is checked against THIS tree's config below, not against the baseline.
+    for (const field of ["variant", "apiBase", "stripComponents"]) {
       ok(`${variant}: manifest.${field} matches the pristine build`, JSON.stringify(here[field]) === JSON.stringify(base[field]), `here=${here[field]} base=${base[field]}`);
+    }
+    {
+      const cfgNow = JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "store-edition.json"), "utf8"));
+      ok(`${variant}: manifest.topDir names this tree's version (${cfgNow.version})`, here.topDir === `store-edition-${variant}-${cfgNow.version}`, here.topDir);
     }
     const baseFiles = extractedFiles(path.join(baseline, "release", base.file));
     const basePaths = [...baseFiles.keys()].sort();
@@ -385,7 +393,11 @@ function buildVariant(cwd, variant) {
   // (e) shell tap targets — static (always runs) + rendered (Chromium, skipped gracefully)
   // ══════════════════════════════════════════════════════════════════════════════════════════
   console.log("\n(e) shell tap targets (>=44px)\n");
-  const css = fs.readFileSync(path.join(ROOT, "src", "seeker", "seeker.css"), "utf8");
+  // v1.1.0: the wallet zone's rules live in src/seeker/edition/full.css (the FULL edition's own
+  // sheet, so the Play/iOS bundle never carries a wallet control's CSS); both sheets are one
+  // shell to a thumb, so both are read here.
+  const css = ["seeker.css", path.join("edition", "full.css")]
+    .map((f) => fs.readFileSync(path.join(ROOT, "src", "seeker", f), "utf8")).join("\n");
   function floorPx(selector, prop) {
     const block = new RegExp(selector.replace(/[.#]/g, "\\$&") + "\\s*\\{([^}]*)\\}").exec(css);
     if (!block) return null;
@@ -540,12 +552,16 @@ function buildVariant(cwd, variant) {
   {
     const seekerCfg = JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "store-edition.json"), "utf8"));
     const ex = new Set(seekerCfg.excludeKeys || []);
-    const missing = NEW_KEYS.filter((k) => !ex.has(k));
     // The store bundles are a PINNED, EDUCATION-ONLY edition: no wallet, no payments, no address
-    // (docs/STORE_EDITION.md). Almost all of this app's copy is wallet, signing and payment text,
-    // and the dictionaries are shared — so every key has to be pruned by name from that copy.
-    ok("store-edition.json excludes every one of the app's keys from the google/ios dictionary copy",
+    // (docs/STORE_EDITION.md). Since v1.1.0 that bundle IS this shell's education edition, so the
+    // dictionaries it ships must carry the education edition's keys and must NOT carry the keys
+    // only a wallet pane renders. Both directions, by name.
+    const missing = WALLET_ONLY_KEYS.filter((k) => !ex.has(k));
+    ok(`store-edition.json excludes every WALLET-ONLY key from the google/ios dictionary copy (${WALLET_ONLY_KEYS.length} of ${NEW_KEYS.length})`,
        missing.length === 0, `${missing.length} not excluded — run: node scripts/seeker-i18n-keys.cjs --sync-exclude`);
+    const wrongly = [...EDU_KEYS].filter((k) => ex.has(k));
+    ok(`store-edition.json does NOT exclude any education-edition key (${EDU_KEYS.size} keys the Play/iOS shell renders)`,
+       wrongly.length === 0, wrongly.slice(0, 5));
   }
   try {
     execFileSync(process.execPath, [path.join(ROOT, "scripts", "i18n-audit.cjs")], { cwd: ROOT, stdio: "pipe" });
