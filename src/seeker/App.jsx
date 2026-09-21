@@ -7,16 +7,23 @@
 // route must resolve client-side off the `#` fragment (CLKN-SEEKER's DELIVERY-CONTRACT.md).
 //
 // Increment 2 (docs/SEEKER_APP_PLAN.md): Rent Reclaim is now the real, read-side pane
-// (RentReclaim.jsx) — enumerate + classify only, no signing (that's increment 3). Ask Cluck and
-// Wallet Checkup stay the increment-1 placeholder. The wallet control in the header exercises the
-// shared, MWA-aware registry (public/cluck-wallet.js) end to end (connect/disconnect through
-// window.CluckWallet) and now feeds the connected address to Rent Reclaim's scan.
+// (RentReclaim.jsx) — enumerate + classify only, no signing (that's increment 3). The wallet
+// control in the header exercises the shared, MWA-aware registry (public/cluck-wallet.js) end to
+// end (connect/disconnect through window.CluckWallet) and now feeds the connected address to
+// Rent Reclaim's scan.
+//
+// Increment 3: Ask Cluck (AskCluck.jsx) is real content too.
+//
+// Increment 4: Wallet Checkup (WalletCheckup.jsx) is the last of the three tabs to go real — a
+// read-only, free, ungated scan over GET /api/wallet-checkup. All three bottom-nav tabs are now
+// real panes; the shared placeholder <Pane> ("Coming soon") this comment used to describe is gone.
 import React from "react";
 import { HashRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
 import { t, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
 import RentReclaimPane from "./RentReclaim.jsx";
 import AskCluckPane from "./AskCluck.jsx";
+import WalletCheckupPane from "./WalletCheckup.jsx";
 
 // Anywhere a user can connect a wallet, they must be able to disconnect (CLAUDE.md) — this is
 // the one control surface, so both live in the same place with the provider's own disconnect()
@@ -63,18 +70,6 @@ function Header({ wallet }) {
   );
 }
 
-function Pane({ title, blurb, icon }) {
-  useI18nReady();
-  return (
-    <section className="seeker-pane">
-      <div className="seeker-paneicon" aria-hidden="true">{icon}</div>
-      <h1>{t(title)}</h1>
-      <p>{t(blurb)}</p>
-      <span className="seeker-badge">{t("Coming soon")}</span>
-    </section>
-  );
-}
-
 const TABS = [
   { to: "/rent", label: "Rent Reclaim", icon: "💰" },
   { to: "/ask", label: "Ask Cluck", icon: "🐔" },
@@ -110,10 +105,7 @@ export default function App() {
             <Route path="/" element={<Navigate to="/rent" replace />} />
             <Route path="/rent" element={<RentReclaimPane wallet={wallet} />} />
             <Route path="/ask" element={<AskCluckPane />} />
-            <Route
-              path="/checkup"
-              element={<Pane icon="🛡" title="Wallet Checkup" blurb="Check approvals, freeze and mint authority — read-only and free." />}
-            />
+            <Route path="/checkup" element={<WalletCheckupPane wallet={wallet} />} />
             <Route path="*" element={<Navigate to="/rent" replace />} />
           </Routes>
         </main>
