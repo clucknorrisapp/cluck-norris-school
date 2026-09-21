@@ -1,5 +1,9 @@
 # Dependencies
 node_modules/
+# ⚠️ The bare name too: `node_modules/` matches a DIRECTORY only, so a node_modules SYMLINK (a
+# worktree pointing at the main checkout's install) slipped past it into a commit on 2026-09-21
+# — an absolute link to one machine's path, tracked in git (Codex on PR #390). Never again.
+node_modules
 
 # Build output
 dist/
