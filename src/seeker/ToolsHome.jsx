@@ -68,13 +68,25 @@ export default function ToolsHome() {
     t(tool.title).toLowerCase().includes(needle) ||
     t(tool.blurb).toLowerCase().includes(needle);
 
-  const groups = GROUPS.map((g) => ({ ...g, items: TOOLS.filter((x) => x.tier === g.tier && match(x)) }))
+  // ⚠️ FLAGSHIPS FIRST, then the tiers. Grouping by access tier alone answered "what does this
+  // cost" before "where do I start", which is the question someone opening the app actually has
+  // (owner review, 2026-09-21). The flagship list is his: "the school, the LP lab, the
+  // airdropper, the locker room, the fire pit, project burn" — the school and the LP Lab are in
+  // the School section, so four of the six are tools. Their tier badge still shows, so leading
+  // with them never hides what a tool needs.
+  //
+  // A flagship appears ONCE. Listing it again under its tier would pad the grid and make the
+  // lead group look decorative rather than a real answer to "start here".
+  const flagships = TOOLS.filter((x) => x.flagship && match(x));
+  const flagshipIds = new Set(flagships.map((x) => x.id));
+  const groups = GROUPS
+    .map((g) => ({ ...g, items: TOOLS.filter((x) => x.tier === g.tier && !flagshipIds.has(x.id) && match(x)) }))
     .filter((g) => g.items.length);
 
   return (
     <div className="seeker-tools">
       <h1 className="seeker-tools-h1">{t("Toolkit")}</h1>
-      <p className="seeker-tools-sub">{t("Everything the school gives you, built for this phone.")}</p>
+      <p className="seeker-tools-sub">{t("The tools, built for this phone. The lessons are in the School tab.")}</p>
 
       <label className="seeker-tools-search">
         <span className="seeker-sr">{t("Search the toolkit")}</span>
@@ -88,7 +100,17 @@ export default function ToolsHome() {
         />
       </label>
 
-      {groups.length === 0 ? (
+      {flagships.length ? (
+        <section className="seeker-tools-group">
+          <h2 className="seeker-tools-grouptitle">{t("Start here")}</h2>
+          <p className="seeker-tools-groupnote">{t("The tools this project is built around.")}</p>
+          <div className="seeker-tools-grid">
+            {flagships.map((tool) => <Card key={tool.id} tool={tool} />)}
+          </div>
+        </section>
+      ) : null}
+
+      {groups.length === 0 && flagships.length === 0 ? (
         <p className="seeker-tool-empty">{t("Nothing matches that.")}</p>
       ) : groups.map((g) => (
         <section className="seeker-tools-group" key={g.tier}>

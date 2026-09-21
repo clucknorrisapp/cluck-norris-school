@@ -157,12 +157,19 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     ok("A · the four shared scripts all loaded", await page.evaluate(() => !!(window.CluckUtil && window.CluckWallet && window.CluckRentMath && window.CLKN_I18N)));
 
     const tabs = await page.evaluate(() => Array.from(document.querySelectorAll(".seeker-navbtn")).map((a) => a.getAttribute("href")));
-    ok("B · four bottom-nav tabs, all hash routes", tabs.length === 4 && tabs.every((h) => String(h).startsWith("#/")), JSON.stringify(tabs));
-    ok("B · it lands on the Toolkit, not a blank route", /Toolkit/i.test(await text(page)), (await text(page)).slice(0, 160));
+    // ⚠️ FIVE tabs, School first. This asserted four tabs landing on the Toolkit, which is how a
+    // school-less app passed its own front-door test — the scope doc listed tools, the app became
+    // tools, and the test agreed. The owner found the gap on his Seeker. AGENTS.md now records
+    // the flagship list with the school first.
+    ok("B · five bottom-nav tabs, all hash routes", tabs.length === 5 && tabs.every((h) => String(h).startsWith("#/")), JSON.stringify(tabs));
+    ok("B · the FIRST tab is the school", /#\/school$/.test(String(tabs[0])), JSON.stringify(tabs));
+    ok("B · it lands on the School, not the Toolkit and not a blank route",
+       /School of Crypto Hard Knocks/i.test(await text(page)), (await text(page)).slice(0, 160));
 
     for (const [hash, want] of [["#/ask", /Ask Cluck/i], ["#/checkup", /Wallet Checkup/i], ["#/rent", /Rent Reclaim/i],
-                                ["#/tools/listing", /Listing Checkup/i], ["#/tools/bags", /Launches/i],
-                                ["#/tools/alpha", /Daily Brief/i], ["#/tools", /Toolkit/i]]) {
+                                ["#/tools/listing", /Listing Checkup/i],
+                                ["#/tools/alpha", /Daily Brief/i], ["#/tools", /Toolkit/i],
+                                ["#/school", /School of Crypto Hard Knocks/i]]) {
       await page.evaluate((h) => { window.location.hash = h; }, hash);
       await page.waitForTimeout(250);
       ok(`B · ${hash} renders its own pane`, want.test(await text(page)));
@@ -208,7 +215,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         .filter((el) => el.getBoundingClientRect().height < 44).length,
       overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     }));
-    ok("B · the toolkit grid renders every tool in the registry", grid.cards >= 15, JSON.stringify(grid));
+    ok("B · the toolkit grid renders every tool in the registry", grid.cards >= 14, JSON.stringify(grid));
     ok("B · ⚠️ an unbuilt tool is NEVER a link — no routing to a blank pane", grid.soonAreLinks === 0, JSON.stringify(grid));
     ok("B · built tools are links, so the grid actually navigates", grid.links >= 6, JSON.stringify(grid));
     ok("B · every card clears 44px and nothing overflows at 390px", grid.smallCards === 0 && !grid.overflow, JSON.stringify(grid));

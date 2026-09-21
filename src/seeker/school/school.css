@@ -1,0 +1,312 @@
+/* The school, on a phone.
+ *
+ * Tokens only — never a literal font stack or a page-local :root. AGENTS.md: a page-local :root
+ * shadows theme.css, and aliasing a token to itself is discarded by CSS, which silently drops
+ * every heading to the inherited font.
+ *
+ * Every tappable row is >= 44px. The lesson list is the surface someone scrolls one-handed on a
+ * bus, so the targets are rows, not the text inside them. */
+
+.seeker-school-title {
+  font-family: var(--disp);
+  letter-spacing: .5px;
+  margin: 0 0 6px;
+}
+
+/* ── progress ──────────────────────────────────────────────────────────────────────────────── */
+.seeker-school-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--card2, #1d1e26);
+  overflow: hidden;
+  flex: 1;
+}
+.seeker-school-bar-fill {
+  height: 100%;
+  background: var(--orange);
+  border-radius: 999px;
+  transition: width .25s ease;
+}
+
+.seeker-school-overall {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 12px 14px;
+  margin: 14px 0;
+}
+.seeker-school-overall-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: var(--body-text, 15px);
+}
+.seeker-school-overall-n {
+  font-family: var(--mono);
+  color: var(--sub);
+}
+
+/* ── continue ──────────────────────────────────────────────────────────────────────────────── */
+.seeker-school-continue {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 64px;
+  justify-content: center;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  border-radius: 12px;
+  border: 1px solid var(--orange);
+  background: rgba(255, 122, 24, .10);
+  text-decoration: none;
+  color: var(--text);
+}
+.seeker-school-continue:active { filter: brightness(.94); }
+.seeker-school-continue-label {
+  font-family: var(--disp);
+  font-size: 11.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--orange);
+}
+.seeker-school-continue-title { font-size: var(--body-text, 15px); }
+
+.seeker-school-finished {
+  border: 1px solid var(--green);
+  background: rgba(70, 200, 120, .10);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  font-size: var(--body-text, 15px);
+}
+
+/* ── courses ───────────────────────────────────────────────────────────────────────────────── */
+.seeker-school-courses { display: flex; flex-direction: column; gap: 10px; }
+
+.seeker-school-course {
+  display: block;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  text-decoration: none;
+  color: var(--text);
+}
+.seeker-school-course:active { filter: brightness(1.08); }
+.seeker-school-course-top { display: flex; gap: 12px; align-items: flex-start; }
+.seeker-school-course-icon { font-size: 26px; line-height: 1; }
+.seeker-school-course-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.seeker-school-course-title {
+  font-family: var(--disp);
+  font-size: 15px;
+  letter-spacing: .5px;
+}
+.seeker-school-course-sub {
+  color: var(--sub);
+  font-size: 13px;
+}
+.seeker-school-course-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.seeker-school-course-n {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+/* ── lesson list ───────────────────────────────────────────────────────────────────────────── */
+.seeker-school-lessons {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.seeker-school-lesson {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  text-decoration: none;
+  color: var(--text);
+}
+.seeker-school-lesson:active { filter: brightness(1.08); }
+.seeker-school-lesson.done { border-color: rgba(70, 200, 120, .45); }
+.seeker-school-lesson-n {
+  flex: 0 0 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card2, #1d1e26);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.seeker-school-lesson.done .seeker-school-lesson-n { background: var(--green); color: #0d1a12; }
+.seeker-school-lesson-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.seeker-school-lesson-title { font-size: var(--body-text, 15px); }
+.seeker-school-lesson-belt {
+  font-family: var(--disp);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--gold);
+}
+
+/* ── one lesson ────────────────────────────────────────────────────────────────────────────── */
+.seeker-school-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--orange);
+  text-decoration: none;
+  font-family: var(--disp);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.seeker-school-belt {
+  font-family: var(--disp);
+  font-size: 11.5px;
+  letter-spacing: 1px;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+.seeker-school-intro {
+  font-size: var(--body-text, 15px);
+  line-height: 1.6;
+}
+
+.seeker-school-concepts {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 12px 14px;
+  margin: 16px 0;
+}
+.seeker-school-concepts-title {
+  font-family: var(--disp);
+  font-size: 11.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.seeker-school-concept { display: flex; flex-direction: column; gap: 2px; }
+.seeker-school-concept + .seeker-school-concept {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.seeker-school-concept-term {
+  font-family: var(--disp);
+  font-size: 13px;
+  letter-spacing: .5px;
+  color: var(--orange);
+}
+.seeker-school-concept-def { font-size: 13.5px; color: var(--sub); line-height: 1.5; }
+
+.seeker-school-start { width: 100%; margin-top: 4px; }
+
+/* ── quiz ──────────────────────────────────────────────────────────────────────────────────── */
+.seeker-school-quizhead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 14px;
+  font-family: var(--disp);
+  font-size: 11.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--orange);
+}
+.seeker-school-quizhead-lesson { color: var(--muted); }
+
+.seeker-school-q {
+  font-size: 17px;
+  line-height: 1.45;
+  margin: 0 0 16px;
+}
+
+.seeker-school-options { display: flex; flex-direction: column; gap: 10px; }
+.seeker-school-option {
+  min-height: 52px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: var(--body-text, 15px);
+  text-align: left;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.seeker-school-option:active { filter: brightness(1.1); }
+/* ⚠️ Disabled options stay READABLE. The repo's rule is that a disabled CTA goes neutral grey
+   rather than dimmed — here the options are not CTAs, they are the answers being reviewed, so
+   they keep full contrast and only lose their pointer. Fading them would hide the explanation
+   the learner is reading. */
+.seeker-school-option:disabled { cursor: default; opacity: 1; }
+.seeker-school-option.correct {
+  border-color: var(--green);
+  background: rgba(70, 200, 120, .12);
+}
+.seeker-school-option.wrong {
+  border-color: var(--red);
+  background: var(--red-soft, rgba(220, 70, 70, .12));
+}
+
+.seeker-school-explain {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.seeker-school-explain p {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--sub);
+  margin: 0 0 12px;
+}
+.seeker-school-explain-verdict {
+  font-family: var(--disp);
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--red);
+  margin-bottom: 8px;
+}
+.seeker-school-explain.right .seeker-school-explain-verdict { color: var(--green); }
+.seeker-school-explain .seeker-btn { width: 100%; }
+
+/* ── passed ────────────────────────────────────────────────────────────────────────────────── */
+.seeker-school-passed { text-align: center; padding-top: 12px; }
+.seeker-school-passed-mark {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 14px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--green);
+  color: #0d1a12;
+  font-size: 32px;
+}
+.seeker-school-passed-note { font-size: 13.5px; color: var(--muted); }
+.seeker-school-passed .seeker-btn { width: 100%; margin-top: 6px; }
+.seeker-school-passed .seeker-school-back { margin-top: 4px; }
