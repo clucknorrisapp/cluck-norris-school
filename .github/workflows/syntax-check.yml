@@ -595,7 +595,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|seeker\.html$|store-edition/|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -771,6 +771,17 @@ jobs:
       - name: wallet standard discovery
         if: steps.gate.outputs.run == 'true'
         run: node scripts/wallet-standard-test.cjs
+      # The Seeker app, actually booted. seeker-build-test.cjs (node-check) proves the TARBALL is
+      # well formed but never opens it, so an app that builds clean and renders a blank screen
+      # would ship green — the same class of break the Normie Quest visual gate exists for. This
+      # unpacks the shipped store-edition-seeker tarball, serves it, and drives it in a phone-sized
+      # Chromium with a fake Wallet Standard wallet: it mounts, hash routing works, connect and
+      # disconnect both work, tap targets clear 44px, and — the one that matters — a FAILED chain
+      # read renders "unavailable" and never a zero total, because "0 SOL to reclaim" off a 503 is
+      # a lie about the user's money.
+      - name: seeker app boots and behaves
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/seeker-app-boot-test.cjs
       # Colosseum roadmap §7 — "accessibility and phone polish on the public pages" — judges click
       # these on phones. Boots its own server and drives /hub, /hub/<project>, /hub/demo,
       # /for-projects, /hub/apply and /hub/<project>/pay at 360 and 390px with a real Chromium:
