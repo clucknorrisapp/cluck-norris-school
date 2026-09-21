@@ -801,6 +801,51 @@ state (each round's harness was pinned to a specific pre-squash sha that no long
 
 Findings, not rewrites, same rule as every other round.
 
+## Round 9 — 2026-09-21: the Google Play / iOS edition of the Seeker shell (store-edition v1.1.0)
+
+Owner's go: *"start on the play store version of the shell"*. Stacked on #390's branch (`f3463d7`),
+so the diff against `develop` includes #390 until it merges — review the store-shell commits on
+their own. `docs/STORE_EDITION.md` → **v1.1.0** is the design of record.
+
+**The claim to break:** *the Google Play / iOS bundle is the phone shell with the school leading,
+and it contains no wallet — not hidden, absent.* The mechanism is one Vite alias:
+`@seeker-edition` → `src/seeker/edition/edu.jsx` (education) or `edition/full.jsx` (Seeker).
+The education module's import list is the whole argument; the build's forbidden-string scan and
+the new boot test are the locks.
+
+Where to look hardest, in order:
+
+1. **`src/seeker/edition/edu.jsx` — the import list.** Anything that reaches a wallet pane, the
+   gate (`needswallet.jsx`), `pass.js`/`passgate.jsx`, `reclaim-sign.js`, `tools/registry.js`
+   is a wallet in the store. Then `pane.jsx` and `addr.js`, which BOTH editions share: I moved
+   `NeedsWallet` out of `pane.jsx` because its `window.CluckWallet` reference would have shipped;
+   is there another shared module carrying a wallet reference the scan's word list would miss?
+2. **`vite.config.js`** — `SHELL`/`EDU`, the `EDU:OUT` strip, the comment strip (`SHELL` only),
+   the two aliases. Can a build reach the education alias WITHOUT the `EDU:OUT` strip, or vice
+   versa? (Both key off the same `EDU` boolean, on purpose.) The website build must be inert:
+   `npm run build` is unchanged.
+3. **`scripts/extract-curriculum.js`** — one `buildCurriculum(edition)` writes both files; the
+   store copy resolves `VITE_STORE_EDITION="google"` inside the lesson modules. `--check` covers
+   both. Is there lesson copy that names a venue or the token OUTSIDE a `STORE ?` branch? The
+   scan found none of the listed strings in `curriculum.store.json`; the list is the scan's, not
+   a reading of every lesson.
+4. **`src/seeker/school/Certificate.jsx`** — the sid handling (`sessionId()` from `src/track.js`,
+   `flushTrackQueue()` first), the `not_yet` rendering, and that nothing here can reach
+   `/api/claim` (the wallet claim). Coursework counts come from the course-scoped local keys.
+5. **`src/seeker/WalletCheckup.jsx`** — now `({ address, gate })`; the pane must not know
+   which edition it is in. `edu.jsx`'s `AddressForm` validates base58 on the device. Confirm the
+   scan path renders `unavailable` on a refused read and never "no issues found".
+6. **`scripts/seeker-i18n-keys.cjs`** — `reachableFrom()` walks static relative imports from
+   `edu.jsx` + `App.jsx`; `--sync-exclude` = (existing ∪ all) − edu. 172 keys were un-excluded.
+   A key rendered by BOTH a wallet pane and an education pane is kept (correct); a wallet-only
+   key that also exists in website copy would be excluded from the Play dictionaries and fall back
+   to English on the website's school inside the store bundle — is there such a key?
+7. **`scripts/store-edition-test.cjs`** — I restated the v1.0.x page assertions as chunk
+   assertions. Read the diff as a checklist: is any v1.0.x contract item weaker now?
+
+What I did NOT do: read-aloud in the shell (the shell has no reader); an iOS TestFlight pass
+(needs the owner's Apple account); screenshots for the listing (a human eye).
+
 ## Round 8 — 2026-09-21: PR #390, your three remaining P2s on `19afe6b`
 
 Still held. All three confirmed against the data first; the first one was my own "check every

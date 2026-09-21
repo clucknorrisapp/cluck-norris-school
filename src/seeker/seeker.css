@@ -42,36 +42,10 @@ html, body {
   letter-spacing: .5px;
   color: var(--gold);
 }
-.seeker-walletzone { display: flex; align-items: center; gap: 8px; }
-.seeker-walletstatus {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--sub);
-  max-width: 40vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.seeker-walletbtn {
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 14px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--orange);
-  font-family: var(--disp);
-  font-size: 12px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.seeker-walletbtn:active { background: rgba(255, 122, 24, .12); }
-.seeker-walleterr {
-  flex-basis: 100%;
-  font-size: 12px;
-  color: var(--red-soft);
-}
+/* The wallet zone's rules (.seeker-walletzone / -walletstatus / -walletbtn / -walleterr) live in
+   src/seeker/edition/full.css — the FULL edition's own sheet — because this file ships in the
+   Google Play / iOS bundle too, and a rule named after a wallet control is a wallet reference in
+   an education-only app. */
 
 .seeker-main {
   flex: 1;
@@ -225,7 +199,7 @@ html, body {
   margin: 0 0 10px;
 }
 /* Increment 3: enabled whenever there is something reclaimable, same outline style as the wallet
-   connect button (.seeker-walletbtn) elsewhere in this shell. Disabled (nothing to reclaim, or a
+   connect button (edition/full.css) elsewhere in this shell. Disabled (nothing to reclaim, or a
    sign is already in flight) goes neutral grey, never dimmed orange — CLAUDE.md: a faded
    accent-color gradient on dark reads as broken, not "not yet". */
 .seeker-reclaim-btn {

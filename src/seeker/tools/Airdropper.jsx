@@ -51,7 +51,8 @@
 // and the sender's balance as the chain reports them and makes no claim about the token itself.
 import React from "react";
 import { t, tf } from "../i18n.js";
-import { Pane, Loading, Unavailable, Confirm, NeedsWallet, useOnline } from "../pane.jsx";
+import { Pane, Loading, Unavailable, Confirm, useOnline } from "../pane.jsx";
+import { NeedsWallet } from "../needswallet.jsx";
 import { usePass } from "../pass.js";
 import { PassGate } from "../passgate.jsx";
 import { shortAddr } from "../addr.js";

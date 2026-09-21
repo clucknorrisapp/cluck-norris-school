@@ -48,9 +48,17 @@ function emptyForm() {
 // Only render a link we built or that a source claimed is http(s) — chain metadata and aggregator
 // responses are attacker-controlled, and an href is not neutralised by React's text escaping the
 // way a text node is (CLAUDE.md's "escape everything from chain metadata" applies to hrefs too).
-function safeHref(u) {
+// Backend-provided URLs become links only if they are http(s) — and, when the edition hands
+// this pane a host allow-list, only if their host is on it. The Google Play / iOS edition does
+// (store-edition v1.1.0; the v1.0.2 store page enforced the same list at render time, because a
+// static verifier cannot see a link that arrives in a response). Off-list URLs render as text.
+function safeHref(u, hosts) {
   const s = String(u || "").trim();
-  return /^https?:\/\//i.test(s) ? s : null;
+  if (!/^https?:\/\//i.test(s)) return null;
+  if (Array.isArray(hosts)) {
+    try { if (!hosts.includes(new URL(s).hostname)) return null; } catch (_) { return null; }
+  }
+  return s;
 }
 
 function FieldRow({ row }) {
@@ -71,10 +79,10 @@ function FieldRow({ row }) {
   );
 }
 
-function SourceCard({ row, open, onToggle }) {
-  const pageHref = safeHref(row.pageUrl);
-  const fixHref = safeHref(row.fixUrl);
-  const howtoHref = row.howToList ? safeHref(row.howToList.url) : null;
+function SourceCard({ row, open, onToggle, hosts }) {
+  const pageHref = safeHref(row.pageUrl, hosts);
+  const fixHref = safeHref(row.fixUrl, hosts);
+  const howtoHref = row.howToList ? safeHref(row.howToList.url, hosts) : null;
   return (
     <div className="seeker-listing-source">
       <button type="button" className="seeker-listing-source-head" onClick={onToggle} aria-expanded={open}>
@@ -137,7 +145,7 @@ function ChainFactsCard({ cf }) {
   );
 }
 
-function ImpersonatorsCard({ data }) {
+function ImpersonatorsCard({ data, hosts }) {
   if (!data) return null;
   if (data.status !== "ok") {
     return (
@@ -155,7 +163,7 @@ function ImpersonatorsCard({ data }) {
         <Empty>{t("No other mints found using this name or symbol.")}</Empty>
       ) : (
         data.matches.map((m) => {
-          const href = safeHref(m.pairUrl);
+          const href = safeHref(m.pairUrl, hosts);
           return (
             <div className="seeker-listing-imp" key={m.mint}>
               <div className="seeker-listing-imp-top">
@@ -224,7 +232,7 @@ function LogoSpecCard({ data }) {
   );
 }
 
-export default function ListingCheckupPane() {
+export default function ListingCheckupPane({ linkHosts }) {
   const online = useOnline();
   const [form, setForm] = React.useState(emptyForm());
   const [more, setMore] = React.useState(false);
@@ -377,11 +385,11 @@ export default function ListingCheckupPane() {
           <section className="seeker-listing-card">
             <h2 className="seeker-listing-card-title">{t("Sources")}</h2>
             {report.sources.map((row) => (
-              <SourceCard key={row.id} row={row} open={openSources.has(row.id)} onToggle={() => toggleSource(row.id)} />
+              <SourceCard key={row.id} row={row} open={openSources.has(row.id)} onToggle={() => toggleSource(row.id)} hosts={linkHosts} />
             ))}
           </section>
 
-          <ImpersonatorsCard data={report.checks && report.checks.impersonators} />
+          <ImpersonatorsCard data={report.checks && report.checks.impersonators} hosts={linkHosts} />
           <LinkHealthCard data={report.checks && report.checks.linkHealth} />
           <LogoSpecCard data={report.checks && report.checks.logoSpec} />
 

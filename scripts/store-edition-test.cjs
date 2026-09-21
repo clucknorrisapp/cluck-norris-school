@@ -55,19 +55,42 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // the LP Lab, Meteora/Bags/Jupiter venue + referral links in the Library, connect/revoke residue in
   // the wallet checkup. Pinned here so a regression is named, not just counted.
   ok("no swap/venue/referral leak (jup.ag/swap, CLKN mint, app.meteora.ag, bags.fm referral)", !code.includes("jup.ag/swap") && !code.includes("DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS") && !code.includes("app.meteora.ag") && !/bags\.fm\?ref/.test(code));
-  ok("wallet checkup carries no connect/revoke residue (wallet-btn, syncRevokeUi, connectWallet)", (() => { const t = text.find(([f]) => f === "wallet-checkup.html")[1]; return !t.includes("wallet-btn") && !t.includes("syncRevokeUi") && !t.includes("connectWallet") && !t.includes("revokeCard"); })());
+  // v1.1.0 (2026-09-21): the bundle is the SEEKER SHELL's education edition (docs/STORE_EDITION.md),
+  // one index.html and one chunk — the page-by-page assertions of v1.0.x are restated below as
+  // assertions on the chunk. Same contract, different shape.
+  ok("no connect/revoke residue anywhere (walletbtn, syncRevokeUi, connectWallet, revokeCard, Connect Wallet)", !code.includes("walletbtn") && !code.includes("syncRevokeUi") && !code.includes("connectWallet") && !code.includes("revokeCard") && !code.includes("Connect Wallet"));
+  ok("⚠️ the wallet half of the shell is absent — no wallet/gate/web3 file, no CluckWallet/CluckGate/CluckMWA, no signing call", !files.some((f) => /cluck-wallet|cluck-gate|solana-web3|rent-reclaim-plan|airdrop-engine/.test(f)) && !code.includes("CluckWallet") && !code.includes("CluckGate") && !code.includes("CluckMWA") && !code.includes("signTransaction"));
+  ok("index.html loads only cluck-util.js, i18n.js and the chunk — nothing else", (() => { const h = text.find(([f]) => f === "index.html")[1]; const srcs = [...h.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1]).sort(); return srcs.length === 3 && srcs.some((x) => x.endsWith("cluck-util.js")) && srcs.some((x) => x.endsWith("i18n.js")) && srcs.some((x) => /\/assets\/.*\.js$/.test(x)); })(), text.find(([f]) => f === "index.html")[1].match(/<script[^>]*src="([^"]+)"/g));
+  ok("index.html ships no HTML comments (the scans read them as content; v1.1.0's first build failed on a comment)", !text.find(([f]) => f === "index.html")[1].includes("<!--"));
+  ok("the shell declares the school dictionary pack (data-i18n-packs=\"school\")", text.find(([f]) => f === "index.html")[1].includes('data-i18n-packs="school"'));
   ok("no relative /api reference anywhere", !/["'`]\/api\/[a-zA-Z]/.test(all));
-  ok("every API call points at the live backend", all.includes(`${cfg.apiBase}/api/ask-cluck`) && all.includes(`${cfg.apiBase}/api/track`) && all.includes(`${cfg.apiBase}/api/claim/certificate`) && all.includes(`${cfg.apiBase}/api/wallet-checkup`) && all.includes(`${cfg.apiBase}/api/listing-checkup/run`));
-  ok("the store-only surfaces are present (certificate, report, listing link)", all.includes("CERTIFICATE OF COMPLETION") && all.includes("REPORT THIS ANSWER") && all.includes("listing-checkup.html"));
+  ok("every API call points at the live backend", all.includes(`${cfg.apiBase}/api/ask-cluck`) && all.includes(`${cfg.apiBase}/api/ask-cluck/report`) && all.includes(`${cfg.apiBase}/api/track`) && all.includes(`${cfg.apiBase}/api/claim/certificate`) && all.includes(`${cfg.apiBase}/api/wallet-checkup`) && all.includes(`${cfg.apiBase}/api/listing-checkup/run`) && all.includes(`${cfg.apiBase}/api/alpha`));
+  ok("the store-only surfaces are present (certificate of completion, report this answer, paste-an-address checkup)", all.includes("Certificate of completion") && all.includes("Report this answer") && all.includes("Paste a wallet address"));
+  ok("the school is in the bundle (the curriculum is bundled, and it is the STORE copy)", all.includes("School of Crypto Hard Knocks") && all.includes("The Incubator") && all.includes("LP Lab"));
+  ok("the store copy of the curriculum is the one bundled (no venue names, no token examples)", !code.includes("where CLKN trades") && !code.includes("CLKN EXAMPLE"));
+  ok("the Daily pane never renders the brief or a yield figure", !code.includes("%/day") && !code.includes("payload.brief"));
   ok("every outbound host in every file is on the allow-list", (() => { const bad = new Set(); for (const [, t] of text) for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9.-]+)/g)) if (!cfg.allowedHosts.includes(m[1])) bad.add(m[1]); return bad.size === 0; })());
   ok("the footer links the store's own privacy policy and terms", all.includes("https://clucknorris.app/privacy/store") && all.includes("https://clucknorris.app/terms/store"));
   ok("the RootCrak credit carries no referral parameter", !all.includes("rootcrak.com/?ref"));
-  ok("the listing checkup gates backend-provided links through a host allow-list at render time", (() => { const t = text.find(([f]) => f === "listing-checkup.html")[1]; return t.includes("STORE_HOSTS") && t.includes("safeUrl(src.pageUrl)") && t.includes("safeUrl(shareUrl)"); })());
+  {
+    // v1.0.2's finding restated for the shell: a static verifier cannot see a link that arrives
+    // in a response, so the PAGE enforces a host allow-list at render time. Source-level, because
+    // the chunk is minified: edu.jsx hands ListingCheckup its LINK_HOSTS, safeHref() enforces a
+    // list when given one, and that list is a subset of this config's allowedHosts.
+    const edu = fs.readFileSync(path.join(ROOT, "src", "seeker", "edition", "edu.jsx"), "utf8");
+    const lc = fs.readFileSync(path.join(ROOT, "src", "seeker", "tools", "ListingCheckup.jsx"), "utf8");
+    ok("the shell's Listing Checkup gates backend-provided links through a host allow-list at render time", /<ListingCheckup\s+linkHosts=\{LINK_HOSTS\}/.test(edu) && /function safeHref\(u, hosts\)/.test(lc) && /hosts\.includes\(new URL\(s\)\.hostname\)/.test(lc) && /safeHref\((row\.pageUrl|row\.fixUrl|m\.pairUrl), hosts\)/.test(lc));
+    const m = edu.match(/export const LINK_HOSTS = \[([\s\S]*?)\];/);
+    const hosts = m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : [];
+    const off = hosts.filter((h) => !cfg.allowedHosts.includes(h));
+    ok("every host the education edition may link to is on the build's allow-list (LINK_HOSTS ⊆ allowedHosts)", hosts.length > 0 && off.length === 0, off);
+    ok("and the allow-listed hosts are actually in the chunk (the list survived the build)", hosts.every((h) => code.includes(h)), hosts.filter((h) => !code.includes(h)));
+  }
   ok("the full edition's wallet claim and trade links are compiled out", !code.includes("YOU EARNED YOUR SPOT IN THE FLOCK") && !code.includes("Submit your Solana wallet"));
   ok("no leftover STORE markers", !/STORE:(OUT|IN)/.test(all));
   ok("no page in the bundle that is not allow-listed", files.filter((f) => f.endsWith(".html")).map((f) => path.relative(tmp, f)).sort().join(",") === ["index.html", ...cfg.pages].sort().join(","), files.filter((f) => f.endsWith(".html")).map((f) => path.relative(tmp, f)));
-  ok("the wallet checkup page carries the scan but no revoke card, no connect, no signing", (() => { const t = text.find(([f]) => f === "wallet-checkup.html")[1]; return t.includes("/api/wallet-checkup?wallet=") && !t.includes("revokeCard") && !t.includes("connectWallet") && !t.includes("signAndSend"); })());
-  ok("the listing checkup page runs the full sweep without a gate", (() => { const t = text.find(([f]) => f === "listing-checkup.html")[1]; return t.includes("function runFull()") && !t.includes("CluckGate") && !t.includes("tools pass"); })());
+  ok("the wallet checkup scans (GET /api/wallet-checkup?wallet=) but carries no revoke, no connect, no signing", code.includes("/api/wallet-checkup?wallet=") && !code.includes("revokeCard") && !code.includes("signAndSend"));
+  ok("the listing checkup runs without a gate (no CluckGate, no 'tools pass' in the bundle)", !code.includes("CluckGate") && !code.includes("tools pass"));
   fs.rmSync(tmp, { recursive: true, force: true });
   if (NO_SERVER) { console.log(failures ? `\n${failures} FAILED` : "\nall passed (bundle only)"); process.exit(failures ? 1 : 0); }
 

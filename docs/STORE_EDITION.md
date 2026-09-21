@@ -120,6 +120,63 @@ Cluck Score never (retired, CLAUDE.md "Removed").
 - Concierge cards still route only to `STORE_PAGES` surfaces; policy unchanged: no wallet, no
   address, no referral, no CLKN promotion; `scripts/store-edition-test.cjs` unchanged and passing.
 
+## v1.1.0 (2026-09-21) — the Seeker shell, in its education edition
+
+Owner, the same day the Seeker app ran on his phone: *"maybe we should rebuild our stuff for google
+play and IOS to look similar and real app feel"*, then *"start on the play store version of the
+shell"*. So v1.1.0 is a **format change, same contract**: the bundle is the phone-native shell
+(`seeker.html`, `src/seeker/*`) built in an **education edition**, instead of the reflowed website.
+Every rule the reviewer and the wrapper rely on still holds — no wallet, no payments, no address
+collection, compiled out rather than hidden — and every v1.0.x contract item is still in the
+bundle. It is a **routine app update**, not a resubmission: same package, same signing key, same
+data-safety declarations; the listing needs new screenshots.
+
+**How the edition is chosen.** `store-edition.json` says `"entry": "seeker"`; the builder passes
+`STORE_ENTRY=seeker` and `vite.config.js` (a) builds `seeker.html`, (b) strips the
+`<!-- EDU:OUT --> … <!-- /EDU:OUT -->` block from it (the wallet scripts: `cluck-wallet.js`,
+`cluck-gate.js`, the vendored web3, the reclaim and airdrop helpers) and every remaining HTML
+comment, and (c) aliases `@seeker-edition` to **`src/seeker/edition/edu.jsx`** instead of
+`edition/full.jsx`. **That module's import list is the safety argument:** it never imports a
+wallet pane, the wallet gate (`needswallet.jsx`, moved out of the shared `pane.jsx` for exactly
+this reason), the tools registry, the pass client or the signing helpers, so none of them can
+reach the bundle. The forbidden-string scan is the second lock, and it now also refuses the
+wallet scripts by filename in `index.html` and any wallet-pane import in `edu.jsx`.
+
+**What the education edition carries** (tabs: School · Daily · Ask · Checkup · Listing):
+
+| Surface | v1.1.0 | Note |
+|---|---|---|
+| The school | IN | 58 lessons / 4 courses / 200 questions, **bundled and offline**, in seven languages. **The STORE copy of the curriculum**: `scripts/extract-curriculum.js` now resolves the lesson sources' `STORE ? … : …` branches per edition and writes `data/curriculum.store.json` beside `data/curriculum.json`; `@seeker-curriculum` aliases the shell to the right one, so the venue names, the CLKN mint and the token-naming worked examples are physically absent. `--check` covers both files. |
+| Certificate of completion | IN | `src/seeker/school/Certificate.jsx`, route `#/school/certificate`, offered from the school's finished state. `POST /api/claim/certificate` with **this device's own session id** — the same anonymous sid every lesson beacon carries — so nothing is transferred and nothing is a bearer credential (this is design 4 in `docs/SEEKER_TRANSCRIPT_HANDOFF.md`, for the certificate only; the wallet-signed diploma cNFT stays on the website). The gate's `not_yet` renders as the record's own sentence, never as an app error. Name stays on the device. |
+| Ask Cluck | IN | The **Report this answer** control (`ReportAnswer` in `AskCluck.jsx`, rendered only when the edition passes `report`), a sibling of the answer bubble — `reason`, `question`, `answer` to `/api/ask-cluck/report`, nothing else. |
+| Wallet Checkup | ADAPT | **Paste an address.** `WalletCheckup.jsx` takes `address` + `gate`; the full app passes the connect gate, this edition passes an address form (base58 checked on the device before any request). Scan only — no revoke, no connect, no signing. |
+| Listing Checkup | IN | Free, no gate. Backend-provided links pass the same render-time host allow-list the v1.0.2 page enforced (`linkHosts` from `edu.jsx`; off-list URLs render as text). |
+| Daily | IN | Today's lesson + the daily check (bundled) and the majors from `GET /api/alpha` (**added to `STORE_API_RE`** in this version — read-only, cached). No brief, no picks, no yield figure. |
+| Legal | IN | `Footer` in `edu.jsx` links `/privacy/store`, `/terms/store` and the site root ("the full toolkit lives on clucknorris.app" — the root, never a deep link into a tool the edition lacks). |
+| Rent Reclaim, Firepit, Locker Room, Project Burn, X-Ray, Holders, Trace, Airdropper, Hatchery, Buy Special, the tools pass | OUT | Not imported by the edition. A stale deep link to any of them lands on the school. |
+
+**Dictionaries.** The old rule excluded *every* seeker string from the google/ios dictionaries;
+under it this bundle would have shipped an English app to a Spanish learner. `scripts/seeker-i18n-keys.cjs
+--sync-exclude` now computes `excludeKeys` = (existing ∪ every seeker key) − the education
+edition's own keys (walked from `edu.jsx`'s import graph), and `seeker-build-test` section (c)
+asserts both directions on the artifact: no wallet-only key in a bundled dictionary, and the
+shell's own strings still present.
+
+**Tests.** `scripts/store-edition-test.cjs` (contract, restated for the shell — the page-by-page
+assertions became chunk assertions; every contract item kept), `scripts/seeker-build-test.cjs` §(c)
+(no wallet half, in files, globals, markers or dictionary keys), and the new
+**`scripts/store-shell-boot-test.cjs`** (CI): boots the shipped google tarball in headless
+Chromium at phone size with every `/api/**` refused — mounts on the school, no wallet layer or
+control exists, stale wallet-tool deep links land on the school, all five tabs mount offline,
+the address form refuses a bad address before any request, an answer carries the report control
+and the report posts exactly `{reason, question, answer}`, the certificate route asks with the
+device's sid and renders "not yet" truthfully, the footer links the store legal pages, and
+nothing left the bundle's origin but `clucknorris.app`.
+
+**Not in this version, deliberately:** read-aloud (`read-aloud.js`) — the shell has no reader
+yet; it comes back when the shell grows one. iOS is built from the identical config
+(`variants: ["google","ios"]`) and needs its own TestFlight pass.
+
 ## Publishing
 
 ```

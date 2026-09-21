@@ -38,7 +38,8 @@
 // (same discipline as Firepit's confirmSel, firepit.html's own variable of that name).
 import React from "react";
 import { t } from "../i18n.js";
-import { Pane, Loading, Empty, Unavailable, Refused, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
+import { Pane, Loading, Empty, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
+import { NeedsWallet } from "../needswallet.jsx";
 import { shortAddr } from "../addr.js";
 import { signSendConfirm, confirmSignature, rpcFn, splTokenShim } from "../sign.js";
 import "./tools.css";

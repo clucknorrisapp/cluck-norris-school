@@ -104,7 +104,40 @@ function classifyFailure({ offline, res, body }) {
   return { kind: "unavailable", text: t("Cluck couldn't answer that one. Try again in a moment.") };
 }
 
-function Bubble({ turn }) {
+// "Report this answer" — Google's generative-AI policy asks for an in-app way to flag an
+// answer, and the store edition has carried one since v1.0.0 (a v1.0.2 review found it rendered
+// INSIDE the "ask another" button, whose click cleared the answer — it is a sibling here). Sends
+// the reason, the question and the answer to /api/ask-cluck/report and nothing else; the server
+// tags the edition from the app's user agent. Rendered only when the edition passes `report`.
+function ReportAnswer({ turn }) {
+  const [state, setState] = React.useState("idle"); // idle | pick | sending | done | failed
+  async function send(reason) {
+    setState("sending");
+    try {
+      const r = await fetch("/api/ask-cluck/report", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, question: turn.question, answer: turn.answer }),
+      });
+      setState(r.ok ? "done" : "failed");
+    } catch (_) { setState("failed"); }
+  }
+  if (state === "done") return <div className="seeker-ask-report seeker-ask-report-done">{t("Thanks — reported.")}</div>;
+  if (state === "failed") return <div className="seeker-ask-report">{t("Could not send the report. Try again in a moment.")}</div>;
+  if (state === "pick" || state === "sending") {
+    return (
+      <div className="seeker-ask-report seeker-ask-report-pick" role="group" aria-label={t("Report this answer")}>
+        {[["inaccurate", "Inaccurate"], ["harmful", "Harmful"], ["offensive", "Offensive"], ["other", "Something else"]].map(([k, label]) => (
+          <button key={k} type="button" className="seeker-btn seeker-btn-quiet" disabled={state === "sending"} onClick={() => send(k)}>{t(label)}</button>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <button type="button" className="seeker-ask-reportbtn" onClick={() => setState("pick")}>⚑ {t("Report this answer")}</button>
+  );
+}
+
+function Bubble({ turn, report }) {
   return (
     <div className="seeker-ask-turn">
       <div className="seeker-ask-bubble seeker-ask-bubble-user">{turn.question}</div>
@@ -114,7 +147,10 @@ function Bubble({ turn }) {
         </div>
       ) : null}
       {turn.status === "ok" ? (
-        <div className="seeker-ask-bubble seeker-ask-bubble-cluck">{turn.answer}</div>
+        <>
+          <div className="seeker-ask-bubble seeker-ask-bubble-cluck">{turn.answer}</div>
+          {report ? <ReportAnswer turn={turn} /> : null}
+        </>
       ) : null}
       {turn.status === "error" ? (
         <div className={"seeker-ask-bubble seeker-ask-bubble-error seeker-ask-bubble-error-" + turn.error.kind} role="alert">
@@ -125,7 +161,7 @@ function Bubble({ turn }) {
   );
 }
 
-export default function AskCluckPane() {
+export default function AskCluckPane({ report }) {
   useI18nReady();
   const [messages, setMessages] = React.useState([]); // { id, question, status: 'thinking'|'ok'|'error', answer?, error? }
   const [input, setInput] = React.useState("");
@@ -225,7 +261,7 @@ export default function AskCluckPane() {
         </div>
       ) : (
         <div className="seeker-ask-thread" ref={threadRef}>
-          {messages.map((turn) => <Bubble key={turn.id} turn={turn} />)}
+          {messages.map((turn) => <Bubble key={turn.id} turn={turn} report={report} />)}
         </div>
       )}
 
