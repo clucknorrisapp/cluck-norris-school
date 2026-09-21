@@ -175,24 +175,24 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
 
     ok("A · no uncaught exception during any of that", errors.length === 0, errors.join(" | ").slice(0, 400));
 
-    // ⚠️ FINDING, pinned rather than silenced (2026-09-21). The shipped bundle reaches OFF-DEVICE
-    // for its typography: public/theme.css line 13 @imports Anton + Chakra Petch from Google
-    // Fonts. Consequences on a real phone: the brand type is gone when the app is offline, and a
-    // dApp Store app makes a third-party request on every cold start. The fix is to self-host the
-    // woff2 subsets into the seeker bundle only (leaving the website's CSS alone) — deliberately
-    // NOT done in the same pass as the signing path.
+    // The bundle is now SELF-CONTAINED for typography. It used to @import Anton + Chakra Petch
+    // from Google Fonts through theme.css, which meant the brand type vanished the moment the
+    // phone lost signal and a store app phoned a third party on every cold start — found by an
+    // earlier version of this very test. scripts/vendor-fonts.mjs vendored all 19 faces into
+    // public/vendor/fonts/, so the ONLY thing that may now leave the bundle is our own API.
     //
-    // The PRIMARY guard against a new third-party host is the store-edition builder's own
-    // `allowedHosts` check, which refuses the build (verified: injecting a fetch to example.com
-    // fails with "host not allow-listed"). This is the RUNTIME half of that pair — build-time
-    // config and actual runtime requests have complementary blind spots, which is the whole
-    // point of AGENTS.md's "check every form, not one form". A host that is allow-listed in
-    // config but should not be reached at boot only shows up here.
-    const ALLOWED_OFFSITE = ["https://fonts.googleapis.com/", "https://fonts.gstatic.com/", "https://clucknorris.app/api/"];
+    // The build refuses a new host too (store-edition's `allowedHosts`, which no longer lists
+    // either font domain). This is the RUNTIME half of that pair: build-time config and actual
+    // runtime requests have complementary blind spots, which is the point of AGENTS.md's "check
+    // every form, not one form". A host that is allow-listed but should not be hit at boot only
+    // shows up here.
+    const ALLOWED_OFFSITE = ["https://clucknorris.app/api/"];
     const unexpected = [...offsite].filter((u) => !ALLOWED_OFFSITE.some((a) => u.startsWith(a)));
-    ok("A · the bundle makes no third-party request outside the known allow-list", unexpected.length === 0, JSON.stringify(unexpected));
-    ok("A · and the only known one is still just the font stylesheet (self-hosting is the open fix)",
-       [...offsite].some((u) => u.startsWith("https://fonts.googleapis.com/")), "the font @import is gone — good; drop this assertion and the note above it");
+    ok("A · the bundle reaches NOTHING off-device but our own API — no fonts, no CDN, no beacon",
+       unexpected.length === 0, JSON.stringify(unexpected));
+    ok("A · the brand fonts really loaded, from inside the bundle",
+       await page.evaluate(() => document.fonts.check("700 16px 'Chakra Petch'") && document.fonts.check("400 16px 'Anton'")),
+       "a face did not load — check vendor/fonts shipped and theme.css points at it");
     await ctx.close();
   }
 

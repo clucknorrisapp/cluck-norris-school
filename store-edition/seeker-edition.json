@@ -15,7 +15,8 @@
     "cluck-norris.png"
   ],
   "dirs": [
-    "i18n"
+    "i18n",
+    "vendor/fonts"
   ],
   "remotes": [],
   "forbidden": [
@@ -29,8 +30,6 @@
   ],
   "allowedHosts": [
     "clucknorris.app",
-    "fonts.googleapis.com",
-    "fonts.gstatic.com",
     "www.w3.org",
     "reactjs.org",
     "phantom.app",
