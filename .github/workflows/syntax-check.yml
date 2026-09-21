@@ -206,6 +206,21 @@ jobs:
       # Dependency-free — stubs global.fetch, no live RPC call in CI.
       - name: Seeker app — Rent Reclaim read side (both token programs, honest classification, unavailable-not-zero, i18n)
         run: node scripts/seeker-reclaim-test.cjs
+      # Rent Reclaim, SIGNING PATH (increment 3, docs/SEEKER_RECLAIM_SIGNING_SPEC.md) — THIS MOVES
+      # USER FUNDS. public/rent-reclaim-plan.js (every decision) + src/seeker/reclaim-sign.js (the
+      # thin browser seam). The built CloseAccount instruction is re-derived from
+      # @solana/spl-token and diffed byte-for-byte for BOTH the classic and Token-2022 program; a
+      # mutated (foreign) destination is REFUSED by the build path, not just the happy path; a
+      # balance that appears BETWEEN the scan and the build drops the account instead of closing
+      # it; wrapped SOL is refused with a reason; the per-transaction batch size is a COMPUTED
+      # bound (cross-checked against a REAL compiled solanaWeb3 transaction, not just the formula
+      # that produced it) and a 40-account wallet plans correctly; partial failure reports exactly
+      # which accounts closed with a confirmed-only total; a re-run after partial failure never
+      # re-attempts an already-closed account and never double-counts; an RPC failure reads
+      # "unavailable", never zero; a rejected signature is a normal outcome that claims no success.
+      # No live RPC, no real signing anywhere in this file — fixtures and a fake bridge only.
+      - name: Seeker app — Rent Reclaim SIGNING path (byte-identical instruction, mutation-tested destination check, batching, idempotency, unavailable, rejection)
+        run: node scripts/seeker-reclaim-sign-test.cjs
       # Addendum B5 / roadmap E3: the on-chain memo format is byte-diffed against a hand-built
       # Uint8Array before it ships; verifyCommitTx never trusts the client (wrong payer, wrong or
       # missing memo, more than one memo, a failed or unconfirmed tx are all refused); a version's
