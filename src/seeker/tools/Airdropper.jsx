@@ -137,6 +137,20 @@ export default function AirdropperPane({ wallet }) {
   const liveRef = React.useRef(true);
   React.useEffect(() => () => { liveRef.current = false; stopRef.current = true; }, []);
 
+  // ⚠️ LOSING THE WALLET MID-DROP MUST STOP THE DROP (adversarial review P3-10, 2026-09-21).
+  // App.jsx drops the connection outright when the wallet switches accounts — the right call —
+  // but an in-flight send() closed over `wallet.provider` and `wallet.address` when it started
+  // and kept going: every remaining batch still built for the OLD address, still prompting the
+  // now-different wallet, with nothing setting stopRef. Best case those batches fail signature
+  // verification and land in the Failed count; a lenient shimmed provider is the case sign.js's
+  // live-public-key re-read exists for, and this engine does not have it.
+  //
+  // The engine already has the hook for this: shouldContinue is checked before each batch, so
+  // setting the flag stops the run BEFORE the next wallet prompt rather than after it.
+  React.useEffect(() => {
+    if (!wallet.connected && phase === "sending") stopRef.current = true;
+  }, [wallet.connected, phase]);
+
   const ready = engine() && plan() && util();
 
   function resetRun() {

@@ -2783,5 +2783,6 @@
   "One of these was refused — retrying them one at a time so the rest still go through…": "Una de estas fue rechazada — reintentándolas una por una para que el resto sí se complete…",
   "SOL back": "SOL de vuelta",
   "{n} of these is wrapped SOL — it is unwrapped, not burned, and the whole balance comes back to you.": "{n} de estas es SOL envuelto — se desenvuelve, no se quema, y todo el saldo vuelve a ti.",
-  "Only {done} of {total} rows made it onto the receipt — the rest did not record:": "Solo {done} de {total} filas llegaron al recibo — el resto no se registró:"
+  "Only {done} of {total} rows made it onto the receipt — the rest did not record:": "Solo {done} de {total} filas llegaron al recibo — el resto no se registró:",
+  "You stopped this drop. {n} of these wallets were never attempted — nothing was sent to them, and nothing was charged for them.": "Detuviste este airdrop. {n} de estas billeteras nunca se intentaron — no se les envió nada, ni se les cobró nada."
 }

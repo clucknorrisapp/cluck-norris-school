@@ -32,10 +32,14 @@ not drift apart. Every entry is pinned by a test, and every test was mutation-pr
 | P2-7 | **CLOSED** | `url` and `error` live in the same object; a partial receipt keeps its link and says "N of M recorded". |
 | P2-8 | **CLOSED** | The Locker Room parses with `CluckAirdropPlan.parseAmount`, which refuses an ambiguous format instead of coercing it. Boot §K drives the finding's whole table through the real form and reads the amount that reaches the wire. |
 | P3-9 | **CLOSED** | A stopped run says so, and counts the wallets never attempted off the engine's own reason string. |
+| P3-10 | **PART CLOSED** | The closable consequence is closed: losing the wallet mid-drop now sets the stop flag, so the engine's own `shouldContinue` halts the run BEFORE the next prompt instead of building every remaining batch for the old address. |
 
-**Still open:** P3-10 — the Airdropper still runs its own send loop rather than `sign.js`'s, and
-an in-flight run still prompts after the app drops the wallet. It is the largest remaining item
-in this document and is a refactor, not a patch.
+**Still open:** the structural half of P3-10 — the Airdropper still runs its own send loop rather
+than `sign.js`'s, so it has neither the live-public-key re-read nor the message-byte diff. The
+engine requires `signAndSendTransaction`, which makes the byte diff impossible by construction, so
+closing this properly means giving the engine a `signTransaction` branch routed through
+`signSendConfirm`. That is a refactor of a file shared with the live desktop page, not a patch,
+and it is the largest remaining item in this document.
 
 ---
 

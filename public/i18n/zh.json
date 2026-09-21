@@ -2783,5 +2783,6 @@
   "One of these was refused — retrying them one at a time so the rest still go through…": "其中一笔被拒绝——正在逐一重试，让其余的仍能成功…",
   "SOL back": "SOL 退回",
   "{n} of these is wrapped SOL — it is unwrapped, not burned, and the whole balance comes back to you.": "其中 {n} 个是 Wrapped SOL——会被解包，不会被销毁，全部余额都会还给你。",
-  "Only {done} of {total} rows made it onto the receipt — the rest did not record:": "收据只记录了 {total} 行中的 {done} 行——其余的未能记录："
+  "Only {done} of {total} rows made it onto the receipt — the rest did not record:": "收据只记录了 {total} 行中的 {done} 行——其余的未能记录：",
+  "You stopped this drop. {n} of these wallets were never attempted — nothing was sent to them, and nothing was charged for them.": "你停止了这次空投。这些钱包中有 {n} 个从未被尝试过——没有向它们发送任何内容，也没有向它们收取任何费用。"
 }

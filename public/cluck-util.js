@@ -43,7 +43,9 @@
   // Two independent adversarial reviews found the same P0 built on not distinguishing them: a
   // transport failure was reported as "nothing was locked / nothing was burned", with a retry
   // button, after the transaction had landed. So a node-answered error is TAGGED, and callers
-  // that move money branch on the tag (src/seeker/sign.js). Additive: every existing caller sees
+  // that move money branch on the tag (the wallet app's signing seam). ⚠️ Do NOT name that file
+  // by path here: this module ships in the education-only store bundles, which assert that no
+  // reference to the wallet app's tree survives in them. Additive: every existing caller sees
   // the same Error with the same message.
   async function rpc(method, params, url) {
     var r = await fetch(url || "/api/helius-rpc", {
