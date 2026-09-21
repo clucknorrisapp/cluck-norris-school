@@ -801,6 +801,57 @@ state (each round's harness was pinned to a specific pre-squash sha that no long
 
 Findings, not rewrites, same rule as every other round.
 
+## Round 7 — 2026-09-21: PR #390, the fix round for YOUR seven findings
+
+**The owner held #390 on your review, and it stays held until you have looked at this.** Every
+finding was confirmed against the data before anything was changed — none was argued with. All
+seven are addressed; one of them (the transcript handoff) is addressed by telling the truth rather
+than by building the feature, and that is deliberate and explained.
+
+| # | Your finding | What changed | Where |
+|---|---|---|---|
+| 1 | P1 — every quiz had no answer buttons | `mapQuestions` in the extractor now carries `options` / `correct` / `explanation` beside the classroom's `q`/`answer`/`why`. `data/curriculum.json` regenerated; 200/200 questions answerable. Exposure note: `answer` already carried the correct option's text, and the file is required server-side, not served. | `scripts/extract-curriculum.js`, `data/curriculum.json` |
+| 2 | P1 — LP Lab and Deep Dive lost their bodies (`sections` discarded) | The model carries `sections`, `content`, `tagline`, `verdict`; the reader renders them OPEN (not accordions — on a phone a collapsed section is a lesson nobody reads). | `src/seeker/school/curriculum.js`, `School.jsx`, `school.css` |
+| 3 | P1 — finishing `basics/dex` credited `fundamentals/dex` | Local progress is keyed by a COURSE-SCOPED `key` (`course:lesson`) everywhere. The LEDGER BEACON deliberately keeps the BARE lesson id — that is the id space the website has always written. Two id spaces, on purpose, documented in the file header. | `curriculum.js`, `School.jsx` `beaconId()` |
+| 4 | P2 — all-wrong answers passed | `passMark(n) = Math.ceil(n * 2/3)`, the website's own rule copied not invented. A miss shows the score, what was needed, and a retake; it writes NO local mark and sends NO completion beacon. | `curriculum.js`, `School.jsx` `advance()` |
+| 5 | P2 — the school dictionary never loaded (pathname vs hash) | The shell DECLARES its packs: `<html data-i18n-packs="school">` on `seeker.html`; `i18n.js` reads the attribute (whitelisted charset) beside its existing pathname rule. Declared, not hash-sniffed, because the app boots at `#/` and redirects after i18n.js has already run. NOT a blanket load — `<lang>.school.json` is ~1MB/356KB gz and the website's homepage must not pay it. The website's own client-nav gap (land on `/`, navigate to `/school`) is pre-existing and is stated in the comment as unfixed. | `seeker.html`, `public/i18n.js` |
+| 6 | P2 — "Claim your transcript on the website" was not true | **Not built.** Every handoff design puts a bearer credential (the sid, or a code minted from it) in front of a treasury-paid mint, and the ledger's live-spread check has to be re-derived for a merged session. That is an owner decision under PLAN ≠ EXECUTE. The copy now says what is true, in seven languages, and the decision is written up with three concrete designs and what each costs. | `School.jsx`, `docs/SEEKER_TRANSCRIPT_HANDOFF.md` |
+| 7 | P2 — `payload.brief` re-imported the LP picks | The pane no longer renders `brief` at all. AND the `cluckBrief()` system prompt in `server.js` no longer asks for "our blue-chip LP yield picks" — it forbids blue-chip/safe/pick language and forbids rendering a fee ratio as a yield or return. That prompt also feeds the public daily Telegram/X post, so leaving it would have meant the brand still said it every day. The `/api/alpha` payload is unchanged. | `DailyBrief.jsx`, `tools.css`, `server.js` ~5115–5124 |
+
+**The missing test you named now exists — `seeker-app-boot-test.cjs` section P**, the learner
+journey: open the richest LP Lab lesson and assert its headings and >2000 chars of body render;
+mark a Deep Dive lesson read; open `basics/dex` (chosen because the id is duplicated), answer
+every question WRONG and assert no pass, no local mark, no ledger beacon; retake answering every
+question RIGHT from the curriculum's own `correct` index and assert pass, the course-scoped local
+key, the bare-id beacon; then assert `basics 1/7` and `fundamentals 0/16`. The whole journey runs
+with every `/api/**` refused, so it also proves the offline claim. **Mutation-proved:** each of the
+four bugs was reintroduced in isolation and the test failed on the right assertion each time
+(P5 printed `fundamentals 1 / 16`, P1 printed `0 of 6`, P3 timed out on a missing option, P3
+reported the false pass). Commit message has the list.
+
+### Where to look hardest
+
+- `School.jsx` `advance()` / `complete()` / the `useEffect` that resets quiz state on a route
+  change. A deep link from the Daily pane into a lesson while another is open must not inherit
+  the previous quiz's `score`.
+- `public/i18n.js` — the attribute path. It is our own markup, but it becomes a URL; the regex
+  is the only guard.
+- `server.js` `cluckBrief` — read the whole prompt, not the diff. Does anything in it still let
+  the model rank or endorse a pool? The data summary line still carries `%/day` as a number; the
+  instruction says never to present it as a return. Is that enough, or should the number go?
+- The eight new dictionary strings (six languages) — placeholder integrity was checked by
+  script; the wording is mine. The two retired keys were removed from all six files with every
+  other byte untouched.
+
+### What was NOT done, and why
+
+- No sid handoff (above). If the owner wants it, the third design in the doc is the one to build.
+- The website's own client-navigation dictionary gap (a pre-existing bug this review surfaced by
+  analogy) is documented in `i18n.js`, not fixed — it needs a lazy merge plus a re-walk of nodes
+  already machine-translated, which is more than a held PR should carry.
+- `/tools/alpha` is still the Daily route's path and the catch-all `*` still lands on `/tools`
+  rather than `/school`. Both are cosmetic and untouched here.
+
 ## Round 6 — 2026-09-21: PR #390, the Seeker app on real hardware
 
 **The owner asked for you on this one specifically**, before it merges. It is the first batch

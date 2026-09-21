@@ -1,9 +1,17 @@
 <!doctype html>
-<html lang="en">
+<!-- data-i18n-packs: which curated dictionaries /i18n.js must load on this shell, regardless of
+     route. The Seeker app is a HASH-ROUTED bundle — its path is always "/" (or "/index.html") and
+     the school lives at "#/school" — so i18n.js's `location.pathname.indexOf("/school") === 0`
+     rule never matched and the curated school dictionary never loaded: 56 of the 58 lesson intros
+     are professionally translated in <lang>.school.json and all six non-English languages were
+     machine-translating them instead, per view, at a cost. (Codex, PR #390.)
+     Declared rather than sniffed, because a hash check at load time is racy: the app boots at "#/"
+     and only then redirects to "#/school". This shell IS the school, so it says so. -->
+<html lang="en" data-i18n-packs="school">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-    <meta name="description" content="Cluck Norris — the pocket crypto toolkit for Solana Seeker: reclaim rent, ask the AI tutor, check your wallet." />
+    <meta name="description" content="Cluck Norris — the free Solana crypto school in your pocket, plus the tools it teaches with: rent reclaim, wallet checkup, the AI tutor and more." />
     <meta name="theme-color" content="#0b0c0e" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

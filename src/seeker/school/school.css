@@ -218,6 +218,66 @@
 }
 .seeker-school-concept-def { font-size: 13.5px; color: var(--sub); line-height: 1.5; }
 
+/* ── the lesson body ───────────────────────────────────────────────────────────────────────── */
+/* ⚠️ `sections` and `content` are the actual teaching material for 35 of the 58 lessons. The
+   first build rendered neither, so LP Lab and Deep Dive were a title and a tagline. They are
+   rendered OPEN, not in accordions: the desktop lab collapses them behind toggles because it has
+   the width for a table of contents — on a phone a collapsed section is a lesson nobody reads. */
+.seeker-school-tagline {
+  font-family: var(--disp);
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.seeker-school-sections { margin-top: 18px; }
+.seeker-school-section + .seeker-school-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.seeker-school-section-h {
+  font-family: var(--disp);
+  font-size: 15px;
+  letter-spacing: .5px;
+  color: var(--orange);
+  margin: 0 0 8px;
+}
+/* `pre-line` keeps the single newlines — the lesson bodies use them for bulleted runs and worked
+   examples, and collapsing them turns a checklist into a paragraph. Paragraph breaks (blank
+   lines) are split into real <p> elements by Prose() so the spacing is the type scale's, not the
+   source file's. */
+.seeker-school-section-body p,
+.seeker-school-content p {
+  font-size: var(--body-text, 15px);
+  line-height: 1.7;
+  white-space: pre-line;
+  margin: 0 0 12px;
+}
+.seeker-school-section-body p:last-child,
+.seeker-school-content p:last-child { margin-bottom: 0; }
+.seeker-school-content { margin-top: 18px; }
+
+.seeker-school-verdict {
+  margin: 20px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 122, 24, .25);
+  background: rgba(255, 122, 24, .08);
+  color: var(--gold);
+  font-size: 14.5px;
+  line-height: 1.7;
+  font-style: italic;
+}
+
+.seeker-school-quiznote {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 20px 0 8px;
+}
+
 .seeker-school-start { width: 100%; margin-top: 4px; }
 
 /* ── quiz ──────────────────────────────────────────────────────────────────────────────────── */
@@ -308,5 +368,13 @@
   font-size: 32px;
 }
 .seeker-school-passed-note { font-size: 13.5px; color: var(--muted); }
+/* A missed quiz is not an error — nothing was lost and it can be retaken without limit. Amber,
+   not red: red says "you broke something", and the repo's own rule is that a discouraging colour
+   on dark reads as broken rather than as a prompt to try again. */
+.seeker-school-passed.missed .seeker-school-passed-mark {
+  background: rgba(255, 122, 24, .18);
+  border: 1px solid var(--orange);
+  color: var(--orange);
+}
 .seeker-school-passed .seeker-btn { width: 100%; margin-top: 6px; }
 .seeker-school-passed .seeker-school-back { margin-top: 4px; }

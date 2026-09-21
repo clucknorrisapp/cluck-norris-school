@@ -49,11 +49,28 @@ export const COURSES = ORDER.filter((id) => raw.courses.some((c) => c.id === id)
     sub: COURSE_META[id] ? COURSE_META[id].sub : c.blurb || "",
     lessons: (c.lessons || []).map((l) => ({
       id: l.id,
+      // ⚠️ COURSE-SCOPED KEY, because lesson ids are NOT unique across courses: `dex` and
+      // `marketcap` exist in both `basics` and `fundamentals`. Keyed by id alone, finishing the
+      // beginner `dex` lesson also ticked the Fundamentals one and advanced that course 0/16 →
+      // 1/16 (Codex, PR #390). Local progress uses this; the LEDGER BEACON deliberately does not
+      // — see beaconId() in School.jsx.
+      key: c.id + ":" + l.id,
       title: l.title,
       icon: l.icon || "•",
       belt: l.belt || "",
       intro: l.intro || "",
+      // LP Lab's `intro` IS its tagline (the extractor maps it that way), so rendering both would
+      // print the same line twice. Carried separately and rendered only when it differs.
+      tagline: l.tagline || "",
       concepts: Array.isArray(l.concepts) ? l.concepts : [],
+      // ⚠️ `sections` is where LP Lab and Deep Dive keep their actual teaching material — 25 of
+      // the 58 lessons have them, and dropping them left those two courses as a title and an
+      // intro (Codex, PR #390). `content` is the basics course's prose.
+      sections: Array.isArray(l.sections) ? l.sections : [],
+      content: typeof l.content === "string" ? l.content : "",
+      // Cluck's closing read on an LP Lab lesson. It is the voice of the course, not decoration —
+      // the desktop lab ends every lesson on it.
+      verdict: l.cluckVerdict || "",
       questions: Array.isArray(l.questions) ? l.questions : [],
     })),
   };
@@ -86,16 +103,17 @@ export function completedIds() {
   }
 }
 
-export function isDone(id) {
-  return completedIds().indexOf(id) !== -1;
+/** `key` is the COURSE-SCOPED key (`course:lesson`), never a bare lesson id. */
+export function isDone(key) {
+  return completedIds().indexOf(key) !== -1;
 }
 
 /** Record a pass locally. The server beacon is fired by the caller through src/track.js. */
-export function markDone(id) {
+export function markDone(key) {
   try {
     const done = completedIds();
-    if (done.indexOf(id) === -1) {
-      done.push(id);
+    if (done.indexOf(key) === -1) {
+      done.push(key);
       localStorage.setItem(DONE_KEY, JSON.stringify(done.slice(-500)));
     }
   } catch (_) {}
@@ -105,7 +123,16 @@ export function courseProgress(courseId) {
   const c = courseById(courseId);
   if (!c) return { done: 0, total: 0 };
   const done = completedIds();
-  return { done: c.lessons.filter((l) => done.indexOf(l.id) !== -1).length, total: c.lessons.length };
+  return { done: c.lessons.filter((l) => done.indexOf(l.key) !== -1).length, total: c.lessons.length };
+}
+
+/**
+ * The website's rule, copied rather than invented: `score >= Math.ceil(n * 2/3)`
+ * (src/App.jsx ~1425). Two schools that disagree about what passing means would be worse than
+ * either rule on its own.
+ */
+export function passMark(n) {
+  return Math.ceil(n * 2 / 3);
 }
 
 /**
@@ -117,7 +144,7 @@ export function nextLesson() {
   const done = completedIds();
   for (const c of COURSES) {
     for (const l of c.lessons) {
-      if (done.indexOf(l.id) === -1) return { course: c, lesson: l };
+      if (done.indexOf(l.key) === -1) return { course: c, lesson: l };
     }
   }
   return null;

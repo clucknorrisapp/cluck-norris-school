@@ -12,7 +12,7 @@
 // connection because the curriculum is bundled.
 //
 // Follows the pane contract in docs/SEEKER_TOOLS_BUILD.md §3: four states never conflated, every
-// string through t(), no verdicts, nothing hardcoded that belongs in config. Two notes specific
+// string through t(), no verdicts, nothing hardcoded that belongs in config. Three notes specific
 // to this surface:
 //
 //   - THERE IS NO "UNAVAILABLE" STATE FOR READING. The curriculum is in the bundle, so a lesson
@@ -21,19 +21,26 @@
 //   - A FAILED BEACON MUST NOT LOOK LIKE A FAILED LESSON. The learner passed; the mark is queued
 //     and re-sent. Telling them the lesson did not count would be false, and the graduation gate
 //     already re-sends the device's own marks before a claim.
+//   - TWO ID SPACES, DELIBERATELY. Local progress is keyed by `lesson.key` (`course:lesson`)
+//     because lesson ids repeat across courses; the LEDGER BEACON keeps the BARE `lesson.id`,
+//     because that is the id space the website has always written and the server's grad-gate
+//     ledger already holds. Mixing them would either credit the wrong course locally or fork the
+//     ledger. Both bugs existed here — see the Codex round on PR #390.
 
 import React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { t } from "../i18n.js";
+import { t, tf } from "../i18n.js";
 import { track } from "../../track.js";
 import {
   COURSES, TOTAL_LESSONS, courseById, lessonById,
-  completedIds, isDone, markDone, courseProgress, nextLesson,
+  completedIds, isDone, markDone, courseProgress, nextLesson, passMark,
 } from "./curriculum.js";
 import "./school.css";
 
 // The id shape the server ledger expects — identical to the website's trackId(), so a lesson
 // passed on the phone and the same lesson passed on the web land on the same ledger row.
+// ⚠️ Takes the BARE lesson id, never the course-scoped key: a colon would be stripped and
+// `basicswallet` is not a row the website has ever written.
 function beaconId(id) {
   return String(id).toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 48);
 }
@@ -47,11 +54,24 @@ function Bar({ done, total }) {
   );
 }
 
+// Lesson prose arrives as plain text with blank-line paragraph breaks and single newlines that
+// are meaningful (bulleted runs, worked examples). Split on the blanks, keep the singles with
+// `white-space: pre-line` in CSS — the desktop lab renders it exactly this way.
+function Prose({ text, className }) {
+  const paras = String(text || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  if (!paras.length) return null;
+  return (
+    <div className={className}>
+      {paras.map((p, i) => <p key={i}>{p}</p>)}
+    </div>
+  );
+}
+
 // ── the front door ──────────────────────────────────────────────────────────────────────────
 export function SchoolHome() {
   const done = completedIds();
   const doneCount = COURSES.reduce(
-    (n, c) => n + c.lessons.filter((l) => done.indexOf(l.id) !== -1).length, 0
+    (n, c) => n + c.lessons.filter((l) => done.indexOf(l.key) !== -1).length, 0
   );
   const next = nextLesson();
 
@@ -79,7 +99,15 @@ export function SchoolHome() {
         </Link>
       ) : (
         <div className="seeker-school-finished">
-          {t("You've finished every lesson in the app. Claim your transcript on the website.")}
+          {/* ⚠️ THIS USED TO SAY "Claim your transcript on the website." It was not true. The
+              graduation ledger is keyed by an anonymous per-browser session id (lib/school-progress,
+              `evaluate(sid, …)`), and a Capacitor webview is its own origin with its own id — so
+              the website, opened in the phone's browser, sees none of the lessons finished here.
+              Building the handoff means letting one device's id credit another's, which is a
+              bearer token in front of a treasury-paid mint and the only anti-farm control there
+              is. That is an owner decision, not a copy fix — docs/SEEKER_TRANSCRIPT_HANDOFF.md.
+              Until it exists, the app says what is actually true. (Codex, PR #390.) */}
+          {t("You've finished every lesson in the app. Your progress is kept on this phone — the diploma is claimed on clucknorris.app, and it counts the lessons you take there.")}
         </div>
       )}
 
@@ -133,9 +161,9 @@ export function SchoolCourse() {
 
       <ol className="seeker-school-lessons">
         {course.lessons.map((l, i) => {
-          const finished = done.indexOf(l.id) !== -1;
+          const finished = done.indexOf(l.key) !== -1;
           return (
-            <li key={l.id}>
+            <li key={l.key}>
               <Link className={"seeker-school-lesson" + (finished ? " done" : "")} to={`/school/${course.id}/${l.id}`}>
                 <span className="seeker-school-lesson-n">{finished ? "✓" : i + 1}</span>
                 <span className="seeker-school-lesson-text">
@@ -158,15 +186,20 @@ export function SchoolLesson() {
   const course = courseById(courseId);
   const lesson = lessonById(courseId, lessonId);
 
-  const [phase, setPhase] = React.useState("read");   // read | quiz | passed
+  const [phase, setPhase] = React.useState("read");   // read | quiz | passed | failed
   const [qi, setQi] = React.useState(0);
   const [picked, setPicked] = React.useState(null);
-  const [wrong, setWrong] = React.useState(0);
+  const [score, setScore] = React.useState(0);
 
   // Reading time is what the funnel measures; fire once per lesson opened.
   React.useEffect(() => {
     if (lesson) track("lesson_start:" + beaconId(lesson.id));
   }, [lessonId]);
+
+  // A lesson opened from a deep link while another is on screen must not inherit its quiz state.
+  React.useEffect(() => {
+    setPhase("read"); setQi(0); setPicked(null); setScore(0);
+  }, [courseId, lessonId]);
 
   if (!course || !lesson) {
     return (
@@ -180,11 +213,25 @@ export function SchoolLesson() {
 
   const questions = lesson.questions;
   const q = questions[qi] || null;
+  // The website's rule, not a new one: `score >= Math.ceil(n * 2/3)` (src/App.jsx ~1425).
+  const need = passMark(questions.length);
+
+  function startQuiz() {
+    setPhase("quiz"); setQi(0); setPicked(null); setScore(0);
+  }
+
+  function complete() {
+    // The mark is recorded locally AND queued to the ledger. A beacon that fails does not change
+    // what the learner sees — they passed, and src/track.js re-sends it.
+    markDone(lesson.key);
+    track("lesson_complete:" + beaconId(lesson.id));
+    setPhase("passed");
+  }
 
   function choose(idx) {
     if (picked !== null) return;           // one answer per question; no re-picking after feedback
     setPicked(idx);
-    if (q && idx !== q.correct) setWrong((n) => n + 1);
+    if (q && idx === q.correct) setScore((n) => n + 1);
   }
 
   function advance() {
@@ -193,36 +240,64 @@ export function SchoolLesson() {
       setPicked(null);
       return;
     }
-    // Done. The mark is recorded locally AND queued to the ledger. A beacon that fails does not
-    // change what the learner sees — they passed, and src/track.js re-sends it.
-    markDone(lesson.id);
-    track("lesson_complete:" + beaconId(lesson.id));
-    setPhase("passed");
+    // ⚠️ THE LAST QUESTION IS NOT THE PASS. This used to mark the lesson done unconditionally, so
+    // answering every question wrong still completed it and still wrote a ledger mark (Codex, PR
+    // #390). A school whose quiz cannot be failed is not teaching anything.
+    if (score >= need) complete();
+    else setPhase("failed");
   }
 
-  if (phase === "passed") {
+  if (phase === "passed" || phase === "failed") {
+    const ok = phase === "passed";
     const p = courseProgress(course.id);
     return (
       <div className="seeker-pane seeker-school">
-        <div className="seeker-school-passed">
-          <div className="seeker-school-passed-mark" aria-hidden="true">✓</div>
-          <h1 className="seeker-school-title">{t("Lesson passed")}</h1>
+        <div className={"seeker-school-passed" + (ok ? "" : " missed")}>
+          <div className="seeker-school-passed-mark" aria-hidden="true">{ok ? "✓" : "↻"}</div>
+          <h1 className="seeker-school-title">{ok ? t("Lesson passed") : t("Not this time")}</h1>
           <p className="seeker-tool-lede">{lesson.title}</p>
-          {wrong > 0 ? (
+
+          {questions.length ? (
             <p className="seeker-school-passed-note">
-              {t("You missed some on the way — the explanations are worth a second read.")}
+              {tf("You got {score} of {total}. You need {need} to pass.", { score, total: questions.length, need })}
             </p>
           ) : null}
-          <div className="seeker-school-overall">
-            <div className="seeker-school-overall-row">
-              <span>{t(course.title)}</span>
-              <span className="seeker-school-overall-n">{p.done} / {p.total}</span>
-            </div>
-            <Bar done={p.done} total={p.total} />
-          </div>
-          <button type="button" className="seeker-btn" onClick={() => navigate(`/school/${course.id}`)}>
-            {t("Next lesson")}
-          </button>
+
+          {ok ? (
+            <>
+              {score < questions.length ? (
+                <p className="seeker-school-passed-note">
+                  {t("You missed some on the way — the explanations are worth a second read.")}
+                </p>
+              ) : null}
+              <div className="seeker-school-overall">
+                <div className="seeker-school-overall-row">
+                  <span>{t(course.title)}</span>
+                  <span className="seeker-school-overall-n">{p.done} / {p.total}</span>
+                </div>
+                <Bar done={p.done} total={p.total} />
+              </div>
+              <button type="button" className="seeker-btn" onClick={() => navigate(`/school/${course.id}`)}>
+                {t("Next lesson")}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="seeker-school-passed-note">
+                {t("Nothing is lost — read it again and retake it. There is no limit and no penalty.")}
+              </p>
+              <button type="button" className="seeker-btn" onClick={startQuiz}>
+                {t("Retake the quiz")}
+              </button>
+              <button
+                type="button"
+                className="seeker-btn seeker-btn-quiet"
+                onClick={() => { setPhase("read"); setQi(0); setPicked(null); setScore(0); }}
+              >
+                {t("Read the lesson again")}
+              </button>
+            </>
+          )}
           <Link className="seeker-school-back" to="/school">{t("Back to the school")}</Link>
         </div>
       </div>
@@ -273,8 +348,11 @@ export function SchoolLesson() {
       <Link className="seeker-school-back" to={`/school/${course.id}`}>{t("Back to")} {t(course.title)}</Link>
       <h1 className="seeker-school-title">{lesson.icon} {lesson.title}</h1>
       {lesson.belt ? <div className="seeker-school-belt">{lesson.belt}</div> : null}
+      {lesson.tagline && lesson.tagline !== lesson.intro ? (
+        <div className="seeker-school-tagline">{lesson.tagline}</div>
+      ) : null}
 
-      <p className="seeker-school-intro">{lesson.intro}</p>
+      {lesson.intro ? <p className="seeker-school-intro">{lesson.intro}</p> : null}
 
       {lesson.concepts.length ? (
         <div className="seeker-school-concepts">
@@ -288,20 +366,39 @@ export function SchoolLesson() {
         </div>
       ) : null}
 
+      {/* ⚠️ THE ACTUAL TEACHING MATERIAL. LP Lab and Deep Dive keep their lesson bodies in
+          `sections`, and the basics course and the liquidity library keep theirs in `content`.
+          Dropping both left 35 of the 58 lessons as a title and a one-line tagline, which is what
+          the first build shipped (Codex, PR #390). Rendered open rather than in accordions: on a
+          phone, a collapsed section is a lesson nobody reads. */}
+      {lesson.sections.length ? (
+        <div className="seeker-school-sections">
+          {lesson.sections.map((s, i) => (
+            <section className="seeker-school-section" key={i}>
+              {s.heading ? <h2 className="seeker-school-section-h">{s.heading}</h2> : null}
+              <Prose text={s.body} className="seeker-school-section-body" />
+            </section>
+          ))}
+        </div>
+      ) : null}
+
+      {lesson.content ? <Prose text={lesson.content} className="seeker-school-content" /> : null}
+
+      {lesson.verdict ? (
+        <blockquote className="seeker-school-verdict">{lesson.verdict}</blockquote>
+      ) : null}
+
       {questions.length ? (
-        <button
-          type="button"
-          className="seeker-btn seeker-school-start"
-          onClick={() => { setPhase("quiz"); setQi(0); setPicked(null); setWrong(0); }}
-        >
-          {isDone(lesson.id) ? t("Take the quiz again") : t("Take the quiz")}
-        </button>
+        <>
+          <p className="seeker-school-quiznote">
+            {tf("{total} questions. {need} right to pass — retake it as often as you like.", { total: questions.length, need })}
+          </p>
+          <button type="button" className="seeker-btn seeker-school-start" onClick={startQuiz}>
+            {isDone(lesson.key) ? t("Take the quiz again") : t("Take the quiz")}
+          </button>
+        </>
       ) : (
-        <button
-          type="button"
-          className="seeker-btn seeker-school-start"
-          onClick={() => { markDone(lesson.id); track("lesson_complete:" + beaconId(lesson.id)); setPhase("passed"); }}
-        >
+        <button type="button" className="seeker-btn seeker-school-start" onClick={complete}>
           {t("Mark as read")}
         </button>
       )}

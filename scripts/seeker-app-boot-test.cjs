@@ -1393,6 +1393,197 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await ctx.close();
   }
 
+  // ---- P: THE LEARNER JOURNEY — open a lesson, answer its quiz, check the progress ---------
+  //
+  // ⚠️ THIS SECTION EXISTS BECAUSE EVERYTHING ELSE PASSED WHILE THE SCHOOL DID NOT WORK.
+  //
+  // Section B above navigates to #/school and asserts the pane mounts with the right title. It
+  // was green on a build where NO QUIZ HAD ANY ANSWER BUTTONS — data/curriculum.json carries the
+  // quiz as {q, answer, why} for the AI classroom, the phone school was written against
+  // {options, correct, explanation}, and `(q.options || []).map(...)` rendered nothing. Every one
+  // of the 200 questions was a dead end. It was also green while LP Lab and Deep Dive rendered a
+  // title and a one-line tagline, because their lesson bodies live in `sections` and the model
+  // dropped the field. And it was green while finishing the beginner `dex` lesson also ticked the
+  // Fundamentals lesson of the same id, and while answering every question WRONG completed the
+  // lesson and wrote a mark to the graduation ledger. Four functional breaks, one review
+  // (Codex, PR #390), zero test failures.
+  //
+  // What they have in common: every one of them is invisible to a test that mounts a pane and
+  // reads the title. So this one does what a learner does — opens a substantive lesson, reads it,
+  // answers the questions, and checks what the progress says afterwards.
+  //
+  // The correct answers come from data/curriculum.json ON DISK rather than from the screen, which
+  // makes this a two-sided check: the journey passes only if the BUNDLE'S copy of a lesson agrees
+  // with the repo's, question for question and index for index.
+  {
+    const CURRICULUM = require(path.join(ROOT, "data", "curriculum.json"));
+    const courseOf = (id) => CURRICULUM.courses.find((c) => c.id === id);
+    const lessonOf = (cid, lid) => (courseOf(cid).lessons || []).find((l) => l.id === lid);
+    const passMark = (n) => Math.ceil(n * 2 / 3);
+
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    const beacons = [];     // every /api/track event the app actually sent
+    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("request", (r) => {
+      if (r.url().includes("/api/track")) {
+        try { const b = JSON.parse(r.postData() || "{}"); if (b.event) beacons.push(b.event); } catch (_) {}
+      }
+    });
+    // Nothing in the school needs the network — that is the point of bundling it. Everything is
+    // refused so a passing journey proves the offline claim rather than quietly relying on a fetch.
+    await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+    await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+
+    const go = async (hash) => { await page.evaluate((h) => { window.location.hash = h; }, hash); await page.waitForTimeout(320); };
+    const opts = () => page.evaluate(() => Array.from(document.querySelectorAll(".seeker-school-option")).map((b) => (b.innerText || "").trim()));
+    const doneKeys = () => page.evaluate(() => { try { return JSON.parse(localStorage.getItem("clkn_completed") || "[]"); } catch (_) { return null; } });
+    const progressOf = (cid) => page.evaluate((c) => {
+      const a = document.querySelector(`a.seeker-school-course[href="#/school/${c}"]`);
+      return a ? (a.querySelector(".seeker-school-course-n") || {}).innerText : null;
+    }, cid);
+
+    // ── P1: the lesson BODY is on the screen, not just its title ──────────────────────────
+    // The LP Lab lesson with the most prose. 24 of the 58 lessons are LP Lab's and 11 are Deep
+    // Dive's; between them that is 35 lessons whose entire teaching material is `sections`.
+    {
+      const lp = courseOf("lp").lessons.map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
+        .sort((a, b) => b.chars - a.chars)[0].l;
+      await go(`#/school/lp/${lp.id}`);
+      const seen = await page.evaluate(() => ({
+        heads: Array.from(document.querySelectorAll(".seeker-school-section-h")).map((h) => (h.innerText || "").trim()),
+        bodyChars: Array.from(document.querySelectorAll(".seeker-school-section-body p")).reduce((n, p) => n + (p.innerText || "").length, 0),
+        title: (document.querySelector(".seeker-school-title") || {}).innerText || "",
+      }));
+      ok(`P1 · an LP Lab lesson renders its section headings (${seen.heads.length} of ${(lp.sections || []).length})`,
+         seen.heads.length === (lp.sections || []).length, JSON.stringify(seen.heads).slice(0, 200));
+      ok("P1 · ⚠️ and their BODIES — the lesson is the material, not the title and a tagline",
+         seen.bodyChars > 2000, `only ${seen.bodyChars} characters of body rendered for "${seen.title}"`);
+      const declared = (lp.sections || []).map((s) => s.heading).filter(Boolean);
+      ok("P1 · the headings on screen are the ones the curriculum declares",
+         declared.every((h) => seen.heads.includes(h)), JSON.stringify({ declared, seen: seen.heads }).slice(0, 300));
+    }
+
+    // ── P2: a Deep Dive lesson (prose, no quiz) renders and can be completed ──────────────
+    {
+      const dd = courseOf("deepdive").lessons.find((l) => (l.sections || []).length || l.content);
+      await go(`#/school/deepdive/${dd.id}`);
+      const before = await page.evaluate(() => (document.body.innerText || "").length);
+      ok("P2 · a Deep Dive lesson renders real material", before > 1200, `${before} chars`);
+      const hasMarkRead = await page.evaluate(() => /Mark as read/i.test((document.querySelector(".seeker-school-start") || {}).innerText || ""));
+      ok("P2 · a lesson with no questions offers 'Mark as read' rather than an empty quiz", hasMarkRead);
+      await page.click(".seeker-school-start");
+      await page.waitForTimeout(250);
+      const keys = await doneKeys();
+      ok("P2 · marking it read records the COURSE-SCOPED key", Array.isArray(keys) && keys.includes("deepdive:" + dd.id), JSON.stringify(keys));
+      ok("P2 · and beacons the BARE lesson id, the ledger's own id space",
+         beacons.includes("lesson_complete:" + String(dd.id).toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 48)), JSON.stringify(beacons));
+    }
+
+    // ── P3: the quiz has answers, and answering them all WRONG does not pass ──────────────
+    //
+    // `dex` is deliberate: it exists in BOTH `basics` and `fundamentals`, which is what made the
+    // duplicate-id credit bug possible. The whole journey runs on it so P5 can check the other
+    // course stayed untouched.
+    const DUP = "dex";
+    const basicsDex = lessonOf("basics", DUP);
+    const NEED = passMark(basicsDex.questions.length);
+    {
+      await go(`#/school/basics/${DUP}`);
+      ok(`P3 · the beginner lesson offers its quiz (${basicsDex.questions.length} questions, ${NEED} to pass)`,
+         await page.evaluate(() => !!document.querySelector(".seeker-school-start")));
+      await page.click(".seeker-school-start");
+      await page.waitForTimeout(250);
+
+      const firstOpts = await opts();
+      // ⚠️ THE ONE THAT SHIPPED BROKEN. Zero buttons is what every learner would have met.
+      ok("P3 · ⚠️ the quiz actually renders ANSWER BUTTONS", firstOpts.length >= 2, `rendered ${firstOpts.length} options`);
+      ok("P3 · and they are the options the curriculum declares",
+         JSON.stringify(firstOpts) === JSON.stringify(basicsDex.questions[0].options), JSON.stringify({ screen: firstOpts, data: basicsDex.questions[0].options }).slice(0, 400));
+
+      const beaconsBefore = beacons.length;
+      for (let i = 0; i < basicsDex.questions.length; i++) {
+        const q = basicsDex.questions[i];
+        const onScreen = await page.evaluate(() => ((document.querySelector(".seeker-school-q") || {}).innerText || "").trim());
+        ok(`P3 · question ${i + 1} on screen is the one the curriculum holds`, onScreen === q.q, JSON.stringify({ onScreen, expected: q.q }).slice(0, 300));
+        const wrongIdx = q.options.findIndex((_, k) => k !== q.correct);
+        await page.click(`.seeker-school-option >> nth=${wrongIdx}`);
+        await page.waitForTimeout(160);
+        const verdict = await page.evaluate(() => ((document.querySelector(".seeker-school-explain-verdict") || {}).innerText || "").trim());
+        ok(`P3 · a wrong answer is marked wrong (q${i + 1})`, /Not quite/i.test(verdict), verdict);
+        await page.click(".seeker-school-explain .seeker-btn");
+        await page.waitForTimeout(200);
+      }
+
+      const end = await page.evaluate(() => ({
+        missed: !!document.querySelector(".seeker-school-passed.missed"),
+        text: (document.body.innerText || "").trim(),
+      }));
+      ok("P3 · ⚠️ answering EVERY question wrong does not pass the lesson", end.missed, end.text.slice(0, 200));
+      const keysAfterFail = await doneKeys();
+      ok("P3 · ⚠️ and writes NO local mark", !keysAfterFail.includes("basics:" + DUP), JSON.stringify(keysAfterFail));
+      ok("P3 · ⚠️ and sends NO completion beacon to the graduation ledger",
+         !beacons.slice(beaconsBefore).some((e) => e.startsWith("lesson_complete:")), JSON.stringify(beacons.slice(beaconsBefore)));
+      ok("P3 · the failed screen says the score and what was needed",
+         end.text.includes(String(NEED)) && /0 of|of 3/i.test(end.text), end.text.slice(0, 200));
+      ok("P3 · and offers a retake — nothing is lost", /Retake the quiz/i.test(end.text), end.text.slice(0, 200));
+    }
+
+    // ── P4: the same quiz, answered correctly, passes and records ────────────────────────
+    {
+      // nth=0 deliberately: the missed screen offers TWO buttons (retake, re-read) and a bare
+      // `.seeker-btn` would be a Playwright strict-mode violation rather than a click.
+      await page.click(".seeker-school-passed .seeker-btn >> nth=0");   // Retake the quiz
+      await page.waitForTimeout(250);
+      for (let i = 0; i < basicsDex.questions.length; i++) {
+        const q = basicsDex.questions[i];
+        await page.click(`.seeker-school-option >> nth=${q.correct}`);
+        await page.waitForTimeout(160);
+        const verdict = await page.evaluate(() => ((document.querySelector(".seeker-school-explain-verdict") || {}).innerText || "").trim());
+        ok(`P4 · the curriculum's own \`correct\` index is marked correct on screen (q${i + 1})`, /Correct/i.test(verdict), verdict);
+        await page.click(".seeker-school-explain .seeker-btn");
+        await page.waitForTimeout(200);
+      }
+      const end = await page.evaluate(() => ({
+        passed: !!document.querySelector(".seeker-school-passed") && !document.querySelector(".seeker-school-passed.missed"),
+        text: (document.body.innerText || "").trim(),
+      }));
+      ok("P4 · answering them all right passes the lesson", end.passed, end.text.slice(0, 200));
+      const keys = await doneKeys();
+      ok("P4 · the local mark is the COURSE-SCOPED key", keys.includes("basics:" + DUP), JSON.stringify(keys));
+      ok("P4 · ⚠️ the LEDGER beacon is the BARE lesson id — the id space the website already wrote",
+         beacons.includes("lesson_complete:" + DUP), JSON.stringify(beacons));
+      ok("P4 · ⚠️ the course-scoped key NEVER reaches the ledger (a colon would be stripped to nonsense)",
+         !beacons.some((e) => e.includes("basics") || e.includes(":" + DUP + ":")), JSON.stringify(beacons));
+    }
+
+    // ── P5: the duplicate id credited exactly ONE course ─────────────────────────────────
+    {
+      await go("#/school");
+      const b = await progressOf("basics");
+      const f = await progressOf("fundamentals");
+      const total = courseOf("basics").lessons.length;
+      ok(`P5 · the course that was actually studied advanced (basics ${b})`,
+         String(b).replace(/\s/g, "") === `1/${total}`, String(b));
+      // ⚠️ `dex` and `marketcap` exist in both courses. Keyed by bare lesson id, finishing the
+      // beginner one advanced Fundamentals 0/16 → 1/16 for a lesson nobody opened.
+      ok(`P5 · ⚠️ and the OTHER course holding a lesson of the same id did not (fundamentals ${f})`,
+         String(f).replace(/\s/g, "") === `0/${courseOf("fundamentals").lessons.length}`, String(f));
+      const overall = await page.evaluate(() => ((document.querySelector(".seeker-school-overall-n") || {}).innerText || "").trim());
+      ok(`P5 · the overall counter agrees (${overall})`, /^2\s*\/\s*\d+$/.test(overall), overall);   // deepdive read + basics dex
+    }
+
+    // ── P6: nothing in the whole journey needed the network ─────────────────────────────
+    ok("P6 · ⚠️ the entire journey ran with every API refused — the school is genuinely offline",
+       errors.length === 0, errors.join(" | ").slice(0, 400));
+    ok("P6 · and the only calls it made were beacons, which are allowed to fail",
+       beacons.every((e) => /^lesson_(start|complete):/.test(e)), JSON.stringify(beacons).slice(0, 300));
+
+    await ctx.close();
+  }
+
   await browser.close();
   console.log("\n" + (failures ? failures + " FAILED" : "all passed") + "\n");
   process.exit(failures ? 1 : 0);

@@ -379,19 +379,8 @@
   color: var(--sub);
   margin-bottom: 10px;
 }
-.seeker-brief-text {
-  white-space: pre-wrap;
-  font-family: var(--body);
-  font-size: 14.5px;
-  line-height: 1.7;
-  color: var(--body-text);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px;
-  margin-bottom: 14px;
-  word-break: break-word;
-}
+/* .seeker-brief-text was the Daily pane's rendering of `payload.brief`, removed with it —
+   see the header of tools/DailyBrief.jsx. Nothing else used the class. */
 .seeker-brief-card {
   background: var(--card);
   border: 1px solid var(--border);
