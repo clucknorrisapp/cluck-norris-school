@@ -55,29 +55,62 @@ function bytesToBase64(bytes) {
   return btoa(binary);
 }
 
+// getMultipleAccounts' documented max is 100 pubkeys per call (⚠️ P1-A, adversarial review,
+// 2026-09-21: lib/rent-reclaim.js allows up to 300 candidate accounts through, but this file sent
+// the WHOLE set in one call — a wallet with 101+ dead accounts got a JSON-RPC error back, which
+// this function correctly turned into `null` ["unavailable", never zero], but the pane then told
+// exactly the wallets this feature is worth most to "Could not read the chain right now" forever.
+// public/airdrop-engine.js's checkRecipientAtas — the file this seam's header says it copied —
+// chunks at `var BATCH = 100;`; that chunking was dropped when this file was written. Restored
+// here, same constant name, same behaviour: ANY chunk throwing fails the WHOLE read (never a
+// partial result masquerading as complete).
+const GET_MULTIPLE_ACCOUNTS_BATCH = 100;
+
 // Re-reads the CURRENT on-chain state of exactly the candidate token accounts, immediately
 // before building (spec Rule 6: smallest possible window between the read and the signature).
-// Uses getMultipleAccounts (one RPC call for the whole candidate set, like public/airdrop-
-// engine.js's checkRecipientAtas) rather than re-walking the owner's whole token-account list.
-// Returns the shape CluckReclaimPlan.reverifyBalances expects: { [tokenAccount]: {exists,
-// uiAmount} }. On ANY failure returns null — "could not read the chain", never an empty object
-// (an empty object would read as "every account vanished", which is not the same claim as "we
-// don't know" and must not be treated as safe to proceed).
+// Uses getMultipleAccounts (chunked at 100 pubkeys per call, its documented max) rather than
+// re-walking the owner's whole token-account list. Returns the shape
+// CluckReclaimPlan.reverifyBalances expects: { [tokenAccount]: {exists, amount, lamports, mint,
+// owner} }.
+//   - `amount` is the EXACT base-unit integer as a STRING (⚠️ P1-B: never `uiAmount`, which is
+//     `f64 | null` in the RPC schema and coerces a Token-2022 withheld-fee account, or anything
+//     the RPC can't ui-scale, to a false zero via `Number(null) === 0`).
+//   - `lamports` and `mint` let reverifyBalances overwrite the confirm sheet's numbers with the
+//     just-read on-chain truth (P2-I) instead of trusting whatever the server claimed minutes ago.
+//   - `owner` here is the account's PARSED AUTHORITY (`data.parsed.info.owner` — the wallet that
+//     actually controls the token account), NEVER the top-level `owner` field getMultipleAccounts
+//     returns (that one is the OWNING PROGRAM id, i.e. the token program) — conflating the two
+//     would silently defeat the P2-I owner-mismatch check this exists to serve.
+// On ANY failure returns null — "could not read the chain", never an empty object (an empty
+// object would read as "every account vanished", which is not the same claim as "we don't know"
+// and must not be treated as safe to proceed).
 export async function getFreshBalances(rpc, tokenAccounts) {
   if (!tokenAccounts.length) return {};
+  const out = {};
   try {
-    const res = await rpc("getMultipleAccounts", [tokenAccounts, { encoding: "jsonParsed" }]);
-    const list = (res && res.value) || [];
-    const out = {};
-    tokenAccounts.forEach((ta, i) => {
-      const acc = list[i];
-      if (!acc) { out[ta] = { exists: false, uiAmount: null }; return; }
-      const info = acc.data && acc.data.parsed && acc.data.parsed.info;
-      const ui = info && info.tokenAmount && info.tokenAmount.uiAmount;
-      out[ta] = { exists: true, uiAmount: typeof ui === "number" ? ui : Number(ui) };
-    });
+    for (let i = 0; i < tokenAccounts.length; i += GET_MULTIPLE_ACCOUNTS_BATCH) {
+      const slice = tokenAccounts.slice(i, i + GET_MULTIPLE_ACCOUNTS_BATCH);
+      const res = await rpc("getMultipleAccounts", [slice, { encoding: "jsonParsed" }]);
+      const list = (res && res.value) || [];
+      slice.forEach((ta, j) => {
+        const acc = list[j];
+        if (!acc) { out[ta] = { exists: false, amount: null, lamports: 0, mint: null, owner: null }; return; }
+        const info = acc.data && acc.data.parsed && acc.data.parsed.info;
+        const rawAmount = info && info.tokenAmount && info.tokenAmount.amount;
+        out[ta] = {
+          exists: true,
+          amount: typeof rawAmount === "string" ? rawAmount : null,
+          lamports: typeof acc.lamports === "number" ? acc.lamports : Number(acc.lamports) || 0,
+          mint: (info && info.mint) || null,
+          owner: (info && info.owner) || null,
+        };
+      });
+    }
     return out;
   } catch (_) {
+    // Any chunk failing fails the WHOLE read — a partial getFreshBalances result (some accounts
+    // re-verified, others not) is exactly the "stale/unknown reads as safe" shape this function
+    // must never produce.
     return null;
   }
 }
@@ -97,7 +130,18 @@ export async function getBlockhash(rpc) {
 export async function confirmSignature(rpc, signature) {
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 1000));
-    const result = await rpc("getSignatureStatuses", [[signature]]);
+    // ⚠️ P3 (adversarial review, 2026-09-21): an RPC read failure here (a network blip while
+    // polling) is NOT an on-chain failure — the transaction may already have landed. Reporting
+    // "failed on-chain" for a status we simply couldn't read told people they lost a close that
+    // may well have succeeded. Keep polling instead; only st.err (below) is a real on-chain
+    // failure. A read failure on every attempt still ends in `false` (ambiguous timeout), never a
+    // fabricated "failed on-chain".
+    let result;
+    try {
+      result = await rpc("getSignatureStatuses", [[signature]]);
+    } catch (_) {
+      continue;
+    }
     const st = result && result.value && result.value[0];
     // ⚠️ ORDER IS LOAD-BEARING — same note as public/airdrop-engine.js, where this bug was
     // LIVE. getSignatureStatuses returns BOTH fields for a transaction that landed and then
@@ -114,6 +158,18 @@ export async function confirmSignature(rpc, signature) {
     if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return true;
   }
   return false;
+}
+
+// P2-H helpers — compare a wallet-returned transaction's actual compiled MESSAGE bytes against
+// the one this file built, byte for byte, before ever sending it. Plain Uint8Array comparison —
+// no Node Buffer here either, same rule as bytesToBase64 above.
+function messageBytes(tx) {
+  try { return tx.compileMessage().serialize(); } catch (_) { return null; }
+}
+function sameBytes(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
 // A user-rejected wallet prompt is not shaped the same way by every provider — normalize to a
@@ -134,6 +190,23 @@ export function isUserRejection(e) {
 export async function signAndSendAll(provider, rpc, descriptorBatches, blockhash, owner) {
   const CW = typeof window !== "undefined" ? window.CluckWallet : null;
   if (!CW) throw new Error("Wallet layer did not load.");
+
+  // ⚠️ P2-J (adversarial review, 2026-09-21): `owner` was captured once, at connect time, and
+  // never re-read before this — the single most dangerous moment in this feature. If the wallet
+  // switched to a different account in the background (the person picked another one in the
+  // extension, or another tab drove the same provider) between connect and this signature, every
+  // close instruction below would still be built with the STALE owner as both the destination
+  // and the closing authority — and the wallet may still happily sign it, because from ITS
+  // current account's point of view the tx is asking it to sign as someone else's authority,
+  // which real wallets refuse, but a shimmed/lenient one might not. Re-read the LIVE public key
+  // right before building and refuse outright on any mismatch, rather than trusting the value
+  // this function was handed.
+  const livePubkey = provider && provider.publicKey && typeof provider.publicKey.toString === "function"
+    ? provider.publicKey.toString() : null;
+  if (livePubkey && livePubkey !== owner) {
+    throw new Error("Your wallet switched accounts — reconnect and rescan.");
+  }
+
   const txs = descriptorBatches.map((d) => buildTransaction(d, blockhash, owner));
 
   if (typeof provider.signAllTransactions === "function") {
@@ -149,6 +222,16 @@ export async function signAndSendAll(provider, rpc, descriptorBatches, blockhash
     for (let i = 0; i < txs.length; i++) {
       try {
         const realTx = CW.asTransaction(arr[i], txs[i]);
+        // ⚠️ P2-H (adversarial review, 2026-09-21): a wallet whose signAllTransactions() returns
+        // its results reordered, substituted, or otherwise different from what it was asked to
+        // sign was proved to send successfully here, with the rows in this batch silently
+        // carrying each other's signatures. Never trust that array position i in the wallet's
+        // response corresponds to descriptorBatches[i] — compare the actual compiled MESSAGE
+        // bytes against the transaction WE built, byte for byte, before calling sendTransaction.
+        if (!sameBytes(messageBytes(txs[i]), messageBytes(realTx))) {
+          out.push({ error: "the wallet returned a different transaction than the one you approved" });
+          continue;
+        }
         const raw = realTx.serialize();
         const sig = await rpc("sendTransaction", [bytesToBase64(raw), { encoding: "base64", skipPreflight: false, preflightCommitment: "confirmed" }]);
         out.push(sig ? { sig } : { error: "wallet/RPC returned no signature" });
@@ -197,4 +280,22 @@ export async function runFullReclaim({ wallet, accounts, closedTokenAccounts }) 
     confirmSignature: (sig) => confirmSignature(rpc, sig),
   };
   return CRP.runReclaimFlow({ accounts, owner, closedTokenAccounts }, io);
+}
+
+// P2-I: what the confirm sheet calls BEFORE showing a signature request, so the count and SOL a
+// person is asked to approve come from a fresh chain read, not the (possibly minutes-old) initial
+// scan. Never builds, never signs — only getFreshBalances is needed. Same shape contract as
+// runFullReclaim: { wallet, accounts, closedTokenAccounts } in, CluckReclaimPlan.planConfirmation's
+// result out ({ status, toClose, lamports, rows }).
+export async function prepareConfirmation({ wallet, accounts, closedTokenAccounts }) {
+  const CRP = typeof window !== "undefined" ? window.CluckReclaimPlan : null;
+  if (!CRP) throw new Error("Reclaim plan module did not load.");
+  const CU = typeof window !== "undefined" ? window.CluckUtil : null;
+  if (!CU || typeof CU.rpc !== "function") throw new Error("RPC layer did not load.");
+  const owner = wallet && wallet.address;
+  if (!owner) throw new Error("Connect a wallet first.");
+
+  const rpc = (method, params) => CU.rpc(method, params);
+  const io = { getFreshBalances: (tokenAccounts) => getFreshBalances(rpc, tokenAccounts) };
+  return CRP.planConfirmation({ accounts, owner, closedTokenAccounts }, io);
 }

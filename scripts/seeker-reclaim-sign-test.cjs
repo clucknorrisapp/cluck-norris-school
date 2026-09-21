@@ -40,11 +40,16 @@ function pk() { return web3.Keypair.generate().publicKey.toBase58(); }
 const OWNER = pk();
 const FOREIGN = pk();
 
+// ⚠️ P1-B: `amount` is the field classifyForClose/reverifyBalances actually decide on now — the
+// EXACT base-unit integer as a STRING, never `uiAmount` (f64 | null in the RPC schema). Fixtures
+// default to a zero-balance, closable account; `uiAmount` is carried along for realism only (it
+// is never read by the code under test).
 function fixtureAccount(overrides) {
   return Object.assign({
     tokenAccount: pk(),
     mint: pk(),
     program: CRP.TOKEN_PROGRAM_CLASSIC,
+    amount: "0",
     uiAmount: 0,
     decimals: 6,
     lamports: 2039280,
@@ -53,12 +58,16 @@ function fixtureAccount(overrides) {
 
 // A fully-permissive fake bridge: everything present is treated as "still zero, still gone" for
 // a fresh re-read, a valid blockhash, and every batch confirms. Individual tests override just
-// the piece they're exercising.
+// the piece they're exercising. getFreshBalances' shape matches src/seeker/reclaim-sign.js's real
+// one post P1-B/P2-I: { exists, amount, lamports, mint, owner } — lamports/mint/owner left
+// `undefined` here (reverifyBalances falls back to the candidate's own claimed values when a
+// fresh field isn't provided), so tests that don't care about the P2-I overwrite/mismatch checks
+// don't have to fake them.
 function baseIo(overrides) {
   return Object.assign({
     getFreshBalances: async (tokenAccounts) => {
       const out = {};
-      tokenAccounts.forEach((ta) => { out[ta] = { exists: true, uiAmount: 0 }; });
+      tokenAccounts.forEach((ta) => { out[ta] = { exists: true, amount: "0" }; });
       return out;
     },
     getBlockhash: async () => "FakeBlockhash1111111111111111111111111111",
@@ -115,14 +124,14 @@ function baseIo(overrides) {
   // ══════════════════════════════════════════════════════════════════════════════════════════
   console.log("\nTest 3 — balance re-verified immediately before building; a late deposit drops it\n");
   {
-    const staleZero = fixtureAccount({ uiAmount: 0 }); // scan said zero...
-    const alwaysZero = fixtureAccount({ uiAmount: 0 });
-    const held = fixtureAccount({ uiAmount: 5 }); // scan already saw a balance
+    const staleZero = fixtureAccount({ amount: "0" }); // scan said zero...
+    const alwaysZero = fixtureAccount({ amount: "0" });
+    const held = fixtureAccount({ amount: "5000000" }); // scan already saw a balance
     const accounts = [staleZero, alwaysZero, held];
     const io = baseIo({
       getFreshBalances: async (tas) => {
         const out = {};
-        tas.forEach((ta) => { out[ta] = { exists: true, uiAmount: ta === staleZero.tokenAccount ? 3 : 0 }; }); // ...but gained a balance since
+        tas.forEach((ta) => { out[ta] = { exists: true, amount: ta === staleZero.tokenAccount ? "3000000" : "0" }; }); // ...but gained a balance since
         return out;
       },
     });
@@ -140,7 +149,7 @@ function baseIo(overrides) {
   // ══════════════════════════════════════════════════════════════════════════════════════════
   console.log("\nTest 4 — wrapped SOL refused with a reason\n");
   {
-    const c1 = CRP.classifyForClose(fixtureAccount({ mint: CRP.WSOL_MINT, uiAmount: 0 }));
+    const c1 = CRP.classifyForClose(fixtureAccount({ mint: CRP.WSOL_MINT, amount: "0" }));
     ok("empty wrapped SOL is ineligible", !c1.eligible);
     ok("the reason mentions wrapped SOL", /wrapped sol/i.test(c1.reason || ""), c1.reason);
     let threw = false, msg = "";
@@ -240,7 +249,7 @@ function baseIo(overrides) {
     // result-mapping logic runReclaimFlow itself runs, not a re-implementation of it.
     const accounts = [okAcc, failAcc, unconfirmedAcc];
     const io2 = {
-      getFreshBalances: async (tas) => { const o = {}; tas.forEach((t) => (o[t] = { exists: true, uiAmount: 0 })); return o; },
+      getFreshBalances: async (tas) => { const o = {}; tas.forEach((t) => (o[t] = { exists: true, amount: "0" })); return o; },
       getBlockhash: async () => "FakeBlockhash1111111111111111111111111111",
       // One signature per batch (each batch holds exactly one account, forced by maxClosesPerTx:1
       // below), so confirmSignature can fail/timeout the SECOND one specifically and the THIRD
@@ -331,7 +340,7 @@ function baseIo(overrides) {
     // declined — batch 1's real success must survive; only batch 2 (and anything not attempted)
     // is rejected. Real multi-batch, via the same maxClosesPerTx:1 override Test 6 uses.
     const io2 = {
-      getFreshBalances: async (tas) => { const o = {}; tas.forEach((t) => (o[t] = { exists: true, uiAmount: 0 })); return o; },
+      getFreshBalances: async (tas) => { const o = {}; tas.forEach((t) => (o[t] = { exists: true, amount: "0" })); return o; },
       getBlockhash: async () => "FakeBlockhash1111111111111111111111111111",
       signAndSendAll: async (batches) => batches.map((_, i) => (i === 0 ? { sig: "LANDED" } : { rejected: true })),
       confirmSignature: async () => true,
@@ -368,18 +377,58 @@ function baseIo(overrides) {
     delete require.cache[require.resolve(path.join(ROOT, "src", "seeker", "reclaim-sign.js"))];
     const seam = await import(path.join(ROOT, "src", "seeker", "reclaim-sign.js") + "?t=" + Date.now());
 
-    // getFreshBalances: normalizes a getMultipleAccounts-shaped response, and returns null (never
-    // {}) when the RPC call itself throws.
+    // getFreshBalances: normalizes a getMultipleAccounts-shaped response — ⚠️ P1-B: the field it
+    // reads off `tokenAmount` is `amount` (the exact base-unit string), never `uiAmount` — and
+    // returns null (never {}) when the RPC call itself throws.
     const fakeRpcAccounts = async (method, params) => {
       if (method !== "getMultipleAccounts") throw new Error("unexpected " + method);
-      return { value: [{ data: { parsed: { info: { tokenAmount: { uiAmount: 0 } } } } }, null] };
+      return { value: [{ lamports: 2039280, data: { parsed: { info: { mint: "MintAAA1111111111111111111111111111111111111", owner: OWNER, tokenAmount: { amount: "0", uiAmount: 0 } } } } }, null] };
     };
     const fresh = await seam.getFreshBalances(fakeRpcAccounts, ["TA1", "TA2"]);
-    ok("getFreshBalances reports an existing zero-balance account correctly", fresh.TA1 && fresh.TA1.exists === true && fresh.TA1.uiAmount === 0, fresh);
+    ok("getFreshBalances reports an existing zero-balance account correctly (amount, not uiAmount)", fresh.TA1 && fresh.TA1.exists === true && fresh.TA1.amount === "0", fresh);
+    ok("getFreshBalances carries the fresh lamports/mint/owner through for P2-I to use", fresh.TA1.lamports === 2039280 && fresh.TA1.mint === "MintAAA1111111111111111111111111111111111111" && fresh.TA1.owner === OWNER, fresh.TA1);
     ok("getFreshBalances reports a missing account as exists:false (already closed), not an error", fresh.TA2 && fresh.TA2.exists === false, fresh);
+    // ⚠️ P1-B mutation check: a uiAmount-null / amount-real shape (a Token-2022 withheld-fee
+    // account, or anything the RPC can't ui-scale) must report the REAL amount, never coerce.
+    const fakeRpcNullUi = async () => ({ value: [{ lamports: 1, data: { parsed: { info: { mint: "M", owner: OWNER, tokenAmount: { amount: "999", uiAmount: null } } } } }] });
+    const freshNullUi = await seam.getFreshBalances(fakeRpcNullUi, ["TA1"]);
+    ok("getFreshBalances never coerces a null uiAmount into a zero amount", freshNullUi.TA1.amount === "999", freshNullUi.TA1);
     const frozenRpc = async () => { throw new Error("RPC is down"); };
     const freshDown = await seam.getFreshBalances(frozenRpc, ["TA1"]);
     ok("getFreshBalances returns null (not {}) when the RPC call fails outright", freshDown === null, freshDown);
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    // P1-A (adversarial review, 2026-09-21, mutation-proved below): getMultipleAccounts' documented
+    // max is 100 pubkeys. A wallet with 101+ dead accounts got a JSON-RPC error -> this function's
+    // OWN correct null-on-failure behaviour -> the pane's permanent "Could not read the chain right
+    // now" for exactly the wallets this feature is worth most to. Chunk at 100 and merge.
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    {
+      const tas150 = Array.from({ length: 150 }, () => pk());
+      const calls = [];
+      const chunkedRpc = async (method, params) => {
+        const slice = params[0];
+        calls.push(slice.length);
+        return { value: slice.map(() => ({ lamports: 1, data: { parsed: { info: { mint: "M", owner: OWNER, tokenAmount: { amount: "0", uiAmount: 0 } } } } })) };
+      };
+      const result150 = await seam.getFreshBalances(chunkedRpc, tas150);
+      ok("P1-A: 150 accounts over the 100-pubkey getMultipleAccounts max -> exactly 2 calls", calls.length === 2, calls);
+      ok("P1-A: chunk sizes are 100 then 50 (never one oversized call)", calls[0] === 100 && calls[1] === 50, calls);
+      ok("P1-A: all 150 tokenAccounts come back in the merged result", Object.keys(result150 || {}).length === 150, Object.keys(result150 || {}).length);
+      ok("P1-A: every one of the 150 requested accounts resolved (chunking never drops or duplicates one)",
+        tas150.every((ta) => result150[ta] && result150[ta].exists === true), tas150.filter((ta) => !result150[ta]));
+
+      // Mutation check, inline: ANY chunk throwing must fail the WHOLE read (null), never a
+      // partial result for the chunks that did succeed.
+      let chunkCall = 0;
+      const oneChunkDown = async (method, params) => {
+        chunkCall++;
+        if (chunkCall === 2) throw new Error("RPC hiccup on the second chunk");
+        return { value: params[0].map(() => ({ lamports: 1, data: { parsed: { info: { mint: "M", owner: OWNER, tokenAmount: { amount: "0", uiAmount: 0 } } } } })) };
+      };
+      const partialDown = await seam.getFreshBalances(oneChunkDown, tas150);
+      ok("P1-A: one chunk failing fails the WHOLE read (null), never a partial 100-of-150 result", partialDown === null, partialDown);
+    }
 
     const bhDown = await seam.getBlockhash(frozenRpc);
     ok("getBlockhash returns null (not a fabricated value) when the RPC call fails", bhDown === null, bhDown);
@@ -398,6 +447,25 @@ function baseIo(overrides) {
       ok("confirmSignature throws when the status carries an on-chain error", threwOnChain);
       const timedOut = await seam.confirmSignature(async () => ({ value: [null] }), "SIG");
       ok("confirmSignature returns false (ambiguous), never true, on a timeout with no error", timedOut === false);
+
+      // ⚠️ P3 (adversarial review, 2026-09-21, mutation-proved): a transient RPC read failure
+      // WHILE POLLING is not an on-chain failure — the transaction may already have landed.
+      // Reporting "failed on-chain" for a status the code simply couldn't read told people they
+      // lost a close that may well have succeeded. A flaky read must keep polling and still reach
+      // the real, later "confirmed" status — never throw on the read failure itself.
+      let flakyCalls = 0;
+      const flakyThenConfirmed = async () => {
+        flakyCalls++;
+        if (flakyCalls === 1) throw new Error("network blip");
+        return { value: [{ confirmationStatus: "confirmed" }] };
+      };
+      const survivedBlip = await seam.confirmSignature(flakyThenConfirmed, "SIG");
+      ok("P3: a transient RPC read failure while polling is NOT reported as failed — it keeps polling and reaches the real status", survivedBlip === true, { flakyCalls });
+
+      // Persistent read failure for the whole window -> ambiguous timeout (false), never a
+      // fabricated "failed on-chain" from the read errors themselves.
+      const alwaysDown = await seam.confirmSignature(async () => { throw new Error("RPC down"); }, "SIG");
+      ok("P3: a read that fails on EVERY attempt ends in ambiguous (false), never throws 'failed on-chain'", alwaysDown === false);
     } finally { global.setTimeout = realSetTimeout; }
 
     ok("isUserRejection recognizes a Phantom-shaped decline", seam.isUserRejection(new Error("User rejected the request.")));
@@ -418,6 +486,201 @@ function baseIo(overrides) {
     const tx = seam.buildTransaction([descriptor], "11111111111111111111111111111111111111111", OWNER);
     ok("buildTransaction sets the fee payer to the connected owner", tx.feePayer.toBase58() === OWNER);
     ok("buildTransaction carries exactly one instruction per descriptor", tx.instructions.length === 1);
+
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    // P2-H (adversarial review, 2026-09-21, mutation-proved below): a wallet whose
+    // signAllTransactions() returns its results reordered or substituted was proved to send
+    // successfully, with the rows in a batch carrying each other's signatures. seam.signAndSendAll
+    // must compare each real, reconstructed transaction's compiled MESSAGE bytes against the one
+    // it actually built for that slot, byte for byte, before ever calling sendTransaction.
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    {
+      // A REAL keypair here (not just a pubkey string) so the "honest" case below can actually
+      // sign the built transactions, the same way a real wallet would — proving the byte-compare
+      // check passes a genuinely honest response, not just that it rejects a dishonest one.
+      const kp = web3.Keypair.generate();
+      const H_OWNER = kp.publicKey.toBase58();
+      const descA = CRP.buildCloseInstruction({ tokenAccount: pk(), mint: pk(), destination: H_OWNER, owner: H_OWNER, programId: CRP.TOKEN_PROGRAM_CLASSIC });
+      const descB = CRP.buildCloseInstruction({ tokenAccount: pk(), mint: pk(), destination: H_OWNER, owner: H_OWNER, programId: CRP.TOKEN_PROGRAM_CLASSIC });
+      const blockhash = web3.Keypair.generate().publicKey.toBase58();
+      let sendCalls = 0;
+      const rpcSpy = async (method) => { if (method === "sendTransaction") { sendCalls++; return "SIGSHOULDNOTHAPPEN"; } throw new Error("unexpected " + method); };
+
+      // Honest baseline: the wallet returns exactly what it was asked to sign (actually signed,
+      // same order) — must send both, no mismatch reported.
+      const honestProvider = {
+        publicKey: { toString: () => H_OWNER },
+        signAllTransactions: async (txs) => { txs.forEach((tx) => tx.sign(kp)); return txs; },
+      };
+      const CWHonest = { asTransaction: (signed) => signed };
+      global.window.CluckWallet = CWHonest;
+      let sent = 0;
+      const rpcHonest = async (method) => { if (method === "sendTransaction") { sent++; return "REALSIG" + sent; } throw new Error("unexpected " + method); };
+      const honestOut = await seam.signAndSendAll(honestProvider, rpcHonest, [[descA], [descB]], blockhash, H_OWNER);
+      ok("P2-H baseline: an HONEST wallet response (same tx, same order) sends both without a mismatch report", honestOut.every((o) => !!o.sig) && sent === 2, honestOut);
+
+      // The attack: signAllTransactions returns the two transactions SWAPPED (position 0 gets
+      // what was built for position 1, and vice versa) — the exact shape a reordering or
+      // substituting wallet produces.
+      const swappedProvider = {
+        publicKey: { toString: () => H_OWNER },
+        signAllTransactions: async (txs) => { txs.forEach((tx) => tx.sign(kp)); return [txs[1], txs[0]]; },
+      };
+      sendCalls = 0;
+      const out = await seam.signAndSendAll(swappedProvider, rpcSpy, [[descA], [descB]], blockhash, H_OWNER);
+      ok("P2-H: a swapped/substituted response is reported as an error for BOTH slots, never sent", out.every((o) => o.error && /different transaction/i.test(o.error)), out);
+      ok("P2-H: sendTransaction is NEVER called for a mismatched slot", sendCalls === 0, sendCalls);
+
+      // Mutation check, inline: if the byte comparison is skipped, the swapped response above
+      // would instead report `sig` for both (wrongly) — assert the negative directly so a
+      // regression that deletes the check is caught even without re-running the mutation sweep.
+      ok("P2-H mutation guard: neither swapped slot is ever reported as sent (the exact bug this fixes)", !out.some((o) => !!o.sig), out);
+      global.window.CluckWallet = { asTransaction: (_signed, original) => original };
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    // P2-J (adversarial review, 2026-09-21, mutation-proved below): `owner` was captured once, at
+    // connect time, and never re-read before building. If the wallet's live public key no longer
+    // matches, signAndSendAll must refuse outright, before building or signing anything.
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    {
+      const desc = CRP.buildCloseInstruction({ tokenAccount: pk(), mint: pk(), destination: OWNER, owner: OWNER, programId: CRP.TOKEN_PROGRAM_CLASSIC });
+      const blockhash = web3.Keypair.generate().publicKey.toBase58();
+      let signCalled = false;
+      const switchedProvider = {
+        publicKey: { toString: () => FOREIGN }, // the wallet is now on a DIFFERENT account
+        signAllTransactions: async (txs) => { signCalled = true; return txs; },
+      };
+      let threw = false, msg = "";
+      try { await seam.signAndSendAll(switchedProvider, async () => { throw new Error("rpc should not be called"); }, [[desc]], blockhash, OWNER); }
+      catch (e) { threw = true; msg = (e && e.message) || String(e); }
+      ok("P2-J: a live publicKey that no longer matches the captured owner is refused", threw, msg);
+      ok("P2-J: the refusal names the actual situation (account switch), not a generic error", /switch|account/i.test(msg), msg);
+      ok("P2-J: the wallet is NEVER asked to sign once the mismatch is caught", !signCalled);
+
+      // The happy path, for contrast — same call, provider.publicKey === owner, must NOT throw
+      // for this reason (it proceeds to actually sign).
+      const matchingProvider = { publicKey: { toString: () => OWNER }, signAllTransactions: async (txs) => txs };
+      let happyThrew = false;
+      global.window.CluckWallet = { asTransaction: (signed) => signed };
+      try { await seam.signAndSendAll(matchingProvider, async (m) => (m === "sendTransaction" ? "SIG" : (() => { throw new Error("unexpected " + m); })()), [[desc]], blockhash, OWNER); }
+      catch (e) { happyThrew = true; }
+      ok("P2-J: a provider whose live publicKey MATCHES the owner is not refused for this reason", !happyThrew);
+      global.window.CluckWallet = { asTransaction: (_signed, original) => original };
+
+      // A provider that doesn't expose .publicKey at all (some MWA-shaped providers before their
+      // first reauthorize) — the check has nothing to compare against, so it must NOT block a
+      // legitimate signer; "best effort" means skipping the check, not refusing everyone.
+      const noPubkeyProvider = { signAllTransactions: async (txs) => txs };
+      let noPubkeyThrew = false;
+      global.window.CluckWallet = { asTransaction: (signed) => signed };
+      try { await seam.signAndSendAll(noPubkeyProvider, async (m) => (m === "sendTransaction" ? "SIG" : (() => { throw new Error("unexpected " + m); })()), [[desc]], blockhash, OWNER); }
+      catch (e) { noPubkeyThrew = true; }
+      ok("P2-J: a provider with no live .publicKey to compare is not blocked by this check", !noPubkeyThrew);
+      global.window.CluckWallet = { asTransaction: (_signed, original) => original };
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // P1-D (adversarial review, 2026-09-21, mutation-proved below): a batch is ONE atomic
+  // transaction. One poisoned account (Token-2022 withheld fees, a confidential account, anything
+  // classification doesn't model) failing the whole atomic tx must not take the other 25 with it —
+  // the poisoned batch is re-planned as one-account transactions and retried exactly once.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\nP1-D — one poisoned account in a batch never fails the rest; isolated + retried once\n");
+  {
+    const okA = fixtureAccount({ lamports: 1000000 });
+    const okB = fixtureAccount({ lamports: 2000000 });
+    const poisoned = fixtureAccount({ lamports: 3000000 });
+    const accounts = [okA, okB, poisoned];
+    let sendCall = 0;
+    const io = {
+      getFreshBalances: async (tas) => { const o = {}; tas.forEach((t) => (o[t] = { exists: true, amount: "0" })); return o; },
+      getBlockhash: async () => "FakeBlockhash1111111111111111111111111111",
+      signAndSendAll: async (batches) => {
+        sendCall++;
+        if (batches.length === 1 && batches[0].length === 3) return [{ sig: "COMBINED_SIG" }]; // first pass: one 3-account batch
+        return batches.map((b) => ({ sig: "SINGLE_SIG_" + b[0].keys[0].pubkey })); // retry: singles
+      },
+      confirmSignature: async (sig) => {
+        if (sig === "COMBINED_SIG") throw new Error("simulated: one poisoned account failed the whole atomic tx");
+        if (String(sig).startsWith("SINGLE_SIG_")) {
+          const ta = sig.slice("SINGLE_SIG_".length);
+          if (ta === poisoned.tokenAccount) throw new Error("this one really is poisoned (Token-2022 withheld fee)");
+          return true;
+        }
+        return false;
+      },
+    };
+    const res = await CRP.runReclaimFlow({ accounts, owner: OWNER, closedTokenAccounts: [] }, io);
+    const byTa = {}; res.rows.forEach((r) => (byTa[r.tokenAccount] = r));
+    ok("P1-D: the combined batch was attempted first (one send call before any retry)", sendCall >= 1);
+    ok("P1-D: the two genuinely-fine accounts end up CONFIRMED after isolation", byTa[okA.tokenAccount].outcome === "confirmed" && byTa[okB.tokenAccount].outcome === "confirmed", byTa);
+    ok("P1-D: the truly poisoned account ends up FAILED, not confirmed and not silently dropped", byTa[poisoned.tokenAccount] && byTa[poisoned.tokenAccount].outcome === "failed", byTa[poisoned.tokenAccount]);
+    ok("P1-D: exactly one retry round happened (two signAndSendAll calls total: combined + singles)", sendCall === 2, sendCall);
+    ok("P1-D: the reclaimed total counts the two isolated successes, never the poisoned one", res.reclaimedLamports === okA.lamports + okB.lamports, res.reclaimedLamports);
+
+    // Mutation-proof: with the retry logic removed (simulated by driving sendAndConfirmBatches
+    // directly for just the first round), all three would be "failed" — confirm THAT is what the
+    // review found, so the fix's effect is unambiguous.
+    const firstRoundOnly = await CRP.sendAndConfirmBatches(io, OWNER, "FakeBlockhash1111111111111111111111111111", [[okA, okB, poisoned]]);
+    ok("P1-D mutation guard: the FIRST round alone (no retry) fails all three — proving the retry is what rescues okA/okB",
+      firstRoundOnly.rows.every((r) => r.outcome === "failed"), firstRoundOnly.rows);
+
+    // A single-account batch is never retried (no isolation to gain) — same poisoned-tx shape,
+    // one account only, must simply report failed once, no second signAndSendAll call.
+    let soloCalls = 0;
+    const soloIo = {
+      getFreshBalances: async (tas) => { const o = {}; tas.forEach((t) => (o[t] = { exists: true, amount: "0" })); return o; },
+      getBlockhash: async () => "FakeBlockhash1111111111111111111111111111",
+      signAndSendAll: async (batches) => { soloCalls++; return batches.map(() => ({ sig: "SOLOSIG" })); },
+      confirmSignature: async () => { throw new Error("solo failure"); },
+    };
+    const soloRes = await CRP.runReclaimFlow({ accounts: [fixtureAccount()], owner: OWNER, closedTokenAccounts: [] }, soloIo);
+    ok("P1-D: a batch of exactly one account is never retried (nothing to isolate)", soloCalls === 1, soloCalls);
+    ok("P1-D: it is still honestly reported failed", soloRes.rows[0].outcome === "failed", soloRes.rows[0]);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // P2-I (adversarial review, 2026-09-21, mutation-proved below): the confirm sheet's numbers, and
+  // the actual close, must come from the FRESH re-read, not the (possibly stale/hostile) server
+  // scan — reverifyBalances overwrites lamports with the just-read value, and drops (never closes)
+  // any candidate whose fresh mint or fresh owner (the account's real authority) doesn't match.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\nP2-I — reverifyBalances overwrites lamports and drops a mint/owner mismatch\n");
+  {
+    const claimedMint = pk(), realMint = pk();
+    const acc = fixtureAccount({ mint: claimedMint, lamports: 999 }); // server claims 999 lamports
+    const io = baseIo({
+      getFreshBalances: async () => ({ [acc.tokenAccount]: { exists: true, amount: "0", lamports: 2039280, mint: claimedMint, owner: OWNER } }),
+    });
+    const prep = await CRP.planConfirmation({ accounts: [acc], owner: OWNER, closedTokenAccounts: [] }, io);
+    ok("P2-I: planConfirmation's toClose carries the FRESH lamports, not the server's stale claim", prep.toClose[0].lamports === 2039280, prep.toClose[0]);
+    ok("P2-I: the confirm-sheet total is built from the fresh lamports", prep.lamports === 2039280, prep.lamports);
+
+    // Mint mismatch: the fresh read's mint differs from what the candidate claimed — dropped,
+    // never closed, never silently kept under the claimed (wrong) mint.
+    const ioMintMismatch = baseIo({
+      getFreshBalances: async () => ({ [acc.tokenAccount]: { exists: true, amount: "0", lamports: 2039280, mint: realMint, owner: OWNER } }),
+    });
+    const prepMint = await CRP.planConfirmation({ accounts: [acc], owner: OWNER, closedTokenAccounts: [] }, ioMintMismatch);
+    ok("P2-I: a fresh mint that differs from the claimed one is DROPPED, never kept", prepMint.toClose.length === 0, prepMint.toClose);
+    ok("P2-I: the drop reason says so honestly", /mint/i.test((prepMint.rows[0] && prepMint.rows[0].reason) || ""), prepMint.rows);
+
+    // Owner mismatch: the fresh read's authority is NOT the connected wallet — the
+    // hostile-server-data class this closes. Dropped, never closed.
+    const ioOwnerMismatch = baseIo({
+      getFreshBalances: async () => ({ [acc.tokenAccount]: { exists: true, amount: "0", lamports: 2039280, mint: claimedMint, owner: FOREIGN } }),
+    });
+    const prepOwner = await CRP.planConfirmation({ accounts: [acc], owner: OWNER, closedTokenAccounts: [] }, ioOwnerMismatch);
+    ok("P2-I: an account whose fresh authority is NOT the connected wallet is DROPPED, never closed", prepOwner.toClose.length === 0, prepOwner.toClose);
+    ok("P2-I: the drop reason says so honestly", /wallet|owner|authority/i.test((prepOwner.rows[0] && prepOwner.rows[0].reason) || ""), prepOwner.rows);
+
+    // Mutation guard: reverifyBalances called WITHOUT the connectedOwner argument must not
+    // enforce the owner check at all (proves the check is actually gated on that argument being
+    // wired through, not a coincidence of the fixture).
+    const withoutOwnerArg = CRP.reverifyBalances([acc], { [acc.tokenAccount]: { exists: true, amount: "0", lamports: 2039280, mint: claimedMint, owner: FOREIGN } });
+    ok("P2-I mutation guard: omitting connectedOwner skips the owner check (proves it's the argument doing the work)", withoutOwnerArg.kept.length === 1, withoutOwnerArg);
   }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
