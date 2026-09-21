@@ -149,10 +149,12 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     ok("A · the four shared scripts all loaded", await page.evaluate(() => !!(window.CluckUtil && window.CluckWallet && window.CluckRentMath && window.CLKN_I18N)));
 
     const tabs = await page.evaluate(() => Array.from(document.querySelectorAll(".seeker-navbtn")).map((a) => a.getAttribute("href")));
-    ok("B · three bottom-nav tabs, all hash routes", tabs.length === 3 && tabs.every((h) => String(h).startsWith("#/")), JSON.stringify(tabs));
-    ok("B · it lands on Rent Reclaim, not a blank route", /Rent Reclaim/i.test(await text(page)), (await text(page)).slice(0, 160));
+    ok("B · four bottom-nav tabs, all hash routes", tabs.length === 4 && tabs.every((h) => String(h).startsWith("#/")), JSON.stringify(tabs));
+    ok("B · it lands on the Toolkit, not a blank route", /Toolkit/i.test(await text(page)), (await text(page)).slice(0, 160));
 
-    for (const [hash, want] of [["#/ask", /Ask Cluck/i], ["#/checkup", /Wallet Checkup/i], ["#/rent", /Rent Reclaim/i]]) {
+    for (const [hash, want] of [["#/ask", /Ask Cluck/i], ["#/checkup", /Wallet Checkup/i], ["#/rent", /Rent Reclaim/i],
+                                ["#/tools/listing", /Listing Checkup/i], ["#/tools/bags", /Launches/i],
+                                ["#/tools/alpha", /Daily Brief/i], ["#/tools", /Toolkit/i]]) {
       await page.evaluate((h) => { window.location.hash = h; }, hash);
       await page.waitForTimeout(250);
       ok(`B · ${hash} renders its own pane`, want.test(await text(page)));
@@ -163,6 +165,25 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const small = await page.evaluate(() => Array.from(document.querySelectorAll(".seeker-navbtn, .seeker-walletbtn"))
       .map((el) => ({ t: (el.innerText || "").trim().slice(0, 18), h: Math.round(el.getBoundingClientRect().height) })).filter((x) => x.h < 44));
     ok("B · every nav and wallet control is >= 44px tall on a phone", small.length === 0, JSON.stringify(small));
+
+    // The grid's own honesty rule (ToolsHome.jsx): a tool that is not built yet renders as a
+    // dead card, never a link. With fifteen tools landing across several batches, the failure
+    // this catches is a `ready` flag flipped ahead of its pane — which routes a judge into a
+    // blank screen, the exact thing the flag exists to prevent.
+    await page.evaluate(() => { window.location.hash = "#/tools"; });
+    await page.waitForTimeout(300);
+    const grid = await page.evaluate(() => ({
+      cards: document.querySelectorAll(".seeker-toolcard").length,
+      links: document.querySelectorAll("a.seeker-toolcard").length,
+      soonAreLinks: document.querySelectorAll("a.seeker-toolcard.seeker-toolcard-soon").length,
+      smallCards: Array.from(document.querySelectorAll(".seeker-toolcard"))
+        .filter((el) => el.getBoundingClientRect().height < 44).length,
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    }));
+    ok("B · the toolkit grid renders every tool in the registry", grid.cards >= 15, JSON.stringify(grid));
+    ok("B · ⚠️ an unbuilt tool is NEVER a link — no routing to a blank pane", grid.soonAreLinks === 0, JSON.stringify(grid));
+    ok("B · built tools are links, so the grid actually navigates", grid.links >= 6, JSON.stringify(grid));
+    ok("B · every card clears 44px and nothing overflows at 390px", grid.smallCards === 0 && !grid.overflow, JSON.stringify(grid));
 
     ok("C · starts disconnected", /Not connected/i.test(await text(page)));
     await page.click(".seeker-walletbtn");
@@ -201,6 +222,8 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const { ctx, page } = await open((r) => r.fulfill({ status: 503, contentType: "application/json",
       body: JSON.stringify({ success: false, status: "unavailable", error: "Could not read the chain right now — try again shortly." }) }));
     await page.waitForFunction(() => !!document.querySelector(".seeker-walletbtn"), null, { timeout: 20000 });
+    await page.evaluate(() => { window.location.hash = "#/rent"; });
+    await page.waitForTimeout(300);
     await page.click(".seeker-walletbtn");
     await page.waitForTimeout(1500);
     const t = await text(page);
@@ -215,6 +238,8 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
   {
     const { ctx, page, errors, offsite } = await open((r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }));
     await page.waitForFunction(() => !!document.querySelector(".seeker-walletbtn"), null, { timeout: 20000 });
+    await page.evaluate(() => { window.location.hash = "#/rent"; });
+    await page.waitForTimeout(300);
     await page.click(".seeker-walletbtn");
     await page.waitForFunction(() => /Total reclaimable/i.test(document.body.innerText), null, { timeout: 20000 }).catch(() => {});
     const t = await text(page);

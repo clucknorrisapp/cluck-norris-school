@@ -99,8 +99,19 @@ export async function confirmSignature(rpc, signature) {
     await new Promise((r) => setTimeout(r, 1000));
     const result = await rpc("getSignatureStatuses", [[signature]]);
     const st = result && result.value && result.value[0];
+    // ⚠️ ORDER IS LOAD-BEARING — same note as public/airdrop-engine.js, where this bug was
+    // LIVE. getSignatureStatuses returns BOTH fields for a transaction that landed and then
+    // failed: {err:{InstructionError:[...]}, confirmationStatus:"confirmed"}. Testing the
+    // status first returned true for a failed close, which marked every account in that batch
+    // "Closed", added its rent to the reclaimed total, and recorded it as done so the pane
+    // never offered it again — the user was told they got money they did not get. err is only
+    // ever set once a tx has LANDED, and a landed tx always carries a confirmationStatus, so
+    // the err check must come first or it is dead code.
+    // The cause is carried through too: the pane used to render the tautology "closing
+    // transaction failed on-chain: failed on-chain" on all 26 rows, with no cause and no
+    // next step — a blanket error, which the spec forbids.
+    if (st && st.err) throw new Error("failed on-chain: " + JSON.stringify(st.err));
     if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return true;
-    if (st && st.err) throw new Error("failed on-chain");
   }
   return false;
 }

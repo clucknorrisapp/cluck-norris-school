@@ -393,7 +393,7 @@ function baseIo(overrides) {
       const landed = await seam.confirmSignature(async () => ({ value: [{ confirmationStatus: "confirmed" }] }), "SIG");
       ok("confirmSignature returns true on a confirmed status", landed === true);
       let threwOnChain = false;
-      try { await seam.confirmSignature(async () => ({ value: [{ err: { InstructionError: [] } }] }), "SIG"); }
+      try { await seam.confirmSignature(async () => ({ value: [{ err: { InstructionError: [0, { Custom: 3 }] }, confirmationStatus: "confirmed", slot: 1, confirmations: 0 }] }), "SIG"); }
       catch (e) { threwOnChain = true; }
       ok("confirmSignature throws when the status carries an on-chain error", threwOnChain);
       const timedOut = await seam.confirmSignature(async () => ({ value: [null] }), "SIG");

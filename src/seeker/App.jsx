@@ -24,6 +24,10 @@ import { shortAddr } from "./addr.js";
 import RentReclaimPane from "./RentReclaim.jsx";
 import AskCluckPane from "./AskCluck.jsx";
 import WalletCheckupPane from "./WalletCheckup.jsx";
+import ToolsHome from "./ToolsHome.jsx";
+import ListingCheckup from "./tools/ListingCheckup.jsx";
+import Launches from "./tools/Launches.jsx";
+import DailyBrief from "./tools/DailyBrief.jsx";
 
 // Anywhere a user can connect a wallet, they must be able to disconnect (CLAUDE.md) — this is
 // the one control surface, so both live in the same place with the provider's own disconnect()
@@ -76,9 +80,10 @@ function Header({ wallet }) {
 }
 
 const TABS = [
-  { to: "/rent", label: "Rent Reclaim", icon: "💰" },
-  { to: "/ask", label: "Ask Cluck", icon: "🐔" },
-  { to: "/checkup", label: "Wallet Checkup", icon: "🛡" },
+  { to: "/tools", label: "Toolkit", icon: "🧰" },
+  { to: "/rent", label: "Rent", icon: "💰" },
+  { to: "/ask", label: "Ask", icon: "🐔" },
+  { to: "/checkup", label: "Checkup", icon: "🛡" },
 ];
 
 function BottomNav() {
@@ -89,6 +94,7 @@ function BottomNav() {
         <NavLink
           key={tab.to}
           to={tab.to}
+          end={tab.to === "/tools"}
           className={({ isActive }) => "seeker-navbtn" + (isActive ? " active" : "")}
         >
           <span className="seeker-navicon" aria-hidden="true">{tab.icon}</span>
@@ -107,11 +113,15 @@ export default function App() {
         <Header wallet={wallet} />
         <main className="seeker-main">
           <Routes>
-            <Route path="/" element={<Navigate to="/rent" replace />} />
+            <Route path="/" element={<Navigate to="/tools" replace />} />
+            <Route path="/tools" element={<ToolsHome />} />
             <Route path="/rent" element={<RentReclaimPane wallet={wallet} />} />
             <Route path="/ask" element={<AskCluckPane />} />
             <Route path="/checkup" element={<WalletCheckupPane wallet={wallet} />} />
-            <Route path="*" element={<Navigate to="/rent" replace />} />
+            <Route path="/tools/listing" element={<ListingCheckup />} />
+            <Route path="/tools/bags" element={<Launches />} />
+            <Route path="/tools/alpha" element={<DailyBrief />} />
+            <Route path="*" element={<Navigate to="/tools" replace />} />
           </Routes>
         </main>
         <BottomNav />
