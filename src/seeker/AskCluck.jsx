@@ -10,8 +10,9 @@
 //        — the SAME shape for the per-minute limiter (15/min, windowMs 60000, generic message)
 //        and the daily cap (rateLimit("aiday"), windowMs 86400000, a friendly server message).
 //        There is no field that names which one fired, so this tells them apart by
-//        retryAfterSec: the per-minute window can only ever report <=60s, so anything bigger is
-//        the daily cap. We build our own t()-wrapped copy for both rather than showing the raw
+//        windowSec (added server-side with this pane) says which limiter fired outright; the old
+//        retryAfterSec heuristic is kept only as a fallback for an older server. We build our own
+//        t()-wrapped copy for both rather than showing the raw
 //        server `error` string, which is untranslated English regardless of `lang` (the rate
 //        limiter runs before aiLangDirective ever sees the request).
 //   500  { success: false, error: "AI not configured" | "No response from AI" | <caught msg> }
@@ -82,7 +83,12 @@ function classifyFailure({ offline, res, body }) {
   }
   if (res && res.status === 429) {
     const retrySec = Number((body && (body.retryAfterSec || body.retryAfter)) || 0);
-    const isDaily = retrySec > 90; // the per-minute limiter's window can only ever report <=60s
+    // The server now SAYS which limiter fired, via windowSec (server.js's rateLimit) — anything
+    // measured in hours is a daily cap, anything in seconds is the per-minute one. The old
+    // heuristic stays only as a fallback for a server that predates that field (staging and
+    // production deploy separately, so the app can meet either).
+    const windowSec = Number((body && body.windowSec) || 0);
+    const isDaily = windowSec > 0 ? windowSec >= 3600 : retrySec > 90;
     const wait = formatWait(retrySec);
     if (isDaily) {
       return {

@@ -3854,8 +3854,16 @@ function rateLimit(bucket, { windowMs, max, message, onLimit, cors }) {
       // instead of a readable 429. Never used for the store-edition contract routes — see
       // STORE_API_RE and the store-CORS middleware above, which this is mounted after.
       if (cors) { res.setHeader("Access-Control-Allow-Origin", "*"); }
+      // `windowSec` is ADDITIVE and exists so a client never has to GUESS which limit it hit.
+      // Two limiters sit on the same AI routes — a 15/minute one and a ~150/day cap — and they
+      // answered with an identical body, so the Seeker app was inferring "retryAfterSec > 90
+      // means the daily cap". That is true today and silently wrong the moment either window is
+      // retuned. The window length is right here in scope; say it rather than make the caller
+      // reverse-engineer it. Purely additive, so the PINNED store-edition app (STORE_API_RE —
+      // its response shapes are a versioned contract) is unaffected: it ignores unknown fields.
       return res.status(429).json({ success: false, ok: false,
-        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter), retryAfter: Math.max(1, retryAfter) });
+        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter), retryAfter: Math.max(1, retryAfter),
+        windowSec: Math.round(windowMs / 1000) });
     }
     arr.push(now);
     next();
