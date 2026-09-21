@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T16:55:21.473Z",
+  "generatedAt": "2026-09-21T20:49:36.709Z",
   "courses": [
     {
       "id": "fundamentals",
@@ -1155,7 +1155,7 @@
             {
               "q": "Where does a Bags.fm token's own project revenue actually come from?",
               "answer": "The creator fee — a cut of every trade of that token",
-              "why": "A token's project revenue is the creator fee — roughly 1% of every trade of that token. A partner ref code is a separate thing that earns from OTHER projects routed through it, not the token's own trades. CLKN reinvests 100% of its creator fee back into buying CLKN.",
+              "why": "A token's project revenue is the creator fee — roughly 1% of every trade of that token. A partner ref code is a separate thing that earns from OTHER projects routed through it, not the token's own trades.",
               "options": [
                 "Its partner ref code earning on its own trades",
                 "The creator fee — a cut of every trade of that token",
@@ -1163,7 +1163,7 @@
                 "Bags.fm tokens earn no revenue"
               ],
               "correct": 1,
-              "explanation": "A token's project revenue is the creator fee — roughly 1% of every trade of that token. A partner ref code is a separate thing that earns from OTHER projects routed through it, not the token's own trades. CLKN reinvests 100% of its creator fee back into buying CLKN."
+              "explanation": "A token's project revenue is the creator fee — roughly 1% of every trade of that token. A partner ref code is a separate thing that earns from OTHER projects routed through it, not the token's own trades."
             }
           ]
         },
@@ -1275,9 +1275,9 @@
               "explanation": "Narrative is everything in memecoin culture. 'Dog with hat', political figures, AI themes, animal coins — when a narrative captures the zeitgeist, it drives viral spread and buying pressure. Without narrative, there's nothing."
             },
             {
-              "q": "CLKN is a memecoin built on Bags.fm. What makes it different from a typical memecoin?",
+              "q": "A memecoin ships with a real product behind it. What makes it different from a typical memecoin?",
               "answer": "It has a real education platform behind it",
-              "why": "CLKN pairs the token with an actual utility layer — the School of Crypto Hard Knocks — and reinvests its creator fee back into the token. That doesn't make it safe: like any memecoin it can still go to zero. But a token doing real work is rarer than one that isn't.",
+              "why": "A token that pairs itself with an actual utility layer — a school, a working toolkit — has something a pure memecoin does not. That doesn't make it safe: like any memecoin it can still go to zero. But a token doing real work is rarer than one that isn't.",
               "options": [
                 "It has a working DeFi product",
                 "It has a real education platform behind it",
@@ -1285,7 +1285,7 @@
                 "It's backed by real assets"
               ],
               "correct": 1,
-              "explanation": "CLKN pairs the token with an actual utility layer — the School of Crypto Hard Knocks — and reinvests its creator fee back into the token. That doesn't make it safe: like any memecoin it can still go to zero. But a token doing real work is rarer than one that isn't."
+              "explanation": "A token that pairs itself with an actual utility layer — a school, a working toolkit — has something a pure memecoin does not. That doesn't make it safe: like any memecoin it can still go to zero. But a token doing real work is rarer than one that isn't."
             }
           ]
         },
@@ -1782,7 +1782,7 @@
             },
             {
               "term": "Token",
-              "def": "A crypto asset built ON TOP of an existing blockchain. CLKN is a token built on Solana. Tokens don't have their own blockchain."
+              "def": "A crypto asset built ON TOP of an existing blockchain. USDC on Solana is a token — it lives on Solana's blockchain. Tokens don't have their own blockchain."
             },
             {
               "term": "Mint Address",
@@ -1807,15 +1807,15 @@
               "explanation": "SOL is actually the native coin of the Solana blockchain — not Ethereum. Tokens are built ON a blockchain, while coins ARE the blockchain's currency."
             },
             {
-              "q": "What is CLKN?",
+              "q": "What is USDC on Solana?",
               "answer": "A token built on Solana",
-              "why": "CLKN is a Solana token — it lives on the Solana blockchain and uses SOL for transactions. It doesn't have its own blockchain.",
+              "why": "USDC on Solana is a token — it lives on the Solana blockchain and uses SOL for transaction fees. It doesn't have its own blockchain.",
               "options": [
                 "A coin with its own blockchain",
                 "A token built on Solana"
               ],
               "correct": 1,
-              "explanation": "CLKN is a Solana token — it lives on the Solana blockchain and uses SOL for transactions. It doesn't have its own blockchain."
+              "explanation": "USDC on Solana is a token — it lives on the Solana blockchain and uses SOL for transaction fees. It doesn't have its own blockchain."
             },
             {
               "q": "Why does a token's mint address matter?",
@@ -2274,15 +2274,15 @@
           "sections": [
             {
               "heading": "What Is an AMM?",
-              "body": "An Automated Market Maker is a smart contract that holds two tokens in a pool and automatically sets the price between them based on their ratio. There is no order book. There are no buyers and sellers being matched. Just math.\n\nTRADITIONAL EXCHANGE (Order Book):\n• Buyers post bids — prices they will pay\n• Sellers post asks — prices they will accept\n• A trade happens when a bid meets an ask\n• Requires constant participation from market makers\n\nAMM (Liquidity Pool):\n• Two tokens sit in a pool — for example SOL and CLKN\n• The ratio between them determines the price\n• Anyone can swap against the pool at any time\n• Price adjusts automatically with every trade\n\nThe AMM never sleeps. It never runs out of quotes. It never needs a counterparty. It is just math running on a blockchain 24 hours a day."
+              "body": "An Automated Market Maker is a smart contract that holds two tokens in a pool and automatically sets the price between them based on their ratio. There is no order book. There are no buyers and sellers being matched. Just math.\n\nTRADITIONAL EXCHANGE (Order Book):\n• Buyers post bids — prices they will pay\n• Sellers post asks — prices they will accept\n• A trade happens when a bid meets an ask\n• Requires constant participation from market makers\n\nAMM (Liquidity Pool):\n• Two tokens sit in a pool — for example SOL and ABC\n• The ratio between them determines the price\n• Anyone can swap against the pool at any time\n• Price adjusts automatically with every trade\n\nThe AMM never sleeps. It never runs out of quotes. It never needs a counterparty. It is just math running on a blockchain 24 hours a day."
             },
             {
               "heading": "The x*y=k Formula",
-              "body": "The most common AMM formula is the constant product formula. It looks like this:\n\nx × y = k\n\nWhere:\n• x = the amount of Token A in the pool\n• y = the amount of Token B in the pool\n• k = a constant — it never changes\n\nEXAMPLE:\nPool has 1,000 SOL and 100,000,000 CLKN\nk = 1,000 × 100,000,000 = 100,000,000,000\n\nYou want to buy some SOL by selling CLKN.\nYou add 1,000,000 CLKN to the pool.\nNew y = 101,000,000 CLKN\n\nTo keep k constant:\nNew x = k / new y = 100,000,000,000 / 101,000,000 = 990.099 SOL\n\nYou added 1,000,000 CLKN and received 1,000 - 990.099 = 9.9 SOL\n\nThe pool always maintains the constant product. This is why large trades relative to pool size move the price significantly — adding a lot to one side requires removing a lot from the other side to keep k the same."
+              "body": "The most common AMM formula is the constant product formula. It looks like this:\n\nx × y = k\n\nWhere:\n• x = the amount of Token A in the pool\n• y = the amount of Token B in the pool\n• k = a constant — it never changes\n\nEXAMPLE:\nPool has 1,000 SOL and 100,000,000 ABC\nk = 1,000 × 100,000,000 = 100,000,000,000\n\nYou want to buy some SOL by selling ABC.\nYou add 1,000,000 ABC to the pool.\nNew y = 101,000,000 ABC\n\nTo keep k constant:\nNew x = k / new y = 100,000,000,000 / 101,000,000 = 990.099 SOL\n\nYou added 1,000,000 ABC and received 1,000 - 990.099 = 9.9 SOL\n\nThe pool always maintains the constant product. This is why large trades relative to pool size move the price significantly — adding a lot to one side requires removing a lot from the other side to keep k the same."
             },
             {
               "heading": "How Price Moves",
-              "body": "The price in an AMM is simply the ratio of the two tokens.\n\nPrice of SOL in CLKN = CLKN in pool / SOL in pool\n\nSTARTING STATE:\nPool: 1,000 SOL / 100,000,000 CLKN\nPrice: 100,000 CLKN per SOL\n\nAFTER SOMEONE BUYS SOL (adds CLKN, removes SOL):\nPool: 990.099 SOL / 101,000,000 CLKN\nNew price: 102,010 CLKN per SOL\n\nThe price went up because there is now less SOL relative to CLKN in the pool. Every buy pushes price up. Every sell pushes price down.\n\nThis is why AMMs are called self-balancing — as the price in the pool drifts from the market price, arbitrageurs step in to buy the cheaper asset and sell the more expensive one, bringing the pool back into alignment. Arbitrage is what keeps AMM prices accurate."
+              "body": "The price in an AMM is simply the ratio of the two tokens.\n\nPrice of SOL in ABC = ABC in pool / SOL in pool\n\nSTARTING STATE:\nPool: 1,000 SOL / 100,000,000 ABC\nPrice: 100,000 ABC per SOL\n\nAFTER SOMEONE BUYS SOL (adds ABC, removes SOL):\nPool: 990.099 SOL / 101,000,000 ABC\nNew price: 102,010 ABC per SOL\n\nThe price went up because there is now less SOL relative to ABC in the pool. Every buy pushes price up. Every sell pushes price down.\n\nThis is why AMMs are called self-balancing — as the price in the pool drifts from the market price, arbitrageurs step in to buy the cheaper asset and sell the more expensive one, bringing the pool back into alignment. Arbitrage is what keeps AMM prices accurate."
             },
             {
               "heading": "Price Impact vs Slippage",
@@ -2308,9 +2308,9 @@
               "explanation": "k is the constant product — the result of multiplying the two token reserves together. Every trade changes x and y but the product must remain k. This is what forces the price to move as trades happen."
             },
             {
-              "q": "A pool has 500 SOL and 50,000,000 CLKN. You want to make a very large buy of SOL. What happens to the price of SOL?",
+              "q": "A pool has 500 SOL and 50,000,000 ABC. You want to make a very large buy of SOL. What happens to the price of SOL?",
               "answer": "Price goes up",
-              "why": "When you buy SOL you remove it from the pool and add CLKN. Less SOL relative to more CLKN means each SOL is worth more CLKN. The price of SOL goes up with every unit you buy. This is price impact — and the larger your trade relative to the pool, the more you pay above the starting price.",
+              "why": "When you buy SOL you remove it from the pool and add ABC. Less SOL relative to more ABC means each SOL is worth more ABC. The price of SOL goes up with every unit you buy. This is price impact — and the larger your trade relative to the pool, the more you pay above the starting price.",
               "options": [
                 "Price stays fixed — AMMs guarantee stable prices regardless of trade size",
                 "Price drops because higher demand always lowers price in DeFi pools",
@@ -2318,7 +2318,7 @@
                 "Price spikes then automatically resets to the original level"
               ],
               "correct": 2,
-              "explanation": "When you buy SOL you remove it from the pool and add CLKN. Less SOL relative to more CLKN means each SOL is worth more CLKN. The price of SOL goes up with every unit you buy. This is price impact — and the larger your trade relative to the pool, the more you pay above the starting price."
+              "explanation": "When you buy SOL you remove it from the pool and add ABC. Less SOL relative to more ABC means each SOL is worth more ABC. The price of SOL goes up with every unit you buy. This is price impact — and the larger your trade relative to the pool, the more you pay above the starting price."
             },
             {
               "q": "What is the difference between price impact and slippage?",
@@ -2347,7 +2347,7 @@
               "explanation": "When an AMM's price drifts from the real market price, arbitrageurs buy the cheaper asset in the AMM and sell it elsewhere (or vice versa) until the prices converge. They profit from the difference, and their activity is what keeps AMM prices aligned with the broader market."
             },
             {
-              "q": "You want to swap $500 of SOL for CLKN. The pool has $50,000 TVL. Your friend wants to swap $50,000 of SOL in the same pool. Who experiences more price impact and why?",
+              "q": "You want to swap $500 of SOL for ABC. The pool has $50,000 TVL. Your friend wants to swap $50,000 of SOL in the same pool. Who experiences more price impact and why?",
               "answer": "Your friend does — 100% of TVL in one trade vs your 1%",
               "why": "Price impact scales with trade size relative to pool size. Your $500 trade is 1% of the $50,000 pool — minimal impact. Your friend's $50,000 trade equals the entire pool TVL — the x*y=k formula means they would drain so much of one token that the price moves dramatically against them. This is why large traders split trades or use pools with higher liquidity.",
               "options": [
@@ -2485,7 +2485,7 @@
             },
             {
               "heading": "Fee Tiers Across Protocols",
-              "body": "Every protocol offers different fee tiers for different types of pairs. Choosing the right fee tier matters.\n\nRAYDIUM:\n• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 1% / 2% / 4%\n• CLMM concentrated pools: 18 tiers from 0.01% up to 4% (0.01 / 0.02 / 0.03 / 0.04 / 0.05 / 0.1 / 0.15 / 0.16 / 0.18 / 0.2 / 0.25 / 0.4 / 0.6 / 0.8 / 1 / 2 / 3 / 4%)\n• Use 0.01% for stable pairs, 0.25% for standard, 1% for exotic/volatile\n\nORCA WHIRLPOOLS:\n• 0.01% / 0.02% / 0.04% / 0.05% / 0.16% / 0.3% / 0.65% / 1% / 2%\n• Similar logic — stable pairs use low tiers, volatile pairs use high tiers\n• The 0.02% tier is the one CLKN's own CLKN/SOL Orca pool runs on — its CLKN/BTC and CLKN/JUP pools run on 0.30%\n\nMETEORA:\n• DAMM: Dynamic fees that adjust automatically to market volatility\n• DLMM: base fee (fixed by the pool's bin step) + a variable fee that rises automatically with volatility. Fees are distributed per bin a swap crosses, but the RATE is pool-wide\n• Dynamic fees are one of Meteora's strongest features for LPs\n\nUNISWAP V3 (Ethereum):\n• 0.01% / 0.05% / 0.3% / 1% — the 0.01% stablecoin tier was added by governance in Nov 2021\n• The original tiered fee system that others copied\n\nCHOOSING THE RIGHT TIER:\nStable pairs (USDC/USDT): 0.01-0.05% — low fee, high volume\nBlue chip pairs (SOL/USDC): 0.05-0.25% — balanced\nVolatile/exotic pairs: 0.5-1% — compensates for higher IL risk"
+              "body": "Every protocol offers different fee tiers for different types of pairs. Choosing the right fee tier matters.\n\nRAYDIUM:\n• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 1% / 2% / 4%\n• CLMM concentrated pools: 18 tiers from 0.01% up to 4% (0.01 / 0.02 / 0.03 / 0.04 / 0.05 / 0.1 / 0.15 / 0.16 / 0.18 / 0.2 / 0.25 / 0.4 / 0.6 / 0.8 / 1 / 2 / 3 / 4%)\n• Use 0.01% for stable pairs, 0.25% for standard, 1% for exotic/volatile\n\nORCA WHIRLPOOLS:\n• 0.01% / 0.02% / 0.04% / 0.05% / 0.16% / 0.3% / 0.65% / 1% / 2%\n• Similar logic — stable pairs use low tiers, volatile pairs use high tiers\n• A pool's own page shows which tier it runs on\n\nMETEORA:\n• DAMM: Dynamic fees that adjust automatically to market volatility\n• DLMM: base fee (fixed by the pool's bin step) + a variable fee that rises automatically with volatility. Fees are distributed per bin a swap crosses, but the RATE is pool-wide\n• Dynamic fees are one of Meteora's strongest features for LPs\n\nUNISWAP V3 (Ethereum):\n• 0.01% / 0.05% / 0.3% / 1% — the 0.01% stablecoin tier was added by governance in Nov 2021\n• The original tiered fee system that others copied\n\nCHOOSING THE RIGHT TIER:\nStable pairs (USDC/USDT): 0.01-0.05% — low fee, high volume\nBlue chip pairs (SOL/USDC): 0.05-0.25% — balanced\nVolatile/exotic pairs: 0.5-1% — compensates for higher IL risk"
             },
             {
               "heading": "The Key Metric — Volume/TVL Ratio",
@@ -2840,7 +2840,7 @@
             },
             {
               "heading": "Token Launch Liquidity",
-              "body": "Single-sided deposits are the foundation of how new tokens launch in DeFi.\n\nTHE BONDING CURVE:\nWhen a token launches on Bags.fm or Pump.fun, initial liquidity is single-sided — only the new token exists. Buyers add SOL and price rises along a mathematical curve.\n\nHOW CLKN LAUNCHED:\nCLKN launched on Bags.fm with token-only liquidity. As the community bought in SOL accumulated. At the graduation threshold the bonding curve closed and liquidity migrated automatically to Meteora DAMM V2 as a full two-sided pool.\n\nEarly buyers paid less because every purchase moves price higher on the curve — earlier participants enter before accumulated buys push price up. This is why believing early in a project on Bags.fm is rewarded."
+              "body": "Single-sided deposits are the foundation of how new tokens launch in DeFi.\n\nTHE BONDING CURVE:\nWhen a token launches on Bags.fm or Pump.fun, initial liquidity is single-sided — only the new token exists. Buyers add SOL and price rises along a mathematical curve.\n\nHOW A BAGS.FM LAUNCH PLAYS OUT:\nA token launches on Bags.fm with token-only liquidity. As buyers come in, SOL accumulates. At the graduation threshold the bonding curve closes and liquidity migrates automatically to Meteora DAMM V2 as a full two-sided pool.\n\nEarly buyers paid less because every purchase moves price higher on the curve — earlier participants enter before accumulated buys push price up. This is why believing early in a project on Bags.fm is rewarded."
             },
             {
               "heading": "Risks and Common Mistakes",
@@ -2927,9 +2927,9 @@
               "explanation": "Opportunity cost matters. A position earning zero fees could be deployed elsewhere generating returns. If your buy range is at $50-$70 when price is $150, you might wait months with zero earnings. Weigh the benefit of accumulating at lower prices against the cost of idle capital."
             },
             {
-              "q": "How did CLKN launch?",
+              "q": "How does a token launched on Bags.fm reach a two-sided pool?",
               "answer": "On Bags.fm bonding curve with single-sided token liquidity, accumulated SOL, then graduated to Meteora DAMM V2",
-              "why": "CLKN used the Bags.fm bonding curve — single-sided launch where only CLKN existed initially. As the community bought in SOL accumulated. At graduation threshold the curve closed and liquidity migrated automatically to Meteora DAMM V2. Standard Bags.fm launch path.",
+              "why": "A Bags.fm launch uses the bonding curve — single-sided, where only the new token exists at first. As buyers come in, SOL accumulates. At the graduation threshold the curve closes and liquidity migrates automatically to Meteora DAMM V2. That is the standard Bags.fm launch path.",
               "options": [
                 "Directly on Meteora with two-sided liquidity and a fixed launch price",
                 "On Bags.fm bonding curve with single-sided token liquidity, accumulated SOL, then graduated to Meteora DAMM V2",
@@ -2937,7 +2937,7 @@
                 "On Raydium with a permissioned whitelist pool"
               ],
               "correct": 1,
-              "explanation": "CLKN used the Bags.fm bonding curve — single-sided launch where only CLKN existed initially. As the community bought in SOL accumulated. At graduation threshold the curve closed and liquidity migrated automatically to Meteora DAMM V2. Standard Bags.fm launch path."
+              "explanation": "A Bags.fm launch uses the bonding curve — single-sided, where only the new token exists at first. As buyers come in, SOL accumulates. At the graduation threshold the curve closes and liquidity migrates automatically to Meteora DAMM V2. That is the standard Bags.fm launch path."
             },
             {
               "q": "A project graduated from Pump.fun and now wants to add their own token to a Meteora pool. They only have the project token — no USDC. Can they provide liquidity?",
@@ -3366,7 +3366,7 @@
             },
             {
               "heading": "Bags.fm and the Dynamic Bonding Curve",
-              "body": "Bags.fm is a Solana launchpad, and CLKN itself launched on it — so this is worth knowing precisely.\n\nHOW IT WORKS:\n• Tokens launch on a bonding curve (a dynamic bonding curve, or DBC) rather than an immediate open pool\n• Buyers transact against the curve during the pre-graduation phase\n• Creators can earn fees from the activity their token generates\n• On graduation, liquidity migrates into a Meteora pool where standard LPing applies\n\nWHY THIS MATTERS FOR AN LP:\nBefore graduation, there is no conventional LP position to take — you are buying on the curve, not providing liquidity. After graduation, a real pool exists and the normal LP rules from this entire lab apply: check depth, check the volume-to-TVL ratio, check the token's authorities, size to your downside.\n\nTHE FORENSIC RULE STILL HOLDS:\nA launchpad API like Bags can confirm the verified creator and whether buyers came through the actual bonding curve. Use that. But the chain shows WHAT happened, not WHY — only call a wallet \"creator\" or \"team\" when the launchpad data confirms it. Never assume intent from on-chain motion alone."
+              "body": "Bags.fm is a Solana launchpad — so this is worth knowing precisely.\n\nHOW IT WORKS:\n• Tokens launch on a bonding curve (a dynamic bonding curve, or DBC) rather than an immediate open pool\n• Buyers transact against the curve during the pre-graduation phase\n• Creators can earn fees from the activity their token generates\n• On graduation, liquidity migrates into a Meteora pool where standard LPing applies\n\nWHY THIS MATTERS FOR AN LP:\nBefore graduation, there is no conventional LP position to take — you are buying on the curve, not providing liquidity. After graduation, a real pool exists and the normal LP rules from this entire lab apply: check depth, check the volume-to-TVL ratio, check the token's authorities, size to your downside.\n\nTHE FORENSIC RULE STILL HOLDS:\nA launchpad API like Bags can confirm the verified creator and whether buyers came through the actual bonding curve. Use that. But the chain shows WHAT happened, not WHY — only call a wallet \"creator\" or \"team\" when the launchpad data confirms it. Never assume intent from on-chain motion alone."
             },
             {
               "heading": "Why LPing a Fresh Launch Is the Highest-Risk LP There Is",
@@ -3767,7 +3767,7 @@
           "title": "How AMMs Work",
           "icon": "⚙️",
           "intro": "Automated Market Makers use a mathematical formula to set prices automatically.",
-          "content": "An Automated Market Maker (AMM) is a smart contract that holds two tokens and automatically calculates their price based on supply and demand — no order book, no human market maker needed.\n\nThe most common formula is the Constant Product Formula:\n\nx × y = k\n\nWhere x = amount of Token A, y = amount of Token B, and k = a constant that never changes.\n\nWhen you buy Token A, you add Token B to the pool and remove Token A. Because k must stay constant, as Token A supply goes down, its price goes up. This is automatic — no one sets the price manually.\n\nEXAMPLE: A pool has 100 SOL and 1,000,000 CLKN. k = 100,000,000. You buy 10 SOL worth of CLKN. Now the pool has 110 SOL — to keep k constant, it must have ~909,090 CLKN. You received ~90,910 CLKN. The price moved because you changed the ratio.",
+          "content": "An Automated Market Maker (AMM) is a smart contract that holds two tokens and automatically calculates their price based on supply and demand — no order book, no human market maker needed.\n\nThe most common formula is the Constant Product Formula:\n\nx × y = k\n\nWhere x = amount of Token A, y = amount of Token B, and k = a constant that never changes.\n\nWhen you buy Token A, you add Token B to the pool and remove Token A. Because k must stay constant, as Token A supply goes down, its price goes up. This is automatic — no one sets the price manually.\n\nEXAMPLE: A pool has 100 SOL and 1,000,000 ABC. k = 100,000,000. You buy 10 SOL worth of ABC. Now the pool has 110 SOL — to keep k constant, it must have ~909,090 ABC. You received ~90,910 ABC. The price moved because you changed the ratio.",
           "reference": true
         },
         {
@@ -3791,7 +3791,7 @@
           "title": "Dynamic Bonding Curves",
           "icon": "📈",
           "intro": "A price mechanism that automatically increases price as more tokens are bought.",
-          "content": "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\nA token that completes this journey — launching on a Bags.fm bonding curve and graduating to Meteora DAMM V2 — ends up with a liquidity pool that is permanent and cannot be pulled by the creator. That closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
+          "content": "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\nA token that completes this journey launches on a Bags.fm bonding curve and graduates to Meteora DAMM V2. This is why the liquidity pool itself is permanent and cannot be pulled by the creator. That closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
           "reference": true
         },
         {
@@ -3815,7 +3815,7 @@
           "title": "Fee Sharing & LP Earnings",
           "icon": "💰",
           "intro": "How liquidity providers and token creators earn from trading activity.",
-          "content": "Every trade on a DEX generates fees. These fees are the incentive that attracts liquidity providers to deposit their tokens into pools.\n\nHOW LP FEES WORK: When you trade in a pool, you pay a small percentage fee (typically 0.25%-1%). This fee is distributed proportionally to all liquidity providers in the pool based on their share of the total liquidity.\n\nBAGS.FM FEE STRUCTURE: Bags.fm adds a creator fee layer on top. When you launch a token on Bags.fm, you (the creator) earn a percentage of all trading fees forever — even after graduation to Meteora. This is the revolutionary part — creators have a permanent financial stake in their token's trading activity.\n\nPARTNER FEES: Bags.fm also has a partner program. Platforms and builders can register a referral code and earn a share of platform fees on trades that come through their link. Important distinction: a partner code only earns from OTHER projects that launch or trade through it — it is NOT the same as the creator fee a token earns on its own trading. A project's revenue can be its creator fee — roughly 1% of every trade — and that is reinvested into the token; it does not come from a partner referral.\n\nCLKN LIFETIME FEES: You can see the total SOL earned from CLKN trading activity live in the Token Data tab — powered by the Bags.fm API.",
+          "content": "Every trade on a DEX generates fees. These fees are the incentive that attracts liquidity providers to deposit their tokens into pools.\n\nHOW LP FEES WORK: When you trade in a pool, you pay a small percentage fee (typically 0.25%-1%). This fee is distributed proportionally to all liquidity providers in the pool based on their share of the total liquidity.\n\nBAGS.FM FEE STRUCTURE: Bags.fm adds a creator fee layer on top. When you launch a token on Bags.fm, you (the creator) earn a percentage of all trading fees forever — even after graduation to Meteora. This is the revolutionary part — creators have a permanent financial stake in their token's trading activity.\n\nPARTNER FEES: Bags.fm also has a partner program. Platforms and builders can register a referral code and earn a share of platform fees on trades that come through their link. Important distinction: a partner code only earns from OTHER projects that launch or trade through it — it is NOT the same as the creator fee a token earns on its own trading. A project's revenue can be its creator fee — roughly 1% of every trade — and that is reinvested into the token; it does not come from a partner referral.",
           "reference": true
         },
         {
@@ -3884,7 +3884,7 @@
             },
             {
               "heading": "Step 2 — Liquidity and Volume",
-              "body": "A token with no liquidity cannot be sold. This is called a liquidity trap.\n\nWHAT TO CHECK ON DEXSCREENER:\n• Total liquidity — under $10K is extremely risky, you may not be able to exit\n• Is liquidity locked? On Solana, check Jupiter Lock or the pool authority via Rugcheck or Solscan (team.finance and UNCX are mainly Ethereum-side tools)\n• Who controls the liquidity? Creator-controlled LP can be removed (rug pull)\n• 24H volume relative to liquidity — low volume with high liquidity means little interest\n• Age of the liquidity pool — very new pools carry more risk\n\nEXAMPLE: When a token graduates from a Bags.fm bonding curve to Meteora DAMM V2, the graduation process locks the liquidity pool permanently — so the LP itself can't be pulled. That closes the most common rug vector, but it does not remove every risk: holder concentration and large insider allocations are separate things you still have to check on any token."
+              "body": "A token with no liquidity cannot be sold. This is called a liquidity trap.\n\nWHAT TO CHECK ON DEXSCREENER:\n• Total liquidity — under $10K is extremely risky, you may not be able to exit\n• Is liquidity locked? On Solana, check Jupiter Lock or the pool authority via Rugcheck or Solscan (team.finance and UNCX are mainly Ethereum-side tools)\n• Who controls the liquidity? Creator-controlled LP can be removed (rug pull)\n• 24H volume relative to liquidity — low volume with high liquidity means little interest\n• Age of the liquidity pool — very new pools carry more risk\n\nEXAMPLE: A token graduates from a Bags.fm bonding curve to Meteora DAMM V2. The graduation process locks the liquidity pool permanently — so the LP itself can't be pulled. That closes the most common rug vector, but it does not remove every risk: holder concentration and large insider allocations are separate things you still have to check on any token."
             },
             {
               "heading": "Step 3 — Team and Transparency",
@@ -3917,7 +3917,7 @@
             },
             {
               "heading": "Reading a Transaction",
-              "body": "Click any transaction signature to see the full detail:\n\nWHAT YOU WILL SEE:\n• Block and timestamp — exactly when it happened\n• Fee payer — who paid the transaction fee\n• Instructions — what the transaction actually did\n• Token transfers — which tokens moved, how much, between which wallets\n• Account inputs and outputs — all accounts involved\n\nBALANCE CHANGES TAB:\nThis is the most useful view. It shows exactly what changed in each wallet as a result of this transaction. Positive numbers = received, negative numbers = sent.\n\nPRO TIP: The Balance Changes tab is how you verify on-chain payments. If you see your wallet with a positive CLKN balance change matching your expected amount — the payment went through."
+              "body": "Click any transaction signature to see the full detail:\n\nWHAT YOU WILL SEE:\n• Block and timestamp — exactly when it happened\n• Fee payer — who paid the transaction fee\n• Instructions — what the transaction actually did\n• Token transfers — which tokens moved, how much, between which wallets\n• Account inputs and outputs — all accounts involved\n\nBALANCE CHANGES TAB:\nThis is the most useful view. It shows exactly what changed in each wallet as a result of this transaction. Positive numbers = received, negative numbers = sent.\n\nPRO TIP: The Balance Changes tab is how you verify on-chain payments. If you see your wallet with a positive balance change in the token you expected, matching the amount — the payment went through."
             },
             {
               "heading": "Finding Smart Money",

@@ -801,6 +801,28 @@ state (each round's harness was pinned to a specific pre-squash sha that no long
 
 Findings, not rewrites, same rule as every other round.
 
+## Round 11 — 2026-09-21: #391, your three findings on `9cabf86`
+
+Fixed on the branch (head in the PR body). Findings → fixes:
+
+| # | Finding | Fix | Regression coverage |
+|---|---|---|---|
+| 1 | **P1** — CLKN promotion still renders in the education bundle: `data/curriculum.store.json` named CLKN's pools and fees (`#/school/lp/4`), the buyback claim, the "what makes CLKN different" quiz, the AMM trading examples | **The lesson SOURCES got their STORE variants, not the generated JSON.** `src/sections/LPLab.jsx`, `src/sections/Library.jsx`, `src/App.jsx`: every sentence ABOUT CLKN carries an explicit `STORE ? … : …` (the launch story, the fee-tier line, the two quizzes, the token definition, the buyback sentence, the "lifetime fees" paragraph); the worked examples use `TOK` (`STORE ? "ABC" : "CLKN"`). Both curricula regenerated; **the website copy is byte-identical** apart from its timestamp (`extract-curriculum --check` ✓, `public/curriculum.html` unchanged). **Audit of siblings:** a structural diff of the two curricula (30 differing fields) and a whole-word scan — the store copy has **0** `\bCLKN\b`; two more bare words were found outside the lessons and removed (the Listing Checkup placeholder `e.g. CLKN` → `e.g. USDC`, and our ticker in `public/i18n.js`'s never-translate whitelist, which ships inside the bundle). **Translations:** every store-only sentence has entries in all six `*.school.json` — derived sentence-by-sentence from the existing translations (mechanical ticker swap where that is all that changed; hand-translated rewrites for the sentences about CLKN); 28/30 store-variant fields are translated in all six languages, the other 2 were never translated on the website either. | `\bCLKN\b` is now a **forbidden pattern** for google/ios in `store-edition/store-edition.json` (the build refuses the bundle); `scripts/store-edition-test.cjs` pins your four examples by name on the generated store curriculum, plus the whole word on the curriculum, the chunk and the bundled dictionaries. **Mutation-proved:** with the previous store JSON swapped in, exactly those pins fail. |
+| 2 | **P2** — a failed answer report removed every reporting control | `ReportAnswer` in `src/seeker/AskCluck.jsx`: `failed` is now the `pick` state with an error line above the same four reason buttons; the answer above is untouched | `scripts/store-shell-boot-test.cjs` D: the report endpoint answers 503 once — the error shows, all four buttons remain enabled, the answer is still on screen, one POST so far; then the endpoint is up, the same reason is pressed again, a second POST lands and "reported" shows. **Mutation-proved** against the previous component. |
+| 3 | **P2** — Daily prices showed `$?` (`m.px` vs the backend's `m.price`) | `src/seeker/tools/DailyBrief.jsx` reads `m.price` | `store-shell-boot-test` B: `/api/alpha` answers a populated payload shaped as `server.js` builds it (`majors: [{ sym:"SOL", price:150, chg:2.1 }, …]`) — SOL renders `$150`, no row renders `$?`, the change shows. **Mutation-proved** against the previous pane. |
+
+Where to look hardest this time: the sentence-level derivation of the six dictionaries
+(`public/i18n/*.school.json` — the diff is additive: new keys only, nothing existing changed); the
+`editionPrelude()` added to the two eval-based extractors (`scripts/build-curriculum.cjs`,
+`scripts/i18n-audit.cjs`) so the website-edition tooling evaluates the lesson arrays with
+`STORE = false` and the file's own `TOK` line; and whether a whole-word rule can be fooled by a
+different spelling of the ticker (`$CLKN`, `CLKN's` are caught; lowercase `clkn` in identifiers is
+not the word and is allowed on purpose).
+
+**Not cleared by this round, and not claimed:** the native wrapper and the APK. The wrapper's
+own CI reads the produced APK for the wallet-adapter class and the `solana-wallet` query
+(CLKN-SEEKER `9defc96`); an independent look at that job and its probe is welcome.
+
 ## Round 10 — 2026-09-21: #390, the last P2 (a lesson opened before the dictionary stays English)
 
 Confirmed exactly as you described it, and my brief's "the app gates on `useI18nReady`" was

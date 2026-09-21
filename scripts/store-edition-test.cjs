@@ -68,6 +68,25 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok("the store-only surfaces are present (certificate of completion, report this answer, paste-an-address checkup)", all.includes("Certificate of completion") && all.includes("Report this answer") && all.includes("Paste a wallet address"));
   ok("the school is in the bundle (the curriculum is bundled, and it is the STORE copy)", all.includes("School of Crypto Hard Knocks") && all.includes("The Incubator") && all.includes("LP Lab"));
   ok("the store copy of the curriculum is the one bundled (no venue names, no token examples)", !code.includes("where CLKN trades") && !code.includes("CLKN EXAMPLE"));
+  // Codex on #391 (2026-09-21): "CLKN promotion still renders in the education bundle" — the
+  // guard above passed four real examples (the pool/fee-tier line, the buyback claim, the "what
+  // makes CLKN different" quiz, the AMM trading examples) because it looked for two phrases. The
+  // rule is the whole word: the education edition names no token of ours, anywhere. Pinned on
+  // the generated store curriculum (the source of the bundled school) AND on the chunk, with the
+  // four examples spelled out so a regression is named, not just counted.
+  {
+    const storeCurriculum = fs.readFileSync(path.join(ROOT, "data", "curriculum.store.json"), "utf8");
+    const examples = [
+      ["the fee-tier line about CLKN's own pools", /CLKN's own/],
+      ["the buyback claim (\"reinvests … back into buying CLKN\")", /buying CLKN/],
+      ["the \"what makes CLKN different\" quiz", /What makes CLKN|CLKN is a memecoin/],
+      ["the AMM worked examples priced in CLKN", /[0-9,]+ CLKN/],
+      ["the whole word, anywhere", /\bCLKN\b/],
+    ];
+    for (const [what, re] of examples) ok(`the store curriculum never carries ${what}`, !re.test(storeCurriculum), (re.exec(storeCurriculum) || [""])[0]);
+    ok("the bundled chunk never carries the whole word CLKN (identifiers like CLKN_I18N are not the word)", !/\bCLKN\b/.test(code), (/.{0,60}\bCLKN\b.{0,60}/.exec(code) || [""])[0]);
+    ok("the bundled dictionaries never carry the whole word CLKN", !text.some(([f, t]) => /i18n\/.*\.json$/.test(f) && /\bCLKN\b/.test(t)), text.filter(([f, t]) => /i18n\/.*\.json$/.test(f) && /\bCLKN\b/.test(t)).map(([f]) => f));
+  }
   ok("the Daily pane never renders the brief or a yield figure", !code.includes("%/day") && !code.includes("payload.brief"));
   ok("every outbound host in every file is on the allow-list", (() => { const bad = new Set(); for (const [, t] of text) for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9.-]+)/g)) if (!cfg.allowedHosts.includes(m[1])) bad.add(m[1]); return bad.size === 0; })());
   ok("the footer links the store's own privacy policy and terms", all.includes("https://clucknorris.app/privacy/store") && all.includes("https://clucknorris.app/terms/store"));

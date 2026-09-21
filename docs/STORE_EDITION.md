@@ -173,6 +173,17 @@ and the report posts exactly `{reason, question, answer}`, the certificate route
 device's sid and renders "not yet" truthfully, the footer links the store legal pages, and
 nothing left the bundle's origin but `clucknorris.app`.
 
+**The token rule, made a rule (Codex round 11, 2026-09-21).** The first shell build still named
+CLKN in four lessons (the fee-tier line about our pools, the buyback claim, the "what makes CLKN
+different" quiz, the AMM worked examples) — the scan looked for two phrases, not the word. Now:
+every sentence about CLKN in the lesson sources carries a `STORE` variant, the worked examples use
+`TOK` (`STORE ? "ABC" : "CLKN"` in `LPLab.jsx` / `Library.jsx`), the six `*.school.json` carry the
+store sentences (derived sentence by sentence from the website's translations), and `\bCLKN\b` is a
+forbidden pattern for google/ios — the build refuses a bundle that names the token anywhere,
+curriculum, chunk or dictionary. The website's copy of every lesson is unchanged. The two
+eval-based extractors (`build-curriculum.cjs`, `i18n-audit.cjs`) evaluate the lesson arrays as the
+website edition (`STORE = false`) since the arrays now carry edition ternaries.
+
 **Not in this version, deliberately:** read-aloud (`read-aloud.js`) — the shell has no reader
 yet; it comes back when the shell grows one. iOS is built from the identical config
 (`variants: ["google","ios"]`) and needs its own TestFlight pass.

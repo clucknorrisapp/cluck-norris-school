@@ -308,6 +308,13 @@ function isCandidateGap(key) { return looksLikeInterfaceText(key) && !isAllowlis
 // LESSON array extraction (src/App.jsx) — same technique as extract-curriculum.js:
 // string-slice the balanced-bracket array literal, then eval it (pure data, no JSX/fns).
 // ---------------------------------------------------------------------------
+// The lesson arrays carry edition ternaries (`STORE ? … : …`, and LPLab/Library's `TOK`, the
+// worked-example ticker — store-edition v1.1.0). These scripts want the WEBSITE edition, so the
+// isolated literal is evaluated with STORE = false and the file's own `const TOK = …` line.
+function editionPrelude(src) {
+  const tok = /const TOK = [^\n]+;/.exec(src);
+  return 'const STORE = false; ' + (tok ? tok[0] + ' ' : "");
+}
 function extractArrayLiteral(src, name) {
   const decl = `const ${name} = [`;
   const start = src.indexOf(decl);
@@ -329,7 +336,7 @@ function extractArrayLiteral(src, name) {
   const slice = src.slice(start + decl.length - 1, i);
   try {
     // eslint-disable-next-line no-eval
-    return eval('(' + slice + ')');
+    return eval('(function(){ ' + editionPrelude(src) + 'return (' + slice + '); })()');
   } catch (e) {
     return { error: `eval of ${name} failed: ${e.message}` };
   }

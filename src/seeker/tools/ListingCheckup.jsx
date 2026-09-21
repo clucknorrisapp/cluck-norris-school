@@ -329,7 +329,7 @@ export default function ListingCheckupPane({ linkHosts }) {
         <input id="lc-name" className="seeker-listing-input" value={form.name} onChange={(e) => setField("name", e.target.value.slice(0, MAX_NAME))} placeholder={t("e.g. Cluck Norris")} autoComplete="off" />
 
         <label className="seeker-listing-label" htmlFor="lc-symbol">{t("Symbol")}</label>
-        <input id="lc-symbol" className="seeker-listing-input" value={form.symbol} onChange={(e) => setField("symbol", e.target.value.slice(0, MAX_SYMBOL))} placeholder={t("e.g. CLKN")} autoComplete="off" />
+        <input id="lc-symbol" className="seeker-listing-input" value={form.symbol} onChange={(e) => setField("symbol", e.target.value.slice(0, MAX_SYMBOL))} placeholder={t("e.g. USDC")} autoComplete="off" />
 
         <button type="button" className="seeker-listing-more-toggle" onClick={() => setMore((m) => !m)}>
           {more ? t("Hide website & socials") : t("Add website & socials (optional)")}

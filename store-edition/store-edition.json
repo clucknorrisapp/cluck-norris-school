@@ -809,7 +809,7 @@
     "jup\\.ag",
     "https?://[^\\s\"'`)]*[?&](ref|r|referral|aff)=",
     "app\\.meteora\\.ag",
-    "https?://bags\\.fm"
+    "https?://bags\\.fm", "\\bCLKN\\b"
   ],
   "allowedHosts": [
     "clucknorris.app",

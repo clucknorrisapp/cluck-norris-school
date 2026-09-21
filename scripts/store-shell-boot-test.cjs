@@ -72,9 +72,15 @@ function findChromium() {
     if (r.method() === "POST") { try { posts.push({ url: u.split("?")[0], body: JSON.parse(r.postData() || "{}") }); } catch (_) { posts.push({ url: u.split("?")[0], body: null }); } }
   });
   // Every API call is answered here, never by the live backend: refused by default, with the
-  // three the assertions below need shaped like the real server's responses.
+  // three the assertions below need shaped like the real server's responses. Two are switchable:
+  // the report endpoint can be made to FAIL once (Codex on #391: a failed report removed every
+  // control), and /api/alpha can answer with a populated payload shaped exactly like server.js
+  // builds it — `majors` rows are { sym, price, chg } (the pane once read `m.px` and showed "$?").
+  let reportMode = "ok", alphaMode = "refuse";
   await page.route("**/api/**", (route) => {
     const u = route.request().url();
+    if (/\/api\/alpha$/.test(u) && alphaMode === "populated") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, date: "2026-09-21", generatedAt: new Date().toISOString(), brief: "not rendered", data: { majors: [{ sym: "SOL", price: 150, chg: 2.1 }, { sym: "BTC", price: 64327.5, chg: -0.4 }], trending: [], gainers: [], losers: [], hotPools: [], newPools: [], lpPicks: [] } }) });
+    if (/\/api\/ask-cluck\/report$/.test(u) && reportMode === "fail") return route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false, error: "unavailable" }) });
     if (/\/api\/ask-cluck$/.test(u)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, answer: "A liquidity pool is a pot of two tokens that traders swap against." }) });
     if (/\/api\/ask-cluck\/report$/.test(u)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
     if (/\/api\/claim\/certificate$/.test(u)) return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ ok: false, error: "not_yet", code: "too-few", detail: "The school's record does not show the full curriculum for this device yet." }) });
@@ -109,6 +115,16 @@ function findChromium() {
   }
   const small = await page.evaluate(() => Array.from(document.querySelectorAll(".seeker-navbtn")).map((el) => Math.round(el.getBoundingClientRect().height)).filter((h) => h < 44));
   ok("B · every tab is >= 44px tall", small.length === 0, small);
+  // A POPULATED Daily read — the majors row must show the backend's `price`, formatted, never "$?".
+  alphaMode = "populated";
+  await go("#/school");
+  await go("#/tools/alpha");
+  await page.waitForFunction(() => !!document.querySelector(".seeker-brief-major"), null, { timeout: 8000 }).catch(() => {});
+  const majors = await page.evaluate(() => Array.from(document.querySelectorAll(".seeker-brief-major")).map((el) => el.innerText.replace(/\s+/g, " ").trim()));
+  ok("B · a populated /api/alpha renders SOL at its price ($150), read from the row's `price` field", majors.some((m) => /^SOL\s*\$150\b/.test(m)), majors);
+  ok("B · no major renders as \"$?\" (the field the backend never sends)", majors.length === 2 && !majors.some((m) => /\$\?/.test(m)), majors);
+  ok("B · the change is shown beside the price", majors.some((m) => /\+2\.1%/.test(m)), majors);
+  alphaMode = "refuse";
 
   // ---- C -----------------------------------------------------------------------------------
   await go("#/checkup");
@@ -131,9 +147,21 @@ function findChromium() {
   ok("D · ⚠️ an answer carries the Report control", await page.evaluate(() => !!document.querySelector(".seeker-ask-reportbtn")));
   await page.click(".seeker-ask-reportbtn");
   await page.waitForTimeout(150);
+  // First attempt FAILS (the endpoint answers 503): the answer must stay, the error must show, and
+  // the reason buttons must still be there to press again.
+  reportMode = "fail";
   await page.click(".seeker-ask-report-pick button >> nth=0");
   await page.waitForTimeout(400);
-  const rep = posts.find((p) => /\/api\/ask-cluck\/report$/.test(p.url));
+  const failedState = await page.evaluate(() => ({ err: !!document.querySelector(".seeker-ask-report-err"), buttons: document.querySelectorAll(".seeker-ask-report-pick button").length, enabled: Array.from(document.querySelectorAll(".seeker-ask-report-pick button")).every((b) => !b.disabled), answerStill: /liquidity pool/i.test(document.body.innerText) }));
+  ok("D · a FAILED report says so and keeps every reason button (retry is possible)", failedState.err && failedState.buttons === 4 && failedState.enabled, failedState);
+  ok("D · the answer being reported is still on screen after the failure", failedState.answerStill, failedState);
+  ok("D · one report was attempted so far", posts.filter((p) => /\/api\/ask-cluck\/report$/.test(p.url)).length === 1);
+  // Retry on the SAME answer, now the endpoint is up.
+  reportMode = "ok";
+  await page.click(".seeker-ask-report-pick button >> nth=0");
+  await page.waitForTimeout(400);
+  ok("D · the retry sent a second report", posts.filter((p) => /\/api\/ask-cluck\/report$/.test(p.url)).length === 2);
+  const rep = posts.filter((p) => /\/api\/ask-cluck\/report$/.test(p.url)).pop();
   ok("D · the report posts the reason with the question and the answer, nothing else", !!rep && rep.body && rep.body.reason === "inaccurate" && /liquidity pool/i.test(rep.body.question) && /liquidity pool/i.test(rep.body.answer) && Object.keys(rep.body).sort().join() === "answer,question,reason", rep);
   ok("D · and says so on screen", /reported/i.test(await text()));
 

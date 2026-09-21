@@ -122,10 +122,13 @@ function ReportAnswer({ turn }) {
     } catch (_) { setState("failed"); }
   }
   if (state === "done") return <div className="seeker-ask-report seeker-ask-report-done">{t("Thanks — reported.")}</div>;
-  if (state === "failed") return <div className="seeker-ask-report">{t("Could not send the report. Try again in a moment.")}</div>;
-  if (state === "pick" || state === "sending") {
+  // A failed send keeps the reason buttons on screen (Codex on #391: "Try again" with every
+  // control removed was a dead end) — the answer is untouched above, and the same reason can be
+  // sent again. `failed` is otherwise the `pick` state with an error line.
+  if (state === "pick" || state === "sending" || state === "failed") {
     return (
-      <div className="seeker-ask-report seeker-ask-report-pick" role="group" aria-label={t("Report this answer")}>
+      <div className={"seeker-ask-report seeker-ask-report-pick" + (state === "failed" ? " seeker-ask-report-failed" : "")} role="group" aria-label={t("Report this answer")}>
+        {state === "failed" ? <div className="seeker-ask-report-err" role="alert">{t("Could not send the report. Try again in a moment.")}</div> : null}
         {[["inaccurate", "Inaccurate"], ["harmful", "Harmful"], ["offensive", "Offensive"], ["other", "Something else"]].map(([k, label]) => (
           <button key={k} type="button" className="seeker-btn seeker-btn-quiet" disabled={state === "sending"} onClick={() => send(k)}>{t(label)}</button>
         ))}
