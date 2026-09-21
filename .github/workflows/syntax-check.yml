@@ -844,6 +844,17 @@ jobs:
       - name: Play/iOS edition of the shell boots and behaves
         if: steps.gate.outputs.run == 'true'
         run: node scripts/store-shell-boot-test.cjs
+      # Codex round 12 on #391: "a passing content scan means the bundle is clean" had already been
+      # wrong once — the scan passed while CLKN's pools and fees were on the phone at
+      # #/school/lp/4. So this reads the SCREEN: the shipped google tarball, every one of the 58
+      # lessons in every one of the seven languages, every one of the 200 quiz questions answered
+      # so its explanation renders, and document.body.innerText scanned for our ticker. Codex's
+      # four examples are pinned by name on the rendered text of the lesson each lived in, and the
+      # store wording is asserted PRESENT so the walk is proven to read the real body.
+      # `--mutate` puts the old sentence back in the extracted chunk and the walk fails.
+      - name: Play/iOS edition — every lesson, every language, read off the screen
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/store-render-scan.cjs
       # Colosseum roadmap §7 — "accessibility and phone polish on the public pages" — judges click
       # these on phones. Boots its own server and drives /hub, /hub/<project>, /hub/demo,
       # /for-projects, /hub/apply and /hub/<project>/pay at 360 and 390px with a real Chromium:

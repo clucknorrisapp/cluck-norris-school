@@ -173,6 +173,17 @@ and the report posts exactly `{reason, question, answer}`, the certificate route
 device's sid and renders "not yet" truthfully, the footer links the store legal pages, and
 nothing left the bundle's origin but `clucknorris.app`.
 
+**Read off the screen (Codex round 12, 2026-09-21).** The round-10 content scan passed while CLKN's
+pools and fees were on the phone at `#/school/lp/4`, so a scan of the files is no longer the proof
+that the bundle is clean — **`scripts/store-render-scan.cjs`** (CI) is. It boots the shipped google
+tarball in headless Chromium and reads `document.body.innerText` of every lesson (58) in every
+language the bundle ships (7), answering every quiz question (200) so the explanations render, and
+fails on our ticker anywhere on any screen. Codex's four examples are pinned by name on the rendered
+text of the lesson each lived in, the store wording is asserted present (the walk reads the real
+body), each non-English walk must render differently from English (the language really switched),
+and `--mutate` puts the old sentence back in the extracted chunk to prove the walk fails. About
+five minutes for all seven languages; `node scripts/store-render-scan.cjs en es` for a subset.
+
 **The token rule, made a rule (Codex round 11, 2026-09-21).** The first shell build still named
 CLKN in four lessons (the fee-tier line about our pools, the buyback claim, the "what makes CLKN
 different" quiz, the AMM worked examples) — the scan looked for two phrases, not the word. Now:
