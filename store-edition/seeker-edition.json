@@ -9,6 +9,7 @@
     "theme.css",
     "cluck-util.js",
     "cluck-wallet.js",
+    "cluck-gate.js",
     "rent-math.js",
     "rent-reclaim-plan.js",
     "vendor/solana-web3-1.95.8.iife.min.js",

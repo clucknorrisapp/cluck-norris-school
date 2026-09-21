@@ -122,18 +122,25 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
 
   // Every page opens as a PHONE. A desktop viewport would hide exactly the layout breaks this
   // app has to survive (the hackathon scores mobile-specific work, and a Seeker is a phone).
-  async function open(reclaimable) {
+  async function open(reclaimable, extraRoutes) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
     const page = await ctx.newPage();
     const errors = [];      // uncaught exceptions only — the strict signal
     const offsite = new Set(); // every request that left the bundle's own origin
+    const calls = [];       // every /api path the bundle actually requested, in order
     page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
-    page.on("request", (r) => { const u = r.url(); if (!u.startsWith(BASE) && !u.startsWith("data:") && !u.startsWith("blob:")) offsite.add(u.split("?")[0]); });
+    page.on("request", (r) => {
+      const u = r.url();
+      const i = u.indexOf("/api/");
+      if (i >= 0) calls.push(u.slice(i).split("?")[0]);
+      if (!u.startsWith(BASE) && !u.startsWith("data:") && !u.startsWith("blob:")) offsite.add(u.split("?")[0]);
+    });
     await page.addInitScript(FAKE);
     // Match on the PATH — the shipped bundle calls the absolute production origin.
     await page.route("**/api/seeker/reclaimable*", (route) => reclaimable(route));
+    if (extraRoutes) await extraRoutes(page);
     await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
-    return { ctx, page, errors, offsite };
+    return { ctx, page, errors, offsite, calls };
   }
   const text = (page) => page.evaluate(() => document.body.innerText);
 
@@ -258,6 +265,78 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     ok("E · an account holding tokens is shown as kept, not closable, with the SERVER's own reason", /Holds a balance/i.test(t) && /would lose that balance/i.test(t));
     ok("E · wrapped SOL is shown as refused, with the reason", /Refused/i.test(t) && /Wrapped SOL/i.test(t));
     ok("E · no uncaught exception rendering a real result", errors.length === 0, errors.join(" | ").slice(0, 300));
+    await ctx.close();
+  }
+
+  // ---- F: the tools pass is actually ENFORCED in the shipped bundle ----------------------
+  //
+  // ⚠️ THIS SECTION EXISTS BECAUSE THE PASS WAS UNENFORCEABLE AND EVERYTHING ELSE WAS GREEN.
+  // src/seeker/pass.js reads window.CluckGate, which public/cluck-gate.js installs. That file
+  // was never listed in seeker.html's <script> tags or in store-edition/seeker-edition.json's
+  // `files`, so in the SHIPPED tarball window.CluckGate did not exist, usePass() took its
+  // documented fail-open branch ("off"), and every pass-tier pane ran ungated. Nothing caught
+  // it: the source builds, the panes render, the tarball verifies, and fail-open is correct
+  // behaviour for a real outage — it is only wrong when the client was never shipped at all.
+  //
+  // So the assertion is deliberately made against the BUNDLE, not the source: the file is
+  // present, the global exists, and — the part that actually matters — a RUN with no pass
+  // opens the gate instead of calling the gated API. The last one is a negative assertion over
+  // observed network calls, which is the only form that distinguishes "gated" from "fails open".
+  {
+    const CFG = { success: true, enabled: true, holdUsd: 50, clknNeeded: 1234567, lamports: 50000000, days: 7 };
+    const { ctx, page, errors, calls } = await open(
+      (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+      async (pg) => {
+        await pg.route("**/api/tool-gate/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CFG) }));
+        // If the pane ever called a gated endpoint without a pass, this would answer 200 and the
+        // tool would render a result — so the failure shows up as data on screen, not just a count.
+        for (const p of ["wallet-xray", "snapshot", "trace"]) {
+          await pg.route(`**/api/${p}*`, (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, wallet: ADDR, labels: [], transactions: [], holders: [], hops: [] }) }));
+        }
+      });
+    await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+
+    ok("F · public/cluck-gate.js is IN the shipped bundle", fs.existsSync(path.join(app, "cluck-gate.js")),
+       "cluck-gate.js missing from the tarball — add it to seeker-edition.json's files");
+    ok("F · window.CluckGate exists at runtime, so the pass client is really loaded",
+       await page.evaluate(() => !!(window.CluckGate && typeof window.CluckGate.config === "function" && typeof window.CluckGate.proof === "function" && typeof window.CluckGate.fetch === "function")),
+       "the <script src=\"/cluck-gate.js\"> tag is missing from seeker.html, or the file failed to parse");
+
+    // The three pass-tier panes, each driven the way a person would: type an address, hit RUN.
+    const CLKN = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+    for (const [hash, runSel, fills] of [
+      ["#/tools/xray", ".seeker-listing-runbtn", [ADDR]],
+      ["#/tools/holders", ".seeker-listing-runbtn", [CLKN]],
+      ["#/tools/trace", ".seeker-listing-runbtn", [ADDR, CLKN]],   // two fields: wallet AND mint
+    ]) {
+      await page.evaluate((h) => { window.location.hash = h; }, hash);
+      await page.waitForTimeout(400);
+      const before = calls.length;
+      // ⚠️ EVERY field, not just the first. Trace takes a wallet AND a mint, and a half-filled
+      // form fails validation BEFORE the pass is ever consulted — so "the gated API was not
+      // called" would have been true for the wrong reason and the check would have proved
+      // nothing (AGENTS.md: a probe that produces no output is not a pass). The form-valid
+      // assertion below is what keeps this honest: if validation stopped the run, the pass
+      // sheet is absent and the section fails.
+      const inputs = await page.$$(".seeker-listing-input");
+      for (let i = 0; i < fills.length && i < inputs.length; i++) await inputs[i].fill(fills[i]);
+      const btn = await page.$(runSel);
+      if (btn) await btn.click();
+      await page.waitForTimeout(900);
+      const gated = calls.slice(before).filter((u) => /\/api\/(wallet-xray|snapshot|trace)\b/.test(u));
+      const body = await text(page);
+      ok(`F · ${hash} — the form was VALID, so the run really reached the gate`,
+         !/Enter a valid/i.test(body), body.slice(0, 200));
+      ok(`F · ${hash} — RUN with no pass NEVER calls the gated API`, gated.length === 0, JSON.stringify(gated));
+      ok(`F · ${hash} — it opens the pass sheet instead, with the LIVE terms`,
+         /Unlock the tools pass/i.test(body) && body.includes("1,234,567"), body.slice(0, 400));
+      // Never a hardcoded amount: the numbers on screen came from CFG, so changing the server's
+      // figure changes the sheet. Pinning the literal above is what makes that true, not assumed.
+      const close = await page.$(".seeker-confirm-actions .seeker-btn-quiet");
+      if (close) await close.click();
+      await page.waitForTimeout(200);
+    }
+    ok("F · no uncaught exception driving the pass tier", errors.length === 0, errors.join(" | ").slice(0, 400));
     await ctx.close();
   }
 
