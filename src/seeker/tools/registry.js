@@ -23,7 +23,7 @@ export const TOOLS = [
     blurb: "Approvals, freeze and mint authority, and what each one actually lets someone do." },
   { id: "firepit",    route: "/tools/firepit",    title: "Firepit",         icon: "🔥", tier: "wallet", ready: true ,
     blurb: "Burn worthless junk and reclaim the SOL rent underneath it. A live value guard stops you torching anything still worth money." },
-  { id: "lock",       route: "/tools/lock",       title: "Locker Room",     icon: "🔒", tier: "wallet", ready: false,
+  { id: "lock",       route: "/tools/lock",       title: "Locker Room",     icon: "🔒", tier: "wallet", ready: true ,
     blurb: "Lock tokens on Jupiter Lock, non-custodially, and get public proof you did." },
   { id: "burn",       route: "/tools/burn",       title: "Project Burn",    icon: "🕯", tier: "wallet", ready: true ,
     blurb: "Burn project supply and get a verifiable receipt for it." },

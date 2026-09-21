@@ -30,6 +30,7 @@ import Launches from "./tools/Launches.jsx";
 import DailyBrief from "./tools/DailyBrief.jsx";
 import Firepit from "./tools/Firepit.jsx";
 import ProjectBurn from "./tools/ProjectBurn.jsx";
+import LockerRoom from "./tools/LockerRoom.jsx";
 
 // Anywhere a user can connect a wallet, they must be able to disconnect (CLAUDE.md) — this is
 // the one control surface, so both live in the same place with the provider's own disconnect()
@@ -152,6 +153,7 @@ export default function App() {
             <Route path="/tools/alpha" element={<DailyBrief />} />
             <Route path="/tools/firepit" element={<Firepit wallet={wallet} />} />
             <Route path="/tools/burn" element={<ProjectBurn wallet={wallet} />} />
+            <Route path="/tools/lock" element={<LockerRoom wallet={wallet} />} />
             <Route path="*" element={<Navigate to="/tools" replace />} />
           </Routes>
         </main>
