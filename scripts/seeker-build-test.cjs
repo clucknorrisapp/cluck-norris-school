@@ -152,7 +152,18 @@ function buildVariant(cwd, variant) {
     baselineWt = fs.mkdtempSync(path.join(os.tmpdir(), "seeker-baseline-"));
     fs.rmdirSync(baselineWt);   // `git worktree add` wants to create the dir itself
     execFileSync("git", ["worktree", "add", "--detach", "--quiet", baselineWt, "origin/develop"], { cwd: ROOT, stdio: "pipe" });
-    fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(baselineWt, "node_modules"));
+    // Resolve the REAL node_modules directory via require.resolve rather than assuming
+    // path.join(ROOT, "node_modules") — this session runs from a git worktree nested under the
+    // main checkout (.claude/worktrees/<id>), which has no node_modules of its own and instead
+    // gets one for free from Node's ancestor-directory module resolution (require.resolve('vite')
+    // here resolves to the MAIN checkout's node_modules, two directories up). Symlinking
+    // path.join(ROOT, "node_modules") in that setup creates a DANGLING symlink (fs.symlinkSync
+    // never checks the target exists), which fails silently here and only surfaces later as a
+    // confusing "Cannot find module 'vite'" from inside the pristine worktree's own vite.config.js
+    // — this resolves the actual directory instead, which is a no-op on a normal checkout (where
+    // ROOT/node_modules is that same directory) and correct here too.
+    const realNodeModules = path.dirname(path.dirname(require.resolve("vite/package.json")));
+    fs.symlinkSync(realNodeModules, path.join(baselineWt, "node_modules"));
     baseline = baselineWt;
   } catch (e) {
     console.log("  · could not set up a pristine origin/develop worktree — skipping the comparison");

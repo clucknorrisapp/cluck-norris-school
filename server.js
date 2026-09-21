@@ -18017,6 +18017,17 @@ app.get("/rent-math.js", (req, res) => {
   res.sendFile(join(__dirname, "public", "rent-math.js"));
 });
 
+// public/rent-reclaim-plan.js — Rent Reclaim SIGNING decisions (Seeker app increment 3, see that
+// file's own header and docs/SEEKER_RECLAIM_SIGNING_SPEC.md). Same no-build-boot trap and same
+// no-cache posture as rent-math.js above: with no explicit route this 404s when seeker.html is
+// served without a prior `npm run build` (the public/-is-not-mounted-directly trap CLAUDE.md
+// documents), and a safety-rule fix must reach every load, not sit behind up to 4h of caching.
+app.get("/rent-reclaim-plan.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "rent-reclaim-plan.js"));
+});
+
 // The sitewide browser runtime every page loads (the floating nav + its i18n and read-aloud
 // loaders, and the theme sheet) had NO explicit route: they were reachable only through the vite
 // build's copy in dist/, so a no-build boot (the CI a11y gate, `node server.js` on a fresh clone)

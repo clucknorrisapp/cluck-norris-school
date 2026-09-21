@@ -170,9 +170,18 @@ function rpcOk(list) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
-  // (g) i18n — the 16 new keys, byte-exact, in all six dictionaries; excluded from google/ios
+  // (g) i18n — the 16 increment-2 keys, byte-exact, in all six dictionaries; excluded from
+  // google/ios. Increment 3 (signing) added its OWN new t(...) literals on top — per
+  // docs/SEEKER_RECLAIM_SIGNING_SPEC.md's build brief, those are deliberately left OUT of the six
+  // curated dictionaries for now ("a later pass handles translation": there is no en.json in this
+  // repo — see scripts/i18n-audit.cjs's header — so a brand-new curated string with zero entries
+  // anywhere simply falls through to i18n.js's documented runtime fallback: English literal for
+  // English viewers, on-demand machine translation for the other six, same as any other
+  // not-yet-curated string on this site; nothing renders as a missing-key placeholder). They are
+  // tracked here anyway so the SAME extraction-matches-list discipline catches a typo or a
+  // component/list drift for them too, just without requiring dictionary membership.
   // ══════════════════════════════════════════════════════════════════════════════════════════
-  console.log("\n(g) i18n — the 16 new keys in all six dictionaries, excluded from google/ios\n");
+  console.log("\n(g) i18n — the 16 increment-2 keys in all six dictionaries; increment-3 keys tracked but left to machine translation\n");
   const NEW_KEYS = [
     "Connect your wallet to scan for reclaimable rent.",
     "Scanning your wallet…",
@@ -181,7 +190,6 @@ function rpcOk(list) {
     "Total reclaimable",
     "More accounts exist in this wallet than are shown here.",
     "Reclaim",
-    "Signing is coming in the next build.",
     "Reclaimable",
     "No reclaimable rent found in this wallet right now.",
     "Holds a balance",
@@ -190,6 +198,27 @@ function rpcOk(list) {
     "No balance — safe to close.",
     "Still holds tokens — won't be closed.",
     "Wrapped SOL — not handled here.",
+  ];
+  // "Signing is coming in the next build." was increment 2's placeholder note under the disabled
+  // Reclaim button — increment 3 enabled signing and removed it, so it is a RETIRED key, not a
+  // current one; it is not expected in NEW_KEYS_INCREMENT3 or in the six dictionaries any more
+  // (dictionaries keep the stale entry harmlessly — i18n-audit.cjs's "extra/stale" is a warning,
+  // never a gate).
+  const NEW_KEYS_INCREMENT3 = [
+    "Confirm reclaim",
+    "Accounts to close",
+    "SOL returning to your wallet",
+    "Your wallet will ask you to approve this next.",
+    "Cancel",
+    "Signing…",
+    "Confirm and sign",
+    "Closed",
+    "Declined",
+    "Skipped",
+    "Failed",
+    "View signature",
+    "Reclaimed",
+    "You declined to sign — nothing was closed.",
   ];
   // These must be the exact literals RentReclaim.jsx passes to t(...) — extracted independently
   // here (a plain t("...") call regex) rather than just re-typing NEW_KEYS a second time, so a
@@ -203,19 +232,30 @@ function rpcOk(list) {
   }
   extracted.delete("Rent Reclaim"); // already an increment-1 key, not new here
   const extractedList = [...extracted].sort();
-  ok("the literal t(...) calls extracted from RentReclaim.jsx match this test's NEW_KEYS list exactly",
-    JSON.stringify(extractedList) === JSON.stringify([...NEW_KEYS].sort()),
-    { extractedOnly: extractedList.filter((k) => !NEW_KEYS.includes(k)), listOnly: NEW_KEYS.filter((k) => !extracted.has(k)) });
+  const expectedList = [...NEW_KEYS, ...NEW_KEYS_INCREMENT3].sort();
+  ok("the literal t(...) calls extracted from RentReclaim.jsx match this test's known-keys lists exactly",
+    JSON.stringify(extractedList) === JSON.stringify(expectedList),
+    { extractedOnly: extractedList.filter((k) => !expectedList.includes(k)), listOnly: expectedList.filter((k) => !extracted.has(k)) });
 
   for (const lang of ["es", "zh", "hi", "it", "pt", "vi"]) {
     const dict = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${lang}.json`), "utf8"));
     const missing = NEW_KEYS.filter((k) => !Object.prototype.hasOwnProperty.call(dict, k));
-    ok(`${lang}.json carries all 16 new keys`, missing.length === 0, missing);
+    ok(`${lang}.json carries all 15 increment-2 keys`, missing.length === 0, missing);
   }
   {
     const storeCfg = JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "store-edition.json"), "utf8"));
     const missing = NEW_KEYS.filter((k) => !(storeCfg.excludeKeys || []).includes(k));
-    ok("store-edition.json excludes every new key from the google/ios dictionary copy", missing.length === 0, missing);
+    ok("store-edition.json excludes every increment-2 key from the google/ios dictionary copy", missing.length === 0, missing);
+  }
+  {
+    // The increment-3 strings must never leak into the google/ios bundle EITHER — but not via the
+    // excludeKeys prune (they were never added to a dictionary to prune from). The real guarantee
+    // is structural: google/ios build from index.html, never seeker.html (vite.config.js's SEEKER
+    // branch), so nothing under src/seeker/* is ever in that dependency graph. Assert that
+    // directly against the config, rather than trusting a comment.
+    const viteSrc = fs.readFileSync(path.join(ROOT, "vite.config.js"), "utf8");
+    ok("vite.config.js only overrides the build entry to seeker.html for the seeker edition (google/ios never reaches src/seeker/*)",
+      /SEEKER\s*\?\s*\{\s*input:\s*resolve\(__dirname,\s*['"]seeker\.html['"]\)/.test(viteSrc), viteSrc);
   }
   try {
     require("child_process").execFileSync(process.execPath, [path.join(ROOT, "scripts", "i18n-audit.cjs")], { cwd: ROOT, stdio: "pipe" });
