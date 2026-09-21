@@ -174,6 +174,26 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       .map((el) => ({ t: (el.innerText || "").trim().slice(0, 18), h: Math.round(el.getBoundingClientRect().height) })).filter((x) => x.h < 44));
     ok("B · every nav and wallet control is >= 44px tall on a phone", small.length === 0, JSON.stringify(small));
 
+    // ⚠️ AND NOTHING IS SITTING ON TOP OF THEM. The size check above passed while the shared
+    // language pill (public/i18n.js injects it fixed at bottom-right, z-index 2147483600) covered
+    // the FOURTH nav tab on every screen of the app — Wallet Checkup was untappable, and nothing
+    // caught it: the tab was the right size, it mounted, its route worked. It was visible only in
+    // a screenshot. A tap target can be exactly 44px and still be unreachable, so this asks the
+    // browser the question a thumb asks: what is actually at that point?
+    const covered = await page.evaluate(() => {
+      const out = [];
+      for (const el of document.querySelectorAll(".seeker-navbtn, .seeker-walletbtn")) {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+        if (!hit || !(el === hit || el.contains(hit) || hit.contains(el))) {
+          out.push({ t: (el.innerText || "").trim().slice(0, 14), by: hit ? (hit.id || hit.className || hit.tagName) : "nothing" });
+        }
+      }
+      return out;
+    });
+    ok("B · ⚠️ and nothing is covering them — the thumb reaches the control, not an overlay",
+       covered.length === 0, JSON.stringify(covered));
+
     // The grid's own honesty rule (ToolsHome.jsx): a tool that is not built yet renders as a
     // dead card, never a link. With fifteen tools landing across several batches, the failure
     // this catches is a `ready` flag flipped ahead of its pane — which routes a judge into a

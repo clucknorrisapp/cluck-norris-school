@@ -115,6 +115,27 @@ html, body {
   text-transform: uppercase;
 }
 
+/* ── the shared language pill, kept off the bottom nav ─────────────────────────────────────────
+   public/i18n.js injects a floating language picker on every page, fixed at bottom-right with
+   `z-index: 2147483600`. On the website it floats over page content, which is fine. Here it
+   landed directly ON TOP of the fourth bottom-nav tab — Wallet Checkup was unreachable by touch
+   on every screen of the app, and nothing caught it: the boot test asserts every control clears
+   44px, which it did, and that every tool mounts, which it did. It was only visible in a
+   screenshot. Tap targets can be the right size and still be covered.
+
+   Lifted above the nav rather than re-styled or suppressed: the picker itself is shared code and
+   works, and a phone app that hides the language control is worse than one where it sits an inch
+   higher. Its styles are INLINE, so these need !important — a stylesheet rule alone loses. The
+   offset is the nav's own height (56px button + 1px border) plus the same safe-area inset the
+   nav pads itself with, so it tracks the bar on a notched device instead of guessing. */
+#clkn-lang-toggle {
+  bottom: calc(57px + 14px + env(safe-area-inset-bottom, 0px)) !important;
+  right: 12px !important;
+}
+/* Its own menu opens upward from the pill; with the pill raised, the menu would otherwise run
+   into the header on a short screen. Anchoring it below keeps it inside the viewport. */
+#clkn-lang-toggle > div:first-child { max-height: 60vh; overflow: auto; }
+
 .seeker-nav {
   position: fixed;
   left: 0;
