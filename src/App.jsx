@@ -1801,10 +1801,9 @@ function StartHere({ onGo }){
         {!STORE && <Act label="🛠 All tools" onClick={goIn("/tools")}/>}
         {STORE && <WebPointer/>}
       </>)},
-    ...(STORE ? [] : [{ key:"team", icon:"🚀", title:"I run a project or community", tag:"Locks, buy competitions, airdrops, listings", body:()=>(<>
-        <p style={txt}>Lock tokens, run a buy competition, airdrop holders, or get listed right — the project-team toolkit, free or unlocked by holding CLKN.</p>
+    ...(STORE ? [] : [{ key:"team", icon:"🚀", title:"I run a project or community", tag:"Locks, airdrops, listings", body:()=>(<>
+        <p style={txt}>Lock tokens, airdrop holders, or get listed right — the project-team toolkit, free or unlocked by holding CLKN.</p>
         <Act label="🔒 Lock tokens" onClick={goIn("/locker-room#create")} color="#34D399" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
-        <Act label="🎯 Run a buy competition" onClick={goIn("/buyspecial")}/>
         <Act label="🛠 All project tools" onClick={goIn("/tools#for-projects")}/>
       </>)}]),
     ...(STORE ? [] : [{ key:"about", icon:"🐔", title:"About Cluck Norris & CLKN", tag:"The story + where to buy", body:()=>(<>
