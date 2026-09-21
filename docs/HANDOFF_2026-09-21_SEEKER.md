@@ -282,10 +282,16 @@ before any of this touches real money.
   schemas, not from a live call.
 - **No real burn, no real lock, no real airdrop, no real mint.** All four are exercised against a
   fake chain that returns what we told it to.
-- **The Hatchery's image path has never run in a browser at all.** A phone's camera roll gives
-  1–15 MB photos and `/build` caps the logo at 100 KiB, so the pane downscales and re-encodes via
-  `<canvas>` — code-reviewed against the documented APIs, never executed. Test it on a real device
-  before the Hatchery ships.
+- ~~**The Hatchery's image path has never run in a browser at all.**~~ **CLOSED 2026-09-21** by
+  boot section O, which drives the real file input in the real bundle with real image bytes and
+  reads what the pane would POST — `imageBase64`/`imageMime` are exactly what reaches Arweave.
+  The fixtures carry a spliced APP1 Exif segment with a canary next to fake GPS tags, and the
+  section asserts it does not survive, that the magic bytes match the declared mime, that a PNG
+  stays a PNG, and that the result is under the server's cap. Mutation-proved: restoring the old
+  byte-for-byte fast path makes the SMALL JPEG's canary survive, and only that assertion — the
+  1600px one still re-encodes, which is exactly the asymmetry the fix exists for.
+  **Still untested on a real device:** a phone's own camera JPEG (bigger, and from a real encoder
+  with real EXIF) and whether the downscale ladder terminates on a 15 MB photo on phone memory.
 - **Three cheap tests worth doing before trusting any of this with money**, each one transaction:
   1. On devnet, confirm `CloseAccount` really refuses a non-empty account — the last line under
      the `uiAmount` class of bug in Rent Reclaim.
