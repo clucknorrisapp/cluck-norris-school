@@ -29,7 +29,7 @@
 
 import React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { t, tf, tBlock } from "../i18n.js";
+import { t, tf, tBlock, useI18nReady } from "../i18n.js";
 import { track } from "../../track.js";
 import {
   COURSES, TOTAL_LESSONS, courseById, lessonById,
@@ -81,6 +81,8 @@ function Prose({ text, className }) {
 // Google Play / iOS edition offers its certificate of completion instead. Defaults are the full
 // app's, so a caller that passes nothing gets exactly what shipped.
 export function SchoolHome({ finished, progressNote }) {
+  // Re-render when the dictionary lands — a lesson opened directly can render before it does.
+  useI18nReady();
   const done = completedIds();
   const doneCount = COURSES.reduce(
     (n, c) => n + c.lessons.filter((l) => done.indexOf(l.key) !== -1).length, 0
@@ -154,6 +156,8 @@ export function SchoolHome({ finished, progressNote }) {
 
 // ── one course: its lessons ─────────────────────────────────────────────────────────────────
 export function SchoolCourse() {
+  // Re-render when the dictionary lands — a lesson opened directly can render before it does.
+  useI18nReady();
   const { courseId } = useParams();
   const course = courseById(courseId);
   const done = completedIds();
@@ -198,6 +202,8 @@ export function SchoolCourse() {
 
 // ── one lesson: read, then quiz ─────────────────────────────────────────────────────────────
 export function SchoolLesson() {
+  // Re-render when the dictionary lands — a lesson opened directly can render before it does.
+  useI18nReady();
   const { courseId, lessonId } = useParams();
   const navigate = useNavigate();
   const course = courseById(courseId);

@@ -58,26 +58,29 @@ export function tBlock(s) {
 }
 
 // i18n.js finishes loading its dictionary asynchronously (a fetch, in the shipped runtime), so a
-// component that read t() at first render can be stuck showing English forever with no prompt to
-// re-read it. This mirrors solana-room.html's waitForI18n(): poll briefly, then stop — never an
-// indefinite loop, never a network call of its own.
-export function useI18nReady(timeoutMs) {
+// component that read t() at first render would show English forever with nothing prompting it
+// to re-read. This re-renders the caller when the dictionary lands.
+//
+// ⚠️ EVENT-DRIVEN, WITH NO TIMEOUT ON THE LISTENER. The first version polled for 1.5 s and then
+// gave up, which meant a lesson opened directly (a deep link, a reload) on a slow load rendered
+// English, was never told the dictionary had arrived, and stayed English — and the page observer
+// then machine-translated the English paragraphs it found (Codex, PR #390 round 9). i18n.js now
+// dispatches "clkn:i18n-ready" the moment window.CLKN_I18N is set; the listener stays for the
+// life of the component. A short bounded poll covers the race between the first render's check
+// and the listener attaching. Never a network call of its own.
+//
+// ⚠️ Every pane that renders t() or a lesson body must call this — not just the header and the
+// nav. The hook re-renders ITS OWN caller only.
+export function useI18nReady() {
   const [ready, setReady] = useState(() => typeof window !== "undefined" && !!window.CLKN_I18N);
   useEffect(() => {
-    if (ready) return undefined;
+    if (ready || typeof window === "undefined") return undefined;
     let stopped = false;
-    const start = Date.now();
-    const limit = timeoutMs || 1500;
-    function poll() {
-      if (stopped) return;
-      if ((typeof window !== "undefined" && window.CLKN_I18N) || Date.now() - start > limit) {
-        if (!stopped) setReady(true);
-        return;
-      }
-      setTimeout(poll, 30);
-    }
-    poll();
-    return () => { stopped = true; };
-  }, [ready, timeoutMs]);
+    const arrive = () => { if (!stopped) setReady(true); };
+    window.addEventListener("clkn:i18n-ready", arrive);
+    const poll = setInterval(() => { if (window.CLKN_I18N) arrive(); }, 50);
+    const stopPoll = setTimeout(() => clearInterval(poll), 3000);
+    return () => { stopped = true; window.removeEventListener("clkn:i18n-ready", arrive); clearInterval(poll); clearTimeout(stopPoll); };
+  }, [ready]);
   return ready;
 }

@@ -102,7 +102,7 @@
 // in this session — no browser tool was available to test it — so treat the canvas path as
 // code-reviewed, not device-verified, until someone runs it on an actual Seeker/Android webview.
 import React from "react";
-import { t } from "../i18n.js";
+import { t, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Unavailable, Confirm, toolFetch, useOnline } from "../pane.jsx";
 import { NeedsWallet } from "../needswallet.jsx";
 import { shortAddr } from "../addr.js";
@@ -300,6 +300,9 @@ function feeConfirmLine(cfg, payWith) {
 }
 
 export default function HatcheryPane({ wallet }) {
+  // Re-render when the dictionary lands. <Pane> subscribes too, but React does not re-render
+  // children it was handed as props, so this pane's own t() strings need their own subscription.
+  useI18nReady();
   const online = useOnline();
 
   // ── live fee config — never hardcoded, refetched on wallet connect and again right before the

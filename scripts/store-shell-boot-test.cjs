@@ -153,6 +153,40 @@ function findChromium() {
   ok("F · no uncaught exception anywhere in the run", errors.length === 0, errors.join(" | ").slice(0, 400));
 
   await ctx.close();
+
+  // ---- G: a lesson opened DIRECTLY in Spanish, with the dictionaries held back ---------------
+  // Same race as seeker-app-boot-test P9, on THIS bundle: the school is where a store user lands,
+  // a reload or a deep link renders the lesson before the dictionary, and it must update itself
+  // when the dictionary arrives — including after the readiness hook's old 1.5 s give-up.
+  {
+    const ES = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", "es.school.json"), "utf8"));
+    const CUR = require(path.join(ROOT, "data", "curriculum.store.json"));
+    const norm = (x) => String(x || "").replace(/\s+/g, " ").trim();
+    const lp = CUR.courses.find((c) => c.id === "lp").lessons
+      .map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
+      .sort((a, b) => b.chars - a.chars)[0].l;
+    const sec0 = lp.sections[0];
+    const curated = ES[norm(sec0.body)];
+    const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const p2 = await ctx2.newPage();
+    const errs = [];
+    p2.on("pageerror", (e) => errs.push(e.message));
+    await p2.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    await p2.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+    await p2.route("**/i18n/es*.json", async (route) => { await new Promise((r) => setTimeout(r, 2500)); await route.continue(); });
+    await p2.goto(`${BASE}/index.html#/school/lp/${lp.id}`, { waitUntil: "domcontentloaded" });
+    await p2.waitForFunction(() => !!document.querySelector(".seeker-school-section-body"), null, { timeout: 20000 });
+    const early = await p2.evaluate(() => ({ dict: !!window.CLKN_I18N, body: (document.querySelector(".seeker-school-section-body") || {}).innerText || "" }));
+    ok("G · the store copy of the lesson renders before the dictionary (English first — the race is real)", !early.dict && norm(early.body) === norm(sec0.body), { dict: early.dict, body: early.body.slice(0, 80) });
+    ok("G · the store copy of this section HAS a curated Spanish translation (else the next check proves nothing)", !!curated && curated.length > 200);
+    await p2.waitForFunction(() => !!window.CLKN_I18N, null, { timeout: 20000 });
+    await p2.waitForFunction((want) => { const w = document.querySelector(".seeker-school-section-body"); return !!w && w.innerText.replace(/\s+/g, " ").trim() === want; }, norm(curated), { timeout: 5000 }).catch(() => {});
+    const late = await p2.evaluate(() => { const w = document.querySelector(".seeker-school-section-body"); return { body: w ? w.innerText : "", skipped: w ? w.getAttribute("data-i18n-skip") : null }; });
+    ok("G · ⚠️ and becomes the curated Spanish on its own once the dictionary lands", norm(late.body) === norm(curated) && late.skipped === "1", { got: late.body.slice(0, 120), skipped: late.skipped });
+    ok("G · nothing threw", errs.length === 0, errs.join(" | ").slice(0, 300));
+    await ctx2.close();
+  }
+
   await browser.close();
   console.log("\n" + (failures ? failures + " FAILED" : "all passed") + "\n");
   process.exit(failures ? 1 : 0);

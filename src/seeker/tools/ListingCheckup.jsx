@@ -26,7 +26,7 @@
 // A failed run (offline, 5xx, rate limit) renders through <Unavailable>, never as an empty report
 // — a report with zero sources checked would otherwise look identical to "everything's fine".
 import React from "react";
-import { t, tf } from "../i18n.js";
+import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, toolFetch, useOnline } from "../pane.jsx";
 import { shortAddr } from "../addr.js";
 import "./tools.css";
@@ -233,6 +233,9 @@ function LogoSpecCard({ data }) {
 }
 
 export default function ListingCheckupPane({ linkHosts }) {
+  // Re-render when the dictionary lands. <Pane> subscribes too, but React does not re-render
+  // children it was handed as props, so this pane's own t() strings need their own subscription.
+  useI18nReady();
   const online = useOnline();
   const [form, setForm] = React.useState(emptyForm());
   const [more, setMore] = React.useState(false);

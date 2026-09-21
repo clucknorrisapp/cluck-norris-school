@@ -81,7 +81,7 @@
 // "safe" or "verified". The bonus-% figure is a PREVIEW this pane computes locally from those
 // facts for whoever is sizing a competition — never a promise this app can pay (it can't send).
 import React from "react";
-import { t } from "../i18n.js";
+import { t, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, useOnline } from "../pane.jsx";
 import { usePass } from "../pass.js";
 import { PassGate, gatedToolFetch } from "../passgate.jsx";
@@ -198,6 +198,9 @@ function ResultRow({ r, trace, onTrace }) {
 }
 
 export default function BuySpecialPane({ wallet }) {
+  // Re-render when the dictionary lands. <Pane> subscribes too, but React does not re-render
+  // children it was handed as props, so this pane's own t() strings need their own subscription.
+  useI18nReady();
   const online = useOnline();
   const pass = usePass();
 

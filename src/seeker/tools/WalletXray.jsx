@@ -33,7 +33,7 @@
 // patterns, not statements of intent". Nothing here calls a wallet "creator" or "team" — X-Ray
 // has no launchpad cross-check, unlike Trace's Bags-verified creator flag.
 import React from "react";
-import { t } from "../i18n.js";
+import { t, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, useOnline } from "../pane.jsx";
 import { usePass } from "../pass.js";
 import { PassGate, gatedToolFetch } from "../passgate.jsx";
@@ -129,6 +129,9 @@ const ACTION_LABEL = {
 };
 
 export default function WalletXrayPane({ wallet }) {
+  // Re-render when the dictionary lands. <Pane> subscribes too, but React does not re-render
+  // children it was handed as props, so this pane's own t() strings need their own subscription.
+  useI18nReady();
   const online = useOnline();
   const pass = usePass();
   const [input, setInput] = React.useState("");

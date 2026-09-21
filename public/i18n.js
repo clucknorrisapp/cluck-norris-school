@@ -268,6 +268,10 @@
       DICT = {};
       parts.forEach(function (p) { for (var k in p) DICT[k] = p[k]; });
       window.CLKN_I18N = { lang: lang, dict: DICT, mt: MT };
+      // Announce it. A React surface that rendered BEFORE this resolved (the Seeker shell's
+      // school on a direct lesson launch) has no other way to learn the dictionary is here —
+      // polling with a timeout misses a slow load for good (Codex, PR #390 round 9).
+      try { window.dispatchEvent(new CustomEvent("clkn:i18n-ready", { detail: { lang: lang } })); } catch (_) {}
       onReady(start);
     })
     .catch(function () { onReady(injectToggle); });
