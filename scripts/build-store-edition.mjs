@@ -149,7 +149,22 @@ for (const f of textFiles) {
     // ALLOW-list of outbound hosts (Codex, 2026-09-12): a deny-list can only name what it already
     // knows. Every http(s) URL in every copied file — JS, HTML, CSS, JSON — must point at a host on
     // the list, or the build fails and the new host is a deliberate, reviewed addition.
-    for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9.-]+)/g)) if (!cfg.allowedHosts.includes(m[1])) problems.push(`${rel}: host not allow-listed: ${m[1]}`);
+    // VENDORED third-party bundles are exempt from the host scan, and this is deliberate.
+    // They are pinned artifacts we do not author: @solana/web3.js's UMD carries feross.org and
+    // github.com in its licence comments and api.{devnet,testnet,mainnet-beta}.solana.com as
+    // library defaults our code never calls. Scanning them forced those hosts onto the GLOBAL
+    // allow-list, which quietly blunted it — api.mainnet-beta.solana.com sitting in the list
+    // would have let a future accident bypass our own /api/helius-rpc proxy without the build
+    // saying a word. An allow-list that has to be widened for strings nobody can act on stops
+    // being a guard.
+    // What covers vendored files instead is the RUNTIME half: scripts/seeker-app-boot-test.cjs
+    // boots the shipped tarball and asserts it reaches nothing off-device but our own API. Build
+    // scan for the code we write, runtime scan for everything that actually executes — the
+    // complementary-blind-spots pairing AGENTS.md calls "check every form, not one form".
+    const vendored = /(^|\/)vendor\//.test(rel);
+    if (!vendored) {
+      for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9.-]+)/g)) if (!cfg.allowedHosts.includes(m[1])) problems.push(`${rel}: host not allow-listed: ${m[1]}`);
+    }
   }
   const relApi = t.match(/["'`]\/api\/[a-zA-Z]/g); if (relApi) problems.push(`${rel}: relative /api reference (${relApi.length})`);
   if (/STORE:(OUT|IN)/.test(t)) problems.push(`${rel}: unprocessed STORE marker`);

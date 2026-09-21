@@ -57,11 +57,6 @@
     "brave.com",
     "jup.ag",
     "www.bybit.com",
-    "solscan.io",
-    "feross.org",
-    "github.com",
-    "api.devnet.solana.com",
-    "api.testnet.solana.com",
-    "api.mainnet-beta.solana.com"
+    "solscan.io"
   ]
 }
