@@ -171,6 +171,21 @@ what they were owed and what arrived.
 helping communities lock tokens on Jupiter Lock and broadcast it. Autopsy stays but isn't the
 lead ("so many rugs and nobody cares").
 
+🚩 **THE FLAGSHIPS (owner, 2026-09-21), in his words:** *"flagships are the school, the LP lab,
+the airdropper, the locker room, the fire pit, project burn."* Six, and the **school leads**.
+This is what any surface that ranks, groups or leads with a subset must lead with — the Seeker
+app's home, the website's doors, promo copy, the demo. Everything else is real and stays, but it
+is not the front door.
+
+⚠️ **The lesson that produced this list.** The Seeker app shipped with **no school in it at
+all** — not hidden, never built. The 2026-09-21 instruction "build all the tools into the seeker
+app" produced `docs/SEEKER_TOOLS_BUILD.md`, a list of fifteen TOOLS, and that list silently
+became the whole app: `seeker.html` is its own Vite entry (`src/seeker/*`) and never included
+`src/App.jsx`, so `/` landed on `/tools` and the Educate half of Educate → Build → Earn simply
+was not in the product. The owner found it on the device. **A scope doc that enumerates one
+category is not a product spec** — when the next one says "all the X", check what it leaves out
+before the list becomes the app.
+
 **Normie Quest** runs under Cluck Norris production for the NORMIE community, and went public
 on **2026-08-22** at `/normie-quest-x7` with owner-set holder terms: free worlds 1-3, **$5 of
 NORMIE → worlds 4-12, $50 → everything** (live-priced — `docs/NQ_LAUNCH_GATE.md` is the

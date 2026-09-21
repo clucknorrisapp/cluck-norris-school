@@ -29,8 +29,6 @@ export const TOOLS = [
     blurb: "Burn project supply and get a verifiable receipt for it." },
   { id: "listing",    route: "/tools/listing",    title: "Listing Checkup", icon: "📋", tier: "free",   ready: true,
     blurb: "The checks listing venues commonly run on a token — run them on yours first." },
-  { id: "bags",       route: "/tools/bags",       title: "Launches",        icon: "🎒", tier: "free",   ready: true,
-    blurb: "Live launches and graduations, from the Bags and Solana Tracker feeds." },
   { id: "alpha",      route: "/tools/alpha",      title: "Daily Brief",     icon: "📰", tier: "free",   ready: true,
     blurb: "The flock's read on Solana today: the mood, what's moving, where the fees are." },
   { id: "xray",       route: "/tools/xray",       title: "Wallet X-Ray",    icon: "🔎", tier: "pass",   ready: true ,

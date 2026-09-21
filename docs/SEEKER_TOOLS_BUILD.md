@@ -67,6 +67,30 @@ Operator and project-owner surfaces: `hub-desk`, `hub-pay`, `hub-apply`, `client
 `lp-rescue`, `premium`/autopsy, `transcript`. These are desk work on a large screen, they are not
 what a phone in a pocket is for, and several are owner-only. Not a capability gap — a scope line.
 
+### ⚠️ Superseded in part, 2026-09-21 (owner, on the device)
+
+Two corrections from the owner after installing the app on his Seeker — **wallet connect and
+signing work**, and then:
+
+1. 🚩 **The flagships are "the school, the LP lab, the airdropper, the locker room, the fire pit,
+   project burn"** — and the **school leads**. The home screen must lead with those, not with a
+   catalogue grouped by access tier. See AGENTS.md.
+2. ⛔ **Launches is REMOVED** (owner: *"I don't want the launches stuff on there especially any
+   bags info"*). The pane, its route, its registry row, its i18n keys and its own CSS are gone.
+   Six classes from its CSS block survive under their old `seeker-launch-` names because the
+   Locker Room, the Hatchery and the Daily Brief all use them — deleting the block wholesale
+   broke all three.
+3. **The Daily Brief is HELD** — owner has not decided ("let's circle back later"). It reads
+   `/api/alpha`, the same brief that already feeds the daily Telegram and X post, and it shows
+   new pools and gainers/losers, which is the launch-flavoured content point 2 is about. Do not
+   remove it, and do not defend it; it is an open question.
+
+**And the big one: this document is why the app had no school.** It enumerates fifteen TOOLS,
+and the app was built to it exactly — `seeker.html` is a separate Vite entry over `src/seeker/*`
+and never included the school at all. Nothing was deleted; the school was never routed in, and
+`/` was pointed at `/tools`. The fix in flight is a **phone-native school** (owner's pick) over
+the EXISTING lesson data, leading the app.
+
 ### Status, 2026-09-21
 **All 15 are built, wired and reachable**, and `scripts/seeker-app-boot-test.cjs` drives every
 one of them in the shipped tarball and asserts it mounts — read from the grid's own rendered

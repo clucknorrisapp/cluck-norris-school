@@ -26,7 +26,6 @@ import AskCluckPane from "./AskCluck.jsx";
 import WalletCheckupPane from "./WalletCheckup.jsx";
 import ToolsHome from "./ToolsHome.jsx";
 import ListingCheckup from "./tools/ListingCheckup.jsx";
-import Launches from "./tools/Launches.jsx";
 import DailyBrief from "./tools/DailyBrief.jsx";
 import Firepit from "./tools/Firepit.jsx";
 import ProjectBurn from "./tools/ProjectBurn.jsx";
@@ -155,7 +154,6 @@ export default function App() {
             <Route path="/ask" element={<AskCluckPane />} />
             <Route path="/checkup" element={<WalletCheckupPane wallet={wallet} />} />
             <Route path="/tools/listing" element={<ListingCheckup />} />
-            <Route path="/tools/bags" element={<Launches />} />
             <Route path="/tools/alpha" element={<DailyBrief />} />
             <Route path="/tools/firepit" element={<Firepit wallet={wallet} />} />
             <Route path="/tools/burn" element={<ProjectBurn wallet={wallet} />} />
