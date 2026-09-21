@@ -264,9 +264,27 @@ sessions, clientlib pinned 2.1.1 — 2.2.0 would have forced an unrelated SDK bu
 real bug on the way: `MobileWalletAdapter.blockchain` **defaults to Devnet**, so every adapter now
 sets Mainnet explicitly.
 
-**It has never been compiled** — no Android SDK in this container. Until the 10-step device
-checklist in `docs/MWA_PLUGIN.md` passes, an APK built today opens, renders and reads, but
-**cannot sign**. That checklist is the day-3 gate no cloud session can close.
+~~**It has never been compiled**~~ — **CLOSED 2026-09-21.** The apps repo now has an `android
+build` workflow (`.github/workflows/android-build.yml`) and it is green: the Kotlin compiles, the
+clientlib resolves, and a 4.9 MB debug APK is uploaded as an artifact on every run. Verified
+against the artifact rather than the green tick — `app.clucknorris.school.mwa.CluckMWAPlugin` and
+all five bridged methods are in the APK's dex, alongside 213 `com/solana/mobilewalletadapter`
+references. Details: `docs/MWA_PLUGIN.md` in the apps repo.
+
+⚠️ Getting there needed three fixes in the apps repo, and the third is the lesson: `npm ci` could
+not install at all (an ERESOLVE from react-native's `@types/react@19` peer, pulled in as an
+*optional* dep of the mobile wallet adapter — `npm install` tolerated it and `npm ci` did not),
+`android-actions/setup-android` defaulted to installing the obsolete `tools` SDK package and
+exited 1, and the workflow pinned Node 20 while the Capacitor 8 CLI hard-refuses anything below
+22. **A bare `if: failure()` fallback step then re-ran Gradle in that broken tree and produced a
+confident, entirely unrelated error** about a missing `cordova.variables.gradle`, which cost a
+full diagnosis chasing a gitignored directory that `cap sync` regenerates correctly. A fallback
+that can run in a state its command does not support does not report failures — it invents them.
+
+**Still true: an APK built today opens, renders and reads, but has never signed anything.** The
+10-step device checklist in `docs/MWA_PLUGIN.md` is entirely unexercised, and it is still the gate
+no cloud session can close. A compiled bridge that has never been handed a wallet proves only that
+it compiles.
 
 ---
 
