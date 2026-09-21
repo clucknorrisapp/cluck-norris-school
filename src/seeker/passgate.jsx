@@ -19,7 +19,7 @@
 // window.CluckGate via src/seeker/pass.js, which is deliberately a thin binding over the one
 // pass client the whole platform uses. See that file's header.
 import React from "react";
-import { t } from "./i18n.js";
+import { t, tf } from "./i18n.js";
 import { shortAddr } from "./addr.js";
 
 export function passGateWindow() {
@@ -112,12 +112,26 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
       <div className="seeker-confirm seeker-passgate">
         <h2>{t("Unlock the tools pass")}</h2>
         <p className="seeker-tool-note">{t(TOOL_LINE[tool] || TOOL_LINE_FALLBACK)}</p>
+        {/* ⚠️ WHOLE SENTENCES WITH THE VALUES INSIDE THEM, not fragments glued around <strong>.
+            This paragraph used to be built from EIGHT separate t() calls — "Hold about", "(around",
+            "worth) and every heavy tool runs free while you hold it.", "for a", "day", "pass to
+            all of them." — which reads fine in English and cannot be translated into any of our
+            six languages: the clause order differs and a translator handed "for a" and "day"
+            separately has nothing to work with. Two translators flagged it independently.
+            The inline bold went with it, deliberately: an untranslatable sentence in six
+            languages is a worse trade than unbolded numerals in one. The live figures are still
+            the only numbers in the paragraph, and they still come from the server — never
+            hardcoded (AGENTS.md). */}
         {cfg ? (
           <p className="seeker-passgate-terms">
             {cfg.clknNeeded
-              ? <>{t("Hold about")} <strong>{fmtInt(cfg.clknNeeded)} CLKN</strong> {t("(around")} <strong>${fmtInt(cfg.holdUsd)}</strong> {t("worth) and every heavy tool runs free while you hold it.")}</>
-              : <>{t("Hold")} <strong>${fmtInt(cfg.holdUsd)} {t("worth of CLKN")}</strong> {t("and every heavy tool runs free while you hold it.")}</>}
-            {" "}{t("Not holding? Pay")} <strong>{cfg.lamports / 1e9} SOL</strong> {t("for a")} <strong>{cfg.days}-{t("day")}</strong> {t("pass to all of them.")}
+              ? tf("Hold about {clkn} CLKN (around ${usd} worth) and every heavy tool runs free while you hold it.",
+                   { clkn: fmtInt(cfg.clknNeeded), usd: fmtInt(cfg.holdUsd) })
+              : tf("Hold ${usd} worth of CLKN and every heavy tool runs free while you hold it.",
+                   { usd: fmtInt(cfg.holdUsd) })}
+            {" "}
+            {tf("Not holding? Pay {sol} SOL for a {days}-day pass to all of them.",
+                { sol: cfg.lamports / 1e9, days: cfg.days })}
           </p>
         ) : <p className="seeker-tool-note">{t("Loading today's terms…")}</p>}
 

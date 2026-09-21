@@ -33,7 +33,7 @@
 // Conversation lives in useState only. Nothing here writes to localStorage — these are the
 // user's own questions, and CLAUDE.md's "conversation stays in memory for the session" applies.
 import React from "react";
-import { t, useI18nReady } from "./i18n.js";
+import { t, tf, useI18nReady } from "./i18n.js";
 
 const MAX_QUESTION_LEN = 2000;
 const MIN_QUESTION_LEN = 3;
@@ -68,7 +68,7 @@ function isOnline() {
 // (never translatable content) is concatenated in.
 function formatWait(sec) {
   if (!(sec > 0)) return null;
-  if (sec < 60) return `${t("Try again in")} ${sec}${t("s")}.`;
+  if (sec < 60) return tf("Try again in {n} seconds.", { n: sec });
   const mins = Math.ceil(sec / 60);
   if (mins < 60) return `${t("Try again in about")} ${mins} ${mins === 1 ? t("minute") : t("minutes")}.`;
   const hours = Math.ceil(sec / 3600);

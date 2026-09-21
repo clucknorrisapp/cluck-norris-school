@@ -24,7 +24,7 @@
 // not actually look"). So sourceDown + zero tokens is treated as Unavailable here, never Empty;
 // sourceDown + a non-empty (stale) list is shown, labelled as stale, because it IS real data.
 import React from "react";
-import { t } from "../i18n.js";
+import { t, tf } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, toolFetch, useOnline } from "../pane.jsx";
 import { shortAddr } from "../addr.js";
 import "./tools.css";
@@ -44,11 +44,10 @@ function agoText(ts) {
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}${t("m ago")}`;
   const hr = Math.floor(min / 60);
-  if (hr < 48) return `${hr}${t("h ago")}`;
+  if (hr < 48) return tf("{n}h ago", { n: hr });
   const day = Math.floor(hr / 24);
   return `${day}${t("d ago")}`;
 }
-function isHttpUrl(u) { return /^https?:\/\//i.test(String(u || "")); }
 // The Bags feed's `twitter` field has shown up as a bare handle or a full profile URL; either way
 // it is attacker-controlled (a launcher's own metadata), so we extract and validate a real X
 // handle before ever building a link from it, rather than trusting the raw string as an href.
@@ -72,16 +71,23 @@ function fmtPct(n) {
   return (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
 }
 
+// ⚠️ NO REMOTE TOKEN IMAGE. `tok.image` is a URL a TOKEN CREATOR put in their own metadata, and
+// it points wherever they like — the live feed serves ipfs.io links today. Rendering it makes the
+// user's device fetch from a host a stranger chose, which is three separate problems in a bundled
+// app: it leaks the viewer's IP to that stranger, it is a per-viewer beacon if the URL is unique,
+// and it breaks the guarantee this bundle actually makes and asserts at runtime — that it reaches
+// NOTHING off-device but our own API (seeker-app-boot-test, section A). The website's own
+// /bags page still loads them; a web page and a store app are not the same privacy posture.
+//
+// Found by that assertion failing in CI once the boot test started mounting every pane. The cost
+// is a coin glyph instead of a logo. The fix, if the logo matters later, is a proxy on our own
+// origin — not rendering a third party's URL directly.
 function TokenCard({ tok, mode }) {
-  const [imgOk, setImgOk] = React.useState(true);
   const handle = xHandleFrom(tok.twitter);
-  const img = isHttpUrl(tok.image) ? tok.image : null;
   const ago = agoText(tok.createdAt);
   return (
     <div className="seeker-launch-card">
-      <div className="seeker-launch-avatar" aria-hidden="true">
-        {img && imgOk ? <img src={img} alt="" onError={() => setImgOk(false)} /> : <span>{"🪙"}</span>}
-      </div>
+      <div className="seeker-launch-avatar" aria-hidden="true"><span>{"🪙"}</span></div>
       <div className="seeker-launch-body">
         <div className="seeker-launch-top">
           <span className="seeker-launch-name">{tok.name || t("(unnamed)")}</span>

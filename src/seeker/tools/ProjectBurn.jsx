@@ -405,7 +405,10 @@ export default function ProjectBurnPane({ wallet }) {
           ) : burning ? (
             <Loading label={t("Approve the burn in your wallet…")} />
           ) : tok.walletBalance != null && balance <= 0 ? (
-            <Empty>{t("This wallet holds 0")} {tok.symbol}{t(" — connect the wallet that holds the tokens you want to burn.")}</Empty>
+            /* One whole sentence per translation unit, with the symbol shown beside it rather
+               than a fragment glued on — a leading "— connect the wallet…" cannot be translated
+               into a language whose clause order is not English's (pane.jsx's STRING RULE). */
+            <Empty>{t("This wallet holds none of this token — connect the wallet that holds the tokens you want to burn.")} ({tok.symbol})</Empty>
           ) : (
             <>
               <label className="seeker-listing-label" htmlFor="pb-amount">{t("Amount to burn")}</label>

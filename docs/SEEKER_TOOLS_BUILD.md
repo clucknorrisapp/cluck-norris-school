@@ -145,6 +145,37 @@ A payment signature is evidence, never the credential.
 In the app: **pages preview free; the gate fires on RUN.** A heavy pane must render its explainer,
 its input and its empty state to anyone — only the run is gated. If pricing is down, fail open.
 
+## 5b. Adding a string, in seven languages
+
+The app renders in all seven languages the school does, and CI fails if a string it shows is
+missing from any of the six translated dictionaries. The loop is three commands:
+
+```
+node scripts/seeker-i18n-keys.cjs                 # every string the app renders, from the source
+node scripts/seeker-i18n-keys.cjs --missing es    # the ones es still needs
+node scripts/seeker-i18n-merge.cjs <dir> --apply  # fold {english: translation} files back in
+node scripts/seeker-i18n-keys.cjs --sync-exclude  # keep the store bundle's excludeKeys in step
+```
+
+Four rules, each of which cost a round trip to learn:
+
+1. ⛔ **`public/i18n/en.json` does not exist and must never be created.** English IS the key text.
+   An en.json would make every key look translated and silently disarm all six checks. Two
+   builders proposed creating one on the same day, independently; it is asserted against now.
+2. **The key list is GENERATED, never kept by hand.** It sat at eight literals while the app grew
+   to fifteen tools. If you add a TABLE of display strings — the way `registry.js` holds every
+   tool's title and blurb — add it to the extractor's `TABLES`, or it renders in English forever
+   while every check passes.
+3. **One whole sentence per translation unit.** A value goes INSIDE the sentence with the
+   `tf("… {n} …", {n})` helper, never glued on either side of a `t()` fragment. "Try again in" +
+   n + "s" reads fine in English and cannot be translated into any of our six; three translators
+   said so independently, and one returned an empty string for the bare "s", which was the honest
+   answer. Placeholders must survive translation verbatim — `i18n-audit` checks that.
+4. **Both halves, always.** The source scan and the rendered check have complementary blind spots
+   (AGENTS.md). `seeker-build-test` (f) reads the files; `seeker-app-boot-test` (I) boots the
+   bundle in a Spanish locale and reads the screen. The first said 644/644 while the app showed
+   27 strings of English; only the second could see it.
+
 ## 6. Tests
 
 Each pane is covered by `scripts/seeker-app-boot-test.cjs`, which boots the **shipped tarball** in

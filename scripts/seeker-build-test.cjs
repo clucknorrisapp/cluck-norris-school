@@ -59,12 +59,14 @@ const ROOT = path.join(__dirname, "..");
 // The curated English keys increment 1 added for the seeker shell. They must exist in all six
 // public/i18n/<lang>.json dictionaries (section f) AND must never reach a google/ios bundle
 // (section c) — store-edition.json's excludeKeys prunes them out of the education-only copy.
-const SEEKER_KEYS = [
-  "Rent Reclaim", "Connect Wallet", "Disconnect", "Coming soon", "Not connected",
-  "Find dead token accounts and reclaim the SOL locked inside them.",
-  "Ask the AI tutor anything about crypto, in plain words.",
-  "Check approvals, freeze and mint authority — read-only and free.",
-];
+// ⚠️ GENERATED, NOT KEPT BY HAND. Every string src/seeker passes to t(), extracted from the
+// source by scripts/seeker-i18n-keys.cjs. It used to be eight literals typed into this file,
+// which was fine while the app had three panes and became a lie the moment it had fifteen: the
+// list would have stayed at eight while 600 new strings shipped untranslated and unexcluded,
+// and every assertion below would have gone on passing. The extractor is the single source for
+// this test, for store-edition.json's excludeKeys (--sync-exclude), and for the translation
+// work itself (--missing <lang>).
+const SEEKER_KEYS = require(path.join(__dirname, "seeker-i18n-keys.cjs")).keys();
 // Strings that only ever exist because of the seeker variant. Generic wording ("Disconnect")
 // is deliberately NOT in here — it appears legitimately in shared code; these do not.
 const SEEKER_MARKERS = ["Rent Reclaim", "CluckMWA", "seeker-edition", "src/seeker"];
@@ -490,20 +492,36 @@ function buildVariant(cwd, variant) {
   // ══════════════════════════════════════════════════════════════════════════════════════════
   // (f) i18n
   // ══════════════════════════════════════════════════════════════════════════════════════════
-  console.log("\n(f) i18n — the 8 new keys, all six dictionaries, and the audit itself\n");
+  console.log(`\n(f) i18n — every one of the app's ${SEEKER_KEYS.length} strings, in all six dictionaries\n`);
   const NEW_KEYS = SEEKER_KEYS;
+  // ⚠️ The school ships in SEVEN languages (AGENTS.md) and this app is part of it. An English-only
+  // app beside a seven-language school is not a smaller version of the same product — it is a
+  // different one for everybody who does not read English. Asserted against the GENERATED key
+  // list, so a new pane's copy fails here until it is translated, instead of shipping in English
+  // and being noticed by a user.
   for (const lang of ["es", "zh", "hi", "it", "pt", "vi"]) {
     const dict = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${lang}.json`), "utf8"));
     const missing = NEW_KEYS.filter((k) => !Object.prototype.hasOwnProperty.call(dict, k));
-    ok(`${lang}.json carries all 8 new keys`, missing.length === 0, missing);
+    ok(`${lang}.json carries all ${NEW_KEYS.length} of the app's strings`, missing.length === 0,
+       `${missing.length} missing, e.g. ${JSON.stringify(missing.slice(0, 3))} — run: node scripts/seeker-i18n-keys.cjs --missing ${lang}`);
   }
+  // ⚠️ public/i18n/en.json MUST NOT EXIST. English is the key text; an en.json would make every
+  // key look translated and silently disarm the six checks above. Two builders proposed creating
+  // one on the same day, independently, which is why it is asserted rather than remembered.
+  ok("public/i18n/en.json does not exist (English IS the key text)",
+     !fs.existsSync(path.join(ROOT, "public", "i18n", "en.json")));
   // the SAME 8 keys must NOT reach the google/ios bundle (excludeKeys prune) — the pristine
   // baseline comparison above already proves this at the byte level when it can run; this checks
   // it directly too, so the assertion still means something even when that comparison is skipped.
   {
     const seekerCfg = JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "store-edition.json"), "utf8"));
-    const missing = NEW_KEYS.filter((k) => !(seekerCfg.excludeKeys || []).includes(k));
-    ok("store-edition.json excludes every new seeker key from the google/ios dictionary copy", missing.length === 0, missing);
+    const ex = new Set(seekerCfg.excludeKeys || []);
+    const missing = NEW_KEYS.filter((k) => !ex.has(k));
+    // The store bundles are a PINNED, EDUCATION-ONLY edition: no wallet, no payments, no address
+    // (docs/STORE_EDITION.md). Almost all of this app's copy is wallet, signing and payment text,
+    // and the dictionaries are shared — so every key has to be pruned by name from that copy.
+    ok("store-edition.json excludes every one of the app's keys from the google/ios dictionary copy",
+       missing.length === 0, `${missing.length} not excluded — run: node scripts/seeker-i18n-keys.cjs --sync-exclude`);
   }
   try {
     execFileSync(process.execPath, [path.join(ROOT, "scripts", "i18n-audit.cjs")], { cwd: ROOT, stdio: "pipe" });

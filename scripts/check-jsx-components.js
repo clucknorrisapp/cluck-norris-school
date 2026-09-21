@@ -37,8 +37,28 @@ let failures = 0;
 let filesChecked = 0;
 let tagsChecked = 0;
 
+// ⚠️ COMMENTS ARE NOT CODE, and this guard used to think they were. A file header that explains
+// what `<Pane>` is, or a note saying a component "replaces guard()'s card with <PassGate>", was
+// read as a USE of an undefined component and failed CI — twice on the same day, in two files,
+// both times for prose. A guard that punishes documentation gets the documentation deleted
+// instead of the bug fixed. Comments and string literals are stripped before the scan.
+//
+// The stripper is deliberately crude (this whole file is a regex scan on purpose — see the header
+// above) and errs toward removing too much: over-stripping can only produce a MISSED use, which
+// is the pre-existing state, while under-stripping produces a false failure, which is worse than
+// no check at all because it teaches people to work around it.
+function stripNonCode(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, " ")          // /* block */ and JSX {/* block */}
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ")       // // line, without eating https://
+    .replace(/`(?:[^`\\]|\\.)*`/g, "``")         // template literals
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")      // '…'
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, '""');     // "…"
+}
+
 for (const file of walk(SRC)) {
-  const s = fs.readFileSync(file, "utf8");
+  const raw = fs.readFileSync(file, "utf8");
+  const s = stripNonCode(raw);
   filesChecked++;
 
   // Used: any capitalised JSX opening tag. Take the root of a dotted path.

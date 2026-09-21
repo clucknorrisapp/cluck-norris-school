@@ -5,6 +5,8 @@
 > now is not. Two live bugs in the website's own airdrop parser are written down but deliberately
 > not touched. **Nothing here has been near a real wallet** — §4 is the gate. Two blockers in §3
 > are yours alone: a tag, and ten minutes with your Seeker.
+>
+> It also stopped being an English-only app tonight — 667 strings, six languages, §2c.
 
 Written for the owner's review. Owner's instruction for the night: *"build all the tools into the
 seeker app appropriately… Don't nickel and dime this"*, *"we aren't shipping a wrapper"*,
@@ -106,6 +108,56 @@ passing (`public/airdrop.html` is a live money path and not this change's to tou
   explains why a float add is unsafe past ~9M tokens at nine decimals. The phone version keeps
   amounts as decimal strings throughout and reports every merge before anyone signs.
 
+## 2c. The app is not English-only any more
+
+The school ships in seven languages and this app is part of the school. It was shipping in one.
+An English-only app beside a seven-language school is not a smaller version of the same product —
+it is a different one for everyone who does not read English.
+
+**667 strings, six languages.** The key list is GENERATED from the source
+(`scripts/seeker-i18n-keys.cjs`), not kept by hand — a hand-kept list sat at eight entries while
+the app grew to fifteen tools, and would have gone on passing while 600 strings shipped in
+English. The same generator feeds `store-edition.json`'s `excludeKeys`, so none of this
+wallet-and-payments copy can ride along into the education-only Play bundle
+(`--sync-exclude`, 147 → 807 entries).
+
+**Three things it turned up, in order of how much they matter:**
+
+1. **The source scan alone was not enough.** It found 644 strings; the app still rendered 27 in
+   English, because the tool NAMES and BLURBS live as data in `registry.js` and the pass sheet's
+   per-tool sentence lives in `passgate.jsx`, rendered as `t(tool.blurb)`. A scan for `t("…")`
+   cannot see any of that. It was caught by a RENDERED check — booting the bundle in a Spanish
+   locale and reading the screen. Source scanning and rendered measurement have complementary
+   blind spots; AGENTS.md says run both, and this is that costing a round trip. Both halves are
+   now in CI.
+
+2. **Sentences were being glued together from fragments, and could not be translated at all.**
+   "Try again in" + n + "s", and the tools-pass terms built from EIGHT separate pieces — "Hold
+   about", "(around", "for a", "day". Reads fine in English; impossible in six languages whose
+   clause order is not English's. Two translators flagged it independently, and one returned an
+   empty string for the bare "s" — which was the honest answer and is what surfaced it. Those are
+   whole sentences with `{placeholder}` values now, using the repo's existing `tf()` convention,
+   which `i18n-audit` already checks for placeholder mismatches. The inline bold on the pass
+   amounts went with it: an untranslatable sentence in six languages is a worse trade than
+   unbolded numerals in one.
+
+3. **Pre-existing gaps in the shipped website dictionaries**, spotted by a translator while
+   cross-checking house style — not introduced here and not fixed here, because they are the
+   website's copy, not this app's:
+   - `vi.json`: `"Total supply"` and `"✅ GRADUATED"` left in English while the same words are
+     correctly translated in neighbouring entries.
+   - `it.json` and `vi.json`: the all-caps `"📡 LIVE BAGS.FM LAUNCHES"` heading untranslated
+     while lowercase "launches" is translated everywhere else in both files.
+   - `vi.json`: "airdropper" translated in one entry and kept as an English loanword in three
+     others — inconsistent either way.
+
+**And an open question, now answered with a measurement.** `hi.json` has long looked half
+untranslated. It is not: 164 of ~2,125 entries (7.7%) are byte-identical to English, and
+essentially all of them are proper nouns, our own tool names, or shouting CTA buttons — never
+plain prose. The other 92% is fluent Hindi that deliberately code-switches crypto nouns into
+Latin script or transliteration (वॉलेट, टोकन, कनेक्ट करें), which is how Indian crypto communities
+actually write. That is a house style, not a gap, and this app's 667 strings follow it.
+
 ## 3. ⛔ Two blockers. Only you can clear them.
 
 ### 1. There is no APK yet — needs a tag
@@ -177,6 +229,18 @@ at index 0 and the escrow key at 1.
 
 ## 6. Also fixed along the way
 
+Two of these were only visible in a screenshot. Nobody had looked at this app — it had been
+measured, asserted and built, never seen.
+
+- **The shared language pill was sitting on top of the fourth nav tab.** Wallet Checkup was
+  untappable on every screen. The boot test asserted every nav control was at least 44px and it
+  was; that every tool mounts and they did; that the route works and it does. **A tap target can
+  be exactly the right size and still be unreachable.** Guarded now by asking the browser what is
+  actually at each control's centre point.
+- **Rent Reclaim and Wallet Checkup asked for a wallet and gave you no way to connect one** — a
+  title, a sentence, and an empty screen, on the second bottom-nav tab and on the free tool that
+  hands people money back. Both use the shared `NeedsWallet` now. Guarded for every pane at once:
+  a pane whose text asks you to connect must render a control or say the device has no wallet.
 - The store-edition host scanner was treating the vendored web3 bundle's **licence comments** as
   our code, which had forced `api.mainnet-beta.solana.com` onto the allow-list — that would have
   let a future accident bypass our own RPC proxy silently. Vendored files are now exempt; the

@@ -16,7 +16,7 @@
 // recommendation — the server's own system prompt already forbids buy/sell calls and price
 // predictions, and this pane adds no scoring or verdicts of its own on top of the numbers.
 import React from "react";
-import { t } from "../i18n.js";
+import { t, tf } from "../i18n.js";
 import { Pane, Loading, Unavailable, toolFetch, useOnline } from "../pane.jsx";
 import "./tools.css";
 
@@ -167,7 +167,7 @@ export default function DailyBriefPane() {
                   <div className="seeker-brief-pool-nums">
                     {p.vol ? <span>{fmtUsd0(p.vol)} {t("vol")}</span> : null}
                     {p.liq ? <span>{fmtUsd0(p.liq)} {t("liq")}</span> : null}
-                    {p.ageH != null ? <span>{p.ageH}{t("h old")}</span> : null}
+                    {p.ageH != null ? <span>{tf("{n}h old", { n: p.ageH })}</span> : null}
                   </div>
                 </div>
               ))}

@@ -19,6 +19,7 @@
 import React from "react";
 import { t, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
+import { NeedsWallet } from "./pane.jsx";
 import { runFullReclaim, prepareConfirmation } from "./reclaim-sign.js";
 
 // public/rent-math.js is loaded as a plain <script> in seeker.html (same pattern as
@@ -259,11 +260,17 @@ export default function RentReclaimPane({ wallet }) {
   }, [wallet, reclaimableNow, closedTokenAccounts, sign.confirm, scan]);
 
   if (!wallet.connected) {
+    // ⚠️ THE CONNECT BUTTON IS THE POINT. This used to be a title and one sentence — "Connect
+    // your wallet to scan for reclaimable rent." — with no control, on the second bottom-nav tab
+    // of the app, on the free tool that literally hands people money back. The only way forward
+    // was to notice the small button in the header. NeedsWallet is the shared answer every other
+    // pane already uses: it offers the button, and where no wallet app exists on the device it
+    // says so plainly instead of offering one that cannot work.
     return (
       <section className="seeker-pane">
         <div className="seeker-paneicon" aria-hidden="true">💰</div>
         <h1>{t("Rent Reclaim")}</h1>
-        <p>{t("Connect your wallet to scan for reclaimable rent.")}</p>
+        <NeedsWallet why="Connect your wallet to scan for reclaimable rent." wallet={wallet} />
       </section>
     );
   }

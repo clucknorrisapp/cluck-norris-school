@@ -42,8 +42,9 @@
 // Every mint/symbol/name here is attacker-controlled chain metadata. This renders it as plain
 // React text only — never dangerouslySetInnerHTML (CLAUDE.md's recorded XSS bug class).
 import React from "react";
-import { t, useI18nReady } from "./i18n.js";
+import { t, tf, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
+import { NeedsWallet } from "./pane.jsx";
 
 const WEBSITE_CHECKUP_URL = "https://clucknorris.app/wallet-checkup";
 
@@ -84,7 +85,7 @@ function fmtNum(n) {
 // minute-vs-daily distinction to make here.
 function formatWaitSec(sec) {
   if (!(sec > 0)) return null;
-  return `${t("Try again in")} ${sec}${t("s")}.`;
+  return tf("Try again in {n} seconds.", { n: sec });
 }
 
 function scopeNote(capped, scanned, tokensHeld) {
@@ -198,11 +199,13 @@ export default function WalletCheckupPane({ wallet }) {
   }, [online, wallet.connected, wallet.address, scan]);
 
   if (!wallet.connected) {
+    // Same gap as Rent Reclaim had: a sentence asking for a wallet, and no way to give one.
+    // NeedsWallet offers the button, and says so plainly where the device has no wallet at all.
     return (
       <section className="seeker-pane">
         <div className="seeker-paneicon" aria-hidden="true">🛡</div>
         <h1>{t("Wallet Checkup")}</h1>
-        <p>{t("Connect your wallet to run a checkup.")}</p>
+        <NeedsWallet why="Connect your wallet to run a checkup." wallet={wallet} />
       </section>
     );
   }

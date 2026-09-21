@@ -18,6 +18,22 @@ export function t(s) {
   return s;
 }
 
+// A translated sentence with a VALUE in it — the repo's existing `{name}` convention, the same
+// one public/hub-verify.html's tf() uses and the one scripts/i18n-audit.cjs already checks for
+// placeholder mismatches between English and each translation.
+//
+// ⚠️ THIS EXISTS BECAUSE THE OBVIOUS THING IS BROKEN IN SIX LANGUAGES. "Try again in " + n + "s"
+// was built from three separate t() calls in three panes. It reads fine in English and cannot be
+// translated at all: word order differs, and "s" is not how any of our six languages marks
+// seconds. A translator handed "Try again in" and "s" as separate strings has no way to produce
+// a correct sentence — one of them returned "" for the "s" and said so, which was the honest
+// answer and is what surfaced this. A value goes INSIDE one whole sentence, always.
+export function tf(s, vars) {
+  let out = t(s);
+  if (vars) for (const k of Object.keys(vars)) out = out.split("{" + k + "}").join(String(vars[k]));
+  return out;
+}
+
 // i18n.js finishes loading its dictionary asynchronously (a fetch, in the shipped runtime), so a
 // component that read t() at first render can be stuck showing English forever with no prompt to
 // re-read it. This mirrors solana-room.html's waitForI18n(): poll briefly, then stop — never an

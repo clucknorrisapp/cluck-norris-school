@@ -219,6 +219,12 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     // when someone forgets. The Hatchery reached this test having never been rendered in a
     // browser by anyone, which is exactly the gap.
     {
+      // ⚠️ NOTHING IN THIS LOOP MAY REACH PRODUCTION. Every pane fetches on mount, and the first
+      // version of this loop stubbed only /api/seeker/reclaimable — so CI navigated to fifteen
+      // tools and hit the LIVE api for the rest, which is both flaky and rude, and which is how
+      // the off-device assertion below started failing on real ipfs.io URLs served by the live
+      // launches feed. A test that reaches the internet is not testing the bundle.
+      await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ success: false, status: "unavailable" }) }));
       const links = await page.evaluate(() => Array.from(document.querySelectorAll("a.seeker-toolcard")).map((a) => a.getAttribute("href")));
       const dead = [];
       for (const href of links) {
@@ -237,6 +243,37 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         if (!body.pane || body.len < 80 || errors.length > before) dead.push(`${href} (pane=${body.pane} len=${body.len} threw=${errors.length > before})`);
       }
       ok(`B · every built tool in the grid actually mounts (${links.length} of them)`, dead.length === 0, dead.join(" | "));
+      await page.unroute("**/api/**");
+      await page.evaluate(() => { window.location.hash = "#/tools"; });
+      await page.waitForTimeout(250);
+    }
+
+    // ⚠️ A PANE THAT ASKS FOR A WALLET MUST OFFER ONE. Rent Reclaim — the second bottom-nav tab,
+    // and the free tool that literally hands people money back — showed a title and the sentence
+    // "Connect your wallet to scan for reclaimable rent." and nothing else. The only way forward
+    // was to notice the small button in the header. Wallet Checkup had the same gap. Both use the
+    // shared NeedsWallet now, which offers the button, or says plainly that the device has no
+    // wallet app rather than offering one that cannot work. This asserts the rule for every tool
+    // at once, so the next pane to be written cannot quietly reintroduce the dead end.
+    {
+      const deadEnds = [];
+      await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ success: false, status: "unavailable" }) }));
+      const links = await page.evaluate(() => Array.from(document.querySelectorAll("a.seeker-toolcard")).map((a) => a.getAttribute("href")));
+      for (const href of ["#/rent", "#/checkup", ...links]) {
+        await page.evaluate((h) => { window.location.hash = String(h).replace(/^#/, ""); }, href);
+        await page.waitForTimeout(300);
+        const r = await page.evaluate(() => {
+          const body = document.body.innerText || "";
+          // Only the PANE, never the shell — the header's own wallet button is not an answer.
+          const pane = document.querySelector(".seeker-tool, .seeker-pane, .seeker-ask");
+          const asks = /connect (your |the )?wallet/i.test(pane ? (pane.innerText || "") : "");
+          const offers = !!(pane && (pane.querySelector("button, a[href]") || /no wallet app was found/i.test(pane.innerText || "")));
+          return { asks, offers, body: body.slice(0, 60) };
+        });
+        if (r.asks && !r.offers) deadEnds.push(href);
+      }
+      ok("B · ⚠️ no pane asks for a wallet without offering a way to connect one", deadEnds.length === 0, deadEnds.join(", "));
+      await page.unroute("**/api/**");
       await page.evaluate(() => { window.location.hash = "#/tools"; });
       await page.waitForTimeout(250);
     }
@@ -698,6 +735,53 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       ok(`H · ${label} — no uncaught exception`, errors.length === 0, errors.join(" | ").slice(0, 300));
       await ctx.close();
     }
+  }
+
+  // ---- I: it is not an English-only app -------------------------------------------------
+  //
+  // The school ships in SEVEN languages (AGENTS.md), and this app is part of the school. An
+  // English-only app beside a seven-language school is not a smaller version of the same product
+  // — it is a different one for everybody who does not read English.
+  //
+  // seeker-build-test (f) asserts every string the app renders is present in all six curated
+  // dictionaries. That is the SOURCE half, and it has a blind spot: a key can be in the file and
+  // still never reach the screen (the dictionary never loads in the bundle, the app reads it
+  // before it is ready, a key does not match byte for byte). This is the RENDERED half — the
+  // pair AGENTS.md's "check every form, not one form" asks for. Both, or neither means much.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+    await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+    await page.waitForTimeout(1200);   // i18n.js fetches its dictionary, then the app re-reads it
+
+    ok("I · the Spanish dictionary actually loads inside the bundle",
+       await page.evaluate(() => !!(window.CLKN_I18N && window.CLKN_I18N.lang === "es" && window.CLKN_I18N.dict && Object.keys(window.CLKN_I18N.dict).length > 100)));
+
+    // Sampled from what is ON SCREEN, not from the file: three strings the toolkit renders, each
+    // of which must differ from its English source. Nothing is asserted about the translation's
+    // quality — only that Spanish is what a Spanish speaker gets.
+    const shots = [];
+    for (const hash of ["#/tools", "#/rent", "#/tools/lock"]) {
+      await page.evaluate((h) => { window.location.hash = h; }, hash);
+      await page.waitForTimeout(400);
+      shots.push(await page.evaluate(() => document.body.innerText));
+    }
+    const body = shots.join("\n");
+    const englishLeftOver = [
+      "Everything the school gives you, built for this phone.",
+      "Dead token accounts are holding your SOL.",
+      "Lock tokens on Jupiter Lock, non-custodially, and get public proof you did.",
+    ].filter((phrase) => body.includes(phrase));
+    ok("I · ⚠️ the toolkit, Rent Reclaim and the Locker Room all render in Spanish, not English",
+       englishLeftOver.length === 0, `still English on screen: ${JSON.stringify(englishLeftOver)}`);
+    ok("I · the nav labels are translated too", !/\bToolkit\b/.test(body), body.slice(0, 200));
+    ok("I · and nothing throws in a non-English locale", errors.length === 0, errors.join(" | ").slice(0, 300));
+    await ctx.close();
   }
 
   await browser.close();
