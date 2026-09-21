@@ -36,6 +36,7 @@ import React from "react";
 import { t } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, useOnline } from "../pane.jsx";
 import { usePass } from "../pass.js";
+import { PassGate, gatedToolFetch } from "../passgate.jsx";
 import { shortAddr } from "../addr.js";
 import "./tools.css";
 
@@ -71,117 +72,9 @@ function fmtTs(ts) {
 function safeHref(u) { const s = String(u || "").trim(); return /^https?:\/\//i.test(s) ? s : null; }
 function solscanAcct(addr) { return safeHref(`https://solscan.io/account/${encodeURIComponent(addr)}`); }
 
-// ── the tools-pass gate, rendered natively (docs/SEEKER_TOOLS_BUILD.md §5) ─────────────────────
-// Duplicated identically across the three pass-gated panes (WalletXray/Holders/Trace): this
-// build's file-ownership boundary is exactly these three files plus tools.css, and pass.js's own
-// header already expects each tool to build its OWN native presentation on top of the one reused
-// credential surface (config/proof/fetch/denied/clear/grant) — a fourth shared file is out of
-// scope here. If this drifts across the three panes in review, that is the signal to extract it,
-// not a reason to add a file this build doesn't own.
-function passGateWindow() {
-  try { return (typeof window !== "undefined" && window.CluckGate) || null; } catch (_) { return null; }
-}
-// The tool's own gated read, classified exactly like pane.jsx's toolFetch (offline / refused /
-// unavailable / ok) but sent through usePass()'s gatedFetch so the pass header goes out and a
-// denial drops the local grant. Kept local rather than calling toolFetch() directly: toolFetch
-// owns its own fetch() call and cannot be handed an already-credentialed one.
-async function gatedToolFetch(gatedFetch, url) {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, kind: "offline", status: 0, error: null };
-  let r, body = null;
-  try { r = await gatedFetch(url); } catch (e) {
-    if (e && e.name === "AbortError") return { ok: false, kind: "aborted", status: 0, error: null };
-    return { ok: false, kind: "offline", status: 0, error: null };
-  }
-  try { body = await r.json(); } catch (_) { body = null; }
-  if (r.ok && body && body.success !== false) return { ok: true, data: body };
-  if (r.status >= 400 && r.status < 500 && r.status !== 429) return { ok: false, kind: "refused", status: r.status, error: (body && body.error) || null, body };
-  return { ok: false, kind: "unavailable", status: r.status, error: (body && body.error) || null, body };
-}
-
-// The native sheet §5 asks for. Renders live terms from usePass().config — never a hardcoded
-// amount, price or duration; a null config (gate down / pricing outage) is handled upstream by
-// usePass() returning "off", so this component only ever mounts when a real config exists or is
-// still loading. Reuses window.CluckGate's challenge → sign → session → grant plumbing end to
-// end — the ONLY thing built here is the presentation, per pass.js's own file header.
-function PassGate({ pass, wallet, onUnlocked, onClose }) {
-  const [busy, setBusy] = React.useState(false);
-  const [err, setErr] = React.useState(null);
-  const [needPay, setNeedPay] = React.useState(null);
-
-  async function checkHolder() {
-    const g = passGateWindow();
-    if (!g) { setErr(t("The pass service isn't available right now.")); return; }
-    if (!wallet.provider || typeof wallet.provider.signMessage !== "function") {
-      setErr(t("This wallet can't sign messages — try Phantom, Solflare, Backpack or Jupiter."));
-      return;
-    }
-    setBusy(true); setErr(null); setNeedPay(null);
-    try {
-      const chR = await fetch(`/api/tool-gate/challenge?wallet=${encodeURIComponent(wallet.address)}`);
-      const ch = await chR.json().catch(() => null);
-      if (!ch || !ch.success || !ch.message) { setErr(t("Could not reach the pass service. Try again shortly.")); setBusy(false); return; }
-      const enc = new TextEncoder().encode(ch.message);
-      let sig;
-      try { sig = await wallet.provider.signMessage(enc, "utf8"); }
-      catch (_e) { setErr(t("Signature request was rejected or failed.")); setBusy(false); return; }
-      let bytes = (sig && sig.signature) ? sig.signature : sig;
-      if (bytes && bytes.data && !bytes.length) bytes = bytes.data;
-      const arr = new Uint8Array(bytes);
-      let bin = ""; for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
-      const b64 = btoa(bin);
-      const sessR = await fetch("/api/tool-gate/session", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: wallet.address, message: ch.message, signature: b64 }),
-      });
-      const j = await sessR.json().catch(() => null);
-      if (j && j.success && j.pass) { g.grant(j.days || 1, j.via || "holder", j.pass); setBusy(false); onUnlocked(); return; }
-      if (j && j.error === "insufficient_holdings") { setNeedPay({ detail: j.detail }); setBusy(false); return; }
-      setErr((j && (j.detail || j.error)) || t("Could not verify this wallet."));
-    } catch (_e) { setErr(t("Could not reach the pass service. Try again shortly.")); }
-    setBusy(false);
-  }
-
-  const cfg = pass.config;
-  return (
-    <div className="seeker-confirm-wrap" role="dialog" aria-modal="true" aria-label={t("Unlock the tools pass")}>
-      <div className="seeker-confirm seeker-passgate">
-        <h2>{t("Unlock the tools pass")}</h2>
-        <p className="seeker-tool-note">{t("Wallet X-Ray runs on the unified tools pass shared by every heavy tool.")}</p>
-        {cfg ? (
-          <p className="seeker-passgate-terms">
-            {cfg.clknNeeded
-              ? <>{t("Hold about")} <strong>{fmtInt(cfg.clknNeeded)} CLKN</strong> {t("(around")} <strong>${fmtInt(cfg.holdUsd)}</strong> {t("worth) and every heavy tool runs free while you hold it.")}</>
-              : <>{t("Hold")} <strong>${fmtInt(cfg.holdUsd)} {t("worth of CLKN")}</strong> {t("and every heavy tool runs free while you hold it.")}</>}
-            {" "}{t("Not holding? Pay")} <strong>{cfg.lamports / 1e9} SOL</strong> {t("for a")} <strong>{cfg.days}-{t("day")}</strong> {t("pass to all of them.")}
-          </p>
-        ) : <p className="seeker-tool-note">{t("Loading today's terms…")}</p>}
-
-        {!wallet.connected ? (
-          <button type="button" className="seeker-btn" onClick={wallet.connect}>{t("Connect Wallet")}</button>
-        ) : (
-          <>
-            <p className="seeker-passgate-wallet">{shortAddr(wallet.address)}</p>
-            <button type="button" className="seeker-btn" disabled={busy} onClick={checkHolder}>
-              {busy ? t("Checking…") : t("Check my CLKN")}
-            </button>
-          </>
-        )}
-
-        {needPay ? (
-          <p className="seeker-passgate-needpay" role="alert">
-            {needPay.detail || t("This wallet doesn't hold enough CLKN for the free tier.")}{" "}
-            {t("Paying in SOL from the full site at clucknorris.app also unlocks the pass — that payment flow isn't built into this app yet.")}
-          </p>
-        ) : null}
-        {err ? <p className="seeker-tool-note seeker-passgate-err" role="alert">{err}</p> : null}
-
-        <div className="seeker-confirm-actions">
-          <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onClose}>{t("Not now")}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// The tools-pass gate lives in ONE file — src/seeker/passgate.jsx. It used to be a 79-line
+// copy in each of the three pass-gated panes, differing by a single string; see that file's
+// header for why it was extracted before it drifted rather than after.
 
 const LABEL_LEVEL_CLASS = { high: " seeker-forensic-label-high", med: " seeker-forensic-label-med", info: "" };
 
@@ -418,7 +311,7 @@ export default function WalletXrayPane({ wallet }) {
       ) : null}
 
       {gateOpen ? (
-        <PassGate pass={pass} wallet={wallet} onUnlocked={onUnlocked} onClose={() => setGateOpen(false)} />
+        <PassGate pass={pass} wallet={wallet} tool="xray" onUnlocked={onUnlocked} onClose={() => setGateOpen(false)} />
       ) : null}
     </Pane>
   );

@@ -381,6 +381,47 @@ function buildVariant(cwd, variant) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
+  // (e2) ONE tools-pass gate, not one per tool
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // The gate shipped as three byte-identical 79-line copies (WalletXray/Holders/Trace) that
+  // differed by a single sentence, each carrying a note saying "if this drifts, extract it".
+  // It was extracted to src/seeker/passgate.jsx before it drifted — and this is what keeps it
+  // extracted, because the next tool that needs a gate will be written by copying a pane that
+  // already has one. It is a SIGNING path: CLAUDE.md's rule about private copies of shared
+  // browser modules exists because copies of exactly this kind drifted into real bugs.
+  //
+  // Asserted on the SOURCE, because that is where a second copy would appear; the bundle-level
+  // half (the gate is really enforced at runtime) is section F of seeker-app-boot-test.cjs.
+  // Source scanning and rendered measurement have complementary blind spots — run both.
+  console.log("\n(e2) one tools-pass gate for the whole app\n");
+  {
+    const gateFile = path.join(ROOT, "src", "seeker", "passgate.jsx");
+    ok("the gate lives in src/seeker/passgate.jsx", fs.existsSync(gateFile));
+    const panes = fs.readdirSync(path.join(ROOT, "src", "seeker", "tools")).filter((f) => f.endsWith(".jsx"));
+    const redefiners = panes.filter((f) => {
+      const t = fs.readFileSync(path.join(ROOT, "src", "seeker", "tools", f), "utf8");
+      // Any form of a second definition — `function PassGate(`, `const PassGate =`, and the two
+      // helpers it owns. Checking one spelling is how the esc() migration missed six copies.
+      return /(^|\n)\s*(export\s+)?(async\s+)?function\s+(PassGate|gatedToolFetch|passGateWindow)\s*\(/.test(t) ||
+             /(^|\n)\s*(export\s+)?(const|let|var)\s+(PassGate|gatedToolFetch|passGateWindow)\s*=/.test(t);
+    });
+    ok("no pane defines its own PassGate / gatedToolFetch / passGateWindow", redefiners.length === 0, redefiners.join(", "));
+    const users = panes.filter((f) => /<PassGate[\s>]/.test(fs.readFileSync(path.join(ROOT, "src", "seeker", "tools", f), "utf8")));
+    ok("the panes that gate do import it from there", users.length > 0 && users.every((f) =>
+      /from "\.\.\/passgate\.jsx"/.test(fs.readFileSync(path.join(ROOT, "src", "seeker", "tools", f), "utf8"))), users.join(", "));
+    // Every gating pane must name a tool the sheet has a sentence for — a typo'd id would
+    // silently fall back to the generic line, which reads fine and says less than it should.
+    const gate = fs.readFileSync(gateFile, "utf8");
+    const known = new Set([...gate.matchAll(/^\s{2}([a-z]+):\s*"/gm)].map((m) => m[1]));
+    const unknown = [];
+    for (const f of users) {
+      const t = fs.readFileSync(path.join(ROOT, "src", "seeker", "tools", f), "utf8");
+      for (const m of t.matchAll(/<PassGate[^>]*\btool="([^"]+)"/g)) if (!known.has(m[1])) unknown.push(`${f}:${m[1]}`);
+    }
+    ok("every gating pane names a tool the sheet has a sentence for", unknown.length === 0, unknown.join(", "));
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
   // (f) i18n
   // ══════════════════════════════════════════════════════════════════════════════════════════
   console.log("\n(f) i18n — the 8 new keys, all six dictionaries, and the audit itself\n");
