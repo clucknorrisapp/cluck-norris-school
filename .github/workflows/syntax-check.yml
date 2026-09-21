@@ -623,9 +623,16 @@ jobs:
           else
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: unknown event — full run"; exit 0
           fi
+          # ⚠️ scripts/seeker-app-boot-test.cjs is in the allowlist ON PURPOSE: it is the only
+          # browser test this gate can skip, so without its own path here a PR that changes the
+          # test never RUNS the test. Found 2026-09-21 on #388, which added a section proving the
+          # Hatchery strips EXIF and went green in 2 minutes without ever opening a browser. A
+          # test you can edit without CI executing it is the "green on the wrong thing" failure
+          # this repo keeps paying for. Any future browser test that this gate can skip belongs
+          # here too.
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|seeker\.html$|store-edition/|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|seeker\.html$|store-edition/|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|scripts/seeker-app-boot-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
