@@ -8,6 +8,11 @@
 >
 > It also stopped being an English-only app tonight — 667 strings, six languages, §2c.
 
+**Four screenshots of the real shipped bundle** are in `docs/seeker/` — the toolkit
+(`toolkit.png`), the Airdropper (`airdropper.png`), the Locker Room (`locker-room.png`), and Rent
+Reclaim in Vietnamese (`rent-vietnamese.png`). Taken from the tarball that actually ships, at
+390×844, with the API returning 503 so what you see is the honest failure state, not a mock.
+
 Written for the owner's review. Owner's instruction for the night: *"build all the tools into the
 seeker app appropriately… Don't nickel and dime this"*, *"we aren't shipping a wrapper"*,
 *"Don't stop on this til done. No approvals."*
