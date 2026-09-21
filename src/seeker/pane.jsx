@@ -50,6 +50,20 @@ export async function toolFetch(url, opts) {
   return { ok: false, kind: "unavailable", status: r.status, error: (body && body.error) || null, body };
 }
 
+// ── THE STRING RULE, so twelve panes cannot drift ──────────────────────────
+// EVERY user-visible string prop on every component below is translated BY THE COMPONENT.
+// Callers pass the English key, never t("…") of it.
+//
+// Passing an already-translated string is harmless — t() falls back to its argument when there
+// is no dictionary entry, so a double call is a no-op — but the rule exists because the
+// alternative bit immediately: the primitives used to be split (Pane/Loading/NeedsWallet/Confirm
+// translated their props, Unavailable/Refused did not), and the first pane to use the shared
+// Confirm pre-translated everything and shipped a double-t() before catching it. One rule, no
+// per-component memory.
+//
+// `lines` on <Confirm> is the deliberate exception and is documented there: those are composed
+// sentences with numbers interpolated, so the caller must translate around the values.
+
 // ── chrome ──────────────────────────────────────────────────────────────────
 export function Pane({ icon, title, children }) {
   useI18nReady();
@@ -83,7 +97,7 @@ export function Unavailable({ kind, message, onRetry }) {
   useI18nReady();
   const text = kind === "offline"
     ? t("You're offline. This needs a connection — it'll work again as soon as you're back.")
-    : (message || t("Could not read the chain right now. Try again shortly."));
+    : t(message || "Could not read the chain right now. Try again shortly.");
   return (
     <div className="seeker-tool-unavailable" role="alert">
       <p>{text}</p>
@@ -96,7 +110,7 @@ export function Unavailable({ kind, message, onRetry }) {
 // say what to fix rather than blaming the chain.
 export function Refused({ message }) {
   useI18nReady();
-  return <div className="seeker-tool-refused" role="alert"><p>{message || t("That input wasn't something we could use.")}</p></div>;
+  return <div className="seeker-tool-refused" role="alert"><p>{t(message || "That input wasn't something we could use.")}</p></div>;
 }
 
 // ── wallet gate ─────────────────────────────────────────────────────────────
@@ -133,6 +147,9 @@ export function Confirm({ open, title, lines, confirmLabel, onConfirm, onCancel,
     <div className="seeker-confirm-wrap" role="dialog" aria-modal="true" aria-label={t(title)}>
       <div className={"seeker-confirm" + (danger ? " seeker-confirm-danger" : "")}>
         <h2>{t(title)}</h2>
+        {/* EXCEPTION to the string rule above: these are composed sentences with amounts and
+            counts interpolated, so the caller translates around the values and passes finished
+            text. Everything else here is translated by this component. */}
         {(lines || []).map((l, i) => <p key={i}>{l}</p>)}
         <div className="seeker-confirm-actions">
           <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onCancel}>{t("Cancel")}</button>
