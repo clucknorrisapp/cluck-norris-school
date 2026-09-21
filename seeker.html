@@ -21,6 +21,15 @@
     <script src="/cluck-util.js"></script>
     <script src="/cluck-wallet.js"></script>
     <script src="/rent-math.js"></script>
+    <!-- web3.js is a VENDORED IIFE, never a vite/npm import — importing @solana/web3.js through
+         vite needs the Node Buffer global browsers don't have and we ship no polyfill, which has
+         silently killed money paths before (AGENTS.md). Same file public/airdrop-engine.js relies
+         on. Must load before rent-reclaim-plan.js's browser seam (src/seeker/reclaim-sign.js). -->
+    <script src="/vendor/solana-web3-1.95.8.iife.min.js"></script>
+    <!-- Rent Reclaim SIGNING decisions (increment 3) — pure, dependency-free, dual-exported the
+         same way rent-math.js is (see that file's header): required by Node tests AND loaded here
+         as window.CluckReclaimPlan for src/seeker/reclaim-sign.js to drive. -->
+    <script src="/rent-reclaim-plan.js"></script>
     <script src="/i18n.js"></script>
     <script type="module" src="/src/seeker/main.jsx"></script>
   </body>

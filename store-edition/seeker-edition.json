@@ -10,6 +10,8 @@
     "cluck-util.js",
     "cluck-wallet.js",
     "rent-math.js",
+    "rent-reclaim-plan.js",
+    "vendor/solana-web3-1.95.8.iife.min.js",
     "i18n.js",
     "icon.svg",
     "cluck-norris.png"
@@ -55,6 +57,12 @@
     "exodus.com",
     "brave.com",
     "jup.ag",
-    "www.bybit.com"
+    "www.bybit.com",
+    "solscan.io",
+    "feross.org",
+    "github.com",
+    "api.devnet.solana.com",
+    "api.testnet.solana.com",
+    "api.mainnet-beta.solana.com"
   ]
 }
