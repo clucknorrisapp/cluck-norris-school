@@ -1,0 +1,132 @@
+/* Cluck Norris — Seeker app, the toolkit grid (src/seeker/ToolsHome.jsx).
+
+   Its own file because src/seeker/seeker.css is the SHELL (header, bottom nav, panes) and is
+   owned by other work in flight; a grid that will grow to fifteen cards deserves its own
+   stylesheet anyway. Palette and type come from theme.css — never redefine a token here
+   (CLAUDE.md), and never write a literal font stack. */
+
+.seeker-tools {
+  padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(16px + env(safe-area-inset-left, 0px));
+  padding-right: calc(16px + env(safe-area-inset-right, 0px));
+}
+.seeker-tools-h1 {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: .5px;
+  margin: 0 0 4px;
+  color: var(--text);
+}
+.seeker-tools-sub { margin: 0 0 16px; color: var(--sub); font-size: var(--body-text, 15px); }
+
+/* Search: type: search strips the UA's own clear button inconsistently across Android skins, so
+   the box is styled from scratch rather than fighting it. 16px is deliberate and load-bearing —
+   anything smaller makes iOS Safari zoom the viewport on focus, which on a phone reads as the
+   app lurching sideways when you tap the box. */
+.seeker-tools-search { display: block; margin: 0 0 22px; }
+.seeker-tools-search input {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  font-size: 16px;
+  font-family: var(--body);
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  appearance: none;
+}
+.seeker-tools-search input:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.seeker-tools-search input::-webkit-search-cancel-button { appearance: none; }
+
+.seeker-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.seeker-tools-group { margin: 0 0 26px; }
+.seeker-tools-grouptitle {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 2px;
+}
+.seeker-tools-groupnote { margin: 0 0 12px; font-size: 12.5px; color: var(--sub); }
+
+/* One column on a phone, on purpose: a two-up grid at 390px would cut every blurb to a word and
+   a half, and the blurb is what tells a first-timer whether the tool is for them. */
+.seeker-tools-grid { display: flex; flex-direction: column; gap: 10px; }
+
+.seeker-toolcard {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: start;
+  gap: 12px;
+  min-height: 72px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: inherit;
+  text-decoration: none;
+  position: relative;
+}
+a.seeker-toolcard:active { transform: scale(.994); }
+a.seeker-toolcard:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
+.seeker-toolcard-icon { font-size: 26px; line-height: 44px; text-align: center; }
+.seeker-toolcard-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.seeker-toolcard-title { font-family: var(--disp); font-weight: 400; font-size: 17px; letter-spacing: .3px; }
+.seeker-toolcard-blurb { font-size: 13px; line-height: 1.45; color: var(--sub); }
+
+.seeker-toolcard-tier {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--sub);
+  white-space: nowrap;
+  align-self: start;
+}
+.seeker-tier-free   { color: var(--gold);   border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+.seeker-tier-wallet { color: var(--orange); border-color: color-mix(in srgb, var(--orange) 45%, transparent); }
+
+/* A tool that isn't built yet. Deliberately NEUTRAL GREY rather than a dimmed brand colour:
+   CLAUDE.md's rule is that a faded gradient on dark reads as broken, not inactive — and a card
+   that looks broken on the toolkit screen is the worst first impression the app could make. */
+.seeker-toolcard-soon {
+  opacity: 1;
+  border-style: dashed;
+  border-color: var(--border);
+  background: transparent;
+}
+.seeker-toolcard-soon .seeker-toolcard-icon,
+.seeker-toolcard-soon .seeker-toolcard-title,
+.seeker-toolcard-soon .seeker-toolcard-blurb { color: var(--sub); filter: grayscale(1); }
+.seeker-toolcard-soonbadge {
+  position: absolute;
+  top: -8px;
+  right: 12px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--sub);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  a.seeker-toolcard:active { transform: none; }
+}

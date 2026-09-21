@@ -286,6 +286,113 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     assert.strictEqual(calls, 0, "the chain is never read for input that cannot possibly verify");
   });
 
+  // ── native SOL drops (adversarial review P2-5) ───────────────────────────────────────────
+  // A SOL drop could never be recorded: the pane posted the literal "native", SOL_ADDR_RE
+  // rejected it, and every SOL drop died on "bad mint". The handle is now the canonical
+  // wrapped-SOL mint address, and verification reads LAMPORT deltas — payout-verify.js's
+  // rowPaidBy cannot see a SystemProgram transfer at all, and widening the Hub's shared money
+  // verifier for an airdrop receipt was the wrong trade.
+  const NATIVE = AR.NATIVE_MINT;
+  // A native tx: account keys plus the pre/post lamport arrays the chain already returns.
+  const natTx = ({ err = null, keys = [], pre = [], post = [], blockTime } = {}) => ({
+    meta: { err, preBalances: pre, postBalances: post },
+    transaction: { message: { accountKeys: keys } },
+    blockTime: blockTime ?? Math.floor(NOW / 1000),
+  });
+
+  t("lamportDelta reads the net change for a wallet, and null when it is not in the tx", () => {
+    const x = natTx({ keys: [PAYER, A], pre: [10_000_000_000, 0], post: [8_999_995_000, 1_000_000_000] });
+    assert.strictEqual(AR.lamportDelta(x, A), 1_000_000_000n);
+    assert.strictEqual(AR.lamportDelta(x, PAYER), -1_000_005_000n);
+    assert.strictEqual(AR.lamportDelta(x, B), null, "a wallet not in the transaction is null, never 0");
+  });
+
+  t("lamportDelta tolerates accountKeys as {pubkey} objects, not only strings", () => {
+    const x = natTx({ keys: [{ pubkey: PAYER }, { pubkey: A }], pre: [10_000_000_000, 0], post: [8_999_995_000, 1_000_000_000] });
+    assert.strictEqual(AR.lamportDelta(x, A), 1_000_000_000n);
+  });
+
+  t("⚠️ nativeRowPaid refuses a failed transaction before it looks at any balance", () => {
+    const x = natTx({ err: { InstructionError: [0, "Custom"] }, keys: [PAYER, A], pre: [10e9, 0], post: [9e9, 1e9] });
+    const v = AR.nativeRowPaid(x, { wallet: A, minRaw: "1000000000", nowUnix: Math.floor(NOW / 1000) });
+    assert.strictEqual(v.ok, false);
+    assert.match(v.why, /failed on chain/);
+  });
+
+  t("nativeRowPaid: enough SOL arrived → ok; not enough → refused with both numbers", () => {
+    const x = natTx({ keys: [PAYER, A], pre: [10e9, 0], post: [8.999995e9, 1e9] });
+    assert.strictEqual(AR.nativeRowPaid(x, { wallet: A, minRaw: "1000000000", nowUnix: Math.floor(NOW / 1000) }).ok, true);
+    const short = AR.nativeRowPaid(x, { wallet: A, minRaw: "2000000000", nowUnix: Math.floor(NOW / 1000) });
+    assert.strictEqual(short.ok, false);
+    assert.match(short.why, /smaller than the amount owed/);
+    assert.strictEqual(short.deltaRaw, "1000000000");
+  });
+
+  t("⚠️ a wallet whose SOL went DOWN is never 'paid' — the sender is not a recipient", () => {
+    const x = natTx({ keys: [PAYER, A], pre: [10e9, 0], post: [8.999995e9, 1e9] });
+    const v = AR.nativeRowPaid(x, { wallet: PAYER, minRaw: "1", nowUnix: Math.floor(NOW / 1000) });
+    assert.strictEqual(v.ok, false);
+    assert.match(v.why, /no SOL reached this wallet/);
+  });
+
+  t("nativeSourceIsOperator: only a wallet that actually lost the lamports counts as the funder", () => {
+    const x = natTx({ keys: [PAYER, A], pre: [10e9, 0], post: [8.999995e9, 1e9] });
+    assert.strictEqual(AR.nativeSourceIsOperator(x, { operator: PAYER, minRaw: 1_000_000_000n }), true);
+    assert.strictEqual(AR.nativeSourceIsOperator(x, { operator: A, minRaw: 1_000_000_000n }), false,
+      "the RECIPIENT must never read as the funder");
+    assert.strictEqual(AR.nativeSourceIsOperator(x, { operator: B, minRaw: 1n }), false,
+      "a wallet not in the transaction at all is not the funder");
+  });
+
+  await tAsync("⚠️ a SOL drop RECORDS and VERIFIES end to end — it used to die on 'bad mint'", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const getTx = txByMap({ [sig]: natTx({ keys: [PAYER, A], pre: [10e9, 0], post: [8.999995e9, 1e9] }) });
+    const r = await AR.recordDrop({
+      kv, getTx, now: NOW, mint: NATIVE, decimals: 9, createdAt: NOW - 60_000,
+      rows: [{ wallet: A, amount: "1", sig }],
+    });
+    assert.strictEqual(r.ok, true, JSON.stringify(r));
+    assert.strictEqual(r.results[0].verified, true, JSON.stringify(r.results[0]));
+    assert.ok(r.dropId, "a SOL drop gets a real dropId, which is what the public URL is built from");
+    assert.strictEqual(r.drop.mint, NATIVE, "and it is stored under a real base58 mint, needing no special case downstream");
+    assert.strictEqual(r.totals.verified, 1);
+  });
+
+  await tAsync("⚠️ a SOL row the chain does not support is recorded UNVERIFIED, never quietly passed", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    // B is in the transaction but gained nothing.
+    const getTx = txByMap({ [sig]: natTx({ keys: [PAYER, A, B], pre: [10e9, 0, 5e9], post: [8.999995e9, 1e9, 5e9] }) });
+    const r = await AR.recordDrop({
+      kv, getTx, now: NOW, mint: NATIVE, decimals: 9, createdAt: NOW - 60_000,
+      rows: [{ wallet: B, amount: "1", sig }],
+    });
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.results[0].verified, false);
+    assert.match(r.results[0].reason, /no SOL reached this wallet/);
+  });
+
+  await tAsync("⚠️ a SOL drop with an operator on record refuses a row a STRANGER funded", async () => {
+    const kv = memoryKv();
+    const sig1 = fakeSig(), sig2 = fakeSig();
+    // sig1 establishes the drop with PAYER as operator; sig2 is funded by B instead.
+    const getTx = txByMap({
+      [sig1]: natTx({ keys: [PAYER, A], pre: [10e9, 0], post: [8.999995e9, 1e9] }),
+      [sig2]: natTx({ keys: [B, A], pre: [10e9, 0], post: [8.999995e9, 1e9] }),
+    });
+    const first = await AR.recordDrop({
+      kv, getTx, now: NOW, mint: NATIVE, decimals: 9, createdAt: NOW - 60_000, operator: PAYER,
+      rows: [{ wallet: A, amount: "1", sig: sig1 }],
+    });
+    assert.strictEqual(first.results[0].verified, true, JSON.stringify(first.results[0]));
+    const second = await AR.recordDrop({
+      kv, getTx, now: NOW, dropId: first.dropId, mint: NATIVE, decimals: 9, createdAt: NOW - 60_000,
+      rows: [{ wallet: A, amount: "1", sig: sig2 }],
+    });
+    assert.strictEqual(second.results[0].verified, false, JSON.stringify(second.results[0]));
+  });
+
   console.log(`\n${pass} passed, ${fail} failed\n`);
   process.exit(fail ? 1 : 0);
 })();

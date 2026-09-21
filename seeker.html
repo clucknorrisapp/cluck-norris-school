@@ -21,6 +21,30 @@
     <script src="/cluck-util.js"></script>
     <script src="/cluck-wallet.js"></script>
     <script src="/rent-math.js"></script>
+    <!-- The unified tools pass (public/cluck-gate.js) — the ONE pass client the whole platform
+         uses. Without this file window.CluckGate does not exist, src/seeker/pass.js resolves
+         every pane to "off", and the pass-tier tools fail open in the shipped app. The desktop
+         gate CARD it also carries is never rendered here: the app calls config/pass/proof/fetch/
+         denied/grant and replaces guard()'s DOM with its own native sheet (pass.js header). -->
+    <script src="/cluck-gate.js"></script>
+    <!-- web3.js is a VENDORED IIFE, never a vite/npm import — importing @solana/web3.js through
+         vite needs the Node Buffer global browsers don't have and we ship no polyfill, which has
+         silently killed money paths before (AGENTS.md). Same file public/airdrop-engine.js relies
+         on. Must load before rent-reclaim-plan.js's browser seam (src/seeker/reclaim-sign.js). -->
+    <script src="/vendor/solana-web3-1.95.8.iife.min.js"></script>
+    <!-- Rent Reclaim SIGNING decisions (increment 3) — pure, dependency-free, dual-exported the
+         same way rent-math.js is (see that file's header): required by Node tests AND loaded here
+         as window.CluckReclaimPlan for src/seeker/reclaim-sign.js to drive. -->
+    <script src="/rent-reclaim-plan.js"></script>
+    <!-- The airdropper. airdrop-engine.js is the platform's ONE audited batch-transfer path
+         (shared by /airdrop, Buy Special, the CUNA payout desk and the Hub desk) — the Seeker
+         pane drives it rather than carrying a private copy, which is CLAUDE.md's rule about
+         shared browser modules applied where a drifted copy would cost the most. It needs the
+         vendored web3 IIFE above it, and it also installs window.splToken, which cluck-gate.js's
+         pay leg looks for. airdrop-plan.js is the pure parse/cost half, dual-exported so
+         scripts/seeker-airdrop-test.cjs can require() the same decisions the app runs. -->
+    <script src="/airdrop-engine.js"></script>
+    <script src="/airdrop-plan.js"></script>
     <script src="/i18n.js"></script>
     <script type="module" src="/src/seeker/main.jsx"></script>
   </body>

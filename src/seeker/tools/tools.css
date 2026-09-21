@@ -1,0 +1,960 @@
+/* Cluck Norris — Seeker app, tool pane stylesheet (docs/SEEKER_TOOLS_BUILD.md §3).
+   Palette + type scale come from theme.css (loaded by seeker.html) — never redefine a token here
+   (CLAUDE.md). This file has two halves:
+     1. The shared primitives every pane in src/seeker/pane.jsx renders through — Pane, Loading,
+        Empty, Unavailable, Refused, NeedsWallet, Confirm. Defined once here so all twelve tools
+        share one look, per the pane contract.
+     2. The tool-specific classes for Listing Checkup, Launches and Daily Brief.
+   Every tap target here is >=44px tall; nothing overflows horizontally at 390px. */
+
+/* ── 1. Shared pane primitives ─────────────────────────────────────────────────────────────── */
+.seeker-tool {
+  max-width: 480px;
+  margin: 0 auto;
+}
+.seeker-tool-icon { font-size: 32px; text-align: center; margin-bottom: 4px; }
+.seeker-tool-title {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 22px;
+  color: var(--text);
+  text-align: center;
+  margin: 0 0 12px;
+}
+.seeker-tool-lede {
+  font-size: var(--body-text, 15px);
+  color: var(--subtext);
+  line-height: 1.6;
+  text-align: center;
+  margin: 0 0 18px;
+}
+.seeker-tool-note { font-size: 12.5px; color: var(--sub); line-height: 1.5; }
+
+.seeker-tool-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 16px;
+  color: var(--sub);
+  font-size: 13.5px;
+}
+.seeker-dots { display: flex; gap: 5px; }
+.seeker-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sub);
+  display: inline-block;
+  animation: seeker-tool-blink 1.1s infinite ease-in-out;
+}
+.seeker-dots i:nth-child(2) { animation-delay: .15s; }
+.seeker-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes seeker-tool-blink {
+  0%, 80%, 100% { opacity: .25; }
+  40% { opacity: 1; }
+}
+
+.seeker-tool-empty {
+  font-size: 13.5px;
+  color: var(--sub);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+  margin: 10px 0;
+}
+
+/* We could NOT look — always visually distinct from an Empty result, never neutral-looking. */
+.seeker-tool-unavailable {
+  text-align: center;
+  padding: 18px 16px;
+  border: 1px solid var(--red-soft, var(--red));
+  border-radius: 12px;
+  background: var(--card);
+  margin: 10px 0;
+}
+.seeker-tool-unavailable p { margin: 0 0 12px; font-size: 13.5px; color: var(--red-soft, var(--red)); line-height: 1.5; }
+.seeker-tool-unavailable p:last-child { margin-bottom: 0; }
+
+.seeker-tool-refused {
+  text-align: center;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  margin: 10px 0;
+}
+.seeker-tool-refused p { margin: 0; font-size: 13.5px; color: var(--gold); line-height: 1.5; }
+
+.seeker-tool-needswallet { text-align: center; padding: 24px 16px; }
+.seeker-tool-needswallet p { font-size: var(--body-text, 15px); color: var(--subtext); margin: 0 0 14px; }
+
+.seeker-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--orange);
+  color: #1a1108;
+  font-family: var(--disp);
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.seeker-btn:active { filter: brightness(.92); }
+.seeker-btn:disabled { background: var(--card2, #1d1e26); color: var(--muted); cursor: not-allowed; }
+.seeker-btn-quiet { background: transparent; color: var(--orange); }
+.seeker-btn-quiet:active { background: rgba(255, 122, 24, .12); }
+.seeker-btn-quiet:disabled { color: var(--muted); background: transparent; }
+.seeker-btn-danger { background: var(--red); color: #fff; border-color: var(--red); }
+
+.seeker-confirm-wrap {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 30;
+}
+.seeker-confirm {
+  width: 100%;
+  max-width: 480px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  padding: 20px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+.seeker-confirm-danger { border-color: var(--red); }
+.seeker-confirm h2 { font-family: var(--disp); font-weight: 400; font-size: 18px; margin: 0 0 10px; color: var(--text); }
+.seeker-confirm p { font-size: 13.5px; color: var(--subtext); margin: 0 0 8px; line-height: 1.5; }
+.seeker-confirm-actions { display: flex; gap: 10px; margin-top: 14px; }
+.seeker-confirm-actions .seeker-btn { flex: 1; }
+
+/* A generic external/action link inside a tool result — kept small and tappable. */
+.seeker-listing-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-family: var(--disp);
+  font-size: 11.5px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--orange);
+  text-decoration: none;
+  margin-right: 14px;
+}
+
+/* ── 2a. Listing Checkup ────────────────────────────────────────────────────────────────────── */
+.seeker-listing-form {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.seeker-listing-label {
+  display: block;
+  font-family: var(--disp);
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--sub);
+  margin: 12px 0 6px;
+}
+.seeker-listing-label:first-child { margin-top: 0; }
+.seeker-listing-input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card2, #1d1e26);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.seeker-listing-textarea { min-height: 80px; resize: vertical; font-family: var(--body); }
+.seeker-listing-more-toggle {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 14px;
+  background: transparent;
+  border: none;
+  color: var(--orange);
+  font-family: var(--disp);
+  font-size: 11.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+.seeker-listing-more { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 4px; }
+.seeker-listing-formerror {
+  font-size: 12.5px;
+  color: var(--red-soft, var(--red));
+  margin: 12px 0 0;
+}
+.seeker-listing-runbtn { display: block; width: 100%; margin-top: 16px; }
+
+.seeker-listing-report { margin-top: 4px; }
+.seeker-listing-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.seeker-listing-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.seeker-listing-chip-correct { border-color: var(--green); color: var(--green); }
+.seeker-listing-chip-incorrect { border-color: var(--red-soft, var(--red)); color: var(--red-soft, var(--red)); }
+.seeker-listing-chip-notfound { border-color: var(--gold); color: var(--gold); }
+.seeker-listing-chip-unread { border-color: var(--muted); color: var(--muted); }
+
+.seeker-listing-fixfirst {
+  font-size: 13px;
+  color: var(--gold);
+  background: rgba(255, 182, 39, .08);
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.seeker-listing-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.seeker-listing-card-title {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: .3px;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+
+.seeker-listing-facts { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.seeker-listing-facts > div { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.seeker-listing-facts dt { color: var(--sub); margin: 0; }
+.seeker-listing-facts dd { color: var(--text); margin: 0; font-family: var(--mono); text-align: right; }
+
+.seeker-listing-source { border-top: 1px solid var(--border-soft, var(--border)); }
+.seeker-listing-source:first-child { border-top: none; }
+.seeker-listing-source-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.seeker-listing-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.seeker-listing-dot-correct { background: var(--green); }
+.seeker-listing-dot-incorrect { background: var(--red-soft, var(--red)); }
+.seeker-listing-dot-not-found { background: var(--gold); }
+.seeker-listing-dot-unread { background: var(--muted); }
+.seeker-listing-source-label { flex: 1; font-size: 14px; color: var(--text); }
+.seeker-listing-source-status { font-size: 11.5px; color: var(--sub); }
+.seeker-listing-source-chev { color: var(--sub); font-size: 10px; }
+.seeker-listing-source-body { padding: 0 0 12px 17px; }
+
+.seeker-listing-field { padding: 8px 0; border-top: 1px solid var(--border-soft, var(--border)); }
+.seeker-listing-field:first-child { border-top: none; }
+.seeker-listing-field-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.seeker-listing-field-label { color: var(--text); }
+.seeker-listing-field-status { font-family: var(--mono); font-size: 11.5px; }
+.seeker-listing-field-match .seeker-listing-field-status { color: var(--green); }
+.seeker-listing-field-differs .seeker-listing-field-status { color: var(--red-soft, var(--red)); }
+.seeker-listing-field-missing .seeker-listing-field-status { color: var(--gold); }
+.seeker-listing-field-unverified .seeker-listing-field-status { color: var(--muted); }
+.seeker-listing-field-detail { margin-top: 4px; font-size: 12px; color: var(--sub); line-height: 1.5; word-break: break-word; }
+.seeker-listing-field-tag { color: var(--muted); margin-right: 4px; }
+.seeker-listing-field-note { margin-top: 3px; font-size: 12px; color: var(--sub); font-style: italic; }
+
+.seeker-listing-howto { margin-top: 6px; }
+.seeker-listing-howto p { font-size: 12.5px; color: var(--sub); line-height: 1.5; margin: 0 0 8px; }
+
+.seeker-listing-imp {
+  border-top: 1px solid var(--border-soft, var(--border));
+  padding: 10px 0;
+}
+.seeker-listing-imp:first-of-type { border-top: none; }
+.seeker-listing-imp-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text); }
+.seeker-listing-imp-badge {
+  font-family: var(--disp);
+  font-size: 10px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  padding: 2px 8px;
+  flex: none;
+}
+
+.seeker-listing-linkrow { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border-soft, var(--border)); }
+.seeker-listing-linkrow:first-child { border-top: none; }
+.seeker-listing-linkrow-field { font-size: 13px; color: var(--text); }
+.seeker-listing-linkrow-status { font-family: var(--mono); font-size: 11.5px; }
+.seeker-listing-linkrow-status-ok { color: var(--green); }
+.seeker-listing-linkrow-status-broken { color: var(--red-soft, var(--red)); }
+.seeker-listing-linkrow-status-redirect { color: var(--gold); }
+.seeker-listing-linkrow-status-unverified { color: var(--muted); }
+.seeker-listing-linkrow-status-unread { color: var(--muted); }
+
+.seeker-listing-share { text-align: center; word-break: break-all; margin-top: 6px; }
+
+/* ── 2b. Launches (Bags feed) ───────────────────────────────────────────────────────────────── */
+.seeker-launch-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.seeker-launch-tabbtn {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--sub);
+  font-family: var(--disp);
+  font-size: 11.5px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0 6px;
+}
+.seeker-launch-tabbtn.active { color: var(--orange); border-color: var(--orange); background: rgba(255, 122, 24, .08); }
+.seeker-launch-stale { text-align: center; margin: 0 0 10px; }
+
+.seeker-launch-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.seeker-launch-card {
+  display: flex;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+}
+.seeker-launch-avatar {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--card2, #1d1e26);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 20px;
+}
+.seeker-launch-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.seeker-launch-body { flex: 1; min-width: 0; }
+.seeker-launch-top { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.seeker-launch-name { font-size: 14.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60vw; }
+.seeker-launch-symbol { font-family: var(--mono); font-size: 12px; color: var(--sub); }
+.seeker-launch-bar { height: 6px; border-radius: 4px; background: var(--card2, #1d1e26); overflow: hidden; margin: 8px 0 4px; }
+.seeker-launch-bar-fill { height: 100%; background: var(--orange); border-radius: 4px; }
+.seeker-launch-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-family: var(--mono); font-size: 12.5px; color: var(--text); }
+.seeker-launch-up { color: var(--green); }
+.seeker-launch-down { color: var(--red-soft, var(--red)); }
+.seeker-launch-refresh { display: block; width: 100%; }
+
+/* A pane state that is neither a result nor a failure: a destructive action's confirm step was
+   accepted, but SIGNING ISN'T WIRED UP YET in this build (Firepit.jsx / ProjectBurn.jsx say why
+   in their file headers). Deliberately its own look — not the Unavailable red (nothing failed)
+   and not a success color (nothing happened) — a calm, informational amber so it can never be
+   mistaken for either. */
+.seeker-tool-notyet {
+  text-align: center;
+  padding: 16px;
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  background: rgba(255, 182, 39, .08);
+  margin: 14px 0;
+}
+.seeker-tool-notyet-title {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: .3px;
+  color: var(--gold);
+  margin: 0 0 8px;
+}
+.seeker-tool-notyet p { margin: 0 0 12px; font-size: 13px; color: var(--subtext); line-height: 1.5; }
+.seeker-tool-notyet p:last-of-type { margin-bottom: 12px; }
+
+/* ── 2c. Daily Brief (Alpha) ────────────────────────────────────────────────────────────────── */
+.seeker-brief-date {
+  text-align: center;
+  font-family: var(--disp);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--sub);
+  margin-bottom: 10px;
+}
+.seeker-brief-text {
+  white-space: pre-wrap;
+  font-family: var(--body);
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--body-text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+  word-break: break-word;
+}
+.seeker-brief-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.seeker-brief-card-title {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  color: var(--sub);
+  margin: 0 0 10px;
+}
+.seeker-brief-majors { display: flex; gap: 10px; flex-wrap: wrap; }
+.seeker-brief-major { display: flex; flex-direction: column; gap: 2px; background: var(--card2, #1d1e26); border-radius: 10px; padding: 8px 12px; min-width: 84px; }
+.seeker-brief-major-sym { font-family: var(--disp); font-size: 12px; color: var(--sub); }
+.seeker-brief-major-price { font-family: var(--mono); font-size: 14px; color: var(--text); }
+.seeker-brief-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.seeker-brief-chip {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--card2, #1d1e26);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+.seeker-brief-movers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.seeker-brief-movers-h { font-family: var(--disp); font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--sub); margin-bottom: 6px; }
+.seeker-brief-mover-row { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12.5px; padding: 3px 0; }
+.seeker-brief-pool-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border-soft, var(--border)); flex-wrap: wrap; }
+.seeker-brief-pool-row:first-child { border-top: none; }
+.seeker-brief-pool-pair { font-size: 13px; color: var(--text); }
+.seeker-brief-pool-nums { display: flex; gap: 10px; font-family: var(--mono); font-size: 12px; color: var(--sub); flex-wrap: wrap; }
+.seeker-brief-yield { color: var(--gold); font-family: var(--mono); font-size: 12.5px; }
+.seeker-brief-disclaimer { text-align: center; font-size: 12px; color: var(--muted); margin: 4px 0 14px; }
+.seeker-brief-refresh { display: block; width: 100%; }
+
+/* ── 2d. Firepit ────────────────────────────────────────────────────────────────────────────── */
+.seeker-firepit-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.seeker-firepit-section-title {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: .3px;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+.seeker-firepit-toolbar { display: flex; gap: 8px; margin: 10px 0; }
+.seeker-firepit-rows { display: flex; flex-direction: column; }
+
+.seeker-firepit-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 4px;
+  border-top: 1px solid var(--border-soft, var(--border));
+  cursor: pointer;
+}
+.seeker-firepit-row:first-child { border-top: none; }
+.seeker-firepit-row-sel { background: rgba(255, 122, 24, .06); border-radius: 8px; }
+.seeker-firepit-row-disabled { opacity: .5; cursor: not-allowed; }
+.seeker-firepit-checkbox { width: 20px; height: 20px; min-width: 20px; margin-top: 2px; accent-color: var(--orange); }
+.seeker-firepit-row-body { flex: 1; min-width: 0; }
+.seeker-firepit-row-top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--text); }
+.seeker-firepit-row-rent { font-family: var(--mono); font-size: 12.5px; color: var(--green); flex: none; }
+.seeker-firepit-row-sub { font-family: var(--mono); font-size: 11.5px; color: var(--sub); margin-top: 2px; word-break: break-word; }
+.seeker-firepit-row-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+.seeker-firepit-tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .2px;
+  border-radius: 999px;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  color: var(--sub);
+}
+.seeker-firepit-tag-frozen { color: var(--muted); border-color: var(--muted); }
+.seeker-firepit-tag-nft { color: var(--sub); }
+.seeker-firepit-tag-unknown { color: #1a0f05; background: var(--gold); border-color: var(--gold); font-weight: 700; }
+.seeker-firepit-tag-value { color: var(--gold); border-color: var(--gold); font-weight: 700; }
+
+.seeker-firepit-actionrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft, var(--border));
+}
+.seeker-firepit-actiontotal { font-size: 13px; color: var(--sub); }
+.seeker-firepit-destroyval { color: var(--red-soft, var(--red)); }
+.seeker-firepit-rescan { display: block; width: 100%; margin-bottom: 10px; }
+
+/* Signing outcomes. sent/failed/unconfirmed reuse Airdropper's row treatment (§2j) and the
+   shared forensic row shape (§2g) — one look per outcome across the app, not a private copy.
+   Declined is its own, deliberately NEUTRAL class (grey, not red): the person said no in their
+   own wallet, nothing went wrong, and it must never look like a failure. */
+.seeker-firepit-row-declined { border-left: 3px solid var(--muted); padding-left: 10px; }
+.seeker-firepit-runreport { margin-top: 4px; }
+
+/* ── 2e. Project Burn ───────────────────────────────────────────────────────────────────────── */
+.seeker-burn-form {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.seeker-burn-tokencard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.seeker-burn-tokenhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.seeker-burn-tokenicon {
+  width: 40px; height: 40px; min-width: 40px;
+  border-radius: 10px;
+  background: var(--card2, #1d1e26);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--disp); font-size: 14px; color: var(--gold);
+}
+.seeker-burn-tokenname { font-size: 15px; color: var(--text); }
+.seeker-burn-pctrow { display: flex; gap: 8px; margin: 10px 0; }
+.seeker-burn-pctrow .seeker-btn { flex: 1; }
+.seeker-burn-live { font-size: 13px; color: var(--subtext); line-height: 1.5; margin: 4px 0 12px; }
+.seeker-burn-live-err { color: var(--red-soft, var(--red)); }
+.seeker-burn-actionbtn { display: block; width: 100%; margin-top: 4px; }
+
+/* The four post-signature outcomes (sent/failed/unconfirmed/declined) — same spirit as
+   Airdropper's/Firepit's split: an ambiguous outcome must never look like either a clean success
+   or a safe-to-retry failure, and a decline must never look like either kind of trouble. */
+.seeker-burn-outcome { border-radius: 14px; padding: 14px; margin: 8px 0 4px; line-height: 1.5; }
+.seeker-burn-outcome-title { font-family: var(--disp); font-weight: 400; font-size: 15px; margin: 0 0 8px; }
+.seeker-burn-outcome p { margin: 0 0 8px; font-size: 13.5px; color: var(--subtext); }
+.seeker-burn-outcome p:last-of-type { margin-bottom: 0; }
+.seeker-burn-outcome-actions { display: flex; gap: 8px; margin-top: 10px; }
+.seeker-burn-outcome-actions .seeker-btn { flex: 1; min-height: 44px; }
+.seeker-burn-outcome-sent { border: 1px solid var(--green); background: rgba(34, 197, 94, .06); }
+.seeker-burn-outcome-sent .seeker-burn-outcome-title { color: var(--green); }
+.seeker-burn-outcome-failed { border: 1px solid var(--red-soft, var(--red)); background: var(--card); }
+.seeker-burn-outcome-failed .seeker-burn-outcome-title { color: var(--red-soft, var(--red)); }
+.seeker-burn-outcome-unconfirmed { border: 1px solid var(--gold); background: rgba(255, 182, 39, .08); }
+.seeker-burn-outcome-unconfirmed .seeker-burn-outcome-title { color: var(--gold); }
+.seeker-burn-outcome-declined { border: 1px solid var(--border); background: var(--card); }
+.seeker-burn-outcome-declined .seeker-burn-outcome-title { color: var(--sub); }
+
+/* ── 2f. Locker Room ────────────────────────────────────────────────────────────────────────── */
+/* The headline "% of supply locked" figure on the View Locks report — deliberately its own big,
+   green stat (this repo's convention for the one number a report leads with; see the /lock/:mint
+   share card in server.js for the same visual role). */
+.seeker-lock-pctwrap { display: flex; align-items: flex-end; gap: 10px; margin: 4px 0 12px; }
+.seeker-lock-pct { font-family: var(--disp); font-weight: 400; font-size: 40px; color: var(--green); line-height: 1; }
+.seeker-lock-pctcap { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--sub); line-height: 1.3; padding-bottom: 4px; }
+
+.seeker-lock-toplocks-title { font-family: var(--disp); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--sub); margin: 14px 0 4px; }
+.seeker-lock-toplock-rank { color: var(--muted); font-family: var(--mono); font-size: 12px; width: 16px; flex: none; }
+.seeker-lock-toplock-amt { font-family: var(--mono); font-size: 13px; color: var(--text); min-width: 64px; }
+.seeker-lock-toplock-who { font-family: var(--mono); font-size: 11.5px; color: var(--sub); flex: 1; }
+.seeker-lock-toplock-label { font-size: 11px; color: var(--sub); flex: none; }
+
+/* Cancelable / recipient-changeable — irreversible-by-default toggles, so each one carries its
+   consequence in the row rather than a separate tooltip (guardrails before power, CLAUDE.md). */
+.seeker-lock-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-soft, var(--border));
+  cursor: pointer;
+}
+.seeker-lock-toggle:first-of-type { border-top: none; }
+.seeker-lock-toggle input { width: 20px; height: 20px; min-width: 20px; margin-top: 2px; accent-color: var(--orange); }
+.seeker-lock-toggle-label { display: block; font-size: 13.5px; color: var(--text); }
+.seeker-lock-toggle-note { display: block; font-size: 12px; color: var(--sub); line-height: 1.5; margin-top: 2px; }
+
+.seeker-lock-durrow { display: flex; gap: 8px; align-items: stretch; }
+.seeker-lock-durrow input { flex: 1; }
+.seeker-lock-select {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card2, #1d1e26);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+/* A built-and-simulated lock that would fail on-chain (bad balance, wrong mint, …) — a fixable
+   form problem, so it renders inline over the form rather than taking over the whole pane. */
+.seeker-lock-simwarning {
+  font-size: 12.5px;
+  color: var(--red-soft, var(--red));
+  background: rgba(220, 38, 38, .08);
+  border: 1px solid var(--red-soft, var(--red));
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 12px 0 0;
+  line-height: 1.5;
+}
+
+
+/* The outcome of a real lock attempt. FOUR states and three visual treatments, because
+   "submitted but unconfirmed" must not look like either success or failure — it is the one that,
+   read as "failed", gets the tokens committed twice by a retry, and a lock cannot be undone. */
+.seeker-lock-result {
+  font-size: 13px;
+  line-height: 1.6;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 14px;
+  margin: 14px 0;
+}
+.seeker-lock-result p { margin: 0 0 8px; }
+.seeker-lock-result .seeker-btn { display: block; width: 100%; margin-top: 10px; }
+.seeker-lock-result-ok { border-color: var(--green); }
+.seeker-lock-result-unconfirmed { border-color: var(--gold); background: rgba(255, 182, 39, .08); }
+.seeker-lock-result-failed { border-color: var(--red-soft, var(--red)); }
+
+/* ── 2g. Wallet X-Ray / Holders / Trace — the pass-gated forensic tools ────────────────────────
+   All three share one shape (a form, a fact grid, evidence rows, a scrollable result list) and
+   one native tools-pass sheet (docs/SEEKER_TOOLS_BUILD.md §5) — see each pane's own file header
+   for why the sheet's JS is duplicated rather than imported from a fourth file. */
+.seeker-forensic-form { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+.seeker-forensic-userow { display: flex; justify-content: flex-end; margin: -4px 0 8px; }
+.seeker-forensic-uselink {
+  background: none;
+  border: none;
+  color: var(--orange);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 4px;
+  min-height: 32px;
+  cursor: pointer;
+}
+.seeker-forensic-deeprow { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 12.5px; color: var(--sub); min-height: 32px; }
+.seeker-forensic-deeprow input { width: 20px; height: 20px; min-width: 20px; accent-color: var(--orange); }
+
+.seeker-forensic-statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.seeker-forensic-stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+.seeker-forensic-stat-label { font-family: var(--disp); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--sub); margin-bottom: 4px; }
+.seeker-forensic-stat-value { font-family: var(--mono); font-size: 15px; line-height: 1.4; color: var(--text); word-break: break-word; }
+
+.seeker-forensic-labels { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.seeker-forensic-label { display: flex; gap: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+.seeker-forensic-label-high { border-color: var(--red-soft, var(--red)); }
+.seeker-forensic-label-med { border-color: var(--gold); }
+.seeker-forensic-label-icon { font-size: 18px; flex: none; line-height: 1.4; }
+.seeker-forensic-label-tag { font-size: 13.5px; color: var(--text); margin-bottom: 2px; }
+.seeker-forensic-label-evidence { font-size: 12px; color: var(--sub); line-height: 1.5; word-break: break-word; }
+
+.seeker-forensic-verdict { font-size: 13.5px; color: var(--body-text); line-height: 1.6; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 14px; word-break: break-word; }
+.seeker-forensic-disclaimer { font-size: 11.5px; color: var(--muted); line-height: 1.5; margin: 0 0 14px; }
+.seeker-forensic-truncnote { text-align: center; margin: 0 0 12px; }
+
+.seeker-forensic-rows { display: flex; flex-direction: column; }
+.seeker-forensic-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-soft, var(--border));
+}
+.seeker-forensic-row:first-child { border-top: none; }
+.seeker-forensic-row-main { flex: 1; min-width: 0; }
+.seeker-forensic-row-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; color: var(--text); word-break: break-word; }
+.seeker-forensic-row-sub { font-family: var(--mono); font-size: 11.5px; color: var(--sub); margin-top: 2px; word-break: break-word; line-height: 1.5; }
+.seeker-forensic-row-value { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; color: var(--text); text-align: right; flex: none; white-space: normal; word-break: break-word; }
+.seeker-forensic-row-tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  border-radius: 999px;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  color: var(--sub);
+  margin-top: 6px;
+}
+
+.seeker-forensic-more { display: block; width: 100%; margin-top: 10px; }
+.seeker-forensic-link { display: inline-flex; align-items: center; min-height: 44px; font-family: var(--mono); font-size: 12.5px; color: var(--orange); text-decoration: none; }
+
+/* The native tools-pass sheet — reuses .seeker-confirm-wrap/.seeker-confirm's bottom-sheet shape,
+   these are just the pass-specific bits inside it. */
+.seeker-passgate-terms { font-size: 13px; color: var(--subtext); line-height: 1.6; margin: 4px 0 14px; }
+.seeker-passgate-terms strong { color: var(--gold); }
+.seeker-passgate-wallet { font-family: var(--mono); font-size: 12.5px; color: var(--sub); margin: 0 0 10px; }
+.seeker-passgate-needpay {
+  font-size: 12.5px;
+  color: var(--gold);
+  background: rgba(255, 182, 39, .08);
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 12px 0 0;
+  line-height: 1.5;
+}
+.seeker-passgate-err { color: var(--red-soft, var(--red)); margin-top: 10px; }
+
+/* ── 2h. Buy Special — buy-competition scanner + hold/trace calculator ─────────────────────────
+   Read-only: this pane never signs or sends anything (see BuySpecial.jsx's header). It reuses the
+   2g forensic shapes (form/stat-grid/rows) for its two on-chain reads and adds only what's unique
+   to a competition config: tappable window/mint/live-comp chips, a hold-rule checkbox, and the
+   status-tag colour variants for a computed eligibility row. */
+.seeker-bs-chiprow { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.seeker-bs-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card2, #1d1e26);
+  color: var(--sub);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.seeker-bs-chip-active { border-color: var(--orange); color: var(--orange); background: rgba(255, 122, 24, .1); }
+.seeker-bs-windownote { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: -4px 0 12px; }
+
+.seeker-bs-checkrow { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 4px 0; }
+.seeker-bs-checkbox { width: 20px; height: 20px; min-width: 20px; margin-top: 2px; accent-color: var(--orange); }
+.seeker-bs-checkrow label { font-size: 13px; color: var(--sub); line-height: 1.5; }
+
+.seeker-bs-rowactions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.seeker-bs-smallbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--sub);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.seeker-bs-smallbtn:disabled { color: var(--muted); cursor: not-allowed; }
+
+/* Status-tag colour variants layered on the shared .seeker-forensic-row-tag shape (2g). */
+.seeker-bs-tag-ok { border-color: var(--green2, var(--green)); color: var(--green2, var(--green)); }
+.seeker-bs-tag-bad { border-color: var(--red-soft, var(--red)); color: var(--red-soft, var(--red)); }
+.seeker-bs-tag-warn { border-color: var(--gold); color: var(--gold); }
+.seeker-bs-tag-muted { border-color: var(--muted); color: var(--muted); }
+
+.seeker-bs-tracebox {
+  font-size: 12px;
+  color: var(--sub);
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+/* ── 2i. Hatchery ───────────────────────────────────────────────────────────────────────────── */
+.seeker-hatch-form {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.seeker-hatch-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seeker-hatch-optional { text-transform: none; letter-spacing: 0; color: var(--muted); }
+
+/* The file input itself is visually hidden (not display:none, which some webviews drop from the
+   tab order) — the label beside it is the real, >=44px tap target. */
+.seeker-hatch-fileinput {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.seeker-hatch-filelabel { display: block; width: 100%; margin: 8px 0; text-align: center; cursor: pointer; }
+.seeker-hatch-logopreview {
+  display: block;
+  width: 96px; height: 96px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card2, #1d1e26);
+  margin: 6px auto;
+}
+.seeker-hatch-cardlogo {
+  width: 40px; height: 40px; min-width: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--card2, #1d1e26);
+}
+
+.seeker-hatch-payrow { display: flex; gap: 8px; margin: 8px 0; }
+.seeker-hatch-payrow .seeker-launch-tabbtn { flex: 1; }
+
+/* Fee states — waived/free is calm and positive (green), a broken config read is honest but
+   never alarming (it isn't a failure of anything the person did), never the same look as either. */
+.seeker-hatch-waived {
+  font-size: 13px;
+  color: var(--green);
+  background: rgba(34, 197, 94, .08);
+  border: 1px solid var(--green);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+.seeker-hatch-feenote {
+  font-size: 12.5px;
+  color: var(--sub);
+  background: var(--card2, #1d1e26);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.seeker-hatch-startover { display: block; width: 100%; margin-top: 8px; }
+
+/* The three post-signature outcomes this pane can land in — each its own look, same spirit as
+   Airdropper's sent/failed/unconfirmed split above: an ambiguous outcome must never look like
+   either a clean success or a safe-to-retry failure. */
+.seeker-hatch-outcome-title { font-family: var(--disp); font-weight: 400; font-size: 15px; margin: 0 0 6px; }
+.seeker-hatch-failed,
+.seeker-hatch-ambiguous,
+.seeker-hatch-done {
+  border-radius: 14px;
+  padding: 14px;
+  margin: 10px 0;
+  line-height: 1.5;
+}
+.seeker-hatch-failed p, .seeker-hatch-ambiguous p, .seeker-hatch-done p { margin: 0 0 8px; font-size: 13.5px; color: var(--subtext); }
+.seeker-hatch-failed { border: 1px solid var(--red-soft, var(--red)); background: var(--card); }
+.seeker-hatch-failed .seeker-hatch-outcome-title { color: var(--red-soft, var(--red)); }
+.seeker-hatch-ambiguous { border: 1px solid var(--gold); background: rgba(255, 182, 39, .08); }
+.seeker-hatch-ambiguous .seeker-hatch-outcome-title { color: var(--gold); }
+.seeker-hatch-done { border: 1px solid var(--green); background: rgba(34, 197, 94, .06); }
+.seeker-hatch-done .seeker-hatch-outcome-title { color: var(--green); }
+/* ── 2j. Airdropper ─────────────────────────────────────────────────────────────────────────
+   The one pane that moves money out in bulk, so its distinct visual job is keeping the three
+   send outcomes apart at a glance — sent / failed / UNCONFIRMED. The third is the one people
+   collapse, and it is the one that double-pays when they do (see Airdropper.jsx's header), so
+   it gets its own colour and its own alert block, not a dimmed version of "failed". */
+.seeker-drop-modes { display: flex; gap: 8px; margin: 12px 0 4px; }
+.seeker-drop-modes .seeker-btn { flex: 1; min-height: 44px; }
+.seeker-drop-mode-on { border-color: var(--orange); color: var(--orange); }
+
+.seeker-drop-textarea {
+  min-height: 132px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.seeker-drop-note {
+  font-size: 12.5px;
+  color: var(--sub);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  line-height: 1.55;
+}
+.seeker-drop-note p { margin: 0 0 4px; }
+.seeker-drop-note p:last-child { margin-bottom: 0; }
+.seeker-drop-note-warn { color: var(--gold); border-color: var(--gold); background: rgba(255, 182, 39, .08); }
+
+.seeker-drop-send { display: block; width: 100%; margin-top: 4px; }
+.seeker-drop-stop { display: block; width: 100%; margin: 12px 0; }
+
+.seeker-drop-progress { margin: 4px 0 12px; }
+.seeker-drop-progressbar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--card2, #1d1e26);
+  overflow: hidden;
+}
+.seeker-drop-progressbar span { display: block; height: 100%; background: var(--orange); transition: width .25s ease; }
+
+/* Three outcomes, three left borders — never the same treatment for two of them. */
+.seeker-drop-row-sent { border-left: 3px solid var(--green); padding-left: 10px; }
+.seeker-drop-row-failed { border-left: 3px solid var(--red-soft, var(--red)); padding-left: 10px; }
+.seeker-drop-row-unconfirmed { border-left: 3px solid var(--gold); padding-left: 10px; }
+
+.seeker-drop-unconfirmed {
+  font-size: 12.5px;
+  color: var(--gold);
+  background: rgba(255, 182, 39, .08);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 0 0 14px;
+  line-height: 1.55;
+}
+.seeker-drop-unconfirmed p { margin: 0 0 6px; }
+.seeker-drop-unconfirmed p:last-child { margin-bottom: 0; }
+

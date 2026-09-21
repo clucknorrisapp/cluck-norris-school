@@ -9,13 +9,19 @@
     "theme.css",
     "cluck-util.js",
     "cluck-wallet.js",
+    "cluck-gate.js",
     "rent-math.js",
+    "rent-reclaim-plan.js",
+    "airdrop-plan.js",
+    "airdrop-engine.js",
+    "vendor/solana-web3-1.95.8.iife.min.js",
     "i18n.js",
     "icon.svg",
     "cluck-norris.png"
   ],
   "dirs": [
-    "i18n"
+    "i18n",
+    "vendor/fonts"
   ],
   "remotes": [],
   "forbidden": [
@@ -29,8 +35,6 @@
   ],
   "allowedHosts": [
     "clucknorris.app",
-    "fonts.googleapis.com",
-    "fonts.gstatic.com",
     "www.w3.org",
     "reactjs.org",
     "phantom.app",
@@ -55,6 +59,9 @@
     "exodus.com",
     "brave.com",
     "jup.ag",
-    "www.bybit.com"
+    "www.bybit.com",
+    "solscan.io",
+    "x.com",
+    "lock.jup.ag"
   ]
 }

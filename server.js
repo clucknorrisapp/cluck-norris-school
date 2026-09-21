@@ -3854,8 +3854,16 @@ function rateLimit(bucket, { windowMs, max, message, onLimit, cors }) {
       // instead of a readable 429. Never used for the store-edition contract routes — see
       // STORE_API_RE and the store-CORS middleware above, which this is mounted after.
       if (cors) { res.setHeader("Access-Control-Allow-Origin", "*"); }
+      // `windowSec` is ADDITIVE and exists so a client never has to GUESS which limit it hit.
+      // Two limiters sit on the same AI routes — a 15/minute one and a ~150/day cap — and they
+      // answered with an identical body, so the Seeker app was inferring "retryAfterSec > 90
+      // means the daily cap". That is true today and silently wrong the moment either window is
+      // retuned. The window length is right here in scope; say it rather than make the caller
+      // reverse-engineer it. Purely additive, so the PINNED store-edition app (STORE_API_RE —
+      // its response shapes are a versioned contract) is unaffected: it ignores unknown fields.
       return res.status(429).json({ success: false, ok: false,
-        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter), retryAfter: Math.max(1, retryAfter) });
+        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter), retryAfter: Math.max(1, retryAfter),
+        windowSec: Math.round(windowMs / 1000) });
     }
     arr.push(now);
     next();
@@ -14752,8 +14760,20 @@ app.get("/api/burn-scan", async (req, res) => {
         ...a,
         symbol: p.symbol || null, name: p.name || null, logo: p.logo || null,
         priceUsd, valueUsd, priceKnown,
-        empty: a.uiAmount === 0,
-        isNft: a.decimals === 0 && a.uiAmount === 1,   // rough; NFT phase refines with mint supply
+        // ⚠️ "empty" comes from the BASE-UNIT STRING, never from uiAmount (adversarial review
+        // P1-6, 2026-09-21). `uiAmount` is `f64 | null` in the RPC schema, and `Number(null) || 0`
+        // above is 0 — so any account the node declines to ui-scale (the Token-2022
+        // withheld-transfer-fee case public/rent-reclaim-plan.js already documents by name, and
+        // fixed on that side) was classified EMPTY here. Firepit pre-selects every empty row —
+        // the only place in the app that pre-selects anything — and then tells the person "these
+        // accounts are empty, nothing of value is destroyed" over a bag that may hold a balance.
+        // The token program refuses to close a non-native account with a balance, so nothing was
+        // ever destroyed; what was wrong was the one sentence that is supposed to be
+        // load-bearing. The same rule was applied to the other half of this job and not to this
+        // one. An unreadable amount is NOT empty.
+        empty: /^[0-9]+$/.test(String(a.amountRaw)) && String(a.amountRaw) === "0",
+        // Same reason, same source: with decimals 0 a base-unit amount of "1" IS a uiAmount of 1.
+        isNft: a.decimals === 0 && String(a.amountRaw) === "1",   // rough; NFT phase refines with mint supply
       };
     });
     // Order: empty rent-only accounts first (always safe), then KNOWN values ascending. Non-empty
@@ -18007,6 +18027,17 @@ app.get("/rent-math.js", (req, res) => {
   res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.type("application/javascript");
   res.sendFile(join(__dirname, "public", "rent-math.js"));
+});
+
+// public/rent-reclaim-plan.js — Rent Reclaim SIGNING decisions (Seeker app increment 3, see that
+// file's own header and docs/SEEKER_RECLAIM_SIGNING_SPEC.md). Same no-build-boot trap and same
+// no-cache posture as rent-math.js above: with no explicit route this 404s when seeker.html is
+// served without a prior `npm run build` (the public/-is-not-mounted-directly trap CLAUDE.md
+// documents), and a safety-rule fix must reach every load, not sit behind up to 4h of caching.
+app.get("/rent-reclaim-plan.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "rent-reclaim-plan.js"));
 });
 
 // The sitewide browser runtime every page loads (the floating nav + its i18n and read-aloud

@@ -55,6 +55,14 @@ Verified in-repo, not assumed:
 device.** No session has ever exercised it. The owner has the Seeker and the Mac; that is a hard
 dependency on his time, not an optional check.
 
+> ⚠️ **SUPERSEDED IN PART, 2026-09-21.** §4 below describes a three-surface app (Rent Reclaim,
+> Ask Cluck, Wallet Checkup). The owner widened that the same night — *"I want to build all the
+> tools into the seeker app appropriately"* — and the tool surface is now the decision of record
+> in **`docs/SEEKER_TOOLS_BUILD.md`**: fifteen tools, each rebuilt phone-native, with the
+> operator/desk surfaces explicitly out of scope. Everything else in THIS file (which repo, what
+> "complete rebuild" means, the deadline, SKR, solo entry, registration mechanics) still stands.
+> Night's handoff: `docs/HANDOFF_2026-09-21_SEEKER.md`.
+
 ## 4. What the app is
 
 One thing done superbly beats five done adequately. Judged on stickiness, UX, mobile-native use and

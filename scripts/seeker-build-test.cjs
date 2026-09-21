@@ -59,12 +59,14 @@ const ROOT = path.join(__dirname, "..");
 // The curated English keys increment 1 added for the seeker shell. They must exist in all six
 // public/i18n/<lang>.json dictionaries (section f) AND must never reach a google/ios bundle
 // (section c) — store-edition.json's excludeKeys prunes them out of the education-only copy.
-const SEEKER_KEYS = [
-  "Rent Reclaim", "Connect Wallet", "Disconnect", "Coming soon", "Not connected",
-  "Find dead token accounts and reclaim the SOL locked inside them.",
-  "Ask the AI tutor anything about crypto, in plain words.",
-  "Check approvals, freeze and mint authority — read-only and free.",
-];
+// ⚠️ GENERATED, NOT KEPT BY HAND. Every string src/seeker passes to t(), extracted from the
+// source by scripts/seeker-i18n-keys.cjs. It used to be eight literals typed into this file,
+// which was fine while the app had three panes and became a lie the moment it had fifteen: the
+// list would have stayed at eight while 600 new strings shipped untranslated and unexcluded,
+// and every assertion below would have gone on passing. The extractor is the single source for
+// this test, for store-edition.json's excludeKeys (--sync-exclude), and for the translation
+// work itself (--missing <lang>).
+const SEEKER_KEYS = require(path.join(__dirname, "seeker-i18n-keys.cjs")).keys();
 // Strings that only ever exist because of the seeker variant. Generic wording ("Disconnect")
 // is deliberately NOT in here — it appears legitimately in shared code; these do not.
 const SEEKER_MARKERS = ["Rent Reclaim", "CluckMWA", "seeker-edition", "src/seeker"];
@@ -152,7 +154,18 @@ function buildVariant(cwd, variant) {
     baselineWt = fs.mkdtempSync(path.join(os.tmpdir(), "seeker-baseline-"));
     fs.rmdirSync(baselineWt);   // `git worktree add` wants to create the dir itself
     execFileSync("git", ["worktree", "add", "--detach", "--quiet", baselineWt, "origin/develop"], { cwd: ROOT, stdio: "pipe" });
-    fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(baselineWt, "node_modules"));
+    // Resolve the REAL node_modules directory via require.resolve rather than assuming
+    // path.join(ROOT, "node_modules") — this session runs from a git worktree nested under the
+    // main checkout (.claude/worktrees/<id>), which has no node_modules of its own and instead
+    // gets one for free from Node's ancestor-directory module resolution (require.resolve('vite')
+    // here resolves to the MAIN checkout's node_modules, two directories up). Symlinking
+    // path.join(ROOT, "node_modules") in that setup creates a DANGLING symlink (fs.symlinkSync
+    // never checks the target exists), which fails silently here and only surfaces later as a
+    // confusing "Cannot find module 'vite'" from inside the pristine worktree's own vite.config.js
+    // — this resolves the actual directory instead, which is a no-op on a normal checkout (where
+    // ROOT/node_modules is that same directory) and correct here too.
+    const realNodeModules = path.dirname(path.dirname(require.resolve("vite/package.json")));
+    fs.symlinkSync(realNodeModules, path.join(baselineWt, "node_modules"));
     baseline = baselineWt;
   } catch (e) {
     console.log("  · could not set up a pristine origin/develop worktree — skipping the comparison");
@@ -370,22 +383,145 @@ function buildVariant(cwd, variant) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
+  // (e2) ONE tools-pass gate, not one per tool
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // The gate shipped as three byte-identical 79-line copies (WalletXray/Holders/Trace) that
+  // differed by a single sentence, each carrying a note saying "if this drifts, extract it".
+  // It was extracted to src/seeker/passgate.jsx before it drifted — and this is what keeps it
+  // extracted, because the next tool that needs a gate will be written by copying a pane that
+  // already has one. It is a SIGNING path: CLAUDE.md's rule about private copies of shared
+  // browser modules exists because copies of exactly this kind drifted into real bugs.
+  //
+  // Asserted on the SOURCE, because that is where a second copy would appear; the bundle-level
+  // half (the gate is really enforced at runtime) is section F of seeker-app-boot-test.cjs.
+  // Source scanning and rendered measurement have complementary blind spots — run both.
+  console.log("\n(e2) one tools-pass gate for the whole app\n");
+  {
+    const gateFile = path.join(ROOT, "src", "seeker", "passgate.jsx");
+    ok("the gate lives in src/seeker/passgate.jsx", fs.existsSync(gateFile));
+    const panes = fs.readdirSync(path.join(ROOT, "src", "seeker", "tools")).filter((f) => f.endsWith(".jsx"));
+    const redefiners = panes.filter((f) => {
+      const t = fs.readFileSync(path.join(ROOT, "src", "seeker", "tools", f), "utf8");
+      // Any form of a second definition — `function PassGate(`, `const PassGate =`, and the two
+      // helpers it owns. Checking one spelling is how the esc() migration missed six copies.
+      return /(^|\n)\s*(export\s+)?(async\s+)?function\s+(PassGate|gatedToolFetch|passGateWindow)\s*\(/.test(t) ||
+             /(^|\n)\s*(export\s+)?(const|let|var)\s+(PassGate|gatedToolFetch|passGateWindow)\s*=/.test(t);
+    });
+    ok("no pane defines its own PassGate / gatedToolFetch / passGateWindow", redefiners.length === 0, redefiners.join(", "));
+    const users = panes.filter((f) => /<PassGate[\s>]/.test(fs.readFileSync(path.join(ROOT, "src", "seeker", "tools", f), "utf8")));
+    ok("the panes that gate do import it from there", users.length > 0 && users.every((f) =>
+      /from "\.\.\/passgate\.jsx"/.test(fs.readFileSync(path.join(ROOT, "src", "seeker", "tools", f), "utf8"))), users.join(", "));
+    // Every gating pane must name a tool the sheet has a sentence for — a typo'd id would
+    // silently fall back to the generic line, which reads fine and says less than it should.
+    const gate = fs.readFileSync(gateFile, "utf8");
+    const known = new Set([...gate.matchAll(/^\s{2}([a-z]+):\s*"/gm)].map((m) => m[1]));
+    const unknown = [];
+    for (const f of users) {
+      const t = fs.readFileSync(path.join(ROOT, "src", "seeker", "tools", f), "utf8");
+      for (const m of t.matchAll(/<PassGate[^>]*\btool="([^"]+)"/g)) if (!known.has(m[1])) unknown.push(`${f}:${m[1]}`);
+    }
+    ok("every gating pane names a tool the sheet has a sentence for", unknown.length === 0, unknown.join(", "));
+
+    // ── and ONE signing seam, for the same reason ──────────────────────────────────────────
+    // src/seeker/sign.js carries four protections, and the first of them — checking `err` before
+    // `confirmationStatus` — shipped WRONG in two copy-pasted places at once and was found by two
+    // independent reviewers on the same day. Five panes now sign; none of them may grow a sixth
+    // copy. Asserted as: no pane and no other app file calls getSignatureStatuses or
+    // sendTransaction directly, and nothing re-declares the seam's exported names.
+    //
+    // public/airdrop-engine.js is deliberately NOT in scope: it is the platform's shared engine,
+    // loaded by the live website and the store bundles as well as this app, and it carries its
+    // own hardened copy with the same fix and the same comment. Rewriting a live money path to
+    // import an app-local ESM module is not a change to slip into an app build.
+    const appFiles = [];
+    (function walk(dir) {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fp = path.join(dir, e.name);
+        if (e.isDirectory()) walk(fp);
+        // Two files may talk to the chain directly, and only these two:
+        //   sign.js        — the seam itself.
+        //   reclaim-sign.js — Rent Reclaim signs MANY batches in ONE wallet prompt
+        //                     (signAllTransactions), a genuinely different shape from the seam's
+        //                     one-transaction flow. It is exempt from the raw-RPC rule and NOT
+        //                     from the rest: the assertion below pins that it imports the seam's
+        //                     protections instead of keeping the copies it used to define.
+        else if (/\.(jsx?|mjs)$/.test(e.name)
+                 && fp !== path.join(ROOT, "src", "seeker", "sign.js")
+                 && fp !== path.join(ROOT, "src", "seeker", "reclaim-sign.js")) appFiles.push(fp);
+      }
+    })(path.join(ROOT, "src", "seeker"));
+    const raw = [], redeclared = [];
+    for (const fp of appFiles) {
+      const t = fs.readFileSync(fp, "utf8")
+        // Comments name these on purpose — they are the record of why the seam exists.
+        .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      const rel = path.relative(ROOT, fp);
+      if (/["'`]getSignatureStatuses["'`]|["'`]sendTransaction["'`]/.test(t)) raw.push(rel);
+      if (/(^|\n)\s*(export\s+)?(async\s+)?function\s+(confirmSignature|isUserRejection|signSendConfirm|assertSameAccount)\s*\(/.test(t) ||
+          /(^|\n)\s*(export\s+)?(const|let|var)\s+(confirmSignature|isUserRejection|signSendConfirm|assertSameAccount)\s*=/.test(t)) redeclared.push(rel);
+    }
+    ok("only the seam (and Rent Reclaim's batch path) talks to getSignatureStatuses / sendTransaction", raw.length === 0, raw.join(", "));
+    {
+      // The exemption is for the RPC call, not for the protections. reclaim-sign.js used to
+      // DEFINE confirmSignature and isUserRejection — that is where one half of the P0 lived.
+      const rs = fs.readFileSync(path.join(ROOT, "src", "seeker", "reclaim-sign.js"), "utf8");
+      ok("reclaim-sign.js gets its protections FROM the seam, not from copies of its own",
+         /from "\.\/sign\.js"/.test(rs) && !/^\s*export async function confirmSignature\(/m.test(rs)
+           && !/^\s*export function isUserRejection\(/m.test(rs),
+         "reclaim-sign.js still defines its own confirmSignature/isUserRejection");
+      ok("and its batch path still diffs the wallet's returned message bytes",
+         /if \(!sameBytes\(messageBytes\(txs\[i\]\), messageBytes\(realTx\)\)\)/.test(rs));
+    }
+    ok("no file re-declares confirmSignature / isUserRejection / signSendConfirm / assertSameAccount", redeclared.length === 0, redeclared.join(", "));
+    // The ordering itself, positively: a negative regex would pass against the broken code.
+    {
+      const seam = fs.readFileSync(path.join(ROOT, "src", "seeker", "sign.js"), "utf8");
+      const iErr = seam.indexOf("if (st && st.err) throw new Error");
+      const iStatus = seam.indexOf('if (st && (st.confirmationStatus === "confirmed"');
+      ok("⚠️ sign.js checks st.err BEFORE st.confirmationStatus — the P0 that shipped twice",
+         iErr > 0 && iStatus > iErr, `err@${iErr} status@${iStatus}`);
+      ok("and an RPC read failure keeps polling rather than reporting a failure that did not happen",
+         /catch \(_\) \{\s*\n(\s*\/\/.*\n)*\s*continue;/.test(seam));
+      ok("sign.js re-reads the LIVE public key before anything is built for signing",
+         /export function assertSameAccount\(/.test(seam) && /live !== expected/.test(seam));
+      ok("and diffs the wallet's returned message bytes against what it built",
+         /if \(!sameBytes\(messageBytes\(tx\), messageBytes\(realTx\)\)\)/.test(seam));
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
   // (f) i18n
   // ══════════════════════════════════════════════════════════════════════════════════════════
-  console.log("\n(f) i18n — the 8 new keys, all six dictionaries, and the audit itself\n");
+  console.log(`\n(f) i18n — every one of the app's ${SEEKER_KEYS.length} strings, in all six dictionaries\n`);
   const NEW_KEYS = SEEKER_KEYS;
+  // ⚠️ The school ships in SEVEN languages (AGENTS.md) and this app is part of it. An English-only
+  // app beside a seven-language school is not a smaller version of the same product — it is a
+  // different one for everybody who does not read English. Asserted against the GENERATED key
+  // list, so a new pane's copy fails here until it is translated, instead of shipping in English
+  // and being noticed by a user.
   for (const lang of ["es", "zh", "hi", "it", "pt", "vi"]) {
     const dict = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${lang}.json`), "utf8"));
     const missing = NEW_KEYS.filter((k) => !Object.prototype.hasOwnProperty.call(dict, k));
-    ok(`${lang}.json carries all 8 new keys`, missing.length === 0, missing);
+    ok(`${lang}.json carries all ${NEW_KEYS.length} of the app's strings`, missing.length === 0,
+       `${missing.length} missing, e.g. ${JSON.stringify(missing.slice(0, 3))} — run: node scripts/seeker-i18n-keys.cjs --missing ${lang}`);
   }
+  // ⚠️ public/i18n/en.json MUST NOT EXIST. English is the key text; an en.json would make every
+  // key look translated and silently disarm the six checks above. Two builders proposed creating
+  // one on the same day, independently, which is why it is asserted rather than remembered.
+  ok("public/i18n/en.json does not exist (English IS the key text)",
+     !fs.existsSync(path.join(ROOT, "public", "i18n", "en.json")));
   // the SAME 8 keys must NOT reach the google/ios bundle (excludeKeys prune) — the pristine
   // baseline comparison above already proves this at the byte level when it can run; this checks
   // it directly too, so the assertion still means something even when that comparison is skipped.
   {
     const seekerCfg = JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "store-edition.json"), "utf8"));
-    const missing = NEW_KEYS.filter((k) => !(seekerCfg.excludeKeys || []).includes(k));
-    ok("store-edition.json excludes every new seeker key from the google/ios dictionary copy", missing.length === 0, missing);
+    const ex = new Set(seekerCfg.excludeKeys || []);
+    const missing = NEW_KEYS.filter((k) => !ex.has(k));
+    // The store bundles are a PINNED, EDUCATION-ONLY edition: no wallet, no payments, no address
+    // (docs/STORE_EDITION.md). Almost all of this app's copy is wallet, signing and payment text,
+    // and the dictionaries are shared — so every key has to be pruned by name from that copy.
+    ok("store-edition.json excludes every one of the app's keys from the google/ios dictionary copy",
+       missing.length === 0, `${missing.length} not excluded — run: node scripts/seeker-i18n-keys.cjs --sync-exclude`);
   }
   try {
     execFileSync(process.execPath, [path.join(ROOT, "scripts", "i18n-audit.cjs")], { cwd: ROOT, stdio: "pipe" });
@@ -454,18 +590,27 @@ async function renderedCheck(pw) {
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle", timeout: 20000 });
     await page.waitForFunction(() => !!(window.CluckWallet && document.querySelector(".seeker-nav")), null, { timeout: 15000 });
 
-    ok("rendered: default route redirects to #/rent", (await page.evaluate(() => location.hash)) === "#/rent");
+    // The toolkit grid is the app's front door now (docs/SEEKER_TOOLS_BUILD.md — owner, 2026-09-21:
+    // "build all the tools into the seeker app appropriately"), with four bottom-nav tabs
+    // (Toolkit, Rent, Ask, Checkup) instead of the original three landing on Rent Reclaim.
+    ok("rendered: default route redirects to #/tools (the toolkit grid, the new front door)", (await page.evaluate(() => location.hash)) === "#/tools");
     const navCount = await page.locator(".seeker-navbtn").count();
-    ok("rendered: three bottom-nav tabs", navCount === 3, navCount);
+    ok("rendered: four bottom-nav tabs", navCount === 4, navCount);
     const boxes = await page.locator(".seeker-navbtn").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()));
     ok("rendered: every nav tab is actually >=44x44 on screen", boxes.every((b) => b.width >= 44 && b.height >= 44), JSON.stringify(boxes));
     const walletBox = await page.locator(".seeker-walletbtn").boundingBox();
     ok("rendered: the wallet button is actually >=44x44 on screen", !!walletBox && walletBox.width >= 44 && walletBox.height >= 44, JSON.stringify(walletBox));
 
-    await page.locator(".seeker-navbtn", { hasText: "Ask Cluck" }).click();
+    // Nav labels are now short single words (Toolkit/Rent/Ask/Checkup, App.jsx's TABS) rather than
+    // full tool names — click by the tab's own hash href, which is stable regardless of label text.
+    await page.locator('.seeker-navbtn[href="#/ask"]').click();
     await page.waitForTimeout(150);
     ok("rendered: tapping a nav tab changes the hash (client-side route, no reload)", (await page.evaluate(() => location.hash)) === "#/ask");
-    ok("rendered: the Ask Cluck pane is now showing", /Ask Cluck/.test(await page.locator(".seeker-pane h1").innerText()));
+    // Ask Cluck is real content as of increment 3 (AskCluck.jsx), not the placeholder <Pane> —
+    // its own title class, not the shared .seeker-pane the other still-placeholder tab uses.
+    ok("rendered: the Ask Cluck pane is now showing", /Ask Cluck/.test(await page.locator(".seeker-ask-title").innerText()));
+    const starterBox = await page.locator(".seeker-ask-starter").first().boundingBox();
+    ok("rendered: an Ask Cluck starter prompt is actually >=44px tall on screen", !!starterBox && starterBox.height >= 44, JSON.stringify(starterBox));
 
     await page.locator(".seeker-walletbtn").click();
     // Generous timeout: this runs after two vite builds + a dozen vm-sandbox checks earlier in
