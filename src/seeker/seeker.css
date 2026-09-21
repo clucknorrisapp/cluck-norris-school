@@ -157,9 +157,10 @@ html, body {
   .seeker-main { max-width: 480px; margin: 0 auto; }
 }
 
-/* ── Rent Reclaim (increment 2) — the one pane with real content, so it drops the centered
-   .seeker-pane layout for a normal top-aligned scrolling list. Every interactive control here
-   (.seeker-reclaim-btn, .seeker-reclaim-retrybtn) still meets the >=44px tap-target floor. ── */
+/* ── Rent Reclaim (increment 2 = read side, increment 3 = signing) — the one pane with real
+   content, so it drops the centered .seeker-pane layout for a normal top-aligned scrolling list.
+   Every interactive control here (.seeker-reclaim-btn, .seeker-reclaim-retrybtn, the confirm
+   sheet's two buttons, the per-result signature link) meets the >=44px tap-target floor. ── */
 .seeker-reclaim {
   max-width: 480px;
   margin: 0 auto;
@@ -202,20 +203,29 @@ html, body {
   text-align: center;
   margin: 0 0 10px;
 }
-/* Disabled — signing ships in the next build. Neutral grey, never dimmed orange (CLAUDE.md: a
-   faded accent-color gradient on dark reads as broken, not "not yet"). */
+/* Increment 3: enabled whenever there is something reclaimable, same outline style as the wallet
+   connect button (.seeker-walletbtn) elsewhere in this shell. Disabled (nothing to reclaim, or a
+   sign is already in flight) goes neutral grey, never dimmed orange — CLAUDE.md: a faded
+   accent-color gradient on dark reads as broken, not "not yet". */
 .seeker-reclaim-btn {
   display: block;
   width: 100%;
   min-height: 48px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--card2, #1d1e26);
-  color: var(--muted);
+  border: 1px solid var(--orange);
+  background: transparent;
+  color: var(--orange);
   font-family: var(--disp);
   font-size: 14px;
   letter-spacing: 1px;
   text-transform: uppercase;
+  cursor: pointer;
+}
+.seeker-reclaim-btn:active { background: rgba(255, 122, 24, .12); }
+.seeker-reclaim-btn:disabled {
+  border-color: var(--border);
+  background: var(--card2, #1d1e26);
+  color: var(--muted);
   cursor: not-allowed;
 }
 .seeker-reclaim-btnnote {
@@ -223,6 +233,100 @@ html, body {
   color: var(--sub);
   text-align: center;
   margin: 6px 0 18px;
+}
+
+/* Confirm sheet — the pre-signature step every reclaim gets (spec Rule 5). A plain in-flow card,
+   not a full overlay: this shell has no modal/portal infrastructure yet and the sheet already
+   replaces the Reclaim button in place, so it can't be missed or ignored underneath it. */
+.seeker-reclaim-confirm {
+  background: var(--card);
+  border: 1px solid var(--orange);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 10px;
+}
+.seeker-reclaim-confirm-title {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 16px;
+  color: var(--text);
+  margin: 0 0 12px;
+  text-align: center;
+}
+.seeker-reclaim-confirm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13.5px;
+  color: var(--sub);
+  margin-bottom: 8px;
+}
+.seeker-reclaim-confirm-row strong {
+  font-family: var(--mono);
+  font-size: 15px;
+  color: var(--text);
+}
+.seeker-reclaim-confirm-note {
+  font-size: 12px;
+  color: var(--sub);
+  margin: 8px 0 14px;
+}
+.seeker-reclaim-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+.seeker-reclaim-confirm-cancel,
+.seeker-reclaim-confirm-go {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 10px;
+  font-family: var(--disp);
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.seeker-reclaim-confirm-cancel {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--sub);
+}
+.seeker-reclaim-confirm-go {
+  border: 1px solid var(--orange);
+  background: transparent;
+  color: var(--orange);
+}
+.seeker-reclaim-confirm-go:disabled,
+.seeker-reclaim-confirm-cancel:disabled { color: var(--muted); border-color: var(--border); cursor: not-allowed; }
+
+.seeker-reclaim-declinedtext {
+  font-size: 13px;
+  color: var(--sub);
+  text-align: center;
+  margin: 6px 0 14px;
+}
+
+/* Result rows (per-account outcome after a sign, spec §4): same card shape as the scan rows, one
+   border-left color per outcome — vocabulary stays closed/reclaimed/refused, never "verified" or
+   "safe" about any token. */
+.seeker-reclaim-resultrow-confirmed { border-left-color: var(--green); }
+.seeker-reclaim-resultrow-failed { border-left-color: var(--red); }
+.seeker-reclaim-resultrow-skipped { border-left-color: var(--gold); }
+.seeker-reclaim-resultrow-rejected { border-left-color: var(--sub); }
+.seeker-reclaim-row-outcome {
+  font-family: var(--disp);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.seeker-reclaim-siglink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--orange);
+  text-decoration: none;
 }
 .seeker-reclaim-group { margin-bottom: 16px; }
 .seeker-reclaim-group-title {

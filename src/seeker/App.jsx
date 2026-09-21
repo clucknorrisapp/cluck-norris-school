@@ -21,21 +21,26 @@ import RentReclaimPane from "./RentReclaim.jsx";
 // the one control surface, so both live in the same place with the provider's own disconnect()
 // called and local state cleared either way.
 function useWallet() {
-  const [state, setState] = React.useState({ connected: false, address: null, name: null, error: null });
+  // `provider` is kept here (not just address/name) because increment 3 (Rent Reclaim signing,
+  // src/seeker/reclaim-sign.js) needs the CONNECTED wallet's own provider object to ask for a
+  // signature — it must come from this live connection, never be re-derived or looked up by
+  // address, per docs/SEEKER_RECLAIM_SIGNING_SPEC.md's "destination is always the connected
+  // wallet" rule.
+  const [state, setState] = React.useState({ connected: false, address: null, name: null, provider: null, error: null });
   const connect = React.useCallback(async () => {
     setState((s) => ({ ...s, error: null }));
     try {
       const CW = typeof window !== "undefined" && window.CluckWallet;
       if (!CW) throw new Error("Wallet layer did not load.");
       const r = await CW.connect();
-      setState({ connected: true, address: r.pubkey, name: r.name, error: null });
+      setState({ connected: true, address: r.pubkey, name: r.name, provider: r.provider, error: null });
     } catch (e) {
       setState((s) => ({ ...s, error: (e && e.message) || String(e) }));
     }
   }, []);
   const disconnect = React.useCallback(() => {
     try { window.CluckWallet && window.CluckWallet.disconnect(); } catch (_) {}
-    setState({ connected: false, address: null, name: null, error: null });
+    setState({ connected: false, address: null, name: null, provider: null, error: null });
   }, []);
   return { ...state, connect, disconnect };
 }
