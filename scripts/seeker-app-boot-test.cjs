@@ -1062,6 +1062,131 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await ctx.close();
   }
 
+  // ---- M: Project Burn never arms on a number it could not read --------------------------
+  //
+  // The other half of P2-9: Project Burn signs, and had no behavioural test beyond "it mounts".
+  //
+  // `/api/burn-token-info` swallows a failed getTokenAccountsByOwner and answers 200 with
+  // `walletBalance: null`. The pane's `overBalance` is guarded on `balance != null`, so it was
+  // false; `canBurn` never required a known balance; and the card showed "Your balance: Unknown"
+  // above a live amount field and a live, armed Burn button. Tapping it re-read, got null again,
+  // and printed "Your balance changed since this page loaded" — a claim about someone's wallet
+  // the app has no basis for. Two separate facts, and the app asserted the wrong one.
+  {
+    const MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+    const INFO = (walletBalance) => ({
+      success: true, mint: MINT, name: "Cluck Norris", symbol: "CLKN", decimals: 6,
+      supply: "1000000000000000", walletBalance,
+      walletBalanceRaw: walletBalance == null ? null : String(Math.round(walletBalance * 1e6)),
+      mintAuthority: null, freezeAuthority: null, priceUsd: null,
+    });
+
+    for (const [label, balance, wantArmed] of [
+      ["an UNREADABLE balance", null, false],
+      ["a readable balance", 1000, true],
+    ]) {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+      const page = await ctx.newPage();
+      const errors = [];
+      page.on("pageerror", (e) => errors.push(e.message));
+      await page.route("**/api/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "{}" }));
+      await page.route("**/api/burn-token-info*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(INFO(balance)) }));
+      await page.addInitScript(FAKE);
+      await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+      await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+      await page.waitForTimeout(400);
+      await page.click(".seeker-walletbtn");
+      await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      await page.evaluate(() => { window.location.hash = "#/tools/burn"; });
+      await page.waitForTimeout(400);
+      await page.fill("#pb-mint", MINT);
+      await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll("button")).find((x) => /load token/i.test(x.innerText.trim()));
+        b && b.click();
+      });
+      const loaded = await page.waitForFunction(() => !!document.querySelector("#pb-amount"), null, { timeout: 15000 })
+        .then(() => true).catch(() => false);
+      ok(`M · ${label} — the token card loads`, loaded, await text(page).then((b) => b.slice(0, 300)));
+
+      if (loaded) {
+        await page.fill("#pb-amount", "1");
+        await page.waitForTimeout(200);
+        const armed = await page.evaluate(() => {
+          const b = Array.from(document.querySelectorAll("button")).find((x) => /^burn$/i.test(x.innerText.trim()));
+          return b ? !b.disabled : null;
+        });
+        ok(`M · ⚠️ ${label} — the Burn button is ${wantArmed ? "armed" : "NOT armed"}`,
+           armed === wantArmed, `armed=${armed}`);
+
+        if (!wantArmed) {
+          // And the screen must not blame them for it. "Unknown" is honest; "your balance
+          // changed" is a claim about their wallet we cannot support.
+          const body = await text(page);
+          ok("M · ⚠️ and it never says their balance CHANGED — only that it could not be read",
+             !/balance changed/i.test(body), body.slice(0, 400));
+        }
+      }
+      ok(`M · ${label} — no uncaught exception`, errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+  }
+
+  // ---- N: the Hatchery says the upload is permanent BEFORE it happens --------------------
+  //
+  // The last of P2-9, and the one with the least forgiving consequence. "Review mint" sounds like
+  // a preview, and the screen it leads to has a "Start over" button — so everything about the
+  // step said nothing had happened yet. It is not a preview: /api/hatchery/build uploads the logo
+  // AND the name, symbol and description to Arweave as the FIRST thing it does, before it builds
+  // anything. That upload is permanent and public, and backing out does not remove it. The pane's
+  // own header recorded that /build is "a REAL, permanent action" and the UI never passed it on.
+  //
+  // Two assertions, and the second is the one that matters: the warning is on screen BEFORE the
+  // button, and /build is not called until the button is tapped. A warning that appears in the
+  // spinner afterwards is not a guardrail.
+  {
+    let buildCalls = 0;
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.route("**/api/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "{}" }));
+    await page.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json",
+      body: JSON.stringify({ success: true, feeWaived: false, solEnabled: true, clknEnabled: false, feeLamports: 50000000, feeSol: 0.05 }) }));
+    await page.route("**/api/hatchery/build*", (r) => { buildCalls++; r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "not part of this test" }) }); });
+    await page.addInitScript(FAKE);
+    await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+    await page.waitForTimeout(400);
+    await page.click(".seeker-walletbtn");
+    await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+    await page.evaluate(() => { window.location.hash = "#/tools/hatchery"; });
+    await page.waitForTimeout(600);
+
+    const onForm = await page.waitForFunction(() => !!document.querySelector("#hatch-name"), null, { timeout: 15000 })
+      .then(() => true).catch(() => false);
+    ok("N · the mint form renders", onForm, await text(page).then((b) => b.slice(0, 300)));
+
+    if (onForm) {
+      const body = await text(page);
+      ok("N · ⚠️ the form says the upload is permanent and public, in plain words",
+         /permanently and publicly/i.test(body), body.slice(0, 600));
+      ok("N · ⚠️ and that backing out afterwards does not undo it",
+         /can't be deleted|cannot be deleted/i.test(body), body.slice(0, 600));
+      // The warning has to be ABOVE the button, not below it — on a phone, below the fold is the
+      // same as absent.
+      const order = await page.evaluate(() => {
+        const note = document.querySelector(".seeker-hatch-permanentnote");
+        const btn = Array.from(document.querySelectorAll("button")).find((x) => /review mint/i.test(x.innerText.trim()));
+        if (!note || !btn) return null;
+        return note.compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING ? "warning-first" : "button-first";
+      });
+      ok("N · ⚠️ the warning comes BEFORE the button, not after it", order === "warning-first", `order=${order}`);
+      ok("N · ⚠️ and NOTHING has been uploaded just by opening the form", buildCalls === 0, `build called ${buildCalls}x`);
+    }
+    ok("N · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+    await ctx.close();
+  }
+
   // ---- I: it is not an English-only app -------------------------------------------------
   //
   // The school ships in SEVEN languages (AGENTS.md), and this app is part of the school. An

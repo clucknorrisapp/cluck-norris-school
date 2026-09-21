@@ -257,6 +257,17 @@ before any of this touches real money.
      the fee payer, the escrow key the second signer.
   3. One two-batch airdrop to two throwaway wallets, and check the public receipt lists exactly
      the confirmed rows.
+- **Add a fourth, after the money review:** one SOL drop to two throwaway wallets, and check the
+  receipt records it at all. That path was dead — it died on "bad mint" for every native drop,
+  deterministically — and its verification is now lamport deltas rather than token balances. The
+  fixtures agree; a real transaction has not.
+
+### What still has no behavioural test
+
+Boot sections now cover the Airdropper (G, J), the Locker Room (H, J), Rent Reclaim (I) and
+Firepit (L). **Project Burn and the Hatchery still have only section B — "it mounts".** Both sign.
+The Hatchery in particular publishes to Arweave, permanently and publicly, and nothing tests that
+path at all. That is the top of the next test pass, and the burn review names it (P2-9).
 
 ---
 
