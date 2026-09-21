@@ -2823,5 +2823,6 @@
   "Retake the quiz": "Làm lại bài kiểm tra",
   "You got {score} of {total}. You need {need} to pass.": "Bạn đúng {score} trên {total} câu. Cần {need} câu để đạt.",
   "You've finished every lesson in the app. Your progress is kept on this phone — the diploma is claimed on clucknorris.app, and it counts the lessons you take there.": "Bạn đã hoàn thành mọi bài học trong ứng dụng. Tiến độ được lưu trên điện thoại này — bằng tốt nghiệp được nhận tại clucknorris.app, và trang đó tính những bài học bạn làm trên chính nó.",
-  "{total} questions. {need} right to pass — retake it as often as you like.": "{total} câu hỏi. Đúng {need} câu là đạt — bạn có thể làm lại bao nhiêu lần tuỳ thích."
+  "{total} questions. {need} right to pass — retake it as often as you like.": "{total} câu hỏi. Đúng {need} câu là đạt — bạn có thể làm lại bao nhiêu lần tuỳ thích.",
+  "Progress here stays on this phone. The diploma is claimed on clucknorris.app.": "Tiến độ được lưu trên điện thoại này. Bằng tốt nghiệp được nhận tại clucknorris.app."
 }

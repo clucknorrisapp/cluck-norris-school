@@ -29,7 +29,7 @@
 
 import React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { t, tf } from "../i18n.js";
+import { t, tf, tBlock } from "../i18n.js";
 import { track } from "../../track.js";
 import {
   COURSES, TOTAL_LESSONS, courseById, lessonById,
@@ -57,11 +57,19 @@ function Bar({ done, total }) {
 // Lesson prose arrives as plain text with blank-line paragraph breaks and single newlines that
 // are meaningful (bulleted runs, worked examples). Split on the blanks, keep the singles with
 // `white-space: pre-line` in CSS — the desktop lab renders it exactly this way.
+//
+// ⚠️ TRANSLATE THE WHOLE BLOCK FIRST, THEN SPLIT. The curated dictionary keys a section by its
+// entire body (whitespace-collapsed) and its translation keeps the paragraph breaks — see
+// tBlock() in ../i18n.js. Splitting the English first and rendering paragraphs left the body
+// in English under a translated heading for every LP Lab and Deep Dive lesson (Codex, PR #390).
+// A curated hit is marked `data-i18n-skip` so the page observer does not send the Spanish off
+// for machine translation.
 function Prose({ text, className }) {
-  const paras = String(text || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const { text: body, translated } = tBlock(text);
+  const paras = String(body || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   if (!paras.length) return null;
   return (
-    <div className={className}>
+    <div className={className} data-i18n-skip={translated ? "1" : undefined}>
       {paras.map((p, i) => <p key={i}>{p}</p>)}
     </div>
   );
@@ -88,6 +96,11 @@ export function SchoolHome() {
           <span className="seeker-school-overall-n">{doneCount} / {TOTAL_LESSONS}</span>
         </div>
         <Bar done={doneCount} total={TOTAL_LESSONS} />
+        {/* Said HERE, before anyone finishes, not only on the finished screen (Codex, PR #390):
+            the phone's progress does not reach the diploma — docs/SEEKER_TRANSCRIPT_HANDOFF.md. */}
+        <p className="seeker-school-overall-note">
+          {t("Progress here stays on this phone. The diploma is claimed on clucknorris.app.")}
+        </p>
       </div>
 
       {next ? (

@@ -2823,5 +2823,6 @@
   "Retake the quiz": "Repetir el cuestionario",
   "You got {score} of {total}. You need {need} to pass.": "Acertaste {score} de {total}. Necesitas {need} para aprobar.",
   "You've finished every lesson in the app. Your progress is kept on this phone — the diploma is claimed on clucknorris.app, and it counts the lessons you take there.": "Has terminado todas las lecciones de la app. Tu progreso se guarda en este teléfono: el diploma se reclama en clucknorris.app, y allí cuentan las lecciones que hagas en esa web.",
-  "{total} questions. {need} right to pass — retake it as often as you like.": "{total} preguntas. {need} aciertos para aprobar; puedes repetirlo las veces que quieras."
+  "{total} questions. {need} right to pass — retake it as often as you like.": "{total} preguntas. {need} aciertos para aprobar; puedes repetirlo las veces que quieras.",
+  "Progress here stays on this phone. The diploma is claimed on clucknorris.app.": "El progreso se guarda en este teléfono. El diploma se reclama en clucknorris.app."
 }

@@ -107,5 +107,62 @@ refuse(
   "The threshold is live-priced from /api/tool-gate/config; a fixed figure goes stale."
 );
 
+
+// ── The DAILY BRIEF — both the prompt and the path the prompt cannot protect ──────────────────
+//
+// cluckBrief() builds a data summary (alphaDataSummary) and asks the model to write from it. If
+// the AI call fails, or there is no API key, it returns the RAW SUMMARY to the reader instead —
+// the brand's daily post, verbatim, with no model in between. So an instruction in the prompt
+// ("never call anything a yield") protects only the happy path; the summary itself has to be
+// clean. Codex reproduced the fallback carrying "%/day fee yield" on PR #390 with a simulated
+// request failure. The same review caught the relabel calling a SEVEN-DAY average "last 24h".
+// The fix is that no fee-ratio figure reaches the summary at all; this pins that on both paths.
+{
+  const fnStart = src.indexOf("function alphaDataSummary(");
+  // `async function` — a bare "function cluckBrief(" anchor sliced nothing and the first run
+  // reported the fallback clean on an empty string. Anchor on the real declaration.
+  const fnEnd = src.indexOf("\nasync function cluckBrief(", fnStart);
+  const cbEnd = src.indexOf("\nlet _alphaInFlight", fnEnd);
+  const summaryFn = fnStart > 0 && fnEnd > fnStart ? src.slice(fnStart, fnEnd) : "";
+  const briefFn = fnEnd > 0 && cbEnd > fnEnd ? src.slice(fnEnd, cbEnd) : "";
+  // Only the STRINGS the code emits — comments explain history and are allowed to name the words.
+  const strip = (x) => x.split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
+  const emittedSummary = strip(summaryFn);   // what the FALLBACK publishes verbatim
+  const emittedBrief = strip(briefFn);       // the prompt + the fallback wrappers
+  // ⚠️ The prompt's PROHIBITION names the words ("NEVER call a pool blue-chip … never present
+  // any pool as a pick"). A bare word-refusal on the prompt fails on the sentence that forbids
+  // the thing — the first run of this did exactly that. So the summary is held to the bare words
+  // and the prompt only to AFFIRMATIVE constructions.
+  function refuseIn(name, re, why, scope) {
+    const hit = re.exec(scope || emittedSummary);
+    const ok = !hit;
+    if (!ok) failures++;
+    console.log(`  ${ok ? "✓" : "✗"} ${name}`);
+    if (!ok) console.log(`      found: ${JSON.stringify(hit[0].slice(0, 120))}\n      why:   ${why}`);
+  }
+  console.log("\n  daily brief — the data summary the FALLBACK path publishes verbatim:");
+  const found = summaryFn.length > 200 && briefFn.length > 200;
+  if (!found) failures++;
+  console.log(`  ${found ? "✓" : "✗"} alphaDataSummary() and cluckBrief() were both located in server.js`);
+  refuseIn("the summary carries NO per-day fee ratio (\"%/day\")", /%\/day/i,
+           "a fee ratio printed beside a pool is a yield claim the fallback path publishes with no model to soften it");
+  refuseIn("the summary never says \"yield\" (the prompt's prohibition cannot reach the fallback)", /\byield/i,
+           "AGENTS.md: never a yield figure we do not pay");
+  refuseIn("the summary never says \"blue-chip\"", /blue[- ]?chip/i,
+           "a safety verdict on tokens, forbidden outright");
+  refuseIn("the summary has no \"picks\" line — a scanner ranking presented as picks is a recommendation", /\bpicks?\b/i,
+           "say what's on-chain, never why");
+  refuseIn("the prompt never ASKS for blue-chip anything (\"our blue-chip\", \"blue-chip LP\")", /(our|the|any) blue[- ]?chip|blue[- ]?chip (lp|pool|pick|yield)/i,
+           "the prohibition may name the word; an instruction to produce it may not", emittedBrief);
+  refuseIn("the prompt never ASKS for picks (\"yield picks\", \"our picks\", \"LP picks\")", /(yield|our|lp|top) picks?\b/i,
+           "same — forbid, never request", emittedBrief);
+  refuseIn("the prompt never carries a per-day figure", /%\/day/i, "a yield claim in the model's own instructions", emittedBrief);
+  refuseIn("no \"last 24h\" label on a figure that is a seven-day average", /last 24h fees/i,
+           "feeYield7dPctDay is a 7-day average volume figure; the first relabel got the period wrong (Codex)");
+  const promptOk = /never quote, estimate or imply a yield, a return, an APR/.test(briefFn);
+  if (!promptOk) failures++;
+  console.log(`  ${promptOk ? "✓" : "✗"} the brief's prompt forbids quoting or implying a yield, return or APR`);
+}
+
 console.log(failures === 0 ? "\nall passed\n" : `\n${failures} FAILING\n`);
 process.exit(failures === 0 ? 0 : 1);

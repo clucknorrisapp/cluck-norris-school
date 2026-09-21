@@ -5110,14 +5110,17 @@ function alphaDataSummary(d) {
   if (d.trending.length) lines.push("TRENDING ON SOLANA (GeckoTerminal): " + d.trending.map((t) => `${t.sym}${t.chg != null ? " " + pct(t.chg) : ""}`).join(", "));
   if (d.gainers.length) lines.push("TOP SOLANA MOVERS ↑ (24h): " + d.gainers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
   if (d.losers.length) lines.push("TOP SOLANA MOVERS ↓ (24h): " + d.losers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
-  if (d.hotPools.length) lines.push("HOTTEST SOLANA POOLS (by volume): " + d.hotPools.map((p) => `${p.pair} on ${p.dex} ($${Math.round(p.vol / 1000)}K 24h vol${p.yieldPct != null ? ", " + p.yieldPct + "%/day fee yield" : ""}${p.risk === "high" ? ", HIGH IL risk" : ""})`).join("; "));
+  // ⚠️ NO FEE-RATIO FIGURE IN THE BRIEF, in either the hot-pools line or the (deleted) "picks"
+  // line. Three reasons, each found separately: "blue-chip"/"picks" is a verdict and a
+  // recommendation (AGENTS.md forbids both); the preferred figure is feeYield7dPctDay — a
+  // SEVEN-DAY average — and the first relabel called it "last 24h", which was simply wrong
+  // (Codex, PR #390); and the prompt cannot protect the FALLBACK path — cluckBrief() returns this
+  // raw summary when the AI call fails, so an instruction to the model never reaches the reader
+  // there. The only wording that survives both paths is the wording that is not here. The
+  // scanner's own pages (/lp-scanner, /alpha) still carry the figure with its period; this is
+  // the brand's daily post and it does not.
+  if (d.hotPools.length) lines.push("BUSIEST SOLANA POOLS (by 24h volume): " + d.hotPools.map((p) => `${p.pair} on ${p.dex} ($${Math.round(p.vol / 1000)}K 24h vol${p.risk === "high" ? ", HIGH IL risk" : ""})`).join("; "));
   if (d.newPools.length) lines.push("BRAND-NEW SOLANA POOLS: " + d.newPools.map((p) => `${tgEsc(p.name)} ($${Math.round(p.vol / 1000)}K vol, $${Math.round(p.liq / 1000)}K liq, ${p.ageH}h old)`).join("; "));
-  // ⚠️ NOT "blue-chip", NOT "picks". "Blue-chip" is a safety verdict on tokens, which AGENTS.md
-  // forbids outright, and a scanner-ranked list presented as picks is a recommendation. The
-  // number itself is a fact — trailing fees divided by TVL — so it is labelled as the fact it is
-  // and the model is told below never to render it as a return. (Codex, PR #390: the Seeker's
-  // Daily pane dropped its LP-picks section and then rendered this brief, which put them back.)
-  if (d.lpPicks.length) lines.push("SOLANA POOLS BY TRAILING FEE REVENUE (our scanner, last 24h fees ÷ TVL — a backward-looking ratio, NOT a yield anyone is paid and NOT net of impermanent loss): " + d.lpPicks.map((p) => `${p.pair} on ${p.dex} ${p.yieldPct}%/day`).join(", "));
   return lines.join("\n");
 }
 async function cluckBrief(d) {
@@ -5129,7 +5132,7 @@ STYLE: punchy, confident, funny, a chicken pun or two, but genuinely informative
 🌡️ THE MOOD — read the majors (BTC/ETH/SOL) in one or two lines.
 🔥 WHAT'S HOT — trending coins + the standout 24h gainers; note if a gainer looks like a pump.
 🌶️ FRESH OFF THE GRILL — the brand-new Solana pools; remind them new pools are high rug risk.
-💧 WHERE THE FEES ARE — the Solana pools with the most trading activity. You may say which pools took the most fees relative to their size, as a plain observation of what already happened. NEVER call a pool or token blue-chip, safe, solid or quality, never present any pool as a pick or a recommendation, and never describe a fee ratio as a yield, a return, an APR or something anyone will earn — it is backward-looking fee revenue before impermanent loss, and this school teaches that difference.
+💧 WHERE THE ACTION IS — the busiest Solana pools by volume, as plain observation of what already traded. NEVER call a pool or token blue-chip, safe, solid or quality, never present any pool as a pick or a recommendation, and never quote, estimate or imply a yield, a return, an APR or anything anyone will earn — you have no fee data, and this school teaches that volume is not income.
 🎓 CLUCK'S LESSON — one sharp educational takeaway tied to today's data.
 RULES: Never tell anyone to buy/sell or predict prices. Never recommend, rank or endorse a token or pool, and never promise or imply a return. Flag risk honestly (memecoins/new pools can go to zero). No markdown asterisks or headers (#). Write tickers plain (BONK, not $BONK) — never put a $ before a ticker. Keep the whole thing under ~320 words. End with: "Not financial advice — now go do your homework. 🐔"`;
   try {

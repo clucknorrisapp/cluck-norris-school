@@ -34,6 +34,29 @@ export function tf(s, vars) {
   return out;
 }
 
+// A BLOCK of prose — a lesson section body, paragraphs separated by blank lines.
+//
+// ⚠️ THE DICTIONARY KEYS ARE NORMALISED, THE VALUES ARE NOT. i18n.js stores every curated key
+// with whitespace collapsed (`norm()` — 0 of the 4,238 school keys contain a newline), and the
+// professionally translated VALUE keeps its "\n\n" paragraph breaks. So a multi-paragraph body
+// is found only by looking up the WHOLE body, collapsed, and then splitting the translation —
+// never by splitting the English first and looking up each paragraph (10 of 529 paragraphs
+// exist as keys; 107 of 125 whole bodies do). The first build split first, and every LP Lab and
+// Deep Dive body rendered in English under a translated heading (Codex on PR #390, from the APK).
+//
+// Returns the translated block and whether it was curated, so the caller can mark the element
+// `data-i18n-skip` — otherwise i18n.js's observer sees Spanish, misses the lookup, and queues it
+// for machine translation, which costs money to make worse.
+export function tBlock(s) {
+  const src = String(s || "");
+  const key = src.replace(/\s+/g, " ").trim();
+  try {
+    const d = typeof window !== "undefined" && window.CLKN_I18N && window.CLKN_I18N.dict;
+    if (key && d && d[key] && d[key] !== key) return { text: d[key], translated: true };
+  } catch (_) {}
+  return { text: src, translated: false };
+}
+
 // i18n.js finishes loading its dictionary asynchronously (a fetch, in the shipped runtime), so a
 // component that read t() at first render can be stuck showing English forever with no prompt to
 // re-read it. This mirrors solana-room.html's waitForI18n(): poll briefly, then stop — never an

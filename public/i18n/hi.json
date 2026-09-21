@@ -2823,5 +2823,6 @@
   "Retake the quiz": "क्विज़ दोबारा दें",
   "You got {score} of {total}. You need {need} to pass.": "आपने {total} में से {score} सही किए। पास होने के लिए {need} चाहिए।",
   "You've finished every lesson in the app. Your progress is kept on this phone — the diploma is claimed on clucknorris.app, and it counts the lessons you take there.": "आपने ऐप का हर पाठ पूरा कर लिया। आपकी प्रगति इसी फ़ोन पर रहती है — डिप्लोमा clucknorris.app पर लिया जाता है, और वहाँ वही पाठ गिने जाते हैं जो आप उस साइट पर करते हैं।",
-  "{total} questions. {need} right to pass — retake it as often as you like.": "{total} प्रश्न। पास होने के लिए {need} सही चाहिए — जितनी बार चाहें दोबारा दे सकते हैं।"
+  "{total} questions. {need} right to pass — retake it as often as you like.": "{total} प्रश्न। पास होने के लिए {need} सही चाहिए — जितनी बार चाहें दोबारा दे सकते हैं।",
+  "Progress here stays on this phone. The diploma is claimed on clucknorris.app.": "प्रगति इसी फ़ोन पर रहती है। डिप्लोमा clucknorris.app पर लिया जाता है।"
 }

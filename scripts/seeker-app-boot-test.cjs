@@ -1575,12 +1575,96 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       ok(`P5 · the overall counter agrees (${overall})`, /^2\s*\/\s*\d+$/.test(overall), overall);   // deepdive read + basics dex
     }
 
+    // ── P7: the pass THRESHOLD, at its boundary — exactly enough, and one short ───────────
+    //
+    // P3/P4 tested 0/3 and 3/3. Codex's point: a rule of ceil(n·2/3) is only proven at the edge.
+    // `wallet` has 3 questions, so the edge is 2: two right passes, one right does not.
+    {
+      const L = lessonOf("basics", "wallet");
+      const need = passMark(L.questions.length);
+      const answerRun = async (rightCount) => {
+        // Leave first: setting the hash to the lesson we are already on is not a navigation, so
+        // the missed screen would stay up and there would be no "Take the quiz" to press.
+        await go("#/school");
+        await go(`#/school/basics/${L.id}`);
+        await page.click(".seeker-school-start");
+        await page.waitForTimeout(250);
+        for (let i = 0; i < L.questions.length; i++) {
+          const q = L.questions[i];
+          const idx = i < rightCount ? q.correct : q.options.findIndex((_, k) => k !== q.correct);
+          await page.click(`.seeker-school-option >> nth=${idx}`);
+          await page.waitForTimeout(160);
+          await page.click(".seeker-school-explain .seeker-btn");
+          await page.waitForTimeout(200);
+        }
+        return page.evaluate(() => ({
+          passed: !!document.querySelector(".seeker-school-passed") && !document.querySelector(".seeker-school-passed.missed"),
+          missed: !!document.querySelector(".seeker-school-passed.missed"),
+        }));
+      };
+      const short = await answerRun(need - 1);
+      ok(`P7 · ⚠️ ONE SHORT of the mark (${need - 1} of ${L.questions.length}, need ${need}) does not pass`, short.missed && !short.passed, JSON.stringify(short));
+      ok("P7 · and left no local mark", !(await doneKeys()).includes("basics:" + L.id));
+      const exact = await answerRun(need);
+      ok(`P7 · ⚠️ EXACTLY the mark (${need} of ${L.questions.length}) passes`, exact.passed && !exact.missed, JSON.stringify(exact));
+      ok("P7 · and recorded the course-scoped key", (await doneKeys()).includes("basics:" + L.id));
+    }
+
     // ── P6: nothing in the whole journey needed the network ─────────────────────────────
     ok("P6 · ⚠️ the entire journey ran with every API refused — the school is genuinely offline",
        errors.length === 0, errors.join(" | ").slice(0, 400));
     ok("P6 · and the only calls it made were beacons, which are allowed to fail",
        beacons.every((e) => /^lesson_(start|complete):/.test(e)), JSON.stringify(beacons).slice(0, 300));
 
+    await ctx.close();
+  }
+
+  // ---- P8: a lesson BODY in Spanish, offline, from the curated dictionary ------------------
+  //
+  // Section I proves the toolkit's own strings render in Spanish. This is the LESSON MATERIAL,
+  // which is different plumbing: the curated dictionary keys a section by its whole body
+  // (whitespace-collapsed) and the translation keeps its paragraph breaks. The first build split
+  // the English into paragraphs first, so every LP Lab body rendered in English under a Spanish
+  // heading — found by Codex on the APK, with the APIs refused so machine translation could not
+  // paper over it. Same conditions here: Spanish, every /api/** refused, the richest LP lesson.
+  {
+    const ES = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", "es.school.json"), "utf8"));
+    const CURRICULUM = require(path.join(ROOT, "data", "curriculum.json"));
+    const norm = (x) => String(x || "").replace(/\s+/g, " ").trim();
+    const lp = CURRICULUM.courses.find((c) => c.id === "lp").lessons
+      .map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
+      .sort((a, b) => b.chars - a.chars)[0].l;
+    const sec0 = lp.sections[0];
+    const curated = ES[norm(sec0.body)];
+
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+    await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!(window.CLKN_I18N && window.CLKN_I18N.dict && Object.keys(window.CLKN_I18N.dict).length > 100), null, { timeout: 20000 });
+    await page.evaluate((h) => { window.location.hash = h; }, `#/school/lp/${lp.id}`);
+    await page.waitForTimeout(600);
+
+    const got = await page.evaluate(() => {
+      const wrap = document.querySelector(".seeker-school-section-body");
+      return {
+        body: wrap ? wrap.innerText : "",
+        paras: wrap ? wrap.querySelectorAll("p").length : 0,
+        skipped: wrap ? wrap.getAttribute("data-i18n-skip") : null,
+        heading: ((document.querySelector(".seeker-school-section-h") || {}).innerText || "").trim(),
+      };
+    });
+    ok("P8 · the curated Spanish translation of this section exists (or the test proves nothing)", !!curated && curated.length > 200);
+    ok("P8 · the section heading renders in Spanish", got.heading && got.heading !== sec0.heading, JSON.stringify(got.heading));
+    ok("P8 · ⚠️ the section BODY renders in Spanish, offline — not the English under a Spanish heading",
+       norm(got.body) === norm(curated), JSON.stringify({ got: got.body.slice(0, 120), want: String(curated).slice(0, 120) }));
+    ok("P8 · and it is NOT the English body", norm(got.body) !== norm(sec0.body));
+    ok("P8 · the translation's paragraph breaks survived (more than one <p>)", got.paras > 1, String(got.paras));
+    ok("P8 · a curated block is marked data-i18n-skip so the observer never sends Spanish for machine translation", got.skipped === "1", String(got.skipped));
+    ok("P8 · nothing threw", errors.length === 0, errors.join(" | ").slice(0, 300));
     await ctx.close();
   }
 

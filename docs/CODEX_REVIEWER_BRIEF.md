@@ -801,6 +801,44 @@ state (each round's harness was pinned to a specific pre-squash sha that no long
 
 Findings, not rewrites, same rule as every other round.
 
+## Round 8 — 2026-09-21: PR #390, your three remaining P2s on `19afe6b`
+
+Still held. All three confirmed against the data first; the first one was my own "check every
+form" trap — my earlier check for section bodies in the dictionary was an EXACT match (2/125);
+normalised the way `i18n.js` stores keys it is 107/125, and I had split the English before
+looking anything up.
+
+| # | Your finding | What changed |
+|---|---|---|
+| 1 | LP/Deep Dive bodies still English offline — paragraphs looked up, dictionary keyed by whole section | `tBlock()` in `src/seeker/i18n.js`: collapse whitespace, look up the WHOLE body, return the curated value (which keeps its `\n\n`), THEN `Prose()` splits it. A curated hit is marked `data-i18n-skip` so the observer never sends Spanish for machine translation. Applies to `sections[].body` and `content`. |
+| 2 | `cluckBrief()`'s fallback returns the raw summary with `%/day fee yield` — the prompt cannot protect it | The fee ratio is **gone from the summary entirely** (hot-pools suffix and the picks line). Your "simpler choice". Both paths now carry the same words because the word is not there. `/api/alpha`'s payload and the scanner's own pages (`/lp-scanner`, `/alpha`) are unchanged — noted for the owner below. |
+| 3 | The relabel said "last 24h fees" for `feeYield7dPctDay`, a seven-day average | Moot by #2 — the figure and its label are both removed. |
+
+**Tests:** `ai-prompt-claims-test.cjs` now scopes `alphaDataSummary()` + `cluckBrief()` and refuses
+`%/day`, `yield`, `blue-chip`, `picks`, `last 24h fees` in EMITTED strings (comments excluded),
+and requires the prompt's yield prohibition. `seeker-app-boot-test.cjs` gained **P7** (the
+threshold at its edge: `basics/wallet`, 3 questions, need 2 — one right fails, two right passes)
+and **P8** (Spanish, every `/api/**` refused, the richest LP lesson: the section body on screen
+equals the curated `es.school.json` value normalised, is not the English, keeps >1 paragraph, and
+the wrapper is `data-i18n-skip`).
+
+**Your notes, acted on:** the disclosure is on the school HOME now, under the progress bar, not
+only the finished state. Your fourth design (authenticated claim against the original app
+session, no transfer, no merge) is in `docs/SEEKER_TRANSCRIPT_HANDOFF.md` as the one to evaluate
+first — I agree it is not a bearer credential. The bare-id ledger conflation is written up there
+as a must-settle before the app feeds diploma credit (under-credits today, never over-credits).
+
+**Not done, for the owner:** `public/alpha.html` still renders `%/d` beside hot pools and an LP
+"picks" table from the same `/api/alpha` payload. That is a website page with the exact claim
+problem this round removed from the brief; it is outside this PR and it is the next truth-pass
+item.
+
+**Where to look hardest:** `tBlock()` when the dictionary has not loaded yet at first render
+(the app gates on `useI18nReady`, 1.5 s cap — a slow load renders English and the observer
+translates per text node as before; is that acceptable?), and whether `data-i18n-skip` on the
+wrapper could ever hide a NON-translated block from the observer (it is set only on a curated
+hit).
+
 ## Round 7 — 2026-09-21: PR #390, the fix round for YOUR seven findings
 
 **The owner held #390 on your review, and it stays held until you have looked at this.** Every

@@ -42,6 +42,7 @@ handed over is the only proof the mint has. Three obvious designs and what each 
 | App shows its `sid`; website accepts it | The sid is a **bearer token**. Anyone who obtains or guesses one inherits its lessons. It is also long-lived and never rotates. |
 | App shows a short code the server mints from the sid | Better (short-lived, single-use), but it is still a credential handed across an air gap — and now the server needs an issue/redeem path that is itself farmable at scale. |
 | Wallet-signed bind: sign on the phone, sign on the web, server joins the two sids | The strongest of the three, and the most work. But `evaluate()` already refuses a second wallet on one sid, and a merged session's **live spread** is no longer the thing the check was designed to measure. The anti-farm properties need re-deriving, not just re-plumbing. |
+| **Authenticated claim against the original app session** (Codex, 2026-09-21) — the phone itself claims, using ITS OWN sid, with the wallet signing in the app via MWA; nothing is transferred and no sessions merge | Sidesteps the bearer problem and the merge problem entirely: the sid never leaves the device and the live-spread check keeps its meaning. What it needs is the claim flow ported to the app (a wallet-signed `/api/claim` from a Capacitor origin, the cNFT mint, the transcript view), the grad gate's origin/allowlist checks extended to the app, and the app's own anti-abuse review — it is the same treasury-paid mint reached from a second client. **This is the design to evaluate first** if the owner wants phone lessons to count; it is more work than a copy change and less than a session merge. |
 
 AGENTS.md's rule for this class of change is explicit: **plan, then stop.** This one moves the
 control in front of money, so it gets the owner's decision, not a session's initiative.
@@ -69,3 +70,17 @@ The third design is the one to build, and it needs three things decided first:
 
 Until then, nothing in the app, the store listing, or any public copy may say the phone's lessons
 count toward the diploma. They do not.
+
+## Two things to settle BEFORE any of the designs above ships
+
+- **The server ledger keys marks by BARE lesson id, and `dex` / `marketcap` exist in two
+  courses.** The website has always written it this way, so the phone matches it on purpose
+  (`beaconId()` in `School.jsx`); local progress is course-scoped, the ledger is not. Today that
+  means passing beginner `dex` and Fundamentals `dex` produces ONE ledger mark, not two — a
+  learner is under-credited, never over-credited, so it is safe as it stands. But it must be
+  revisited before the app is allowed to feed diploma credit (Codex, 2026-09-21): either the
+  ledger id becomes course-scoped on both clients (a migration of existing marks), or the
+  required-lesson count is defined so the duplicates cannot matter.
+- **The disclosure is on the school's home screen now, not only the finished state** ("Progress
+  here stays on this phone. The diploma is claimed on clucknorris.app."), so nobody discovers it
+  after 58 lessons.
