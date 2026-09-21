@@ -767,67 +767,6 @@
   line-height: 1.5;
 }
 
-/* ── 2j. Airdropper ─────────────────────────────────────────────────────────────────────────
-   The one pane that moves money out in bulk, so its distinct visual job is keeping the three
-   send outcomes apart at a glance — sent / failed / UNCONFIRMED. The third is the one people
-   collapse, and it is the one that double-pays when they do (see Airdropper.jsx's header), so
-   it gets its own colour and its own alert block, not a dimmed version of "failed". */
-.seeker-drop-modes { display: flex; gap: 8px; margin: 12px 0 4px; }
-.seeker-drop-modes .seeker-btn { flex: 1; min-height: 44px; }
-.seeker-drop-mode-on { border-color: var(--orange); color: var(--orange); }
-
-.seeker-drop-textarea {
-  min-height: 132px;
-  font-family: var(--mono);
-  font-size: 12.5px;
-  line-height: 1.6;
-  resize: vertical;
-}
-
-.seeker-drop-note {
-  font-size: 12.5px;
-  color: var(--sub);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 12px;
-  margin: 0 0 12px;
-  line-height: 1.55;
-}
-.seeker-drop-note p { margin: 0 0 4px; }
-.seeker-drop-note p:last-child { margin-bottom: 0; }
-.seeker-drop-note-warn { color: var(--gold); border-color: var(--gold); background: rgba(255, 182, 39, .08); }
-
-.seeker-drop-send { display: block; width: 100%; margin-top: 4px; }
-.seeker-drop-stop { display: block; width: 100%; margin: 12px 0; }
-
-.seeker-drop-progress { margin: 4px 0 12px; }
-.seeker-drop-progressbar {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--card2, #1d1e26);
-  overflow: hidden;
-}
-.seeker-drop-progressbar span { display: block; height: 100%; background: var(--orange); transition: width .25s ease; }
-
-/* Three outcomes, three left borders — never the same treatment for two of them. */
-.seeker-drop-row-sent { border-left: 3px solid var(--green); padding-left: 10px; }
-.seeker-drop-row-failed { border-left: 3px solid var(--red-soft, var(--red)); padding-left: 10px; }
-.seeker-drop-row-unconfirmed { border-left: 3px solid var(--gold); padding-left: 10px; }
-
-.seeker-drop-unconfirmed {
-  font-size: 12.5px;
-  color: var(--gold);
-  background: rgba(255, 182, 39, .08);
-  border: 1px solid var(--gold);
-  border-radius: 12px;
-  padding: 12px;
-  margin: 0 0 14px;
-  line-height: 1.55;
-}
-.seeker-drop-unconfirmed p { margin: 0 0 6px; }
-.seeker-drop-unconfirmed p:last-child { margin-bottom: 0; }
-
 /* ── 2i. Hatchery ───────────────────────────────────────────────────────────────────────────── */
 .seeker-hatch-form {
   background: var(--card);
@@ -915,3 +854,64 @@
 .seeker-hatch-ambiguous .seeker-hatch-outcome-title { color: var(--gold); }
 .seeker-hatch-done { border: 1px solid var(--green); background: rgba(34, 197, 94, .06); }
 .seeker-hatch-done .seeker-hatch-outcome-title { color: var(--green); }
+/* ── 2j. Airdropper ─────────────────────────────────────────────────────────────────────────
+   The one pane that moves money out in bulk, so its distinct visual job is keeping the three
+   send outcomes apart at a glance — sent / failed / UNCONFIRMED. The third is the one people
+   collapse, and it is the one that double-pays when they do (see Airdropper.jsx's header), so
+   it gets its own colour and its own alert block, not a dimmed version of "failed". */
+.seeker-drop-modes { display: flex; gap: 8px; margin: 12px 0 4px; }
+.seeker-drop-modes .seeker-btn { flex: 1; min-height: 44px; }
+.seeker-drop-mode-on { border-color: var(--orange); color: var(--orange); }
+
+.seeker-drop-textarea {
+  min-height: 132px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.seeker-drop-note {
+  font-size: 12.5px;
+  color: var(--sub);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  line-height: 1.55;
+}
+.seeker-drop-note p { margin: 0 0 4px; }
+.seeker-drop-note p:last-child { margin-bottom: 0; }
+.seeker-drop-note-warn { color: var(--gold); border-color: var(--gold); background: rgba(255, 182, 39, .08); }
+
+.seeker-drop-send { display: block; width: 100%; margin-top: 4px; }
+.seeker-drop-stop { display: block; width: 100%; margin: 12px 0; }
+
+.seeker-drop-progress { margin: 4px 0 12px; }
+.seeker-drop-progressbar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--card2, #1d1e26);
+  overflow: hidden;
+}
+.seeker-drop-progressbar span { display: block; height: 100%; background: var(--orange); transition: width .25s ease; }
+
+/* Three outcomes, three left borders — never the same treatment for two of them. */
+.seeker-drop-row-sent { border-left: 3px solid var(--green); padding-left: 10px; }
+.seeker-drop-row-failed { border-left: 3px solid var(--red-soft, var(--red)); padding-left: 10px; }
+.seeker-drop-row-unconfirmed { border-left: 3px solid var(--gold); padding-left: 10px; }
+
+.seeker-drop-unconfirmed {
+  font-size: 12.5px;
+  color: var(--gold);
+  background: rgba(255, 182, 39, .08);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 0 0 14px;
+  line-height: 1.55;
+}
+.seeker-drop-unconfirmed p { margin: 0 0 6px; }
+.seeker-drop-unconfirmed p:last-child { margin-bottom: 0; }
+

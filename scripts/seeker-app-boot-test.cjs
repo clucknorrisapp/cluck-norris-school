@@ -193,6 +193,34 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     ok("B · built tools are links, so the grid actually navigates", grid.links >= 6, JSON.stringify(grid));
     ok("B · every card clears 44px and nothing overflows at 390px", grid.smallCards === 0 && !grid.overflow, JSON.stringify(grid));
 
+    // EVERY built tool must actually mount. Driven from the rendered grid's own hrefs rather
+    // than a list in this file: a list would have to be remembered, and the failure it is meant
+    // to catch — a `ready` flag flipped ahead of a pane that throws on mount — arrives precisely
+    // when someone forgets. The Hatchery reached this test having never been rendered in a
+    // browser by anyone, which is exactly the gap.
+    {
+      const links = await page.evaluate(() => Array.from(document.querySelectorAll("a.seeker-toolcard")).map((a) => a.getAttribute("href")));
+      const dead = [];
+      for (const href of links) {
+        const before = errors.length;
+        await page.evaluate((h) => { window.location.hash = String(h).replace(/^#/, ""); }, href);
+        await page.waitForTimeout(350);
+        const body = await page.evaluate(() => ({
+          // Three pane roots, because three surfaces predate the shared Pane wrapper and none of
+          // them is wrong: .seeker-tool is Pane (every tool built since), .seeker-ask is Ask
+          // Cluck (a chat surface, not a form-and-result pane), .seeker-pane is the original
+          // two bottom-nav panes. Listing all three rather than loosening to "something
+          // rendered" keeps the assertion about MOUNTING, not about the body having text in it.
+          pane: !!document.querySelector(".seeker-tool, .seeker-ask, .seeker-pane"),
+          len: (document.body.innerText || "").trim().length,
+        }));
+        if (!body.pane || body.len < 80 || errors.length > before) dead.push(`${href} (pane=${body.pane} len=${body.len} threw=${errors.length > before})`);
+      }
+      ok(`B · every built tool in the grid actually mounts (${links.length} of them)`, dead.length === 0, dead.join(" | "));
+      await page.evaluate(() => { window.location.hash = "#/tools"; });
+      await page.waitForTimeout(250);
+    }
+
     ok("C · starts disconnected", /Not connected/i.test(await text(page)));
     await page.click(".seeker-walletbtn");
     await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
