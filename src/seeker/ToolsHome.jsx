@@ -18,6 +18,7 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import { t, useI18nReady } from "./i18n.js";
 import { TOOLS } from "./tools/registry.js";
+import "./toolshome.css";
 
 const TIER_LABEL = {
   free: "Free",
