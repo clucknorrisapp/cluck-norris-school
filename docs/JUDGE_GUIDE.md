@@ -28,7 +28,7 @@ being true.
 ## Potential Impact
 
 1. `/for-projects` — the guided front door a project team opens first: lock, apply for
-   lock-to-earn, run a buy competition, airdrop, get listed right, snapshot holders, burn with a
+   lock-to-earn, airdrop, get listed right, snapshot holders, burn with a
    receipt. Pinned by `scripts/hub-apply-test.cjs`.
 2. `/hub/poke` — a second, real, branded project already on the same settlement library while its
    own terms are still being agreed, labelled DRY RUN rather than hidden until it is ready. Pinned

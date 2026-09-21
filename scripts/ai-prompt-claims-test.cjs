@@ -164,5 +164,56 @@ refuse(
   console.log(`  ${promptOk ? "✓" : "✗"} the brief's prompt forbids quoting or implying a yield, return or APR`);
 }
 
+// ── The Daily PAGE, the alpha payload, the lesson example and the LP share card ───────────────
+//
+// The brief's summary above carries no fee ratio at all. The scanner's own surfaces DO carry the
+// figure (it is the LP Lab's whole point) — with its period, as the ratio it is, never as a
+// "yield" and never framed as picks. Codex's #390 finding was a seven-day average labelled
+// "last 24h"; the fix that survives every renderer is that the PAYLOAD row names its period and
+// each surface prints it. Pinned here in every form: the page's rendered strings, the payload
+// builder, the classroom live example, and the share card's canvas text.
+{
+  const page = fs.readFileSync(path.join(ROOT, "public", "alpha.html"), "utf8");
+  // Only what the page RENDERS: strip JS comments and the <!-- --> comments; keep string literals.
+  const rendered = page.replace(/<!--[\s\S]*?-->/g, "").split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
+  function pin(name, ok, why) {
+    if (!ok) failures++;
+    console.log(`  ${ok ? "✓" : "✗"} ${name}`);
+    if (!ok) console.log(`      why: ${why}`);
+  }
+  console.log("\n  the Daily page (/alpha) — the ratio with its period, never a yield, never picks:");
+  pin("the page never prints \"Fee Yield\", \"LP YIELD\" or \"fee yields\"", !/fee yields?|LP YIELD/i.test(rendered),
+      "a fees ÷ TVL ratio is a measured number; \"yield\" is a claim about someone's return");
+  pin("the page never calls a pool \"blue-chip\" or a \"pick\"", !/blue[- ]?chip|\bpicks?\b(?![A-Za-z])/i.test(rendered.replace(/lpPicks/g, "")),
+      "a verdict and a recommendation — AGENTS.md forbids both");
+  pin("every per-day figure is rendered through ratio(), which prints the period beside it",
+      /var ratio=function\(p\)/.test(page) && /'7d avg'/.test(page) && /'24h'/.test(page) && !/yieldPct\+'%\/d/.test(page.replace(/var ratio=function[^\n]*\n/, "")),
+      "a bare \"%/d\" beside a pool is the seven-day-average-called-24h trap again");
+  pin("the ratio note says what the number is NOT (what an LP earns)", /not what a liquidity provider earns/i.test(rendered),
+      "the reader must be told the ratio ignores range, IL and price moves");
+  pin("the meta description no longer promises \"real LP fee yields\"", !/real LP fee yields/i.test(rendered), "same claim, in the search snippet");
+
+  console.log("\n  the /api/alpha payload builder — every ratio row names its period:");
+  const hot = /d\.hotPools = [^\n]*/.exec(src); const est = /d\.lpPicks = [^\n]*/.exec(src);
+  pin("hotPools rows carry period (7d|24h) and basis feesToTvlPctDay", !!hot && /period: p\.feeYield7dPctDay != null \? "7d" : "24h"/.test(hot[0]) && /basis: "feesToTvlPctDay"/.test(hot[0]),
+      "a renderer cannot label the period it is not told");
+  pin("lpPicks rows carry period and basis too", !!est && /period: p\.feeYield7dPctDay != null \? "7d" : "24h"/.test(est[0]) && /basis: "feesToTvlPctDay"/.test(est[0]), "same");
+
+  console.log("\n  the classroom live example (what the lesson writer is told about a real pool):");
+  const liveStart = src.indexOf("async function classroomLiveExample("); const liveEnd = src.indexOf("\n}", liveStart);
+  const live = liveStart > 0 ? src.slice(liveStart, liveEnd) : "";
+  pin("classroomLiveExample() was located", live.length > 100, "renamed? update the anchor, do not delete this");
+  pin("it never says \"fee yield\" or \"%/day fee\"", !/fee yield|%\/day fee/i.test(live), "the model would print it in a lesson");
+  pin("it names the ratio (fees ÷ TVL) and its period (7-day average / 24h) and says it is NOT what an LP earns",
+      /fees ÷ TVL/.test(live) && /7-day average/.test(live) && /24h volume/.test(live) && /NOT what an LP earns/.test(live), "the period and the caveat are the whole honesty of the figure");
+
+  console.log("\n  the LP share card (renderLpCard canvas text):");
+  const cardStart = src.indexOf("async function renderLpCard("); const cardEnd = src.indexOf("\n}", cardStart);
+  const cardFn = cardStart > 0 ? src.slice(cardStart, cardEnd).split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n") : "";
+  pin("renderLpCard() was located", cardFn.length > 100, "renamed? update the anchor");
+  pin("the headline is FEES ÷ TVL PER DAY with its period, not TOP FEE YIELD", /FEES ÷ TVL PER DAY \(/.test(cardFn) && /"7D AVG" : "24H"/.test(cardFn) && !/FEE YIELD/.test(cardFn), "the image travels on X without its page");
+  pin("the ranking line says RANKED BY FEES ÷ TVL, not BY YIELD", /RANKED BY FEES ÷ TVL/.test(cardFn) && !/RANKED BY YIELD/.test(cardFn), "same");
+}
+
 console.log(failures === 0 ? "\nall passed\n" : `\n${failures} FAILING\n`);
 process.exit(failures === 0 ? 0 : 1);

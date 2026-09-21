@@ -676,6 +676,12 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
 
 ## Open decisions — the owner's call, not yours
 
+- **Buy Special / buy comp is OFF the main webpage (owner, 2026-09-21: "we are going to remove
+  buy special/buy comp from the main CLKN webpage").** Scope confirmed the same day: public
+  surfacing only — the homepage door, the Tools roundup card, the `/for-projects` step, the
+  README and `/investors` copy. `/buyspecial`, `/rose`, the draw and dashboard pages, their API
+  routes and the Telegram buy-comp engine all stay reachable by direct URL for ROSE and Hub
+  operators. Don't put it back in a roundup, a door, promo copy or the tools catalogue.
 - **Buy Special lost its CLKN price.** Retiring send-to-unlock removed the 5,850-CLKN door priced
   on 2026-07-24 to be ~25% cheaper than SOL. Paying in CLKN is no longer possible there, only
   holding. That reversed a deliberate decision — re-raise it rather than assuming it's settled.
