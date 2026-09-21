@@ -186,7 +186,7 @@ export default function WalletXrayPane({ wallet }) {
 
   return (
     <Pane icon="🔎" title="Wallet X-Ray">
-      <p className="seeker-tool-lede">{t("Paste any Solana wallet to see its funding origin, trading history and behavioral signals — all read straight off the chain.")}</p>
+      <p className="seeker-tool-lede">{t("Paste any Solana wallet to see its funding origin and the activity we can find. This is an activity scan, not a balance sheet: it can miss holdings, and it reports what happened, never why.")}</p>
 
       <div className="seeker-forensic-form">
         {wallet.connected ? (

@@ -1,4 +1,5 @@
 {
+  "4": "4",
   "Tools": "工具",
   "🔥 Ask Cluck": "🔥 问 Cluck",
   "Enter School": "进入学校",
@@ -2062,7 +2063,6 @@
   "The real SKR": "真正的 SKR",
   "The impersonator": "冒充者",
   "~45,700": "~45,700",
-  "4": "4",
   "Actively scored": "正在被评分",
   "0 — no real trading activity behind it": "0——背后没有真实的交易活动",
   "Trades across dozens of pools on several exchanges": "在多个交易所的数十个池子里交易",
@@ -2373,7 +2373,6 @@
   "Paste a token's mint address": "粘贴代币的地址",
   "Paste a wallet address": "粘贴一个钱包地址",
   "Paste any Solana token's mint to see who holds it, how concentrated it is, and what's a wallet versus a pool, lock or contract.": "粘贴任何 Solana 代币的地址，查看谁持有它、集中度如何，以及哪些是钱包、哪些是资金池、锁仓或合约。",
-  "Paste any Solana wallet to see its funding origin, trading history and behavioral signals — all read straight off the chain.": "粘贴任何 Solana 钱包，查看它的资金来源、交易历史和行为信号——全部直接从链上读取。",
   "Paste team, insider or treasury addresses to leave out": "粘贴要排除的团队、内部人员或金库地址",
   "Paste the mint address": "粘贴代币地址",
   "Paste the token's mint address": "粘贴该代币的地址",
@@ -2713,7 +2712,6 @@
   "Approvals, freeze and mint authority, and what each one actually lets someone do.": "授权、冻结权限与铸造权限——以及每一项实际上能让某人做什么。",
   "Ask anything about crypto in plain words. Free, no wallet, no signup.": "用大白话问任何关于加密货币的问题。免费，无需钱包，无需注册。",
   "Burn project supply and get a verifiable receipt for it.": "销毁项目的代币供应量，并获得一份可核实的收据。",
-  "Burn worthless junk and reclaim the SOL rent underneath it. A live value guard stops you torching anything still worth money.": "销毁毫无价值的垃圾代币，收回其中锁着的 SOL 租金。一个实时价值防护会阻止你烧掉任何仍然值钱的东西。",
   "Buy Special runs on the unified tools pass shared by every heavy tool.": "买入特奖使用的是所有重度工具共享的统一工具通行证。",
   "Daily Brief": "每日简报",
   "Dead token accounts are holding your SOL. See exactly what you can close, and get it back.": "已失效的代币账户正占用着你的 SOL。精确查看你能关闭哪些账户，并把它拿回来。",
@@ -2725,7 +2723,6 @@
   "Holders runs on the unified tools pass shared by every heavy tool.": "持有者使用的是所有重度工具共享的统一工具通行证。",
   "Launches": "发射",
   "Listing Checkup": "上市检查",
-  "Live launches and graduations, read straight off the chain.": "实时发行与毕业代币，直接从链上读取。",
   "Lock tokens on Jupiter Lock, non-custodially, and get public proof you did.": "在 Jupiter Lock 上以非托管方式锁定代币，并获得你已锁定的公开证明。",
   "Locker Room": "Locker Room",
   "Mint a token properly, with the authorities set the way you meant.": "正确地铸造一个代币，权限设置完全符合你的本意。",
@@ -2739,7 +2736,6 @@
   "Trace runs on the unified tools pass shared by every heavy tool.": "追踪使用的是所有重度工具共享的统一工具通行证。",
   "Try again in {n} seconds.": "请在 {n} 秒后重试。",
   "Wallet X-Ray runs on the unified tools pass shared by every heavy tool.": "钱包 X-Ray 使用的是所有重度工具共享的统一工具通行证。",
-  "What a listing venue will check before it lists a token — run it on yours first.": "一个上市平台在收录代币之前会检查什么——先在你自己的代币上运行一遍。",
   "Who holds a token, how concentrated it is, and how that changed.": "谁持有这个代币、集中度如何，以及这一情况是如何变化的。",
   "{n}h ago": "{n}小时前",
   "{n}h old": "{n}小时前",
@@ -2784,5 +2780,9 @@
   "SOL back": "SOL 退回",
   "{n} of these is wrapped SOL — it is unwrapped, not burned, and the whole balance comes back to you.": "其中 {n} 个是 Wrapped SOL——会被解包，不会被销毁，全部余额都会还给你。",
   "Only {done} of {total} rows made it onto the receipt — the rest did not record:": "收据只记录了 {total} 行中的 {done} 行——其余的未能记录：",
-  "You stopped this drop. {n} of these wallets were never attempted — nothing was sent to them, and nothing was charged for them.": "你停止了这次空投。这些钱包中有 {n} 个从未被尝试过——没有向它们发送任何内容，也没有向它们收取任何费用。"
+  "You stopped this drop. {n} of these wallets were never attempted — nothing was sent to them, and nothing was charged for them.": "你停止了这次空投。这些钱包中有 {n} 个从未被尝试过——没有向它们发送任何内容，也没有向它们收取任何费用。",
+  "Burn worthless junk and reclaim the SOL rent underneath it. Every token is priced first, and anything with value — or that we could not price — is flagged before it can burn.": "烧掉毫无价值的垃圾代币，取回压在下面的 SOL 租金。每个代币都会先定价，任何有价值的——或我们无法定价的——都会在能够烧毁之前被标记出来。",
+  "Live launches and graduations, from the Bags and Solana Tracker feeds.": "实时的代币发行与毕业动态，来自 Bags 和 Solana Tracker 数据源。",
+  "Paste any Solana wallet to see its funding origin and the activity we can find. This is an activity scan, not a balance sheet: it can miss holdings, and it reports what happened, never why.": "粘贴任意 Solana 钱包，查看其资金来源以及我们能找到的活动记录。这是活动扫描，不是资产负债表：它可能遗漏持仓，而且它只说明发生了什么，绝不说明原因。",
+  "The checks listing venues commonly run on a token — run them on yours first.": "上线平台通常会对代币做的那些检查——先在你自己的代币上跑一遍。"
 }

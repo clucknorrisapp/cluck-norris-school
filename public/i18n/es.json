@@ -1,4 +1,5 @@
 {
+  "4": "4",
   "Tools": "Herramientas",
   "🔥 Ask Cluck": "🔥 Pregunta a Cluck",
   "Enter School": "Entrar a la Escuela",
@@ -2062,7 +2063,6 @@
   "The real SKR": "El SKR real",
   "The impersonator": "El impostor",
   "~45,700": "~45,700",
-  "4": "4",
   "Actively scored": "Con puntuación activa",
   "0 — no real trading activity behind it": "0 — sin actividad de trading real detrás",
   "Trades across dozens of pools on several exchanges": "Se opera en decenas de pools en varios exchanges",
@@ -2373,7 +2373,6 @@
   "Paste a token's mint address": "Pega la dirección de mint de un token",
   "Paste a wallet address": "Pega una dirección de billetera",
   "Paste any Solana token's mint to see who holds it, how concentrated it is, and what's a wallet versus a pool, lock or contract.": "Pega el mint de cualquier token de Solana para ver quién lo tiene, qué tan concentrado está, y qué es una billetera frente a un pool, bloqueo o contrato.",
-  "Paste any Solana wallet to see its funding origin, trading history and behavioral signals — all read straight off the chain.": "Pega cualquier billetera de Solana para ver su origen de fondeo, historial de operaciones y señales de comportamiento — todo leído directamente de la cadena.",
   "Paste team, insider or treasury addresses to leave out": "Pega direcciones de equipo, insiders o tesorería para dejar fuera",
   "Paste the mint address": "Pega la dirección del mint",
   "Paste the token's mint address": "Pega la dirección de mint del token",
@@ -2713,7 +2712,6 @@
   "Approvals, freeze and mint authority, and what each one actually lets someone do.": "Aprobaciones, freeze y autoridad de mint, y qué le permite hacer cada una en realidad.",
   "Ask anything about crypto in plain words. Free, no wallet, no signup.": "Pregunta lo que sea sobre cripto en palabras simples. Gratis, sin billetera, sin registro.",
   "Burn project supply and get a verifiable receipt for it.": "Quema el suministro de tu proyecto y obtén un recibo verificable de ello.",
-  "Burn worthless junk and reclaim the SOL rent underneath it. A live value guard stops you torching anything still worth money.": "Quema basura sin valor y recupera el rent en SOL que hay debajo. Un control de valor en vivo te impide incinerar algo que todavía valga dinero.",
   "Buy Special runs on the unified tools pass shared by every heavy tool.": "Promo de Compra funciona con el pase de herramientas unificado que comparten todas las herramientas pesadas.",
   "Daily Brief": "Resumen Diario",
   "Dead token accounts are holding your SOL. See exactly what you can close, and get it back.": "Las cuentas de token muertas están reteniendo tu SOL. Mira exactamente qué puedes cerrar, y recupéralo.",
@@ -2723,7 +2721,6 @@
   "Holders runs on the unified tools pass shared by every heavy tool.": "Holders funciona con el pase de herramientas unificado que comparten todas las herramientas pesadas.",
   "Launches": "Lanzamientos",
   "Listing Checkup": "Listing Checkup",
-  "Live launches and graduations, read straight off the chain.": "Lanzamientos y graduaciones en vivo, leídos directamente de la cadena.",
   "Lock tokens on Jupiter Lock, non-custodially, and get public proof you did.": "Bloquea tokens en Jupiter Lock, sin custodia, y obtén una prueba pública de que lo hiciste.",
   "Locker Room": "Locker Room",
   "Mint a token properly, with the authorities set the way you meant.": "Mintea un token correctamente, con las autoridades configuradas como querías.",
@@ -2734,7 +2731,6 @@
   "The flock's read on Solana today: the mood, what's moving, where the fees are.": "La lectura de la bandada sobre Solana hoy: el ánimo, qué se está moviendo, dónde están las comisiones.",
   "Trace runs on the unified tools pass shared by every heavy tool.": "Trace funciona con el pase de herramientas unificado que comparten todas las herramientas pesadas.",
   "Wallet X-Ray runs on the unified tools pass shared by every heavy tool.": "Wallet X-Ray funciona con el pase de herramientas unificado que comparten todas las herramientas pesadas.",
-  "What a listing venue will check before it lists a token — run it on yours first.": "Lo que una plataforma de listado revisará antes de listar un token — revísalo primero en el tuyo.",
   "Who holds a token, how concentrated it is, and how that changed.": "Quién tiene un token, qué tan concentrado está, y cómo cambió eso.",
   "Hold ${usd} worth of CLKN and every heavy tool runs free while you hold it.": "Ten ${usd} en CLKN y cada herramienta pesada funciona gratis mientras la mantengas.",
   "Hold about {clkn} CLKN (around ${usd} worth) and every heavy tool runs free while you hold it.": "Ten alrededor de {clkn} CLKN (unos ${usd} de valor) y cada herramienta pesada funciona gratis mientras la mantengas.",
@@ -2784,5 +2780,9 @@
   "SOL back": "SOL de vuelta",
   "{n} of these is wrapped SOL — it is unwrapped, not burned, and the whole balance comes back to you.": "{n} de estas es SOL envuelto — se desenvuelve, no se quema, y todo el saldo vuelve a ti.",
   "Only {done} of {total} rows made it onto the receipt — the rest did not record:": "Solo {done} de {total} filas llegaron al recibo — el resto no se registró:",
-  "You stopped this drop. {n} of these wallets were never attempted — nothing was sent to them, and nothing was charged for them.": "Detuviste este airdrop. {n} de estas billeteras nunca se intentaron — no se les envió nada, ni se les cobró nada."
+  "You stopped this drop. {n} of these wallets were never attempted — nothing was sent to them, and nothing was charged for them.": "Detuviste este airdrop. {n} de estas billeteras nunca se intentaron — no se les envió nada, ni se les cobró nada.",
+  "Burn worthless junk and reclaim the SOL rent underneath it. Every token is priced first, and anything with value — or that we could not price — is flagged before it can burn.": "Quema tokens basura sin valor y recupera el alquiler de SOL que hay debajo. Cada token se valora primero, y todo lo que tenga valor —o que no hayamos podido valorar— se marca antes de que pueda quemarse.",
+  "Live launches and graduations, from the Bags and Solana Tracker feeds.": "Lanzamientos y graduaciones en vivo, desde los feeds de Bags y Solana Tracker.",
+  "Paste any Solana wallet to see its funding origin and the activity we can find. This is an activity scan, not a balance sheet: it can miss holdings, and it reports what happened, never why.": "Pega cualquier billetera de Solana para ver su origen de fondos y la actividad que podamos encontrar. Esto es un escaneo de actividad, no un balance: puede pasar por alto tenencias, e informa lo que ocurrió, nunca por qué.",
+  "The checks listing venues commonly run on a token — run them on yours first.": "Las comprobaciones que los sitios de listado suelen hacer a un token: hazlas tú primero en el tuyo."
 }
