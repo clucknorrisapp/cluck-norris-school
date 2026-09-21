@@ -51,6 +51,16 @@ does not tell you how to write software; use your judgement for that.
 > init script (60 fps, same logic; the state and beat tests do) and drive the target scene with a
 > lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`); the visual gate stays on WebGL.
 
+> ⛔ **COLOSSEUM IS OFF (owner, 2026-09-21): "we are only doing the Solana Mobile hackathon at this
+> time, we are not doing the Colosseum — I don't have the time or the ability to meet the commitments
+> right now. All in on the Solana Mobile hackathon and our actual project and the others we are
+> helping."** The whole Colosseum block below is history, kept so nothing is rebuilt twice: do not
+> start or resume Colosseum work — no roadmap extensions, no weekly-update videos, no Arena posts, no
+> submission prep, no disclosure lines in `docs/PRE_EVENT_STATE.md`. The Project Hub stays live as
+> product; touch it only when a partner project needs it. **The track is the Seeker app for the Solana
+> Mobile CLOCK IN hackathon — `docs/SEEKER_APP_PLAN.md` and `docs/CLOCK_IN_HACKATHON_2026.md`;
+> submissions close 2026-10-09 06:59 UTC (Oct 8, 23:59 PT)** — plus the product and the partner
+> projects. Withdrawing the Colosseum registration itself is the owner's act on colosseum.com.
 > 🏛️ **Colosseum Crypto World's Fair (Sep 14 – Oct 12, 2026) — we are ENTERED (owner, 2026-09-10).**
 > The submission package is `docs/COLOSSEUM_2026_SUBMISSION.md` (product description, GTM, demo
 > script, pitch outline, competitive landscape). The **Colosseum Copilot** research skill is
