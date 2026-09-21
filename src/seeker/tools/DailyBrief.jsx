@@ -52,7 +52,7 @@
 // not depend on signal.
 import React from "react";
 import { Link } from "react-router-dom";
-import { t, tf } from "../i18n.js";
+import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Unavailable, toolFetch, useOnline } from "../pane.jsx";
 import { lessonOfDay, questionOfDay, answeredToday, streakCount, recordAnswer } from "../school/daily.js";
 import "./tools.css";
@@ -144,6 +144,7 @@ function DailyCheck() {
 }
 
 export default function DailyBriefPane() {
+  useI18nReady();
   const online = useOnline();
   const [phase, setPhase] = React.useState("loading"); // loading | result | unavailable
   const [payload, setPayload] = React.useState(null);

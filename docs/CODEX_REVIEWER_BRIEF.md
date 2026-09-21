@@ -801,6 +801,35 @@ state (each round's harness was pinned to a specific pre-squash sha that no long
 
 Findings, not rewrites, same rule as every other round.
 
+## Round 10 — 2026-09-21: #390, the last P2 (a lesson opened before the dictionary stays English)
+
+Confirmed exactly as you described it, and my brief's "the app gates on `useI18nReady`" was
+false — the hook lived in the header and nav only, re-rendered only them, and stopped polling at
+1.5 s. Three changes, one test each:
+
+1. **`public/i18n.js` announces the dictionary**: `window.dispatchEvent(new CustomEvent("clkn:i18n-ready"))`
+   the moment `window.CLKN_I18N` is set. Website and shell share this file; the event is inert
+   anywhere nothing listens.
+2. **`useI18nReady()` is event-driven with no give-up**: the listener stays for the life of the
+   component; a 50 ms poll bounded to 3 s covers the race between the first render's check and
+   the listener attaching. Never a network call.
+3. **Every pane that renders its own strings subscribes**: the three school components, Daily,
+   and each tools pane. `<Pane>` already subscribed, but React does not re-render children it was
+   handed as props, so a wrapper's subscription never reached the pane's own `t()` calls.
+
+**Tests:** `seeker-app-boot-test` **P9** and (and, on #391's branch, `store-shell-boot-test` **G**) — Spanish, every
+`/api/**` refused, BOTH dictionary files held back 2.5 s (past the old give-up), the lesson is
+the INITIAL url. Asserted in order: the lesson is on screen in English while `window.CLKN_I18N`
+is still absent (the race is real, not simulated); then, with no navigation, the section body
+equals the curated `es.school.json` value, keeps its paragraphs, is `data-i18n-skip`, and the
+heading followed. P8 (dictionary first) stays as the steady-state case.
+
+Look hardest at: the 3 s poll bound (is there a path where the event fires before the listener
+attaches AND after the poll stops? — the event is dispatched synchronously after the fetch
+resolves, which is always after the first render's effect has attached the listener, but say if
+you see one), and whether any pane still renders `t()` without subscribing (grep
+`useI18nReady()` per file under `src/seeker`).
+
 ## Round 8 — 2026-09-21: PR #390, your three remaining P2s on `19afe6b`
 
 Still held. All three confirmed against the data first; the first one was my own "check every
@@ -833,11 +862,13 @@ as a must-settle before the app feeds diploma credit (under-credits today, never
 problem this round removed from the brief; it is outside this PR and it is the next truth-pass
 item.
 
-**Where to look hardest:** `tBlock()` when the dictionary has not loaded yet at first render
-(the app gates on `useI18nReady`, 1.5 s cap — a slow load renders English and the observer
-translates per text node as before; is that acceptable?), and whether `data-i18n-skip` on the
-wrapper could ever hide a NON-translated block from the observer (it is set only on a curated
-hit).
+**Where to look hardest:** whether `data-i18n-skip` on the wrapper could ever hide a
+NON-translated block from the observer (it is set only on a curated hit).
+
+**Correction (round 10):** I wrote here that "the app gates on `useI18nReady`". It did not —
+the hook was called by the header and the nav only, and it gave up polling at 1.5 s. Codex's
+round-9 finding (a lesson opened directly stays English) was right and the statement above was
+wrong. Fixed in round 10 below.
 
 ## Round 7 — 2026-09-21: PR #390, the fix round for YOUR seven findings
 

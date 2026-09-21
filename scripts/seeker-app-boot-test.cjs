@@ -1668,6 +1668,63 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await ctx.close();
   }
 
+  // ---- P9: a lesson opened DIRECTLY, before the dictionary arrives, updates when it does ------
+  //
+  // P8 waited for the dictionary before navigating, which is exactly the case that hides this
+  // (Codex, PR #390 round 9). The real sequence on a deep link or a reload: the lesson renders
+  // first, tBlock() finds no dictionary and returns English, the English is split into
+  // paragraphs — and then the dictionary lands. Nothing used to tell the lesson. Worse, the old
+  // readiness hook gave up polling at 1.5 s, so a slow load was missed for good, and the page
+  // observer then machine-translated the English paragraphs it found. Here the dictionaries are
+  // held back for 2.5 s (past that old give-up), the lesson is the INITIAL url, and every API is
+  // refused. The lesson must be English first, then become the curated Spanish on its own.
+  {
+    const ES = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", "es.school.json"), "utf8"));
+    const CURRICULUM = require(path.join(ROOT, "data", "curriculum.json"));
+    const norm = (x) => String(x || "").replace(/\s+/g, " ").trim();
+    const lp = CURRICULUM.courses.find((c) => c.id === "lp").lessons
+      .map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
+      .sort((a, b) => b.chars - a.chars)[0].l;
+    const sec0 = lp.sections[0];
+    const curated = ES[norm(sec0.body)];
+    const DELAY_MS = 2500;
+
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+    // Hold the dictionaries back. Both files — the base pack and the school pack.
+    await page.route("**/i18n/es*.json", async (route) => { await new Promise((r) => setTimeout(r, DELAY_MS)); await route.continue(); });
+    const t0 = Date.now();
+    await page.goto(`${BASE}/index.html#/school/lp/${lp.id}`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => !!document.querySelector(".seeker-school-section-body"), null, { timeout: 20000 });
+    const early = await page.evaluate(() => ({
+      dict: !!window.CLKN_I18N,
+      body: (document.querySelector(".seeker-school-section-body") || {}).innerText || "",
+    }));
+    ok("P9 · the lesson renders BEFORE the dictionary arrives (the race is real, not simulated)", !early.dict && norm(early.body) === norm(sec0.body), { dict: early.dict, ms: Date.now() - t0, body: early.body.slice(0, 80) });
+
+    await page.waitForFunction(() => !!window.CLKN_I18N, null, { timeout: 20000 });
+    await page.waitForFunction((want) => {
+      const w = document.querySelector(".seeker-school-section-body");
+      return !!w && w.innerText.replace(/\s+/g, " ").trim() === want;
+    }, norm(curated), { timeout: 5000 }).catch(() => {});
+    const late = await page.evaluate(() => {
+      const w = document.querySelector(".seeker-school-section-body");
+      return { body: w ? w.innerText : "", skipped: w ? w.getAttribute("data-i18n-skip") : null, paras: w ? w.querySelectorAll("p").length : 0,
+               heading: ((document.querySelector(".seeker-school-section-h") || {}).innerText || "").trim() };
+    });
+    ok(`P9 · ⚠️ once the dictionary lands (${DELAY_MS} ms, past the old 1.5 s give-up) the lesson BODY becomes the curated Spanish on its own`,
+       norm(late.body) === norm(curated), { got: late.body.slice(0, 120), want: String(curated).slice(0, 120) });
+    ok("P9 · with its paragraph breaks", late.paras > 1, String(late.paras));
+    ok("P9 · marked data-i18n-skip so the observer never sends the Spanish for machine translation", late.skipped === "1", String(late.skipped));
+    ok("P9 · the heading followed too", late.heading && late.heading !== sec0.heading, late.heading);
+    ok("P9 · nothing threw", errors.length === 0, errors.join(" | ").slice(0, 300));
+    await ctx.close();
+  }
+
   await browser.close();
   console.log("\n" + (failures ? failures + " FAILED" : "all passed") + "\n");
   process.exit(failures ? 1 : 0);

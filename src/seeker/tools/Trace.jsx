@@ -31,7 +31,7 @@
 // recorded rule in CLAUDE.md ("only call a wallet creator or team when a launchpad API confirms
 // it"). Nothing else here ever uses that word.
 import React from "react";
-import { t } from "../i18n.js";
+import { t, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, useOnline } from "../pane.jsx";
 import { usePass } from "../pass.js";
 import { PassGate, gatedToolFetch } from "../passgate.jsx";
@@ -99,6 +99,9 @@ function TxRow({ r }) {
 }
 
 export default function TracePane({ wallet }) {
+  // Re-render when the dictionary lands. <Pane> subscribes too, but React does not re-render
+  // children it was handed as props, so this pane's own t() strings need their own subscription.
+  useI18nReady();
   const online = useOnline();
   const pass = usePass();
   const [walletInput, setWalletInput] = React.useState("");

@@ -41,7 +41,7 @@
 // "Say what's on-chain, never why" (CLAUDE.md): this pane reports balances, rent and price facts.
 // It never labels a token safe, verified, scam or worthless — only what it is priced at.
 import React from "react";
-import { t, tf } from "../i18n.js";
+import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
 import { shortAddr } from "../addr.js";
 import { signSendConfirm, splTokenShim } from "../sign.js";
@@ -194,6 +194,9 @@ function OutcomeRow({ a, status, error }) {
 }
 
 export default function FirepitPane({ wallet }) {
+  // Re-render when the dictionary lands. <Pane> subscribes too, but React does not re-render
+  // children it was handed as props, so this pane's own t() strings need their own subscription.
+  useI18nReady();
   const online = useOnline();
   const [phase, setPhase] = React.useState("idle"); // idle | loading | result | unavailable
   const [errKind, setErrKind] = React.useState("unavailable");
