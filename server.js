@@ -2515,7 +2515,7 @@ function tgCommandReply(cmd, arg) {
     case "dex":
       return `📊 <b>CLKN on DexScreener</b>\nhttps://${CLKN_DEXSCREENER}`;
     case "walletxray":
-      return `🩻 <b>Wallet X-Ray</b> — full wallet deep dive: funding origin, every trade, bot/dumper signals\n${link("/wallet-xray", "wallet")}` + (addr ? "" : "\n\nTip: <code>/walletxray &lt;wallet&gt;</code> pre-fills a wallet.");
+      return `🩻 <b>Wallet X-Ray</b> — wallet deep dive: funding origin and the activity the scan can find\n${link("/wallet-xray", "wallet")}` + (addr ? "" : "\n\nTip: <code>/walletxray &lt;wallet&gt;</code> pre-fills a wallet.");
     case "autopsy":
       return `🪦 <b>Token Autopsy</b> — deep forensic breakdown\n${link("/autopsy", "mint")}` + (addr ? "" : "\n\nTip: <code>/autopsy &lt;mint&gt;</code>.");
     case "trace":
@@ -15326,12 +15326,26 @@ THE LP LAB (its own tab, not inside the Library):
 - Interactive calculators throughout: impermanent loss, AMM price impact, fee-vs-IL breakeven, capital efficiency, bin visualizer, DCA accumulation, LP-vs-HODL, strategy matcher
 - Shareable directly at clucknorris.app/lp-lab
 
-FREE TOOLS (all read-only, no wallet connect):
-- Wallet X-Ray -- any wallet's funding origin, every trade, and behavior signals
-- Holders -- who really holds a token: real wallets separated from LP pools, locks and program accounts, plus an airdrop-ready CSV
-- Trace -- one wallet's full history with one token
+FREE FOR EVERYONE -- no wallet, no signup:
 - Wallet Checkup -- scan any address for risky approvals, honeypot holdings and live mint/freeze authority, and revoke your own approvals right there (Security Coop merged into it)
 - The Jup Locker Room -- free non-custodial token locking for any Solana project
+- Ask Cluck (this conversation), the whole school, and the Library
+
+HEAVY TOOLS -- these need a CONNECTED WALLET and the unified tools pass (see CLKN TOKEN UTILITY
+below for the terms). Do NOT tell anyone these are free with no wallet; that was true before
+2026-08-18 and is not true now:
+- Wallet X-Ray -- a wallet's funding origin and the activity the scan can find
+- Holders -- who really holds a token: real wallets separated from LP pools, locks and program accounts, plus an airdrop-ready CSV
+- Trace -- one wallet's history with one token
+- The airdropper and Buy Special
+
+HONESTY ABOUT WHAT THESE TOOLS SEE -- this matters more than sounding impressive:
+- X-Ray and Trace are ACTIVITY SCANNERS. They can miss holdings and they do not see everything.
+  Never claim X-Ray sees all of a wallet's trades, or a complete balance -- it does not, and
+  people have been given wrong numbers by assuming it does.
+- The chain shows WHAT happened, never WHY. Report authorities, balances, approvals and lock
+  terms as facts. Never label a token safe, verified, a scam or a rug, and only call a wallet
+  "creator" or "team" when a launchpad API confirms it.
 
 NAVIGATION HELP -- HOW TO DIRECT PEOPLE:
 - Complete beginner? -> Start in the INCUBATOR tab

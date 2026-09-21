@@ -780,6 +780,11 @@ jobs:
         run: node scripts/hub-judge-doc-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
+      # The AI's system prompt is the widest-reach, least-reviewed copy we ship — seven
+      # languages, website + Play + iOS. It had the heavy tools listed as "free, no wallet
+      # connect" (untrue since 2026-08-18) while describing the pass correctly further down.
+      - name: Ask Cluck's system prompt makes no claim the product cannot support
+        run: node scripts/ai-prompt-claims-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)
         run: node scripts/jvp-dashboard-test.cjs
       # Listing Checkup routes: validation, the offline run → cache → share page with every
