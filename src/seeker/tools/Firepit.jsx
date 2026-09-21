@@ -1,14 +1,8 @@
 // Cluck Norris — Seeker app, Firepit pane (docs/SEEKER_TOOLS_BUILD.md — registry id "firepit").
 //
-// ⛔ SCOPE LINE (owner-set, tonight's build): READ SIDE + CLASSIFICATION + THE FULL CONFIRM UX
-// ONLY. No transaction is built, no signature is requested, nothing is sent. An adversarial
-// review found a P0 in the reclaim path — `getSignatureStatuses` returns both `err` and a
-// `confirmationStatus` for a transaction that LANDED AND FAILED, and testing the status first
-// reported a failed burn as a success — and the identical bug was already live in
-// public/airdrop-engine.js because the send/confirm logic had been copy-pasted. The hardened
-// send/confirm seam is being extracted into a shared helper in a parallel fix round; signing for
-// this pane lands on top of it, once, reviewed. So: tapping "Confirm and sign" here renders the
-// SigningNotYet block instead of touching a wallet's signTransaction — never a fabricated result.
+// Signs and sends. Every transaction goes through src/seeker/sign.js's signSendConfirm() — the
+// app's one signing seam (confirmation-err-first, three outcomes, live-pubkey re-read, message-
+// byte diff). This file does not re-implement any of that.
 //
 // Server: GET /api/burn-scan?wallet=<address> (server.js, read-only) —
 //   200 { success:true, wallet, count, capped, rentSolTotal, valueUsdTotal,
@@ -17,6 +11,9 @@
 //                       empty, isNft }] }
 //   400 { success:false, error }   — bad wallet address
 //   500 { success:false, error }   — server/RPC trouble
+// Firepit has no receipt/broadcast endpoint of its own (unlike Project Burn) — this pane never
+// calls /api/burn-receipt; that is a Project Burn feature for a project's OWN token, and firepit's
+// desktop page (public/firepit.html) does not call it either. Confirmed by reading it.
 //
 // ⚠️ THE VALUE GUARD IS THE WHOLE POINT (CLAUDE.md, the task brief) and it is carried over
 // FAITHFULLY from public/firepit.html's `burnable()` / `openConfirm()` logic and the server's own
@@ -28,17 +25,34 @@
 // every guardrail (the confirm sheet, the danger styling, the count of "still worth something").
 // A failed price read is `unavailable` information, not permission to destroy the asset.
 //
+// ⚠️ FRESH READ BEFORE SIGNING: tapping Reclaim/Burn does not open the confirm sheet on
+// whatever the last scan happened to hold — it re-scans on-chain right then, matches the fresh
+// rows back to what was selected, and freezes THAT exact list (`confirmSel`, same role as
+// firepit.html's variable of the same name). The transaction-building step reads only that frozen
+// list; it never recomputes the selection at signing time, so a checkbox that changes while the
+// sheet is open (or a row that closed/emptied between scans) cannot silently swap what gets signed.
+//
+// ⚠️ NEVER BURN WRAPPED SOL (firepit.html, by name): closing a wSOL account just UNWRAPS it back
+// to the owner's SOL balance — it is not a burn, and its value is never counted as destroyed.
+//
+// Amounts sent to the chain are `amountRaw` (base units) from the server's scan, exact strings —
+// never `uiAmount` (a float) and never a float multiply.
+//
 // "Say what's on-chain, never why" (CLAUDE.md): this pane reports balances, rent and price facts.
 // It never labels a token safe, verified, scam or worthless — only what it is priced at.
 import React from "react";
 import { t } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
 import { shortAddr } from "../addr.js";
+import { signSendConfirm, splTokenShim } from "../sign.js";
 import "./tools.css";
 
 // Closing a wrapped-SOL account UNWRAPS it back to the owner — it is not a burn, and its value
 // is never counted as "destroyed" (matches public/firepit.html's isNativeSol()).
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
+// Token accounts per transaction (burn + close = up to 2 instructions each) — matches
+// firepit.html's CHUNK, kept well under the 1232-byte tx limit.
+const CHUNK = 8;
 
 function fmtSol(n) {
   n = Number(n) || 0;
@@ -113,6 +127,36 @@ function useToggleSet(initial) {
   return [set, toggle, selectAll, clear, setSet];
 }
 
+// The three (well, four — declined joins them) post-signature outcomes, one look each, never a
+// dimmed version of another. Reuses Airdropper's row classes (tools.css §2j) and forensic row
+// shape (§2g) rather than a fourth private copy of the same idea; declined gets its own neutral
+// class defined in this pane's own §2d (nothing went wrong, so it must not look like a failure).
+const OUTCOME_LABEL = {
+  sent: "Done",
+  failed: "Failed",
+  unconfirmed: "Unconfirmed",
+  declined: "Declined — nothing sent",
+};
+const OUTCOME_CLASS = {
+  sent: " seeker-drop-row-sent",
+  failed: " seeker-drop-row-failed",
+  unconfirmed: " seeker-drop-row-unconfirmed",
+  declined: " seeker-firepit-row-declined",
+};
+function OutcomeRow({ a, status, error }) {
+  return (
+    <div className={"seeker-forensic-row" + (OUTCOME_CLASS[status] || "")}>
+      <div className="seeker-forensic-row-main">
+        <div className="seeker-forensic-row-top"><span>{a.symbol || shortAddr(a.mint)}</span></div>
+        <div className="seeker-forensic-row-sub">
+          {t(OUTCOME_LABEL[status] || status)}{error ? ` · ${error}` : ""}
+        </div>
+      </div>
+      <div className="seeker-forensic-row-value">{fmtSol(a.rentLamports)}</div>
+    </div>
+  );
+}
+
 export default function FirepitPane({ wallet }) {
   const online = useOnline();
   const [phase, setPhase] = React.useState("idle"); // idle | loading | result | unavailable
@@ -121,13 +165,22 @@ export default function FirepitPane({ wallet }) {
   const [selEmpty, toggleEmpty, selectAllEmpty, clearEmpty, setSelEmpty] = useToggleSet();
   const [selBurn, toggleBurn, selectAllBurn, clearBurn, setSelBurn] = useToggleSet();
   const [confirmKind, setConfirmKind] = React.useState(null); // null | "reclaim" | "burn"
-  const [notice, setNotice] = React.useState(null); // { kind, count, lamports, valueUsd, unpricedCount }
+  // confirmPhase: "idle" (no sheet) | "checking" (fresh re-read in flight) | "ready" (sheet open,
+  // signing frozen against confirmSel) | "stale" (nothing selected survived the re-read) | "error"
+  const [confirmPhase, setConfirmPhase] = React.useState("idle");
+  const [confirmSel, setConfirmSel] = React.useState([]);   // the exact rows the sheet showed — see header note
+  const [busy, setBusy] = React.useState(false);
+  const [runMsg, setRunMsg] = React.useState("");
+  const [runResults, setRunResults] = React.useState([]);   // [{ a, status, sig, error }] flattened, in send order
+  const [runNotAttempted, setRunNotAttempted] = React.useState(0);
   const abortRef = React.useRef(null);
+  const confirmAbortRef = React.useRef(null);
 
   const scan = React.useCallback((address) => {
     if (!address) return;
     setPhase("loading");
-    setNotice(null);
+    setRunResults([]);   // a fresh scan retires any earlier run report — it must not persist forever
+    setRunNotAttempted(0);
     try { abortRef.current && abortRef.current.abort(); } catch (_) {}
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -156,6 +209,8 @@ export default function FirepitPane({ wallet }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.connected, wallet.address]);
 
+  React.useEffect(() => () => { try { confirmAbortRef.current && confirmAbortRef.current.abort(); } catch (_) {} }, []);
+
   if (!wallet.connected) {
     return (
       <Pane icon="🔥" title="Firepit">
@@ -180,37 +235,118 @@ export default function FirepitPane({ wallet }) {
   const burnValueUsd = selBurnRows.reduce((s, a) => s + (isWsol(a) ? 0 : Number(a.valueUsd) || 0), 0);
   const burnUnpriced = selBurnRows.filter((a) => isUnpriced(a));
 
-  function openConfirm(kind) {
-    if (kind === "reclaim" && selEmptyRows.length === 0) return;
-    if (kind === "burn" && selBurnRows.length === 0) return;
+  // ── open the confirm sheet on a FRESH chain read (see header note) ─────────────────────────
+  async function openConfirm(kind) {
+    const rows = kind === "reclaim" ? selEmptyRows : selBurnRows;
+    if (!rows.length) return;
+    const ids = new Set(rows.map((a) => a.tokenAccount));
     setConfirmKind(kind);
+    setConfirmPhase("checking");
+    setConfirmSel([]);
+    try { confirmAbortRef.current && confirmAbortRef.current.abort(); } catch (_) {}
+    const ctrl = new AbortController();
+    confirmAbortRef.current = ctrl;
+    const res = await toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(wallet.address)}`, { signal: ctrl.signal });
+    if (res.kind === "aborted") return;
+    if (!res.ok) { setConfirmPhase("error"); return; }
+    const freshAccounts = res.data.accounts || [];
+    // Keep the underlying page in step with the same fresh read — never leave it showing an
+    // older scan next to a sheet built from a newer one.
+    setData(res.data);
+    setSelEmpty((s) => { const ok = new Set(freshAccounts.filter((a) => a.empty && actionable(a)).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
+    setSelBurn((s) => { const ok = new Set(freshAccounts.filter((a) => !a.empty && actionable(a)).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
+    const matched = freshAccounts.filter((a) => ids.has(a.tokenAccount) && actionable(a) && (kind === "reclaim" ? a.empty : !a.empty));
+    if (!matched.length) { setConfirmPhase("stale"); return; }
+    setConfirmSel(matched);
+    setConfirmPhase("ready");
   }
-  function cancelConfirm() { setConfirmKind(null); }
-  function onConfirmed() {
-    // ⛔ NO SIGNING TONIGHT. See the file header — this is the deliberate stop, not a bug.
-    const kind = confirmKind;
+  function cancelConfirm() { setConfirmKind(null); setConfirmPhase("idle"); setConfirmSel([]); }
+
+  // ── build + sign, exactly the frozen confirmSel — never a recomputed selection ─────────────
+  async function onConfirmed() {
+    const sel = confirmSel;
     setConfirmKind(null);
-    if (kind === "reclaim") {
-      setNotice({ kind, count: selEmptyRows.length, lamports: emptyLamports });
-    } else {
-      setNotice({ kind, count: selBurnRows.length, lamports: burnLamports, valueUsd: burnValueUsd, unpricedCount: burnUnpriced.length });
+    setConfirmPhase("idle");
+    setConfirmSel([]);
+    if (!sel.length) return;
+
+    setBusy(true);
+    setRunResults([]);
+    setRunNotAttempted(0);
+    const collected = [];
+    const chunks = [];
+    for (let i = 0; i < sel.length; i += CHUNK) chunks.push(sel.slice(i, i + CHUNK));
+
+    for (let c = 0; c < chunks.length; c++) {
+      const chunk = chunks[c];
+      setRunMsg(`${t("Approve transaction")} ${c + 1} ${t("of")} ${chunks.length} ${t("in your wallet…")}`);
+      // eslint-disable-next-line no-await-in-loop
+      const res = await signSendConfirm({
+        provider: wallet.provider,
+        owner: wallet.address,
+        skipPreflight: true,   // matches firepit.html — preflight runs at 'finalized' and rejects a fresh 'confirmed' blockhash
+        build: (web3, blockhash, owner) => {
+          const { Transaction, PublicKey } = web3;
+          const spl = splTokenShim();
+          const ownerKey = new PublicKey(owner);
+          const tx = new Transaction();
+          chunk.forEach((a) => {
+            const ta = new PublicKey(a.tokenAccount), mint = new PublicKey(a.mint);
+            // Burn any balance to zero first — but NEVER "burn" wrapped SOL; closing it just
+            // unwraps it back to SOL (header note, and firepit.html by name).
+            if (!a.empty && !isWsol(a)) {
+              tx.add(spl.createBurnCheckedInstruction(ta, mint, ownerKey, a.amountRaw, a.decimals, a.program));
+            }
+            // Close the (now-empty) account and send its rent to the owner.
+            tx.add(spl.createCloseAccountInstruction(ta, ownerKey, ownerKey, a.program));
+          });
+          tx.feePayer = ownerKey;
+          tx.recentBlockhash = blockhash;
+          return tx;
+        },
+      });
+      collected.push({ chunk, status: res.status, sig: res.sig, error: res.error });
+      setRunResults(collected.flatMap(({ chunk: ch, status, sig, error }) => ch.map((a) => ({ a, status, sig, error }))));
+      if (res.status === "declined" || res.status === "failed") {
+        setRunNotAttempted(sel.length - collected.reduce((n, r) => n + r.chunk.length, 0));
+        break;
+      }
+      // "unconfirmed" continues to the next chunk (matches firepit.html) — it may still land, and
+      // stopping the whole run over one ambiguous chunk would leave easy, safe reclaims undone.
     }
+
+    // Only DROP rows we watched actually land (status "sent") — an unconfirmed or failed row is
+    // untouched on-chain and must stay in the list so Rescan can re-check it truthfully.
+    const sentIds = new Set();
+    collected.forEach(({ chunk, status }) => { if (status === "sent") chunk.forEach((a) => sentIds.add(a.tokenAccount)); });
+    if (sentIds.size) {
+      setData((d) => (d ? { ...d, accounts: (d.accounts || []).filter((a) => !sentIds.has(a.tokenAccount)) } : d));
+      setSelEmpty((s) => { const n = new Set(s); sentIds.forEach((id) => n.delete(id)); return n; });
+      setSelBurn((s) => { const n = new Set(s); sentIds.forEach((id) => n.delete(id)); return n; });
+    }
+    setRunMsg("");
+    setBusy(false);
   }
 
-  const reclaimLines = [
-    <span key="c">{t("Accounts to close")}: <strong>{selEmptyRows.length}</strong></span>,
-    <span key="s">{t("SOL returning to your wallet")}: <strong>{fmtSol(emptyLamports)}</strong></span>,
+  const reclaimLines = confirmKind === "reclaim" ? [
+    <span key="c">{t("Accounts to close")}: <strong>{confirmSel.length}</strong></span>,
+    <span key="s">{t("SOL returning to your wallet")}: <strong>{fmtSol(confirmSel.reduce((s, a) => s + (Number(a.rentLamports) || 0), 0))}</strong></span>,
     <span key="n">{t("These accounts are empty — nothing of value is destroyed.")}</span>,
-  ];
-  const burnLines = [
-    <span key="c">{t("Accounts affected")}: <strong>{selBurnRows.length}</strong></span>,
-    <span key="s">{t("SOL returning to your wallet")}: <strong>{fmtSol(burnLamports)}</strong></span>,
-    burnValueUsd > 0 ? <span key="v">{t("Known value being destroyed")}: <strong className="seeker-firepit-destroyval">{fmtUsd(burnValueUsd)}</strong></span> : null,
-    burnUnpriced.length > 0 ? (
-      <span key="u">{burnUnpriced.length} {burnUnpriced.length === 1 ? t("token could not be priced — its value is unknown, not zero. It may be worth money.") : t("tokens could not be priced — their value is unknown, not zero. They may be worth money.")}</span>
+  ] : [];
+  const confirmBurnValueUsd = confirmKind === "burn" ? confirmSel.reduce((s, a) => s + (isWsol(a) ? 0 : Number(a.valueUsd) || 0), 0) : 0;
+  const confirmBurnUnpriced = confirmKind === "burn" ? confirmSel.filter((a) => isUnpriced(a)) : [];
+  const burnLines = confirmKind === "burn" ? [
+    <span key="c">{t("Accounts affected")}: <strong>{confirmSel.length}</strong></span>,
+    <span key="s">{t("SOL returning to your wallet")}: <strong>{fmtSol(confirmSel.reduce((s, a) => s + (Number(a.rentLamports) || 0), 0))}</strong></span>,
+    confirmBurnValueUsd > 0 ? <span key="v">{t("Known value being destroyed")}: <strong className="seeker-firepit-destroyval">{fmtUsd(confirmBurnValueUsd)}</strong></span> : null,
+    confirmBurnUnpriced.length > 0 ? (
+      <span key="u">{confirmBurnUnpriced.length} {confirmBurnUnpriced.length === 1 ? t("token could not be priced — its value is unknown, not zero. It may be worth money.") : t("tokens could not be priced — their value is unknown, not zero. They may be worth money.")}</span>
     ) : null,
     <span key="p">{t("This burns the token balance permanently. It cannot be undone — the tokens cannot be recovered.")}</span>,
-  ].filter(Boolean);
+  ].filter(Boolean) : [];
+
+  const counts = runResults.reduce((a, r) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
+  const runDone = !busy && runResults.length > 0;
 
   return (
     <Pane icon="🔥" title="Firepit">
@@ -219,11 +355,40 @@ export default function FirepitPane({ wallet }) {
       {phase === "loading" ? <Loading label={t("Scanning your wallet on-chain…")} /> : null}
       {phase === "unavailable" ? <Unavailable kind={errKind} onRetry={() => scan(wallet.address)} /> : null}
 
-      {phase === "result" && accounts.length === 0 ? (
+      {phase === "result" && accounts.length === 0 && !busy && !runDone ? (
         <Empty>{t("Clean wallet — no token accounts to burn or reclaim.")}</Empty>
       ) : null}
 
-      {phase === "result" && accounts.length > 0 ? (
+      {busy ? (
+        <>
+          <Loading label="Working…" />
+          {runMsg ? <p className="seeker-tool-note">{runMsg}</p> : null}
+          {runResults.length ? <div className="seeker-forensic-rows">{runResults.map((r, i) => <OutcomeRow key={i} a={r.a} status={r.status} error={r.error} />)}</div> : null}
+        </>
+      ) : null}
+
+      {runDone ? (
+        <div className="seeker-firepit-runreport">
+          <div className="seeker-forensic-statgrid">
+            <div className="seeker-forensic-stat"><div className="seeker-forensic-stat-label">{t("Done")}</div><div className="seeker-forensic-stat-value">{counts.sent || 0}</div></div>
+            <div className="seeker-forensic-stat"><div className="seeker-forensic-stat-label">{t("Failed")}</div><div className="seeker-forensic-stat-value">{counts.failed || 0}</div></div>
+          </div>
+          {counts.unconfirmed ? (
+            <div className="seeker-drop-unconfirmed" role="alert">
+              <p className="seeker-tool-notyet-title">⏳ {counts.unconfirmed} {t("unconfirmed")}</p>
+              <p>{t("These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check — do not sign them again until you've confirmed they didn't land, or you risk trying to burn the same tokens twice.")}</p>
+            </div>
+          ) : null}
+          {counts.declined ? <p className="seeker-tool-note">{t("You declined a transaction, so nothing in it was sent.")}</p> : null}
+          {runNotAttempted > 0 ? <p className="seeker-tool-note">{runNotAttempted} {t("account(s) were never attempted and are unchanged.")}</p> : null}
+          <div className="seeker-forensic-rows">{runResults.map((r, i) => <OutcomeRow key={i} a={r.a} status={r.status} error={r.error} />)}</div>
+          {/* Always reachable, even when the burn/reclaim cleared out every remaining account and
+              the sections below have nothing left to show. */}
+          <button type="button" className="seeker-btn seeker-btn-quiet seeker-firepit-rescan" disabled={!online} onClick={() => scan(wallet.address)}>{t("Rescan")}</button>
+        </div>
+      ) : null}
+
+      {phase === "result" && accounts.length > 0 && !busy ? (
         <>
           {data && data.capped ? <p className="seeker-tool-note">{t("More accounts exist in this wallet than are shown here (first 200).")}</p> : null}
 
@@ -243,7 +408,7 @@ export default function FirepitPane({ wallet }) {
                 </div>
                 <div className="seeker-firepit-actionrow">
                   <span className="seeker-firepit-actiontotal">{t("You'll receive")}: <strong>{fmtSol(emptyLamports)}</strong></span>
-                  <button type="button" className="seeker-btn" disabled={selEmptyRows.length === 0} onClick={() => openConfirm("reclaim")}>{t("Reclaim")}</button>
+                  <button type="button" className="seeker-btn" disabled={selEmptyRows.length === 0 || confirmPhase === "checking"} onClick={() => openConfirm("reclaim")}>{t("Reclaim")}</button>
                 </div>
               </>
             )}
@@ -267,7 +432,7 @@ export default function FirepitPane({ wallet }) {
                   <span className="seeker-firepit-actiontotal">
                     {burnValueUsd > 0 ? <>{t("Value to destroy")}: <strong className="seeker-firepit-destroyval">{fmtUsd(burnValueUsd)}</strong></> : t("Reclaim")}: <strong>{fmtSol(burnLamports)}</strong>
                   </span>
-                  <button type="button" className="seeker-btn seeker-btn-danger" disabled={selBurnRows.length === 0} onClick={() => openConfirm("burn")}>{t("Burn")}</button>
+                  <button type="button" className="seeker-btn seeker-btn-danger" disabled={selBurnRows.length === 0 || confirmPhase === "checking"} onClick={() => openConfirm("burn")}>{t("Burn")}</button>
                 </div>
               </>
             )}
@@ -277,8 +442,22 @@ export default function FirepitPane({ wallet }) {
         </>
       ) : null}
 
+      {confirmPhase === "checking" ? <Loading label={t("Re-checking your wallet on-chain before you sign…")} /> : null}
+      {confirmPhase === "stale" ? (
+        <div className="seeker-tool-note seeker-passgate-err" role="alert">
+          {t("Those accounts changed since the last scan — nothing left to act on. Rescan and try again.")}
+          <button type="button" className="seeker-btn seeker-btn-quiet" onClick={cancelConfirm}>{t("OK")}</button>
+        </div>
+      ) : null}
+      {confirmPhase === "error" ? (
+        <div className="seeker-tool-note seeker-passgate-err" role="alert">
+          {t("Could not re-check your wallet on-chain. Try again.")}
+          <button type="button" className="seeker-btn seeker-btn-quiet" onClick={cancelConfirm}>{t("OK")}</button>
+        </div>
+      ) : null}
+
       <Confirm
-        open={confirmKind === "reclaim"}
+        open={confirmKind === "reclaim" && confirmPhase === "ready"}
         title="Confirm reclaim"
         lines={reclaimLines}
         confirmLabel="Confirm and sign"
@@ -286,7 +465,7 @@ export default function FirepitPane({ wallet }) {
         onCancel={cancelConfirm}
       />
       <Confirm
-        open={confirmKind === "burn"}
+        open={confirmKind === "burn" && confirmPhase === "ready"}
         title="Confirm burn"
         lines={burnLines}
         confirmLabel="Confirm and sign"
@@ -294,14 +473,6 @@ export default function FirepitPane({ wallet }) {
         onCancel={cancelConfirm}
         danger
       />
-
-      {notice ? (
-        <div className="seeker-tool-notyet" role="status">
-          <p className="seeker-tool-notyet-title">🚧 {t("Signing lands in the next build")}</p>
-          <p>{t("Nothing was sent or signed. This build ships the scan, the value guard and this confirm step; the actual burn/close transaction ships in a follow-up build on a hardened, shared send-and-confirm helper.")}</p>
-          <button type="button" className="seeker-btn seeker-btn-quiet" onClick={() => setNotice(null)}>{t("OK")}</button>
-        </div>
-      ) : null}
     </Pane>
   );
 }

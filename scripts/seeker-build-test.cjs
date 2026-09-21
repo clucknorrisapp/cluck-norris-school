@@ -419,6 +419,72 @@ function buildVariant(cwd, variant) {
       for (const m of t.matchAll(/<PassGate[^>]*\btool="([^"]+)"/g)) if (!known.has(m[1])) unknown.push(`${f}:${m[1]}`);
     }
     ok("every gating pane names a tool the sheet has a sentence for", unknown.length === 0, unknown.join(", "));
+
+    // ── and ONE signing seam, for the same reason ──────────────────────────────────────────
+    // src/seeker/sign.js carries four protections, and the first of them — checking `err` before
+    // `confirmationStatus` — shipped WRONG in two copy-pasted places at once and was found by two
+    // independent reviewers on the same day. Five panes now sign; none of them may grow a sixth
+    // copy. Asserted as: no pane and no other app file calls getSignatureStatuses or
+    // sendTransaction directly, and nothing re-declares the seam's exported names.
+    //
+    // public/airdrop-engine.js is deliberately NOT in scope: it is the platform's shared engine,
+    // loaded by the live website and the store bundles as well as this app, and it carries its
+    // own hardened copy with the same fix and the same comment. Rewriting a live money path to
+    // import an app-local ESM module is not a change to slip into an app build.
+    const appFiles = [];
+    (function walk(dir) {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fp = path.join(dir, e.name);
+        if (e.isDirectory()) walk(fp);
+        // Two files may talk to the chain directly, and only these two:
+        //   sign.js        — the seam itself.
+        //   reclaim-sign.js — Rent Reclaim signs MANY batches in ONE wallet prompt
+        //                     (signAllTransactions), a genuinely different shape from the seam's
+        //                     one-transaction flow. It is exempt from the raw-RPC rule and NOT
+        //                     from the rest: the assertion below pins that it imports the seam's
+        //                     protections instead of keeping the copies it used to define.
+        else if (/\.(jsx?|mjs)$/.test(e.name)
+                 && fp !== path.join(ROOT, "src", "seeker", "sign.js")
+                 && fp !== path.join(ROOT, "src", "seeker", "reclaim-sign.js")) appFiles.push(fp);
+      }
+    })(path.join(ROOT, "src", "seeker"));
+    const raw = [], redeclared = [];
+    for (const fp of appFiles) {
+      const t = fs.readFileSync(fp, "utf8")
+        // Comments name these on purpose — they are the record of why the seam exists.
+        .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      const rel = path.relative(ROOT, fp);
+      if (/["'`]getSignatureStatuses["'`]|["'`]sendTransaction["'`]/.test(t)) raw.push(rel);
+      if (/(^|\n)\s*(export\s+)?(async\s+)?function\s+(confirmSignature|isUserRejection|signSendConfirm|assertSameAccount)\s*\(/.test(t) ||
+          /(^|\n)\s*(export\s+)?(const|let|var)\s+(confirmSignature|isUserRejection|signSendConfirm|assertSameAccount)\s*=/.test(t)) redeclared.push(rel);
+    }
+    ok("only the seam (and Rent Reclaim's batch path) talks to getSignatureStatuses / sendTransaction", raw.length === 0, raw.join(", "));
+    {
+      // The exemption is for the RPC call, not for the protections. reclaim-sign.js used to
+      // DEFINE confirmSignature and isUserRejection — that is where one half of the P0 lived.
+      const rs = fs.readFileSync(path.join(ROOT, "src", "seeker", "reclaim-sign.js"), "utf8");
+      ok("reclaim-sign.js gets its protections FROM the seam, not from copies of its own",
+         /from "\.\/sign\.js"/.test(rs) && !/^\s*export async function confirmSignature\(/m.test(rs)
+           && !/^\s*export function isUserRejection\(/m.test(rs),
+         "reclaim-sign.js still defines its own confirmSignature/isUserRejection");
+      ok("and its batch path still diffs the wallet's returned message bytes",
+         /if \(!sameBytes\(messageBytes\(txs\[i\]\), messageBytes\(realTx\)\)\)/.test(rs));
+    }
+    ok("no file re-declares confirmSignature / isUserRejection / signSendConfirm / assertSameAccount", redeclared.length === 0, redeclared.join(", "));
+    // The ordering itself, positively: a negative regex would pass against the broken code.
+    {
+      const seam = fs.readFileSync(path.join(ROOT, "src", "seeker", "sign.js"), "utf8");
+      const iErr = seam.indexOf("if (st && st.err) throw new Error");
+      const iStatus = seam.indexOf('if (st && (st.confirmationStatus === "confirmed"');
+      ok("⚠️ sign.js checks st.err BEFORE st.confirmationStatus — the P0 that shipped twice",
+         iErr > 0 && iStatus > iErr, `err@${iErr} status@${iStatus}`);
+      ok("and an RPC read failure keeps polling rather than reporting a failure that did not happen",
+         /catch \(_\) \{\s*\n(\s*\/\/.*\n)*\s*continue;/.test(seam));
+      ok("sign.js re-reads the LIVE public key before anything is built for signing",
+         /export function assertSameAccount\(/.test(seam) && /live !== expected/.test(seam));
+      ok("and diffs the wallet's returned message bytes against what it built",
+         /if \(!sameBytes\(messageBytes\(tx\), messageBytes\(realTx\)\)\)/.test(seam));
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════

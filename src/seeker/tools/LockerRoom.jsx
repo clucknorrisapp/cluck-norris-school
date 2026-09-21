@@ -2,14 +2,22 @@
 // This is the flagship story (AGENTS.md): "helping communities lock tokens on Jupiter Lock and
 // broadcast it." Two halves, both real tonight:
 //
-// ⛔ SCOPE LINE (owner-set, tonight's build): READ SIDE + FULL CONFIRM UX ONLY. No transaction is
-// signed or sent. Same reason as Firepit.jsx / ProjectBurn.jsx: the send/confirm seam (sign →
-// partialSign → submit → poll getSignatureStatuses) is being extracted into one hardened, reviewed
-// helper after an adversarial review found a landed-but-failed status bug baked into a copy-pasted
-// version of it. Locking lands on top of that helper once it exists. Tapping "Confirm and sign"
-// here renders the SigningNotYet block instead of touching a wallet.
+// ✅ SIGNING IS LIVE. This pane stopped short of a wallet in its first build, on purpose: the
+// send/confirm seam (sign → partialSign → submit → poll getSignatureStatuses) was about to be
+// written a third time, and an adversarial review had just found a landed-but-failed status bug
+// baked into the two copies that already existed. That seam is now ONE file — src/seeker/sign.js
+// — and this pane sits on it. Nothing about confirmation, decline detection, the live-pubkey
+// re-read or the message-byte diff is re-implemented here; read that file's header for what each
+// of those four protections costs when it is missing.
 //
-// Server (server.js, all read-only or build-only — nothing here ever asks a wallet to sign):
+// ⚠️ THE SIGNING ORDER IS A RULE, NOT A STYLE (CLAUDE.md): the CONNECTED WALLET SIGNS FIRST, then
+// the ephemeral escrow key co-signs. Pre-signing server-side, or using signAndSendTransaction when
+// a non-wallet signer exists, is what makes Phantom warn "this transaction may be malicious". The
+// transaction itself is built and mainnet-simulated SERVER-SIDE by /api/lock/create-tx — no
+// Jupiter Lock instruction is constructed in this browser — so `txBase64` and `baseSecret` are
+// now USED (they were discarded in the read-only build): decoded, signed in that order, submitted.
+//
+// Server (server.js):
 //   GET  /api/locks?mint=<mint>  — the public proof read, on-chain, no wallet needed.
 //     200 { success:true, partial, mint, decimals, supply, totalLocked, pctOfSupply, lockCount,
 //           breakdown:[{label,tokens}], topLocks:[{authority,tokens,label}] (top 20),
@@ -24,7 +32,8 @@
 //     200 { ok:true, txBase64, baseSecret, escrow, escrowToken, decimals, tokenProgram,
 //           schedule:{totalRaw,cliffRaw,perPeriodRaw,periods,freqSec,cliffTime}, simError,
 //           tokenSymbol?, tokenName? }
-//       — txBase64/baseSecret are UNSIGNED/throwaway and never used by this pane; discarded. A
+//       — txBase64 is UNSIGNED (the wallet signs it first); baseSecret is a throwaway keypair the
+//         server generated for THIS escrow alone and is an authority over nothing. A
 //         non-null `simError` means the plan would fail on-chain (bad balance, wrong mint, a
 //         soulbound/transfer-hook token, …) and this pane treats it as a fixable form problem, not
 //         a result to confirm.
@@ -58,6 +67,7 @@ import React from "react";
 import { t } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
 import { shortAddr } from "../addr.js";
+import { signSendConfirm } from "../sign.js";
 import "./tools.css";
 
 // AGENTS.md — the canonical CLKN mint. Used only as the View Locks tab's starting example so the
@@ -248,7 +258,11 @@ function CreateLockTab({ wallet }) {
   const [errMsg, setErrMsg] = React.useState(null);
   const [plan, setPlan] = React.useState(null);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
-  const [notice, setNotice] = React.useState(null);
+  // The result of an actual on-chain attempt. FOUR states, kept apart deliberately (src/seeker/
+  // sign.js explains why): sent | unconfirmed | failed | declined. "unconfirmed" MAY have created
+  // the lock, so it never offers a retry — a second lock would commit the tokens twice.
+  const [result, setResult] = React.useState(null);
+  const [signing, setSigning] = React.useState(false);
   const abortRef = React.useRef(null);
 
   React.useEffect(() => () => { try { abortRef.current && abortRef.current.abort(); } catch (_) {} }, []);
@@ -271,7 +285,7 @@ function CreateLockTab({ wallet }) {
     const pct = Math.max(0, Math.min(100, parseFloat(cliffPct) || 0));
     setFormError(null);
     setSimWarning(null);
-    setNotice(null);
+    setResult(null);
     setPlan(null);
     if (!online) { setPhase("unavailable"); setErrKind("offline"); return; }
     setPhase("building");
@@ -343,10 +357,54 @@ function CreateLockTab({ wallet }) {
 
   function openConfirm() { if (plan) setConfirmOpen(true); }
   function cancelConfirm() { setConfirmOpen(false); }
-  function onConfirmed() {
-    // ⛔ NO SIGNING TONIGHT. See the file header — deliberate stop, not a bug.
+  // The signature. The transaction was BUILT AND MAINNET-SIMULATED SERVER-SIDE by
+  // /api/lock/create-tx — nothing about the Jupiter Lock instruction is constructed in this
+  // browser — so what happens here is only: decode it, let the connected wallet sign it FIRST,
+  // then add the ephemeral escrow signature, submit, confirm.
+  //
+  // ⚠️ THE ORDER IS THE WHOLE POINT, and it is a CLAUDE.md rule by name: the CONNECTED WALLET
+  // SIGNS FIRST, then extra signers. Pre-signing server-side, or reaching for
+  // signAndSendTransaction when a non-wallet signer exists, is what makes Phantom show
+  // "this transaction may be malicious". `baseSecret` is a throwaway keypair the server
+  // generated for THIS escrow and nothing else; it is not an authority over anything, and it
+  // never leaves this function. sign.js's coSign hook runs it after the wallet has signed and
+  // after the byte diff — partialSign does not alter the compiled message, so what the person
+  // approved is still what goes out.
+  async function onConfirmed() {
     setConfirmOpen(false);
-    setNotice({ amount: totalTokens, symbol, cliffTime, fullyVestedAt });
+    if (!plan || signing) return;
+    setSigning(true);
+    setResult(null);
+    const out = await signSendConfirm({
+      provider: wallet.provider,
+      owner: wallet.address,
+      build: (web3) => {
+        // The server's blockhash is kept — it is the one the simulation ran against and the one
+        // `lastValidBlockHeight` refers to. Re-fetching one here would silently invalidate both.
+        const bytes = Uint8Array.from(atob(plan.txBase64), (c) => c.charCodeAt(0));
+        return web3.Transaction.from(bytes);
+      },
+      coSign: (tx, web3) => {
+        const secret = Uint8Array.from(atob(plan.baseSecret), (c) => c.charCodeAt(0));
+        tx.partialSign(web3.Keypair.fromSecretKey(secret));
+      },
+    });
+    setSigning(false);
+    setResult(out);
+    // The public "made right here" feed. Only a CONFIRMED lock is offered to it, and the server
+    // verifies the signature on chain and refuses anything without our attribution memo — so a
+    // failure here cannot put a false lock in the feed. It also cannot un-make the lock: a
+    // recording hiccup is reported as exactly that, never as a failed lock.
+    if (out.status === "sent" && out.sig) {
+      try {
+        const r = await fetch("/api/lock/record", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sig: out.sig }),
+        });
+        const j = await r.json().catch(() => null);
+        setResult({ ...out, recorded: !!(j && j.ok), recordError: (j && j.error) || null });
+      } catch (_) { setResult({ ...out, recorded: false, recordError: "could not reach the feed" }); }
+    }
   }
 
   return (
@@ -427,7 +485,17 @@ function CreateLockTab({ wallet }) {
             <div><dt>{t("Fully unlocked")}</dt><dd>{fmtDate(fullyVestedAt)}</dd></div>
             <div><dt>{t("Cancelable")}</dt><dd>{plan.cancelable ? t("Yes, by you") : t("No — permanent")}</dd></div>
           </dl>
-          <button type="button" className="seeker-btn seeker-btn-danger seeker-burn-actionbtn" onClick={openConfirm}>{t("Lock tokens")}</button>
+          {/* ⚠️ THE BUTTON DISAPPEARS ONCE THE LOCK MAY EXIST. Caught by section H of
+              seeker-app-boot-test.cjs: the result card rendered BELOW the reviewed card, so after
+              an UNCONFIRMED attempt — one that may well have landed — "Lock tokens" was still
+              sitting there, one tap from committing the tokens a second time with no way back.
+              A failed or declined attempt is different: nothing happened, and trying again is
+              exactly the right next step, so the button stays. */}
+          {result && (result.status === "sent" || result.status === "unconfirmed") ? null : (
+            <button type="button" className="seeker-btn seeker-btn-danger seeker-burn-actionbtn" onClick={openConfirm} disabled={signing}>
+              {signing ? t("Waiting for your wallet…") : t("Lock tokens")}
+            </button>
+          )}
         </div>
       ) : null}
 
@@ -441,14 +509,58 @@ function CreateLockTab({ wallet }) {
         danger
       />
 
-      {notice ? (
-        <div className="seeker-tool-notyet" role="status">
-          <p className="seeker-tool-notyet-title">🚧 {t("Signing lands in the next build")}</p>
-          <p>{t("Nothing was sent or signed. This build ships the on-chain simulation, the exact schedule and this confirm step; the actual lock transaction ships in a follow-up build on a hardened, shared send-and-confirm helper.")}</p>
-          <button type="button" className="seeker-btn seeker-btn-quiet" onClick={() => setNotice(null)}>{t("OK")}</button>
-        </div>
-      ) : null}
+      {result ? <LockResult result={result} symbol={symbol} amount={totalTokens} onDone={() => { setResult(null); setPhase("form"); setPlan(null); }} /> : null}
     </>
+  );
+}
+
+// FOUR outcomes, four different things to do next. Collapsing any two of them is the failure
+// src/seeker/sign.js's header describes, and on a lock it is worse than on a transfer: the
+// tokens are committed until a date nobody can move.
+function LockResult({ result, symbol, amount, onDone }) {
+  const href = /^[1-9A-HJ-NP-Za-km-z]{43,88}$/.test(String(result.sig || "")) ? `https://solscan.io/tx/${result.sig}` : null;
+  if (result.status === "declined") {
+    return (
+      <div className="seeker-tool-notyet" role="status">
+        <p className="seeker-tool-notyet-title">{t("Nothing was signed")}</p>
+        <p>{t("You closed the wallet prompt. No tokens were locked and nothing was sent — the plan above is still here if you want to try again.")}</p>
+        <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onDone}>{t("OK")}</button>
+      </div>
+    );
+  }
+  if (result.status === "sent") {
+    return (
+      <div className="seeker-lock-result seeker-lock-result-ok" role="status">
+        <p className="seeker-tool-notyet-title">🔒 {t("Locked.")}</p>
+        <p>{fmtNum(amount)}{symbol ? ` ${symbol}` : ""} {t("is now held by Jupiter Lock's program on the schedule you approved. Nobody — including us — can move it earlier.")}</p>
+        {href ? <a className="seeker-forensic-link" href={href} target="_blank" rel="noopener noreferrer">{t("View the transaction")}</a> : null}
+        {result.recorded === false ? (
+          <p className="seeker-tool-note">{t("The lock is on-chain and real. It just didn't make it into the public Locker Room feed:")} {result.recordError || t("unknown error")}.</p>
+        ) : null}
+        <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onDone}>{t("Done")}</button>
+      </div>
+    );
+  }
+  if (result.status === "unconfirmed") {
+    return (
+      <div className="seeker-lock-result seeker-lock-result-unconfirmed" role="alert">
+        <p className="seeker-tool-notyet-title">⏳ {t("Submitted, but not confirmed")}</p>
+        {/* ⚠️ NO RETRY BUTTON HERE, ON PURPOSE. This may already have created the lock. Locking
+            again would commit the tokens twice, and a lock cannot be undone. */}
+        <p>{t("Your wallet signed and the transaction went out, but there was still no on-chain status after 30 seconds. It may yet land. Check the transaction before doing anything else — do NOT lock again, or you could commit the tokens twice.")}</p>
+        {href ? <a className="seeker-forensic-link" href={href} target="_blank" rel="noopener noreferrer">{t("Check the transaction")}</a> : null}
+        <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onDone}>{t("OK")}</button>
+      </div>
+    );
+  }
+  return (
+    <div className="seeker-lock-result seeker-lock-result-failed" role="alert">
+      <p className="seeker-tool-notyet-title">{t("The lock did not go through")}</p>
+      <p>{result.error || t("The transaction failed.")}</p>
+      <p className="seeker-tool-note">{t("Nothing was locked — your tokens are where they were. You can fix the problem above and try again.")}</p>
+      {href ? <a className="seeker-forensic-link" href={href} target="_blank" rel="noopener noreferrer">{t("View the transaction")}</a> : null}
+      <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onDone}>{t("OK")}</button>
+    </div>
   );
 }
 

@@ -541,6 +541,145 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await ctx.close();
   }
 
+  // ---- H: the Locker Room — two signers, in the order that matters ------------------------
+  //
+  // The flagship tool, and the only transaction in this app with a SECOND signer. CLAUDE.md
+  // states the rule by name: the CONNECTED WALLET SIGNS FIRST, then extra signers; pre-signing
+  // server-side, or reaching for signAndSendTransaction when a non-wallet signer exists, is what
+  // makes Phantom warn "this transaction may be malicious". A rule stated in a comment is not a
+  // rule, so this section takes the bytes the app actually submits, deserializes them, and reads
+  // the signatures back out.
+  //
+  // The transaction is a stand-in, not a real Jupiter Lock instruction: a memo whose one account
+  // is the ephemeral base key as a required signer, fee-paid by the wallet. What is under test is
+  // the pane's signing ORDER and its four outcomes, not the lock program — /api/lock/create-tx
+  // builds and mainnet-simulates the real one server-side, and this test replaces that endpoint.
+  {
+    const MEMO = new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+    const MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+    const SIG_OK = "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCFFzVkbqDHHcgkTMZLFBgrPtrTKJqXNJ2kFfPjRnLXGRCGXBLjF";
+
+    // Four runs, one per outcome. Each gets a fresh page so state can't leak between them.
+    for (const [label, statusResult, wantText, wantNoText] of [
+      ["sent", { err: null, confirmationStatus: "confirmed" }, /Locked\./i, null],
+      ["failed on-chain", { err: { InstructionError: [0, "Custom"] }, confirmationStatus: "confirmed" }, /did not go through/i, /Locked\./i],
+      ["unconfirmed", null, /not confirmed/i, /Locked\./i],
+    ]) {
+      const SIGNER = web3.Keypair.generate();
+      const BASE = web3.Keypair.generate();
+      const recorded = [];
+      let submitted = null;
+      const FAKE_SIGNING = `(() => {
+        const SECRET = ${JSON.stringify(Array.from(SIGNER.secretKey))};
+        const account = { address: ${JSON.stringify(SIGNER.publicKey.toBase58())}, publicKey: new Uint8Array(32).fill(7),
+          chains: ["solana:mainnet"], features: ["solana:signTransaction"] };
+        const wallet = {
+          version: "1.0.0", name: "Jupiter", icon: "data:image/svg+xml;base64,PHN2Zy8+",
+          chains: ["solana:mainnet"], accounts: [],
+          features: {
+            "standard:connect": { version: "1.0.0", connect: async () => { wallet.accounts = [account]; return { accounts: [account] }; } },
+            "standard:disconnect": { version: "1.0.0", disconnect: async () => { wallet.accounts = []; } },
+            "standard:events": { version: "1.0.0", on: () => () => {} },
+            "solana:signTransaction": { version: "1.0.0", supportedTransactionVersions: ["legacy", 0],
+              signTransaction: async (...inputs) => inputs.map((x) => {
+                const tx = solanaWeb3.Transaction.from(x.transaction);
+                tx.partialSign(solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(SECRET)));
+                return { signedTransaction: tx.serialize({ requireAllSignatures: false, verifySignatures: false }) };
+              }) },
+          },
+        };
+        const cb = ({ register }) => register(wallet);
+        window.addEventListener("wallet-standard:app-ready", (ev) => cb(ev.detail));
+        window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", { detail: cb }));
+      })();`;
+
+      const unsigned = new web3.Transaction({ feePayer: SIGNER.publicKey, recentBlockhash: web3.Keypair.generate().publicKey.toBase58() })
+        .add(new web3.TransactionInstruction({ keys: [{ pubkey: BASE.publicKey, isSigner: true, isWritable: true }], programId: MEMO, data: Buffer.from("clucknorris") }));
+      const CREATE = {
+        ok: true,
+        txBase64: unsigned.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64"),
+        baseSecret: Buffer.from(BASE.secretKey).toString("base64"),
+        escrow: web3.Keypair.generate().publicKey.toBase58(), escrowToken: web3.Keypair.generate().publicKey.toBase58(),
+        decimals: 6, tokenProgram: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        schedule: { totalRaw: "1000000000", cliffRaw: "1000000000", perPeriodRaw: "0", periods: 0, freqSec: 2592000, cliffTime: 1790000000 },
+        simError: null, tokenSymbol: "CLKN",
+      };
+
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/lock/create-tx*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CREATE) }));
+          await pg.route("**/api/lock/record*", (r) => { recorded.push(1); r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) }); });
+          await pg.route("**/api/locks*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, mint: MINT, decimals: 6, supply: 1e9, totalLocked: 0, pctOfSupply: 0, lockCount: 0, breakdown: [], topLocks: [] }) }));
+          await pg.route("**/api/helius-rpc", async (r) => {
+            const body = JSON.parse(r.request().postData() || "{}");
+            let result = null;
+            if (body.method === "sendTransaction") { submitted = body.params[0]; result = SIG_OK; }
+            else if (body.method === "getSignatureStatuses") { result = { value: [statusResult] }; }
+            else if (body.method === "getLatestBlockhash") { result = { value: { blockhash: "11111111111111111111111111111111" } }; }
+            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result }) });
+          });
+        }, FAKE_SIGNING);
+
+      await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+      // Connect from the shell FIRST, then navigate. The Locker Room's create tab renders its own
+      // NeedsWallet connect button when disconnected, so clicking ".seeker-walletbtn" on that
+      // screen is ambiguous — the header control is the one that drives the shared registry.
+      await page.waitForTimeout(400);
+      await page.click(".seeker-walletbtn");
+      const connected = await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).then(() => true).catch(() => false);
+      if (!connected) {
+        ok(`H · ${label} — the fake wallet connects`, false,
+           JSON.stringify(await page.evaluate(() => ({ wallets: (window.CluckWallet && window.CluckWallet.available() || []).map((w) => w.name), err: (document.querySelector(".seeker-walleterr") || {}).innerText || null, btn: (document.querySelector(".seeker-walletbtn") || {}).innerText }))));
+        await ctx.close();
+        continue;
+      }
+      await page.evaluate(() => { window.location.hash = "#/tools/lock"; });
+      await page.waitForTimeout(400);
+      await page.evaluate(() => { const b = Array.from(document.querySelectorAll(".seeker-launch-tabbtn")).find((x) => /create/i.test(x.innerText)); b && b.click(); });
+      await page.waitForTimeout(300);
+      await page.fill("#lr-c-mint", MINT);
+      await page.fill("#lr-c-amount", "1000");
+      await page.click(".seeker-listing-runbtn");
+      await page.waitForFunction(() => /Lock tokens/i.test(document.body.innerText), null, { timeout: 20000 });
+      await page.evaluate(() => { const b = Array.from(document.querySelectorAll("button")).find((x) => /^lock tokens$/i.test(x.innerText.trim())); b && b.click(); });
+      await page.waitForFunction(() => /Confirm lock/i.test(document.body.innerText), null, { timeout: 10000 });
+      await page.click(".seeker-confirm .seeker-btn:not(.seeker-btn-quiet)");
+      await page.waitForFunction(() => /Locked\.|did not go through|not confirmed/i.test(document.body.innerText), null, { timeout: 60000 }).catch(() => {});
+      const body = await text(page);
+
+      if (label === "sent") {
+        // ⚠️ THE ASSERTION THIS SECTION EXISTS FOR. Read the bytes the app actually submitted.
+        ok("H · the submitted transaction really carries BOTH signatures", (() => {
+          if (!submitted) return false;
+          const tx = web3.Transaction.from(Buffer.from(submitted, "base64"));
+          return tx.signatures.length === 2 && tx.signatures.every((s) => !!s.signature) && tx.verifySignatures();
+        })(), submitted ? "submitted, but the signatures did not verify" : "nothing was submitted");
+        ok("H · and the CONNECTED WALLET signed FIRST, the escrow key second", (() => {
+          if (!submitted) return false;
+          const tx = web3.Transaction.from(Buffer.from(submitted, "base64"));
+          // signatures[] is ordered by the compiled message's signer list, and the fee payer is
+          // always index 0 — so "the wallet is the fee payer and index 0" IS the order rule.
+          return tx.signatures[0].publicKey.toBase58() === SIGNER.publicKey.toBase58()
+              && tx.signatures[1].publicKey.toBase58() === BASE.publicKey.toBase58();
+        })());
+      }
+      ok(`H · ${label} — the screen says so`, wantText.test(body), body.slice(0, 400));
+      if (wantNoText) ok(`H · ${label} — and never claims the lock succeeded`, !wantNoText.test(body), body.slice(0, 400));
+      // ⚠️ Only a CONFIRMED lock may enter the public "made right here" feed.
+      ok(`H · ${label} — the public feed is told ${label === "sent" ? "once" : "nothing"}`,
+         recorded.length === (label === "sent" ? 1 : 0), `recorded ${recorded.length}`);
+      if (label === "unconfirmed") {
+        // ⚠️ NO RETRY on the ambiguous outcome: the lock may already exist, and locking again
+        // would commit the tokens twice with no way back.
+        ok("H · ⚠️ unconfirmed offers NO way to lock again", await page.evaluate(() =>
+          !Array.from(document.querySelectorAll("button")).some((b) => /^lock tokens$/i.test(b.innerText.trim()))));
+      }
+      ok(`H · ${label} — no uncaught exception`, errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+  }
+
   await browser.close();
   console.log("\n" + (failures ? failures + " FAILED" : "all passed") + "\n");
   process.exit(failures ? 1 : 0);

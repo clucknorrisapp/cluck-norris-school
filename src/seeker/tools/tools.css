@@ -535,6 +535,13 @@
 .seeker-firepit-destroyval { color: var(--red-soft, var(--red)); }
 .seeker-firepit-rescan { display: block; width: 100%; margin-bottom: 10px; }
 
+/* Signing outcomes. sent/failed/unconfirmed reuse Airdropper's row treatment (§2j) and the
+   shared forensic row shape (§2g) — one look per outcome across the app, not a private copy.
+   Declined is its own, deliberately NEUTRAL class (grey, not red): the person said no in their
+   own wallet, nothing went wrong, and it must never look like a failure. */
+.seeker-firepit-row-declined { border-left: 3px solid var(--muted); padding-left: 10px; }
+.seeker-firepit-runreport { margin-top: 4px; }
+
 /* ── 2e. Project Burn ───────────────────────────────────────────────────────────────────────── */
 .seeker-burn-form {
   background: var(--card);
@@ -564,6 +571,24 @@
 .seeker-burn-live { font-size: 13px; color: var(--subtext); line-height: 1.5; margin: 4px 0 12px; }
 .seeker-burn-live-err { color: var(--red-soft, var(--red)); }
 .seeker-burn-actionbtn { display: block; width: 100%; margin-top: 4px; }
+
+/* The four post-signature outcomes (sent/failed/unconfirmed/declined) — same spirit as
+   Airdropper's/Firepit's split: an ambiguous outcome must never look like either a clean success
+   or a safe-to-retry failure, and a decline must never look like either kind of trouble. */
+.seeker-burn-outcome { border-radius: 14px; padding: 14px; margin: 8px 0 4px; line-height: 1.5; }
+.seeker-burn-outcome-title { font-family: var(--disp); font-weight: 400; font-size: 15px; margin: 0 0 8px; }
+.seeker-burn-outcome p { margin: 0 0 8px; font-size: 13.5px; color: var(--subtext); }
+.seeker-burn-outcome p:last-of-type { margin-bottom: 0; }
+.seeker-burn-outcome-actions { display: flex; gap: 8px; margin-top: 10px; }
+.seeker-burn-outcome-actions .seeker-btn { flex: 1; min-height: 44px; }
+.seeker-burn-outcome-sent { border: 1px solid var(--green); background: rgba(34, 197, 94, .06); }
+.seeker-burn-outcome-sent .seeker-burn-outcome-title { color: var(--green); }
+.seeker-burn-outcome-failed { border: 1px solid var(--red-soft, var(--red)); background: var(--card); }
+.seeker-burn-outcome-failed .seeker-burn-outcome-title { color: var(--red-soft, var(--red)); }
+.seeker-burn-outcome-unconfirmed { border: 1px solid var(--gold); background: rgba(255, 182, 39, .08); }
+.seeker-burn-outcome-unconfirmed .seeker-burn-outcome-title { color: var(--gold); }
+.seeker-burn-outcome-declined { border: 1px solid var(--border); background: var(--card); }
+.seeker-burn-outcome-declined .seeker-burn-outcome-title { color: var(--sub); }
 
 /* ── 2f. Locker Room ────────────────────────────────────────────────────────────────────────── */
 /* The headline "% of supply locked" figure on the View Locks report — deliberately its own big,
@@ -623,6 +648,24 @@
   line-height: 1.5;
 }
 
+
+/* The outcome of a real lock attempt. FOUR states and three visual treatments, because
+   "submitted but unconfirmed" must not look like either success or failure — it is the one that,
+   read as "failed", gets the tokens committed twice by a retry, and a lock cannot be undone. */
+.seeker-lock-result {
+  font-size: 13px;
+  line-height: 1.6;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 14px;
+  margin: 14px 0;
+}
+.seeker-lock-result p { margin: 0 0 8px; }
+.seeker-lock-result .seeker-btn { display: block; width: 100%; margin-top: 10px; }
+.seeker-lock-result-ok { border-color: var(--green); }
+.seeker-lock-result-unconfirmed { border-color: var(--gold); background: rgba(255, 182, 39, .08); }
+.seeker-lock-result-failed { border-color: var(--red-soft, var(--red)); }
 
 /* ── 2g. Wallet X-Ray / Holders / Trace — the pass-gated forensic tools ────────────────────────
    All three share one shape (a form, a fact grid, evidence rows, a scrollable result list) and

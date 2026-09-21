@@ -48,12 +48,6 @@ export function buildTransaction(descriptors, blockhash, feePayer) {
   return tx;
 }
 
-// No Node Buffer here either — same rule as above, plain browser primitives only.
-function bytesToBase64(bytes) {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
 
 // getMultipleAccounts' documented max is 100 pubkeys per call (⚠️ P1-A, adversarial review,
 // 2026-09-21: lib/rent-reclaim.js allows up to 300 candidate accounts through, but this file sent
@@ -84,6 +78,17 @@ const GET_MULTIPLE_ACCOUNTS_BATCH = 100;
 // On ANY failure returns null — "could not read the chain", never an empty object (an empty
 // object would read as "every account vanished", which is not the same claim as "we don't know"
 // and must not be treated as safe to proceed).
+// ── THE SIGNING SEAM NOW LIVES IN ONE FILE ───────────────────────────────────────────────────
+// confirmSignature, isUserRejection and the byte helpers used to be DEFINED here, and the same
+// confirmation check was also copy-pasted into public/airdrop-engine.js — where the identical
+// P0 (testing confirmationStatus before err, so a transaction that landed and FAILED reported
+// as success) was found on the same day, in both copies, by two independent reviewers. They are
+// now src/seeker/sign.js's, shared by every tool in this app that touches a wallet, and
+// RE-EXPORTED here so this file's own public surface is unchanged. Read sign.js's header for
+// what each of its four protections costs when it is missing.
+export { confirmSignature, isUserRejection, bytesToBase64, messageBytes, sameBytes } from "./sign.js";
+import { confirmSignature, isUserRejection, bytesToBase64, messageBytes, sameBytes } from "./sign.js";
+
 export async function getFreshBalances(rpc, tokenAccounts) {
   if (!tokenAccounts.length) return {};
   const out = {};
@@ -124,62 +129,8 @@ export async function getBlockhash(rpc) {
   }
 }
 
-// Polls up to 30s, same posture as public/airdrop-engine.js's confirmTransaction: true = landed,
-// throw = failed on-chain, false = timed out (ambiguous — CluckReclaimPlan reports that as
-// "failed" with the signature attached rather than ever claiming success from a submission alone).
-export async function confirmSignature(rpc, signature) {
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 1000));
-    // ⚠️ P3 (adversarial review, 2026-09-21): an RPC read failure here (a network blip while
-    // polling) is NOT an on-chain failure — the transaction may already have landed. Reporting
-    // "failed on-chain" for a status we simply couldn't read told people they lost a close that
-    // may well have succeeded. Keep polling instead; only st.err (below) is a real on-chain
-    // failure. A read failure on every attempt still ends in `false` (ambiguous timeout), never a
-    // fabricated "failed on-chain".
-    let result;
-    try {
-      result = await rpc("getSignatureStatuses", [[signature]]);
-    } catch (_) {
-      continue;
-    }
-    const st = result && result.value && result.value[0];
-    // ⚠️ ORDER IS LOAD-BEARING — same note as public/airdrop-engine.js, where this bug was
-    // LIVE. getSignatureStatuses returns BOTH fields for a transaction that landed and then
-    // failed: {err:{InstructionError:[...]}, confirmationStatus:"confirmed"}. Testing the
-    // status first returned true for a failed close, which marked every account in that batch
-    // "Closed", added its rent to the reclaimed total, and recorded it as done so the pane
-    // never offered it again — the user was told they got money they did not get. err is only
-    // ever set once a tx has LANDED, and a landed tx always carries a confirmationStatus, so
-    // the err check must come first or it is dead code.
-    // The cause is carried through too: the pane used to render the tautology "closing
-    // transaction failed on-chain: failed on-chain" on all 26 rows, with no cause and no
-    // next step — a blanket error, which the spec forbids.
-    if (st && st.err) throw new Error("failed on-chain: " + JSON.stringify(st.err));
-    if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return true;
-  }
-  return false;
-}
 
-// P2-H helpers — compare a wallet-returned transaction's actual compiled MESSAGE bytes against
-// the one this file built, byte for byte, before ever sending it. Plain Uint8Array comparison —
-// no Node Buffer here either, same rule as bytesToBase64 above.
-function messageBytes(tx) {
-  try { return tx.compileMessage().serialize(); } catch (_) { return null; }
-}
-function sameBytes(a, b) {
-  if (!a || !b || a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
 
-// A user-rejected wallet prompt is not shaped the same way by every provider — normalize to a
-// single `.rejected` flag CluckReclaimPlan.runReclaimFlow checks for. Every wallet in
-// public/cluck-wallet.js's registry (Phantom-shaped or Wallet-Standard-shimmed) throws with one
-// of these two vocabularies on a decline; anything else is a genuine failure, not a decline.
-export function isUserRejection(e) {
-  const msg = String((e && e.message) || e || "").toLowerCase();
-  return msg.includes("user rejected") || msg.includes("declined") || (e && (e.code === 4001 || e.code === "4001"));
-}
 
 // Signs and submits every batch. Prefers provider.signAllTransactions (spec decision 5) so a
 // multi-batch reclaim needs ONE wallet approval; falls back to signAndSendTransaction per batch

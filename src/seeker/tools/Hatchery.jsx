@@ -70,7 +70,7 @@
 // ── Confirming a submitted signature (the P0 this app has shipped twice) ────────────────────────
 // `getSignatureStatuses` returns BOTH `err` and `confirmationStatus` for a transaction that landed
 // and then failed — checking confirmationStatus first mis-reports a failed mint as a success. This
-// file does not re-implement that check: it imports `confirmSignature` from ../reclaim-sign.js,
+// file does not re-implement that check: it imports `confirmSignature` from ../sign.js,
 // the one place in this app that already has the fix (err checked first) and the adversarial-review
 // comment explaining why, and the generic `isUserRejection` normalizer from the same file. Only two
 // browser-primitive helpers are duplicated locally (base64 codec, the `window.solanaWeb3` guard) —
@@ -105,7 +105,7 @@ import React from "react";
 import { t } from "../i18n.js";
 import { Pane, Loading, Unavailable, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
 import { shortAddr } from "../addr.js";
-import { confirmSignature, isUserRejection } from "../reclaim-sign.js";
+import { confirmSignature, isUserRejection } from "../sign.js";
 import "./tools.css";
 
 // ── constants ────────────────────────────────────────────────────────────────────────────────
