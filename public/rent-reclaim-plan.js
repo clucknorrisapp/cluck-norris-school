@@ -92,18 +92,20 @@
 
   function isWrappedSol(mint) { return mint === WSOL_MINT; }
 
-  // `amount` is a ui-scaled Number (the same shape /api/seeker/reclaimable already reports, and
-  // the same shape the browser's own fresh re-read below normalizes to) — 0 means zero tokens
-  // regardless of the mint's decimals, so a plain Number comparison is exact here even though it
-  // would not be for a non-zero amount. `null`/`undefined` (an unreadable balance) is NEVER
-  // treated as zero — that would be the exact "stale/unknown reads as safe" bug this feature must
-  // not have.
+  // ⚠️ P1-B (adversarial review, 2026-09-21): classify on the EXACT base-unit `amount` STRING,
+  // never on `uiAmount`. `uiAmount` is `f64 | null` in the RPC schema — a Token-2022 account with
+  // withheld transfer fees (or any account the RPC can't ui-scale) comes back `uiAmount: null`,
+  // and `Number(null) === 0`, which used to read a wallet that STILL HOLDS TOKENS as empty and
+  // safe to close. `amount` is never null for an account that exists; anything else
+  // (non-numeric, missing) is treated as holds_balance, NEVER reclaimable — an unreadable balance
+  // can only ever err toward refusing to close.
   function isZeroAmount(amount) {
-    return typeof amount === "number" && isFinite(amount) && amount === 0;
+    return typeof amount === "string" && amount === "0";
   }
 
   // Rule 2 + Rule 3, applied to a scan-side account record ({tokenAccount, mint, program,
-  // uiAmount, lamports, ...} — the exact shape GET /api/seeker/reclaimable returns per account).
+  // amount, uiAmount, lamports, ...} — the exact shape GET /api/seeker/reclaimable returns per
+  // account, lib/rent-reclaim.js's own P1-B fix). `uiAmount` is display-only here — never read.
   function classifyForClose(acc) {
     if (!acc || !acc.tokenAccount || !acc.mint || !acc.program) {
       return { eligible: false, reason: "malformed account record" };
@@ -111,7 +113,7 @@
     if (isWrappedSol(acc.mint)) {
       return { eligible: false, reason: "Wrapped SOL — closing it is not offered here." };
     }
-    if (!isZeroAmount(acc.uiAmount)) {
+    if (!isZeroAmount(acc.amount)) {
       return { eligible: false, reason: "Still holds a token balance — closing it would lose that balance." };
     }
     return { eligible: true, reason: null };
@@ -143,18 +145,33 @@
   }
 
   // Idempotency, part 2 + Rule 2's "immediately before building" re-check (spec §2.2/§2.6/§5
-  // Test 3): `freshMap` maps tokenAccount -> { exists: bool, uiAmount: number|null }, produced
-  // by a REAL, JUST-NOW chain read (io.getFreshBalances in runReclaimFlow below). An account the
-  // fresh read says no longer exists is treated as "already closed elsewhere" (harmless — it
-  // just quietly drops off this run's candidate list, exactly like a row a previous run already
-  // confirmed) rather than an error.
+  // Test 3): `freshMap` maps tokenAccount -> { exists, amount, lamports, mint, owner }, produced
+  // by a REAL, JUST-NOW chain read (io.getFreshBalances — a getMultipleAccounts call, so `owner`
+  // here is the account's PARSED AUTHORITY, info.owner — the wallet that controls the token
+  // account — never the owning PROGRAM id getMultipleAccounts' top-level `owner` field would
+  // give you; the browser seam (src/seeker/reclaim-sign.js) is what maps the raw RPC response
+  // into this shape). An account the fresh read says no longer exists is treated as "already
+  // closed elsewhere" (harmless — it just quietly drops off this run's candidate list, exactly
+  // like a row a previous run already confirmed) rather than an error.
   //
   // `freshMap == null` means the fresh read itself FAILED — never fall through and treat that as
   // "everything is still zero, safe to close" (spec's hard "unavailable, never zero" rule, same
   // one CLAUDE.md states for the tool gate and lib/rent-reclaim.js's own read side). It throws a
   // tagged error (`.code === "unavailable"`) instead of returning a result, so a caller cannot
   // accidentally ignore it and keep going.
-  function reverifyBalances(candidates, freshMap) {
+  //
+  // ⚠️ P2-I (adversarial review, 2026-09-21): the SERVER'S claimed lamports/mint were, until now,
+  // carried straight through to the confirm sheet and the close instruction untouched — even
+  // though the fresh read right here already has the true on-chain values for exactly these
+  // accounts. This is the one place that HAS the truth, so it now (a) overwrites `lamports` with
+  // the just-read on-chain value (the confirm sheet and the reclaimed total are built from
+  // `kept`, so they inherit this automatically) and (b) drops — never closes — any candidate
+  // whose fresh mint differs from what the server claimed, or whose fresh owner (the account's
+  // real authority) is not the CONNECTED wallet. A caller (server response, or anything upstream
+  // of it) claiming a token account that isn't actually this wallet's, or mislabeling its mint,
+  // can therefore never reach a close instruction — closes the hostile-server-data class at the
+  // read step, not by trusting buildCloseInstruction's owner check alone.
+  function reverifyBalances(candidates, freshMap, connectedOwner) {
     if (freshMap == null) {
       var e = new Error("Could not re-verify balances — the chain is unavailable right now.");
       e.code = "unavailable";
@@ -167,11 +184,20 @@
         dropped.push(mergeRow(c, "skipped", "no longer exists — already closed"));
         return;
       }
-      if (!isZeroAmount(fresh.uiAmount)) {
+      if (!isZeroAmount(fresh.amount)) {
         dropped.push(mergeRow(c, "skipped", "gained a balance since the scan"));
         return;
       }
-      kept.push(c);
+      if (fresh.mint && c.mint && fresh.mint !== c.mint) {
+        dropped.push(mergeRow(c, "skipped", "the mint on-chain doesn't match what was scanned — refused"));
+        return;
+      }
+      if (connectedOwner && fresh.owner && fresh.owner !== connectedOwner) {
+        dropped.push(mergeRow(c, "skipped", "this account isn't controlled by the connected wallet — refused"));
+        return;
+      }
+      var freshLamports = typeof fresh.lamports === "number" && isFinite(fresh.lamports) ? fresh.lamports : c.lamports;
+      kept.push(Object.assign({}, c, { lamports: freshLamports }));
     });
     return { kept: kept, dropped: dropped };
   }
@@ -260,51 +286,21 @@
     };
   }
 
-  // ── the orchestrator ─────────────────────────────────────────────────────────────────────────
-  // Runs the WHOLE signing flow end to end: select -> exclude already-closed -> re-verify fresh
-  // (Rule 6: re-verify, then build, then sign, in that order, smallest possible window) -> batch
-  // -> for each batch build descriptors, fetch a blockhash, sign+send, confirm -> summarize.
-  //
-  // `input`: { accounts, owner, closedTokenAccounts, maxClosesPerTx }
-  //   accounts             — the scan result's `.accounts` array (GET /api/seeker/reclaimable)
-  //   owner                — the CONNECTED wallet's pubkey string. Never taken from anywhere else.
-  //   closedTokenAccounts  — tokenAccounts a PRIOR run of this function already confirmed (array
-  //                          or Set) — idempotency across repeated clicks in the same session.
-  //   maxClosesPerTx       — optional override for planBatches' cap (default MAX_CLOSES_PER_TX,
-  //                          the computed bound above). Exists so a caller — or
-  //                          scripts/seeker-reclaim-sign-test.cjs, forcing one close per
-  //                          transaction to exercise per-batch outcomes without needing 26+
-  //                          fixture accounts — can ask for smaller batches; it can only make
-  //                          batches SMALLER than the computed bound, never larger (planBatches
-  //                          ignores a non-positive value and falls back to the real cap).
-  //
-  // `io`: four injected async functions — the ENTIRE surface this file touches outside itself,
-  // and the entire surface a test needs to fake (spec §5: "fixtures and a fake MWA bridge — no
-  // live RPC, no real signing"):
-  //   io.getFreshBalances(tokenAccounts) -> { [tokenAccount]: {exists, uiAmount} } | throws/null
-  //   io.getBlockhash()                  -> blockhash string | throws/null
-  //   io.signAndSendAll(descriptorBatches, blockhash, owner)
-  //       -> array, one entry per batch, of { sig } | { rejected: true } | { error: string }
-  //   io.confirmSignature(sig)           -> true (landed) | false (timed out, ambiguous) | throws
-  //                                          (failed on-chain)
-  //
-  // Returns { status: "ok"|"unavailable"|"rejected", reclaimedLamports, confirmedCount,
-  //           failedCount, skippedCount, rejectedCount, rows }. `status` is about the RUN as a
-  // whole (could the chain be read at all; did the person say no); the per-row outcomes are
-  // always the honest per-account record regardless of `status`.
-  async function runReclaimFlow(input, io) {
+  // ── shared select -> exclude-already-closed -> fresh re-verify (Rule 6) ─────────────────────
+  // The FIRST half of the orchestrator, factored out so the confirm sheet (planConfirmation,
+  // P2-I) runs the exact same safety checks the real run will apply — a re-implementation for
+  // "just the numbers" is exactly how a check like this drifts out of sync and stops meaning
+  // anything. Returns either { status: "unavailable", rows } or { status: "ok", toClose, rows }.
+  async function prepareCandidates(input, io) {
     var owner = input && input.owner;
-    if (!owner) throw new Error("runReclaimFlow: owner (the connected wallet) is required");
+    if (!owner) throw new Error("owner (the connected wallet) is required");
 
     var eligible = selectEligible((input && input.accounts) || []);
     var idem = excludeAlreadyClosed(eligible, input && input.closedTokenAccounts);
     var rows = idem.excluded.slice();
     var candidates = idem.kept;
 
-    if (!candidates.length) {
-      var s0 = summarize(rows);
-      return Object.assign({ status: "ok" }, s0);
-    }
+    if (!candidates.length) return { status: "ok", toClose: [], rows: rows };
 
     var freshMap = null;
     try {
@@ -314,28 +310,43 @@
     }
     var reverified;
     try {
-      reverified = reverifyBalances(candidates, freshMap);
+      reverified = reverifyBalances(candidates, freshMap, owner);
     } catch (e) {
-      if (e && e.code === "unavailable") return Object.assign({ status: "unavailable" }, summarize(rows));
+      if (e && e.code === "unavailable") return { status: "unavailable", toClose: [], rows: rows };
       throw e;
     }
     rows = rows.concat(reverified.dropped);
-    var toClose = reverified.kept;
+    return { status: "ok", toClose: reverified.kept, rows: rows };
+  }
 
-    if (!toClose.length) {
-      return Object.assign({ status: "ok" }, summarize(rows));
-    }
+  // ── confirm-sheet support (P2-I) ────────────────────────────────────────────────────────────
+  // Runs the SAME selection + fresh re-verify runReclaimFlow is about to run, so the numbers a
+  // person signs off on are read from the chain right before the confirm sheet renders, not
+  // whatever the (possibly minutes-old) initial scan said. Never signs, never builds a
+  // transaction — `io` here only needs to supply getFreshBalances. Returns { status: "ok" |
+  // "unavailable", toClose, lamports, rows }; `toClose` is what the real run should be handed so
+  // it doesn't have to guess, and `rows` carries honest reasons for anything already dropped
+  // (e.g. "gained a balance since the scan") so a lower count than the original scan showed is
+  // never a silent discrepancy.
+  async function planConfirmation(input, io) {
+    var prep = await prepareCandidates(input, io);
+    return {
+      status: prep.status,
+      toClose: prep.toClose,
+      lamports: lamportsForList(prep.toClose),
+      rows: prep.rows,
+    };
+  }
 
-    var blockhash = null;
-    try { blockhash = await io.getBlockhash(); } catch (e) { blockhash = null; }
-    if (!blockhash) {
-      return Object.assign({ status: "unavailable" }, summarize(rows));
-    }
-
-    var requestedCap = input && input.maxClosesPerTx > 0 ? input.maxClosesPerTx : MAX_CLOSES_PER_TX;
-    var batches = planBatches(toClose, Math.min(requestedCap, MAX_CLOSES_PER_TX));
+  // Build, sign, send and confirm ONE round of batches, returning { rows, allRejected }.
+  // `allRejected` mirrors the old inline check (every batch declined) so runReclaimFlow's status
+  // stays correct even after a retry round runs (a retry never touches a rejected batch — see
+  // below — so this flag, captured on the FIRST round, is still the right answer for the whole
+  // run). Factored out so the P1-D retry-as-singles round below is the identical code path, not
+  // a second, drifting implementation of "send a batch and read back what happened".
+  async function sendAndConfirmBatches(io, owner, blockhash, batches) {
     var descriptorBatches = batches.map(function (b) { return buildBatchDescriptors(b, owner); });
-
+    var rows = [];
     var sendResults;
     try {
       sendResults = await io.signAndSendAll(descriptorBatches, blockhash, owner);
@@ -346,12 +357,12 @@
         // signature is a normal outcome, not an error state (spec §3): every planned close is
         // reported "rejected", never "failed".
         batches.forEach(function (b) { b.forEach(function (c) { rows.push(mergeRow(c, "rejected", "you declined to sign")); }); });
-        return Object.assign({ status: "rejected" }, summarize(rows));
+        return { rows: rows, allRejected: true };
       }
       // Some other outright failure preparing/sending — never silently drop these accounts from
       // the report; they simply did not close.
       batches.forEach(function (b) { b.forEach(function (c) { rows.push(mergeRow(c, "failed", (e && e.message) || String(e))); }); });
-      return Object.assign({ status: "ok" }, summarize(rows));
+      return { rows: rows, allRejected: false };
     }
 
     for (var i = 0; i < batches.length; i++) {
@@ -377,8 +388,103 @@
       })(r.sig, confirmed, confirmError);
     }
 
-    var anyRejected = batches.length && sendResults.every(function (r) { return r && r.rejected; });
-    return Object.assign({ status: anyRejected ? "rejected" : "ok" }, summarize(rows));
+    var allRejected = batches.length > 0 && sendResults.every(function (r) { return r && r.rejected; });
+    return { rows: rows, allRejected: allRejected };
+  }
+
+  // ── the orchestrator ─────────────────────────────────────────────────────────────────────────
+  // Runs the WHOLE signing flow end to end: select -> exclude already-closed -> re-verify fresh
+  // (Rule 6: re-verify, then build, then sign, in that order, smallest possible window) -> batch
+  // -> for each batch build descriptors, fetch a blockhash, sign+send, confirm -> P1-D: any batch
+  // that failed OUTRIGHT (not declined) is re-planned as one transaction per account and retried
+  // exactly once -> summarize.
+  //
+  // `input`: { accounts, owner, closedTokenAccounts, maxClosesPerTx }
+  //   accounts             — the scan result's `.accounts` array (GET /api/seeker/reclaimable),
+  //                          or the `toClose` a prior planConfirmation() call already re-verified.
+  //   owner                — the CONNECTED wallet's pubkey string. Never taken from anywhere else.
+  //   closedTokenAccounts  — tokenAccounts a PRIOR run of this function already confirmed (array
+  //                          or Set) — idempotency across repeated clicks in the same session.
+  //   maxClosesPerTx       — optional override for planBatches' cap (default MAX_CLOSES_PER_TX,
+  //                          the computed bound above). Exists so a caller — or
+  //                          scripts/seeker-reclaim-sign-test.cjs, forcing one close per
+  //                          transaction to exercise per-batch outcomes without needing 26+
+  //                          fixture accounts — can ask for smaller batches; it can only make
+  //                          batches SMALLER than the computed bound, never larger (planBatches
+  //                          ignores a non-positive value and falls back to the real cap).
+  //
+  // `io`: four injected async functions — the ENTIRE surface this file touches outside itself,
+  // and the entire surface a test needs to fake (spec §5: "fixtures and a fake MWA bridge — no
+  // live RPC, no real signing"):
+  //   io.getFreshBalances(tokenAccounts) -> { [tokenAccount]: {exists, amount, lamports, mint,
+  //                                            owner} } | throws/null
+  //   io.getBlockhash()                  -> blockhash string | throws/null
+  //   io.signAndSendAll(descriptorBatches, blockhash, owner)
+  //       -> array, one entry per batch, of { sig } | { rejected: true } | { error: string }
+  //   io.confirmSignature(sig)           -> true (landed) | false (timed out, ambiguous) | throws
+  //                                          (failed on-chain)
+  //
+  // Returns { status: "ok"|"unavailable"|"rejected", reclaimedLamports, confirmedCount,
+  //           failedCount, skippedCount, rejectedCount, rows }. `status` is about the RUN as a
+  // whole (could the chain be read at all; did the person say no); the per-row outcomes are
+  // always the honest per-account record regardless of `status`.
+  async function runReclaimFlow(input, io) {
+    var owner = input && input.owner;
+    if (!owner) throw new Error("runReclaimFlow: owner (the connected wallet) is required");
+
+    var prep = await prepareCandidates(input, io);
+    if (prep.status === "unavailable") return Object.assign({ status: "unavailable" }, summarize(prep.rows));
+    var rows = prep.rows;
+    var toClose = prep.toClose;
+
+    if (!toClose.length) {
+      return Object.assign({ status: "ok" }, summarize(rows));
+    }
+
+    var blockhash = null;
+    try { blockhash = await io.getBlockhash(); } catch (e) { blockhash = null; }
+    if (!blockhash) {
+      return Object.assign({ status: "unavailable" }, summarize(rows));
+    }
+
+    var requestedCap = input && input.maxClosesPerTx > 0 ? input.maxClosesPerTx : MAX_CLOSES_PER_TX;
+    var batches = planBatches(toClose, Math.min(requestedCap, MAX_CLOSES_PER_TX));
+
+    var first = await sendAndConfirmBatches(io, owner, blockhash, batches);
+    rows = rows.concat(first.rows);
+
+    // ⚠️ P1-D (adversarial review, 2026-09-21): a batch is ONE atomic transaction — if it fails
+    // on-chain because of ONE poisoned account (Token-2022 withheld transfer fees, a
+    // confidential account, anything classification doesn't model), sendAndConfirmBatches just
+    // marked EVERY account in that batch "failed", even though the other 25 would have closed
+    // fine on their own. Re-plan any batch that failed OUTRIGHT — never a DECLINED one; a
+    // decline is a normal "no" and is never retried — as one transaction per account, and retry
+    // exactly once. A retry is safe: reverifyBalances already dropped anything that no longer
+    // exists, and closing an account twice is a no-op failure on the token program's side, never
+    // a double-spend. Batches of exactly one account are skipped here — resending the identical
+    // failing transaction gains nothing a single retry of the whole run wouldn't already offer.
+    var retryAccounts = [];
+    batches.forEach(function (b) {
+      if (b.length <= 1) return;
+      var repRow = rows.filter(function (r) { return r.tokenAccount === b[0].tokenAccount; }).pop();
+      if (repRow && repRow.outcome === "failed") retryAccounts = retryAccounts.concat(b);
+    });
+
+    if (retryAccounts.length) {
+      var retryBlockhash = null;
+      try { retryBlockhash = await io.getBlockhash(); } catch (e) { retryBlockhash = null; }
+      if (retryBlockhash) {
+        var singleBatches = planBatches(retryAccounts, 1);
+        var retried = await sendAndConfirmBatches(io, owner, retryBlockhash, singleBatches);
+        var retriedTAs = {};
+        retryAccounts.forEach(function (c) { retriedTAs[c.tokenAccount] = true; });
+        rows = rows.filter(function (r) { return !retriedTAs[r.tokenAccount]; }).concat(retried.rows);
+      }
+      // If even a fresh blockhash isn't available, the accounts stay reported as they were —
+      // "failed", with the original batch's signature attached — never silently dropped.
+    }
+
+    return Object.assign({ status: first.allRejected ? "rejected" : "ok" }, summarize(rows));
   }
 
   var CluckReclaimPlan = {
@@ -400,6 +506,9 @@
     planBatches: planBatches,
     lamportsForList: lamportsForList,
     summarize: summarize,
+    prepareCandidates: prepareCandidates,
+    planConfirmation: planConfirmation,
+    sendAndConfirmBatches: sendAndConfirmBatches,
     runReclaimFlow: runReclaimFlow,
   };
 

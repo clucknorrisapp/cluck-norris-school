@@ -245,8 +245,17 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const t = await text(page);
     ok("E · the total renders from the response, formatted by the shared rent math",
        /Total reclaimable/i.test(t) && t.includes("0.00203928"), t.slice(0, 300));
-    ok("E · the closable account is listed as reclaimable", /reclaimable/i.test(t) && /No balance/i.test(t), t.slice(0, 300));
-    ok("E · an account holding tokens is shown as kept, not closable", /Holds a balance/i.test(t) && /won't be closed/i.test(t));
+    // P1-C (adversarial review, 2026-09-21): renamed from "No balance — safe to close." — never
+    // call a token "safe" or "verified" (spec / SEEKER_TOOLS_BUILD.md §3.3), and it was untrue
+    // too (a Token-2022 account with withheld transfer fees can read zero and not be closable).
+    ok("E · the closable account is listed as reclaimable", /reclaimable/i.test(t) && /No token balance/i.test(t), t.slice(0, 300));
+    // P1-C mutation guard: the rendered pane text must never claim a token is "safe" or
+    // "verified" — the exact vocabulary the spec forbids.
+    ok("E · the rendered pane never calls a token \"safe\" or \"verified\"", !/\bsafe\b|\bverified\b/i.test(t), t.slice(0, 300));
+    // P2-G (adversarial review, 2026-09-21): the row now shows the SERVER's own per-account
+    // reason (GOOD fixture's own text) rather than a hardcoded client string that used to discard
+    // it — "closing it would lose that balance" is that server text, not a client re-derivation.
+    ok("E · an account holding tokens is shown as kept, not closable, with the SERVER's own reason", /Holds a balance/i.test(t) && /would lose that balance/i.test(t));
     ok("E · wrapped SOL is shown as refused, with the reason", /Refused/i.test(t) && /Wrapped SOL/i.test(t));
     ok("E · no uncaught exception rendering a real result", errors.length === 0, errors.join(" | ").slice(0, 300));
     await ctx.close();

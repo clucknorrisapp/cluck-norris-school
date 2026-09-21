@@ -465,15 +465,20 @@ async function renderedCheck(pw) {
     await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle", timeout: 20000 });
     await page.waitForFunction(() => !!(window.CluckWallet && document.querySelector(".seeker-nav")), null, { timeout: 15000 });
 
-    ok("rendered: default route redirects to #/rent", (await page.evaluate(() => location.hash)) === "#/rent");
+    // The toolkit grid is the app's front door now (docs/SEEKER_TOOLS_BUILD.md — owner, 2026-09-21:
+    // "build all the tools into the seeker app appropriately"), with four bottom-nav tabs
+    // (Toolkit, Rent, Ask, Checkup) instead of the original three landing on Rent Reclaim.
+    ok("rendered: default route redirects to #/tools (the toolkit grid, the new front door)", (await page.evaluate(() => location.hash)) === "#/tools");
     const navCount = await page.locator(".seeker-navbtn").count();
-    ok("rendered: three bottom-nav tabs", navCount === 3, navCount);
+    ok("rendered: four bottom-nav tabs", navCount === 4, navCount);
     const boxes = await page.locator(".seeker-navbtn").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()));
     ok("rendered: every nav tab is actually >=44x44 on screen", boxes.every((b) => b.width >= 44 && b.height >= 44), JSON.stringify(boxes));
     const walletBox = await page.locator(".seeker-walletbtn").boundingBox();
     ok("rendered: the wallet button is actually >=44x44 on screen", !!walletBox && walletBox.width >= 44 && walletBox.height >= 44, JSON.stringify(walletBox));
 
-    await page.locator(".seeker-navbtn", { hasText: "Ask Cluck" }).click();
+    // Nav labels are now short single words (Toolkit/Rent/Ask/Checkup, App.jsx's TABS) rather than
+    // full tool names — click by the tab's own hash href, which is stable regardless of label text.
+    await page.locator('.seeker-navbtn[href="#/ask"]').click();
     await page.waitForTimeout(150);
     ok("rendered: tapping a nav tab changes the hash (client-side route, no reload)", (await page.evaluate(() => location.hash)) === "#/ask");
     // Ask Cluck is real content as of increment 3 (AskCluck.jsx), not the placeholder <Pane> —

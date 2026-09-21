@@ -266,10 +266,28 @@ html, body {
   font-size: 15px;
   color: var(--text);
 }
+/* P2-E: the consequence sentence — permanence and the re-creation cost — has to actually be
+   readable before a signature, not a footnote. */
+.seeker-reclaim-confirm-consequence {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text);
+  background: rgba(255, 122, 24, .08);
+  border-left: 2px solid var(--orange);
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 4px 0 10px;
+}
 .seeker-reclaim-confirm-note {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--sub);
   margin: 8px 0 14px;
+}
+.seeker-reclaim-confirmloading {
+  font-size: 12.5px;
+  color: var(--sub);
+  text-align: center;
+  margin: 0 0 10px;
 }
 .seeker-reclaim-confirm-actions {
   display: flex;
@@ -366,7 +384,9 @@ html, body {
   color: var(--text);
 }
 .seeker-reclaim-row-reason {
-  font-size: 12px;
+  /* P3 (adversarial review, 2026-09-21): the site's small-print floor is 12.5px (theme.css) —
+     this was under it. */
+  font-size: 12.5px;
   color: var(--sub);
   margin-top: 4px;
 }

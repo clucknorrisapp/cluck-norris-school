@@ -150,6 +150,59 @@ function rpcOk(list) {
   // ══════════════════════════════════════════════════════════════════════════════════════════
   // (f) truncation is flagged, never a silent cut
   // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\nP1-B — classify() uses the exact amount string, never a uiAmount coercion\n");
+  {
+    // A holder account whose RPC response carries uiAmount: null (a real jsonParsed shape — a
+    // Token-2022 account with withheld transfer fees is one real cause) alongside a real,
+    // non-zero base-unit `amount`. Mutation-proved: revert classify() to
+    // `Number(raw.uiAmount) || 0` and this goes red — Number(null) === 0 reads this as empty.
+    const poisoned = {
+      pubkey: "ACC_NULL_UI_HOLDS",
+      account: {
+        lamports: 2039280,
+        data: { parsed: { info: { mint: "MintPoisonAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", tokenAmount: { uiAmount: null, decimals: 6, amount: "123456789" } } } },
+      },
+    };
+    // A genuinely empty account that ALSO carries uiAmount: null — must still classify
+    // reclaimable, because amount is exactly "0". A null uiAmount alone is never a reason to
+    // refuse; only the exact amount string decides.
+    const trulyEmpty = {
+      pubkey: "ACC_NULL_UI_EMPTY",
+      account: {
+        lamports: 2039280,
+        data: { parsed: { info: { mint: "MintEmptyBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", tokenAmount: { uiAmount: null, decimals: 6, amount: "0" } } } },
+      },
+    };
+    // A malformed/unreadable amount (the field missing entirely) — must be treated conservatively
+    // as holds_balance, never reclaimable: an unreadable balance can only ever err toward refusing
+    // to close.
+    const malformed = {
+      pubkey: "ACC_MALFORMED",
+      account: {
+        lamports: 2039280,
+        data: { parsed: { info: { mint: "MintMalformedCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC", tokenAmount: { uiAmount: null, decimals: 6 } } } }, // no `amount` field
+      },
+    };
+    global.fetch = async (url, init) => {
+      const body = JSON.parse(init.body);
+      return rpcOk(body.params[1].programId === PROG_LEGACY ? [poisoned, trulyEmpty, malformed] : []);
+    };
+    delete require.cache[require.resolve(path.join(ROOT, "lib", "rent-reclaim"))];
+    delete require.cache[require.resolve(path.join(ROOT, "lib", "rpc"))];
+    const { scanReclaimable } = require(path.join(ROOT, "lib", "rent-reclaim"));
+    const res = await scanReclaimable(WALLET);
+    const byAcc = {}; for (const a of res.accounts) byAcc[a.tokenAccount] = a;
+
+    ok("P1-B: uiAmount:null with a real non-zero amount is holds_balance, NOT reclaimable",
+      byAcc.ACC_NULL_UI_HOLDS.status === "holds_balance", byAcc.ACC_NULL_UI_HOLDS);
+    ok("P1-B: its lamports are excluded from the reclaimable total",
+      res.totalReclaimableLamports === byAcc.ACC_NULL_UI_EMPTY.lamports, { total: res.totalReclaimableLamports, byAcc });
+    ok("P1-B: uiAmount:null with amount:\"0\" is still correctly reclaimable",
+      byAcc.ACC_NULL_UI_EMPTY.status === "reclaimable", byAcc.ACC_NULL_UI_EMPTY);
+    ok("P1-B: a missing/malformed amount field is treated as holds_balance, never reclaimable",
+      byAcc.ACC_MALFORMED.status === "holds_balance", byAcc.ACC_MALFORMED);
+  }
+
   console.log("\n(f) more accounts than the cap -> truncated:true, never a silent cut\n");
   {
     const { MAX_ACCOUNTS } = require(path.join(ROOT, "lib", "rent-reclaim"));
@@ -188,26 +241,35 @@ function rpcOk(list) {
     "Could not read the chain right now. Try again shortly.",
     "Try again",
     "Total reclaimable",
-    "More accounts exist in this wallet than are shown here.",
     "Reclaim",
     "Reclaimable",
     "No reclaimable rent found in this wallet right now.",
     "Holds a balance",
     "Refused",
     "Rescan",
-    "No balance — safe to close.",
+    // P1-C (adversarial review, 2026-09-21): renamed from "No balance — safe to close." — the
+    // spec forbids calling any token "safe", and it was untrue too (a Token-2022 account with
+    // withheld transfer fees can read as zero and is NOT closable). Same key across all six
+    // dictionaries in the same commit (AGENTS.md: editing English copy without the translation
+    // silently drops six languages).
+    "No token balance — can be closed.",
     "Still holds tokens — won't be closed.",
     "Wrapped SOL — not handled here.",
+    // P2-E (adversarial review, 2026-09-21): the confirm sheet named only the reward, never the
+    // consequence. Curated in all six dictionaries too, unlike most increment-3 strings below —
+    // SEEKER_TOOLS_BUILD.md §3.4 requires the exact consequence in plain words before a signature.
+    "This closes the accounts permanently — it can't be undone. If you're ever sent this token again, the account is re-created and you pay this deposit again.",
   ];
   // "Signing is coming in the next build." was increment 2's placeholder note under the disabled
   // Reclaim button — increment 3 enabled signing and removed it, so it is a RETIRED key, not a
   // current one; it is not expected in NEW_KEYS_INCREMENT3 or in the six dictionaries any more
   // (dictionaries keep the stale entry harmlessly — i18n-audit.cjs's "extra/stale" is a warning,
-  // never a gate).
+  // never a gate). "More accounts exist in this wallet than are shown here." (P3) and "SOL
+  // returning to your wallet" / "Reclaimed" (renamed by P3/P2-E's review) are retired the same way.
   const NEW_KEYS_INCREMENT3 = [
     "Confirm reclaim",
     "Accounts to close",
-    "SOL returning to your wallet",
+    "SOL returning to your wallet (before network fees)",
     "Your wallet will ask you to approve this next.",
     "Cancel",
     "Signing…",
@@ -217,8 +279,14 @@ function rpcOk(list) {
     "Skipped",
     "Failed",
     "View signature",
-    "Reclaimed",
+    "Reclaimed this run",
     "You declined to sign — nothing was closed.",
+    // P2-I: the confirm sheet's own pre-signature fresh-read state.
+    "Checking the current balances before you sign…",
+    // P3: truncation now names the actual numbers instead of a vague "more exist somewhere".
+    "Showing",
+    "of",
+    "Reclaim these, then rescan for the rest.",
   ];
   // These must be the exact literals RentReclaim.jsx passes to t(...) — extracted independently
   // here (a plain t("...") call regex) rather than just re-typing NEW_KEYS a second time, so a

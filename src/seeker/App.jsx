@@ -39,6 +39,30 @@ function useWallet() {
   // address, per docs/SEEKER_RECLAIM_SIGNING_SPEC.md's "destination is always the connected
   // wallet" rule.
   const [state, setState] = React.useState({ connected: false, address: null, name: null, provider: null, error: null });
+  // ⚠️ P2-J (adversarial review, 2026-09-21): best-effort live tracking of the wallet's OWN
+  // account-switch event, on top of reclaim-sign.js's own point-in-time check right before
+  // signing (the check that actually matters — this is a second line of defense, not a
+  // replacement for it: not every provider fires this event, and a background switch between
+  // renders can still land only at sign time). Provider is whatever CluckWallet.connect()
+  // returned, exactly as the spec requires — never re-derived or looked up by address.
+  const listenerRef = React.useRef(null);
+  const clearListener = React.useCallback(() => {
+    if (listenerRef.current) { try { listenerRef.current(); } catch (_) {} listenerRef.current = null; }
+  }, []);
+  const attachAccountChanged = React.useCallback((provider) => {
+    clearListener();
+    if (!provider || typeof provider.on !== "function") return; // not every provider supports it
+    const handler = () => {
+      // The account changed under us — never silently re-point an in-flight scan or a confirm
+      // sheet at a different wallet. Drop the connection; the pane's own "not connected" state
+      // and reasonForConnect prompt the person to reconnect and rescan explicitly.
+      setState({ connected: false, address: null, name: null, provider: null, error: null });
+    };
+    try {
+      const off = provider.on("accountChanged", handler);
+      listenerRef.current = typeof off === "function" ? off : () => { try { provider.off && provider.off("accountChanged", handler); } catch (_) {} };
+    } catch (_) {}
+  }, [clearListener]);
   const connect = React.useCallback(async () => {
     setState((s) => ({ ...s, error: null }));
     try {
@@ -46,14 +70,17 @@ function useWallet() {
       if (!CW) throw new Error("Wallet layer did not load.");
       const r = await CW.connect();
       setState({ connected: true, address: r.pubkey, name: r.name, provider: r.provider, error: null });
+      attachAccountChanged(r.provider);
     } catch (e) {
       setState((s) => ({ ...s, error: (e && e.message) || String(e) }));
     }
-  }, []);
+  }, [attachAccountChanged]);
   const disconnect = React.useCallback(() => {
+    clearListener();
     try { window.CluckWallet && window.CluckWallet.disconnect(); } catch (_) {}
     setState({ connected: false, address: null, name: null, provider: null, error: null });
-  }, []);
+  }, [clearListener]);
+  React.useEffect(() => clearListener, [clearListener]); // unmount safety net
   return { ...state, connect, disconnect };
 }
 
