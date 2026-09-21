@@ -1187,6 +1187,158 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await ctx.close();
   }
 
+  // ---- O: the Hatchery's image pipeline actually RUNS ------------------------------------
+  //
+  // `docs/HANDOFF_2026-09-21_SEEKER.md` §4 names this as never verified: "the Hatchery's image
+  // path has never run in a browser at all". The adversarial-review fix made that worse, not
+  // better — it changed prepareLogo so EVERY image is re-encoded through a canvas (previously a
+  // small png/jpeg/webp was passed through byte-for-byte), added a PNG branch and a server-cap
+  // check, and none of it had ever executed. Code that moves someone's photo into permanent
+  // public storage should not ship on a reading of the source.
+  //
+  // So this drives the real file input in the real bundle with real image bytes, and reads what
+  // the pane would POST to /api/hatchery/build — `imageBase64` and `imageMime` are exactly what
+  // reaches Arweave. The request is refused, so nothing is uploaded; only the bytes are examined.
+  {
+    const os = require("os");
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "hatch-img-"));
+
+    // Build real, decodable images with the browser itself, then (for the JPEG) splice in an
+    // APP1 Exif segment right after SOI — a valid, browser-decodable JPEG that carries EXIF,
+    // which is what a phone's camera roll hands over. Hand-writing a JPEG encoder here would be
+    // its own source of bugs; the browser's encoder is the one real photos come through anyway.
+    const genCtx = await browser.newContext();
+    const genPage = await genCtx.newPage();
+    await genPage.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+    const made = await genPage.evaluate(() => {
+      function draw(w, h, alpha) {
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        const x = c.getContext("2d");
+        if (!alpha) { x.fillStyle = "#123456"; x.fillRect(0, 0, w, h); }
+        // Enough detail that a JPEG of it is not trivially tiny.
+        for (let i = 0; i < 400; i++) {
+          x.fillStyle = `rgb(${(i * 7) % 256},${(i * 13) % 256},${(i * 29) % 256})`;
+          x.fillRect((i * 37) % w, (i * 53) % h, w / 12, h / 12);
+        }
+        return c;
+      }
+      return {
+        // Big enough that the old fast path would NOT have applied to it anyway…
+        bigJpeg: draw(1600, 1600, false).toDataURL("image/jpeg", 0.95),
+        // …and one small enough that it WOULD have been passed through byte-for-byte before.
+        smallJpeg: draw(160, 160, false).toDataURL("image/jpeg", 0.7),
+        // A PNG with transparency, to prove the PNG branch keeps it PNG.
+        smallPng: draw(120, 120, true).toDataURL("image/png"),
+      };
+    });
+    await genCtx.close();
+
+    const b64ToBuf = (dataUrl) => Buffer.from(dataUrl.split(",")[1], "base64");
+    // APP1 Exif segment: marker FFE1, length, "Exif\0\0", then a minimal little-endian TIFF
+    // header. Decoders skip a segment they cannot parse, so the image still renders — which is
+    // the point: the bytes ride along invisibly, exactly as a camera's GPS tags do.
+    function withExif(jpeg) {
+      const payload = Buffer.concat([
+        Buffer.from("Exif\0\0", "latin1"),
+        Buffer.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00]),
+        Buffer.from("GPSLatitude 51.5074 GPSLongitude -0.1278 CLUCK-EXIF-CANARY", "latin1"),
+      ]);
+      const len = payload.length + 2;
+      return Buffer.concat([
+        jpeg.subarray(0, 2),                            // SOI
+        Buffer.from([0xff, 0xe1, (len >> 8) & 0xff, len & 0xff]),
+        payload,
+        jpeg.subarray(2),
+      ]);
+    }
+
+    const files = {
+      // name              bytes                                        what it proves
+      bigJpeg:   { buf: withExif(b64ToBuf(made.bigJpeg)),   mime: "image/jpeg", ext: "jpg" },
+      smallJpeg: { buf: withExif(b64ToBuf(made.smallJpeg)), mime: "image/jpeg", ext: "jpg" },
+      smallPng:  { buf: b64ToBuf(made.smallPng),            mime: "image/png",  ext: "png" },
+    };
+    for (const [k, f] of Object.entries(files)) {
+      f.path = path.join(tmp, `${k}.${f.ext}`);
+      fs.writeFileSync(f.path, f.buf);
+    }
+    ok("O · the EXIF canary really is in the source files (or the test below proves nothing)",
+       files.bigJpeg.buf.includes("CLUCK-EXIF-CANARY") && files.smallJpeg.buf.includes("CLUCK-EXIF-CANARY"),
+       "the spliced APP1 segment is missing from the fixtures");
+
+    const MAX_LOGO_BYTES = 100 * 1024;   // mirrors hatchery.js, same as the pane
+    for (const [label, f, wantMime] of [
+      ["a 1600px camera JPEG with EXIF", files.bigJpeg, "image/jpeg"],
+      ["⚠️ a SMALL JPEG with EXIF (the old fast path passed these through untouched)", files.smallJpeg, "image/jpeg"],
+      ["a small PNG", files.smallPng, "image/png"],
+    ]) {
+      let posted = null;
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+      const page = await ctx.newPage();
+      const errors = [];
+      page.on("pageerror", (e) => errors.push(e.message));
+      await page.route("**/api/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "{}" }));
+      await page.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json",
+        body: JSON.stringify({ success: true, feeWaived: true, solEnabled: true, clknEnabled: false, feeLamports: 0, feeSol: 0 }) }));
+      await page.route("**/api/hatchery/build*", (r) => {
+        try { posted = JSON.parse(r.request().postData() || "{}"); } catch (_) { posted = { parseError: true }; }
+        // Refuse it. Nothing is uploaded anywhere; we only want the bytes it was going to send.
+        r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "not part of this test" }) });
+      });
+      await page.addInitScript(FAKE);
+      await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
+      await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+      await page.waitForTimeout(400);
+      await page.click(".seeker-walletbtn");
+      await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      await page.evaluate(() => { window.location.hash = "#/tools/hatchery"; });
+      await page.waitForFunction(() => !!document.querySelector("#hatch-name"), null, { timeout: 15000 }).catch(() => {});
+
+      await page.fill("#hatch-name", "Cluck Coin");
+      await page.fill("#hatch-symbol", "CLUCK");
+      await page.fill("#hatch-supply", "1000000000");
+      await page.setInputFiles("#hatch-logo", f.path);
+      // prepareLogo decodes and re-encodes; give it room on a slow box.
+      await page.waitForTimeout(2500);
+      await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll("button")).find((x) => /review mint/i.test(x.innerText.trim()));
+        b && b.click();
+      });
+      await page.waitForFunction(() => true, null, { timeout: 1000 }).catch(() => {});
+      await page.waitForTimeout(2500);
+
+      ok(`O · ${label} — the pane got as far as posting a logo`,
+         !!(posted && typeof posted.imageBase64 === "string" && posted.imageBase64.length > 0),
+         `posted=${JSON.stringify(posted && Object.keys(posted))}`);
+
+      if (posted && typeof posted.imageBase64 === "string" && posted.imageBase64.length) {
+        const out = Buffer.from(posted.imageBase64, "base64");
+
+        // ⚠️ THE ONE THIS SECTION EXISTS FOR. A canvas re-encode reads PIXELS; every EXIF, XMP
+        // and ICC block is left behind. If the canary survives, someone's GPS coordinates just
+        // went to permanent public storage.
+        ok(`O · ⚠️ ${label} — NO EXIF survives into what would be uploaded`,
+           !out.includes("CLUCK-EXIF-CANARY") && !out.includes("GPSLatitude"),
+           `the EXIF canary is still in the ${out.length}-byte payload`);
+
+        ok(`O · ${label} — it is a real ${wantMime} and the declared mime matches the bytes`,
+           posted.imageMime === wantMime && (wantMime === "image/png"
+             ? (out[0] === 0x89 && out[1] === 0x50 && out[2] === 0x4e && out[3] === 0x47)
+             : (out[0] === 0xff && out[1] === 0xd8)),
+           `mime=${posted.imageMime} magic=${out.subarray(0, 4).toString("hex")}`);
+
+        ok(`O · ${label} — under the server's own cap (${MAX_LOGO_BYTES} bytes)`,
+           out.length <= MAX_LOGO_BYTES, `${out.length} bytes`);
+
+        ok(`O · ${label} — and not empty or truncated`, out.length > 200, `${out.length} bytes`);
+      }
+      ok(`O · ${label} — no uncaught exception`, errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
+  }
+
   // ---- I: it is not an English-only app -------------------------------------------------
   //
   // The school ships in SEVEN languages (AGENTS.md), and this app is part of the school. An
