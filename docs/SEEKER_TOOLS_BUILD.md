@@ -39,11 +39,11 @@ app does not invent new gates and does not hardcode any amount.
 ### Free, wallet connects to act
 | Tool | Route | Notes |
 |---|---|---|
-| Rent Reclaim | `/rent` | **in flight** — increment 3 signing |
-| Wallet Checkup | `/checkup` | **in flight** |
-| Firepit | `/tools/firepit` | burn junk + reclaim rent; the value-guard is load-bearing |
-| Locker Room | `/tools/lock` | the flagship story; non-custodial locking |
-| Project Burn | `/tools/burn` | verified burn + receipt |
+| Rent Reclaim | `/rent` | **signs** — many batches, one wallet prompt |
+| Wallet Checkup | `/checkup` | **live** |
+| Firepit | `/tools/firepit` | **signs** — burn junk + reclaim rent; the value-guard is load-bearing |
+| Locker Room | `/tools/lock` | **signs** — the flagship story; non-custodial locking; the app's only two-signer transaction |
+| Project Burn | `/tools/burn` | **signs** — verified burn + receipt |
 
 ### Heavy — the unified tools pass
 `$50 of CLKN` held (live-priced) **or** `0.05 SOL` for a 7-day pass. Config comes from
@@ -53,19 +53,45 @@ app does not invent new gates and does not hardcode any amount.
 | Wallet X-Ray | `/tools/xray` |
 | Token Holders | `/tools/holders` |
 | Trace | `/tools/trace` |
-| Airdrop | `/tools/airdrop` |
-| Buy Special | `/tools/buyspecial` |
+| Airdrop | `/tools/airdrop` | **signs** — drives `public/airdrop-engine.js`, plans with `public/airdrop-plan.js`, records a public receipt |
+| Buy Special | `/tools/buyspecial` | read side only — the prize-SENDING half is an operator surface and is out of scope below |
 
 ### Paid
 | Tool | Route | Notes |
 |---|---|---|
-| Hatchery | `/tools/hatchery` | probe `/api/hatchery/config` for today's figure — computed live |
+| Hatchery | `/tools/hatchery` | **signs** — probe `/api/hatchery/config` for today's figure, computed live |
 
 ### Deliberately NOT in the app
 Operator and project-owner surfaces: `hub-desk`, `hub-pay`, `hub-apply`, `client-portal`,
 `jupverify`, `owners-snapshot`, `buyspecial-dashboard`, `cuna-payout`, `cuna-staking`,
 `lp-rescue`, `premium`/autopsy, `transcript`. These are desk work on a large screen, they are not
 what a phone in a pocket is for, and several are owner-only. Not a capability gap — a scope line.
+
+### Status, 2026-09-21
+**All 15 are built, wired and reachable**, and `scripts/seeker-app-boot-test.cjs` drives every
+one of them in the shipped tarball and asserts it mounts — read from the grid's own rendered
+hrefs, not a list in the test, so a new tool cannot be added without a render check.
+
+Five of them sign: Rent Reclaim, Firepit, Project Burn, the Locker Room and the Hatchery, plus
+the Airdropper. **Nothing has been exercised against a real wallet or a real chain** — see
+`docs/HANDOFF_2026-09-21_SEEKER.md` §4 for the device gate that has to pass first.
+
+## 2b. Three things are shared, and CI keeps them shared
+
+This app's recurring failure mode is not a missing feature; it is the same logic written twice
+and fixed once. Each of these was a real instance, and each is now pinned by
+`scripts/seeker-build-test.cjs` section (e2).
+
+| Shared file | What it owns | What happened without it |
+|---|---|---|
+| `src/seeker/sign.js` | the whole sign → send → confirm path, and four protections | the same P0 (confirmationStatus checked before err) shipped in TWO copies and was found by two reviewers on the same day |
+| `src/seeker/passgate.jsx` | the tools-pass sheet | three byte-identical 79-line copies differing by one sentence, each carrying a note saying "extract this if it drifts" |
+| `public/airdrop-engine.js` | batching, tx building, instruction encoding | the Seeker Airdropper drives it rather than carrying a copy; `public/airdrop-plan.js` is the only new logic, and it is pure |
+
+The guard is an inventory, not a style rule: no file outside the seam may call
+`getSignatureStatuses` or `sendTransaction`, no pane may define a `PassGate`, and the
+err-before-status ordering is asserted **positively** — a negative regex passes against the
+broken code, which is exactly how the original assertion went green while being wrong.
 
 ## 3. The pane contract — every tool obeys it
 
@@ -126,3 +152,36 @@ a phone-sized Chromium. Add your tool's assertions there: it renders, its states
 failed read shows unavailable and never a zero, and its controls clear 44px. Pure logic goes in a
 `public/*.js` dual-export module with its own Node test, the way `rent-math.js` and
 `rent-reclaim-plan.js` do — not buried in a component.
+
+### What the boot test now covers, section by section
+
+| | What it drives |
+|---|---|
+| A | the bundle mounts, loads its scripts, reaches **nothing off-device but our own API**, and the brand fonts come from inside the bundle |
+| B | hash routing, 44px targets, the grid's honesty rule (an unbuilt tool is never a link), and **every built tool mounts** |
+| C | connect and disconnect through the real shared registry |
+| D | ⚠️ a 503 renders **unavailable and never a zero total** — asserted negatively too |
+| E | a good read renders the real numbers, in the right groups, with the server's own reasons |
+| F | ⚠️ the tools pass is really **enforced in the bundle** — a RUN with no pass never calls the gated API |
+| G | ⚠️ the Airdropper's **three outcomes stay apart**, and only confirmed rows reach the public receipt |
+| H | ⚠️ the Locker Room's **two signatures, in order** — read back out of the bytes actually submitted |
+
+### Three ways a test here has lied, and what to do about it
+
+Each of these happened while building this app. They are listed because each one looked exactly
+like a product bug or a clean pass, and cost real time.
+
+1. **A fixture that can't occur.** The original confirmation assertion used a status shape mainnet
+   never returns (`err` with no `confirmationStatus`), so it asserted the opposite of reality and
+   went green over a live P0. **Fixtures must be shapes the chain actually produces.**
+2. **A probe that produces no output is not a pass.** A bad URL injected into a comment, and then
+   into an unused export, both "passed" the host scanner — comments are stripped and unused
+   exports are tree-shaken. Only a third probe, changing a URL that actually renders, proved the
+   scanner worked at all.
+3. **A harness that fails for its own reasons.** Addresses that match base58 but aren't real
+   keypairs, a fake wallet that returns the unsigned bytes it was handed, a template literal that
+   didn't interpolate — each produced a screen full of failures that read as a regression in the
+   pane. **Before believing a red test, check the fixture.**
+
+Run a new or changed guard as a **mutation**: break the thing it protects and watch it go red,
+then restore it. A guard that has never been seen to fail is not known to work.
