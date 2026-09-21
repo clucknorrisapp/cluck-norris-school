@@ -28,6 +28,7 @@
 // rewrites its own API calls to absolute https://clucknorris.app/... (store-edition builder), so
 // the route pattern matches on the path, not the origin.
 const { execFileSync } = require("child_process");
+const web3 = require("@solana/web3.js");
 const http = require("http");
 const fs = require("fs");
 const os = require("os");
@@ -122,7 +123,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
 
   // Every page opens as a PHONE. A desktop viewport would hide exactly the layout breaks this
   // app has to survive (the hackathon scores mobile-specific work, and a Seeker is a phone).
-  async function open(reclaimable, extraRoutes) {
+  async function open(reclaimable, extraRoutes, fakeScript) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
     const page = await ctx.newPage();
     const errors = [];      // uncaught exceptions only — the strict signal
@@ -135,7 +136,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       if (i >= 0) calls.push(u.slice(i).split("?")[0]);
       if (!u.startsWith(BASE) && !u.startsWith("data:") && !u.startsWith("blob:")) offsite.add(u.split("?")[0]);
     });
-    await page.addInitScript(FAKE);
+    await page.addInitScript(fakeScript || FAKE);
     // Match on the PATH — the shipped bundle calls the absolute production origin.
     await page.route("**/api/seeker/reclaimable*", (route) => reclaimable(route));
     if (extraRoutes) await extraRoutes(page);
@@ -337,6 +338,178 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       await page.waitForTimeout(200);
     }
     ok("F · no uncaught exception driving the pass tier", errors.length === 0, errors.join(" | ").slice(0, 400));
+    await ctx.close();
+  }
+
+  // ---- G: the Airdropper — three outcomes, kept apart -------------------------------------
+  //
+  // ⚠️ THE MOST CONSEQUENTIAL SCREEN IN THIS APP. It moves someone else's money out of the
+  // user's wallet in bulk, and the way it goes wrong is not a crash: it is a batch reported as
+  // "sent" that was not. A batch has THREE outcomes and collapsing any two of them is a
+  // specific lie to the operator —
+  //     sent        confirmed on-chain.
+  //     failed      landed and failed, or never went. Nobody was paid. Retry it.
+  //     unconfirmed submitted, no status after 30s. It MAY still land. Called "sent", unpaid
+  //                 people look paid; called "failed", the operator resends and DOUBLE-PAYS.
+  // The engine (public/airdrop-engine.js) distinguishes all three and its own comment records
+  // the day it did not. This drives the SHIPPED bundle through one real run of all three, with
+  // a fake wallet and a fake chain, and checks what the screen actually says.
+  //
+  // Slow on purpose: the unconfirmed case is a real 30-second poll, because shortening it would
+  // mean testing something other than the code that ships.
+  {
+    // A pass already held, written the way cluck-gate.js writes it — this section is about the
+    // send, not the gate (section F owns that), and a gate sheet in the way would prove nothing.
+    const PASS = { unlockedAt: 1, expiresAt: 4102444800000, why: "holder", proof: "t:faketoken" };
+    const SIG_OK = "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCFFzVkbqDHHcgkTMZLFBgrPtrTKJqXNJ2kFfPjRnLXGRCGXBLjF";
+    const SIG_BAD = "3nVfYQMJMyXjWJvUXkTWSLZfqNqTtjqKRy1vFgvvfsnFvyqMdSHJzqKLXaTVmcXyJDsBaMvVnKkYaWQxjqRLbNnG";
+    const SIG_SILENT = "4hXTJHFoFvPZs1e4z1Q1vMWgkgi3zVJMhVQcHX7FmKjzKPPRcy6HmQ9cQ4B8dkcbSmvKJgVRC1L3H7gK2vNrWqMT";
+    const sigs = [SIG_OK, SIG_BAD, SIG_SILENT];
+    // ⚠️ A REAL key here too. "SenderTokAcct111…" matched the eye but not ed25519, and every row
+    // came back "Invalid public key input" — the same broken-fixture failure as the recipients,
+    // one layer down, and it looked identical to a real regression in the pane.
+    const SENDER_TOKEN_ACCOUNT = web3.Keypair.generate().publicKey.toBase58();
+
+    // ⚠️ A wallet that REALLY SIGNS. The shell's fake (FAKE, above) hands back the unsigned bytes
+    // it was given, which is fine for "does connect work" but not here: cluck-wallet.js's
+    // sign-only path calls .serialize() on what comes back, and an unsigned transaction throws
+    // "Missing signature for public key" — 34 rows failed for that reason alone and the
+    // three-outcome assertions were, again, measuring the fixture. Sections C/D/E keep the simple
+    // fake and its fixed address; this one carries its own keypair.
+    const SIGNER = web3.Keypair.generate();
+    const SIGNER_ADDR = SIGNER.publicKey.toBase58();
+    const FAKE_SIGNING = `(() => {
+      const SECRET = ${JSON.stringify(Array.from(SIGNER.secretKey))};
+      const account = { address: ${JSON.stringify(SIGNER.publicKey.toBase58())}, publicKey: new Uint8Array(32).fill(7),
+        chains: ["solana:mainnet"], features: ["solana:signTransaction"] };
+      const wallet = {
+        version: "1.0.0", name: "Jupiter", icon: "data:image/svg+xml;base64,PHN2Zy8+",
+        chains: ["solana:mainnet"], accounts: [],
+        features: {
+          "standard:connect": { version: "1.0.0", connect: async () => { wallet.accounts = [account]; return { accounts: [account] }; } },
+          "standard:disconnect": { version: "1.0.0", disconnect: async () => { wallet.accounts = []; } },
+          "standard:events": { version: "1.0.0", on: () => () => {} },
+          "solana:signTransaction": { version: "1.0.0", supportedTransactionVersions: ["legacy", 0],
+            signTransaction: async (...inputs) => inputs.map((x) => {
+              const tx = solanaWeb3.Transaction.from(x.transaction);
+              tx.sign(solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(SECRET)));
+              return { signedTransaction: tx.serialize() };
+            }) },
+        },
+      };
+      const cb = ({ register }) => register(wallet);
+      window.addEventListener("wallet-standard:app-ready", (ev) => cb(ev.detail));
+      window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", { detail: cb }));
+    })();`;
+    let sendCount = 0;
+    const recorded = [];
+
+    const { ctx, page, errors } = await open(
+      (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+      async (pg) => {
+        await pg.addInitScript((p) => { try { localStorage.setItem("clkn_tools_unlock", JSON.stringify(p)); } catch (_) {} }, PASS);
+        await pg.route("**/api/tool-gate/config*", (r) => r.fulfill({ status: 200, contentType: "application/json",
+          body: JSON.stringify({ success: true, enabled: true, holdUsd: 50, clknNeeded: 1000, lamports: 50000000, days: 7 }) }));
+        await pg.route("**/api/airdrop/record*", async (r) => {
+          try { recorded.push(JSON.parse(r.request().postData() || "{}")); } catch (_) {}
+          r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, dropId: "testdrop", url: "/airdrop/r/testdrop" }) });
+        });
+        // A fake chain. Three batches: the first confirms, the second lands and FAILS, the third
+        // never answers at all (the engine's 30s poll runs out — the ambiguous case).
+        await pg.route("**/api/helius-rpc", async (r) => {
+          const body = JSON.parse(r.request().postData() || "{}");
+          const m = body.method;
+          let result;
+          if (m === "getTokenAccountsByOwner") {
+            result = { value: [{ pubkey: SENDER_TOKEN_ACCOUNT,
+              account: { owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+                data: { parsed: { info: { tokenAmount: { decimals: 6 } } } } } }] };
+          } else if (m === "getMultipleAccounts") {
+            // Everyone already holds the token: no ATA rent, weight 1 each, so the batch
+            // boundaries are the plain ones the cost preview showed.
+            result = { value: (body.params[0] || []).map(() => ({ lamports: 1 })) };
+          } else if (m === "getMinimumBalanceForRentExemption") { result = 2039280; }
+          else if (m === "getBalance") { result = { value: 1000000000 }; }
+          else if (m === "getLatestBlockhash") { result = { value: { blockhash: "11111111111111111111111111111111" } }; }
+          else if (m === "sendTransaction") { result = sigs[Math.min(sendCount++, sigs.length - 1)]; }
+          else if (m === "getSignatureStatuses") {
+            const sig = (body.params[0] || [])[0];
+            if (sig === SIG_OK) result = { value: [{ err: null, confirmationStatus: "confirmed" }] };
+            // ⚠️ BOTH fields set. This is the shape that made "confirmed" read as success for a
+            // transaction that FAILED — the P0 this repo shipped twice. err must win.
+            else if (sig === SIG_BAD) result = { value: [{ err: { InstructionError: [0, "Custom"] }, confirmationStatus: "confirmed" }] };
+            else result = { value: [null] };   // never answers — the 30s timeout
+          } else { result = null; }
+          r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result }) });
+        });
+      }, FAKE_SIGNING);
+    await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+    await page.evaluate(() => { window.location.hash = "#/tools/airdrop"; });
+    await page.waitForTimeout(400);
+
+    ok("G · the airdrop engine and the plan module are both in the bundle",
+       await page.evaluate(() => !!(window.CluckAirdrop && window.CluckAirdrop.send && window.CluckAirdropPlan && window.CluckAirdropPlan.parseRecipients)),
+       "airdrop-engine.js / airdrop-plan.js did not load — check seeker.html and seeker-edition.json");
+
+    await page.click(".seeker-walletbtn");
+    await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 });
+
+    // 34 recipients at weight 1 = three batches at the engine's budget of 16. One per outcome.
+    // ⚠️ REAL keypairs, not strings that merely match the base58 shape. The first version of this
+    // synthesized addresses by editing one character of a known key: they passed the pane's
+    // ADDR_RE and then every single one failed inside the engine with "Invalid public key input",
+    // so the run produced 34 failures and the three-outcome assertions were measuring a broken
+    // fixture rather than the thing under test. A probe that fails for its own reasons proves
+    // nothing about the code.
+    const R = Array.from({ length: 34 }, () => web3.Keypair.generate().publicKey.toBase58());
+    await page.fill("#drop-mint", "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS");
+    await page.fill("#drop-list", R.join("\n"));
+    await page.fill("#drop-amt", "1.5");
+    await page.click(".seeker-listing-runbtn");
+    await page.waitForFunction(() => /Transactions to sign|Could not read the network cost/i.test(document.body.innerText), null, { timeout: 20000 });
+
+    const review = await text(page);
+    ok("G · the review shows the transaction count the ENGINE will actually produce",
+       /Transactions to sign[\s\S]{0,40}\b3\b/i.test(review), review.slice(0, 600));
+    ok("G · and the network cost, before anything is signed", /Network cost/i.test(review) && /SOL/.test(review));
+    ok("G · the total is computed from the list, not typed by hand", /\b51\b/.test(review), review.slice(0, 600));
+
+    await page.click(".seeker-drop-send");
+    await page.waitForFunction(() => /Send this drop\?/i.test(document.body.innerText), null, { timeout: 10000 });
+    const confirm = await text(page);
+    ok("G · the confirmation names the amount, the wallet count and that it cannot be undone",
+       /51/.test(confirm) && /34/.test(confirm) && /cannot be reversed/i.test(confirm), confirm.slice(0, 500));
+
+    await page.click(".seeker-confirm .seeker-btn:not(.seeker-btn-quiet)");
+    // Three batches; the third burns the engine's full 30s poll. Generous, then assert.
+    await page.waitForFunction(() => /Start another drop/i.test(document.body.innerText), null, { timeout: 90000 }).catch(() => {});
+    const done = await text(page);
+
+    ok("G · the run finishes and reports", /Start another drop/i.test(done), done.slice(0, 400));
+    // The whole point. Sixteen paid, sixteen not, two ambiguous — and nothing rounded together.
+    const counts = await page.evaluate(() => ({
+      sent: document.querySelectorAll(".seeker-drop-row-sent").length,
+      failed: document.querySelectorAll(".seeker-drop-row-failed").length,
+      unconfirmed: document.querySelectorAll(".seeker-drop-row-unconfirmed").length,
+    }));
+    ok("G · ⚠️ the batch that CONFIRMED is the only one reported sent", counts.sent === 16, JSON.stringify(counts));
+    ok("G · ⚠️ the batch that landed and FAILED is reported failed, not sent — err beats confirmationStatus",
+       counts.failed === 16, JSON.stringify(counts));
+    ok("G · ⚠️ the batch with no status is UNCONFIRMED — not sent, and not failed",
+       counts.unconfirmed === 2, JSON.stringify(counts));
+    ok("G · the unconfirmed rows get their own warning, naming the double-pay risk",
+       /unconfirmed/i.test(done) && /twice/i.test(done), done.slice(0, 900));
+    ok("G · every row carries a signature to check", await page.evaluate(() =>
+       document.querySelectorAll('a[href^="https://solscan.io/tx/"]').length >= 3));
+
+    // ⚠️ Only CONFIRMED rows may reach the public receipt. An unconfirmed row has no on-chain
+    // truth yet and a failed one has none at all — publishing either is a claim the chain does
+    // not support, which is the one thing the receipt exists to avoid.
+    const rows = recorded.flatMap((b) => b.rows || []);
+    ok("G · ⚠️ the public receipt records ONLY the confirmed rows", rows.length === 16, `recorded ${rows.length}`);
+    ok("G · and only with the confirming signature", rows.length > 0 && rows.every((r) => r.sig === SIG_OK));
+    ok("G · the receipt link is offered once it exists", /Public receipt/i.test(done));
+    ok("G · no uncaught exception through the whole send", errors.length === 0, errors.join(" | ").slice(0, 400));
     await ctx.close();
   }
 

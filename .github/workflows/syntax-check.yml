@@ -221,6 +221,21 @@ jobs:
       # No live RPC, no real signing anywhere in this file — fixtures and a fake bridge only.
       - name: Seeker app — Rent Reclaim SIGNING path (byte-identical instruction, mutation-tested destination check, batching, idempotency, unavailable, rejection)
         run: node scripts/seeker-reclaim-sign-test.cjs
+      # The Airdropper's PLANNING decisions (public/airdrop-plan.js) — THIS MOVES USER FUNDS IN
+      # BULK, and everything here happens before the wallet is asked to sign, which is the last
+      # point at which a mistake is still free. Two sections exist because the desktop parser gets
+      # them wrong today: an ambiguous number format ("1.234,56") is REFUSED rather than silently
+      # read as 1.23456, in both spellings of that trap (the parser's and the splitter's); and
+      # duplicate addresses are summed in exact decimal STRING arithmetic — never floats, which
+      # airdrop-engine.js's own toBaseUnits() comment explains go wrong past ~9M tokens at nine
+      # decimals — and always REPORTED rather than merged behind the operator's back. The two
+      # list modes merge differently on purpose (line items sum; "give everyone X" does not
+      # double). The cost preview mirrors the engine's own batch weighting exactly, so the
+      # transaction count shown is the one the wallet will ask to approve, and an unreadable SOL
+      # balance is `null` — never an optimistic "affordable". The chain-touching half is driven
+      # for real in the boot test's section G.
+      - name: Seeker app — Airdropper planning (ambiguous amounts refused, exact decimal sums, duplicate reporting, engine-matched batch cost)
+        run: node scripts/seeker-airdrop-test.cjs
       # Addendum B5 / roadmap E3: the on-chain memo format is byte-diffed against a hand-built
       # Uint8Array before it ships; verifyCommitTx never trusts the client (wrong payer, wrong or
       # missing memo, more than one memo, a failed or unconfirmed tx are all refused); a version's

@@ -34,6 +34,7 @@ import LockerRoom from "./tools/LockerRoom.jsx";
 import WalletXray from "./tools/WalletXray.jsx";
 import Holders from "./tools/Holders.jsx";
 import Trace from "./tools/Trace.jsx";
+import Airdropper from "./tools/Airdropper.jsx";
 
 // Anywhere a user can connect a wallet, they must be able to disconnect (CLAUDE.md) — this is
 // the one control surface, so both live in the same place with the provider's own disconnect()
@@ -160,6 +161,7 @@ export default function App() {
             <Route path="/tools/xray" element={<WalletXray wallet={wallet} />} />
             <Route path="/tools/holders" element={<Holders wallet={wallet} />} />
             <Route path="/tools/trace" element={<Trace wallet={wallet} />} />
+            <Route path="/tools/airdrop" element={<Airdropper wallet={wallet} />} />
             <Route path="*" element={<Navigate to="/tools" replace />} />
           </Routes>
         </main>

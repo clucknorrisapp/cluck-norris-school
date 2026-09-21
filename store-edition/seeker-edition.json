@@ -12,6 +12,8 @@
     "cluck-gate.js",
     "rent-math.js",
     "rent-reclaim-plan.js",
+    "airdrop-plan.js",
+    "airdrop-engine.js",
     "vendor/solana-web3-1.95.8.iife.min.js",
     "i18n.js",
     "icon.svg",

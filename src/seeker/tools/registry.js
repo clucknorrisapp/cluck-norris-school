@@ -39,7 +39,7 @@ export const TOOLS = [
     blurb: "Who holds a token, how concentrated it is, and how that changed." },
   { id: "trace",      route: "/tools/trace",      title: "Trace",           icon: "🧭", tier: "pass",   ready: true ,
     blurb: "Follow the money between wallets, hop by hop." },
-  { id: "airdrop",    route: "/tools/airdrop",    title: "Airdropper",      icon: "🪂", tier: "pass",   ready: false,
+  { id: "airdrop",    route: "/tools/airdrop",    title: "Airdropper",      icon: "🪂", tier: "pass",   ready: true ,
     blurb: "Send a token to many wallets at once, with a receipt for every row." },
   { id: "buyspecial", route: "/tools/buyspecial", title: "Buy Special",     icon: "🎯", tier: "pass",   ready: false,
     blurb: "Run a buy competition with standings anyone can check." },

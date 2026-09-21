@@ -706,3 +706,212 @@
   line-height: 1.5;
 }
 .seeker-passgate-err { color: var(--red-soft, var(--red)); margin-top: 10px; }
+
+/* ── 2h. Buy Special — buy-competition scanner + hold/trace calculator ─────────────────────────
+   Read-only: this pane never signs or sends anything (see BuySpecial.jsx's header). It reuses the
+   2g forensic shapes (form/stat-grid/rows) for its two on-chain reads and adds only what's unique
+   to a competition config: tappable window/mint/live-comp chips, a hold-rule checkbox, and the
+   status-tag colour variants for a computed eligibility row. */
+.seeker-bs-chiprow { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.seeker-bs-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card2, #1d1e26);
+  color: var(--sub);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.seeker-bs-chip-active { border-color: var(--orange); color: var(--orange); background: rgba(255, 122, 24, .1); }
+.seeker-bs-windownote { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: -4px 0 12px; }
+
+.seeker-bs-checkrow { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 4px 0; }
+.seeker-bs-checkbox { width: 20px; height: 20px; min-width: 20px; margin-top: 2px; accent-color: var(--orange); }
+.seeker-bs-checkrow label { font-size: 13px; color: var(--sub); line-height: 1.5; }
+
+.seeker-bs-rowactions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.seeker-bs-smallbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--sub);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.seeker-bs-smallbtn:disabled { color: var(--muted); cursor: not-allowed; }
+
+/* Status-tag colour variants layered on the shared .seeker-forensic-row-tag shape (2g). */
+.seeker-bs-tag-ok { border-color: var(--green2, var(--green)); color: var(--green2, var(--green)); }
+.seeker-bs-tag-bad { border-color: var(--red-soft, var(--red)); color: var(--red-soft, var(--red)); }
+.seeker-bs-tag-warn { border-color: var(--gold); color: var(--gold); }
+.seeker-bs-tag-muted { border-color: var(--muted); color: var(--muted); }
+
+.seeker-bs-tracebox {
+  font-size: 12px;
+  color: var(--sub);
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+/* ── 2j. Airdropper ─────────────────────────────────────────────────────────────────────────
+   The one pane that moves money out in bulk, so its distinct visual job is keeping the three
+   send outcomes apart at a glance — sent / failed / UNCONFIRMED. The third is the one people
+   collapse, and it is the one that double-pays when they do (see Airdropper.jsx's header), so
+   it gets its own colour and its own alert block, not a dimmed version of "failed". */
+.seeker-drop-modes { display: flex; gap: 8px; margin: 12px 0 4px; }
+.seeker-drop-modes .seeker-btn { flex: 1; min-height: 44px; }
+.seeker-drop-mode-on { border-color: var(--orange); color: var(--orange); }
+
+.seeker-drop-textarea {
+  min-height: 132px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.seeker-drop-note {
+  font-size: 12.5px;
+  color: var(--sub);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  line-height: 1.55;
+}
+.seeker-drop-note p { margin: 0 0 4px; }
+.seeker-drop-note p:last-child { margin-bottom: 0; }
+.seeker-drop-note-warn { color: var(--gold); border-color: var(--gold); background: rgba(255, 182, 39, .08); }
+
+.seeker-drop-send { display: block; width: 100%; margin-top: 4px; }
+.seeker-drop-stop { display: block; width: 100%; margin: 12px 0; }
+
+.seeker-drop-progress { margin: 4px 0 12px; }
+.seeker-drop-progressbar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--card2, #1d1e26);
+  overflow: hidden;
+}
+.seeker-drop-progressbar span { display: block; height: 100%; background: var(--orange); transition: width .25s ease; }
+
+/* Three outcomes, three left borders — never the same treatment for two of them. */
+.seeker-drop-row-sent { border-left: 3px solid var(--green); padding-left: 10px; }
+.seeker-drop-row-failed { border-left: 3px solid var(--red-soft, var(--red)); padding-left: 10px; }
+.seeker-drop-row-unconfirmed { border-left: 3px solid var(--gold); padding-left: 10px; }
+
+.seeker-drop-unconfirmed {
+  font-size: 12.5px;
+  color: var(--gold);
+  background: rgba(255, 182, 39, .08);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 0 0 14px;
+  line-height: 1.55;
+}
+.seeker-drop-unconfirmed p { margin: 0 0 6px; }
+.seeker-drop-unconfirmed p:last-child { margin-bottom: 0; }
+
+/* ── 2i. Hatchery ───────────────────────────────────────────────────────────────────────────── */
+.seeker-hatch-form {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.seeker-hatch-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seeker-hatch-optional { text-transform: none; letter-spacing: 0; color: var(--muted); }
+
+/* The file input itself is visually hidden (not display:none, which some webviews drop from the
+   tab order) — the label beside it is the real, >=44px tap target. */
+.seeker-hatch-fileinput {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.seeker-hatch-filelabel { display: block; width: 100%; margin: 8px 0; text-align: center; cursor: pointer; }
+.seeker-hatch-logopreview {
+  display: block;
+  width: 96px; height: 96px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card2, #1d1e26);
+  margin: 6px auto;
+}
+.seeker-hatch-cardlogo {
+  width: 40px; height: 40px; min-width: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--card2, #1d1e26);
+}
+
+.seeker-hatch-payrow { display: flex; gap: 8px; margin: 8px 0; }
+.seeker-hatch-payrow .seeker-launch-tabbtn { flex: 1; }
+
+/* Fee states — waived/free is calm and positive (green), a broken config read is honest but
+   never alarming (it isn't a failure of anything the person did), never the same look as either. */
+.seeker-hatch-waived {
+  font-size: 13px;
+  color: var(--green);
+  background: rgba(34, 197, 94, .08);
+  border: 1px solid var(--green);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+.seeker-hatch-feenote {
+  font-size: 12.5px;
+  color: var(--sub);
+  background: var(--card2, #1d1e26);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.seeker-hatch-startover { display: block; width: 100%; margin-top: 8px; }
+
+/* The three post-signature outcomes this pane can land in — each its own look, same spirit as
+   Airdropper's sent/failed/unconfirmed split above: an ambiguous outcome must never look like
+   either a clean success or a safe-to-retry failure. */
+.seeker-hatch-outcome-title { font-family: var(--disp); font-weight: 400; font-size: 15px; margin: 0 0 6px; }
+.seeker-hatch-failed,
+.seeker-hatch-ambiguous,
+.seeker-hatch-done {
+  border-radius: 14px;
+  padding: 14px;
+  margin: 10px 0;
+  line-height: 1.5;
+}
+.seeker-hatch-failed p, .seeker-hatch-ambiguous p, .seeker-hatch-done p { margin: 0 0 8px; font-size: 13.5px; color: var(--subtext); }
+.seeker-hatch-failed { border: 1px solid var(--red-soft, var(--red)); background: var(--card); }
+.seeker-hatch-failed .seeker-hatch-outcome-title { color: var(--red-soft, var(--red)); }
+.seeker-hatch-ambiguous { border: 1px solid var(--gold); background: rgba(255, 182, 39, .08); }
+.seeker-hatch-ambiguous .seeker-hatch-outcome-title { color: var(--gold); }
+.seeker-hatch-done { border: 1px solid var(--green); background: rgba(34, 197, 94, .06); }
+.seeker-hatch-done .seeker-hatch-outcome-title { color: var(--green); }
