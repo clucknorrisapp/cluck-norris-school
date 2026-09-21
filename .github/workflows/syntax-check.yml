@@ -785,6 +785,11 @@ jobs:
       # connect" (untrue since 2026-08-18) while describing the pass correctly further down.
       - name: Ask Cluck's system prompt makes no claim the product cannot support
         run: node scripts/ai-prompt-claims-test.cjs
+      # "Explain this result" sends finding CODES, never the screen's text, because token names
+      # are attacker-controlled and an LLM prompt turns that from an XSS class into an injection
+      # class. This attacks the validator that is the whole defence.
+      - name: Explain-this-result payload cannot carry free text to the model
+        run: node scripts/explain-findings-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)
         run: node scripts/jvp-dashboard-test.cjs
       # Listing Checkup routes: validation, the offline run → cache → share page with every
