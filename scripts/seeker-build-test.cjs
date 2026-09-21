@@ -465,7 +465,11 @@ async function renderedCheck(pw) {
     await page.locator(".seeker-navbtn", { hasText: "Ask Cluck" }).click();
     await page.waitForTimeout(150);
     ok("rendered: tapping a nav tab changes the hash (client-side route, no reload)", (await page.evaluate(() => location.hash)) === "#/ask");
-    ok("rendered: the Ask Cluck pane is now showing", /Ask Cluck/.test(await page.locator(".seeker-pane h1").innerText()));
+    // Ask Cluck is real content as of increment 3 (AskCluck.jsx), not the placeholder <Pane> —
+    // its own title class, not the shared .seeker-pane the other still-placeholder tab uses.
+    ok("rendered: the Ask Cluck pane is now showing", /Ask Cluck/.test(await page.locator(".seeker-ask-title").innerText()));
+    const starterBox = await page.locator(".seeker-ask-starter").first().boundingBox();
+    ok("rendered: an Ask Cluck starter prompt is actually >=44px tall on screen", !!starterBox && starterBox.height >= 44, JSON.stringify(starterBox));
 
     await page.locator(".seeker-walletbtn").click();
     // Generous timeout: this runs after two vite builds + a dozen vm-sandbox checks earlier in

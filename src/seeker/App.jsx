@@ -16,6 +16,7 @@ import { HashRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
 import { t, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
 import RentReclaimPane from "./RentReclaim.jsx";
+import AskCluckPane from "./AskCluck.jsx";
 
 // Anywhere a user can connect a wallet, they must be able to disconnect (CLAUDE.md) — this is
 // the one control surface, so both live in the same place with the provider's own disconnect()
@@ -108,10 +109,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/rent" replace />} />
             <Route path="/rent" element={<RentReclaimPane wallet={wallet} />} />
-            <Route
-              path="/ask"
-              element={<Pane icon="🐔" title="Ask Cluck" blurb="Ask the AI tutor anything about crypto, in plain words." />}
-            />
+            <Route path="/ask" element={<AskCluckPane />} />
             <Route
               path="/checkup"
               element={<Pane icon="🛡" title="Wallet Checkup" blurb="Check approvals, freeze and mint authority — read-only and free." />}
