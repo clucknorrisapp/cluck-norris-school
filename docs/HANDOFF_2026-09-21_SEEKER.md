@@ -209,6 +209,42 @@ plain prose. The other 92% is fluent Hindi that deliberately code-switches crypt
 Latin script or transliteration (वॉलेट, टोकन, कनेक्ट करें), which is how Indian crypto communities
 actually write. That is a house style, not a gap, and this app's 667 strings follow it.
 
+## 3b. One decision I did not take on my own — the Airdropper's send loop
+
+Recorded here rather than acted on, because the posture for unattended work says to write the
+question down rather than start it.
+
+**What is left.** The money review's P3-10 has two halves. The closable half is closed: losing the
+wallet mid-drop now stops the run before the next prompt. The structural half is not, and it is
+the last item in either review document.
+
+`sign.js` presents four protections as the ones every tool touching a wallet needs. The Airdropper
+uses none of them. It runs its own send loop in `public/airdrop-engine.js`, which requires
+`provider.signAndSendTransaction` — so there is no live-public-key re-read before building, and no
+message-byte diff, the one added because a wallet returning reordered results was **proved** to
+send successfully with rows silently carrying each other's signatures. `signAndSendTransaction`
+makes that diff impossible by construction: the wallet hands back a signature with no transaction
+to compare.
+
+**What closing it would take.** Give the engine a `signTransaction` branch and route it through
+`signSendConfirm`, falling back to the existing path only for wallets that cannot sign-then-send.
+
+**Why I stopped.** `public/airdrop-engine.js` is shared with the LIVE desktop airdropper on
+clucknorris.app. This is not a Seeker-only file: a mistake there moves other people's tokens
+today, not after a release tag. It is a refactor of a live money path, it is the kind of change
+this repo's own history says gets a full money-path treatment and an adversarial review, and it is
+not the sort of thing to start unattended at 4am against a file whose blast radius is production.
+
+**What I would want before doing it:** your go, and the review run on the result before it merges
+— the same shape as the round that just closed, which found a P0 two independent lenses both hit.
+
+**If you would rather it waited:** nothing is broken today. The Airdropper's three-outcomes
+handling, its balance check, its receipt flushing and its stop-on-disconnect are all closed and
+tested. This is the difference between "protected by its own careful code" and "protected by the
+seam every other signing tool sits on" — worth closing, not urgent.
+
+---
+
 ## 3. ⛔ Two blockers. Only you can clear them.
 
 ### 1. There is no APK yet — needs a tag
