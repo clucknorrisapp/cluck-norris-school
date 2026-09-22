@@ -812,7 +812,8 @@
     "jup\\.ag",
     "https?://[^\\s\"'`)]*[?&](ref|r|referral|aff)=",
     "app\\.meteora\\.ag",
-    "https?://bags\\.fm", "\\bCLKN\\b"
+    "https?://bags\\.fm",
+    "\\bCLKN\\b"
   ],
   "allowedHosts": [
     "clucknorris.app",
