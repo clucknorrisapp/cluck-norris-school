@@ -160,6 +160,22 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 14 — 2026-09-22: #395, your three findings on `a4bb0bb` + the listing mismatches, fixed
+
+You were right on all seven. Findings → fixes:
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P1** — the SKR door graced on a missing SKR price (also during a healthy cold-start refresh), admitting a zero-CLKN wallet the website denies | **SKR never graces.** In `lib/tool-pass-qualify.js` the SKR branch only ever ADDS a grant on a verified qualifying balance; a missing/invalid SKR price or a failed SKR read yields the same denial the website gives, with `skr.unavailable: "price"` or `"rpc"` and the reason in `detail`, and that denial is not cached. `toolPassQualify` now AWAITS `refreshSkrPrice()` when the door is asked for and no SKR price is loaded, so "missing" means unavailable, not still loading. | `tool-pass-qualify-test`: the two former grace cases are now denials; a 16-state sweep (SKR price ∈ {null, 0, −1, 0.5} × read ∈ {down, throws, 0, 99}) asserts the door never admits a wallet the website denies |
+| 2 | **P2** — a negative / non-finite SKR tick was persisted and then blocked every valid tick via the 10× band | One rule, `acceptPrice()` in the lib, used by BOTH refreshes: finite and positive first, then the band against a RECENT (<6h) last-good only, ignoring a non-positive last-good. Boot-time kv loads pass the same finite-positive check (`loadedPrice`). The SKR refresh is single-flight. | `tool-pass-qualify-test` acceptPrice cases: −1, 0, NaN, undefined, "abc", Infinity rejected; 9× accepted; 10× rejected vs recent, accepted vs stale; a poisoned −1 last-good never blocks a valid tick |
+| 3 | **P2** — a cached denial outranked a comp granted later | Comp is checked before the cache, and the cache now lives INSIDE the pure function (`input.cache`), so the ordering is unit-tested rather than assumed. Only real answers are cached (holders, verified denials); grace and "could not check SKR" are not. Keys are wallet + doors. | `tool-pass-qualify-test` cache section: deny → comp → in immediately; website denial does not answer a Seeker request and the reverse; TTL expiry re-evaluates; grace never cached |
+| 4 | **P2** — both listings put the Hatchery in the unified pass | Hatchery is its own section in both: one fee per mint, SOL or discounted CLKN, price shown before confirming; removed from the pass lines and the testing instructions | CLKN-SEEKER `dapp-store/config.yaml`, `config.seeker.yaml` (`c49341c`) |
+| 5 | **P2** — the Seeker listing advertised a pasted-address Wallet Checkup, a Launches tool and a certificate the edition does not have | Wallet Checkup described as reading the connected wallet; Launches removed; "certificate" → "your progress stays on this phone"; "fifteen tools" → "fourteen", with only the wallet tools said to sign | `config.seeker.yaml` |
+| 6 | **P2** — Rent Reclaim "accrues again over time" / "nothing is charged" | "Every new token you touch leaves another account behind, so it is worth checking again later. We charge nothing …; the network fee for each close is shown before you approve it." | `config.seeker.yaml` |
+| 7 | **P3** — "a quiz on every lesson" (21 of 58 have none) | "quizzes on most lessons" in both listings | both files |
+
+Checks on this head: `tool-pass-qualify-test` (every case), `tool-pass-gate-test` (booted server; the config pin is now consistency — `skrNeeded` null iff no price, else `ceil(holdUsd/price)` — because this box can reach Jupiter and the earlier "null" pin was timing), `node --check server.js`. Not re-run: the browser suites (no client or dictionary change this round). Still not claimed: a real wallet through the door.
+
 ## Round 13 — 2026-09-22: #395, the SKR door on the tools pass (money/auth path — please break it)
 
 (Numbered after #391's rounds 11–12, which live on that PR's branch until it merges.)

@@ -126,8 +126,14 @@ async function get(base, p, headers) {
 
     console.log("\nThe Seeker app's SKR door (lib/tool-pass-qualify.js) — the API surface\n");
     const cfg = await get(A.base, "/api/tool-gate/config");
-    ok("config publishes the door: the verified SKR mint, door:'skr', and skrNeeded null with no price loaded",
-       cfg.body && cfg.body.skr && cfg.body.skr.mint === "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3" && cfg.body.skr.door === "skr" && cfg.body.skr.skrNeeded === null, JSON.stringify(cfg.body && cfg.body.skr));
+    // The SKR price comes from Jupiter's public API, which this box may or may not reach — so the
+    // pin is CONSISTENCY, not a fixed value: skrNeeded is null exactly when there is no price, and
+    // otherwise ceil(holdUsd / priceUsd) of a finite positive price (never a hardcoded amount).
+    const skrCfg = cfg.body && cfg.body.skr;
+    const skrConsistent = skrCfg && (skrCfg.priceUsd === null ? skrCfg.skrNeeded === null
+      : (Number.isFinite(skrCfg.priceUsd) && skrCfg.priceUsd > 0 && skrCfg.skrNeeded === Math.ceil(cfg.body.holdUsd / skrCfg.priceUsd)));
+    ok("config publishes the door: the verified SKR mint, door:'skr', and skrNeeded derived from a finite positive live price or null",
+       skrCfg && skrCfg.mint === "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3" && skrCfg.door === "skr" && skrConsistent, JSON.stringify(skrCfg));
     ok("config still leads with CLKN (holdUsd, clknNeeded, mint) — SKR is an extra block, not a replacement",
        cfg.body && cfg.body.holdUsd === 50 && "clknNeeded" in cfg.body && cfg.body.mint === MINT, JSON.stringify(cfg.body));
     const skrWal = makeWallet();

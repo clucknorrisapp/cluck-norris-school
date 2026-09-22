@@ -397,9 +397,14 @@ in one click, or sign a message where the gate is *ownership* rather than paymen
   of SKR (`SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`, live-priced, never hardcoded) opens the same
   free tier.** The app sends `doors:["skr"]` on `POST /api/tool-gate/session`; the website and the
   store editions send nothing and never grow the door. CLKN is always checked first; SKR only when
-  asked; the same fail-open on our outages. The decision is `lib/tool-pass-qualify.js` (pure,
-  `scripts/tool-pass-qualify-test.cjs`). It is a PRODUCT boundary, not a security one — a hand-made
-  request with the door gets what a CLKN holder already gets — and **nothing is gated behind SKR**.
+  asked; and **SKR never graces** — it only ever ADDS a grant on a verified qualifying balance, so
+  the fail-open population is the CLKN one and only the CLKN one (Codex, round 13: the first cut
+  graced on a missing SKR price, which admitted zero-CLKN wallets during a cold-start refresh).
+  Comp is consulted before the holder cache, and the cache is keyed by wallet + doors. The decision
+  is `lib/tool-pass-qualify.js` (pure, `scripts/tool-pass-qualify-test.cjs`); one `acceptPrice()`
+  rule guards what either mint's price refresh may persist (finite, positive, inside the 10× band of
+  a recent last-good). It is a PRODUCT boundary, not a security one — a hand-made request with the
+  door gets what a CLKN holder already gets — and **nothing is gated behind SKR**.
 - premium forensics — holder-gated at 2M, re-checked live on every run (NOT part of the pass)
 - transcript Tier-2 — connect & sign with `minHold: 0` (a graduate may hold no CLKN)
 - The Hatchery is the one place you can still **pay** in CLKN, ~30% cheaper than the SOL price.

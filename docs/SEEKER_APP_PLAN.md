@@ -114,6 +114,9 @@ changes rather than the deadline.
 > `skr` block on `/api/tool-gate/config` (live SKR price → `skrNeeded`, kv last-known-good, sanity
 > band), `holder-skr` tokens re-checked through their own door, and the sheet's SKR sentence in
 > seven languages. Nothing behind SKR; the website and store editions unchanged.
+> **Codex round 13 (same day):** SKR never graces — a missing SKR price or a failed SKR read is
+> a denial with the reason, never a free pass; comp before cache; one price-acceptance rule for
+> both mints.
 
 **Hold ~$50 of SKR → the heavy tools are free in the Seeker app**, alongside the two doors that
 already exist (hold CLKN, or pay the SOL pass). Owner's call, same evening.

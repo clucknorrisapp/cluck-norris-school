@@ -9614,22 +9614,31 @@ for (const k of ["TOOLGATE_LAMPORTS", "TOOLGATE_DAYS"]) {
 // Seeded from the volume at declaration (2026-08-18 review): the kv fallback used to live only
 // inside the refresh branch, so every request racing a cold-start refresh read usd=0 and the
 // paywall failed open for the whole first-fetch window after each deploy.
-let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: null,
-  // The Seeker app's second door (owner, 2026-09-19; lib/tool-pass-qualify.js): SKR, priced the
-  // same way, cached the same way, and read only when a session asked for that door.
-  skrUsd: Number(kv.get("toolGateSkrUsd", 0)) || 0 };
 const TOOL_PASS_QUALIFY = require("./lib/tool-pass-qualify");
 const SKR_MINT = TOOL_PASS_QUALIFY.SKR_MINT;
-async function refreshSkrPrice(now) {
-  const j = await jupPriceV3([SKR_MINT]);
-  const fresh = Number(j && j[SKR_MINT] && j[SKR_MINT].usdPrice) || 0;
-  if (!fresh) { console.warn("[tool-gate] price refresh returned no usable SKR price"); return; }
-  const lastAt = Number(kv.get("toolGateSkrUsdAt", 0)) || 0;
-  if (toolGatePrice.skrUsd && now - lastAt < 6 * 3600e3 && (fresh > toolGatePrice.skrUsd * 10 || fresh < toolGatePrice.skrUsd / 10)) {
-    console.warn(`[tool-gate] rejected implausible SKR price ${fresh} (last good ${toolGatePrice.skrUsd})`); return;
-  }
-  toolGatePrice.skrUsd = fresh;
-  kv.set("toolGateSkrUsd", fresh); kv.set("toolGateSkrUsdAt", now);
+// A persisted price is trusted only if it is a finite positive number (Codex, round 13 P2: a
+// stored -1 would otherwise be loaded at boot and make the sanity band refuse every valid tick).
+const loadedPrice = (k) => { const v = Number(kv.get(k, 0)); return Number.isFinite(v) && v > 0 ? v : 0; };
+let toolGatePrice = { at: 0, usd: loadedPrice("toolGateClknUsd"), p: null,
+  // The Seeker app's second door (owner, 2026-09-19; lib/tool-pass-qualify.js): SKR, priced the
+  // same way, cached the same way, and read only when a session asked for that door.
+  skrUsd: loadedPrice("toolGateSkrUsd"), skrP: null };
+// One SKR refresh at a time; both the config route (fire-and-forget) and a session that asked for
+// the door with no price loaded (awaited) share it. acceptPrice() is the one rule for what may be
+// persisted: finite, positive, and inside the 10× band of a RECENT last-good.
+function refreshSkrPrice(now) {
+  if (toolGatePrice.skrP) return toolGatePrice.skrP;
+  toolGatePrice.skrP = (async () => {
+    try {
+      const j = await jupPriceV3([SKR_MINT]);
+      const a = TOOL_PASS_QUALIFY.acceptPrice({ fresh: j && j[SKR_MINT] && j[SKR_MINT].usdPrice, last: toolGatePrice.skrUsd, lastAt: kv.get("toolGateSkrUsdAt", 0), now });
+      if (!a.ok) { console.warn("[tool-gate] SKR price refresh rejected: " + a.reason); return; }
+      toolGatePrice.skrUsd = a.price;
+      kv.set("toolGateSkrUsd", a.price); kv.set("toolGateSkrUsdAt", now);
+    } catch (e) { console.warn("[tool-gate] SKR price refresh failed:", e.message); }
+    finally { toolGatePrice.skrP = null; }
+  })();
+  return toolGatePrice.skrP;
 }
 
 // SERVER-SIDE enforcement of the tools pass (2026-09-10, reworked the same night after a
@@ -9728,24 +9737,21 @@ function rememberHolder(wallet, entry) {
 async function toolPassQualify(wallet, doors) {
   // The decision itself is lib/tool-pass-qualify.js (pure, unit-tested); this wires the reads.
   // `doors` is what the client asked for — the Seeker app sends ["skr"]; nothing else does.
+  // The comp list is consulted INSIDE the lib before its cache (Codex, round 13 P2: a cached
+  // denial used to outrank a comp granted a minute later), and the lib caches only real answers
+  // — holders and verified denials — keyed by wallet + doors. rememberHolder keeps it bounded.
   const d = TOOL_PASS_QUALIFY.normalizeDoors(doors);
-  const cacheKey = wallet + "|" + d.join(",");
-  const cached = toolPassHolderCache.get(cacheKey);
-  if (cached && Date.now() - cached.at < 5 * 60e3) return cached.ok ? { ok: true, via: cached.via } : { ok: false, ...cached.deny };
-  const q = await TOOL_PASS_QUALIFY.qualify({
+  if (d.includes("skr") && !toolGatePrice.skrUsd) { try { await refreshSkrPrice(Date.now()); } catch (_) {} }   // "missing" must mean unavailable, not still loading
+  return TOOL_PASS_QUALIFY.qualify({
     wallet, doors: d, usd: TOOLGATE.usd,
     prices: { clkn: toolGatePrice.usd || null, skr: toolGatePrice.skrUsd || null },
     comped: isToolComped(wallet),
+    cache: { get: (k) => toolPassHolderCache.get(k), set: (k, v) => rememberHolder(k, v) },
     readClkn: () => checkCLKNHolder(wallet),
     readSkr: () => checkMintHolder(wallet, SKR_MINT),
     terms: { lamports: TOOLGATE.lamports, days: TOOLGATE.days },
     log: (m) => console.warn("[tool-pass] " + m),
   });
-  // Only real answers are cached — a grace grant is re-evaluated next time so an outage ending
-  // restores the real check within a request, and a comp is re-read on every call (see toolPassGate).
-  if (q.via === "holder" || q.via === "holder-skr") rememberHolder(cacheKey, { ok: true, at: Date.now(), via: q.via });
-  else if (!q.ok) { const { ok, ...deny } = q; rememberHolder(cacheKey, { ok: false, at: Date.now(), deny }); }
-  return q;
 }
 async function toolPassGate(req) {
   if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return { ok: true, via: "gate-off" };
@@ -10130,25 +10136,20 @@ app.get("/api/tool-gate/config", async (req, res) => {
     toolGatePrice.p = (async () => {
       try {
         const ov = await tokenOverviewData(CLKN_MINT_ADDR);
-        const fresh = ov && Number(ov.priceUsd) > 0 ? Number(ov.priceUsd) : 0;
-        if (!fresh) { console.warn("[tool-gate] price refresh returned no usable CLKN price"); return; }
         // Sanity band: a single thin-pool tick 10x off must not repin the paywall threshold.
         // The band only applies against a RECENT good price (<6h) so a genuinely moved market
-        // can still re-anchor once the last-good value ages out.
-        const lastAt = Number(kv.get("toolGateClknUsdAt", 0)) || 0;
-        if (toolGatePrice.usd && now - lastAt < 6 * 3600e3
-            && (fresh > toolGatePrice.usd * 10 || fresh < toolGatePrice.usd / 10)) {
-          console.warn(`[tool-gate] rejected implausible CLKN price ${fresh} (last good ${toolGatePrice.usd})`);
-          return;
-        }
-        toolGatePrice.usd = fresh;
-        kv.set("toolGateClknUsd", fresh); kv.set("toolGateClknUsdAt", now);
+        // can still re-anchor once the last-good value ages out. One rule for both mints:
+        // lib/tool-pass-qualify.js acceptPrice() (finite and positive first, then the band).
+        const a = TOOL_PASS_QUALIFY.acceptPrice({ fresh: ov && ov.priceUsd, last: toolGatePrice.usd, lastAt: kv.get("toolGateClknUsdAt", 0), now });
+        if (!a.ok) { console.warn("[tool-gate] CLKN price refresh rejected: " + a.reason); return; }
+        toolGatePrice.usd = a.price;
+        kv.set("toolGateClknUsd", a.price); kv.set("toolGateClknUsdAt", now);
       } catch (e) { console.warn("[tool-gate] price refresh failed:", e.message); }
       finally { toolGatePrice.p = null; }
     })();
     // SKR, for the Seeker app's door, refreshed beside CLKN but independently: a Jupiter
     // hiccup on one mint never costs the other its price. Same sanity band, same kv last-known-good.
-    refreshSkrPrice(now).catch((e) => console.warn("[tool-gate] SKR price refresh failed:", e.message));
+    refreshSkrPrice(now);
   }
   if (toolGatePrice.p && !toolGatePrice.usd) { try { await toolGatePrice.p; } catch (_) {} }
   const priceUsd = toolGatePrice.usd || null;

@@ -3,7 +3,7 @@
 // lib/tool-pass-qualify.js — every branch of the free-tier decision, with the reads injected.
 // The SKR door (Seeker app, 2026-09-22) doubled the branches; this is what keeps "CLKN first,
 // SKR only when asked, fail open on OUR outages, never on a verified zero" true by construction.
-const { qualify, normalizeDoors, doorsForVia, SKR_MINT } = require("../lib/tool-pass-qualify");
+const { qualify, normalizeDoors, doorsForVia, acceptPrice, SKR_MINT } = require("../lib/tool-pass-qualify");
 
 let failures = 0;
 const ok = (n, c, d) => { if (c) console.log("  ✓ " + n); else { failures++; console.log("  ✗ " + n + (d ? "\n      " + (typeof d === "string" ? d : JSON.stringify(d)) : "")); } };
@@ -52,11 +52,30 @@ const BASE = { wallet: "W", usd: 50, prices: { clkn: 0.0005, skr: 0.5 }, terms: 
   r = await qualify({ ...BASE, readClkn: bal(0), readSkr: bal(1000000) });
   ok("NO skr door: a million SKR does nothing — the website never grows the door on its own", !r.ok && r.skr === null);
   r = await qualify({ ...BASE, doors: ["skr"], prices: { clkn: 0.0005, skr: null }, readClkn: bal(0), readSkr: never });
-  ok("skr door with no SKR price → grace-price (same fail-open the CLKN price gets), SKR never read", r.ok && r.via === "grace-price" && r.door === "skr");
+  ok("⚠️ skr door with no SKR price → DENIED (never graced — Codex round 13 P1), SKR not read, the denial says why", !r.ok && r.skr && r.skr.unavailable === "price" && /SKR could not be checked/.test(r.detail));
+  r = await qualify({ ...BASE, doors: ["skr"], prices: { clkn: 0.0005, skr: -1 }, readClkn: bal(0), readSkr: never });
+  ok("a negative SKR price is 'no price', and still a denial", !r.ok && r.skr && r.skr.unavailable === "price");
+  r = await qualify({ ...BASE, doors: ["skr"], prices: { clkn: 0.0005, skr: NaN }, readClkn: bal(0), readSkr: never });
+  ok("a NaN SKR price is 'no price', and still a denial", !r.ok && r.skr && r.skr.unavailable === "price");
+  r = await qualify({ ...BASE, prices: { clkn: -0.0005, skr: 0.5 }, readClkn: never, readSkr: never });
+  ok("a negative CLKN price is 'no price' → grace-price (the pre-existing CLKN rule, unchanged)", r.ok && r.via === "grace-price");
   r = await qualify({ ...BASE, prices: { clkn: 0.0005, skr: null }, readClkn: bal(0), readSkr: never });
   ok("no skr door with no SKR price → still a plain CLKN denial (the missing SKR price is irrelevant)", !r.ok && r.skr === null);
   r = await qualify({ ...BASE, doors: ["skr"], readClkn: bal(0), readSkr: down });
-  ok("skr door, SKR read unavailable → grace-rpc", r.ok && r.via === "grace-rpc" && r.door === "skr");
+  ok("⚠️ skr door, SKR read unavailable → DENIED (never graced), the denial says the read failed", !r.ok && r.skr && r.skr.unavailable === "rpc" && /balance read failed/.test(r.detail));
+  r = await qualify({ ...BASE, doors: ["skr"], readClkn: bal(0), readSkr: boom });
+  ok("skr door, SKR read throws → same denial", !r.ok && r.skr && r.skr.unavailable === "rpc");
+  r = await qualify({ ...BASE, doors: ["skr"], readClkn: bal(100000), readSkr: never });
+  ok("a CLKN holder with the skr door is a holder whatever SKR pricing is doing", r.ok && r.via === "holder");
+  // The population claim, stated as a test: for every (price, read) state, a wallet that the
+  // website would deny is denied with the skr door too unless it holds a VERIFIED qualifying SKR balance.
+  let widened = 0;
+  for (const skrPrice of [null, 0, -1, 0.5]) for (const readSkr of [down, boom, bal(0), bal(99)]) {
+    const web = await qualify({ ...BASE, prices: { clkn: 0.0005, skr: skrPrice }, readClkn: bal(0), readSkr: never });
+    const app = await qualify({ ...BASE, doors: ["skr"], prices: { clkn: 0.0005, skr: skrPrice }, readClkn: bal(0), readSkr });
+    if (!web.ok && app.ok) widened++;
+  }
+  ok("⚠️ across 16 SKR price × read states, the skr door never admits a wallet the website denies (only a verified ≥ threshold SKR balance does)", widened === 0, { widened });
   r = await qualify({ ...BASE, doors: ["skr"], readClkn: bal(0), readSkr: bal(0) });
   ok("skr door, verified zero SKR and zero CLKN → denied", !r.ok && r.skr.balance === 0);
   r = await qualify({ ...BASE, doors: ["skr", "skr", "vip"], readClkn: bal(0), readSkr: bal(100) });
@@ -76,7 +95,48 @@ const BASE = { wallet: "W", usd: 50, prices: { clkn: 0.0005, skr: 0.5 }, terms: 
   await qualify({ ...BASE, readClkn: down, readSkr: never, log: (m) => lines.push(m) });
   await qualify({ ...BASE, doors: ["skr"], prices: { clkn: 0.0005, skr: null }, readClkn: bal(0), readSkr: never, log: (m) => lines.push(m) });
   await qualify({ ...BASE, doors: ["skr"], readClkn: bal(0), readSkr: boom, log: (m) => lines.push(m) });
-  ok("all four grace paths say why (a silent grace hid a two-week pricing outage once)", lines.length === 4 && lines.every((l) => /failing open/.test(l)), lines);
+  ok("every fail-open and every not-checked path says why (a silent grace hid a two-week pricing outage once)", lines.length === 4 && lines.slice(0, 2).every((l) => /failing open/.test(l)) && lines.slice(2).every((l) => /SKR not checked/.test(l)), lines);
+
+  // 6. the cache sits AFTER comp and caches only real answers (Codex round 13 P2)
+  console.log("\ncache + comp ordering\n");
+  const mk = () => { const m = new Map(); return { get: (k) => m.get(k), set: (k, v) => m.set(k, v), m }; };
+  let cache = mk(); let t = 1000;
+  const C = { ...BASE, cache, now: () => t };
+  r = await qualify({ ...C, readClkn: bal(0), readSkr: never });
+  ok("a verified denial is cached under wallet|", !r.ok && cache.m.has("W|") && cache.m.get("W|").ok === false);
+  r = await qualify({ ...C, readClkn: never, readSkr: never });
+  ok("…and answers the next website request without a read", !r.ok && r.cached === true);
+  r = await qualify({ ...C, comped: true, readClkn: never, readSkr: never });
+  ok("⚠️ a comp granted AFTER the cached denial wins immediately (comp before cache)", r.ok && r.via === "comp");
+  r = await qualify({ ...C, doors: ["skr"], readClkn: bal(0), readSkr: bal(100) });
+  ok("the website's cached denial does NOT answer a Seeker request (different key): SKR is read and qualifies", r.ok && r.via === "holder-skr" && cache.m.has("W|skr"));
+  r = await qualify({ ...C, readClkn: never, readSkr: never });
+  ok("…and the Seeker grant does NOT answer a website request (still the cached denial)", !r.ok && r.cached === true);
+  t += 5 * 60e3 + 1;
+  r = await qualify({ ...C, readClkn: bal(100000), readSkr: never });
+  ok("after the TTL the cache is re-evaluated (now a holder)", r.ok && r.via === "holder" && !r.cached);
+  cache = mk(); t = 2000;
+  r = await qualify({ ...BASE, cache, now: () => t, prices: { clkn: null, skr: 0.5 }, readClkn: never, readSkr: never });
+  ok("a grace answer is never cached", r.ok && r.via === "grace-price" && cache.m.size === 0);
+  r = await qualify({ ...BASE, cache, now: () => t, doors: ["skr"], prices: { clkn: 0.0005, skr: null }, readClkn: bal(0), readSkr: never });
+  ok("a denial that could not check SKR is never cached (the next request may find the price)", !r.ok && cache.m.size === 0);
+  r = await qualify({ ...BASE, cache, now: () => t, doors: ["skr"], readClkn: bal(0), readSkr: bal(99) });
+  ok("a fully verified two-door denial IS cached under wallet|skr", !r.ok && cache.m.has("W|skr"));
+
+  // 7. acceptPrice — one rule for what may be persisted (Codex round 13 P2)
+  console.log("\nacceptPrice\n");
+  const NOW = 1e12;
+  ok("finite positive, no history → accepted", acceptPrice({ fresh: 0.5, last: 0, lastAt: 0, now: NOW }).ok);
+  ok("-1 with no history → rejected (never persisted)", !acceptPrice({ fresh: -1, last: 0, lastAt: 0, now: NOW }).ok);
+  ok("0 → rejected", !acceptPrice({ fresh: 0, last: 0, lastAt: 0, now: NOW }).ok);
+  ok("NaN / undefined / 'abc' → rejected", !acceptPrice({ fresh: NaN, last: 0, lastAt: 0, now: NOW }).ok && !acceptPrice({ fresh: undefined, last: 0, lastAt: 0, now: NOW }).ok && !acceptPrice({ fresh: "abc", last: 0, lastAt: 0, now: NOW }).ok);
+  ok("Infinity → rejected", !acceptPrice({ fresh: Infinity, last: 0, lastAt: 0, now: NOW }).ok);
+  ok("a string number is accepted as its number", acceptPrice({ fresh: "0.52", last: 0, lastAt: 0, now: NOW }).price === 0.52);
+  ok("10× a recent last-good → rejected", !acceptPrice({ fresh: 6, last: 0.5, lastAt: NOW - 60e3, now: NOW }).ok);
+  ok("1/10 of a recent last-good → rejected", !acceptPrice({ fresh: 0.04, last: 0.5, lastAt: NOW - 60e3, now: NOW }).ok);
+  ok("9× a recent last-good → accepted", acceptPrice({ fresh: 4.5, last: 0.5, lastAt: NOW - 60e3, now: NOW }).ok);
+  ok("10× a STALE last-good (7h) → accepted (the market may have moved)", acceptPrice({ fresh: 6, last: 0.5, lastAt: NOW - 7 * 3600e3, now: NOW }).ok);
+  ok("a poisoned last-good of -1 never blocks a valid tick (the band ignores a non-positive last)", acceptPrice({ fresh: 0.5, last: -1, lastAt: NOW - 60e3, now: NOW }).ok);
 
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);
