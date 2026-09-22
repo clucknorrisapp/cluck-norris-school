@@ -1,5 +1,10 @@
 # Operating model — who does what, and when
 
+> **Decision of record, 2026-09-21 (owner):** Colosseum is off — no time or ability to meet its
+> commitments. The only tracks are the Seeker app for the Solana Mobile CLOCK IN hackathon
+> (`docs/SEEKER_APP_PLAN.md`, submissions close 2026-10-09 06:59 UTC), the live product, and the
+> partner projects. The hourly build loop was retargeted the same day; its prompt carries the rule.
+
 Owner, 2026-09-19: *"Fable has so much usage per week… I just feel like we can orchestrate better
 especially overnight and utilize all our assets and codex more efficiently."*
 

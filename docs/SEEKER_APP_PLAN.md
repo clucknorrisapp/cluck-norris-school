@@ -163,8 +163,10 @@ device. One submission per contestant — multiple entries forfeit.
 3. **SKR's weight** — one published scheme makes SKR integration 20% of the main score, the other a
    separate $10k bonus, and they may mean on-chain activity rather than holdings. **Ask in office
    hours (Wednesdays 18:30 UTC, Discord) before assuming the holdings shape is enough.**
-4. **What gives** — the Colosseum Hub extension roadmap (GG2/GG4/GG5 and beyond) is the proposed
-   pause. Colosseum itself continues; their FAQ explicitly allows both hackathons.
+4. ~~**What gives** — the Colosseum Hub extension roadmap (GG2/GG4/GG5 and beyond) is the proposed
+   pause. Colosseum itself continues; their FAQ explicitly allows both hackathons.~~ **Settled
+   2026-09-21: Colosseum is off entirely (owner). This plan, the product and the partner projects
+   are the whole focus until Oct 8.**
 
 ## 9. Needs doing regardless of any of the above
 
