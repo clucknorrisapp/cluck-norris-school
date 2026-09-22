@@ -144,8 +144,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     for (const o of ["https://localhost", "http://localhost"]) { const r = await req(s1.base, "/api/track", { method: "OPTIONS", headers: { origin: o } }); ok(`OPTIONS /api/track from ${o} → 204 + echo`, r.status === 204 && r.h("access-control-allow-origin") === o); }
     const tr = await req(s1.base, "/api/track", { method: "POST", headers: { origin: CAP, "content-type": "application/json", "user-agent": UA }, body: JSON.stringify({ event: "lesson_start:x", sid: "store-test-sid-0001" }) });
     ok("POST /api/track with the store origin + UA is served with CORS", tr.status < 400 && tr.h("access-control-allow-origin") === CAP, { status: tr.status, acao: tr.h("access-control-allow-origin") });
-    const ex = await req(s1.base, "/api/hatchery/config", { method: "OPTIONS", headers: { origin: CAP, "access-control-request-method": "GET" } });
-    ok("an excluded endpoint gets NO CORS for the app origin (preflight does not 204 with our headers)", !(ex.status === 204 && ex.h("access-control-allow-origin") === CAP), { status: ex.status, acao: ex.h("access-control-allow-origin") });
+    // Until 2026-09-22 this asserted that an excluded endpoint got NO CORS for the app origin.
+    // The Seeker edition — the full product — runs from the SAME webview origins and needs CORS
+    // on exactly these endpoints (SEEKER_API_RE, scripts/seeker-cors-test.cjs), so the origin is
+    // no longer what keeps the education edition out: the UA refusal is (403 below, and every
+    // endpoint's own gate). What this pins now: the store UA is refused on it WITH the CORS
+    // headers, so the education app reads the 403 instead of an opaque network error.
+    const ex = await req(s1.base, "/api/hatchery/config", { headers: { origin: CAP, "user-agent": UA } });
+    ok("an excluded endpoint refuses the store UA (403) even from the app origin, and the refusal is readable (CORS present)", ex.status === 403 && ex.json && ex.json.error === "not_available_in_this_edition" && ex.h("access-control-allow-origin") === CAP, { status: ex.status, acao: ex.h("access-control-allow-origin") });
     const foreign = await req(s1.base, "/api/ask-cluck", { method: "OPTIONS", headers: { origin: "https://evil.example", "access-control-request-method": "POST" } });
     ok("a foreign origin gets no app-origin echo", foreign.h("access-control-allow-origin") !== "https://evil.example");
     for (const p of ["/api/tool-gate/config", "/api/tool-gate/session", "/api/hatchery/config", "/api/buyspecial/config", "/api/lock/recent", "/api/wallet-xray?wallet=x", "/api/trace?wallet=x", "/api/claim", "/api/cuna-draw/enter", "/api/security-coop/revoke", "/api/airdrop-collect"]) {

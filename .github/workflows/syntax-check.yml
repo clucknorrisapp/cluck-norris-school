@@ -292,6 +292,12 @@ jobs:
         run: node scripts/cuna-draw-test.cjs
       - name: Store edition — bundle compiled clean (no wallet, no pass, absolute API) + CORS, UA defense, certificate, report
         run: node scripts/store-edition-test.cjs google
+      # The Seeker app calls the backend cross-origin from its webview (https://localhost); a missing
+      # CORS header turns a good 200 into "Could not reach the pass service" on the phone and
+      # nowhere else. Derives the app's endpoint inventory from src/seeker, refuses any path neither
+      # allow-list covers, then boots server.js and sends the webview's own preflight per endpoint.
+      - name: Seeker app — CORS for every endpoint it calls (inventory + live preflight)
+        run: node scripts/seeker-cors-test.cjs
       - name: Buy-comp entries (every $N buy = horses)
         run: node scripts/buycomp-entries-test.cjs
       # The paid tools pass: consuming the payment signature is the ONLY durable write, and the
