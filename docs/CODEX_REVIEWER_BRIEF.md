@@ -160,6 +160,19 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 20 — 2026-09-22: #395, your re-review of `e0400d0` — one finding, fixed
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P2** — token funding proved X lost the claimed mint, not that X paid THIS recipient: in one transaction X → B and Y → A (same mint), X recorded A's row and Y got 409 | **Both required now, as the native check already was:** (1) the operator's OWN net balance of the claimed mint down by ≥ the amount, AND (2) a parsed spl-token `transfer` / `transferChecked` (top-level or inner) whose SOURCE account is owned by the operator and whose DESTINATION account is owned by this recipient, of this mint, of ≥ the amount (`boundTokenTransferExists`, resolving each account through its token-balance row by `accountIndex`, post rows first so an ATA created in the same transaction binds). `sourceIsOperator` takes `wallet` | "in ONE transaction X pays B and Y pays A, the same mint — X cannot record A's row, Y can; and X can record B's" (X → 409 `transfer_not_from_operator`, nothing claimed; Y → recorded; X's own X → C row in that same transaction is then "already recorded on another receipt" — one signature, one receipt, unchanged); "the right mint and amount to the WRONG recipient, or a different amount, is not funding"; "the recipient's token account created in the same transaction (no pre row) still binds". The balance-only fixture builder (`tx()`) now synthesises the parsed transfers and `accountIndex` a jsonParsed transaction carries, so every earlier fixture exercises the bound check |
+
+Suite: 50 receipt tests (was 47). Stated, so it is not mistaken for a gap: one signature still
+belongs to one receipt. When two operators genuinely share a transaction (X → C and Y → A), the
+first to record it owns it and the other's true row is refused with "already recorded on
+another receipt" — that row is true on-chain, it is simply not on its operator's receipt. The
+airdropper never builds such a transaction; per-row ownership would be the change if it ever
+must, and it is not made here.
+
 ## Round 19 — 2026-09-22: #395, your re-review of `ede8756` — two findings, fixed
 
 | # | Finding | Fix | Pinned by |

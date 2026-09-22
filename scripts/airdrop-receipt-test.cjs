@@ -22,7 +22,32 @@ let sigCounter = 0;
 function fakeSig() { sigCounter++; const b = Buffer.alloc(64, 0); b.writeUInt32BE(sigCounter, 0); return bs58.encode(b); }
 const bal = (owner, mint, amount) => ({ owner, mint, uiTokenAmount: { amount: String(amount) } });
 const NOW = 1_800_000_000_000; // fixed ms "now" for deterministic notBefore checks
-const tx = ({ err = null, pre = [], post = [], blockTime } = {}) => ({ meta: { err, preTokenBalances: pre, postTokenBalances: post }, blockTime: blockTime ?? Math.floor(NOW / 1000) });
+// A token transaction fixture built from balances alone. Since Codex round 20 the funding check is
+// bound to a PARSED TRANSFER (source owner → destination owner, mint, amount), so the fixture
+// synthesises what a jsonParsed getTransaction would carry for the balances it is given: one
+// account key per (owner, mint) row — the owner's address stands in for its token account — with
+// `accountIndex` on every balance row, and one transferChecked from each owner whose balance of a
+// mint fell to each owner whose balance of that mint rose, for the amount that rose. `payer`
+// puts that key first (the fee payer, feePayerOf). Fixtures that need a different shape build it
+// by hand (the inner-CPI, unrelated-token and same-mint-other-recipient cases below).
+const tx = ({ err = null, pre = [], post = [], blockTime, payer } = {}) => {
+  const keys = payer ? [payer] : [];
+  const keyOf = (o) => { if (!keys.includes(o)) keys.push(o); return keys.indexOf(o); };
+  const index = (rows) => rows.map((b) => ({ ...b, accountIndex: keyOf(b.owner) }));
+  const preRows = index(pre), postRows = index(post);
+  const mints = new Set([...preRows, ...postRows].map((b) => b.mint));
+  const ixs = [];
+  for (const m of mints) {
+    const delta = new Map();
+    for (const b of preRows) if (b.mint === m) delta.set(b.owner, (delta.get(b.owner) || 0n) - BigInt(b.uiTokenAmount.amount));
+    for (const b of postRows) if (b.mint === m) delta.set(b.owner, (delta.get(b.owner) || 0n) + BigInt(b.uiTokenAmount.amount));
+    for (const [from, d] of delta) if (d < 0n) for (const [to, g] of delta) if (g > 0n) {
+      ixs.push({ programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", program: "spl-token", parsed: { type: "transferChecked", info: { source: from, destination: to, authority: from, mint: m, tokenAmount: { amount: g.toString() } } } });
+    }
+  }
+  if (keys.length && !keys.includes("11111111111111111111111111111111")) keys.push("11111111111111111111111111111111");
+  return { meta: { err, preTokenBalances: preRows, postTokenBalances: postRows }, transaction: { message: { accountKeys: keys, instructions: ixs } }, blockTime: blockTime ?? Math.floor(NOW / 1000) };
+};
 
 // A row the operator PAYER really funded: PAYER loses `amt` raw of MINT, `to` gains it. Since
 // Codex round 16 only rows like this are ever stored — an unfunded or short transfer is reported
@@ -251,7 +276,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
   // there is no pass, and nothing the client sends names the wallet). The operator is the FEE
   // PAYER of the first row's transaction — accountKeys[0] on a jsonParsed tx — and every later
   // row is held to it exactly as a pass-named operator was. The receipt route passes nothing.
-  const txPaidBy = (payer, opts) => { const t1 = tx(opts); t1.transaction = { message: { accountKeys: [payer, "11111111111111111111111111111111"] } }; return t1; };
+  const txPaidBy = (payer, opts) => tx({ ...opts, payer });
   await tAsync("no operator passed: the fee payer of the first readable row BECOMES the operator (stored, never public)", async () => {
     const kv = memoryKv();
     const sig = fakeSig();
@@ -750,8 +775,8 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
       ] } },
       blockTime: Math.floor(NOW / 1000),
     };
-    assert.strictEqual(AR.sourceIsOperator(t1, { mint: MINT, operator: X, minRaw: 1_000_000_000n }), false, "X's authority over an unrelated transfer is not funding");
-    assert.strictEqual(AR.sourceIsOperator(t1, { mint: MINT, operator: Y, minRaw: 1_000_000_000n }), true);
+    assert.strictEqual(AR.sourceIsOperator(t1, { mint: MINT, operator: X, wallet: A, minRaw: 1_000_000_000n }), false, "X's authority over an unrelated transfer is not funding");
+    assert.strictEqual(AR.sourceIsOperator(t1, { mint: MINT, operator: Y, wallet: A, minRaw: 1_000_000_000n }), true);
     const asX = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: X, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
     assert.strictEqual(asX.ok, false); assert.strictEqual(asX.status, 409); assert.strictEqual(asX.results[0].reason, AR.SOURCE_MISMATCH_REASON);
     assert.strictEqual(AR.receiptOfSig(kv, sig), null, "X claimed nothing");
@@ -789,6 +814,76 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     assert.strictEqual(r.ok, true); assert.strictEqual(r.results[0].verified, true);
     const asDelegate = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: DELEGATE, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW + 1000 });
     assert.strictEqual(asDelegate.ok, false, "the delegate's authority alone is not funding — its balance did not move");
+  });
+
+
+  // ── Codex round 20 (re-review of e0400d0): the funding evidence must name THIS recipient ─────
+  await tAsync("⚠️ round 20 P2: in ONE transaction X pays B and Y pays A, the same mint — X cannot record A's row, Y can; and X can record B's", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const X = B, Y = PAYER;
+    const C = "GMUYqTwgDeR9CxE7Pp49um76n7zu98iA2tTNYsY47phb"; // a fourth wallet
+    // X → C (1 token), Y → A (1 token), both MINT. X really lost the mint — but to C, not to A.
+    const t1 = {
+      meta: { err: null,
+        preTokenBalances: [
+          { accountIndex: 0, owner: X, mint: MINT, uiTokenAmount: { amount: "5000000000" } },
+          { accountIndex: 1, owner: Y, mint: MINT, uiTokenAmount: { amount: "5000000000" } },
+          { accountIndex: 2, owner: A, mint: MINT, uiTokenAmount: { amount: "0" } },
+          { accountIndex: 3, owner: C, mint: MINT, uiTokenAmount: { amount: "0" } },
+        ],
+        postTokenBalances: [
+          { accountIndex: 0, owner: X, mint: MINT, uiTokenAmount: { amount: "4000000000" } },
+          { accountIndex: 1, owner: Y, mint: MINT, uiTokenAmount: { amount: "4000000000" } },
+          { accountIndex: 2, owner: A, mint: MINT, uiTokenAmount: { amount: "1000000000" } },
+          { accountIndex: 3, owner: C, mint: MINT, uiTokenAmount: { amount: "1000000000" } },
+        ] },
+      transaction: { message: { accountKeys: [X, Y, A, C], instructions: [
+        { programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", parsed: { type: "transferChecked", info: { source: X, destination: C, authority: X, mint: MINT, tokenAmount: { amount: "1000000000" } } } },
+        { programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", parsed: { type: "transferChecked", info: { source: Y, destination: A, authority: Y, mint: MINT, tokenAmount: { amount: "1000000000" } } } },
+      ] } },
+      blockTime: Math.floor(NOW / 1000),
+    };
+    assert.strictEqual(AR.sourceIsOperator(t1, { mint: MINT, operator: X, wallet: A, minRaw: 1_000_000_000n }), false, "X lost the mint, but not to A");
+    assert.strictEqual(AR.sourceIsOperator(t1, { mint: MINT, operator: Y, wallet: A, minRaw: 1_000_000_000n }), true);
+    assert.strictEqual(AR.sourceIsOperator(t1, { mint: MINT, operator: X, wallet: C, minRaw: 1_000_000_000n }), true, "X did pay C");
+    const asX = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: X, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
+    assert.strictEqual(asX.ok, false); assert.strictEqual(asX.results[0].reason, AR.SOURCE_MISMATCH_REASON);
+    assert.strictEqual(AR.receiptOfSig(kv, sig), null, "X claimed nothing");
+    const asY = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: Y, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW + 1000 });
+    assert.strictEqual(asY.ok, true); assert.strictEqual(AR.receiptOfSig(kv, sig), asY.dropId);
+    // The signature now belongs to Y's receipt; X's own real row (X → C) in the same transaction
+    // is refused as "already recorded on another receipt" — one signature, one receipt is the
+    // ownership rule, unchanged. X's row is true on-chain; it is simply not on X's receipt.
+    const xOwn = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: X, rows: [{ wallet: C, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW + 2000 });
+    assert.strictEqual(xOwn.ok, false); assert.strictEqual(xOwn.results[0].reason, "already recorded on another receipt");
+  });
+  await tAsync("round 20: a transfer of the right mint and amount from the operator to the WRONG recipient, or of a different amount, is not funding for this row", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const t1 = tx({ pre: [bal(PAYER, MINT, 5_000_000_000n), bal(B, MINT, 0n)], post: [bal(PAYER, MINT, 4_000_000_000n), bal(B, MINT, 1_000_000_000n)] });
+    // The row claims A, the chain shows PAYER → B. rowPaidBy refuses first (A is not in the tx).
+    const r = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
+    assert.strictEqual(r.ok, false); assert.strictEqual(r.results[0].verified, false);
+    // And directly: the bound check refuses the wrong recipient and an under-sized transfer.
+    assert.strictEqual(AR.sourceIsOperator(t1, { mint: MINT, operator: PAYER, wallet: A, minRaw: 1_000_000_000n }), false);
+    assert.strictEqual(AR.sourceIsOperator(t1, { mint: MINT, operator: PAYER, wallet: B, minRaw: 1_000_000_001n }), false);
+    assert.strictEqual(AR.sourceIsOperator(t1, { mint: MINT, operator: PAYER, wallet: B, minRaw: 1_000_000_000n }), true);
+  });
+  await tAsync("round 20: the recipient's token account created in the same transaction (no pre row) still binds — post rows are read first", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const t1 = {
+      meta: { err: null,
+        preTokenBalances: [{ accountIndex: 0, owner: PAYER, mint: MINT, uiTokenAmount: { amount: "5000000000" } }],
+        postTokenBalances: [{ accountIndex: 0, owner: PAYER, mint: MINT, uiTokenAmount: { amount: "4000000000" } }, { accountIndex: 1, owner: A, mint: MINT, uiTokenAmount: { amount: "1000000000" } }] },
+      transaction: { message: { accountKeys: [PAYER, A], instructions: [
+        { programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", parsed: { type: "transferChecked", info: { source: PAYER, destination: A, authority: PAYER, mint: MINT, tokenAmount: { amount: "1000000000" } } } },
+      ] } },
+      blockTime: Math.floor(NOW / 1000),
+    };
+    const r = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
+    assert.strictEqual(r.ok, true, JSON.stringify(r)); assert.strictEqual(r.results[0].verified, true);
   });
 
   console.log(`\n${pass} passed, ${fail} failed\n`);
