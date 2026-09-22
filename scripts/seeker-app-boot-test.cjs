@@ -1725,6 +1725,290 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await ctx.close();
   }
 
+  // ---- Q: pane states — refused vs unavailable vs offline vs empty ------------------------
+  //
+  // Four small facts this app keeps conflating one pane at a time: a 4xx the CALLER caused
+  // (refused — the person can fix it) is not the same fact as the chain being unreachable
+  // (unavailable — never their fault), a lost connection is a THIRD, more specific fact still
+  // (offline — checked before the network is even touched), and an honest empty result is a
+  // FOURTH (empty — we looked, there is nothing). Sections D and I already pin the reclaim
+  // pane's unavailable-vs-zero rule; this section is the same discipline pointed at six more
+  // panes that each carry their own copy of the split. Every case asserts the fact that SHOULD
+  // show AND that the fact it is not is absent — a pane that shows both is exactly as wrong as
+  // one that shows neither (AGENTS.md: "check every form, not one form").
+  {
+    // -- 1. Firepit: a 4xx on the wallet address is REFUSED, never the chain-outage wording ----
+    {
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/burn-scan*", (r) => r.fulfill({ status: 400, contentType: "application/json",
+            body: JSON.stringify({ success: false, error: "Invalid wallet address" }) }));
+        }
+      );
+      await page.waitForFunction(() => !!document.querySelector(".seeker-walletbtn"), null, { timeout: 20000 });
+      await page.click(".seeker-walletbtn");
+      await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      await page.evaluate(() => { window.location.hash = "#/tools/firepit"; });
+      await page.waitForTimeout(600);
+      const q1 = await text(page);
+      ok("Q1 · Firepit — a 400 on the wallet address renders REFUSED, with the server's own reason",
+         /Invalid wallet address/i.test(q1) && await page.evaluate(() => !!document.querySelector(".seeker-tool-refused")), q1.slice(0, 300));
+      ok("Q1 · ⚠️ and NEVER the chain-outage wording — a bad address is not an RPC failure",
+         !/Could not read the chain right now/i.test(q1), q1.slice(0, 300));
+      ok("Q1 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+
+    // -- 2. Rent Reclaim: the same split, on the pane that predates the shared Pane wrapper ---
+    {
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 400, contentType: "application/json",
+          body: JSON.stringify({ success: false, status: "error", error: "Invalid wallet address" }) })
+      );
+      await page.waitForFunction(() => !!document.querySelector(".seeker-walletbtn"), null, { timeout: 20000 });
+      await page.click(".seeker-walletbtn");
+      await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      await page.evaluate(() => { window.location.hash = "#/rent"; });
+      await page.waitForTimeout(600);
+      const q2 = await text(page);
+      ok("Q2 · Rent Reclaim — a 400 on the wallet renders REFUSED, with the server's own reason",
+         /Invalid wallet address/i.test(q2), q2.slice(0, 300));
+      ok("Q2 · ⚠️ and shows no total, no account rows, and no fabricated zero",
+         !/Total reclaimable/i.test(q2) && !/\b0(\.0+)?\s*SOL\b/i.test(q2), q2.slice(0, 300));
+      ok("Q2 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+
+    // -- 3. Rent Reclaim OFFLINE: caught before the network is touched at all, not the generic
+    //    "could not read the chain" wording that belongs to a real RPC failure. navigator.onLine
+    //    is forced false BEFORE the bundle ever loads, via an init script — no race to manage.
+    {
+      const { ctx, page, errors, calls } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.addInitScript(() => {
+            try { Object.defineProperty(window.navigator, "onLine", { configurable: true, get: () => false }); } catch (_) {}
+          });
+        }
+      );
+      await page.waitForFunction(() => !!document.querySelector(".seeker-walletbtn"), null, { timeout: 20000 });
+      await page.click(".seeker-walletbtn");
+      await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      await page.evaluate(() => { window.location.hash = "#/rent"; });
+      await page.waitForTimeout(600);
+      const q3 = await text(page);
+      ok("Q3 · Rent Reclaim offline — reported as OFFLINE, not as a chain failure",
+         /You're offline\. This needs a connection/i.test(q3), q3.slice(0, 300));
+      ok("Q3 · ⚠️ and the reclaimable endpoint was NEVER called — checked before the network is touched",
+         calls.filter((u) => u.includes("/api/seeker/reclaimable")).length === 0, JSON.stringify(calls));
+      ok("Q3 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+
+    // -- 4. Daily: an honest empty market read is Empty, never a blank section ---------------
+    {
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/alpha*", (r) => r.fulfill({ status: 200, contentType: "application/json",
+            body: JSON.stringify({ success: true, generatedAt: Date.now(), date: "2026-09-22", data: { majors: [] } }) }));
+        }
+      );
+      await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+      await page.evaluate(() => { window.location.hash = "#/tools/alpha"; });
+      await page.waitForTimeout(600);
+      const q4 = await text(page);
+      ok("Q4 · Daily — an empty majors list renders as an HONEST empty, not a blank section",
+         /No prices in today's read\./i.test(q4) && await page.evaluate(() => !!document.querySelector(".seeker-tool-empty")), q4.slice(0, 300));
+      ok("Q4 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+
+    // -- 5. Locker Room create: a server-side simulation failure is REFUSED, not silent -------
+    {
+      const MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/locks*", (r) => r.fulfill({ status: 200, contentType: "application/json",
+            body: JSON.stringify({ success: true, mint: MINT, decimals: 6, supply: 1e9, totalLocked: 0, pctOfSupply: 0, lockCount: 0, breakdown: [], topLocks: [] }) }));
+          await pg.route("**/api/lock/create-tx*", (r) => r.fulfill({ status: 200, contentType: "application/json",
+            body: JSON.stringify({ success: true, simError: "Simulation failed: insufficient funds" }) }));
+        }
+      );
+      await page.waitForFunction(() => !!document.querySelector(".seeker-walletbtn"), null, { timeout: 20000 });
+      await page.click(".seeker-walletbtn");
+      await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      await page.evaluate(() => { window.location.hash = "#/tools/lock"; });
+      await page.waitForTimeout(400);
+      await page.evaluate(() => { const b = Array.from(document.querySelectorAll(".seeker-launch-tabbtn")).find((x) => /create/i.test(x.innerText)); b && b.click(); });
+      await page.waitForTimeout(300);
+      await page.fill("#lr-c-mint", MINT);
+      await page.fill("#lr-c-amount", "1000");
+      await page.click(".seeker-listing-runbtn");
+      await page.waitForTimeout(900);
+      const q5 = await text(page);
+      ok("Q5 · Locker Room create — a mainnet-simulation failure is shown, not swallowed",
+         /Simulation failed: insufficient funds/i.test(q5) && await page.evaluate(() => !!document.querySelector(".seeker-tool-refused")), q5.slice(0, 400));
+      ok("Q5 · ⚠️ and there is no separate bespoke sim-warning element — it reuses the shared Refused",
+         await page.evaluate(() => !document.querySelector(".seeker-lock-simwarning")));
+      ok("Q5 · and it never advances to the Lock tokens review step", await page.evaluate(() =>
+         !Array.from(document.querySelectorAll("button")).some((b) => /^lock tokens$/i.test(b.innerText.trim()))));
+      ok("Q5 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+
+    // -- 6. Ask Cluck: a validation refusal names the reason; a real outage gets the generic
+    //    line — and the two must never swap (classifyFailure's whole job).
+    {
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/ask-cluck*", (r) => r.fulfill({ status: 400, contentType: "application/json",
+            body: JSON.stringify({ success: false, error: "Question too short" }) }));
+        }
+      );
+      await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+      await page.evaluate(() => { window.location.hash = "#/ask"; });
+      await page.waitForTimeout(400);
+      await page.fill(".seeker-ask-input", "hi there");
+      await page.click(".seeker-ask-sendbtn");
+      await page.waitForFunction(() => /Question too short/i.test(document.body.innerText), null, { timeout: 10000 }).catch(() => {});
+      const q6a = await text(page);
+      ok("Q6 · Ask Cluck — a 400 validation refusal shows the server's own reason",
+         /Question too short/i.test(q6a), q6a.slice(0, 300));
+      ok("Q6 · ⚠️ and NOT the generic outage line — a short question is not an outage",
+         !/Cluck couldn't answer/i.test(q6a), q6a.slice(0, 300));
+
+      await page.unroute("**/api/ask-cluck*");
+      await page.route("**/api/ask-cluck*", (r) => r.fulfill({ status: 500, contentType: "application/json",
+        body: JSON.stringify({ success: false, error: "No response from AI" }) }));
+      await page.fill(".seeker-ask-input", "what is rent on solana anyway");
+      await page.click(".seeker-ask-sendbtn");
+      await page.waitForFunction(() => /Cluck couldn't answer that one/i.test(document.body.innerText), null, { timeout: 10000 }).catch(() => {});
+      const q6b = await text(page);
+      ok("Q6 · ⚠️ and a real 500 outage DOES get the generic outage line",
+         /Cluck couldn't answer that one/i.test(q6b), q6b.slice(0, 300));
+      ok("Q6 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+
+    // -- 7. Airdropper: a connection lost right before the tap is caught BEFORE any chain read,
+    //    and gets the offline wording, never the generic "could not read the network cost" line
+    //    (Airdropper.jsx's own header note on why isOffline() is checked here, not only at the
+    //    phase==="form" gate). ⚠️ navigator.onLine is flipped WITHOUT dispatching an "offline"
+    //    event: dispatching it updates the pane's `online` REACT STATE too, and this pane's own
+    //    top-level gate is `if (!online && phase==="form") return <Unavailable/>` — which would
+    //    swap out the whole form (mint/list/amount, and the Review button with it) before the
+    //    tap could ever land, wiping the very race this case exists to reproduce. The real bug
+    //    is a device losing signal in the instant between the tap and review()'s synchronous
+    //    isOffline() check, before that state has had a chance to update either — so leaving the
+    //    React state alone and only flipping the raw property is what actually reproduces it.
+    {
+      const PASS = { unlockedAt: 1, expiresAt: 4102444800000, why: "holder", proof: "t:faketoken" };
+      const CFG = { success: true, enabled: true, holdUsd: 10, clknNeeded: 1000, lamports: 50000000, days: 7 };
+      const R = Array.from({ length: 3 }, () => web3.Keypair.generate().publicKey.toBase58());
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.addInitScript((p) => { try { localStorage.setItem("clkn_tools_unlock", JSON.stringify(p)); } catch (_) {} }, PASS);
+          await pg.route("**/api/tool-gate/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CFG) }));
+        }
+      );
+      await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+      await page.click(".seeker-walletbtn");
+      await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      await page.evaluate(() => { window.location.hash = "#/tools/airdrop"; });
+      await page.waitForTimeout(400);
+      await page.fill("#drop-mint", "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS");
+      await page.fill("#drop-list", R.join("\n"));
+      await page.fill("#drop-amt", "1.5");
+      await page.evaluate(() => {
+        try { Object.defineProperty(window.navigator, "onLine", { configurable: true, get: () => false }); } catch (_) {}
+      });
+      await page.click(".seeker-listing-runbtn");
+      await page.waitForFunction(() => /You're offline|Transactions to sign|Could not read the network cost/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      const q7 = await text(page);
+      ok("Q7 · Airdropper — offline right before the tap is caught BEFORE any chain read",
+         /You're offline\. This needs a connection/i.test(q7), q7.slice(0, 400));
+      ok("Q7 · ⚠️ and NOT the generic 'could not read the network cost' line — that implies a chain hiccup, not a lost signal",
+         !/Could not read the network cost/i.test(q7), q7.slice(0, 400));
+      ok("Q7 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+
+    // -- 8. Buy Special: a superseded compute must never land over a newer one ---------------
+    //
+    // The same ref-identity guard Firepit/Rent Reclaim use for a fresh chain read before signing
+    // (openConfirm), pointed at doCompute()'s own comment: "a stale run that resolves late can
+    // never overwrite rows/computeMeta with an answer for a buyer list that is no longer on
+    // screen". Driven for real: scan buyer X, start verifying (a slow 1500ms holdcheck), scan
+    // buyer Y WHILE that is still in flight (which resets computePhase and swaps the active
+    // buyer), start verifying again (an immediate holdcheck) — then wait out the first call's
+    // delay and confirm only Y's row is on screen, never X's.
+    {
+      const PASS = { unlockedAt: 1, expiresAt: 4102444800000, why: "holder", proof: "t:faketoken" };
+      const CFG = { success: true, enabled: true, holdUsd: 10, clknNeeded: 1000, lamports: 50000000, days: 7 };
+      const X = web3.Keypair.generate().publicKey.toBase58();
+      const Y = web3.Keypair.generate().publicKey.toBase58();
+      const shortForm = (a) => a.slice(0, 4) + "…" + a.slice(-4);
+      let scanCall = 0;
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.addInitScript((p) => { try { localStorage.setItem("clkn_tools_unlock", JSON.stringify(p)); } catch (_) {} }, PASS);
+          await pg.route("**/api/tool-gate/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CFG) }));
+          await pg.route("**/api/buycomp/presets*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, comps: [] }) }));
+          await pg.route("**/api/buyspecial-crosscheck*", (r) => {
+            scanCall++;
+            const wallet = scanCall === 1 ? X : Y;
+            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+              success: true, source: "helius", buyerCount: 1, reachedWindowStart: true,
+              buyers: [{ wallet, buyCount: 1, volumeSol: 1, tokensBought: 100, maxBuySol: 1 }],
+            }) });
+          });
+          // The FIRST holdcheck call (wallet=X) is slow; the SECOND (wallet=Y) is immediate —
+          // matched on which wallet is in the query string, not on call order, since the two
+          // requests race and could in principle land at the network in either order.
+          await pg.route("**/api/buyspecial-holdcheck*", async (r) => {
+            const url = r.request().url();
+            if (url.includes(X)) {
+              await new Promise((res) => setTimeout(res, 1500));
+              return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, results: [{ wallet: X, balance: 1000, sells: 0, soldInWindow: false, source: "helius" }] }) });
+            }
+            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, results: [{ wallet: Y, balance: 1000, sells: 0, soldInWindow: false, source: "helius" }] }) });
+          });
+        }
+      );
+      await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+      await page.evaluate(() => { window.location.hash = "#/tools/buyspecial"; });
+      await page.waitForTimeout(400);
+      await page.fill("#bs-mint", "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS");
+      await page.evaluate(() => { const b = Array.from(document.querySelectorAll(".seeker-bs-chip")).find((x) => /Last 24 hours/i.test(x.innerText)); b && b.click(); });
+      await page.waitForTimeout(150);
+      const clickScan = () => page.evaluate(() => { const b = Array.from(document.querySelectorAll("button")).find((x) => /^scan buys$/i.test(x.innerText.trim())); b && b.click(); });
+      const clickCompute = () => page.evaluate(() => { const b = Array.from(document.querySelectorAll("button")).find((x) => /verify holds & preview payout/i.test(x.innerText.trim())); b && b.click(); });
+
+      await clickScan();
+      await page.waitForFunction(() => /Buyers in this window/i.test(document.body.innerText), null, { timeout: 10000 });
+      await clickCompute();                // call #1: X, resolves in 1500ms
+      await page.waitForTimeout(200);
+      await clickScan();                   // re-scan -> active buyer becomes Y
+      await page.waitForFunction(() => /Buyers in this window/i.test(document.body.innerText), null, { timeout: 10000 });
+      await clickCompute();                // call #2: Y, resolves immediately — supersedes #1
+      await page.waitForTimeout(2000);     // outlast call #1's 1500ms delay
+
+      const q8 = await text(page);
+      ok("Q8 · Buy Special — the SECOND (faster) compute's row is what's on screen",
+         q8.includes(shortForm(Y)), q8.slice(0, 500));
+      ok("Q8 · ⚠️ and the FIRST (slower, superseded) compute's row never lands, even 2s later",
+         !q8.includes(shortForm(X)), q8.slice(0, 500));
+      ok("Q8 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+  }
+
   await browser.close();
   console.log("\n" + (failures ? failures + " FAILED" : "all passed") + "\n");
   process.exit(failures ? 1 : 0);
