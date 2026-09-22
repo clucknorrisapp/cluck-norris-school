@@ -478,6 +478,17 @@ served the React shell at 200.
 
 ## Things that will bite you
 
+- 📱 **The Seeker app calls production CROSS-ORIGIN, from `https://localhost` — every endpoint it
+  uses needs CORS for that origin (`SEEKER_API_RE` in `server.js`), and a browser test proves
+  nothing about it.** On 2026-09-22 the owner's pass sheet said "Could not reach the pass service":
+  the tool-gate endpoints answered 200 to curl and a 404 to the webview's preflight, because only
+  the education edition's contract (`STORE_API_RE`) had CORS and it deliberately excludes
+  everything that pays, signs, mints, locks or sends. 15 of the 23 endpoints the app calls were in
+  that state — every POST and every `x-clkn-pass` GET. `scripts/seeker-cors-test.cjs` (CI) derives
+  the app's endpoint inventory from `src/seeker` and boots the server to send the real preflight
+  per endpoint; **a new pane that calls a new endpoint must add it to `SEEKER_API_RE` or that test
+  fails.** The Origin still grants nothing (every endpoint keeps its own gate) and the store UA is
+  still refused on these — now WITH the CORS headers, so the education app reads the 403.
 - **The whole scheduler block only starts if `TELEGRAM_BOT_TOKEN` AND `TELEGRAM_CHAT_ID` are set
   at boot.** Missing either → no alerts, lessons, radar, recap, graduation watcher. First thing to
   check when "the bot isn't doing X."
@@ -575,7 +586,13 @@ served the React shell at 200.
   day)** — the meme routine POSTs its `done=` write, carried a transition GET fallback while the old
   build was live, and had it removed once #337 was verified; the list, `history=1` and `all=1`
   stay GETs. With this, **no admin route on the surface writes or sends on a GET** — the guard test
-  is the inventory; add a new admin flag there before you add it to a route. ⚠️ **The one that got
+  is the inventory; add a new admin flag there before you add it to a route. ⚠️ **The IN-PROCESS
+  caller that got missed (found 2026-09-22, the birthday special's board never appeared):
+  `lib/cuna-giveaway.js` `postBoard()` — the 15-minute room leaderboard — sends itself through the
+  public edge to `/api/tg-test` and was still a GET, so every drop since #335 answered 405 →
+  `send_failed` on the 5-minute tick, silently. When a route goes POST-only, grep the LIB code for
+  `fetch(` to it too, not only the routines and skills;** `scripts/cuna-board-post-test.cjs` (CI)
+  stubs the route the way production behaves (405 to a GET) and pins the method. ⚠️ **The one that got
   through (incident, 2026-09-17 16:11 UTC): `/api/rose-buybot`'s FLAG-LESS GET ran a full poll
   "even while disarmed"** — the 09-05 audit read it as the harmless read. A status check on a bot
   disarmed for days walked its whole 100-signature window and posted every buy above the floor

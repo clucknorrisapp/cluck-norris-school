@@ -292,6 +292,12 @@ jobs:
         run: node scripts/cuna-draw-test.cjs
       - name: Store edition — bundle compiled clean (no wallet, no pass, absolute API) + CORS, UA defense, certificate, report
         run: node scripts/store-edition-test.cjs google
+      # The Seeker app calls the backend cross-origin from its webview (https://localhost); a missing
+      # CORS header turns a good 200 into "Could not reach the pass service" on the phone and
+      # nowhere else. Derives the app's endpoint inventory from src/seeker, refuses any path neither
+      # allow-list covers, then boots server.js and sends the webview's own preflight per endpoint.
+      - name: Seeker app — CORS for every endpoint it calls (inventory + live preflight)
+        run: node scripts/seeker-cors-test.cjs
       - name: Buy-comp entries (every $N buy = horses)
         run: node scripts/buycomp-entries-test.cjs
       # The paid tools pass: consuming the payment signature is the ONLY durable write, and the
@@ -516,6 +522,11 @@ jobs:
       # winner on 2026-09-04 because it judged a hold in dollars and the price cache was cold.
       - name: giveaway hold-check (token-based, survives a cold price feed)
         run: node scripts/giveaway-holdcheck-test.cjs
+      # The room leaderboard is POSTED to /api/tg-test (POST-only since #335). It sent a GET for five
+      # days and every 15-minute board silently answered 405 — found when the 2026-09-22 birthday
+      # special opened with no board. Stub answers exactly what production does: 405 to a GET.
+      - name: giveaway room board is a POST (tg-test is POST-only)
+        run: node scripts/cuna-board-post-test.cjs
       # /api/token-metadata/* is FREE and unauthenticated, and rebuild-json fetches a URL the
       # caller supplies. That makes the private-network guard load-bearing rather than tidy: a
       # regression here turns a public tool into a probe of our internal network. Built-ins only,
