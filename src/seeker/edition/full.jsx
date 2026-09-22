@@ -148,12 +148,19 @@ function FullCheckup({ wallet }) {
     );
   }
 
-  return (
-    <>
-      <AddressForm onSubmit={setPasted} />
-      {wallet.connected ? null : <NeedsWallet why="Connect your wallet to run a checkup." wallet={wallet} />}
-    </>
-  );
+  // No address decided yet — routed through the pane itself (address=null) so its own "Wallet
+  // Checkup" header and .seeker-pane wrapper still render here, same as every other state; a
+  // bare form with no pane around it briefly shipped and both the app's own route-render and
+  // grid-mount checks caught it (a tool card whose pane never mounts a recognised pane class).
+  const gate = wallet.connected
+    ? <AddressForm onSubmit={setPasted} />
+    : (
+      <>
+        <AddressForm onSubmit={setPasted} />
+        <NeedsWallet why="Connect your wallet to run a checkup." wallet={wallet} />
+      </>
+    );
+  return <WalletCheckupPane address={null} gate={gate} />;
 }
 
 // ⚠️ THE SCHOOL LEADS. AGENTS.md records the owner's flagship list — "the school, the LP lab,
