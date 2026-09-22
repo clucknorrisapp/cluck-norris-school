@@ -2446,6 +2446,7 @@
   "Show more": "और दिखाएं",
   "Showing": "दिखाया जा रहा है",
   "Showing the last successful read — a fresh one just failed.": "आखिरी सफल रीड दिखाई जा रही है — एक नया प्रयास अभी विफल हुआ।",
+  "The receipt sign-in was declined, so this drop has no public receipt. The tokens still send.": "रसीद साइन-इन अस्वीकार कर दिया गया, इसलिए इस ड्रॉप की कोई सार्वजनिक रसीद नहीं है। टोकन फिर भी भेजे जाते हैं।",
   "Signature request was rejected or failed.": "सिग्नेचर रिक्वेस्ट अस्वीकृत हुई या विफल हो गई।",
   "Signing…": "साइन किया जा रहा है…",
   "Skip wallets below (optional)": "नीचे दिए वॉलेट छोड़ें (वैकल्पिक)",

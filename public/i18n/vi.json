@@ -2446,6 +2446,7 @@
   "Show more": "Hiển thị thêm",
   "Showing": "Đang hiển thị",
   "Showing the last successful read — a fresh one just failed.": "Đang hiển thị lần đọc thành công gần nhất — một lần đọc mới vừa thất bại.",
+  "The receipt sign-in was declined, so this drop has no public receipt. The tokens still send.": "Đăng nhập biên nhận đã bị từ chối, nên đợt gửi này không có biên nhận công khai. Token vẫn được gửi.",
   "Signature request was rejected or failed.": "Yêu cầu chữ ký đã bị từ chối hoặc thất bại.",
   "Signing…": "Đang ký…",
   "Skip wallets below (optional)": "Bỏ qua các ví dưới đây (không bắt buộc)",

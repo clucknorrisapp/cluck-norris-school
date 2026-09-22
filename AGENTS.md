@@ -172,9 +172,16 @@ what they were owed and what arrived.
   free, RUN needs the pass. Kill switch: `TOOLGATE_OFF=1`. Planned: lifetime-pass NFTs hook into
   the comp check. ⛔ **The Airdropper is FREE FOR EVERYONE on every platform since 2026-09-22**
   (owner, same message: "airdropper should be free for everyone on all platforms moving
-  forward") — no pass on the web page, none in the Seeker app, none on `/api/airdrop/record`;
-  the receipt learns the operator from the chain (the fee payer of each row's own transaction,
-  `lib/airdrop-receipt.js` `feePayerOf`) and still holds every row to that wallet. ⚠️ **Only
+  forward") — no tools pass on the web page, none in the Seeker app, none on
+  `/api/airdrop/record`. ⚠️ **But writing the drop's PUBLIC RECEIPT needs the RECEIPT SIGN-IN**
+  (Codex, round 18): the operator wallet signs a one-line nonce (`purpose=receipt` on the
+  challenge, its own message, a `receipt` token that `toolPassGate` refuses as a tools pass) — a
+  signature, never a holdings check or a payment — and every row is held to that wallet, the
+  cap is keyed on it, and only it may append to the drop. Deriving the operator from the chain
+  alone (rounds 15–17) let a stranger claim an operator's unrecorded transfer first; don't go
+  back to it. A declined signature means the tokens still send and the drop gets no public
+  receipt, said on screen. Rows are keyed `(signature, wallet)` — one batch transaction pays
+  many recipients; the signature alone is only the ownership key. ⚠️ **Only
   verified rows are ever stored** (Codex, round 16): a drop exists only once a row has verified,
   nothing unverified is written, and a verified signature belongs to one receipt — free access is
   not unauthenticated write access. ⚠️ **The record is a verify phase then a SYNCHRONOUS commit**

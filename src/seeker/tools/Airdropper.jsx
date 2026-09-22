@@ -38,7 +38,8 @@
 // pane's job is to keep them distinct all the way to the screen.
 //
 // ── SERVER ───────────────────────────────────────────────────────────────────────────────────
-//   POST /api/airdrop/record  (no pass — free for everyone, owner 2026-09-22)
+//   POST /api/airdrop/record  (no tools pass — free for everyone, owner 2026-09-22; needs the
+//                             RECEIPT SIGN-IN header x-clkn-pass, a signed nonce, round 18)
 //                             { dropId?, mint, decimals, createdAt, rows:[{wallet, amount, sig}] }
 //     200 { success:true, dropId, url:"/airdrop/r/<id>", recorded, totals }
 //     400 { success:false, error }   — bad rows / too many rows
@@ -65,6 +66,18 @@ import "./tools.css";
 const ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const MAX_RECIPIENTS = 2000;     // a phone paste, not a spreadsheet job — see the note at parse()
 const RECORD_CHUNK = 100;        // the server's own per-call row cap is higher; this keeps posts small
+// The receipt sign-in token, per wallet, 23h (the server issues 24h). localStorage so a drop
+// resumed after the OS backgrounded the app does not prompt again mid-run.
+const RECEIPT_SESSION_KEY = "clkn_seeker_receipt_session";
+function readReceiptSession(address) {
+  try { const d = JSON.parse(localStorage.getItem(RECEIPT_SESSION_KEY) || "null"); return d && d.wallet === address && d.exp > Date.now() && d.pass ? d.pass : null; } catch (_) { return null; }
+}
+function writeReceiptSession(address, pass) {
+  try { localStorage.setItem(RECEIPT_SESSION_KEY, JSON.stringify({ wallet: address, pass, exp: Date.now() + 23 * 3600e3 })); } catch (_) {}
+}
+function forgetReceiptSession(address) {
+  try { const d = JSON.parse(localStorage.getItem(RECEIPT_SESSION_KEY) || "null"); if (!d || d.wallet === address) localStorage.removeItem(RECEIPT_SESSION_KEY); } catch (_) {}
+}
 
 function plan() { try { return (typeof window !== "undefined" && window.CluckAirdropPlan) || null; } catch (_) { return null; } }
 function engine() { try { return (typeof window !== "undefined" && window.CluckAirdrop) || null; } catch (_) { return null; } }
@@ -295,6 +308,33 @@ export default function AirdropperPane({ wallet }) {
     setConfirmOpen(true);
   }
 
+  // The receipt sign-in: GET a challenge with purpose=receipt, wallet.provider.signMessage, POST
+  // the session; the server answers a "receipt" token that toolPassGate refuses as a tools pass.
+  // Same shapes as passgate.jsx's checkHolder — the message and the purpose are the difference.
+  async function ensureReceiptSession() {
+    const cached = readReceiptSession(wallet.address);
+    if (cached) return cached;
+    if (!wallet.provider || typeof wallet.provider.signMessage !== "function") throw new Error(t("This wallet can't sign messages — try Phantom, Solflare, Backpack or Jupiter."));
+    const chR = await fetch(`/api/tool-gate/challenge?wallet=${encodeURIComponent(wallet.address)}&purpose=receipt`);
+    const ch = await chR.json().catch(() => null);
+    if (!ch || !ch.success || !ch.message) throw new Error(t("could not reach the receipt service"));
+    const enc = new TextEncoder().encode(ch.message);
+    let sig;
+    try { sig = await wallet.provider.signMessage(enc, "utf8"); } catch (_e) { throw new Error("declined"); }
+    let bytes = (sig && sig.signature) ? sig.signature : sig;
+    if (bytes && bytes.data && !bytes.length) bytes = bytes.data;
+    const arr = new Uint8Array(bytes);
+    let bin = ""; for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+    const sessR = await fetch("/api/tool-gate/session", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet: wallet.address, message: ch.message, signature: btoa(bin) }),
+    });
+    const j = await sessR.json().catch(() => null);
+    if (!j || !j.success || !j.pass) throw new Error((j && (j.detail || j.error)) || t("could not reach the receipt service"));
+    writeReceiptSession(wallet.address, j.pass);
+    return j.pass;
+  }
+
   async function send() {
     setConfirmOpen(false);
     const E = engine();
@@ -305,6 +345,19 @@ export default function AirdropperPane({ wallet }) {
     const created = Date.now();
     let dropId = null;
     const collected = [];
+
+    // ── the receipt sign-in (Codex round 18, 2026-09-22) ─────────────────────────────────────
+    // Writing the drop's PUBLIC receipt needs the operator wallet to sign a one-line nonce — a
+    // signature, NOT a transaction, no holdings check, no payment (the Airdropper is free for
+    // everyone). Without it a stranger who knew an operator's public transfer could claim it on a
+    // receipt of their own first. It happens BEFORE the first batch is signed so the person sees
+    // one sign-in prompt, then the transactions, and the first confirmed batch can record at
+    // once. Declined or unavailable → the tokens still send; the drop gets no public receipt and
+    // the screen says so. Cached per wallet for 23h.
+    let receiptPass = null, receiptDeclined = null;
+    try { receiptPass = await ensureReceiptSession(); }
+    catch (e) { receiptDeclined = String((e && e.message) || e || "declined"); }
+    if (!receiptPass && liveRef.current) setReceipt({ url: null, recorded: 0, total: 0, error: t("The receipt sign-in was declined, so this drop has no public receipt. The tokens still send.") + (receiptDeclined && !/declined|rejected/i.test(receiptDeclined) ? " " + receiptDeclined : "") });
 
     // Record each batch's confirmed rows as they land, not once at the end: an app backgrounded
     // by the OS mid-run (a real thing on a phone) would otherwise take the whole receipt with it.
@@ -339,6 +392,7 @@ export default function AirdropperPane({ wallet }) {
     };
     async function record(rows, decimalsForReceipt) {
       if (!rows.length) return;
+      if (!receiptPass) return;   // no sign-in, no receipt — already on screen
       attempted += rows.length;
       // One failed chunk no longer ends the run's recording (round 17): the chunks after it are
       // independent calls, and a 409 on one batch says nothing about the next.
@@ -347,7 +401,7 @@ export default function AirdropperPane({ wallet }) {
         let j = null;
         try {
           const r = await fetch("/api/airdrop/record", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST", headers: { "Content-Type": "application/json", "x-clkn-pass": receiptPass },
             body: JSON.stringify({
               dropId: dropId || undefined, mint: native ? NATIVE_RECEIPT_MINT : mint.trim(),
               decimals: Number.isInteger(decimalsForReceipt) ? decimalsForReceipt : undefined, createdAt: created,
@@ -355,6 +409,7 @@ export default function AirdropperPane({ wallet }) {
             }),
           });
           j = await r.json().catch(() => null);
+          if (r.status === 401) forgetReceiptSession(wallet.address);   // dead sign-in: the next drop prompts again
         } catch (_) { refused += chunk.length; lastReason = t("could not reach the receipt service"); publish(null); continue; }
         // A 409 ("nothing in this batch verified") carries the per-row reasons exactly like a 200.
         const n = landed(j);

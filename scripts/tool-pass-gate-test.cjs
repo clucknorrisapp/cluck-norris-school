@@ -21,7 +21,7 @@ function makeWallet() {
   return { pub: new PublicKey(raw).toBase58(), sign: (msg) => crypto.sign(null, Buffer.from(msg, "utf8"), privateKey).toString("base64") };
 }
 // The message must come from the server: GET /api/tool-gate/challenge issues a single-use nonce.
-async function challenge(base, wallet) { const r = await fetch(`${base}/api/tool-gate/challenge?wallet=${wallet}`); const j = await r.json(); return j.message; }
+async function challenge(base, wallet, purpose) { const r = await fetch(`${base}/api/tool-gate/challenge?wallet=${wallet}${purpose ? "&purpose=" + purpose : ""}`); const j = await r.json(); return j.message; }
 function fakeMsg(wallet, nonce) { return `Cluck Norris — unlock the tools pass\nwallet: ${wallet}\nnonce: ${nonce}\nThis only proves you own this wallet. It is NOT a transaction and grants no spending approval.`; }
 function forgeToken(payload, key) {
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -141,11 +141,13 @@ async function get(base, p, headers) {
     ok("the SKR block carries ITS OWN figure (holdUsd $20), distinct from the CLKN one",
        skrCfg && skrCfg.holdUsd === 20 && skrCfg.holdUsd !== cfg.body.holdUsd, JSON.stringify(skrCfg));
     // The Airdropper is free for everyone on every platform (owner, 2026-09-22): its record route
-    // takes no pass. With no body it fails on the ROWS, never on a missing credential — and the
-    // operator it will hold rows to comes from the chain (lib/airdrop-receipt.js feePayerOf).
+    // never asks for a TOOLS pass (402 pass_required) or holdings. What it asks for (Codex round
+    // 18) is the RECEIPT SIGN-IN: a challenge with purpose=receipt, signed, answered with a
+    // "receipt" token that proves the wallet and nothing else.
     const rec = await post(A.base, "/api/airdrop/record", {});
-    ok("airdrop/record with NO pass is not refused for a pass (400 on the empty rows, never 402/403)",
-       rec.status === 400 && rec.body && /rows/.test(String(rec.body.error)), JSON.stringify(rec));
+    ok("airdrop/record with NO session is 401 receipt_session_required — never 402 pass_required, never a silent 200",
+       rec.status === 401 && rec.body && rec.body.error === "receipt_session_required", JSON.stringify(rec));
+    // The receipt sign-in itself is exercised on server C below (its own session limiter).
     const skrWal = makeWallet();
     const m3 = await challenge(A.base, skrWal.pub);
     s = await post(A.base, "/api/tool-gate/session", { wallet: skrWal.pub, message: m3, signature: skrWal.sign(m3), doors: ["skr"] });
@@ -181,6 +183,45 @@ async function get(base, p, headers) {
     const r = await get(B.base, `/api/wallet-xray?wallet=${W}`);
     ok("wallet-xray with the gate off is not refused for a pass", r.status !== 402 && r.status !== 403, "status " + r.status);
   } finally { B.stop(); }
+
+  // A third boot, gate ON, so the receipt sign-in's challenge/session calls get their own
+  // 30-per-minute "pay" limiter instead of eating server A's.
+  const C = await boot(Number(process.env.TOOLPASS_TEST_PORT || 3141) + 2, { TOOLGATE_OFF: "" });
+  try {
+    console.log("\nThe receipt sign-in (Codex round 18 on #395) — a signed nonce, never a tools pass\n");
+    const tW = makeWallet();
+    const tM = await challenge(C.base, tW.pub);
+    const ts = await post(C.base, "/api/tool-gate/session", { wallet: tW.pub, message: tM, signature: tW.sign(tM) });
+    const tok = ts.body && ts.body.pass;
+    ok("a tools session on C (grace, no price) issues a token to reuse below", /^t:/.test(String(tok || "")), JSON.stringify(ts.body));
+    const opWal = makeWallet();
+    const rMsg = await challenge(C.base, opWal.pub, "receipt");
+    ok("a receipt challenge carries its own message (not the tools-pass one)", /sign in to the Airdropper/.test(rMsg) && !/unlock the tools pass/.test(rMsg), rMsg);
+    const rs = await post(C.base, "/api/tool-gate/session", { wallet: opWal.pub, message: rMsg, signature: opWal.sign(rMsg) });
+    ok("the receipt session is issued to a wallet with NO holdings — via 'receipt', no pay intent, no holdings figure",
+       rs.status === 200 && rs.body && rs.body.success && rs.body.via === "receipt" && /^t:/.test(rs.body.pass) && !rs.body.payIntent && !("balance" in rs.body), JSON.stringify(rs.body));
+    const withSess = await fetch(C.base + "/api/airdrop/record", { method: "POST", headers: { "content-type": "application/json", "x-clkn-pass": rs.body.pass }, body: "{}" });
+    const wsBody = await withSess.json().catch(() => null);
+    ok("with the receipt session, the route gets past the credential and fails on the empty ROWS (400)",
+       withSess.status === 400 && wsBody && /rows/.test(String(wsBody.error)), JSON.stringify({ status: withSess.status, wsBody }));
+    const asPass = await get(C.base, `/api/wallet-xray?wallet=${W}`, { "x-clkn-pass": rs.body.pass });
+    ok("⚠️ a receipt token is NOT a tools pass — a gated tool refuses it with 403 bad_pass",
+       asPass.status === 403 && asPass.body && asPass.body.error === "bad_pass", JSON.stringify({ status: asPass.status, body: asPass.body }));
+    // Purposes never cross: a receipt challenge's nonce inside the tools-pass message is refused.
+    const rMsg2 = await challenge(C.base, opWal.pub, "receipt");
+    const nonce2 = /nonce: ([0-9a-f]{32})/.exec(rMsg2)[1];
+    const crossed = fakeMsg(opWal.pub, nonce2);
+    const cr = await post(C.base, "/api/tool-gate/session", { wallet: opWal.pub, message: crossed, signature: opWal.sign(crossed) });
+    ok("⚠️ a receipt challenge cannot mint a tools pass (its nonce in the tools message → 400)", cr.status === 400 && cr.body && /challenge/.test(String(cr.body.error)), JSON.stringify(cr.body));
+    const tMsg = await challenge(C.base, opWal.pub);
+    const tNonce = /nonce: ([0-9a-f]{32})/.exec(tMsg)[1];
+    const crossed2 = `Cluck Norris — sign in to the Airdropper\nwallet: ${opWal.pub}\nnonce: ${tNonce}\nThis only proves you own this wallet, so the public receipt of your drop is yours to write. It is NOT a transaction and grants no spending approval.`;
+    const cr2 = await post(C.base, "/api/tool-gate/session", { wallet: opWal.pub, message: crossed2, signature: opWal.sign(crossed2) });
+    ok("⚠️ and a tools challenge cannot mint a receipt session either", cr2.status === 400 && cr2.body && /challenge/.test(String(cr2.body.error)), JSON.stringify(cr2.body));
+    // A TOOLS token (any proven wallet) is accepted by the record route too — it proves the wallet.
+    const holderRec = await fetch(C.base + "/api/airdrop/record", { method: "POST", headers: { "content-type": "application/json", "x-clkn-pass": tok }, body: "{}" });
+    ok("a tools-pass token also proves the wallet to the record route (400 on the rows, not 401)", holderRec.status === 400, String(holderRec.status));
+  } finally { C.stop(); }
 
   console.log(failures ? `\n${failures} failed` : "\nall passed");
   process.exit(failures ? 1 : 0);

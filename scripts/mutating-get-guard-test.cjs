@@ -135,8 +135,9 @@ function raw(method, p, headers) {
 
   // ── airdrop per-drop receipt (Colosseum roadmap §W4/Extension): recording a row is a POST-only
   // write. It carried the tools pass until 2026-09-22 (owner: the Airdropper is free for everyone
-  // on every platform); now it takes no credential at all and holds every row to the wallet the
-  // CHAIN names as the fee payer (lib/airdrop-receipt.js). The public receipt reads
+  // on every platform); it takes no tools pass and reads no holdings, but since Codex's round 18
+  // it needs the RECEIPT SIGN-IN (a signed nonce, 401 without it) so a stranger cannot claim an
+  // operator's transfer on a receipt of their own. The public receipt reads
   // (/api/airdrop/r/:dropId[/:wallet]) are unauthenticated GETs and stay that way; they are
   // exercised by scripts/airdrop-receipt-test.cjs, not here.
   r = await call("GET", "/api/airdrop/record", false);
@@ -144,7 +145,7 @@ function raw(method, p, headers) {
   r = await call("GET", "/api/airdrop/record?dropId=x", false);
   ok("GET /api/airdrop/record with query params is still refused with 405", r.status === 405);
   r = await call("POST", "/api/airdrop/record", false);
-  ok("POST /api/airdrop/record with no pass and no rows is a 400 on the rows — no pass is asked for, and never a silent 200", r.status === 400 && r.body && /rows/.test(String(r.body.error)), JSON.stringify(r.body));
+  ok("POST /api/airdrop/record with no sign-in is 401 receipt_session_required — never 402 (no tools pass is asked for), never a silent 200", r.status === 401 && r.body && r.body.error === "receipt_session_required", JSON.stringify(r.body));
 
   // ── buy-comp server payout: run / sweep / unpay / set on a GET → 405, decided BEFORE the comp
   // lookup so a pasted link is refused before it touches anything; the flag-less GET is the read.

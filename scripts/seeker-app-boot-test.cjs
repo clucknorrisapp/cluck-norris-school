@@ -53,7 +53,7 @@ function findChromium() {
 const ADDR = "6A5uicTYmdVerq5JDKcb3XC9J8sv5F7zMKGqBBYXcnrh";
 const FAKE = `(() => {
   const account = { address: ${JSON.stringify(ADDR)}, publicKey: new Uint8Array(32).fill(7),
-    chains: ["solana:mainnet"], features: ["solana:signTransaction"] };
+    chains: ["solana:mainnet"], features: ["solana:signTransaction", "solana:signMessage"] };
   const wallet = {
     version: "1.0.0", name: "Jupiter", icon: "data:image/svg+xml;base64,PHN2Zy8+",
     chains: ["solana:mainnet"], accounts: [],
@@ -63,6 +63,10 @@ const FAKE = `(() => {
       "standard:events": { version: "1.0.0", on: () => () => {} },
       "solana:signTransaction": { version: "1.0.0", supportedTransactionVersions: ["legacy", 0],
         signTransaction: async (...i) => i.map((x) => ({ signedTransaction: x.transaction })) },
+      // Message signing, as every real Seeker wallet offers it: the Airdropper's receipt sign-in
+      // (round 18) and the tools-pass sheet both go through it.
+      "solana:signMessage": { version: "1.0.0",
+        signMessage: async (...i) => i.map((x) => ({ signedMessage: x.message, signature: new Uint8Array(64).fill(9) })) },
     },
   };
   const cb = ({ register }) => register(wallet);
@@ -483,7 +487,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const FAKE_SIGNING = `(() => {
       const SECRET = ${JSON.stringify(Array.from(SIGNER.secretKey))};
       const account = { address: ${JSON.stringify(SIGNER.publicKey.toBase58())}, publicKey: new Uint8Array(32).fill(7),
-        chains: ["solana:mainnet"], features: ["solana:signTransaction"] };
+        chains: ["solana:mainnet"], features: ["solana:signTransaction", "solana:signMessage"] };
       const wallet = {
         version: "1.0.0", name: "Jupiter", icon: "data:image/svg+xml;base64,PHN2Zy8+",
         chains: ["solana:mainnet"], accounts: [],
@@ -497,6 +501,9 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
               tx.sign(solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(SECRET)));
               return { signedTransaction: tx.serialize() };
             }) },
+          // Message signing, as every real Seeker wallet offers it: the receipt sign-in (round 18).
+          "solana:signMessage": { version: "1.0.0",
+            signMessage: async (...inputs) => inputs.map((x) => ({ signedMessage: x.message, signature: new Uint8Array(64).fill(9) })) },
         },
       };
       const cb = ({ register }) => register(wallet);
@@ -504,15 +511,31 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", { detail: cb }));
     })();`;
     let sendCount = 0;
-    const recorded = [];
+    const recorded = [], sessionBodies = [], recordHeaders = [];
 
     const { ctx, page, errors, calls } = await open(
       (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
       async (pg) => {
         await pg.route("**/api/tool-gate/config*", (r) => r.fulfill({ status: 200, contentType: "application/json",
           body: JSON.stringify({ success: true, enabled: true, holdUsd: 10, clknNeeded: 1000, lamports: 50000000, days: 7 }) }));
+        // The receipt sign-in (round 18): a challenge with purpose=receipt, the wallet signs it, the
+        // session answers a "receipt" token, and every record call carries it. The mocks hand back
+        // the real shapes; the assertions below check the pane asked for the RECEIPT purpose and
+        // never for a tools pass (no doors, no pass sheet).
+        await pg.route("**/api/tool-gate/challenge*", (r) => {
+          const u = new URL(r.request().url()); const w = u.searchParams.get("wallet") || "";
+          r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, purpose: u.searchParams.get("purpose") || "tools", nonce: "ab".repeat(16),
+            message: (u.searchParams.get("purpose") === "receipt" ? "Cluck Norris — sign in to the Airdropper" : "Cluck Norris — unlock the tools pass") + `\nwallet: ${w}\nnonce: ${"ab".repeat(16)}\nThis only proves you own this wallet.` }) });
+        });
+        await pg.route("**/api/tool-gate/session*", (r) => {
+          let body = {}; try { body = JSON.parse(r.request().postData() || "{}"); } catch (_) {}
+          sessionBodies.push(body);
+          const isReceipt = /sign in to the Airdropper/.test(String(body.message || ""));
+          r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(isReceipt ? { success: true, via: "receipt", pass: "t:receipt.token", days: 1 } : { success: false, error: "insufficient_holdings" }) });
+        });
         await pg.route("**/api/airdrop/record*", async (r) => {
           let body = {};
+          recordHeaders.push(r.request().headers()["x-clkn-pass"] || null);
           try { body = JSON.parse(r.request().postData() || "{}"); recorded.push(body); } catch (_) {}
           // The real route answers one result per row sent (round 17: the pane counts THOSE, never
           // the chunk it sent), so the mock echoes every row back verified.
@@ -593,12 +616,19 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const done = await text(page);
 
     ok("G · the run finishes and reports", /Start another drop/i.test(done), done.slice(0, 400));
-    // Free for everyone (owner, 2026-09-22): no pass was held, no sheet appeared, and the pass
-    // service was never asked — the wallet signed the batches and that was all it took.
-    ok("G · ⚠️ the Airdropper never opened the pass sheet and never called the pass service (free for everyone)",
+    // Free for everyone (owner, 2026-09-22): no pass was held, no sheet appeared, and no TOOLS
+    // pass was ever asked for. What the pane DID ask for (round 18) is the RECEIPT sign-in: one
+    // challenge with purpose=receipt, one session with the receipt message and no doors, and the
+    // token on every record call.
+    ok("G · ⚠️ the Airdropper never opened the pass sheet and never asked for a tools pass (free for everyone)",
        !/Unlock the tools pass/i.test(confirm) && !/Unlock the tools pass/i.test(done)
-         && !calls.some((u) => /\/api\/tool-gate\/(session|challenge)\b/.test(u)),
-       JSON.stringify(calls.filter((u) => /tool-gate/.test(u))));
+         // (`calls` keeps pathnames only; the RECEIPT purpose is proven by the message the session
+         // carries — the challenge mock issues that text only for purpose=receipt.)
+         && sessionBodies.length >= 1 && sessionBodies.every((b) => !b.doors && /sign in to the Airdropper/.test(String(b.message || ""))),
+       JSON.stringify({ calls: calls.filter((u) => /tool-gate/.test(u)), sessionBodies }));
+    ok("G · ⚠️ the receipt sign-in is asked ONCE, before the batches, and every record call carries its token",
+       sessionBodies.length === 1 && recordHeaders.length >= 1 && recordHeaders.every((h) => h === "t:receipt.token"),
+       JSON.stringify({ sessions: sessionBodies.length, recordHeaders }));
     // The whole point. Sixteen paid, sixteen not, two ambiguous — and nothing rounded together.
     const counts = await page.evaluate(() => ({
       sent: document.querySelectorAll(".seeker-drop-row-sent").length,
@@ -657,7 +687,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       const FAKE_SIGNING = `(() => {
         const SECRET = ${JSON.stringify(Array.from(SIGNER.secretKey))};
         const account = { address: ${JSON.stringify(SIGNER.publicKey.toBase58())}, publicKey: new Uint8Array(32).fill(7),
-          chains: ["solana:mainnet"], features: ["solana:signTransaction"] };
+          chains: ["solana:mainnet"], features: ["solana:signTransaction", "solana:signMessage"] };
         const wallet = {
           version: "1.0.0", name: "Jupiter", icon: "data:image/svg+xml;base64,PHN2Zy8+",
           chains: ["solana:mainnet"], accounts: [],
@@ -790,7 +820,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       const FAKE_SIGNING = `(() => {
         const SECRET = ${JSON.stringify(Array.from(SIGNER.secretKey))};
         const account = { address: ${JSON.stringify(SIGNER.publicKey.toBase58())}, publicKey: new Uint8Array(32).fill(7),
-          chains: ["solana:mainnet"], features: ["solana:signTransaction"] };
+          chains: ["solana:mainnet"], features: ["solana:signTransaction", "solana:signMessage"] };
         const wallet = {
           version: "1.0.0", name: "Jupiter", icon: "data:image/svg+xml;base64,PHN2Zy8+",
           chains: ["solana:mainnet"], accounts: [],

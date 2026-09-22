@@ -7809,18 +7809,20 @@ app.get("/api/airdrop-handoff", (req, res) => {
 app.use("/api/airdrop/record", rateLimit("airdropRecord", { windowMs: 60000, max: 30 }));
 app.post("/api/airdrop/record", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  // No pass, no credential (owner, 2026-09-22: "airdropper should be free for everyone on all
-  // platforms moving forward"). Until then this route ran toolPassGate() and took the operator's
-  // wallet from the signed session, both for the daily-drop cap and for the source check that
-  // keeps a stranger's transfer from recording as this operator's airdrop. The wallet now comes
-  // from the CHAIN instead: lib/airdrop-receipt.js reads the fee payer of the first row it can
-  // verify and holds every later row to that wallet (feePayerOf / sourceIsOperator). Nothing a
-  // caller sends names the operator, so there is nothing to spoof; the only thing this route
-  // will record is a transfer that a wallet demonstrably paid for. Rate limit above, row caps
-  // below, and the public body never carries the operator — all unchanged. And since Codex's
-  // round 16 on this change: ONLY VERIFIED ROWS ARE STORED, a new drop exists only once one row
-  // has verified (409 otherwise, nothing written), and a verified signature belongs to exactly
-  // one receipt — so free access is not unauthenticated write access to someone's receipt.
+  // No TOOLS PASS (owner, 2026-09-22: "airdropper should be free for everyone on all platforms
+  // moving forward"): this route never asks for holdings or a payment. It does ask for the
+  // RECEIPT SIGN-IN (round 18): the operator wallet signs a nonce once, and that is the wallet
+  // every row is held to (sourceIsOperator), the wallet the daily-drop cap is keyed on, and the
+  // only wallet that may append to the drop. The public body never carries it. Rounds 15–17 read
+  // the operator off the chain instead (feePayerOf); that let a stranger claim an operator's
+  // unrecorded transfer first, which the sign-in closes. Since round 16: ONLY VERIFIED ROWS ARE
+  // STORED, a drop exists only once a row verified, one signature belongs to one receipt.
+  // Round 18 (Codex): the write needs the OPERATOR's receipt sign-in — a signature, never a
+  // holdings check or a payment, so the tool stays free; see receiptSessionGate. Every row is
+  // then held to that wallet, an existing drop must be that wallet's, and a stranger's claim of
+  // someone else's transfer is refused before anything is read from the chain.
+  const sess = receiptSessionGate(req);
+  if (!sess.ok) return res.status(sess.status).json({ success: false, error: sess.error, detail: sess.detail });
   const b = req.body || {};
   const rows = Array.isArray(b.rows) ? b.rows : null;
   if (!rows || !rows.length) return res.status(400).json({ success: false, error: "rows must be a non-empty list of {wallet, amount, sig}" });
@@ -7835,7 +7837,7 @@ app.post("/api/airdrop/record", async (req, res) => {
     r = await airdropReceipt.recordDrop({
       kv, dropId: b.dropId ? String(b.dropId) : undefined,
       mint: String(b.mint || ""), decimals: b.decimals, createdAt: b.createdAt,
-      rows, getTx,
+      rows, getTx, operator: sess.wallet,
     });
   } catch (e) { return res.status(400).json({ success: false, error: String((e && e.message) || e) }); }
   // A 409 ("nothing verified") carries the per-row reasons, so the operator's own screen can say
@@ -9687,24 +9689,52 @@ function refreshSkrPrice(now) {
 // timestamp nonce let the same signed message mint more than one session). One nonce per signing,
 // bound to the wallet and to this purpose, consumed on first use whether or not it verifies.
 const TOOL_PASS_MSG_RE = /^Cluck Norris — unlock the tools pass\nwallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nnonce: ([0-9a-f]{32})\n/;
-const toolPassChallenges = new Map();   // nonce -> { wallet, exp }
+// The RECEIPT session (Codex round 18 on #395, 2026-09-22): the Airdropper is free for everyone,
+// but writing a drop's PUBLIC RECEIPT is not anonymous — a stranger who knew an operator's
+// unrecorded public transfer could claim it on a receipt of their own first, and the operator's
+// own recording then got "already recorded on another receipt". So /api/airdrop/record takes a
+// signed session too — its OWN message and purpose, with NO holdings check and NO payment: the
+// wallet signs a nonce, the server hands back a token that says only "this wallet proved
+// itself", and every row is then held to that wallet (lib/airdrop-receipt.js `operator`). A
+// receipt token is never a tools pass (toolPassGate refuses via "receipt"), and a receipt
+// challenge can never mint a tools pass (the purpose travels with the nonce and the message).
+const RECEIPT_MSG_RE = /^Cluck Norris — sign in to the Airdropper\nwallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nnonce: ([0-9a-f]{32})\n/;
+const RECEIPT_SESSION_TTL = 24 * 3600e3;
+const toolPassChallenges = new Map();   // nonce -> { wallet, exp, purpose }
 const TOOL_PASS_CHALLENGE_TTL = 10 * 60e3;
 function toolPassMessage(wallet, nonce) {
   return `Cluck Norris — unlock the tools pass\nwallet: ${wallet}\nnonce: ${nonce}\nThis only proves you own this wallet. It is NOT a transaction and grants no spending approval.`;
 }
-function issueToolPassChallenge(wallet) {
+function receiptMessage(wallet, nonce) {
+  return `Cluck Norris — sign in to the Airdropper\nwallet: ${wallet}\nnonce: ${nonce}\nThis only proves you own this wallet, so the public receipt of your drop is yours to write. It is NOT a transaction and grants no spending approval.`;
+}
+function issueToolPassChallenge(wallet, purpose) {
+  purpose = purpose === "receipt" ? "receipt" : "tools";
   const now = Date.now();
   for (const [n, c] of toolPassChallenges) if (c.exp < now) toolPassChallenges.delete(n);
   if (toolPassChallenges.size > 5000) throw new Error("too many open challenges — try again in a minute");
   const nonce = randomBytes(16).toString("hex");
-  toolPassChallenges.set(nonce, { wallet, exp: now + TOOL_PASS_CHALLENGE_TTL });
-  return { nonce, message: toolPassMessage(wallet, nonce), expiresAt: now + TOOL_PASS_CHALLENGE_TTL };
+  toolPassChallenges.set(nonce, { wallet, exp: now + TOOL_PASS_CHALLENGE_TTL, purpose });
+  return { nonce, purpose, message: purpose === "receipt" ? receiptMessage(wallet, nonce) : toolPassMessage(wallet, nonce), expiresAt: now + TOOL_PASS_CHALLENGE_TTL };
 }
-// Consumes the nonce on ANY attempt; returns true only when it exists, matches the wallet and is unexpired.
-function consumeToolPassChallenge(nonce, wallet) {
+// Consumes the nonce on ANY attempt; returns true only when it exists, matches the wallet AND the
+// purpose it was issued for, and is unexpired.
+function consumeToolPassChallenge(nonce, wallet, purpose) {
   const c = toolPassChallenges.get(nonce);
   if (c) toolPassChallenges.delete(nonce);
-  return !!(c && c.wallet === wallet && c.exp >= Date.now());
+  return !!(c && c.wallet === wallet && (c.purpose || "tools") === (purpose || "tools") && c.exp >= Date.now());
+}
+// The receipt route's gate: any valid session token proves its wallet (every one is issued only
+// after a signature or a payIntent minted from one). Returns the wallet, never a tier. Fails
+// CLOSED without the issuer key — this guards a write, unlike toolPassGate's fail-open reads.
+function receiptSessionGate(req) {
+  if (!process.env.PREMIUM_ACCESS_KEY) return { ok: false, status: 503, error: "receipt_sessions_unavailable", detail: "The receipt service cannot verify sessions right now. The tokens still send; the receipt can be recorded later." };
+  const raw = String(req.get("x-clkn-pass") || "").trim();
+  const m = /^t:([A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)$/.exec(raw);
+  if (!m) return { ok: false, status: 401, error: "receipt_session_required", detail: "Recording a public receipt needs the operator wallet to sign in first (a signature, not a transaction; no holdings, no payment)." };
+  const p = verifyToolPass(m[1]);
+  if (!p) return { ok: false, status: 401, error: "receipt_session_expired", detail: "The receipt sign-in has expired or is not valid — sign in again from the page." };
+  return { ok: true, wallet: p.w, via: p.v };
 }
 // A short-lived, wallet-bound credential handed to a wallet that just proved itself but did not
 // qualify, so the PAY path can redeem its payment without a second signature prompt.
@@ -9785,6 +9815,7 @@ async function toolPassGate(req) {
   if (!m) return { ok: false, status: 403, error: "bad_pass", detail: "Unrecognised pass proof — unlock again from the page." };
   const p = verifyToolPass(m[1]);
   if (!p) return { ok: false, status: 403, error: "pass_expired", detail: "That tools pass has expired or is not valid — unlock again from the page." };
+  if (p.v === "receipt") return { ok: false, status: 403, error: "bad_pass", detail: "That is an Airdropper receipt sign-in, not a tools pass — unlock the tools pass from the page." };
   if (p.v === "paid" || p.v === "gate-off" || p.v === "grace-price" || p.v === "grace-rpc") return { ok: true, via: p.v, wallet: p.w };
   // Holder and comped tokens stay honest: the free tier is "while you hold", re-read live —
   // through the same door the token came from (a website session never grows an SKR door).
@@ -9815,7 +9846,7 @@ app.get("/api/tool-gate/challenge", rateLimit("pay", { windowMs: 60000, max: 30 
   res.setHeader("Cache-Control", "no-store");
   const wallet = String(req.query.wallet || "").trim();
   if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "need wallet" });
-  try { return res.status(200).json({ success: true, ...issueToolPassChallenge(wallet) }); }
+  try { return res.status(200).json({ success: true, ...issueToolPassChallenge(wallet, String(req.query.purpose || "")) }); }
   catch (e) { return res.status(503).json({ success: false, error: e.message }); }
 });
 // POST /api/tool-gate/session — the only issuer of tools-pass tokens (see the block above).
@@ -9833,11 +9864,22 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
     if (!String(b.paySig || "").trim()) return res.status(400).json({ success: false, error: "pay intent needs a payment signature" });
   } else {
     if (!message || !signature) return res.status(400).json({ success: false, error: "need wallet, message, signature" });
+    // The RECEIPT sign-in (see RECEIPT_MSG_RE): its own message, its own challenge purpose, and
+    // it ends here — a "receipt" token, never a tools pass, no holdings read, no payment leg.
+    const rm = RECEIPT_MSG_RE.exec(message);
+    if (rm) {
+      if (rm[1] !== wallet) return res.status(400).json({ success: false, error: "message does not match wallet" });
+      if (!consumeToolPassChallenge(rm[2], wallet, "receipt")) return res.status(400).json({ success: false, error: "challenge missing, expired or already used — request a new one" });
+      if (message !== receiptMessage(wallet, rm[2])) return res.status(400).json({ success: false, error: "message does not match the issued challenge" });
+      if (!verifySolanaSignature(message, signature, wallet)) return res.status(401).json({ success: false, error: "Signature did not verify" });
+      try { traction.recordWalletConnect(kv, { source: "receipt", wallet }); } catch (_) { /* counter only */ }
+      return res.status(200).json({ success: true, via: "receipt", pass: "t:" + issueToolPass(wallet, "receipt", RECEIPT_SESSION_TTL), days: 1 });
+    }
     const mm = TOOL_PASS_MSG_RE.exec(message);
     if (!mm || mm[1] !== wallet) return res.status(400).json({ success: false, error: "message does not match wallet" });
     // The challenge is consumed on this attempt no matter what follows: a signed message is
     // good for exactly one session request.
-    if (!consumeToolPassChallenge(mm[2], wallet)) return res.status(400).json({ success: false, error: "challenge missing, expired or already used — request a new one" });
+    if (!consumeToolPassChallenge(mm[2], wallet, "tools")) return res.status(400).json({ success: false, error: "challenge missing, expired or already used — request a new one" });
     if (message !== toolPassMessage(wallet, mm[2])) return res.status(400).json({ success: false, error: "message does not match the issued challenge" });
     if (!verifySolanaSignature(message, signature, wallet)) return res.status(401).json({ success: false, error: "Signature did not verify" });
   }

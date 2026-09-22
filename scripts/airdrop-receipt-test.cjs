@@ -56,7 +56,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     assert.strictEqual(r.results[0].verified, true);
     assert.strictEqual(r.totals.verified, 1);
     const drop = AR.loadDrop(kv, r.dropId);
-    assert.strictEqual(drop.rows[sig].verified, true);
+    assert.strictEqual(AR.rowOnDrop(drop, sig, A).verified, true, "rows are keyed by (signature, wallet) — round 18");
     assert.strictEqual(drop.operator, PAYER, "operator is stored internally");
   });
 
@@ -590,7 +590,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     ]);
     assert.strictEqual(a.ok, true); assert.strictEqual(b.ok, true);
     const drop = AR.loadDrop(kv, r0.dropId);
-    assert.deepStrictEqual(Object.keys(drop.rows).sort(), [s0, s1, s2].sort(), "all three rows are on the receipt");
+    assert.deepStrictEqual(Object.keys(drop.rows).sort(), [AR.rowKey(s0, A), AR.rowKey(s1, A), AR.rowKey(s2, B)].sort(), "all three rows are on the receipt");
     for (const s of [s0, s1, s2]) assert.strictEqual(AR.receiptOfSig(kv, s), r0.dropId);
   });
   await tAsync("⚠️ round 17: an EXISTING drop answers 409 to a batch of which nothing verified — never a 200 a client could count as recorded", async () => {
@@ -637,6 +637,85 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     assert.strictEqual(r.ok, true);
     assert.strictEqual(kv.get("airdropReceiptSigIndex", null), null, "the round-16 whole-object index is gone");
     assert.strictEqual(kv.get(AR.sigKey(sig), null), r.dropId);
+  });
+
+
+  // ── Codex round 18 (re-review of 72b4d48): row identity, the quota under concurrency ───────
+  await tAsync("⚠️ round 18 P1: ONE transaction pays A and B → TWO rows on the receipt, each verified under its own wallet, one signature key", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    // The airdropper's real shape: one signed batch, many recipients, the operator down by the sum.
+    const batch = txPaidBy(PAYER, { pre: [bal(PAYER, MINT, 5_000_000_000n), bal(A, MINT, 0n), bal(B, MINT, 0n)], post: [bal(PAYER, MINT, 3_000_000_000n), bal(A, MINT, 1_000_000_000n), bal(B, MINT, 1_000_000_000n)] });
+    const r = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }, { wallet: B, amount: "1", sig }], getTx: txByMap({ [sig]: batch }), now: NOW });
+    assert.strictEqual(r.ok, true, JSON.stringify(r));
+    assert.deepStrictEqual(r.results.map((x) => [x.wallet, x.verified, !!x.alreadyRecorded]), [[A, true, false], [B, true, false]], "both recipients, in order, neither a duplicate");
+    const drop = AR.loadDrop(kv, r.dropId);
+    assert.strictEqual(Object.keys(drop.rows).length, 2);
+    assert.strictEqual(AR.rowOnDrop(drop, sig, A).wallet, A); assert.strictEqual(AR.rowOnDrop(drop, sig, B).wallet, B);
+    assert.deepStrictEqual(r.totals, { rows: 2, verified: 2, stored: 2, alreadyRecorded: 0, refused: 0 });
+    assert.strictEqual(AR.receiptOfSig(kv, sig), r.dropId, "the transaction is owned by this one receipt");
+    assert.strictEqual(AR.publicDrop(drop).count, 2); assert.strictEqual(AR.publicDrop(drop).total, "2");
+    // The same batch posted again: both rows already recorded, nothing new, still a success.
+    const again = await AR.recordDrop({ kv, dropId: r.dropId, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }, { wallet: B, amount: "1", sig }], getTx: txByMap({ [sig]: batch }), now: NOW + 1000 });
+    assert.strictEqual(again.ok, true); assert.strictEqual(again.nothingNew, true);
+    assert.deepStrictEqual(again.totals, { rows: 2, verified: 2, stored: 0, alreadyRecorded: 2, refused: 0 });
+    // A third "recipient" of the same signature that the chain does NOT show paid is refused, the two stay.
+    const r3 = await AR.recordDrop({ kv, dropId: r.dropId, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: PAYER, amount: "1", sig }], getTx: txByMap({ [sig]: batch }), now: NOW + 2000 });
+    assert.strictEqual(r3.ok, false); assert.strictEqual(r3.status, 409); assert.strictEqual(Object.keys(AR.loadDrop(kv, r.dropId).rows).length, 2);
+  });
+  await tAsync("⚠️ round 18 P2: the daily cap holds under concurrency — from 19, two overlapping first-row calls make 20, never 21", async () => {
+    const kv = snapshotKv(memoryKv());
+    const day = new Date(NOW).toISOString().slice(0, 10);
+    kv.set(`airdropOpDrops:${PAYER}:${day}`, Array.from({ length: 19 }, (_, i) => "seed" + i));
+    const s1 = fakeSig(), s2 = fakeSig();
+    const getTx = slowTxByMap({ [s1]: payerTx(A, 1_000_000_000n), [s2]: payerTx(B, 1_000_000_000n) });
+    const base = { kv, mint: MINT, decimals: 9, createdAt: NOW, getTx, now: NOW };
+    const [r1, r2] = await Promise.all([
+      AR.recordDrop({ ...base, rows: [{ wallet: A, amount: "1", sig: s1 }] }),
+      AR.recordDrop({ ...base, rows: [{ wallet: B, amount: "1", sig: s2 }] }),
+    ]);
+    const oks = [r1, r2].filter((r) => r.ok);
+    assert.strictEqual(oks.length, 1, JSON.stringify([r1, r2].map((r) => [r.ok, r.status])));
+    const loser = r1.ok ? r2 : r1;
+    assert.strictEqual(loser.status, 429);
+    assert.strictEqual(kv.get(`airdropOpDrops:${PAYER}:${day}`, []).length, 20, "exactly the cap, never over it");
+    assert.strictEqual(loser.dropId, undefined);
+    // Same with the operator PASSED (the route's normal case since round 18).
+    const kv2 = snapshotKv(memoryKv());
+    kv2.set(`airdropOpDrops:${PAYER}:${day}`, Array.from({ length: 19 }, (_, i) => "seed" + i));
+    const [q1, q2] = await Promise.all([
+      AR.recordDrop({ ...base, kv: kv2, operator: PAYER, rows: [{ wallet: A, amount: "1", sig: s1 }] }),
+      AR.recordDrop({ ...base, kv: kv2, operator: PAYER, rows: [{ wallet: B, amount: "1", sig: s2 }] }),
+    ]);
+    assert.strictEqual([q1, q2].filter((r) => r.ok).length, 1);
+    assert.strictEqual(kv2.get(`airdropOpDrops:${PAYER}:${day}`, []).length, 20);
+  });
+  await tAsync("round 18: a row stored before this change under the bare signature is still recognised — a retry never stores it twice", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const r = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: payerTx(A, 1_000_000_000n) }), now: NOW });
+    // Rewrite the stored row the way rounds 15–17 keyed it.
+    const drop = AR.loadDrop(kv, r.dropId);
+    const row = drop.rows[AR.rowKey(sig, A)]; delete drop.rows[AR.rowKey(sig, A)]; drop.rows[sig] = row; kv.set(AR.kvKey(r.dropId), drop);
+    const again = await AR.recordDrop({ kv, dropId: r.dropId, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: payerTx(A, 1_000_000_000n) }), now: NOW + 1000 });
+    assert.strictEqual(again.ok, true); assert.strictEqual(again.results[0].alreadyRecorded, true);
+    assert.strictEqual(Object.keys(AR.loadDrop(kv, r.dropId).rows).length, 1, "one row, under the legacy key, not two");
+  });
+  await tAsync("⚠️ round 18 P2: with the operator PROVEN by the caller, a stranger's earlier claim of the operator's transfer cannot exist — an existing drop refuses a different operator, and the operator's own receipt records the transfer", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const tx = payerTx(A, 1_000_000_000n);
+    // The stranger presents PAYER's transfer with THEIR proven wallet (B): the transfer was not funded by B → refused, no drop.
+    const stranger = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: B, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: tx }), now: NOW });
+    assert.strictEqual(stranger.ok, false); assert.strictEqual(stranger.status, 409);
+    assert.strictEqual(stranger.results[0].reason, AR.SOURCE_MISMATCH_REASON);
+    assert.strictEqual(AR.receiptOfSig(kv, sig), null, "the signature was not claimed");
+    // The operator records it on their own receipt.
+    const own = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: tx }), now: NOW + 1000 });
+    assert.strictEqual(own.ok, true); assert.strictEqual(AR.receiptOfSig(kv, sig), own.dropId);
+    // And the stranger cannot append to it either.
+    const append = await AR.recordDrop({ kv, dropId: own.dropId, mint: MINT, decimals: 9, createdAt: NOW, operator: B, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: tx }), now: NOW + 2000 });
+    assert.strictEqual(append.ok, false); assert.strictEqual(append.status, 403);
   });
 
   console.log(`\n${pass} passed, ${fail} failed\n`);

@@ -2446,6 +2446,7 @@
   "Show more": "Mostrar más",
   "Showing": "Mostrando",
   "Showing the last successful read — a fresh one just failed.": "Mostrando la última lectura exitosa — una nueva acaba de fallar.",
+  "The receipt sign-in was declined, so this drop has no public receipt. The tokens still send.": "Se rechazó el inicio de sesión del recibo, así que este envío no tiene recibo público. Los tokens se envían igual.",
   "Signature request was rejected or failed.": "La solicitud de firma fue rechazada o falló.",
   "Signing…": "Firmando…",
   "Skip wallets below (optional)": "Omitir billeteras abajo (opcional)",

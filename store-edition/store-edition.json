@@ -491,6 +491,7 @@
     "The mint account is the token",
     "The mint authority is whichever account is allowed to create more of a token, at any time, with no announcement required. If a mint's authority has been permanently given up, no more of that token can ever be created — and that's checkable on-chain. If it hasn't, more can be minted whenever that authority chooses, no matter what a description or a website says.",
     "The pass service isn't available right now.",
+    "The receipt sign-in was declined, so this drop has no public receipt. The tokens still send.",
     "The seed phrase IS the wallet",
     "The token account stays open — only the burned amount is destroyed.",
     "The token on chain is not the one that was scanned, so this was refused.",

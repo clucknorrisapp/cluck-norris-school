@@ -2446,6 +2446,7 @@
   "Show more": "显示更多",
   "Showing": "正在显示",
   "Showing the last successful read — a fresh one just failed.": "正在显示上一次成功读取的数据——刚才的新请求失败了。",
+  "The receipt sign-in was declined, so this drop has no public receipt. The tokens still send.": "收据签名登录被拒绝，因此这次空投没有公开收据。代币仍会照常发送。",
   "Signature request was rejected or failed.": "签名请求被拒绝或失败。",
   "Signing…": "正在签名…",
   "Skip wallets below (optional)": "跳过以下钱包（可选）",
