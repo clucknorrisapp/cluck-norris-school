@@ -160,6 +160,34 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 16 — 2026-09-22: #395, your three receipt findings on `caa90b8`, fixed
+
+All three were right, and they share one cause: when the pass left `/api/airdrop/record`, the
+route kept writing rows it had NOT verified (bad amounts, unreadable signatures, mismatches —
+"shown anyway, with why" on the public page), and creating drops before any row had verified.
+Free access became unauthenticated write access. The fix removes the cause rather than the three
+symptoms:
+
+| # | Finding | Fix (`lib/airdrop-receipt.js`) | Pinned by (`scripts/airdrop-receipt-test.cjs`) |
+|---|---|---|---|
+| 1 | **P1** — 1,999 junk rows against a public dropId filled the 2,000-row cap; an `operator:null` receipt could be taken over | **Only verified rows are ever stored.** Local-validation failures, unreadable signatures, mismatches and stranger-funded transfers come back in `results` with their reason and touch nothing. A drop always has an operator: it is created only once a row verifies (its fee payer), so no `operator:null` receipt can exist to take over | "junk rows against a known dropId are reported, NEVER stored": 1,901 junk rows incl. a stranger-funded transfer → every one answered, none stored, the operator's next real row still lands |
+| 2 | **P2** — replaying one public FAILED transaction into 20 new drops burned its fee payer's quota | The operator is adopted and the cap charged **only when the first row verifies**; a failed transaction never verifies, so it creates nothing and charges nobody. Plus **one signature, one receipt** (`airdropReceiptSigIndex`, persisted with the drop in one `setManyVerified`): a public signature already on a receipt cannot start a second drop | "replaying a FAILED public transaction creates no drop and charges nobody's quota" (25 replays → 25×409, quota list empty, the payer's own real drop then succeeds); "a signature already on one receipt cannot start a second drop" |
+| 3 | **P2** — deferred operator assignment skipped the cap | There is no deferred path: a new drop with nothing verified is a **409 with nothing written**; the retry creates it with the operator and the cap charged at that moment | "an unreadable first tx creates NO drop … the retry creates it with the operator and the cap charged" (asserts the `airdropOpDrops:` day list) |
+
+Also: `server.js` passes the per-row reasons through on the 409 so the operator's own screen can
+say which rows the chain did not confirm; `public/airdrop-receipt.html` no longer promises to show
+unverified rows. Existing tests whose fixtures only needed a drop to exist were given a
+PAYER-funded transfer (`paid()` helper); the "retried on replay" case now asserts the 409 first.
+
+Claims to break on this head: (a) with any sequence of calls carrying no verified row, no kv key
+changes at all; (b) a stranger cannot make a verified row appear on a receipt whose operator did
+not fund it; (c) a public signature that is already on a receipt cannot be used to create or
+charge anything; (d) the row cap and the daily cap count only verified rows / created drops.
+Residual, stated: a stranger who knows an operator's UNRECORDED real transfers of the same mint
+(after the drop's `createdAt`) can create truthful receipts from them and consume that wallet's
+20-drop day. The receipts are true and the operator's own recording claims those signatures
+first; this is documented rather than closed.
+
 ## Round 15 — 2026-09-22: #395 again — two door figures ($10 CLKN / $20 SKR) and the Airdropper free everywhere
 
 Owner, after round 14: *"lets lower it to 20 dollars of SKR or 10 dollars of CLKN to get access to

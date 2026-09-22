@@ -24,6 +24,11 @@ const bal = (owner, mint, amount) => ({ owner, mint, uiTokenAmount: { amount: St
 const NOW = 1_800_000_000_000; // fixed ms "now" for deterministic notBefore checks
 const tx = ({ err = null, pre = [], post = [], blockTime } = {}) => ({ meta: { err, preTokenBalances: pre, postTokenBalances: post }, blockTime: blockTime ?? Math.floor(NOW / 1000) });
 
+// A row the operator PAYER really funded: PAYER loses `amt` raw of MINT, `to` gains it. Since
+// Codex round 16 only rows like this are ever stored — an unfunded or short transfer is reported
+// back with its reason and never touches the drop — so fixtures that just need a drop to exist
+// use this shape.
+const paid = (to, amt) => tx({ pre: [bal(PAYER, MINT, amt * 2n), bal(to, MINT, 0n)], post: [bal(PAYER, MINT, amt), bal(to, MINT, amt)] });
 function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnProperty.call(map, sig)) return map[sig]; throw new Error("sig not found (test getTx called for an unmocked sig)"); }; }
 
 (async () => {
@@ -63,11 +68,11 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
       kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER,
       rows: [{ wallet: A, amount: "1000", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW,
     });
-    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.ok, false, "nothing verified → no drop is created (Codex round 16)");
+    assert.strictEqual(r.status, 409);
     assert.strictEqual(r.results[0].verified, false);
     assert.match(r.results[0].reason, /smaller than the amount owed/);
-    const drop = AR.loadDrop(kv, r.dropId);
-    assert.strictEqual(drop.rows[sig].verified, false);
+    assert.strictEqual(r.dropId, undefined, "no dropId for a drop that was never created");
   });
 
   await tAsync("a row for the wrong mint is unverified (never credited from an unrelated token move)", async () => {
@@ -104,9 +109,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     const r = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
     assert.strictEqual(r.results[0].verified, false, "a stranger's transfer must never verify as this operator's airdrop");
     assert.strictEqual(r.results[0].reason, AR.SOURCE_MISMATCH_REASON);
-    const drop = AR.loadDrop(kv, r.dropId);
-    assert.strictEqual(drop.rows[sig].verified, false);
-    assert.strictEqual(drop.rows[sig].reason, AR.SOURCE_MISMATCH_REASON);
+    assert.strictEqual(r.ok, false); assert.strictEqual(r.status, 409, "and nothing is stored, so no drop exists");
   });
 
   await tAsync("finding #1: an inner-CPI transfer routed through a DEX pool (not the operator) is unverified", async () => {
@@ -175,17 +178,20 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     let fail = true;
     const getTx = async () => { if (fail) throw new Error("RPC unavailable"); return tx({ pre: [bal(PAYER, MINT, 2_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 1_000_000_000n), bal(A, MINT, 1_000_000_000n)] }); };
     const r1 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx, now: NOW });
-    assert.strictEqual(r1.results[0].verified, false);
+    assert.strictEqual(r1.ok, false); assert.strictEqual(r1.status, 409, "an unreadable first row creates nothing");
+    assert.strictEqual(r1.results[0].verified, false); assert.match(r1.results[0].reason, /could not read the chain/);
     fail = false;
-    const r2 = await AR.recordDrop({ kv, dropId: r1.dropId, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx, now: NOW + 1000 });
-    assert.strictEqual(r2.results[0].verified, true, "a previously-unverified row is re-checked, not stuck forever");
+    const r2 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig }], getTx, now: NOW + 1000 });
+    assert.strictEqual(r2.ok, true);
+    assert.strictEqual(r2.results[0].verified, true, "the same row, retried once readable, is recorded — nothing was stuck");
   });
 
   await tAsync("continuing a dropId under different mint/decimals/createdAt is refused", async () => {
     const kv = memoryKv();
     const sig1 = fakeSig();
-    const t1 = tx({ pre: [bal(A, MINT, 0n)], post: [bal(A, MINT, 1_000_000_000n)] });
+    const t1 = paid(A, 1_000_000_000_000n);
     const r1 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1000", sig: sig1 }], getTx: txByMap({ [sig1]: t1 }), now: NOW });
+    assert.strictEqual(r1.ok, true, JSON.stringify(r1));
     const r2 = await AR.recordDrop({ kv, dropId: r1.dropId, mint: OTHER_MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1", sig: fakeSig() }], getTx: async () => null, now: NOW });
     assert.strictEqual(r2.ok, false); assert.strictEqual(r2.status, 400);
   });
@@ -193,8 +199,9 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
   await tAsync("a different operator may not append to someone else's dropId", async () => {
     const kv = memoryKv();
     const sig1 = fakeSig();
-    const t1 = tx({ pre: [bal(A, MINT, 0n)], post: [bal(A, MINT, 1_000_000_000n)] });
+    const t1 = paid(A, 1_000_000_000_000n);
     const r1 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1000", sig: sig1 }], getTx: txByMap({ [sig1]: t1 }), now: NOW });
+    assert.strictEqual(r1.ok, true, JSON.stringify(r1));
     const r2 = await AR.recordDrop({ kv, dropId: r1.dropId, mint: MINT, decimals: 9, createdAt: NOW, operator: B, rows: [{ wallet: A, amount: "1000", sig: fakeSig() }], getTx: async () => null, now: NOW });
     assert.strictEqual(r2.ok, false); assert.strictEqual(r2.status, 403);
   });
@@ -202,8 +209,9 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
   await tAsync("the per-drop row cap refuses a call that would exceed it", async () => {
     const kv = memoryKv();
     const sig = fakeSig();
-    const t1 = tx({ pre: [bal(A, MINT, 0n)], post: [bal(A, MINT, 1_000_000_000n)] });
+    const t1 = paid(A, 1_000_000_000_000n);
     const r1 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: A, amount: "1000", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
+    assert.strictEqual(r1.ok, true, JSON.stringify(r1));
     // Force the cap down for this check by hand-editing the stored drop to look nearly full.
     const drop = AR.loadDrop(kv, r1.dropId);
     for (let i = 0; i < AR.MAX_ROWS_PER_DROP - 1; i++) drop.rows["pad" + i] = { wallet: A, amount: "1", sig: "pad" + i, verified: true, recordedAt: NOW };
@@ -216,7 +224,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
 
   await tAsync("the daily per-operator drop cap refuses a NEW drop past the limit — continuing an existing one is unaffected", async () => {
     const kv = memoryKv();
-    const t1 = tx({ pre: [bal(A, MINT, 0n)], post: [bal(A, MINT, 1_000_000_000n)] });
+    const t1 = paid(A, 1_000_000_000n);
     let lastOk;
     for (let i = 0; i < AR.MAX_DROPS_PER_OPERATOR_PER_DAY; i++) {
       const sig = fakeSig();
@@ -229,12 +237,14 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     // Adding another row to the LAST already-created drop today must still work — the cap only
     // gates minting a NEW dropId.
     const moreSig = fakeSig();
-    const cont = await AR.recordDrop({ kv, dropId: lastOk.dropId, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: B, amount: "1", sig: moreSig }], getTx: txByMap({ [moreSig]: t1 }), now: NOW });
+    const cont = await AR.recordDrop({ kv, dropId: lastOk.dropId, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER, rows: [{ wallet: B, amount: "1", sig: moreSig }], getTx: txByMap({ [moreSig]: paid(B, 1_000_000_000n) }), now: NOW });
     assert.strictEqual(cont.ok, true, "continuing an in-progress drop is never throttled by the daily-new-drop cap");
-    // A different operator is unaffected by PAYER's cap.
+    assert.strictEqual(cont.results[0].verified, true);
+    // A different operator is unaffected by PAYER's cap (its row is funded by A, the operator).
     const otherSig = fakeSig();
-    const other = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: A, rows: [{ wallet: B, amount: "1", sig: otherSig }], getTx: txByMap({ [otherSig]: t1 }), now: NOW });
-    assert.strictEqual(other.ok, true);
+    const tA = tx({ pre: [bal(A, MINT, 2_000_000_000n), bal(B, MINT, 0n)], post: [bal(A, MINT, 1_000_000_000n), bal(B, MINT, 1_000_000_000n)] });
+    const other = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, operator: A, rows: [{ wallet: B, amount: "1", sig: otherSig }], getTx: txByMap({ [otherSig]: tA }), now: NOW });
+    assert.strictEqual(other.ok, true, JSON.stringify(other));
   });
 
   // ── No operator passed (the normal case since 2026-09-22: the Airdropper is free for everyone,
@@ -296,14 +306,71 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     const other = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: A, amount: "1", sig: otherSig }], getTx: otherTx, now: NOW });
     assert.strictEqual(other.ok, true, "a different fee payer is unaffected by PAYER's cap");
   });
-  await tAsync("no operator passed and the first tx cannot be read: the drop is created with operator:null, and the NEXT readable row names it", async () => {
+  await tAsync("⚠️ Codex round 16 P2-3: an unreadable first tx creates NO drop (no operator:null receipt to take over, no deferred cap) — the retry creates it with the operator and the cap charged", async () => {
     const kv = memoryKv();
-    const sig1 = fakeSig(), sig2 = fakeSig();
+    const sig1 = fakeSig();
     const r1 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: A, amount: "1", sig: sig1 }], getTx: async () => { throw new Error("rpc down"); }, now: NOW });
-    assert.strictEqual(r1.ok, true); assert.strictEqual(r1.drop.operator, null); assert.strictEqual(r1.results[0].verified, false);
-    const t2 = txPaidBy(PAYER, { pre: [bal(PAYER, MINT, 5_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 4_000_000_000n), bal(A, MINT, 1_000_000_000n)] });
-    const r2 = await AR.recordDrop({ kv, dropId: r1.dropId, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: A, amount: "1", sig: sig2 }], getTx: txByMap({ [sig2]: t2 }), now: NOW + 1000 });
+    assert.strictEqual(r1.ok, false); assert.strictEqual(r1.status, 409); assert.strictEqual(r1.dropId, undefined);
+    const t1 = txPaidBy(PAYER, { pre: [bal(PAYER, MINT, 5_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 4_000_000_000n), bal(A, MINT, 1_000_000_000n)] });
+    const r2 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: A, amount: "1", sig: sig1 }], getTx: txByMap({ [sig1]: t1 }), now: NOW + 1000 });
     assert.strictEqual(r2.ok, true); assert.strictEqual(r2.drop.operator, PAYER); assert.strictEqual(r2.results[0].verified, true);
+    const day = new Date(NOW + 1000).toISOString().slice(0, 10);
+    assert.deepStrictEqual(kv.get(`airdropOpDrops:${PAYER}:${day}`, []), [r2.dropId], "the cap is charged when the drop is really created");
+  });
+  await tAsync("⚠️ Codex round 16 P1: junk rows against a known dropId are reported, NEVER stored — the row cap cannot be filled by a stranger", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const t1 = txPaidBy(PAYER, { pre: [bal(PAYER, MINT, 5_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 4_000_000_000n), bal(A, MINT, 1_000_000_000n)] });
+    const r1 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
+    assert.strictEqual(r1.ok, true);
+    // A stranger with the public dropId: bad amounts, unreadable sigs, and a transfer B funded.
+    const junk = [];
+    for (let i = 0; i < 1500; i++) junk.push({ wallet: A, amount: "abc", sig: fakeSig() });
+    for (let i = 0; i < 400; i++) junk.push({ wallet: A, amount: "1", sig: fakeSig() });
+    const bSig = fakeSig();
+    const tB = txPaidBy(B, { pre: [bal(B, MINT, 5_000_000_000n), bal(A, MINT, 1_000_000_000n)], post: [bal(B, MINT, 4_000_000_000n), bal(A, MINT, 2_000_000_000n)] });
+    junk.push({ wallet: A, amount: "1", sig: bSig });
+    const r2 = await AR.recordDrop({ kv, dropId: r1.dropId, mint: MINT, decimals: 9, createdAt: NOW, rows: junk, getTx: async (s) => { if (s === bSig) return tB; throw new Error("rpc down"); }, now: NOW + 1000 });
+    assert.strictEqual(r2.ok, true); assert.strictEqual(r2.nothingNew, true);
+    assert.strictEqual(r2.results.length, junk.length, "every junk row is answered");
+    assert.ok(r2.results.every((x) => x.verified === false), "and none verified");
+    assert.strictEqual(Object.keys(AR.loadDrop(kv, r1.dropId).rows).length, 1, "and none was stored");
+    // The operator's next real row still lands.
+    const sig3 = fakeSig();
+    const t3 = txPaidBy(PAYER, { pre: [bal(PAYER, MINT, 4_000_000_000n), bal(B, MINT, 0n)], post: [bal(PAYER, MINT, 3_000_000_000n), bal(B, MINT, 1_000_000_000n)] });
+    const r3 = await AR.recordDrop({ kv, dropId: r1.dropId, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: B, amount: "1", sig: sig3 }], getTx: txByMap({ [sig3]: t3 }), now: NOW + 2000 });
+    assert.strictEqual(r3.ok, true); assert.strictEqual(r3.results[0].verified, true); assert.strictEqual(r3.totals.rows, 2);
+  });
+  await tAsync("⚠️ Codex round 16 P2-2: replaying a FAILED public transaction creates no drop and charges nobody's quota", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const failed = txPaidBy(PAYER, { err: { InstructionError: [0, "Custom"] }, pre: [bal(PAYER, MINT, 5_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 5_000_000_000n), bal(A, MINT, 0n)] });
+    for (let i = 0; i < 25; i++) {
+      const r = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: failed }), now: NOW });
+      assert.strictEqual(r.ok, false); assert.strictEqual(r.status, 409, JSON.stringify(r));
+    }
+    const day = new Date(NOW).toISOString().slice(0, 10);
+    assert.deepStrictEqual(kv.get(`airdropOpDrops:${PAYER}:${day}`, []), [], "no quota consumed");
+    // And PAYER's own real drop still goes through afterwards.
+    const good = fakeSig();
+    const t1 = txPaidBy(PAYER, { pre: [bal(PAYER, MINT, 5_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 4_000_000_000n), bal(A, MINT, 1_000_000_000n)] });
+    const ok = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: A, amount: "1", sig: good }], getTx: txByMap({ [good]: t1 }), now: NOW });
+    assert.strictEqual(ok.ok, true);
+  });
+  await tAsync("⚠️ Codex round 16: a signature already on one receipt cannot start a second drop (one signature, one receipt)", async () => {
+    const kv = memoryKv();
+    const sig = fakeSig();
+    const t1 = txPaidBy(PAYER, { pre: [bal(PAYER, MINT, 5_000_000_000n), bal(A, MINT, 0n)], post: [bal(PAYER, MINT, 4_000_000_000n), bal(A, MINT, 1_000_000_000n)] });
+    const r1 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW });
+    assert.strictEqual(r1.ok, true);
+    const r2 = await AR.recordDrop({ kv, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW + 1000 });
+    assert.strictEqual(r2.ok, false); assert.strictEqual(r2.status, 409);
+    assert.match(r2.results[0].reason, /already recorded on another receipt/);
+    const day = new Date(NOW).toISOString().slice(0, 10);
+    assert.deepStrictEqual(kv.get(`airdropOpDrops:${PAYER}:${day}`, []), [r1.dropId], "the replay charged no second drop");
+    // Replaying it into ITS OWN receipt is the idempotent no-op it always was.
+    const r3 = await AR.recordDrop({ kv, dropId: r1.dropId, mint: MINT, decimals: 9, createdAt: NOW, rows: [{ wallet: A, amount: "1", sig }], getTx: txByMap({ [sig]: t1 }), now: NOW + 2000 });
+    assert.strictEqual(r3.ok, true); assert.strictEqual(r3.results[0].alreadyRecorded, true);
   });
 
   await tAsync("the public body carries no operator wallet anywhere", async () => {
@@ -326,8 +393,8 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
   await tAsync("the per-wallet lookup finds the right row and nothing else", async () => {
     const kv = memoryKv();
     const sigA = fakeSig(), sigB = fakeSig();
-    const t1 = tx({ pre: [bal(A, MINT, 0n)], post: [bal(A, MINT, 1_000_000_000n)] });
-    const t2 = tx({ pre: [bal(B, MINT, 0n)], post: [bal(B, MINT, 2_000_000_000n)] });
+    const t1 = paid(A, 1_000_000_000_000n);
+    const t2 = paid(B, 2_000_000_000_000n);
     const r = await AR.recordDrop({
       kv, mint: MINT, decimals: 9, createdAt: NOW, operator: PAYER,
       rows: [{ wallet: A, amount: "1000", sig: sigA }, { wallet: B, amount: "2000", sig: sigB }],
@@ -349,7 +416,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
       rows: [{ wallet: "not-a-wallet", amount: "1", sig: fakeSig() }, { wallet: A, amount: "1", sig: "not-a-signature" }],
       getTx, now: NOW,
     });
-    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.ok, false); assert.strictEqual(r.status, 409, "malformed rows alone create nothing");
     assert.strictEqual(r.results[0].verified, false); assert.match(r.results[0].reason, /wallet address/);
     assert.strictEqual(r.results[1].verified, false); assert.match(r.results[1].reason, /signature/);
     assert.strictEqual(calls, 0, "the chain is never read for input that cannot possibly verify");
@@ -428,7 +495,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
     assert.strictEqual(r.totals.verified, 1);
   });
 
-  await tAsync("⚠️ a SOL row the chain does not support is recorded UNVERIFIED, never quietly passed", async () => {
+  await tAsync("⚠️ a SOL row the chain does not support is reported UNVERIFIED and never stored, never quietly passed", async () => {
     const kv = memoryKv();
     const sig = fakeSig();
     // B is in the transaction but gained nothing.
@@ -437,7 +504,7 @@ function txByMap(map) { return async (sig) => { if (Object.prototype.hasOwnPrope
       kv, getTx, now: NOW, mint: NATIVE, decimals: 9, createdAt: NOW - 60_000,
       rows: [{ wallet: B, amount: "1", sig }],
     });
-    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.ok, false); assert.strictEqual(r.status, 409);
     assert.strictEqual(r.results[0].verified, false);
     assert.match(r.results[0].reason, /no SOL reached this wallet/);
   });

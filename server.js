@@ -7814,7 +7814,10 @@ app.post("/api/airdrop/record", async (req, res) => {
   // verify and holds every later row to that wallet (feePayerOf / sourceIsOperator). Nothing a
   // caller sends names the operator, so there is nothing to spoof; the only thing this route
   // will record is a transfer that a wallet demonstrably paid for. Rate limit above, row caps
-  // below, and the public body never carries the operator — all unchanged.
+  // below, and the public body never carries the operator — all unchanged. And since Codex's
+  // round 16 on this change: ONLY VERIFIED ROWS ARE STORED, a new drop exists only once one row
+  // has verified (409 otherwise, nothing written), and a verified signature belongs to exactly
+  // one receipt — so free access is not unauthenticated write access to someone's receipt.
   const b = req.body || {};
   const rows = Array.isArray(b.rows) ? b.rows : null;
   if (!rows || !rows.length) return res.status(400).json({ success: false, error: "rows must be a non-empty list of {wallet, amount, sig}" });
@@ -7832,8 +7835,10 @@ app.post("/api/airdrop/record", async (req, res) => {
       rows, getTx,
     });
   } catch (e) { return res.status(400).json({ success: false, error: String((e && e.message) || e) }); }
-  if (!r.ok) return res.status(r.status || 400).json({ success: false, error: r.error });
-  return res.status(200).json({ success: true, dropId: r.dropId, url: `/airdrop/r/${r.dropId}`, recorded: r.results, totals: r.totals });
+  // A 409 ("nothing verified yet") carries the per-row reasons, so the operator's own screen can
+  // say which rows the chain did not confirm — the public receipt never will (Codex, round 16).
+  if (!r.ok) return res.status(r.status || 400).json({ success: false, error: r.error, ...(r.results ? { recorded: r.results } : {}) });
+  return res.status(200).json({ success: true, dropId: r.dropId, url: `/airdrop/r/${r.dropId}`, recorded: r.results, totals: r.totals, nothingNew: !!r.nothingNew });
 });
 // Same route, GET refused — see the mutating-GET-guard rule (CLAUDE.md): every admin/record route
 // that writes answers 405 on a GET.

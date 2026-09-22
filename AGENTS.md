@@ -174,8 +174,11 @@ what they were owed and what arrived.
   (owner, same message: "airdropper should be free for everyone on all platforms moving
   forward") — no pass on the web page, none in the Seeker app, none on `/api/airdrop/record`;
   the receipt learns the operator from the chain (the fee payer of each row's own transaction,
-  `lib/airdrop-receipt.js` `feePayerOf`) and still holds every row to that wallet. Don't put the
-  Airdropper back behind the pass in a roundup, a tier badge or a listing.
+  `lib/airdrop-receipt.js` `feePayerOf`) and still holds every row to that wallet. ⚠️ **Only
+  verified rows are ever stored** (Codex, round 16): a drop exists only once a row has verified,
+  nothing unverified is written, and a verified signature belongs to one receipt — free access is
+  not unauthenticated write access. Don't put the Airdropper back behind the pass in a roundup,
+  a tier badge or a listing.
 - **Say what's on-chain, never why.** The chain shows *what*, not *why*. Only call a wallet
   "creator" or "team" when a launchpad API confirms it. That forensic honesty is the brand.
 - **Guardrails before power.** First-timers get warned before they can hurt themselves. That's
