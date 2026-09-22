@@ -101,6 +101,20 @@ function classifyFailure({ offline, res, body }) {
       text: t("Slow down a little — too many questions at once.") + " " + (wait || t("Try again in a moment.")),
     };
   }
+  // A 4xx that isn't the rate limiter is a refusal the CALLER caused — today that's the server's
+  // own "Question too short" / "Question too long" validation (server.js ~15176), in the
+  // server's own English regardless of `lang` (same caveat as the 429 branch above, and the same
+  // reason this pane doesn't run it through t() — it isn't our dictionary's text to translate).
+  // Showing that reason beats the generic outage text below, which tells someone to "try again in
+  // a moment" — meaningless advice for a question that will be refused every time until they
+  // change it. `detail`/`error` are plain server text rendered as a React text node, never HTML.
+  if (res && res.status >= 400 && res.status < 500 && res.status !== 429) {
+    const serverText = (body && (body.detail || body.error)) || null;
+    // The fallback reuses Buy Special's already-translated "refused" wording verbatim (the exact
+    // same key, already in all six dictionaries) rather than adding a new string for this pane
+    // alone — see BuySpecial.jsx's own "refused" phase for the sibling usage.
+    return { kind: "refused", text: serverText || t("That request wasn't something we could use.") };
+  }
   return { kind: "unavailable", text: t("Cluck couldn't answer that one. Try again in a moment.") };
 }
 
