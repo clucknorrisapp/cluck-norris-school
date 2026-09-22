@@ -316,10 +316,17 @@ export default function HatcheryPane({ wallet }) {
   const liveRef = React.useRef(true);
   const abortRef = React.useRef(null);
   const confirmAbortRef = React.useRef(null);
-  React.useEffect(() => () => {
-    liveRef.current = false;
-    try { abortRef.current && abortRef.current.abort(); } catch (_) {}
-    try { confirmAbortRef.current && confirmAbortRef.current.abort(); } catch (_) {}
+  // Set TRUE in the effect body, not only at ref creation: React StrictMode (src/seeker/main.jsx)
+  // mounts, runs the cleanup, then re-runs the effect on the SAME instance, so a cleanup-only
+  // effect leaves liveRef false forever and every guard fires — a dead Review button, and worse,
+  // a wallet-approved signature that is never submitted (verifier on #396, P2-4).
+  React.useEffect(() => {
+    liveRef.current = true;
+    return () => {
+      liveRef.current = false;
+      try { abortRef.current && abortRef.current.abort(); } catch (_) {}
+      try { confirmAbortRef.current && confirmAbortRef.current.abort(); } catch (_) {}
+    };
   }, []);
 
   // ── live fee config — never hardcoded, refetched on wallet connect and again right before the
@@ -486,7 +493,10 @@ export default function HatcheryPane({ wallet }) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mintAddress: plan.mintAddress, signedTxBase64 }),
-        signal: ctrl.signal,
+        // No abort signal here (verifier on #396, P2-6): the server broadcasts and charges as soon as
+        // the request reaches it, so a client-side abort mid-flight could only hide a mint that
+        // landed. The liveRef check after the await is the guard; the request itself must finish.
+        
       });
       if (!liveRef.current) return;
       if (!subRes.ok) {
@@ -535,7 +545,9 @@ export default function HatcheryPane({ wallet }) {
       toolFetch("/api/hatchery/minted", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() }),
-        signal: ctrl.signal,
+        // Never abortable (verifier on #396, P1-1): this is the once-only server-side record and
+        // announce of a REAL mint, fire-and-forget by design — navigating away must not cancel it.
+        
       }).catch(() => {});
     } catch (e) {
       if (!liveRef.current) return;

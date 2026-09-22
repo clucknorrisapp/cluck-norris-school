@@ -145,7 +145,9 @@ export default function AirdropperPane({ wallet }) {
   // (adversarial review P3-9), so the same fact is mirrored into state.
   const [stopped, setStopped] = React.useState(false);
   const liveRef = React.useRef(true);
-  React.useEffect(() => () => { liveRef.current = false; stopRef.current = true; }, []);
+  // TRUE in the effect body: StrictMode re-runs the effect on the same instance after its cleanup,
+  // so a cleanup-only effect would leave liveRef false and every post-await guard would fire.
+  React.useEffect(() => { liveRef.current = true; return () => { liveRef.current = false; stopRef.current = true; }; }, []);
 
   // ⚠️ LOSING THE WALLET MID-DROP MUST STOP THE DROP (adversarial review P3-10, 2026-09-21).
   // App.jsx drops the connection outright when the wallet switches accounts — the right call —

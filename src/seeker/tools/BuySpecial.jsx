@@ -299,10 +299,15 @@ export default function BuySpecialPane({ wallet }) {
     // letting it land after this would overwrite rows/computeMeta next to a brand-new buyer list
     // it no longer corresponds to.
     try { computeAbortRef.current && computeAbortRef.current.abort(); } catch (_) {}
+    computeAbortRef.current = null;   // so the superseded run's identity check fails even if its last chunk was already in flight (verifier on #396, P1-3)
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const url = `/api/buyspecial-crosscheck?mint=${encodeURIComponent(mint)}&from=${from}&to=${to}`;
     gatedToolFetch(pass.gatedFetch, url).then((res) => {
+      // A newer scan (or unmount) supersedes this one: drop its result rather than let an older
+      // buyer list land over a newer one (verifier on #396, P3-7 — gatedToolFetch carries no
+      // signal, so the identity check is the only stop).
+      if (ctrl.signal.aborted || abortRef.current !== ctrl) return;
       if (res.kind === "aborted") return;
       if (!res.ok) {
         if (pass.isDenial(res.body)) { pass.refresh(); setPendingAction("scan"); setGateOpen(true); setScanPhase("form"); return; }
@@ -400,7 +405,7 @@ export default function BuySpecialPane({ wallet }) {
     runHoldcheckChunks(active.map((b) => b.wallet), scannedMint, scannedFrom, checkTo, ctrl).then((res) => {
       // Superseded by a newer compute or a fresh scan — drop this run's result rather than let
       // it land over whatever replaced it.
-      if (computeAbortRef.current !== ctrl) return;
+      if (ctrl.signal.aborted || computeAbortRef.current !== ctrl) return;
       if (!res.ok) {
         if (res.kind === "aborted") return;
         if (pass.isDenial(res.body)) { pass.refresh(); setPendingAction("compute"); setGateOpen(true); setComputePhase("idle"); return; }

@@ -187,6 +187,11 @@ function ConfirmSheet({ count, lamports, busy, onConfirm, onCancel }) {
 export default function RentReclaimPane({ wallet }) {
   useI18nReady();
   const online = useOnline();
+  // Read through a ref inside scan() so scan's identity never changes with connectivity: with
+  // `online` in its deps, every signal blip re-ran the mount effect, which re-scanned and BLANKED a
+  // just-completed reclaim's result behind "You're offline" (verifier on #396, P2-5). The mount
+  // effect runs on connect only, as it always did; Try again covers the rest.
+  const onlineRef = React.useRef(online); onlineRef.current = online;
   // kind (unavailable phase only): "offline" | "unavailable" — a phone losing signal is not the
   // same fact as the chain being unreachable, and pane.jsx's other tools already say so (the
   // wording below is copied from pane.jsx's own <Unavailable> and from WalletCheckup.jsx).
@@ -224,7 +229,10 @@ export default function RentReclaimPane({ wallet }) {
     // Short-circuit BEFORE the request — a phone losing signal must read as offline, not as a
     // generic "could not read the chain" (this pane never checked navigator.onLine before; every
     // other pane's fetch does, via pane.jsx's toolFetch or its own explicit check).
-    if (!online) { setState({ phase: "unavailable", data: null, kind: "offline", errMsg: null }); return; }
+    // Offline and unavailable KEEP whatever data is on screen (functional update): after a reclaim
+    // the post-run rescan can fail, and the run's own result must stay visible — a landed
+    // transaction is never shown as a read failure (verifier on #396, P2-5).
+    if (!onlineRef.current) { setState((p) => ({ phase: "unavailable", data: p.data, kind: "offline", errMsg: null })); return; }
     setState({ phase: "loading", data: null, kind: null, errMsg: null });
     fetch(`/api/seeker/reclaimable?wallet=${encodeURIComponent(address)}`, { signal })
       .then(async (r) => {
@@ -233,23 +241,23 @@ export default function RentReclaimPane({ wallet }) {
         // the way the tools with a rate branch do) is the wallet address itself, not the chain —
         // pane.jsx's split: "refused" is a 4xx the CALLER caused, "unavailable" is everything
         // else. This used to fold both into the same generic "could not read the chain" line.
-        if (r.status >= 400 && r.status < 500) {
+        if (r.status >= 400 && r.status < 500 && r.status !== 429) {   // 429 = the forensic rate bucket, transient → unavailable with its Try-again (verifier on #396, P1-2)
           setState({ phase: "refused", data: null, kind: null, errMsg: (j && j.error) || null });
           return;
         }
         // Both any other HTTP-level failure and a body-level status:"unavailable" (or a malformed
         // body) land here — never fall through to rendering a zero/empty result off a failed read.
         if (!j || !r.ok || j.status === "unavailable" || j.success !== true) {
-          setState({ phase: "unavailable", data: null, kind: "unavailable", errMsg: null });
+          setState((p) => ({ phase: "unavailable", data: p.data, kind: "unavailable", errMsg: null }));
           return;
         }
         setState({ phase: "ok", data: j, kind: null, errMsg: null });
       })
       .catch((e) => {
         if (e && e.name === "AbortError") return;
-        setState({ phase: "unavailable", data: null, kind: "unavailable", errMsg: null });
+        setState((p) => ({ phase: "unavailable", data: p.data, kind: "unavailable", errMsg: null }));
       });
-  }, [online]);
+  }, []);
 
   React.useEffect(() => {
     if (!wallet.connected || !wallet.address) {
@@ -366,13 +374,17 @@ export default function RentReclaimPane({ wallet }) {
     );
   }
 
-  if (state.phase === "unavailable") {
-    // Same wording pane.jsx's shared <Unavailable> and WalletCheckup.jsx already use for
-    // "offline" — a phone losing signal is a different fact from the chain being unreachable,
-    // and this pane used to say the second thing for both.
-    const text = state.kind === "offline"
-      ? t("You're offline. This needs a connection — it'll work again as soon as you're back.")
-      : t("Could not read the chain right now. Try again shortly.");
+  // Same wording pane.jsx's shared <Unavailable> and WalletCheckup.jsx already use for
+  // "offline" — a phone losing signal is a different fact from the chain being unreachable,
+  // and this pane used to say the second thing for both.
+  const unavailableText = state.kind === "offline"
+    ? t("You're offline. This needs a connection — it'll work again as soon as you're back.")
+    : t("Could not read the chain right now. Try again shortly.");
+  // A finished run's result OUTRANKS a failed rescan: when a reclaim is done and we still hold
+  // data, the notice renders inline inside the results view below instead of replacing it.
+  const showResultsDespiteUnavailable = state.phase === "unavailable" && sign.phase === "done" && !!state.data;
+  if (state.phase === "unavailable" && !showResultsDespiteUnavailable) {
+    const text = unavailableText;
     return (
       <section className="seeker-pane">
         <div className="seeker-paneicon" aria-hidden="true">💰</div>
@@ -418,6 +430,13 @@ export default function RentReclaimPane({ wallet }) {
     <div className="seeker-reclaim">
       <div className="seeker-reclaim-topicon" aria-hidden="true">💰</div>
       <h1 className="seeker-reclaim-title">{t("Rent Reclaim")}</h1>
+
+      {showResultsDespiteUnavailable ? (
+        <div className="seeker-reclaim-rescan-note">
+          <p className="seeker-reclaim-errtext" role="alert">{unavailableText}</p>
+          <button type="button" className="seeker-reclaim-retrybtn" onClick={() => scan(wallet.address)}>{t("Try again")}</button>
+        </div>
+      ) : null}
 
       <div className="seeker-reclaim-total">
         <span className="seeker-reclaim-total-label">{t("Total reclaimable")}</span>
