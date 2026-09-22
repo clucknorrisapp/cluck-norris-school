@@ -103,7 +103,9 @@ contradictory published scoring schemes and the eligibility rules, is in
 | 18–19 | Buffer | — |
 
 **Gate at day 3:** a real wallet connects on the owner's Seeker. If that does not happen, the plan
-changes rather than the deadline.
+changes rather than the deadline. The owner's phone walk, step by step with what each screen must
+say, is `docs/SEEKER_DEVICE_TEST.md` (2026-09-22); the wallet-bridge steps are in the apps repo's
+`docs/MWA_PLUGIN.md`.
 
 ## 7. Decided (owner, 2026-09-19)
 

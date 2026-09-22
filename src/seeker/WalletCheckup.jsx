@@ -124,8 +124,8 @@ function RiskyRow({ r }) {
 
 export default function WalletCheckupPane({ address, gate }) {
   useI18nReady();
-  // phase: idle | loading | ok | error. kind (error only): offline | rate | unavailable.
-  const [state, setState] = React.useState({ phase: "idle", kind: null, data: null, retrySec: 0 });
+  // phase: idle | loading | ok | error. kind (error only): offline | rate | refused | unavailable.
+  const [state, setState] = React.useState({ phase: "idle", kind: null, data: null, retrySec: 0, errMsg: null });
   const [online, setOnline] = React.useState(isOnline());
   const wasOfflineRef = React.useRef(!online);
   const abortRef = React.useRef(null);
@@ -133,29 +133,37 @@ export default function WalletCheckupPane({ address, gate }) {
   const scan = React.useCallback((address, signal) => {
     if (!address) return;
     if (!isOnline()) {
-      setState({ phase: "error", kind: "offline", data: null, retrySec: 0 });
+      setState({ phase: "error", kind: "offline", data: null, retrySec: 0, errMsg: null });
       return;
     }
-    setState({ phase: "loading", kind: null, data: null, retrySec: 0 });
+    setState({ phase: "loading", kind: null, data: null, retrySec: 0, errMsg: null });
     fetch(`/api/wallet-checkup?wallet=${encodeURIComponent(address)}`, { signal })
       .then(async (res) => {
         const body = await res.json().catch(() => null);
         if (res.status === 429) {
           const retrySec = Number((body && (body.retryAfterSec || body.retryAfter)) || 0);
-          setState({ phase: "error", kind: "rate", data: null, retrySec });
+          setState({ phase: "error", kind: "rate", data: null, retrySec, errMsg: null });
           return;
         }
-        // Any HTTP-level failure, a missing/malformed body, or success!==true all land as
+        // A 4xx OTHER than 429 is the wallet address itself, not the chain (toolFetch's own
+        // split, pane.jsx: "refused" is a 4xx the CALLER caused and the pane's job to explain;
+        // "unavailable" is everything else and never the user's fault) — this used to fold both
+        // into the same generic "could not read the chain" line.
+        if (res.status >= 400 && res.status < 500) {
+          setState({ phase: "error", kind: "refused", data: null, retrySec: 0, errMsg: (body && body.error) || null });
+          return;
+        }
+        // Any other HTTP-level failure, a missing/malformed body, or success!==true all land as
         // "unavailable" — never fall through to rendering an empty/zero result off a failed read.
         if (!res.ok || !body || body.success !== true) {
-          setState({ phase: "error", kind: "unavailable", data: null, retrySec: 0 });
+          setState({ phase: "error", kind: "unavailable", data: null, retrySec: 0, errMsg: null });
           return;
         }
-        setState({ phase: "ok", kind: null, data: body, retrySec: 0 });
+        setState({ phase: "ok", kind: null, data: body, retrySec: 0, errMsg: null });
       })
       .catch((e) => {
         if (e && e.name === "AbortError") return;
-        setState({ phase: "error", kind: isOnline() ? "unavailable" : "offline", data: null, retrySec: 0 });
+        setState({ phase: "error", kind: isOnline() ? "unavailable" : "offline", data: null, retrySec: 0, errMsg: null });
       });
   }, []);
 
@@ -227,6 +235,8 @@ export default function WalletCheckupPane({ address, gate }) {
         ? t("You're offline. Wallet Checkup needs a connection — it'll scan automatically once you're back online.")
         : state.kind === "rate"
         ? t("Too many checkups at once.") + " " + (formatWaitSec(state.retrySec) || t("Try again in a moment."))
+        : state.kind === "refused"
+        ? (state.errMsg || t("That address wasn't something we could use."))
         : t("Could not read the chain right now. Try again shortly.");
     return (
       <section className="seeker-pane">

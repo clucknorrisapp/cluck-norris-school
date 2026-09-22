@@ -53,7 +53,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { t, tf, useI18nReady } from "../i18n.js";
-import { Pane, Loading, Unavailable, toolFetch, useOnline } from "../pane.jsx";
+import { Pane, Loading, Empty, Unavailable, toolFetch, useOnline } from "../pane.jsx";
 import { lessonOfDay, questionOfDay, answeredToday, streakCount, recordAnswer } from "../school/daily.js";
 import "./tools.css";
 
@@ -210,7 +210,7 @@ export default function DailyBriefPane() {
                 ))}
               </div>
             ) : (
-              <p className="seeker-tool-note">{t("No prices in today's read.")}</p>
+              <Empty>{t("No prices in today's read.")}</Empty>
             )}
 
             {/* ⚠️ `payload.brief` is deliberately NOT rendered — see the header. It is free text

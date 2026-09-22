@@ -267,6 +267,11 @@ function rpcOk(list) {
   // never a gate). "More accounts exist in this wallet than are shown here." (P3) and "SOL
   // returning to your wallet" / "Reclaimed" (renamed by P3/P2-E's review) are retired the same way.
   const NEW_KEYS_INCREMENT3 = [
+    // Pane-states batch (#396, 2026-09-22): Rent Reclaim splits "refused" (a 4xx on the connected
+    // address) from "unavailable", and names airplane mode as offline. Both sentences are REUSED
+    // from pane.jsx / WalletCheckup.jsx — already translated in all six dictionaries, no new key.
+    "That address wasn't something we could use.",
+    "You're offline. This needs a connection — it'll work again as soon as you're back.",
     "Confirm reclaim",
     "Accounts to close",
     "SOL returning to your wallet (before network fees)",

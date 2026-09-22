@@ -457,7 +457,6 @@
     "TOTAL LOCKED",
     "Tapping this uploads your logo and token details permanently and publicly. That upload can't be deleted afterwards, even if you stop here.",
     "Team (Bags-verified)",
-    "That address wasn't something we could use.",
     "That amount could not be read:",
     "That couldn't be built as entered.",
     "That couldn't be locked as entered.",
@@ -467,7 +466,6 @@
     "That mint or window wasn't something we could use.",
     "That mint request could not be submitted — build it again.",
     "That mint wasn't something we could use.",
-    "That request wasn't something we could use.",
     "That wallet or mint wasn't something we could use.",
     "That's also the trap: a signature can authorize more than it looks like. Approving a token \"delegate\" or signing a transaction you didn't read can hand over spending rights without a single SOL visibly moving. Read what your wallet's own pop-up says it's signing — if it doesn't match what the site told you, stop.",
     "That's also why the amount you actually receive can differ from the quote you were shown: a quote is a snapshot of the pool at the moment it was fetched, and time passes — however briefly — before your transaction confirms. Other trades can land in that gap and move the pool before yours does.",
@@ -809,7 +807,8 @@
     "jup\\.ag",
     "https?://[^\\s\"'`)]*[?&](ref|r|referral|aff)=",
     "app\\.meteora\\.ag",
-    "https?://bags\\.fm", "\\bCLKN\\b"
+    "https?://bags\\.fm",
+    "\\bCLKN\\b"
   ],
   "allowedHosts": [
     "clucknorris.app",

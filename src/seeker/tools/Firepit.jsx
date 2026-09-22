@@ -42,7 +42,7 @@
 // It never labels a token safe, verified, scam or worthless — only what it is priced at.
 import React from "react";
 import { t, tf, useI18nReady } from "../i18n.js";
-import { Pane, Loading, Empty, Unavailable, Confirm, toolFetch, useOnline } from "../pane.jsx";
+import { Pane, Loading, Empty, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
 import { NeedsWallet } from "../needswallet.jsx";
 import { shortAddr } from "../addr.js";
 import { signSendConfirm, splTokenShim } from "../sign.js";
@@ -199,8 +199,9 @@ export default function FirepitPane({ wallet }) {
   // children it was handed as props, so this pane's own t() strings need their own subscription.
   useI18nReady();
   const online = useOnline();
-  const [phase, setPhase] = React.useState("idle"); // idle | loading | result | unavailable
+  const [phase, setPhase] = React.useState("idle"); // idle | loading | result | unavailable | refused
   const [errKind, setErrKind] = React.useState("unavailable");
+  const [errMsg, setErrMsg] = React.useState(null);
   const [data, setData] = React.useState(null);
   const [selEmpty, toggleEmpty, selectAllEmpty, clearEmpty, setSelEmpty] = useToggleSet();
   const [selBurn, toggleBurn, selectAllBurn, clearBurn, setSelBurn] = useToggleSet();
@@ -227,7 +228,16 @@ export default function FirepitPane({ wallet }) {
     toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(address)}`, { signal: ctrl.signal }).then((res) => {
       if (res.kind === "aborted") return;
       if (!res.ok) {
+        // A 4xx here is the wallet address itself, not the chain — ListingCheckup/ProjectBurn's
+        // same split: `refused` gets the server's own error/detail (the person can fix it),
+        // everything else (offline, 5xx, rate limit) is `unavailable` (never their fault).
+        if (res.kind === "refused") {
+          setPhase("refused");
+          setErrMsg((res.body && (res.body.error || res.body.detail)) || t("That address wasn't something we could use."));
+          return;
+        }
         setErrKind(res.kind === "offline" ? "offline" : "unavailable");
+        setErrMsg(null);
         setPhase("unavailable");
         return;
       }
@@ -482,7 +492,8 @@ export default function FirepitPane({ wallet }) {
       <p className="seeker-tool-lede">{t("Burn worthless junk tokens and reclaim the SOL rent locked in their accounts. Non-custodial — you sign, we take nothing. Every token is priced live, and anything still worth money — or whose value we couldn't read — is flagged before it can burn.")}</p>
 
       {phase === "loading" ? <Loading label={t("Scanning your wallet on-chain…")} /> : null}
-      {phase === "unavailable" ? <Unavailable kind={errKind} onRetry={() => scan(wallet.address)} /> : null}
+      {phase === "unavailable" ? <Unavailable kind={errKind} message={errMsg} onRetry={() => scan(wallet.address)} /> : null}
+      {phase === "refused" ? <Refused message={errMsg} /> : null}
 
       {phase === "result" && accounts.length === 0 && !busy && !runDone ? (
         <Empty>{t("Clean wallet — no token accounts to burn or reclaim.")}</Empty>
