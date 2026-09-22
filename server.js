@@ -9614,7 +9614,23 @@ for (const k of ["TOOLGATE_LAMPORTS", "TOOLGATE_DAYS"]) {
 // Seeded from the volume at declaration (2026-08-18 review): the kv fallback used to live only
 // inside the refresh branch, so every request racing a cold-start refresh read usd=0 and the
 // paywall failed open for the whole first-fetch window after each deploy.
-let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: null };
+let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: null,
+  // The Seeker app's second door (owner, 2026-09-19; lib/tool-pass-qualify.js): SKR, priced the
+  // same way, cached the same way, and read only when a session asked for that door.
+  skrUsd: Number(kv.get("toolGateSkrUsd", 0)) || 0 };
+const TOOL_PASS_QUALIFY = require("./lib/tool-pass-qualify");
+const SKR_MINT = TOOL_PASS_QUALIFY.SKR_MINT;
+async function refreshSkrPrice(now) {
+  const j = await jupPriceV3([SKR_MINT]);
+  const fresh = Number(j && j[SKR_MINT] && j[SKR_MINT].usdPrice) || 0;
+  if (!fresh) { console.warn("[tool-gate] price refresh returned no usable SKR price"); return; }
+  const lastAt = Number(kv.get("toolGateSkrUsdAt", 0)) || 0;
+  if (toolGatePrice.skrUsd && now - lastAt < 6 * 3600e3 && (fresh > toolGatePrice.skrUsd * 10 || fresh < toolGatePrice.skrUsd / 10)) {
+    console.warn(`[tool-gate] rejected implausible SKR price ${fresh} (last good ${toolGatePrice.skrUsd})`); return;
+  }
+  toolGatePrice.skrUsd = fresh;
+  kv.set("toolGateSkrUsd", fresh); kv.set("toolGateSkrUsdAt", now);
+}
 
 // SERVER-SIDE enforcement of the tools pass (2026-09-10, reworked the same night after a
 // second-reviewer pass found two bypasses). Until now the pass lived only in localStorage and
@@ -9709,22 +9725,27 @@ function rememberHolder(wallet, entry) {
   let drop = toolPassHolderCache.size - 5000;
   for (const w of toolPassHolderCache.keys()) { if (drop-- <= 0) break; toolPassHolderCache.delete(w); }
 }
-async function toolPassQualify(wallet) {
-  if (isToolComped(wallet)) return { ok: true, via: "comp" };
-  const cached = toolPassHolderCache.get(wallet);
-  if (cached && Date.now() - cached.at < 5 * 60e3) return cached.ok ? { ok: true, via: "holder" } : { ok: false, ...cached.deny };
-  const priceUsd = toolGatePrice.usd || null;
-  if (!priceUsd) return { ok: true, via: "grace-price" };
-  let h;
-  try { h = await checkCLKNHolder(wallet); } catch (e) { h = { unavailable: true, error: e.message }; }
-  if (!h || h.unavailable) { console.warn("[tool-pass] balance read unavailable, failing open:", (h && h.error) || "no result"); return { ok: true, via: "grace-rpc" }; }
-  const needed = Math.ceil(TOOLGATE.usd / priceUsd);
-  const bal = Number(h.balance) || 0;
-  if (bal >= needed) { rememberHolder(wallet, { ok: true, at: Date.now() }); return { ok: true, via: "holder", balance: bal, needed }; }
-  const deny = { error: "insufficient_holdings", balance: bal, needed, holdUsd: TOOLGATE.usd, priceUsd,
-    detail: `The free tier needs about $${TOOLGATE.usd} of CLKN (~${needed.toLocaleString()} at the current price); that wallet holds ${Math.round(bal).toLocaleString()}. ${TOOLGATE.lamports / 1e9} SOL unlocks every heavy tool for ${TOOLGATE.days} days.` };
-  rememberHolder(wallet, { ok: false, at: Date.now(), deny });
-  return { ok: false, ...deny };
+async function toolPassQualify(wallet, doors) {
+  // The decision itself is lib/tool-pass-qualify.js (pure, unit-tested); this wires the reads.
+  // `doors` is what the client asked for — the Seeker app sends ["skr"]; nothing else does.
+  const d = TOOL_PASS_QUALIFY.normalizeDoors(doors);
+  const cacheKey = wallet + "|" + d.join(",");
+  const cached = toolPassHolderCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < 5 * 60e3) return cached.ok ? { ok: true, via: cached.via } : { ok: false, ...cached.deny };
+  const q = await TOOL_PASS_QUALIFY.qualify({
+    wallet, doors: d, usd: TOOLGATE.usd,
+    prices: { clkn: toolGatePrice.usd || null, skr: toolGatePrice.skrUsd || null },
+    comped: isToolComped(wallet),
+    readClkn: () => checkCLKNHolder(wallet),
+    readSkr: () => checkMintHolder(wallet, SKR_MINT),
+    terms: { lamports: TOOLGATE.lamports, days: TOOLGATE.days },
+    log: (m) => console.warn("[tool-pass] " + m),
+  });
+  // Only real answers are cached — a grace grant is re-evaluated next time so an outage ending
+  // restores the real check within a request, and a comp is re-read on every call (see toolPassGate).
+  if (q.via === "holder" || q.via === "holder-skr") rememberHolder(cacheKey, { ok: true, at: Date.now(), via: q.via });
+  else if (!q.ok) { const { ok, ...deny } = q; rememberHolder(cacheKey, { ok: false, at: Date.now(), deny }); }
+  return q;
 }
 async function toolPassGate(req) {
   if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return { ok: true, via: "gate-off" };
@@ -9739,8 +9760,9 @@ async function toolPassGate(req) {
   const p = verifyToolPass(m[1]);
   if (!p) return { ok: false, status: 403, error: "pass_expired", detail: "That tools pass has expired or is not valid — unlock again from the page." };
   if (p.v === "paid" || p.v === "gate-off" || p.v === "grace-price" || p.v === "grace-rpc") return { ok: true, via: p.v, wallet: p.w };
-  // Holder and comped tokens stay honest: the free tier is "while you hold", re-read live.
-  const q = await toolPassQualify(p.w);
+  // Holder and comped tokens stay honest: the free tier is "while you hold", re-read live —
+  // through the same door the token came from (a website session never grows an SKR door).
+  const q = await toolPassQualify(p.w, TOOL_PASS_QUALIFY.doorsForVia(p.v));
   if (q.ok) return { ok: true, via: q.via, wallet: p.w };
   const { ok, ...deny } = q;
   return { ok: false, status: 403, ...deny };
@@ -9822,9 +9844,12 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
     if (!r.ok) return res.status(r.status || 200).json({ success: false, error: r.error, retry: !!r.retry, lamports: r.lamports, needed: r.needed });
     return res.status(200).json({ success: true, via: "paid", recovered: r.recovered, lamports: r.lamports, termDays: r.termDays, pass: "t:" + issueToolPass(wallet, "paid", r.ttlMs), days: r.days });
   }
-  const q = await toolPassQualify(wallet);
+  // `doors`: the extra free-tier doors this client offers. The Seeker app sends ["skr"]
+  // (docs/SEEKER_APP_PLAN.md §7); the website and the store editions send nothing. A product
+  // boundary, not a security one — see lib/tool-pass-qualify.js.
+  const q = await toolPassQualify(wallet, b.doors);
   if (!q.ok) { const { ok, ...deny } = q; return res.status(200).json({ success: false, ...deny, payIntent: issuePayIntent(wallet) }); }
-  const ttl = q.via === "comp" ? 30 * dayMs : q.via === "holder" ? TOOLGATE.days * dayMs : 1 * dayMs;   // grace = 1 day, like the client's old grace grant
+  const ttl = q.via === "comp" ? 30 * dayMs : (q.via === "holder" || q.via === "holder-skr") ? TOOLGATE.days * dayMs : 1 * dayMs;   // grace = 1 day, like the client's old grace grant
   return res.status(200).json({ success: true, via: q.via, balance: q.balance, needed: q.needed, pass: "t:" + issueToolPass(wallet, q.via, ttl), days: Math.round(ttl / dayMs) });
 });
 // One line per gated route: answers the JSON the page renders, or null to continue.
@@ -10121,14 +10146,21 @@ app.get("/api/tool-gate/config", async (req, res) => {
       } catch (e) { console.warn("[tool-gate] price refresh failed:", e.message); }
       finally { toolGatePrice.p = null; }
     })();
+    // SKR, for the Seeker app's door, refreshed beside CLKN but independently: a Jupiter
+    // hiccup on one mint never costs the other its price. Same sanity band, same kv last-known-good.
+    refreshSkrPrice(now).catch((e) => console.warn("[tool-gate] SKR price refresh failed:", e.message));
   }
   if (toolGatePrice.p && !toolGatePrice.usd) { try { await toolGatePrice.p; } catch (_) {} }
   const priceUsd = toolGatePrice.usd || null;
+  const skrUsd = toolGatePrice.skrUsd || null;
   return res.json({
     success: true, enabled: true, holdUsd: TOOLGATE.usd, priceUsd,
     clknNeeded: priceUsd ? Math.ceil(TOOLGATE.usd / priceUsd) : null,
     lamports: TOOLGATE.lamports, days: TOOLGATE.days,
     receiver: SOL_UNLOCK_WALLET, mint: CLKN_MINT_ADDR,
+    // The Seeker app's door: the same $ figure in SKR, live-priced. A client that does not offer
+    // the door ignores this block; a null skrNeeded means "no price right now" (the app says so).
+    skr: { mint: SKR_MINT, priceUsd: skrUsd, skrNeeded: skrUsd ? Math.ceil(TOOLGATE.usd / skrUsd) : null, door: "skr" },
   });
 });
 // ── /host-image: owner's permanent image host (Arweave via the funded Turbo key) ─────────────
@@ -14102,6 +14134,21 @@ async function getSheetRows() {
   return data.values || [];
 }
 
+// Any mint, same read and the same outage contract as checkCLKNHolder below: an RPC error is
+// `unavailable`, never a zero. No comp short-circuit here — comp is decided before any read
+// (lib/tool-pass-qualify.js), so this is a plain balance.
+async function checkMintHolder(wallet, mint) {
+  try {
+    const url = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "holder-check", method: "getTokenAccountsByOwner", params: [wallet, { mint }, { encoding: "jsonParsed" }] }) });
+    const data = await response.json();
+    if (!data || !data.result || !Array.isArray(data.result.value)) return { balance: 0, unavailable: true, error: (data && data.error && data.error.message) || "no result" };
+    let balance = 0;
+    for (const a of data.result.value) balance += Number(a && a.account && a.account.data && a.account.data.parsed && a.account.data.parsed.info && a.account.data.parsed.info.tokenAmount && a.account.data.parsed.info.tokenAmount.uiAmount) || 0;
+    return { balance };
+  } catch (e) { return { balance: 0, unavailable: true, error: e.message }; }
+}
 async function checkCLKNHolder(wallet) {
   // Operator comp: a wallet on the all-tools free-access list (toolCompWallets, managed via
   // /api/tool-comp) is treated as a full holder on EVERY balance-gated tool — premium forensics,

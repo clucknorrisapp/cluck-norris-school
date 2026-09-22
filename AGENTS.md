@@ -393,6 +393,13 @@ in one click, or sign a message where the gate is *ownership* rather than paymen
   `TOOLGATE_LAMPORTS`/`TOOLGATE_DAYS` env are ignored with a boot error since 2026-09-11).
   Pages preview free — the gate fires on RUN/SEND. Fail-open when pricing is down. The old
   per-tool thresholds (50k airdropper / 100k Buy Special) are RETIRED by this.
+  **The SKR door (owner 2026-09-19, shipped 2026-09-22): in the Seeker app only, holding $50 worth
+  of SKR (`SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`, live-priced, never hardcoded) opens the same
+  free tier.** The app sends `doors:["skr"]` on `POST /api/tool-gate/session`; the website and the
+  store editions send nothing and never grow the door. CLKN is always checked first; SKR only when
+  asked; the same fail-open on our outages. The decision is `lib/tool-pass-qualify.js` (pure,
+  `scripts/tool-pass-qualify-test.cjs`). It is a PRODUCT boundary, not a security one — a hand-made
+  request with the door gets what a CLKN holder already gets — and **nothing is gated behind SKR**.
 - premium forensics — holder-gated at 2M, re-checked live on every run (NOT part of the pass)
 - transcript Tier-2 — connect & sign with `minHold: 0` (a graduate may hold no CLKN)
 - The Hatchery is the one place you can still **pay** in CLKN, ~30% cheaper than the SOL price.

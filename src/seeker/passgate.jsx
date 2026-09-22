@@ -96,7 +96,10 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
       const b64 = btoa(bin);
       const sessR = await fetch("/api/tool-gate/session", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: wallet.address, message: ch.message, signature: b64 }),
+        // doors: the free-tier doors THIS app offers beyond CLKN. The Seeker app is the one
+        // surface with the SKR door (owner, 2026-09-19; lib/tool-pass-qualify.js); the website's
+        // cluck-gate.js sends none. Nothing is gated behind SKR — it opens the same door CLKN does.
+        body: JSON.stringify({ wallet: wallet.address, message: ch.message, signature: b64, doors: ["skr"] }),
       });
       const j = await sessR.json().catch(() => null);
       if (j && j.success && j.pass) { g.grant(j.days || 1, j.via || "holder", j.pass); setBusy(false); onUnlocked(); return; }
@@ -129,6 +132,11 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
                    { clkn: fmtInt(cfg.clknNeeded), usd: fmtInt(cfg.holdUsd) })
               : tf("Hold ${usd} worth of CLKN and every heavy tool runs free while you hold it.",
                    { usd: fmtInt(cfg.holdUsd) })}
+            {cfg.skr && cfg.skr.skrNeeded ? " " : ""}
+            {cfg.skr && cfg.skr.skrNeeded
+              ? tf("Holding about {skr} SKR (around ${usd} worth) unlocks them the same way, in this app.",
+                   { skr: fmtInt(cfg.skr.skrNeeded), usd: fmtInt(cfg.holdUsd) })
+              : null}
             {" "}
             {tf("Not holding? Pay {sol} SOL for a {days}-day pass to all of them.",
                 { sol: cfg.lamports / 1e9, days: cfg.days })}
@@ -141,14 +149,14 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
           <>
             <p className="seeker-passgate-wallet">{shortAddr(wallet.address)}</p>
             <button type="button" className="seeker-btn" disabled={busy} onClick={checkHolder}>
-              {busy ? t("Checking…") : t("Check my CLKN")}
+              {busy ? t("Checking…") : t("Check my wallet")}
             </button>
           </>
         )}
 
         {needPay ? (
           <p className="seeker-passgate-needpay" role="alert">
-            {needPay.detail || t("This wallet doesn't hold enough CLKN for the free tier.")}{" "}
+            {needPay.detail || t("This wallet doesn't hold enough CLKN or SKR for the free tier.")}{" "}
             {t("Paying in SOL from the full site at clucknorris.app also unlocks the pass — that payment flow isn't built into this app yet.")}
           </p>
         ) : null}

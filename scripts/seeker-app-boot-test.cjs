@@ -376,7 +376,10 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
   // opens the gate instead of calling the gated API. The last one is a negative assertion over
   // observed network calls, which is the only form that distinguishes "gated" from "fails open".
   {
-    const CFG = { success: true, enabled: true, holdUsd: 50, clknNeeded: 1234567, lamports: 50000000, days: 7 };
+    // `skr`: the Seeker app's second door, shaped as /api/tool-gate/config publishes it. The
+    // figure below is pinned on screen the same way clknNeeded is — never a hardcoded amount.
+    const CFG = { success: true, enabled: true, holdUsd: 50, clknNeeded: 1234567, lamports: 50000000, days: 7,
+      skr: { mint: "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3", priceUsd: 0.5, skrNeeded: 98765, door: "skr" } };
     const { ctx, page, errors, calls } = await open(
       (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
       async (pg) => {
@@ -423,6 +426,8 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       ok(`F · ${hash} — RUN with no pass NEVER calls the gated API`, gated.length === 0, JSON.stringify(gated));
       ok(`F · ${hash} — it opens the pass sheet instead, with the LIVE terms`,
          /Unlock the tools pass/i.test(body) && body.includes("1,234,567"), body.slice(0, 400));
+      ok(`F · ${hash} — the sheet names the SKR door with ITS live figure (98,765 SKR)`,
+         /98,765 SKR/.test(body), body.slice(0, 400));
       // Never a hardcoded amount: the numbers on screen came from CFG, so changing the server's
       // figure changes the sheet. Pinning the literal above is what makes that true, not assumed.
       const close = await page.$(".seeker-confirm-actions .seeker-btn-quiet");

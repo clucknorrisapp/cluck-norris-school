@@ -109,6 +109,12 @@ changes rather than the deadline.
 
 ### SKR — an additional door, never a gate
 
+> **Shipped 2026-09-22:** `lib/tool-pass-qualify.js` (the decision, pure, unit-tested), the
+> `doors:["skr"]` field on `POST /api/tool-gate/session` sent only by `src/seeker/passgate.jsx`, the
+> `skr` block on `/api/tool-gate/config` (live SKR price → `skrNeeded`, kv last-known-good, sanity
+> band), `holder-skr` tokens re-checked through their own door, and the sheet's SKR sentence in
+> seven languages. Nothing behind SKR; the website and store editions unchanged.
+
 **Hold ~$50 of SKR → the heavy tools are free in the Seeker app**, alongside the two doors that
 already exist (hold CLKN, or pay the SOL pass). Owner's call, same evening.
 

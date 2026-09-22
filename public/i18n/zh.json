@@ -2824,5 +2824,8 @@
   "You got {score} of {total}. You need {need} to pass.": "你答对了 {total} 题中的 {score} 题。答对 {need} 题才算通过。",
   "You've finished every lesson in the app. Your progress is kept on this phone — the diploma is claimed on clucknorris.app, and it counts the lessons you take there.": "你已经学完了应用里的每一课。进度保存在这部手机上——毕业证书要在 clucknorris.app 上领取，而那里统计的是你在网站上完成的课程。",
   "{total} questions. {need} right to pass — retake it as often as you like.": "共 {total} 题，答对 {need} 题即可通过——想重做多少次都可以。",
-  "Progress here stays on this phone. The diploma is claimed on clucknorris.app.": "进度保存在这部手机上。毕业证书在 clucknorris.app 上领取。"
+  "Progress here stays on this phone. The diploma is claimed on clucknorris.app.": "进度保存在这部手机上。毕业证书在 clucknorris.app 上领取。",
+  "Holding about {skr} SKR (around ${usd} worth) unlocks them the same way, in this app.": "持有约 {skr} 枚 SKR（价值约 ${usd}）同样可在本应用中解锁这些工具。",
+  "Check my wallet": "检查我的钱包",
+  "This wallet doesn't hold enough CLKN or SKR for the free tier.": "此钱包持有的 CLKN 或 SKR 不足以使用免费档。"
 }

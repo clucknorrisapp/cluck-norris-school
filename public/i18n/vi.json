@@ -2824,5 +2824,8 @@
   "You got {score} of {total}. You need {need} to pass.": "Bạn đúng {score} trên {total} câu. Cần {need} câu để đạt.",
   "You've finished every lesson in the app. Your progress is kept on this phone — the diploma is claimed on clucknorris.app, and it counts the lessons you take there.": "Bạn đã hoàn thành mọi bài học trong ứng dụng. Tiến độ được lưu trên điện thoại này — bằng tốt nghiệp được nhận tại clucknorris.app, và trang đó tính những bài học bạn làm trên chính nó.",
   "{total} questions. {need} right to pass — retake it as often as you like.": "{total} câu hỏi. Đúng {need} câu là đạt — bạn có thể làm lại bao nhiêu lần tuỳ thích.",
-  "Progress here stays on this phone. The diploma is claimed on clucknorris.app.": "Tiến độ được lưu trên điện thoại này. Bằng tốt nghiệp được nhận tại clucknorris.app."
+  "Progress here stays on this phone. The diploma is claimed on clucknorris.app.": "Tiến độ được lưu trên điện thoại này. Bằng tốt nghiệp được nhận tại clucknorris.app.",
+  "Holding about {skr} SKR (around ${usd} worth) unlocks them the same way, in this app.": "Nắm giữ khoảng {skr} SKR (trị giá khoảng ${usd}) cũng mở khóa chúng theo cách tương tự, trong ứng dụng này.",
+  "Check my wallet": "Kiểm tra ví của tôi",
+  "This wallet doesn't hold enough CLKN or SKR for the free tier.": "Ví này không có đủ CLKN hoặc SKR cho hạng miễn phí."
 }

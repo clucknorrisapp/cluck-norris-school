@@ -2824,5 +2824,8 @@
   "You got {score} of {total}. You need {need} to pass.": "Hai risposto correttamente a {score} su {total}. Ne servono {need} per superarla.",
   "You've finished every lesson in the app. Your progress is kept on this phone — the diploma is claimed on clucknorris.app, and it counts the lessons you take there.": "Hai completato tutte le lezioni dell'app. I tuoi progressi restano su questo telefono: il diploma si richiede su clucknorris.app, dove contano le lezioni che svolgi lì.",
   "{total} questions. {need} right to pass — retake it as often as you like.": "{total} domande. {need} risposte giuste per superarla: puoi rifarlo quante volte vuoi.",
-  "Progress here stays on this phone. The diploma is claimed on clucknorris.app.": "I progressi restano su questo telefono. Il diploma si richiede su clucknorris.app."
+  "Progress here stays on this phone. The diploma is claimed on clucknorris.app.": "I progressi restano su questo telefono. Il diploma si richiede su clucknorris.app.",
+  "Holding about {skr} SKR (around ${usd} worth) unlocks them the same way, in this app.": "Avere circa {skr} SKR (circa ${usd}) li sblocca allo stesso modo, in questa app.",
+  "Check my wallet": "Controlla il mio wallet",
+  "This wallet doesn't hold enough CLKN or SKR for the free tier.": "Questo wallet non ha abbastanza CLKN o SKR per il livello gratuito."
 }

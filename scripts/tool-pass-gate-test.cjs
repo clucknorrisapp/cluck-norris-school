@@ -124,6 +124,28 @@ async function get(base, p, headers) {
     ok("Wallet Checkup stays free (no gate)", wc.status !== 402 && wc.status !== 403, "status " + wc.status);
     ok("tool-gate config is public", (await get(A.base, "/api/tool-gate/config")).status === 200);
 
+    console.log("\nThe Seeker app's SKR door (lib/tool-pass-qualify.js) — the API surface\n");
+    const cfg = await get(A.base, "/api/tool-gate/config");
+    ok("config publishes the door: the verified SKR mint, door:'skr', and skrNeeded null with no price loaded",
+       cfg.body && cfg.body.skr && cfg.body.skr.mint === "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3" && cfg.body.skr.door === "skr" && cfg.body.skr.skrNeeded === null, JSON.stringify(cfg.body && cfg.body.skr));
+    ok("config still leads with CLKN (holdUsd, clknNeeded, mint) — SKR is an extra block, not a replacement",
+       cfg.body && cfg.body.holdUsd === 50 && "clknNeeded" in cfg.body && cfg.body.mint === MINT, JSON.stringify(cfg.body));
+    const skrWal = makeWallet();
+    const m3 = await challenge(A.base, skrWal.pub);
+    s = await post(A.base, "/api/tool-gate/session", { wallet: skrWal.pub, message: m3, signature: skrWal.sign(m3), doors: ["skr"] });
+    ok("a session asking for the skr door is issued (grace here: no price loaded), never rejected for the field",
+       s.status === 200 && s.body && s.body.success && /^t:/.test(s.body.pass) && /grace/.test(s.body.via), JSON.stringify(s.body));
+    const m4 = await challenge(A.base, skrWal.pub);
+    s = await post(A.base, "/api/tool-gate/session", { wallet: skrWal.pub, message: m4, signature: skrWal.sign(m4), doors: "skr" });
+    ok("a malformed doors field (not an array) is ignored, not an error", s.status === 200 && s.body && s.body.success, JSON.stringify(s.body));
+    const m5 = await challenge(A.base, skrWal.pub);
+    s = await post(A.base, "/api/tool-gate/session", { wallet: skrWal.pub, message: m5, signature: skrWal.sign(m5), doors: ["vip", 7, null] });
+    ok("unknown doors are dropped silently", s.status === 200 && s.body && s.body.success, JSON.stringify(s.body));
+    g = await get(A.base, `/api/wallet-xray?wallet=${W}`, { "x-clkn-pass": "t:" + forgeToken({ t: "tools", w: skrWal.pub, v: "holder-skr", exp: Date.now() + 1e7 }, KEY) });
+    ok("a holder-skr token is re-checked live through its own door (grace here) and opens the gate", g.status !== 402 && g.status !== 403, "status " + g.status);
+    g = await get(A.base, `/api/wallet-xray?wallet=${W}`, { "x-clkn-pass": "t:" + forgeToken({ t: "tools", w: skrWal.pub, v: "holder-skr", exp: Date.now() + 1e7 }, "wrong-key") });
+    ok("…and a holder-skr token with a bad signature is still refused", g.status === 403, "status " + g.status);
+
     console.log("\nOperator consoles are not served raw\n");
     for (const n of ["engine-dashboard", "buycomp-admin", "jupverify-admin", "client-portal", "whale-panel", "cuna-payout", "prize-wheel"]) {
       ok(`/${n}.html → 404`, (await get(A.base, `/${n}.html`)).status === 404);
