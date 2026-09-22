@@ -63,7 +63,6 @@ const TOOL_LINE = {
   holders: "Holders runs on the unified tools pass shared by every heavy tool.",
   trace: "Trace runs on the unified tools pass shared by every heavy tool.",
   airdrop: "The Airdropper runs on the unified tools pass shared by every heavy tool.",
-  buyspecial: "Buy Special runs on the unified tools pass shared by every heavy tool.",
 };
 const TOOL_LINE_FALLBACK = "This tool runs on the unified tools pass shared by every heavy tool.";
 

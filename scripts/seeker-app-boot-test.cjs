@@ -215,7 +215,8 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         .filter((el) => el.getBoundingClientRect().height < 44).length,
       overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     }));
-    ok("B · the toolkit grid renders every tool in the registry", grid.cards >= 14, JSON.stringify(grid));
+    // 13 since 2026-09-22 (Buy Special left the app — owner: "shouldn't be in here at all on seeker").
+    ok("B · the toolkit grid renders every tool in the registry", grid.cards >= 13, JSON.stringify(grid));
     ok("B · ⚠️ an unbuilt tool is NEVER a link — no routing to a blank pane", grid.soonAreLinks === 0, JSON.stringify(grid));
     ok("B · built tools are links, so the grid actually navigates", grid.links >= 6, JSON.stringify(grid));
     ok("B · every card clears 44px and nothing overflows at 390px", grid.smallCards === 0 && !grid.overflow, JSON.stringify(grid));
@@ -1938,75 +1939,8 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       await ctx.close();
     }
 
-    // -- 8. Buy Special: a superseded compute must never land over a newer one ---------------
-    //
-    // The same ref-identity guard Firepit/Rent Reclaim use for a fresh chain read before signing
-    // (openConfirm), pointed at doCompute()'s own comment: "a stale run that resolves late can
-    // never overwrite rows/computeMeta with an answer for a buyer list that is no longer on
-    // screen". Driven for real: scan buyer X, start verifying (a slow 1500ms holdcheck), scan
-    // buyer Y WHILE that is still in flight (which resets computePhase and swaps the active
-    // buyer), start verifying again (an immediate holdcheck) — then wait out the first call's
-    // delay and confirm only Y's row is on screen, never X's.
-    {
-      const PASS = { unlockedAt: 1, expiresAt: 4102444800000, why: "holder", proof: "t:faketoken" };
-      const CFG = { success: true, enabled: true, holdUsd: 10, clknNeeded: 1000, lamports: 50000000, days: 7 };
-      const X = web3.Keypair.generate().publicKey.toBase58();
-      const Y = web3.Keypair.generate().publicKey.toBase58();
-      const shortForm = (a) => a.slice(0, 4) + "…" + a.slice(-4);
-      let scanCall = 0;
-      const { ctx, page, errors } = await open(
-        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
-        async (pg) => {
-          await pg.addInitScript((p) => { try { localStorage.setItem("clkn_tools_unlock", JSON.stringify(p)); } catch (_) {} }, PASS);
-          await pg.route("**/api/tool-gate/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CFG) }));
-          await pg.route("**/api/buycomp/presets*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, comps: [] }) }));
-          await pg.route("**/api/buyspecial-crosscheck*", (r) => {
-            scanCall++;
-            const wallet = scanCall === 1 ? X : Y;
-            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
-              success: true, source: "helius", buyerCount: 1, reachedWindowStart: true,
-              buyers: [{ wallet, buyCount: 1, volumeSol: 1, tokensBought: 100, maxBuySol: 1 }],
-            }) });
-          });
-          // The FIRST holdcheck call (wallet=X) is slow; the SECOND (wallet=Y) is immediate —
-          // matched on which wallet is in the query string, not on call order, since the two
-          // requests race and could in principle land at the network in either order.
-          await pg.route("**/api/buyspecial-holdcheck*", async (r) => {
-            const url = r.request().url();
-            if (url.includes(X)) {
-              await new Promise((res) => setTimeout(res, 1500));
-              return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, results: [{ wallet: X, balance: 1000, sells: 0, soldInWindow: false, source: "helius" }] }) });
-            }
-            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, results: [{ wallet: Y, balance: 1000, sells: 0, soldInWindow: false, source: "helius" }] }) });
-          });
-        }
-      );
-      await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
-      await page.evaluate(() => { window.location.hash = "#/tools/buyspecial"; });
-      await page.waitForTimeout(400);
-      await page.fill("#bs-mint", "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS");
-      await page.evaluate(() => { const b = Array.from(document.querySelectorAll(".seeker-bs-chip")).find((x) => /Last 24 hours/i.test(x.innerText)); b && b.click(); });
-      await page.waitForTimeout(150);
-      const clickScan = () => page.evaluate(() => { const b = Array.from(document.querySelectorAll("button")).find((x) => /^scan buys$/i.test(x.innerText.trim())); b && b.click(); });
-      const clickCompute = () => page.evaluate(() => { const b = Array.from(document.querySelectorAll("button")).find((x) => /verify holds & preview payout/i.test(x.innerText.trim())); b && b.click(); });
-
-      await clickScan();
-      await page.waitForFunction(() => /Buyers in this window/i.test(document.body.innerText), null, { timeout: 10000 });
-      await clickCompute();                // call #1: X, resolves in 1500ms
-      await page.waitForTimeout(200);
-      await clickScan();                   // re-scan -> active buyer becomes Y
-      await page.waitForFunction(() => /Buyers in this window/i.test(document.body.innerText), null, { timeout: 10000 });
-      await clickCompute();                // call #2: Y, resolves immediately — supersedes #1
-      await page.waitForTimeout(2000);     // outlast call #1's 1500ms delay
-
-      const q8 = await text(page);
-      ok("Q8 · Buy Special — the SECOND (faster) compute's row is what's on screen",
-         q8.includes(shortForm(Y)), q8.slice(0, 500));
-      ok("Q8 · ⚠️ and the FIRST (slower, superseded) compute's row never lands, even 2s later",
-         !q8.includes(shortForm(X)), q8.slice(0, 500));
-      ok("Q8 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
-      await ctx.close();
-    }
+    // (Section 8 — Buy Special's superseded-compute guard — left with the pane on 2026-09-22:
+    //  the owner: "buy special ... shouldn't be in here at all on seeker".)
   }
 
   // ---- R: Wallet Checkup (full edition) — the connected wallet by default, any pasted -----

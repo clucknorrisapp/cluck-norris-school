@@ -54,7 +54,7 @@ app does not invent new gates and does not hardcode any amount.
 | Token Holders | `/tools/holders` |
 | Trace | `/tools/trace` |
 | Airdrop | `/tools/airdrop` | **signs** — drives `public/airdrop-engine.js`, plans with `public/airdrop-plan.js`, records a public receipt |
-| Buy Special | `/tools/buyspecial` | read side only — the prize-SENDING half is an operator surface and is out of scope below |
+| ~~Buy Special~~ | ~~`/tools/buyspecial`~~ | **REMOVED 2026-09-22** (owner: "buy special is in the tools list and shouldn't be in here at all on seeker") — shipped in #387 as a read-only pane, deleted the day after Buy Special left the main webpage (#392). Do not re-add |
 
 ### Paid
 | Tool | Route | Notes |

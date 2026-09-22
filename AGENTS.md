@@ -692,6 +692,9 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
   README and `/investors` copy. `/buyspecial`, `/rose`, the draw and dashboard pages, their API
   routes and the Telegram buy-comp engine all stay reachable by direct URL for ROSE and Hub
   operators. Don't put it back in a roundup, a door, promo copy or the tools catalogue.
+  **And NOT in the Seeker app at all (owner, 2026-09-22: "buy special is in the tools list and
+  shouldn't be in here at all on seeker")** — the `buyspecial` registry entry, route, pane and
+  CSS were deleted; the wrapper's listing no longer names it. Don't re-add it to the app.
 - **Buy Special lost its CLKN price.** Retiring send-to-unlock removed the 5,850-CLKN door priced
   on 2026-07-24 to be ~25% cheaper than SOL. Paying in CLKN is no longer possible there, only
   holding. That reversed a deliberate decision — re-raise it rather than assuming it's settled.

@@ -83,8 +83,9 @@ reference.
     it). Then either the tool runs (holder) or the sheet says exactly which door was short and by
     how much, and that SOL payment is on the website, not in the app yet.
 19. Kill the app, reopen, run X-Ray again: a held pass is remembered; a denied one asks again.
-20. **Holders**, **Trace**, **Buy Special**: each behaves like 17 — a pass or a sheet, never a
-    silent empty result.
+20. **Holders**, **Trace**: each behaves like 17 — a pass or a sheet, never a silent empty
+    result. **Buy Special is NOT in the app** (owner, 2026-09-22) — if a Buy Special tile or route
+    appears anywhere, that is a failure.
 
 ## 6. The Hatchery (priced per mint)
 
