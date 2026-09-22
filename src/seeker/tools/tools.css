@@ -704,66 +704,6 @@
 }
 .seeker-passgate-err { color: var(--red-soft, var(--red)); margin-top: 10px; }
 
-/* ── 2h. Buy Special — buy-competition scanner + hold/trace calculator ─────────────────────────
-   Read-only: this pane never signs or sends anything (see BuySpecial.jsx's header). It reuses the
-   2g forensic shapes (form/stat-grid/rows) for its two on-chain reads and adds only what's unique
-   to a competition config: tappable window/mint/live-comp chips, a hold-rule checkbox, and the
-   status-tag colour variants for a computed eligibility row. */
-.seeker-bs-chiprow { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
-.seeker-bs-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--card2, #1d1e26);
-  color: var(--sub);
-  font-family: var(--mono);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.seeker-bs-chip-active { border-color: var(--orange); color: var(--orange); background: rgba(255, 122, 24, .1); }
-.seeker-bs-windownote { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: -4px 0 12px; }
-
-.seeker-bs-checkrow { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 4px 0; }
-.seeker-bs-checkbox { width: 20px; height: 20px; min-width: 20px; margin-top: 2px; accent-color: var(--orange); }
-.seeker-bs-checkrow label { font-size: 13px; color: var(--sub); line-height: 1.5; }
-
-.seeker-bs-rowactions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.seeker-bs-smallbtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--sub);
-  font-family: var(--mono);
-  font-size: 11.5px;
-  cursor: pointer;
-}
-.seeker-bs-smallbtn:disabled { color: var(--muted); cursor: not-allowed; }
-
-/* Status-tag colour variants layered on the shared .seeker-forensic-row-tag shape (2g). */
-.seeker-bs-tag-ok { border-color: var(--green2, var(--green)); color: var(--green2, var(--green)); }
-.seeker-bs-tag-bad { border-color: var(--red-soft, var(--red)); color: var(--red-soft, var(--red)); }
-.seeker-bs-tag-warn { border-color: var(--gold); color: var(--gold); }
-.seeker-bs-tag-muted { border-color: var(--muted); color: var(--muted); }
-
-.seeker-bs-tracebox {
-  font-size: 12px;
-  color: var(--sub);
-  background: rgba(255, 255, 255, .03);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 10px;
-  margin-top: 8px;
-  line-height: 1.5;
-}
-
 /* ── 2i. Hatchery ───────────────────────────────────────────────────────────────────────────── */
 .seeker-hatch-form {
   background: var(--card);

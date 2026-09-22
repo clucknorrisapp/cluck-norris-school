@@ -48,8 +48,6 @@ export const TOOLS = [
     blurb: "Follow the money between wallets, hop by hop." },
   { id: "airdrop",    route: "/tools/airdrop",    title: "Airdropper",      icon: "🪂", tier: "wallet", ready: true, flagship: true ,
     blurb: "Send a token to many wallets at once, with a receipt for every row." },
-  { id: "buyspecial", route: "/tools/buyspecial", title: "Buy Special",     icon: "🎯", tier: "pass",   ready: true ,
-    blurb: "Run a buy competition with standings anyone can check." },
   { id: "hatchery",   route: "/tools/hatchery",   title: "Hatchery",        icon: "🥚", tier: "paid",   ready: true ,
     blurb: "Mint a token properly, with the authorities set the way you meant." },
 ];
