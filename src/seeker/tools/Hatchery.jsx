@@ -304,6 +304,23 @@ export default function HatcheryPane({ wallet }) {
   useI18nReady();
   const online = useOnline();
 
+  // ── lifecycle guards for the build → sign → submit → confirm chain ─────────────────────────
+  // This pane uploads a permanent public record (the /build Arweave upload) and mints a real
+  // token — a setState firing after the user has navigated away is how "did this land" gets
+  // mis-tracked (the component is gone, but the flow's on-chain outcome is not). `liveRef` is
+  // checked before every setState that follows an await; `abortRef` covers review()'s /build
+  // call, `confirmAbortRef` covers onConfirmed()'s /submit and /minted calls, and both are
+  // aborted on unmount. Guards only — the signing order, the fee logic and what is sent are
+  // unchanged.
+  const liveRef = React.useRef(true);
+  const abortRef = React.useRef(null);
+  const confirmAbortRef = React.useRef(null);
+  React.useEffect(() => () => {
+    liveRef.current = false;
+    try { abortRef.current && abortRef.current.abort(); } catch (_) {}
+    try { confirmAbortRef.current && confirmAbortRef.current.abort(); } catch (_) {}
+  }, []);
+
   // ── live fee config — never hardcoded, refetched on wallet connect and again right before the
   // Confirm sheet opens (the freshest read this pane can get without polling). ──
   const [cfg, setCfg] = React.useState(null);
@@ -383,10 +400,15 @@ export default function HatcheryPane({ wallet }) {
     try {
       logo = await prepareLogo(logoFile);
     } catch (e) {
+      if (!liveRef.current) return;
       setFormError((e && e.message) || t("Couldn't prepare that logo. Try a different image."));
       return;
     }
+    if (!liveRef.current) return;
     setPhase("building");
+    try { abortRef.current && abortRef.current.abort(); } catch (_) {}
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     const res = await toolFetch("/api/hatchery/build", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -397,8 +419,11 @@ export default function HatcheryPane({ wallet }) {
         imageBase64: logo.base64, imageMime: logo.mime,
         revokeMint, revokeFreeze, payWith,
       }),
+      signal: ctrl.signal,
     });
+    if (!liveRef.current) return;
     if (!res.ok) {
+      if (res.kind === "aborted") return;
       if (res.kind === "offline") { setErrKind("offline"); setPhase("unavailable"); return; }
       if (res.kind === "refused") {
         setBuildError((res.body && res.body.error) || t("That couldn't be built as entered."));
@@ -420,6 +445,9 @@ export default function HatcheryPane({ wallet }) {
   async function onConfirmed() {
     setConfirmOpen(false);
     setPhase("signing");
+    try { confirmAbortRef.current && confirmAbortRef.current.abort(); } catch (_) {}
+    const ctrl = new AbortController();
+    confirmAbortRef.current = ctrl;
     try {
       // Same class of guard as reclaim-sign.js's P2-J finding, and it matters even more here:
       // every authority and the fee payer in this transaction is the creator address /build was
@@ -444,19 +472,24 @@ export default function HatcheryPane({ wallet }) {
         signedTx = await wallet.provider.signTransaction(tx);
       } catch (e) {
         if (isUserRejection(e)) {
+          if (!liveRef.current) return;
           setPhase("form");
           setFormError(t("You declined to sign — nothing was created."));
           return;
         }
         throw e;
       }
+      if (!liveRef.current) return;
       const signedTxBase64 = bytesToBase64(signedTx.serialize({ requireAllSignatures: false, verifySignatures: false }));
       const subRes = await toolFetch("/api/hatchery/submit", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mintAddress: plan.mintAddress, signedTxBase64 }),
+        signal: ctrl.signal,
       });
+      if (!liveRef.current) return;
       if (!subRes.ok) {
+        if (subRes.kind === "aborted") return;
         if (subRes.kind === "offline") { setErrKind("offline"); setPhase("unavailable"); return; }
         if (subRes.kind === "refused") {
           // 400 (tampered/invalid) or 410 (expired) — both are "build it again" per hatchery.js.
@@ -480,12 +513,14 @@ export default function HatcheryPane({ wallet }) {
       try {
         landed = await confirmSignature(rpc, signature);
       } catch (e) {
+        if (!liveRef.current) return;
         // Landed AND failed on-chain. All-or-nothing: nothing was created, nothing was charged.
         setResult({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
         setOutcomeMsg((e && e.message) || t("The transaction failed on-chain."));
         setPhase("failed");
         return;
       }
+      if (!liveRef.current) return;
       if (!landed) {
         setResult({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
         setOutcomeMsg(t("Timed out waiting for the network to confirm it."));
@@ -499,8 +534,10 @@ export default function HatcheryPane({ wallet }) {
       toolFetch("/api/hatchery/minted", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() }),
+        signal: ctrl.signal,
       }).catch(() => {});
     } catch (e) {
+      if (!liveRef.current) return;
       setOutcomeMsg((e && e.message) || String(e));
       setPhase("ambiguous");
     }

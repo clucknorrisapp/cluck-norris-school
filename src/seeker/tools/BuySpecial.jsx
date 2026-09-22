@@ -241,7 +241,18 @@ export default function BuySpecialPane({ wallet }) {
   const [gateOpen, setGateOpen] = React.useState(false);
   const [pendingAction, setPendingAction] = React.useState(null); // "scan" | "compute" | null
   const abortRef = React.useRef(null);
-  React.useEffect(() => () => { try { abortRef.current && abortRef.current.abort(); } catch (_) {} }, []);
+  // Compute's own controller (separate from the scan's `abortRef`): a fresh scan or a fresh
+  // compute must both be able to invalidate a compute already in flight, so a stale run that
+  // resolves late can never overwrite `rows`/`computeMeta` with an answer for a buyer list that
+  // is no longer on screen. `gatedToolFetch` (passgate.jsx) doesn't thread a signal into the
+  // underlying request — same limitation `abortRef` above already has — so the guard that
+  // actually does the work is the ref-identity check in doCompute()'s `.then()`, not the network
+  // cancellation; `.abort()` is still called for the same reason `abortRef` calls it.
+  const computeAbortRef = React.useRef(null);
+  React.useEffect(() => () => {
+    try { abortRef.current && abortRef.current.abort(); } catch (_) {}
+    try { computeAbortRef.current && computeAbortRef.current.abort(); } catch (_) {}
+  }, []);
 
   // Free, unauthenticated convenience — see the file header on why a miss here is silent rather
   // than an Unavailable state: the endpoint itself can't tell "no live comps" from "couldn't check".
@@ -284,6 +295,10 @@ export default function BuySpecialPane({ wallet }) {
     setScanPhase("loading");
     setComputePhase("idle"); setRows(null); setTraceMap({}); setBuyerShown(20);
     try { abortRef.current && abortRef.current.abort(); } catch (_) {}
+    // A fresh scan invalidates any compute still running against the PREVIOUS scan's buyers —
+    // letting it land after this would overwrite rows/computeMeta next to a brand-new buyer list
+    // it no longer corresponds to.
+    try { computeAbortRef.current && computeAbortRef.current.abort(); } catch (_) {}
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const url = `/api/buyspecial-crosscheck?mint=${encodeURIComponent(mint)}&from=${from}&to=${to}`;
@@ -319,10 +334,13 @@ export default function BuySpecialPane({ wallet }) {
 
   // Fetches one hold-check chunk at a time (server caps a single call at 200 wallets) and stops
   // on the FIRST failure — a partial holdMap rendered as if it were the whole answer would be
-  // exactly the "empty read that isn't" this app is built to never do.
-  async function runHoldcheckChunks(wallets, mint, from, to) {
+  // exactly the "empty read that isn't" this app is built to never do. `ctrl` is this run's own
+  // AbortController (see computeAbortRef above): checked between chunks so a superseded run
+  // stops making further requests rather than racing a newer one to the finish.
+  async function runHoldcheckChunks(wallets, mint, from, to, ctrl) {
     const holdMap = {};
     for (let i = 0; i < wallets.length; i += HOLDCHECK_CHUNK) {
+      if (ctrl && ctrl.signal.aborted) return { ok: false, kind: "aborted" };
       const chunk = wallets.slice(i, i + HOLDCHECK_CHUNK);
       const url = `/api/buyspecial-holdcheck?mint=${encodeURIComponent(mint)}&from=${from}&to=${to}&wallets=${encodeURIComponent(chunk.join(","))}`;
       const res = await gatedToolFetch(pass.gatedFetch, url);
@@ -372,10 +390,19 @@ export default function BuySpecialPane({ wallet }) {
     if (!requireHold) { finalizeRows(active, null, 0); return; }
     if (!online) { setComputePhase("unavailable"); setComputeErrKind("offline"); setComputeErrMsg(null); return; }
     setComputePhase("loading");
+    // This run's own controller — a NEWER compute (or a fresh scan, see doScan) invalidates the
+    // one before it, the same shape as the scan's own abortRef above.
+    try { computeAbortRef.current && computeAbortRef.current.abort(); } catch (_) {}
+    const ctrl = new AbortController();
+    computeAbortRef.current = ctrl;
     const now = nowSec();
     const checkTo = holdHoursNum > 0 ? Math.min(now, scannedTo + Math.round(holdHoursNum * 3600)) : now;
-    runHoldcheckChunks(active.map((b) => b.wallet), scannedMint, scannedFrom, checkTo).then((res) => {
+    runHoldcheckChunks(active.map((b) => b.wallet), scannedMint, scannedFrom, checkTo, ctrl).then((res) => {
+      // Superseded by a newer compute or a fresh scan — drop this run's result rather than let
+      // it land over whatever replaced it.
+      if (computeAbortRef.current !== ctrl) return;
       if (!res.ok) {
+        if (res.kind === "aborted") return;
         if (pass.isDenial(res.body)) { pass.refresh(); setPendingAction("compute"); setGateOpen(true); setComputePhase("idle"); return; }
         if (res.kind === "offline") { setComputePhase("unavailable"); setComputeErrKind("offline"); setComputeErrMsg(null); return; }
         if (res.kind === "refused") { setComputePhase("refused"); setComputeErrMsg((res.body && res.body.error) || t("That request wasn't something we could use.")); return; }
