@@ -522,6 +522,11 @@ jobs:
       # winner on 2026-09-04 because it judged a hold in dollars and the price cache was cold.
       - name: giveaway hold-check (token-based, survives a cold price feed)
         run: node scripts/giveaway-holdcheck-test.cjs
+      # The room leaderboard is POSTED to /api/tg-test (POST-only since #335). It sent a GET for five
+      # days and every 15-minute board silently answered 405 — found when the 2026-09-22 birthday
+      # special opened with no board. Stub answers exactly what production does: 405 to a GET.
+      - name: giveaway room board is a POST (tg-test is POST-only)
+        run: node scripts/cuna-board-post-test.cjs
       # /api/token-metadata/* is FREE and unauthenticated, and rebuild-json fetches a URL the
       # caller supplies. That makes the private-network guard load-bearing rather than tidy: a
       # regression here turns a public tool into a probe of our internal network. Built-ins only,
