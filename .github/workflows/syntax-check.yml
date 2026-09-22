@@ -195,6 +195,17 @@ jobs:
         run: |
           git fetch origin develop --depth=1 --quiet || true
           node scripts/seeker-build-test.cjs
+      # docs/SEEKER_DEMO_INVENTORY.md — an inventory (facts, not pitch copy) of every route in
+      # both Seeker editions plus every existing docs/seeker/ and docs/demo/ capture, for the
+      # owner's demo shot list and deck. Pins the doc to the code, both directions: every route
+      # table matches the <Route path="…"> entries in src/seeker/edition/{full,edu}.jsx exactly
+      # (nothing added to a shell and left uninventoried, nothing inventoried that no longer
+      # exists), every docs/seeker or docs/demo path the doc names exists on disk and every file
+      # under those two directories is named somewhere in the doc, no literal "$<digit>" amount,
+      # and none of the forbidden words scripts/solana-room-test.cjs already enforces on public
+      # pages (yield/APR/APY framing, Normie Quest, Wallet Watch, Nomadz, Solana Foundation).
+      - name: Seeker app — demo inventory doc matches the routes and captures on disk
+        run: node scripts/seeker-demo-inventory-test.cjs
       # Rent Reclaim, READ SIDE (increment 2, docs/SEEKER_APP_PLAN.md) — GET /api/seeker/
       # reclaimable (lib/rent-reclaim.js) and its pane (src/seeker/RentReclaim.jsx). Both token
       # programs are enumerated; an account holding a balance is never classed reclaimable;
