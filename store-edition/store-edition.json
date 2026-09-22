@@ -33,6 +33,7 @@
     "A liquidity pool is a pair of token balances sitting in one account, put there by whoever supplied them. Its price for one token in terms of the other comes directly from the ratio between those two balances — not from a list of buy and sell orders the way a stock exchange works.",
     "A mint can also carry a freeze authority: an account allowed to freeze any individual token account for that mint, blocking that holder from moving their tokens — without touching total supply or anyone else's balance.",
     "A mint is an account — the same kind of thing your own wallet address is, just one whose job is defining a token instead of holding a personal balance. Its own address, one long string, is the token's actual identity on-chain.",
+    "A mint you approved was still being sent when you left this screen.",
     "A pool sets the price — there's no order book",
     "A real example: two mints, one name",
     "A short line about the token",

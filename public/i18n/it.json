@@ -317,6 +317,7 @@
   "e.g. what does revoking mint authority do?": "ad es. cosa fa revocare l'autorità di mint?",
   "2 · TOKEN DETAILS": "2 · DETTAGLI TOKEN",
   "A short line about the token": "Una breve descrizione del token",
+  "A mint you approved was still being sent when you left this screen.": "Un mint che hai approvato era ancora in fase di invio quando hai lasciato questa schermata.",
   "logo preview": "anteprima logo",
   "Tap to choose a logo image": "Tocca per scegliere un'immagine di logo",
   "Revoke mint authority": "Revoca autorità di mint",
