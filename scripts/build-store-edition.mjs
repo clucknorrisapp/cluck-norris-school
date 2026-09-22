@@ -56,6 +56,12 @@ if (!cfg.variants.includes(variant)) {
   const known = [...JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "store-edition.json"), "utf8")).variants, ...SEEKER_VARIANTS];
   console.error(`unknown variant "${variant}" — one of ${known.join(", ")}`); process.exit(2);
 }
+// store-edition v1.1.0 (owner, 2026-09-21): google/ios are built from the SEEKER SHELL (seeker.html,
+// src/seeker/*) in its education edition — `entry: "seeker"` in store-edition.json. The v1.0.x
+// website bundle is still what a config WITHOUT `entry` builds, byte for byte. STORE_ENTRY tells
+// vite.config.js to use the shell entry and the education alias; the html rename and the chunk
+// check below follow the same branch the seeker variant already took.
+const useShell = !isSeeker && cfg.entry === "seeker";
 const OUT = path.join(ROOT, `dist-store-${variant}`);
 const NAME = `store-edition-${variant}-${cfg.version}`;
 const REL = path.join(ROOT, "release");
@@ -64,13 +70,13 @@ const log = (m) => console.log(`[store-edition] ${m}`);
 // 1. vite
 fs.rmSync(OUT, { recursive: true, force: true });
 execFileSync("npx", ["vite", "build", "--outDir", OUT, "--emptyOutDir"], { cwd: ROOT, stdio: "inherit",
-  env: { ...process.env, STORE_EDITION: variant } });
+  env: { ...process.env, STORE_EDITION: variant, ...(useShell ? { STORE_ENTRY: "seeker" } : {}) } });
 // seeker builds a DIFFERENT html entry (seeker.html, vite.config.js's SEEKER branch) — the
 // Capacitor wrapper (and this script's own verify/tar steps below) both expect the app's single
 // entry at the bundle root as index.html, same as every other variant.
-if (isSeeker) {
+if (isSeeker || useShell) {
   const from = path.join(OUT, "seeker.html"), to = path.join(OUT, "index.html");
-  if (!fs.existsSync(from)) throw new Error("vite did not produce seeker.html — check vite.config.js's SEEKER branch");
+  if (!fs.existsSync(from)) throw new Error("vite did not produce seeker.html — check vite.config.js's SHELL branch");
   fs.renameSync(from, to);
 }
 
@@ -149,7 +155,22 @@ for (const f of textFiles) {
     // ALLOW-list of outbound hosts (Codex, 2026-09-12): a deny-list can only name what it already
     // knows. Every http(s) URL in every copied file — JS, HTML, CSS, JSON — must point at a host on
     // the list, or the build fails and the new host is a deliberate, reviewed addition.
-    for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9.-]+)/g)) if (!cfg.allowedHosts.includes(m[1])) problems.push(`${rel}: host not allow-listed: ${m[1]}`);
+    // VENDORED third-party bundles are exempt from the host scan, and this is deliberate.
+    // They are pinned artifacts we do not author: @solana/web3.js's UMD carries feross.org and
+    // github.com in its licence comments and api.{devnet,testnet,mainnet-beta}.solana.com as
+    // library defaults our code never calls. Scanning them forced those hosts onto the GLOBAL
+    // allow-list, which quietly blunted it — api.mainnet-beta.solana.com sitting in the list
+    // would have let a future accident bypass our own /api/helius-rpc proxy without the build
+    // saying a word. An allow-list that has to be widened for strings nobody can act on stops
+    // being a guard.
+    // What covers vendored files instead is the RUNTIME half: scripts/seeker-app-boot-test.cjs
+    // boots the shipped tarball and asserts it reaches nothing off-device but our own API. Build
+    // scan for the code we write, runtime scan for everything that actually executes — the
+    // complementary-blind-spots pairing AGENTS.md calls "check every form, not one form".
+    const vendored = /(^|\/)vendor\//.test(rel);
+    if (!vendored) {
+      for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9.-]+)/g)) if (!cfg.allowedHosts.includes(m[1])) problems.push(`${rel}: host not allow-listed: ${m[1]}`);
+    }
   }
   const relApi = t.match(/["'`]\/api\/[a-zA-Z]/g); if (relApi) problems.push(`${rel}: relative /api reference (${relApi.length})`);
   if (/STORE:(OUT|IN)/.test(t)) problems.push(`${rel}: unprocessed STORE marker`);
@@ -179,6 +200,23 @@ if (isSeeker) {
   const appSrc = fs.readFileSync(path.join(ROOT, "src", "seeker", "App.jsx"), "utf8");
   if (!/\bHashRouter\b/.test(appSrc)) problems.push("src/seeker/App.jsx does not use HashRouter — a bundled app has no server to rewrite deep paths, it must hash-route");
   if (/\bBrowserRouter\b/.test(appSrc)) problems.push("src/seeker/App.jsx uses BrowserRouter — a bundled app has no server to rewrite deep paths, it must hash-route");
+} else if (useShell) {
+  // The education edition of the shell. Its chunk is named after seeker.html, like the seeker
+  // variant's; what distinguishes it is what must NOT be there, and the forbidden list above
+  // already refuses cluck-wallet.js, cluck-gate.js, solana-web3 and the wallet globals. Two
+  // structural checks on top: the wallet scripts were actually stripped from the html, and the
+  // shell still hash-routes (a bundled app has no server to rewrite deep paths).
+  if (!files.some((f) => /assets[\\/].*\.js$/.test(f))) problems.push("missing the vite entry chunk");
+  const html = fs.readFileSync(path.join(OUT, "index.html"), "utf8");
+  if (/EDU:OUT/.test(html)) problems.push("index.html: EDU:OUT block was not stripped — the wallet scripts are in the education bundle");
+  for (const bad of ["cluck-wallet.js", "cluck-gate.js", "solana-web3", "rent-reclaim-plan.js", "airdrop-engine.js"]) if (html.includes(bad)) problems.push(`index.html: loads ${bad} — the education edition must not carry the wallet half of the shell`);
+  if (!/data-i18n-packs="school"/.test(html)) problems.push("index.html: the shell must declare data-i18n-packs=\"school\" or the curated lesson translations never load");
+  const appSrc = fs.readFileSync(path.join(ROOT, "src", "seeker", "App.jsx"), "utf8");
+  if (!/\bHashRouter\b/.test(appSrc) || /\bBrowserRouter\b/.test(appSrc)) problems.push("src/seeker/App.jsx must hash-route — a bundled app has no server to rewrite deep paths");
+  const eduSrc = fs.readFileSync(path.join(ROOT, "src", "seeker", "edition", "edu.jsx"), "utf8");
+  for (const bad of ["needswallet", "RentReclaim", "ToolsHome", "tools/registry", "passgate", "pass.js", "reclaim-sign", "Firepit", "LockerRoom", "Airdropper", "Hatchery", "BuySpecial", "WalletXray", "Holders", "Trace", "ProjectBurn"]) {
+    if (new RegExp("import[^\\n]*" + bad.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(eduSrc)) problems.push(`src/seeker/edition/edu.jsx imports ${bad} — the education edition's import list is the safety argument; a wallet pane in it is a wallet in the store`);
+  }
 } else {
   if (!files.some((f) => /assets[\\/]index-.*\.js$/.test(f))) problems.push("missing the vite entry chunk");
 }

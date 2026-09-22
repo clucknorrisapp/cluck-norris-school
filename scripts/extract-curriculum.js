@@ -35,7 +35,11 @@ const OUT_PATH = path.join(ROOT, "data", "curriculum.json");
 // Runs `relFile` (a real source file, e.g. "src/App.jsx") through esbuild and returns the named
 // top-level `const` values as an object. Fails loudly (throws) rather than returning partial data
 // — a course silently going missing is exactly the bug this rewrite exists to stop.
-function extractVars(relFile, varNames) {
+// `edition` is what `import.meta.env.VITE_STORE_EDITION` folds to while the lesson modules run:
+// "" for the website copy, "google" for the education-only store copy (the STORE branches in
+// src/App.jsx and src/sections/Library.jsx resolve the other way — no venue names, no CLKN mint,
+// worked examples that do not name the token). Same modules, same extractor, two outputs.
+function extractVars(relFile, varNames, edition) {
   const abs = path.join(ROOT, relFile);
   const dir = path.dirname(abs);
   const orig = fs.readFileSync(abs, "utf8");
@@ -54,7 +58,7 @@ function extractVars(relFile, varNames) {
       "--platform=node",
       "--jsx=automatic",
       // The website edition, not the app-store bundle — see the header comment.
-      '--define:import.meta.env.VITE_STORE_EDITION=""',
+      `--define:import.meta.env.VITE_STORE_EDITION=${JSON.stringify(edition || "")}`,
       "--log-level=warning",
     ], { cwd: dir, maxBuffer: 1024 * 1024 * 64 }).toString();
   } finally {
@@ -74,14 +78,40 @@ function extractVars(relFile, varNames) {
   return result;
 }
 
+// ⚠️ TWO CONSUMERS, TWO SHAPES, ONE OBJECT.
+//
+// `q` / `answer` / `why` is what the AI classroom and the tutor read (server.js) — a flat Q&A
+// grounding, never a quiz. `options` / `correct` / `explanation` is the QUIZ, and it is carried
+// through verbatim so a client can actually render one.
+//
+// The quiz fields were dropped here originally, and on 2026-09-21 the Seeker school was built on
+// this file assuming it carried them: every one of the 200 questions rendered with NO ANSWER
+// BUTTONS, so no lesson could be finished. Found by Codex on PR #390, not by any test — the
+// browser test mounted the pane and never tapped an answer.
+//
+// Exposure note: this adds nothing new. `answer` already carried the correct option's TEXT, so
+// the key was always here. This file is required server-side (server.js ~77) and is not served.
 function mapQuestions(qs) {
-  return (qs || []).map((q) => ({ q: q.q, answer: (q.options || [])[q.correct], why: q.explanation || "" }));
+  return (qs || []).map((q) => ({
+    q: q.q,
+    answer: (q.options || [])[q.correct],
+    why: q.explanation || "",
+    // The quiz, for clients that render one.
+    options: Array.isArray(q.options) ? q.options.slice() : [],
+    correct: Number.isInteger(q.correct) ? q.correct : null,
+    explanation: q.explanation || "",
+  }));
 }
 
+// Build the whole curriculum object for one edition. Called twice: "" → data/curriculum.json
+// (the AI classroom's grounding and the website/Seeker school), "google" → data/curriculum.store.json
+// (the Google Play / iOS school — store-edition v1.1.0, 2026-09-21). One function so the two files
+// can never drift in SHAPE; only the STORE-branched copy differs.
+function buildCurriculum(edition) {
 const out = { generatedAt: new Date().toISOString(), courses: [] };
 
 // 1) Core curriculum (belts) — concepts + questions. Source: src/App.jsx `LESSONS`.
-const { LESSONS, INCUBATOR_LESSONS } = extractVars("src/App.jsx", ["LESSONS", "INCUBATOR_LESSONS"]);
+const { LESSONS, INCUBATOR_LESSONS } = extractVars("src/App.jsx", ["LESSONS", "INCUBATOR_LESSONS"], edition);
 out.courses.push({
   id: "fundamentals", title: "Crypto Fundamentals", icon: "📚",
   blurb: "Wallets, tokens, DEXs, rugs, market cap, on-chain basics — the bedrock every survivor needs.",
@@ -112,7 +142,7 @@ out.courses.push({
 //    extractor was written — mapped here into `questions` at the lesson level (the same field
 //    `lessonMaterial()` in server.js already reads for the other courses) so the comprehension
 //    answer key keeps reaching the classroom.
-const { LP_LESSONS } = extractVars("src/sections/LPLab.jsx", ["LP_LESSONS"]);
+const { LP_LESSONS } = extractVars("src/sections/LPLab.jsx", ["LP_LESSONS"], edition);
 const lpCourse = {
   id: "lp", title: "Liquidity & LP Mastery", icon: "💧",
   blurb: "AMMs, impermanent loss, concentrated liquidity, fees & LP earnings — the real money mechanics.",
@@ -132,7 +162,7 @@ out.courses.push(lpCourse);
 // 4) Liquidity library (short reference prose) — folded into the LP course as extra reference
 //    lessons, same as the pre-move extractor did with `LIBRARY_LIQUIDITY`. Source: now
 //    src/sections/Library.jsx (moved out of App.jsx with the rest of the Library section).
-const { LIBRARY_TOPICS, LIBRARY_LIQUIDITY } = extractVars("src/sections/Library.jsx", ["LIBRARY_TOPICS", "LIBRARY_LIQUIDITY"]);
+const { LIBRARY_TOPICS, LIBRARY_LIQUIDITY } = extractVars("src/sections/Library.jsx", ["LIBRARY_TOPICS", "LIBRARY_LIQUIDITY"], edition);
 for (const t of LIBRARY_LIQUIDITY) {
   lpCourse.lessons.push({ id: "lib-" + t.id, title: t.title, icon: t.icon || "📖", intro: t.summary || "", content: t.content || "", reference: true });
 }
@@ -150,30 +180,45 @@ out.courses.push({
   })),
 });
 
+return out;
+}
+
+const OUTPUTS = [
+  { edition: "", path: OUT_PATH },
+  { edition: "google", path: path.join(ROOT, "data", "curriculum.store.json") },
+];
+
 function withoutGeneratedAt(obj) {
   const { generatedAt, ...rest } = obj;
   return rest;
 }
 
 if (process.argv.includes("--check")) {
-  let committed;
-  try { committed = JSON.parse(fs.readFileSync(OUT_PATH, "utf8")); }
-  catch (e) { console.error(`[extract --check] could not read ${OUT_PATH}: ${e.message}`); process.exit(1); }
-  const freshBody = JSON.stringify(withoutGeneratedAt(out));
-  const committedBody = JSON.stringify(withoutGeneratedAt(committed));
-  if (freshBody !== committedBody) {
-    const freshCounts = out.courses.map((c) => `${c.id}:${c.lessons.length}`).join("  ");
-    const committedCounts = (committed.courses || []).map((c) => `${c.id}:${(c.lessons || []).length}`).join("  ");
-    console.error("[extract --check] data/curriculum.json is STALE.");
-    console.error(`  committed: ${committedCounts}`);
-    console.error(`  fresh:     ${freshCounts}`);
-    console.error("  Run: node scripts/extract-curriculum.js");
-    process.exit(1);
+  let stale = 0;
+  for (const { edition, path: outPath } of OUTPUTS) {
+    const out = buildCurriculum(edition);
+    let committed;
+    try { committed = JSON.parse(fs.readFileSync(outPath, "utf8")); }
+    catch (e) { console.error(`[extract --check] could not read ${outPath}: ${e.message}`); process.exit(1); }
+    const freshBody = JSON.stringify(withoutGeneratedAt(out));
+    const committedBody = JSON.stringify(withoutGeneratedAt(committed));
+    if (freshBody !== committedBody) {
+      const freshCounts = out.courses.map((c) => `${c.id}:${c.lessons.length}`).join("  ");
+      const committedCounts = (committed.courses || []).map((c) => `${c.id}:${(c.lessons || []).length}`).join("  ");
+      console.error(`[extract --check] ${path.relative(ROOT, outPath)} is STALE (edition ${JSON.stringify(edition)}).`);
+      console.error(`  committed: ${committedCounts}`);
+      console.error(`  fresh:     ${freshCounts}`);
+      stale++;
+    }
   }
-  console.log("[extract --check] data/curriculum.json matches the current sources.");
+  if (stale) { console.error("  Run: node scripts/extract-curriculum.js"); process.exit(1); }
+  console.log("[extract --check] data/curriculum.json and data/curriculum.store.json match the current sources.");
   process.exit(0);
 }
 
-fs.writeFileSync(OUT_PATH, JSON.stringify(out, null, 2));
-const counts = out.courses.map((c) => `${c.id}:${c.lessons.length}`).join("  ");
-console.log(`[extract] wrote data/curriculum.json — ${out.courses.length} courses · ${counts}`);
+for (const { edition, path: outPath } of OUTPUTS) {
+  const out = buildCurriculum(edition);
+  fs.writeFileSync(outPath, JSON.stringify(out, null, 2));
+  const counts = out.courses.map((c) => `${c.id}:${c.lessons.length}`).join("  ");
+  console.log(`[extract] wrote ${path.relative(ROOT, outPath)} (edition ${JSON.stringify(edition)}) — ${out.courses.length} courses · ${counts}`);
+}

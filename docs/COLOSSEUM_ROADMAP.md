@@ -1,5 +1,9 @@
 # Colosseum window roadmap — 2026-09-14 13:00 UTC → 2026-10-13 06:59 UTC (revision 3)
 
+> ⛔ **WITHDRAWN 2026-09-21 (owner): we are not doing Colosseum this window.** This roadmap and its
+> extensions are history. Nothing below is to be started or resumed. See `AGENTS.md` and
+> `docs/SEEKER_APP_PLAN.md` for the track that replaced it.
+
 The operating plan for the four weeks. One founder, no cofounder, an agent team: every
 workstream below is a separately scoped session with a definition of done, and the founder is
 the only sign-off. Written 2026-09-13 from the think tank

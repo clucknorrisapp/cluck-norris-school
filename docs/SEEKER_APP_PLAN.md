@@ -55,6 +55,14 @@ Verified in-repo, not assumed:
 device.** No session has ever exercised it. The owner has the Seeker and the Mac; that is a hard
 dependency on his time, not an optional check.
 
+> ⚠️ **SUPERSEDED IN PART, 2026-09-21.** §4 below describes a three-surface app (Rent Reclaim,
+> Ask Cluck, Wallet Checkup). The owner widened that the same night — *"I want to build all the
+> tools into the seeker app appropriately"* — and the tool surface is now the decision of record
+> in **`docs/SEEKER_TOOLS_BUILD.md`**: fifteen tools, each rebuilt phone-native, with the
+> operator/desk surfaces explicitly out of scope. Everything else in THIS file (which repo, what
+> "complete rebuild" means, the deadline, SKR, solo entry, registration mechanics) still stands.
+> Night's handoff: `docs/HANDOFF_2026-09-21_SEEKER.md`.
+
 ## 4. What the app is
 
 One thing done superbly beats five done adequately. Judged on stickiness, UX, mobile-native use and
@@ -95,14 +103,35 @@ contradictory published scoring schemes and the eligibility rules, is in
 | 18–19 | Buffer | — |
 
 **Gate at day 3:** a real wallet connects on the owner's Seeker. If that does not happen, the plan
-changes rather than the deadline.
+changes rather than the deadline. The owner's phone walk, step by step with what each screen must
+say, is `docs/SEEKER_DEVICE_TEST.md` (2026-09-22); the wallet-bridge steps are in the apps repo's
+`docs/MWA_PLUGIN.md`.
 
 ## 7. Decided (owner, 2026-09-19)
 
 ### SKR — an additional door, never a gate
 
-**Hold ~$50 of SKR → the heavy tools are free in the Seeker app**, alongside the two doors that
-already exist (hold CLKN, or pay the SOL pass). Owner's call, same evening.
+> **Shipped 2026-09-22:** `lib/tool-pass-qualify.js` (the decision, pure, unit-tested), the
+> `doors:["skr"]` field on `POST /api/tool-gate/session` sent only by `src/seeker/passgate.jsx`, the
+> `skr` block on `/api/tool-gate/config` (live SKR price → `skrNeeded`, kv last-known-good, sanity
+> band), `holder-skr` tokens re-checked through their own door, and the sheet's SKR sentence in
+> seven languages. Nothing behind SKR; the website and store editions unchanged.
+> **Codex round 13 (same day):** SKR never graces — a missing SKR price or a failed SKR read is
+> a denial with the reason, never a free pass; comp before cache; one price-acceptance rule for
+> both mints.
+
+> **Owner, 2026-09-22 (later the same day):** *"lets lower it to 20 dollars of SKR or 10 dollars of
+> CLKN to get access to advanced tools, airdropper should be free for everyone on all platforms
+> moving forward."* Shipped on the same branch: the two doors carry their OWN figures
+> (`TOOLGATE.usd` = 10 for CLKN, `TOOLGATE.skrUsd` = 20 for SKR, env `TOOLGATE_USD` /
+> `TOOLGATE_SKR_USD`, published as `holdUsd` and `skr.holdUsd`), and the Airdropper is outside
+> the pass everywhere — the web page, this app, and `/api/airdrop/record`, which now reads the
+> operator off the chain (the fee payer of each row's transaction) instead of a signed session.
+> The "$50" figures below are the 09-19 decision as written; the figures are the owner's and live
+> in the environment, never in a page.
+
+**Hold SKR worth the SKR door's figure → the heavy tools are free in the Seeker app**, alongside
+the two doors that already exist (hold CLKN, or pay the SOL pass). Owner's call, same evening.
 
 - **Mint: `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`** — SPL Token, 6 decimals.
   ⚠️ **Verified before use, and this mattered:** a second mint also calls itself SKR
@@ -117,7 +146,8 @@ already exist (hold CLKN, or pay the SOL pass). Owner's call, same evening.
   terminal 2%). ~10.6B in circulation with an active mint authority is exactly what that predicts.
   The "fixed" wording came from a search summary, not from Solana Mobile, and was wrong. It was
   also about to ship onto a public page; it did not.
-- **$50 worth, live-priced, never hardcoded** — same rule as the CLKN threshold.
+- **A dollar figure, live-priced, never hardcoded** — same rule as the CLKN threshold ($50 when
+  decided; $20 since 2026-09-22, with CLKN at $10).
 - **Same comp criteria as the existing hold**: re-checked at use, fails open when pricing is down.
   No new behaviour to reason about.
 - **Seeker app only.** The web, Google Play and iOS editions are unchanged.
@@ -155,8 +185,10 @@ device. One submission per contestant — multiple entries forfeit.
 3. **SKR's weight** — one published scheme makes SKR integration 20% of the main score, the other a
    separate $10k bonus, and they may mean on-chain activity rather than holdings. **Ask in office
    hours (Wednesdays 18:30 UTC, Discord) before assuming the holdings shape is enough.**
-4. **What gives** — the Colosseum Hub extension roadmap (GG2/GG4/GG5 and beyond) is the proposed
-   pause. Colosseum itself continues; their FAQ explicitly allows both hackathons.
+4. ~~**What gives** — the Colosseum Hub extension roadmap (GG2/GG4/GG5 and beyond) is the proposed
+   pause. Colosseum itself continues; their FAQ explicitly allows both hackathons.~~ **Settled
+   2026-09-21: Colosseum is off entirely (owner). This plan, the product and the partner projects
+   are the whole focus until Oct 8.**
 
 ## 9. Needs doing regardless of any of the above
 

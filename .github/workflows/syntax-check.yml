@@ -195,6 +195,17 @@ jobs:
         run: |
           git fetch origin develop --depth=1 --quiet || true
           node scripts/seeker-build-test.cjs
+      # docs/SEEKER_DEMO_INVENTORY.md — an inventory (facts, not pitch copy) of every route in
+      # both Seeker editions plus every existing docs/seeker/ and docs/demo/ capture, for the
+      # owner's demo shot list and deck. Pins the doc to the code, both directions: every route
+      # table matches the <Route path="…"> entries in src/seeker/edition/{full,edu}.jsx exactly
+      # (nothing added to a shell and left uninventoried, nothing inventoried that no longer
+      # exists), every docs/seeker or docs/demo path the doc names exists on disk and every file
+      # under those two directories is named somewhere in the doc, no literal "$<digit>" amount,
+      # and none of the forbidden words scripts/solana-room-test.cjs already enforces on public
+      # pages (yield/APR/APY framing, Normie Quest, Wallet Watch, Nomadz, Solana Foundation).
+      - name: Seeker app — demo inventory doc matches the routes and captures on disk
+        run: node scripts/seeker-demo-inventory-test.cjs
       # Rent Reclaim, READ SIDE (increment 2, docs/SEEKER_APP_PLAN.md) — GET /api/seeker/
       # reclaimable (lib/rent-reclaim.js) and its pane (src/seeker/RentReclaim.jsx). Both token
       # programs are enumerated; an account holding a balance is never classed reclaimable;
@@ -206,6 +217,36 @@ jobs:
       # Dependency-free — stubs global.fetch, no live RPC call in CI.
       - name: Seeker app — Rent Reclaim read side (both token programs, honest classification, unavailable-not-zero, i18n)
         run: node scripts/seeker-reclaim-test.cjs
+      # Rent Reclaim, SIGNING PATH (increment 3, docs/SEEKER_RECLAIM_SIGNING_SPEC.md) — THIS MOVES
+      # USER FUNDS. public/rent-reclaim-plan.js (every decision) + src/seeker/reclaim-sign.js (the
+      # thin browser seam). The built CloseAccount instruction is re-derived from
+      # @solana/spl-token and diffed byte-for-byte for BOTH the classic and Token-2022 program; a
+      # mutated (foreign) destination is REFUSED by the build path, not just the happy path; a
+      # balance that appears BETWEEN the scan and the build drops the account instead of closing
+      # it; wrapped SOL is refused with a reason; the per-transaction batch size is a COMPUTED
+      # bound (cross-checked against a REAL compiled solanaWeb3 transaction, not just the formula
+      # that produced it) and a 40-account wallet plans correctly; partial failure reports exactly
+      # which accounts closed with a confirmed-only total; a re-run after partial failure never
+      # re-attempts an already-closed account and never double-counts; an RPC failure reads
+      # "unavailable", never zero; a rejected signature is a normal outcome that claims no success.
+      # No live RPC, no real signing anywhere in this file — fixtures and a fake bridge only.
+      - name: Seeker app — Rent Reclaim SIGNING path (byte-identical instruction, mutation-tested destination check, batching, idempotency, unavailable, rejection)
+        run: node scripts/seeker-reclaim-sign-test.cjs
+      # The Airdropper's PLANNING decisions (public/airdrop-plan.js) — THIS MOVES USER FUNDS IN
+      # BULK, and everything here happens before the wallet is asked to sign, which is the last
+      # point at which a mistake is still free. Two sections exist because the desktop parser gets
+      # them wrong today: an ambiguous number format ("1.234,56") is REFUSED rather than silently
+      # read as 1.23456, in both spellings of that trap (the parser's and the splitter's); and
+      # duplicate addresses are summed in exact decimal STRING arithmetic — never floats, which
+      # airdrop-engine.js's own toBaseUnits() comment explains go wrong past ~9M tokens at nine
+      # decimals — and always REPORTED rather than merged behind the operator's back. The two
+      # list modes merge differently on purpose (line items sum; "give everyone X" does not
+      # double). The cost preview mirrors the engine's own batch weighting exactly, so the
+      # transaction count shown is the one the wallet will ask to approve, and an unreadable SOL
+      # balance is `null` — never an optimistic "affordable". The chain-touching half is driven
+      # for real in the boot test's section G.
+      - name: Seeker app — Airdropper planning (ambiguous amounts refused, exact decimal sums, duplicate reporting, engine-matched batch cost)
+        run: node scripts/seeker-airdrop-test.cjs
       # Addendum B5 / roadmap E3: the on-chain memo format is byte-diffed against a hand-built
       # Uint8Array before it ships; verifyCommitTx never trusts the client (wrong payer, wrong or
       # missing memo, more than one memo, a failed or unconfirmed tx are all refused); a version's
@@ -261,6 +302,12 @@ jobs:
       # throwing changes nothing.
       - name: Tools pass — paid redemption + recovery (fault injection)
         run: node scripts/tool-pass-redeem-test.cjs
+      # The free-tier DECISION (lib/tool-pass-qualify.js): CLKN first, the Seeker app's SKR door
+      # only when asked for, fail open on OUR outages and never on a verified zero, thresholds
+      # live-priced. Two doors × three outage policies is exactly the branching that goes wrong
+      # silently inside server.js, so it is a pure function with every branch pinned here.
+      - name: Tools pass — free-tier decision, CLKN + the Seeker SKR door
+        run: node scripts/tool-pass-qualify-test.cjs
       - name: Buy comp — pool sale vs transfer vs LOCK (hold check; a lock is not a sell)
         run: node scripts/buycomp-sell-detect-test.cjs
       # The project buy bots' detection, on two real mainnet transactions: a Jupiter buy split
@@ -379,6 +426,18 @@ jobs:
       # carries a private field or a forbidden word.
       - name: Hub project feed — JSON Feed + RSS (Colosseum §14 DD2)
         run: HUB_FEED_TEST_PORT=3367 node scripts/hub-feed-test.cjs
+      # AA1 follow-up (Colosseum roadmap §14 DD2 + §11 AA1) — "follow a wallet without a project":
+      # the per-wallet twin of the feed test above. GET /api/hub/wallet/:wallet/feed.json (JSON
+      # Feed 1.1) and GET /hub/wallet/:wallet/feed.xml (RSS 2.0), scoped to every project a wallet
+      # actually appears in (never the full registry). Checks program-version/commitment items are
+      # project-wide while batch items are scoped to the batches that actually paid that wallet,
+      # that two projects sharing a batch id or version number never collide (project-prefixed
+      # item ids), that a hostile project label round-trips exactly through a real (non-regex)
+      # hand-rolled XML tree parser's entity decoding, that an unseen wallet gets a valid empty
+      # feed rather than a 404, and that a malformed/oversized address is refused 400 before any
+      # project is ever walked.
+      - name: Hub wallet feed — JSON Feed + RSS across every project a wallet appears in (AA1 follow-up)
+        run: HUB_WALLET_FEED_TEST_PORT=3368 node scripts/hub-wallet-feed-test.cjs
       # Colosseum roadmap §7 (the W4 deferred item): the public Buy Special standings page.
       # Unsealed publishes rules only (no results/review/payouts key at all); sealed publishes the
       # full view plus a stable resultsHash; hold-through is held/sold/moved-out/locked-not-a-sell
@@ -581,9 +640,16 @@ jobs:
           else
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: unknown event — full run"; exit 0
           fi
+          # ⚠️ scripts/seeker-app-boot-test.cjs is in the allowlist ON PURPOSE: it is the only
+          # browser test this gate can skip, so without its own path here a PR that changes the
+          # test never RUNS the test. Found 2026-09-21 on #388, which added a section proving the
+          # Hatchery strips EXIF and went green in 2 minutes without ever opening a browser. A
+          # test you can edit without CI executing it is the "green on the wrong thing" failure
+          # this repo keeps paying for. Any future browser test that this gate can skip belongs
+          # here too.
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|seeker\.html$|store-edition/|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|scripts/(seeker-app-boot|store-shell-boot)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -731,6 +797,20 @@ jobs:
         run: node scripts/hub-judge-doc-test.cjs
       - name: Tools pass server-side gate + raw console guard (2026-09-10)
         run: node scripts/tool-pass-gate-test.cjs
+      # The AI's system prompt is the widest-reach, least-reviewed copy we ship — seven
+      # languages, website + Play + iOS. It had the heavy tools listed as "free, no wallet
+      # connect" (untrue since 2026-08-18) while describing the pass correctly further down.
+      - name: Ask Cluck's system prompt makes no claim the product cannot support
+        run: node scripts/ai-prompt-claims-test.cjs
+      # "Explain this result" sends finding CODES, never the screen's text, because token names
+      # are attacker-controlled and an LLM prompt turns that from an XSS class into an injection
+      # class. This attacks the validator that is the whole defence.
+      - name: Explain-this-result payload cannot carry free text to the model
+        run: node scripts/explain-findings-test.cjs
+      # The Daily pane's value is that "today's lesson" means the same thing for everyone. A
+      # local-time rollover or a streak that survives a gap would break that invisibly.
+      - name: Daily rotation is UTC, shared, and never beacons the ledger
+        run: node scripts/daily-rotation-test.cjs
       - name: JVP dashboard data layer (sanitisation, decisions, slimming)
         run: node scripts/jvp-dashboard-test.cjs
       # Listing Checkup routes: validation, the offline run → cache → share page with every
@@ -759,6 +839,39 @@ jobs:
       - name: wallet standard discovery
         if: steps.gate.outputs.run == 'true'
         run: node scripts/wallet-standard-test.cjs
+      # The Seeker app, actually booted. seeker-build-test.cjs (node-check) proves the TARBALL is
+      # well formed but never opens it, so an app that builds clean and renders a blank screen
+      # would ship green — the same class of break the Normie Quest visual gate exists for. This
+      # unpacks the shipped store-edition-seeker tarball, serves it, and drives it in a phone-sized
+      # Chromium with a fake Wallet Standard wallet: it mounts, hash routing works, connect and
+      # disconnect both work, tap targets clear 44px, and — the one that matters — a FAILED chain
+      # read renders "unavailable" and never a zero total, because "0 SOL to reclaim" off a 503 is
+      # a lie about the user's money.
+      - name: seeker app boots and behaves
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/seeker-app-boot-test.cjs
+      # The Google Play / iOS edition of the same shell (store-edition v1.1.0), booted the same
+      # way: the shipped google tarball, phone-sized Chromium, every /api/** refused. It asserts
+      # what a store reviewer would: the school leads, NO wallet layer or control exists, a stale
+      # deep link to a wallet tool lands on the school, the pasted-address checkup refuses a bad
+      # address on the device, an answer carries the report control, the certificate route asks
+      # with the device's own sid, the legal footer is there, and nothing left the bundle's
+      # origin but clucknorris.app. store-edition-test.cjs checks the tarball's CONTENTS; this
+      # checks what it does when opened.
+      - name: Play/iOS edition of the shell boots and behaves
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/store-shell-boot-test.cjs
+      # Codex round 12 on #391: "a passing content scan means the bundle is clean" had already been
+      # wrong once — the scan passed while CLKN's pools and fees were on the phone at
+      # #/school/lp/4. So this reads the SCREEN: the shipped google tarball, every one of the 58
+      # lessons in every one of the seven languages, every one of the 200 quiz questions answered
+      # so its explanation renders, and document.body.innerText scanned for our ticker. Codex's
+      # four examples are pinned by name on the rendered text of the lesson each lived in, and the
+      # store wording is asserted PRESENT so the walk is proven to read the real body.
+      # `--mutate` puts the old sentence back in the extracted chunk and the walk fails.
+      - name: Play/iOS edition — every lesson, every language, read off the screen
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/store-render-scan.cjs
       # Colosseum roadmap §7 — "accessibility and phone polish on the public pages" — judges click
       # these on phones. Boots its own server and drives /hub, /hub/<project>, /hub/demo,
       # /for-projects, /hub/apply and /hub/<project>/pay at 360 and 390px with a real Chromium:

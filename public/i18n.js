@@ -97,7 +97,11 @@
   var setVal = (typeof WeakMap !== "undefined") ? new WeakMap() : null;   // node -> value we wrote (to ignore our own mutations)
   var SKIP = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, CODE: 1, PRE: 1, TEXTAREA: 1, SVG: 1, KBD: 1, SAMP: 1 };
   var BAD_CHILD = "a,br,span,div,p,ul,ol,li,section,article,header,footer,nav,table,tbody,tr,button,input,textarea,select,img,svg,label,form,h1,h2,h3,h4,h5,h6";
-  var TICKER = {}; "CLKN SOL USDC USDT JUP cbBTC BTC ETH SOLUSD NFT LP AMM DeFi MEV APR APY TVL IL DEX CEX SPL DAO USD".split(" ").forEach(function (t) { TICKER[t] = 1; });
+  // Whole-node tickers/acronyms are never sent for translation. Our own ticker is NOT on this
+  // list on purpose: this file ships inside the education edition of the app, whose bundle
+  // scan refuses the bare word (store-edition v1.1.0 — the app names no token of ours). A lone
+  // node holding our ticker on the website goes to the translator once and comes back unchanged.
+  var TICKER = {}; "SOL USDC USDT JUP cbBTC BTC ETH SOLUSD NFT LP AMM DeFi MEV APR APY TVL IL DEX CEX SPL DAO USD".split(" ").forEach(function (t) { TICKER[t] = 1; });
 
   function norm(s) { return (s || "").replace(/\s+/g, " ").trim(); }
   function curated(key) { var v = DICT[key]; return (v && v !== key) ? v : null; }
@@ -236,13 +240,42 @@
   // social card, and then burned the daily machine-translation budget re-translating
   // strings that were already professionally translated in <lang>.school.json.
   var _p = (location.pathname || "");
-  if (_p.indexOf("/school") === 0 || _p.indexOf("/lp-lab") === 0 || _p.indexOf("/lplab") === 0) jobs.push(loadDict(lang + ".school"));
+  var _packs = {};
+  if (_p.indexOf("/school") === 0 || _p.indexOf("/lp-lab") === 0 || _p.indexOf("/lplab") === 0) _packs.school = 1;
+  // A shell may DECLARE the packs it needs, for the case the path rule above cannot see: a
+  // hash-routed bundle. The Seeker app's path is always "/" and its school is at "#/school", so
+  // the pathname rule never fired and six languages machine-translated lesson prose that was
+  // already professionally translated in <lang>.school.json (Codex, PR #390). Sniffing the hash
+  // instead would be racy — the app boots at "#/" and redirects to "#/school" after this runs —
+  // so the shell declares it: <html data-i18n-packs="school">.
+  //
+  // ⚠️ NOT a blanket "always load everything": <lang>.school.json is ~1MB raw / ~356KB gzipped,
+  // and putting it on the website's homepage for every Spanish visitor would be a real
+  // regression. Only a shell that IS the school declares it.
+  //
+  // ⚠️ KNOWN GAP, stated rather than papered over: on the WEBSITE this is still decided once, at
+  // load. Someone who lands on "/" and then client-navigates to /school does not get the curated
+  // pack for that visit. That predates this change and is unchanged by it; fixing it needs a
+  // lazy merge plus a re-walk of nodes that were already machine-translated, which is a bigger
+  // change than this PR should carry.
+  try {
+    var _decl = (document.documentElement.getAttribute("data-i18n-packs") || "").split(/\s+/);
+    // Whitelisted charset, not because this attribute is attacker-controlled (it is our own
+    // shell markup) but because the value becomes a URL path — a typo should 404 a dictionary,
+    // never escape the /i18n/ directory.
+    for (var _i = 0; _i < _decl.length; _i++) if (/^[a-z][a-z0-9-]*$/.test(_decl[_i])) _packs[_decl[_i]] = 1;
+  } catch (_) {}
+  for (var _k in _packs) if (_packs.hasOwnProperty(_k)) jobs.push(loadDict(lang + "." + _k));
   /* STORE:OUT */ if ((location.pathname || "").indexOf("/locker-room") === 0) jobs.push(loadDict(lang + ".locker")); /* /STORE:OUT */
   Promise.all(jobs)
     .then(function (parts) {
       DICT = {};
       parts.forEach(function (p) { for (var k in p) DICT[k] = p[k]; });
       window.CLKN_I18N = { lang: lang, dict: DICT, mt: MT };
+      // Announce it. A React surface that rendered BEFORE this resolved (the Seeker shell's
+      // school on a direct lesson launch) has no other way to learn the dictionary is here —
+      // polling with a timeout misses a slow load for good (Codex, PR #390 round 9).
+      try { window.dispatchEvent(new CustomEvent("clkn:i18n-ready", { detail: { lang: lang } })); } catch (_) {}
       onReady(start);
     })
     .catch(function () { onReady(injectToggle); });

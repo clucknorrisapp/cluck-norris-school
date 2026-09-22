@@ -51,6 +51,16 @@ does not tell you how to write software; use your judgement for that.
 > init script (60 fps, same logic; the state and beat tests do) and drive the target scene with a
 > lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`); the visual gate stays on WebGL.
 
+> ⛔ **COLOSSEUM IS OFF (owner, 2026-09-21): "we are only doing the Solana Mobile hackathon at this
+> time, we are not doing the Colosseum — I don't have the time or the ability to meet the commitments
+> right now. All in on the Solana Mobile hackathon and our actual project and the others we are
+> helping."** The whole Colosseum block below is history, kept so nothing is rebuilt twice: do not
+> start or resume Colosseum work — no roadmap extensions, no weekly-update videos, no Arena posts, no
+> submission prep, no disclosure lines in `docs/PRE_EVENT_STATE.md`. The Project Hub stays live as
+> product; touch it only when a partner project needs it. **The track is the Seeker app for the Solana
+> Mobile CLOCK IN hackathon — `docs/SEEKER_APP_PLAN.md` and `docs/CLOCK_IN_HACKATHON_2026.md`;
+> submissions close 2026-10-09 06:59 UTC (Oct 8, 23:59 PT)** — plus the product and the partner
+> projects. Withdrawing the Colosseum registration itself is the owner's act on colosseum.com.
 > 🏛️ **Colosseum Crypto World's Fair (Sep 14 – Oct 12, 2026) — we are ENTERED (owner, 2026-09-10).**
 > The submission package is `docs/COLOSSEUM_2026_SUBMISSION.md` (product description, GTM, demo
 > script, pitch outline, competitive landscape). The **Colosseum Copilot** research skill is
@@ -122,8 +132,8 @@ does not tell you how to write software; use your judgement for that.
 ## The mission
 
 **School of Crypto Hard Knocks** — a free Solana crypto school wrapped around real tools:
-the heavy tools are free to anyone holding ~$50 of CLKN (else a small SOL pass), the safety
-basics stay free for everyone. Live at **clucknorris.app**.
+the heavy tools are free to anyone holding ~$10 of CLKN (else a small SOL pass), the safety
+basics and the Airdropper stay free for everyone. Live at **clucknorris.app**.
 
 The point is that people lose money in crypto because nobody told them the truth plainly, and
 this teaches them before they get hurt. Design calls should serve that:
@@ -154,11 +164,34 @@ what they were owed and what arrived.
 
 - **Learning and safety stay genuinely free.** The school, the AI tutor, Wallet Checkup,
   Firepit, the Locker Room — no wallet, no signup, no catch. The **heavy tools** (X-Ray,
-  Holders, Trace, Airdrop, Buy Special) moved behind the **unified tools pass on 2026-08-18**
-  (owner's call, for the app-store transition): hold **$50 worth of CLKN** (live-priced,
-  `/api/tool-gate/config`, never hardcode the amount) = all free; else **0.05 SOL for a 7-day
-  all-tools pass**. Client: `cluck-gate.js` — pages preview free, RUN/SEND needs the pass.
-  Kill switch: `TOOLGATE_OFF=1`. Planned: lifetime-pass NFTs hook into the comp check.
+  Holders, Trace, Buy Special) moved behind the **unified tools pass on 2026-08-18**
+  (owner's call, for the app-store transition): hold **$10 worth of CLKN** (live-priced,
+  `/api/tool-gate/config`, never hardcode the amount; **lowered from $50 on 2026-09-22**, owner:
+  "lower it to 20 dollars of SKR or 10 dollars of CLKN to get access to advanced tools") = all
+  free; else **0.05 SOL for a 7-day all-tools pass**. Client: `cluck-gate.js` — pages preview
+  free, RUN needs the pass. Kill switch: `TOOLGATE_OFF=1`. Planned: lifetime-pass NFTs hook into
+  the comp check. ⛔ **The Airdropper is FREE FOR EVERYONE on every platform since 2026-09-22**
+  (owner, same message: "airdropper should be free for everyone on all platforms moving
+  forward") — no tools pass on the web page, none in the Seeker app, none on
+  `/api/airdrop/record`. ⚠️ **But writing the drop's PUBLIC RECEIPT needs the RECEIPT SIGN-IN**
+  (Codex, round 18): the operator wallet signs a one-line nonce (`purpose=receipt` on the
+  challenge, its own message, a `receipt` token that `toolPassGate` refuses as a tools pass) — a
+  signature, never a holdings check or a payment — and every row is held to that wallet, the
+  cap is keyed on it, and only it may append to the drop. Deriving the operator from the chain
+  alone (rounds 15–17) let a stranger claim an operator's unrecorded transfer first; don't go
+  back to it. A declined signature means the tokens still send and the drop gets no public
+  receipt, said on screen. Rows are keyed `(signature, wallet)` — one batch transaction pays
+  many recipients; the signature alone is only the ownership key. ⚠️ **Only
+  verified rows are ever stored** (Codex, round 16): a drop exists only once a row has verified,
+  nothing unverified is written, and a verified signature belongs to one receipt — free access is
+  not unauthenticated write access. ⚠️ **The record is a verify phase then a SYNCHRONOUS commit**
+  (Codex, round 17): verification awaits the chain and writes nothing; the commit re-reads the
+  drop and each signature's own kv key (`airdropReceiptSig:<sig>`, never one index object) and
+  persists with no await in between. Don't move a check back in front of the `await getTx()` —
+  that is exactly what made two concurrent calls produce two receipts for one signature and lose
+  each other's rows. A batch that put nothing on the receipt is a 409, and both clients count the
+  route's per-row `verified` answers, never the chunk they sent. Don't put the Airdropper back
+  behind the pass in a roundup, a tier badge or a listing.
 - **Say what's on-chain, never why.** The chain shows *what*, not *why*. Only call a wallet
   "creator" or "team" when a launchpad API confirms it. That forensic honesty is the brand.
 - **Guardrails before power.** First-timers get warned before they can hurt themselves. That's
@@ -170,6 +203,21 @@ what they were owed and what arrived.
 **Current strategic priority (owner, 2026-07-19):** the **Locker Room** is the flagship story —
 helping communities lock tokens on Jupiter Lock and broadcast it. Autopsy stays but isn't the
 lead ("so many rugs and nobody cares").
+
+🚩 **THE FLAGSHIPS (owner, 2026-09-21), in his words:** *"flagships are the school, the LP lab,
+the airdropper, the locker room, the fire pit, project burn."* Six, and the **school leads**.
+This is what any surface that ranks, groups or leads with a subset must lead with — the Seeker
+app's home, the website's doors, promo copy, the demo. Everything else is real and stays, but it
+is not the front door.
+
+⚠️ **The lesson that produced this list.** The Seeker app shipped with **no school in it at
+all** — not hidden, never built. The 2026-09-21 instruction "build all the tools into the seeker
+app" produced `docs/SEEKER_TOOLS_BUILD.md`, a list of fifteen TOOLS, and that list silently
+became the whole app: `seeker.html` is its own Vite entry (`src/seeker/*`) and never included
+`src/App.jsx`, so `/` landed on `/tools` and the Educate half of Educate → Build → Earn simply
+was not in the product. The owner found it on the device. **A scope doc that enumerates one
+category is not a product spec** — when the next one says "all the X", check what it leaves out
+before the list becomes the app.
 
 **Normie Quest** runs under Cluck Norris production for the NORMIE community, and went public
 on **2026-08-22** at `/normie-quest-x7` with owner-set holder terms: free worlds 1-3, **$5 of
@@ -254,6 +302,21 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   `/api/whirlpool/vault/status` without `project=` returns the CLKN project, NOT treasury.)
 - **Telegram posts are SILENT by default.** Never `&loud=1` unless the owner says so in the
   moment.
+- 📄 **"Send this to someone" means A PDF. Every time, without being asked** (owner, 2026-09-20,
+  after a session delivered an on-chain report as a Docs link and then a `.md` file: *"I like
+  everything as copy-paste, a PDF. This is nothing new."*). The moment a deliverable is for anyone
+  outside this chat — a partner, a project's CEO, a judge, an investor — the default is:
+  1. **a PDF file, delivered as a file**, named so it reads on its own
+     (`NORMIE-onchain-report-2026-09-20.pdf`, not `report.pdf`); and
+  2. **the text in chat, ready to copy-paste**, when it is short enough to paste.
+  ⛔ Not a claude.ai link, not a Docs page, not a `.md` file, not "here are three options" —
+  those are extra steps between him and sending it. Build it once, hand over the PDF, stop.
+  How: write clean print HTML, then
+  `/opt/pw-browsers/chromium-1234/chrome-linux64/chrome --headless --disable-gpu --no-sandbox
+  --no-pdf-header-footer --print-to-pdf=<name>.pdf report.html` (the binary path moves between
+  Playwright versions — `find /opt/pw-browsers -maxdepth 3 -type f -name chrome`), then
+  `SendUserFile`. Writing the deliverable somewhere he then has to convert or export is the
+  failure, not a smaller version of success.
 - **Never commit secrets**, and don't put a model identifier in committed files.
 - **Tell the truth about what you did.** If a check didn't run, say so. Most of the worst bugs
   here survived because something reported green on the wrong thing.
@@ -344,15 +407,29 @@ split is settled — don't re-debate it.
 Every gate resolves through the **connected wallet**: hold CLKN (free), pay a small SOL price
 in one click, or sign a message where the gate is *ownership* rather than payment.
 
-- **The unified tools pass** (X-Ray, Holders, Trace, airdropper, Buy Special): hold **$50 worth
-  of CLKN** → all free; else **0.05 SOL = 7-day pass to all of them**. ONE localStorage pass
+- **The unified tools pass** (X-Ray, Holders, Trace, Buy Special — the airdropper LEFT it on
+  2026-09-22, free for everyone): hold **$10 worth of CLKN** (was $50 until 2026-09-22) → all
+  free; else **0.05 SOL = 7-day pass to all of them**. ONE localStorage pass
   (`clkn_tools_unlock`), one client (`cluck-gate.js`), config at `/api/tool-gate/config`
-  ($-amount → CLKN computed from the live price; env knobs `TOOLGATE_USD` and `TOOLGATE_OFF`;
+  ($-amount → CLKN computed from the live price; env knobs `TOOLGATE_USD` (CLKN door, default
+  10), `TOOLGATE_SKR_USD` (SKR door, default 20) and `TOOLGATE_OFF`;
   **the paid terms — lamports and days — are an append-only schedule in `lib/tool-pass-terms.js`
   resolved at the payment's block time**, so a bought pass never moves when the offer changes;
   `TOOLGATE_LAMPORTS`/`TOOLGATE_DAYS` env are ignored with a boot error since 2026-09-11).
   Pages preview free — the gate fires on RUN/SEND. Fail-open when pricing is down. The old
   per-tool thresholds (50k airdropper / 100k Buy Special) are RETIRED by this.
+  **The SKR door (owner 2026-09-19, shipped 2026-09-22): in the Seeker app only, holding $20 worth
+  of SKR (`SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`, live-priced, never hardcoded; its OWN
+  figure — `TOOLGATE.skrUsd`, published as `skr.holdUsd` on the config) opens the same free tier.** The app sends `doors:["skr"]` on `POST /api/tool-gate/session`; the website and the
+  store editions send nothing and never grow the door. CLKN is always checked first; SKR only when
+  asked; and **SKR never graces** — it only ever ADDS a grant on a verified qualifying balance, so
+  the fail-open population is the CLKN one and only the CLKN one (Codex, round 13: the first cut
+  graced on a missing SKR price, which admitted zero-CLKN wallets during a cold-start refresh).
+  Comp is consulted before the holder cache, and the cache is keyed by wallet + doors. The decision
+  is `lib/tool-pass-qualify.js` (pure, `scripts/tool-pass-qualify-test.cjs`); one `acceptPrice()`
+  rule guards what either mint's price refresh may persist (finite, positive, inside the 10× band of
+  a recent last-good). It is a PRODUCT boundary, not a security one — a hand-made request with the
+  door gets what a CLKN holder already gets — and **nothing is gated behind SKR**.
 - premium forensics — holder-gated at 2M, re-checked live on every run (NOT part of the pass)
 - transcript Tier-2 — connect & sign with `minHold: 0` (a graduate may hold no CLKN)
 - The Hatchery is the one place you can still **pay** in CLKN, ~30% cheaper than the SOL price.
@@ -646,6 +723,12 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
 
 ## Open decisions — the owner's call, not yours
 
+- **Buy Special / buy comp is OFF the main webpage (owner, 2026-09-21: "we are going to remove
+  buy special/buy comp from the main CLKN webpage").** Scope confirmed the same day: public
+  surfacing only — the homepage door, the Tools roundup card, the `/for-projects` step, the
+  README and `/investors` copy. `/buyspecial`, `/rose`, the draw and dashboard pages, their API
+  routes and the Telegram buy-comp engine all stay reachable by direct URL for ROSE and Hub
+  operators. Don't put it back in a roundup, a door, promo copy or the tools catalogue.
 - **Buy Special lost its CLKN price.** Retiring send-to-unlock removed the 5,850-CLKN door priced
   on 2026-07-24 to be ~25% cheaper than SOL. Paying in CLKN is no longer possible there, only
   holding. That reversed a deliberate decision — re-raise it rather than assuming it's settled.

@@ -301,8 +301,15 @@ var CluckAirdrop = {
       try {
         var result = await rpc("getSignatureStatuses", [[signature]]);
         var st = result && result.value && result.value[0];
+        // ⚠️ ORDER IS LOAD-BEARING. getSignatureStatuses returns BOTH fields for a transaction
+        // that landed and then failed: {err:{InstructionError:[...]}, confirmationStatus:"confirmed"}.
+        // Testing confirmationStatus first returned true for a FAILED airdrop and reported every
+        // recipient in that batch as sent. err is only ever set once the tx has landed, and a
+        // landed tx always carries a confirmationStatus — so the err check must come first or it
+        // is dead code. Found 2026-09-21 by an adversarial review of the Seeker reclaim path,
+        // which had copied this function; the bug was live here.
+        if (st && st.err) throw new Error("Transaction failed on-chain: " + JSON.stringify(st.err));
         if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return true;
-        if (st && st.err) throw new Error("Transaction failed on-chain");
       } catch (e) { if (/failed on-chain/.test(e.message)) throw e; }
     }
     return false;

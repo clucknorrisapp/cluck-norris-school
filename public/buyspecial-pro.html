@@ -9,9 +9,6 @@
 <meta property="og:title" content="Buy Special — buy competitions"/>
 <meta property="og:description" content="Run a buy competition on any Solana token: reward every holder, or rank the top buyers. On-chain, hold-verified, and paid out from your own wallet without leaving the page."/>
 <meta property="og:image" content="https://clucknorris.app/cluck-norris.png"/>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   /* palette comes from theme.css — the private :root that used to shadow it was removed 2026-07-29 */
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -657,10 +654,11 @@ const OP_FLAG='clkn_buyspecial_operator';
 const OP_KEY='clkn_buyspecial_opkey';
 async function toolFetch(url){ let k=null; try{ k=sessionStorage.getItem(OP_KEY); }catch(_){} if(k) return fetch(url,{headers:{'x-premium-key':k}});
   const r=await CluckGate.fetch(url); if((r.status===402||r.status===403)&&!CluckGate.pass()) showGate(); return r; }
-// Unified tools pass (owner, 2026-08-18): ONE pass across every heavy tool — hold $50 worth
-// of CLKN (live-priced via /api/tool-gate/config) = free, else 0.05 SOL for 7 days of
-// EVERYTHING. This page keeps its own gate UI but reads/writes the shared pass through
-// CluckGate, so unlocking here unlocks X-Ray/Holders/Trace/Airdrop too (and vice versa).
+// Unified tools pass (owner, 2026-08-18): ONE pass across every heavy tool — hold CLKN worth
+// the live figure (/api/tool-gate/config) = free, else 0.05 SOL for 7 days of EVERYTHING.
+// This page keeps its own gate UI but reads/writes the shared pass through CluckGate, so
+// unlocking here unlocks X-Ray/Holders/Trace too (and vice versa). The Airdropper left the
+// pass on 2026-09-22 — free for everyone.
 // CluckGate.pass() also honors the old clkn_buyspecial_unlock key until it expires.
 // A pass counts only with its server-issued token (proof): the heavy APIs check that token, and a
 // token-less local grant (the old flow here, or a pre-2026-09-10 pass) would only 402.

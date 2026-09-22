@@ -1,0 +1,14 @@
+/* Education edition only — the pieces the Play/iOS shell has that the full app does not.
+   The address-form / "check another" bar styles moved to ../addressform.css (that component is
+   now shared with the full edition too — CLAUDE.md's "one copy" rule).
+   Tokens only, never a page-local :root (AGENTS.md). */
+.seeker-edu-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.seeker-edu-footer a { color: var(--muted); text-decoration: underline; min-height: 44px; display: inline-flex; align-items: center; }

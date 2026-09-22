@@ -120,6 +120,96 @@ Cluck Score never (retired, CLAUDE.md "Removed").
 - Concierge cards still route only to `STORE_PAGES` surfaces; policy unchanged: no wallet, no
   address, no referral, no CLKN promotion; `scripts/store-edition-test.cjs` unchanged and passing.
 
+## v1.1.0 (2026-09-21) — the Seeker shell, in its education edition
+
+Owner, the same day the Seeker app ran on his phone: *"maybe we should rebuild our stuff for google
+play and IOS to look similar and real app feel"*, then *"start on the play store version of the
+shell"*. So v1.1.0 is a **format change, same contract**: the bundle is the phone-native shell
+(`seeker.html`, `src/seeker/*`) built in an **education edition**, instead of the reflowed website.
+Every rule the reviewer and the wrapper rely on still holds — no wallet, no payments, no address
+collection, compiled out rather than hidden — and every v1.0.x contract item is still in the
+bundle. It is a **routine app update**, not a resubmission: same package, same signing key, same
+data-safety declarations; the listing needs new screenshots.
+
+**How the edition is chosen.** `store-edition.json` says `"entry": "seeker"`; the builder passes
+`STORE_ENTRY=seeker` and `vite.config.js` (a) builds `seeker.html`, (b) strips the
+`<!-- EDU:OUT --> … <!-- /EDU:OUT -->` block from it (the wallet scripts: `cluck-wallet.js`,
+`cluck-gate.js`, the vendored web3, the reclaim and airdrop helpers) and every remaining HTML
+comment, and (c) aliases `@seeker-edition` to **`src/seeker/edition/edu.jsx`** instead of
+`edition/full.jsx`. **That module's import list is the safety argument:** it never imports a
+wallet pane, the wallet gate (`needswallet.jsx`, moved out of the shared `pane.jsx` for exactly
+this reason), the tools registry, the pass client or the signing helpers, so none of them can
+reach the bundle. The forbidden-string scan is the second lock, and it now also refuses the
+wallet scripts by filename in `index.html` and any wallet-pane import in `edu.jsx`.
+
+**What the education edition carries** (tabs: School · Daily · Ask · Checkup · Listing):
+
+| Surface | v1.1.0 | Note |
+|---|---|---|
+| The school | IN | 58 lessons / 4 courses / 200 questions, **bundled and offline**, in seven languages. **The STORE copy of the curriculum**: `scripts/extract-curriculum.js` now resolves the lesson sources' `STORE ? … : …` branches per edition and writes `data/curriculum.store.json` beside `data/curriculum.json`; `@seeker-curriculum` aliases the shell to the right one, so the venue names, the CLKN mint and the token-naming worked examples are physically absent. `--check` covers both files. |
+| Certificate of completion | IN | `src/seeker/school/Certificate.jsx`, route `#/school/certificate`, offered from the school's finished state. `POST /api/claim/certificate` with **this device's own session id** — the same anonymous sid every lesson beacon carries — so nothing is transferred and nothing is a bearer credential (this is design 4 in `docs/SEEKER_TRANSCRIPT_HANDOFF.md`, for the certificate only; the wallet-signed diploma cNFT stays on the website). The gate's `not_yet` renders as the record's own sentence, never as an app error. Name stays on the device. |
+| Ask Cluck | IN | The **Report this answer** control (`ReportAnswer` in `AskCluck.jsx`, rendered only when the edition passes `report`), a sibling of the answer bubble — `reason`, `question`, `answer` to `/api/ask-cluck/report`, nothing else. |
+| Wallet Checkup | ADAPT | **Paste an address.** `WalletCheckup.jsx` takes `address` + `gate`; the full app passes the connect gate, this edition passes an address form (base58 checked on the device before any request). Scan only — no revoke, no connect, no signing. |
+| Listing Checkup | IN | Free, no gate. Backend-provided links pass the same render-time host allow-list the v1.0.2 page enforced (`linkHosts` from `edu.jsx`; off-list URLs render as text). |
+| Daily | IN | Today's lesson + the daily check (bundled) and the majors from `GET /api/alpha` (**added to `STORE_API_RE`** in this version — read-only, cached). No brief, no picks, no yield figure. |
+| Legal | IN | `Footer` in `edu.jsx` links `/privacy/store`, `/terms/store` and the site root ("the full toolkit lives on clucknorris.app" — the root, never a deep link into a tool the edition lacks). |
+| Rent Reclaim, Firepit, Locker Room, Project Burn, X-Ray, Holders, Trace, Airdropper, Hatchery, Buy Special, the tools pass | OUT | Not imported by the edition. A stale deep link to any of them lands on the school. |
+
+**Dictionaries.** The old rule excluded *every* seeker string from the google/ios dictionaries;
+under it this bundle would have shipped an English app to a Spanish learner. `scripts/seeker-i18n-keys.cjs
+--sync-exclude` now computes `excludeKeys` = (existing ∪ every seeker key) − the education
+edition's own keys (walked from `edu.jsx`'s import graph), and `seeker-build-test` section (c)
+asserts both directions on the artifact: no wallet-only key in a bundled dictionary, and the
+shell's own strings still present.
+
+**Tests.** `scripts/store-edition-test.cjs` (contract, restated for the shell — the page-by-page
+assertions became chunk assertions; every contract item kept), `scripts/seeker-build-test.cjs` §(c)
+(no wallet half, in files, globals, markers or dictionary keys), and the new
+**`scripts/store-shell-boot-test.cjs`** (CI): boots the shipped google tarball in headless
+Chromium at phone size with every `/api/**` refused — mounts on the school, no wallet layer or
+control exists, stale wallet-tool deep links land on the school, all five tabs mount offline,
+the address form refuses a bad address before any request, an answer carries the report control
+and the report posts exactly `{reason, question, answer}`, the certificate route asks with the
+device's sid and renders "not yet" truthfully, the footer links the store legal pages, and
+nothing left the bundle's origin but `clucknorris.app`.
+
+**Read off the screen (Codex round 12, 2026-09-21).** The round-10 content scan passed while CLKN's
+pools and fees were on the phone at `#/school/lp/4`, so a scan of the files is no longer the proof
+that the bundle is clean — **`scripts/store-render-scan.cjs`** (CI) is. It boots the shipped google
+tarball in headless Chromium and reads `document.body.innerText` of every lesson (58) in every
+language the bundle ships (7), answering every quiz question (200) so the explanations render, and
+fails on our ticker anywhere on any screen. Codex's four examples are pinned by name on the rendered
+text of the lesson each lived in, the store wording is asserted present (the walk reads the real
+body), each non-English walk must render differently from English (the language really switched),
+and `--mutate` puts the old sentence back in the extracted chunk to prove the walk fails. About
+five minutes for all seven languages; `node scripts/store-render-scan.cjs en es` for a subset.
+
+**The token rule, made a rule (Codex round 11, 2026-09-21).** The first shell build still named
+CLKN in four lessons (the fee-tier line about our pools, the buyback claim, the "what makes CLKN
+different" quiz, the AMM worked examples) — the scan looked for two phrases, not the word. Now:
+every sentence about CLKN in the lesson sources carries a `STORE` variant, the worked examples use
+`TOK` (`STORE ? "ABC" : "CLKN"` in `LPLab.jsx` / `Library.jsx`), the six `*.school.json` carry the
+store sentences (derived sentence by sentence from the website's translations), and `\bCLKN\b` is a
+forbidden pattern for google/ios — the build refuses a bundle that names the token anywhere,
+curriculum, chunk or dictionary. The website's copy of every lesson is unchanged. The two
+eval-based extractors (`build-curriculum.cjs`, `i18n-audit.cjs`) evaluate the lesson arrays as the
+website edition (`STORE = false`) since the arrays now carry edition ternaries.
+
+**Not in this version, deliberately:** read-aloud (`read-aloud.js`) — the shell has no reader
+yet; it comes back when the shell grows one. iOS is built from the identical config
+(`variants: ["google","ios"]`) and needs its own TestFlight pass.
+
+**The wrapper side (CLKN-SEEKER), found on the first Play-dev APK.** The web bundle has no wallet,
+but the Android wrapper had grown the native Mobile Wallet Adapter bridge (`CluckMWAPlugin`, for
+the Seeker edition) in `src/main`, registered for every target — so the education APK carried the
+whole MWA client library and a merged `<queries>` entry for the `solana-wallet` scheme, in an app
+whose store pages promise no wallet. Inert is not absent: a reviewer sees the library, not our
+intent. Since 2026-09-21 the wallet layer is a Gradle property there: `build:play` and
+`build:play-dev` pass `-PclknWallet=false`, which compiles an education `MainActivity` that
+registers nothing and drops the dependency, and the wrapper's CI reads the produced APK (no
+`MobileWalletAdapter` class, no `solana-wallet` query) with the Seeker build as the positive
+control. The approved v1.0.0 Play release predates the plugin and never carried it.
+
 ## Publishing
 
 ```

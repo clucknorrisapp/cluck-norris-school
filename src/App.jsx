@@ -12,64 +12,7 @@ const LAMPORTS_PER_SOL = 1_000_000_000;
 // Guarded: CLKN_READ may not exist yet, or at all on non-school pages.
 function stopRead(){ try{ if(typeof window!=="undefined"&&window.CLKN_READ&&window.CLKN_READ.stop) window.CLKN_READ.stop(); }catch(e){} }
 
-// Fire-and-forget learning-funnel event (no PII) — see /api/track + lib/analytics.
-// Lets us see where learners drop off (per-lesson start/complete, school/incubator/
-// challenge/graduation). Never throws, never blocks the UI.
-// Anonymous per-browser session id — no PII, never leaves this site. It lets the server
-// keep its own record of lesson completions so the graduation claim (diploma cNFT, paid
-// by the treasury) can verify the curriculum was actually walked, not just asserted.
-function sessionId(){
-  try{
-    let s=localStorage.getItem("clkn_sid");
-    if(!s){
-      s=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
-      localStorage.setItem("clkn_sid",s);
-    }
-    return s;
-  }catch(_){ return ""; }
-}
-// Lesson-completion beacons are the ONLY thing that tells the server's graduation ledger a class
-// was passed. They used to be fire-and-forget: a dropped mobile connection, a blocker, or a tab
-// closing right after the last quiz lost that mark for good, and the graduation gate then blocked
-// a real learner with nothing they could do about it (deep dive 2026-09-17). A failed durable
-// beacon is now queued in localStorage and re-sent on the next load, when the network comes back,
-// and before a claim. The server keeps the FIRST sighting of a lesson, so a re-send never rewrites
-// a genuine mark, and the ledger's anti-farm timing checks are unaffected.
-var TRACK_QUEUE_KEY="clkn_track_q";
-function readTrackQueue(){ try{ var q=JSON.parse(localStorage.getItem(TRACK_QUEUE_KEY)||"[]"); return Array.isArray(q)?q:[]; }catch(_){ return []; } }
-function writeTrackQueue(q){ try{ localStorage.setItem(TRACK_QUEUE_KEY,JSON.stringify(q.slice(-60))); }catch(_){} }
-function queueTrack(payload){ var q=readTrackQueue(); if(!q.some(function(x){return x&&x.event===payload.event;})) q.push(payload); writeTrackQueue(q); }
-function sendTrack(payload){
-  return fetch(api("/api/track"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),keepalive:true})
-    .then(function(r){ if(!r.ok) throw new Error("track "+r.status); });
-}
-function track(event,extra){
-  try{
-    var ev=String(event||"").toLowerCase().replace(/[^a-z0-9_:-]/g,"").slice(0,64);
-    if(!ev) return;
-    var payload=Object.assign({event:ev,sid:sessionId()},extra||{});
-    var durable=/^lesson_complete:/.test(ev);
-    sendTrack(payload).catch(function(){ if(durable) queueTrack(payload); });
-  }catch(_){}
-}
-// Re-send every queued beacon. Resolves when the attempt is over (never rejects); anything that
-// fails again goes back on the queue.
-// An entry leaves the queue only AFTER its send resolved OK (Codex on #333: clearing the queue up
-// front and re-queueing on failure lost every entry if the tab closed mid-flight). A duplicate
-// delivery is harmless — the server keeps the first sighting per lesson — so overlapping flushes
-// (load + online + claim) are allowed rather than guarded.
-function dropFromTrackQueue(event){ writeTrackQueue(readTrackQueue().filter(function(x){ return !(x&&x.event===event); })); }
-function flushTrackQueue(){
-  var q=readTrackQueue();
-  if(!q.length) return Promise.resolve();
-  return Promise.all(q.map(function(p){ return sendTrack(p).then(function(){ dropFromTrackQueue(p.event); }).catch(function(){}); })).then(function(){});
-}
-if(typeof window!=="undefined"){
-  try{
-    window.addEventListener("online",function(){ flushTrackQueue(); });
-    setTimeout(flushTrackQueue,1500);
-  }catch(_){}
-}
+import { sessionId, track, flushTrackQueue } from "./track.js";
 const trackId=(prefix,id)=>track(prefix+":"+String(id).toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,48));
 // #key=value out of the URL hash, or null. Deep links into one screen: #lesson=<id>, #library=<id>.
 // The hash can carry more than one pair, "&"-joined (E6: #lesson=<id>&from=hub:<project>), so
@@ -472,7 +415,7 @@ const LESSONS = [
       { q: "What is a partner ref code on Bags.fm?", options: ["A discount code for launching tokens", "A referral code that earns a % of platform fees", "A verification badge", "An API access code"], correct: 1, explanation: "A partner ref code earns a share of platform fees when other people's tokens are launched or traded through your link — it's a referral mechanism, separate from the fees a token earns on its own trading." },
       { q: "What is Meteora DAMM V2?", options: ["A Solana validator operated by the Meteora protocol", "A graduated liquidity pool providing deeper, more stable trading", "A token burning mechanism built into the Meteora protocol", "A CEX listing program run by Meteora for graduated tokens"], correct: 1, explanation: "Meteora DAMM V2 is where Bags.fm tokens go after graduation. It is Meteora's dynamic AMM — a constant-product style pool with configurable, dynamic fees (not concentrated liquidity; that is Meteora's DLMM). It gives the token a real two-sided pool with deeper liquidity and better trading conditions than the bonding curve." },
       { q: "If a Bags.fm token never graduates, what happens?", options: ["It automatically lists on Raydium", "It stays on the bonding curve indefinitely", "The dev gets their SOL back", "It becomes a stable coin"], correct: 1, explanation: "Not every Bags.fm token graduates. If a token doesn't attract enough buying pressure to fill the bonding curve, it stays there indefinitely. Many tokens fail at this stage — research is critical." },
-      { q: "Where does a Bags.fm token's own project revenue actually come from?", options: ["Its partner ref code earning on its own trades", "The creator fee — a cut of every trade of that token", "Selling the team's token allocation", "Bags.fm tokens earn no revenue"], correct: 1, explanation: "A token's project revenue is the creator fee — roughly 1% of every trade of that token. A partner ref code is a separate thing that earns from OTHER projects routed through it, not the token's own trades. CLKN reinvests 100% of its creator fee back into buying CLKN." },
+      { q: "Where does a Bags.fm token's own project revenue actually come from?", options: ["Its partner ref code earning on its own trades", "The creator fee — a cut of every trade of that token", "Selling the team's token allocation", "Bags.fm tokens earn no revenue"], correct: 1, explanation: "A token's project revenue is the creator fee — roughly 1% of every trade of that token. A partner ref code is a separate thing that earns from OTHER projects routed through it, not the token's own trades." + (STORE ? "" : " CLKN reinvests 100% of its creator fee back into buying CLKN.") },
     ],
   },
 
@@ -495,7 +438,7 @@ const LESSONS = [
       { q: "What does degen trading mean?", options: ["Trading on insider information from project teams", "High-risk early entries into speculative tokens with small position sizes", "Day trading on CEXs with maximum leverage enabled", "Trading on vibes alone without any research or analysis"], correct: 1, explanation: "Degen (degenerate) trading is high-risk speculation — usually early entries into memecoins or new launches. Experienced degens use small position sizes, take profits early, and accept that most bets will fail." },
       { q: "You find a brand new memecoin at a $10K market cap with a funny meme. What is the correct risk management approach?", options: ["Put in everything — small cap = maximum upside", "Only invest what you can completely afford to lose — treat it like a lottery ticket", "Avoid it entirely — small caps are always scams", "Wait until it reaches $1M market cap to confirm legitimacy"], correct: 1, explanation: "Ultra small cap memecoins are essentially lottery tickets. The upside can be enormous but the probability of failure is very high. Only ever invest what you can afford to completely lose — because you probably will." },
       { q: "What is narrative in memecoin culture?", options: ["The project's technical whitepaper and developer roadmap", "The story or theme driving community excitement and buying pressure", "The dev team's public statement on their vision", "The token's smart contract code and audit results"], correct: 1, explanation: "Narrative is everything in memecoin culture. 'Dog with hat', political figures, AI themes, animal coins — when a narrative captures the zeitgeist, it drives viral spread and buying pressure. Without narrative, there's nothing." },
-      { q: "CLKN is a memecoin built on Bags.fm. What makes it different from a typical memecoin?", options: ["It has a working DeFi product", "It has a real education platform behind it", "It has a fixed supply", "It's backed by real assets"], correct: 1, explanation: "CLKN pairs the token with an actual utility layer — the School of Crypto Hard Knocks — and reinvests its creator fee back into the token. That doesn't make it safe: like any memecoin it can still go to zero. But a token doing real work is rarer than one that isn't." },
+      { q: STORE ? "A memecoin ships with a real product behind it. What makes it different from a typical memecoin?" : "CLKN is a memecoin built on Bags.fm. What makes it different from a typical memecoin?", options: ["It has a working DeFi product", "It has a real education platform behind it", "It has a fixed supply", "It's backed by real assets"], correct: 1, explanation: STORE ? "A token that pairs itself with an actual utility layer — a school, a working toolkit — has something a pure memecoin does not. That doesn't make it safe: like any memecoin it can still go to zero. But a token doing real work is rarer than one that isn't." : "CLKN pairs the token with an actual utility layer — the School of Crypto Hard Knocks — and reinvests its creator fee back into the token. That doesn't make it safe: like any memecoin it can still go to zero. But a token doing real work is rarer than one that isn't." },
     ],
   },
 
@@ -654,13 +597,13 @@ const INCUBATOR_LESSONS = [
     intro: "You've probably heard 'coin' and 'token' used interchangeably — but they're different. Understanding this helps you know what you're actually buying.",
     concepts: [
       { term: "Coin", def: "A native cryptocurrency that powers its own blockchain. Examples: SOL (Solana), ETH (Ethereum), BTC (Bitcoin)." },
-      { term: "Token", def: "A crypto asset built ON TOP of an existing blockchain. CLKN is a token built on Solana. Tokens don't have their own blockchain." },
+      { term: "Token", def: STORE ? "A crypto asset built ON TOP of an existing blockchain. USDC on Solana is a token — it lives on Solana's blockchain. Tokens don't have their own blockchain." : "A crypto asset built ON TOP of an existing blockchain. CLKN is a token built on Solana. Tokens don't have their own blockchain." },
       { term: "Mint Address", def: "The unique ID of a token on Solana — like a social security number for the token. Used to identify the exact token you're buying." },
       { term: "Supply", def: "The total number of tokens that exist. A fixed supply means no more can ever be created." },
     ],
     questions: [
       { q: "SOL is a token built on the Ethereum blockchain.", options: ["True", "False"], correct: 1, explanation: "SOL is actually the native coin of the Solana blockchain — not Ethereum. Tokens are built ON a blockchain, while coins ARE the blockchain's currency." },
-      { q: "What is CLKN?", options: ["A coin with its own blockchain", "A token built on Solana"], correct: 1, explanation: "CLKN is a Solana token — it lives on the Solana blockchain and uses SOL for transactions. It doesn't have its own blockchain." },
+      { q: STORE ? "What is USDC on Solana?" : "What is CLKN?", options: ["A coin with its own blockchain", "A token built on Solana"], correct: 1, explanation: STORE ? "USDC on Solana is a token — it lives on the Solana blockchain and uses SOL for transaction fees. It doesn't have its own blockchain." : "CLKN is a Solana token — it lives on the Solana blockchain and uses SOL for transactions. It doesn't have its own blockchain." },
       { q: "Why does a token's mint address matter?", options: ["It shows how much the token is worth based on current supply", "It uniquely identifies the exact token so you don't buy a fake copy"], correct: 1, explanation: "Scammers create fake tokens with similar names. The mint address is the only guaranteed way to confirm you have the right token. Always verify!" },
     ],
   },
@@ -1858,10 +1801,9 @@ function StartHere({ onGo }){
         {!STORE && <Act label="🛠 All tools" onClick={goIn("/tools")}/>}
         {STORE && <WebPointer/>}
       </>)},
-    ...(STORE ? [] : [{ key:"team", icon:"🚀", title:"I run a project or community", tag:"Locks, buy competitions, airdrops, listings", body:()=>(<>
-        <p style={txt}>Lock tokens, run a buy competition, airdrop holders, or get listed right — the project-team toolkit, free or unlocked by holding CLKN.</p>
+    ...(STORE ? [] : [{ key:"team", icon:"🚀", title:"I run a project or community", tag:"Locks, airdrops, listings", body:()=>(<>
+        <p style={txt}>Lock tokens, airdrop holders, or get listed right — the project-team toolkit, free or unlocked by holding CLKN.</p>
         <Act label="🔒 Lock tokens" onClick={goIn("/locker-room#create")} color="#34D399" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
-        <Act label="🎯 Run a buy competition" onClick={goIn("/buyspecial")}/>
         <Act label="🛠 All project tools" onClick={goIn("/tools#for-projects")}/>
       </>)}]),
     ...(STORE ? [] : [{ key:"about", icon:"🐔", title:"About Cluck Norris & CLKN", tag:"The story + where to buy", body:()=>(<>

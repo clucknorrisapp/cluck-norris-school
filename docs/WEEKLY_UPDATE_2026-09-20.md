@@ -3,8 +3,9 @@
 Colosseum strongly recommends a ~1-minute video each week on what shipped and what was hard.
 This is the founder's script for update #1, covering **Sep 14 13:00 UTC → Sep 20**.
 
-Refreshed 2026-09-19 with `node scripts/weekly-update-draft.cjs --from 2026-09-14 --to
-2026-09-19` (Colosseum roadmap §10 Z1 — the shipped list is a run, not a rewrite) and reconciled
+Refreshed again 2026-09-20 with `node scripts/weekly-update-draft.cjs --from 2026-09-14 --to
+2026-09-20` (raw: `docs/weekly-update-raw-2026-09-20.md`) after the overnight promote. Previously
+refreshed 2026-09-19 with `--to 2026-09-19` (Colosseum roadmap §10 Z1 — the shipped list is a run, not a rewrite) and reconciled
 by hand for prose and grouping; the script's own labels (production vs. staging, PR numbers) were
 kept as-is, not retyped. Raw output: `docs/weekly-update-raw-2026-09-19.md`. This is the
 night-before refresh the roadmap calls for, so the list below is complete through PR #357. **If
@@ -15,18 +16,27 @@ Rules for the recording (from `docs/COLOSSEUM_ROADMAP.md` §W10 and CLAUDE.md): 
 no slides needed; name what shipped with a link; "Earn" is capability, never a promise; nothing
 about Normie Quest prize terms; nothing about Wallet Watch; no APR/APY figures anywhere.
 
-⚠️ **What you can show on camera — checked against production 2026-09-19 20:4x UTC.** `main` is
-still at **PR #337**. Nothing from the Hub extension work or the Solana Room is live:
-`clucknorris.app/hub/demo`, `/hub/glossary` and `/solana` all return the **React shell**, not the
-page. (They answer HTTP 200, which is why a status-code check is not a check here — the catch-all
-serves the app shell for unknown non-API paths. Verify by content.)
+✅ **What you can show on camera — re-checked against production 2026-09-20 06:5x UTC, by
+content and not by status code.** The owner said "send it all live" overnight, so `main` is now at
+**PR #381** and **everything below is on production**. Each of these was fetched and its real
+`<title>` confirmed, not just its HTTP status (the catch-all serves the React shell at 200 for an
+unknown path, which is why a status check is not a check here):
 
-So there are two options, and they are yours:
-- **Record against staging** and say plainly that it is staging and not yet promoted — which is
-  true, consistent with the "promote only on an explicit go" rule, and honest about where the work
-  sits; or
-- **Say "promote"** and this goes to production before you record, so the URLs on camera are the
-  ones a judge can open.
+| URL | serves |
+|---|---|
+| `/hub` | Project Hub — receipts you can verify |
+| `/hub/demo` | Demo Community — Hub demo walkthrough |
+| `/hub/glossary` | The Hub Glossary |
+| `/hub/verify` | Reproduce a Hub receipt |
+| `/hub/status` | Hub Status — what is live, where |
+| `/hub/trust` | What The Hub Doesn't Prove |
+| `/hub/judge` | The Judge's Fifteen Minutes |
+| `/hub/apply` | Run Lock to Earn for your token |
+| `/solana` | The Solana Room (all ten pages) |
+| `/for-projects` | For Projects |
+
+So the two options the earlier draft laid out — record against staging, or promote first — are
+**settled**: you promoted, and every URL on camera is one a judge can open.
 
 Do not point the camera at a production URL for a page that is not there.
 
@@ -44,6 +54,14 @@ Do not point the camera at a production URL for a page that is not there.
    airdrops and Buy Special standings with hold-through proof, a history of holder-count
    snapshots a reader can re-hash themselves, and a plain-language Solana reference room that
    starts with what rent actually is and why the "free SOL" posts going around are wrong."
+⚠️ **Bullet 1 above still says "On staging, not live yet" — that clause is now FALSE and needs
+one edit before you speak it.** Everything it lists (reproduce-your-own-receipt, the no-wallet
+walkthrough, the on-chain witness, the Hub in seven languages, the readiness checklist, airdrop
+and Buy Special receipts, the snapshot history, and the Solana reference room) shipped to
+production overnight. The fix is to drop "On staging, not live yet:" and say it all as live. Left
+for you to reword rather than rewritten here — it is your script and your voice, and this is the
+one sentence on the page a rewrite could put words in your mouth.
+
 2. **What was hard.** "Money paths and their own review. A second AI reviewer found four blockers
    before our first server-signed payout — a rounded total that refused a real payout, a
    double-pay window on a timeout — and a platform-wide security pass closed nine P0s, including
@@ -59,7 +77,7 @@ Do not point the camera at a production URL for a page that is not there.
 
 ## Shipped this week (paste-ready, with links)
 
-**Production today (`main`, PR #337):** Hub W1 core — project records, program versions with
+**Production today (`main`, PR #381 — refreshed 2026-09-20):** Hub W1 core — project records, program versions with
 hashes, ledger partition, settlement journal (#307); Addendum C, the six answers a holder needs
 before locking (#308); public Hub pages + receipts, lock-to-earn pays itself, server-signed and
 journalled before broadcast (#315, #319); buy-comp server payout (#311) and four reviewer
@@ -68,8 +86,12 @@ tool (#309); honest visitor counting (#310); the CUNA lock-scan reliability fix 
 BigInt serialisation fix (#317); the Colosseum entry stated publicly and the Official Rules
 correction (#299, #302, #303).
 
-**Staging only (`develop`) — not yet promoted, per CLAUDE.md "promote only on an explicit owner
-go":**
+> ⚠️ **This partition was rewritten on 2026-09-20.** When this doc was drafted, `main` sat at PR
+> #337 and everything below the line was staging-only. The owner promoted overnight, so the list
+> that follows is now **on production** — every URL in it was re-checked by content, not by status
+> code. Only two things remain on staging and they are named at the end.
+
+**Promoted to production overnight (was "staging only" when this was drafted):**
 - **Project Hub, generalised:** the Lock to Earn engine lifted to any project, per-project routes
   and a 10-minute scheduler, platform access tiers priced live in SOL or CLKN, self-serve
   `/hub/apply` and pay page, the operator desk with a wallet-signed session — #321, #322, #323,
@@ -138,8 +160,9 @@ browser-signed payout. It is a money path, so it is held to the two-lens rule: t
 and three fix rounds so far, CI green, and it does not merge while a lens still reports an open
 finding. It is deliberately absent from the shipped list above, because it has not shipped.
 
-Everything else in this window is merged. `main` is still at PR #337, so every roadmap extension
-item above is on staging only and none of it is promoted.
+Everything else in this window is merged **and, since the overnight promote, on production**:
+`main` is at PR #381 and `/api/build` reports `eef0f11`. The only exceptions are the two staging
+items named further down (#376, #382).
 
 - **Batches 19–21 (#358, #360, #361, #362, #363, #364, #365 — merged 2026-09-19, after this
   file's night-before refresh):** the Solana Room — `/solana` and `/solana/rent`, a plain-language
@@ -149,6 +172,22 @@ item above is on staging only and none of it is promoted.
   repo boundary; and the first two increments of a **native Solana Mobile app** — a fourth store
   build variant, a phone-first shell, a Mobile Wallet Adapter-aware wallet layer, and the read side
   of Rent Reclaim (#367, open). Research and decision docs for that track: #360, #361, #364.
+
+**Still on staging only (`develop`), not promoted:**
+- **Follow a wallet** — `GET /api/hub/wallet/:wallet/feed.json` (JSON Feed) and
+  `GET /hub/wallet/:wallet/feed.xml` (RSS) across every project a wallet appears in, plus the
+  follow link on `/hub/wallet/<address>` (#376).
+- **The homepage in six languages** — twenty of the front door's visible strings were in no
+  dictionary at all; now curated and gated so they cannot drift back (#382).
+
+**Also shipped overnight, after the promote, and worth a sentence if you want one:** the whole
+Solana Room went live — ten plain-words pages on how the chain actually works, free and with no
+wallet (#362, #371, #373, #375) — the school gained a sixteenth lesson on the rent deposit (#374),
+the room got its own tile on the homepage (#378), and a nav rule that had been hiding **every
+section back link on the site**, including on all nine Project Hub pages, was found and fixed
+(#380). That last one is the honest "what was hard" material: the links were present, correct and
+rendering at zero height, so a source scan said the markup was perfect and only measuring the
+rendered page showed it.
 
 ## Where to post
 Colosseum Arena (the project's update thread) and X from the CLKN account (X Premium, no 280 limit).
@@ -165,21 +204,21 @@ assume from this file — re-check on the day.
       missing and are now listed.
 - [x] **Done 2026-09-19.** `git log origin/develop` confirms every PR named above is merged;
       `develop` is at #357. The re-run surfaced #351–#357.
-- [x] `git log origin/main` — confirm which of the above is actually **promoted** (owner's
-      explicit go; never assumed). **Re-checked 2026-09-19: `main` is still at PR #337** — only the Hub
-      core, public pages, apply/pay/desk and generalised Lock to Earn engine (W1–W3) plus the
-      items listed under "Production today" above are live; every Colosseum roadmap extension
-      item (batches 2–9) is on staging only, not yet promoted.
-- [ ] Pick the demo URL to show on camera based on what's actually promoted at recording time:
-      - If only the "Production today" list is promoted: show `clucknorris.app/hub` and a real
-        project page (`clucknorris.app/hub/cuna`) — the live, working settlement flow.
-      - If the extension batches are merged and promoted by recording day: show
-        `clucknorris.app/hub/demo` (the no-wallet, DRY-RUN-labelled single-holder walkthrough) and
-        `/hub/verify` instead — the cleaner demo surface, and neither needs a wallet on camera.
-      - Never show a `develop`/staging URL as if it were the live product.
+- [x] **SUPERSEDED 2026-09-20.** The 09-19 entry said "`main` is still at PR #337 … every
+      Colosseum roadmap extension item is on staging only." **That is no longer true.** The owner
+      promoted overnight ("send it all live", then two more gos), `main` is at **PR #381**, and
+      `/api/build` reports `eef0f11` on `main` in production. Verified by content, route by route
+      — see the table at the top of this file.
+- [x] **Demo URL settled by the promote.** Show `clucknorris.app/hub/demo` (the no-wallet,
+      DRY-RUN-labelled single-holder walkthrough) and `/hub/verify` — the cleaner demo surface,
+      neither needs a wallet on camera, and both are now live. `clucknorris.app/solana` is also
+      available if you want a second, purely-educational surface with nothing to connect.
+      Never show a `develop`/staging URL as if it were the live product — the only two things
+      still on staging are the wallet feeds (#376) and the homepage translations (#382).
 - [ ] Re-read `docs/ARENA_POSTS.md`'s status table immediately before posting anything from it —
-      it is a snapshot from 2026-09-18 and is already behind: it stops at batch 12, and batches
-      13–18 have since merged.
+      it is a snapshot from 2026-09-18 and is now well behind: it stops at batch 12, and
+      everything through #382 has since merged, most of it to production. **Do not paste from it
+      without re-checking each line against production first.**
 - [ ] **Demo captures:** `docs/DEMO_STORYBOARD.md` is the shot-by-shot demo script and the pitch
       outline, with real screenshots (phone + desktop) in `docs/demo/2026-09-18/`. Re-screenshot
       before the actual recording if the Hub pages have changed since 2026-09-18 — the storyboard

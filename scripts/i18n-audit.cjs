@@ -308,6 +308,13 @@ function isCandidateGap(key) { return looksLikeInterfaceText(key) && !isAllowlis
 // LESSON array extraction (src/App.jsx) — same technique as extract-curriculum.js:
 // string-slice the balanced-bracket array literal, then eval it (pure data, no JSX/fns).
 // ---------------------------------------------------------------------------
+// The lesson arrays carry edition ternaries (`STORE ? … : …`, and LPLab/Library's `TOK`, the
+// worked-example ticker — store-edition v1.1.0). These scripts want the WEBSITE edition, so the
+// isolated literal is evaluated with STORE = false and the file's own `const TOK = …` line.
+function editionPrelude(src) {
+  const tok = /const TOK = [^\n]+;/.exec(src);
+  return 'const STORE = false; ' + (tok ? tok[0] + ' ' : "");
+}
 function extractArrayLiteral(src, name) {
   const decl = `const ${name} = [`;
   const start = src.indexOf(decl);
@@ -329,7 +336,7 @@ function extractArrayLiteral(src, name) {
   const slice = src.slice(start + decl.length - 1, i);
   try {
     // eslint-disable-next-line no-eval
-    return eval('(' + slice + ')');
+    return eval('(function(){ ' + editionPrelude(src) + 'return (' + slice + '); })()');
   } catch (e) {
     return { error: `eval of ${name} failed: ${e.message}` };
   }
@@ -501,7 +508,12 @@ for (const fam of FAMILIES) {
     // creation: same "curated, not machine-translated" bar as the rest of the school's public
     // reference pages, same t()/tf() page-local helper as hub-glossary.html. solana-wallet.html
     // and solana-mint.html joined the same way when they shipped.
-    const HUB_FILES = ['hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html', 'hub-trust.html', 'hub-verify.html', 'hub-compare.html', 'hub-glossary.html', 'solana-room.html', 'solana-rent.html', 'solana-wallet.html', 'solana-mint.html', 'solana-buying.html', 'solana-transfers.html', 'solana-fees.html', 'solana-uses.html', 'solana-markets.html', 'solana-events.html', 'solana-links.html'];
+    // home.html joined this list on 2026-09-20. It is not a Hub page — it is the site's FRONT
+    // DOOR, and it was the least curated page on the site: 16 of its visible strings were in
+    // none of the six dictionaries, so the highest-traffic page we have was paying a live
+    // machine-translation call per string per language on first view and showing English for a
+    // beat while it resolved. Same curated-copy bar as everything else in this list.
+    const HUB_FILES = ['home.html', 'hub.html', 'hub-demo.html', 'hub-apply.html', 'hub-pay.html', 'for-projects.html', 'airdrop-receipt.html', 'hub-status.html', 'hub-trust.html', 'hub-verify.html', 'hub-compare.html', 'hub-glossary.html', 'hub-wallet.html', 'solana-room.html', 'solana-rent.html', 'solana-wallet.html', 'solana-mint.html', 'solana-buying.html', 'solana-transfers.html', 'solana-fees.html', 'solana-uses.html', 'solana-markets.html', 'solana-events.html', 'solana-links.html', 'solana-phone.html'];
     const hubKeys = new Set();
     // JS-built strings (see the "JS-BUILT STRINGS ON HUB_FILES" header comment): every literal
     // passed to a page-local t()/tf() call is an explicit "translate this" signal from whoever
@@ -516,7 +528,19 @@ for (const fam of FAMILIES) {
       for (const k of extractMarkupText(raw, { bodyOnly: true })) hubKeys.add(k);
       for (const k of extractJsTFCalls(raw)) hubJsKeys.add(k);
     }
-    const hubCandidates = Array.from(new Set([...[...hubKeys].filter(isCandidateGap), ...hubJsKeys]));
+    // ⚠️ Two strings on home.html are deliberately NOT curated, and translating them would make
+    // the page WORSE, not better. The footer disclaimer — "the chain shows <em>what</em>, never
+    // <em>why</em>. Nothing here is financial advice." — is split by its own <em> tags into five
+    // separate text nodes, so the runtime looks up ", never" and ". Nothing here is financial
+    // advice." as standalone keys. A fragment translated in isolation cannot compose back into a
+    // correct sentence in a language whose word order differs, so a curated entry here would
+    // produce confident nonsense in a load-bearing disclaimer. The real fix is to stop
+    // fragmenting the sentence (drop the <em>s, or wrap the whole line in one element) and then
+    // curate it as ONE key — a markup change, tracked rather than done silently at 4am. Until
+    // then these two stay English, which is the honest outcome.
+    const HOME_FRAGMENT_EXCEPTIONS = new Set([', never', '. Nothing here is financial advice.']);
+    const hubCandidates = Array.from(new Set([...[...hubKeys].filter(isCandidateGap), ...hubJsKeys]))
+      .filter((k) => !HOME_FRAGMENT_EXCEPTIONS.has(k));
     const hubUsedNotInAnyDict = hubCandidates.filter((k) => !REFERENCE.has(k)).sort();
     // Per-language view of the same gap: for a key that IS in some language's dict (added for one
     // language but missed for another) the cross-language diff above already gates it — this

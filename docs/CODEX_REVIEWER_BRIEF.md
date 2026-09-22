@@ -160,6 +160,199 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 20 — 2026-09-22: #395, your re-review of `e0400d0` — one finding, fixed
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P2** — token funding proved X lost the claimed mint, not that X paid THIS recipient: in one transaction X → B and Y → A (same mint), X recorded A's row and Y got 409 | **Both required now, as the native check already was:** (1) the operator's OWN net balance of the claimed mint down by ≥ the amount, AND (2) a parsed spl-token `transfer` / `transferChecked` (top-level or inner) whose SOURCE account is owned by the operator and whose DESTINATION account is owned by this recipient, of this mint, of ≥ the amount (`boundTokenTransferExists`, resolving each account through its token-balance row by `accountIndex`, post rows first so an ATA created in the same transaction binds). `sourceIsOperator` takes `wallet` | "in ONE transaction X pays B and Y pays A, the same mint — X cannot record A's row, Y can; and X can record B's" (X → 409 `transfer_not_from_operator`, nothing claimed; Y → recorded; X's own X → C row in that same transaction is then "already recorded on another receipt" — one signature, one receipt, unchanged); "the right mint and amount to the WRONG recipient, or a different amount, is not funding"; "the recipient's token account created in the same transaction (no pre row) still binds". The balance-only fixture builder (`tx()`) now synthesises the parsed transfers and `accountIndex` a jsonParsed transaction carries, so every earlier fixture exercises the bound check |
+
+Suite: 50 receipt tests (was 47). Stated, so it is not mistaken for a gap: one signature still
+belongs to one receipt. When two operators genuinely share a transaction (X → C and Y → A), the
+first to record it owns it and the other's true row is refused with "already recorded on
+another receipt" — that row is true on-chain, it is simply not on its operator's receipt. The
+airdropper never builds such a transaction; per-row ownership would be the change if it ever
+must, and it is not made here.
+
+## Round 19 — 2026-09-22: #395, your re-review of `ede8756` — two findings, fixed
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P2** — funding attribution: `sourceIsOperator`'s second branch accepted ANY parsed spl-token transfer naming the operator as authority (or source owner), unbound to the row's mint, recipient or amount. A signed X that moved an unrelated token in the transaction where Y paid A could claim A's row; Y then got 409. The native check accepted a fee-only lamport drop for a claim smaller than the fee | **Token: the second branch is gone.** The only funding evidence is the operator's OWN net balance of THE CLAIMED MINT going down by at least the row's amount (`payoutVerify.tokenDeltas`) — a DEX pool draining is refused, a delegate moving the operator's tokens still counts (the operator's account drains). `ownerOfTokenAccount` is deleted with it. **Native: two things, both required** — a parsed SystemProgram `transfer` (top-level or inner) FROM the operator TO this recipient of at least the amount (the exact instruction `createSolTransferInstruction` emits), AND the operator's lamports down by at least the amount. `nativeSourceIsOperator` now takes `wallet` | "a signed wallet X that moved an UNRELATED token in the transaction where Y paid A cannot claim A's row — only Y can" (X → 409 `transfer_not_from_operator`, signature unclaimed; Y → recorded); "(native) a FEE PAYER X in the transaction where Y sent SOL to A cannot claim A's row, however small the claim" (the old delta-only rule is asserted to have passed it); "a delegate moving the operator's tokens still counts … the delegate itself cannot claim"; the native unit test asserts a lamport delta with no parsed transfer is not funding and that the transfer must name THIS recipient. The three native end-to-end fixtures now carry the parsed instruction |
+| 2 | **P2** — the Seeker pane's background receipt flush raced the final one: 101 recipients → two requests with no dropId → two receipts; a transaction crossing the chunk boundary lost a row to signature ownership while the screen counted it | **One promise chain for every record call** (`enqueueRecord` in `Airdropper.jsx`): the background flush is queued, not awaited, so the wallet prompt is never held up, but it runs strictly before the next call, and the final `record()` waits for whatever is in flight. The `flushing` flag is gone with it | No browser test drives 101 recipients through the fake chain (7 batches × the 30 s ambiguous-status poll); the serialisation is by construction — one chain, `then`-linked — and the boot test's 34-recipient run (G) still passes. If you can rerun your 101-recipient client harness against this head, that is the check |
+
+Suite: 47 receipt tests (was 44). Claims to break on this head: (a) no transaction in which
+wallet X did not lose ≥ amount of the claimed mint (or, for SOL, did not carry a parsed system
+transfer X → recipient ≥ amount) lets X record that row; (b) the Seeker pane never issues two
+record calls without a dropId for one drop.
+
+## Round 18 — 2026-09-22: #395, your re-review of `72b4d48` — three findings, fixed
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P1** — one transaction pays A and B; rows keyed by signature kept A and reported B as a duplicate, and the client counted two | A row's identity is **(signature, wallet)** — `rowKey` / `rowOnDrop` in `lib/airdrop-receipt.js`; the in-call duplicate check, the idempotent "already on this receipt" lookup, the commit and the row cap all use it. The per-signature kv key stays what it was: **ownership** (one signature, one receipt), now idempotent across the rows of one batch. Rows stored before this change under the bare signature are still recognised (`rowOnDrop` reads both shapes), so a retry never stores an old row twice | "ONE transaction pays A and B → TWO rows on the receipt, each verified under its own wallet, one signature key" (results in order, totals `stored:2`, `publicDrop.count === 2`, the same batch again → `alreadyRecorded:2`, a third unpaid "recipient" of the same signature → 409); "a row stored before this change under the bare signature is still recognised" |
+| 2 | **P2** — the daily cap was checked in the verify phase, before further awaited lookups; from 19, two overlapping calls made 21 | `capReached` runs **again at the top of the synchronous commit**, before any write, for a new drop with candidates — the operator is known by then (adopted from the first verified row, or passed) | "the daily cap holds under concurrency — from 19, two overlapping first-row calls make 20, never 21" (derived operator AND passed operator; the loser is a 429 with no drop; the day list holds exactly 20) |
+| 3 | **P2** — a stranger could claim an operator's unrecorded public transfer first; the operator then got 409 | **The record route requires the RECEIPT SIGN-IN.** `GET /api/tool-gate/challenge?wallet=&purpose=receipt` issues its own message ("sign in to the Airdropper"); `POST /api/tool-gate/session` verifies the signature and answers a `receipt` token — **no holdings read, no payment leg, no pay intent** — and `receiptSessionGate` on `/api/airdrop/record` (401 without it, 503 fail-closed without the issuer key) hands the proven wallet to `recordDrop` as `operator`. Every row must be funded by that wallet (`sourceIsOperator`), an existing drop must be that wallet's (403), the cap is keyed on it. `toolPassGate` refuses a `receipt` token (403 `bad_pass`), and the purpose travels with the nonce so a receipt challenge can never mint a tools pass or vice versa. Both clients sign once before the first batch (the web page caches per wallet in sessionStorage, the Seeker pane in localStorage, 23h); a declined signature means the tokens still send and the drop has no public receipt, said on screen | `tool-pass-gate-test` (server C): no session → 401 `receipt_session_required`, never 402; a wallet with NO holdings gets a `receipt` session; with it the route fails on the rows (400); the receipt token on a gated tool → 403 `bad_pass`; a receipt nonce in the tools message → 400 and the reverse → 400; a tools token also proves the wallet to the route. `airdrop-receipt-test`: a stranger's proven wallet presenting the operator's transfer → 409 `transfer_not_from_operator`, signature unclaimed, the operator's own receipt then records it, the stranger cannot append (403). `mutating-get-guard-test`: the no-session POST is 401. `seeker-app-boot-test` G: one challenge with `purpose=receipt`, one session with the receipt message and no `doors`, the token on every record call, no pass sheet |
+
+Free for everyone is unchanged: nothing about CLKN, SKR or SOL is read on this path. What changed is
+that a receipt is written by the wallet that paid for the rows, proven by a signature, and by no
+one else. Suite: 44 receipt tests (was 40).
+
+## Round 17 — 2026-09-22: #395, your re-review of `de772db` — three reproductions, fixed
+
+You reran the tests and reproduced duplicate receipts, overwritten signature-index entries, and
+partial batches counted as fully recorded. All three reproduce against `de772db`
+(`scripts/airdrop-receipt-test.cjs` now carries each as a test that fails on that head), and they
+share one cause: round 16 read the signature index and the drop BEFORE the `await getTx()` chain
+round-trip, mutated those copies, and wrote both back whole at the end. Anything in flight at the
+same time worked from its own stale copy and overwrote the other's write.
+
+| # | Reproduction | Cause on `de772db` | Fix | Pinned by |
+|---|---|---|---|---|
+| 1 | **Duplicate receipts** — one signature posted in two concurrent calls made two drops | the "one signature, one receipt" check ran before the await; both calls passed it, both wrote | **Two phases.** Phase 1 verifies against the chain and writes nothing. Phase 2 (commit) re-reads the drop and each candidate signature's owner and writes — one synchronous stretch, no await between check and persist, so in-process two calls cannot both claim a signature | "the SAME signature in two concurrent calls makes ONE receipt, never two" (the loser is a 409 with `already recorded on another receipt`, wrote no drop) |
+| 2 | **Overwritten index entries** — `airdropReceiptSigIndex` was one object, read at the top and written back whole; concurrent calls erased each other's entries, and the erased signature could be recorded again on a third receipt | whole-object read-modify-write across the await | **One kv key per signature** (`airdropReceiptSig:<sig>` → dropId, `sigKey`/`receiptOfSig`). A write can only claim ITS signature. The drop and its new keys still land in one `setManyVerified` | "two concurrent calls with DIFFERENT signatures never erase each other's signature key — neither can be re-recorded"; "no signature ever lands in one big index object" |
+| 2b | **Lost rows** — two batches of ONE drop posted at once: the second's whole-drop write dropped the first's rows (reproduces under a snapshot-on-read store, which is what `lib/kvstore.js` is: `refresh()` replaces `state` wholesale) | drop loaded before the await, written back whole | commit re-loads the drop and merges the verified rows onto the fresh copy | "two concurrent batches of ONE drop both land" (asserts all three signatures on the receipt and each key pointing at it) |
+| 3 | **Partial batches counted as fully recorded** — (a) an existing drop answered `200 + nothingNew` to a batch of which nothing verified; (b) the Seeker pane added `chunk.length` to "recorded" on any 200, and a failed chunk ended the whole run's recording; (c) the web page showed the receipt link with no count at all | the 200 meant "the call was fine", and both clients read it as "every row landed" | A call that put nothing on the receipt and found none of its rows already there is a **409 for an existing drop too** (a retry whose rows are all already on it stays the idempotent 200). `totals` carries `stored` / `alreadyRecorded` / `refused`; `results` is one entry per input row, in input order (a signature sent twice in one call gets the first copy's outcome, `duplicateInCall`). Both clients count `recorded[].verified === true`, never the chunk; the pane keeps recording after a failed chunk and shows the shortfall whenever one exists; the page shows "N rows on it" beside the link and the shortfall with its reason | "an EXISTING drop answers 409 to a batch of which nothing verified"; "totals say what LANDED" (mixed batch: 1 stored, 2 already, 1 refused, 3 verified results); `seeker-app-boot-test` G (mock echoes per-row results) |
+
+Test suite: 40 (was 34). One pre-existing fixture was wrong and the lenient 200 hid it: the
+daily-cap test's continuation row named wallet B while its transaction paid A; it "succeeded" as
+`nothingNew`. It now names A and asserts the row verified.
+
+Stated limit, unchanged from the store's own header: across PROCESSES the only guard is
+`lib/kvstore.js`'s mtime refresh ("not a real lock"). The in-process commit is atomic; two
+Railway replicas writing the same signature in the same millisecond is the store's known window,
+the same one every other journal in this repo lives with. Claims to break on this head: (a) no
+interleaving of calls in one process yields two receipts for one signature or drops a verified
+row; (b) no 200 from `/api/airdrop/record` can be produced by a batch of which nothing is on the
+receipt; (c) both clients' "N of M" figures equal the count of `verified:true` results received.
+
+## Round 16 — 2026-09-22: #395, your three receipt findings on `caa90b8`, fixed
+
+All three were right, and they share one cause: when the pass left `/api/airdrop/record`, the
+route kept writing rows it had NOT verified (bad amounts, unreadable signatures, mismatches —
+"shown anyway, with why" on the public page), and creating drops before any row had verified.
+Free access became unauthenticated write access. The fix removes the cause rather than the three
+symptoms:
+
+| # | Finding | Fix (`lib/airdrop-receipt.js`) | Pinned by (`scripts/airdrop-receipt-test.cjs`) |
+|---|---|---|---|
+| 1 | **P1** — 1,999 junk rows against a public dropId filled the 2,000-row cap; an `operator:null` receipt could be taken over | **Only verified rows are ever stored.** Local-validation failures, unreadable signatures, mismatches and stranger-funded transfers come back in `results` with their reason and touch nothing. A drop always has an operator: it is created only once a row verifies (its fee payer), so no `operator:null` receipt can exist to take over | "junk rows against a known dropId are reported, NEVER stored": 1,901 junk rows incl. a stranger-funded transfer → every one answered, none stored, the operator's next real row still lands |
+| 2 | **P2** — replaying one public FAILED transaction into 20 new drops burned its fee payer's quota | The operator is adopted and the cap charged **only when the first row verifies**; a failed transaction never verifies, so it creates nothing and charges nobody. Plus **one signature, one receipt** (`airdropReceiptSigIndex`, persisted with the drop in one `setManyVerified`): a public signature already on a receipt cannot start a second drop | "replaying a FAILED public transaction creates no drop and charges nobody's quota" (25 replays → 25×409, quota list empty, the payer's own real drop then succeeds); "a signature already on one receipt cannot start a second drop" |
+| 3 | **P2** — deferred operator assignment skipped the cap | There is no deferred path: a new drop with nothing verified is a **409 with nothing written**; the retry creates it with the operator and the cap charged at that moment | "an unreadable first tx creates NO drop … the retry creates it with the operator and the cap charged" (asserts the `airdropOpDrops:` day list) |
+
+Also: `server.js` passes the per-row reasons through on the 409 so the operator's own screen can
+say which rows the chain did not confirm; `public/airdrop-receipt.html` no longer promises to show
+unverified rows. Existing tests whose fixtures only needed a drop to exist were given a
+PAYER-funded transfer (`paid()` helper); the "retried on replay" case now asserts the 409 first.
+
+Claims to break on this head: (a) with any sequence of calls carrying no verified row, no kv key
+changes at all; (b) a stranger cannot make a verified row appear on a receipt whose operator did
+not fund it; (c) a public signature that is already on a receipt cannot be used to create or
+charge anything; (d) the row cap and the daily cap count only verified rows / created drops.
+Residual, stated: a stranger who knows an operator's UNRECORDED real transfers of the same mint
+(after the drop's `createdAt`) can create truthful receipts from them and consume that wallet's
+20-drop day. The receipts are true and the operator's own recording claims those signatures
+first; this is documented rather than closed.
+
+## Round 15 — 2026-09-22: #395 again — two door figures ($10 CLKN / $20 SKR) and the Airdropper free everywhere
+
+Owner, after round 14: *"lets lower it to 20 dollars of SKR or 10 dollars of CLKN to get access to
+advanced tools, airdropper should be free for everyone on all platforms moving forward."* Both
+landed on the same branch, so the head you re-review carries them. What changed and what to break:
+
+**Two figures.** `TOOLGATE.usd` (CLKN door) defaults to 10, `TOOLGATE.skrUsd` (SKR door) to 20;
+env `TOOLGATE_USD` / `TOOLGATE_SKR_USD`. `lib/tool-pass-qualify.js` takes `input.skrUsd` (falls
+back to `usd` when absent or not positive) and needs `ceil(skrUsd / skrPrice)` SKR; the denial
+sentence names both figures. `/api/tool-gate/config` publishes `holdUsd` (CLKN) and
+`skr.holdUsd` (SKR) side by side; `skr.skrNeeded` divides the SKR figure, never the CLKN one.
+The Seeker sheet reads `cfg.skr.holdUsd` for the SKR sentence (falls back to `holdUsd` on an
+older config). Owners Snapshot shares `TOOLGATE.usd` and therefore follows to $10.
+- Claim to break: no client anywhere divides the SKR price by the CLKN figure, and no page
+  carries either number as a literal (the only "$10"/"$20" strings are in docs, the README, the
+  investors page's dated history line, and code comments).
+
+**The Airdropper is free for everyone, on every platform.** The web page dropped
+`cluck-gate.js` and both `CluckGate.guard` wrappers; the Seeker pane dropped `usePass` /
+`<PassGate tool="airdrop">` and moved to tier `wallet`; `/api/airdrop/record` takes no pass.
+The receipt kept its two defences by moving them onto the chain: `lib/airdrop-receipt.js`
+`feePayerOf(tx)` reads `accountKeys[0]` of the first row whose transaction can be read, stores
+it as the drop's operator (never public), holds every later row to it (`sourceIsOperator`,
+`transfer_not_from_operator`), and keys the 20-drops-per-day cap on it. Nothing the client
+sends names the operator, so there is nothing to spoof.
+- Claims to break: (1) a stranger who knows a public `dropId` cannot append a row the drop's
+  operator did not fund; (2) a stranger cannot make a wallet's daily cap fill without that
+  wallet's own real transactions; (3) a batch mixing two fee payers records the first readable
+  row's payer as operator and the other payer's rows as unverified; (4) a first transaction the
+  RPC cannot read leaves `operator:null` and the next readable row names it; (5) the public body
+  never carries the operator, derived or passed.
+
+Checks on this head: `tool-pass-qualify-test` (+5 two-figure cases), `tool-pass-gate-test`
+(booted server: `holdUsd === 10`, `skr.holdUsd === 20`, `skrNeeded` divides the SKR figure,
+`POST /api/airdrop/record` with no pass is a 400 on the rows and never 402/403),
+`airdrop-receipt-test` (+5 derived-operator cases), `mutating-get-guard-test` (the record route's
+no-pass pin flipped from 402/403 to 400), `seeker-app-boot-test` (section F pins "$10" beside the
+CLKN figure and "$20" beside the SKR figure; section G sends a drop with NO pass in storage and
+asserts the pass service was never called and no sheet appeared).
+
+## Round 14 — 2026-09-22: #395, your three findings on `a4bb0bb` + the listing mismatches, fixed
+
+You were right on all seven. Findings → fixes:
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P1** — the SKR door graced on a missing SKR price (also during a healthy cold-start refresh), admitting a zero-CLKN wallet the website denies | **SKR never graces.** In `lib/tool-pass-qualify.js` the SKR branch only ever ADDS a grant on a verified qualifying balance; a missing/invalid SKR price or a failed SKR read yields the same denial the website gives, with `skr.unavailable: "price"` or `"rpc"` and the reason in `detail`, and that denial is not cached. `toolPassQualify` now AWAITS `refreshSkrPrice()` when the door is asked for and no SKR price is loaded, so "missing" means unavailable, not still loading. | `tool-pass-qualify-test`: the two former grace cases are now denials; a 16-state sweep (SKR price ∈ {null, 0, −1, 0.5} × read ∈ {down, throws, 0, 99}) asserts the door never admits a wallet the website denies |
+| 2 | **P2** — a negative / non-finite SKR tick was persisted and then blocked every valid tick via the 10× band | One rule, `acceptPrice()` in the lib, used by BOTH refreshes: finite and positive first, then the band against a RECENT (<6h) last-good only, ignoring a non-positive last-good. Boot-time kv loads pass the same finite-positive check (`loadedPrice`). The SKR refresh is single-flight. | `tool-pass-qualify-test` acceptPrice cases: −1, 0, NaN, undefined, "abc", Infinity rejected; 9× accepted; 10× rejected vs recent, accepted vs stale; a poisoned −1 last-good never blocks a valid tick |
+| 3 | **P2** — a cached denial outranked a comp granted later | Comp is checked before the cache, and the cache now lives INSIDE the pure function (`input.cache`), so the ordering is unit-tested rather than assumed. Only real answers are cached (holders, verified denials); grace and "could not check SKR" are not. Keys are wallet + doors. | `tool-pass-qualify-test` cache section: deny → comp → in immediately; website denial does not answer a Seeker request and the reverse; TTL expiry re-evaluates; grace never cached |
+| 4 | **P2** — both listings put the Hatchery in the unified pass | Hatchery is its own section in both: one fee per mint, SOL or discounted CLKN, price shown before confirming; removed from the pass lines and the testing instructions | CLKN-SEEKER `dapp-store/config.yaml`, `config.seeker.yaml` (`c49341c`) |
+| 5 | **P2** — the Seeker listing advertised a pasted-address Wallet Checkup, a Launches tool and a certificate the edition does not have | Wallet Checkup described as reading the connected wallet; Launches removed; "certificate" → "your progress stays on this phone"; "fifteen tools" → "fourteen", with only the wallet tools said to sign | `config.seeker.yaml` |
+| 6 | **P2** — Rent Reclaim "accrues again over time" / "nothing is charged" | "Every new token you touch leaves another account behind, so it is worth checking again later. We charge nothing …; the network fee for each close is shown before you approve it." | `config.seeker.yaml` |
+| 7 | **P3** — "a quiz on every lesson" (21 of 58 have none) | "quizzes on most lessons" in both listings | both files |
+
+Checks on this head: `tool-pass-qualify-test` (every case), `tool-pass-gate-test` (booted server; the config pin is now consistency — `skrNeeded` null iff no price, else `ceil(holdUsd/price)` — because this box can reach Jupiter and the earlier "null" pin was timing), `node --check server.js`. Not re-run: the browser suites (no client or dictionary change this round). Still not claimed: a real wallet through the door.
+
+## Round 13 — 2026-09-22: #395, the SKR door on the tools pass (money/auth path — please break it)
+
+(Numbered after #391's rounds 11–12, which live on that PR's branch until it merges.)
+
+**Context.** The tools pass is the revenue gate. #395 adds a second free-tier door for the Seeker
+app: hold about $50 of SKR (`SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`), live-priced, alongside
+the CLKN door. Owner decision 2026-09-19 (`docs/SEEKER_APP_PLAN.md` §7). Also on your desk, lighter:
+the dApp Store listing rewrite in `clucknorrisapp/CLKN-SEEKER` (`dapp-store/config.yaml`,
+`dapp-store/config.seeker.yaml`) — read it against the code and flag any claim the app cannot support.
+
+**The claims to break, in order of what it would cost if wrong:**
+
+1. **Nothing that was gated is opened by this change for anyone who could not already open it.**
+   The door is requested by the client (`doors:["skr"]` on `POST /api/tool-gate/session`); a website
+   user who hand-crafts it gets what a CLKN holder already gets and nothing more. No user-agent or
+   app id is treated as authorisation. If you can reach a gated API with a token that neither a
+   CLKN holder nor an SKR holder nor a payer could have obtained, that is the P0.
+2. **CLKN is always checked first and SKR only when asked** — `lib/tool-pass-qualify.js`. A session
+   that never asked for the door must never be granted through it, and a `holder-skr` token must be
+   re-checked through its own door only (`doorsForVia`). Try to make a website session grow the door.
+3. **The fail-open policy did not widen.** No CLKN price → grace (pre-existing). New: the skr door
+   requested AND no SKR price → grace. Is that the same population the CLKN rule already graces, or
+   did it add one? A verified zero balance must still deny; only `unavailable` reads grace.
+4. **The price cannot be pinned by a bad tick.** `refreshSkrPrice()` keeps CLKN's 10× sanity band
+   against a recent last-good and kv last-known-good. The refresh is independent of CLKN's — a
+   failure on one mint must not cost the other its price. It runs only when `/api/tool-gate/config`
+   is hit (same as CLKN today). Is there a path where a session is qualified against a stale SKR
+   price that the config route would have refused?
+5. **The holder cache is keyed by wallet + doors.** A denial cached for `wallet|` must not answer a
+   later `wallet|skr` request, and a grant cached for `wallet|skr` must not answer a website request.
+6. **Threshold arithmetic:** `ceil(usd / price)` with a 6-decimal mint; no hardcoded SKR amount
+   anywhere in the app or the server (`grep -rn "SKR" src/seeker server.js lib` should show only
+   the mint, the door name and the sentence templates).
+7. **The sheet.** `src/seeker/passgate.jsx` renders the SKR figure from `config.skr.skrNeeded`
+   only when it is known; the education bundles never ship the three new strings
+   (`store-edition.json` excludeKeys, pinned by `seeker-build-test`).
+
+**What is pinned:** `scripts/tool-pass-qualify-test.cjs` (25 branches of the decision),
+`scripts/tool-pass-gate-test.cjs` (config shape, doors accepted/ignored, `holder-skr` re-check and
+refusal), `seeker-app-boot-test` (the sheet), `seeker-build-test` (dictionaries and bundles).
+
+**Not claimed:** no real wallet has been through the door; the SKR price feed and the SKR balance
+read run for the first time on staging.
+
 ## Round 0 — DELIVERED (2026-09-13). Folded into roadmap revision 2.
 
 Your Round 0 findings were adopted: the centerpiece confirmed, settlement rules tightened into
@@ -800,6 +993,292 @@ state (each round's harness was pinned to a specific pre-squash sha that no long
 - `node scripts/hub-preview-test.cjs` → all passed (22 passed)
 
 Findings, not rewrites, same rule as every other round.
+
+## Round 12 — 2026-09-21: #391, your re-review note ("a fix table isn't proof")
+
+You were right, and the point is sharper than the note: the content scan in round 10 PASSED while
+CLKN's pools and fees were on the phone at `#/school/lp/4`. A scan reads files; a reviewer reads
+the screen. So round 12 adds no fix — it adds the proof you asked for, in the form you asked for,
+against the four things you said you would verify before clearing the PR.
+
+| What you would verify | How it is now proven | Where |
+|---|---|---|
+| Token promotion is gone from **rendered** lessons and translations | **`scripts/store-render-scan.cjs`** (CI): boots the shipped google tarball in headless Chromium, opens **every one of the 58 lessons in every one of the 7 languages** the bundle ships, answers **every one of the 200 quiz questions** so the explanation renders, and scans `document.body.innerText` for `\bCLKN\b`. Nothing is read from JSON. Your four examples are pinned **by name on the rendered text of the lesson each lived in** (`lp/4`, `lp/7`, `fundamentals/bags`, `fundamentals/memecoins`, `fundamentals/lp`), and the store wording is asserted PRESENT on `lp/4` and `lp/7` so the walk is proven to read the real body. It proves its own reach: 58/58 lessons and 200/200 questions per language, and for each non-English language the rendered lesson text must differ from English (58/58 do; the dictionary is 6,300 keys). **Mutation-proved:** `--mutate` puts your fee-tier sentence back into the extracted chunk and the walk fails on `lp/4` (ticker on screen + the pinned example + the store wording missing). Local run on this head: 7 languages, ≈2.9M rendered characters read, 0 hits. | `scripts/store-render-scan.cjs`; CI step "every lesson, every language, read off the screen" in `syntax-check.yml` |
+| Failed reports can retry without losing the answer | `store-shell-boot-test` **D**, run on this head: a 503 on the first report → the error line shows, all four reason buttons stay enabled, the answer is still on screen, one POST so far; endpoint up → same reason → a second POST lands, "reported" shows. 7/7 D assertions pass. | `scripts/store-shell-boot-test.cjs` D |
+| Daily shows real prices from the backend's response | `store-shell-boot-test` **B**, run on this head: `/api/alpha` answers `majors: [{sym:"SOL", price:150, chg:2.1}, …]` as `server.js` builds it → SOL renders `$150`, no row renders `$?`, `+2.1%` beside it. 3/3 pass. | `scripts/store-shell-boot-test.cjs` B |
+| The final Play APK contains no native wallet library | The wrapper's CI probes the **produced APK**, not the source: CLKN-SEEKER run `35638677722` (job `play-dev-apk`, `9defc96`) reads the dex and the manifest — `✓ no MobileWalletAdapter class · ✓ no CluckMWAPlugin class · ✓ manifest has no solana-wallet query · ✓ app id app.clucknorris.edu.dev · ✓ stamped do-not-publish` — and the sibling `seeker-dev-apk` job runs the same probe as the positive control ("the Seeker APK HAS the wallet layer", passes). **Honest scope:** that is the play-DEV APK built from the branch; the FINAL Play APK is `build:play` from the tagged `store-google-v1.1.0` release on the owner's Mac, and the same probe is part of that path (`WRAPPER-BUILD-TARGETS.md`). Nobody has probed the final signed artifact yet because it does not exist yet. | CLKN-SEEKER `.github/workflows/android-build.yml`, run 35638677722 |
+
+What I did NOT do this round: change a lesson, a component, or a dictionary. The diff is the
+rendered walk, its CI step, and these notes. If the walk is wrong, say where — it is the thing
+that would have caught round 10's miss, and it should be the thing you break next.
+
+## Round 11 — 2026-09-21: #391, your three findings on `9cabf86`
+
+Fixed on the branch (head in the PR body). Findings → fixes:
+
+| # | Finding | Fix | Regression coverage |
+|---|---|---|---|
+| 1 | **P1** — CLKN promotion still renders in the education bundle: `data/curriculum.store.json` named CLKN's pools and fees (`#/school/lp/4`), the buyback claim, the "what makes CLKN different" quiz, the AMM trading examples | **The lesson SOURCES got their STORE variants, not the generated JSON.** `src/sections/LPLab.jsx`, `src/sections/Library.jsx`, `src/App.jsx`: every sentence ABOUT CLKN carries an explicit `STORE ? … : …` (the launch story, the fee-tier line, the two quizzes, the token definition, the buyback sentence, the "lifetime fees" paragraph); the worked examples use `TOK` (`STORE ? "ABC" : "CLKN"`). Both curricula regenerated; **the website copy is byte-identical** apart from its timestamp (`extract-curriculum --check` ✓, `public/curriculum.html` unchanged). **Audit of siblings:** a structural diff of the two curricula (30 differing fields) and a whole-word scan — the store copy has **0** `\bCLKN\b`; two more bare words were found outside the lessons and removed (the Listing Checkup placeholder `e.g. CLKN` → `e.g. USDC`, and our ticker in `public/i18n.js`'s never-translate whitelist, which ships inside the bundle). **Translations:** every store-only sentence has entries in all six `*.school.json` — derived sentence-by-sentence from the existing translations (mechanical ticker swap where that is all that changed; hand-translated rewrites for the sentences about CLKN); 28/30 store-variant fields are translated in all six languages, the other 2 were never translated on the website either. | `\bCLKN\b` is now a **forbidden pattern** for google/ios in `store-edition/store-edition.json` (the build refuses the bundle); `scripts/store-edition-test.cjs` pins your four examples by name on the generated store curriculum, plus the whole word on the curriculum, the chunk and the bundled dictionaries. **Mutation-proved:** with the previous store JSON swapped in, exactly those pins fail. |
+| 2 | **P2** — a failed answer report removed every reporting control | `ReportAnswer` in `src/seeker/AskCluck.jsx`: `failed` is now the `pick` state with an error line above the same four reason buttons; the answer above is untouched | `scripts/store-shell-boot-test.cjs` D: the report endpoint answers 503 once — the error shows, all four buttons remain enabled, the answer is still on screen, one POST so far; then the endpoint is up, the same reason is pressed again, a second POST lands and "reported" shows. **Mutation-proved** against the previous component. |
+| 3 | **P2** — Daily prices showed `$?` (`m.px` vs the backend's `m.price`) | `src/seeker/tools/DailyBrief.jsx` reads `m.price` | `store-shell-boot-test` B: `/api/alpha` answers a populated payload shaped as `server.js` builds it (`majors: [{ sym:"SOL", price:150, chg:2.1 }, …]`) — SOL renders `$150`, no row renders `$?`, the change shows. **Mutation-proved** against the previous pane. |
+
+Where to look hardest this time: the sentence-level derivation of the six dictionaries
+(`public/i18n/*.school.json` — the diff is additive: new keys only, nothing existing changed); the
+`editionPrelude()` added to the two eval-based extractors (`scripts/build-curriculum.cjs`,
+`scripts/i18n-audit.cjs`) so the website-edition tooling evaluates the lesson arrays with
+`STORE = false` and the file's own `TOK` line; and whether a whole-word rule can be fooled by a
+different spelling of the ticker (`$CLKN`, `CLKN's` are caught; lowercase `clkn` in identifiers is
+not the word and is allowed on purpose).
+
+**Not cleared by this round, and not claimed:** the native wrapper and the APK. The wrapper's
+own CI reads the produced APK for the wallet-adapter class and the `solana-wallet` query
+(CLKN-SEEKER `9defc96`); an independent look at that job and its probe is welcome.
+
+## Round 10 — 2026-09-21: #390, the last P2 (a lesson opened before the dictionary stays English)
+
+Confirmed exactly as you described it, and my brief's "the app gates on `useI18nReady`" was
+false — the hook lived in the header and nav only, re-rendered only them, and stopped polling at
+1.5 s. Three changes, one test each:
+
+1. **`public/i18n.js` announces the dictionary**: `window.dispatchEvent(new CustomEvent("clkn:i18n-ready"))`
+   the moment `window.CLKN_I18N` is set. Website and shell share this file; the event is inert
+   anywhere nothing listens.
+2. **`useI18nReady()` is event-driven with no give-up**: the listener stays for the life of the
+   component; a 50 ms poll bounded to 3 s covers the race between the first render's check and
+   the listener attaching. Never a network call.
+3. **Every pane that renders its own strings subscribes**: the three school components, Daily,
+   and each tools pane. `<Pane>` already subscribed, but React does not re-render children it was
+   handed as props, so a wrapper's subscription never reached the pane's own `t()` calls.
+
+**Tests:** `seeker-app-boot-test` **P9** and `store-shell-boot-test` **G** — Spanish, every
+`/api/**` refused, BOTH dictionary files held back 2.5 s (past the old give-up), the lesson is
+the INITIAL url. Asserted in order: the lesson is on screen in English while `window.CLKN_I18N`
+is still absent (the race is real, not simulated); then, with no navigation, the section body
+equals the curated `es.school.json` value, keeps its paragraphs, is `data-i18n-skip`, and the
+heading followed. P8 (dictionary first) stays as the steady-state case.
+
+Look hardest at: the 3 s poll bound (is there a path where the event fires before the listener
+attaches AND after the poll stops? — the event is dispatched synchronously after the fetch
+resolves, which is always after the first render's effect has attached the listener, but say if
+you see one), and whether any pane still renders `t()` without subscribing (grep
+`useI18nReady()` per file under `src/seeker`).
+
+## Round 9 — 2026-09-21: the Google Play / iOS edition of the Seeker shell (store-edition v1.1.0)
+
+Owner's go: *"start on the play store version of the shell"*. Stacked on #390's branch (`f3463d7`),
+so the diff against `develop` includes #390 until it merges — review the store-shell commits on
+their own. `docs/STORE_EDITION.md` → **v1.1.0** is the design of record.
+
+**The claim to break:** *the Google Play / iOS bundle is the phone shell with the school leading,
+and it contains no wallet — not hidden, absent.* The mechanism is one Vite alias:
+`@seeker-edition` → `src/seeker/edition/edu.jsx` (education) or `edition/full.jsx` (Seeker).
+The education module's import list is the whole argument; the build's forbidden-string scan and
+the new boot test are the locks.
+
+Where to look hardest, in order:
+
+1. **`src/seeker/edition/edu.jsx` — the import list.** Anything that reaches a wallet pane, the
+   gate (`needswallet.jsx`), `pass.js`/`passgate.jsx`, `reclaim-sign.js`, `tools/registry.js`
+   is a wallet in the store. Then `pane.jsx` and `addr.js`, which BOTH editions share: I moved
+   `NeedsWallet` out of `pane.jsx` because its `window.CluckWallet` reference would have shipped;
+   is there another shared module carrying a wallet reference the scan's word list would miss?
+2. **`vite.config.js`** — `SHELL`/`EDU`, the `EDU:OUT` strip, the comment strip (`SHELL` only),
+   the two aliases. Can a build reach the education alias WITHOUT the `EDU:OUT` strip, or vice
+   versa? (Both key off the same `EDU` boolean, on purpose.) The website build must be inert:
+   `npm run build` is unchanged.
+3. **`scripts/extract-curriculum.js`** — one `buildCurriculum(edition)` writes both files; the
+   store copy resolves `VITE_STORE_EDITION="google"` inside the lesson modules. `--check` covers
+   both. Is there lesson copy that names a venue or the token OUTSIDE a `STORE ?` branch? The
+   scan found none of the listed strings in `curriculum.store.json`; the list is the scan's, not
+   a reading of every lesson.
+4. **`src/seeker/school/Certificate.jsx`** — the sid handling (`sessionId()` from `src/track.js`,
+   `flushTrackQueue()` first), the `not_yet` rendering, and that nothing here can reach
+   `/api/claim` (the wallet claim). Coursework counts come from the course-scoped local keys.
+5. **`src/seeker/WalletCheckup.jsx`** — now `({ address, gate })`; the pane must not know
+   which edition it is in. `edu.jsx`'s `AddressForm` validates base58 on the device. Confirm the
+   scan path renders `unavailable` on a refused read and never "no issues found".
+6. **`scripts/seeker-i18n-keys.cjs`** — `reachableFrom()` walks static relative imports from
+   `edu.jsx` + `App.jsx`; `--sync-exclude` = (existing ∪ all) − edu. 172 keys were un-excluded.
+   A key rendered by BOTH a wallet pane and an education pane is kept (correct); a wallet-only
+   key that also exists in website copy would be excluded from the Play dictionaries and fall back
+   to English on the website's school inside the store bundle — is there such a key?
+7. **`scripts/store-edition-test.cjs`** — I restated the v1.0.x page assertions as chunk
+   assertions. Read the diff as a checklist: is any v1.0.x contract item weaker now?
+
+What I did NOT do: read-aloud in the shell (the shell has no reader); an iOS TestFlight pass
+(needs the owner's Apple account); screenshots for the listing (a human eye).
+
+## Round 8 — 2026-09-21: PR #390, your three remaining P2s on `19afe6b`
+
+Still held. All three confirmed against the data first; the first one was my own "check every
+form" trap — my earlier check for section bodies in the dictionary was an EXACT match (2/125);
+normalised the way `i18n.js` stores keys it is 107/125, and I had split the English before
+looking anything up.
+
+| # | Your finding | What changed |
+|---|---|---|
+| 1 | LP/Deep Dive bodies still English offline — paragraphs looked up, dictionary keyed by whole section | `tBlock()` in `src/seeker/i18n.js`: collapse whitespace, look up the WHOLE body, return the curated value (which keeps its `\n\n`), THEN `Prose()` splits it. A curated hit is marked `data-i18n-skip` so the observer never sends Spanish for machine translation. Applies to `sections[].body` and `content`. |
+| 2 | `cluckBrief()`'s fallback returns the raw summary with `%/day fee yield` — the prompt cannot protect it | The fee ratio is **gone from the summary entirely** (hot-pools suffix and the picks line). Your "simpler choice". Both paths now carry the same words because the word is not there. `/api/alpha`'s payload and the scanner's own pages (`/lp-scanner`, `/alpha`) are unchanged — noted for the owner below. |
+| 3 | The relabel said "last 24h fees" for `feeYield7dPctDay`, a seven-day average | Moot by #2 — the figure and its label are both removed. |
+
+**Tests:** `ai-prompt-claims-test.cjs` now scopes `alphaDataSummary()` + `cluckBrief()` and refuses
+`%/day`, `yield`, `blue-chip`, `picks`, `last 24h fees` in EMITTED strings (comments excluded),
+and requires the prompt's yield prohibition. `seeker-app-boot-test.cjs` gained **P7** (the
+threshold at its edge: `basics/wallet`, 3 questions, need 2 — one right fails, two right passes)
+and **P8** (Spanish, every `/api/**` refused, the richest LP lesson: the section body on screen
+equals the curated `es.school.json` value normalised, is not the English, keeps >1 paragraph, and
+the wrapper is `data-i18n-skip`).
+
+**Your notes, acted on:** the disclosure is on the school HOME now, under the progress bar, not
+only the finished state. Your fourth design (authenticated claim against the original app
+session, no transfer, no merge) is in `docs/SEEKER_TRANSCRIPT_HANDOFF.md` as the one to evaluate
+first — I agree it is not a bearer credential. The bare-id ledger conflation is written up there
+as a must-settle before the app feeds diploma credit (under-credits today, never over-credits).
+
+**Not done, for the owner:** `public/alpha.html` still renders `%/d` beside hot pools and an LP
+"picks" table from the same `/api/alpha` payload. That is a website page with the exact claim
+problem this round removed from the brief; it is outside this PR and it is the next truth-pass
+item.
+
+**Where to look hardest:** whether `data-i18n-skip` on the wrapper could ever hide a
+NON-translated block from the observer (it is set only on a curated hit).
+
+**Correction (round 10):** I wrote here that "the app gates on `useI18nReady`". It did not —
+the hook was called by the header and the nav only, and it gave up polling at 1.5 s. Codex's
+round-9 finding (a lesson opened directly stays English) was right and the statement above was
+wrong. Fixed in round 10 below.
+
+## Round 7 — 2026-09-21: PR #390, the fix round for YOUR seven findings
+
+**The owner held #390 on your review, and it stays held until you have looked at this.** Every
+finding was confirmed against the data before anything was changed — none was argued with. All
+seven are addressed; one of them (the transcript handoff) is addressed by telling the truth rather
+than by building the feature, and that is deliberate and explained.
+
+| # | Your finding | What changed | Where |
+|---|---|---|---|
+| 1 | P1 — every quiz had no answer buttons | `mapQuestions` in the extractor now carries `options` / `correct` / `explanation` beside the classroom's `q`/`answer`/`why`. `data/curriculum.json` regenerated; 200/200 questions answerable. Exposure note: `answer` already carried the correct option's text, and the file is required server-side, not served. | `scripts/extract-curriculum.js`, `data/curriculum.json` |
+| 2 | P1 — LP Lab and Deep Dive lost their bodies (`sections` discarded) | The model carries `sections`, `content`, `tagline`, `verdict`; the reader renders them OPEN (not accordions — on a phone a collapsed section is a lesson nobody reads). | `src/seeker/school/curriculum.js`, `School.jsx`, `school.css` |
+| 3 | P1 — finishing `basics/dex` credited `fundamentals/dex` | Local progress is keyed by a COURSE-SCOPED `key` (`course:lesson`) everywhere. The LEDGER BEACON deliberately keeps the BARE lesson id — that is the id space the website has always written. Two id spaces, on purpose, documented in the file header. | `curriculum.js`, `School.jsx` `beaconId()` |
+| 4 | P2 — all-wrong answers passed | `passMark(n) = Math.ceil(n * 2/3)`, the website's own rule copied not invented. A miss shows the score, what was needed, and a retake; it writes NO local mark and sends NO completion beacon. | `curriculum.js`, `School.jsx` `advance()` |
+| 5 | P2 — the school dictionary never loaded (pathname vs hash) | The shell DECLARES its packs: `<html data-i18n-packs="school">` on `seeker.html`; `i18n.js` reads the attribute (whitelisted charset) beside its existing pathname rule. Declared, not hash-sniffed, because the app boots at `#/` and redirects after i18n.js has already run. NOT a blanket load — `<lang>.school.json` is ~1MB/356KB gz and the website's homepage must not pay it. The website's own client-nav gap (land on `/`, navigate to `/school`) is pre-existing and is stated in the comment as unfixed. | `seeker.html`, `public/i18n.js` |
+| 6 | P2 — "Claim your transcript on the website" was not true | **Not built.** Every handoff design puts a bearer credential (the sid, or a code minted from it) in front of a treasury-paid mint, and the ledger's live-spread check has to be re-derived for a merged session. That is an owner decision under PLAN ≠ EXECUTE. The copy now says what is true, in seven languages, and the decision is written up with three concrete designs and what each costs. | `School.jsx`, `docs/SEEKER_TRANSCRIPT_HANDOFF.md` |
+| 7 | P2 — `payload.brief` re-imported the LP picks | The pane no longer renders `brief` at all. AND the `cluckBrief()` system prompt in `server.js` no longer asks for "our blue-chip LP yield picks" — it forbids blue-chip/safe/pick language and forbids rendering a fee ratio as a yield or return. That prompt also feeds the public daily Telegram/X post, so leaving it would have meant the brand still said it every day. The `/api/alpha` payload is unchanged. | `DailyBrief.jsx`, `tools.css`, `server.js` ~5115–5124 |
+
+**The missing test you named now exists — `seeker-app-boot-test.cjs` section P**, the learner
+journey: open the richest LP Lab lesson and assert its headings and >2000 chars of body render;
+mark a Deep Dive lesson read; open `basics/dex` (chosen because the id is duplicated), answer
+every question WRONG and assert no pass, no local mark, no ledger beacon; retake answering every
+question RIGHT from the curriculum's own `correct` index and assert pass, the course-scoped local
+key, the bare-id beacon; then assert `basics 1/7` and `fundamentals 0/16`. The whole journey runs
+with every `/api/**` refused, so it also proves the offline claim. **Mutation-proved:** each of the
+four bugs was reintroduced in isolation and the test failed on the right assertion each time
+(P5 printed `fundamentals 1 / 16`, P1 printed `0 of 6`, P3 timed out on a missing option, P3
+reported the false pass). Commit message has the list.
+
+### Where to look hardest
+
+- `School.jsx` `advance()` / `complete()` / the `useEffect` that resets quiz state on a route
+  change. A deep link from the Daily pane into a lesson while another is open must not inherit
+  the previous quiz's `score`.
+- `public/i18n.js` — the attribute path. It is our own markup, but it becomes a URL; the regex
+  is the only guard.
+- `server.js` `cluckBrief` — read the whole prompt, not the diff. Does anything in it still let
+  the model rank or endorse a pool? The data summary line still carries `%/day` as a number; the
+  instruction says never to present it as a return. Is that enough, or should the number go?
+- The eight new dictionary strings (six languages) — placeholder integrity was checked by
+  script; the wording is mine. The two retired keys were removed from all six files with every
+  other byte untouched.
+
+### What was NOT done, and why
+
+- No sid handoff (above). If the owner wants it, the third design in the doc is the one to build.
+- The website's own client-navigation dictionary gap (a pre-existing bug this review surfaced by
+  analogy) is documented in `i18n.js`, not fixed — it needs a lazy merge plus a re-walk of nodes
+  already machine-translated, which is more than a held PR should carry.
+- `/tools/alpha` is still the Daily route's path and the catch-all `*` still lands on `/tools`
+  rather than `/school`. Both are cosmetic and untouched here.
+
+## Round 6 — 2026-09-21: PR #390, the Seeker app on real hardware
+
+**The owner asked for you on this one specifically**, before it merges. It is the first batch
+written after the app ran on his actual Seeker — wallet connect and MWA signing work, which
+closes the oldest "never verified end-to-end" item in AGENTS.md.
+
+PR #390 is large but only two parts need a careful reviewer. The rest is copy and wiring.
+
+### ⚠️ Priority 1 — `src/track.js`: the graduation ledger's only input is now shared
+
+Extracted verbatim out of `src/App.jsx` so the new phone school and the desktop school use one
+implementation. The reason it had to be shared rather than copied: **two copies means two queues,
+two session ids, and lesson marks landing in one and not the other — in front of a treasury-paid
+diploma.**
+
+That code carries incident history including **your own fix on #333** (clearing the queue up front
+lost every entry if the tab closed mid-flight). I moved it without changing its logic. Please check:
+
+- Is the extraction genuinely behaviour-identical? `api` is now imported from `edition.js` rather
+  than closed over in `App.jsx`.
+- **The bit I most expect to be wrong:** the module runs
+  `window.addEventListener("online", flushTrackQueue)` and `setTimeout(flushTrackQueue, 1500)` at
+  import time. Two entry points now import it (`src/App.jsx`, `src/seeker/school/School.jsx`). In
+  the bundles they are separate builds, so it should be once each — but is there any path where one
+  build registers twice, and would a double flush hurt? (I believe not: the server keeps the first
+  sighting, and overlapping flushes are explicitly allowed. Confirm or shoot it down.)
+- `beaconId()` in `School.jsx` must produce the same shape as `trackId()` in `App.jsx`, or a lesson
+  passed on the phone lands on a different ledger row than the same lesson passed on the web.
+
+### ⚠️ Priority 1 — two tests were DEFENDING the bug
+
+`seeker-build-test` asserted the default route redirects to `#/tools`; the boot test asserted four
+nav tabs landing on the Toolkit. Both passed happily against an app **with no school in it at
+all** — the scope doc enumerated fifteen tools, the app was built to it exactly, and the tests
+agreed with the scope doc. The owner found the gap by opening the app on his phone.
+
+The general form is now in AGENTS.md: *a test that encodes a scope doc will defend that scope
+doc's blind spot.* **Worth your eye: are there others?** The same shape would hide anywhere a test
+asserts "the app has exactly N of X" where N came from a planning document rather than from a
+product decision.
+
+### Priority 2 — `lib/explain-findings.js` (payload layer for contextual Ask Cluck)
+
+Not wired to a UI yet; the endpoint and consent sheet are the next PR. It exists so "Explain this
+result" can send a tool's findings to the tutor **without sending the screen's text**, because
+token names are attacker-controlled and an LLM prompt turns that from an XSS class into a prompt
+injection class.
+
+Only finding CODES and COUNTS cross; the server renders English from its own table. The validator
+is the entire defence — `scripts/explain-findings-test.cjs` attacks it (extra keys carrying free
+text, prompts smuggled as codes, `__proto__`/`constructor`/`toString`, malformed counts,
+duplicates used to weight the prompt). **Try to get a string through it that I did not think of.**
+
+Also worth your opinion as a design call: I deliberately departed from the owner's brief, which
+asked for "the exact displayed findings". The cost is that an explanation cannot name a specific
+token. Is that the right trade?
+
+### Priority 3 — claims, and the Daily rebuild
+
+Five surfaces carried claims the code cannot support, found from one owner catch (Firepit's "a
+value guard **stops you** burning anything still worth money"). The others: Launches "read
+straight off the chain" (it is the Bags API), X-Ray's "behavioral signals … straight off the
+chain" (AGENTS.md calls it an activity scanner that undercounts), the **Ask Cluck system prompt**
+listing X-Ray/Holders/Trace as "FREE TOOLS (no wallet connect)" while describing the pass
+correctly further down the same prompt, and the Telegram `/walletxray` help saying "every trade".
+`scripts/ai-prompt-claims-test.cjs` pins it.
+
+The Daily pane was rebuilt after the owner asked what I thought of it: it had a section headed
+"Blue-chip LP picks" with a `%/day` yield, two tabs from an LP Lab that teaches impermanent loss
+and that fee APR is not return. Now it is today's lesson + one question + majors. **The daily
+check deliberately sends no beacon** — a one-tap answer must never reach the graduation ledger.
+
+### What is NOT in this PR, so you do not look for it
+
+The MWA native plugin, the Android CI and the `seeker-dev` unpinned build path are all in
+`clucknorrisapp/CLKN-SEEKER` on `claude/seeker-integration`. Notable there if you have appetite:
+`npm run build:seeker` could never have succeeded — the seeker variant inherited the
+education-only content scan, which forbids the wallet-connect and signing the Seeker edition
+legitimately ships. Measured against a real tarball: five hits. It would have refused its own
+correct artifact on release-tag night.
 
 ## Open questions the owner would like your opinion on
 - Is lock-to-earn on Jupiter Lock the right headline mechanism for a Consumer Apps entry, or is

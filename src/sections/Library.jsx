@@ -2,6 +2,9 @@
 import { useState } from "react";
 import { LOGO_B64, COL, AskCluck } from "../shared.jsx";
 import { STORE } from "../edition.js";
+// Worked-example token — see the same constant in LPLab.jsx. The store edition names no token
+// of ours; sentences ABOUT CLKN carry an explicit STORE variant.
+const TOK = STORE ? "ABC" : "CLKN";
 
 // ── THE LIBRARY — DEEP DIVES ──
 const LIBRARY_TOPICS = [
@@ -120,7 +123,7 @@ WHAT TO CHECK ON DEXSCREENER:
 • 24H volume relative to liquidity — low volume with high liquidity means little interest
 • Age of the liquidity pool — very new pools carry more risk
 
-${STORE ? "EXAMPLE: When a token graduates from a Bags.fm bonding curve to Meteora DAMM V2, the graduation process locks the liquidity pool permanently" : "CLKN EXAMPLE: CLKN graduated from the Bags.fm bonding curve to Meteora DAMM V2. The graduation process locks the liquidity pool permanently"} — so the LP itself can't be pulled. That closes the most common rug vector, but it does not remove every risk: holder concentration and large insider allocations are separate things you still have to check on any token.`
+${STORE ? "EXAMPLE: A token graduates from a Bags.fm bonding curve to Meteora DAMM V2. The graduation process locks the liquidity pool permanently" : "CLKN EXAMPLE: CLKN graduated from the Bags.fm bonding curve to Meteora DAMM V2. The graduation process locks the liquidity pool permanently"} — so the LP itself can't be pulled. That closes the most common rug vector, but it does not remove every risk: holder concentration and large insider allocations are separate things you still have to check on any token.`
       },
       {
         heading: "Step 3 — Team and Transparency",
@@ -232,7 +235,7 @@ WHAT YOU WILL SEE:
 BALANCE CHANGES TAB:
 This is the most useful view. It shows exactly what changed in each wallet as a result of this transaction. Positive numbers = received, negative numbers = sent.
 
-PRO TIP: The Balance Changes tab is how you verify on-chain payments. If you see your wallet with a positive CLKN balance change matching your expected amount — the payment went through.`
+PRO TIP: The Balance Changes tab is how you verify on-chain payments. ${STORE ? "If you see your wallet with a positive balance change in the token you expected, matching the amount — the payment went through." : "If you see your wallet with a positive CLKN balance change matching your expected amount — the payment went through."}`
       },
       {
         heading: "Finding Smart Money",
@@ -987,7 +990,7 @@ const LIBRARY_LIQUIDITY = [
     title: "How AMMs Work",
     icon: "⚙️",
     summary: "Automated Market Makers use a mathematical formula to set prices automatically.",
-    content: "An Automated Market Maker (AMM) is a smart contract that holds two tokens and automatically calculates their price based on supply and demand — no order book, no human market maker needed.\n\nThe most common formula is the Constant Product Formula:\n\nx × y = k\n\nWhere x = amount of Token A, y = amount of Token B, and k = a constant that never changes.\n\nWhen you buy Token A, you add Token B to the pool and remove Token A. Because k must stay constant, as Token A supply goes down, its price goes up. This is automatic — no one sets the price manually.\n\nEXAMPLE: A pool has 100 SOL and 1,000,000 CLKN. k = 100,000,000. You buy 10 SOL worth of CLKN. Now the pool has 110 SOL — to keep k constant, it must have ~909,090 CLKN. You received ~90,910 CLKN. The price moved because you changed the ratio.",
+    content: "An Automated Market Maker (AMM) is a smart contract that holds two tokens and automatically calculates their price based on supply and demand — no order book, no human market maker needed.\n\nThe most common formula is the Constant Product Formula:\n\nx × y = k\n\nWhere x = amount of Token A, y = amount of Token B, and k = a constant that never changes.\n\nWhen you buy Token A, you add Token B to the pool and remove Token A. Because k must stay constant, as Token A supply goes down, its price goes up. This is automatic — no one sets the price manually.\n\nEXAMPLE: A pool has 100 SOL and 1,000,000 " + TOK + ". k = 100,000,000. You buy 10 SOL worth of " + TOK + ". Now the pool has 110 SOL — to keep k constant, it must have ~909,090 " + TOK + ". You received ~90,910 " + TOK + ". The price moved because you changed the ratio.",
   },
   {
     id: "impermanent-loss",
@@ -1008,7 +1011,7 @@ const LIBRARY_LIQUIDITY = [
     title: "Dynamic Bonding Curves",
     icon: "📈",
     summary: "A price mechanism that automatically increases price as more tokens are bought.",
-    content: "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\n" + (STORE ? "A token that completes this journey — launching on a Bags.fm bonding curve and graduating to Meteora DAMM V2 — ends up with a liquidity pool that is permanent and cannot be pulled by the creator." : "CLKN completed this journey — it launched on a Bags.fm bonding curve and graduated to Meteora DAMM V2. This is why the liquidity pool itself is permanent and cannot be pulled by the creator.") + " That closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
+    content: "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\n" + (STORE ? "A token that completes this journey launches on a Bags.fm bonding curve and graduates to Meteora DAMM V2. This is why the liquidity pool itself is permanent and cannot be pulled by the creator." : "CLKN completed this journey — it launched on a Bags.fm bonding curve and graduated to Meteora DAMM V2. This is why the liquidity pool itself is permanent and cannot be pulled by the creator.") + " That closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
   },
   {
     id: "meteora-damm",
@@ -1029,7 +1032,7 @@ const LIBRARY_LIQUIDITY = [
     title: "Fee Sharing & LP Earnings",
     icon: "💰",
     summary: "How liquidity providers and token creators earn from trading activity.",
-    content: "Every trade on a DEX generates fees. These fees are the incentive that attracts liquidity providers to deposit their tokens into pools.\n\nHOW LP FEES WORK: When you trade in a pool, you pay a small percentage fee (typically 0.25%-1%). This fee is distributed proportionally to all liquidity providers in the pool based on their share of the total liquidity.\n\nBAGS.FM FEE STRUCTURE: Bags.fm adds a creator fee layer on top. When you launch a token on Bags.fm, you (the creator) earn a percentage of all trading fees forever — even after graduation to Meteora. This is the revolutionary part — creators have a permanent financial stake in their token's trading activity.\n\nPARTNER FEES: Bags.fm also has a partner program. Platforms and builders can register a referral code and earn a share of platform fees on trades that come through their link. Important distinction: a partner code only earns from OTHER projects that launch or trade through it — it is NOT the same as the creator fee a token earns on its own trading. " + (STORE ? "A project's revenue can be its creator fee — roughly 1% of every trade" : "CLKN's project revenue is its creator fee — roughly 1% of every CLKN trade") + " — and that is reinvested into the token; it does not come from a partner referral.\n\nCLKN LIFETIME FEES: You can see the total SOL earned from CLKN trading activity live in the Token Data tab — powered by the Bags.fm API.",
+    content: "Every trade on a DEX generates fees. These fees are the incentive that attracts liquidity providers to deposit their tokens into pools.\n\nHOW LP FEES WORK: When you trade in a pool, you pay a small percentage fee (typically 0.25%-1%). This fee is distributed proportionally to all liquidity providers in the pool based on their share of the total liquidity.\n\nBAGS.FM FEE STRUCTURE: Bags.fm adds a creator fee layer on top. When you launch a token on Bags.fm, you (the creator) earn a percentage of all trading fees forever — even after graduation to Meteora. This is the revolutionary part — creators have a permanent financial stake in their token's trading activity.\n\nPARTNER FEES: Bags.fm also has a partner program. Platforms and builders can register a referral code and earn a share of platform fees on trades that come through their link. Important distinction: a partner code only earns from OTHER projects that launch or trade through it — it is NOT the same as the creator fee a token earns on its own trading. " + (STORE ? "A project's revenue can be its creator fee — roughly 1% of every trade" : "CLKN's project revenue is its creator fee — roughly 1% of every CLKN trade") + " — and that is reinvested into the token; it does not come from a partner referral." + (STORE ? "" : "\n\nCLKN LIFETIME FEES: You can see the total SOL earned from CLKN trading activity live in the Token Data tab — powered by the Bags.fm API."),
   },
   {
     id: "reading-pool",
