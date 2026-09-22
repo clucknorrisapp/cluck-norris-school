@@ -2,6 +2,11 @@
 import { useState, useMemo, Component } from "react";
 import { LOGO_B64, COLW, READ, AskCluck } from "../shared.jsx";
 import { STORE } from "../edition.js";
+// The worked-example token. The website and the Seeker app teach with CLKN; the Google Play /
+// iOS edition is education-only and names no token of ours (store-edition v1.1.0, Codex on
+// #391: "CLKN promotion still renders in the education bundle"), so its examples use a
+// placeholder ticker. Sentences ABOUT CLKN carry an explicit STORE variant instead.
+const TOK = STORE ? "ABC" : "CLKN";
 
 // Every calculator below is wrapped in this. It was referenced in twelve places before it was ever
 // written, which is a runtime-only ReferenceError — `npm run build` compiles a free variable
@@ -89,7 +94,7 @@ The people depositing tokens into pools are called Liquidity Providers — LPs. 
           rows: [
             ["Raydium", "Solana", "AMM + CLMM", "Deep pools, top-tier Solana volume"],
             ["Orca", "Solana", "Whirlpools", "Concentrated LP, clean UI"],
-            ["Meteora", "Solana", "DAMM + DLMM", "Dynamic fees, CLKN lives here"],
+            ["Meteora", "Solana", "DAMM + DLMM", STORE ? "Dynamic fees" : "Dynamic fees, CLKN lives here"],
             ["Uniswap", "Ethereum", "v2 + v3", "The original DEX"],
             ["Curve", "Multi-chain", "StableSwap", "Stablecoin specialist"],
           ]
@@ -172,7 +177,7 @@ TRADITIONAL EXCHANGE (Order Book):
 • Requires constant participation from market makers
 
 AMM (Liquidity Pool):
-• Two tokens sit in a pool — for example SOL and CLKN
+• Two tokens sit in a pool — for example SOL and ${TOK}
 • The ratio between them determines the price
 • Anyone can swap against the pool at any time
 • Price adjusts automatically with every trade
@@ -191,17 +196,17 @@ Where:
 • k = a constant — it never changes
 
 EXAMPLE:
-Pool has 1,000 SOL and 100,000,000 CLKN
+Pool has 1,000 SOL and 100,000,000 ${TOK}
 k = 1,000 × 100,000,000 = 100,000,000,000
 
-You want to buy some SOL by selling CLKN.
-You add 1,000,000 CLKN to the pool.
-New y = 101,000,000 CLKN
+You want to buy some SOL by selling ${TOK}.
+You add 1,000,000 ${TOK} to the pool.
+New y = 101,000,000 ${TOK}
 
 To keep k constant:
 New x = k / new y = 100,000,000,000 / 101,000,000 = 990.099 SOL
 
-You added 1,000,000 CLKN and received 1,000 - 990.099 = 9.9 SOL
+You added 1,000,000 ${TOK} and received 1,000 - 990.099 = 9.9 SOL
 
 The pool always maintains the constant product. This is why large trades relative to pool size move the price significantly — adding a lot to one side requires removing a lot from the other side to keep k the same.`
       },
@@ -209,17 +214,17 @@ The pool always maintains the constant product. This is why large trades relativ
         heading: "How Price Moves",
         body: `The price in an AMM is simply the ratio of the two tokens.
 
-Price of SOL in CLKN = CLKN in pool / SOL in pool
+Price of SOL in ${TOK} = ${TOK} in pool / SOL in pool
 
 STARTING STATE:
-Pool: 1,000 SOL / 100,000,000 CLKN
-Price: 100,000 CLKN per SOL
+Pool: 1,000 SOL / 100,000,000 ${TOK}
+Price: 100,000 ${TOK} per SOL
 
-AFTER SOMEONE BUYS SOL (adds CLKN, removes SOL):
-Pool: 990.099 SOL / 101,000,000 CLKN
-New price: 102,010 CLKN per SOL
+AFTER SOMEONE BUYS SOL (adds ${TOK}, removes SOL):
+Pool: 990.099 SOL / 101,000,000 ${TOK}
+New price: 102,010 ${TOK} per SOL
 
-The price went up because there is now less SOL relative to CLKN in the pool. Every buy pushes price up. Every sell pushes price down.
+The price went up because there is now less SOL relative to ${TOK} in the pool. Every buy pushes price up. Every sell pushes price down.
 
 This is why AMMs are called self-balancing — as the price in the pool drifts from the market price, arbitrageurs step in to buy the cheaper asset and sell the more expensive one, bringing the pool back into alignment. Arbitrage is what keeps AMM prices accurate.`
       },
@@ -265,10 +270,10 @@ FINDING THE RIGHT TOLERANCE:
         explanation: "k is the constant product — the result of multiplying the two token reserves together. Every trade changes x and y but the product must remain k. This is what forces the price to move as trades happen."
       },
       {
-        q: "A pool has 500 SOL and 50,000,000 CLKN. You want to make a very large buy of SOL. What happens to the price of SOL?",
+        q: `A pool has 500 SOL and 50,000,000 ${TOK}. You want to make a very large buy of SOL. What happens to the price of SOL?`,
         options: ["Price stays fixed — AMMs guarantee stable prices regardless of trade size", "Price drops because higher demand always lowers price in DeFi pools", "Price goes up", "Price spikes then automatically resets to the original level"],
         correct: 2,
-        explanation: "When you buy SOL you remove it from the pool and add CLKN. Less SOL relative to more CLKN means each SOL is worth more CLKN. The price of SOL goes up with every unit you buy. This is price impact — and the larger your trade relative to the pool, the more you pay above the starting price."
+        explanation: `When you buy SOL you remove it from the pool and add ${TOK}. Less SOL relative to more ${TOK} means each SOL is worth more ${TOK}. The price of SOL goes up with every unit you buy. This is price impact — and the larger your trade relative to the pool, the more you pay above the starting price.`
       },
       {
         q: "What is the difference between price impact and slippage?",
@@ -283,7 +288,7 @@ FINDING THE RIGHT TOLERANCE:
         explanation: "When an AMM's price drifts from the real market price, arbitrageurs buy the cheaper asset in the AMM and sell it elsewhere (or vice versa) until the prices converge. They profit from the difference, and their activity is what keeps AMM prices aligned with the broader market."
       },
       {
-        q: "You want to swap $500 of SOL for CLKN. The pool has $50,000 TVL. Your friend wants to swap $50,000 of SOL in the same pool. Who experiences more price impact and why?",
+        q: `You want to swap $500 of SOL for ${TOK}. The pool has $50,000 TVL. Your friend wants to swap $50,000 of SOL in the same pool. Who experiences more price impact and why?`,
         options: ["You do — smaller wallets always suffer more price impact due to routing inefficiencies", "Your friend does — 100% of TVL in one trade vs your 1%", "Both experience identical impact — AMMs are designed to treat every trade size exactly the same", "Neither — AMMs use an internal price guarantee mechanism that protects all trade sizes equally"],
         correct: 1,
         explanation: "Price impact scales with trade size relative to pool size. Your $500 trade is 1% of the $50,000 pool — minimal impact. Your friend's $50,000 trade equals the entire pool TVL — the x*y=k formula means they would drain so much of one token that the price moves dramatically against them. This is why large traders split trades or use pools with higher liquidity."
@@ -463,7 +468,7 @@ RAYDIUM:
 ORCA WHIRLPOOLS:
 • 0.01% / 0.02% / 0.04% / 0.05% / 0.16% / 0.3% / 0.65% / 1% / 2%
 • Similar logic — stable pairs use low tiers, volatile pairs use high tiers
-• The 0.02% tier is the one CLKN's own CLKN/SOL Orca pool runs on — its CLKN/BTC and CLKN/JUP pools run on 0.30%
+${STORE ? "• A pool's own page shows which tier it runs on" : "• The 0.02% tier is the one CLKN's own CLKN/SOL Orca pool runs on — its CLKN/BTC and CLKN/JUP pools run on 0.30%"}
 
 METEORA:
 • DAMM: Dynamic fees that adjust automatically to market volatility
@@ -954,8 +959,7 @@ Capital sits idle earning nothing if price never reaches your range. Rapid crash
 THE BONDING CURVE:
 When a token launches on Bags.fm or Pump.fun, initial liquidity is single-sided — only the new token exists. Buyers add SOL and price rises along a mathematical curve.
 
-HOW CLKN LAUNCHED:
-CLKN launched on Bags.fm with token-only liquidity. As the community bought in SOL accumulated. At the graduation threshold the bonding curve closed and liquidity migrated automatically to Meteora DAMM V2 as a full two-sided pool.
+${STORE ? "HOW A BAGS.FM LAUNCH PLAYS OUT:\nA token launches on Bags.fm with token-only liquidity. As buyers come in, SOL accumulates. At the graduation threshold the bonding curve closes and liquidity migrates automatically to Meteora DAMM V2 as a full two-sided pool." : "HOW CLKN LAUNCHED:\nCLKN launched on Bags.fm with token-only liquidity. As the community bought in SOL accumulated. At the graduation threshold the bonding curve closed and liquidity migrated automatically to Meteora DAMM V2 as a full two-sided pool."}
 
 Early buyers paid less because every purchase moves price higher on the curve — earlier participants enter before accumulated buys push price up. This is why believing early in a project on Bags.fm is rewarded.`
       },
@@ -1016,10 +1020,10 @@ COMMON MISTAKES:
         explanation: "Opportunity cost matters. A position earning zero fees could be deployed elsewhere generating returns. If your buy range is at $50-$70 when price is $150, you might wait months with zero earnings. Weigh the benefit of accumulating at lower prices against the cost of idle capital."
       },
       {
-        q: "How did CLKN launch?",
+        q: STORE ? "How does a token launched on Bags.fm reach a two-sided pool?" : "How did CLKN launch?",
         options: ["Directly on Meteora with two-sided liquidity and a fixed launch price", "On Bags.fm bonding curve with single-sided token liquidity, accumulated SOL, then graduated to Meteora DAMM V2", "Traditional ICO with fixed price sales before DEX listing", "On Raydium with a permissioned whitelist pool"],
         correct: 1,
-        explanation: "CLKN used the Bags.fm bonding curve — single-sided launch where only CLKN existed initially. As the community bought in SOL accumulated. At graduation threshold the curve closed and liquidity migrated automatically to Meteora DAMM V2. Standard Bags.fm launch path."
+        explanation: STORE ? "A Bags.fm launch uses the bonding curve — single-sided, where only the new token exists at first. As buyers come in, SOL accumulates. At the graduation threshold the curve closes and liquidity migrates automatically to Meteora DAMM V2. That is the standard Bags.fm launch path." : "CLKN used the Bags.fm bonding curve — single-sided launch where only CLKN existed initially. As the community bought in SOL accumulated. At graduation threshold the curve closed and liquidity migrated automatically to Meteora DAMM V2. Standard Bags.fm launch path."
       },
       {
         q: "A project graduated from Pump.fun and now wants to add their own token to a Meteora pool. They only have the project token — no USDC. Can they provide liquidity?",
@@ -1603,7 +1607,7 @@ This is precisely what the Cluck Norris near-graduation tracker and graduation a
       },
       {
         heading: "Bags.fm and the Dynamic Bonding Curve",
-        body: `Bags.fm is a Solana launchpad, and CLKN itself launched on it — so this is worth knowing precisely.
+        body: `Bags.fm is a Solana launchpad${STORE ? "" : ", and CLKN itself launched on it"} — so this is worth knowing precisely.
 
 HOW IT WORKS:
 • Tokens launch on a bonding curve (a dynamic bonding curve, or DBC) rather than an immediate open pool

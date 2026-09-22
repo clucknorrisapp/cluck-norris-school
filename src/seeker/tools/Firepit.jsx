@@ -42,7 +42,8 @@
 // It never labels a token safe, verified, scam or worthless — only what it is priced at.
 import React from "react";
 import { t, tf, useI18nReady } from "../i18n.js";
-import { Pane, Loading, Empty, Unavailable, Refused, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
+import { Pane, Loading, Empty, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
+import { NeedsWallet } from "../needswallet.jsx";
 import { shortAddr } from "../addr.js";
 import { signSendConfirm, splTokenShim } from "../sign.js";
 import "./tools.css";

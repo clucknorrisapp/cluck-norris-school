@@ -204,7 +204,7 @@ export default function DailyBriefPane() {
                 {d.majors.map((m) => (
                   <div className="seeker-brief-major" key={m.sym}>
                     <span className="seeker-brief-major-sym">{m.sym}</span>
-                    <span className="seeker-brief-major-px">${fmtPrice(m.px)}</span>
+                    <span className="seeker-brief-major-px">${fmtPrice(m.price)}</span>
                     {m.chg != null ? <span className={pctClass(m.chg)}>{fmtPct(m.chg)}</span> : null}
                   </div>
                 ))}

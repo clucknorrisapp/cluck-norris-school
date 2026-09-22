@@ -27,6 +27,13 @@
          everywhere else. i18n.js populates window.CLKN_I18N.dict, which the app's own t()
          (src/seeker/i18n.js) reads — same pattern as public/hub-glossary.html / solana-room.html. -->
     <script src="/cluck-util.js"></script>
+    <!-- EDU:OUT — everything between these markers is the WALLET half of the shell, and the Google
+         Play / iOS edition (docs/STORE_EDITION.md: no wallet, no payments, no address) is built
+         WITHOUT it: vite.config.js strips this block when the edition is google or ios, the same
+         way it strips the website's own edition blocks from index.html. The education edition's own module
+         (src/seeker/edition/edu.jsx) never references any of these globals, and the store build
+         refuses their filenames in the bundle, so a missing strip fails loudly rather than
+         shipping a wallet into an app whose listing says it has none. -->
     <script src="/cluck-wallet.js"></script>
     <script src="/rent-math.js"></script>
     <!-- The unified tools pass (public/cluck-gate.js) — the ONE pass client the whole platform
@@ -53,6 +60,7 @@
          scripts/seeker-airdrop-test.cjs can require() the same decisions the app runs. -->
     <script src="/airdrop-engine.js"></script>
     <script src="/airdrop-plan.js"></script>
+    <!-- /EDU:OUT -->
     <script src="/i18n.js"></script>
     <script type="module" src="/src/seeker/main.jsx"></script>
   </body>

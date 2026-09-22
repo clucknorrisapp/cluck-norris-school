@@ -3891,7 +3891,10 @@ setInterval(() => {
 // mints, locks or sends is reachable this way, and the Origin header grants nothing by itself
 // (every endpoint keeps its own rules; this only lets the browser read the answer).
 const STORE_APP_ORIGINS = new Set(String(process.env.STORE_APP_ORIGINS || "capacitor://localhost,https://localhost,http://localhost,ionic://localhost").split(",").map((o) => o.trim()).filter(Boolean));
-const STORE_API_RE = /^\/api\/(ask-cluck(\/report)?|track|claim\/certificate|certificate\/[A-Za-z0-9]{6,32}|i18n\/translate|tts|helius-rpc|wallet-checkup|listing-checkup\/(config|run|report))$/;
+// `alpha` joined the contract with store-edition v1.1.0 (the Seeker-shell Play/iOS edition,
+// 2026-09-21): its Daily pane reads GET /api/alpha for the majors. Read-only, unauthenticated,
+// cached 10 min; the pane renders prices only (no picks, no brief — see tools/DailyBrief.jsx).
+const STORE_API_RE = /^\/api\/(ask-cluck(\/report)?|track|claim\/certificate|certificate\/[A-Za-z0-9]{6,32}|i18n\/translate|tts|helius-rpc|wallet-checkup|listing-checkup\/(config|run|report)|alpha)$/;
 app.use((req, res, next) => {
   const origin = String(req.get("origin") || "");
   if (!origin || !STORE_APP_ORIGINS.has(origin) || !STORE_API_RE.test(req.path)) return next();

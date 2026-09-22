@@ -97,7 +97,11 @@
   var setVal = (typeof WeakMap !== "undefined") ? new WeakMap() : null;   // node -> value we wrote (to ignore our own mutations)
   var SKIP = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, CODE: 1, PRE: 1, TEXTAREA: 1, SVG: 1, KBD: 1, SAMP: 1 };
   var BAD_CHILD = "a,br,span,div,p,ul,ol,li,section,article,header,footer,nav,table,tbody,tr,button,input,textarea,select,img,svg,label,form,h1,h2,h3,h4,h5,h6";
-  var TICKER = {}; "CLKN SOL USDC USDT JUP cbBTC BTC ETH SOLUSD NFT LP AMM DeFi MEV APR APY TVL IL DEX CEX SPL DAO USD".split(" ").forEach(function (t) { TICKER[t] = 1; });
+  // Whole-node tickers/acronyms are never sent for translation. Our own ticker is NOT on this
+  // list on purpose: this file ships inside the education edition of the app, whose bundle
+  // scan refuses the bare word (store-edition v1.1.0 — the app names no token of ours). A lone
+  // node holding our ticker on the website goes to the translator once and comes back unchanged.
+  var TICKER = {}; "SOL USDC USDT JUP cbBTC BTC ETH SOLUSD NFT LP AMM DeFi MEV APR APY TVL IL DEX CEX SPL DAO USD".split(" ").forEach(function (t) { TICKER[t] = 1; });
 
   function norm(s) { return (s || "").replace(/\s+/g, " ").trim(); }
   function curated(key) { var v = DICT[key]; return (v && v !== key) ? v : null; }

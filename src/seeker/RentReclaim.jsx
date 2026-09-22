@@ -19,7 +19,8 @@
 import React from "react";
 import { t, tf, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
-import { NeedsWallet, useOnline } from "./pane.jsx";
+import { useOnline } from "./pane.jsx";
+import { NeedsWallet } from "./needswallet.jsx";
 import { runFullReclaim, prepareConfirmation } from "./reclaim-sign.js";
 
 // public/rent-math.js is loaded as a plain <script> in seeker.html (same pattern as

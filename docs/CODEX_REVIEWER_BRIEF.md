@@ -801,6 +801,46 @@ state (each round's harness was pinned to a specific pre-squash sha that no long
 
 Findings, not rewrites, same rule as every other round.
 
+## Round 12 — 2026-09-21: #391, your re-review note ("a fix table isn't proof")
+
+You were right, and the point is sharper than the note: the content scan in round 10 PASSED while
+CLKN's pools and fees were on the phone at `#/school/lp/4`. A scan reads files; a reviewer reads
+the screen. So round 12 adds no fix — it adds the proof you asked for, in the form you asked for,
+against the four things you said you would verify before clearing the PR.
+
+| What you would verify | How it is now proven | Where |
+|---|---|---|
+| Token promotion is gone from **rendered** lessons and translations | **`scripts/store-render-scan.cjs`** (CI): boots the shipped google tarball in headless Chromium, opens **every one of the 58 lessons in every one of the 7 languages** the bundle ships, answers **every one of the 200 quiz questions** so the explanation renders, and scans `document.body.innerText` for `\bCLKN\b`. Nothing is read from JSON. Your four examples are pinned **by name on the rendered text of the lesson each lived in** (`lp/4`, `lp/7`, `fundamentals/bags`, `fundamentals/memecoins`, `fundamentals/lp`), and the store wording is asserted PRESENT on `lp/4` and `lp/7` so the walk is proven to read the real body. It proves its own reach: 58/58 lessons and 200/200 questions per language, and for each non-English language the rendered lesson text must differ from English (58/58 do; the dictionary is 6,300 keys). **Mutation-proved:** `--mutate` puts your fee-tier sentence back into the extracted chunk and the walk fails on `lp/4` (ticker on screen + the pinned example + the store wording missing). Local run on this head: 7 languages, ≈2.9M rendered characters read, 0 hits. | `scripts/store-render-scan.cjs`; CI step "every lesson, every language, read off the screen" in `syntax-check.yml` |
+| Failed reports can retry without losing the answer | `store-shell-boot-test` **D**, run on this head: a 503 on the first report → the error line shows, all four reason buttons stay enabled, the answer is still on screen, one POST so far; endpoint up → same reason → a second POST lands, "reported" shows. 7/7 D assertions pass. | `scripts/store-shell-boot-test.cjs` D |
+| Daily shows real prices from the backend's response | `store-shell-boot-test` **B**, run on this head: `/api/alpha` answers `majors: [{sym:"SOL", price:150, chg:2.1}, …]` as `server.js` builds it → SOL renders `$150`, no row renders `$?`, `+2.1%` beside it. 3/3 pass. | `scripts/store-shell-boot-test.cjs` B |
+| The final Play APK contains no native wallet library | The wrapper's CI probes the **produced APK**, not the source: CLKN-SEEKER run `35638677722` (job `play-dev-apk`, `9defc96`) reads the dex and the manifest — `✓ no MobileWalletAdapter class · ✓ no CluckMWAPlugin class · ✓ manifest has no solana-wallet query · ✓ app id app.clucknorris.edu.dev · ✓ stamped do-not-publish` — and the sibling `seeker-dev-apk` job runs the same probe as the positive control ("the Seeker APK HAS the wallet layer", passes). **Honest scope:** that is the play-DEV APK built from the branch; the FINAL Play APK is `build:play` from the tagged `store-google-v1.1.0` release on the owner's Mac, and the same probe is part of that path (`WRAPPER-BUILD-TARGETS.md`). Nobody has probed the final signed artifact yet because it does not exist yet. | CLKN-SEEKER `.github/workflows/android-build.yml`, run 35638677722 |
+
+What I did NOT do this round: change a lesson, a component, or a dictionary. The diff is the
+rendered walk, its CI step, and these notes. If the walk is wrong, say where — it is the thing
+that would have caught round 10's miss, and it should be the thing you break next.
+
+## Round 11 — 2026-09-21: #391, your three findings on `9cabf86`
+
+Fixed on the branch (head in the PR body). Findings → fixes:
+
+| # | Finding | Fix | Regression coverage |
+|---|---|---|---|
+| 1 | **P1** — CLKN promotion still renders in the education bundle: `data/curriculum.store.json` named CLKN's pools and fees (`#/school/lp/4`), the buyback claim, the "what makes CLKN different" quiz, the AMM trading examples | **The lesson SOURCES got their STORE variants, not the generated JSON.** `src/sections/LPLab.jsx`, `src/sections/Library.jsx`, `src/App.jsx`: every sentence ABOUT CLKN carries an explicit `STORE ? … : …` (the launch story, the fee-tier line, the two quizzes, the token definition, the buyback sentence, the "lifetime fees" paragraph); the worked examples use `TOK` (`STORE ? "ABC" : "CLKN"`). Both curricula regenerated; **the website copy is byte-identical** apart from its timestamp (`extract-curriculum --check` ✓, `public/curriculum.html` unchanged). **Audit of siblings:** a structural diff of the two curricula (30 differing fields) and a whole-word scan — the store copy has **0** `\bCLKN\b`; two more bare words were found outside the lessons and removed (the Listing Checkup placeholder `e.g. CLKN` → `e.g. USDC`, and our ticker in `public/i18n.js`'s never-translate whitelist, which ships inside the bundle). **Translations:** every store-only sentence has entries in all six `*.school.json` — derived sentence-by-sentence from the existing translations (mechanical ticker swap where that is all that changed; hand-translated rewrites for the sentences about CLKN); 28/30 store-variant fields are translated in all six languages, the other 2 were never translated on the website either. | `\bCLKN\b` is now a **forbidden pattern** for google/ios in `store-edition/store-edition.json` (the build refuses the bundle); `scripts/store-edition-test.cjs` pins your four examples by name on the generated store curriculum, plus the whole word on the curriculum, the chunk and the bundled dictionaries. **Mutation-proved:** with the previous store JSON swapped in, exactly those pins fail. |
+| 2 | **P2** — a failed answer report removed every reporting control | `ReportAnswer` in `src/seeker/AskCluck.jsx`: `failed` is now the `pick` state with an error line above the same four reason buttons; the answer above is untouched | `scripts/store-shell-boot-test.cjs` D: the report endpoint answers 503 once — the error shows, all four buttons remain enabled, the answer is still on screen, one POST so far; then the endpoint is up, the same reason is pressed again, a second POST lands and "reported" shows. **Mutation-proved** against the previous component. |
+| 3 | **P2** — Daily prices showed `$?` (`m.px` vs the backend's `m.price`) | `src/seeker/tools/DailyBrief.jsx` reads `m.price` | `store-shell-boot-test` B: `/api/alpha` answers a populated payload shaped as `server.js` builds it (`majors: [{ sym:"SOL", price:150, chg:2.1 }, …]`) — SOL renders `$150`, no row renders `$?`, the change shows. **Mutation-proved** against the previous pane. |
+
+Where to look hardest this time: the sentence-level derivation of the six dictionaries
+(`public/i18n/*.school.json` — the diff is additive: new keys only, nothing existing changed); the
+`editionPrelude()` added to the two eval-based extractors (`scripts/build-curriculum.cjs`,
+`scripts/i18n-audit.cjs`) so the website-edition tooling evaluates the lesson arrays with
+`STORE = false` and the file's own `TOK` line; and whether a whole-word rule can be fooled by a
+different spelling of the ticker (`$CLKN`, `CLKN's` are caught; lowercase `clkn` in identifiers is
+not the word and is allowed on purpose).
+
+**Not cleared by this round, and not claimed:** the native wrapper and the APK. The wrapper's
+own CI reads the produced APK for the wallet-adapter class and the `solana-wallet` query
+(CLKN-SEEKER `9defc96`); an independent look at that job and its probe is welcome.
+
 ## Round 10 — 2026-09-21: #390, the last P2 (a lesson opened before the dictionary stays English)
 
 Confirmed exactly as you described it, and my brief's "the app gates on `useI18nReady`" was
@@ -817,7 +857,7 @@ false — the hook lived in the header and nav only, re-rendered only them, and 
    and each tools pane. `<Pane>` already subscribed, but React does not re-render children it was
    handed as props, so a wrapper's subscription never reached the pane's own `t()` calls.
 
-**Tests:** `seeker-app-boot-test` **P9** and (and, on #391's branch, `store-shell-boot-test` **G**) — Spanish, every
+**Tests:** `seeker-app-boot-test` **P9** and `store-shell-boot-test` **G** — Spanish, every
 `/api/**` refused, BOTH dictionary files held back 2.5 s (past the old give-up), the lesson is
 the INITIAL url. Asserted in order: the lesson is on screen in English while `window.CLKN_I18N`
 is still absent (the race is real, not simulated); then, with no navigation, the section body
@@ -829,6 +869,51 @@ attaches AND after the poll stops? — the event is dispatched synchronously aft
 resolves, which is always after the first render's effect has attached the listener, but say if
 you see one), and whether any pane still renders `t()` without subscribing (grep
 `useI18nReady()` per file under `src/seeker`).
+
+## Round 9 — 2026-09-21: the Google Play / iOS edition of the Seeker shell (store-edition v1.1.0)
+
+Owner's go: *"start on the play store version of the shell"*. Stacked on #390's branch (`f3463d7`),
+so the diff against `develop` includes #390 until it merges — review the store-shell commits on
+their own. `docs/STORE_EDITION.md` → **v1.1.0** is the design of record.
+
+**The claim to break:** *the Google Play / iOS bundle is the phone shell with the school leading,
+and it contains no wallet — not hidden, absent.* The mechanism is one Vite alias:
+`@seeker-edition` → `src/seeker/edition/edu.jsx` (education) or `edition/full.jsx` (Seeker).
+The education module's import list is the whole argument; the build's forbidden-string scan and
+the new boot test are the locks.
+
+Where to look hardest, in order:
+
+1. **`src/seeker/edition/edu.jsx` — the import list.** Anything that reaches a wallet pane, the
+   gate (`needswallet.jsx`), `pass.js`/`passgate.jsx`, `reclaim-sign.js`, `tools/registry.js`
+   is a wallet in the store. Then `pane.jsx` and `addr.js`, which BOTH editions share: I moved
+   `NeedsWallet` out of `pane.jsx` because its `window.CluckWallet` reference would have shipped;
+   is there another shared module carrying a wallet reference the scan's word list would miss?
+2. **`vite.config.js`** — `SHELL`/`EDU`, the `EDU:OUT` strip, the comment strip (`SHELL` only),
+   the two aliases. Can a build reach the education alias WITHOUT the `EDU:OUT` strip, or vice
+   versa? (Both key off the same `EDU` boolean, on purpose.) The website build must be inert:
+   `npm run build` is unchanged.
+3. **`scripts/extract-curriculum.js`** — one `buildCurriculum(edition)` writes both files; the
+   store copy resolves `VITE_STORE_EDITION="google"` inside the lesson modules. `--check` covers
+   both. Is there lesson copy that names a venue or the token OUTSIDE a `STORE ?` branch? The
+   scan found none of the listed strings in `curriculum.store.json`; the list is the scan's, not
+   a reading of every lesson.
+4. **`src/seeker/school/Certificate.jsx`** — the sid handling (`sessionId()` from `src/track.js`,
+   `flushTrackQueue()` first), the `not_yet` rendering, and that nothing here can reach
+   `/api/claim` (the wallet claim). Coursework counts come from the course-scoped local keys.
+5. **`src/seeker/WalletCheckup.jsx`** — now `({ address, gate })`; the pane must not know
+   which edition it is in. `edu.jsx`'s `AddressForm` validates base58 on the device. Confirm the
+   scan path renders `unavailable` on a refused read and never "no issues found".
+6. **`scripts/seeker-i18n-keys.cjs`** — `reachableFrom()` walks static relative imports from
+   `edu.jsx` + `App.jsx`; `--sync-exclude` = (existing ∪ all) − edu. 172 keys were un-excluded.
+   A key rendered by BOTH a wallet pane and an education pane is kept (correct); a wallet-only
+   key that also exists in website copy would be excluded from the Play dictionaries and fall back
+   to English on the website's school inside the store bundle — is there such a key?
+7. **`scripts/store-edition-test.cjs`** — I restated the v1.0.x page assertions as chunk
+   assertions. Read the diff as a checklist: is any v1.0.x contract item weaker now?
+
+What I did NOT do: read-aloud in the shell (the shell has no reader); an iOS TestFlight pass
+(needs the owner's Apple account); screenshots for the listing (a human eye).
 
 ## Round 8 — 2026-09-21: PR #390, your three remaining P2s on `19afe6b`
 
