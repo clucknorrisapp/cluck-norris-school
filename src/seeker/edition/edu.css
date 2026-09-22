@@ -1,26 +1,7 @@
 /* Education edition only — the pieces the Play/iOS shell has that the full app does not.
+   The address-form / "check another" bar styles moved to ../addressform.css (that component is
+   now shared with the full edition too — CLAUDE.md's "one copy" rule).
    Tokens only, never a page-local :root (AGENTS.md). */
-.seeker-edu-addrform { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
-.seeker-edu-addrinput {
-  width: 100%;
-  min-height: 48px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 14px;
-}
-.seeker-edu-addrbtn { width: 100%; }
-.seeker-edu-addrbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 12px 0;
-}
-.seeker-edu-addrbar-addr { font-family: var(--mono); font-size: 13px; color: var(--sub); }
 .seeker-edu-footer {
   display: flex;
   flex-wrap: wrap;

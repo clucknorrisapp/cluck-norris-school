@@ -12,12 +12,13 @@
 // string scan (store-edition.json) is the second lock on the door.
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { t } from "../i18n.js";
+import { t, useI18nReady } from "../i18n.js";
 import { shortAddr } from "../addr.js";
 import { NeedsWallet } from "../needswallet.jsx";
 import RentReclaimPane from "../RentReclaim.jsx";
 import AskCluckPane from "../AskCluck.jsx";
 import WalletCheckupPane from "../WalletCheckup.jsx";
+import { AddressForm, AddressBar } from "../addressform.jsx";
 import ToolsHome from "../ToolsHome.jsx";
 import { SchoolHome, SchoolCourse, SchoolLesson } from "../school/School.jsx";
 import ListingCheckup from "../tools/ListingCheckup.jsx";
@@ -112,6 +113,56 @@ export function HeaderExtra({ wallet }) {
   );
 }
 
+// ── Wallet Checkup: the connected wallet by default, any pasted address as an override ─────────
+// Parity with the website's own Wallet Checkup (any address, always) while still defaulting to
+// "just works" for someone who already connected. Three states, in priority order:
+//   1. a pasted address is set — it WINS, however the wallet is doing. The bar shows it (shared
+//      with the education edition's own AddressBar) with "Check another" to drop back to the
+//      connected wallet (or the form, if none is connected).
+//   2. no pasted address, wallet connected — the checkup runs on wallet.address with no paste
+//      needed, plus a quiet "Check another" control that reveals the paste form.
+//   3. no pasted address, no wallet — the paste form AND the connect gate render together, so
+//      connecting stays one tap without losing the option to check someone else's address first.
+function FullCheckup({ wallet }) {
+  useI18nReady();
+  const [pasted, setPasted] = React.useState(null);
+  const [pasting, setPasting] = React.useState(false);
+
+  if (pasted) {
+    return (
+      <>
+        <AddressBar address={pasted} onClear={() => { setPasted(null); setPasting(false); }} />
+        <WalletCheckupPane address={pasted} />
+      </>
+    );
+  }
+
+  if (wallet.connected && !pasting) {
+    return (
+      <>
+        <WalletCheckupPane address={wallet.address} />
+        <button type="button" className="seeker-btn seeker-btn-quiet seeker-checkup-another" onClick={() => setPasting(true)}>
+          {t("Check another")}
+        </button>
+      </>
+    );
+  }
+
+  // No address decided yet — routed through the pane itself (address=null) so its own "Wallet
+  // Checkup" header and .seeker-pane wrapper still render here, same as every other state; a
+  // bare form with no pane around it briefly shipped and both the app's own route-render and
+  // grid-mount checks caught it (a tool card whose pane never mounts a recognised pane class).
+  const gate = wallet.connected
+    ? <AddressForm onSubmit={setPasted} />
+    : (
+      <>
+        <AddressForm onSubmit={setPasted} />
+        <NeedsWallet why="Connect your wallet to run a checkup." wallet={wallet} />
+      </>
+    );
+  return <WalletCheckupPane address={null} gate={gate} />;
+}
+
 // ⚠️ THE SCHOOL LEADS. AGENTS.md records the owner's flagship list — "the school, the LP lab,
 // the airdropper, the locker room, the fire pit, project burn" — and the school is first. The app
 // shipped landing on /tools with no school in it at all; do not put the toolkit back in front.
@@ -124,7 +175,6 @@ export const TABS = [
 ];
 
 export function EditionRoutes({ wallet }) {
-  const checkupAddress = wallet.connected ? wallet.address : null;
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/school" replace />} />
@@ -134,10 +184,7 @@ export function EditionRoutes({ wallet }) {
       <Route path="/tools" element={<ToolsHome />} />
       <Route path="/rent" element={<RentReclaimPane wallet={wallet} />} />
       <Route path="/ask" element={<AskCluckPane />} />
-      <Route
-        path="/checkup"
-        element={<WalletCheckupPane address={checkupAddress} gate={<NeedsWallet why="Connect your wallet to run a checkup." wallet={wallet} />} />}
-      />
+      <Route path="/checkup" element={<FullCheckup wallet={wallet} />} />
       <Route path="/tools/listing" element={<ListingCheckup />} />
       <Route path="/tools/alpha" element={<DailyBrief />} />
       <Route path="/tools/firepit" element={<Firepit wallet={wallet} />} />

@@ -131,6 +131,12 @@ export default function AirdropperPane({ wallet }) {
   const [results, setResults] = React.useState([]);
   const [receipt, setReceipt] = React.useState(null);    // { url } | { error }
   const [decimals, setDecimals] = React.useState(null);
+  // Set only when the cost-preview read in review() failed BECAUSE this device was offline — the
+  // offline gate below only covers phase "form" (a page loaded with no signal never even reaches
+  // review()), but review() itself makes several RPC calls, and losing the connection mid-check
+  // used to fall through to the generic "Could not read the network cost" text, which reads as a
+  // cosmetic pricing hiccup rather than "you're offline". Reset at the top of every review() run.
+  const [costOffline, setCostOffline] = React.useState(false);
 
   // ⚠️ A send in flight must be stoppable, and the engine's own `shouldContinue` hook exists for
   // exactly this: a caller that can no longer RECORD what it sent must be able to stop before the
@@ -141,7 +147,9 @@ export default function AirdropperPane({ wallet }) {
   // (adversarial review P3-9), so the same fact is mirrored into state.
   const [stopped, setStopped] = React.useState(false);
   const liveRef = React.useRef(true);
-  React.useEffect(() => () => { liveRef.current = false; stopRef.current = true; }, []);
+  // TRUE in the effect body: StrictMode re-runs the effect on the same instance after its cleanup,
+  // so a cleanup-only effect would leave liveRef false and every post-await guard would fire.
+  React.useEffect(() => { liveRef.current = true; return () => { liveRef.current = false; stopRef.current = true; }; }, []);
 
   // ⚠️ LOSING THE WALLET MID-DROP MUST STOP THE DROP (adversarial review P3-10, 2026-09-21).
   // App.jsx drops the connection outright when the wallet switches accounts — the right call —
@@ -163,6 +171,8 @@ export default function AirdropperPane({ wallet }) {
     setResults([]); setReceipt(null); setProgress({ msg: "", pct: 0 }); stopRef.current = false; setStopped(false);
   }
 
+  function isOffline() { return typeof navigator !== "undefined" && navigator.onLine === false; }
+
   // ── parse + preflight ──────────────────────────────────────────────────────────────────────
   async function review() {
     const P = plan();
@@ -171,6 +181,7 @@ export default function AirdropperPane({ wallet }) {
     if (!text.trim()) { setFormError(t("Paste the wallets you want to send to.")); return; }
     setFormError(null);
     resetRun();
+    setCostOffline(false);
 
     const res = P.parseRecipients({ mode, text, equalAmount, minAmount });
     if (res.error) { setFormError(t(res.error)); return; }
@@ -194,6 +205,20 @@ export default function AirdropperPane({ wallet }) {
 
     // Which recipients need a token account created, what that costs today, and can the sender
     // actually afford it. All read-only. An RPC failure here is "unknown", never "free".
+    //
+    // ⚠️ Checked HERE, right before the RPC calls, not only via the phase==="form" gate lower in
+    // this file — that gate only catches a page that was already offline when it loaded. This
+    // pane's own online state can flip between the tap and this point, and once the RPC calls
+    // are in flight a failure could equally be a real chain outage or just no signal; the offline
+    // check up front is the one case this pane CAN tell apart with certainty. The parsed list
+    // stays — only the cost preview is skipped, same shape as the catch block below.
+    if (isOffline()) {
+      setCost(null);
+      setDecimals(null);
+      setCostOffline(true);
+      setPhase("review");
+      return;
+    }
     try {
       let dec = 9, txBudget = (engine() && engine().TX_WEIGHT_BUDGET) || 16;
       let tokenBalanceBaseUnits = null;
@@ -256,6 +281,10 @@ export default function AirdropperPane({ wallet }) {
       // which the record path already treats as "do not send a decimals field".
       setCost(null);
       setDecimals(null);
+      // A read that failed WHILE offline gets the offline wording below, not the generic "could
+      // not read the network cost" text — that text implies a chain hiccup, and a lost signal is
+      // a different, more specific fact worth telling the person outright.
+      setCostOffline(isOffline());
       setPhase("review");
     }
   }
@@ -558,6 +587,11 @@ export default function AirdropperPane({ wallet }) {
                     <div className="seeker-forensic-stat"><div className="seeker-forensic-stat-label">{t("Transactions to sign")}</div><div className="seeker-forensic-stat-value">{cost.txCount}</div></div>
                     <div className="seeker-forensic-stat"><div className="seeker-forensic-stat-label">{t("Network cost")}</div><div className="seeker-forensic-stat-value">{fmtSol(cost.totalLamports)}</div></div>
                   </div>
+                ) : costOffline ? (
+                  // Offline gets the pane's own offline wording (same as the phase==="form" gate
+                  // below) rather than the generic message — a lost signal is a more specific,
+                  // more actionable fact than "the chain read failed".
+                  <Unavailable kind="offline" />
                 ) : (
                   // NOT a zero. "We could not read it" and "it is free" are different facts.
                   <div className="seeker-drop-note seeker-drop-note-warn" role="alert">

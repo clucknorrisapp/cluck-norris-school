@@ -390,6 +390,8 @@
   "Cluck Coin": "Cluck Coin",
   "CLUCK": "CLUCK",
   "A short line about the token": "关于该代币的一句简短描述",
+  "A mint you approved was still being sent when you left this screen.": "你批准的一次铸造在你离开此页面时仍在发送中。",
+  "The chain shows no such mint yet.": "链上还没有显示这次铸造。",
   "logo preview": "logo 预览",
   "Tap to choose a logo image": "点击选择 logo 图片",
   "Revoke mint authority": "放弃铸造权限",

@@ -84,6 +84,31 @@ const PROPS = /\b(?:why|title|label|message|confirmLabel)=\{?\s*"((?:[^"\\]|\\.)
 // google/ios dictionaries, and every other seeker key must be excluded from them. Static
 // import parsing only — the shell has no dynamic imports, and the point is that the edition's
 // import list IS the safety argument (src/seeker/edition/edu.jsx header).
+// Strip comments WITHOUT tripping over a "/*" inside a string or a line comment. The two-regex
+// version this replaces (`/\/\*[\s\S]*?\*\//g` then `^\s*\/\/.*$`) treated the "/*" in a
+// `// … "image/*" …` line comment and in the JSX attribute `accept="image/*"` as a block-comment
+// opener and swallowed everything up to the next real "*/" — ~750 lines of Hatchery.jsx, dozens
+// of real strings, silently missing from the key list. Nothing noticed because --sync-exclude only
+// ever ADDS and those keys had been excluded by an earlier, correct run (found by the #398
+// builder, 2026-09-22). This walks the source once: inside a '…', "…" or `…` literal nothing is a
+// comment; `//` runs to end of line; `/*` runs to `*/`. Regex literals are not tracked — a "//"
+// or "/*" inside one would still be misread, and none of the app's sources has one.
+function stripComments(src) {
+  let out = "", i = 0, n = src.length;
+  while (i < n) {
+    const c = src[i], d = src[i + 1];
+    if (c === '"' || c === "'" || c === "`") {
+      const q = c; let j = i + 1;
+      while (j < n && src[j] !== q) { if (src[j] === "\\") j++; if (q !== "`" && src[j] === "\n") break; j++; }
+      out += src.slice(i, j + 1); i = j + 1; continue;
+    }
+    if (c === "/" && d === "/") { const e = src.indexOf("\n", i); i = e < 0 ? n : e; continue; }
+    if (c === "/" && d === "*") { const e = src.indexOf("*/", i + 2); i = e < 0 ? n : e + 2; continue; }
+    out += c; i++;
+  }
+  return out;
+}
+
 function reachableFrom(entry) {
   const seen = new Set();
   const stack = [path.resolve(entry), path.join(SRC, "App.jsx")];   // App.jsx is the shell around every edition
@@ -91,7 +116,7 @@ function reachableFrom(entry) {
     const fp = stack.pop();
     if (seen.has(fp) || !fs.existsSync(fp)) continue;
     seen.add(fp);
-    const src = fs.readFileSync(fp, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const src = stripComments(fs.readFileSync(fp, "utf8"));
     for (const m of src.matchAll(/\bfrom\s+"(\.{1,2}\/[^"]+)"/g)) {
       let target = path.resolve(path.dirname(fp), m[1]);
       if (!/\.(jsx?|mjs|css|json)$/.test(target)) { for (const ext of [".jsx", ".js"]) if (fs.existsSync(target + ext)) { target = target + ext; break; } }
@@ -104,9 +129,7 @@ function reachableFrom(entry) {
 function keysIn(files) {
   const out = new Set();
   for (const fp of files) {
-    const src = fs.readFileSync(fp, "utf8")
-      .replace(/\/\*[\s\S]*?\*\//g, "")      // block comments
-      .replace(/^\s*\/\/.*$/gm, "");         // line comments
+    const src = stripComments(fs.readFileSync(fp, "utf8"));
     let m;
     while ((m = CALL.exec(src))) {
       let v;
@@ -116,8 +139,7 @@ function keysIn(files) {
   }
   // Translated props, in the panes and the shell alike.
   for (const fp of files) {
-    const src = fs.readFileSync(fp, "utf8")
-      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const src = stripComments(fs.readFileSync(fp, "utf8"));
     let m;
     const re = new RegExp(PROPS.source, "g");
     while ((m = re.exec(src))) {
@@ -143,7 +165,7 @@ function keys() { return keysIn(walk(SRC, [])); }
 // The education edition's own keys (google/ios, store-edition v1.1.0).
 function eduKeys() { return keysIn(reachableFrom(path.join(SRC, "edition", "edu.jsx"))); }
 
-module.exports = { keys, eduKeys, reachableFrom };
+module.exports = { keys, eduKeys, reachableFrom, stripComments };
 
 if (require.main === module) {
   const all = keys();

@@ -479,7 +479,7 @@ function CreateLockTab({ wallet }) {
         </label>
 
         {formError ? <p className="seeker-listing-formerror" role="alert">{formError}</p> : null}
-        {simWarning ? <p className="seeker-lock-simwarning" role="alert">{simWarning}</p> : null}
+        {simWarning ? <Refused message={simWarning} /> : null}
 
         <button type="button" className="seeker-btn seeker-listing-runbtn" onClick={review} disabled={phase === "building"}>
           {phase === "building" ? t("Checking on-chain…") : t("Review lock")}

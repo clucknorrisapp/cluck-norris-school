@@ -19,7 +19,7 @@
 import React from "react";
 import { t, tf, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
-import {  } from "./pane.jsx";
+import { useOnline } from "./pane.jsx";
 import { NeedsWallet } from "./needswallet.jsx";
 import { runFullReclaim, prepareConfirmation } from "./reclaim-sign.js";
 
@@ -186,7 +186,16 @@ function ConfirmSheet({ count, lamports, busy, onConfirm, onCancel }) {
 
 export default function RentReclaimPane({ wallet }) {
   useI18nReady();
-  const [state, setState] = React.useState({ phase: "idle", data: null });
+  const online = useOnline();
+  // Read through a ref inside scan() so scan's identity never changes with connectivity: with
+  // `online` in its deps, every signal blip re-ran the mount effect, which re-scanned and BLANKED a
+  // just-completed reclaim's result behind "You're offline" (verifier on #396, P2-5). The mount
+  // effect runs on connect only, as it always did; Try again covers the rest.
+  const onlineRef = React.useRef(online); onlineRef.current = online;
+  // kind (unavailable phase only): "offline" | "unavailable" — a phone losing signal is not the
+  // same fact as the chain being unreachable, and pane.jsx's other tools already say so (the
+  // wording below is copied from pane.jsx's own <Unavailable> and from WalletCheckup.jsx).
+  const [state, setState] = React.useState({ phase: "idle", data: null, kind: null, errMsg: null });
   // Signing state, kept separate from the scan state above: "idle" (no sign in flight),
   // "confirmloading" (P2-I's fresh re-read is running, before the sheet can show real numbers),
   // "confirming" (the pre-signature sheet is up, showing THAT fresh read), "signing"
@@ -199,24 +208,54 @@ export default function RentReclaimPane({ wallet }) {
   // pool by CluckReclaimPlan.excludeAlreadyClosed — a retry after a partial failure never
   // re-attempts (or double-counts) an account this pane has already seen confirmed.
   const [closedTokenAccounts, setClosedTokenAccounts] = React.useState([]);
+  // Guards for the confirm/sign path (mirrors Firepit.jsx's own confirmAbortRef): confirmAbortRef
+  // marks an in-flight openConfirm re-read STALE the moment a newer openConfirm call (or unmount)
+  // supersedes it; liveRef additionally covers "this pane is still mounted" for doReclaim's own
+  // await, since runFullReclaim/prepareConfirmation don't take an AbortSignal (reclaim-sign.js has
+  // no signal plumbing) — the guard can't cancel the in-flight read/send, only stop it from
+  // committing state that would clobber whatever is on screen by the time it resolves.
+  const confirmAbortRef = React.useRef(null);
+  const liveRef = React.useRef(true);
+  React.useEffect(() => {
+    liveRef.current = true;
+    return () => {
+      liveRef.current = false;
+      try { confirmAbortRef.current && confirmAbortRef.current.abort(); } catch (_) {}
+    };
+  }, []);
 
   const scan = React.useCallback((address, signal) => {
     if (!address) return;
-    setState({ phase: "loading", data: null });
+    // Short-circuit BEFORE the request — a phone losing signal must read as offline, not as a
+    // generic "could not read the chain" (this pane never checked navigator.onLine before; every
+    // other pane's fetch does, via pane.jsx's toolFetch or its own explicit check).
+    // Offline and unavailable KEEP whatever data is on screen (functional update): after a reclaim
+    // the post-run rescan can fail, and the run's own result must stay visible — a landed
+    // transaction is never shown as a read failure (verifier on #396, P2-5).
+    if (!onlineRef.current) { setState((p) => ({ phase: "unavailable", data: p.data, kind: "offline", errMsg: null })); return; }
+    setState({ phase: "loading", data: null, kind: null, errMsg: null });
     fetch(`/api/seeker/reclaimable?wallet=${encodeURIComponent(address)}`, { signal })
       .then(async (r) => {
         const j = await r.json().catch(() => null);
-        // Both an HTTP-level failure and a body-level status:"unavailable" (or a malformed body)
-        // land here — never fall through to rendering a zero/empty result off a failed read.
-        if (!j || !r.ok || j.status === "unavailable" || j.success !== true) {
-          setState({ phase: "unavailable", data: null });
+        // A 4xx OTHER than 429 (this route has no per-minute limiter reachable from the client
+        // the way the tools with a rate branch do) is the wallet address itself, not the chain —
+        // pane.jsx's split: "refused" is a 4xx the CALLER caused, "unavailable" is everything
+        // else. This used to fold both into the same generic "could not read the chain" line.
+        if (r.status >= 400 && r.status < 500 && r.status !== 429) {   // 429 = the forensic rate bucket, transient → unavailable with its Try-again (verifier on #396, P1-2)
+          setState({ phase: "refused", data: null, kind: null, errMsg: (j && j.error) || null });
           return;
         }
-        setState({ phase: "ok", data: j });
+        // Both any other HTTP-level failure and a body-level status:"unavailable" (or a malformed
+        // body) land here — never fall through to rendering a zero/empty result off a failed read.
+        if (!j || !r.ok || j.status === "unavailable" || j.success !== true) {
+          setState((p) => ({ phase: "unavailable", data: p.data, kind: "unavailable", errMsg: null }));
+          return;
+        }
+        setState({ phase: "ok", data: j, kind: null, errMsg: null });
       })
       .catch((e) => {
         if (e && e.name === "AbortError") return;
-        setState({ phase: "unavailable", data: null });
+        setState((p) => ({ phase: "unavailable", data: p.data, kind: "unavailable", errMsg: null }));
       });
   }, []);
 
@@ -244,9 +283,18 @@ export default function RentReclaimPane({ wallet }) {
   // asked to sign for is what is ACTUALLY there right now, not a stale scan's guess.
   const openConfirm = React.useCallback(async () => {
     if (!reclaimableNow.length) return;
+    // A new openConfirm supersedes whatever fresh-read was already in flight — exactly Firepit's
+    // own openConfirm guard, so a fast double-tap (or Cancel-then-Reclaim-again) can't let an
+    // older, slower read land its result over a newer one.
+    try { confirmAbortRef.current && confirmAbortRef.current.abort(); } catch (_) {}
+    const ctrl = new AbortController();
+    confirmAbortRef.current = ctrl;
     setSign({ phase: "confirmloading", result: null, error: null, confirm: null });
     try {
       const prep = await prepareConfirmation({ wallet, accounts: reclaimableNow, closedTokenAccounts });
+      // The pane may have unmounted, or a newer openConfirm call may already be running its own
+      // fresh read — either way this result is stale and must not commit any state.
+      if (!liveRef.current || confirmAbortRef.current !== ctrl) return;
       if (prep.status === "unavailable") {
         setSign({ phase: "error", result: null, error: t("Could not read the chain right now. Try again shortly."), confirm: null });
         return;
@@ -263,6 +311,7 @@ export default function RentReclaimPane({ wallet }) {
         confirm: { count: prep.toClose.length, lamports: prep.lamports, toClose: prep.toClose },
       });
     } catch (e) {
+      if (!liveRef.current || confirmAbortRef.current !== ctrl) return;
       setSign({ phase: "error", result: null, error: (e && e.message) || String(e), confirm: null });
     }
   }, [wallet, reclaimableNow, closedTokenAccounts, scan]);
@@ -278,6 +327,9 @@ export default function RentReclaimPane({ wallet }) {
     setSign((s) => ({ ...s, phase: "signing", result: null, error: null }));
     try {
       const result = await runFullReclaim({ wallet, accounts: toClose, closedTokenAccounts });
+      // If the pane unmounted while the sign/send was in flight, don't touch state at all — this
+      // never changes what was signed or sent, only whether this component still commits it.
+      if (!liveRef.current) return;
       const newlyConfirmed = (result.rows || []).filter((r) => r.outcome === "confirmed").map((r) => r.tokenAccount);
       if (newlyConfirmed.length) setClosedTokenAccounts((prev) => prev.concat(newlyConfirmed));
       setSign({ phase: "done", result, error: null, confirm: null });
@@ -288,6 +340,7 @@ export default function RentReclaimPane({ wallet }) {
       // chain rather than patch the old scan's classifications by hand.
       scan(wallet.address);
     } catch (e) {
+      if (!liveRef.current) return;
       // A hard failure BEFORE the pure module could even report a status (e.g. the wallet layer
       // never loaded, or P2-J's account-switch guard fired) — never rendered as a fabricated
       // result, always its own honest error state.
@@ -321,12 +374,22 @@ export default function RentReclaimPane({ wallet }) {
     );
   }
 
-  if (state.phase === "unavailable") {
+  // Same wording pane.jsx's shared <Unavailable> and WalletCheckup.jsx already use for
+  // "offline" — a phone losing signal is a different fact from the chain being unreachable,
+  // and this pane used to say the second thing for both.
+  const unavailableText = state.kind === "offline"
+    ? t("You're offline. This needs a connection — it'll work again as soon as you're back.")
+    : t("Could not read the chain right now. Try again shortly.");
+  // A finished run's result OUTRANKS a failed rescan: when a reclaim is done and we still hold
+  // data, the notice renders inline inside the results view below instead of replacing it.
+  const showResultsDespiteUnavailable = state.phase === "unavailable" && sign.phase === "done" && !!state.data;
+  if (state.phase === "unavailable" && !showResultsDespiteUnavailable) {
+    const text = unavailableText;
     return (
       <section className="seeker-pane">
         <div className="seeker-paneicon" aria-hidden="true">💰</div>
         <h1>{t("Rent Reclaim")}</h1>
-        <p className="seeker-reclaim-errtext" role="alert">{t("Could not read the chain right now. Try again shortly.")}</p>
+        <p className="seeker-reclaim-errtext" role="alert">{text}</p>
         <button
           type="button"
           className="seeker-reclaim-retrybtn"
@@ -334,6 +397,19 @@ export default function RentReclaimPane({ wallet }) {
         >
           {t("Try again")}
         </button>
+      </section>
+    );
+  }
+
+  if (state.phase === "refused") {
+    // A 4xx on the wallet's own address — not something a retry button can fix here (the address
+    // comes from the connected wallet, never typed), same posture as ListingCheckup/ProjectBurn's
+    // <Refused>: explain, don't offer a retry that would just repeat the same request.
+    return (
+      <section className="seeker-pane">
+        <div className="seeker-paneicon" aria-hidden="true">💰</div>
+        <h1>{t("Rent Reclaim")}</h1>
+        <p className="seeker-reclaim-errtext" role="alert">{state.errMsg || t("That address wasn't something we could use.")}</p>
       </section>
     );
   }
@@ -354,6 +430,13 @@ export default function RentReclaimPane({ wallet }) {
     <div className="seeker-reclaim">
       <div className="seeker-reclaim-topicon" aria-hidden="true">💰</div>
       <h1 className="seeker-reclaim-title">{t("Rent Reclaim")}</h1>
+
+      {showResultsDespiteUnavailable ? (
+        <div className="seeker-reclaim-rescan-note">
+          <p className="seeker-reclaim-errtext" role="alert">{unavailableText}</p>
+          <button type="button" className="seeker-reclaim-retrybtn" onClick={() => scan(wallet.address)}>{t("Try again")}</button>
+        </div>
+      ) : null}
 
       <div className="seeker-reclaim-total">
         <span className="seeker-reclaim-total-label">{t("Total reclaimable")}</span>

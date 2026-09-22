@@ -15,9 +15,9 @@
 import React from "react";
 import { Routes, Route, Navigate, Link } from "react-router-dom";
 import { t, useI18nReady } from "../i18n.js";
-import { shortAddr } from "../addr.js";
 import AskCluckPane from "../AskCluck.jsx";
 import WalletCheckupPane from "../WalletCheckup.jsx";
+import { AddressForm, AddressBar } from "../addressform.jsx";
 import { SchoolHome, SchoolCourse, SchoolLesson } from "../school/School.jsx";
 import Certificate from "../school/Certificate.jsx";
 import ListingCheckup from "../tools/ListingCheckup.jsx";
@@ -43,52 +43,15 @@ export function useWallet() { return null; }
 export function HeaderExtra() { return null; }
 
 // ── Wallet Checkup, by pasted address ────────────────────────────────────────────────────────
-// A Solana address is public information; typing one in is not "collecting an address" — nothing
-// is stored, nothing leaves the device but the scan request, and the result is the same read-only
-// report the website gives anyone. Base58, 32–44 chars, checked before any request is made.
-const ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-
-function AddressForm({ onSubmit }) {
-  useI18nReady();
-  const [value, setValue] = React.useState("");
-  const [err, setErr] = React.useState("");
-  function submit(e) {
-    e.preventDefault();
-    const v = value.trim();
-    if (!ADDR_RE.test(v)) { setErr(t("That doesn't look like a Solana address.")); return; }
-    setErr("");
-    onSubmit(v);
-  }
-  return (
-    <form className="seeker-edu-addrform" onSubmit={submit}>
-      <p className="seeker-tool-note">{t("Paste any Solana wallet address to check its approvals and the authorities on what it holds. Read-only — nothing is stored.")}</p>
-      <input
-        className="seeker-edu-addrinput"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={t("Paste a wallet address")}
-        autoComplete="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        inputMode="text"
-      />
-      {err ? <div className="seeker-tool-refused" role="alert"><p>{err}</p></div> : null}
-      <button type="submit" className="seeker-btn seeker-edu-addrbtn">{t("Run the checkup")}</button>
-    </form>
-  );
-}
-
+// AddressForm + AddressBar now live in ../addressform.jsx (shared with the full edition, which
+// offers the same paste form as an override over the connected wallet — CLAUDE.md's one-copy
+// rule). Behaviour here is unchanged: paste an address, scan it, "Check another" clears it.
 function EduCheckup() {
   useI18nReady();
   const [address, setAddress] = React.useState(null);
   return (
     <>
-      {address ? (
-        <div className="seeker-edu-addrbar">
-          <span className="seeker-edu-addrbar-addr">{shortAddr(address)}</span>
-          <button type="button" className="seeker-btn seeker-btn-quiet" onClick={() => setAddress(null)}>{t("Check another")}</button>
-        </div>
-      ) : null}
+      {address ? <AddressBar address={address} onClear={() => setAddress(null)} /> : null}
       <WalletCheckupPane address={address} gate={<AddressForm onSubmit={setAddress} />} />
     </>
   );
