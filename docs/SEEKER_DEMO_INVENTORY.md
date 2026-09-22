@@ -205,10 +205,11 @@ retake against a live server before they are demo-ready.
   `process.env.TOOLGATE_USD` or a code default), `priceUsd`, `clknNeeded`, `lamports`, `days`
   (both resolved live from `lib/tool-pass-terms.js`'s append-only schedule), `receiver`, `mint`.
   Never hardcode `holdUsd` or the SOL price/day terms in a demo script — read them from this
-  endpoint at record time. **Correction to the assumed shape:** as of this commit the endpoint
-  returns only a single CLKN-denominated `holdUsd` — there is no `skr.holdUsd` (or any SKR-keyed)
-  field anywhere in `server.js` or `src/seeker/pass.js`. If an SKR-denominated pass term is wanted
-  for the demo, it does not exist in the code yet and needs to be built, not merely quoted.
+  endpoint at record time. **Shape on `develop` as of this commit:** a single CLKN-denominated
+  `holdUsd`. The SKR door (`skr: { mint, holdUsd, priceUsd, skrNeeded, door }`, its own figure,
+  sent only by the Seeker app's pass sheet) is on PR #395, held for Codex's re-review; once that
+  merges the demo reads `skr.holdUsd` / `skr.skrNeeded` from the same endpoint — still never a
+  literal.
 - **Seven languages** — AGENTS.md: en / es / hi / it / pt / vi / zh. Confirmed on disk:
   `public/i18n/{es,hi,it,pt,vi,zh}.json` (English is the source keys, uncatalogued as its own
   file).
