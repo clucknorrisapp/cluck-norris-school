@@ -384,3 +384,39 @@
 }
 .seeker-school-passed .seeker-btn { width: 100%; margin-top: 6px; }
 .seeker-school-passed .seeker-school-back { margin-top: 4px; }
+
+/* ── certificate of completion (education edition) ─────────────────────────────────────────── */
+.seeker-cert-card {
+  border: 1px solid rgba(212, 175, 55, .35);
+  background: rgba(212, 175, 55, .08);
+  border-radius: 12px;
+  padding: 14px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.seeker-cert-kicker {
+  font-family: var(--disp);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.seeker-cert-label { font-size: 12.5px; color: var(--muted); }
+.seeker-cert-paper {
+  background: #0f0a05;
+  border: 1px solid rgba(255, 182, 39, .35);
+  border-radius: 10px;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.seeker-cert-school { font-family: var(--disp); font-size: 11px; letter-spacing: 3px; color: var(--muted); }
+.seeker-cert-name { font-family: var(--disp); font-size: 22px; color: var(--text); }
+.seeker-cert-line { font-size: 14px; color: var(--sub); line-height: 1.6; }
+.seeker-cert-meta { font-size: 12.5px; color: var(--muted); }
+.seeker-cert-meta code { color: var(--gold); }
+.seeker-cert-verify { font-size: 12px; color: var(--muted); word-break: break-all; }
+.seeker-cert-btn { width: 100%; }

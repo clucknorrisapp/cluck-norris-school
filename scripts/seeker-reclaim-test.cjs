@@ -348,18 +348,26 @@ function rpcOk(list) {
   }
   {
     const storeCfg = JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "store-edition.json"), "utf8"));
-    const missing = NEW_KEYS.filter((k) => !(storeCfg.excludeKeys || []).includes(k));
-    ok("store-edition.json excludes every increment-2 key from the google/ios dictionary copy", missing.length === 0, missing);
+    // store-edition v1.1.0: the google/ios bundle IS the shell (education edition), so a key that
+    // an education pane ALSO renders is rightly kept in its dictionaries. What must be excluded
+    // is every increment-2 key that only the wallet half renders.
+    const eduKeys = new Set(require(path.join(ROOT, "scripts", "seeker-i18n-keys.cjs")).eduKeys());
+    const walletOnly = NEW_KEYS.filter((k) => !eduKeys.has(k));
+    const missing = walletOnly.filter((k) => !(storeCfg.excludeKeys || []).includes(k));
+    ok(`store-edition.json excludes every wallet-only increment-2 key from the google/ios dictionary copy (${walletOnly.length} of ${NEW_KEYS.length}; the rest are shared with the education edition)`, missing.length === 0, missing);
   }
   {
-    // The increment-3 strings must never leak into the google/ios bundle EITHER — but not via the
-    // excludeKeys prune (they were never added to a dictionary to prune from). The real guarantee
-    // is structural: google/ios build from index.html, never seeker.html (vite.config.js's SEEKER
-    // branch), so nothing under src/seeker/* is ever in that dependency graph. Assert that
-    // directly against the config, rather than trusting a comment.
+    // The increment-3 strings (Rent Reclaim SIGNING) must never leak into the google/ios bundle
+    // EITHER. Since store-edition v1.1.0 google/ios DO build from seeker.html — so the structural
+    // guarantee moved: when the entry is the shell and the edition is google/ios, "@seeker-edition"
+    // resolves to src/seeker/edition/edu.jsx, whose import list never reaches RentReclaim or
+    // reclaim-sign. Assert the alias wiring against the config, and the import list against the
+    // file, rather than trusting a comment.
     const viteSrc = fs.readFileSync(path.join(ROOT, "vite.config.js"), "utf8");
-    ok("vite.config.js only overrides the build entry to seeker.html for the seeker edition (google/ios never reaches src/seeker/*)",
-      /SEEKER\s*\?\s*\{\s*input:\s*resolve\(__dirname,\s*['"]seeker\.html['"]\)/.test(viteSrc), viteSrc);
+    ok("vite.config.js aliases @seeker-edition to the education module when the edition is google/ios",
+      /const EDU = SHELL && \(EDITION === 'google' \|\| EDITION === 'ios'\)/.test(viteSrc) && /'@seeker-edition':\s*resolve\(__dirname,\s*EDU \? 'src\/seeker\/edition\/edu\.jsx' : 'src\/seeker\/edition\/full\.jsx'\)/.test(viteSrc), viteSrc.slice(0, 400));
+    const eduSrc = fs.readFileSync(path.join(ROOT, "src", "seeker", "edition", "edu.jsx"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    ok("the education edition never imports Rent Reclaim, the wallet gate or the signing helpers", !/import[^\n]*(RentReclaim|needswallet|reclaim-sign|rent-math)/.test(eduSrc));
   }
   try {
     require("child_process").execFileSync(process.execPath, [path.join(ROOT, "scripts", "i18n-audit.cjs")], { cwd: ROOT, stdio: "pipe" });

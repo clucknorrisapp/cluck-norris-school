@@ -638,7 +638,7 @@ jobs:
           # here too.
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|seeker\.html$|store-edition/|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|scripts/seeker-app-boot-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|seeker\.html$|store-edition/|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|scripts/(seeker-app-boot|store-shell-boot)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -839,6 +839,28 @@ jobs:
       - name: seeker app boots and behaves
         if: steps.gate.outputs.run == 'true'
         run: node scripts/seeker-app-boot-test.cjs
+      # The Google Play / iOS edition of the same shell (store-edition v1.1.0), booted the same
+      # way: the shipped google tarball, phone-sized Chromium, every /api/** refused. It asserts
+      # what a store reviewer would: the school leads, NO wallet layer or control exists, a stale
+      # deep link to a wallet tool lands on the school, the pasted-address checkup refuses a bad
+      # address on the device, an answer carries the report control, the certificate route asks
+      # with the device's own sid, the legal footer is there, and nothing left the bundle's
+      # origin but clucknorris.app. store-edition-test.cjs checks the tarball's CONTENTS; this
+      # checks what it does when opened.
+      - name: Play/iOS edition of the shell boots and behaves
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/store-shell-boot-test.cjs
+      # Codex round 12 on #391: "a passing content scan means the bundle is clean" had already been
+      # wrong once — the scan passed while CLKN's pools and fees were on the phone at
+      # #/school/lp/4. So this reads the SCREEN: the shipped google tarball, every one of the 58
+      # lessons in every one of the seven languages, every one of the 200 quiz questions answered
+      # so its explanation renders, and document.body.innerText scanned for our ticker. Codex's
+      # four examples are pinned by name on the rendered text of the lesson each lived in, and the
+      # store wording is asserted PRESENT so the walk is proven to read the real body.
+      # `--mutate` puts the old sentence back in the extracted chunk and the walk fails.
+      - name: Play/iOS edition — every lesson, every language, read off the screen
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/store-render-scan.cjs
       # Colosseum roadmap §7 — "accessibility and phone polish on the public pages" — judges click
       # these on phones. Boots its own server and drives /hub, /hub/<project>, /hub/demo,
       # /for-projects, /hub/apply and /hub/<project>/pay at 360 and 390px with a real Chromium:

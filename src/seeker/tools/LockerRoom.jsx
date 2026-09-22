@@ -65,7 +65,8 @@
 // a mint we simply could not read are different answers and get different components.
 import React from "react";
 import { t, useI18nReady } from "../i18n.js";
-import { Pane, Loading, Empty, Unavailable, Refused, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
+import { Pane, Loading, Empty, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
+import { NeedsWallet } from "../needswallet.jsx";
 import { shortAddr } from "../addr.js";
 import { signSendConfirm } from "../sign.js";
 import "./tools.css";

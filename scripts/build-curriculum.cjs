@@ -27,6 +27,13 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 // tracking bracket depth and string state (so a "]" or "//" inside a string/template literal
 // doesn't end the scan early), then eval the isolated literal. These are pure-data arrays —
 // no JSX, no function calls — so eval is safe and deterministic.
+// The lesson arrays carry edition ternaries (`STORE ? … : …`, and LPLab/Library's `TOK`, the
+// worked-example ticker — store-edition v1.1.0). These scripts want the WEBSITE edition, so the
+// isolated literal is evaluated with STORE = false and the file's own `const TOK = …` line.
+function editionPrelude(src) {
+  const tok = /const TOK = [^\n]+;/.exec(src);
+  return "const STORE = false; " + (tok ? tok[0] + " " : "");
+}
 function extractArray(src, name) {
   const decl = `const ${name} = [`;
   const start = src.indexOf(decl);
@@ -46,7 +53,7 @@ function extractArray(src, name) {
     else if (c === "]") { depth--; if (depth === 0) { i++; break; } }
   }
   const slice = src.slice(start + decl.length - 1, i);
-  return eval("(" + slice + ")");
+  return eval("(function(){ " + editionPrelude(src) + "return (" + slice + "); })()");
 }
 
 const appSrc = read("src/App.jsx");

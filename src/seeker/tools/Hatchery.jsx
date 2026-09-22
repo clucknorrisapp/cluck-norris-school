@@ -103,7 +103,8 @@
 // code-reviewed, not device-verified, until someone runs it on an actual Seeker/Android webview.
 import React from "react";
 import { t, useI18nReady } from "../i18n.js";
-import { Pane, Loading, Unavailable, Confirm, NeedsWallet, toolFetch, useOnline } from "../pane.jsx";
+import { Pane, Loading, Unavailable, Confirm, toolFetch, useOnline } from "../pane.jsx";
+import { NeedsWallet } from "../needswallet.jsx";
 import { shortAddr } from "../addr.js";
 import { confirmSignature, isUserRejection } from "../sign.js";
 import "./tools.css";
