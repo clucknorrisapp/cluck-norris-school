@@ -154,7 +154,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
 
   // ---- A + B + C: shell, routing, wallet -------------------------------------------------
   {
-    const { ctx, page, errors, offsite } = await open((r) => r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ success: false, status: "unavailable" }) }));
+    const { ctx, page, errors, offsite, calls } = await open((r) => r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ success: false, status: "unavailable" }) }));
     await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 }).catch(() => {});
     const mounted = await page.evaluate(() => !!document.querySelector(".seeker-shell") && document.querySelector("#root").children.length > 0);
     ok("A · it mounts — #root is not an empty div", mounted);
@@ -224,6 +224,30 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     ok("B · ⚠️ an unbuilt tool is NEVER a link — no routing to a blank pane", grid.soonAreLinks === 0, JSON.stringify(grid));
     ok("B · built tools are links, so the grid actually navigates", grid.links >= 6, JSON.stringify(grid));
     ok("B · every card clears 44px and nothing overflows at 390px", grid.smallCards === 0 && !grid.overflow, JSON.stringify(grid));
+
+    // ⛔ REMOVED, AND STAYS REMOVED. Owner, 2026-09-22: "buy special is in the tools list and
+    // shouldn't be in here at all on seeker" (#401). Codex's review of that PR: the `>= 13` above
+    // would never catch it coming back. Three forms, because a tile can return without a route
+    // and a route without a tile: no card names it, no card links to it, and the old deep link
+    // falls through the catch-all to the Toolkit — no pane, no Buy Special API call, no throw.
+    // (The shared dictionaries still name Buy Special legitimately for the website; this asks
+    // the RENDERED grid, not the bundle text.)
+    const bs = await page.evaluate(() => ({
+      cards: Array.from(document.querySelectorAll(".seeker-toolcard")).filter((el) => /buy\s*special|buy\s*comp/i.test(el.innerText || "")).length,
+      hrefs: document.querySelectorAll("a[href*='buyspecial']").length,
+    }));
+    ok("B · ⛔ no Buy Special tile on the grid and nothing links to one (removed 2026-09-22)", bs.cards === 0 && bs.hrefs === 0, JSON.stringify(bs));
+    {
+      const callsBefore = calls.length, errBefore = errors.length;
+      await page.evaluate(() => { window.location.hash = "#/tools/buyspecial"; });
+      await page.waitForTimeout(350);
+      const after = await page.evaluate(() => ({ hash: window.location.hash, text: (document.body.innerText || "").slice(0, 4000) }));
+      const bsCalls = calls.slice(callsBefore).filter((u) => /buyspecial/i.test(u));
+      ok("B · ⛔ the old #/tools/buyspecial deep link falls through to the Toolkit", after.hash === "#/tools", after.hash);
+      ok("B · ⛔ … and renders no Buy Special pane, calls no Buy Special API, throws nothing",
+         !/buy\s*special/i.test(after.text) && bsCalls.length === 0 && errors.length === errBefore,
+         JSON.stringify({ bsCalls, threw: errors.length - errBefore, text: after.text.slice(0, 120) }));
+    }
 
     // EVERY built tool must actually mount. Driven from the rendered grid's own hrefs rather
     // than a list in this file: a list would have to be remembered, and the failure it is meant
