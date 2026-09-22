@@ -44,7 +44,6 @@
 import React from "react";
 import { t, tf, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
-import { NeedsWallet } from "./pane.jsx";
 
 const WEBSITE_CHECKUP_URL = "https://clucknorris.app/wallet-checkup";
 
@@ -123,7 +122,7 @@ function RiskyRow({ r }) {
   );
 }
 
-export default function WalletCheckupPane({ wallet }) {
+export default function WalletCheckupPane({ address, gate }) {
   useI18nReady();
   // phase: idle | loading | ok | error. kind (error only): offline | rate | unavailable.
   const [state, setState] = React.useState({ phase: "idle", kind: null, data: null, retrySec: 0 });
@@ -178,34 +177,36 @@ export default function WalletCheckupPane({ wallet }) {
   React.useEffect(() => () => { try { abortRef.current && abortRef.current.abort(); } catch (_) {} }, []);
 
   React.useEffect(() => {
-    if (!wallet.connected || !wallet.address) {
+    if (!address) {
       setState({ phase: "idle", kind: null, data: null, retrySec: 0 });
       return undefined;
     }
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    scan(wallet.address, ctrl.signal);
+    scan(address, ctrl.signal);
     return () => ctrl.abort();
-  }, [wallet.connected, wallet.address, scan]);
+  }, [address, scan]);
 
   // Recover automatically once the connection returns — same posture as Ask Cluck's offline
   // handling, but here "recover" means "rescan" rather than "let the next send through".
   React.useEffect(() => {
     const wasOffline = wasOfflineRef.current;
     wasOfflineRef.current = !online;
-    if (wasOffline && online && wallet.connected && wallet.address) {
-      scan(wallet.address);
+    if (wasOffline && online && address) {
+      scan(address);
     }
-  }, [online, wallet.connected, wallet.address, scan]);
+  }, [online, address, scan]);
 
-  if (!wallet.connected) {
-    // Same gap as Rent Reclaim had: a sentence asking for a wallet, and no way to give one.
-    // NeedsWallet offers the button, and says so plainly where the device has no wallet at all.
+  if (!address) {
+    // No address yet. WHAT asks for one is the EDITION's call, not this pane's: the full app
+    // passes a NeedsWallet gate (connect, MWA-aware), the Google Play / iOS edition passes a
+    // paste-an-address form, because that edition has no wallet at all — its listing says so and
+    // its build refuses the string. The pane itself never knows which; it just renders `gate`.
     return (
       <section className="seeker-pane">
         <div className="seeker-paneicon" aria-hidden="true">🛡</div>
         <h1>{t("Wallet Checkup")}</h1>
-        <NeedsWallet why="Connect your wallet to run a checkup." wallet={wallet} />
+        {gate}
       </section>
     );
   }
@@ -232,7 +233,7 @@ export default function WalletCheckupPane({ wallet }) {
         <div className="seeker-paneicon" aria-hidden="true">🛡</div>
         <h1>{t("Wallet Checkup")}</h1>
         <p className="seeker-checkup-errtext" role="alert">{text}</p>
-        <button type="button" className="seeker-checkup-rescanbtn" onClick={() => scan(wallet.address)}>
+        <button type="button" className="seeker-checkup-rescanbtn" onClick={() => scan(address)}>
           {t("Try again")}
         </button>
       </section>
@@ -320,7 +321,7 @@ export default function WalletCheckupPane({ wallet }) {
         </div>
       ) : null}
 
-      <button type="button" className="seeker-checkup-rescanbtn" onClick={() => scan(wallet.address)}>
+      <button type="button" className="seeker-checkup-rescanbtn" onClick={() => scan(address)}>
         {t("Rescan")}
       </button>
     </div>

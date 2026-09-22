@@ -79,9 +79,31 @@ const TABLES = [
 // small lesson: an extractor that over-reaches sends translators work that should not be done.
 const PROPS = /\b(?:why|title|label|message|confirmLabel)=\{?\s*"((?:[^"\\]|\\.)*)"/g;
 
-function keys() {
+// The set of source files ONE edition of the shell can reach, by following relative imports
+// from its edition module. Used for the education edition: the keys it renders must STAY in the
+// google/ios dictionaries, and every other seeker key must be excluded from them. Static
+// import parsing only — the shell has no dynamic imports, and the point is that the edition's
+// import list IS the safety argument (src/seeker/edition/edu.jsx header).
+function reachableFrom(entry) {
+  const seen = new Set();
+  const stack = [path.resolve(entry), path.join(SRC, "App.jsx")];   // App.jsx is the shell around every edition
+  while (stack.length) {
+    const fp = stack.pop();
+    if (seen.has(fp) || !fs.existsSync(fp)) continue;
+    seen.add(fp);
+    const src = fs.readFileSync(fp, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    for (const m of src.matchAll(/\bfrom\s+"(\.{1,2}\/[^"]+)"/g)) {
+      let target = path.resolve(path.dirname(fp), m[1]);
+      if (!/\.(jsx?|mjs|css|json)$/.test(target)) { for (const ext of [".jsx", ".js"]) if (fs.existsSync(target + ext)) { target = target + ext; break; } }
+      if (/\.(jsx?|mjs)$/.test(target)) stack.push(target);
+    }
+  }
+  return [...seen];
+}
+
+function keysIn(files) {
   const out = new Set();
-  for (const fp of walk(SRC, [])) {
+  for (const fp of files) {
     const src = fs.readFileSync(fp, "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "")      // block comments
       .replace(/^\s*\/\/.*$/gm, "");         // line comments
@@ -93,7 +115,7 @@ function keys() {
     }
   }
   // Translated props, in the panes and the shell alike.
-  for (const fp of walk(SRC, [])) {
+  for (const fp of files) {
     const src = fs.readFileSync(fp, "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     let m;
@@ -105,7 +127,7 @@ function keys() {
     }
   }
   for (const { file, re } of TABLES) {
-    if (!fs.existsSync(file)) continue;
+    if (!fs.existsSync(file) || !files.includes(file)) continue;
     const src = fs.readFileSync(file, "utf8").replace(/^\s*\/\/.*$/gm, "");
     let m;
     while ((m = re.exec(src))) {
@@ -117,7 +139,11 @@ function keys() {
   return [...out].sort();
 }
 
-module.exports = { keys };
+function keys() { return keysIn(walk(SRC, [])); }
+// The education edition's own keys (google/ios, store-edition v1.1.0).
+function eduKeys() { return keysIn(reachableFrom(path.join(SRC, "edition", "edu.jsx"))); }
+
+module.exports = { keys, eduKeys, reachableFrom };
 
 if (require.main === module) {
   const all = keys();
@@ -133,7 +159,15 @@ if (require.main === module) {
     const fp = path.join(ROOT, "store-edition", "store-edition.json");
     const cfg = JSON.parse(fs.readFileSync(fp, "utf8"));
     const before = (cfg.excludeKeys || []).length;
-    const merged = [...new Set([...(cfg.excludeKeys || []), ...all])].sort();
+    // ⚠️ v1.1.0: the google/ios bundle IS the seeker shell (education edition), so its own strings
+    // must NOT be excluded from its dictionaries — the old "exclude every seeker key" rule would
+    // ship a Spanish learner an English app. excludeKeys = (existing ∪ every seeker key) MINUS the
+    // education edition's keys. An existing exclusion the extractor cannot see stays; an existing
+    // exclusion that the education edition renders is REMOVED, on purpose, and the count says so.
+    const edu = new Set(eduKeys());
+    const merged = [...new Set([...(cfg.excludeKeys || []), ...all])].filter((k) => !edu.has(k)).sort();
+    const removed = (cfg.excludeKeys || []).filter((k) => edu.has(k)).length;
+    if (removed) console.log(`excludeKeys: ${removed} education-edition key(s) un-excluded (the Play/iOS shell renders them)`);
     cfg.excludeKeys = merged;
     fs.writeFileSync(fp, JSON.stringify(cfg, null, 2) + "\n");
     console.log(`excludeKeys ${before} -> ${merged.length} (+${merged.length - before})`);

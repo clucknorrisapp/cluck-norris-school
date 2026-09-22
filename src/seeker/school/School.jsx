@@ -76,7 +76,11 @@ function Prose({ text, className }) {
 }
 
 // ── the front door ──────────────────────────────────────────────────────────────────────────
-export function SchoolHome() {
+// `finished` and `progressNote` are the EDITION's words for the end of the school: the full app
+// says the diploma is claimed on the website (true — docs/SEEKER_TRANSCRIPT_HANDOFF.md); the
+// Google Play / iOS edition offers its certificate of completion instead. Defaults are the full
+// app's, so a caller that passes nothing gets exactly what shipped.
+export function SchoolHome({ finished, progressNote }) {
   // Re-render when the dictionary lands — a lesson opened directly can render before it does.
   useI18nReady();
   const done = completedIds();
@@ -101,7 +105,7 @@ export function SchoolHome() {
         {/* Said HERE, before anyone finishes, not only on the finished screen (Codex, PR #390):
             the phone's progress does not reach the diploma — docs/SEEKER_TRANSCRIPT_HANDOFF.md. */}
         <p className="seeker-school-overall-note">
-          {t("Progress here stays on this phone. The diploma is claimed on clucknorris.app.")}
+          {t(progressNote || "Progress here stays on this phone. The diploma is claimed on clucknorris.app.")}
         </p>
       </div>
 
@@ -112,7 +116,7 @@ export function SchoolHome() {
           </span>
           <span className="seeker-school-continue-title">{next.lesson.icon} {next.lesson.title}</span>
         </Link>
-      ) : (
+      ) : finished ? finished : (
         <div className="seeker-school-finished">
           {/* ⚠️ THIS USED TO SAY "Claim your transcript on the website." It was not true. The
               graduation ledger is keyed by an anonymous per-browser session id (lib/school-progress,

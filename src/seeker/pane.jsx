@@ -114,27 +114,8 @@ export function Refused({ message }) {
 }
 
 // ── wallet gate ─────────────────────────────────────────────────────────────
-// A pane that needs an address renders this instead of its body. It NEVER fakes a connection and
-// never renders a result implying a wallet was read. Inside the bundled app with no native MWA
-// bridge yet, `CluckWallet.available()` is empty — say that plainly rather than spinning.
-export function NeedsWallet({ why, wallet }) {
-  useI18nReady();
-  const [noWallet, setNoWallet] = React.useState(false);
-  React.useEffect(() => {
-    try {
-      const CW = window.CluckWallet;
-      setNoWallet(!!(CW && typeof CW.available === "function" && CW.available().length === 0));
-    } catch (_) { setNoWallet(false); }
-  }, []);
-  return (
-    <div className="seeker-tool-needswallet">
-      <p>{t(why || "Connect your wallet to use this.")}</p>
-      {noWallet
-        ? <p className="seeker-tool-note">{t("No wallet app was found on this device.")}</p>
-        : <button type="button" className="seeker-btn" onClick={wallet && wallet.connect}>{t("Connect Wallet")}</button>}
-    </div>
-  );
-}
+// NeedsWallet moved to ./needswallet.jsx. This module is shared with the education-only Play/iOS
+// edition, whose build refuses the string "CluckWallet" — see that file's header.
 
 // ── the destructive-action confirm ──────────────────────────────────────────
 // "Guardrails before power" is the brand, and it is the rule that separates this app from the
