@@ -421,7 +421,17 @@ export default function AirdropperPane({ wallet }) {
     }
 
     let pendingReceipt = [];
-    let flushing = false;
+    // ⚠️ ONE CHAIN FOR EVERY RECORD CALL (Codex round 19, 2026-09-22). The background flush used
+    // to run unawaited beside the final record(): with 101 recipients two requests left with no
+    // dropId and the server made TWO receipts, and a transaction crossing the chunk boundary lost
+    // a row to signature ownership while the screen counted it recorded. Every call now queues
+    // behind the previous one, so the first flush mints the dropId before the next call starts
+    // and the final record() waits for whatever is still in flight.
+    let recordChain = Promise.resolve();
+    const enqueueRecord = (rows, decimalsForReceipt) => {
+      recordChain = recordChain.then(() => record(rows, decimalsForReceipt)).catch(() => {});
+      return recordChain;
+    };
     // Starts as the state value and is REPLACED by the engine's own figure the moment the run
     // returns one. Undefined is a legitimate answer — the receipt route treats a missing
     // decimals as "not stated" rather than guessing, which is the honest outcome when the only
@@ -466,12 +476,12 @@ export default function AirdropperPane({ wallet }) {
           // be rejected for the rest of the run or, worse, fix the receipt to a denomination the
           // transfers do not use. When we do not know, everything waits for the final record(),
           // which takes the engine's own authoritative figure.
-          if (Number.isInteger(receiptDecimals) && pendingReceipt.length >= RECORD_CHUNK && !flushing) {
+          if (Number.isInteger(receiptDecimals) && pendingReceipt.length >= RECORD_CHUNK) {
             const batch = pendingReceipt;
             pendingReceipt = [];
-            flushing = true;
-            // Not awaited — onResult must not hold up the next wallet prompt.
-            record(batch, receiptDecimals).finally(() => { flushing = false; });
+            // Not awaited here — onResult must not hold up the next wallet prompt — but queued
+            // on the one chain, so it runs strictly before the next record call.
+            enqueueRecord(batch, receiptDecimals);
           }
         },
       });
@@ -479,7 +489,7 @@ export default function AirdropperPane({ wallet }) {
     } catch (e) {
       if (liveRef.current) { setErrKind("unavailable"); setErrMsg((e && e.message) || String(e)); }
     }
-    await record(pendingReceipt, receiptDecimals);
+    await enqueueRecord(pendingReceipt, receiptDecimals);
     if (liveRef.current) setPhase("done");
   }
 

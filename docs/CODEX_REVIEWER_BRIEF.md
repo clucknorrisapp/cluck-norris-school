@@ -160,6 +160,18 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 19 — 2026-09-22: #395, your re-review of `ede8756` — two findings, fixed
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P2** — funding attribution: `sourceIsOperator`'s second branch accepted ANY parsed spl-token transfer naming the operator as authority (or source owner), unbound to the row's mint, recipient or amount. A signed X that moved an unrelated token in the transaction where Y paid A could claim A's row; Y then got 409. The native check accepted a fee-only lamport drop for a claim smaller than the fee | **Token: the second branch is gone.** The only funding evidence is the operator's OWN net balance of THE CLAIMED MINT going down by at least the row's amount (`payoutVerify.tokenDeltas`) — a DEX pool draining is refused, a delegate moving the operator's tokens still counts (the operator's account drains). `ownerOfTokenAccount` is deleted with it. **Native: two things, both required** — a parsed SystemProgram `transfer` (top-level or inner) FROM the operator TO this recipient of at least the amount (the exact instruction `createSolTransferInstruction` emits), AND the operator's lamports down by at least the amount. `nativeSourceIsOperator` now takes `wallet` | "a signed wallet X that moved an UNRELATED token in the transaction where Y paid A cannot claim A's row — only Y can" (X → 409 `transfer_not_from_operator`, signature unclaimed; Y → recorded); "(native) a FEE PAYER X in the transaction where Y sent SOL to A cannot claim A's row, however small the claim" (the old delta-only rule is asserted to have passed it); "a delegate moving the operator's tokens still counts … the delegate itself cannot claim"; the native unit test asserts a lamport delta with no parsed transfer is not funding and that the transfer must name THIS recipient. The three native end-to-end fixtures now carry the parsed instruction |
+| 2 | **P2** — the Seeker pane's background receipt flush raced the final one: 101 recipients → two requests with no dropId → two receipts; a transaction crossing the chunk boundary lost a row to signature ownership while the screen counted it | **One promise chain for every record call** (`enqueueRecord` in `Airdropper.jsx`): the background flush is queued, not awaited, so the wallet prompt is never held up, but it runs strictly before the next call, and the final `record()` waits for whatever is in flight. The `flushing` flag is gone with it | No browser test drives 101 recipients through the fake chain (7 batches × the 30 s ambiguous-status poll); the serialisation is by construction — one chain, `then`-linked — and the boot test's 34-recipient run (G) still passes. If you can rerun your 101-recipient client harness against this head, that is the check |
+
+Suite: 47 receipt tests (was 44). Claims to break on this head: (a) no transaction in which
+wallet X did not lose ≥ amount of the claimed mint (or, for SOL, did not carry a parsed system
+transfer X → recipient ≥ amount) lets X record that row; (b) the Seeker pane never issues two
+record calls without a dropId for one drop.
+
 ## Round 18 — 2026-09-22: #395, your re-review of `72b4d48` — three findings, fixed
 
 | # | Finding | Fix | Pinned by |
