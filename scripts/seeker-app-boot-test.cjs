@@ -512,8 +512,14 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         await pg.route("**/api/tool-gate/config*", (r) => r.fulfill({ status: 200, contentType: "application/json",
           body: JSON.stringify({ success: true, enabled: true, holdUsd: 10, clknNeeded: 1000, lamports: 50000000, days: 7 }) }));
         await pg.route("**/api/airdrop/record*", async (r) => {
-          try { recorded.push(JSON.parse(r.request().postData() || "{}")); } catch (_) {}
-          r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, dropId: "testdrop", url: "/airdrop/r/testdrop" }) });
+          let body = {};
+          try { body = JSON.parse(r.request().postData() || "{}"); recorded.push(body); } catch (_) {}
+          // The real route answers one result per row sent (round 17: the pane counts THOSE, never
+          // the chunk it sent), so the mock echoes every row back verified.
+          const rows = Array.isArray(body.rows) ? body.rows : [];
+          r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, dropId: "testdrop", url: "/airdrop/r/testdrop",
+            recorded: rows.map((x) => ({ wallet: x.wallet, sig: x.sig, verified: true, reason: null })),
+            totals: { rows: rows.length, verified: rows.length, stored: rows.length, alreadyRecorded: 0, refused: 0 } }) });
         });
         // A fake chain. Three batches: the first confirms, the second lands and FAILS, the third
         // never answers at all (the engine's 30s poll runs out — the ambiguous case).

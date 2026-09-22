@@ -160,6 +160,34 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 17 — 2026-09-22: #395, your re-review of `de772db` — three reproductions, fixed
+
+You reran the tests and reproduced duplicate receipts, overwritten signature-index entries, and
+partial batches counted as fully recorded. All three reproduce against `de772db`
+(`scripts/airdrop-receipt-test.cjs` now carries each as a test that fails on that head), and they
+share one cause: round 16 read the signature index and the drop BEFORE the `await getTx()` chain
+round-trip, mutated those copies, and wrote both back whole at the end. Anything in flight at the
+same time worked from its own stale copy and overwrote the other's write.
+
+| # | Reproduction | Cause on `de772db` | Fix | Pinned by |
+|---|---|---|---|---|
+| 1 | **Duplicate receipts** — one signature posted in two concurrent calls made two drops | the "one signature, one receipt" check ran before the await; both calls passed it, both wrote | **Two phases.** Phase 1 verifies against the chain and writes nothing. Phase 2 (commit) re-reads the drop and each candidate signature's owner and writes — one synchronous stretch, no await between check and persist, so in-process two calls cannot both claim a signature | "the SAME signature in two concurrent calls makes ONE receipt, never two" (the loser is a 409 with `already recorded on another receipt`, wrote no drop) |
+| 2 | **Overwritten index entries** — `airdropReceiptSigIndex` was one object, read at the top and written back whole; concurrent calls erased each other's entries, and the erased signature could be recorded again on a third receipt | whole-object read-modify-write across the await | **One kv key per signature** (`airdropReceiptSig:<sig>` → dropId, `sigKey`/`receiptOfSig`). A write can only claim ITS signature. The drop and its new keys still land in one `setManyVerified` | "two concurrent calls with DIFFERENT signatures never erase each other's signature key — neither can be re-recorded"; "no signature ever lands in one big index object" |
+| 2b | **Lost rows** — two batches of ONE drop posted at once: the second's whole-drop write dropped the first's rows (reproduces under a snapshot-on-read store, which is what `lib/kvstore.js` is: `refresh()` replaces `state` wholesale) | drop loaded before the await, written back whole | commit re-loads the drop and merges the verified rows onto the fresh copy | "two concurrent batches of ONE drop both land" (asserts all three signatures on the receipt and each key pointing at it) |
+| 3 | **Partial batches counted as fully recorded** — (a) an existing drop answered `200 + nothingNew` to a batch of which nothing verified; (b) the Seeker pane added `chunk.length` to "recorded" on any 200, and a failed chunk ended the whole run's recording; (c) the web page showed the receipt link with no count at all | the 200 meant "the call was fine", and both clients read it as "every row landed" | A call that put nothing on the receipt and found none of its rows already there is a **409 for an existing drop too** (a retry whose rows are all already on it stays the idempotent 200). `totals` carries `stored` / `alreadyRecorded` / `refused`; `results` is one entry per input row, in input order (a signature sent twice in one call gets the first copy's outcome, `duplicateInCall`). Both clients count `recorded[].verified === true`, never the chunk; the pane keeps recording after a failed chunk and shows the shortfall whenever one exists; the page shows "N rows on it" beside the link and the shortfall with its reason | "an EXISTING drop answers 409 to a batch of which nothing verified"; "totals say what LANDED" (mixed batch: 1 stored, 2 already, 1 refused, 3 verified results); `seeker-app-boot-test` G (mock echoes per-row results) |
+
+Test suite: 40 (was 34). One pre-existing fixture was wrong and the lenient 200 hid it: the
+daily-cap test's continuation row named wallet B while its transaction paid A; it "succeeded" as
+`nothingNew`. It now names A and asserts the row verified.
+
+Stated limit, unchanged from the store's own header: across PROCESSES the only guard is
+`lib/kvstore.js`'s mtime refresh ("not a real lock"). The in-process commit is atomic; two
+Railway replicas writing the same signature in the same millisecond is the store's known window,
+the same one every other journal in this repo lives with. Claims to break on this head: (a) no
+interleaving of calls in one process yields two receipts for one signature or drops a verified
+row; (b) no 200 from `/api/airdrop/record` can be produced by a batch of which nothing is on the
+receipt; (c) both clients' "N of M" figures equal the count of `verified:true` results received.
+
 ## Round 16 — 2026-09-22: #395, your three receipt findings on `caa90b8`, fixed
 
 All three were right, and they share one cause: when the pass left `/api/airdrop/record`, the

@@ -177,8 +177,14 @@ what they were owed and what arrived.
   `lib/airdrop-receipt.js` `feePayerOf`) and still holds every row to that wallet. ⚠️ **Only
   verified rows are ever stored** (Codex, round 16): a drop exists only once a row has verified,
   nothing unverified is written, and a verified signature belongs to one receipt — free access is
-  not unauthenticated write access. Don't put the Airdropper back behind the pass in a roundup,
-  a tier badge or a listing.
+  not unauthenticated write access. ⚠️ **The record is a verify phase then a SYNCHRONOUS commit**
+  (Codex, round 17): verification awaits the chain and writes nothing; the commit re-reads the
+  drop and each signature's own kv key (`airdropReceiptSig:<sig>`, never one index object) and
+  persists with no await in between. Don't move a check back in front of the `await getTx()` —
+  that is exactly what made two concurrent calls produce two receipts for one signature and lose
+  each other's rows. A batch that put nothing on the receipt is a 409, and both clients count the
+  route's per-row `verified` answers, never the chunk they sent. Don't put the Airdropper back
+  behind the pass in a roundup, a tier badge or a listing.
 - **Say what's on-chain, never why.** The chain shows *what*, not *why*. Only call a wallet
   "creator" or "team" when a launchpad API confirms it. That forensic honesty is the brand.
 - **Guardrails before power.** First-timers get warned before they can hurt themselves. That's

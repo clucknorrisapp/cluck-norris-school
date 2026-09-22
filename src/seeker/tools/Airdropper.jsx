@@ -324,16 +324,27 @@ export default function AirdropperPane({ wallet }) {
     // Run-level, NOT per call: record() is now called several times during one drop (see the
     // flush in onResult), so a per-call counter would make the last flush's numbers look like
     // the whole run's.
-    let recorded = 0, attempted = 0;
+    let recorded = 0, attempted = 0, refused = 0, lastReason = null;
+    // ⚠️ COUNT WHAT THE SERVER SAYS LANDED, NEVER THE CHUNK (Codex round 17, 2026-09-22). This
+    // used to add `chunk.length` on any 200 — but a 200 answers "the call was fine", not "every
+    // row is on the receipt": rows the chain did not support come back `verified:false` with a
+    // reason, and an existing drop used to answer 200 to a batch of which NOTHING verified. So a
+    // chunk of 100 with 40 refused read as "100 of 100 on the receipt". `recorded` is one entry
+    // per row sent; `verified:true` (new or already there) is the only thing that counts.
+    const landed = (j) => (Array.isArray(j && j.recorded) ? j.recorded : []).filter((x) => x && x.verified === true).length;
+    const firstReason = (j) => { const x = (Array.isArray(j && j.recorded) ? j.recorded : []).find((y) => y && y.verified === false && y.reason); return x ? String(x.reason) : null; };
+    const publish = (url) => {
+      if (!liveRef.current) return;
+      setReceipt((prev) => ({ url: url || (prev && prev.url) || null, recorded, total: attempted, error: refused > 0 ? lastReason : null }));
+    };
     async function record(rows, decimalsForReceipt) {
       if (!rows.length) return;
       attempted += rows.length;
-      const fail = (msg) => {
-        if (!liveRef.current) return;
-        setReceipt((prev) => ({ ...(prev || {}), error: msg, recorded, total: attempted }));
-      };
+      // One failed chunk no longer ends the run's recording (round 17): the chunks after it are
+      // independent calls, and a 409 on one batch says nothing about the next.
       for (let i = 0; i < rows.length; i += RECORD_CHUNK) {
         const chunk = rows.slice(i, i + RECORD_CHUNK);
+        let j = null;
         try {
           const r = await fetch("/api/airdrop/record", {
             method: "POST", headers: { "Content-Type": "application/json" },
@@ -343,13 +354,14 @@ export default function AirdropperPane({ wallet }) {
               rows: chunk.map((x) => ({ wallet: x.addr, amount: String(x.amount), sig: x.sig })),
             }),
           });
-          const j = await r.json().catch(() => null);
-          if (!j || !j.success) { fail((j && (j.detail || j.error)) || t("unknown error")); return; }
-          dropId = j.dropId;
-          recorded += chunk.length;
-          // Clear any earlier error only once a chunk has actually succeeded after it.
-          if (liveRef.current) setReceipt({ url: j.url, recorded, total: attempted });
-        } catch (_) { fail(t("could not reach the receipt service")); return; }
+          j = await r.json().catch(() => null);
+        } catch (_) { refused += chunk.length; lastReason = t("could not reach the receipt service"); publish(null); continue; }
+        // A 409 ("nothing in this batch verified") carries the per-row reasons exactly like a 200.
+        const n = landed(j);
+        recorded += n;
+        if (n < chunk.length) { refused += chunk.length - n; lastReason = firstReason(j) || (j && (j.detail || j.error)) || t("unknown error"); }
+        if (j && j.success && j.dropId) dropId = j.dropId;
+        publish(j && j.success ? j.url : null);
       }
     }
 

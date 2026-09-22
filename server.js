@@ -7838,8 +7838,13 @@ app.post("/api/airdrop/record", async (req, res) => {
       rows, getTx,
     });
   } catch (e) { return res.status(400).json({ success: false, error: String((e && e.message) || e) }); }
-  // A 409 ("nothing verified yet") carries the per-row reasons, so the operator's own screen can
-  // say which rows the chain did not confirm — the public receipt never will (Codex, round 16).
+  // A 409 ("nothing verified") carries the per-row reasons, so the operator's own screen can say
+  // which rows the chain did not confirm — the public receipt never will (Codex, round 16). Since
+  // round 17 an EXISTING drop answers it too when a batch put nothing on the receipt, and both
+  // clients count `recorded[].verified`, never the chunk they sent. The commit inside recordDrop
+  // is synchronous (verify, then re-read and write with no await between), and every verified
+  // signature has its own kv key — two batches of one drop, or one signature posted twice at
+  // once, can no longer erase each other (round 17).
   if (!r.ok) return res.status(r.status || 400).json({ success: false, error: r.error, ...(r.results ? { recorded: r.results } : {}) });
   return res.status(200).json({ success: true, dropId: r.dropId, url: `/airdrop/r/${r.dropId}`, recorded: r.results, totals: r.totals, nothingNew: !!r.nothingNew });
 });

@@ -1044,6 +1044,10 @@ var reconcileDone = false;
 // that, so a retry's late-landing rows join the SAME receipt instead of starting a new one.
 var currentDropId = null;
 var currentDropCreatedAt = null;
+// What the receipt route said LANDED for this drop, across every batch — counted from its
+// per-row `recorded` answers, never from the batch length (Codex round 17, 2026-09-22): a 200
+// means the call was fine, not that every row is on the receipt.
+var receiptLanded = 0, receiptShort = 0, receiptLastWhy = '';
 
 async function sendAirdrop() {
   if (!walletPubkey) { showError('Connect a wallet first.'); return; }
@@ -1067,6 +1071,7 @@ async function sendAirdrop() {
   reconcileDone = false;
   currentDropId = null;
   currentDropCreatedAt = null;
+  receiptLanded = 0; receiptShort = 0; receiptLastWhy = '';
   document.getElementById('receiptPanel').style.display = 'none';
 
   await runSendBatches(active);
@@ -1092,10 +1097,21 @@ async function recordDropRows(rowsForBatch) {
       }),
     });
     const j = await r.json().catch(function () { return null; });
+    // One answer per row sent; only `verified:true` (new, or already on the receipt) is on it.
+    // A 409 ("nothing in this batch verified") carries the same per-row reasons as a 200.
+    const rec = (j && Array.isArray(j.recorded)) ? j.recorded : [];
+    const landed = rec.filter(function (x) { return x && x.verified === true; }).length;
+    const short = rowsForBatch.length - landed;
+    if (short > 0) {
+      const bad = rec.find(function (y) { return y && y.verified === false && y.reason; });
+      receiptLastWhy = bad ? String(bad.reason) : ((j && (j.detail || j.error)) || 'unknown error');
+    }
+    receiptLanded += landed; receiptShort += short;
     if (!j || !j.success) {
+      if (currentDropId) { renderReceiptPanel(); return; }   // an earlier batch made the receipt — keep its link, say what is short
       panel.style.display = 'block';
       panel.style.background = 'rgba(239,68,68,0.08)'; panel.style.borderColor = 'rgba(239,68,68,0.3)'; panel.style.color = '#FCA5A5';
-      panel.textContent = 'Receipt recording failed for one batch (' + ((j && (j.detail || j.error)) || 'unknown error') + ') — the tokens still sent; the receipt just won\'t list those rows.';
+      panel.textContent = 'Receipt recording failed for one batch (' + receiptLastWhy + ') — the tokens still sent; the receipt just won\'t list those ' + rowsForBatch.length + ' rows.';
       return;
     }
     currentDropId = j.dropId;
@@ -1113,7 +1129,11 @@ function renderReceiptPanel() {
   const panel = document.getElementById('receiptPanel');
   panel.style.display = 'block';
   panel.style.background = 'rgba(16,185,129,0.08)'; panel.style.borderColor = 'rgba(16,185,129,0.3)'; panel.style.color = 'var(--body-text)';
-  panel.innerHTML = '✅ Public receipt for this drop → <a href="/airdrop/r/' + encodeURIComponent(currentDropId) + '" target="_blank" style="color:#6EE7B7;font-weight:700">/airdrop/r/' + esc(currentDropId) + '</a>';
+  panel.innerHTML = '✅ Public receipt for this drop → <a href="/airdrop/r/' + encodeURIComponent(currentDropId) + '" target="_blank" style="color:#6EE7B7;font-weight:700">/airdrop/r/' + esc(currentDropId) + '</a>' +
+    ' <span style="opacity:.85">— ' + receiptLanded + ' row' + (receiptLanded === 1 ? '' : 's') + ' on it</span>' +
+    (receiptShort > 0
+      ? '<div style="margin-top:6px;color:#FCA5A5">⚠️ ' + receiptShort + ' row' + (receiptShort === 1 ? '' : 's') + ' did not record (' + esc(receiptLastWhy) + ') — the tokens still sent; the receipt just doesn\'t list ' + (receiptShort === 1 ? 'it' : 'them') + '.</div>'
+      : '');
 }
 
 // localStorage only — there is no server-side listing by operator wallet, which would need an
