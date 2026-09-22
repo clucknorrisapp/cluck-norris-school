@@ -160,6 +160,50 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 13 — 2026-09-22: #395, the SKR door on the tools pass (money/auth path — please break it)
+
+(Numbered after #391's rounds 11–12, which live on that PR's branch until it merges.)
+
+**Context.** The tools pass is the revenue gate. #395 adds a second free-tier door for the Seeker
+app: hold about $50 of SKR (`SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`), live-priced, alongside
+the CLKN door. Owner decision 2026-09-19 (`docs/SEEKER_APP_PLAN.md` §7). Also on your desk, lighter:
+the dApp Store listing rewrite in `clucknorrisapp/CLKN-SEEKER` (`dapp-store/config.yaml`,
+`dapp-store/config.seeker.yaml`) — read it against the code and flag any claim the app cannot support.
+
+**The claims to break, in order of what it would cost if wrong:**
+
+1. **Nothing that was gated is opened by this change for anyone who could not already open it.**
+   The door is requested by the client (`doors:["skr"]` on `POST /api/tool-gate/session`); a website
+   user who hand-crafts it gets what a CLKN holder already gets and nothing more. No user-agent or
+   app id is treated as authorisation. If you can reach a gated API with a token that neither a
+   CLKN holder nor an SKR holder nor a payer could have obtained, that is the P0.
+2. **CLKN is always checked first and SKR only when asked** — `lib/tool-pass-qualify.js`. A session
+   that never asked for the door must never be granted through it, and a `holder-skr` token must be
+   re-checked through its own door only (`doorsForVia`). Try to make a website session grow the door.
+3. **The fail-open policy did not widen.** No CLKN price → grace (pre-existing). New: the skr door
+   requested AND no SKR price → grace. Is that the same population the CLKN rule already graces, or
+   did it add one? A verified zero balance must still deny; only `unavailable` reads grace.
+4. **The price cannot be pinned by a bad tick.** `refreshSkrPrice()` keeps CLKN's 10× sanity band
+   against a recent last-good and kv last-known-good. The refresh is independent of CLKN's — a
+   failure on one mint must not cost the other its price. It runs only when `/api/tool-gate/config`
+   is hit (same as CLKN today). Is there a path where a session is qualified against a stale SKR
+   price that the config route would have refused?
+5. **The holder cache is keyed by wallet + doors.** A denial cached for `wallet|` must not answer a
+   later `wallet|skr` request, and a grant cached for `wallet|skr` must not answer a website request.
+6. **Threshold arithmetic:** `ceil(usd / price)` with a 6-decimal mint; no hardcoded SKR amount
+   anywhere in the app or the server (`grep -rn "SKR" src/seeker server.js lib` should show only
+   the mint, the door name and the sentence templates).
+7. **The sheet.** `src/seeker/passgate.jsx` renders the SKR figure from `config.skr.skrNeeded`
+   only when it is known; the education bundles never ship the three new strings
+   (`store-edition.json` excludeKeys, pinned by `seeker-build-test`).
+
+**What is pinned:** `scripts/tool-pass-qualify-test.cjs` (25 branches of the decision),
+`scripts/tool-pass-gate-test.cjs` (config shape, doors accepted/ignored, `holder-skr` re-check and
+refusal), `seeker-app-boot-test` (the sheet), `seeker-build-test` (dictionaries and bundles).
+
+**Not claimed:** no real wallet has been through the door; the SKR price feed and the SKR balance
+read run for the first time on staging.
+
 ## Round 0 — DELIVERED (2026-09-13). Folded into roadmap revision 2.
 
 Your Round 0 findings were adopted: the centerpiece confirmed, settlement rules tightened into
