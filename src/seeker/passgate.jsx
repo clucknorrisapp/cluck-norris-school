@@ -57,12 +57,12 @@ function fmtInt(n) { return Math.round(Number(n) || 0).toLocaleString(); }
 // the component that renders it (so the caller passes an id, never display text); and a sentence
 // split into fragments cannot be translated — word order is not English's in six of our seven
 // languages, and a translator handed "Holders" and "runs on the unified tools pass…" separately
-// has no way to produce a correct sentence. Adding a tool means adding its line here.
+// has no way to produce a correct sentence. Adding a tool means adding its line here. (The
+// Airdropper's line left on 2026-09-22 — it is free for everyone now, on every platform.)
 const TOOL_LINE = {
   xray: "Wallet X-Ray runs on the unified tools pass shared by every heavy tool.",
   holders: "Holders runs on the unified tools pass shared by every heavy tool.",
   trace: "Trace runs on the unified tools pass shared by every heavy tool.",
-  airdrop: "The Airdropper runs on the unified tools pass shared by every heavy tool.",
 };
 const TOOL_LINE_FALLBACK = "This tool runs on the unified tools pass shared by every heavy tool.";
 
@@ -95,7 +95,10 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
       const b64 = btoa(bin);
       const sessR = await fetch("/api/tool-gate/session", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: wallet.address, message: ch.message, signature: b64 }),
+        // doors: the free-tier doors THIS app offers beyond CLKN. The Seeker app is the one
+        // surface with the SKR door (owner, 2026-09-19; lib/tool-pass-qualify.js); the website's
+        // cluck-gate.js sends none. Nothing is gated behind SKR — it opens the same door CLKN does.
+        body: JSON.stringify({ wallet: wallet.address, message: ch.message, signature: b64, doors: ["skr"] }),
       });
       const j = await sessR.json().catch(() => null);
       if (j && j.success && j.pass) { g.grant(j.days || 1, j.via || "holder", j.pass); setBusy(false); onUnlocked(); return; }
@@ -128,6 +131,14 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
                    { clkn: fmtInt(cfg.clknNeeded), usd: fmtInt(cfg.holdUsd) })
               : tf("Hold ${usd} worth of CLKN and every heavy tool runs free while you hold it.",
                    { usd: fmtInt(cfg.holdUsd) })}
+            {cfg.skr && cfg.skr.skrNeeded ? " " : ""}
+            {/* The SKR door carries ITS OWN dollar figure (cfg.skr.holdUsd — owner, 2026-09-22:
+                "$20 of SKR or $10 of CLKN"), so the sentence reads the figure from the skr block,
+                never the CLKN one beside it. Older configs without skr.holdUsd fall back to it. */}
+            {cfg.skr && cfg.skr.skrNeeded
+              ? tf("Holding about {skr} SKR (around ${usd} worth) unlocks them the same way, in this app.",
+                   { skr: fmtInt(cfg.skr.skrNeeded), usd: fmtInt(cfg.skr.holdUsd || cfg.holdUsd) })
+              : null}
             {" "}
             {tf("Not holding? Pay {sol} SOL for a {days}-day pass to all of them.",
                 { sol: cfg.lamports / 1e9, days: cfg.days })}
@@ -140,14 +151,14 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
           <>
             <p className="seeker-passgate-wallet">{shortAddr(wallet.address)}</p>
             <button type="button" className="seeker-btn" disabled={busy} onClick={checkHolder}>
-              {busy ? t("Checking…") : t("Check my CLKN")}
+              {busy ? t("Checking…") : t("Check my wallet")}
             </button>
           </>
         )}
 
         {needPay ? (
           <p className="seeker-passgate-needpay" role="alert">
-            {needPay.detail || t("This wallet doesn't hold enough CLKN for the free tier.")}{" "}
+            {needPay.detail || t("This wallet doesn't hold enough CLKN or SKR for the free tier.")}{" "}
             {t("Paying in SOL from the full site at clucknorris.app also unlocks the pass — that payment flow isn't built into this app yet.")}
           </p>
         ) : null}

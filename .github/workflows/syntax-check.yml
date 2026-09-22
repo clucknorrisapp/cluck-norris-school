@@ -302,6 +302,12 @@ jobs:
       # throwing changes nothing.
       - name: Tools pass — paid redemption + recovery (fault injection)
         run: node scripts/tool-pass-redeem-test.cjs
+      # The free-tier DECISION (lib/tool-pass-qualify.js): CLKN first, the Seeker app's SKR door
+      # only when asked for, fail open on OUR outages and never on a verified zero, thresholds
+      # live-priced. Two doors × three outage policies is exactly the branching that goes wrong
+      # silently inside server.js, so it is a pure function with every branch pinned here.
+      - name: Tools pass — free-tier decision, CLKN + the Seeker SKR door
+        run: node scripts/tool-pass-qualify-test.cjs
       - name: Buy comp — pool sale vs transfer vs LOCK (hold check; a lock is not a sell)
         run: node scripts/buycomp-sell-detect-test.cjs
       # The project buy bots' detection, on two real mainnet transactions: a Jupiter buy split

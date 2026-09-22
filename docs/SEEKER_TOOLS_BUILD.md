@@ -46,14 +46,17 @@ app does not invent new gates and does not hardcode any amount.
 | Project Burn | `/tools/burn` | **signs** — verified burn + receipt |
 
 ### Heavy — the unified tools pass
-`$50 of CLKN` held (live-priced) **or** `0.05 SOL` for a 7-day pass. Config comes from
-`GET /api/tool-gate/config`. ⛔ **Never hardcode the amount or the lamports.**
+CLKN held worth the live dollar figure (or, in this app, SKR worth its own figure) **or**
+`0.05 SOL` for a 7-day pass. Config comes from `GET /api/tool-gate/config` (`holdUsd`,
+`skr.holdUsd`). ⛔ **Never hardcode the amount or the lamports.** ⚠️ The Airdropper is NOT in
+this tier since 2026-09-22 (owner: "free for everyone on all platforms") — it is a "wallet"-tier
+tool: free, signs every batch, no pass anywhere.
 | Tool | Route |
 |---|---|
 | Wallet X-Ray | `/tools/xray` |
 | Token Holders | `/tools/holders` |
 | Trace | `/tools/trace` |
-| Airdrop | `/tools/airdrop` | **signs** — drives `public/airdrop-engine.js`, plans with `public/airdrop-plan.js`, records a public receipt |
+| Airdrop | `/tools/airdrop` | **signs** — drives `public/airdrop-engine.js`, plans with `public/airdrop-plan.js`, records a public receipt. **Free for everyone since 2026-09-22 — listed here for the route only, tier `wallet` in the registry** |
 | ~~Buy Special~~ | ~~`/tools/buyspecial`~~ | **REMOVED 2026-09-22** (owner: "buy special is in the tools list and shouldn't be in here at all on seeker") — shipped in #387 as a read-only pane, deleted the day after Buy Special left the main webpage (#392). Do not re-add |
 
 ### Paid

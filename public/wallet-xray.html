@@ -650,7 +650,7 @@ document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='
 document.getElementById('askFab').classList.add('show');
 
 // Unified tools pass (owner, 2026-08-18): the page previews free — RUN needs the pass
-// (hold $50 of CLKN = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
+// (hold CLKN worth the live figure = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
 run = CluckGate.guard(run, { tool: 'Wallet X-Ray', anchor: '#runBtn' });
 // Ask Cluck answers with a paid model call, so it sits behind the same pass as the scan (P1-064).
 sendChat = CluckGate.guard(sendChat, { tool: 'Wallet X-Ray', anchor: '#runBtn' });

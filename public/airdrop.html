@@ -307,10 +307,13 @@
     </div>
   </div>
 
-  <!-- 🔒 CLKN Unlock Gate — visible until tool access is paid for -->
-  <!-- The tool renders for everyone — preview free, the PASS is checked on SEND (cluck-gate.js,
-       the shared card, wrapped around sendAirdrop/retryUnresolved at the bottom of this page).
-       The private "hold 50,000 CLKN / pay 0.05 SOL" gate that used to sit here had been hidden
+  <!-- No gate (owner, 2026-09-22: "airdropper should be free for everyone on all platforms
+       moving forward"). From 2026-08-18 to 2026-09-22 SEND ran through the unified tools pass
+       (cluck-gate.js's card wrapped sendAirdrop/retryUnresolved at the bottom of this page); the
+       pass and its script are gone from this page. /api/airdrop/record takes no tools pass; it
+       takes the RECEIPT SIGN-IN (a signed nonce — ensureReceiptSession() below, Codex round 18) so
+       only the operator wallet can write its drop's public receipt. Before
+       that, the private "hold 50,000 CLKN / pay 0.05 SOL" gate that used to sit here had been hidden
        on load since 2026-08-10, but its pay path still consumed a payment signature for a LOCAL
        unlock with no server token (deep dive 2026-09-17 P1-066). Deleted so it cannot come back;
        the education panel it carried lives on below. -->
@@ -332,7 +335,7 @@
 
       <div style="margin-bottom:10px"><span style="color:var(--gold);font-weight:700">4. IRREVERSIBLE.</span> Solana transactions can't be undone. Wrong address = lost tokens. <strong>Verify your recipient list twice</strong> before clicking SEND.</div>
 
-      <div style="margin-bottom:10px"><span class="k">5. ACCESS IS SEPARATE FROM YOUR AIRDROP.</span> Sending needs the tools pass — hold about $50 of CLKN and it is free, or a small SOL fee covers a week; the live numbers are on the card when you press SEND. Your airdrop tokens are separate — they leave your wallet only when YOU sign the batches in your own wallet (11 supported).</div>
+      <div style="margin-bottom:10px"><span class="k">5. THE TOOL IS FREE. THE NETWORK IS NOT.</span> There is no pass and no fee for using the airdropper — for anyone, on the website or in the app. What you pay is Solana's own cost: the per-transaction fee and the rent for any recipient's new token account, both shown in the preview before you sign. Your airdrop tokens leave your wallet only when YOU sign the batches in your own wallet (11 supported).</div>
 
       <div style="margin-bottom:10px"><span style="color:var(--gold);font-weight:700">6. THINGS THAT GO WRONG.</span> Not enough SOL for rent. Typo in a recipient address. Sending the wrong amount because you read the column wrong. <strong>Preview before you sign every time.</strong></div>
 
@@ -544,7 +547,6 @@
 
 <script src="/cluck-wallet.js?v=2"></script>
 <script src="/cluck-util.js"></script>
-<script src="/cluck-gate.js"></script>
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
 const RPC_URL = '/api/helius-rpc';
@@ -691,6 +693,7 @@ async function connectWallet(walletId) {
 function disconnectWallet() {
   try { activeWallet?.provider?.disconnect?.(); } catch(e) {}
   walletPubkey = null;
+  forgetReceiptSession();
   activeWallet = null;
   syncWalletUi();
   document.getElementById('tokenBalance').innerHTML = 'Connect wallet to see balance';
@@ -1043,6 +1046,45 @@ var reconcileDone = false;
 // that, so a retry's late-landing rows join the SAME receipt instead of starting a new one.
 var currentDropId = null;
 var currentDropCreatedAt = null;
+// What the receipt route said LANDED for this drop, across every batch — counted from its
+// per-row `recorded` answers, never from the batch length (Codex round 17, 2026-09-22): a 200
+// means the call was fine, not that every row is on the receipt.
+var receiptLanded = 0, receiptShort = 0, receiptLastWhy = '';
+// The RECEIPT SIGN-IN (Codex round 18, 2026-09-22): writing a drop's public receipt needs the
+// operator wallet to sign a one-line nonce once — a signature, NOT a transaction, no holdings
+// check, no payment (the Airdropper is free for everyone). Without it a stranger who knew an
+// operator's public transfer could claim it on a receipt of their own first. Cached per wallet
+// for the tab's life; a declined signature means the tokens still send and the drop simply gets
+// no public receipt — said plainly in the panel, never silently.
+var receiptSession = null;      // { wallet, pass, exp }
+var receiptDeclined = '';       // why this drop has no receipt, or '' when it can have one
+var RECEIPT_SESSION_KEY = 'clkn_receipt_session';
+async function ensureReceiptSession() {
+  if (!walletPubkey) throw new Error('connect a wallet first');
+  if (receiptSession && receiptSession.wallet === walletPubkey && receiptSession.exp > Date.now()) return receiptSession.pass;
+  try { var d = JSON.parse(sessionStorage.getItem(RECEIPT_SESSION_KEY) || 'null'); if (d && d.wallet === walletPubkey && d.exp > Date.now() && d.pass) { receiptSession = d; return d.pass; } } catch (e) {}
+  var provider = activeWallet && activeWallet.provider;
+  if (!provider || typeof provider.signMessage !== 'function') throw new Error('this wallet cannot sign messages — try Phantom, Solflare, Backpack or Jupiter');
+  var ch = await fetch('/api/tool-gate/challenge?wallet=' + encodeURIComponent(walletPubkey) + '&purpose=receipt').then(function (r) { return r.json(); }).catch(function () { return null; });
+  if (!ch || !ch.success || !ch.message) throw new Error((ch && ch.error) || 'could not reach the receipt service');
+  var enc = new TextEncoder().encode(ch.message);
+  var res = await provider.signMessage(enc, 'utf8');
+  var bytes = (res && res.signature) ? res.signature : res;
+  if (bytes && bytes.data && !bytes.length) bytes = bytes.data;
+  var b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(bytes)));
+  var j = await fetch('/api/tool-gate/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wallet: walletPubkey, message: ch.message, signature: b64 }) }).then(function (r) { return r.json(); }).catch(function () { return null; });
+  if (!j || !j.success || !j.pass) throw new Error((j && (j.detail || j.error)) || 'sign-in failed');
+  receiptSession = { wallet: walletPubkey, pass: j.pass, exp: Date.now() + 23 * 3600 * 1000 };
+  try { sessionStorage.setItem(RECEIPT_SESSION_KEY, JSON.stringify(receiptSession)); } catch (e) {}
+  return j.pass;
+}
+function forgetReceiptSession() { receiptSession = null; try { sessionStorage.removeItem(RECEIPT_SESSION_KEY); } catch (e) {} }
+function showReceiptDeclined() {
+  var panel = document.getElementById('receiptPanel');
+  panel.style.display = 'block';
+  panel.style.background = 'rgba(245,158,11,0.08)'; panel.style.borderColor = 'rgba(245,158,11,0.35)'; panel.style.color = '#FCD34D';
+  panel.textContent = 'No public receipt for this drop (' + receiptDeclined + ') — the tokens still send. Sign in on the next send to get one.';
+}
 
 async function sendAirdrop() {
   if (!walletPubkey) { showError('Connect a wallet first.'); return; }
@@ -1066,7 +1108,14 @@ async function sendAirdrop() {
   reconcileDone = false;
   currentDropId = null;
   currentDropCreatedAt = null;
+  receiptLanded = 0; receiptShort = 0; receiptLastWhy = '';
   document.getElementById('receiptPanel').style.display = 'none';
+
+  // The receipt sign-in comes BEFORE the first batch is signed, so the first confirmed batch can
+  // be recorded at once and the person sees one signature prompt, then the transactions.
+  receiptDeclined = '';
+  try { await ensureReceiptSession(); }
+  catch (e) { receiptDeclined = String((e && e.message) || e || 'sign-in declined'); showReceiptDeclined(); }
 
   await runSendBatches(active);
   document.getElementById('sendBtn').disabled = false;
@@ -1074,16 +1123,21 @@ async function sendAirdrop() {
 
 // Posts one batch's just-confirmed rows to the public receipt (POST /api/airdrop/record). Never
 // throws and never blocks the send — a receipt-recording hiccup must not look like a failed
-// airdrop; the tokens already landed. Runs through CluckGate.fetch so the pass proof (the same
-// one RUN/SEND already required) rides along as x-clkn-pass.
+// airdrop; the tokens already landed. A plain fetch — the route takes no pass since 2026-09-22;
+// the server reads the operator off the chain (the fee payer of each row's own transaction).
 async function recordDropRows(rowsForBatch) {
   if (!rowsForBatch || !rowsForBatch.length) return;
+  if (receiptDeclined) { showReceiptDeclined(); return; }
   if (!currentDropCreatedAt) currentDropCreatedAt = Date.now();
   const panel = document.getElementById('receiptPanel');
   try {
-    const r = await CluckGate.fetch('/api/airdrop/record', {
+    // Cached after sendAirdrop's prompt; a retry or reconcile in a fresh tab prompts here instead.
+    let pass;
+    try { pass = await ensureReceiptSession(); }
+    catch (e) { receiptDeclined = String((e && e.message) || e || 'sign-in declined'); showReceiptDeclined(); return; }
+    const r = await fetch('/api/airdrop/record', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-clkn-pass': pass },
       body: JSON.stringify({
         dropId: currentDropId || undefined,
         mint: currentMint, decimals: currentDecimals, createdAt: currentDropCreatedAt,
@@ -1091,10 +1145,23 @@ async function recordDropRows(rowsForBatch) {
       }),
     });
     const j = await r.json().catch(function () { return null; });
+    // A dead sign-in (server restart, 24h) is dropped so the next batch prompts again.
+    if (r.status === 401) forgetReceiptSession();
+    // One answer per row sent; only `verified:true` (new, or already on the receipt) is on it.
+    // A 409 ("nothing in this batch verified") carries the same per-row reasons as a 200.
+    const rec = (j && Array.isArray(j.recorded)) ? j.recorded : [];
+    const landed = rec.filter(function (x) { return x && x.verified === true; }).length;
+    const short = rowsForBatch.length - landed;
+    if (short > 0) {
+      const bad = rec.find(function (y) { return y && y.verified === false && y.reason; });
+      receiptLastWhy = bad ? String(bad.reason) : ((j && (j.detail || j.error)) || 'unknown error');
+    }
+    receiptLanded += landed; receiptShort += short;
     if (!j || !j.success) {
+      if (currentDropId) { renderReceiptPanel(); return; }   // an earlier batch made the receipt — keep its link, say what is short
       panel.style.display = 'block';
       panel.style.background = 'rgba(239,68,68,0.08)'; panel.style.borderColor = 'rgba(239,68,68,0.3)'; panel.style.color = '#FCA5A5';
-      panel.textContent = 'Receipt recording failed for one batch (' + ((j && (j.detail || j.error)) || 'unknown error') + ') — the tokens still sent; the receipt just won\'t list those rows.';
+      panel.textContent = 'Receipt recording failed for one batch (' + receiptLastWhy + ') — the tokens still sent; the receipt just won\'t list those ' + rowsForBatch.length + ' rows.';
       return;
     }
     currentDropId = j.dropId;
@@ -1112,7 +1179,11 @@ function renderReceiptPanel() {
   const panel = document.getElementById('receiptPanel');
   panel.style.display = 'block';
   panel.style.background = 'rgba(16,185,129,0.08)'; panel.style.borderColor = 'rgba(16,185,129,0.3)'; panel.style.color = 'var(--body-text)';
-  panel.innerHTML = '✅ Public receipt for this drop → <a href="/airdrop/r/' + encodeURIComponent(currentDropId) + '" target="_blank" style="color:#6EE7B7;font-weight:700">/airdrop/r/' + esc(currentDropId) + '</a>';
+  panel.innerHTML = '✅ Public receipt for this drop → <a href="/airdrop/r/' + encodeURIComponent(currentDropId) + '" target="_blank" style="color:#6EE7B7;font-weight:700">/airdrop/r/' + esc(currentDropId) + '</a>' +
+    ' <span style="opacity:.85">— ' + receiptLanded + ' row' + (receiptLanded === 1 ? '' : 's') + ' on it</span>' +
+    (receiptShort > 0
+      ? '<div style="margin-top:6px;color:#FCA5A5">⚠️ ' + receiptShort + ' row' + (receiptShort === 1 ? '' : 's') + ' did not record (' + esc(receiptLastWhy) + ') — the tokens still sent; the receipt just doesn\'t list ' + (receiptShort === 1 ? 'it' : 'them') + '.</div>'
+      : '');
 }
 
 // localStorage only — there is no server-side listing by operator wallet, which would need an
@@ -1673,15 +1744,6 @@ function toggleAirdropLearn() {
     const tool=document.getElementById('airdropTool'); const host=tool||document.querySelector('.wrap'); if(host) host.insertBefore(notice, host.firstChild);
   } catch(e){}
 })();
-</script>
-
-<script>
-// Unified tools pass (owner, 2026-08-18): building + previewing a drop is free — SENDING
-// needs the pass (hold $50 of CLKN = free, else 0.05 SOL / 7 days, all tools). This
-// replaces the per-tool 50k-CLKN gate that was parked on 2026-08-10. /cluck-gate.js.
-// Retry sends real transactions too, so it goes through the same gate as the first send.
-sendAirdrop = CluckGate.guard(sendAirdrop, { tool: 'Airdrop Tool', anchor: '#sendBtn' });
-retryUnresolved = CluckGate.guard(retryUnresolved, { tool: 'Airdrop Tool', anchor: '#retryBtn' });
 </script>
 
 <script defer src="/cluck-nav.js"></script>
