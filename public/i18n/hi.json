@@ -390,6 +390,8 @@
   "Cluck Coin": "Cluck Coin",
   "CLUCK": "CLUCK",
   "A short line about the token": "टोकन के बारे में एक छोटी लाइन",
+  "A mint you approved was still being sent when you left this screen.": "आपने जिस मिंट को मंज़ूरी दी थी, वह इस स्क्रीन को छोड़ते समय अब भी भेजा जा रहा था।",
+  "The chain shows no such mint yet.": "चेन में अभी तक ऐसा कोई मिंट नहीं दिखता।",
   "logo preview": "logo preview",
   "Tap to choose a logo image": "लोगो इमेज चुनने के लिए टैप करें",
   "Revoke mint authority": "Revoke mint authority",

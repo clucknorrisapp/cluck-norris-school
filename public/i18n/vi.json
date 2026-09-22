@@ -390,6 +390,8 @@
   "Cluck Coin": "Cluck Coin",
   "CLUCK": "CLUCK",
   "A short line about the token": "A short line about the token",
+  "A mint you approved was still being sent when you left this screen.": "Một lượt đúc bạn đã phê duyệt vẫn đang được gửi đi khi bạn rời khỏi màn hình này.",
+  "The chain shows no such mint yet.": "Blockchain vẫn chưa hiển thị mint này.",
   "logo preview": "logo preview",
   "Tap to choose a logo image": "Tap to choose a logo image",
   "Revoke mint authority": "Revoke mint authority",
