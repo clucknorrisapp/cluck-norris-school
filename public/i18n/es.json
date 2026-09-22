@@ -391,6 +391,7 @@
   "CLUCK": "CLUCK",
   "A short line about the token": "Una línea breve sobre el token",
   "A mint you approved was still being sent when you left this screen.": "Un mint que aprobaste todavía se estaba enviando cuando saliste de esta pantalla.",
+  "The chain shows no such mint yet.": "La cadena todavía no muestra ese mint.",
   "logo preview": "vista previa del logo",
   "Tap to choose a logo image": "Toca para elegir una imagen de logo",
   "Revoke mint authority": "Renunciar a la autoridad de acuñación",

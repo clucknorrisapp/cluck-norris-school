@@ -476,6 +476,7 @@
     "The airdrop engine didn't load. Reopen the app and try again.",
     "The amount checker did not load. Reopen the app and try again.",
     "The base fee: 5,000 lamports per signature",
+    "The chain shows no such mint yet.",
     "The checks listing venues commonly run on a token — run them on yours first.",
     "The closing transaction failed on chain.",
     "The first transfer of a token can cost more — and it surprises people",

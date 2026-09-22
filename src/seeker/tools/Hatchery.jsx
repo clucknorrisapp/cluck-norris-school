@@ -61,6 +61,13 @@
 //       again. This pane never offers that retry: a submit-time failure or a confirmation timeout
 //       both route to the AMBIGUOUS state below (check the mint on Solscan; start a fresh mint —
 //       never resend blindly, a second attempt can create and charge for a second token).
+//       ⚠️ 410 is NOT proof that nothing landed (adversarial review on #398, item 2): the SAME 410
+//       fires both for a genuinely expired entry AND after a PREVIOUS /submit already deleted the
+//       entry and broadcast it — so a duplicate delivery of this exact request (a flaky mobile
+//       connection retried by the browser/OS) gets 410 while the first attempt may be landing
+//       right now. Only a plain 400 (a form-level refusal — tampered/invalid/missing signature)
+//       is genuinely "nothing was submitted." A 410 is treated exactly like the 500 case below:
+//       the persisted record is kept, never cleared as if this were a clean miss.
 //     500 { error } — RPC/submit trouble AFTER the pending entry was already deleted (see above).
 //   POST /api/hatchery/minted — best-effort Telegram announce for a REAL, verified mint. This pane
 //     calls it once, fire-and-forget, after a landed+confirmed mint; its `{ok:true|false}` result
@@ -278,12 +285,26 @@ function bytesToBase64(bytes) {
 // read back on mount, so a remount can only ever show the TRUE outcome, never a guess and never
 // a blank slate.
 //
-// Only these five fields are ever stored — never the signed transaction bytes, and never
-// anything else. Storing signed bytes would let a remount attempt to resubmit a transaction this
-// pane never re-verifies, which is exactly the kind of double-charge/double-mint AGENTS.md warns
-// about for a signature that "may already be on chain".
+// Only these fields are ever stored — never the signed transaction bytes, and never anything
+// else. Storing signed bytes would let a remount attempt to resubmit a transaction this pane
+// never re-verifies, which is exactly the kind of double-charge/double-mint AGENTS.md warns about
+// for a signature that "may already be on chain".
+//   mintAddress, signature (string|null), name, symbol, stage, at (ms epoch, for staleness)
+//   owner    — the wallet address this record belongs to (adversarial review on #398, item 8):
+//              the record lives at one localStorage key per ORIGIN, not per wallet, so without
+//              this a second wallet on the same device could resolve — or silently clear — a
+//              mint someone else's wallet is still waiting on. A record whose owner doesn't match
+//              the connected wallet is left completely alone: not resolved, not cleared.
+//   announced — set true the moment /api/hatchery/minted has been (or is being) fired for this
+//              mint, so a record that gets re-read before the post's own async work finishes
+//              can't fire it twice (item 4). The server itself also re-verifies and dedupes, so
+//              this is belt-and-suspenders, not the only guard.
 const PENDING_KEY = "clkn_seeker_hatchery_pending";
 const PENDING_STAGES = ["signed", "submitted", "confirmed", "failed", "unconfirmed"];
+// A submitted/unconfirmed record older than this is not worth polling forever (item 3, P2): show
+// the ambiguous screen with the signature link straight away instead of re-running a 30-attempt
+// searchHistory poll on every single mount.
+const STALE_POLL_MS = 24 * 60 * 60 * 1000; // 24h
 function readPending() {
   try {
     const raw = localStorage.getItem(PENDING_KEY);
@@ -292,30 +313,66 @@ function readPending() {
     if (!rec || typeof rec !== "object") return null;
     if (!MINT_ADDR_RE.test(String(rec.mintAddress || ""))) return null;
     if (PENDING_STAGES.indexOf(rec.stage) < 0) return null;
+    const owner = typeof rec.owner === "string" ? rec.owner.trim() : "";
+    if (!owner) return null; // every record this pane writes now carries an owner — no owner, no trust
+    const signature = SIG_RE.test(String(rec.signature || "")) ? String(rec.signature) : null;
+    // item 7: a "submitted"/"unconfirmed" record with no usable signature can never be resolved by
+    // polling a signature that doesn't exist, and silently ignoring it (the old behaviour) is how
+    // a recoverable record turned into a blank form. Fold it onto the same path a signed-but-not-
+    // yet-submitted record already takes — see the "signed" branch of the mount recovery effect.
+    const stage = ((rec.stage === "submitted" || rec.stage === "unconfirmed") && !signature) ? "signed" : rec.stage;
     return {
       mintAddress: String(rec.mintAddress),
-      signature: SIG_RE.test(String(rec.signature || "")) ? String(rec.signature) : null,
+      signature,
       name: typeof rec.name === "string" ? rec.name : "",
       symbol: typeof rec.symbol === "string" ? rec.symbol : "",
-      stage: rec.stage,
+      owner,
+      announced: rec.announced === true,
+      stage,
       at: typeof rec.at === "number" ? rec.at : 0,
     };
   } catch (_) { return null; }
 }
 function writePending(rec) {
   try {
+    const signature = rec.signature || null;
+    // Same invariant enforced at the write side too (item 7, belt-and-suspenders): never store a
+    // "submitted"/"unconfirmed" stage without the signature that stage exists to poll.
+    const stage = ((rec.stage === "submitted" || rec.stage === "unconfirmed") && !signature) ? "signed" : rec.stage;
     localStorage.setItem(PENDING_KEY, JSON.stringify({
       mintAddress: rec.mintAddress,
-      signature: rec.signature || null,
+      signature,
       name: rec.name || "",
       symbol: rec.symbol || "",
-      stage: rec.stage,
+      owner: rec.owner || "",
+      announced: rec.announced === true,
+      stage,
       at: Date.now(),
     }));
   } catch (_) {} // private mode / storage unavailable — the pane still has to work
 }
 function clearPending() {
   try { localStorage.removeItem(PENDING_KEY); } catch (_) {}
+}
+// The once-only, best-effort announce — shared by the live path and the mount-recovery path
+// (item 4: recovery used to never call this at all). No-ops without a signature, since hatchery.js
+// needs one and a mint resolved purely from getAccountInfo (see the "signed" recovery branch) may
+// not have one — that path marks itself announced without ever calling this, which is honest: it
+// really didn't post anything, and the record is cleared right after being shown once anyway.
+function announceMinted({ mintAddress, signature, name, symbol }) {
+  if (!signature) return;
+  toolFetch("/api/hatchery/minted", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ signature, mintAddress, name, symbol }),
+  }).catch(() => {});
+}
+// Persist the "confirmed" transition and fire the announce EXACTLY once for it, from wherever it
+// happens (live path or recovery poll) — `announced` on the record already present is the guard.
+function markConfirmedAndAnnounce(baseRec, signature) {
+  const prev = readPending();
+  const already = !!(prev && prev.mintAddress === baseRec.mintAddress && prev.announced);
+  writePending({ ...baseRec, signature, stage: "confirmed", announced: true });
+  if (!already) announceMinted({ mintAddress: baseRec.mintAddress, signature, name: baseRec.name, symbol: baseRec.symbol });
 }
 
 // ── fee line — shared by the form panel and the Confirm sheet so they never disagree ───────────
@@ -440,41 +497,62 @@ export default function HatcheryPane({ wallet }) {
   // ── recover an in-flight mint on mount ──────────────────────────────────────────────────────
   // A remount (the bottom nav, the OS backgrounding the app) between the wallet signing and a
   // confirmed answer must never show the ordinary empty form (see the file header and the
-  // persistence helpers above). This reads the one persisted record ONCE per mount and — for a
-  // signature we already know about — re-runs the SAME confirmSignature the live path uses, with
-  // the SAME outcome mapping, so what renders here can never disagree with what a live confirm
-  // would have said. NEVER rebuilds, NEVER re-submits, NEVER calls /build or /submit from here.
+  // persistence helpers above). This reads the one persisted record and — for a signature we
+  // already know about — re-runs the SAME confirmSignature the live path uses, with the SAME
+  // outcome mapping, so what renders here can never disagree with what a live confirm would have
+  // said. NEVER rebuilds, NEVER re-submits, NEVER calls /build or /submit from here.
   //
-  // `pendingCheckedRef` (not `liveRef`) guards against running twice: React StrictMode mounts,
-  // cleans up, and re-runs effects on the SAME instance (src/seeker/main.jsx), and a second poll
-  // racing the first would just waste a round trip — but `liveRef` itself is still checked after
-  // every await below, exactly like every other async guard in this file, in case of a REAL
-  // unmount while a poll is in flight.
-  const pendingCheckedRef = React.useRef(false);
+  // ⚠️ `pendingResolvedRef` only latches once a record has actually been RESOLVED (or found
+  // absent) — not merely attempted. Two reasons, both from adversarial review on #398:
+  //   · item 8 — a record whose `owner` isn't the connected wallet is left completely alone. If
+  //     no wallet is connected yet, or the wrong one is, this effect must try again once the
+  //     right wallet connects, so the dependency array watches wallet.connected/wallet.address and
+  //     the ref is NOT set on an owner mismatch or while disconnected.
+  //   · React StrictMode mounts, cleans up, and re-runs effects on the SAME instance
+  //     (src/seeker/main.jsx); once a record IS actually resolved the ref stops a second poll from
+  //     racing the first. `liveRef` itself still gates every setState after an await, exactly like
+  //     every other async guard in this file, for a REAL unmount while a poll is in flight — but,
+  //     per item 1, it never gates the PERSISTENCE itself. Every writePending()/announceMinted()
+  //     call below happens unconditionally; only the setResult/setPhase/setOutcomeMsg calls that
+  //     follow are wrapped in `if (liveRef.current)`.
+  const pendingResolvedRef = React.useRef(false);
   React.useEffect(() => {
-    if (pendingCheckedRef.current) return;
-    pendingCheckedRef.current = true;
+    if (pendingResolvedRef.current) return;
+    if (!wallet.connected || !wallet.address) return; // wait for a wallet before resolving anything
     const rec = readPending();
-    if (!rec) return;
+    if (!rec) { pendingResolvedRef.current = true; return; }
+    if (rec.owner !== wallet.address) return; // not this wallet's record — try again if it changes
+    pendingResolvedRef.current = true;
+
+    const baseRec = { mintAddress: rec.mintAddress, name: rec.name, symbol: rec.symbol, owner: rec.owner };
+
     if (rec.stage === "confirmed") {
       setResult({ signature: rec.signature || undefined, mintAddress: rec.mintAddress, name: rec.name, symbol: rec.symbol });
       setPhase("done");
+      clearPending(); // item 3: shown once — a later remount is the ordinary form, not a repeat
       return;
     }
     if (rec.stage === "failed") {
       setResult({ signature: rec.signature || undefined, mintAddress: rec.mintAddress, name: rec.name, symbol: rec.symbol });
       setPhase("failed");
+      clearPending();
       return;
     }
     if ((rec.stage === "submitted" || rec.stage === "unconfirmed") && rec.signature) {
       setResult({ signature: rec.signature, mintAddress: rec.mintAddress, name: rec.name, symbol: rec.symbol });
+      // item 3: a record this old is not worth polling forever — show the ambiguous screen (the
+      // signature link still works) instead of re-running a 30-attempt poll on every mount.
+      if (Date.now() - rec.at > STALE_POLL_MS) {
+        writePending({ ...baseRec, signature: rec.signature, stage: "unconfirmed" });
+        setOutcomeMsg(t("Timed out waiting for the network to confirm it."));
+        setPhase("ambiguous");
+        return;
+      }
       setPhase("signing"); // the exact same "waiting for the network" screen the live path shows
       (async () => {
         let rpc;
         try { rpc = rpcFn(); } catch (e) {
-          if (!liveRef.current) return;
-          setOutcomeMsg((e && e.message) || t("RPC layer did not load."));
-          setPhase("ambiguous");
+          if (liveRef.current) { setOutcomeMsg((e && e.message) || t("RPC layer did not load.")); setPhase("ambiguous"); }
           return;
         }
         let landed;
@@ -484,35 +562,57 @@ export default function HatcheryPane({ wallet }) {
           // without it (sign.js's own note on a manual recheck of an older signature).
           landed = await confirmSignature(rpc, rec.signature, { attempts: 30, searchHistory: true });
         } catch (e) {
-          if (!liveRef.current) return;
-          writePending({ mintAddress: rec.mintAddress, signature: rec.signature, name: rec.name, symbol: rec.symbol, stage: "failed" });
-          setOutcomeMsg((e && e.message) || t("The transaction failed on-chain."));
-          setPhase("failed");
+          writePending({ ...baseRec, signature: rec.signature, stage: "failed" });
+          if (liveRef.current) { setOutcomeMsg((e && e.message) || t("The transaction failed on-chain.")); setPhase("failed"); }
+          clearPending(); // item 3: shown once, whether reached directly or via this re-poll
           return;
         }
-        if (!liveRef.current) return;
         if (!landed) {
-          writePending({ mintAddress: rec.mintAddress, signature: rec.signature, name: rec.name, symbol: rec.symbol, stage: "unconfirmed" });
-          setOutcomeMsg(t("Timed out waiting for the network to confirm it."));
-          setPhase("ambiguous");
+          writePending({ ...baseRec, signature: rec.signature, stage: "unconfirmed" });
+          if (liveRef.current) { setOutcomeMsg(t("Timed out waiting for the network to confirm it.")); setPhase("ambiguous"); }
           return;
         }
-        writePending({ mintAddress: rec.mintAddress, signature: rec.signature, name: rec.name, symbol: rec.symbol, stage: "confirmed" });
-        setPhase("done");
+        // item 4: the recovery path used to never announce a landed mint at all.
+        markConfirmedAndAnnounce(baseRec, rec.signature);
+        if (liveRef.current) setPhase("done");
+        clearPending(); // item 3
       })();
       return;
     }
-    if (rec.stage === "signed" && !rec.signature) {
-      // The wallet signed and we were about to call /submit when this pane last unmounted. We
-      // genuinely do not know whether that request ever reached the server — never guess, never
-      // resubmit, never rebuild. See the "orphaned" render block below.
+    if (rec.stage === "signed") {
+      // Either the wallet signed and we never learned whether /submit was reached, or (item 7)
+      // readPending() folded a signature-less submitted/unconfirmed record onto this same path —
+      // neither can be resolved by polling a signature we don't have. item 6: the mint keypair is
+      // server-held and spent in exactly one transaction, so a mint ACCOUNT existing at this
+      // address is proof the mint landed, even without the signature to confirm it by.
       setResult({ mintAddress: rec.mintAddress, name: rec.name, symbol: rec.symbol });
-      setPhase("orphaned");
+      setPhase("signing"); // a brief network check, not a guess
+      (async () => {
+        let rpc;
+        try { rpc = rpcFn(); } catch (_) { if (liveRef.current) setPhase("orphaned"); return; }
+        let info;
+        try {
+          info = await rpc("getAccountInfo", [rec.mintAddress, { encoding: "base64" }]);
+        } catch (_) {
+          // Could not check — the plain notice, same as before this check existed.
+          if (liveRef.current) setPhase("orphaned");
+          return;
+        }
+        if (info && info.value) {
+          // The account exists. It could only have been created by the one mint transaction this
+          // record is for — that IS proof it landed, signature or not.
+          writePending({ ...baseRec, signature: null, stage: "confirmed", announced: false });
+          if (liveRef.current) setPhase("done");
+          clearPending(); // item 3
+          return;
+        }
+        // Confirmed absent right now — not proof it will NEVER land, so keep the record and the
+        // orphan notice, just say what we found rather than leaving it generic.
+        if (liveRef.current) { setOutcomeMsg(t("The chain shows no such mint yet.")); setPhase("orphaned"); }
+      })();
       return;
     }
-    // Any other shape (e.g. "submitted" recorded with no signature, which should never happen) is
-    // not trustworthy enough to act on — leave the ordinary form rather than guess.
-  }, []);
+  }, [wallet.connected, wallet.address]);
 
   function validateForm() {
     if (!name.trim() || name.trim().length > 32) return t("Enter a token name, up to 32 characters.");
@@ -582,6 +682,15 @@ export default function HatcheryPane({ wallet }) {
     try { confirmAbortRef.current && confirmAbortRef.current.abort(); } catch (_) {}
     const ctrl = new AbortController();
     confirmAbortRef.current = ctrl;
+    // ⚠️ item 1 (adversarial review on #398): PERSISTENCE IS NOT setState. Every writePending() /
+    // markConfirmedAndAnnounce() call below runs UNCONDITIONALLY, with no liveRef check anywhere
+    // near it — a signature that exists is real whether or not this component is still mounted to
+    // hear about it, and the whole point of this file's persistence layer is that navigating away
+    // must never be how a landed mint's own signature gets thrown away. `setIfLive` gates ONLY the
+    // React state updates that follow each persist; it is never a substitute for one.
+    const setIfLive = (fn) => { if (liveRef.current) fn(); };
+    const owner = wallet.address;
+    const baseRec = { mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim(), owner };
     try {
       // Same class of guard as reclaim-sign.js's P2-J finding, and it matters even more here:
       // every authority and the fee payer in this transaction is the creator address /build was
@@ -606,19 +715,15 @@ export default function HatcheryPane({ wallet }) {
         signedTx = await wallet.provider.signTransaction(tx);
       } catch (e) {
         if (isUserRejection(e)) {
-          if (!liveRef.current) return;
-          setPhase("form");
-          setFormError(t("You declined to sign — nothing was created."));
+          setIfLive(() => { setPhase("form"); setFormError(t("You declined to sign — nothing was created.")); });
           return;
         }
         throw e;
       }
-      if (!liveRef.current) return;
-      // Persist the moment the wallet hands back a signed tx — BEFORE /submit is even called.
-      // From here on, a remount can never show an empty form for a mint that may already be
-      // broadcasting; see the recovery effect above and the file header's whole reason this
-      // section exists.
-      writePending({ mintAddress: plan.mintAddress, signature: null, name: name.trim(), symbol: symbol.trim(), stage: "signed" });
+      // Persist the moment the wallet hands back a signed tx — BEFORE /submit is even called, and
+      // before any liveRef check. From here on, a remount can never show an empty form for a mint
+      // that may already be broadcasting; see the recovery effect above and the file header.
+      writePending({ ...baseRec, signature: null, stage: "signed" });
       const signedTxBase64 = bytesToBase64(signedTx.serialize({ requireAllSignatures: false, verifySignatures: false }));
       const subRes = await toolFetch("/api/hatchery/submit", {
         method: "POST",
@@ -626,37 +731,49 @@ export default function HatcheryPane({ wallet }) {
         body: JSON.stringify({ mintAddress: plan.mintAddress, signedTxBase64 }),
         // No abort signal here (verifier on #396, P2-6): the server broadcasts and charges as soon as
         // the request reaches it, so a client-side abort mid-flight could only hide a mint that
-        // landed. The liveRef check after the await is the guard; the request itself must finish.
-        
+        // landed. `setIfLive` below is the guard on what the UI shows; the request itself must finish.
+
       });
-      if (!liveRef.current) return;
+      if (subRes.kind === "aborted") return; // never actually reached — see the note above
       if (!subRes.ok) {
-        if (subRes.kind === "aborted") return;
-        if (subRes.kind === "offline") { setErrKind("offline"); setPhase("unavailable"); return; }
-        if (subRes.kind === "refused") {
-          // 400 (tampered/invalid) or 410 (expired) — both are "build it again" per hatchery.js,
-          // and hatchery.js's own header is explicit that NOTHING landed in either case: safe to
-          // clear the persisted record rather than leave a "signed" ghost behind it.
+        if (subRes.kind === "offline") { setIfLive(() => { setErrKind("offline"); setPhase("unavailable"); }); return; }
+        if (subRes.kind === "refused" && subRes.status === 400) {
+          // A plain 400 — hatchery.js's own contract: a form-level refusal (tampered/invalid/
+          // missing signature). NOTHING was submitted, so this is the one case actually safe to
+          // clear and offer a clean retry from.
           clearPending();
-          setPhase("form");
-          setBuildError((subRes.body && subRes.body.error) || t("That mint request could not be submitted — build it again."));
+          setIfLive(() => { setPhase("form"); setBuildError((subRes.body && subRes.body.error) || t("That mint request could not be submitted — build it again.")); });
           return;
         }
-        // A 500 here can land AFTER hatchery.js already deleted the pending mint entry (see the
-        // file header) — the transaction may or may not have reached the network. Never treat
-        // this as "failed, retry" and never resubmit; only a Solscan check tells the truth. The
-        // persisted record is already "signed" with no signature (written above) — exactly the
-        // shape the recovery effect treats as "unknown, check Solscan", so nothing more to write.
-        setResult({ mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
-        setOutcomeMsg((subRes.body && subRes.body.error) || t("Could not confirm whether this was submitted."));
-        setPhase("ambiguous");
+        // Either a 410 (item 2: NOT proof nothing landed — see the /submit contract note above,
+        // it fires for a duplicate delivery of an already-broadcast request too) or a 500 (can
+        // land AFTER hatchery.js already deleted the pending mint entry — see the file header).
+        // Neither is "failed, retry"; only a Solscan check tells the truth. The persisted record
+        // is already "signed" with no signature (written above) — exactly the shape the recovery
+        // effect treats as "unknown, check Solscan", so nothing more to write here.
+        setIfLive(() => {
+          setResult({ mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
+          setOutcomeMsg((subRes.body && subRes.body.error) || t("Could not confirm whether this was submitted."));
+          setPhase("ambiguous");
+        });
         return;
       }
       const signature = subRes.data.signature;
-      // The signature is known now — worth persisting on its own, before the confirmation poll
-      // even starts, so a remount mid-poll re-runs confirmSignature on the SAME signature rather
-      // than being stuck with the earlier "signed, no signature" record.
-      if (signature) writePending({ mintAddress: plan.mintAddress, signature, name: name.trim(), symbol: symbol.trim(), stage: "submitted" });
+      if (!signature) {
+        // item 7: a 200 with no signature must not be treated as more resolved than a plain
+        // "signed" record — leave it exactly there rather than writing a submitted/unconfirmed
+        // stage with nothing to poll (writePending() enforces this too, belt-and-suspenders).
+        setIfLive(() => {
+          setResult({ mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
+          setOutcomeMsg(t("Could not confirm whether this was submitted."));
+          setPhase("ambiguous");
+        });
+        return;
+      }
+      // The signature is known now — persisted before the confirmation poll even starts, and
+      // before any liveRef check, so a remount mid-poll re-runs confirmSignature on the SAME
+      // signature rather than being stuck with the earlier "signed, no signature" record.
+      writePending({ ...baseRec, signature, stage: "submitted" });
       const CU = typeof window !== "undefined" ? window.CluckUtil : null;
       if (!CU || typeof CU.rpc !== "function") throw new Error(t("RPC layer did not load."));
       const rpc = (method, params) => CU.rpc(method, params);
@@ -664,38 +781,32 @@ export default function HatcheryPane({ wallet }) {
       try {
         landed = await confirmSignature(rpc, signature);
       } catch (e) {
-        if (!liveRef.current) return;
         // Landed AND failed on-chain. All-or-nothing: nothing was created, nothing was charged.
-        writePending({ mintAddress: plan.mintAddress, signature, name: name.trim(), symbol: symbol.trim(), stage: "failed" });
-        setResult({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
-        setOutcomeMsg((e && e.message) || t("The transaction failed on-chain."));
-        setPhase("failed");
+        writePending({ ...baseRec, signature, stage: "failed" });
+        setIfLive(() => {
+          setResult({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
+          setOutcomeMsg((e && e.message) || t("The transaction failed on-chain."));
+          setPhase("failed");
+        });
         return;
       }
-      if (!liveRef.current) return;
       if (!landed) {
-        writePending({ mintAddress: plan.mintAddress, signature, name: name.trim(), symbol: symbol.trim(), stage: "unconfirmed" });
-        setResult({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
-        setOutcomeMsg(t("Timed out waiting for the network to confirm it."));
-        setPhase("ambiguous");
+        writePending({ ...baseRec, signature, stage: "unconfirmed" });
+        setIfLive(() => {
+          setResult({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
+          setOutcomeMsg(t("Timed out waiting for the network to confirm it."));
+          setPhase("ambiguous");
+        });
         return;
       }
-      writePending({ mintAddress: plan.mintAddress, signature, name: name.trim(), symbol: symbol.trim(), stage: "confirmed" });
-      setResult({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
-      setPhase("done");
-      // Best-effort announce — never affects what the user sees, and the server re-verifies
-      // everything on-chain before it ever posts anything (hatchery.js's /minted header).
-      toolFetch("/api/hatchery/minted", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() }),
-        // Never abortable (verifier on #396, P1-1): this is the once-only server-side record and
-        // announce of a REAL mint, fire-and-forget by design — navigating away must not cancel it.
-        
-      }).catch(() => {});
+      // item 4/1: persist + announce unconditionally, then update the UI only if still mounted.
+      markConfirmedAndAnnounce(baseRec, signature);
+      setIfLive(() => {
+        setResult({ signature, mintAddress: plan.mintAddress, name: name.trim(), symbol: symbol.trim() });
+        setPhase("done");
+      });
     } catch (e) {
-      if (!liveRef.current) return;
-      setOutcomeMsg((e && e.message) || String(e));
-      setPhase("ambiguous");
+      setIfLive(() => { setOutcomeMsg((e && e.message) || String(e)); setPhase("ambiguous"); });
     }
   }
 
@@ -713,9 +824,15 @@ export default function HatcheryPane({ wallet }) {
   }
 
   // The "failed" screen's own retry: the on-chain failure is terminal and all-or-nothing (nothing
-  // was created, nothing was charged), so its persisted record is done. Clear it before building
-  // a fresh mint so a remount mid-way through the NEW attempt can't show the OLD failure instead.
+  // was created, nothing was charged). ⚠️ item 5 (adversarial review on #398): calling review()
+  // unconditionally was DEAD on a RECOVERED failed screen — the form fields (name/symbol/logo) are
+  // still at their empty defaults on a fresh mount, so validateForm() fails, formError is set, and
+  // nothing visible happens because formError only renders under phase "form", which this never
+  // reaches. If there is nothing usable to rebuild from, go to the empty form instead (startOver()
+  // already clears the record); only rebuild in place when the session's own form still has valid
+  // values to retry with (the LIVE on-chain-failure case, where the person is still on this form).
   function retryAfterFailure() {
+    if (validateForm()) { startOver(); return; }
     clearPending();
     review();
   }
@@ -852,14 +969,18 @@ export default function HatcheryPane({ wallet }) {
 
       {/* A record left over from before this pane last unmounted: the wallet had signed, but we
           never learned whether /submit was even reached. See the mount recovery effect above and
-          the file header for why this exists — never a network call from here, never a rebuild,
-          never a resubmit. Only two new sentences (the rest reuses the "ambiguous" screen's own
-          wording, so the guidance is identical either way this pane learns it can't be sure). */}
+          the file header for why this exists — never a rebuild, never a resubmit; the one network
+          call this makes is a read-only getAccountInfo check on the mint address (item 6), which
+          resolves straight to the DONE screen below when it proves the mint landed. `outcomeMsg`
+          carries what that check found — the chain shows no such mint (yet), or nothing extra when
+          the check itself couldn't be made — over the same "ambiguous" wording used elsewhere, so
+          the guidance is identical either way this pane learns it can't be sure. */}
       {phase === "orphaned" && result ? (
         <div className="seeker-hatch-ambiguous" role="alert">
           <p className="seeker-hatch-outcome-title">{t("Couldn't confirm what happened")}</p>
           <p>{t("A mint you approved was still being sent when you left this screen.")}</p>
           <p>{t("We lost track of whether this went through. Check the mint below on Solscan before doing anything else — starting a new mint now could create and pay for a second token.")}</p>
+          {outcomeMsg ? <p className="seeker-tool-note">{outcomeMsg}</p> : null}
           {mintHref(result.mintAddress) ? <a className="seeker-listing-link" href={mintHref(result.mintAddress)} target="_blank" rel="noopener noreferrer">{t("Check the mint on Solscan →")}</a> : null}
           <button type="button" className="seeker-btn seeker-btn-quiet" onClick={startOver}>{t("Start a new mint")}</button>
         </div>

@@ -2105,14 +2105,27 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
   // Filed on PR #396's adversarial review: this pane's build → sign → submit → confirmSignature
   // → minted chain lived only in React state, so tapping the bottom nav between "wallet signed"
   // and "confirmed" returned to an EMPTY FORM — a paid, broadcast mint indistinguishable from one
-  // that never happened. src/seeker/tools/Hatchery.jsx now persists ONE localStorage record
+  // that never happened. src/seeker/tools/Hatchery.jsx persists ONE localStorage record
   // (`clkn_seeker_hatchery_pending`) at every step and reads it back on mount.
   //
-  // S1-S3 seed that record directly (the remount case) and assert the pane resolves it WITHOUT
-  // ever calling /build or /submit — a mount must only ever CHECK an existing signature, never
-  // rebuild or resubmit. S4 drives the real build → sign → submit → confirm chain and reads the
-  // record back after each step, gating the mocked /submit and RPC responses so each stage can be
-  // observed before the next one starts.
+  // A SECOND adversarial review (PR #398) found eight more things, all pinned below:
+  //   1. persistence must never be gated behind liveRef — a signature that lands after the
+  //      component unmounts still has to be written and announced (S9).
+  //   2. a 410 from /submit is NOT proof nothing landed — never auto-cleared (S10).
+  //   3. terminal records (confirmed/failed) render once, then clear; a stale (>24h)
+  //      submitted/unconfirmed record stops polling and shows the ambiguous screen directly
+  //      (S1/S2/S7).
+  //   4. the recovery path must announce a landed mint too, exactly once (S1).
+  //   5. "Try again" on a RECOVERED failed screen (empty form fields) must land on the empty
+  //      form, not stay stuck on a dead button (S11).
+  //   6. a "signed" record with no signature is resolved (not just displayed) via a read-only
+  //      getAccountInfo(mintAddress) check — an existing account is proof the mint landed even
+  //      without the signature (S3/S4/S5).
+  //   7. readPending() folds a signature-less submitted/unconfirmed record onto the same
+  //      resolvable path as "signed", rather than silently doing nothing (implicit in how S3-S5
+  //      are seeded as "signed" — the shape a corrupted submitted/unconfirmed record now takes).
+  //   8. every record carries an `owner`; a record for a different wallet is left completely
+  //      alone — never resolved, never cleared (S6).
   {
     const PENDING_KEY = "clkn_seeker_hatchery_pending";
     const SIG_OK = "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCFFzVkbqDHHcgkTMZLFBgrPtrTKJqXNJ2kFfPjRnLXGRCGXBLjF";
@@ -2173,18 +2186,31 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       await page.waitForTimeout(300);
       return connected;
     }
+    // A getAccountInfo route for item 6's checks. `shape` is "hit" (an initialized account
+    // exists), "miss" (null value — nothing there yet), or "error" (the RPC call itself fails).
+    function accountInfoRoute(shape, counters) {
+      return async (r) => {
+        const body = JSON.parse(r.request().postData() || "{}");
+        if (body.method !== "getAccountInfo") return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result: null }) });
+        if (counters) counters.getAccountInfo = (counters.getAccountInfo || 0) + 1;
+        if (shape === "error") return r.fulfill({ status: 500, contentType: "text/html", body: "<html>bad gateway</html>" });
+        const value = shape === "hit" ? { data: ["", "base64"], executable: false, lamports: 1461600, owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", rentEpoch: 0 } : null;
+        r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result: { context: { slot: 1 }, value } }) });
+      };
+    }
 
-    // -- 1. submitted + confirmed on re-check -> the DONE screen, never rebuilt/resubmitted ----
+    // -- 1. submitted + confirmed on re-check -> DONE once, cleared, /minted fired once ------
     {
       const MINT = web3.Keypair.generate().publicKey.toBase58();
-      let buildCalls = 0, submitCalls = 0;
-      const rec = { mintAddress: MINT, signature: SIG_OK, name: "Cluck Coin", symbol: "CLUCK", stage: "submitted", at: Date.now() };
+      let buildCalls = 0, submitCalls = 0, mintedCalls = 0;
+      const rec = { mintAddress: MINT, signature: SIG_OK, name: "Cluck Coin", symbol: "CLUCK", owner: ADDR, stage: "submitted", at: Date.now() };
       const { ctx, page, errors } = await open(
         (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
         async (pg) => {
           await pg.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CONFIG_OK) }));
           await pg.route("**/api/hatchery/build*", (r) => { buildCalls++; r.fulfill({ status: 503, contentType: "application/json", body: "{}" }); });
           await pg.route("**/api/hatchery/submit*", (r) => { submitCalls++; r.fulfill({ status: 503, contentType: "application/json", body: "{}" }); });
+          await pg.route("**/api/hatchery/minted*", (r) => { mintedCalls++; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) }); });
           await pg.route("**/api/helius-rpc", async (r) => {
             const body = JSON.parse(r.request().postData() || "{}");
             let result = null;
@@ -2201,16 +2227,20 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       ok("S1 · with that mint address", await mintHrefOk(page, MINT));
       ok("S1 · and that signature", await txHrefOk(page, SIG_OK));
       ok("S1 · ⚠️ NEVER called /api/hatchery/build or /submit to get there", buildCalls === 0 && submitCalls === 0, `build=${buildCalls} submit=${submitCalls}`);
+      // item 4: the recovery path used to never fire /minted at all.
+      await page.waitForTimeout(300);
+      ok("S1 · ⚠️ /api/hatchery/minted was fired exactly once from the recovery path", mintedCalls === 1, `mintedCalls=${mintedCalls}`);
+      // item 3: shown once, then the record is gone — a later remount is the ordinary form.
       const finalRec = await readPendingRec(page);
-      ok("S1 · the record itself is updated to confirmed", finalRec && finalRec.stage === "confirmed", JSON.stringify(finalRec));
+      ok("S1 · ⚠️ the record is CLEARED after being shown once, not left behind", finalRec === null, JSON.stringify(finalRec));
       ok("S1 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
       await ctx.close();
     }
 
-    // -- 2. submitted + failed on re-check -> the FAILED screen, never "done" -----------------
+    // -- 2. submitted + failed on re-check -> FAILED once, cleared, never "done" -------------
     {
       const MINT = web3.Keypair.generate().publicKey.toBase58();
-      const rec = { mintAddress: MINT, signature: SIG_OK, name: "Cluck Coin", symbol: "CLUCK", stage: "submitted", at: Date.now() };
+      const rec = { mintAddress: MINT, signature: SIG_OK, name: "Cluck Coin", symbol: "CLUCK", owner: ADDR, stage: "submitted", at: Date.now() };
       const { ctx, page, errors } = await open(
         (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
         async (pg) => {
@@ -2232,56 +2262,183 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       ok("S2 · a submitted+failed record renders the FAILED screen on mount", /Nothing was created/i.test(body2), body2.slice(0, 400));
       ok("S2 · and NEVER claims the mint succeeded", !/Token created/i.test(body2), body2.slice(0, 400));
       const finalRec = await readPendingRec(page);
-      ok("S2 · the record itself is updated to failed", finalRec && finalRec.stage === "failed", JSON.stringify(finalRec));
+      ok("S2 · ⚠️ the record is CLEARED after being shown once (item 3)", finalRec === null, JSON.stringify(finalRec));
       ok("S2 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
       await ctx.close();
     }
 
-    // -- 3. signed, no signature yet -> the orphaned notice, ZERO network calls --------------
+    // -- 3. signed (no signature) + getAccountInfo HIT -> resolves to DONE (item 6) ----------
     {
       const MINT = web3.Keypair.generate().publicKey.toBase58();
-      let buildCalls = 0, submitCalls = 0, rpcCalls = 0;
-      const rec = { mintAddress: MINT, signature: null, name: "Cluck Coin", symbol: "CLUCK", stage: "signed", at: Date.now() };
+      let buildCalls = 0, submitCalls = 0;
+      const counters = {};
+      const rec = { mintAddress: MINT, signature: null, name: "Cluck Coin", symbol: "CLUCK", owner: ADDR, stage: "signed", at: Date.now() };
       const { ctx, page, errors } = await open(
         (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
         async (pg) => {
           await pg.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CONFIG_OK) }));
           await pg.route("**/api/hatchery/build*", (r) => { buildCalls++; r.fulfill({ status: 503, contentType: "application/json", body: "{}" }); });
           await pg.route("**/api/hatchery/submit*", (r) => { submitCalls++; r.fulfill({ status: 503, contentType: "application/json", body: "{}" }); });
-          await pg.route("**/api/helius-rpc", (r) => { rpcCalls++; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result: null }) }); });
+          await pg.route("**/api/helius-rpc", accountInfoRoute("hit", counters));
         },
         FAKE + seedPendingScript(rec)
       );
       await connectAndGo(page);
-      await page.waitForTimeout(500);
+      await page.waitForFunction(() => /Token created/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
       const body3 = await text(page);
-      ok("S3 · ⚠️ a signed/no-signature record renders the notice — never the empty form",
-         /still being sent when you left this screen/i.test(body3), body3.slice(0, 400));
-      ok("S3 · which reuses the ambiguous screen's own instruction to check before minting again",
-         /Check the mint below on Solscan/i.test(body3), body3.slice(0, 400));
-      ok("S3 · with a link to the right mint", await mintHrefOk(page, MINT));
-      ok("S3 · and the ordinary form is NOT shown underneath it", await page.evaluate(() => !document.querySelector("#hatch-name")));
-      ok("S3 · ⚠️ ZERO network calls — never rebuild, never resubmit, never check a signature that doesn't exist",
-         buildCalls === 0 && submitCalls === 0 && rpcCalls === 0, `build=${buildCalls} submit=${submitCalls} rpc=${rpcCalls}`);
+      ok("S3 · ⚠️ a signed/no-signature record resolves to DONE when the mint account exists on-chain (item 6)",
+         /Token created/i.test(body3), body3.slice(0, 400));
+      ok("S3 · with that mint address", await mintHrefOk(page, MINT));
+      ok("S3 · but no transaction link — the signature was never known", !(await txHrefOk(page, SIG_OK)));
+      ok("S3 · exactly one getAccountInfo check, no build/submit", counters.getAccountInfo === 1 && buildCalls === 0 && submitCalls === 0,
+         `getAccountInfo=${counters.getAccountInfo} build=${buildCalls} submit=${submitCalls}`);
+      const finalRec = await readPendingRec(page);
+      ok("S3 · the record is cleared after being shown once", finalRec === null, JSON.stringify(finalRec));
+      ok("S3 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
 
-      // "Start a new mint" clears the record and returns to the ordinary form.
+    // -- 4. signed (no signature) + getAccountInfo MISS -> the orphan notice, record kept ----
+    {
+      const MINT = web3.Keypair.generate().publicKey.toBase58();
+      let buildCalls = 0, submitCalls = 0;
+      const counters = {};
+      const rec = { mintAddress: MINT, signature: null, name: "Cluck Coin", symbol: "CLUCK", owner: ADDR, stage: "signed", at: Date.now() };
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CONFIG_OK) }));
+          await pg.route("**/api/hatchery/build*", (r) => { buildCalls++; r.fulfill({ status: 503, contentType: "application/json", body: "{}" }); });
+          await pg.route("**/api/hatchery/submit*", (r) => { submitCalls++; r.fulfill({ status: 503, contentType: "application/json", body: "{}" }); });
+          await pg.route("**/api/helius-rpc", accountInfoRoute("miss", counters));
+        },
+        FAKE + seedPendingScript(rec)
+      );
+      await connectAndGo(page);
+      await page.waitForFunction(() => /still being sent when you left this screen/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      const body4 = await text(page);
+      ok("S4 · ⚠️ a signed/no-signature record with NO on-chain account yet renders the orphan notice",
+         /still being sent when you left this screen/i.test(body4), body4.slice(0, 400));
+      ok("S4 · ⚠️ and says plainly what the check found (item 6)", /chain shows no such mint yet/i.test(body4), body4.slice(0, 400));
+      ok("S4 · with a link to the right mint", await mintHrefOk(page, MINT));
+      ok("S4 · and the ordinary form is NOT shown underneath it", await page.evaluate(() => !document.querySelector("#hatch-name")));
+      ok("S4 · exactly one getAccountInfo check, no build/submit", counters.getAccountInfo === 1 && buildCalls === 0 && submitCalls === 0,
+         `getAccountInfo=${counters.getAccountInfo} build=${buildCalls} submit=${submitCalls}`);
+      const midRec = await readPendingRec(page);
+      ok("S4 · the record is KEPT (not proof it will never land)", midRec && midRec.stage === "signed" && midRec.mintAddress === MINT, JSON.stringify(midRec));
+
+      // "Start a new mint" still clears it and returns to the ordinary form.
       await page.evaluate(() => {
         const b = Array.from(document.querySelectorAll("button")).find((x) => /start a new mint/i.test(x.innerText.trim()));
         b && b.click();
       });
       await page.waitForTimeout(300);
-      ok("S3 · 'Start a new mint' clears the persisted record", (await readPendingRec(page)) === null);
-      ok("S3 · and returns to the ordinary (now empty) form", await page.evaluate(() => !!document.querySelector("#hatch-name")));
-      ok("S3 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      ok("S4 · 'Start a new mint' clears the persisted record", (await readPendingRec(page)) === null);
+      ok("S4 · and returns to the ordinary (now empty) form", await page.evaluate(() => !!document.querySelector("#hatch-name")));
+      ok("S4 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
       await ctx.close();
     }
 
-    // -- 4. the LIVE path — the record is written at each stage, ending confirmed ------------
+    // -- 5. signed (no signature) + getAccountInfo READ FAILS -> the plain notice, record kept
+    {
+      const MINT = web3.Keypair.generate().publicKey.toBase58();
+      const counters = {};
+      const rec = { mintAddress: MINT, signature: null, name: "Cluck Coin", symbol: "CLUCK", owner: ADDR, stage: "signed", at: Date.now() };
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CONFIG_OK) }));
+          await pg.route("**/api/hatchery/build*", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+          await pg.route("**/api/hatchery/submit*", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+          await pg.route("**/api/helius-rpc", accountInfoRoute("error", counters));
+        },
+        FAKE + seedPendingScript(rec)
+      );
+      await connectAndGo(page);
+      await page.waitForFunction(() => /still being sent when you left this screen/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      const body5 = await text(page);
+      ok("S5 · a signed/no-signature record whose getAccountInfo check itself fails renders the plain notice",
+         /still being sent when you left this screen/i.test(body5), body5.slice(0, 400));
+      ok("S5 · ⚠️ with NO extra claim about what the chain shows — the check never answered",
+         !/chain shows no such mint/i.test(body5), body5.slice(0, 400));
+      const midRec = await readPendingRec(page);
+      ok("S5 · the record is KEPT, not cleared, on a read failure", midRec && midRec.stage === "signed", JSON.stringify(midRec));
+      ok("S5 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+
+    // -- 6. a record for a DIFFERENT wallet is left completely alone (item 8) ----------------
+    {
+      const MINT = web3.Keypair.generate().publicKey.toBase58();
+      const OTHER = web3.Keypair.generate().publicKey.toBase58();
+      const rec = { mintAddress: MINT, signature: SIG_OK, name: "Cluck Coin", symbol: "CLUCK", owner: OTHER, stage: "submitted", at: Date.now() };
+      let rpcCalls = 0;
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CONFIG_OK) }));
+          await pg.route("**/api/helius-rpc", (r) => { rpcCalls++; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result: null }) }); });
+        },
+        FAKE + seedPendingScript(rec)
+      );
+      await connectAndGo(page); // connects as ADDR — NOT the record's owner (OTHER)
+      await page.waitForTimeout(600);
+      ok("S6 · ⚠️ a record owned by a different wallet renders the ordinary FORM, not the notice",
+         await page.evaluate(() => !!document.querySelector("#hatch-name")), (await text(page)).slice(0, 300));
+      ok("S6 · and makes no RPC call trying to resolve someone else's mint", rpcCalls === 0, `rpcCalls=${rpcCalls}`);
+      const stillThere = await readPendingRec(page);
+      ok("S6 · ⚠️ the record itself is left completely untouched — not cleared, not resolved",
+         stillThere && stillThere.owner === OTHER && stillThere.stage === "submitted" && stillThere.mintAddress === MINT, JSON.stringify(stillThere));
+      ok("S6 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+
+    // -- 7. a STALE submitted record (>24h old) stops polling (item 3) ----------------------
+    {
+      const MINT = web3.Keypair.generate().publicKey.toBase58();
+      const rec = { mintAddress: MINT, signature: SIG_OK, name: "Cluck Coin", symbol: "CLUCK", owner: ADDR, stage: "submitted", at: Date.now() - 25 * 60 * 60 * 1000 };
+      let sigStatusCalls = 0;
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CONFIG_OK) }));
+          await pg.route("**/api/helius-rpc", async (r) => {
+            const body = JSON.parse(r.request().postData() || "{}");
+            if (body.method === "getSignatureStatuses") sigStatusCalls++;
+            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result: null }) });
+          });
+        },
+        FAKE + seedPendingScript(rec)
+      );
+      await connectAndGo(page);
+      await page.waitForFunction(() => /Couldn.t confirm what happened/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      const body7 = await text(page);
+      ok("S7 · ⚠️ a stale (>24h) submitted record renders the ambiguous screen straight away",
+         /Couldn.t confirm what happened/i.test(body7) && /Check the mint below on Solscan/i.test(body7), body7.slice(0, 400));
+      ok("S7 · with the signature link still offered", await txHrefOk(page, SIG_OK));
+      ok("S7 · ⚠️ WITHOUT ever polling getSignatureStatuses for it", sigStatusCalls === 0, `sigStatusCalls=${sigStatusCalls}`);
+      const finalRec = await readPendingRec(page);
+      ok("S7 · the record is kept (updated to unconfirmed), not cleared", finalRec && finalRec.stage === "unconfirmed" && finalRec.signature === SIG_OK, JSON.stringify(finalRec));
+      ok("S7 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+
+    // -- 8. the LIVE path, mounted throughout — signed -> submitted -> confirmed ------------
     //
     // Both /submit and the confirming RPC call are gated (held open until this test explicitly
     // releases them) so each persisted stage can be observed before the next one is written —
     // otherwise a mocked round trip resolves in the same tick and "signed" would never be
     // visible even though the code briefly held it.
+    async function driveToConfirmSheet(page, logoPath) {
+      await page.fill("#hatch-name", "Cluck Coin");
+      await page.fill("#hatch-symbol", "CLUCK");
+      await page.setInputFiles("#hatch-logo", logoPath);
+      await page.waitForTimeout(1500); // prepareLogo's canvas decode/re-encode
+      await page.click(".seeker-listing-runbtn"); // "Review mint"
+      await page.waitForFunction(() => !!document.querySelector(".seeker-burn-actionbtn"), null, { timeout: 20000 });
+      await page.click(".seeker-burn-actionbtn"); // "Mint" -> opens the Confirm sheet
+      await page.waitForFunction(() => /Confirm mint/i.test(document.body.innerText), null, { timeout: 15000 });
+    }
     {
       const MINT = web3.Keypair.generate().publicKey.toBase58();
       const unsigned = new web3.Transaction({ feePayer: new web3.PublicKey(ADDR), recentBlockhash: web3.Keypair.generate().publicKey.toBase58() })
@@ -2298,7 +2455,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       let releaseSubmit, releaseRpc;
       const submitGate = new Promise((res) => { releaseSubmit = res; });
       const rpcGate = new Promise((res) => { releaseRpc = res; });
-      let buildCalls = 0, submitCalls = 0;
+      let buildCalls = 0, submitCalls = 0, mintedCalls = 0;
 
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "hatch-persist-"));
       const logoPath = path.join(tmp, "logo.png");
@@ -2314,7 +2471,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
             await submitGate;
             r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ signature: SIG_OK }) });
           });
-          await pg.route("**/api/hatchery/minted*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) }));
+          await pg.route("**/api/hatchery/minted*", (r) => { mintedCalls++; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) }); });
           await pg.route("**/api/helius-rpc", async (r) => {
             const body = JSON.parse(r.request().postData() || "{}");
             if (body.method !== "getSignatureStatuses") return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result: null }) });
@@ -2325,59 +2482,223 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       );
       const connected = await connectAndGo(page);
       if (!connected) {
-        ok("S4 · the fake wallet connects", false,
+        ok("S8 · the fake wallet connects", false,
            JSON.stringify(await page.evaluate(() => ({ wallets: (window.CluckWallet && window.CluckWallet.available() || []).map((w) => w.name), btn: (document.querySelector(".seeker-walletbtn") || {}).innerText }))));
       }
-      ok("S4 · nothing persisted before any mint has been attempted", (await readPendingRec(page)) === null);
+      ok("S8 · nothing persisted before any mint has been attempted", (await readPendingRec(page)) === null);
 
       const onForm = await page.waitForFunction(() => !!document.querySelector("#hatch-name"), null, { timeout: 30000 }).then(() => true).catch(() => false);
-      ok("S4 · the mint form renders", onForm, (await text(page)).slice(0, 300));
-      if (!onForm) { ok("S4 · aborting the rest of this run — no form to drive", false); await ctx.close(); try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {} }
+      ok("S8 · the mint form renders", onForm, (await text(page)).slice(0, 300));
+      if (!onForm) { ok("S8 · aborting the rest of this run — no form to drive", false); await ctx.close(); try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {} }
       else {
-      await page.fill("#hatch-name", "Cluck Coin");
-      await page.fill("#hatch-symbol", "CLUCK");
-      await page.setInputFiles("#hatch-logo", logoPath);
-      await page.waitForTimeout(1500); // prepareLogo's canvas decode/re-encode
-      await page.click(".seeker-listing-runbtn"); // "Review mint"
-      await page.waitForFunction(() => !!document.querySelector(".seeker-burn-actionbtn"), null, { timeout: 20000 });
-      ok("S4 · nothing persisted yet at the reviewed step either (not signed yet)", (await readPendingRec(page)) === null);
-
-      await page.click(".seeker-burn-actionbtn"); // "Mint" -> opens the Confirm sheet
-      await page.waitForFunction(() => /Confirm mint/i.test(document.body.innerText), null, { timeout: 15000 });
+      await driveToConfirmSheet(page, logoPath);
+      ok("S8 · nothing persisted yet at the reviewed step either (not signed yet)", (await readPendingRec(page)) === null);
       await page.click(".seeker-confirm .seeker-btn:not(.seeker-btn-quiet)"); // "Create and sign"
 
       const gotSigned = await waitForStage(page, "signed", 15000).then(() => true).catch(() => false);
-      ok("S4 · ⚠️ the record is written the MOMENT the wallet signs — before /submit is even called",
+      ok("S8 · ⚠️ the record is written the MOMENT the wallet signs — before /submit is even called",
          gotSigned, JSON.stringify(await readPendingRec(page)));
       if (gotSigned) {
         const signedRec = await readPendingRec(page);
-        ok("S4 · signed stage carries the right mint, no signature yet, and the form values",
-           signedRec && signedRec.mintAddress === MINT && signedRec.signature === null && signedRec.name === "Cluck Coin" && signedRec.symbol === "CLUCK",
+        ok("S8 · signed stage carries the right mint, no signature yet, the owner, and the form values",
+           signedRec && signedRec.mintAddress === MINT && signedRec.signature === null && signedRec.owner === ADDR && signedRec.name === "Cluck Coin" && signedRec.symbol === "CLUCK",
            JSON.stringify(signedRec));
       }
 
       releaseSubmit();
       const gotSubmitted = await waitForStage(page, "submitted", 15000).then(() => true).catch(() => false);
-      ok("S4 · the record moves to submitted once /submit answers with a signature", gotSubmitted, JSON.stringify(await readPendingRec(page)));
+      ok("S8 · the record moves to submitted once /submit answers with a signature", gotSubmitted, JSON.stringify(await readPendingRec(page)));
       if (gotSubmitted) {
         const subRec = await readPendingRec(page);
-        ok("S4 · submitted stage carries the real signature", subRec && subRec.signature === SIG_OK, JSON.stringify(subRec));
+        ok("S8 · submitted stage carries the real signature", subRec && subRec.signature === SIG_OK, JSON.stringify(subRec));
       }
 
       releaseRpc();
       await page.waitForFunction(() => /Token created/i.test(document.body.innerText), null, { timeout: 20000 }).catch(() => {});
-      const body4 = await text(page);
-      ok("S4 · the live path still ends on the DONE screen", /Token created/i.test(body4), body4.slice(0, 400));
+      const body8 = await text(page);
+      ok("S8 · the live path still ends on the DONE screen", /Token created/i.test(body8), body8.slice(0, 400));
       const finalRec = await readPendingRec(page);
-      ok("S4 · ⚠️ and the persisted record ends confirmed, for the right mint + signature",
+      ok("S8 · ⚠️ and the persisted record ends confirmed, for the right mint + signature",
          finalRec && finalRec.stage === "confirmed" && finalRec.mintAddress === MINT && finalRec.signature === SIG_OK, JSON.stringify(finalRec));
-      ok("S4 · /build and /submit were each called exactly once — no double-build, no double-submit",
+      ok("S8 · /build and /submit were each called exactly once — no double-build, no double-submit",
          buildCalls === 1 && submitCalls === 1, `build=${buildCalls} submit=${submitCalls}`);
-      ok("S4 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      ok("S8 · and /minted fired exactly once", mintedCalls === 1, `mintedCalls=${mintedCalls}`);
+      ok("S8 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
 
       await ctx.close();
       try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
       }
+    }
+
+    // -- 9. UNMOUNT mid-submit — persistence and /minted must not depend on liveRef (item 1) --
+    //
+    // ⚠️ THE P1 THIS SECTION EXISTS FOR. The pane's liveRef guard used to sit BETWEEN the /submit
+    // await and writing "submitted" — navigating away right after the wallet signed threw the
+    // only copy of the signature away, and a landed mint's own confirmation and /minted announce
+    // never happened. This drives the real flow, navigates OFF the Hatchery route (a real React
+    // unmount, not a browser close) while /submit is still gated open, THEN releases it — proving
+    // the persistence chain runs to completion with nobody there to see it, and a remount finds
+    // the truth waiting.
+    {
+      const MINT = web3.Keypair.generate().publicKey.toBase58();
+      const unsigned = new web3.Transaction({ feePayer: new web3.PublicKey(ADDR), recentBlockhash: web3.Keypair.generate().publicKey.toBase58() })
+        .add(new web3.TransactionInstruction({
+          keys: [{ pubkey: new web3.PublicKey(ADDR), isSigner: true, isWritable: true }],
+          programId: new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
+          data: Buffer.from("clucknorris-hatchery-unmount-test"),
+        }));
+      const BUILD_OK = {
+        txBase64: unsigned.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64"),
+        mintAddress: MINT, metadataUri: "ar://meta", imageUri: "ar://logo", cluster: "mainnet-beta",
+      };
+      let releaseSubmit, releaseRpc;
+      const submitGate = new Promise((res) => { releaseSubmit = res; });
+      const rpcGate = new Promise((res) => { releaseRpc = res; });
+      let buildCalls = 0, submitCalls = 0, mintedCalls = 0;
+
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "hatch-unmount-"));
+      const logoPath = path.join(tmp, "logo.png");
+      fs.writeFileSync(logoPath, await makeLogoPng());
+
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CONFIG_OK) }));
+          await pg.route("**/api/hatchery/build*", (r) => { buildCalls++; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(BUILD_OK) }); });
+          await pg.route("**/api/hatchery/submit*", async (r) => {
+            submitCalls++;
+            await submitGate;
+            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ signature: SIG_OK }) });
+          });
+          await pg.route("**/api/hatchery/minted*", (r) => { mintedCalls++; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) }); });
+          await pg.route("**/api/helius-rpc", async (r) => {
+            const body = JSON.parse(r.request().postData() || "{}");
+            if (body.method !== "getSignatureStatuses") return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result: null }) });
+            await rpcGate;
+            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result: { value: [{ err: null, confirmationStatus: "confirmed" }] } }) });
+          });
+        }
+      );
+      await connectAndGo(page);
+      const onForm = await page.waitForFunction(() => !!document.querySelector("#hatch-name"), null, { timeout: 30000 }).then(() => true).catch(() => false);
+      if (!onForm) {
+        ok("S9 · the mint form renders", false, (await text(page)).slice(0, 300));
+      } else {
+        await driveToConfirmSheet(page, logoPath);
+        await page.click(".seeker-confirm .seeker-btn:not(.seeker-btn-quiet)"); // "Create and sign"
+        const gotSigned = await waitForStage(page, "signed", 15000).then(() => true).catch(() => false);
+        ok("S9 · reaches the signed stage before we navigate away", gotSigned, JSON.stringify(await readPendingRec(page)));
+
+        // The unmount: navigate to a completely different tab WHILE /submit is still held open.
+        await page.evaluate(() => { window.location.hash = "#/school"; });
+        await page.waitForTimeout(300);
+        ok("S9 · the Hatchery pane is genuinely gone", await page.evaluate(() => !document.querySelector("#hatch-name") && !document.querySelector(".seeker-hatch-outcome-title")));
+
+        releaseSubmit();
+        const gotSubmitted = await waitForStage(page, "submitted", 15000).then(() => true).catch(() => false);
+        ok("S9 · ⚠️ the record still reaches 'submitted' — the signature was NOT thrown away by the unmount",
+           gotSubmitted, JSON.stringify(await readPendingRec(page)));
+
+        releaseRpc();
+        const gotConfirmed = await waitForStage(page, "confirmed", 15000).then(() => true).catch(() => false);
+        ok("S9 · ⚠️ and reaches 'confirmed' too, entirely while unmounted", gotConfirmed, JSON.stringify(await readPendingRec(page)));
+        await page.waitForTimeout(300);
+        ok("S9 · ⚠️ and /api/hatchery/minted still fired — announcing a landed mint must not depend on the UI being open",
+           mintedCalls === 1, `mintedCalls=${mintedCalls}`);
+
+        // Remount: the recovered record must render truthfully.
+        await page.evaluate(() => { window.location.hash = "#/tools/hatchery"; });
+        await page.waitForFunction(() => /Token created/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+        const body9 = await text(page);
+        ok("S9 · the remount shows the DONE screen for the mint that landed while we were away",
+           /Token created/i.test(body9), body9.slice(0, 400));
+        ok("S9 · /build and /submit were each called exactly once — the unmount did not trigger a resubmit",
+           buildCalls === 1 && submitCalls === 1, `build=${buildCalls} submit=${submitCalls}`);
+      }
+      ok("S9 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+      try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
+    }
+
+    // -- 10. /submit answers 410 -> NOT proof nothing landed, record kept (item 2) -----------
+    {
+      const MINT = web3.Keypair.generate().publicKey.toBase58();
+      const unsigned = new web3.Transaction({ feePayer: new web3.PublicKey(ADDR), recentBlockhash: web3.Keypair.generate().publicKey.toBase58() })
+        .add(new web3.TransactionInstruction({
+          keys: [{ pubkey: new web3.PublicKey(ADDR), isSigner: true, isWritable: true }],
+          programId: new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
+          data: Buffer.from("clucknorris-hatchery-410-test"),
+        }));
+      const BUILD_OK = {
+        txBase64: unsigned.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64"),
+        mintAddress: MINT, metadataUri: "ar://meta", imageUri: "ar://logo", cluster: "mainnet-beta",
+      };
+      let buildCalls = 0, submitCalls = 0;
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "hatch-410-"));
+      const logoPath = path.join(tmp, "logo.png");
+      fs.writeFileSync(logoPath, await makeLogoPng());
+
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CONFIG_OK) }));
+          await pg.route("**/api/hatchery/build*", (r) => { buildCalls++; r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(BUILD_OK) }); });
+          await pg.route("**/api/hatchery/submit*", (r) => { submitCalls++; r.fulfill({ status: 410, contentType: "application/json", body: JSON.stringify({ error: "this mint request expired or was already submitted — build it again." }) }); });
+        }
+      );
+      await connectAndGo(page);
+      const onForm = await page.waitForFunction(() => !!document.querySelector("#hatch-name"), null, { timeout: 30000 }).then(() => true).catch(() => false);
+      if (!onForm) {
+        ok("S10 · the mint form renders", false, (await text(page)).slice(0, 300));
+      } else {
+        await driveToConfirmSheet(page, logoPath);
+        await page.click(".seeker-confirm .seeker-btn:not(.seeker-btn-quiet)"); // "Create and sign"
+        await page.waitForFunction(() => /Couldn.t confirm what happened/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+        const body10 = await text(page);
+        ok("S10 · ⚠️ a 410 from /submit is NOT reported as 'nothing was submitted' — the ambiguous screen, not the form",
+           /Couldn.t confirm what happened/i.test(body10), body10.slice(0, 400));
+        ok("S10 · and never lands back on the empty form with a build-it-again error",
+           !(await page.evaluate(() => !!document.querySelector("#hatch-name"))));
+        const rec410 = await readPendingRec(page);
+        ok("S10 · ⚠️ the persisted record is KEPT — still 'signed', no signature, never cleared as if this were a clean miss",
+           rec410 && rec410.stage === "signed" && rec410.signature === null && rec410.mintAddress === MINT, JSON.stringify(rec410));
+        ok("S10 · /build and /submit were each called exactly once", buildCalls === 1 && submitCalls === 1, `build=${buildCalls} submit=${submitCalls}`);
+      }
+      ok("S10 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+      try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
+    }
+
+    // -- 11. "Try again" on a RECOVERED failed screen must reach the form (item 5) -----------
+    {
+      const MINT = web3.Keypair.generate().publicKey.toBase58();
+      let buildCalls = 0;
+      const rec = { mintAddress: MINT, signature: SIG_OK, name: "Cluck Coin", symbol: "CLUCK", owner: ADDR, stage: "failed", at: Date.now() };
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/hatchery/config*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(CONFIG_OK) }));
+          await pg.route("**/api/hatchery/build*", (r) => { buildCalls++; r.fulfill({ status: 503, contentType: "application/json", body: "{}" }); });
+        },
+        FAKE + seedPendingScript(rec)
+      );
+      await connectAndGo(page);
+      await page.waitForFunction(() => /Nothing was created/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      ok("S11 · a recovered FAILED screen renders first", /Nothing was created/i.test(await text(page)));
+      // item 3 already cleared this record the moment it was shown — confirm that, so the
+      // assertion below is really testing item 5 (the button), not item 3 leaving it around.
+      ok("S11 · and (item 3) the record is already cleared by the time we can act on it", (await readPendingRec(page)) === null);
+
+      await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll("button")).find((x) => /^try again$/i.test(x.innerText.trim()));
+        b && b.click();
+      });
+      await page.waitForTimeout(300);
+      ok("S11 · ⚠️ 'Try again' on a RECOVERED (empty-form) failed screen lands on the ordinary FORM, not a dead button",
+         await page.evaluate(() => !!document.querySelector("#hatch-name")), (await text(page)).slice(0, 300));
+      ok("S11 · and did NOT try to rebuild with the empty form values", buildCalls === 0, `buildCalls=${buildCalls}`);
+      ok("S11 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
     }
   }
 
