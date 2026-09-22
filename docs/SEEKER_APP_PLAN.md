@@ -118,8 +118,18 @@ changes rather than the deadline.
 > a denial with the reason, never a free pass; comp before cache; one price-acceptance rule for
 > both mints.
 
-**Hold ~$50 of SKR → the heavy tools are free in the Seeker app**, alongside the two doors that
-already exist (hold CLKN, or pay the SOL pass). Owner's call, same evening.
+> **Owner, 2026-09-22 (later the same day):** *"lets lower it to 20 dollars of SKR or 10 dollars of
+> CLKN to get access to advanced tools, airdropper should be free for everyone on all platforms
+> moving forward."* Shipped on the same branch: the two doors carry their OWN figures
+> (`TOOLGATE.usd` = 10 for CLKN, `TOOLGATE.skrUsd` = 20 for SKR, env `TOOLGATE_USD` /
+> `TOOLGATE_SKR_USD`, published as `holdUsd` and `skr.holdUsd`), and the Airdropper is outside
+> the pass everywhere — the web page, this app, and `/api/airdrop/record`, which now reads the
+> operator off the chain (the fee payer of each row's transaction) instead of a signed session.
+> The "$50" figures below are the 09-19 decision as written; the figures are the owner's and live
+> in the environment, never in a page.
+
+**Hold SKR worth the SKR door's figure → the heavy tools are free in the Seeker app**, alongside
+the two doors that already exist (hold CLKN, or pay the SOL pass). Owner's call, same evening.
 
 - **Mint: `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`** — SPL Token, 6 decimals.
   ⚠️ **Verified before use, and this mattered:** a second mint also calls itself SKR
@@ -134,7 +144,8 @@ already exist (hold CLKN, or pay the SOL pass). Owner's call, same evening.
   terminal 2%). ~10.6B in circulation with an active mint authority is exactly what that predicts.
   The "fixed" wording came from a search summary, not from Solana Mobile, and was wrong. It was
   also about to ship onto a public page; it did not.
-- **$50 worth, live-priced, never hardcoded** — same rule as the CLKN threshold.
+- **A dollar figure, live-priced, never hardcoded** — same rule as the CLKN threshold ($50 when
+  decided; $20 since 2026-09-22, with CLKN at $10).
 - **Same comp criteria as the existing hold**: re-checked at use, fails open when pricing is down.
   No new behaviour to reason about.
 - **Seeker app only.** The web, Google Play and iOS editions are unchanged.

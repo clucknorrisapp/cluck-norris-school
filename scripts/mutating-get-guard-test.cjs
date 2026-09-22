@@ -134,15 +134,17 @@ function raw(method, p, headers) {
   r = await call("GET", "/api/meme-queue?done=abc", false); ok("meme-queue stays 404 without the key", r.status === 404);
 
   // ── airdrop per-drop receipt (Colosseum roadmap §W4/Extension): recording a row is a POST-only
-  // write, gated by the tools pass, not the admin key — a GET is refused before the pass is even
-  // checked. The public receipt reads (/api/airdrop/r/:dropId[/:wallet]) are unauthenticated GETs
-  // and stay that way; they are exercised by scripts/airdrop-receipt-test.cjs, not here.
+  // write. It carried the tools pass until 2026-09-22 (owner: the Airdropper is free for everyone
+  // on every platform); now it takes no credential at all and holds every row to the wallet the
+  // CHAIN names as the fee payer (lib/airdrop-receipt.js). The public receipt reads
+  // (/api/airdrop/r/:dropId[/:wallet]) are unauthenticated GETs and stay that way; they are
+  // exercised by scripts/airdrop-receipt-test.cjs, not here.
   r = await call("GET", "/api/airdrop/record", false);
   ok("GET /api/airdrop/record is refused with 405", r.status === 405, JSON.stringify(r.body));
   r = await call("GET", "/api/airdrop/record?dropId=x", false);
   ok("GET /api/airdrop/record with query params is still refused with 405", r.status === 405);
   r = await call("POST", "/api/airdrop/record", false);
-  ok("POST /api/airdrop/record with no pass is refused (402/403), never a silent 200", [402, 403].includes(r.status), JSON.stringify(r.body));
+  ok("POST /api/airdrop/record with no pass and no rows is a 400 on the rows — no pass is asked for, and never a silent 200", r.status === 400 && r.body && /rows/.test(String(r.body.error)), JSON.stringify(r.body));
 
   // ── buy-comp server payout: run / sweep / unpay / set on a GET → 405, decided BEFORE the comp
   // lookup so a pasted link is refused before it touches anything; the flag-less GET is the read.

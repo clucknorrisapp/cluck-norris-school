@@ -38,10 +38,16 @@
 // pane's job is to keep them distinct all the way to the screen.
 //
 // ── SERVER ───────────────────────────────────────────────────────────────────────────────────
-//   POST /api/airdrop/record  (toolPassGate)  { dropId?, mint, decimals, createdAt, rows:[{wallet, amount, sig}] }
+//   POST /api/airdrop/record  (no pass — free for everyone, owner 2026-09-22)
+//                             { dropId?, mint, decimals, createdAt, rows:[{wallet, amount, sig}] }
 //     200 { success:true, dropId, url:"/airdrop/r/<id>", recorded, totals }
 //     400 { success:false, error }   — bad rows / too many rows
-//     402/403 { success:false, error:"pass_required"|"insufficient_holdings"|… , detail }
+//     429 { success:false, error }   — this wallet's daily drop cap (keyed on the fee payer the
+//                                      server reads off the chain, never on anything we send)
+//   This pane carried the unified tools pass from its first commit to 2026-09-22 (usePass and
+//   the shared pass sheet, keyed by the registry id "airdrop"). It is free now, on every
+//   platform; the wallet is still needed —
+//   it signs every batch — but nothing is checked, bought or held to use the tool.
 //   The receipt is the verifiable half: a stranger can read /airdrop/r/<id> and the server
 //   re-reads each signature on-chain. Recording NEVER blocks or fails the send — the tokens have
 //   already landed by then, and a receipt hiccup that looked like a failed airdrop would be its
@@ -52,8 +58,6 @@
 import React from "react";
 import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Unavailable, Confirm, NeedsWallet, useOnline } from "../pane.jsx";
-import { usePass } from "../pass.js";
-import { PassGate } from "../passgate.jsx";
 import { shortAddr } from "../addr.js";
 import "./tools.css";
 
@@ -106,7 +110,6 @@ export default function AirdropperPane({ wallet }) {
   // children it was handed as props, so this pane's own t() strings need their own subscription.
   useI18nReady();
   const online = useOnline();
-  const pass = usePass();
 
   const [native, setNative] = React.useState(false);
   const [mint, setMint] = React.useState("");
@@ -122,7 +125,6 @@ export default function AirdropperPane({ wallet }) {
   const [phase, setPhase] = React.useState("form");      // form | checking | review | sending | done | unavailable
   const [errKind, setErrKind] = React.useState("unavailable");
   const [errMsg, setErrMsg] = React.useState(null);
-  const [gateOpen, setGateOpen] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [progress, setProgress] = React.useState({ msg: "", pct: 0 });
   const [results, setResults] = React.useState([]);
@@ -259,8 +261,6 @@ export default function AirdropperPane({ wallet }) {
 
   // ── the send ───────────────────────────────────────────────────────────────────────────────
   function askToSend() {
-    if (pass.status === "unsignable") return;
-    if (pass.status === "needed") { setGateOpen(true); return; }
     if (!wallet.connected) { wallet.connect(); return; }
     setConfirmOpen(true);
   }
@@ -305,7 +305,7 @@ export default function AirdropperPane({ wallet }) {
       for (let i = 0; i < rows.length; i += RECORD_CHUNK) {
         const chunk = rows.slice(i, i + RECORD_CHUNK);
         try {
-          const r = await pass.gatedFetch("/api/airdrop/record", {
+          const r = await fetch("/api/airdrop/record", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               dropId: dropId || undefined, mint: native ? NATIVE_RECEIPT_MINT : mint.trim(),
@@ -390,7 +390,7 @@ export default function AirdropperPane({ wallet }) {
   // Counted off the engine's own reason string rather than arithmetic on totals, so the banner
   // and the rows can never disagree.
   const stoppedNotAttempted = results.filter((r) => r.status === "failed" && /stopped by the caller/.test(String(r.error || ""))).length;
-  const runDisabled = phase === "checking" || phase === "sending" || pass.status === "loading";
+  const runDisabled = phase === "checking" || phase === "sending";
 
   if (!online && phase === "form") {
     return <Pane icon="🪂" title="Airdropper"><Unavailable kind="offline" /></Pane>;
@@ -518,13 +518,6 @@ export default function AirdropperPane({ wallet }) {
             <button type="button" className="seeker-btn seeker-listing-runbtn" onClick={review} disabled={runDisabled}>
               {phase === "checking" ? t("Checking…") : t("Review the drop")}
             </button>
-
-            {pass.status === "unsignable" ? (
-              <div className="seeker-tool-notyet" role="status">
-                <p className="seeker-tool-notyet-title">🔒 {t("No wallet on this device can sign")}</p>
-                <p>{t("The tools pass needs a signature, and this device has no wallet that can produce one yet. This resolves itself once wallet support lands in the app — nothing you can do here unlocks it early.")}</p>
-              </div>
-            ) : null}
           </div>
 
           {phase === "checking" ? <Loading label={t("Reading the chain…")} /> : null}
@@ -622,10 +615,6 @@ export default function AirdropperPane({ wallet }) {
         onConfirm={send}
         onCancel={() => setConfirmOpen(false)}
       />
-
-      {gateOpen ? (
-        <PassGate pass={pass} wallet={wallet} tool="airdrop" onUnlocked={() => { setGateOpen(false); pass.refresh(); setConfirmOpen(true); }} onClose={() => setGateOpen(false)} />
-      ) : null}
     </Pane>
   );
 }

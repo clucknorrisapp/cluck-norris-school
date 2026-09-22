@@ -378,8 +378,10 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
   {
     // `skr`: the Seeker app's second door, shaped as /api/tool-gate/config publishes it. The
     // figure below is pinned on screen the same way clknNeeded is — never a hardcoded amount.
-    const CFG = { success: true, enabled: true, holdUsd: 50, clknNeeded: 1234567, lamports: 50000000, days: 7,
-      skr: { mint: "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3", priceUsd: 0.5, skrNeeded: 98765, door: "skr" } };
+    // Two figures, one per door (owner, 2026-09-22: "$20 of SKR or $10 of CLKN"): the SKR block
+    // carries its own holdUsd, and the sheet must read THAT one for the SKR sentence.
+    const CFG = { success: true, enabled: true, holdUsd: 10, clknNeeded: 1234567, lamports: 50000000, days: 7,
+      skr: { mint: "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3", holdUsd: 20, priceUsd: 0.5, skrNeeded: 98765, door: "skr" } };
     const { ctx, page, errors, calls } = await open(
       (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
       async (pg) => {
@@ -428,6 +430,8 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
          /Unlock the tools pass/i.test(body) && body.includes("1,234,567"), body.slice(0, 400));
       ok(`F · ${hash} — the sheet names the SKR door with ITS live figure (98,765 SKR)`,
          /98,765 SKR/.test(body), body.slice(0, 400));
+      ok(`F · ${hash} — each door shows ITS OWN dollar figure: CLKN around $10, SKR around $20`,
+         /1,234,567 CLKN \(around \$10 worth\)/.test(body) && /98,765 SKR \(around \$20 worth\)/.test(body), body.slice(0, 400));
       // Never a hardcoded amount: the numbers on screen came from CFG, so changing the server's
       // figure changes the sheet. Pinning the literal above is what makes that true, not assumed.
       const close = await page.$(".seeker-confirm-actions .seeker-btn-quiet");
@@ -455,9 +459,10 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
   // Slow on purpose: the unconfirmed case is a real 30-second poll, because shortening it would
   // mean testing something other than the code that ships.
   {
-    // A pass already held, written the way cluck-gate.js writes it — this section is about the
-    // send, not the gate (section F owns that), and a gate sheet in the way would prove nothing.
-    const PASS = { unlockedAt: 1, expiresAt: 4102444800000, why: "holder", proof: "t:faketoken" };
+    // NO pass held, on purpose. The Airdropper is free for everyone on every platform (owner,
+    // 2026-09-22); until then this section seeded a fake pass so the gate sheet would not block
+    // the send. Now the absence of a pass IS part of what is under test: the send must go through
+    // with nothing in localStorage and without a single call to the pass service.
     const SIG_OK = "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCFFzVkbqDHHcgkTMZLFBgrPtrTKJqXNJ2kFfPjRnLXGRCGXBLjF";
     const SIG_BAD = "3nVfYQMJMyXjWJvUXkTWSLZfqNqTtjqKRy1vFgvvfsnFvyqMdSHJzqKLXaTVmcXyJDsBaMvVnKkYaWQxjqRLbNnG";
     const SIG_SILENT = "4hXTJHFoFvPZs1e4z1Q1vMWgkgi3zVJMhVQcHX7FmKjzKPPRcy6HmQ9cQ4B8dkcbSmvKJgVRC1L3H7gK2vNrWqMT";
@@ -501,12 +506,11 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     let sendCount = 0;
     const recorded = [];
 
-    const { ctx, page, errors } = await open(
+    const { ctx, page, errors, calls } = await open(
       (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
       async (pg) => {
-        await pg.addInitScript((p) => { try { localStorage.setItem("clkn_tools_unlock", JSON.stringify(p)); } catch (_) {} }, PASS);
         await pg.route("**/api/tool-gate/config*", (r) => r.fulfill({ status: 200, contentType: "application/json",
-          body: JSON.stringify({ success: true, enabled: true, holdUsd: 50, clknNeeded: 1000, lamports: 50000000, days: 7 }) }));
+          body: JSON.stringify({ success: true, enabled: true, holdUsd: 10, clknNeeded: 1000, lamports: 50000000, days: 7 }) }));
         await pg.route("**/api/airdrop/record*", async (r) => {
           try { recorded.push(JSON.parse(r.request().postData() || "{}")); } catch (_) {}
           r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, dropId: "testdrop", url: "/airdrop/r/testdrop" }) });
@@ -583,6 +587,12 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const done = await text(page);
 
     ok("G · the run finishes and reports", /Start another drop/i.test(done), done.slice(0, 400));
+    // Free for everyone (owner, 2026-09-22): no pass was held, no sheet appeared, and the pass
+    // service was never asked — the wallet signed the batches and that was all it took.
+    ok("G · ⚠️ the Airdropper never opened the pass sheet and never called the pass service (free for everyone)",
+       !/Unlock the tools pass/i.test(confirm) && !/Unlock the tools pass/i.test(done)
+         && !calls.some((u) => /\/api\/tool-gate\/(session|challenge)\b/.test(u)),
+       JSON.stringify(calls.filter((u) => /tool-gate/.test(u))));
     // The whole point. Sixteen paid, sixteen not, two ambiguous — and nothing rounded together.
     const counts = await page.evaluate(() => ({
       sent: document.querySelectorAll(".seeker-drop-row-sent").length,

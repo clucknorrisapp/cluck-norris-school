@@ -7806,12 +7806,15 @@ app.get("/api/airdrop-handoff", (req, res) => {
 app.use("/api/airdrop/record", rateLimit("airdropRecord", { windowMs: 60000, max: 30 }));
 app.post("/api/airdrop/record", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  // Same gate the airdropper's send already runs through client-side — this is the SERVER side of
-  // it, checked again here because the record is what a stranger will later read as "this landed".
-  // (Not requireToolPass()'s one-liner — that would need a second toolPassGate call just to learn
-  // the operator's wallet, and a holder check re-reads the chain, so it is done once here.)
-  const g = await toolPassGate(req);
-  if (!g.ok) { const { status, ...body } = g; return res.status(status || 403).json({ success: false, ...body }); }
+  // No pass, no credential (owner, 2026-09-22: "airdropper should be free for everyone on all
+  // platforms moving forward"). Until then this route ran toolPassGate() and took the operator's
+  // wallet from the signed session, both for the daily-drop cap and for the source check that
+  // keeps a stranger's transfer from recording as this operator's airdrop. The wallet now comes
+  // from the CHAIN instead: lib/airdrop-receipt.js reads the fee payer of the first row it can
+  // verify and holds every later row to that wallet (feePayerOf / sourceIsOperator). Nothing a
+  // caller sends names the operator, so there is nothing to spoof; the only thing this route
+  // will record is a transfer that a wallet demonstrably paid for. Rate limit above, row caps
+  // below, and the public body never carries the operator — all unchanged.
   const b = req.body || {};
   const rows = Array.isArray(b.rows) ? b.rows : null;
   if (!rows || !rows.length) return res.status(400).json({ success: false, error: "rows must be a non-empty list of {wallet, amount, sig}" });
@@ -7826,7 +7829,7 @@ app.post("/api/airdrop/record", async (req, res) => {
     r = await airdropReceipt.recordDrop({
       kv, dropId: b.dropId ? String(b.dropId) : undefined,
       mint: String(b.mint || ""), decimals: b.decimals, createdAt: b.createdAt,
-      rows, operator: g.wallet || null, getTx,
+      rows, getTx,
     });
   } catch (e) { return res.status(400).json({ success: false, error: String((e && e.message) || e) }); }
   if (!r.ok) return res.status(r.status || 400).json({ success: false, error: r.error });
@@ -9589,9 +9592,13 @@ const SOL_UNLOCK_MIN_LAMPORTS = 50_000_000;
 // /api/token-overview, cached 60s in memory and last-known-good in kv — if pricing is down we
 // publish clknNeeded:null and the client fails OPEN (an outage on our side never locks users
 // out). TOOLGATE_OFF=1 kills the whole gate without a deploy.
+// Owner, 2026-09-22: "lower it to 20 dollars of SKR or 10 dollars of CLKN to get access to
+// advanced tools" — so the two doors carry their OWN figures (was one $50 figure for both),
+// and the Airdropper left the pass entirely the same day ("free for everyone on all platforms").
 const TOOLGATE_TERMS = require("./lib/tool-pass-terms");
 const TOOLGATE = {
-  usd: Number(process.env.TOOLGATE_USD) || 50,
+  usd: Number(process.env.TOOLGATE_USD) || 10,
+  skrUsd: Number(process.env.TOOLGATE_SKR_USD) || 20,   // the Seeker app's SKR door (lib/tool-pass-qualify.js)
   // days + lamports come from the immutable terms schedule (lib/tool-pass-terms.js), NOT env,
   // since 2026-09-11: a payment's terms are fixed at payment time and resolve from that schedule,
   // so the offer the page advertises must be the schedule's current entry by construction. To
@@ -9743,7 +9750,7 @@ async function toolPassQualify(wallet, doors) {
   const d = TOOL_PASS_QUALIFY.normalizeDoors(doors);
   if (d.includes("skr") && !toolGatePrice.skrUsd) { try { await refreshSkrPrice(Date.now()); } catch (_) {} }   // "missing" must mean unavailable, not still loading
   return TOOL_PASS_QUALIFY.qualify({
-    wallet, doors: d, usd: TOOLGATE.usd,
+    wallet, doors: d, usd: TOOLGATE.usd, skrUsd: TOOLGATE.skrUsd,
     prices: { clkn: toolGatePrice.usd || null, skr: toolGatePrice.skrUsd || null },
     comped: isToolComped(wallet),
     cache: { get: (k) => toolPassHolderCache.get(k), set: (k, v) => rememberHolder(k, v) },
@@ -10159,9 +10166,10 @@ app.get("/api/tool-gate/config", async (req, res) => {
     clknNeeded: priceUsd ? Math.ceil(TOOLGATE.usd / priceUsd) : null,
     lamports: TOOLGATE.lamports, days: TOOLGATE.days,
     receiver: SOL_UNLOCK_WALLET, mint: CLKN_MINT_ADDR,
-    // The Seeker app's door: the same $ figure in SKR, live-priced. A client that does not offer
-    // the door ignores this block; a null skrNeeded means "no price right now" (the app says so).
-    skr: { mint: SKR_MINT, priceUsd: skrUsd, skrNeeded: skrUsd ? Math.ceil(TOOLGATE.usd / skrUsd) : null, door: "skr" },
+    // The Seeker app's door: its OWN $ figure (holdUsd here, TOOLGATE.skrUsd) in SKR, live-priced.
+    // A client that does not offer the door ignores this block; a null skrNeeded means "no price
+    // right now" (the app says so).
+    skr: { mint: SKR_MINT, holdUsd: TOOLGATE.skrUsd, priceUsd: skrUsd, skrNeeded: skrUsd ? Math.ceil(TOOLGATE.skrUsd / skrUsd) : null, door: "skr" },
   });
 });
 // ── /host-image: owner's permanent image host (Arweave via the funded Turbo key) ─────────────

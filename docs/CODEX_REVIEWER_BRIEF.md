@@ -160,6 +160,46 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 15 — 2026-09-22: #395 again — two door figures ($10 CLKN / $20 SKR) and the Airdropper free everywhere
+
+Owner, after round 14: *"lets lower it to 20 dollars of SKR or 10 dollars of CLKN to get access to
+advanced tools, airdropper should be free for everyone on all platforms moving forward."* Both
+landed on the same branch, so the head you re-review carries them. What changed and what to break:
+
+**Two figures.** `TOOLGATE.usd` (CLKN door) defaults to 10, `TOOLGATE.skrUsd` (SKR door) to 20;
+env `TOOLGATE_USD` / `TOOLGATE_SKR_USD`. `lib/tool-pass-qualify.js` takes `input.skrUsd` (falls
+back to `usd` when absent or not positive) and needs `ceil(skrUsd / skrPrice)` SKR; the denial
+sentence names both figures. `/api/tool-gate/config` publishes `holdUsd` (CLKN) and
+`skr.holdUsd` (SKR) side by side; `skr.skrNeeded` divides the SKR figure, never the CLKN one.
+The Seeker sheet reads `cfg.skr.holdUsd` for the SKR sentence (falls back to `holdUsd` on an
+older config). Owners Snapshot shares `TOOLGATE.usd` and therefore follows to $10.
+- Claim to break: no client anywhere divides the SKR price by the CLKN figure, and no page
+  carries either number as a literal (the only "$10"/"$20" strings are in docs, the README, the
+  investors page's dated history line, and code comments).
+
+**The Airdropper is free for everyone, on every platform.** The web page dropped
+`cluck-gate.js` and both `CluckGate.guard` wrappers; the Seeker pane dropped `usePass` /
+`<PassGate tool="airdrop">` and moved to tier `wallet`; `/api/airdrop/record` takes no pass.
+The receipt kept its two defences by moving them onto the chain: `lib/airdrop-receipt.js`
+`feePayerOf(tx)` reads `accountKeys[0]` of the first row whose transaction can be read, stores
+it as the drop's operator (never public), holds every later row to it (`sourceIsOperator`,
+`transfer_not_from_operator`), and keys the 20-drops-per-day cap on it. Nothing the client
+sends names the operator, so there is nothing to spoof.
+- Claims to break: (1) a stranger who knows a public `dropId` cannot append a row the drop's
+  operator did not fund; (2) a stranger cannot make a wallet's daily cap fill without that
+  wallet's own real transactions; (3) a batch mixing two fee payers records the first readable
+  row's payer as operator and the other payer's rows as unverified; (4) a first transaction the
+  RPC cannot read leaves `operator:null` and the next readable row names it; (5) the public body
+  never carries the operator, derived or passed.
+
+Checks on this head: `tool-pass-qualify-test` (+5 two-figure cases), `tool-pass-gate-test`
+(booted server: `holdUsd === 10`, `skr.holdUsd === 20`, `skrNeeded` divides the SKR figure,
+`POST /api/airdrop/record` with no pass is a 400 on the rows and never 402/403),
+`airdrop-receipt-test` (+5 derived-operator cases), `mutating-get-guard-test` (the record route's
+no-pass pin flipped from 402/403 to 400), `seeker-app-boot-test` (section F pins "$10" beside the
+CLKN figure and "$20" beside the SKR figure; section G sends a drop with NO pass in storage and
+asserts the pass service was never called and no sheet appeared).
+
 ## Round 14 — 2026-09-22: #395, your three findings on `a4bb0bb` + the listing mismatches, fixed
 
 You were right on all seven. Findings → fixes:

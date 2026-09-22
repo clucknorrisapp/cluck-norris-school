@@ -26,6 +26,19 @@ const BASE = { wallet: "W", usd: 50, prices: { clkn: 0.0005, skr: 0.5 }, terms: 
   let r = await qualify({ ...BASE, comped: true, readClkn: never, readSkr: never });
   ok("comp wins before any read", r.ok && r.via === "comp");
 
+  // 1b. Two figures, one per door (owner, 2026-09-22: "$20 of SKR or $10 of CLKN"). skrUsd is
+  // the SKR door's own threshold; when a caller omits it the SKR door falls back to the CLKN figure.
+  r = await qualify({ ...BASE, usd: 10, skrUsd: 20, doors: ["skr"], prices: { clkn: 0.0005, skr: 0.5 }, readClkn: bal(0), readSkr: bal(40) });
+  ok("skrUsd: 0 CLKN, 40 SKR at $0.50 ($20) → holder-skr against the SKR figure, needed 40", r.ok && r.via === "holder-skr" && r.needed === 40 && r.holdUsd === 20, r);
+  r = await qualify({ ...BASE, usd: 10, skrUsd: 20, doors: ["skr"], prices: { clkn: 0.0005, skr: 0.5 }, readClkn: bal(0), readSkr: bal(39) });
+  ok("skrUsd: 39 SKR is one short of the $20 door → denied, and the sentence names $10 of CLKN and $20 of SKR", !r.ok && r.skr && r.skr.needed === 40 && r.skr.holdUsd === 20 && r.needed === 20000 && /\$10 of CLKN/.test(r.detail) && /\$20 of SKR \(~40\)/.test(r.detail), r);
+  r = await qualify({ ...BASE, usd: 10, doors: ["skr"], prices: { clkn: 0.0005, skr: 0.5 }, readClkn: bal(0), readSkr: bal(20) });
+  ok("skrUsd omitted: the SKR door uses the CLKN figure ($10 → 20 SKR)", r.ok && r.via === "holder-skr" && r.needed === 20 && r.holdUsd === 10, r);
+  r = await qualify({ ...BASE, usd: 10, skrUsd: -5, doors: ["skr"], prices: { clkn: 0.0005, skr: 0.5 }, readClkn: bal(0), readSkr: bal(20) });
+  ok("skrUsd that is not a positive number falls back to the CLKN figure, never to zero", r.ok && r.via === "holder-skr" && r.needed === 20, r);
+  r = await qualify({ ...BASE, usd: 10, skrUsd: 20, prices: { clkn: 0.0005, skr: 0.5 }, readClkn: bal(20000), readSkr: never });
+  ok("the CLKN door is $10 on its own: 20,000 CLKN at $0.0005 → holder, SKR never read", r.ok && r.via === "holder" && r.needed === 20000, r);
+
   // 2. CLKN first
   r = await qualify({ ...BASE, readClkn: bal(100000), readSkr: never });
   ok("100,000 CLKN at $0.0005 ($50) → holder; SKR is never read when CLKN qualifies", r.ok && r.via === "holder" && r.needed === 100000 && r.balance === 100000);

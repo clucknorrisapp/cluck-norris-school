@@ -132,8 +132,8 @@ does not tell you how to write software; use your judgement for that.
 ## The mission
 
 **School of Crypto Hard Knocks** — a free Solana crypto school wrapped around real tools:
-the heavy tools are free to anyone holding ~$50 of CLKN (else a small SOL pass), the safety
-basics stay free for everyone. Live at **clucknorris.app**.
+the heavy tools are free to anyone holding ~$10 of CLKN (else a small SOL pass), the safety
+basics and the Airdropper stay free for everyone. Live at **clucknorris.app**.
 
 The point is that people lose money in crypto because nobody told them the truth plainly, and
 this teaches them before they get hurt. Design calls should serve that:
@@ -164,11 +164,18 @@ what they were owed and what arrived.
 
 - **Learning and safety stay genuinely free.** The school, the AI tutor, Wallet Checkup,
   Firepit, the Locker Room — no wallet, no signup, no catch. The **heavy tools** (X-Ray,
-  Holders, Trace, Airdrop, Buy Special) moved behind the **unified tools pass on 2026-08-18**
-  (owner's call, for the app-store transition): hold **$50 worth of CLKN** (live-priced,
-  `/api/tool-gate/config`, never hardcode the amount) = all free; else **0.05 SOL for a 7-day
-  all-tools pass**. Client: `cluck-gate.js` — pages preview free, RUN/SEND needs the pass.
-  Kill switch: `TOOLGATE_OFF=1`. Planned: lifetime-pass NFTs hook into the comp check.
+  Holders, Trace, Buy Special) moved behind the **unified tools pass on 2026-08-18**
+  (owner's call, for the app-store transition): hold **$10 worth of CLKN** (live-priced,
+  `/api/tool-gate/config`, never hardcode the amount; **lowered from $50 on 2026-09-22**, owner:
+  "lower it to 20 dollars of SKR or 10 dollars of CLKN to get access to advanced tools") = all
+  free; else **0.05 SOL for a 7-day all-tools pass**. Client: `cluck-gate.js` — pages preview
+  free, RUN needs the pass. Kill switch: `TOOLGATE_OFF=1`. Planned: lifetime-pass NFTs hook into
+  the comp check. ⛔ **The Airdropper is FREE FOR EVERYONE on every platform since 2026-09-22**
+  (owner, same message: "airdropper should be free for everyone on all platforms moving
+  forward") — no pass on the web page, none in the Seeker app, none on `/api/airdrop/record`;
+  the receipt learns the operator from the chain (the fee payer of each row's own transaction,
+  `lib/airdrop-receipt.js` `feePayerOf`) and still holds every row to that wallet. Don't put the
+  Airdropper back behind the pass in a roundup, a tier badge or a listing.
 - **Say what's on-chain, never why.** The chain shows *what*, not *why*. Only call a wallet
   "creator" or "team" when a launchpad API confirms it. That forensic honesty is the brand.
 - **Guardrails before power.** First-timers get warned before they can hurt themselves. That's
@@ -384,18 +391,20 @@ split is settled — don't re-debate it.
 Every gate resolves through the **connected wallet**: hold CLKN (free), pay a small SOL price
 in one click, or sign a message where the gate is *ownership* rather than payment.
 
-- **The unified tools pass** (X-Ray, Holders, Trace, airdropper, Buy Special): hold **$50 worth
-  of CLKN** → all free; else **0.05 SOL = 7-day pass to all of them**. ONE localStorage pass
+- **The unified tools pass** (X-Ray, Holders, Trace, Buy Special — the airdropper LEFT it on
+  2026-09-22, free for everyone): hold **$10 worth of CLKN** (was $50 until 2026-09-22) → all
+  free; else **0.05 SOL = 7-day pass to all of them**. ONE localStorage pass
   (`clkn_tools_unlock`), one client (`cluck-gate.js`), config at `/api/tool-gate/config`
-  ($-amount → CLKN computed from the live price; env knobs `TOOLGATE_USD` and `TOOLGATE_OFF`;
+  ($-amount → CLKN computed from the live price; env knobs `TOOLGATE_USD` (CLKN door, default
+  10), `TOOLGATE_SKR_USD` (SKR door, default 20) and `TOOLGATE_OFF`;
   **the paid terms — lamports and days — are an append-only schedule in `lib/tool-pass-terms.js`
   resolved at the payment's block time**, so a bought pass never moves when the offer changes;
   `TOOLGATE_LAMPORTS`/`TOOLGATE_DAYS` env are ignored with a boot error since 2026-09-11).
   Pages preview free — the gate fires on RUN/SEND. Fail-open when pricing is down. The old
   per-tool thresholds (50k airdropper / 100k Buy Special) are RETIRED by this.
-  **The SKR door (owner 2026-09-19, shipped 2026-09-22): in the Seeker app only, holding $50 worth
-  of SKR (`SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`, live-priced, never hardcoded) opens the same
-  free tier.** The app sends `doors:["skr"]` on `POST /api/tool-gate/session`; the website and the
+  **The SKR door (owner 2026-09-19, shipped 2026-09-22): in the Seeker app only, holding $20 worth
+  of SKR (`SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`, live-priced, never hardcoded; its OWN
+  figure — `TOOLGATE.skrUsd`, published as `skr.holdUsd` on the config) opens the same free tier.** The app sends `doors:["skr"]` on `POST /api/tool-gate/session`; the website and the
   store editions send nothing and never grow the door. CLKN is always checked first; SKR only when
   asked; and **SKR never graces** — it only ever ADDS a grant on a verified qualifying balance, so
   the fail-open population is the CLKN one and only the CLKN one (Codex, round 13: the first cut

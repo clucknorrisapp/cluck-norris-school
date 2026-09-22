@@ -307,10 +307,12 @@
     </div>
   </div>
 
-  <!-- 🔒 CLKN Unlock Gate — visible until tool access is paid for -->
-  <!-- The tool renders for everyone — preview free, the PASS is checked on SEND (cluck-gate.js,
-       the shared card, wrapped around sendAirdrop/retryUnresolved at the bottom of this page).
-       The private "hold 50,000 CLKN / pay 0.05 SOL" gate that used to sit here had been hidden
+  <!-- No gate (owner, 2026-09-22: "airdropper should be free for everyone on all platforms
+       moving forward"). From 2026-08-18 to 2026-09-22 SEND ran through the unified tools pass
+       (cluck-gate.js's card wrapped sendAirdrop/retryUnresolved at the bottom of this page); the
+       pass and its script are gone from this page, and /api/airdrop/record takes no credential —
+       the receipt learns the operator from the chain (lib/airdrop-receipt.js feePayerOf). Before
+       that, the private "hold 50,000 CLKN / pay 0.05 SOL" gate that used to sit here had been hidden
        on load since 2026-08-10, but its pay path still consumed a payment signature for a LOCAL
        unlock with no server token (deep dive 2026-09-17 P1-066). Deleted so it cannot come back;
        the education panel it carried lives on below. -->
@@ -332,7 +334,7 @@
 
       <div style="margin-bottom:10px"><span style="color:var(--gold);font-weight:700">4. IRREVERSIBLE.</span> Solana transactions can't be undone. Wrong address = lost tokens. <strong>Verify your recipient list twice</strong> before clicking SEND.</div>
 
-      <div style="margin-bottom:10px"><span class="k">5. ACCESS IS SEPARATE FROM YOUR AIRDROP.</span> Sending needs the tools pass — hold about $50 of CLKN and it is free, or a small SOL fee covers a week; the live numbers are on the card when you press SEND. Your airdrop tokens are separate — they leave your wallet only when YOU sign the batches in your own wallet (11 supported).</div>
+      <div style="margin-bottom:10px"><span class="k">5. THE TOOL IS FREE. THE NETWORK IS NOT.</span> There is no pass and no fee for using the airdropper — for anyone, on the website or in the app. What you pay is Solana's own cost: the per-transaction fee and the rent for any recipient's new token account, both shown in the preview before you sign. Your airdrop tokens leave your wallet only when YOU sign the batches in your own wallet (11 supported).</div>
 
       <div style="margin-bottom:10px"><span style="color:var(--gold);font-weight:700">6. THINGS THAT GO WRONG.</span> Not enough SOL for rent. Typo in a recipient address. Sending the wrong amount because you read the column wrong. <strong>Preview before you sign every time.</strong></div>
 
@@ -544,7 +546,6 @@
 
 <script src="/cluck-wallet.js?v=2"></script>
 <script src="/cluck-util.js"></script>
-<script src="/cluck-gate.js"></script>
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
 const RPC_URL = '/api/helius-rpc';
@@ -1074,14 +1075,14 @@ async function sendAirdrop() {
 
 // Posts one batch's just-confirmed rows to the public receipt (POST /api/airdrop/record). Never
 // throws and never blocks the send — a receipt-recording hiccup must not look like a failed
-// airdrop; the tokens already landed. Runs through CluckGate.fetch so the pass proof (the same
-// one RUN/SEND already required) rides along as x-clkn-pass.
+// airdrop; the tokens already landed. A plain fetch — the route takes no pass since 2026-09-22;
+// the server reads the operator off the chain (the fee payer of each row's own transaction).
 async function recordDropRows(rowsForBatch) {
   if (!rowsForBatch || !rowsForBatch.length) return;
   if (!currentDropCreatedAt) currentDropCreatedAt = Date.now();
   const panel = document.getElementById('receiptPanel');
   try {
-    const r = await CluckGate.fetch('/api/airdrop/record', {
+    const r = await fetch('/api/airdrop/record', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1673,15 +1674,6 @@ function toggleAirdropLearn() {
     const tool=document.getElementById('airdropTool'); const host=tool||document.querySelector('.wrap'); if(host) host.insertBefore(notice, host.firstChild);
   } catch(e){}
 })();
-</script>
-
-<script>
-// Unified tools pass (owner, 2026-08-18): building + previewing a drop is free — SENDING
-// needs the pass (hold $50 of CLKN = free, else 0.05 SOL / 7 days, all tools). This
-// replaces the per-tool 50k-CLKN gate that was parked on 2026-08-10. /cluck-gate.js.
-// Retry sends real transactions too, so it goes through the same gate as the first send.
-sendAirdrop = CluckGate.guard(sendAirdrop, { tool: 'Airdrop Tool', anchor: '#sendBtn' });
-retryUnresolved = CluckGate.guard(retryUnresolved, { tool: 'Airdrop Tool', anchor: '#retryBtn' });
 </script>
 
 <script defer src="/cluck-nav.js"></script>

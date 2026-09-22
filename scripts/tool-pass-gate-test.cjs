@@ -131,11 +131,21 @@ async function get(base, p, headers) {
     // otherwise ceil(holdUsd / priceUsd) of a finite positive price (never a hardcoded amount).
     const skrCfg = cfg.body && cfg.body.skr;
     const skrConsistent = skrCfg && (skrCfg.priceUsd === null ? skrCfg.skrNeeded === null
-      : (Number.isFinite(skrCfg.priceUsd) && skrCfg.priceUsd > 0 && skrCfg.skrNeeded === Math.ceil(cfg.body.holdUsd / skrCfg.priceUsd)));
+      : (Number.isFinite(skrCfg.priceUsd) && skrCfg.priceUsd > 0 && skrCfg.skrNeeded === Math.ceil(skrCfg.holdUsd / skrCfg.priceUsd)));
     ok("config publishes the door: the verified SKR mint, door:'skr', and skrNeeded derived from a finite positive live price or null",
        skrCfg && skrCfg.mint === "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3" && skrCfg.door === "skr" && skrConsistent, JSON.stringify(skrCfg));
-    ok("config still leads with CLKN (holdUsd, clknNeeded, mint) — SKR is an extra block, not a replacement",
-       cfg.body && cfg.body.holdUsd === 50 && "clknNeeded" in cfg.body && cfg.body.mint === MINT, JSON.stringify(cfg.body));
+    // Owner, 2026-09-22: "$20 of SKR or $10 of CLKN" — two figures, one per door, each published
+    // beside its own mint so a client never divides an SKR price by the CLKN figure.
+    ok("config still leads with CLKN (holdUsd $10, clknNeeded, mint) — SKR is an extra block, not a replacement",
+       cfg.body && cfg.body.holdUsd === 10 && "clknNeeded" in cfg.body && cfg.body.mint === MINT, JSON.stringify(cfg.body));
+    ok("the SKR block carries ITS OWN figure (holdUsd $20), distinct from the CLKN one",
+       skrCfg && skrCfg.holdUsd === 20 && skrCfg.holdUsd !== cfg.body.holdUsd, JSON.stringify(skrCfg));
+    // The Airdropper is free for everyone on every platform (owner, 2026-09-22): its record route
+    // takes no pass. With no body it fails on the ROWS, never on a missing credential — and the
+    // operator it will hold rows to comes from the chain (lib/airdrop-receipt.js feePayerOf).
+    const rec = await post(A.base, "/api/airdrop/record", {});
+    ok("airdrop/record with NO pass is not refused for a pass (400 on the empty rows, never 402/403)",
+       rec.status === 400 && rec.body && /rows/.test(String(rec.body.error)), JSON.stringify(rec));
     const skrWal = makeWallet();
     const m3 = await challenge(A.base, skrWal.pub);
     s = await post(A.base, "/api/tool-gate/session", { wallet: skrWal.pub, message: m3, signature: skrWal.sign(m3), doors: ["skr"] });

@@ -57,12 +57,12 @@ function fmtInt(n) { return Math.round(Number(n) || 0).toLocaleString(); }
 // the component that renders it (so the caller passes an id, never display text); and a sentence
 // split into fragments cannot be translated — word order is not English's in six of our seven
 // languages, and a translator handed "Holders" and "runs on the unified tools pass…" separately
-// has no way to produce a correct sentence. Adding a tool means adding its line here.
+// has no way to produce a correct sentence. Adding a tool means adding its line here. (The
+// Airdropper's line left on 2026-09-22 — it is free for everyone now, on every platform.)
 const TOOL_LINE = {
   xray: "Wallet X-Ray runs on the unified tools pass shared by every heavy tool.",
   holders: "Holders runs on the unified tools pass shared by every heavy tool.",
   trace: "Trace runs on the unified tools pass shared by every heavy tool.",
-  airdrop: "The Airdropper runs on the unified tools pass shared by every heavy tool.",
   buyspecial: "Buy Special runs on the unified tools pass shared by every heavy tool.",
 };
 const TOOL_LINE_FALLBACK = "This tool runs on the unified tools pass shared by every heavy tool.";
@@ -133,9 +133,12 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
               : tf("Hold ${usd} worth of CLKN and every heavy tool runs free while you hold it.",
                    { usd: fmtInt(cfg.holdUsd) })}
             {cfg.skr && cfg.skr.skrNeeded ? " " : ""}
+            {/* The SKR door carries ITS OWN dollar figure (cfg.skr.holdUsd — owner, 2026-09-22:
+                "$20 of SKR or $10 of CLKN"), so the sentence reads the figure from the skr block,
+                never the CLKN one beside it. Older configs without skr.holdUsd fall back to it. */}
             {cfg.skr && cfg.skr.skrNeeded
               ? tf("Holding about {skr} SKR (around ${usd} worth) unlocks them the same way, in this app.",
-                   { skr: fmtInt(cfg.skr.skrNeeded), usd: fmtInt(cfg.holdUsd) })
+                   { skr: fmtInt(cfg.skr.skrNeeded), usd: fmtInt(cfg.skr.holdUsd || cfg.holdUsd) })
               : null}
             {" "}
             {tf("Not holding? Pay {sol} SOL for a {days}-day pass to all of them.",
