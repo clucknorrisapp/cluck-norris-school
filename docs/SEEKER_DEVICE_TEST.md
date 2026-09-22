@@ -85,7 +85,11 @@ reference.
     count. If you hold over either door, the run simply runs.
 18. On the sheet, **Check my wallet**: the wallet signs a one-line message (NOT a transaction — read
     it). Then either the tool runs (holder) or the sheet says exactly which door was short and by
-    how much, and that SOL payment is on the website, not in the app yet.
+    how much, and that SOL payment is on the website, not in the app yet. **"Could not reach the
+    pass service. Try again shortly." on a phone with signal is NOT a network blip** — it was the
+    missing CORS on the pass endpoints (2026-09-22, fixed server-side, needs the fix on
+    production: the app calls clucknorris.app, not staging). If it reappears, check
+    `scripts/seeker-cors-test.cjs` against the deployed build before anything else.
 19. Kill the app, reopen, run X-Ray again: a held pass is remembered; a denied one asks again.
 20. **Holders**, **Trace**: each behaves like 17 — a pass or a sheet, never a silent empty
     result. **Buy Special is NOT in the app** (owner, 2026-09-22) — if a Buy Special tile or route

@@ -3906,6 +3906,34 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.status(204).end();
   next();
 });
+// ── SEEKER edition (Solana dApp Store bundle) — CORS for the FULL product ────────────────────
+// The Seeker app is the same shell built with the wallet half IN (src/seeker/edition/full.jsx),
+// bundled by the wrapper and calling this backend from the SAME webview origins as the store
+// edition (https://localhost on Android). STORE_API_RE above is the education edition's contract
+// and deliberately excludes everything that pays, signs, mints, locks or sends — which is exactly
+// what the Seeker app does. Until 2026-09-22 nothing granted CORS for those, so on the owner's
+// phone the pass sheet said "Could not reach the pass service", and every POST and every gated
+// GET (x-clkn-pass triggers a preflight) would have failed the same way: 15 of the 23 endpoints
+// the app calls answered its preflight with the /api/* 404. Green in a browser, red in the app —
+// the same class as the store-edition trap, on the other edition. This list is the Seeker app's
+// contract; scripts/seeker-cors-test.cjs derives the app's endpoint inventory from src/seeker
+// and refuses any path that neither regex covers. The Origin header still grants nothing: every
+// endpoint keeps its own gate (the tools pass, the receipt sign-in, the payment checks), and the
+// store UA refusal below still answers 403 to the education editions on these — now WITH the
+// CORS headers, so that app reads the refusal instead of an opaque network error.
+const SEEKER_API_RE = /^\/api\/(tool-gate\/(config|challenge|session)|seeker\/reclaimable|wallet-xray|snapshot|trace|airdrop\/record|lock\/(create-tx|record)|locks|burn-(scan|token-info|receipt)|hatchery\/(config|build|submit|minted))$/;
+app.use((req, res, next) => {
+  const origin = String(req.get("origin") || "");
+  if (!origin || !STORE_APP_ORIGINS.has(origin) || !SEEKER_API_RE.test(req.path)) return next();
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  // x-clkn-pass: the tools pass / receipt sign-in token (toolPassGate, receiptSessionGate).
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Clkn-Pass");
+  res.setHeader("Access-Control-Max-Age", "600");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
 // The wrapper appends a User-Agent marker (ClucknorrisPlay / ClucknorrisIOS). It is a HINT, never
 // an authorisation: a request carrying it is refused on every endpoint the store edition must not
 // reach (payments, passes, mint/burn/lock/send, the wallet claim, competitions). Spoofing the

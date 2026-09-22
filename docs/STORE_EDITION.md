@@ -223,6 +223,13 @@ Bumping the lock is the only way the installed app's frontend changes.
 
 ## What the backend does for it (server.js)
 
+> **2026-09-22 — the Seeker edition has its OWN CORS list now.** `SEEKER_API_RE` (right after the
+> store-CORS middleware) grants the same webview origins CORS on the wallet-half endpoints the full
+> product calls (tool-gate, X-Ray/Holders/Trace, airdrop record, locks, burn, hatchery, reclaim),
+> with `X-Clkn-Pass` allowed. The education edition is kept out of those by its UA marker (403,
+> now readable because the CORS headers are present) and by compile-out — never by the origin.
+> `scripts/seeker-cors-test.cjs` pins it.
+
 - **CORS** for `capacitor://localhost`, `https://localhost`, `http://localhost`, `ionic://localhost`
   (env `STORE_APP_ORIGINS`) on exactly the endpoints the edition calls: `/api/ask-cluck`,
   `/api/ask-cluck/report`, `/api/track`, `/api/claim/certificate`, `/api/certificate/:id`,

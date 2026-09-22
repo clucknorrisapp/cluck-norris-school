@@ -478,6 +478,17 @@ served the React shell at 200.
 
 ## Things that will bite you
 
+- 📱 **The Seeker app calls production CROSS-ORIGIN, from `https://localhost` — every endpoint it
+  uses needs CORS for that origin (`SEEKER_API_RE` in `server.js`), and a browser test proves
+  nothing about it.** On 2026-09-22 the owner's pass sheet said "Could not reach the pass service":
+  the tool-gate endpoints answered 200 to curl and a 404 to the webview's preflight, because only
+  the education edition's contract (`STORE_API_RE`) had CORS and it deliberately excludes
+  everything that pays, signs, mints, locks or sends. 15 of the 23 endpoints the app calls were in
+  that state — every POST and every `x-clkn-pass` GET. `scripts/seeker-cors-test.cjs` (CI) derives
+  the app's endpoint inventory from `src/seeker` and boots the server to send the real preflight
+  per endpoint; **a new pane that calls a new endpoint must add it to `SEEKER_API_RE` or that test
+  fails.** The Origin still grants nothing (every endpoint keeps its own gate) and the store UA is
+  still refused on these — now WITH the CORS headers, so the education app reads the 403.
 - **The whole scheduler block only starts if `TELEGRAM_BOT_TOKEN` AND `TELEGRAM_CHAT_ID` are set
   at boot.** Missing either → no alerts, lessons, radar, recap, graduation watcher. First thing to
   check when "the bot isn't doing X."

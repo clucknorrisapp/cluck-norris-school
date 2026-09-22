@@ -160,6 +160,25 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 22 — 2026-09-22: the Seeker app could not reach the pass service — CORS, not holdings
+
+Owner, on the device: *"when going to unlock it says could not reach the pass service try again
+shortly."* Cause, confirmed against production with the webview's own preflight: the Seeker bundle
+runs from `https://localhost` and calls `https://clucknorris.app` cross-origin; only the
+education edition's contract (`STORE_API_RE`) had CORS for that origin, and it excludes every
+endpoint that pays, signs, mints, locks or sends. 15 of the 23 endpoints the app calls answered
+the preflight with the `/api/*` 404 — the pass sheet was the first one a human hit.
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P1** — the Seeker app cannot unlock the pass, run a gated tool, record a drop, lock, burn, or mint against production: every POST and every `x-clkn-pass` GET fails the preflight | `SEEKER_API_RE` + a second CORS middleware in `server.js`, mounted right after the store one and before the UA refusal: the same webview origins, the wallet-half endpoints, `Content-Type, X-Clkn-Pass` allowed, OPTIONS → 204. The Origin grants nothing — every endpoint keeps its own gate. The store UA is still refused on these, now WITH the CORS headers so the education app reads the 403 | `scripts/seeker-cors-test.cjs` (CI): (1) static — the app's endpoint inventory extracted from `src/seeker` (23 paths) must each match `STORE_API_RE` or `SEEKER_API_RE`, the four `x-clkn-pass` senders on the Seeker list; (2) live — server booted, the real preflight per endpoint from both origins → 204 + origin echoed + header allowed; a foreign origin never echoed; no Origin → no CORS header; store UA → 403 with CORS; no marker → 200. `store-edition-test` "excluded endpoint" assertion rewritten: the UA is the refusal, not the origin |
+
+Where to look hardest: whether any endpoint on `SEEKER_API_RE` relied on the ABSENCE of CORS as a
+control (none should — each has its own gate: `toolPassGate`, `receiptSessionGate`, payment
+checks, the Hatchery's own fee verification), and whether `https://localhost` as an allowed origin
+is broader than intended (it is the Capacitor Android origin; any local page on that origin in a
+desktop browser holds none of the app's tokens).
+
 ## Round 21 — 2026-09-22: #401 (Buy Special out of the Seeker app), your follow-up — done
 
 You cleared `d2f378f` / wrapper `e842461` with one follow-up: the `>= 13` tile assertion would
