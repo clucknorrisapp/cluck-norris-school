@@ -67,8 +67,12 @@ reference.
     burn button is live. Burn it. Same three outcomes.
 14. **Airdropper** — the free-for-everyone check: build a drop to two of your own addresses, review
     (transaction count and network cost shown before signing), send. **No pass sheet appears at any
-    point.** After the batches confirm, the pane offers a public receipt link; open it in the phone
-    browser — the rows are there, verified, and your wallet address is NOT on the page.
+    point.** One **sign-in prompt** appears before the first batch: a message signature ("sign in
+    to the Airdropper"), not a transaction — it makes the drop's public receipt yours to write.
+    Approve it. After the batches confirm, the pane offers a public receipt link; open it in the
+    phone browser — BOTH rows are there, verified (one batch transaction, two recipients), and
+    your wallet address is NOT on the page. Then send a second tiny drop and DECLINE the sign-in:
+    the tokens still send and the pane says the drop has no public receipt.
 15. **Locker Room**: preview a lock (do not have to complete one). The wallet prompt, if you go
     through with it, shows your wallet as the first signer.
 16. **Project Burn**: preview only unless you mean it — burning supply is real.

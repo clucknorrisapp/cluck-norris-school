@@ -16,9 +16,9 @@
 - **Build** — forensics, holder analysis, non-custodial locking and campaign tools that projects use to strengthen their communities.
 - **Earn** — reward programs whose terms and payouts any holder can verify without trusting us.
 
-Open source, live on mainnet. The heavy tools stay free while you hold ~$50 of CLKN (or a small SOL pass) — the token is the key that unlocks them, not a play for its own sake.
+Open source, live on mainnet. The heavy tools stay free while you hold ~$10 of CLKN (or a small SOL pass) — the token is the key that unlocks them, not a play for its own sake.
 
-Everything that teaches is free. No signup, no wallet connect to learn, no subscription. The heavy tools (X-Ray, Holders, Trace, the airdropper) cost real money to run — hold about $50 worth of CLKN and they are all free; otherwise 0.05 SOL unlocks the lot for 7 days. The safety basics — Wallet Checkup, Firepit, the Locker Room — stay free for everyone.
+Everything that teaches is free. No signup, no wallet connect to learn, no subscription. The heavy tools (X-Ray, Holders, Trace) cost real money to run — hold about $10 worth of CLKN (in the Seeker app, about $20 of SKR opens the same door) and they are all free; otherwise 0.05 SOL unlocks the lot for 7 days. The safety basics — Wallet Checkup, Firepit, the Locker Room — and the airdropper stay free for everyone.
 
 Live at **[clucknorris.app](https://clucknorris.app)**.
 
@@ -168,15 +168,16 @@ subscriptions, no accounts.
 
 | Tool | Cost |
 |---|---|
-| 💰 **[Batch airdrop sender](https://clucknorris.app/airdrop)** | **Free** holding ~$50 of CLKN (live-priced) · else **0.05 SOL** = a 7-day pass to every heavy tool |
+| 💰 **[Batch airdrop sender](https://clucknorris.app/airdrop)** | **Free for everyone** — no pass, no hold (since 2026-09-22); you pay only Solana's own fees and rent |
 | 🔬 **[Premium Forensics](https://clucknorris.app/premium)** | Holder-gated on a live 2,000,000 CLKN balance |
 | 🔎 **[Listing Checkup](https://clucknorris.app/listing-checkup)** — a project's listings vs. its own on-chain record, with a fix link for each mismatch | **Free preview** (on-chain metadata, CoinGecko, GeckoTerminal, DexScreener, Jupiter) · full sweep (+ Solscan, Rugcheck, pump.fun, CoinMarketCap, Birdeye, byte-level logo compare, shareable report) on the unified tools pass |
 | 🥚 **[The Hatchery](https://clucknorris.app/hatchery)** — guided token creator | **0.1 SOL**, or the CLKN equivalent at a **~30% discount** · free above the live holder threshold at `/api/hatchery/config` |
 
-The heavy tools — Wallet X-Ray, Holders, Trace and the airdropper — share **one**
-pass: hold about $50 worth of CLKN (computed from the live price, never a fixed token count —
-`/api/tool-gate/config` is the source of truth) and all of them are free; otherwise 0.05 SOL buys
-a 7-day pass to all of them. Every page previews free; the gate fires on RUN/SEND.
+The heavy tools — Wallet X-Ray, Holders, Trace — share **one** pass: hold about $10 worth of
+CLKN (computed from the live price, never a fixed token count — `/api/tool-gate/config` is the
+source of truth; the Seeker app also opens it on about $20 of SKR) and all of them are free;
+otherwise 0.05 SOL buys a 7-day pass to all of them. Every page previews free; the gate fires on
+RUN. The airdropper is outside the pass since 2026-09-22 — free for everyone, on every platform.
 
 The Hatchery is the one place you can still *pay* in CLKN, and it's deliberately ~30%
 cheaper than the SOL price. The token amount is computed live from the CLKN price so it
@@ -203,7 +204,7 @@ Two places you *do* connect — not to hand anything over, but to **sign your ow
 
 ## 🔐 How access works
 
-Connect a wallet and the gate resolves itself: hold about $50 of CLKN (checked against
+Connect a wallet and the gate resolves itself: hold about $10 of CLKN (checked against
 the live price — no fixed window) and the heavy tools are free. If you don't, one click
 sends 0.05 SOL and unlocks all of them for 7 days. Where the gate is *ownership* rather than payment — Premium Forensics, and
 proving a transcript is yours — you sign a one-line message instead. That's a
@@ -325,7 +326,7 @@ didn't traverse the WAF. Both are live since 2026-08-04.
 
 ## 🔥 The pitch, in one breath
 
-A free crypto school disciplined enough to be useful, wrapped around forensic tools that tell you what's on-chain and refuse to tell you why — with every heavy tool free to anyone holding ~$50 of the token (or a small SOL pass).
+A free crypto school disciplined enough to be useful, wrapped around forensic tools that tell you what's on-chain and refuse to tell you why — with every heavy tool free to anyone holding ~$10 of the token (or a small SOL pass).
 
 Learn fast. Avoid rugs. Survive the schoolyard.
 

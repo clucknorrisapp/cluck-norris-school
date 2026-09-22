@@ -654,10 +654,11 @@ const OP_FLAG='clkn_buyspecial_operator';
 const OP_KEY='clkn_buyspecial_opkey';
 async function toolFetch(url){ let k=null; try{ k=sessionStorage.getItem(OP_KEY); }catch(_){} if(k) return fetch(url,{headers:{'x-premium-key':k}});
   const r=await CluckGate.fetch(url); if((r.status===402||r.status===403)&&!CluckGate.pass()) showGate(); return r; }
-// Unified tools pass (owner, 2026-08-18): ONE pass across every heavy tool — hold $50 worth
-// of CLKN (live-priced via /api/tool-gate/config) = free, else 0.05 SOL for 7 days of
-// EVERYTHING. This page keeps its own gate UI but reads/writes the shared pass through
-// CluckGate, so unlocking here unlocks X-Ray/Holders/Trace/Airdrop too (and vice versa).
+// Unified tools pass (owner, 2026-08-18): ONE pass across every heavy tool — hold CLKN worth
+// the live figure (/api/tool-gate/config) = free, else 0.05 SOL for 7 days of EVERYTHING.
+// This page keeps its own gate UI but reads/writes the shared pass through CluckGate, so
+// unlocking here unlocks X-Ray/Holders/Trace too (and vice versa). The Airdropper left the
+// pass on 2026-09-22 — free for everyone.
 // CluckGate.pass() also honors the old clkn_buyspecial_unlock key until it expires.
 // A pass counts only with its server-issued token (proof): the heavy APIs check that token, and a
 // token-less local grant (the old flow here, or a pre-2026-09-10 pass) would only 402.

@@ -7809,12 +7809,20 @@ app.get("/api/airdrop-handoff", (req, res) => {
 app.use("/api/airdrop/record", rateLimit("airdropRecord", { windowMs: 60000, max: 30 }));
 app.post("/api/airdrop/record", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  // Same gate the airdropper's send already runs through client-side — this is the SERVER side of
-  // it, checked again here because the record is what a stranger will later read as "this landed".
-  // (Not requireToolPass()'s one-liner — that would need a second toolPassGate call just to learn
-  // the operator's wallet, and a holder check re-reads the chain, so it is done once here.)
-  const g = await toolPassGate(req);
-  if (!g.ok) { const { status, ...body } = g; return res.status(status || 403).json({ success: false, ...body }); }
+  // No TOOLS PASS (owner, 2026-09-22: "airdropper should be free for everyone on all platforms
+  // moving forward"): this route never asks for holdings or a payment. It does ask for the
+  // RECEIPT SIGN-IN (round 18): the operator wallet signs a nonce once, and that is the wallet
+  // every row is held to (sourceIsOperator), the wallet the daily-drop cap is keyed on, and the
+  // only wallet that may append to the drop. The public body never carries it. Rounds 15–17 read
+  // the operator off the chain instead (feePayerOf); that let a stranger claim an operator's
+  // unrecorded transfer first, which the sign-in closes. Since round 16: ONLY VERIFIED ROWS ARE
+  // STORED, a drop exists only once a row verified, one signature belongs to one receipt.
+  // Round 18 (Codex): the write needs the OPERATOR's receipt sign-in — a signature, never a
+  // holdings check or a payment, so the tool stays free; see receiptSessionGate. Every row is
+  // then held to that wallet, an existing drop must be that wallet's, and a stranger's claim of
+  // someone else's transfer is refused before anything is read from the chain.
+  const sess = receiptSessionGate(req);
+  if (!sess.ok) return res.status(sess.status).json({ success: false, error: sess.error, detail: sess.detail });
   const b = req.body || {};
   const rows = Array.isArray(b.rows) ? b.rows : null;
   if (!rows || !rows.length) return res.status(400).json({ success: false, error: "rows must be a non-empty list of {wallet, amount, sig}" });
@@ -7829,11 +7837,18 @@ app.post("/api/airdrop/record", async (req, res) => {
     r = await airdropReceipt.recordDrop({
       kv, dropId: b.dropId ? String(b.dropId) : undefined,
       mint: String(b.mint || ""), decimals: b.decimals, createdAt: b.createdAt,
-      rows, operator: g.wallet || null, getTx,
+      rows, getTx, operator: sess.wallet,
     });
   } catch (e) { return res.status(400).json({ success: false, error: String((e && e.message) || e) }); }
-  if (!r.ok) return res.status(r.status || 400).json({ success: false, error: r.error });
-  return res.status(200).json({ success: true, dropId: r.dropId, url: `/airdrop/r/${r.dropId}`, recorded: r.results, totals: r.totals });
+  // A 409 ("nothing verified") carries the per-row reasons, so the operator's own screen can say
+  // which rows the chain did not confirm — the public receipt never will (Codex, round 16). Since
+  // round 17 an EXISTING drop answers it too when a batch put nothing on the receipt, and both
+  // clients count `recorded[].verified`, never the chunk they sent. The commit inside recordDrop
+  // is synchronous (verify, then re-read and write with no await between), and every verified
+  // signature has its own kv key — two batches of one drop, or one signature posted twice at
+  // once, can no longer erase each other (round 17).
+  if (!r.ok) return res.status(r.status || 400).json({ success: false, error: r.error, ...(r.results ? { recorded: r.results } : {}) });
+  return res.status(200).json({ success: true, dropId: r.dropId, url: `/airdrop/r/${r.dropId}`, recorded: r.results, totals: r.totals, nothingNew: !!r.nothingNew });
 });
 // Same route, GET refused — see the mutating-GET-guard rule (CLAUDE.md): every admin/record route
 // that writes answers 405 on a GET.
@@ -9592,9 +9607,13 @@ const SOL_UNLOCK_MIN_LAMPORTS = 50_000_000;
 // /api/token-overview, cached 60s in memory and last-known-good in kv — if pricing is down we
 // publish clknNeeded:null and the client fails OPEN (an outage on our side never locks users
 // out). TOOLGATE_OFF=1 kills the whole gate without a deploy.
+// Owner, 2026-09-22: "lower it to 20 dollars of SKR or 10 dollars of CLKN to get access to
+// advanced tools" — so the two doors carry their OWN figures (was one $50 figure for both),
+// and the Airdropper left the pass entirely the same day ("free for everyone on all platforms").
 const TOOLGATE_TERMS = require("./lib/tool-pass-terms");
 const TOOLGATE = {
-  usd: Number(process.env.TOOLGATE_USD) || 50,
+  usd: Number(process.env.TOOLGATE_USD) || 10,
+  skrUsd: Number(process.env.TOOLGATE_SKR_USD) || 20,   // the Seeker app's SKR door (lib/tool-pass-qualify.js)
   // days + lamports come from the immutable terms schedule (lib/tool-pass-terms.js), NOT env,
   // since 2026-09-11: a payment's terms are fixed at payment time and resolve from that schedule,
   // so the offer the page advertises must be the schedule's current entry by construction. To
@@ -9617,7 +9636,32 @@ for (const k of ["TOOLGATE_LAMPORTS", "TOOLGATE_DAYS"]) {
 // Seeded from the volume at declaration (2026-08-18 review): the kv fallback used to live only
 // inside the refresh branch, so every request racing a cold-start refresh read usd=0 and the
 // paywall failed open for the whole first-fetch window after each deploy.
-let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: null };
+const TOOL_PASS_QUALIFY = require("./lib/tool-pass-qualify");
+const SKR_MINT = TOOL_PASS_QUALIFY.SKR_MINT;
+// A persisted price is trusted only if it is a finite positive number (Codex, round 13 P2: a
+// stored -1 would otherwise be loaded at boot and make the sanity band refuse every valid tick).
+const loadedPrice = (k) => { const v = Number(kv.get(k, 0)); return Number.isFinite(v) && v > 0 ? v : 0; };
+let toolGatePrice = { at: 0, usd: loadedPrice("toolGateClknUsd"), p: null,
+  // The Seeker app's second door (owner, 2026-09-19; lib/tool-pass-qualify.js): SKR, priced the
+  // same way, cached the same way, and read only when a session asked for that door.
+  skrUsd: loadedPrice("toolGateSkrUsd"), skrP: null };
+// One SKR refresh at a time; both the config route (fire-and-forget) and a session that asked for
+// the door with no price loaded (awaited) share it. acceptPrice() is the one rule for what may be
+// persisted: finite, positive, and inside the 10× band of a RECENT last-good.
+function refreshSkrPrice(now) {
+  if (toolGatePrice.skrP) return toolGatePrice.skrP;
+  toolGatePrice.skrP = (async () => {
+    try {
+      const j = await jupPriceV3([SKR_MINT]);
+      const a = TOOL_PASS_QUALIFY.acceptPrice({ fresh: j && j[SKR_MINT] && j[SKR_MINT].usdPrice, last: toolGatePrice.skrUsd, lastAt: kv.get("toolGateSkrUsdAt", 0), now });
+      if (!a.ok) { console.warn("[tool-gate] SKR price refresh rejected: " + a.reason); return; }
+      toolGatePrice.skrUsd = a.price;
+      kv.set("toolGateSkrUsd", a.price); kv.set("toolGateSkrUsdAt", now);
+    } catch (e) { console.warn("[tool-gate] SKR price refresh failed:", e.message); }
+    finally { toolGatePrice.skrP = null; }
+  })();
+  return toolGatePrice.skrP;
+}
 
 // SERVER-SIDE enforcement of the tools pass (2026-09-10, reworked the same night after a
 // second-reviewer pass found two bypasses). Until now the pass lived only in localStorage and
@@ -9645,24 +9689,52 @@ let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: 
 // timestamp nonce let the same signed message mint more than one session). One nonce per signing,
 // bound to the wallet and to this purpose, consumed on first use whether or not it verifies.
 const TOOL_PASS_MSG_RE = /^Cluck Norris — unlock the tools pass\nwallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nnonce: ([0-9a-f]{32})\n/;
-const toolPassChallenges = new Map();   // nonce -> { wallet, exp }
+// The RECEIPT session (Codex round 18 on #395, 2026-09-22): the Airdropper is free for everyone,
+// but writing a drop's PUBLIC RECEIPT is not anonymous — a stranger who knew an operator's
+// unrecorded public transfer could claim it on a receipt of their own first, and the operator's
+// own recording then got "already recorded on another receipt". So /api/airdrop/record takes a
+// signed session too — its OWN message and purpose, with NO holdings check and NO payment: the
+// wallet signs a nonce, the server hands back a token that says only "this wallet proved
+// itself", and every row is then held to that wallet (lib/airdrop-receipt.js `operator`). A
+// receipt token is never a tools pass (toolPassGate refuses via "receipt"), and a receipt
+// challenge can never mint a tools pass (the purpose travels with the nonce and the message).
+const RECEIPT_MSG_RE = /^Cluck Norris — sign in to the Airdropper\nwallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nnonce: ([0-9a-f]{32})\n/;
+const RECEIPT_SESSION_TTL = 24 * 3600e3;
+const toolPassChallenges = new Map();   // nonce -> { wallet, exp, purpose }
 const TOOL_PASS_CHALLENGE_TTL = 10 * 60e3;
 function toolPassMessage(wallet, nonce) {
   return `Cluck Norris — unlock the tools pass\nwallet: ${wallet}\nnonce: ${nonce}\nThis only proves you own this wallet. It is NOT a transaction and grants no spending approval.`;
 }
-function issueToolPassChallenge(wallet) {
+function receiptMessage(wallet, nonce) {
+  return `Cluck Norris — sign in to the Airdropper\nwallet: ${wallet}\nnonce: ${nonce}\nThis only proves you own this wallet, so the public receipt of your drop is yours to write. It is NOT a transaction and grants no spending approval.`;
+}
+function issueToolPassChallenge(wallet, purpose) {
+  purpose = purpose === "receipt" ? "receipt" : "tools";
   const now = Date.now();
   for (const [n, c] of toolPassChallenges) if (c.exp < now) toolPassChallenges.delete(n);
   if (toolPassChallenges.size > 5000) throw new Error("too many open challenges — try again in a minute");
   const nonce = randomBytes(16).toString("hex");
-  toolPassChallenges.set(nonce, { wallet, exp: now + TOOL_PASS_CHALLENGE_TTL });
-  return { nonce, message: toolPassMessage(wallet, nonce), expiresAt: now + TOOL_PASS_CHALLENGE_TTL };
+  toolPassChallenges.set(nonce, { wallet, exp: now + TOOL_PASS_CHALLENGE_TTL, purpose });
+  return { nonce, purpose, message: purpose === "receipt" ? receiptMessage(wallet, nonce) : toolPassMessage(wallet, nonce), expiresAt: now + TOOL_PASS_CHALLENGE_TTL };
 }
-// Consumes the nonce on ANY attempt; returns true only when it exists, matches the wallet and is unexpired.
-function consumeToolPassChallenge(nonce, wallet) {
+// Consumes the nonce on ANY attempt; returns true only when it exists, matches the wallet AND the
+// purpose it was issued for, and is unexpired.
+function consumeToolPassChallenge(nonce, wallet, purpose) {
   const c = toolPassChallenges.get(nonce);
   if (c) toolPassChallenges.delete(nonce);
-  return !!(c && c.wallet === wallet && c.exp >= Date.now());
+  return !!(c && c.wallet === wallet && (c.purpose || "tools") === (purpose || "tools") && c.exp >= Date.now());
+}
+// The receipt route's gate: any valid session token proves its wallet (every one is issued only
+// after a signature or a payIntent minted from one). Returns the wallet, never a tier. Fails
+// CLOSED without the issuer key — this guards a write, unlike toolPassGate's fail-open reads.
+function receiptSessionGate(req) {
+  if (!process.env.PREMIUM_ACCESS_KEY) return { ok: false, status: 503, error: "receipt_sessions_unavailable", detail: "The receipt service cannot verify sessions right now. The tokens still send; the receipt can be recorded later." };
+  const raw = String(req.get("x-clkn-pass") || "").trim();
+  const m = /^t:([A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)$/.exec(raw);
+  if (!m) return { ok: false, status: 401, error: "receipt_session_required", detail: "Recording a public receipt needs the operator wallet to sign in first (a signature, not a transaction; no holdings, no payment)." };
+  const p = verifyToolPass(m[1]);
+  if (!p) return { ok: false, status: 401, error: "receipt_session_expired", detail: "The receipt sign-in has expired or is not valid — sign in again from the page." };
+  return { ok: true, wallet: p.w, via: p.v };
 }
 // A short-lived, wallet-bound credential handed to a wallet that just proved itself but did not
 // qualify, so the PAY path can redeem its payment without a second signature prompt.
@@ -9712,22 +9784,24 @@ function rememberHolder(wallet, entry) {
   let drop = toolPassHolderCache.size - 5000;
   for (const w of toolPassHolderCache.keys()) { if (drop-- <= 0) break; toolPassHolderCache.delete(w); }
 }
-async function toolPassQualify(wallet) {
-  if (isToolComped(wallet)) return { ok: true, via: "comp" };
-  const cached = toolPassHolderCache.get(wallet);
-  if (cached && Date.now() - cached.at < 5 * 60e3) return cached.ok ? { ok: true, via: "holder" } : { ok: false, ...cached.deny };
-  const priceUsd = toolGatePrice.usd || null;
-  if (!priceUsd) return { ok: true, via: "grace-price" };
-  let h;
-  try { h = await checkCLKNHolder(wallet); } catch (e) { h = { unavailable: true, error: e.message }; }
-  if (!h || h.unavailable) { console.warn("[tool-pass] balance read unavailable, failing open:", (h && h.error) || "no result"); return { ok: true, via: "grace-rpc" }; }
-  const needed = Math.ceil(TOOLGATE.usd / priceUsd);
-  const bal = Number(h.balance) || 0;
-  if (bal >= needed) { rememberHolder(wallet, { ok: true, at: Date.now() }); return { ok: true, via: "holder", balance: bal, needed }; }
-  const deny = { error: "insufficient_holdings", balance: bal, needed, holdUsd: TOOLGATE.usd, priceUsd,
-    detail: `The free tier needs about $${TOOLGATE.usd} of CLKN (~${needed.toLocaleString()} at the current price); that wallet holds ${Math.round(bal).toLocaleString()}. ${TOOLGATE.lamports / 1e9} SOL unlocks every heavy tool for ${TOOLGATE.days} days.` };
-  rememberHolder(wallet, { ok: false, at: Date.now(), deny });
-  return { ok: false, ...deny };
+async function toolPassQualify(wallet, doors) {
+  // The decision itself is lib/tool-pass-qualify.js (pure, unit-tested); this wires the reads.
+  // `doors` is what the client asked for — the Seeker app sends ["skr"]; nothing else does.
+  // The comp list is consulted INSIDE the lib before its cache (Codex, round 13 P2: a cached
+  // denial used to outrank a comp granted a minute later), and the lib caches only real answers
+  // — holders and verified denials — keyed by wallet + doors. rememberHolder keeps it bounded.
+  const d = TOOL_PASS_QUALIFY.normalizeDoors(doors);
+  if (d.includes("skr") && !toolGatePrice.skrUsd) { try { await refreshSkrPrice(Date.now()); } catch (_) {} }   // "missing" must mean unavailable, not still loading
+  return TOOL_PASS_QUALIFY.qualify({
+    wallet, doors: d, usd: TOOLGATE.usd, skrUsd: TOOLGATE.skrUsd,
+    prices: { clkn: toolGatePrice.usd || null, skr: toolGatePrice.skrUsd || null },
+    comped: isToolComped(wallet),
+    cache: { get: (k) => toolPassHolderCache.get(k), set: (k, v) => rememberHolder(k, v) },
+    readClkn: () => checkCLKNHolder(wallet),
+    readSkr: () => checkMintHolder(wallet, SKR_MINT),
+    terms: { lamports: TOOLGATE.lamports, days: TOOLGATE.days },
+    log: (m) => console.warn("[tool-pass] " + m),
+  });
 }
 async function toolPassGate(req) {
   if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return { ok: true, via: "gate-off" };
@@ -9741,9 +9815,11 @@ async function toolPassGate(req) {
   if (!m) return { ok: false, status: 403, error: "bad_pass", detail: "Unrecognised pass proof — unlock again from the page." };
   const p = verifyToolPass(m[1]);
   if (!p) return { ok: false, status: 403, error: "pass_expired", detail: "That tools pass has expired or is not valid — unlock again from the page." };
+  if (p.v === "receipt") return { ok: false, status: 403, error: "bad_pass", detail: "That is an Airdropper receipt sign-in, not a tools pass — unlock the tools pass from the page." };
   if (p.v === "paid" || p.v === "gate-off" || p.v === "grace-price" || p.v === "grace-rpc") return { ok: true, via: p.v, wallet: p.w };
-  // Holder and comped tokens stay honest: the free tier is "while you hold", re-read live.
-  const q = await toolPassQualify(p.w);
+  // Holder and comped tokens stay honest: the free tier is "while you hold", re-read live —
+  // through the same door the token came from (a website session never grows an SKR door).
+  const q = await toolPassQualify(p.w, TOOL_PASS_QUALIFY.doorsForVia(p.v));
   if (q.ok) return { ok: true, via: q.via, wallet: p.w };
   const { ok, ...deny } = q;
   return { ok: false, status: 403, ...deny };
@@ -9770,7 +9846,7 @@ app.get("/api/tool-gate/challenge", rateLimit("pay", { windowMs: 60000, max: 30 
   res.setHeader("Cache-Control", "no-store");
   const wallet = String(req.query.wallet || "").trim();
   if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "need wallet" });
-  try { return res.status(200).json({ success: true, ...issueToolPassChallenge(wallet) }); }
+  try { return res.status(200).json({ success: true, ...issueToolPassChallenge(wallet, String(req.query.purpose || "")) }); }
   catch (e) { return res.status(503).json({ success: false, error: e.message }); }
 });
 // POST /api/tool-gate/session — the only issuer of tools-pass tokens (see the block above).
@@ -9788,11 +9864,22 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
     if (!String(b.paySig || "").trim()) return res.status(400).json({ success: false, error: "pay intent needs a payment signature" });
   } else {
     if (!message || !signature) return res.status(400).json({ success: false, error: "need wallet, message, signature" });
+    // The RECEIPT sign-in (see RECEIPT_MSG_RE): its own message, its own challenge purpose, and
+    // it ends here — a "receipt" token, never a tools pass, no holdings read, no payment leg.
+    const rm = RECEIPT_MSG_RE.exec(message);
+    if (rm) {
+      if (rm[1] !== wallet) return res.status(400).json({ success: false, error: "message does not match wallet" });
+      if (!consumeToolPassChallenge(rm[2], wallet, "receipt")) return res.status(400).json({ success: false, error: "challenge missing, expired or already used — request a new one" });
+      if (message !== receiptMessage(wallet, rm[2])) return res.status(400).json({ success: false, error: "message does not match the issued challenge" });
+      if (!verifySolanaSignature(message, signature, wallet)) return res.status(401).json({ success: false, error: "Signature did not verify" });
+      try { traction.recordWalletConnect(kv, { source: "receipt", wallet }); } catch (_) { /* counter only */ }
+      return res.status(200).json({ success: true, via: "receipt", pass: "t:" + issueToolPass(wallet, "receipt", RECEIPT_SESSION_TTL), days: 1 });
+    }
     const mm = TOOL_PASS_MSG_RE.exec(message);
     if (!mm || mm[1] !== wallet) return res.status(400).json({ success: false, error: "message does not match wallet" });
     // The challenge is consumed on this attempt no matter what follows: a signed message is
     // good for exactly one session request.
-    if (!consumeToolPassChallenge(mm[2], wallet)) return res.status(400).json({ success: false, error: "challenge missing, expired or already used — request a new one" });
+    if (!consumeToolPassChallenge(mm[2], wallet, "tools")) return res.status(400).json({ success: false, error: "challenge missing, expired or already used — request a new one" });
     if (message !== toolPassMessage(wallet, mm[2])) return res.status(400).json({ success: false, error: "message does not match the issued challenge" });
     if (!verifySolanaSignature(message, signature, wallet)) return res.status(401).json({ success: false, error: "Signature did not verify" });
   }
@@ -9825,9 +9912,12 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
     if (!r.ok) return res.status(r.status || 200).json({ success: false, error: r.error, retry: !!r.retry, lamports: r.lamports, needed: r.needed });
     return res.status(200).json({ success: true, via: "paid", recovered: r.recovered, lamports: r.lamports, termDays: r.termDays, pass: "t:" + issueToolPass(wallet, "paid", r.ttlMs), days: r.days });
   }
-  const q = await toolPassQualify(wallet);
+  // `doors`: the extra free-tier doors this client offers. The Seeker app sends ["skr"]
+  // (docs/SEEKER_APP_PLAN.md §7); the website and the store editions send nothing. A product
+  // boundary, not a security one — see lib/tool-pass-qualify.js.
+  const q = await toolPassQualify(wallet, b.doors);
   if (!q.ok) { const { ok, ...deny } = q; return res.status(200).json({ success: false, ...deny, payIntent: issuePayIntent(wallet) }); }
-  const ttl = q.via === "comp" ? 30 * dayMs : q.via === "holder" ? TOOLGATE.days * dayMs : 1 * dayMs;   // grace = 1 day, like the client's old grace grant
+  const ttl = q.via === "comp" ? 30 * dayMs : (q.via === "holder" || q.via === "holder-skr") ? TOOLGATE.days * dayMs : 1 * dayMs;   // grace = 1 day, like the client's old grace grant
   return res.status(200).json({ success: true, via: q.via, balance: q.balance, needed: q.needed, pass: "t:" + issueToolPass(wallet, q.via, ttl), days: Math.round(ttl / dayMs) });
 });
 // One line per gated route: answers the JSON the page renders, or null to continue.
@@ -10108,30 +10198,33 @@ app.get("/api/tool-gate/config", async (req, res) => {
     toolGatePrice.p = (async () => {
       try {
         const ov = await tokenOverviewData(CLKN_MINT_ADDR);
-        const fresh = ov && Number(ov.priceUsd) > 0 ? Number(ov.priceUsd) : 0;
-        if (!fresh) { console.warn("[tool-gate] price refresh returned no usable CLKN price"); return; }
         // Sanity band: a single thin-pool tick 10x off must not repin the paywall threshold.
         // The band only applies against a RECENT good price (<6h) so a genuinely moved market
-        // can still re-anchor once the last-good value ages out.
-        const lastAt = Number(kv.get("toolGateClknUsdAt", 0)) || 0;
-        if (toolGatePrice.usd && now - lastAt < 6 * 3600e3
-            && (fresh > toolGatePrice.usd * 10 || fresh < toolGatePrice.usd / 10)) {
-          console.warn(`[tool-gate] rejected implausible CLKN price ${fresh} (last good ${toolGatePrice.usd})`);
-          return;
-        }
-        toolGatePrice.usd = fresh;
-        kv.set("toolGateClknUsd", fresh); kv.set("toolGateClknUsdAt", now);
+        // can still re-anchor once the last-good value ages out. One rule for both mints:
+        // lib/tool-pass-qualify.js acceptPrice() (finite and positive first, then the band).
+        const a = TOOL_PASS_QUALIFY.acceptPrice({ fresh: ov && ov.priceUsd, last: toolGatePrice.usd, lastAt: kv.get("toolGateClknUsdAt", 0), now });
+        if (!a.ok) { console.warn("[tool-gate] CLKN price refresh rejected: " + a.reason); return; }
+        toolGatePrice.usd = a.price;
+        kv.set("toolGateClknUsd", a.price); kv.set("toolGateClknUsdAt", now);
       } catch (e) { console.warn("[tool-gate] price refresh failed:", e.message); }
       finally { toolGatePrice.p = null; }
     })();
+    // SKR, for the Seeker app's door, refreshed beside CLKN but independently: a Jupiter
+    // hiccup on one mint never costs the other its price. Same sanity band, same kv last-known-good.
+    refreshSkrPrice(now);
   }
   if (toolGatePrice.p && !toolGatePrice.usd) { try { await toolGatePrice.p; } catch (_) {} }
   const priceUsd = toolGatePrice.usd || null;
+  const skrUsd = toolGatePrice.skrUsd || null;
   return res.json({
     success: true, enabled: true, holdUsd: TOOLGATE.usd, priceUsd,
     clknNeeded: priceUsd ? Math.ceil(TOOLGATE.usd / priceUsd) : null,
     lamports: TOOLGATE.lamports, days: TOOLGATE.days,
     receiver: SOL_UNLOCK_WALLET, mint: CLKN_MINT_ADDR,
+    // The Seeker app's door: its OWN $ figure (holdUsd here, TOOLGATE.skrUsd) in SKR, live-priced.
+    // A client that does not offer the door ignores this block; a null skrNeeded means "no price
+    // right now" (the app says so).
+    skr: { mint: SKR_MINT, holdUsd: TOOLGATE.skrUsd, priceUsd: skrUsd, skrNeeded: skrUsd ? Math.ceil(TOOLGATE.skrUsd / skrUsd) : null, door: "skr" },
   });
 });
 // ── /host-image: owner's permanent image host (Arweave via the funded Turbo key) ─────────────
@@ -14105,6 +14198,21 @@ async function getSheetRows() {
   return data.values || [];
 }
 
+// Any mint, same read and the same outage contract as checkCLKNHolder below: an RPC error is
+// `unavailable`, never a zero. No comp short-circuit here — comp is decided before any read
+// (lib/tool-pass-qualify.js), so this is a plain balance.
+async function checkMintHolder(wallet, mint) {
+  try {
+    const url = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "holder-check", method: "getTokenAccountsByOwner", params: [wallet, { mint }, { encoding: "jsonParsed" }] }) });
+    const data = await response.json();
+    if (!data || !data.result || !Array.isArray(data.result.value)) return { balance: 0, unavailable: true, error: (data && data.error && data.error.message) || "no result" };
+    let balance = 0;
+    for (const a of data.result.value) balance += Number(a && a.account && a.account.data && a.account.data.parsed && a.account.data.parsed.info && a.account.data.parsed.info.tokenAmount && a.account.data.parsed.info.tokenAmount.uiAmount) || 0;
+    return { balance };
+  } catch (e) { return { balance: 0, unavailable: true, error: e.message }; }
+}
 async function checkCLKNHolder(wallet) {
   // Operator comp: a wallet on the all-tools free-access list (toolCompWallets, managed via
   // /api/tool-comp) is treated as a full holder on EVERY balance-gated tool — premium forensics,

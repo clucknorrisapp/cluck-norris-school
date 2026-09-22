@@ -8,8 +8,11 @@
 // `tier` is the EXISTING access model (AGENTS.md), not a new one:
 //   "free"   — no wallet, no pass. Read-only or explanatory.
 //   "wallet" — free, but needs a connected wallet to act on your own assets.
-//   "pass"   — the unified tools pass: hold $50 of CLKN (live-priced) or 0.05 SOL for 7 days.
-//              ⛔ The amount is NEVER hardcoded anywhere — it renders from /api/tool-gate/config.
+//   "pass"   — the unified tools pass: hold CLKN (or, in this app, SKR) worth the live dollar
+//              figure, or a small SOL payment for a short pass to all of them.
+//              ⛔ The amounts are NEVER hardcoded anywhere — they render from /api/tool-gate/config.
+//              The Airdropper is NOT in this tier since 2026-09-22 (owner: "free for everyone on
+//              all platforms") — it is "wallet": free, signs every batch.
 //   "paid"   — priced per use; the figure is computed live by its own config endpoint.
 //
 // `flagship` is the owner's list, 2026-09-21: "the school, the LP lab, the airdropper, the
@@ -43,7 +46,7 @@ export const TOOLS = [
     blurb: "Who holds a token, how concentrated it is, and how that changed." },
   { id: "trace",      route: "/tools/trace",      title: "Trace",           icon: "🧭", tier: "pass",   ready: true ,
     blurb: "Follow the money between wallets, hop by hop." },
-  { id: "airdrop",    route: "/tools/airdrop",    title: "Airdropper",      icon: "🪂", tier: "pass",   ready: true, flagship: true ,
+  { id: "airdrop",    route: "/tools/airdrop",    title: "Airdropper",      icon: "🪂", tier: "wallet", ready: true, flagship: true ,
     blurb: "Send a token to many wallets at once, with a receipt for every row." },
   { id: "buyspecial", route: "/tools/buyspecial", title: "Buy Special",     icon: "🎯", tier: "pass",   ready: true ,
     blurb: "Run a buy competition with standings anyone can check." },
