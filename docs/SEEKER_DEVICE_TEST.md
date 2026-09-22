@@ -53,9 +53,12 @@ reference.
 
 ## 4. Wallet tools — connect once, then act
 
-11. **Wallet Checkup** (`/checkup`): with no wallet connected it must show a connect control or say
-    the device has no wallet — never ask you to connect with nothing to tap. Connect. It reads YOUR
-    wallet (no paste field in this edition) and lists approvals and authorities.
+11. **Wallet Checkup** (`/checkup`): with no wallet connected it shows a paste-an-address form AND a
+    connect control (or says the device has no wallet) — never ask you to connect with nothing to
+    tap. Connect and it switches to scanning YOUR wallet automatically, no paste needed, plus a
+    quiet "Check another" control if you want to check a different address instead — that pasted
+    address wins over the connected wallet until you clear it. Lists approvals and authorities
+    either way.
 12. **Rent Reclaim** (`/rent`): the scan lists closable accounts and the SOL that comes back, per
     account. Close ONE. The wallet shows the exact instruction before you approve; the app then says
     landed / failed / unconfirmed — the three outcomes are worded differently. The balance goes up

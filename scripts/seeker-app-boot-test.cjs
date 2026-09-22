@@ -2009,6 +2009,97 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     }
   }
 
+  // ---- R: Wallet Checkup (full edition) — the connected wallet by default, any pasted -----
+  //         address as an override (src/seeker/edition/full.jsx's FullCheckup +
+  //         src/seeker/addressform.jsx, the paste form shared with the education edition).
+  //         Parity with the website's own Wallet Checkup, which takes any address, always.
+  {
+    const PASTE_ADDR = web3.Keypair.generate().publicKey.toBase58(); // distinct from the fake wallet's ADDR
+    const shortForm = (a) => a.slice(0, 4) + "…" + a.slice(-4);
+    const checkupBody = (wallet) => ({
+      success: true, wallet, tokensHeld: 1, scanned: 1, capped: false, unverified: 0,
+      portfolioUsd: 12.34, atRiskUsd: 0, holdings: [], approvals: [], riskyHoldings: [],
+    });
+
+    // -- 1. no wallet connected: the paste form AND a connect control are both on screen -----
+    {
+      const checkupCalls = [];
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/wallet-checkup*", (r) => {
+            checkupCalls.push(r.request().url());
+            const wallet = new URL(r.request().url()).searchParams.get("wallet");
+            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(checkupBody(wallet)) });
+          });
+        }
+      );
+      await page.waitForFunction(() => !!document.querySelector(".seeker-walletbtn"), null, { timeout: 20000 });
+      await page.evaluate(() => { window.location.hash = "#/checkup"; });
+      await page.waitForTimeout(400);
+      ok("R1 · no wallet — the paste form is present", await page.evaluate(() => !!document.querySelector(".seeker-edu-addrinput")));
+      ok("R1 · no wallet — a connect control is present too (connecting stays one tap)",
+         await page.evaluate(() => !!document.querySelector(".seeker-tool-needswallet button")));
+      ok("R1 · and no wallet-checkup call has happened yet", checkupCalls.length === 0, JSON.stringify(checkupCalls));
+
+      await page.fill(".seeker-edu-addrinput", PASTE_ADDR);
+      await page.click(".seeker-edu-addrbtn");
+      await page.waitForFunction(() => /Portfolio value/i.test(document.body.innerText), null, { timeout: 10000 }).catch(() => {});
+      const r1 = await text(page);
+      ok("R1 · submitting a valid pasted address makes EXACTLY ONE wallet-checkup call, for that address",
+         checkupCalls.length === 1 && checkupCalls[0].includes(`wallet=${PASTE_ADDR}`), JSON.stringify(checkupCalls));
+      ok("R1 · and the result actually renders", /Portfolio value/i.test(r1), r1.slice(0, 300));
+      ok("R1 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+
+      // -- 2. "Check another" returns to the form; no further call until the next submit -----
+      await page.click(".seeker-btn-quiet");
+      await page.waitForTimeout(300);
+      ok("R2 · Check another returns to the paste form", await page.evaluate(() => !!document.querySelector(".seeker-edu-addrinput")));
+      ok("R2 · ⚠️ and clearing it alone made no further wallet-checkup call", checkupCalls.length === 1, JSON.stringify(checkupCalls));
+      await ctx.close();
+    }
+
+    // -- 3. wallet connected, nothing pasted: the checkup runs on the WALLET address ---------
+    //    with no paste needed — and 4. a pasted address still wins over it.
+    {
+      const checkupCalls = [];
+      const { ctx, page, errors } = await open(
+        (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+        async (pg) => {
+          await pg.route("**/api/wallet-checkup*", (r) => {
+            checkupCalls.push(r.request().url());
+            const wallet = new URL(r.request().url()).searchParams.get("wallet");
+            r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(checkupBody(wallet)) });
+          });
+        }
+      );
+      await page.waitForFunction(() => !!document.querySelector(".seeker-walletbtn"), null, { timeout: 20000 });
+      await page.click(".seeker-walletbtn");
+      await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+      await page.evaluate(() => { window.location.hash = "#/checkup"; });
+      await page.waitForFunction(() => /Portfolio value/i.test(document.body.innerText), null, { timeout: 10000 }).catch(() => {});
+      const r3 = await text(page);
+      ok("R3 · wallet connected — the checkup runs on the WALLET address, no paste needed",
+         checkupCalls.length === 1 && checkupCalls[0].includes(`wallet=${ADDR}`), JSON.stringify(checkupCalls));
+      ok("R3 · and the result renders", /Portfolio value/i.test(r3), r3.slice(0, 300));
+      ok("R3 · no paste form shown up front — connecting was enough", await page.evaluate(() => !document.querySelector(".seeker-edu-addrinput")));
+
+      await page.click(".seeker-checkup-another");
+      await page.waitForTimeout(300);
+      ok("R4 · the quiet 'Check another' control opens the paste form", await page.evaluate(() => !!document.querySelector(".seeker-edu-addrinput")));
+      await page.fill(".seeker-edu-addrinput", PASTE_ADDR);
+      await page.click(".seeker-edu-addrbtn");
+      await page.waitForFunction((short) => document.body.innerText.includes(short), shortForm(PASTE_ADDR), { timeout: 10000 }).catch(() => {});
+      const r4 = await text(page);
+      ok("R4 · a pasted address WINS over the connected wallet — its own bar is shown",
+         r4.includes(shortForm(PASTE_ADDR)), r4.slice(0, 300));
+      ok("R4 · and the second call was for the pasted address, not the wallet's",
+         checkupCalls.length === 2 && checkupCalls[1].includes(`wallet=${PASTE_ADDR}`), JSON.stringify(checkupCalls));
+      ok("R4 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+      await ctx.close();
+    }
+  }
+
   await browser.close();
   console.log("\n" + (failures ? failures + " FAILED" : "all passed") + "\n");
   process.exit(failures ? 1 : 0);

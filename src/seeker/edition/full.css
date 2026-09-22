@@ -32,3 +32,6 @@
   font-size: 12px;
   color: var(--red-soft);
 }
+/* Wallet Checkup: the quiet control under the connected wallet's own result that opens the
+   paste-an-address form (FullCheckup, edition/full.jsx). */
+.seeker-checkup-another { display: block; width: auto; margin: 4px auto 0; }
