@@ -160,6 +160,20 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 21 — 2026-09-22: #401 (Buy Special out of the Seeker app), your follow-up — done
+
+You cleared `d2f378f` / wrapper `e842461` with one follow-up: the `>= 13` tile assertion would
+never catch Buy Special coming back. Now pinned in two places, so a tile can't return without a
+route nor a route without a tile:
+
+- `scripts/seeker-app-boot-test.cjs` B: no rendered card names Buy Special or buy comp, nothing
+  links to `buyspecial`; the old `#/tools/buyspecial` deep link falls through the catch-all to
+  `#/tools`, renders no Buy Special pane, makes no Buy Special API call, throws nothing.
+- `store-edition/seeker-edition.json` `forbidden`: `/api/buyspecial`, `tools/buyspecial`,
+  `seeker-bs-` — the built Seeker bundle's text must never contain them (`seeker-build-test`).
+  The website's dictionaries still name Buy Special legitimately, so the bundle guard is on the
+  route, the API path and the CSS prefix, not the words.
+
 ## Round 20 — 2026-09-22: #395, your re-review of `e0400d0` — one finding, fixed
 
 | # | Finding | Fix | Pinned by |

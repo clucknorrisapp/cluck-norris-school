@@ -27,7 +27,10 @@
   "forbidden": [
     "Wallet Watch",
     "Nomadz",
-    "Solana Foundation"
+    "Solana Foundation",
+    "/api/buyspecial",
+    "tools/buyspecial",
+    "seeker-bs-"
   ],
   "forbiddenPatterns": [
     "[Gg]uaranteed (return|yield|APR|APY)",

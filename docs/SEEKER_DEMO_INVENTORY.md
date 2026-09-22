@@ -45,10 +45,9 @@ is none.
 | `/tools/trace` | `Trace` | `trace` / pass | no | no | no |
 | `/tools/airdrop` | `Airdropper` | `airdrop` / pass | **yes** — `CluckAirdrop.send()` → `provider.signAndSendTransaction()` (`public/airdrop-engine.js`, shared with the website's own airdropper) | no | **yes** |
 | `/tools/hatchery` | `Hatchery` | `hatchery` / paid | **yes** — `wallet.provider.signTransaction()` directly (mint keypair is server-held and co-signs in `/api/hatchery/submit`) | no | no |
-| `/tools/buyspecial` | `BuySpecial` | `buyspecial` / pass | no | no | no |
 | `*` | `Navigate` → `/tools` | — | no | n/a (redirect) | — |
 
-20 routes. 6 panes sign: Rent Reclaim, Firepit, Project Burn, Locker Room, Airdropper, Hatchery —
+19 routes (Buy Special left the app on 2026-09-22 — owner: not in the Seeker app at all). 6 panes sign: Rent Reclaim, Firepit, Project Burn, Locker Room, Airdropper, Hatchery —
 of those, Firepit/Project Burn/Locker Room/Rent Reclaim go through the two shared signing seams
 (`sign.js`'s `signSendConfirm`, `reclaim-sign.js`'s `runFullReclaim`); Airdropper signs through the
 separate, shared `public/airdrop-engine.js`; Hatchery calls the wallet provider directly because
@@ -178,8 +177,7 @@ Everything in §1 and §2 **except** `/tools`, `/tools/airdrop`, `/tools/lock` a
 - `/school/certificate` (education edition only)
 - `/ask`, `/checkup`, `/tools/listing`, `/tools/alpha` (both editions)
 - `/tools/firepit`, `/tools/burn` (full edition — two of the six flagships)
-- `/tools/xray`, `/tools/holders`, `/tools/trace`, `/tools/hatchery`, `/tools/buyspecial` (full
-  edition)
+- `/tools/xray`, `/tools/holders`, `/tools/trace`, `/tools/hatchery` (full edition)
 
 And the four existing captures were taken against a 503'd backend (§3a), so even those four need a
 retake against a live server before they are demo-ready.

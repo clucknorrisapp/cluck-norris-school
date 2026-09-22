@@ -1,4 +1,4 @@
-// The Seeker app's tool grid — the screen that makes fifteen tools findable on a phone
+// The Seeker app's tool grid — the screen that makes the toolkit (fourteen tools since Buy Special left on 2026-09-22) findable on a phone
 // (docs/SEEKER_TOOLS_BUILD.md §2). Renders entirely from src/seeker/tools/registry.js, so a
 // builder adds a row there and the grid, the filter and the tier badges follow.
 //

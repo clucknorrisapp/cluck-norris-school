@@ -110,9 +110,9 @@ function classifyFailure({ offline, res, body }) {
   // change it. `detail`/`error` are plain server text rendered as a React text node, never HTML.
   if (res && res.status >= 400 && res.status < 500 && res.status !== 429) {
     const serverText = (body && (body.detail || body.error)) || null;
-    // The fallback reuses Buy Special's already-translated "refused" wording verbatim (the exact
+    // The fallback reuses the already-translated "refused" wording verbatim (the exact
     // same key, already in all six dictionaries) rather than adding a new string for this pane
-    // alone — see BuySpecial.jsx's own "refused" phase for the sibling usage.
+    // alone — the string predates this pane; Buy Special, its first user, left the app on 2026-09-22.
     return { kind: "refused", text: serverText || t("That request wasn't something we could use.") };
   }
   return { kind: "unavailable", text: t("Cluck couldn't answer that one. Try again in a moment.") };
