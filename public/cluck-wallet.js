@@ -316,6 +316,20 @@
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return bytes;
   }
+  // The native plugin returns `address` as BASE64 of the 32 key bytes (CluckMWAPlugin.kt's
+  // contract: "`address` ... are BASE64"). Pages, the tools-pass challenge (SOL_ADDR_RE) and every
+  // explorer want base58 — on 2026-09-23 the owner's Seeker showed "5lrl…qeM=" as the connected
+  // wallet and the pass sheet answered "could not reach the pass service" (the server said
+  // "need wallet"). Convert here, once. The bridge keeps getting ITS encoding back (signMessages'
+  // `addresses`). A bridge that already hands over base58 (a fake, a future shell) is left alone:
+  // base64 of 32 bytes is always 44 chars ending in "=", and a base58 key never contains "=", "+"
+  // or "/".
+  function mwaAddressToBase58(addr) {
+    var s = String(addr || "");
+    if (!/[=+\/]/.test(s) && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s)) return s;
+    try { var bytes = b64decode(s); if (bytes.length === 32) return b58encode(bytes); } catch (e) {}
+    return s;
+  }
   function mwaIdentity() {
     return { name: "Cluck Norris", uri: (global.location && global.location.origin) || "https://clucknorris.app", icon: "/icon.svg" };
   }
@@ -333,8 +347,8 @@
         return Promise.resolve(call).then(function (r) {
           if (!r || !r.address) throw new Error("Mobile Wallet Adapter returned no address.");
           authToken = r.authToken || authToken;
-          address = r.address;
-          pk = mkPk(address);
+          address = r.address;                  // the bridge's own encoding — handed back to signMessages
+          pk = mkPk(mwaAddressToBase58(address)); // what pages, the pass server and explorers see
           p.publicKey = pk;
           return { publicKey: pk };
         });
