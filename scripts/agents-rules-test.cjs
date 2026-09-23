@@ -232,6 +232,23 @@ const PINNED_SENTENCES = [
   "the birthday special's board never appeared",
   "Rule B (exclude-by-recipient-and-creator) is the ONLY thing keeping 2.285B of treasury locks",
   "flagships are the school, the LP lab, the airdropper, the locker room, the fire pit, project burn",
+  // The global money posture must stay in AGENTS.md (loads for every session), not only in the
+  // path-scoped rules file — the first cut of the split moved it out, review caught it.
+  "WATCH-ONLY.** Don't rebalance, recenter, close, redeploy, add/remove liquidity",
+  "NO LIQUIDITY ENGINE RUNS FOR ANY PROJECT",
+  "The autonomous rebalancer is hard-killed in code",
+  "Read balances ON-CHAIN, never with the product tools.",
+  "Treasury wallet `2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8`",
+];
+
+// (d2) The posture sentences above must live in AGENTS.md specifically — a rules file only
+// loads for sessions touching its paths, and WATCH-ONLY applies to every session.
+const MUST_BE_IN_AGENTS_MD = [
+  "WATCH-ONLY.** Don't rebalance, recenter, close, redeploy, add/remove liquidity",
+  "NO LIQUIDITY ENGINE RUNS FOR ANY PROJECT",
+  "The autonomous rebalancer is hard-killed in code",
+  "Read balances ON-CHAIN, never with the product tools.",
+  "Treasury wallet `2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8`",
 ];
 
 const AGENTS_MD_TEXT = normalizeWs(read("AGENTS.md"));
@@ -253,6 +270,14 @@ for (const sentence of PINNED_SENTENCES) {
     fail(`pinned sentence duplicated in ${hits.join(", ")}: "${sentence.slice(0, 60)}..."`);
   } else {
     ok(`pinned sentence present exactly once (in ${hits[0]}): "${sentence.slice(0, 40)}..."`);
+  }
+}
+
+for (const sentence of MUST_BE_IN_AGENTS_MD) {
+  if (!AGENTS_MD_TEXT.includes(normalizeWs(sentence))) {
+    fail(`global money posture missing from AGENTS.md (it must load for every session): "${sentence.slice(0, 60)}"`);
+  } else {
+    ok(`global money posture in AGENTS.md: "${sentence.slice(0, 40)}..."`);
   }
 }
 

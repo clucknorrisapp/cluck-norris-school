@@ -328,10 +328,46 @@ setup: `docs/STAGING_WORKFLOW.md`.
 
 The owner manages all liquidity positions **manually**. Read freely; touch nothing.
 
-> Moved to .claude/rules/money-engines.md (loads for `lib/whirlpool-*`, `lib/orca-*`,
-> `whirlpool-mm.js`, `lib/engine-decisions.js`, `lib/cuna-*`, `scripts/engine-sim-test.cjs`,
-> `docs/CUNA_STAKING_RUNBOOK.md`) — the full WATCH-ONLY / no-engines-running / brand-bag /
-> rebalancer / on-chain-balances rules, and the treasury + canonical-chart addresses.
+- ⛔ **WATCH-ONLY.** Don't rebalance, recenter, close, redeploy, add/remove liquidity, or
+  buy/sell CLKN. Don't "take over." Observe and log.
+- ⛔ **NO LIQUIDITY ENGINE RUNS FOR ANY PROJECT (owner, 2026-09-05: "none of the liquidity
+  engines should be running for any project").** The live vault flag reads `paused:true` for all
+  five projects (poke/cuna/dnc/rose/treasury) and survived three redeploys that day. The scoped
+  `poke` engine in server.js — the one carve-out from watch-only granted 2026-08-19 (two Orca
+  0.01% POKEAHOE pools at ±1% for VOLUME, signing with `MM_OPERATOR_SECRET_TREASURY`, touching
+  POKEAHOE/USDC/SOL only) — is **OFF BY DEFAULT in code since 2026-09-05** (owner: "flip the code
+  default to off too"). It registers its scheduler only with `POKE_ENGINE_ON=1` in Railway, set by
+  the owner in the moment; `POKE_ENGINE_OFF=1` still wins as a kill; the project's own `paused`
+  flag is a second, independent stop. Do not resume, un-pause, arm, or widen any engine without an
+  owner ask in that moment — an intent statement is a discussion, not a go. Instant stop if one is
+  ever running: `curl -X POST 'https://clucknorris.app/api/whirlpool/vault/pause?project=poke&key=…'`
+  — the route is **POST-only**, so a browser hit or a bare `curl` (GET) falls through to the
+  `/api/*` catch-all and returns `not_found`, which looks like "endpoint gone" in the middle of a
+  stop. The 2026-08-31 recoup-baseline carve-out below is unchanged but moot while nothing runs.
+- ⛔ **The brand bag is protected — with ONE owner-defined carve-out (2026-08-31).** The original
+  bag is never sold. But the owner revised the blanket rule: a tight-quoting engine that ABSORBS
+  someone's sell may sell that absorbed inventory back to recoup its quote funds ("those sells
+  would show up on the chart anyway — it's only fair we recoup as our base funds for volume").
+  Mechanism: `POST /api/whirlpool/vault/recoup-baseline?project=…&arm=1` snapshots current holdings as
+  a protected baseline; `manualSwap` then allows selling ONLY the amount above it. Disarmed +
+  baseline-less = the historic never-sell behavior, and that is the default everywhere. Also:
+  **never buy CLKN with operator funds** without asking in that moment (owner rule, after
+  unwanted inventory buys).
+- ⛔ **The autonomous rebalancer is hard-killed in code** (`JUP_AUTO_REBALANCE_KILLED = true`).
+  Re-enabling is a deliberate two-step opt-in. Don't, without an explicit ask.
+- **Read balances ON-CHAIN, never with the product tools.** `/api/wallet-xray` and autopsy are
+  *activity scanners* — they undercount and miss holdings, and two wrong balance reports came from
+  trusting them. Use `getTokenAccountsByOwner` (jsonParsed) for **both** token programs — legacy
+  and Token-2022 — plus `getBalance`, POSTed to `/api/helius-rpc`.
+
+Treasury wallet `2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8`. Canonical chart is the community
+Meteora pool `64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd`; engine pools are Orca. The venue
+split is settled — don't re-debate it.
+
+> Engine-implementation traps (the boot ratchets and `&durable=1`, the fail-open vault `paused`
+> flag, kv arm keys, the two-key money journal) live in .claude/rules/money-engines.md and load
+> for `lib/whirlpool-*`, `lib/orca-*`, `whirlpool-mm.js`, `lib/engine-decisions.js`,
+> `lib/cuna-*`, `scripts/engine-sim-test.cjs`, `docs/CUNA_STAKING_RUNBOOK.md`.
 
 ---
 
