@@ -109,8 +109,10 @@ export function SchoolHome({ finished, progressNote }) {
         </p>
       </div>
 
+      {/* data-clkn-avoid on the continue card: -avoid, not -kids — it is one short card, so its
+          own top is what the 🌐 pill measures against. */}
       {next ? (
-        <Link className="seeker-school-continue" to={`/school/${next.course.id}/${next.lesson.id}`}>
+        <Link className="seeker-school-continue" data-clkn-avoid="1" to={`/school/${next.course.id}/${next.lesson.id}`}>
           <span className="seeker-school-continue-label">
             {doneCount ? t("Pick up where you left off") : t("Start your first lesson")}
           </span>
@@ -130,7 +132,8 @@ export function SchoolHome({ finished, progressNote }) {
         </div>
       )}
 
-      <div className="seeker-school-courses">
+      {/* -kids, not -avoid: each card's own top is what the pill measures against. */}
+      <div className="seeker-school-courses" data-clkn-avoid-kids="1">
         {COURSES.map((c) => {
           const p = courseProgress(c.id);
           return (

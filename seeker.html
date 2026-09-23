@@ -61,6 +61,10 @@
     <script src="/airdrop-engine.js"></script>
     <script src="/airdrop-plan.js"></script>
     <!-- /EDU:OUT -->
+    <!-- Collision-avoidance for the bottom-pinned 🌐 pill. The website gets this via
+         cluck-nav.js, which this bundled shell does not load — without it i18n.js's
+         `if (window.__clknDockFloat)` guard no-ops and the pill sits on the course cards. -->
+    <script src="/clkn-dock-float.js"></script>
     <script src="/i18n.js"></script>
     <script type="module" src="/src/seeker/main.jsx"></script>
   </body>

@@ -18215,7 +18215,9 @@ app.get("/rent-reclaim-plan.js", (req, res) => {
 // served every page without its nav landmark, language toggle or Listen button — exactly the
 // public/-is-not-mounted trap CLAUDE.md describes. Found by scripts/hub-a11y-test.cjs on
 // 2026-09-18: green with dist/, 24 failures without it. Same no-cache posture as the modules above.
-for (const f of ["cluck-nav.js", "i18n.js", "read-aloud.js"]) {
+// clkn-dock-float.js joined on 2026-09-23: cluck-nav.js injects it as a separate file now (the
+// store editions ship it directly), so it needs the same no-build-boot route and cache posture.
+for (const f of ["cluck-nav.js", "i18n.js", "read-aloud.js", "clkn-dock-float.js"]) {
   app.get("/" + f, (req, res) => {
     res.setHeader("Cache-Control", "no-cache, must-revalidate");
     res.type("application/javascript");

@@ -11,6 +11,7 @@
     "theme.css",
     "cluck-util.js",
     "i18n.js",
+    "clkn-dock-float.js",
     "icon.svg",
     "cluck-norris.png"
   ],
