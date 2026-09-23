@@ -160,6 +160,65 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 23 — 2026-09-23: #412 (the wallet address was base64) and #411 (the Claude Code scaffolding)
+
+Both merged to `develop` on the owner's standing go; neither is on `main` yet. Findings, not
+rewrites, as always — the owner promotes after you have looked.
+
+### PR #412 — `public/cluck-wallet.js`: the Mobile Wallet Adapter address arrives BASE64
+
+Owner, on the device with the round-22 CORS fix installed: the connected wallet showed as
+`5lrl…qeM=` and the pass sheet still said "could not reach the pass service". Cause:
+`CluckMWAPlugin.kt` (the apps repo's native bridge) returns `address` as **base64 of the 32 key
+bytes**, by its own documented contract; `mwaProvider.connect()` used that string as the public
+key, and `GET /api/tool-gate/challenge?wallet=…` answered `400 need wallet` (fails
+`SOL_ADDR_RE`), which the sheet reports as unreachable. The round-22 CORS fix was correct.
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P1** — every Seeker surface that reads `provider.publicKey` saw base64: the pass sheet, the receipt sign-in, Wallet Checkup's "use connected wallet", the signing helpers' live-pubkey check | `mwaAddressToBase58()`: decode base64 → 32 bytes → the file's existing `b58encode`; `connect()` builds `publicKey` from that and keeps the bridge's OWN encoding for `signMessages`' `addresses`. A bridge that already speaks base58 passes through (base64 of 32 bytes always ends in `=`; base58 never contains `=`, `+`, `/`) | `scripts/seeker-build-test.cjs`: the fake bridges now return base64 like the real plugin (the first cut returned base58 and hid the bug); asserts the app-facing address is base58 and that `signMessages` gets base64 back |
+
+Where to look hardest — this is the wallet layer, the one surface every Seeker money path signs
+through:
+
+- **Is the passthrough heuristic safe?** A 44-char base58 key can `atob()` without throwing; the
+  guard is "decoded to exactly 32 bytes". Find a base58 public key whose base64 decoding is 32
+  bytes, or convince yourself none exists (43–44 base58 chars → 32–33 decoded bytes; we rely on
+  the `=`/`+`/`/` pre-check to short-circuit first).
+- **`signMessages` and `signTransactions` are unchanged** — they never used the address for
+  anything but the `addresses` echo. Confirm the base64 `address` still reaches the bridge
+  unmodified; the owner's device test (pass check + unlock with a CLKN wallet) passed, so the
+  signed message verified server-side against the base58 key.
+- **The server side did not move.** `SOL_ADDR_RE` on challenge and session is the same gate;
+  nothing accepts base64. A base64 wallet in any OTHER route's query would still 400 — grep
+  `src/seeker` for a wallet string built from anything but `provider.publicKey`.
+- **Untested on the device:** the SKR door and a wallet holding neither.
+
+### PR #411 — Claude Code scaffolding (`.claude/agents`, `.claude/commands`, `.claude/rules`, a hook)
+
+Not a product change; a process one. The parts that gate money deserve your eye:
+
+- **`.claude/hooks/no-mutating-get.sh`** (registered in `settings.json` `PreToolUse`): blocks a
+  `curl` to a clucknorris.app admin route carrying a mutating flag unless it is a real POST. It
+  is defence-in-depth for the POST-only rule the server already enforces. Try to write a curl
+  line that mutates and slips past it (a different host spelling, `--url`, a flag inside a
+  quoted body, `-XPOST` with no space, `--data-raw`). `scripts/no-mutating-get-hook-test.cjs`
+  is the corpus; a bypass you find goes in there.
+- **`.claude/commands/cuna-payout.md`** — the send and sweep steps unlock only on the literal
+  argument `go`; `cuna-special.md` never runs the draw or the payout. Read them as an
+  attacker who can type a slash command: is there a path from the command to a send without
+  the owner's word?
+- **`AGENTS.md` split into `.claude/rules/*.md`** with `paths:` frontmatter. The first cut
+  moved the WATCH-ONLY / no-engines money posture out of the always-loaded file into the
+  path-scoped one; review caught it and it is back in `AGENTS.md`. `scripts/agents-rules-test.cjs`
+  pins every moved sentence to exactly one place and pins the posture to `AGENTS.md` — tell us
+  if anything else that should load for EVERY session now loads only for some paths.
+
+### What is NOT in these PRs
+
+No endpoint changed. No payment, gate, or engine code changed. The apps repo's native plugin is
+unchanged — the fix is on our side of its contract.
+
 ## Round 22 — 2026-09-22: the Seeker app could not reach the pass service — CORS, not holdings
 
 Owner, on the device: *"when going to unlock it says could not reach the pass service try again
