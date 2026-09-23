@@ -249,6 +249,11 @@ const MUST_BE_IN_AGENTS_MD = [
   "The autonomous rebalancer is hard-killed in code",
   "Read balances ON-CHAIN, never with the product tools.",
   "Treasury wallet `2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8`",
+  // Codex round 23 (#411 P2): the OnlyRose posting policy is the owner's rule, not a
+  // path-specific implementation trap — a session that only runs a curl never loads
+  // telegram-x.md, so the policy sentence itself must live in AGENTS.md (the implementation
+  // detail stays in telegram-x.md, pointed back at AGENTS.md).
+  "The Cluck bot posts NOTHING in the OnlyRose room",
 ];
 
 const AGENTS_MD_TEXT = normalizeWs(read("AGENTS.md"));

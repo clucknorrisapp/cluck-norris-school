@@ -27,18 +27,15 @@ below is unedited — see `AGENTS.md` for the sections that stayed there.
   `[A-Za-z0-9]` (never the free-form name) and rate-limits itself (per-wallet/mint cooldown + hourly
   cap) so a griefer can't spam our X into a suspension. Don't loosen either without thinking it through.
 
-- ⛔ **The Cluck bot posts NOTHING in the OnlyRose room (owner, 2026-09-17: "make sure it is not
-  posting anything in rose").** Enforced in code, not by call-site discipline: `lib/telegram-rooms.js`
-  is consulted by `tgApi()` (the one send choke point since the 09-17 consolidation) and by the
-  three direct senders (`/api/tg-test`, the meme uploaders, the vault and swap-desk notifiers); a
-  send whose chat is the OnlyRose room is refused and logged (`[TG] refused: …`). The only
-  allows: the ROSE bot's own `roseTgSend*` path (it is disarmed; arming it is the owner's act),
-  an operator naming the room outright on `/api/tg-test` (`chat=` / `project=`), and a buy comp
-  the owner configured for that room. Everything else — welcomes, `/price`-style command replies,
-  burn celebrations, vault alerts, spotlights — is refused there. Deletes and button acks are not
-  posts and still work. `scripts/telegram-rooms-test.cjs` pins the policy and that no direct
-  Telegram send exists outside the audited functions. History: CLKN welcomes leaked in (09-02),
-  vault alerts (08-31), a replayed window of buy alerts (09-17, `docs/INCIDENT_2026-09-17_ROSE_BUYBOT_REPLAY.md`).
+- **OnlyRose posting — the owner's rule itself is in `AGENTS.md`** (it is a session-wide policy,
+  not a path-scoped trap, so it lives where every session reads it). Enforced in code here, not by
+  call-site discipline: `lib/telegram-rooms.js` is consulted by `tgApi()` (the one send choke
+  point since the 09-17 consolidation) and by the three direct senders (`/api/tg-test`, the meme
+  uploaders, the vault and swap-desk notifiers); a send whose chat is the OnlyRose room is refused
+  and logged (`[TG] refused: …`). Deletes and button acks are not posts and still work.
+  `scripts/telegram-rooms-test.cjs` pins the policy and that no direct Telegram send exists
+  outside the audited functions. History: CLKN welcomes leaked in (09-02), vault alerts (08-31), a
+  replayed window of buy alerts (09-17, `docs/INCIDENT_2026-09-17_ROSE_BUYBOT_REPLAY.md`).
 
 - **A Telegram post with an image gets 1024 characters, not 4096** — and our own code silently
   truncates at 1024 while returning success. Count the caption; put load-bearing lines (the X
