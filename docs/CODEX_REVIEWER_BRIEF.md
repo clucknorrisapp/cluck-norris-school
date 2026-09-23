@@ -160,6 +160,23 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 24 — 2026-09-23: #411, your three P2s — fixed
+
+All three round-23 findings on the Claude Code scaffolding (`.claude/hooks/no-mutating-get.sh`,
+`.claude/commands/cuna-payout.md`, and the OnlyRose policy split) are addressed on this branch.
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P2** — `no-mutating-get.sh` judged the WHOLE command string: any `-X POST` anywhere in a chained command "covered" an unrelated, unsafe curl elsewhere in the same line (`curl -X POST https://x/y; curl ".../admin?run=1"` was allowed) | The command is split into segments on `;`, `&&`, `\|\|`, `\|` and newlines (multi-char operators collapsed first so they don't get chopped into stray single `\|`s); each segment that is itself a curl against an admin path with a mutating flag is now judged on its own flags — needs an explicit POST (`-X POST`/`-XPOST`/`-X 'POST'`/`--request POST`/`--request=POST`), or a data flag (`-d `/`--data*`/`--json`) with no explicit GET override (`-X GET`/`--request GET`/`-G`/`--get`, since curl itself sends a GET when any of those is present even alongside a data flag) | `scripts/no-mutating-get-hook-test.cjs`: 8 new cases — chained-command leakage in both directions, `-X GET`+`--data`, `-G`+`--data-urlencode`, `-XPOST` (no space), a POST piped into another command, two admin routes each POSTed independently, and a flag-less admin read |
+| 2 | **P2** — `cuna-payout.md` built the batch (`POST ?export=1`) BEFORE the `go` argument check, so a mere preview call moved real amounts out of "owed" | Restructured: without `go`, only two plain GETs run (the ledger read's own `previewLines`, and `/api/cuna-stake/admin`'s `wouldPay`/`eligible` — both cited in `docs/CUNA_STAKING_RUNBOOK.md`) and the command stops before Step 1; `export=1` now runs only past the `go` gate, and Step 3's verify script is a hard STOP-if-nonzero before Step 4 send | `scripts/agents-rules-test.cjs` (the `\bgo\b` check still passes); manual read of the restructured file — no exported call above the STOP line |
+| 3 | **P2** — the OnlyRose owner policy (⛔ "posts NOTHING in the OnlyRose room") lives only in `.claude/rules/telegram-x.md`, which loads only for sessions touching `server.js`/`lib/telegram-*.js`/`lib/cuna-giveaway.js` — a session that only runs a curl against `/api/tg-test` never loads it | The policy sentence, the owner quote, the three allows, and the "everything else is refused there" line moved back to `AGENTS.md` (session-wide); `telegram-x.md` keeps the implementation (`lib/telegram-rooms.js`, `tgApi()`, the three direct senders, `scripts/telegram-rooms-test.cjs`, the history line) behind a one-line pointer back to `AGENTS.md` | `scripts/agents-rules-test.cjs`: the pinned sentence is now required to be in `AGENTS.md` specifically (added to `MUST_BE_IN_AGENTS_MD`, same treatment as the WATCH-ONLY posture), and still checked to exist in exactly one place total |
+
+Where to look hardest — the hook's per-segment split and the `-G` / explicit-GET override: is
+there a shell metacharacter this simple splitter misses that could hide a second curl inside what
+looks like one segment (e.g. `$(...)`, backticks, a `;` inside an unquoted here-doc), and does the
+explicit-GET-beats-data-flag ordering match curl's actual precedence in every flag combination you
+can think of (e.g. `-G` after `--data` on the command line, `--request=GET` mixed case)?
+
 ## Round 23 — 2026-09-23: #412 (the wallet address was base64) and #411 (the Claude Code scaffolding)
 
 Both merged to `develop` on the owner's standing go; neither is on `main` yet. Findings, not

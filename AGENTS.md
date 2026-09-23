@@ -453,7 +453,15 @@ served the React shell at 200.
   at boot.** Missing either → no alerts, lessons, radar, recap, graduation watcher. First thing to
   check when "the bot isn't doing X."
 > Moved to .claude/rules/telegram-x.md (loads for `server.js`, `lib/telegram-*.js`,
-> `lib/cuna-giveaway.js`) — the `X_AUTOPOST_PAUSED` carve-out list and the OnlyRose posting rule.
+> `lib/cuna-giveaway.js`) — the `X_AUTOPOST_PAUSED` carve-out list.
+- ⛔ **The Cluck bot posts NOTHING in the OnlyRose room (owner, 2026-09-17: "make sure it is not
+  posting anything in rose").** The only allows: the ROSE bot's own `roseTgSend*` path (it is
+  disarmed; arming it is the owner's act), an operator naming the room outright on `/api/tg-test`
+  (`chat=` / `project=`), and a buy comp the owner configured for that room. Everything else —
+  welcomes, `/price`-style command replies, burn celebrations, vault alerts, spotlights — is
+  refused there. This is a session-wide policy, not a path-scoped trap — a session that only runs
+  a curl never loads `.claude/rules/telegram-x.md`, so it belongs here. Implementation and
+  history: `.claude/rules/telegram-x.md`.
 - **The CLKN X account has X Premium (owner, 2026-09-05), so brand posts may run past 280
   characters** — don't trim an owner-initiated announcement to fit the classic limit. The 280
   counter on the lock-and-earn page's announce card is for LOCKERS' own accounts and stays.

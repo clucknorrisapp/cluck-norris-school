@@ -107,9 +107,52 @@ expectExit(
   0
 );
 
+// --- Per-request, not command-wide (Codex round 23 / #411 P2): an earlier or later curl's own
+// -X POST must not "cover" an unrelated curl in the same shell command. ------------------------
+expectExit(
+  "unrelated POST first, then an unsafe admin GET after a ;",
+  'curl -sS -X POST https://example.com/hook; curl -sS "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "explicit -X GET plus --data on an admin mutating route — GET wins, still unsafe",
+  'curl -sS -X GET --data \'\' "https://clucknorris.app/api/tg-test?key=k&post=1"',
+  2
+);
+expectExit(
+  "-G (explicit GET override) plus --data-urlencode — still a GET, still unsafe",
+  'curl -sS -G --data-urlencode "x=1" "https://clucknorris.app/api/cuna-giveaway/admin?key=k&scan=1"',
+  2
+);
+expectExit(
+  "unsafe admin GET first, then an unrelated POST after &&",
+  'curl -sS "https://clucknorris.app/api/whirlpool/vault/pause?project=poke&key=k&run=1" && curl -sS -X POST https://example.com/x',
+  2
+);
+expectExit(
+  "-XPOST (no space) on the admin route itself",
+  'curl -sS -XPOST -H "x-premium-key: k" "https://clucknorris.app/api/cuna-giveaway/admin?scan=1"',
+  0
+);
+expectExit(
+  "-X POST admin route piped into node — the curl segment itself is a safe POST",
+  'curl -sS -X POST -H "x-premium-key: k" "https://clucknorris.app/api/cuna-giveaway/admin?scan=1" | node -e \'let s=""\'',
+  0
+);
+expectExit(
+  "two admin routes chained with ; , each POSTed on its own",
+  'curl -sS --request POST "https://clucknorris.app/api/meme-queue?key=k&done=1" ; curl -sS -X POST "https://clucknorris.app/api/tg-test?key=k&chat=1&post=1"',
+  0
+);
+expectExit(
+  "flag-less admin read, no mutating flag at all",
+  'curl -sS "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  0
+);
+
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");
-const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md"];
+const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md", "store-release.md"];
 let extracted = 0;
 for (const f of commandFiles) {
   const full = path.join(COMMANDS_DIR, f);
