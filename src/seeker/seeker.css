@@ -103,6 +103,9 @@ html, body {
    offset is the nav's own height (56px button + 1px border) plus the same safe-area inset the
    nav pads itself with, so it tracks the bar on a notched device instead of guessing. */
 #clkn-lang-toggle {
+  /* --clkn-dock-base is the resting anchor clkn-dock-float.js measures from and returns to;
+     the bottom below repeats it as a fallback for when that script has not loaded. */
+  --clkn-dock-base: calc(57px + 14px + env(safe-area-inset-bottom, 0px));
   bottom: calc(57px + 14px + env(safe-area-inset-bottom, 0px)) !important;
   right: 12px !important;
 }
