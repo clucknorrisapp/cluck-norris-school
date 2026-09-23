@@ -16,6 +16,7 @@
     "airdrop-engine.js",
     "vendor/solana-web3-1.95.8.iife.min.js",
     "i18n.js",
+    "clkn-dock-float.js",
     "icon.svg",
     "cluck-norris.png"
   ],
