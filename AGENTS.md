@@ -7,6 +7,11 @@ This file is deliberately short. It carries the **mission**, the **owner's decis
 **traps that already cost someone a day** — things you can't derive from reading the code. It
 does not tell you how to write software; use your judgement for that.
 
+> 🤖 Path-specific traps (Normie Quest, the money engines, the store/Seeker bundles, Telegram/X)
+> live in `.claude/rules/*.md` and load automatically for the paths they name — see "Claude Code
+> scaffolding" in `docs/OPERATING_MODEL.md`. Subagent seats are `.claude/agents/*.md`; repeatable
+> runbooks are `.claude/commands/*.md` slash commands.
+
 > Detailed operational history — engine states, position sizes, past comps, superseded
 > strategies — lives in `git log` and `docs/`. It was trimmed out of here on 2026-07-30 because
 > a stale instruction stated with authority is worse than no instruction, and several were.
@@ -37,19 +42,8 @@ does not tell you how to write software; use your judgement for that.
 > from our own `firstSeenAt`, never from `vesting_start_time` (Jupiter sets that equal to the cliff,
 > and it is creator-set — live CUNA escrows declare 2069 and 2077).
 
-> 🎮 **Working on Normie Quest? Read `docs/NQ_TESTING_RULES.md` and `docs/HANDOFF_2026-07-27.md`
-> first.** The testing rules (owner, 2026-09-06) are mechanised: `node normie-quest/test/nq-verify.cjs
-> <baseUrl>` reads the diff, classifies it by REGION (an icon, a backdrop, a between-level card, a
-> menu or a DOM control never buys a level run; only ENGINE code or a level's own data does) and
-> picks the checks. A FULL run is **sharded across CI runners** (`nq-state` matrix, advisory until
-> 2026-09-13) or across machines with `NQ_SHARD=i/n` — never N agents on one box, they starve
-> each other. Don't run the full state test (every level — 90 today) by reflex — a day went to
-> running it for icon swaps it could never have validated, and a 90-level run for a LevelClear card
-> timed out under load on 2026-09-05. ⚠️ Headless Chromium renders the game's WebGL at ~0.5 fps
-> (SwiftShader, no flag fixes it) and Phaser pins DELTA at the 60fps target while frames overrun,
-> so a `delayedCall` crawls or never fires. Logic tests set `window.__NQ_RENDER='canvas'` in an
-> init script (60 fps, same logic; the state and beat tests do) and drive the target scene with a
-> lab hook (`__NQ_BEAT`, `__NQ_SCENE_START`, `__NQ_STARTLEVEL`); the visual gate stays on WebGL.
+> Moved to .claude/rules/normie-quest.md (loads for `normie-quest/**`) — the Normie Quest testing
+> handoff, the boss/audio/speed handoff, and the Phaser `setScrollFactor` trap.
 
 > ⛔ **COLOSSEUM IS OFF (owner, 2026-09-21): "we are only doing the Solana Mobile hackathon at this
 > time, we are not doing the Colosseum — I don't have the time or the ability to meet the commitments
@@ -95,37 +89,11 @@ does not tell you how to write software; use your judgement for that.
 > `unavailable`, never a zero balance, never cached as a denial. `scripts/tool-pass-gate-test.cjs`
 > drives the whole flow with a real ed25519 keypair.
 
-> 📱 **The Google Play app is a PINNED, education-only bundle — read `docs/STORE_EDITION.md`
-> before touching any endpoint it calls.** Shipped 2026-09-11 as release `store-google-v1.0.0`
-> (built from main `dc8652a`; the wrapper repo `clucknorrisapp/CLKN-SEEKER` pins the tarball by
-> sha256). A website deploy never changes the installed app, so **the endpoints in `STORE_API_RE`
-> (`server.js`) are a versioned contract**: `/api/ask-cluck` + `/report`, `/api/track`,
-> `/api/claim/certificate`, `/api/certificate/:id`, `/api/i18n/translate`, `/api/tts`,
-> `/api/helius-rpc`, `/api/wallet-checkup`, `/api/listing-checkup/*` — don't rename them or change
-> their response shapes without cutting a new `store-google-v*` release (the workflow has a manual
-> run; a cloud session cannot push tags). The store's legal pages are `/privacy/store` and
-> `/terms/store` and must stay true to that bundle (no wallet, no payments, no address). The
-> `ClucknorrisPlay` / `ClucknorrisIOS` user-agent marker is refused on excluded endpoints as
-> defense-in-depth only — never treat it as authorisation.
+> Moved to .claude/rules/store-and-seeker.md (loads for `store-edition/**`, `docs/STORE_EDITION.md`,
+> etc.) — the Google Play pinned-bundle note (`STORE_API_RE`).
 
-> 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
-> `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts
-> had no feet — NOT a position or resolution bug (that finding cost ~24h).
-> **RESOLVED 2026-08-16:** the KOL and Custodian plates were replaced with full-body art, and the
-> grounding-shadow mitigation was deleted. There WAS also a small real position bug underneath it:
-> the boss body box ended at 96% of the texture while every plate is trimmed to 100% content, so
-> every gravity boss sank by 4% of its display height. Body bottoms are now 1.00 and all six ground
-> bosses measure feet exactly on `GY`. Regression guard: `node normie-quest/test/nq-boss-ground.cjs
-> <baseUrl>`. The speed tuning landed 2026-08-16 (owner's numbers: base 192, boost 225 — see the
-> retune commit); the moon world's two 280px showpiece gaps were trimmed to 240px to stay makeable.
-> ⚠️ iOS audio has FOUR dead states, not two: 'suspended', WebKit's 'interrupted', 'closed' (memory
-> pressure — terminal, needs a NEW context), and the ZOMBIE (state says 'running', currentTime
-> frozen, zero output — the state field LIES; only the clock is honest). The rebuild machinery in
-> game_logic.js handles all four; don't simplify it back to a state check. The pause card shows a
-> live `audio:` line for field diagnosis on iPads.
-> ⚠️ Bosses are scaled by HEIGHT, so **swapping in a plate with different bottom margin silently
-> re-breaks this.** A floating boss must declare `bossBodyBot` on its level def (the GHOST GALLEON
-> does); anything that stands on the ground leaves it at the 1.00 default.
+> Moved to .claude/rules/normie-quest.md (loads for `normie-quest/**`) — the boss-ground / speed /
+> iOS-audio handoff.
 
 ---
 
@@ -320,12 +288,8 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 - **Never commit secrets**, and don't put a model identifier in committed files.
 - **Tell the truth about what you did.** If a check didn't run, say so. Most of the worst bugs
   here survived because something reported green on the wrong thing.
-- ⚠️ **`tgSend` and `postToX` SWALLOW their own errors and return null / `{ok:false}` — they never
-  throw.** So `await tgSend(...)` followed by a `kv.set` watermark is a silent-loss bug, not a
-  send: an outage looks exactly like success. Three schedulers had it (fixed 2026-09-04) — the
-  worst marked new graduates "seen" after a DM that never arrived, so no later tick resurfaced
-  them and their airdrop prompt never registered. **Check the return value, and never advance
-  durable state on a send that did not land.** `scripts/broadcast-integrity-test.cjs` guards it.
+> Moved to .claude/rules/telegram-x.md (loads for `server.js`, `lib/telegram-*.js`,
+> `lib/cuna-giveaway.js`) — the `tgSend`/`postToX` swallow-errors trap.
 
 ---
 
@@ -399,6 +363,11 @@ The owner manages all liquidity positions **manually**. Read freely; touch nothi
 Treasury wallet `2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8`. Canonical chart is the community
 Meteora pool `64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd`; engine pools are Orca. The venue
 split is settled — don't re-debate it.
+
+> Engine-implementation traps (the boot ratchets and `&durable=1`, the fail-open vault `paused`
+> flag, kv arm keys, the two-key money journal) live in .claude/rules/money-engines.md and load
+> for `lib/whirlpool-*`, `lib/orca-*`, `whirlpool-mm.js`, `lib/engine-decisions.js`,
+> `lib/cuna-*`, `scripts/engine-sim-test.cjs`, `docs/CUNA_STAKING_RUNBOOK.md`.
 
 ---
 
@@ -478,53 +447,18 @@ served the React shell at 200.
 
 ## Things that will bite you
 
-- 📱 **The Seeker app calls production CROSS-ORIGIN, from `https://localhost` — every endpoint it
-  uses needs CORS for that origin (`SEEKER_API_RE` in `server.js`), and a browser test proves
-  nothing about it.** On 2026-09-22 the owner's pass sheet said "Could not reach the pass service":
-  the tool-gate endpoints answered 200 to curl and a 404 to the webview's preflight, because only
-  the education edition's contract (`STORE_API_RE`) had CORS and it deliberately excludes
-  everything that pays, signs, mints, locks or sends. 15 of the 23 endpoints the app calls were in
-  that state — every POST and every `x-clkn-pass` GET. `scripts/seeker-cors-test.cjs` (CI) derives
-  the app's endpoint inventory from `src/seeker` and boots the server to send the real preflight
-  per endpoint; **a new pane that calls a new endpoint must add it to `SEEKER_API_RE` or that test
-  fails.** The Origin still grants nothing (every endpoint keeps its own gate) and the store UA is
-  still refused on these — now WITH the CORS headers, so the education app reads the 403.
+> Moved to .claude/rules/store-and-seeker.md (loads for `src/seeker/**`, `seeker.html`, etc.) — the
+> Seeker cross-origin (`SEEKER_API_RE`) trap.
 - **The whole scheduler block only starts if `TELEGRAM_BOT_TOKEN` AND `TELEGRAM_CHAT_ID` are set
   at boot.** Missing either → no alerts, lessons, radar, recap, graduation watcher. First thing to
   check when "the bot isn't doing X."
-- **`X_AUTOPOST_PAUSED=true` hard-gates `postToX`.** A new auto-poster that doesn't pass
-  `{force:true}` posts nothing and reports `{ok:false,paused:true}`. Carve-outs need an owner ask,
-  and must alert the operator chat on failure rather than failing silently. ⚠️ **This list said
-  "two carve-outs" and was WRONG** (corrected 2026-09-04 — `force:true` is passed from ELEVEN call
-  sites). Autonomous posters that still reach X while paused: **lock announcements**
-  (`postLockToX`), **project-burn celebrations** (`broadcastBurnCelebration`,
-  owner 2026-08-20 — every verified burn auto-posts X-then-Telegram), the **daily lesson
-  tweet and its reply**, the **lesson bump replies**, **chain spotlights**, and **approved queued
-  content**. The operator-triggered admin post/meme endpoints also pass `force`, which is no
-  surprise — a human just asked for that post. `postToX` now LOGS a line every time the carve-out
-  fires, so the real scope is visible rather than inferred. **Keep this list in step with the
-  call sites.** ⚠️ The burn broadcaster posts
-  **attacker-supplied token metadata** to the brand channels, so it hard-sanitizes the symbol to
-  `[A-Za-z0-9]` (never the free-form name) and rate-limits itself (per-wallet/mint cooldown + hourly
-  cap) so a griefer can't spam our X into a suspension. Don't loosen either without thinking it through.
-- ⛔ **The Cluck bot posts NOTHING in the OnlyRose room (owner, 2026-09-17: "make sure it is not
-  posting anything in rose").** Enforced in code, not by call-site discipline: `lib/telegram-rooms.js`
-  is consulted by `tgApi()` (the one send choke point since the 09-17 consolidation) and by the
-  three direct senders (`/api/tg-test`, the meme uploaders, the vault and swap-desk notifiers); a
-  send whose chat is the OnlyRose room is refused and logged (`[TG] refused: …`). The only
-  allows: the ROSE bot's own `roseTgSend*` path (it is disarmed; arming it is the owner's act),
-  an operator naming the room outright on `/api/tg-test` (`chat=` / `project=`), and a buy comp
-  the owner configured for that room. Everything else — welcomes, `/price`-style command replies,
-  burn celebrations, vault alerts, spotlights — is refused there. Deletes and button acks are not
-  posts and still work. `scripts/telegram-rooms-test.cjs` pins the policy and that no direct
-  Telegram send exists outside the audited functions. History: CLKN welcomes leaked in (09-02),
-  vault alerts (08-31), a replayed window of buy alerts (09-17, `docs/INCIDENT_2026-09-17_ROSE_BUYBOT_REPLAY.md`).
+> Moved to .claude/rules/telegram-x.md (loads for `server.js`, `lib/telegram-*.js`,
+> `lib/cuna-giveaway.js`) — the `X_AUTOPOST_PAUSED` carve-out list and the OnlyRose posting rule.
 - **The CLKN X account has X Premium (owner, 2026-09-05), so brand posts may run past 280
   characters** — don't trim an owner-initiated announcement to fit the classic limit. The 280
   counter on the lock-and-earn page's announce card is for LOCKERS' own accounts and stays.
-- **A Telegram post with an image gets 1024 characters, not 4096** — and our own code silently
-  truncates at 1024 while returning success. Count the caption; put load-bearing lines (the X
-  link, a CTA) where truncation can't eat them. Recover with `&replaceMsg=<oldId>`.
+> Moved to .claude/rules/telegram-x.md (loads for `server.js`, `lib/telegram-*.js`,
+> `lib/cuna-giveaway.js`) — the 1024-character Telegram image-caption trap.
 - ⛔ **Never call `SystemProgram.transfer()` — or any web3.js layout encoder — in a browser page.**
   It encodes u64 through `toBufferLE()`, which needs the Node `Buffer` global browsers don't have,
   and we ship no polyfill. This silently killed three money paths at once. Use
@@ -535,91 +469,15 @@ served the React shell at 200.
   then extra signers. Build unsigned server-side → `provider.signTransaction(tx)` →
   `signed.partialSign(base)` → submit raw. Never pre-sign server-side, and never
   `signAndSendTransaction` when a non-wallet signer exists. `/locker-room` is the reference impl.
-- 🎮 **Phaser: `setScrollFactor(0)` does NOT take an object out of the camera transform.** It stops it
-  scrolling; a zoomed camera still scales it about the viewport centre
-  (`screen = half + zoom*(p - half)`, `half = cam.width/2`). So "place at (0,0), size it
-  `cam.width × cam.height`" draws RES times too big and off-screen. That is what cropped every world
-  backdrop to the middle `1/RES` (the "backgrounds are zoomed in" report — 1/4 of the plate at 2×, 1/9
-  at 3×) and what slid the HUD off at 3×. Use `SCREEN_RECT(cam)` in `game_logic.js` for **any**
-  screen-pinned object; never hardcode the anchor. Fixed 2026-08-16 — and note it survived a whole
-  session of being argued away as "no regression found", so trust the screenshot over the reasoning:
-  compare the level against `normie-quest/public/worlds/<plate>.webp`.
-- **The engine boot ratchets re-assert per-project config on EVERY deploy** — a live config
-  write silently reverts on the next push to `main` unless it was made with `&durable=1`
-  (stored in kv `ratchetOverrides:<project>`, merged over the code defaults at boot, cleared
-  by writing the key as null). This trap cost live tuning twice on 2026-08-28 before the
-  override mechanism existed. ⚠️ Until the 2026-09-06 code batch only the `dnc` and `rose`
-  ratchets merged the override table — `cuna` and `poke` answered `durable:true` and reverted on
-  the next deploy anyway (audit #3); all four merge it now. Engine GATE logic is pure in `lib/engine-decisions.js` —
-  changing a gate means updating `scripts/engine-sim-test.cjs` (CI runs it; each scenario is
-  a real incident) and replaying it locally BEFORE shipping, not debugging in production.
-- ⛔ **Admin routes that ACT are POST-only, and armed vault calls must name `project=`** (audit
-  2026-09-05, shipped in the code batch): `run=1` / `arm=1` / `disarm=1` / `set=` on any
-  `/api/whirlpool/vault/*` route, `clear=1`/`run=1`/`probe=` on `/api/lock-celebration`, `run=1` on
-  `/api/x-delete`, any field or flag on `/api/buybot`, `arm/disarm/setmin/test/announce/backfill`
-  on `/api/rose-buybot`, `post=1` on the two Telegram test routes, and arming
-  `/api/treasury-engine-window` all answer **405 on a GET** — the same request as a POST goes
-  through, and a flag-less GET is still the dry run / read. A POST with `run=1` and no
-  `project=` is refused with 400 rather than defaulting to `clkn`, and every vault response
-  echoes `project` + `operator`. The hourly lock-celebration routine, the two skills and the
-  runbooks were switched to POST in the same change; `scripts/mutating-get-guard-test.cjs` (CI)
-  pins all of it. **Extended 2026-09-17 (platform deep dive P0-002 / P0-008 — the routes the first
-  audit missed):** `/api/cuna-giveaway/admin` (every configuring, scanning, drawing, paying or
-  reconciling flag — `&draw=1` and `&payout=1&run=1` sent real prize tokens on a GET), the Meteora
-  levers (`remove-liquidity`, `add-liquidity`, `open-position`, `unwrap`, `rebalance-inplace`,
-  `recenter`, and `config` writes), `/api/clkn-blitz`, the three `*-engine?on=1|off=1` arms,
-  `/api/diploma-mint …&run=1` and `/api/school-airdrop` writes. Same rule: the flag-less GET is still
-  the read or dry run. Buy Special's three data endpoints (`/api/buyspecial-crosscheck`,
-  `-holdcheck`, `-trace`) check the tools pass server-side now — the page's gate was theatre before.
-  **P1 batch (same day):** `/api/x-announce?post=1`, `/api/x-post-test?post=1` and
-  `/api/classroom/graduates?action=` joined the list (dry runs and the list stay GETs). ⚠️ The hourly
-  lock-celebration routine posts through `x-announce?post=1` — its prompt was switched to
-  `curl -X POST` with this change; if you ever recreate that routine, keep it a POST. **`/api/tg-test`
-  is POST-only too (owner, 2026-09-17: "convert tg-test too, routine first")** — every form of it
-  sends, so the whole GET method answers 405 after the key's 404; the query send and the raw
-  file-body upload share one dispatcher; a body under 100 bytes is refused rather than re-read as
-  the text send (Codex on #333). The meme routine and the lock-celebration watcher were switched
-  to `curl -X POST` BEFORE the server change, carried a transition GET fallback while the old build
-  was live, and had it **removed on 2026-09-17 once #335 was verified on production** — both prompts
-  now say "never fall back to a GET". **`/api/meme-queue` `&done=`/`&art=`/`&clear=1` are POST-only
-  too (owner, 2026-09-17, same routine-first sequencing; live on production via #337 the same
-  day)** — the meme routine POSTs its `done=` write, carried a transition GET fallback while the old
-  build was live, and had it removed once #337 was verified; the list, `history=1` and `all=1`
-  stay GETs. With this, **no admin route on the surface writes or sends on a GET** — the guard test
-  is the inventory; add a new admin flag there before you add it to a route. ⚠️ **The IN-PROCESS
-  caller that got missed (found 2026-09-22, the birthday special's board never appeared):
-  `lib/cuna-giveaway.js` `postBoard()` — the 15-minute room leaderboard — sends itself through the
-  public edge to `/api/tg-test` and was still a GET, so every drop since #335 answered 405 →
-  `send_failed` on the 5-minute tick, silently. When a route goes POST-only, grep the LIB code for
-  `fetch(` to it too, not only the routines and skills;** `scripts/cuna-board-post-test.cjs` (CI)
-  stubs the route the way production behaves (405 to a GET) and pins the method. ⚠️ **The one that got
-  through (incident, 2026-09-17 16:11 UTC): `/api/rose-buybot`'s FLAG-LESS GET ran a full poll
-  "even while disarmed"** — the 09-05 audit read it as the harmless read. A status check on a bot
-  disarmed for days walked its whole 100-signature window and posted every buy above the floor
-  into the OnlyRose room, in a row. Fixed the same day: the plain GET is the status read, the poll
-  is `POST ?run=1`, and BOTH buy bots step over anything older than `BUYBOT_REPLAY_MAX_AGE_S`
-  (default 15 min) after any pause — a resume never narrates history. **A "read" that calls the
-  poller is not a read; check what the flag-less path actually does before calling an admin
-  route on production.** **The burn celebration also has a value floor now**: a verified burn Jupiter
-  prices under `BURN_BROADCAST_MIN_USD` (default $10; unpriced = skipped) gets its receipt page
-  but no auto-post — a stranger's one-unit mint could otherwise force a brand tweet.
-- ⛔ **A vault `paused` flag FAILS OPEN, and a stale `lastTickTs` proves nothing.** `getState()`
-  defaults to `{}` (`lib/whirlpool-vault.js` ~358), so a missing kv key reads as *not paused*; and
-  `lib/kvstore.js` `mkdirSync`s `DATA_DIR` and reports persistent even when the volume is not the
-  real one, so a bad mount looks healthy while every flag silently resets. cuna/dnc/rose arming
-  used to fall back to `<X>_ENGINE_ON` env on kv loss the same way — **closed 2026-09-17 (deep dive
-  P1-032): the kv arm key is the ONLY switch for cuna/dnc/rose, an absent key is OFF, and
-  `<X>_ENGINE_ON=1` is inert (boot logs a warning if it is set)**. A durable stop is therefore an ENV
-  VAR (`POKE_ENGINE_OFF=1`, `<X>_ENGINE_OFF=1`) or a code default, never a kv flag — which is why
-  POKE's code default was flipped to off on 2026-09-05 (verified read-only by an adversarial pass
-  that day: with the old default, a boot with an empty kv would have started POKE trading 20 s
-  later, signing with the treasury operator key). Verifying a stop via `lastTickTs` is invalid:
-  `tick()` returns on `paused` before writing it, so a registered scheduler no-oping every 2 min
-  is indistinguishable from an unregistered one. Only `paused` + the env/code gate tell you anything.
-  ⚠️ **A money journal that spans two kv keys (a batch's sent rows + the paid totals) is written with
-  `kv.setManyVerified` / `hubStore.writeManyVerified` — ONE persist.** Two `setVerified` calls in a row
-  left a crash window where a row was recorded sent with nothing in paid, and `owedNow` offered that
-  money again (Codex, 2026-09-17). `owedNow` also treats a recorded sent row as settled on its own.
+> Moved to .claude/rules/normie-quest.md (loads for `normie-quest/**`) — the Phaser
+> `setScrollFactor(0)` camera trap.
+> Moved to .claude/rules/money-engines.md (loads for `lib/engine-decisions.js`,
+> `scripts/engine-sim-test.cjs`, etc.) — the engine-boot ratchet trap.
+> Moved to .claude/rules/telegram-x.md (loads for `server.js`, `lib/telegram-*.js`,
+> `lib/cuna-giveaway.js`) — the full "admin routes that ACT are POST-only" trap (vault, giveaway,
+> lock-celebration, tg-test, meme-queue, rose-buybot, and the in-process caller that got missed).
+> Moved to .claude/rules/money-engines.md (loads for `lib/whirlpool-*`, etc.) — the "vault `paused`
+> flag FAILS OPEN" trap and the two-kv-key money-journal trap.
 - **Escape anything from an API, URL or chain metadata before `innerHTML`** — token names and
   symbols are attacker-controlled. Use `CluckUtil.esc`; five hand-rolled copies were missing the
   single-quote escape.
@@ -746,9 +604,8 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
   README and `/investors` copy. `/buyspecial`, `/rose`, the draw and dashboard pages, their API
   routes and the Telegram buy-comp engine all stay reachable by direct URL for ROSE and Hub
   operators. Don't put it back in a roundup, a door, promo copy or the tools catalogue.
-  **And NOT in the Seeker app at all (owner, 2026-09-22: "buy special is in the tools list and
-  shouldn't be in here at all on seeker")** — the `buyspecial` registry entry, route, pane and
-  CSS were deleted; the wrapper's listing no longer names it. Don't re-add it to the app.
+  Seeker-app scope: moved to `.claude/rules/store-and-seeker.md` (loads for `src/seeker/**`,
+  `seeker.html`, `store-edition/**`).
 - **Buy Special lost its CLKN price.** Retiring send-to-unlock removed the 5,850-CLKN door priced
   on 2026-07-24 to be ~25% cheaper than SOL. Paying in CLKN is no longer possible there, only
   holding. That reversed a deliberate decision — re-raise it rather than assuming it's settled.
