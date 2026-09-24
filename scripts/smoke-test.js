@@ -284,6 +284,93 @@ function serveDist() {
     }
   }
 
+  // QUIZ AUTO-SCROLL. Owner (2026-09-24, testing the iOS edition, then the web app too):
+  // tapping an answer had to be followed by a manual drag to see the verdict, the explanation
+  // and the Next button — "I shouldn't have to drag." src/App.jsx's Lesson quiz screen and
+  // src/shared/scrollReveal.js fix this; this is the render-level check that it actually works,
+  // at a phone width (where the fixed chrome eats the most of the viewport) and a desktop width.
+  log("\nquiz auto-scroll (owner ask 2026-09-24 — the result must come into view with no drag):");
+  for (const vp of [{ width: 390, height: 844, label: "390x844" }, { width: 1280, height: 800, label: "1280x800" }]) {
+    const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(String(e).split("\n")[0].slice(0, 160)));
+    await page.route("**://fonts.googleapis.com/**", (r) => r.abort());
+    await page.route("**://fonts.gstatic.com/**", (r) => r.abort());
+    await page.goto(`${BASE}/#select`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => document.querySelectorAll("button").length > 3, null, { timeout: 20000 }).catch(() => {});
+    await page.waitForTimeout(700);
+
+    checks++;
+    const openedLesson = await page.evaluate(() => {
+      const tiles = [...document.querySelectorAll("button")].filter((b) => /LESSON\s*\d+|\d+\.\s+\S/.test(b.textContent || ""));
+      if (!tiles.length) return false;
+      tiles[0].click();
+      return true;
+    });
+    if (!openedLesson) {
+      failures.push(`quiz auto-scroll ${vp.label} — no lesson tile found to open`);
+      log(`  ✗ quiz auto-scroll ${vp.label} — no lesson tile found`);
+      await page.close();
+      continue;
+    }
+    await page.waitForTimeout(500);
+
+    checks++;
+    const startedQuiz = await page.evaluate(() => {
+      const btn = [...document.querySelectorAll("button")].find((b) => /TAKE THE EXAM/i.test(b.textContent || ""));
+      if (!btn) return false;
+      btn.click();
+      return true;
+    });
+    if (!startedQuiz) {
+      failures.push(`quiz auto-scroll ${vp.label} — no "TAKE THE EXAM" button found`);
+      log(`  ✗ quiz auto-scroll ${vp.label} — no exam button found`);
+      await page.close();
+      continue;
+    }
+    await page.waitForTimeout(500);
+
+    // Answer options are rendered "A<opt text>" .. "D<opt text>" (App.jsx's Lesson quiz screen
+    // prefixes each with String.fromCharCode(65+i)) — pick the first one. Which answer is right
+    // or wrong does not matter here, only that the reveal scrolls.
+    checks++;
+    const picked = await page.evaluate(() => {
+      const opt = [...document.querySelectorAll("button")].find((b) => /^[A-D]\S/.test((b.textContent || "").trim()));
+      if (!opt) return false;
+      opt.click();
+      return true;
+    });
+    if (!picked) {
+      failures.push(`quiz auto-scroll ${vp.label} — no answer option found to click`);
+      log(`  ✗ quiz auto-scroll ${vp.label} — no answer option found`);
+      await page.close();
+      continue;
+    }
+    // Two rAFs plus the smooth-scroll animation itself.
+    await page.waitForTimeout(800);
+
+    checks++;
+    const result = await page.evaluate(() => {
+      const btn = [...document.querySelectorAll("button")].find((b) => /NEXT QUESTION|SEE REPORT CARD/i.test(b.textContent || ""));
+      if (!btn) return { ok: false, reason: "no Next/Finish button rendered" };
+      const r = btn.getBoundingClientRect();
+      return { ok: true, rect: { top: r.top, bottom: r.bottom }, vh: window.innerHeight };
+    });
+    if (errors.length) {
+      failures.push(`quiz auto-scroll ${vp.label} — uncaught error: ${[...new Set(errors)].join(" | ")}`);
+      log(`  ✗ quiz auto-scroll ${vp.label} — uncaught error`);
+    } else if (!result.ok) {
+      failures.push(`quiz auto-scroll ${vp.label} — ${result.reason}`);
+      log(`  ✗ quiz auto-scroll ${vp.label} — ${result.reason}`);
+    } else if (result.rect.top < 0 || result.rect.bottom > result.vh) {
+      failures.push(`quiz auto-scroll ${vp.label} — the Next button is NOT fully inside the viewport after answering (top=${result.rect.top.toFixed(1)} bottom=${result.rect.bottom.toFixed(1)} vh=${result.vh})`);
+      log(`  ✗ quiz auto-scroll ${vp.label} — Next button not in view (top=${result.rect.top.toFixed(1)} bottom=${result.rect.bottom.toFixed(1)} vh=${result.vh})`);
+    } else {
+      log(`  ✓ quiz auto-scroll ${vp.label} — the Next button auto-scrolled fully into view (top=${result.rect.top.toFixed(1)} bottom=${result.rect.bottom.toFixed(1)} vh=${result.vh})`);
+    }
+    await page.close();
+  }
+
   // A GRADUATE WHO RELOADS. `setScreen("complete")` fires exactly once — on the click that
   // completes the twelfth lesson — and "complete" is not in SCREENS, so it has no hash route.
   // Before the claim button on the Landing existed, a learner who finished the course and then

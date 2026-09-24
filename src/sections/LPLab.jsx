@@ -1,7 +1,20 @@
 // LP Lab — lessons + calculators (~2,800 lines) — lazy-loaded section.
-import { useState, useMemo, Component } from "react";
+import { useState, useMemo, useEffect, useRef, Component } from "react";
 import { LOGO_B64, COLW, READ, AskCluck } from "../shared.jsx";
 import { STORE } from "../edition.js";
+import { revealQuizResult, revealUnderClear } from "../shared/scrollReveal.js";
+
+// Same clearance rule as src/App.jsx's own quiz screens (kept local rather than imported from
+// App.jsx to avoid a circular import — App.jsx lazy-loads this section, not the other way round).
+// See the "quiz auto-scroll" comment near the top of App.jsx for what these two elements are.
+function quizTopClearY() {
+  let y = 0;
+  const bar = document.getElementById("cluck-nav-bar");
+  if (bar) y = Math.max(y, bar.getBoundingClientRect().bottom);
+  const header = document.querySelector("[data-cluck-top-clear]");
+  if (header) y = Math.max(y, header.getBoundingClientRect().bottom);
+  return y;
+}
 // The worked-example token. The website and the Seeker app teach with CLKN; the Google Play /
 // iOS edition is education-only and names no token of ours (store-edition v1.1.0, Codex on
 // #391: "CLKN promotion still renders in the education bundle"), so its examples use a
@@ -2996,10 +3009,50 @@ function LPLessonView({ lesson, onBack, onComplete }) {
     }
   }
 
+  // Quiz auto-scroll refs — see the "quiz auto-scroll" comment near the top of App.jsx; same
+  // behaviour, same shared helper (src/shared/scrollReveal.js).
+  const quizHeadRef = useRef(null);
+  const explainRef = useRef(null);
+  const nextBtnRef = useRef(null);
+  const resultRef = useRef(null);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel === null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!explainRef.current || !nextBtnRef.current) return;
+        revealQuizResult({ scrollEl: window, resultEl: explainRef.current, actionEl: nextBtnRef.current, topClearY: quizTopClearY(), bottomClearY: window.innerHeight });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, sel]);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel !== null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!quizHeadRef.current) return;
+        revealUnderClear({ scrollEl: window, el: quizHeadRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, qi, lesson.id]);
+
+  useEffect(() => {
+    if (phase !== "result") return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!resultRef.current) return;
+        revealUnderClear({ scrollEl: window, el: resultRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase]);
+
   if (phase === "quiz") return (
     <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
       <button onClick={()=>setPhase("content")} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LESSON</button>
-      <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#10B981",letterSpacing:2,marginBottom:4}}>⚗️ LP LAB — LESSON {lesson.id} QUIZ</div>
+      <div ref={quizHeadRef} style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#10B981",letterSpacing:2,marginBottom:4}}>⚗️ LP LAB — LESSON {lesson.id} QUIZ</div>
       <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:1,marginBottom:16}}>QUESTION {qi+1} OF {shuffledQuestions.length}</div>
       <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,color:"#F9FAFB",lineHeight:1.5}}>{q.q}</div>
@@ -3021,24 +3074,22 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         })}
       </div>
       {showExp && (
-        <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:14,marginBottom:12}}>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:sel===q.correct?"#10B981":"#EF4444",letterSpacing:1,marginBottom:6}}>{sel===q.correct?"✓ CORRECT":"✗ NOT QUITE"} — CLUCK EXPLAINS:</div>
-          <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.7}}>{q.explanation}</p>
-        </div>
-      )}
-      {showExp && (
-        <>
+        <div ref={explainRef}>
+          <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:14,marginBottom:12}}>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:sel===q.correct?"#10B981":"#EF4444",letterSpacing:1,marginBottom:6}}>{sel===q.correct?"✓ CORRECT":"✗ NOT QUITE"} — CLUCK EXPLAINS:</div>
+            <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.7}}>{q.explanation}</p>
+          </div>
           <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-          <button onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+          <button ref={nextBtnRef} onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
             {qi+1<shuffledQuestions.length?"NEXT QUESTION →":"SEE RESULTS →"}
           </button>
-        </>
+        </div>
       )}
     </div>
   );
 
   if (phase === "result") return (
-    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto",textAlign:"center"}}>
+    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto",textAlign:"center"}} ref={resultRef}>
       <div style={{fontSize:48,marginBottom:12}}>{score===shuffledQuestions.length?"🏆":score>=3?"✅":"📚"}</div>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:20,fontWeight:900,color:"#10B981",letterSpacing:2,marginBottom:8}}>
         {score}/{shuffledQuestions.length} CORRECT
