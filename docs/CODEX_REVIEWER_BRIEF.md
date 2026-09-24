@@ -160,6 +160,58 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 27 — 2026-09-24: #420, an adversarial review's three P2s and its P3s — fixed
+
+(Numbered 27, the next after Round 26 below — the task that produced this entry named "Round 29,
+above Round 28", but neither exists in this file; 27 is the correct next number in this doc's own
+sequence. Flagging so nothing looks silently skipped.)
+
+`claude/seeker-swap` (PR #420, the Seeker in-app Jupiter swap, `docs/SEEKER_SWAP_DESIGN.md`).
+Unreviewed by you. This is the fix round for a read-only adversarial review that found no P0/P1,
+three P2s and a page of P3s — all on a money path (user funds, a wallet signature, a third-party
+transaction).
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P2-1** — the transaction Jupiter built was never checked against the quote the person was shown: nothing verified the quote's own fields matched what was asked for, nothing checked whether Jupiter's own simulation already knew the transaction would fail, and nothing on the CLIENT verified the transaction's fee payer, signer count, program ids or the route instruction's own encoded amounts before signing | Server: `/quote` refuses (502 `quote_mismatch`) a Jupiter quote whose `inputMint`/`outputMint`/`swapMode`/`slippageBps` disagree with the request, before it is ever stored under a `quoteId`; `/tx` refuses (502 `swap_unavailable`, with `detail`) when Jupiter's own response carries a non-null `simulationError`. Client: new `src/seeker/swap-verify.js`, a pure structural verifier run inside `Swap.jsx`'s `build()` — fee payer must equal the live re-read address, `numRequiredSignatures === 1`, every instruction's program id (resolved from `staticAccountKeys`, since program ids are static keys on a v0 tx) is on an allowlist of exactly what a Jupiter swap touches, and the Jupiter route instruction's own trailing 19 bytes (`in_amount`/`quoted_out_amount`/`slippage_bps`/`platform_fee_bps`, decoded per Jupiter's Anchor IDL — sighash `shared_accounts_route` confirmed against the recorded fixture) match the quote shown. `JUP_SWAP_BASE` now only overrides the upstream host outside production, or when it names 127.0.0.1/localhost — otherwise logged loudly and ignored | `scripts/seeker-swap-verify-test.cjs` (the real fixture passes every check; wrong fee payer, altered `quote.inAmount`/`outAmount`/`slippageBps`, an extra unrecognised-program instruction, and a non-zero `platform_fee_bps` are each refused, never signed) + new `quote_mismatch`/`simulationError` sections in `scripts/seeker-swap-test.cjs` |
+| 2 | **P2-2** — an "unconfirmed" swap left the whole form live: the amount, pickers, flip, slippage and Review button all stayed usable, `lastValidBlockHeight` (already returned by `/tx`) was never read, and leaving the pane lost the check entirely | A `pending` signature now locks the form (amount input, both pickers, flip, slippage chips, Review — all `disabled`), shows the signature with a "Checking…" state, and polls `getSignatureStatuses` + `getBlockHeight` every 3s through a new `checkPendingSwap()` helper kept in the one signing seam (`src/seeker/sign.js`, not duplicated in the pane) — err-before-confirmationStatus first, `sent`/`failed`/`expired` (once the chain's height passes `lastValidBlockHeight`) as three distinct outcomes, an RPC read failure never resolves anything. Persisted to `localStorage` (`{sig, lastValidBlockHeight, wallet, at}`) so leaving and returning to the pane resumes the same check. No manual retry while pending | `scripts/seeker-build-test.cjs`'s "only the seam talks to getSignatureStatuses" assertion (pins that the poll went through `sign.js`, not a raw RPC call in the pane) |
+| 3 | **P2-3** — the confirm sheet's slippage line read the live `slippageBps` CHIP state, not the frozen quote (`cq.slippageBps`) the transaction was actually built against, and a quote could go stale on screen for a render after the amount/mint/slippage changed before the invalidation caught up | `confirmLines` now reads `cq.slippageBps` and `cq.inAmount` (the latter already did). The quote-fetch effect resets `quote` to `null` and `quotePhase` to `"loading"` synchronously the instant its OWN dependencies (amount/either mint/slippage) change — not on the periodic 15s background refresh, which still avoids flicker via the existing functional `setQuotePhase` — so `canReview` (which requires `quotePhase === "loaded"`) goes false immediately and no stale number renders | Exercised by the existing `seeker-swap-test.cjs` quote/tx echo assertions (the stored quote's `slippageBps` now round-trips into the response) |
+
+**P3s, all in the same PR:** SOL `overBalance`/`Max` now reserve 0.01 SOL for fees (`spendableCap()`); the confirm sheet gains a "Network cost" line — Jupiter's own `prioritizationFeeLamports` from a best-effort `/tx` build fetched when the sheet opens (never a guess; the REAL signing `/tx` call still happens again with the live address at confirm time, unchanged from the design), plus an ATA-open note when the receiving mint's account doesn't exist yet (checked via `getTokenAccountsByOwner` when a fresh quote lands); distinct failure wording ("landed but failed on-chain — a network fee was charged" vs "did not land — nothing was swapped"); outcome titles ("Swapped"/"Swap failed"/"Unconfirmed"/"Expired") rewritten as literal `t("…")` calls the i18n extractor can see (they were `t(OUTCOME_LABEL[status])`, a computed lookup invisible to `scripts/seeker-i18n-keys.cjs`) and translated into all six dictionaries; `toBaseUnits` normalises a single comma to a dot; a missing `priceImpactPct` already rendered "—" not "NaN%" in the quote card but the confirm sheet's own line did not — fixed and both now share one guarded value; confirmed (against Jupiter's docs and the recorded fixture's own 0.01 SOL → SKR quote, ~0.14% impact for three hops) that `priceImpactPct` is a fraction, not a percent — the existing `× 100` was already correct, a comment now cites the check; no wildcard `Access-Control-Allow-Origin` on any of the three swap routes (the `SEEKER_API_RE` middleware already mounted earlier sets the restricted, origin-echoed header — the routes' own `res.setHeader(..., "*")` was silently overriding it); the quote route gets its own 30/min-per-IP floor (`rateLimit("seekerswapquote", …)`, on top of the group's 60/min) and the pane debounces its own quote requests by 400ms.
+
+Where to look hardest:
+
+- **The route-instruction decoder's layout assumptions.** `swap-verify.js` reads the LAST 19
+  bytes of a Jupiter aggregator instruction as `in_amount(u64)/quoted_out_amount(u64)/
+  slippage_bps(u16)/platform_fee_bps(u8)` regardless of which of the four discriminators
+  (`route`/`exact_out_route`/`shared_accounts_route`/`shared_accounts_exact_out_route`) matched —
+  reasoned from Anchor's field-order serialization (the variable-length `route_plan: Vec<…>`
+  necessarily comes first, so the fixed trailing fields are always last regardless of the vec's
+  own length) and confirmed against exactly ONE real recorded instruction (`shared_accounts_route`).
+  Is that layout assumption actually true for the other three discriminators, or does e.g.
+  `exact_out_route`'s field order differ enough that this would silently misread `in_amount` for
+  `quoted_out_amount` on an ExactOut trade? The pane always requests `ExactIn` today (no UI for
+  ExactOut), so this path is unexercised in practice — but the verifier accepts all four kinds.
+- **The program allowlist.** Seven entries (Jupiter v6, ComputeBudget, ATA, both SPL token
+  programs, System, Memo). Is Memo actually ever present in a real Jupiter swap transaction, or
+  was it allowlisted defensively and never observed? Is there a legitimate Jupiter route shape
+  (a DCA/limit-order variant, a different DEX integration) that would add an eighth program this
+  allowlist would wrongly refuse — turning a legitimate swap into "the app does not recognise
+  this" rather than a real threat?
+- **The block-height expiry resolution.** `checkPendingSwap` compares a freshly-read
+  `getBlockHeight` against `lastValidBlockHeight` captured from `/tx`'s response at build time.
+  Between build and the wallet's signature, and again between signing and the first poll, is there
+  a window where the height check could report "expired" for a transaction that actually still
+  landed (a slow signer, a slow first poll), producing a false "safe to retry" that could double-
+  spend if the person retries AND the original later confirms? `searchTransactionHistory: true`
+  is passed to `getSignatureStatuses` specifically to reduce that window — is it enough?
+- **The quote-invalidation race.** The `setQuote(null)` reset lives in the quote-fetch effect's
+  own body, which only re-runs on a DEPENDENCY change (amount/mint/slippage), not on the periodic
+  `setInterval` tick inside the same effect instance. Is there an input sequence — a rapid mint
+  flip immediately followed by a manual pick back to the original pair, or a slippage chip click
+  landing in the same tick as the 15s auto-refresh — where the effect's cleanup/re-run ordering
+  lets a stale `quote` survive one extra render with `quotePhase` already back at `"loaded"`?
+
 ## Round 26 — 2026-09-24: #416 and #418 — the CUNA giveaway scanner missed 15 buys; the fix and the catch-up
 
 Both on `develop`; #416 is on `main` (PR #417, promoted 2026-09-24 ~02:25 UTC on the owner's word),
