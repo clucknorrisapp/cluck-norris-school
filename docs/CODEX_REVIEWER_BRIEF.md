@@ -179,7 +179,9 @@ is deliberately a ceiling-only bound, never a value the client trusts for displa
 `claude/seeker-swap` (PR #420). A second, harder adversarial pass past Codex's round 31, looking
 specifically for fail-open cases round 31's own fixes might have left behind. Two reproduced P0/P1s
 plus four more; Round 32 above is Codex's own finding on top of item 2's fix, folded into the same
-commit per the coordinator's instruction.
+commit per the coordinator's instruction. Items 8-9 are two verifier follow-ups on this round's own
+item 4 (the simulation gate), found once it landed and fixed in a separate commit on the same
+branch, same day.
 
 | # | Finding | Fix | Pinned by |
 |---|---|---|---|
@@ -190,6 +192,8 @@ commit per the coordinator's instruction.
 | 5 | **P2** — ATA `Create`/`CreateIdempotent` checked the target ATA only "when static" and SKIPPED (never refused) an ALT-resolved one — the one case in the whole file where a unique-per-user account (which is never legitimately ALT-resolved, per the file's own `pubkeyAt` note) got the SAME leniency as the genuinely-shared mint slots | An ALT-resolved ATA index now refuses outright — closing both the right-account check and the one-per-ATA duplicate count an unresolved index used to slip past uncounted | `scripts/seeker-swap-verify-test.cjs` §7: 5 extra ALT-resolved ATA creates → refused |
 | 6 | **P2** — `checkPendingSwap` declared a pending swap `expired` on block-height expiry alone; height passing only proves nothing NEW can execute against that blockhash, never that THIS signature didn't land. Server also passed `lastValidBlockHeight` through unchecked | Server now requires a positive integer `lastValidBlockHeight` (502 otherwise). Client: `expired` now requires BOTH a well-formed null status AND a confirmed-dead `recentBlockhash` (`isBlockhashValid`, checked against the blockhash the PENDING TRANSACTION ITSELF carried, persisted on the record). No `recentBlockhash` at all (an older record) means the second half can never be proven, so such a record now stays `pending` forever rather than falling back to height-only expiry — `PendingCard` grows its own manual "stop watching" escape hatch after 10 minutes so such a record isn't stuck locking the form forever, the signature staying visible throughout | `scripts/seeker-pending-swap-test.cjs` §2/2b/2c/2d: a dead blockhash → expired; a still-valid one → pending; no blockhash at all → pending, `isBlockhashValid` never even called; an RPC error on that check → pending |
 | 7 | **P3** — the round 31 CU-default formula (`min(200000 × nonComputeBudgetInstructions, 1400000)`) was reviewed against solana.com/docs/core/fees/fee-structure and confirmed correct | No change | — |
+| 8 | **verifier follow-up** — `Swap.jsx`'s inline inventory-shaping (item 4's simulation gate) held the SOL-balance read to a strict standard (`typeof value === "number"` or refuse) but the two `getTokenAccountsByOwner` reads to a much looser one: `(legacyAccts && legacyAccts.value) || []` turned ANY malformed response — `{}`, `undefined`, `{value:null}`, `{value:"x"}` — into an empty list, silently treating the wallet as holding NO token accounts in that program. An account this read failed to enumerate would then be completely invisible to the "no other mint may move" check and could be drained past the gate | Inventory-shaping moved into a new pure, unit-testable function, `buildInventory()` (`src/seeker/swap-simulate.js`): all three raw RPC results (SOL balance + both token programs) are now held to the SAME standard — anything other than the well-formed shape REFUSES with "could not read your wallet" wording, never silently becomes "holds nothing" | `scripts/seeker-swap-simulate-test.cjs` §9: all four malformed shapes on EITHER token program, and on the SOL balance, all refuse; a real well-formed inventory (both programs, one holding) → ok with the exact addresses/labels `verifySimulationResult` expects; one unreadable INDIVIDUAL entry among several is still just dropped (unchanged, correct behaviour), not a refusal of the whole inventory |
+| 9 | **verifier follow-up** — a LATENT double-accounting when the input is native SOL and the wallet already holds a pre-existing wSOL ATA for the same mint: the SOL-outflow bound (`inAmount + fee + rent`) and the wSOL-mint token bound (`inAmount`) in `verifySimulationResult` were enforced INDEPENDENTLY, so in principle BOTH could fall by `inAmount` — up to 2× `inAmount` leaving the wallet while each individual check still passed | The bound is now SHARED when the input is SOL: native SOL and any pre-existing wSOL-mint token label are the same asset from the wallet's perspective, so whatever native SOL falls beyond its own legitimate overhead (fee + allowed rent), PLUS however much any wSOL-mint token label fell, is checked ONCE against the single `inAmount` ceiling — never each independently. The non-SOL-input case (a genuine SPL token input) is unaffected | `scripts/seeker-swap-simulate-test.cjs` §8: a pre-existing wSOL ATA falling by the full `inAmount` WHILE native SOL also falls by `inAmount + fee` → refused; the normal case (no pre-existing wSOL ATA, created/closed within the transaction, native SOL falls by `inAmount + fee`) → still passes; an untouched pre-existing wSOL ATA → passes; the split-exactly-at-the-boundary case (all of `inAmount` from the wSOL ATA, none from native SOL beyond the fee) → passes, the ceiling is inclusive |
 
 Where to look hardest:
 
@@ -209,6 +213,22 @@ Where to look hardest:
 - **The 10-minute manual escape hatch** (item 6) — does dismissing a still-genuinely-pending swap
   ever get presented as if something were undone? It should not: the copy is deliberately "stop
   watching," never "cancelled" or "nothing happened."
+- **Whether the SOL/wSOL shared bound (item 9) generalises to the output side.** This fix only
+  covers the INPUT being SOL with a pre-existing wSOL ATA. If the OUTPUT mint is ever SOL with a
+  pre-existing wSOL ATA already in the wallet's inventory, is there an analogous way for the
+  minimum-received check and a native-SOL rise to be double-counted in the person's favour (a
+  different risk shape, but worth checking it can't hide a REAL shortfall on the other side)?
+- **`buildInventory()`'s "unknown key" gap in the i18n tooling** (item 8) — its two reason strings
+  are passed through `t()` dynamically (`t(inv.reason)`), so `scripts/seeker-i18n-keys.cjs`'s
+  static scanner cannot see them as required keys (it only finds literal `t("…")` calls). The
+  SOL-balance message still renders translated because it happens to match a dictionary entry left
+  over from before this refactor; the new token-accounts message has no such history and will
+  render English-only until it's added to `scripts/seeker-i18n-keys.cjs`'s TABLES list (the same
+  mechanism `registry.js`/`passgate.jsx` already use for exactly this situation) or otherwise
+  hand-translated. Deliberately not done here: `swap-verify.js`/`swap-simulate.js`'s OTHER
+  refusal reasons are shown untranslated by established convention throughout this whole
+  verification pipeline, and folding these two into the scanner would require deciding whether
+  that convention should change, not just patching two strings.
 
 ## Round 31 — 2026-09-24: #420, Codex's two P1s and two P2s on round 30's fixes — fixed
 

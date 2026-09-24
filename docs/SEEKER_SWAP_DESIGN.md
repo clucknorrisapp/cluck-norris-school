@@ -195,14 +195,20 @@ sync with the code across rounds 29-31 and shouldn't again.
    can resolve to ANY address at execution time. Decoding cannot see what those hop accounts
    actually do; only running the transaction can. So, after structural verification passes and
    BEFORE the wallet is ever called: the pane fetches its own current SOL balance and full
-   token-account inventory (both token programs, fresh, never cached), calls
-   `simulateTransaction` via `/api/helius-rpc` (`sigVerify:false`, `replaceRecentBlockhash:true`,
-   `accounts:{encoding:"jsonParsed", addresses:[...]}`), and checks the SIMULATED balance deltas:
-   only the input mint may fall, by at most `inAmount`; the output mint must rise by at least the
-   computed minimum; no other mint's balance may change at all; SOL may fall by at most
-   `inAmount` (if SOL is the input) + the verified fee + rent for however many NEW token accounts
-   the transaction's own (already-counted) instructions actually create. **An unreachable RPC — the
-   balance fetch or the simulate call — is a REFUSAL, never a skip.**
+   token-account inventory (both token programs, fresh, never cached — shaped by the pure,
+   unit-tested `buildInventory()`, which refuses rather than silently treats a malformed
+   `getTokenAccountsByOwner` result as "holds nothing"; verifier follow-up, round 31b item 8),
+   calls `simulateTransaction` via `/api/helius-rpc` (`sigVerify:false`,
+   `replaceRecentBlockhash:true`, `accounts:{encoding:"jsonParsed", addresses:[...]}`), and checks
+   the SIMULATED balance deltas: only the input mint may fall, by at most `inAmount`; the output
+   mint must rise by at least the computed minimum; no other mint's balance may change at all; SOL
+   may fall by at most the verified fee + rent for however many NEW token accounts the
+   transaction's own (already-counted) instructions actually create, PLUS `inAmount` when SOL is
+   the input — and when the input IS SOL, that `inAmount` allowance is SHARED with any pre-existing
+   wSOL ATA the wallet already held (native SOL and that ATA are the same asset from the wallet's
+   perspective; bounding each independently would let up to 2× `inAmount` leave the wallet at once
+   — verifier follow-up, round 31b item 9). **An unreachable RPC — the balance fetch or the
+   simulate call — is a REFUSAL, never a skip.**
    ⚠️ **TRUST BOUNDARY, STATED HONESTLY:** this gate proves the SIMULATED outcome matches what was
    shown. It does not, and cannot, prove the REAL execution will match the simulation — pool state
    can move between simulating and landing (exactly the risk `slippageBps` and the route

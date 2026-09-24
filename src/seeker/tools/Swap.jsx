@@ -63,7 +63,7 @@ import { Pane, Loading, Unavailable, Refused, Confirm, toolFetch, useOnline } fr
 import { NeedsWallet } from "../needswallet.jsx";
 import { signSendConfirm, assertSameAccount, rpcFn, checkPendingSwap } from "../sign.js";
 import { verifySwapTransaction, MAX_PRIORITY_FEE_LAMPORTS } from "../swap-verify.js";
-import { verifySimulationResult } from "../swap-simulate.js";
+import { verifySimulationResult, buildInventory } from "../swap-simulate.js";
 import "./tools.css";
 
 const NATIVE_SOL_MINT = "So11111111111111111111111111111111111111112";
@@ -133,38 +133,19 @@ async function runPreSignSimulation({ rpc, live, swapTransactionB64, quote, feeL
   } catch (_) {
     return { ok: false, reason: t("Could not reach the network to check this transaction before signing. Try again.") };
   }
-  const solBefore = solRes && typeof solRes.value === "number" ? solRes.value : null;
-  if (solBefore == null) {
-    return { ok: false, reason: t("Could not read your SOL balance to check this transaction before signing. Try again.") };
-  }
 
-  // The FULL current inventory, both token programs — never filtered to just the two mints this
-  // swap expects, so the simulation gate can catch a balance change on a mint nobody asked about.
-  const tokenList = [
-    ...((legacyAccts && legacyAccts.value) || []),
-    ...((token22Accts && token22Accts.value) || []),
-  ];
-  const addressLabels = [{ kind: "sol", before: String(solBefore) }];
-  const addresses = [live];
-  for (const entry of tokenList) {
-    const info = entry && entry.account && entry.account.data && entry.account.data.parsed && entry.account.data.parsed.info;
-    const mint = info && info.mint;
-    const amount = info && info.tokenAmount && info.tokenAmount.amount;
-    // An unreadable inventory entry is left OUT of the checked set rather than guessed — the
-    // simulation's own missing/malformed-response handling (swap-simulate.js) still refuses on
-    // anything it can't read for the accounts that ARE included; this only affects an entry this
-    // client itself could not parse from its own read, which never happens for a real
-    // getTokenAccountsByOwner(jsonParsed) response.
-    if (!mint || amount == null || !entry.pubkey) continue;
-    addressLabels.push({ kind: "token", mint, before: String(amount) });
-    addresses.push(entry.pubkey);
-  }
+  // ⚠️ Frontier review round 31b, verifier follow-up 1 — inventory-shaping (and the "well-formed
+  // or refuse" rule for all three RPC results, never just the SOL one) lives in the pure module so
+  // it is unit-testable: scripts/seeker-swap-simulate-test.cjs. The reason strings are the SAME
+  // English text as the app's translated dictionary entries, so `t()` here still finds them.
+  const inv = buildInventory({ live, solRes, legacyAccts, token22Accts });
+  if (!inv.ok) return { ok: false, reason: t(inv.reason) };
 
   let simRes;
   try {
     simRes = await rpc("simulateTransaction", [swapTransactionB64, {
       encoding: "base64", sigVerify: false, replaceRecentBlockhash: true,
-      accounts: { encoding: "jsonParsed", addresses },
+      accounts: { encoding: "jsonParsed", addresses: inv.addresses },
     }]);
   } catch (_) {
     return { ok: false, reason: t("Could not simulate this transaction before signing. Try again.") };
@@ -172,7 +153,7 @@ async function runPreSignSimulation({ rpc, live, swapTransactionB64, quote, feeL
 
   const minReceived = computeMinReceived(quote.outAmount, quote.slippageBps);
   return verifySimulationResult({
-    simResult: simRes, addressLabels,
+    simResult: simRes, addressLabels: inv.labels,
     inputMint: quote.inputMint, outputMint: quote.outputMint, inAmount: quote.inAmount,
     minReceived, feeLamports, inputIsSol, allowedNewAtaCount: ataCreateCount,
   });

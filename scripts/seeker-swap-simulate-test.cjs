@@ -63,7 +63,7 @@ const baseArgs = () => ({
   console.log("\nSeeker swap — pre-sign simulation gate (swap-simulate.js)\n");
 
   const mod = await import(path.join(ROOT, "src", "seeker", "swap-simulate.js") + "?t=" + Date.now());
-  const { verifySimulationResult, ATA_RENT_LAMPORTS } = mod;
+  const { verifySimulationResult, ATA_RENT_LAMPORTS, buildInventory } = mod;
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
   console.log("(1) exact expected — a genuine, honest simulation passes\n");
@@ -140,7 +140,7 @@ const baseArgs = () => ({
     const { addressLabels, simResult } = honestLabelsAndResult();
     const tampered = Object.assign({}, simResult, { accounts: [solEntry(SOL_BEFORE - IN_AMOUNT - FEE_LAMPORTS - 1n), simResult.accounts[1], simResult.accounts[2]] });
     const r = verifySimulationResult({ simResult: tampered, addressLabels, ...baseArgs() });
-    ok("SOL fell by ONE lamport more than inAmount+fee allows -> refused", r.ok === false && /more sol than the quote/i.test(r.reason), r);
+    ok("SOL fell by ONE lamport more than inAmount+fee allows -> refused", r.ok === false && /more sol/i.test(r.reason), r);
 
     // A legitimately allowed ATA-create rent cost is accepted when allowedNewAtaCount reflects it.
     const withAta = Object.assign({}, simResult, { accounts: [solEntry(SOL_BEFORE - IN_AMOUNT - FEE_LAMPORTS - BigInt(ATA_RENT_LAMPORTS)), simResult.accounts[1], simResult.accounts[2]] });
@@ -199,6 +199,101 @@ const baseArgs = () => ({
     const under = Object.assign({}, simResult, { accounts: [simResult.accounts[0], tokenEntry(OUT_MINT, OUT_BEFORE + MIN_RECEIVED - 1n), simResult.accounts[2]] });
     const r = verifySimulationResult({ simResult: under, addressLabels, ...baseArgs() });
     ok("output balance rose by ONE base unit less than the computed minimum -> refused", r.ok === false && /less than the minimum/i.test(r.reason), r);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(8) verifier follow-up 2 — a pre-existing wSOL ATA must SHARE the inAmount bound with native SOL, never add to it\n");
+  {
+    // A pre-existing wSOL ATA (before this swap even runs) that falls by the FULL inAmount, WHILE
+    // native SOL ALSO falls by inAmount+fee (the "normal" allowance on its own) — bounding each
+    // independently would let 2x inAmount leave the wallet. The combined bound must catch it.
+    const WSOL_ATA_BEFORE = 500_000_000n; // the wallet already held some wSOL before this swap
+    const addressLabelsWithWsol = [
+      { kind: "sol", before: String(SOL_BEFORE) },
+      { kind: "token", mint: IN_MINT, before: String(WSOL_ATA_BEFORE) }, // the pre-existing wSOL ATA
+      { kind: "token", mint: OUT_MINT, before: String(OUT_BEFORE) },
+    ];
+    const doubleSpendResult = {
+      err: null,
+      accounts: [
+        solEntry(SOL_BEFORE - IN_AMOUNT - FEE_LAMPORTS), // native SOL falls by inAmount+fee, on its own "allowed"
+        tokenEntry(IN_MINT, WSOL_ATA_BEFORE - IN_AMOUNT), // the pre-existing wSOL ATA ALSO falls by inAmount
+        tokenEntry(OUT_MINT, OUT_BEFORE + MIN_RECEIVED),
+      ],
+    };
+    const r = verifySimulationResult({ simResult: doubleSpendResult, addressLabels: addressLabelsWithWsol, ...baseArgs() });
+    ok("the double-accounting case — native SOL falls by inAmount+fee AND a pre-existing wSOL ATA ALSO falls by inAmount -> refused (combined, not independent, bound)",
+      r.ok === false && /native and wrapped combined/i.test(r.reason), r);
+
+    // The normal case: no pre-existing wSOL ATA in the inventory at all (created and closed
+    // WITHIN this same transaction, so it never appears in the wallet's pre-tx inventory), native
+    // SOL falls by exactly inAmount+fee -> still passes exactly as section (1) already proved.
+    const { addressLabels: normalLabels, simResult: normalResult } = honestLabelsAndResult();
+    const rNormal = verifySimulationResult({ simResult: normalResult, addressLabels: normalLabels, ...baseArgs() });
+    ok("the normal case — no pre-existing wSOL ATA, native SOL falls by inAmount+fee -> still passes", rNormal.ok === true, rNormal);
+
+    // A pre-existing wSOL ATA that DOESN'T move at all (this swap ignores it entirely) must not
+    // be penalised — zero contribution to the combined bound.
+    const untouchedWsol = Object.assign({}, doubleSpendResult, { accounts: [solEntry(SOL_BEFORE - IN_AMOUNT - FEE_LAMPORTS), tokenEntry(IN_MINT, WSOL_ATA_BEFORE), doubleSpendResult.accounts[2]] });
+    const rUntouched = verifySimulationResult({ simResult: untouchedWsol, addressLabels: addressLabelsWithWsol, ...baseArgs() });
+    ok("a pre-existing wSOL ATA that does not move at all -> passes (native SOL alone still within inAmount+fee)", rUntouched.ok === true, rUntouched);
+
+    // Split exactly at the boundary: native SOL contributes NOTHING beyond fee (no inAmount drawn
+    // from native SOL), and the wSOL ATA falls by exactly inAmount — the combined total is exactly
+    // inAmount, which must still pass (the ceiling is inclusive).
+    const splitExact = Object.assign({}, doubleSpendResult, { accounts: [solEntry(SOL_BEFORE - FEE_LAMPORTS), tokenEntry(IN_MINT, WSOL_ATA_BEFORE - IN_AMOUNT), doubleSpendResult.accounts[2]] });
+    const rSplit = verifySimulationResult({ simResult: splitExact, addressLabels: addressLabelsWithWsol, ...baseArgs() });
+    ok("all of inAmount drawn from the pre-existing wSOL ATA, none from native SOL beyond the fee -> passes (combined == inAmount, inclusive)", rSplit.ok === true, rSplit);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(9) verifier follow-up 1 — buildInventory() refuses on a malformed getTokenAccountsByOwner result, never silently []\n");
+  {
+    const goodSol = { context: { slot: 1 }, value: 1_000_000_000 };
+    const goodLegacy = { context: { slot: 1 }, value: [{ pubkey: "LEGACYacct1111111111111111111111111111111", account: { data: { parsed: { info: { mint: OTHER_MINT, tokenAmount: { amount: "500" } } } } } }] };
+    const goodToken22 = { context: { slot: 1 }, value: [] };
+
+    // Each of the four malformed shapes the reviewer named, on EITHER token-program result —
+    // never silently treated as "holds nothing" (which is what `.value || []` used to do).
+    const malformedShapes = [
+      { label: "{}", value: {} },
+      { label: "undefined", value: undefined },
+      { label: "{value:null}", value: { value: null } },
+      { label: "{value:\"x\"}", value: { value: "x" } },
+    ];
+    for (const shape of malformedShapes) {
+      const rLegacy = buildInventory({ live: SOL_ADDR, solRes: goodSol, legacyAccts: shape.value, token22Accts: goodToken22 });
+      ok(`legacy token accounts malformed as ${shape.label} -> refused, never silently []`,
+        rLegacy.ok === false && /token accounts/i.test(rLegacy.reason), rLegacy);
+
+      const rToken22 = buildInventory({ live: SOL_ADDR, solRes: goodSol, legacyAccts: goodLegacy, token22Accts: shape.value });
+      ok(`Token-2022 accounts malformed as ${shape.label} -> refused, never silently []`,
+        rToken22.ok === false && /token accounts/i.test(rToken22.reason), rToken22);
+    }
+
+    // The SOL balance read is held to the same standard (already true before this fix, re-pinned
+    // here alongside the token-account cases for a single source of truth on buildInventory).
+    for (const shape of malformedShapes) {
+      const rSol = buildInventory({ live: SOL_ADDR, solRes: shape.value, legacyAccts: goodLegacy, token22Accts: goodToken22 });
+      ok(`SOL balance malformed as ${shape.label} -> refused, never treated as a zero balance`,
+        rSol.ok === false && /sol balance/i.test(rSol.reason), rSol);
+    }
+
+    // A REAL, well-formed shape (both programs, one holding, one empty) -> ok, with the addresses
+    // and labels shaped exactly as verifySimulationResult expects.
+    const rGood = buildInventory({ live: SOL_ADDR, solRes: goodSol, legacyAccts: goodLegacy, token22Accts: goodToken22 });
+    ok("a real, well-formed inventory -> ok", rGood.ok === true, rGood);
+    ok("…addresses = [live, the one legacy token account's pubkey]", JSON.stringify(rGood.addresses) === JSON.stringify([SOL_ADDR, "LEGACYacct1111111111111111111111111111111"]), rGood.addresses);
+    ok("…labels = [sol, the one token label with its mint/before]",
+      rGood.labels.length === 2 && rGood.labels[0].kind === "sol" && rGood.labels[0].before === "1000000000"
+      && rGood.labels[1].kind === "token" && rGood.labels[1].mint === OTHER_MINT && rGood.labels[1].before === "500", rGood.labels);
+
+    // An unreadable INDIVIDUAL entry (not the whole `.value`) is dropped from the label set rather
+    // than refusing the whole inventory — unchanged behaviour from before this fix, re-pinned here.
+    const oneBadEntry = { context: { slot: 1 }, value: [{ pubkey: "X", account: { data: { parsed: { info: {} } } } }, { pubkey: "LEGACYacct1111111111111111111111111111111", account: { data: { parsed: { info: { mint: OTHER_MINT, tokenAmount: { amount: "500" } } } } } }] };
+    const rMixed = buildInventory({ live: SOL_ADDR, solRes: goodSol, legacyAccts: oneBadEntry, token22Accts: goodToken22 });
+    ok("one unreadable entry among several -> that entry dropped, the rest kept, still ok",
+      rMixed.ok === true && rMixed.labels.length === 2 && rMixed.addresses.length === 2, rMixed);
   }
 
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);
