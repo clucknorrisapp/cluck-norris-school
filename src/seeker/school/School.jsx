@@ -37,6 +37,7 @@ import {
   COURSES, TOTAL_LESSONS, courseById, lessonById,
   completedIds, isDone, markDone, courseProgress, nextLesson, passMark,
 } from "./curriculum.js";
+import ShieldIcon from "../icons/ShieldIcon.jsx";
 import "./school.css";
 
 // The id shape the server ledger expects — identical to the website's trackId(), so a lesson
@@ -82,7 +83,12 @@ function Prose({ text, className }) {
 // says the diploma is claimed on the website (true — docs/SEEKER_TRANSCRIPT_HANDOFF.md); the
 // Google Play / iOS edition offers its certificate of completion instead. Defaults are the full
 // app's, so a caller that passes nothing gets exactly what shipped.
-export function SchoolHome({ finished, progressNote }) {
+//
+// `safetyTools`: the education edition only (edu.jsx passes it — the full edition's own
+// `<SchoolHome />` call passes nothing, so its home is unchanged by this). Owner (Xcode review,
+// 2026-09-24): Wallet Checkup and Listing Checkup lost their own bottom-nav tabs, so their front
+// door becomes a card here instead of disappearing from the app.
+export function SchoolHome({ finished, progressNote, safetyTools }) {
   // Re-render when the dictionary lands — a lesson opened directly can render before it does.
   useI18nReady();
   const done = completedIds();
@@ -181,6 +187,33 @@ export function SchoolHome({ finished, progressNote }) {
         <span className="seeker-solana-schoolcard-title">{t(SOLANA_ROOM_INDEX.title)}</span>
         <span className="seeker-solana-schoolcard-sub">{t(SOLANA_ROOM_INDEX.intro)}</span>
       </Link>
+
+      {/* Safety tools — education edition only (edu.jsx passes safetyTools). Wallet Checkup and
+          Listing Checkup have no tab of their own anymore (owner, Xcode review, 2026-09-24), so
+          this is their front door instead. Titles/blurbs are the SAME strings the tools registry
+          already carries (registry.js) — already curated, translated keys, so this ships correct
+          in all seven languages on day one rather than waiting on a new translation pass. */}
+      {safetyTools ? (
+        <div className="seeker-school-safety">
+          <span className="seeker-school-safety-heading">{t("Safety tools")}</span>
+          <div className="seeker-school-safety-row" data-clkn-avoid-kids="1">
+            <Link className="seeker-school-safety-card" to="/checkup">
+              <span className="seeker-school-safety-card-icon" aria-hidden="true"><ShieldIcon /></span>
+              <span className="seeker-school-safety-card-title">{t("Wallet Checkup")}</span>
+              <span className="seeker-school-safety-card-sub">
+                {t("Approvals, freeze and mint authority, and what each one actually lets someone do.")}
+              </span>
+            </Link>
+            <Link className="seeker-school-safety-card" to="/tools/listing">
+              <span className="seeker-school-safety-card-icon" aria-hidden="true">📋</span>
+              <span className="seeker-school-safety-card-title">{t("Listing Checkup")}</span>
+              <span className="seeker-school-safety-card-sub">
+                {t("The checks listing venues commonly run on a token — run them on yours first.")}
+              </span>
+            </Link>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
