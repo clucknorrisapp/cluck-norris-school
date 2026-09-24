@@ -65,3 +65,4 @@ probe.cjs
 # nq-visual regression gate: diff images written ONLY on a failing run, for local inspection.
 # The baselines/ dir IS committed (it's the source of truth); the diffs/ dir is throwaway.
 normie-quest/test/visual-diffs/
+dist-seeker/

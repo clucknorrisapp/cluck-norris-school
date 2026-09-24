@@ -194,7 +194,11 @@ function Block({ block }) {
 }
 
 // ── the room index ─────────────────────────────────────────────────────────────────────────────
-export function SolanaRoomIndex() {
+// `extra`: an optional ReactNode rendered after the two topic groups — the Seeker edition's own
+// "Seeker wing" section (src/seeker/solana/SeekerWing.jsx). This file never imports that module
+// itself: edu.jsx renders <SolanaRoomIndex /> with no `extra`, so the wing's content and its
+// import graph never reach the education bundle even indirectly through this shared file.
+export function SolanaRoomIndex({ extra }) {
   useI18nReady();
   return (
     <div className="seeker-pane seeker-solana">
@@ -232,6 +236,7 @@ export function SolanaRoomIndex() {
             </div>
           ))}
         </div>
+        {extra || null}
       </div>
     </div>
   );
