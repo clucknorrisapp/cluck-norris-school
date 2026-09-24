@@ -17,7 +17,7 @@ Two Seeker editions ship from one shell (`src/seeker/App.jsx`), selected at buil
 
 ## 1. Full (Seeker) edition — routes (`src/seeker/edition/full.jsx`)
 
-Tier and flagship flag are read from `src/seeker/tools/registry.js` (14 `TOOLS` entries today).
+Tier and flagship flag are read from `src/seeker/tools/registry.js` (15 `TOOLS` entries today).
 "Signs" is what the pane itself does when a wallet is connected, found by grepping the pane file
 for `signTransaction` / `signAndSendTransaction` / `runFullReclaim` / `signSendConfirm`. "Works
 offline" means the pane can render its own screen with zero network call — only the school
@@ -45,10 +45,11 @@ is none.
 | `/tools/trace` | `Trace` | `trace` / pass | no | no | no |
 | `/tools/airdrop` | `Airdropper` | `airdrop` / pass | **yes** — `CluckAirdrop.send()` → `provider.signAndSendTransaction()` (`public/airdrop-engine.js`, shared with the website's own airdropper) | no | **yes** |
 | `/tools/hatchery` | `Hatchery` | `hatchery` / paid | **yes** — `wallet.provider.signTransaction()` directly (mint keypair is server-held and co-signs in `/api/hatchery/submit`) | no | no |
+| `/tools/swap` | `Swap` | `swap` / wallet | **yes** — `signSendConfirm()` (`src/seeker/sign.js`), deserializing the v0 `VersionedTransaction` Jupiter returns | no | no |
 | `*` | `Navigate` → `/tools` | — | no | n/a (redirect) | — |
 
-19 routes (Buy Special left the app on 2026-09-22 — owner: not in the Seeker app at all). 6 panes sign: Rent Reclaim, Firepit, Project Burn, Locker Room, Airdropper, Hatchery —
-of those, Firepit/Project Burn/Locker Room/Rent Reclaim go through the two shared signing seams
+20 routes (Buy Special left the app on 2026-09-22 — owner: not in the Seeker app at all). 7 panes sign: Rent Reclaim, Firepit, Project Burn, Locker Room, Airdropper, Hatchery, Swap —
+of those, Firepit/Project Burn/Locker Room/Rent Reclaim/Swap go through the two shared signing seams
 (`sign.js`'s `signSendConfirm`, `reclaim-sign.js`'s `runFullReclaim`); Airdropper signs through the
 separate, shared `public/airdrop-engine.js`; Hatchery calls the wallet provider directly because
 the mint keypair (not an escrow) is the second signer.
@@ -177,7 +178,7 @@ Everything in §1 and §2 **except** `/tools`, `/tools/airdrop`, `/tools/lock` a
 - `/school/certificate` (education edition only)
 - `/ask`, `/checkup`, `/tools/listing`, `/tools/alpha` (both editions)
 - `/tools/firepit`, `/tools/burn` (full edition — two of the six flagships)
-- `/tools/xray`, `/tools/holders`, `/tools/trace`, `/tools/hatchery` (full edition)
+- `/tools/xray`, `/tools/holders`, `/tools/trace`, `/tools/hatchery`, `/tools/swap` (full edition)
 
 And the four existing captures were taken against a 503'd backend (§3a), so even those four need a
 retake against a live server before they are demo-ready.
