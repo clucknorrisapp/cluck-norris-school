@@ -15161,12 +15161,14 @@ app.get("/api/seeker/swap/quote", rateLimit("seekerswapquote", { windowMs: 60000
     if (!quote || quote.error || !quote.outAmount) return res.status(502).json({ ok: false, error: "quote_unavailable" });
     // ⚠️ P2-1: the transaction is never checked against the quote — the first half of that is
     // never STORING a quote whose own fields disagree with what was asked for. A quote that comes
-    // back naming a different pair, a different swap mode, or a different slippage than requested
-    // is refused outright rather than handed to the client (and never cached under a quoteId a
-    // /tx call could later be built from).
+    // back naming a different pair, a different swap mode, a different slippage, or (round 30
+    // fix 5 — Codex found `amount` was never checked here at all) a different `inAmount` than
+    // requested is refused outright rather than handed to the client (and never cached under a
+    // quoteId a /tx call could later be built from).
     if (quote.inputMint !== inputMint || quote.outputMint !== outputMint
-      || quote.swapMode !== SEEKER_SWAP_REQUESTED_MODE || Number(quote.slippageBps) !== slippageBps) {
-      console.error("[seeker-swap-quote] quote_mismatch", { inputMint, outputMint, slippageBps, got: { inputMint: quote.inputMint, outputMint: quote.outputMint, swapMode: quote.swapMode, slippageBps: quote.slippageBps } });
+      || quote.swapMode !== SEEKER_SWAP_REQUESTED_MODE || Number(quote.slippageBps) !== slippageBps
+      || String(quote.inAmount) !== amount) {
+      console.error("[seeker-swap-quote] quote_mismatch", { inputMint, outputMint, amount, slippageBps, got: { inputMint: quote.inputMint, outputMint: quote.outputMint, swapMode: quote.swapMode, slippageBps: quote.slippageBps, inAmount: quote.inAmount } });
       return res.status(502).json({ ok: false, error: "quote_mismatch" });
     }
     const quoteId = createHash("sha256").update(JSON.stringify(quote)).digest("hex");

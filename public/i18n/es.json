@@ -2913,5 +2913,6 @@
   "The transaction did not land — nothing was swapped.": "La transacción no se confirmó — no se intercambió nada.",
   "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "La transacción se confirmó pero falló en la cadena — no se intercambió nada; se cobró una tarifa de red.",
   "This did not land before its expiry block height passed — it's safe to try again.": "Esto no se confirmó antes de que pasara su altura de bloque de vencimiento — es seguro intentarlo de nuevo.",
-  "Unconfirmed": "Sin confirmar"
+  "Unconfirmed": "Sin confirmar",
+  "That quote's numbers had aged — here are the current ones. Review before continuing.": "Los números de esa cotización habían caducado — aquí están los actuales. Revisa antes de continuar."
 }

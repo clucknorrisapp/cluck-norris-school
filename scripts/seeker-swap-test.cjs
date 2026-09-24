@@ -73,7 +73,7 @@ const GOOD_SWAP = Object.assign({}, FIXTURE_SWAP, { simulationError: null });
   }
 
   // ---- local stubs -------------------------------------------------------------------------
-  let jupState = { failQuote: false, failSwap: false, simErrorSwap: false, mismatchQuote: false, lastQuoteQuery: null, lastSwapBody: null };
+  let jupState = { failQuote: false, failSwap: false, simErrorSwap: false, mismatchQuote: false, mismatchAmount: false, lastQuoteQuery: null, lastSwapBody: null };
   const stub = http.createServer((req, res) => {
     const u = new URL(req.url, "http://127.0.0.1");
     let body = "";
@@ -87,6 +87,13 @@ const GOOD_SWAP = Object.assign({}, FIXTURE_SWAP, { simulationError: null });
         if (jupState.mismatchQuote) {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify(Object.assign({}, FIXTURE_QUOTE, { outputMint: USDC_MINT })));
+          return;
+        }
+        // Round 30 fix 5 — Codex found the route never checked quote.inAmount against the
+        // requested `amount` at all. Simulate Jupiter answering for a DIFFERENT amount.
+        if (jupState.mismatchAmount) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(Object.assign({}, FIXTURE_QUOTE, { inAmount: String(Number(FIXTURE_QUOTE.inAmount) + 1) })));
           return;
         }
         res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(FIXTURE_QUOTE)); return;
@@ -252,6 +259,15 @@ const GOOD_SWAP = Object.assign({}, FIXTURE_SWAP, { simulationError: null });
       ok("a non-null simulationError on Jupiter's own swap response -> 502 swap_unavailable with detail, never a swapTransaction",
         r5.status === 502 && r5.json && r5.json.error === "swap_unavailable" && r5.json.swapTransaction === undefined && !!r5.json.detail, r5.json);
       jupState.simErrorSwap = false;
+
+      // Round 30 fix 5 — Codex found `quote.inAmount` was never checked against the requested
+      // `amount` at all. A quote answering for a DIFFERENT amount than requested is refused,
+      // never stored under a quoteId.
+      jupState.mismatchAmount = true;
+      const rq3 = await getJson("/api/seeker/swap/quote?" + new URLSearchParams({ inputMint: SOL_MINT, outputMint: SKR_MINT, amount: "10000000", slippageBps: "100" }).toString());
+      ok("Jupiter answering for a different inAmount than requested -> 502 quote_mismatch, never stored/returned",
+        rq3.status === 502 && rq3.json && rq3.json.error === "quote_mismatch" && rq3.json.quote === undefined, rq3);
+      jupState.mismatchAmount = false;
     }
 
     // ══════════════════════════════════════════════════════════════════════════════════════

@@ -2913,5 +2913,6 @@
   "The transaction did not land — nothing was swapped.": "Giao dịch không thành công — không có gì được hoán đổi.",
   "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "Giao dịch đã được ghi nhận nhưng thất bại trên chuỗi — không có gì được hoán đổi; một khoản phí mạng đã bị tính.",
   "This did not land before its expiry block height passed — it's safe to try again.": "Giao dịch này không được ghi nhận trước khi độ cao khối hết hạn trôi qua — bạn có thể thử lại một cách an toàn.",
-  "Unconfirmed": "Chưa xác nhận"
+  "Unconfirmed": "Chưa xác nhận",
+  "That quote's numbers had aged — here are the current ones. Review before continuing.": "Các con số của báo giá đó đã cũ — đây là các con số hiện tại. Hãy xem lại trước khi tiếp tục."
 }

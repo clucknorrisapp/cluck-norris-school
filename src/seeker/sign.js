@@ -133,26 +133,61 @@ export async function confirmSignature(rpc, signature, opts) {
 // (`lastValidBlockHeight`, e.g. Jupiter's swap build — docs/SEEKER_SWAP_DESIGN.md, fix round
 // P2-2) rather than a locally-fetched blockhash this seam tracked itself. Same err-before-
 // confirmationStatus rule as confirmSignature() above, PLUS an expiry check: once the chain's
-// current block height passes what the transaction was built against, it can no longer land, and
-// that is reported as "expired" rather than left "pending" forever. An RPC READ failure is not an
-// on-chain answer either way — it reports "pending" so a caller's poll loop just tries again.
-// Exists here, not duplicated in a pane, so this is the ONE place that owns the
-// err-before-confirmationStatus rule and the ONE place callers of getSignatureStatuses live
-// (scripts/seeker-build-test.cjs pins that no pane calls getSignatureStatuses/sendTransaction
-// directly).
+// current block height passes what the transaction was built against, it can no longer land —
+// but that only proves nothing NEW can execute, never that this transaction didn't already land.
+// An RPC READ failure is not an on-chain answer either way — it reports "pending" so a caller's
+// poll loop just tries again. Exists here, not duplicated in a pane, so this is the ONE place
+// that owns the err-before-confirmationStatus rule and the ONE place callers of
+// getSignatureStatuses live (scripts/seeker-build-test.cjs pins that no pane calls
+// getSignatureStatuses/sendTransaction directly).
+//
+// ⚠️ Codex round 30, P1 — "a PROCESSED transaction was declared expired." `processed` (or
+// `confirmed`) with no `err` IS a landed transaction; block-height expiry only proves nothing NEW
+// can execute against that blockhash — it says nothing about whether THIS signature already
+// landed. The previous version fell straight into the height check for any non-confirmed status,
+// including `processed`, and reported a transaction that was actively landing as "expired — safe
+// to retry", which is exactly the double-spend risk this whole seam exists to prevent. `processed`
+// now short-circuits to "pending" (keep polling) before the height is ever consulted. And once
+// the height genuinely has passed with NO status at all, this does one FINAL
+// `getSignatureStatuses` with `searchTransactionHistory: true` (broader than the recent-status
+// cache the first call already used) before calling it "expired" — ambiguous results after that
+// (an RPC error on the final check, or a status that's neither err nor confirmed/finalized/
+// processed) stay "pending", never "safe to try again".
+function statusOutcome(st) {
+  // ⚠️ ORDER IS LOAD-BEARING — same as confirmSignature() above: err is only ever set once a
+  // transaction has landed, so it must be checked before confirmationStatus.
+  if (st && st.err) return { status: "failed", error: "failed on-chain: " + JSON.stringify(st.err) };
+  if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return { status: "sent" };
+  if (st && st.confirmationStatus === "processed") return { status: "pending" }; // landed, not yet confirmed — never expired
+  return null; // no status yet — caller decides what "no status" means in its own context
+}
 export async function checkPendingSwap(rpc, { signature, lastValidBlockHeight }) {
   try {
     const [stRes, height] = await Promise.all([
-      rpc("getSignatureStatuses", [[signature], { searchTransactionHistory: true }]),
+      rpc("getSignatureStatuses", [[signature], {}]),
       rpc("getBlockHeight", [{ commitment: "confirmed" }]),
     ]);
     const st = stRes && stRes.value && stRes.value[0];
-    // ⚠️ ORDER IS LOAD-BEARING — same as confirmSignature() above.
-    if (st && st.err) return { status: "failed", error: "failed on-chain: " + JSON.stringify(st.err) };
-    if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return { status: "sent" };
+    const outcome = statusOutcome(st);
+    if (outcome) return outcome;
+
     const h = typeof height === "number" ? height : null;
-    if (h != null && lastValidBlockHeight != null && h > lastValidBlockHeight) return { status: "expired" };
-    return { status: "pending" };
+    if (h == null || lastValidBlockHeight == null || h <= lastValidBlockHeight) return { status: "pending" };
+
+    // The height has passed with no status from the recent-status cache. One FINAL check with
+    // searchTransactionHistory before calling it expired — the recent-status cache the call above
+    // used can already have aged the signature out even though it landed.
+    let finalRes;
+    try {
+      finalRes = await rpc("getSignatureStatuses", [[signature], { searchTransactionHistory: true }]);
+    } catch (_) {
+      return { status: "pending" }; // an RPC read failure is not an on-chain answer either way
+    }
+    const finalSt = finalRes && finalRes.value && finalRes.value[0];
+    const finalOutcome = statusOutcome(finalSt);
+    if (finalOutcome) return finalOutcome;
+    if (!finalSt) return { status: "expired" }; // truly nothing, ever, after the height passed
+    return { status: "pending" }; // some other ambiguous shape — never guess "safe to retry"
   } catch (_) {
     return { status: "pending" };
   }
@@ -279,7 +314,19 @@ export async function submitSigned(rpc, realTx, opts) {
 //   · partialSign does not touch the compiled message, so the diff above stays meaningful — the
 //     extra signature is added to a transaction whose contents were already checked against the
 //     one the person approved.
-export async function signSendConfirm({ provider, owner, build, coSign, skipPreflight }) {
+// ⚠️ Codex round 30, P2 — "the pending record is saved too late." A pane used to persist its
+// `{sig, lastValidBlockHeight, wallet}` record only once this function had returned `unconfirmed`
+// — but the signature already exists the moment the wallet hands back a validly-diffed signed
+// transaction (see the note above `submitSigned`), and `submitSigned`/`rpc("sendTransaction")` can
+// throw from a transport failure BEFORE this function ever gets to return anything. A crash right
+// there — the exact transport-failure case protection (5) exists for — lost the record entirely
+// and left nothing on screen or in storage to resume checking. `onSigned(sig)` fires immediately
+// after the wallet returns a validly-diffed signature (both the `signTransaction` path and the
+// `signAndSendTransaction` path), BEFORE `submitSigned`/the send is attempted — so the caller can
+// persist the record first and have it survive a throw. Errors from the callback itself are
+// swallowed (this is a signing seam, not a storage layer — a storage failure must never block a
+// swap that otherwise succeeded).
+export async function signSendConfirm({ provider, owner, build, coSign, skipPreflight, onSigned }) {
   const CW = typeof window !== "undefined" ? window.CluckWallet : null;
   const web3 = typeof window !== "undefined" ? window.solanaWeb3 : null;
   if (!CW || !web3) return { status: "failed", error: "Wallet layer did not load." };
@@ -324,6 +371,12 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
         return { status: "failed", error: "The wallet returned a different transaction than the one you approved." };
       }
       if (typeof coSign === "function") coSign(realTx, web3);
+      // round 30 P2 — persist BEFORE the send is even attempted, so a transport throw doesn't
+      // lose the record. `signatureOf` reads the wallet's own signature off `realTx`, the same
+      // value `submitSigned` will report as `localSig` if the send throws.
+      if (typeof onSigned === "function") {
+        try { const s = signatureOf(realTx); if (s) onSigned(s); } catch (_) { /* never block a swap on a storage failure */ }
+      }
       // (5) lives in submitSigned — the one place that knows a thrown submit is not proof that
       // nothing landed. Never inline an rpc("sendTransaction") next to this.
       const out = await submitSigned(rpc, realTx, { skipPreflight: !!skipPreflight });
@@ -345,6 +398,11 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
     } else if (typeof provider.signAndSendTransaction === "function") {
       const res = await provider.signAndSendTransaction(tx);
       sig = (res && res.signature) || (typeof res === "string" ? res : null);
+      // round 30 P2 — same persist-before-confirmation rule, for the one path that returns an
+      // already-submitted signature instead of a transaction to diff.
+      if (sig && typeof onSigned === "function") {
+        try { onSigned(sig); } catch (_) { /* never block a swap on a storage failure */ }
+      }
     } else {
       return { status: "failed", error: "This wallet can't sign from here — try Phantom, Solflare, Backpack or Jupiter." };
     }

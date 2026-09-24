@@ -2913,5 +2913,6 @@
   "The transaction did not land — nothing was swapped.": "交易未成功上链——没有发生任何兑换。",
   "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "交易已上链但执行失败——没有发生任何兑换；已收取网络费用。",
   "This did not land before its expiry block height passed — it's safe to try again.": "在其到期区块高度之前未能上链——可以放心重试。",
-  "Unconfirmed": "未确认"
+  "Unconfirmed": "未确认",
+  "That quote's numbers had aged — here are the current ones. Review before continuing.": "该报价的数字已过期——以下是最新数字。请在继续前查看。"
 }

@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 "use strict";
 // Seeker app in-app swap — CLIENT-SIDE structural verifier (docs/SEEKER_SWAP_DESIGN.md, PR #420
-// fix round P2-1: "the transaction is never checked against the quote").
+// fix round P2-1 "the transaction is never checked against the quote", and Codex round 30 P1
+// "the verifier checks program ids, not instruction semantics").
 //
 // src/seeker/swap-verify.js is pure (no window, no fetch, no signing) — this drives it directly
 // against the REAL recorded fixture (scripts/fixtures/seeker-swap/swap.json), decoded with the
 // real @solana/web3.js VersionedTransaction.deserialize, and then against mutated copies of the
-// same bytes to prove every refusal path actually refuses.
+// same bytes to prove every refusal path actually refuses. Mutations are done by editing the
+// deserialized message's own `staticAccountKeys`/`compiledInstructions` arrays directly (append a
+// key, append or edit an instruction) rather than recompiling through `TransactionMessage` — a
+// recompile with no address lookup tables would force every originally ALT-resolved account
+// (the fixture's own source/destination mints — see swap-verify.js's note on that) to become a
+// NEW static key pointing at a filler value, which would trip the mint-mismatch check for a
+// reason unrelated to whatever the test is actually trying to isolate.
 //
 // Usage: node scripts/seeker-swap-verify-test.cjs
 
@@ -25,7 +32,25 @@ const FIXTURE_SWAP = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "fixt
 const FIXTURE_QUOTE = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "fixtures", "seeker-swap", "quote.json"), "utf8"));
 
 function b64ToBytes(b64) { return new Uint8Array(Buffer.from(b64, "base64")); }
-function bytesToB64(bytes) { return Buffer.from(bytes).toString("base64"); }
+
+// Static account indices in the recorded fixture (scripts/fixtures/seeker-swap/swap.json), read
+// by hand once and pinned here — see the account dump in this PR's comment.
+const SYSTEM_IDX = 9, JUP_IDX = 11, TOKEN_IDX = 12;
+
+function cloneMsg() { return web3.VersionedTransaction.deserialize(b64ToBytes(FIXTURE_SWAP.swapTransaction)); }
+function pushKey(msg, pubkey) { msg.staticAccountKeys.push(pubkey); return msg.staticAccountKeys.length - 1; }
+function systemTransferData(lamports) {
+  const d = new Uint8Array(12);
+  new DataView(d.buffer).setUint32(0, 2, true);
+  new DataView(d.buffer).setBigUint64(4, BigInt(lamports), true);
+  return d;
+}
+function tokenTransferData(amount) {
+  const d = new Uint8Array(9);
+  d[0] = 3; // Transfer
+  new DataView(d.buffer).setBigUint64(1, BigInt(amount), true);
+  return d;
+}
 
 (async () => {
   console.log("\nSeeker swap — client-side structural verifier (swap-verify.js)\n");
@@ -36,6 +61,10 @@ function bytesToB64(bytes) { return Buffer.from(bytes).toString("base64"); }
   const realBytes = b64ToBytes(FIXTURE_SWAP.swapTransaction);
   const realTx = web3.VersionedTransaction.deserialize(realBytes);
   const liveAddress = realTx.message.staticAccountKeys[0].toBase58();
+  ok("fixture's static account map matches the indices this file pins",
+    realTx.message.staticAccountKeys[SYSTEM_IDX].toBase58() === "11111111111111111111111111111111"
+    && realTx.message.staticAccountKeys[JUP_IDX].toBase58() === "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"
+    && realTx.message.staticAccountKeys[TOKEN_IDX].toBase58() === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
   console.log("(1) the real recorded fixture — every check must pass\n");
@@ -67,72 +96,154 @@ function bytesToB64(bytes) { return Buffer.from(bytes).toString("base64"); }
       ok(`every real instruction's program (${pid ? pid.toBase58() : "?"}) is on the allowlist`, !!pid && SWAP_PROGRAM_ALLOWLIST.has(pid.toBase58()));
     }
 
-    const check = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE });
+    // Round 30: the fixture's own top-level shapes — pinned here so a future change to the
+    // allowlist/decoder can be checked against what a REAL Jupiter build actually contains,
+    // rather than only against invented cases. ComputeBudget×2 (limit, price), ATA
+    // CreateIdempotent×2 (wSOL ATA, output ATA), System Transfer×1 (SOL->wSOL wrap), Token
+    // SyncNative×1, the Jupiter shared_accounts_route×1, Token CloseAccount×1 (unwrap the
+    // leftover wSOL ATA). No Memo, no ATA "Create" (non-idempotent), no `route`/exact-out kind.
+    const shapes = realTx.message.compiledInstructions.map((ix) => {
+      const pid = realTx.message.staticAccountKeys[ix.programIdIndex].toBase58();
+      return pid + ":" + Buffer.from(ix.data.slice(0, Math.min(8, ix.data.length))).toString("hex");
+    });
+    ok("the fixture contains exactly 8 top-level instructions", shapes.length === 8, shapes);
+
+    const check = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
     ok("verifySwapTransaction PASSES the real, untouched fixture against its own quote", check.ok === true, check);
     ok("…and reports the route kind it found", check.routeKind === "shared_accounts_route", check);
+    ok("…and decodes the compute budget instructions", check.cuLimit === 1400000 && check.cuPriceMicroLamports === 315258n, check);
+
+    // Round 30 fix 6 — a ceiling at or above the real fee passes; below it refuses.
+    const realFeeLamports = (BigInt(check.cuLimit) * check.cuPriceMicroLamports) / 1000000n; // 1,400,000 * 315,258 / 1e6 = 441,361
+    const okCeil = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: String(realFeeLamports) });
+    ok("a priority-fee ceiling >= the real fee -> still passes", okCeil.ok === true, okCeil);
+    const tooLow = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: String(realFeeLamports - 1n) });
+    ok("a priority-fee ceiling 1 lamport below the real fee -> refused", tooLow.ok === false && /priority fee/i.test(tooLow.reason), tooLow);
   }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
   console.log("\n(2) refusals — each mutation must be caught, never signed\n");
   {
     const wrongLive = "11111111111111111111111111111112"; // real-shaped, not the actual fee payer
-    const r1 = verifySwapTransaction({ tx: realTx, liveAddress: wrongLive, quote: FIXTURE_QUOTE });
+    const r1 = verifySwapTransaction({ tx: realTx, liveAddress: wrongLive, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
     ok("wrong fee payer (stale/switched account) -> refused", r1.ok === false && /different account/i.test(r1.reason), r1);
 
+    // Round 30: lowering quote.inAmount now trips the SOL-wrap System-transfer cap (its own
+    // instruction, processed earlier in the loop) before the route tail is even reached — a
+    // DIFFERENT but equally correct refusal reason than round 29's single check.
     const badQuoteIn = Object.assign({}, FIXTURE_QUOTE, { inAmount: "1" });
-    const r2 = verifySwapTransaction({ tx: realTx, liveAddress, quote: badQuoteIn });
-    ok("altered quote.inAmount vs the tx's own bytes -> refused", r2.ok === false && /amount in this transaction/i.test(r2.reason), r2);
+    const r2 = verifySwapTransaction({ tx: realTx, liveAddress, quote: badQuoteIn, PublicKeyClass: web3.PublicKey });
+    ok("altered quote.inAmount vs the tx's own bytes -> refused", r2.ok === false && /(amount in this transaction|more sol than the quote)/i.test(r2.reason), r2);
 
     const badQuoteOut = Object.assign({}, FIXTURE_QUOTE, { outAmount: "999999999" });
-    const r3 = verifySwapTransaction({ tx: realTx, liveAddress, quote: badQuoteOut });
+    const r3 = verifySwapTransaction({ tx: realTx, liveAddress, quote: badQuoteOut, PublicKeyClass: web3.PublicKey });
     ok("altered quote.outAmount -> refused", r3.ok === false && /you'd receive/i.test(r3.reason), r3);
 
     const badQuoteSlip = Object.assign({}, FIXTURE_QUOTE, { slippageBps: 300 });
-    const r4 = verifySwapTransaction({ tx: realTx, liveAddress, quote: badQuoteSlip });
+    const r4 = verifySwapTransaction({ tx: realTx, liveAddress, quote: badQuoteSlip, PublicKeyClass: web3.PublicKey });
     ok("altered quote.slippageBps -> refused", r4.ok === false && /slippage/i.test(r4.reason), r4);
 
-    // Extra program: insert an unknown instruction (a bogus program id appended as a new static
-    // key) into a copy of the message, re-serialize, re-deserialize, and verify it is refused.
+    // Extra unrecognised program: append a new static key + a new instruction directly onto a
+    // clone's message — every original instruction/account stays untouched (see the file header).
     {
-      const payer = new web3.PublicKey(liveAddress);
-      const evilProgram = web3.Keypair.generate().publicKey; // not on any allowlist
-      const ixs = realTx.message.compiledInstructions.map((ix) => new web3.TransactionInstruction({
-        programId: realTx.message.staticAccountKeys[ix.programIdIndex],
-        keys: ix.accountKeyIndexes.map((idx) => ({
-          pubkey: realTx.message.staticAccountKeys[idx] || payer, // ALT-resolved keys aren't needed for this shape test
-          isSigner: idx === 0, isWritable: true,
-        })),
-        data: Buffer.from(ix.data),
-      }));
-      ixs.push(new web3.TransactionInstruction({ programId: evilProgram, keys: [], data: Buffer.from([1, 2, 3]) }));
-      const msgV0 = new web3.TransactionMessage({
-        payerKey: payer,
-        recentBlockhash: realTx.message.recentBlockhash,
-        instructions: ixs,
-      }).compileToV0Message(); // no lookup tables — simplest shape that still exercises the allowlist check
-      const mutated = new web3.VersionedTransaction(msgV0);
-      const r5 = verifySwapTransaction({ tx: mutated, liveAddress, quote: FIXTURE_QUOTE });
+      const clone = cloneMsg();
+      const evilProgram = web3.Keypair.generate().publicKey;
+      const evilIdx = pushKey(clone.message, evilProgram);
+      clone.message.compiledInstructions.push({ programIdIndex: evilIdx, accountKeyIndexes: [], data: new Uint8Array([1, 2, 3]) });
+      const r5 = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
       ok("an extra instruction calling an unrecognised program -> refused", r5.ok === false && /program the app does not recognise/i.test(r5.reason), r5);
     }
 
     // Non-zero platform fee in the route instruction's own trailing byte.
     {
-      const routeIdx = realTx.message.compiledInstructions.findIndex((ix) => {
-        const pid = realTx.message.staticAccountKeys[ix.programIdIndex];
-        return pid && pid.toBase58() === "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
-      });
-      const clone = web3.VersionedTransaction.deserialize(realBytes);
+      const routeIdx = realTx.message.compiledInstructions.findIndex((ix) => ix.programIdIndex === JUP_IDX);
+      const clone = cloneMsg();
       const data = Buffer.from(clone.message.compiledInstructions[routeIdx].data);
       data[data.length - 1] = 5; // platform_fee_bps -> 5
       clone.message.compiledInstructions[routeIdx].data = new Uint8Array(data);
-      const r6 = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE });
+      const r6 = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
       ok("a non-zero platform_fee_bps encoded in the instruction -> refused", r6.ok === false && /fee we do not expect/i.test(r6.reason), r6);
     }
 
-    const r7 = verifySwapTransaction({ tx: null, liveAddress, quote: FIXTURE_QUOTE });
+    const r7 = verifySwapTransaction({ tx: null, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
     ok("no transaction -> refused, never throws", r7.ok === false);
-    const r8 = verifySwapTransaction({ tx: realTx, liveAddress, quote: null });
+    const r8 = verifySwapTransaction({ tx: realTx, liveAddress, quote: null, PublicKeyClass: web3.PublicKey });
     ok("no quote to check against -> refused, never throws", r8.ok === false);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(3) Codex round 30, P1 — instruction SEMANTICS, not just program ids\n");
+  {
+    // Codex's exact exploit: append a System transfer of 1 SOL to a brand-new recipient. System
+    // is (correctly) allowlisted for the SOL-wrap step — round 29's program-id-only check let
+    // this straight through. Round 30 decodes the instruction itself.
+    {
+      const clone = cloneMsg();
+      const strangerIdx = pushKey(clone.message, web3.Keypair.generate().publicKey);
+      clone.message.compiledInstructions.push({ programIdIndex: SYSTEM_IDX, accountKeyIndexes: [0, strangerIdx], data: systemTransferData(1_000_000_000) });
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("Codex's exploit — an appended System transfer of 1 SOL to a stranger -> refused, never signed",
+        r.ok === false && /not yours/i.test(r.reason), r);
+    }
+
+    // A Token `Transfer` appended at top level — never legitimate in a swap this pane builds.
+    {
+      const clone = cloneMsg();
+      const strangerIdx = pushKey(clone.message, web3.Keypair.generate().publicKey);
+      clone.message.compiledInstructions.push({ programIdIndex: TOKEN_IDX, accountKeyIndexes: [6, strangerIdx, 0], data: tokenTransferData(1_000_000) });
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("an appended Token `Transfer` -> refused", r.ok === false && /does not recognise/i.test(r.reason), r);
+    }
+
+    // The SOL-wrap System transfer redirected to a NON-ATA (a stranger's plain account).
+    {
+      const clone = cloneMsg();
+      const strangerIdx = pushKey(clone.message, web3.Keypair.generate().publicKey);
+      const sysIx = clone.message.compiledInstructions.findIndex((ix) => ix.programIdIndex === SYSTEM_IDX);
+      clone.message.compiledInstructions[sysIx].accountKeyIndexes = [0, strangerIdx];
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("the wSOL-wrap transfer redirected to a non-ATA stranger -> refused", r.ok === false && /not yours/i.test(r.reason), r);
+    }
+
+    // CloseAccount whose destination is a stranger, not the connected wallet.
+    {
+      const clone = cloneMsg();
+      const strangerIdx = pushKey(clone.message, web3.Keypair.generate().publicKey);
+      const closeIx = clone.message.compiledInstructions.findIndex((ix) => ix.programIdIndex === TOKEN_IDX && ix.data.length === 1 && ix.data[0] === 9);
+      const accts = clone.message.compiledInstructions[closeIx].accountKeyIndexes;
+      clone.message.compiledInstructions[closeIx].accountKeyIndexes = [accts[0], strangerIdx, accts[2]];
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("CloseAccount's destination redirected to a stranger -> refused", r.ok === false && /different account/i.test(r.reason), r);
+    }
+
+    // The recorded fixture still passes, untouched (also checked in section 1 — restated here
+    // next to its exploit siblings so this section stands on its own).
+    {
+      const r = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("the untouched recorded fixture still passes", r.ok === true, r);
+    }
+
+    // The route instruction's own user_destination_token_account swapped to a stranger's ATA.
+    {
+      const clone = cloneMsg();
+      const strangerIdx = pushKey(clone.message, web3.Keypair.generate().publicKey);
+      const routeIx = clone.message.compiledInstructions.findIndex((ix) => ix.programIdIndex === JUP_IDX);
+      clone.message.compiledInstructions[routeIx].accountKeyIndexes[6] = strangerIdx; // shared_accounts_route's destinationTokenAccount slot
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("the route's user_destination_token_account swapped to a stranger's ATA -> refused", r.ok === false && /not yours/i.test(r.reason), r);
+    }
+
+    // Round 30 fix 4 — ExactOut discriminators refuse outright, even with an otherwise-untouched
+    // account layout and a tail that would decode cleanly.
+    {
+      const clone = cloneMsg();
+      const routeIx = clone.message.compiledInstructions.findIndex((ix) => ix.programIdIndex === JUP_IDX);
+      const data = Buffer.from(clone.message.compiledInstructions[routeIx].data);
+      Buffer.from("b0d169a89a7d453e", "hex").copy(data, 0); // shared_accounts_exact_out_route
+      clone.message.compiledInstructions[routeIx].data = new Uint8Array(data);
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("an ExactOut discriminator -> refused, never decoded as ExactIn", r.ok === false && /exact-output/i.test(r.reason), r);
+    }
   }
 
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);

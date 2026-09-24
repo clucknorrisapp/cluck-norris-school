@@ -160,6 +160,46 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 30 — 2026-09-24: #420, Codex's two P1s and four P2s — fixed
+
+`claude/seeker-swap` (PR #420, the Seeker in-app Jupiter swap). Codex's own review of round 29's
+fixes, on the same money path (user funds, a wallet signature, a third-party transaction).
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P1** — the client verifier checked every instruction's PROGRAM against an allowlist but never its DATA or ACCOUNTS: Codex appended a 1 SOL `SystemProgram.transfer` to a new recipient (System is allowlisted for the SOL-wrap step) and `verify` still returned ok | `src/seeker/swap-verify.js` now decodes every top-level instruction by its OWN layout and refuses anything that isn't exactly one of the shapes a real Jupiter swap emits: ComputeBudget `SetComputeUnitLimit`/`SetComputeUnitPrice` only (decoded and returned so fix 6 can enforce a ceiling); System `Transfer` only, `from`==live, `to`==live's own wSOL ATA, amount capped at the quote's `inAmount` (and 0 when the input isn't SOL) — Codex's exact exploit path; ATA program `Create`/`CreateIdempotent` only, payer and owner both live, the account the live wallet's derived ATA for the input or output mint; Token/Token-2022 `SyncNative`/`CloseAccount` only, both bound to the live wallet's own wSOL ATA — any `Transfer`/`TransferChecked`/`Approve`/`SetAuthority`/`Burn` at top level refuses; Memo unconditionally allowed (never moves value); Jupiter `route`/`shared_accounts_route` only, every named account bound by the IDL's own order (`user_transfer_authority`, the user's source/destination token accounts, `platform_fee_account` all required STATIC — an ALT-resolved index there refuses as "route account not static"; `source_mint`/`destination_mint` checked only when static, since the recorded fixture shows Jupiter resolving BOTH through a lookup table even for a plain SOL→SKR trade). ATA math is dual-derived against both SPL token programs (`ataCandidates`) so a Token-2022 output mint verifies without an RPC call. `PublicKeyClass` is now dependency-injected (no static web3.js import, but the ATA math needs a `PublicKey` and the Node test has no `window`) | `scripts/seeker-swap-verify-test.cjs` §3: Codex's exact exploit (an appended System transfer to a stranger), an appended Token `Transfer`, the wSOL-wrap transfer redirected to a non-ATA, `CloseAccount`'s destination redirected to a stranger, the untouched recorded fixture still passing, and the route's `user_destination_token_account` swapped to a stranger's ATA — all refused |
+| 2 | **P1** — `checkPendingSwap` (`src/seeker/sign.js`) declared a `processed` transaction (landed, not yet confirmed) "expired" once the chain's height passed `lastValidBlockHeight`; block-height expiry only proves nothing NEW can execute, never that this signature didn't already land | `processed` (and `confirmed`/`finalized`) now short-circuit to their real outcome BEFORE the height is ever consulted. Once the height genuinely has passed with NO status at all, one FINAL `getSignatureStatuses` with `searchTransactionHistory: true` runs before calling it `expired`; an RPC error on that final check, or any other ambiguous shape, stays `pending` — never a guessed "safe to retry" | new `scripts/seeker-pending-swap-test.cjs`: Codex's fixture (processed, height past the limit) → pending, never expired; null status + height past the limit + history null → expired; null + past + history confirmed → sent; an RPC error on the final check → stays pending; the unchanged err-first and under-the-limit paths |
+| 3 | **P2** — the pending swap record was only persisted once `signSendConfirm` had already returned `"unconfirmed"`, so a transport failure that THROWS from inside `sendTransaction` (the exact case protection 5 exists for) could lose the record entirely before the pane ever got a chance to save it | `signSendConfirm` (`sign.js`) gains an `onSigned(sig)` callback, fired immediately after the wallet returns a validly byte-diffed signature — for both the `signTransaction` path and `signAndSendTransaction` — BEFORE `submitSigned`/the send is attempted. `Swap.jsx` persists `{sig, lastValidBlockHeight, wallet, at}` inside `onSigned`, not after the fact; a final "failed"/"declined" outcome clears whatever `onSigned` may have written, since a node-refused send never actually landed | `scripts/seeker-sign-versioned-test.cjs` §8: a fake wallet + a fake `rpc` whose `sendTransaction` throws a plain transport error (legacy and v0) — `onSigned` fires with the real signature before the throw, and the eventual `"unconfirmed"` result carries that SAME signature; a separate case for `signAndSendTransaction` wallets |
+| 4 | **P2** — the ExactIn-only verifier decoded `exact_out_route`/`shared_accounts_exact_out_route` as if they were ExactIn, misreading their trailing bytes | Both ExactOut discriminators now refuse outright ("This app does not support exact-output swaps") before any tail bytes are read; the pane never requests ExactOut | `scripts/seeker-swap-verify-test.cjs` §3: the recorded fixture's discriminator swapped to `shared_accounts_exact_out_route` → refused |
+| 5 | **P2** — `/api/seeker/swap/quote` checked the returned quote's `inputMint`/`outputMint`/`swapMode`/`slippageBps` against the request but never `inAmount` against the requested `amount` | Added `String(quote.inAmount) !== amount` to the existing mismatch check (502 `quote_mismatch`, never stored under a `quoteId`) | `scripts/seeker-swap-test.cjs` (4b): a stub answering with a different `inAmount` than requested → 502, nothing cached |
+| 6 | **P2** — the confirm sheet's displayed priority fee came from a SEPARATE `/tx` build (a best-effort estimate fetched when the sheet opened) than the one actually signed (fetched again, for real, inside `onConfirmed`) — two independent Jupiter builds, no guarantee the numbers agreed | `/tx` is now called exactly ONCE, when the sheet opens (`buildConfirmData`), and that SAME response (`confirmData.tx`) is both what the sheet displays and what gets signed. If more than 45s pass before confirming, or the wallet's live address moved, the flow re-fetches and RE-OPENS the sheet with the fresh numbers rather than signing stale ones. The verifier's ComputeBudget decode (fix 1) now enforces `cuLimit × cuPriceMicroLamports / 1e6 <= maxPriorityFeeLamports`, with the displayed ceiling passed in from the same `/tx` response | `scripts/seeker-swap-verify-test.cjs` §1: a ceiling at or above the fixture's real fee (441,361 lamports) passes; one lamport below it refuses |
+
+Where to look hardest:
+
+- **The per-program instruction allowlist.** Confirmed against the ONE real recorded fixture
+  (`scripts/fixtures/seeker-swap/swap.json`) — its 8 top-level instructions are exactly
+  ComputeBudget×2 (limit, price), Associated Token `CreateIdempotent`×2 (the wSOL ATA, the output
+  ATA), System `Transfer`×1 (the SOL-wrap step), Token `SyncNative`×1, the Jupiter
+  `shared_accounts_route`×1, and Token `CloseAccount`×1 (unwrapping the leftover wSOL ATA). No
+  Memo instruction has ever actually been observed — it stays allowlisted defensively (round 29's
+  same open question) but every check here is against a single sample. Is there a legitimate
+  Jupiter route shape this now refuses that the fixture never exercised — a token-2022 transfer-fee
+  hop, a DCA/limit-order variant, a route that legitimately needs a second System instruction?
+- **The ATA derivation for Token-2022 outputs.** `ataCandidates()` derives the expected ATA under
+  BOTH `TokenkegQ…` and `Tokenz…` and accepts either, specifically so an output mint on Token-2022
+  verifies without an extra RPC call to learn which program owns it. The recorded fixture's own
+  mints are both classic-Token, so this exact branch has never been exercised against a real
+  Token-2022 swap — only reasoned from the SPL ATA derivation formula.
+- **The `processed`-never-expired rule's interaction with the UI poll.** `checkPendingSwap` is
+  correct in isolation (pinned above), but `Swap.jsx` polls it every 3s from `pending` state — is
+  there a window between the wallet returning a signature and the FIRST poll where a person could
+  force a second "Review swap" by some other means (closing and reopening the pane before
+  `pending` ever loads from `localStorage`) and get two live signatures for the same intent?
+- **The single-fetch confirm sheet's re-render path.** When `onConfirmed` detects staleness (>45s,
+  or a moved address) it silently re-fetches and re-opens the sheet rather than signing — does the
+  person clearly see that this happened (the `confirmNote` line), or could a fast re-click of
+  "Confirm and sign" race past it and still sign the OLD numbers on some interleaving?
+
 ## Round 29 — 2026-09-24: #420, an adversarial review's three P2s and its P3s — fixed
 
 `claude/seeker-swap` (PR #420, the Seeker in-app Jupiter swap, `docs/SEEKER_SWAP_DESIGN.md`).

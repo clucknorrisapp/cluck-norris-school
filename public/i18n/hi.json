@@ -2913,5 +2913,6 @@
   "The transaction did not land — nothing was swapped.": "लेन-देन सफल नहीं हुआ — कुछ भी स्वैप नहीं हुआ।",
   "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "लेन-देन दर्ज हुआ लेकिन ऑन-चेन विफल रहा — कुछ भी स्वैप नहीं हुआ; एक नेटवर्क शुल्क लिया गया।",
   "This did not land before its expiry block height passed — it's safe to try again.": "इसकी समाप्ति ब्लॉक ऊँचाई बीतने से पहले यह दर्ज नहीं हुआ — फिर से प्रयास करना सुरक्षित है।",
-  "Unconfirmed": "अपुष्ट"
+  "Unconfirmed": "अपुष्ट",
+  "That quote's numbers had aged — here are the current ones. Review before continuing.": "उस कोट के आंकड़े पुराने हो गए थे — ये रहे मौजूदा आंकड़े। जारी रखने से पहले समीक्षा करें।"
 }

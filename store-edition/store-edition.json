@@ -513,6 +513,7 @@
     "That mint request could not be submitted — build it again.",
     "That mint wasn't something we could use.",
     "That quote had expired — here are the current numbers. Review before continuing.",
+    "That quote's numbers had aged — here are the current ones. Review before continuing.",
     "That wallet or mint wasn't something we could use.",
     "That's also the trap: a signature can authorize more than it looks like. Approving a token \"delegate\" or signing a transaction you didn't read can hand over spending rights without a single SOL visibly moving. Read what your wallet's own pop-up says it's signing — if it doesn't match what the site told you, stop.",
     "That's also why the amount you actually receive can differ from the quote you were shown: a quote is a snapshot of the pool at the moment it was fetched, and time passes — however briefly — before your transaction confirms. Other trades can land in that gap and move the pool before yours does.",

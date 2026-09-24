@@ -78,6 +78,16 @@ const QUOTE_DEBOUNCE_MS = 400;
 // by a real getSignatureStatuses/getBlockHeight read.
 const PENDING_STORAGE_KEY = "seekerSwapPendingTx";
 const PENDING_POLL_MS = 3000;
+// ⚠️ Codex round 30 P2 — "the displayed fee is from a different transaction than the one
+// signed." `/tx` used to be called TWICE per swap: once (best-effort) when the sheet opened, to
+// show a fee estimate, and again (for real) inside onConfirmed with whatever the live address
+// happened to be at that moment — two separate Jupiter builds, each with its own priority fee and
+// its own `lastValidBlockHeight`, so the number the sheet showed was never provably the number in
+// the transaction actually signed. Now `/tx` is called exactly ONCE, when the sheet opens, and
+// that SAME response is what gets signed. If more than this many ms pass before the person
+// confirms, or the wallet's live address moved, the flow re-fetches and re-renders the sheet with
+// the new numbers instead of ever signing something the sheet didn't show.
+const CONFIRM_TX_TTL_MS = 45000;
 
 // No Node Buffer anywhere in this app (AGENTS.md) — plain browser primitives only.
 function base64ToBytes(b64) {
@@ -253,7 +263,11 @@ export default function SwapPane({ wallet }) {
   const [quoteErr, setQuoteErr] = React.useState(null);
 
   const [confirmPhase, setConfirmPhase] = React.useState("idle"); // idle|checking|ready|expired|error
-  const [confirmData, setConfirmData] = React.useState(null); // the frozen quote used to open the sheet
+  // Round 30 P2 fix — confirmData now carries the SINGLE /tx build the sheet shows AND the one
+  // that gets signed: { data:{quote,quoteId}, fetchedAt, tx:<the /tx response>, builtAt, builtFor }.
+  // `data`/`fetchedAt` keep the same shape `quote` itself uses so every existing `confirmData.data.quote`
+  // read below is unchanged.
+  const [confirmData, setConfirmData] = React.useState(null);
   const [confirmNote, setConfirmNote] = React.useState(null);
 
   const [swapping, setSwapping] = React.useState(false);
@@ -264,9 +278,6 @@ export default function SwapPane({ wallet }) {
   // getBlockHeight) resolves it into sent/failed/expired. Persisted so leaving and returning to
   // the pane (or the app being backgrounded) resumes the same check instead of losing it.
   const [pending, setPending] = React.useState(null); // { sig, lastValidBlockHeight, wallet, at, inSym, outSym, inAmt, outAmt }
-  // P3: the confirm sheet's "Network cost" line — a best-effort fee estimate fetched when the
-  // sheet opens (see openReview), never a guess.
-  const [feeEstimate, setFeeEstimate] = React.useState(null); // { prioritizationFeeLamports } | null
   const [outAtaExists, setOutAtaExists] = React.useState(null); // null unknown | true | false
 
   const quoteAbortRef = React.useRef(null);
@@ -469,12 +480,29 @@ export default function SwapPane({ wallet }) {
     setAmount(rawToPlainDecimal(raw, inMint.decimals));
   }
 
-  // ── open the confirm sheet with a FRESH quote (re-fetched if stale) ─────────────────────────
+  // ── build the ONE /tx response the sheet shows AND the one that gets signed (round 30 fix 6) ──
+  // Throws { code:409 } when the quoteId aged out server-side, or a plain Error otherwise. The
+  // LIVE address is re-read (assertSameAccount) right before the request goes out every time this
+  // runs — at sheet-open time here, and again in onConfirmed if a refresh is needed there.
+  async function buildConfirmData(q) {
+    const live = assertSameAccount(wallet.provider, wallet.address);
+    const r = await fetch("/api/seeker/swap/tx", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quoteId: q.data.quoteId, userPublicKey: live }),
+    });
+    const body = await r.json().catch(() => null);
+    if (r.status === 409) { const e = new Error("quote_expired"); e.code = 409; throw e; }
+    if (!r.ok || !body || !body.ok) { const e = new Error((body && body.error) || "swap_unavailable"); e.code = r.status; throw e; }
+    return { data: q.data, fetchedAt: q.fetchedAt, tx: body, builtAt: Date.now(), builtFor: live };
+  }
+
+  // ── open the confirm sheet with a FRESH quote (re-fetched if stale) AND the ONE /tx build that
+  // will be signed — round 30 fix 6: this used to be fetched again, separately, at confirm time,
+  // so the fee/expiry the sheet showed could differ from what actually got signed. ─────────────
   async function openReview() {
     if (!quote || pending) return;
     setConfirmPhase("checking");
     setConfirmNote(null);
-    setFeeEstimate(null);
     let q = quote;
     if (Date.now() - quote.fetchedAt > QUOTE_STALE_MS) {
       const res = await fetchQuoteNow();
@@ -482,85 +510,83 @@ export default function SwapPane({ wallet }) {
       q = { data: res.data, fetchedAt: Date.now() };
       setQuote(q);
     }
-    setConfirmData(q);
-    // P3: the confirm sheet's "Network cost" line shows Jupiter's OWN prioritizationFeeLamports,
-    // never a guess — best-effort only. This does not consume the server's in-memory quote entry
-    // (it can be built more than once), and it is NOT the transaction that gets signed: onConfirmed
-    // below re-requests /tx with the LIVE re-read address right before signing, exactly as
-    // docs/SEEKER_SWAP_DESIGN.md requires. A failure here just omits the fee line.
     try {
-      const r = await fetch("/api/seeker/swap/tx", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quoteId: q.data.quoteId, userPublicKey: wallet.address }),
-      });
-      const b = await r.json().catch(() => null);
-      if (r.ok && b && b.ok) setFeeEstimate({ prioritizationFeeLamports: b.prioritizationFeeLamports });
-    } catch (_) { /* estimate only */ }
-    setConfirmPhase("ready");
+      const cd = await buildConfirmData(q);
+      setConfirmData(cd);
+      setConfirmPhase("ready");
+    } catch (e) {
+      if (e && e.code === 409) {
+        const res = await fetchQuoteNow();
+        if (res && res.ok) {
+          const fresh = { data: res.data, fetchedAt: Date.now() };
+          setQuote(fresh);
+          try {
+            const cd = await buildConfirmData(fresh);
+            setConfirmData(cd);
+            setConfirmPhase("ready");
+            return;
+          } catch (_) { /* fall through to error */ }
+        }
+      }
+      setConfirmPhase("error");
+    }
   }
-  function cancelConfirm() { setConfirmPhase("idle"); setConfirmData(null); setConfirmNote(null); setFeeEstimate(null); }
+  function cancelConfirm() { setConfirmPhase("idle"); setConfirmData(null); setConfirmNote(null); }
 
   // ── confirm + sign ───────────────────────────────────────────────────────────────────────────
   async function onConfirmed() {
-    const q = confirmData;
+    const cd = confirmData;
     setConfirmPhase("idle");
-    setConfirmData(null);
-    if (!q) return;
-    setSwapping(true);
-    setOutcome(null);
+    if (!cd) return;
 
+    // ⚠️ Round 30 fix 6: NEVER sign a transaction whose numbers the sheet did not show. If too
+    // much time passed since /tx was built, or the wallet's live address moved since then,
+    // re-fetch and re-OPEN the sheet with the fresh numbers instead of silently signing stale
+    // ones — the person reviews again before anything is sent to their wallet.
     let live;
-    try {
-      live = assertSameAccount(wallet.provider, wallet.address);
-    } catch (e) {
-      setSwapping(false);
-      setOutcome({ status: "failed", error: (e && e.message) || String(e) });
-      return;
-    }
-
-    // The transaction is requested with the LIVE address, right now — not the one captured at
-    // quote time (docs/SEEKER_SWAP_DESIGN.md).
-    let r, body = null;
-    try {
-      r = await fetch("/api/seeker/swap/tx", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quoteId: q.data.quoteId, userPublicKey: live }),
-      });
-      body = await r.json().catch(() => null);
-    } catch (_) {
-      setSwapping(false);
-      setOutcome({ status: "failed", error: t("Could not reach the swap service.") });
-      return;
-    }
-
-    if (r.status === 409) {
-      // The quote expired server-side between opening the sheet and confirming — re-quote and
-      // reopen with fresh numbers. Never sign against the stale one.
-      const res = await fetchQuoteNow();
-      setSwapping(false);
-      if (res && res.ok) {
-        const fresh = { data: res.data, fetchedAt: Date.now() };
-        setQuote(fresh);
+    try { live = assertSameAccount(wallet.provider, wallet.address); }
+    catch (e) { setOutcome({ status: "failed", error: (e && e.message) || String(e) }); return; }
+    const stale = Date.now() - cd.builtAt > CONFIRM_TX_TTL_MS;
+    if (stale || live !== cd.builtFor) {
+      setConfirmPhase("checking");
+      try {
+        const fresh = await buildConfirmData(cd);
         setConfirmData(fresh);
-        setConfirmNote(t("That quote had expired — here are the current numbers. Review before continuing."));
+        setConfirmNote(t("That quote's numbers had aged — here are the current ones. Review before continuing."));
         setConfirmPhase("ready");
-      } else {
-        setQuotePhase("unavailable");
+      } catch (e) {
+        if (e && e.code === 409) {
+          const res = await fetchQuoteNow();
+          if (res && res.ok) {
+            const fresh2 = { data: res.data, fetchedAt: Date.now() };
+            setQuote(fresh2);
+            try {
+              const cd2 = await buildConfirmData(fresh2);
+              setConfirmData(cd2);
+              setConfirmNote(t("That quote had expired — here are the current numbers. Review before continuing."));
+              setConfirmPhase("ready");
+              return;
+            } catch (_) { /* fall through */ }
+          }
+        }
+        setConfirmData(null);
         setOutcome({ status: "failed", error: t("The quote expired and a fresh one could not be fetched. Try again.") });
       }
       return;
     }
-    if (!r.ok || !body || !body.ok) {
-      setSwapping(false);
-      setOutcome({ status: "failed", error: (body && body.error) || t("The swap service refused this request.") });
-      return;
-    }
 
+    setConfirmData(null);
+    setSwapping(true);
+    setOutcome(null);
+
+    const body = cd.tx;
     const swapTransaction = body.swapTransaction;
-    // ⚠️ P2-1: the quote object the person was actually SHOWN (from the confirm sheet, `q.data.quote`)
-    // — verifySwapTransaction() compares this against the bytes of the route instruction Jupiter
-    // built, not against anything the server merely SAYS about it.
-    const shownQuote = q && q.data && q.data.quote;
+    // ⚠️ P2-1: the quote object the person was actually SHOWN (from the confirm sheet,
+    // `cd.data.quote`) — verifySwapTransaction() compares this against the bytes of the route
+    // instruction Jupiter built, not against anything the server merely SAYS about it.
+    const shownQuote = cd && cd.data && cd.data.quote;
+    const inAmt = fmtAmt(body.inAmount, inMint.decimals);
+    const outAmt = fmtAmt(body.otherAmountThreshold, outMint.decimals);
     const res = await signSendConfirm({
       provider: wallet.provider,
       owner: wallet.address,
@@ -570,39 +596,51 @@ export default function SwapPane({ wallet }) {
       // even fresher than the `live` this function closed over above.
       build: (web3, _blockhash, freshLive) => {
         const deserialized = web3.VersionedTransaction.deserialize(base64ToBytes(swapTransaction));
-        // ⚠️ P2-1: structurally verify BEFORE this is ever handed to the wallet to sign, against
-        // the freshest possible re-read of the connected address — never a cached one. Throwing
-        // here is caught by signSendConfirm and reported as "failed" with this sentence; nothing
-        // is ever signed on a mismatch.
-        const check = verifySwapTransaction({ tx: deserialized, liveAddress: freshLive || live, quote: shownQuote });
+        // ⚠️ P2-1 / round 30: structurally verify BEFORE this is ever handed to the wallet to
+        // sign, against the freshest possible re-read of the connected address — never a cached
+        // one — and against the SAME priority-fee ceiling this sheet displayed
+        // (body.prioritizationFeeLamports, round 30 fix 6). Throwing here is caught by
+        // signSendConfirm and reported as "failed" with this sentence; nothing is ever signed on
+        // a mismatch.
+        const check = verifySwapTransaction({
+          tx: deserialized, liveAddress: freshLive || live, quote: shownQuote,
+          PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: body.prioritizationFeeLamports,
+        });
         if (!check.ok) throw new Error(check.reason);
         return deserialized;
       },
+      // ⚠️ Round 30 fix 3 — persist the pending record the MOMENT a validly-diffed signature comes
+      // back, before submission is even attempted, so a transport failure (which can throw before
+      // signSendConfirm ever returns) does not lose it. See sign.js's own note on `onSigned`.
+      onSigned: (sig) => {
+        const p = { sig, lastValidBlockHeight: body.lastValidBlockHeight, wallet: live, at: Date.now(), inSym, outSym, inAmt, outAmt };
+        savePending(p);
+        setPending(p);
+      },
     });
 
-    const inAmt = fmtAmt(body.inAmount, inMint.decimals);
-    const outAmt = fmtAmt(body.otherAmountThreshold, outMint.decimals);
     const base = { inSym, outSym, inAmt, outAmt };
     if (res.status === "sent") {
       setOutcome({ ...base, status: "sent", sig: res.sig });
       setBalTick((n) => n + 1); // re-read balances now that the swap landed
       setSwapping(false);
     } else if (res.status === "unconfirmed") {
-      // P2-2: hand off to the persisted poller instead of a static "check it yourself" message —
-      // the form stays locked (see `pending` below) until a real getSignatureStatuses/
-      // getBlockHeight read resolves it into sent/failed/expired.
-      const p = { sig: res.sig, lastValidBlockHeight: body.lastValidBlockHeight, wallet: live, at: Date.now(), inSym, outSym, inAmt, outAmt };
-      savePending(p);
-      setPending(p);
-      // setSwapping(false) intentionally NOT called here — `pending` itself now drives the
-      // locked-form UI, and clearing `swapping` too early would flash the form as usable for one
-      // render before `pending`'s effect takes over.
-      setSwapping(false);
-    } else if (res.status === "declined") {
-      setOutcome({ ...base, status: "declined" });
+      // onSigned already persisted the pending record above — nothing more to do here.
+      // setSwapping(false) intentionally NOT called-then-forgotten — `pending` itself now drives
+      // the locked-form UI, and clearing `swapping` too early would flash the form as usable for
+      // one render before `pending`'s effect takes over.
       setSwapping(false);
     } else {
-      setOutcome({ ...base, status: "failed", error: res.error, sig: res.sig });
+      // "failed" or "declined": whatever onSigned may have persisted was never actually landed
+      // (the node explicitly refused it, or nothing was ever signed) — clear it rather than
+      // leaving a stale pending record the poller would spin on forever.
+      clearPendingStorage();
+      setPending(null);
+      if (res.status === "declined") {
+        setOutcome({ ...base, status: "declined" });
+      } else {
+        setOutcome({ ...base, status: "failed", error: res.error, sig: res.sig });
+      }
       setSwapping(false);
     }
   }
@@ -635,11 +673,12 @@ export default function SwapPane({ wallet }) {
   const cImpactPct = cq && cq.priceImpactPct != null ? Number(cq.priceImpactPct) * 100 : null;
   const cImpactStr = cImpactPct != null && isFinite(cImpactPct) ? `${cImpactPct.toFixed(2)}%` : "—";
   const cDanger = cImpactPct != null && isFinite(cImpactPct) && cImpactPct >= 5;
-  // P3: "Network cost" — the priority fee actually quoted by /tx (never a guess), plus the
-  // one-time ATA-open note when the receiving mint's account does not exist yet (checked at
-  // quote time, above).
-  const feeSolStr = feeEstimate && feeEstimate.prioritizationFeeLamports != null
-    ? fmtAmt(String(feeEstimate.prioritizationFeeLamports), 9, 6) : null;
+  // P3 / round 30 fix 6: "Network cost" — the priority fee from the SAME /tx build that will be
+  // signed (confirmData.tx, never a second, separate estimate call), plus the one-time ATA-open
+  // note when the receiving mint's account does not exist yet (checked at quote time, above).
+  const cTx = confirmData && confirmData.tx;
+  const feeSolStr = cTx && cTx.prioritizationFeeLamports != null
+    ? fmtAmt(String(cTx.prioritizationFeeLamports), 9, 6) : null;
   const confirmLines = cq && inMint && outMint ? [
     <span key="p">{tf("Pay {amt} {sym}", { amt: fmtAmt(cq.inAmount, inMint.decimals), sym: inSym })}</span>,
     <span key="r">{tf("Receive at least {amt} {sym}", { amt: fmtAmt(cq.otherAmountThreshold, outMint.decimals), sym: outSym })}</span>,

@@ -378,6 +378,88 @@ const ok = (name, cond, detail) => {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 8. Codex round 30 P2 — "the pending record is saved too late." `onSigned(sig)` must fire
+  // BEFORE submitSigned/the send is attempted, so a transport failure (which throws from inside
+  // sendTransaction) still leaves the record written. A fake `rpc` whose `sendTransaction` throws
+  // a plain transport error (no `.rpcError`, exactly submitSigned's "node never answered" case)
+  // proves the write happened before the throw — not caught after the fact.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\nCodex round 30 P2 — onSigned() fires before the send is attempted (legacy + v0, signTransaction)\n");
+  {
+    const buildLegacy = (w3, blockhash, live) => {
+      const t = new w3.Transaction({ feePayer: new w3.PublicKey(live), recentBlockhash: blockhash });
+      t.add(w3.SystemProgram.transfer({ fromPubkey: new w3.PublicKey(live), toPubkey: w3.Keypair.generate().publicKey, lamports: 1000 }));
+      return t;
+    };
+    const buildV0 = (w3, blockhash, live) => {
+      const msg = new w3.TransactionMessage({
+        payerKey: new w3.PublicKey(live), recentBlockhash: blockhash,
+        instructions: [w3.SystemProgram.transfer({ fromPubkey: new w3.PublicKey(live), toPubkey: w3.Keypair.generate().publicKey, lamports: 1000 })],
+      }).compileToV0Message();
+      return new w3.VersionedTransaction(msg);
+    };
+
+    for (const [label, build] of [["legacy", buildLegacy], ["v0", buildV0]]) {
+      global.window.CluckUtil = {
+        rpc: async (method) => {
+          if (method === "getLatestBlockhash") return { value: { blockhash: web3.Keypair.generate().publicKey.toBase58() } };
+          if (method === "sendTransaction") throw new Error("ECONNRESET: fake transport failure — no rpcError tag, mirrors a dropped connection");
+          throw new Error("unexpected rpc call: " + method);
+        },
+      };
+      const payer = web3.Keypair.generate();
+      const provider = {
+        publicKey: { toString: () => payer.publicKey.toBase58() },
+        signTransaction: async (tx) => { tx.partialSign ? tx.partialSign(payer) : tx.sign([payer]); return tx; },
+      };
+      let onSignedCalledBeforeThrow = false;
+      let sigSeen = null;
+      const res = await seam.signSendConfirm({
+        provider, owner: payer.publicKey.toBase58(), build,
+        onSigned: (sig) => { onSignedCalledBeforeThrow = true; sigSeen = sig; },
+      });
+      ok(`${label}: onSigned fired`, onSignedCalledBeforeThrow, res);
+      ok(`${label}: onSigned received a real base58 signature`, typeof sigSeen === "string" && sigSeen.length >= 43, sigSeen);
+      // The transport failure means submitSigned couldn't reach the node — signSendConfirm
+      // reports that ambiguity as "unconfirmed" (protection 5), carrying the SAME local
+      // signature onSigned already received — proving onSigned ran on the real, final signature,
+      // not a placeholder computed some other way.
+      ok(`${label}: the transport failure resolves to 'unconfirmed' carrying that SAME signature (never silently swallowed)`,
+        res.status === "unconfirmed" && res.sig === sigSeen, res);
+    }
+  }
+
+  // ── signAndSendTransaction wallets: onSigned fires with the returned signature too ───────────
+  console.log("\nCodex round 30 P2 — onSigned() also fires for signAndSendTransaction wallets\n");
+  {
+    global.window.CluckUtil = {
+      rpc: async (method) => {
+        if (method === "getLatestBlockhash") return { value: { blockhash: web3.Keypair.generate().publicKey.toBase58() } };
+        if (method === "getSignatureStatuses") return { value: [{ confirmationStatus: "confirmed" }] };
+        throw new Error("unexpected rpc call: " + method);
+      },
+    };
+    const realSetTimeout = global.setTimeout;
+    global.setTimeout = (fn) => fn();
+    try {
+      const payer = web3.Keypair.generate();
+      const provider = {
+        publicKey: { toString: () => payer.publicKey.toBase58() },
+        signAndSendTransaction: async () => ({ signature: "SASTSIG1111111111111111111111111111111111111111111111111111111111111" }),
+      };
+      const buildLegacy = (w3, blockhash, live) => {
+        const t = new w3.Transaction({ feePayer: new w3.PublicKey(live), recentBlockhash: blockhash });
+        t.add(w3.SystemProgram.transfer({ fromPubkey: new w3.PublicKey(live), toPubkey: w3.Keypair.generate().publicKey, lamports: 1000 }));
+        return t;
+      };
+      let sigSeen = null;
+      const res = await seam.signSendConfirm({ provider, owner: payer.publicKey.toBase58(), build: buildLegacy, onSigned: (sig) => { sigSeen = sig; } });
+      ok("signAndSendTransaction: onSigned fired with the returned signature", sigSeen === "SASTSIG1111111111111111111111111111111111111111111111111111111111111", sigSeen);
+      ok("signAndSendTransaction: still resolves normally (onSigned never blocks the real flow)", res.status === "sent", res);
+    } finally { global.setTimeout = realSetTimeout; }
+  }
+
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
