@@ -11265,7 +11265,7 @@ app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), 
   // stay reads.
   if (mutatingGetRefused(req, res, ["reset", "mint", "pool", "symbol", "chat", "min", "display", "exclude", "start", "end", "holdend",
     "mode", "bonus", "entrymode", "dq", "undq", "scan", "every", "replaceon", "replaceoff", "pinon", "pinoff", "board", "boardoff", "boardon",
-    "draw", "run", "sweep", "unpay"])) return;
+    "draw", "run", "sweep", "unpay", "rewind"])) return;
   const q = req.query;
   const deps = { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched };
   const ms = (v) => { if (v == null || v === "") return undefined; const n = Number(v); return Number.isFinite(n) && n > 1e11 ? n : Date.parse(String(v)) || undefined; };
@@ -11304,6 +11304,13 @@ app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), 
       rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined,
     });
     if (q.scan === "1") out.scan = await cunaGiveaway.scanOnce(deps);
+    // &rewind=<ISO|unix ms|unix s> moves the scan cursor BACK so the next &scan=1 (or the 5-minute
+    // tick) re-walks a stretch of tape it already retired. 2026-09-24: a wallet's buys landed
+    // seconds before a scan tick and Helius's enhanced parse had not caught up yet — the tape
+    // reported the slice as fully covered (no missing signature) with no usable trade in it, so
+    // the incremental scanner retired the slice and the buys were gone for good. Safe to repeat:
+    // it only moves cursorMs, and a re-scan cannot double-credit a signature already recorded.
+    if (q.rewind !== undefined) out.rewind = cunaGiveaway.rewindCursor(String(q.rewind));
     if (q.trace === "1") out.trace = await cunaGiveaway.traceOutbound(deps, { hops: 2 });
     if (q.every !== undefined) { cunaGiveaway.configure({ boardEveryMin: Math.max(5, Number(q.every) || 5) }); out.config = cunaGiveaway.config(); }
     if (q.replaceon === "1") { cunaGiveaway.configure({ boardReplace: true }); out.config = cunaGiveaway.config(); }

@@ -539,6 +539,12 @@ jobs:
       # — and a missed SELL leaves a wallet holding entries that decide who wins a prize.
       - name: trade-tape coverage honesty
         run: node scripts/tape-coverage-test.cjs
+      # 2026-09-24: a signature present in the tape but not yet enriched with tokenTransfers reads
+      # as a fully-covered, empty slice (reachedWindowStart never flags it) — 15 of one wallet's 35
+      # qualifying buys were retired this way. The scanner now never scans within 5 minutes of
+      # "now"; &rewind= is the operator's escape hatch for tape already retired before the fix.
+      - name: giveaway scanner settle delay + cursor rewind
+        run: node scripts/cuna-giveaway-scan-test.cjs
       # Railway runs more than one process against one volume. Both school stores read their file
       # once at boot and rewrote it wholesale, so a stale instance DELETED the other's work —
       # lesson marks the graduation gate depends on, and issued transcripts. Spawns real child
@@ -760,6 +766,22 @@ jobs:
       # throwaway key and no secrets.
       - name: admin mutation discipline (405 on GET, explicit project, pool allowlist)
         run: node scripts/mutating-get-guard-test.cjs
+      # Claude Code scaffolding (2026-09-23, docs/OPERATING_MODEL.md "Claude Code scaffolding"):
+      # pins .claude/agents/*.md (valid model alias per seat), .claude/commands/*.md (the money
+      # ones keep the PLAN != EXECUTE gate and cuna-payout.md's 'go' argument), .claude/rules/*.md
+      # (every paths: glob matches a real file), that no committed file under the new .claude/
+      # scaffolding names a literal model id instead of an alias, and — the one this exists for —
+      # that splitting the path-specific traps out of AGENTS.md into .claude/rules/*.md moved each
+      # pinned sentence to exactly one place, never zero (lost) and never two (duplicated).
+      - name: Claude Code scaffolding (agents/commands/rules) — no text lost, no drift
+        run: node scripts/agents-rules-test.cjs
+      # The PreToolUse hook (.claude/hooks/no-mutating-get.sh, registered in .claude/settings.json)
+      # that blocks a curl against a known admin route carrying a mutating flag unless it's a real
+      # POST. Feeds it ~10 blocked/allowed commands, including the exact curl lines the four
+      # money/admin slash commands run (which must all pass — a hook that blocks its own runbook
+      # is worse than none).
+      - name: no-mutating-get PreToolUse hook (blocked + allowed commands)
+        run: node scripts/no-mutating-get-hook-test.cjs
       # Colosseum roadmap §10 Z3: the Hub's newer public read routes (reproducibility,
       # batch/inputs, buy-comp standings, a receipt, the holders-snapshot series and one
       # snapshot, the airdrop receipt routes, the JVP timeline, the JSON Schemas and the built

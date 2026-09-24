@@ -307,12 +307,18 @@ function buildVariant(cwd, variant) {
     return sandbox;
   }
 
-  const ADDR = "FAKEADDR1111111111111111111111111111111111";
+  // The real plugin returns the address as BASE64 of the 32 key bytes (CluckMWAPlugin.kt), so the
+  // fake does too — the first cut returned base58 here and hid the bug the owner then hit on the
+  // device ("5lrl…qeM=" shown as the connected wallet, pass sheet "could not reach the pass
+  // service"). ADDR is what the app must SEE (base58); ADDR_B64 is what the bridge SENDS.
+  const KEY_BYTES = Buffer.from(Array.from({ length: 32 }, (_, i) => (i * 29 + 3) % 256));
+  const ADDR_B64 = KEY_BYTES.toString("base64");
+  const ADDR = (() => { const A = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"; let n = 0n; for (const b of KEY_BYTES) n = n * 256n + BigInt(b); let o = ""; while (n > 0n) { o = A[Number(n % 58n)] + o; n /= 58n; } for (const b of KEY_BYTES) { if (b === 0) o = "1" + o; else break; } return o; })();
   const SIG = "5FakeSig1111111111111111111111111111111111111111111111111111111111111111";
   function fakeBridge(calls) {
     return {
-      authorize: async (a) => { calls.push(["authorize", a]); return { address: ADDR, authToken: "tok-1" }; },
-      reauthorize: async (a) => { calls.push(["reauthorize", a]); return { address: ADDR, authToken: "tok-1" }; },
+      authorize: async (a) => { calls.push(["authorize", a]); return { address: ADDR_B64, authToken: "tok-1" }; },
+      reauthorize: async (a) => { calls.push(["reauthorize", a]); return { address: ADDR_B64, authToken: "tok-1" }; },
       deauthorize: async (a) => { calls.push(["deauthorize", a]); return {}; },
       signTransactions: async (a) => { calls.push(["signTransactions", a]); return { signedTransactions: a.transactions }; },
       signAndSendTransactions: async (a) => { calls.push(["signAndSendTransactions", a]); return { signatures: [SIG] }; },
@@ -329,7 +335,8 @@ function buildVariant(cwd, variant) {
     ok("inside the Capacitor Android app with the bridge present, MWA is the (only) entry", list.length === 1 && list[0].id === "mwa" && !!list[0].mwa, JSON.stringify(list.map((w) => w.id)));
 
     const r = await sandbox.CluckWallet.connect("mwa");
-    ok("connect() returns a real address through the shared connect() surface", r && r.pubkey === ADDR && r.id === "mwa", JSON.stringify(r));
+    ok("connect() returns the address as BASE58 (the bridge sent base64) through the shared connect() surface", r && r.pubkey === ADDR && r.id === "mwa", JSON.stringify(r));
+    ok("the base58 address has no base64 padding or symbols", typeof r.pubkey === "string" && !/[=+\/]/.test(r.pubkey) && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(r.pubkey), String(r && r.pubkey));
     ok("authorize() was the call made (not reauthorize, first connect)", calls.map((c) => c[0])[0] === "authorize");
 
     const entry = sandbox.CluckWallet.available()[0];
@@ -343,6 +350,8 @@ function buildVariant(cwd, variant) {
     // its own Uint8Array class, so a host-realm instanceof check on a value the sandbox built
     // would always (and wrongly) read false. ArrayBuffer.isView works cross-realm by spec.
     ok("signMessage returns signed bytes", ArrayBuffer.isView(sig.signature) && sig.signature.length === 5, JSON.stringify(Array.from(sig.signature || [])));
+    const smCall = calls.find((c) => c[0] === "signMessages");
+    ok("signMessages hands the bridge back ITS encoding of the address (base64), not the base58 the app shows", !!smCall && JSON.stringify(smCall[1].addresses) === JSON.stringify([ADDR_B64]), JSON.stringify(smCall && smCall[1].addresses));
 
     sandbox.CluckWallet.disconnect();
     ok("disconnect() calls the bridge's deauthorize and clears state", calls.some((c) => c[0] === "deauthorize") && sandbox.CluckWallet.available()[0].id === "mwa");
@@ -618,7 +627,7 @@ async function renderedCheck(pw) {
         getPlatform: () => "android",
         Plugins: {
           CluckMWA: {
-            authorize: async (a) => { window.__mwaCalls.push(["authorize", a]); return { address: "RENDEREDFAKE111111111111111111111111111111", authToken: "tok" }; },
+            authorize: async (a) => { window.__mwaCalls.push(["authorize", a]); return { address: "HYyhgbGvBjQoGvP85fKeBh4N8+pFghiNlZ//5dVq6R8=", authToken: "tok" }; },  // base64, like the real plugin
             deauthorize: async () => { window.__mwaCalls.push(["deauthorize"]); return {}; },
             signTransactions: async (a) => ({ signedTransactions: a.transactions }),
             signAndSendTransactions: async () => ({ signatures: ["5Sig"] }),

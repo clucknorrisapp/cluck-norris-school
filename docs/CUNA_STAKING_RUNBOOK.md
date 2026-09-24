@@ -369,6 +369,37 @@ at all (see above). An over-payment reads as zero owed, never as a debt.
 
 ---
 
+## The buy-to-enter giveaway scanner: settle delay + rewind (2026-09-24)
+
+`lib/cuna-giveaway.js` runs the separate CUNA buy-to-enter giveaway (the birthday raffle at
+`/prize-wheel`), scanning the trade tape incrementally and never looking back. On 2026-09-23 wallet
+`8w3JXv…HCuNt` made 35 qualifying buys and only 20 were credited: the 15 missed all landed SECONDS
+before a scan tick ran. `getTradeTapeHelius` only reports a slice as incomplete when a signature is
+MISSING from its batch — not when the signature is present but Helius's enhanced parse for a very
+fresh transaction comes back with no usable `tokenTransfers` yet (the enrichment lags a little
+behind the signature index). That read as a fully-covered, empty slice, so the cursor retired it
+and the buys inside it were gone for good.
+
+**The fix, shipped the same day:** `scanOnce()` never scans a slice whose end is within 5 minutes
+of "now" — a `SETTLE_MS` delay that gives Helius's enrichment time to catch up before a slice is
+ever asked for. The room board runs 5 minutes behind live because of this, which is fine — it
+already refreshes every 15–20 minutes. Once a promo's window has actually closed (`now >= endMs +
+5min`), the delay stops mattering and the scanner still reaches exactly `endMs`.
+
+**`&rewind=<ISO | unix ms | unix s>`** on `/api/cuna-giveaway/admin` (**POST-only**, like every
+other mutating flag on this route) is the operator's lever for the tape that was already retired
+before the fix shipped — or for any other stretch worth re-checking. It moves `cursorMs` backward
+and touches NOTHING else: no wallet record, no dq mark, no payout, no draw. It is safe to repeat
+any number of times — every credit is deduped by signature
+(`rec.buys.some(b => b.sig === t.sig)`), so a re-scan cannot double-credit a buy it already counted,
+and a sell already recorded as a dq stays a dq. It clamps to the promo's `startMs` on the early side
+and refuses to move the cursor FORWARD on the late side (a bad or reversed value cannot skip tape
+that hasn't been scanned yet). After a rewind, the next `&scan=1` (or the 5-minute tick) simply
+re-walks the reopened stretch. `scripts/cuna-giveaway-scan-test.cjs` pins both the settle delay and
+the rewind clamp/dedupe behaviour against the real module.
+
+---
+
 ## Where things are
 
 | | |

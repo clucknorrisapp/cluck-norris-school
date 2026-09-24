@@ -341,6 +341,10 @@ function raw(method, p, headers) {
   ok("GET /api/cuna-giveaway/admin?scan=1 (ledger write) is refused with 405", r.status === 405);
   r = await call("GET", "/api/cuna-giveaway/admin?reset=1");
   ok("GET /api/cuna-giveaway/admin?reset=1 is refused with 405", r.status === 405);
+  // 2026-09-24: &rewind= moves the scan cursor back (see the settle-delay fix) — a state change
+  // exactly like &scan=1, so it must be POST-only the same way.
+  r = await call("GET", "/api/cuna-giveaway/admin?rewind=" + encodeURIComponent("2026-09-23T12:25:00Z"));
+  ok("GET /api/cuna-giveaway/admin?rewind= (cursor write) is refused with 405", r.status === 405, JSON.stringify(r.body));
   r = await call("GET", "/api/cuna-giveaway/admin");
   ok("GET /api/cuna-giveaway/admin flag-less still reports config", r.status === 200 && r.body && r.body.ok === true && ("config" in r.body), JSON.stringify(r.body).slice(0, 200));
   r = await call("GET", "/api/cuna-giveaway/admin?payout=1");

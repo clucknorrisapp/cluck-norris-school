@@ -86,3 +86,29 @@ Same rule: a poller that usually does nothing does not need a frontier model. Fr
 (`create_new_session_on_fire`) take a `model` — **set it.** Self-bound routines inherit the calling
 session's model and cannot be tiered, so for those cut **frequency** instead, and prefer a
 fresh-session routine when the job needs no conversation context.
+
+---
+
+## Claude Code scaffolding
+
+The seats and rules above are enforced by files, not memory, so a session gets the right model and
+the right traps without being told twice.
+
+| Lives in | What it is | Loads |
+|---|---|---|
+| `.claude/agents/*.md` | The four seats (`mechanic`→Haiku, `builder`→Sonnet, `reviewer`→Opus, `verifier`→Sonnet), each with a `model:` in frontmatter and a body naming the AGENTS.md rules that seat needs. | When invoked as a subagent by name. |
+| `.claude/commands/*.md` | Slash commands for the repeatable runbooks (`/promote`, `/store-release`, `/cuna-payout`, `/cuna-special`) — the exact procedure from the source doc, with the owner-gate lines kept intact. | On `/name` in a session. |
+| `.claude/rules/*.md` | Path-specific traps split out of `AGENTS.md` (Normie Quest, the money engines, the store/Seeker bundles, Telegram/X), each with a `paths:` glob in frontmatter. | Automatically, only for a session touching a matching path. |
+| `.claude/hooks/no-mutating-get.sh` | A `PreToolUse` hook on `Bash` (registered in `.claude/settings.json`) that blocks a `curl` against a known admin route carrying a mutating flag without `-X POST`/`--data`. | Every `Bash` call. |
+
+**Adding a seat, command, or rule:** write the file in the matching directory, following the shape
+of the existing ones (frontmatter first, body scoped to what that file needs — never paste the
+whole of `AGENTS.md` into it). Rules use a `paths:` glob list; commands use `argument-hint` +
+`$ARGUMENTS`; agents use `model:` from `{haiku, sonnet, opus}`, never a literal model id.
+
+**The drift test:** `scripts/agents-rules-test.cjs` (wired into `.github/workflows/syntax-check.yml`)
+pins all of it — every agent file parses with a valid `model`, every command's money paths carry the
+literal "PLAN ≠ EXECUTE" gate, every rule's `paths:` globs match a real file, no committed file under
+`.claude/` contains a model identifier (`claude-<name>-<number>`) rather than an alias, and a pinned
+list of distinctive sentences from the pre-split `AGENTS.md` each survive in exactly one of
+`AGENTS.md` or a rules file — so a future edit can't silently drop a trap while moving it.

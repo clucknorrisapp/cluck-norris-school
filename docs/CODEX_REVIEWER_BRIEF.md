@@ -160,6 +160,100 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 25 — 2026-09-24: #414, your two P2s on the hook — fixed
+
+Both round-24 findings on `.claude/hooks/no-mutating-get.sh` are addressed by moving the whole
+decision into a new `no-mutating-get.js` (CommonJS, no dependencies) and making the `.sh` a thin,
+portable wrapper that just pipes stdin to `node` and exits with its code (falling back to a crude
+fail-CLOSED grep only if `node` is not on PATH).
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P2** — the bash segment splitter did not work on macOS Bash 3.2 (the PR's own `;`/`&&` test cases FAILED there — the unsafe GET was allowed), and background `&` and nested `$(curl …)`/backtick invocations still bypassed it regardless of bash version | Segmentation moved to Node's `segmentCommand()`: walks the command character by character tracking single-quote/double-quote/backslash state; outside any quotes, newline/`;`/`&&`/`\|\|`/`\|`/a lone `&`/`(`/`)`/`{`/`}`/`$(`/backtick are all boundaries; inside double quotes only `$(` and backtick punch through (command substitution still runs there); nothing is a boundary inside single quotes; every boundary resets to a fresh unquoted state so a curl hidden inside `$(...)`, backticks, a trailing `&`, or a bare `(...)` subshell is still isolated and judged on its own | `scripts/no-mutating-get-hook-test.cjs`: new cases for a trailing background `&`, a curl inside `$(...)` wrapped in an outer double-quoted string, a curl inside backticks assigned to a variable, and a bare `(...)` subshell — each run through BOTH the `.sh` wrapper and the `.js` directly so a node-less CI runner can never mask a logic bug |
+| 2 | **P2** — an explicit POST anywhere in a segment was accepted immediately: `curl -X POST -X GET <admin-url>?draw=1` was allowed, but curl actually sends that as a GET (curl honours the LAST `-X`) | `computeEffectiveMethod()` tokenizes each segment into shell words and walks them in order: the LAST `-X`/`-XPOST`/`--request`/`--request=` wins; `-G`/`--get` forces GET, `-I`/`--head` forces HEAD, `-T`/`--upload-file` implies PUT, any of `-d`/`--data*`/`--json`/`-F`/`--form*` implies POST; combined short-flag clusters (`-sSXPOST`, `-sSd`) are handled by scanning for the flag letter and taking the rest of the word (or the next word) as its value; precedence is explicit > HEAD > forced GET > upload PUT > data POST > default GET, matching curl's own behaviour | `scripts/no-mutating-get-hook-test.cjs`: `-X POST -X GET` (blocked, last wins), `-X GET -X POST` (allowed, last wins), `-d`+`-G` (blocked, GET wins over data), `-I` alone (blocked, HEAD not POST), `-G` after `-X POST` (allowed, explicit wins over `-G`), plus the combined-cluster and long-flag-inline forms |
+
+Where to look hardest — the quote-aware boundary scanner (`segmentCommand()` in
+`no-mutating-get.js`: which characters are boundaries in which quote state, and whether resetting
+quote state to unquoted at every boundary is right for every nesting you can construct) and the
+effective-method walk (`computeEffectiveMethod()`: last `-X` wins over everything else including a
+later `-G`, and `-G` is only consulted when no explicit `-X`/`--request` is present at all).
+
+## Round 24 — 2026-09-23: #411, your three P2s — fixed
+
+All three round-23 findings on the Claude Code scaffolding (`.claude/hooks/no-mutating-get.sh`,
+`.claude/commands/cuna-payout.md`, and the OnlyRose policy split) are addressed on this branch.
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P2** — `no-mutating-get.sh` judged the WHOLE command string: any `-X POST` anywhere in a chained command "covered" an unrelated, unsafe curl elsewhere in the same line (`curl -X POST https://x/y; curl ".../admin?run=1"` was allowed) | The command is split into segments on `;`, `&&`, `\|\|`, `\|` and newlines (multi-char operators collapsed first so they don't get chopped into stray single `\|`s); each segment that is itself a curl against an admin path with a mutating flag is now judged on its own flags — needs an explicit POST (`-X POST`/`-XPOST`/`-X 'POST'`/`--request POST`/`--request=POST`), or a data flag (`-d `/`--data*`/`--json`) with no explicit GET override (`-X GET`/`--request GET`/`-G`/`--get`, since curl itself sends a GET when any of those is present even alongside a data flag) | `scripts/no-mutating-get-hook-test.cjs`: 8 new cases — chained-command leakage in both directions, `-X GET`+`--data`, `-G`+`--data-urlencode`, `-XPOST` (no space), a POST piped into another command, two admin routes each POSTed independently, and a flag-less admin read |
+| 2 | **P2** — `cuna-payout.md` built the batch (`POST ?export=1`) BEFORE the `go` argument check, so a mere preview call moved real amounts out of "owed" | Restructured: without `go`, only two plain GETs run (the ledger read's own `previewLines`, and `/api/cuna-stake/admin`'s `wouldPay`/`eligible` — both cited in `docs/CUNA_STAKING_RUNBOOK.md`) and the command stops before Step 1; `export=1` now runs only past the `go` gate, and Step 3's verify script is a hard STOP-if-nonzero before Step 4 send | `scripts/agents-rules-test.cjs` (the `\bgo\b` check still passes); manual read of the restructured file — no exported call above the STOP line |
+| 3 | **P2** — the OnlyRose owner policy (⛔ "posts NOTHING in the OnlyRose room") lives only in `.claude/rules/telegram-x.md`, which loads only for sessions touching `server.js`/`lib/telegram-*.js`/`lib/cuna-giveaway.js` — a session that only runs a curl against `/api/tg-test` never loads it | The policy sentence, the owner quote, the three allows, and the "everything else is refused there" line moved back to `AGENTS.md` (session-wide); `telegram-x.md` keeps the implementation (`lib/telegram-rooms.js`, `tgApi()`, the three direct senders, `scripts/telegram-rooms-test.cjs`, the history line) behind a one-line pointer back to `AGENTS.md` | `scripts/agents-rules-test.cjs`: the pinned sentence is now required to be in `AGENTS.md` specifically (added to `MUST_BE_IN_AGENTS_MD`, same treatment as the WATCH-ONLY posture), and still checked to exist in exactly one place total |
+
+Where to look hardest — the hook's per-segment split and the `-G` / explicit-GET override: is
+there a shell metacharacter this simple splitter misses that could hide a second curl inside what
+looks like one segment (e.g. `$(...)`, backticks, a `;` inside an unquoted here-doc), and does the
+explicit-GET-beats-data-flag ordering match curl's actual precedence in every flag combination you
+can think of (e.g. `-G` after `--data` on the command line, `--request=GET` mixed case)?
+
+## Round 23 — 2026-09-23: #412 (the wallet address was base64) and #411 (the Claude Code scaffolding)
+
+Both merged to `develop` on the owner's standing go; neither is on `main` yet. Findings, not
+rewrites, as always — the owner promotes after you have looked.
+
+### PR #412 — `public/cluck-wallet.js`: the Mobile Wallet Adapter address arrives BASE64
+
+Owner, on the device with the round-22 CORS fix installed: the connected wallet showed as
+`5lrl…qeM=` and the pass sheet still said "could not reach the pass service". Cause:
+`CluckMWAPlugin.kt` (the apps repo's native bridge) returns `address` as **base64 of the 32 key
+bytes**, by its own documented contract; `mwaProvider.connect()` used that string as the public
+key, and `GET /api/tool-gate/challenge?wallet=…` answered `400 need wallet` (fails
+`SOL_ADDR_RE`), which the sheet reports as unreachable. The round-22 CORS fix was correct.
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P1** — every Seeker surface that reads `provider.publicKey` saw base64: the pass sheet, the receipt sign-in, Wallet Checkup's "use connected wallet", the signing helpers' live-pubkey check | `mwaAddressToBase58()`: decode base64 → 32 bytes → the file's existing `b58encode`; `connect()` builds `publicKey` from that and keeps the bridge's OWN encoding for `signMessages`' `addresses`. A bridge that already speaks base58 passes through (base64 of 32 bytes always ends in `=`; base58 never contains `=`, `+`, `/`) | `scripts/seeker-build-test.cjs`: the fake bridges now return base64 like the real plugin (the first cut returned base58 and hid the bug); asserts the app-facing address is base58 and that `signMessages` gets base64 back |
+
+Where to look hardest — this is the wallet layer, the one surface every Seeker money path signs
+through:
+
+- **Is the passthrough heuristic safe?** A 44-char base58 key can `atob()` without throwing; the
+  guard is "decoded to exactly 32 bytes". Find a base58 public key whose base64 decoding is 32
+  bytes, or convince yourself none exists (43–44 base58 chars → 32–33 decoded bytes; we rely on
+  the `=`/`+`/`/` pre-check to short-circuit first).
+- **`signMessages` and `signTransactions` are unchanged** — they never used the address for
+  anything but the `addresses` echo. Confirm the base64 `address` still reaches the bridge
+  unmodified; the owner's device test (pass check + unlock with a CLKN wallet) passed, so the
+  signed message verified server-side against the base58 key.
+- **The server side did not move.** `SOL_ADDR_RE` on challenge and session is the same gate;
+  nothing accepts base64. A base64 wallet in any OTHER route's query would still 400 — grep
+  `src/seeker` for a wallet string built from anything but `provider.publicKey`.
+- **Untested on the device:** the SKR door and a wallet holding neither.
+
+### PR #411 — Claude Code scaffolding (`.claude/agents`, `.claude/commands`, `.claude/rules`, a hook)
+
+Not a product change; a process one. The parts that gate money deserve your eye:
+
+- **`.claude/hooks/no-mutating-get.sh`** (registered in `settings.json` `PreToolUse`): blocks a
+  `curl` to a clucknorris.app admin route carrying a mutating flag unless it is a real POST. It
+  is defence-in-depth for the POST-only rule the server already enforces. Try to write a curl
+  line that mutates and slips past it (a different host spelling, `--url`, a flag inside a
+  quoted body, `-XPOST` with no space, `--data-raw`). `scripts/no-mutating-get-hook-test.cjs`
+  is the corpus; a bypass you find goes in there.
+- **`.claude/commands/cuna-payout.md`** — the send and sweep steps unlock only on the literal
+  argument `go`; `cuna-special.md` never runs the draw or the payout. Read them as an
+  attacker who can type a slash command: is there a path from the command to a send without
+  the owner's word?
+- **`AGENTS.md` split into `.claude/rules/*.md`** with `paths:` frontmatter. The first cut
+  moved the WATCH-ONLY / no-engines money posture out of the always-loaded file into the
+  path-scoped one; review caught it and it is back in `AGENTS.md`. `scripts/agents-rules-test.cjs`
+  pins every moved sentence to exactly one place and pins the posture to `AGENTS.md` — tell us
+  if anything else that should load for EVERY session now loads only for some paths.
+
+### What is NOT in these PRs
+
+No endpoint changed. No payment, gate, or engine code changed. The apps repo's native plugin is
+unchanged — the fix is on our side of its contract.
+
 ## Round 22 — 2026-09-22: the Seeker app could not reach the pass service — CORS, not holdings
 
 Owner, on the device: *"when going to unlock it says could not reach the pass service try again
