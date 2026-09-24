@@ -28,6 +28,7 @@
 //     ledger. Both bugs existed here — see the Codex round on PR #390.
 
 import React from "react";
+import { revealQuizResult, revealUnderClear } from "../../shared/scrollReveal.js";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { t, tf, tBlock, useI18nReady } from "../i18n.js";
 import { track } from "../../track.js";
@@ -231,6 +232,25 @@ export function SchoolCourse() {
   );
 }
 
+// ── quiz auto-scroll ─────────────────────────────────────────────────────────────────────────
+// Owner (2026-09-24, testing the iOS edition, then confirmed on the web app too): tapping an
+// answer must bring the verdict, the explanation and the Next button into view on its own —
+// "I shouldn't have to drag" — and Next must do the same for the next question's heading.
+// `.seeker-header` is a real flex sibling of `.seeker-main` (not stacked over it), so its own
+// bottom edge already sits at the scroll container's top edge; the bottom nav, though, is
+// `position:fixed` OVER the last ~96px of `.seeker-main`'s scrollable content, so a plain
+// `scrollIntoView` can park a button behind it. The shared helper (src/shared/scrollReveal.js,
+// reused by the website's own quiz screens so the two can't drift) scrolls `.seeker-main` itself
+// by a computed delta instead, so the nav's real on-screen position is what "in view" means, not
+// the container's raw clientHeight.
+function quizScrollChrome() {
+  const scrollEl = document.querySelector(".seeker-main");
+  const header = document.querySelector(".seeker-header");
+  const nav = document.querySelector(".seeker-nav");
+  if (!scrollEl || !header || !nav) return null;
+  return { scrollEl, topClearY: header.getBoundingClientRect().bottom, bottomClearY: nav.getBoundingClientRect().top };
+}
+
 // ── one lesson: read, then quiz ─────────────────────────────────────────────────────────────
 export function SchoolLesson() {
   // Re-render when the dictionary lands — a lesson opened directly can render before it does.
@@ -244,6 +264,51 @@ export function SchoolLesson() {
   const [qi, setQi] = React.useState(0);
   const [picked, setPicked] = React.useState(null);
   const [score, setScore] = React.useState(0);
+
+  // Refs the auto-scroll effects below target — see "quiz auto-scroll" above the component.
+  const quizHeadRef = React.useRef(null);
+  const explainRef = React.useRef(null);
+  const nextBtnRef = React.useRef(null);
+  const resultRef = React.useRef(null);
+
+  // Answer tapped: bring the verdict, explanation and Next button into view without a drag.
+  React.useEffect(() => {
+    if (phase !== "quiz" || picked === null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        const chrome = quizScrollChrome();
+        if (!chrome || !explainRef.current || !nextBtnRef.current) return;
+        revealQuizResult({ ...chrome, resultEl: explainRef.current, actionEl: nextBtnRef.current });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, picked]);
+
+  // A fresh question (quiz start, or Next tapped) — its heading goes just under the header.
+  React.useEffect(() => {
+    if (phase !== "quiz" || picked !== null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        const chrome = quizScrollChrome();
+        if (!chrome || !quizHeadRef.current) return;
+        revealUnderClear({ scrollEl: chrome.scrollEl, el: quizHeadRef.current, topClearY: chrome.topClearY });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, qi]);
+
+  // Finished — pass or fail — bring the result summary into view.
+  React.useEffect(() => {
+    if (phase !== "passed" && phase !== "failed") return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        const chrome = quizScrollChrome();
+        if (!chrome || !resultRef.current) return;
+        revealUnderClear({ scrollEl: chrome.scrollEl, el: resultRef.current, topClearY: chrome.topClearY });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase]);
 
   // Reading time is what the funnel measures; fire once per lesson opened.
   React.useEffect(() => {
@@ -306,7 +371,7 @@ export function SchoolLesson() {
     const p = courseProgress(course.id);
     return (
       <div className="seeker-pane seeker-school">
-        <div className={"seeker-school-passed" + (ok ? "" : " missed")}>
+        <div className={"seeker-school-passed" + (ok ? "" : " missed")} ref={resultRef}>
           <div className="seeker-school-passed-mark" aria-hidden="true">{ok ? "✓" : "↻"}</div>
           <h1 className="seeker-school-title">{ok ? t("Lesson passed") : t("Not this time")}</h1>
           <p className="seeker-tool-lede">{lesson.title}</p>
@@ -363,7 +428,7 @@ export function SchoolLesson() {
     const right = answered && picked === q.correct;
     return (
       <div className="seeker-pane seeker-school">
-        <div className="seeker-school-quizhead">
+        <div className="seeker-school-quizhead" ref={quizHeadRef}>
           <span>{t("Question")} {qi + 1} / {questions.length}</span>
           <span className="seeker-school-quizhead-lesson">{lesson.title}</span>
         </div>
@@ -384,10 +449,10 @@ export function SchoolLesson() {
         </div>
 
         {answered ? (
-          <div className={"seeker-school-explain" + (right ? " right" : "")}>
+          <div className={"seeker-school-explain" + (right ? " right" : "")} ref={explainRef}>
             <div className="seeker-school-explain-verdict">{right ? t("Correct.") : t("Not quite.")}</div>
             {q.explanation ? <p>{q.explanation}</p> : null}
-            <button type="button" className="seeker-btn" onClick={advance}>
+            <button type="button" className="seeker-btn" onClick={advance} ref={nextBtnRef}>
               {qi + 1 < questions.length ? t("Next question") : t("Finish the lesson")}
             </button>
           </div>
