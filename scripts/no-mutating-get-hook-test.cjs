@@ -1,37 +1,57 @@
 #!/usr/bin/env node
-// Drives .claude/hooks/no-mutating-get.sh with fake PreToolUse payloads and checks the exit code:
-// 2 (blocked) for a mutating admin GET, 0 (allowed) for everything else — including the exact
+// Drives the no-mutating-get hook with fake PreToolUse payloads and checks the exit code: 2
+// (blocked) for a mutating admin GET, 0 (allowed) for everything else — including the exact
 // commands the four money/admin slash commands (.claude/commands/*.md) actually run, which must
 // all pass, since a hook that blocks its own runbook is worse than no hook.
+//
+// Codex round 24 (#414 P2s): the decision now lives in no-mutating-get.js, and no-mutating-get.sh
+// is just a portable wrapper around it. Every case here runs through BOTH the .sh wrapper (the way
+// the harness actually invokes it) AND the .js directly, so a CI runner without node on PATH can
+// never mask a logic bug in the .js by silently falling through to the wrapper's crude fallback.
 "use strict";
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = path.join(__dirname, "..");
-const HOOK = path.join(ROOT, ".claude", "hooks", "no-mutating-get.sh");
+const HOOK_SH = path.join(ROOT, ".claude", "hooks", "no-mutating-get.sh");
+const HOOK_JS = path.join(ROOT, ".claude", "hooks", "no-mutating-get.js");
 
 let failures = 0;
-function runHook(command) {
+function runVia(bin, args, command) {
   const payload = JSON.stringify({ tool_name: "Bash", tool_input: { command } });
-  const res = spawnSync("bash", [HOOK], { input: payload, encoding: "utf8" });
-  return res;
+  return spawnSync(bin, args, { input: payload, encoding: "utf8" });
 }
 
 function expectExit(label, command, expected) {
-  const res = runHook(command);
-  if (res.status === expected) {
-    console.log(`ok - [exit ${expected}] ${label}`);
-  } else {
+  const shRes = runVia("bash", [HOOK_SH], command);
+  const jsRes = runVia("node", [HOOK_JS], command);
+  let ok = true;
+  if (shRes.status !== expected) {
+    ok = false;
     failures++;
-    console.error(`FAIL: [expected exit ${expected}, got ${res.status}] ${label}`);
+    console.error(`FAIL (.sh): [expected exit ${expected}, got ${shRes.status}] ${label}`);
     console.error(`  command: ${command}`);
-    if (res.stderr) console.error(`  stderr: ${res.stderr.trim()}`);
+    if (shRes.stderr) console.error(`  stderr: ${shRes.stderr.trim()}`);
+  }
+  if (jsRes.status !== expected) {
+    ok = false;
+    failures++;
+    console.error(`FAIL (.js): [expected exit ${expected}, got ${jsRes.status}] ${label}`);
+    console.error(`  command: ${command}`);
+    if (jsRes.stderr) console.error(`  stderr: ${jsRes.stderr.trim()}`);
+  }
+  if (ok) {
+    console.log(`ok - [exit ${expected}] ${label} (.sh + .js)`);
   }
 }
 
-if (!fs.existsSync(HOOK)) {
-  console.error(`FAIL: hook script not found at ${HOOK}`);
+if (!fs.existsSync(HOOK_SH)) {
+  console.error(`FAIL: hook wrapper not found at ${HOOK_SH}`);
+  process.exit(1);
+}
+if (!fs.existsSync(HOOK_JS)) {
+  console.error(`FAIL: hook script not found at ${HOOK_JS}`);
   process.exit(1);
 }
 
@@ -157,6 +177,93 @@ expectExit(
 expectExit(
   "cuna-giveaway rewind= as POST",
   'curl -sS -X POST -H "x-premium-key: k" "https://clucknorris.app/api/cuna-giveaway/admin?rewind=2026-09-23T12:25:00Z"',
+  0
+);
+
+// --- Codex round 24 (#414 P2s): quote-aware boundaries + curl's effective method -----------------
+expectExit(
+  "explicit -X POST overridden by a later -X GET on the SAME curl — curl sends GET, still unsafe",
+  'curl -X POST -X GET "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "backgrounded with a trailing & — must still be judged, not swallowed",
+  'curl -sS "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1" &',
+  2
+);
+expectExit(
+  "curl hidden inside $(...) even though the whole thing is wrapped in an outer double-quoted echo",
+  'echo "$(curl -sS "https://clucknorris.app/api/tg-test?key=k&post=1")"',
+  2
+);
+expectExit(
+  "curl hidden inside a backtick command substitution assigned to a variable",
+  'X=`curl -sS "https://clucknorris.app/api/meme-queue?key=k&done=1"`',
+  2
+);
+expectExit(
+  "unrelated POST first, then an unsafe admin GET after a ; — the ; must still split them",
+  'curl -sS -X POST https://example.com/a; curl -sS "https://clucknorris.app/api/whirlpool/vault/pause?project=poke&key=k&run=1"',
+  2
+);
+expectExit(
+  "unrelated POST first, then an unsafe admin GET after && — the && must still split them",
+  'curl -sS -X POST https://example.com/a && curl -sS "https://clucknorris.app/api/whirlpool/vault/pause?project=poke&key=k&run=1"',
+  2
+);
+expectExit(
+  "-d with an explicit -G override — curl sends this as a GET despite the data flag",
+  'curl -d "" -G "https://clucknorris.app/api/cuna-giveaway/admin?key=k&scan=1"',
+  2
+);
+expectExit(
+  "-I (HEAD) on a mutating admin route — not a POST",
+  'curl -I "https://clucknorris.app/api/cuna-giveaway/admin?key=k&scan=1"',
+  2
+);
+expectExit(
+  "wrapped in a bare subshell (...) — the parens must not hide the curl inside",
+  '(curl -sS "https://clucknorris.app/api/cuna-giveaway/admin?key=k&scan=1")',
+  2
+);
+expectExit(
+  "-X GET then -X POST — last -X wins, curl sends POST, allowed",
+  'curl -X GET -X POST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&scan=1"',
+  0
+);
+expectExit(
+  "-sSXPOST combined short-flag cluster with an inline method value",
+  'curl -sSXPOST -H "x-premium-key: k" "https://clucknorris.app/api/cuna-giveaway/admin?scan=1"',
+  0
+);
+expectExit(
+  "--request=POST long-flag inline form",
+  'curl -sS --request=POST "https://clucknorris.app/api/meme-queue?key=k&done=1"',
+  0
+);
+expectExit(
+  "-X 'POST' with the method value quoted",
+  "curl -sS -X 'POST' \"https://clucknorris.app/api/tg-test?key=k&chat=1&post=1\"",
+  0
+);
+expectExit(
+  "-F form data implies POST",
+  'curl -sS -F "photo=@/tmp/x.png" "https://clucknorris.app/api/tg-test?key=k&chat=1&post=1"',
+  0
+);
+expectExit(
+  "-G after -X POST — explicit -X still wins over -G per curl's own precedence",
+  'curl -sS -G -X POST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&scan=1"',
+  0
+);
+expectExit(
+  "a safe -X POST curl piped into a non-curl command — the pipe target is not itself a curl",
+  "curl -sS -X POST \"https://clucknorris.app/api/cuna-giveaway/admin?key=k&scan=1\" | node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d)'",
+  0
+);
+expectExit(
+  "-X POST with a URL-encoded ampersand in a value — still fine, still POST",
+  'curl -sS -X POST "https://clucknorris.app/api/tg-test?key=k&chat=1&post=1&text=a%26b"',
   0
 );
 

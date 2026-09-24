@@ -160,6 +160,24 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 25 — 2026-09-24: #414, your two P2s on the hook — fixed
+
+Both round-24 findings on `.claude/hooks/no-mutating-get.sh` are addressed by moving the whole
+decision into a new `no-mutating-get.js` (CommonJS, no dependencies) and making the `.sh` a thin,
+portable wrapper that just pipes stdin to `node` and exits with its code (falling back to a crude
+fail-CLOSED grep only if `node` is not on PATH).
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P2** — the bash segment splitter did not work on macOS Bash 3.2 (the PR's own `;`/`&&` test cases FAILED there — the unsafe GET was allowed), and background `&` and nested `$(curl …)`/backtick invocations still bypassed it regardless of bash version | Segmentation moved to Node's `segmentCommand()`: walks the command character by character tracking single-quote/double-quote/backslash state; outside any quotes, newline/`;`/`&&`/`\|\|`/`\|`/a lone `&`/`(`/`)`/`{`/`}`/`$(`/backtick are all boundaries; inside double quotes only `$(` and backtick punch through (command substitution still runs there); nothing is a boundary inside single quotes; every boundary resets to a fresh unquoted state so a curl hidden inside `$(...)`, backticks, a trailing `&`, or a bare `(...)` subshell is still isolated and judged on its own | `scripts/no-mutating-get-hook-test.cjs`: new cases for a trailing background `&`, a curl inside `$(...)` wrapped in an outer double-quoted string, a curl inside backticks assigned to a variable, and a bare `(...)` subshell — each run through BOTH the `.sh` wrapper and the `.js` directly so a node-less CI runner can never mask a logic bug |
+| 2 | **P2** — an explicit POST anywhere in a segment was accepted immediately: `curl -X POST -X GET <admin-url>?draw=1` was allowed, but curl actually sends that as a GET (curl honours the LAST `-X`) | `computeEffectiveMethod()` tokenizes each segment into shell words and walks them in order: the LAST `-X`/`-XPOST`/`--request`/`--request=` wins; `-G`/`--get` forces GET, `-I`/`--head` forces HEAD, `-T`/`--upload-file` implies PUT, any of `-d`/`--data*`/`--json`/`-F`/`--form*` implies POST; combined short-flag clusters (`-sSXPOST`, `-sSd`) are handled by scanning for the flag letter and taking the rest of the word (or the next word) as its value; precedence is explicit > HEAD > forced GET > upload PUT > data POST > default GET, matching curl's own behaviour | `scripts/no-mutating-get-hook-test.cjs`: `-X POST -X GET` (blocked, last wins), `-X GET -X POST` (allowed, last wins), `-d`+`-G` (blocked, GET wins over data), `-I` alone (blocked, HEAD not POST), `-G` after `-X POST` (allowed, explicit wins over `-G`), plus the combined-cluster and long-flag-inline forms |
+
+Where to look hardest — the quote-aware boundary scanner (`segmentCommand()` in
+`no-mutating-get.js`: which characters are boundaries in which quote state, and whether resetting
+quote state to unquoted at every boundary is right for every nesting you can construct) and the
+effective-method walk (`computeEffectiveMethod()`: last `-X` wins over everything else including a
+later `-G`, and `-G` is only consulted when no explicit `-X`/`--request` is present at all).
+
 ## Round 24 — 2026-09-23: #411, your three P2s — fixed
 
 All three round-23 findings on the Claude Code scaffolding (`.claude/hooks/no-mutating-get.sh`,
