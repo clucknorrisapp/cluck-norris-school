@@ -280,6 +280,23 @@ function buildVariant(cwd, variant) {
       ok(`${variant}: an UNEXPLAINED change to the education-only bundle — this branch touched nothing the bundle is built from, yet it moved`, false, delta);
     }
   }
+  // A pristine origin/develop SEEKER bundle too, kept in a standalone dir (independent of the
+  // worktree, which is about to be removed) so section (e) below can render both this tree's
+  // header and the pristine one at the same viewport and compare .seeker-header's actual height —
+  // the regression that matters here is a wallet-zone/logo change that pushes the header onto two
+  // rows, and a byte diff alone can't tell you that; only a render can.
+  let baselineSeekerDir = null;
+  if (baseline) {
+    try {
+      const baseSeeker = buildVariant(baseline, "seeker");
+      baselineSeekerDir = fs.mkdtempSync(path.join(os.tmpdir(), "seeker-baseline-render-"));
+      execFileSync("tar", ["-xzf", path.join(baseline, "release", baseSeeker.file), "-C", baselineSeekerDir, "--strip-components=1"]);
+    } catch (e) {
+      console.log("  · could not build a pristine origin/develop seeker bundle for the header-height check — skipping it");
+      console.log("    (" + ((e && e.message) || String(e)).split("\n")[0] + ")");
+      baselineSeekerDir = null;
+    }
+  }
   if (baselineWt) { try { execFileSync("git", ["worktree", "remove", "--force", baselineWt], { cwd: ROOT, stdio: "pipe" }); } catch (_) {} }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -424,8 +441,9 @@ function buildVariant(cwd, variant) {
   if (!pw) {
     console.log("  · playwright(-core) not resolvable — skipping the rendered check (everything above still ran)");
   } else {
-    await renderedCheck(pw);
+    await renderedCheck(pw, baselineSeekerDir);
   }
+  if (baselineSeekerDir) { try { fs.rmSync(baselineSeekerDir, { recursive: true, force: true }); } catch (_) {} }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
   // (e2) ONE tools-pass gate, not one per tool
@@ -596,7 +614,7 @@ function resolvePlaywright() {
   return null;
 }
 
-async function renderedCheck(pw) {
+async function renderedCheck(pw, baselineSeekerDir) {
   const http = require("http");
   const extractDir = fs.mkdtempSync(path.join(os.tmpdir(), "seeker-render-"));
   const tgz = path.join(ROOT, "release", `store-edition-seeker-${JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "seeker-edition.json"), "utf8")).version}.tgz`);
@@ -738,6 +756,53 @@ async function renderedCheck(pw) {
     const progressBox = await pillPage.locator(".seeker-school-overall").boundingBox();
     ok("rendered: the 🌐 pill does not cover the school home's progress card (360x800)",
        !overlaps(pillBoxSchool, progressBox), `pill=${JSON.stringify(pillBoxSchool)} progress=${JSON.stringify(progressBox)}`);
+    // The header logo (2026-09-24) pushed everything below it further down the page, including
+    // the hero title and lede — re-check that whole band, not only the progress card underneath
+    // it. (Marking only the lede once let the pill lift clean past the unmarked title next to it
+    // and land there instead — both need their own check, not just their own marker.)
+    const heroTitleBox = await pillPage.locator(".seeker-school >> h1.seeker-school-title").boundingBox();
+    ok("rendered: the 🌐 pill does not cover the school home's hero title (360x800)",
+       !overlaps(pillBoxSchool, heroTitleBox), `pill=${JSON.stringify(pillBoxSchool)} title=${JSON.stringify(heroTitleBox)}`);
+    const heroLedeBox = await pillPage.locator(".seeker-school >> p.seeker-tool-lede").boundingBox();
+    ok("rendered: the 🌐 pill does not cover the school home's hero lede (360x800)",
+       !overlaps(pillBoxSchool, heroLedeBox), `pill=${JSON.stringify(pillBoxSchool)} lede=${JSON.stringify(heroLedeBox)}`);
+
+    // ── the header stays ONE row at 360px, unchanged from a pristine origin/develop build ──────
+    // Adding the header logo narrowed the brand's own share of the row; if the wallet zone (status
+    // + button) can't shrink to fit what's left, the header wraps onto two rows and roughly
+    // doubles in height — exactly the class of bug a byte diff in section (c) can't see. Compared
+    // against a pristine origin/develop render at the same viewport, not a hardcoded pixel count,
+    // so this doesn't need updating every time the header's own padding or font size changes for
+    // an unrelated reason.
+    const hereHeaderHeight = (await pillPage.locator(".seeker-header").boundingBox()).height;
+    if (baselineSeekerDir) {
+      const http2 = require("http");
+      const mime2 = { ".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" };
+      const baseServer = http2.createServer((req, res) => {
+        let p = decodeURIComponent(req.url.split("?")[0]);
+        if (p === "/") p = "/index.html";
+        const fp = path.join(baselineSeekerDir, p);
+        if (!fp.startsWith(baselineSeekerDir) || !fs.existsSync(fp) || fs.statSync(fp).isDirectory()) { res.writeHead(404); res.end(); return; }
+        res.writeHead(200, { "Content-Type": mime2[path.extname(fp)] || "application/octet-stream" });
+        fs.createReadStream(fp).pipe(res);
+      });
+      await new Promise((resolve) => baseServer.listen(0, "127.0.0.1", resolve));
+      const basePort = baseServer.address().port;
+      const basePage = await browser.newPage({ viewport: { width: 360, height: 800 } });
+      try {
+        await basePage.goto(`http://127.0.0.1:${basePort}/`, { waitUntil: "networkidle", timeout: 20000 });
+        await basePage.waitForSelector(".seeker-header", { timeout: 15000 });
+        const baseHeaderHeight = (await basePage.locator(".seeker-header").boundingBox()).height;
+        ok("rendered: .seeker-header's height at 360px is unchanged from a pristine origin/develop build (still one row)",
+           Math.abs(hereHeaderHeight - baseHeaderHeight) <= 1,
+           `here=${hereHeaderHeight}px base=${baseHeaderHeight}px`);
+      } finally {
+        await basePage.close();
+        await new Promise((resolve) => baseServer.close(resolve));
+      }
+    } else {
+      console.log("  · no pristine origin/develop seeker bundle available — reporting this tree's header height only: " + hereHeaderHeight + "px");
+    }
 
     // Connect the wallet (same fake MWA bridge), then open the checkup pane.
     await pillPage.locator(".seeker-walletbtn").click();

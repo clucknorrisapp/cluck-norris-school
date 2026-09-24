@@ -92,8 +92,17 @@ export function SchoolHome({ finished, progressNote }) {
   return (
     <div className="seeker-pane seeker-school">
       <img className="seeker-school-logo" src="/cluck-norris.png" alt="" decoding="async" />
-      <h1 className="seeker-school-title">{t("School of Crypto Hard Knocks")}</h1>
-      <p className="seeker-tool-lede">
+      {/* data-clkn-avoid on BOTH the title and the lede: adding the hero logo above the title
+          (2026-09-24) pushed this whole hero block down into the fixed 🌐 pill's strike zone at
+          360x800 — the same class of collision the progress card below already carries a marker
+          for. Marking only the lede is not enough: clkn-dock-float.js lifts the pill just far
+          enough to clear the highest MARKED element it overlaps, and with only the lede marked it
+          climbed clean past the unmarked title (they sit only 6px apart) and landed on that
+          instead — found in a real render at 360x800, 2026-09-24. Two short, adjacent elements
+          each carrying their own marker is fine; the thing the module's own comment warns against
+          is marking one TALL multi-row container, not two one-line siblings. */}
+      <h1 className="seeker-school-title" data-clkn-avoid="1">{t("School of Crypto Hard Knocks")}</h1>
+      <p className="seeker-tool-lede" data-clkn-avoid="1">
         {t("Free, forever. No wallet, no signup, and it works with no signal — every lesson is already on your phone.")}
       </p>
 
