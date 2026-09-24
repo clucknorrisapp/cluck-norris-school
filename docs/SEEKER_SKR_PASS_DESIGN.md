@@ -67,26 +67,46 @@ nothing here.
 ```
 `amountRaw = ceil(usd / priceUsd × 10^decimals)` as an integer string (BigInt math, never a
 float multiply on the final step). Token: `body = base64url({ t:"tools-skr", w:wallet,
-a:amountRaw, exp })`, `sig = HMAC-sha256(PREMIUM_ACCESS_KEY, "tools-skr." + body)` — the same
-scheme as `issuePayIntent`, its own purpose string so a pay-intent or a tools token can never
-be presented as a quote. Add `issueSkrQuote` / `verifySkrQuote` beside them; `verifySkrQuote`
-returns `{ amountRaw, exp }` only when the HMAC, purpose and wallet all match.
+a:amountRaw, iat, exp })`, `sig = HMAC-sha256(PREMIUM_ACCESS_KEY, "tools-skr." + body)` — the
+same scheme as `issuePayIntent`, its own purpose string so a pay-intent or a tools token can
+never be presented as a quote. `iat` is the issue instant, `exp = iat + 10 min`. Add
+`issueSkrQuote` / `verifySkrQuote` beside them; `verifySkrQuote` returns `{ amountRaw, iat, exp }`
+when the HMAC, purpose and wallet all match — **it does NOT compare `exp` to the current time**
+(Codex round 27, finding 4): a quote's timing is judged against the PAYMENT's chain timestamp
+in step 3, never against the clock at verification, so a payment made at minute nine and
+redeemed at minute eleven is honoured. The window has BOTH ends (finding 3): the payment's
+block time must satisfy `iat − 2 min ≤ blockTimeMs ≤ exp + 5 min`. Without the lower bound a
+transfer sent earlier and too small could be redeemed later against a cheaper quote after the
+SKR price rose.
 
 ### `POST /api/tool-gate/session` — the SKR leg
 Body gains `skrQuote`. When `paySig` and `skrQuote` are both present:
 1. `verifySkrQuote(skrQuote, wallet)` — fail → 401 `skr quote invalid or expired — request a new one`.
-2. `verifySkrPaymentTx(paySig)` (new, beside `verifySolPaymentTx`): `getTransaction` jsonParsed
-   (`maxSupportedTransactionVersion:1`, `confirmed`); refuse on `meta.err`; payer = `accountKeys[0]`;
-   the SKR delta is read from `meta.preTokenBalances` / `postTokenBalances` for entries with
-   `mint === SKR_MINT` AND `owner === SOL_UNLOCK_WALLET` (owner, never account index — a
-   look-alike account is the obvious forgery), summed as BigInt strings: `amountRaw`. Returns
-   `{ ok, kind:"skr", amountRaw, payer, blockTimeMs }`.
+2. `verifySkrPaymentTx(paySig, wallet)` (new, beside `verifySolPaymentTx`): `getTransaction`
+   jsonParsed (`maxSupportedTransactionVersion:1`, `confirmed`); refuse on `meta.err`. **The
+   payer is the wallet whose SKR left, not the fee payer** (Codex round 27, finding 2: wallet X
+   can pay the fee while wallet Y supplies the tokens — the same trap the airdrop receipts closed
+   with "funding = the operator's own balance change"). From `meta.preTokenBalances` /
+   `postTokenBalances`, keyed by `owner` + `mint` (never account index — a look-alike account is
+   the obvious forgery), compute two BigInt deltas for `mint === SKR_MINT`: `outRaw` = the
+   DECREASE across every account owned by the proven `wallet`, and `inRaw` = the INCREASE across
+   every account owned by `SOL_UNLOCK_WALLET`. Both must be ≥ the quoted amount; a transaction
+   where the receiver's balance rose but the proven wallet's did not fall by that much is refused
+   ("payment was funded by a different wallet"). As a second, independent check, the parsed
+   instructions must contain an SPL `transfer`/`transferChecked` of the SKR mint whose
+   `authority`/`source` owner is `wallet` and whose destination is owned by `SOL_UNLOCK_WALLET`;
+   its `amount` ≥ quoted. Returns `{ ok, kind:"skr", amountRaw: min(outRaw, inRaw), payer:
+   wallet, feePayer: accountKeys[0], blockTimeMs }` — `payer` is only ever set when the
+   token-balance evidence names that wallet, so `redeemPaidPass`'s existing "payer must equal the
+   proven wallet" rule keeps its meaning.
 3. `redeemPaidPass(...)` — extended, still pure: `verified.kind === "skr"` uses the quote's
    `amountRaw` as the minimum (`BigInt(verified.amountRaw) >= BigInt(quote.amountRaw)`),
-   requires `termsAt(blockTimeMs).skr` to exist, requires `blockTimeMs <= quote.exp + 5 min`
-   (a payment that landed after the quote expired was priced on a stale number → refused,
-   nothing consumed; the person re-quotes and the SAME signature cannot be reused because it is
-   refused before the store is touched), and everything else identical: payer must equal the
+   requires `termsAt(blockTimeMs).skr` to exist, requires the payment window
+   `quote.iat − 2 min ≤ blockTimeMs ≤ quote.exp + 5 min` judged on CHAIN time only (a payment
+   that landed after the quote expired was priced on a stale number, and one that landed before
+   the quote was issued was never priced by it → refused, nothing consumed; the person re-quotes
+   and re-pays, and the old signature stays unconsumed and unusable because it is refused before
+   the store is touched), and everything else identical: payer must equal the
    proven wallet, block time required, older-than-its-pass refused, hub-access cross-check,
    the `"sol:" + sig` namespace (a signature is unique; one namespace means one signature can
    never buy twice across SOL and SKR), fail-closed store → 503 nothing consumed.
@@ -130,14 +150,24 @@ Flow on tap (`src/seeker/skr-pay.js`, thin — the seam does the signing):
    sends tokens through it; confirm both instruction builders exist in
    `public/airdrop-engine.js`'s shim before relying on them, and never call a web3.js layout
    encoder in the page — AGENTS.md). `feePayer` = payer.
-5. Outcomes: `sent` → `POST /api/tool-gate/session { wallet, payIntent, paySig, skrQuote }` →
-   `CluckGate.grant(days, "paid-skr", pass)` → unlocked. `unconfirmed` → keep the signature in
-   localStorage under the wallet (mirror `cluck-gate.js`'s pending-pay record, same key shape
-   so a recovered payment is found the same way), show "Your payment may still be landing —
-   check it before paying again", with a **Check payment** button that re-posts the session with
-   the stored signature (recovery). `failed` → the error, nothing stored, retry allowed.
-   `declined` → back to the sheet. On reopen, a stored pending signature for this wallet is
-   re-posted automatically before anything else, like `cluck-gate.js` does.
+5. **Persist BEFORE redeeming** (Codex round 27, finding 5): the moment `signSendConfirm`
+   returns a signature — `sent` OR `unconfirmed` — write `{ wallet, paySig, skrQuote, payIntent,
+   at }` to localStorage under the wallet (mirror `cluck-gate.js`'s pending-pay record shape so a
+   recovered payment is found the same way). First redemption needs the quote, and a confirmed
+   payment whose redemption request then fails (network, 5xx, closed app) must still be
+   redeemable. Then: `sent` → `POST /api/tool-gate/session { wallet, payIntent, paySig,
+   skrQuote }` → `CluckGate.grant(days, "paid-skr", pass)` → unlocked → clear the record.
+   `unconfirmed` → show "Your payment may still be landing — check it before paying again" with
+   a **Check payment** button that re-posts the stored record. A redemption answer that is a
+   RETRYABLE refusal (the chain has not timestamped it yet, the store could not record, a
+   transport failure) keeps the record. The record is cleared only on a verified grant or a
+   DEFINITIVE refusal (a different wallet funded it, amount below the quote, outside the payment
+   window, signature already used elsewhere) — and a definitive refusal is shown with its reason
+   so the person knows that transfer will never buy a pass. `failed` (nothing landed, the node
+   refused it) → nothing stored, the error, retry allowed. `declined` → back to the sheet. On
+   reopen, a stored record for this wallet is re-posted automatically before anything else, like
+   `cluck-gate.js` does; a stored quote that has expired is still sent — the server judges the
+   payment by chain time, not by the clock.
 6. A session answer of `pay intent expired` → re-run the signed challenge (the existing
    `checkHolder` path) which returns a fresh `payIntent`, then re-post with the same signature.
 
@@ -154,17 +184,37 @@ than SOL", no value talk.
 
 ## Tests
 - `scripts/tool-pass-redeem-test.cjs` gains the SKR cases: quote amount honoured (exact, above,
-  below → refused nothing consumed); quote expired before block time (+5 min grace) → refused;
-  wrong payer → refused; recovery without quote after consumption → recovered:true same expiry;
+  below → refused nothing consumed); block time after `exp` + 5 min → refused; block time before
+  `iat` − 2 min → refused (the short-payment-then-cheaper-quote replay, finding 3); block time at
+  minute nine redeemed at minute eleven with `now` past `exp` → HONOURED (finding 4); wrong
+  payer → refused; fee payer X with token source Y where X is the proven wallet → refused
+  (finding 2); recovery without quote after consumption → recovered:true same expiry;
   unconsumed + no quote → refused; hub-access collision → 409; fail-closed store → 503.
 - New `scripts/tool-pass-skr-test.cjs`: `issueSkrQuote`/`verifySkrQuote` (tamper the amount,
-  the wallet, the purpose, expiry); `verifySkrPaymentTx` against a fixture `getTransaction`
-  response with pre/post token balances — the right owner+mint entry is summed, a same-mint
-  entry owned by someone else is ignored, a same-owner entry of another mint is ignored, a
-  failed tx is refused; `amountRaw` from a price (BigInt ceiling, no float drift at 6 and 9
-  decimals).
+  the wallet, the purpose, `iat`, `exp`; an expired quote still VERIFIES — timing is not this
+  function's job); `verifySkrPaymentTx` against fixture `getTransaction` responses with pre/post
+  token balances and parsed instructions — the proven wallet's decrease and the receiver's
+  increase are both required; a fixture where the fee payer is the proven wallet but another
+  owner's SKR fell is refused; a same-mint entry owned by someone else is ignored; a same-owner
+  entry of another mint is ignored; a transaction that also moves SKR back OUT of the receiver
+  nets to its true increase; a failed tx is refused; `amountRaw` from a price (BigInt ceiling,
+  no float drift at 6 and 9 decimals).
+- App-side `scripts/seeker-skr-pay-test.cjs` (fake window, fake provider, fake fetch): the
+  pending record is written BEFORE the session request; a 5xx on redemption keeps it; a
+  definitive refusal clears it and surfaces the reason; a grant clears it; reopen re-posts it.
 - `scripts/tool-pass-gate-test.cjs` (the real-keypair end-to-end) gains one SKR leg with the
   RPC stubbed.
+
+## Codex round 27 (2026-09-24, design review of 8987d0e) — folded in above
+Finding 2 (fee payer ≠ token source) → the payer is the wallet whose SKR balance fell, with the
+parsed transfer instruction as a second witness. Finding 3 (a later, cheaper quote validating an
+earlier short payment) → `iat` in the token and a two-sided payment window on chain time.
+Finding 4 (a timely payment stranded by a clock check) → the token is authenticated without an
+`exp` clock check; timing is judged only against the block time. Finding 5 (recovery needs the
+quote, and a confirmed payment with a failed redemption needs recovery) → signature + quote +
+pay-intent persisted before the redemption request, kept through retryable refusals, cleared
+only on a grant or a definitive refusal. Finding 1 (the seam's in-place mutation) is fixed on
+PR #420, which this builds on. Each is pinned by a named test below.
 
 ## Review before merge (read-only, adversarial)
 The quote token (forge, replay across wallets, replay after expiry, a quote from a low price
