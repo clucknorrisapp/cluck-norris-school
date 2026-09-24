@@ -267,6 +267,50 @@ expectExit(
   0
 );
 
+// --- Codex round 32 P2: short-flag cluster value-consumption + --next request boundary ---------
+expectExit(
+  "-o/dev/null short-flag value must not be misparsed as -d data (Codex round 32)",
+  'curl -o/dev/null "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "-o /dev/null (separate word) is the same trap, still allowed since it's a plain GET with no data intent — must still block on the admin mutating GET",
+  'curl -o /dev/null "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "-X POST safe request, --next resets the method for the admin GET that follows (Codex round 32)",
+  'curl -X POST https://example.com/hook --next "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "--next admin request explicitly POSTed on its own side is allowed",
+  'curl -X POST https://example.com/hook --next -X POST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  0
+);
+
+// --- Codex round 32 P2: -G/--get converts -d/--data* into query params MUTATING_FLAG_RE must see -
+expectExit(
+  "-G --data-urlencode draw=1 turns into a GET query the raw-text check couldn't see (Codex round 32)",
+  'curl -G --data-urlencode draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-G -d 'draw=1' — same trap, short -d form",
+  "curl -G -d 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-G --data-raw 'x=1&draw=1' — the mutating flag is buried inside a larger data-raw value",
+  "curl -G --data-raw 'x=1&draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-G with data that carries no mutating flag at all stays allowed",
+  "curl -G -d 'foo=bar' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  0
+);
+
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");
 const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md", "store-release.md"];
