@@ -54,17 +54,38 @@ export function bytesToBase64(bytes) {
 // A signed transaction's own signature, base58, read straight off the transaction. Uses
 // cluck-wallet.js's one base58 implementation rather than a copy (see its export note).
 // Returns null when the transaction is not signed — never a fabricated string.
+//
+// v0 (VersionedTransaction) note (docs/SEEKER_SWAP_DESIGN.md, "the one technical gap"): a legacy
+// Transaction's signatures are `{publicKey, signature}` objects, one per signer slot, empty until
+// a slot is filled. A VersionedTransaction's `signatures` is instead an array of raw Uint8Array
+// signatures, one per required signer, PRE-ALLOCATED as 64 zero bytes before signing — so
+// `signatures[0]` always exists on a v0 tx, signed or not, and the only way to tell them apart is
+// to check whether it's still all zero. Getting this wrong silently drops protection (5) — a
+// transport failure on a swap would report "nothing happened" instead of "may have landed".
 export function signatureOf(tx) {
   try {
     const CW = typeof window !== "undefined" ? window.CluckWallet : null;
+    if (!CW || typeof CW.b58encode !== "function") return null;
+    if (tx && tx.version !== undefined) {
+      const s = tx.signatures && tx.signatures[0];
+      if (!s || typeof s.length !== "number" || s.length !== 64) return null;
+      let allZero = true;
+      for (let i = 0; i < s.length; i++) { if (s[i] !== 0) { allZero = false; break; } }
+      if (allZero) return null;
+      return CW.b58encode(s) || null;
+    }
     const s = tx && tx.signatures && tx.signatures[0] && tx.signatures[0].signature;
-    if (!s || !CW || typeof CW.b58encode !== "function") return null;
+    if (!s) return null;
     return CW.b58encode(s) || null;
   } catch (_) { return null; }
 }
 
+// v0 messages are compiled at construction time (`message`), never lazily like a legacy
+// Transaction's `compileMessage()` — calling `.compileMessage()` on a VersionedTransaction throws
+// (it has no such method), which used to make this return null for every v0 tx and FAIL the byte
+// diff in signSendConfirm as "the wallet returned a different transaction" (protection 4).
 export function messageBytes(tx) {
-  try { return tx.compileMessage().serialize(); } catch (_) { return null; }
+  try { return tx.version !== undefined ? tx.message.serialize() : tx.compileMessage().serialize(); } catch (_) { return null; }
 }
 export function sameBytes(a, b) {
   if (!a || !b || a.length !== b.length) return false;
