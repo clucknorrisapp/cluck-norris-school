@@ -564,15 +564,17 @@ export default function SwapPane({ wallet }) {
     const res = await signSendConfirm({
       provider: wallet.provider,
       owner: wallet.address,
-      // The blockhash/owner arguments are unused — the server-built v0 transaction carries its
-      // own blockhash already (docs/SEEKER_SWAP_DESIGN.md).
-      build: (web3) => {
+      // The blockhash argument is unused — the server-built v0 transaction carries its own
+      // blockhash already (docs/SEEKER_SWAP_DESIGN.md). `freshLive` IS used: it's the address
+      // signSendConfirm's OWN assertSameAccount() re-reads immediately before calling build(),
+      // even fresher than the `live` this function closed over above.
+      build: (web3, _blockhash, freshLive) => {
         const deserialized = web3.VersionedTransaction.deserialize(base64ToBytes(swapTransaction));
-        // ⚠️ P2-1: structurally verify BEFORE this is ever handed to the wallet to sign. `live` is
-        // the address re-read by assertSameAccount() above, immediately before this request went
-        // out — never a cached one. Throwing here is caught by signSendConfirm and reported as
-        // "failed" with this sentence; nothing is ever signed on a mismatch.
-        const check = verifySwapTransaction({ tx: deserialized, liveAddress: live, quote: shownQuote });
+        // ⚠️ P2-1: structurally verify BEFORE this is ever handed to the wallet to sign, against
+        // the freshest possible re-read of the connected address — never a cached one. Throwing
+        // here is caught by signSendConfirm and reported as "failed" with this sentence; nothing
+        // is ever signed on a mismatch.
+        const check = verifySwapTransaction({ tx: deserialized, liveAddress: freshLive || live, quote: shownQuote });
         if (!check.ok) throw new Error(check.reason);
         return deserialized;
       },
