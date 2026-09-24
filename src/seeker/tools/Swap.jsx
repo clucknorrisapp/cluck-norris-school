@@ -59,7 +59,7 @@
 import React from "react";
 import { useSearchParams } from "react-router-dom";
 import { t, tf, useI18nReady } from "../i18n.js";
-import { Pane, Loading, Empty, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
+import { Pane, Loading, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
 import { NeedsWallet } from "../needswallet.jsx";
 import { signSendConfirm, assertSameAccount, rpcFn } from "../sign.js";
 import "./tools.css";
