@@ -160,6 +160,24 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 28 — 2026-09-24: design review request — Apple Watch for the iOS (education-only) app
+
+No code. The owner asked for your read on a plan before anything is built: the "Apple Watch"
+section of `docs/IOS_NATIVE_APP_PLAN.md` (three tiers: W1 a daily lesson push mirrored to the
+watch, W2 a WidgetKit complication, W3 a native SwiftUI watch app). Questions for you:
+
+- **W1's push-token registry** is the first place this product would store a device identifier.
+  Is the privacy posture in the section (anonymous install id only, deleted on unsubscribe or
+  APNs "unregistered", public copy only in the payload) sufficient, and what would you require
+  the unit test to pin?
+- **Education-only boundary on the wrist**: is there any tier where the daily brief's content
+  (the Daily pane's closes for the majors) reads as a price signal in a notification, and should
+  the push carry the lesson only?
+- **W1 before 2026-10-09**: the section says it can be pulled forward because the sender also
+  serves the Android app. Do you see a reason it should wait for the Seeker submission?
+
+Findings, not rewrites; a "reviewed, no issue" on the privacy posture is a real result.
+
 ## Round 26 — 2026-09-24: #416 and #418 — the CUNA giveaway scanner missed 15 buys; the fix and the catch-up
 
 Both on `develop`; #416 is on `main` (PR #417, promoted 2026-09-24 ~02:25 UTC on the owner's word),

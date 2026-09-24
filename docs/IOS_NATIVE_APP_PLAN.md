@@ -43,6 +43,27 @@ mechanism, what it reuses, and **how it is verified without a human eye** — th
 Not in this list, by the owner's word: anything that connects a wallet, signs, pays, or shows a
 holder gate. The full toolkit stays on the Seeker and the website.
 
+## Apple Watch (owner, 2026-09-24: "could be a way to send daily update or some other type of integration")
+
+Added the day the Apple developer account was paid for and the watchOS toolchain installed. Same
+posture as everything above: education only — nothing on the wrist ever shows a wallet, a
+balance or an address. Three tiers, cheapest first; each is its own increment with its own test.
+
+| Tier | Feature | Mechanism | Reuses | Verified by |
+|---|---|---|---|---|
+| W1 | **Daily lesson push, mirrored to the watch.** One notification a day at an owner-set time: today's lesson title + the one question, deep-linking to the Daily pane. iOS mirrors iPhone notifications to a paired watch when the phone is locked, so no watch target is needed. | APNs (a key from the developer account) via the Capacitor push plugin in the wrapper; a server-side sender (`lib/push-daily.js`) with a device-token registry keyed by an anonymous install id, one scheduled send per day, opt-in on first launch, unsubscribe in settings. Android gets the same sender through Firebase. | `GET /api/alpha` (the Daily pane's brief — already in `STORE_API_RE`); the anonymous per-install id the traction counters use. | Unit test on the sender (payload shape, one send per day per token, a dead token is dropped, a token never leaves the registry in any read); a fixture APNs stub. The device receipt is the owner's. |
+| W2 | **Complication on the watch face.** Today's lesson title (or the streak) on the face; tap opens the phone app on that route. | WidgetKit on watchOS — a Swift target in the wrapper that reads a cached copy of the daily brief the phone app stores in the shared app group. | Same brief. | Boot test that the phone app writes the brief to the app group container; the face itself is the owner's screenshot. |
+| W3 | **A watch app.** Lesson of the day, its question answered by tap, the streak, the certificate's verify QR. | SwiftUI + WatchConnectivity (a webview cannot run on the watch, so this is native). | Curriculum JSON (static, bundled), the progress marks queue. | Unit tests on the Swift view model in the wrapper; marks land in the same ledger as the phone's. |
+
+**Privacy, stated up front for the reviewer:** a push token is a device identifier. It is stored
+against the anonymous install id only, never a wallet, never an email; it is deleted on
+unsubscribe or on the first APNs "unregistered" response; the daily payload carries public lesson
+copy only. The privacy pages (`/privacy/store`) gain one paragraph before W1 ships.
+
+Sequencing: W1 is mostly server work and can be pulled forward before 2026-10-09 on the owner's
+word, since it also serves the Android app; W2 and W3 wait for the submission to close like the
+rest of this plan.
+
 ## Sequencing
 
 1. **After 2026-10-09 only.** The Seeker submission is the track until then.
