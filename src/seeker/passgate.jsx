@@ -19,6 +19,7 @@
 // window.CluckGate via src/seeker/pass.js, which is deliberately a thin binding over the one
 // pass client the whole platform uses. See that file's header.
 import React from "react";
+import { Link } from "react-router-dom";
 import { t, tf } from "./i18n.js";
 import { shortAddr } from "./addr.js";
 
@@ -144,6 +145,14 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
                 { sol: cfg.lamports / 1e9, days: cfg.days })}
           </p>
         ) : <p className="seeker-tool-note">{t("Loading today's terms…")}</p>}
+
+        {/* The whole tie-in to Swap from this sheet, per docs/SEEKER_SWAP_DESIGN.md — one line
+            under the SKR sentence, only when the SKR door is actually live in this config. */}
+        {cfg && cfg.skr && cfg.skr.skrNeeded ? (
+          <p className="seeker-tool-note">
+            <Link to="/tools/swap?out=SKR" className="seeker-listing-link">{t("Swap for SKR in this app")}</Link>
+          </p>
+        ) : null}
 
         {!wallet.connected ? (
           <button type="button" className="seeker-btn" onClick={wallet.connect}>{t("Connect Wallet")}</button>
