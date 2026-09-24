@@ -33,6 +33,7 @@ is none.
 | `/school/:courseId/:lessonId` | `SchoolLesson` | — (School / LP Lab) | no | **yes**, same as above | yes |
 | `/solana` | `SolanaRoomIndex` | `solana` / free | no | **yes** — the room's own content is bundled (`src/seeker/solana/content.js`) | no |
 | `/solana/:pageId` | `SolanaRoomPage` | `solana` / free | no | **yes**, same as above; the rent page's numbers come from bundled `rent-math.js`, not a fetch | no |
+| `/solana/seeker/:pageId` | `SeekerWingPage` | `solana` / free | no | **yes** — the Seeker wing's own bundled content (`src/seeker/solana/wing-content.js`); its SKR page fetches `/api/tool-gate/config` for the live door figure only, showing no number rather than a stale/guessed one when that call fails — **Seeker-edition-only, not in `edu.jsx`** | no |
 | `/tools` | `ToolsHome` | — (grid page, not itself gated) | no | no | — |
 | `/rent` | `RentReclaimPane` | `rent` / wallet | **yes** — `runFullReclaim()` (`src/seeker/reclaim-sign.js`), connected wallet signs first | no | no |
 | `/ask` | `AskCluckPane` | `ask` / free | no | no | no |
@@ -49,7 +50,7 @@ is none.
 | `/tools/hatchery` | `Hatchery` | `hatchery` / paid | **yes** — `wallet.provider.signTransaction()` directly (mint keypair is server-held and co-signs in `/api/hatchery/submit`) | no | no |
 | `*` | `Navigate` → `/tools` | — | no | n/a (redirect) | — |
 
-21 routes (Buy Special left the app on 2026-09-22 — owner: not in the Seeker app at all; the Solana Room, `/solana` + `/solana/:pageId`, added since). 6 panes sign: Rent Reclaim, Firepit, Project Burn, Locker Room, Airdropper, Hatchery —
+22 routes (Buy Special left the app on 2026-09-22 — owner: not in the Seeker app at all; the Solana Room, `/solana` + `/solana/:pageId`, added since, then the Seeker-only wing route `/solana/seeker/:pageId`). 6 panes sign: Rent Reclaim, Firepit, Project Burn, Locker Room, Airdropper, Hatchery —
 of those, Firepit/Project Burn/Locker Room/Rent Reclaim go through the two shared signing seams
 (`sign.js`'s `signSendConfirm`, `reclaim-sign.js`'s `runFullReclaim`); Airdropper signs through the
 separate, shared `public/airdrop-engine.js`; Hatchery calls the wallet provider directly because
