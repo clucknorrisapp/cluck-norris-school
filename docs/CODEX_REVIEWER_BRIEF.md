@@ -162,10 +162,6 @@ no issue" when that is the answer.
 
 ## Round 29 — 2026-09-24: #420, an adversarial review's three P2s and its P3s — fixed
 
-(Numbered 27, the next after Round 26 below — the task that produced this entry named "Round 29,
-above Round 28", but neither exists in this file; 27 is the correct next number in this doc's own
-sequence. Flagging so nothing looks silently skipped.)
-
 `claude/seeker-swap` (PR #420, the Seeker in-app Jupiter swap, `docs/SEEKER_SWAP_DESIGN.md`).
 Unreviewed by you. This is the fix round for a read-only adversarial review that found no P0/P1,
 three P2s and a page of P3s — all on a money path (user funds, a wallet signature, a third-party
