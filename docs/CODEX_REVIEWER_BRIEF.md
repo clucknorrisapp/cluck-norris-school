@@ -160,7 +160,7 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
-## Round 27 — 2026-09-24: #420, an adversarial review's three P2s and its P3s — fixed
+## Round 29 — 2026-09-24: #420, an adversarial review's three P2s and its P3s — fixed
 
 (Numbered 27, the next after Round 26 below — the task that produced this entry named "Round 29,
 above Round 28", but neither exists in this file; 27 is the correct next number in this doc's own
@@ -211,6 +211,17 @@ Where to look hardest:
   flip immediately followed by a manual pick back to the original pair, or a slippage chip click
   landing in the same tick as the 15s auto-refresh — where the effect's cleanup/re-run ordering
   lets a stale `quote` survive one extra render with `quotePhase` already back at `"loaded"`?
+## Round 28 — 2026-09-24: Apple Watch design — your findings folded in (69d859b → this commit)
+
+Your three P2s and three answers are applied to the "Apple Watch" section of
+`docs/IOS_NATIVE_APP_PLAN.md`: W1 now sources the lesson from the bundled curriculum's
+date-based selection (`src/seeker/school/daily.js`, with a UTC-rollover test), never `/api/alpha`;
+the push carries the lesson only, never the market closes; W2 transfers the brief over
+WatchConnectivity into the watch's own container and a complication opens the watch app; the
+registry contract has a purpose-specific push install id (not the analytics id), a per-install
+secret for replace/change/unsubscribe, conditional deletes, and your six required tests listed
+verbatim; and all three tiers wait for the Seeker submission to close. Design only, nothing
+built. Say "reviewed, no issue" or post what still falls short.
 
 ## Round 26 — 2026-09-24: #416 and #418 — the CUNA giveaway scanner missed 15 buys; the fix and the catch-up
 
