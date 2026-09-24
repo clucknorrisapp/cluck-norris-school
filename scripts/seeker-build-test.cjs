@@ -680,6 +680,76 @@ async function renderedCheck(pw) {
       gotDisconnect && /disconnect/i.test(btnText), `btnText=${JSON.stringify(btnText)} err=${JSON.stringify(errText)}`);
     const calls = await page.evaluate(() => window.__mwaCalls.map((c) => c[0]));
     ok("rendered: the authorize call actually reached the fake Capacitor bridge", calls.includes("authorize"), JSON.stringify(calls));
+
+    // ── the 🌐 pill never covers content, 360x800 (the size the real device screenshots that
+    // found this bug were taken at) ─────────────────────────────────────────────────────────
+    // The pill (#clkn-lang-toggle, public/i18n.js) is `position:fixed`, so it sits in the same
+    // screen band on every pane regardless of scroll position — a bug here is never "the page is
+    // too short", it's a card that happens to land in that band on first paint. Found in real
+    // Seeker-edition screenshots: the school home's progress-card note ("Progress here stays on
+    // this phone…") and the checkup pane's risky-holding line ("supply can be inf…") were both
+    // hidden under it. The fix is the data-clkn-avoid / data-clkn-avoid-kids markers those two
+    // elements were missing (School.jsx, WalletCheckup.jsx) — clkn-dock-float.js already lifts
+    // the pill off anything so marked; it just never knew these existed.
+    console.log("\n  (🌐 pill collision, 360x800)\n");
+    const pillPage = await browser.newPage({ viewport: { width: 360, height: 800 } });
+    await pillPage.addInitScript(() => {
+      window.Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => "android",
+        Plugins: {
+          CluckMWA: {
+            authorize: async () => ({ address: "HYyhgbGvBjQoGvP85fKeBh4N8+pFghiNlZ//5dVq6R8=", authToken: "tok" }),
+            deauthorize: async () => ({}),
+            signTransactions: async (a) => ({ signedTransactions: a.transactions }),
+            signAndSendTransactions: async () => ({ signatures: ["5Sig"] }),
+            signMessages: async (a) => ({ signedMessages: a.messages }),
+          },
+        },
+      };
+    });
+    // The checkup pane fetches GET /api/wallet-checkup — this static-file server (see above) has
+    // no such route, so it is stubbed with a fixture carrying a risky holding whose issue text
+    // reproduces the real report ("supply can be inf…" truncated by the card's own width, not by
+    // this fixture — the point is that SOME issue text renders low enough on a 360px-wide card to
+    // reach the pill's band).
+    await pillPage.route("**/api/wallet-checkup*", (route) => route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({
+        success: true, scanned: 1, tokensHeld: 1, capped: false, atRiskUsd: 12.34,
+        approvals: [],
+        riskyHoldings: [{
+          mint: "RiskyMint11111111111111111111111111111111", symbol: "RUG", amount: 1000, valueUsd: 12.34, severity: 2,
+          issues: ["Mint authority is still active — supply can be inflated at any time by the token's creator."],
+        }],
+      }),
+    }));
+    await pillPage.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle", timeout: 20000 });
+    await pillPage.waitForFunction(() => !!(window.CluckWallet && document.getElementById("clkn-lang-toggle")), null, { timeout: 15000 });
+
+    function overlaps(a, b) {
+      if (!a || !b) return false;
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }
+
+    // School home is the default route.
+    await pillPage.waitForSelector(".seeker-school-overall", { timeout: 15000 });
+    const pillBoxSchool = await pillPage.locator("#clkn-lang-toggle").boundingBox();
+    const progressBox = await pillPage.locator(".seeker-school-overall").boundingBox();
+    ok("rendered: the 🌐 pill does not cover the school home's progress card (360x800)",
+       !overlaps(pillBoxSchool, progressBox), `pill=${JSON.stringify(pillBoxSchool)} progress=${JSON.stringify(progressBox)}`);
+
+    // Connect the wallet (same fake MWA bridge), then open the checkup pane.
+    await pillPage.locator(".seeker-walletbtn").click();
+    await pillPage.waitForFunction(() => /disconnect/i.test(document.querySelector(".seeker-walletbtn").textContent), null, { timeout: 15000 }).catch(() => {});
+    await pillPage.locator('.seeker-navbtn[href="#/checkup"]').click();
+    await pillPage.waitForSelector(".seeker-checkup-issue", { timeout: 15000 });
+    const pillBoxCheckup = await pillPage.locator("#clkn-lang-toggle").boundingBox();
+    const issueBoxes = await pillPage.locator(".seeker-checkup-issue").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+    const issueOverlap = issueBoxes.some((b) => overlaps(pillBoxCheckup, b));
+    ok("rendered: the 🌐 pill does not cover a risky-holding issue line on Wallet Checkup (360x800)",
+       !issueOverlap, `pill=${JSON.stringify(pillBoxCheckup)} issues=${JSON.stringify(issueBoxes)}`);
+    await pillPage.close();
   } finally {
     await browser.close();
     server.close();

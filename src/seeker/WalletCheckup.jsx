@@ -305,6 +305,11 @@ export default function WalletCheckupPane({ address, gate }) {
         </div>
       ) : null}
 
+      {/* data-clkn-avoid-kids on both sections below: each row is its own card at a different
+          screen height depending on how many issue lines it prints (e.g. "supply can be inf…"),
+          so the row's own top — not the section's — is what the fixed 🌐 pill must clear. Found
+          overlapping the tail of a risky-holding line in real Seeker-edition screenshots, 360x800
+          CSS @3x, 2026-09-24 — the pill has no idea these rows exist without this marker. */}
       {approvals.length ? (
         <div className="seeker-checkup-section">
           <div className="seeker-checkup-section-title seeker-checkup-section-title-warn">
@@ -313,7 +318,9 @@ export default function WalletCheckupPane({ address, gate }) {
           <p className="seeker-checkup-section-explain">
             {t("A delegate can move the approved amount out of your wallet without asking again.")}
           </p>
-          {approvals.map((a) => <ApprovalRow key={a.tokenAccount} a={a} />)}
+          <div data-clkn-avoid-kids="1">
+            {approvals.map((a) => <ApprovalRow key={a.tokenAccount} a={a} />)}
+          </div>
           <p className="seeker-checkup-revokenote">
             {t("Revoking needs a wallet signature — not available in this app yet.")}{" "}
             <a href={WEBSITE_CHECKUP_URL} target="_blank" rel="noreferrer">{t("Revoke on the website")}</a>
@@ -327,7 +334,9 @@ export default function WalletCheckupPane({ address, gate }) {
             {t("Risky holdings")} · {risky.length}
             {data.atRiskUsd > 0 ? " · " + fmtUsd(data.atRiskUsd) + " " + t("at risk") : ""}
           </div>
-          {risky.map((r) => <RiskyRow key={r.mint} r={r} />)}
+          <div data-clkn-avoid-kids="1">
+            {risky.map((r) => <RiskyRow key={r.mint} r={r} />)}
+          </div>
         </div>
       ) : null}
 
