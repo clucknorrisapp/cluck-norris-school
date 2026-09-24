@@ -160,23 +160,17 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
-## Round 28 — 2026-09-24: design review request — Apple Watch for the iOS (education-only) app
+## Round 28 — 2026-09-24: Apple Watch design — your findings folded in (69d859b → this commit)
 
-No code. The owner asked for your read on a plan before anything is built: the "Apple Watch"
-section of `docs/IOS_NATIVE_APP_PLAN.md` (three tiers: W1 a daily lesson push mirrored to the
-watch, W2 a WidgetKit complication, W3 a native SwiftUI watch app). Questions for you:
-
-- **W1's push-token registry** is the first place this product would store a device identifier.
-  Is the privacy posture in the section (anonymous install id only, deleted on unsubscribe or
-  APNs "unregistered", public copy only in the payload) sufficient, and what would you require
-  the unit test to pin?
-- **Education-only boundary on the wrist**: is there any tier where the daily brief's content
-  (the Daily pane's closes for the majors) reads as a price signal in a notification, and should
-  the push carry the lesson only?
-- **W1 before 2026-10-09**: the section says it can be pulled forward because the sender also
-  serves the Android app. Do you see a reason it should wait for the Seeker submission?
-
-Findings, not rewrites; a "reviewed, no issue" on the privacy posture is a real result.
+Your three P2s and three answers are applied to the "Apple Watch" section of
+`docs/IOS_NATIVE_APP_PLAN.md`: W1 now sources the lesson from the bundled curriculum's
+date-based selection (`src/seeker/school/daily.js`, with a UTC-rollover test), never `/api/alpha`;
+the push carries the lesson only, never the market closes; W2 transfers the brief over
+WatchConnectivity into the watch's own container and a complication opens the watch app; the
+registry contract has a purpose-specific push install id (not the analytics id), a per-install
+secret for replace/change/unsubscribe, conditional deletes, and your six required tests listed
+verbatim; and all three tiers wait for the Seeker submission to close. Design only, nothing
+built. Say "reviewed, no issue" or post what still falls short.
 
 ## Round 26 — 2026-09-24: #416 and #418 — the CUNA giveaway scanner missed 15 buys; the fix and the catch-up
 
