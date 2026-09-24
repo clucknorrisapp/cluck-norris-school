@@ -684,11 +684,33 @@
   // signed.partialSign(base) — every multi-signer flow here — died with "signed.partialSign is not
   // a function" for one of those wallets (a lock-and-earn user, 2026-09-05). This turns any of
   // them into a real Transaction from the page's own web3, or throws something a person can act on.
+  //
+  // v0 (VersionedTransaction) branch (docs/SEEKER_SWAP_DESIGN.md — Jupiter's swap transaction is
+  // always v0, for the address lookup tables a multi-hop route needs): `original.version !==
+  // undefined` is what tells the two shapes apart, exactly like messageBytes()/signatureOf() in
+  // src/seeker/sign.js. A legacy Transaction.from(bytes) on v0 bytes silently corrupts the
+  // message rather than throwing, so the branch must be picked on the ORIGINAL we built, never
+  // guessed from what came back. The bare {signatures:[...]} graft below only makes sense against
+  // a legacy Transaction's per-signer-slot array (see its own comment) — a v0 message has no such
+  // array, so that shape is refused for v0 with a readable error instead of silently mis-grafting.
   function asTransaction(signed, original) {
     var W3 = global.solanaWeb3;
     if (!W3 || !W3.Transaction) throw new Error("web3 is not loaded on this page.");
     if (signed == null) signed = original;                         // signed in place
     if (signed && signed.signedTransaction) return asTransaction(signed.signedTransaction, original);
+    if (original && original.version !== undefined) {
+      if (W3.VersionedTransaction && signed instanceof W3.VersionedTransaction) return signed;
+      if (signed instanceof Uint8Array || (signed && signed.buffer instanceof ArrayBuffer && typeof signed.byteLength === "number")) {
+        return W3.VersionedTransaction.deserialize(signed);
+      }
+      if (signed instanceof ArrayBuffer) return W3.VersionedTransaction.deserialize(new Uint8Array(signed));
+      if (Array.isArray(signed) && signed.length && typeof signed[0] === "number") return W3.VersionedTransaction.deserialize(Uint8Array.from(signed));
+      if (signed && typeof signed.serialize === "function") {
+        // a VersionedTransaction from another web3 copy: same wire format, round-trip it through ours
+        return W3.VersionedTransaction.deserialize(signed.serialize());
+      }
+      throw new Error("This wallet returned a versioned transaction in a form the app can't complete.");
+    }
     if (signed instanceof W3.Transaction) return signed;
     if (signed instanceof Uint8Array || (signed && signed.buffer instanceof ArrayBuffer && typeof signed.byteLength === "number")) {
       return W3.Transaction.from(signed);

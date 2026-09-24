@@ -3921,7 +3921,7 @@ app.use((req, res, next) => {
 // endpoint keeps its own gate (the tools pass, the receipt sign-in, the payment checks), and the
 // store UA refusal below still answers 403 to the education editions on these — now WITH the
 // CORS headers, so that app reads the refusal instead of an opaque network error.
-const SEEKER_API_RE = /^\/api\/(tool-gate\/(config|challenge|session)|seeker\/reclaimable|wallet-xray|snapshot|trace|airdrop\/record|lock\/(create-tx|record)|locks|burn-(scan|token-info|receipt)|hatchery\/(config|build|submit|minted))$/;
+const SEEKER_API_RE = /^\/api\/(tool-gate\/(config|challenge|session)|seeker\/reclaimable|seeker\/swap\/(config|quote|tx)|wallet-xray|snapshot|trace|airdrop\/record|lock\/(create-tx|record)|locks|burn-(scan|token-info|receipt)|hatchery\/(config|build|submit|minted))$/;
 app.use((req, res, next) => {
   const origin = String(req.get("origin") || "");
   if (!origin || !STORE_APP_ORIGINS.has(origin) || !SEEKER_API_RE.test(req.path)) return next();
@@ -3940,7 +3940,7 @@ app.use((req, res, next) => {
 // marker only ever LOSES access, so nothing security-sensitive rests on it — the excluded flows are
 // absent from the bundle and every endpoint enforces its own rules regardless of UA.
 const STORE_UA_RE = /Clucknorris(Play|IOS)/;
-const STORE_DENY_RE = /^\/api\/(tool-gate|hatchery|airdrop|buyspecial|buycomp|lock\b|firepit|burn|project-burn|lp-rescue|wallet-xray|trace|snapshot|holders|owners-snapshot\/start|security-coop\/revoke|swap|premium|verify-sol-payment|claim$|classroom\/graduate-claim|cuna-stake|cuna-draw|whirlpool|rose|jvp|nq\/|normie)/;
+const STORE_DENY_RE = /^\/api\/(tool-gate|hatchery|airdrop|buyspecial|buycomp|lock\b|firepit|burn|project-burn|lp-rescue|wallet-xray|trace|snapshot|holders|owners-snapshot\/start|security-coop\/revoke|swap|seeker\/swap|premium|verify-sol-payment|claim$|classroom\/graduate-claim|cuna-stake|cuna-draw|whirlpool|rose|jvp|nq\/|normie)/;
 app.use((req, res, next) => {
   if (!STORE_UA_RE.test(String(req.get("user-agent") || ""))) return next();
   if (!STORE_DENY_RE.test(req.path)) return next();
@@ -4017,6 +4017,10 @@ app.use("/api/wallet-checkup", rateLimit("forensic", { windowMs: 60000, max: 15 
 // Rent Reclaim (Seeker app, read side): 2 billed getTokenAccountsByOwner reads per request,
 // unauthenticated — same "forensic" budget as its siblings above, for the same reason (sec M3).
 app.use("/api/seeker/reclaimable", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+// Seeker app in-app swap (docs/SEEKER_SWAP_DESIGN.md): public relays to Jupiter, no admin key,
+// nothing server-signed. The app refreshes a quote every 15s while the pane is open — 60/min
+// covers real use with room, and stops a scripted hammer on the keyed upstream.
+app.use("/api/seeker/swap", rateLimit("seekerswap", { windowMs: 60000, max: 60 }));
 // Owners Snapshot: /start queues an hours-long paced crawl, so it gets its own tight cap; the
 // status/result/history reads are cheap file reads and only need the global /api cap.
 app.use("/api/owners-snapshot/start", rateLimit("ownersstart", { windowMs: 3600000, max: 6 }));
@@ -15008,6 +15012,272 @@ app.get("/api/seeker/reclaimable", async (req, res) => {
     // rule for the tool gate applies just as hard to money-adjacent reads. Never a 200 here.
     console.error("[seeker-reclaimable]", e.message);
     return res.status(503).json({ success: false, status: "unavailable", wallet, error: "Could not read the chain right now — try again shortly." });
+  }
+});
+
+// ── Seeker app — in-app swap (Jupiter proxy), docs/SEEKER_SWAP_DESIGN.md ───────────────────────
+// The app NEVER calls Jupiter directly: the API key and its rate limits stay server-side, the
+// mint allowlist lives in one place, the app's allowedHosts (store-edition/seeker-edition.json)
+// doesn't grow a third-party host, and scripts/seeker-cors-test.cjs can see the whole endpoint
+// inventory. All three routes are PUBLIC RELAYS — no admin key, nothing server-signed; every
+// transaction is built by Jupiter and signed by the user's own connected wallet in the app.
+//
+// ⛔ NO PLATFORM FEE (owner, 2026-09-24: "I do not want to collect any platform fee") — no
+// platformFeeBps on the quote call, no feeAccount on the swap call, no fee env vars anywhere in
+// this block. platformFeeBps is published on /config as the constant 0 so the pane's contract
+// never has to change if this is revisited.
+//
+// JUP_SWAP_BASE overrides BOTH upstream hosts with one URL — test-only (scripts/seeker-swap-test.cjs
+// points it at a local fixture stub); unset in every real environment, where the real keyed-then-
+// lite-api pattern below (same as jupTokensSearch) applies.
+//
+// ⚠️ Fix round P2-1: honoured ONLY when NODE_ENV !== "production", OR the value itself points at
+// 127.0.0.1/localhost — a stray JUP_SWAP_BASE left set on a production deploy would otherwise
+// silently redirect every swap quote/build to whatever host it names, with no key and no
+// allowlisting of its own. A non-local value in production is logged loudly and ignored; the
+// real api.jup.ag / lite-api.jup.ag pattern below still runs.
+const JUP_SWAP_BASE_RAW = process.env.JUP_SWAP_BASE || "";
+const JUP_SWAP_BASE_LOCAL_RE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$|\?)/;
+let JUP_SWAP_BASE = "";
+if (JUP_SWAP_BASE_RAW) {
+  if (process.env.NODE_ENV !== "production" || JUP_SWAP_BASE_LOCAL_RE.test(JUP_SWAP_BASE_RAW)) {
+    JUP_SWAP_BASE = JUP_SWAP_BASE_RAW;
+  } else {
+    console.error("[seeker-swap] JUP_SWAP_BASE is set in production to a non-local URL — ignoring it and calling the real Jupiter API. value=" + JUP_SWAP_BASE_RAW);
+  }
+}
+const SEEKER_SWAP_SLIPPAGE_OPTIONS = [50, 100, 300];
+const SEEKER_SWAP_DEFAULT_SLIPPAGE_BPS = 100;
+// Base-unit integer amount, no float, no leading zero, capped at 20 digits (design's own bound —
+// well above any real token's total supply in base units, so nothing legitimate is ever refused).
+const SEEKER_SWAP_AMOUNT_RE = /^[1-9][0-9]{0,19}$/;
+// SOL and USDC decimals are fixed by the SPL standard for these specific well-known mints; SKR
+// and CLKN are read from the chain once and cached forever below — AGENTS.md: never hardcode
+// SKR/CLKN decimals. SKR_MINT comes from lib/tool-pass-qualify.js (required above as
+// TOOL_PASS_QUALIFY/SKR_MINT) — never retyped, a look-alike mint exists.
+const SEEKER_SWAP_MINTS = [
+  { symbol: "SOL", mint: "So11111111111111111111111111111111111111112", decimals: 9 },
+  { symbol: "SKR", mint: SKR_MINT, decimals: null },
+  { symbol: "CLKN", mint: CLKN_MINT, decimals: null },
+  { symbol: "USDC", mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", decimals: 6 },
+];
+const SEEKER_SWAP_MINT_SET = new Set(SEEKER_SWAP_MINTS.map((m) => m.mint));
+const seekerSwapDecimalsCache = new Map(); // mint -> decimals (never expires — decimals are immutable)
+async function seekerSwapDecimalsFor(mint) {
+  if (seekerSwapDecimalsCache.has(mint)) return seekerSwapDecimalsCache.get(mint);
+  const sup = await rpc.rpcJson("getTokenSupply", [mint]);
+  const d = sup && sup.result && sup.result.value && sup.result.value.decimals;
+  if (typeof d !== "number") throw new Error("could not read decimals for " + mint);
+  seekerSwapDecimalsCache.set(mint, d);
+  return d;
+}
+// A 60s in-memory quote store, keyed by quoteId (sha256 of the quote JSON). The tx route echoes
+// amounts from the STORED quote, never the request, so the confirm sheet and the transaction come
+// from the same object a client cannot forge. Swept on an interval rather than on every read.
+const seekerSwapQuotes = new Map(); // quoteId -> { quote, at }
+const SEEKER_SWAP_QUOTE_TTL_MS = 60000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, v] of seekerSwapQuotes) if (now - v.at > SEEKER_SWAP_QUOTE_TTL_MS) seekerSwapQuotes.delete(id);
+}, 30000).unref();
+
+// Same keyed-host-then-lite-api pattern as jupTokensSearch (~line 20000): api.jup.ag with
+// x-api-key when JUPITER_API_KEY is set, automatic fallback to lite-api.jup.ag. JUP_SWAP_BASE
+// (test-only) replaces both with one URL and sends no key header.
+async function jupSwapCall(pathAndQuery, { method = "GET", body } = {}) {
+  const tries = JUP_SWAP_BASE
+    ? [{ u: JUP_SWAP_BASE + pathAndQuery, h: {} }]
+    : (JUP_API_KEY ? [{ u: "https://api.jup.ag" + pathAndQuery, h: { "x-api-key": JUP_API_KEY } }] : [])
+        .concat([{ u: "https://lite-api.jup.ag" + pathAndQuery, h: {} }]);
+  let lastErr = null;
+  for (const t of tries) {
+    try {
+      const r = await fetch(t.u, {
+        method,
+        headers: Object.assign({ "Content-Type": "application/json" }, t.h),
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(8000),
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) { lastErr = new Error("jupiter " + r.status + (j && j.error ? ": " + j.error : "")); continue; }
+      return j;
+    } catch (e) { lastErr = e; continue; }
+  }
+  throw lastErr || new Error("jupiter unavailable");
+}
+
+// ⚠️ Fix round P3: no wildcard Access-Control-Allow-Origin on any of the three swap routes below —
+// the SEEKER_API_RE middleware mounted earlier already sets a RESTRICTED, origin-echoed CORS
+// header for the exact Seeker/store-app origins in STORE_APP_ORIGINS, the same as every other
+// seeker/* route. A route-level "*" here would silently override that restriction on every real
+// (non-OPTIONS) response.
+app.get("/api/seeker/swap/config", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const mints = await Promise.all(SEEKER_SWAP_MINTS.map(async (m) => ({
+      symbol: m.symbol, mint: m.mint,
+      decimals: m.decimals != null ? m.decimals : await seekerSwapDecimalsFor(m.mint),
+    })));
+    return res.status(200).json({
+      ok: true,
+      mints,
+      defaultIn: "SOL", defaultOut: "SKR",
+      slippageBpsOptions: SEEKER_SWAP_SLIPPAGE_OPTIONS,
+      defaultSlippageBps: SEEKER_SWAP_DEFAULT_SLIPPAGE_BPS,
+      platformFeeBps: 0,
+    });
+  } catch (e) {
+    console.error("[seeker-swap-config]", e.message);
+    return res.status(502).json({ ok: false, error: "swap_unavailable" });
+  }
+});
+
+// Request expects Jupiter's default swap mode when none is sent — never sent explicitly above,
+// so this is what a quote must echo back to be trusted (P2-1: the quote is never checked against
+// what was asked for, so a mismatched/forged-looking upstream response was returned as-is).
+const SEEKER_SWAP_REQUESTED_MODE = "ExactIn";
+// ⚠️ Frontier review round 31b item 2 — the SAME hard ceiling as `MAX_PRIORITY_FEE_LAMPORTS` in
+// `src/seeker/swap-verify.js` (that file can't be `require()`d here — it's an ESM module the
+// client bundles — so the number is kept in sync by hand; `scripts/seeker-swap-test.cjs` pins
+// both files' values equal). A `/tx` response whose own `prioritizationFeeLamports` exceeds this
+// is refused server-side, never merely trusted client-side.
+const SEEKER_SWAP_MAX_PRIORITY_FEE_LAMPORTS = 1000000;
+// A tighter per-IP cap than the 60/min shared across the whole /api/seeker/swap group — the quote
+// route is the one an idle pane can hammer every 400ms while the amount box is being typed into
+// (fix round P3: the pane also debounces its own calls by 400ms, below is the server-side floor).
+app.get("/api/seeker/swap/quote", rateLimit("seekerswapquote", { windowMs: 60000, max: 30 }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const inputMint = String(req.query.inputMint || "").trim();
+  const outputMint = String(req.query.outputMint || "").trim();
+  const amount = String(req.query.amount || "").trim();
+  const slippageBps = Number(req.query.slippageBps);
+
+  if (!SEEKER_SWAP_MINT_SET.has(inputMint)) return res.status(400).json({ ok: false, error: "bad_request", field: "inputMint" });
+  if (!SEEKER_SWAP_MINT_SET.has(outputMint)) return res.status(400).json({ ok: false, error: "bad_request", field: "outputMint" });
+  if (inputMint === outputMint) return res.status(400).json({ ok: false, error: "bad_request", field: "outputMint" });
+  if (!SEEKER_SWAP_AMOUNT_RE.test(amount)) return res.status(400).json({ ok: false, error: "bad_request", field: "amount" });
+  if (!SEEKER_SWAP_SLIPPAGE_OPTIONS.includes(slippageBps)) return res.status(400).json({ ok: false, error: "bad_request", field: "slippageBps" });
+
+  try {
+    const qs = new URLSearchParams({
+      inputMint, outputMint, amount, slippageBps: String(slippageBps),
+      restrictIntermediateTokens: "true",
+    });
+    const quote = await jupSwapCall("/swap/v1/quote?" + qs.toString());
+    if (!quote || quote.error || !quote.outAmount) return res.status(502).json({ ok: false, error: "quote_unavailable" });
+    // ⚠️ P2-1: the transaction is never checked against the quote — the first half of that is
+    // never STORING a quote whose own fields disagree with what was asked for. A quote that comes
+    // back naming a different pair, a different swap mode, a different slippage, or (round 30
+    // fix 5 — Codex found `amount` was never checked here at all) a different `inAmount` than
+    // requested is refused outright rather than handed to the client (and never cached under a
+    // quoteId a /tx call could later be built from).
+    if (quote.inputMint !== inputMint || quote.outputMint !== outputMint
+      || quote.swapMode !== SEEKER_SWAP_REQUESTED_MODE || Number(quote.slippageBps) !== slippageBps
+      || String(quote.inAmount) !== amount) {
+      console.error("[seeker-swap-quote] quote_mismatch", { inputMint, outputMint, amount, slippageBps, got: { inputMint: quote.inputMint, outputMint: quote.outputMint, swapMode: quote.swapMode, slippageBps: quote.slippageBps, inAmount: quote.inAmount } });
+      return res.status(502).json({ ok: false, error: "quote_mismatch" });
+    }
+    // ⚠️ Frontier review round 31b item 3 — nobody ever tied `otherAmountThreshold` (the minimum
+    // the confirm sheet displayed) to `outAmount`/`slippageBps` (the two numbers the CLIENT
+    // verifier checks the route instruction's own bytes against). Only `SEEKER_SWAP_REQUESTED_MODE
+    // === "ExactIn"` is ever accepted above (checked before this point), so only that mode's rule
+    // applies here; a stored quote whose upstream threshold disagrees with it is refused rather
+    // than cached under a quoteId a /tx call could later build from.
+    // ⚠️ NOT a plain floor: checked against the real recorded fixture
+    // (scripts/fixtures/seeker-swap/quote.json — a genuine 3-hop route, outAmount 55,235,110,
+    // slippageBps 100) and floor(outAmount × 9900 / 10000) = 54,682,758 while the fixture's own
+    // otherAmountThreshold is 54,682,759 — Jupiter's real threshold does not exactly reduce to a
+    // floor on the final outAmount (whether from its own rounding convention or per-hop
+    // arithmetic). Rather than guess a single formula and risk refusing genuine quotes forever,
+    // this accepts EITHER the floor OR the ceiling of outAmount × (10000 − slippageBps) / 10000 —
+    // the only two values any honest single global rounding of that exact formula can produce —
+    // and refuses anything outside that two-value window. The fixture's 54,682,759 is the ceiling
+    // of that range; `scripts/seeker-swap-test.cjs` pins the fixture passing and a forged
+    // (materially smaller) threshold refusing.
+    const thresholdNumerator = BigInt(quote.outAmount) * (10000n - BigInt(slippageBps));
+    const thresholdFloor = thresholdNumerator / 10000n;
+    const thresholdCeil = (thresholdNumerator % 10000n === 0n) ? thresholdFloor : thresholdFloor + 1n;
+    const gotThreshold = BigInt(String(quote.otherAmountThreshold));
+    if (gotThreshold < thresholdFloor || gotThreshold > thresholdCeil) {
+      console.error("[seeker-swap-quote] threshold_mismatch", { outAmount: quote.outAmount, slippageBps, thresholdFloor: String(thresholdFloor), thresholdCeil: String(thresholdCeil), got: quote.otherAmountThreshold });
+      return res.status(502).json({ ok: false, error: "quote_mismatch" });
+    }
+    const quoteId = createHash("sha256").update(JSON.stringify(quote)).digest("hex");
+    seekerSwapQuotes.set(quoteId, { quote, at: Date.now() });
+    return res.status(200).json({ ok: true, quote, quoteId });
+  } catch (e) {
+    console.error("[seeker-swap-quote]", e.message);
+    return res.status(502).json({ ok: false, error: "quote_unavailable" });
+  }
+});
+
+app.post("/api/seeker/swap/tx", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const quoteId = String((req.body && req.body.quoteId) || "").trim();
+  const userPublicKey = String((req.body && req.body.userPublicKey) || "").trim();
+  if (!quoteId) return res.status(400).json({ ok: false, error: "bad_request", field: "quoteId" });
+  if (!SOL_ADDR_RE.test(userPublicKey)) return res.status(400).json({ ok: false, error: "bad_request", field: "userPublicKey" });
+
+  const entry = seekerSwapQuotes.get(quoteId);
+  if (!entry || Date.now() - entry.at > SEEKER_SWAP_QUOTE_TTL_MS) {
+    seekerSwapQuotes.delete(quoteId);
+    return res.status(409).json({ ok: false, error: "quote_expired" });
+  }
+
+  try {
+    const body = {
+      quoteResponse: entry.quote,
+      userPublicKey,
+      wrapAndUnwrapSol: true,
+      dynamicComputeUnitLimit: true,
+      asLegacyTransaction: false,
+      prioritizationFeeLamports: { priorityLevelWithMaxLamports: { maxLamports: 1000000, priorityLevel: "high" } },
+    };
+    const out = await jupSwapCall("/swap/v1/swap", { method: "POST", body });
+    if (!out || !out.swapTransaction) return res.status(502).json({ ok: false, error: "swap_unavailable" });
+    // ⚠️ P2-1: Jupiter simulates every transaction it builds before returning it, and a non-null
+    // simulationError means IT ALREADY KNOWS this transaction will fail on-chain — refuse it here
+    // rather than hand the app a transaction to sign that Jupiter itself expects to fail.
+    if (out.simulationError != null) {
+      console.error("[seeker-swap-tx] simulationError", out.simulationError);
+      return res.status(502).json({ ok: false, error: "swap_unavailable", detail: out.simulationError });
+    }
+    // ⚠️ Frontier review round 31b item 2 — `prioritizationFeeLamports` used to be passed through
+    // raw, unchecked: missing, non-numeric or absurd (Codex's exploit: no compute-unit-limit
+    // instruction + an enormous price) all reached the client as-is. Refused here, server-side,
+    // never merely trusted — the CLIENT still computes and enforces its own hard ceiling from the
+    // transaction's actual bytes (`MAX_PRIORITY_FEE_LAMPORTS`, `swap-verify.js`); this is defense
+    // in depth, not a replacement for that check.
+    if (typeof out.prioritizationFeeLamports !== "number" || !Number.isFinite(out.prioritizationFeeLamports)
+      || out.prioritizationFeeLamports < 0 || out.prioritizationFeeLamports > SEEKER_SWAP_MAX_PRIORITY_FEE_LAMPORTS) {
+      console.error("[seeker-swap-tx] prioritizationFeeLamports out of bounds", out.prioritizationFeeLamports);
+      return res.status(502).json({ ok: false, error: "swap_unavailable" });
+    }
+    // Round 31b item 6 — `lastValidBlockHeight` drives the client's expiry logic (checkPendingSwap
+    // in sign.js); anything that isn't a genuine positive block height is refused rather than
+    // handed to a client that would otherwise trust it blind.
+    if (!Number.isInteger(out.lastValidBlockHeight) || out.lastValidBlockHeight <= 0) {
+      console.error("[seeker-swap-tx] lastValidBlockHeight invalid", out.lastValidBlockHeight);
+      return res.status(502).json({ ok: false, error: "swap_unavailable" });
+    }
+    // Amounts echoed from the STORED quote (entry.quote), never the request — the confirm sheet
+    // and the transaction Jupiter actually built come from the same object.
+    return res.status(200).json({
+      ok: true,
+      swapTransaction: out.swapTransaction,
+      lastValidBlockHeight: out.lastValidBlockHeight,
+      prioritizationFeeLamports: out.prioritizationFeeLamports,
+      inputMint: entry.quote.inputMint,
+      outputMint: entry.quote.outputMint,
+      inAmount: entry.quote.inAmount,
+      outAmount: entry.quote.outAmount,
+      otherAmountThreshold: entry.quote.otherAmountThreshold,
+      priceImpactPct: entry.quote.priceImpactPct,
+      slippageBps: entry.quote.slippageBps,
+    });
+  } catch (e) {
+    console.error("[seeker-swap-tx]", e.message);
+    return res.status(502).json({ ok: false, error: "swap_unavailable" });
   }
 });
 

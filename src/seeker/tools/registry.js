@@ -50,6 +50,8 @@ export const TOOLS = [
     blurb: "Send a token to many wallets at once, with a receipt for every row." },
   { id: "hatchery",   route: "/tools/hatchery",   title: "Hatchery",        icon: "🥚", tier: "paid",   ready: true ,
     blurb: "Mint a token properly, with the authorities set the way you meant." },
+  { id: "swap",       route: "/tools/swap",       title: "Swap",            icon: "🔁", tier: "wallet", ready: true,
+    blurb: "Swap SOL, SKR, CLKN and USDC in this app. Every quote shows the rate, the minimum you receive and the price impact before you sign." },
 ];
 
 export const byId = (id) => TOOLS.find((t) => t.id === id) || null;

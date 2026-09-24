@@ -298,6 +298,42 @@ jobs:
       # allow-list covers, then boots server.js and sends the webview's own preflight per endpoint.
       - name: Seeker app — CORS for every endpoint it calls (inventory + live preflight)
         run: node scripts/seeker-cors-test.cjs
+      # The Seeker in-app swap — Part A, the signing seam's versioned-transaction (v0) support.
+      # Jupiter's swap endpoint always returns a v0 tx (address lookup tables); the seam previously
+      # only worked for legacy Transactions. messageBytes/signatureOf/asTransaction now branch
+      # correctly on v0 vs legacy, pinned against real @solana/web3.js transactions built in Node
+      # (no network, no real wallet) — every asTransaction input shape a wallet can hand back, for
+      # both v0 and legacy originals, plus a negative (an altered v0 message fails the byte diff)
+      # and byte-for-byte pins that the legacy path is unchanged.
+      - name: Seeker app — swap signing seam (v0 VersionedTransaction support)
+        run: node scripts/seeker-sign-versioned-test.cjs
+      # The Seeker in-app swap — fix round (PR #420) P2-1: "the transaction is never checked
+      # against the quote." src/seeker/swap-verify.js is the CLIENT-SIDE structural verifier run
+      # immediately before signing: fee payer is the live connected account, exactly one required
+      # signature, every instruction's program id on an allowlist (program ids are static keys on
+      # a v0 tx), and the Jupiter route instruction's own trailing bytes (in_amount/
+      # quoted_out_amount/slippage_bps/platform_fee_bps) match the quote the person was shown.
+      # Driven against the REAL recorded fixture (scripts/fixtures/seeker-swap/swap.json, decoded
+      # with real @solana/web3.js) and mutated copies — wrong fee payer, altered quote amounts, an
+      # extra unrecognised-program instruction, a non-zero platform fee — each proven refused.
+      - name: Seeker app — swap client-side structural verifier (transaction vs quote)
+        run: node scripts/seeker-swap-verify-test.cjs
+      # The Seeker in-app swap — Part B, the server-side Jupiter proxy (docs/SEEKER_SWAP_DESIGN.md).
+      # Three public relays, no admin key, nothing server-signed. Pins: the mint allowlist (SKR from
+      # lib/tool-pass-qualify.js, CLKN/SKR decimals read from the chain and never hardcoded);
+      # amount/slippage/mint validation on the quote route; the 60s quoteId store and its 409 on an
+      # unknown/expired id; the tx route echoing amounts from the STORED quote, never the request's;
+      # an upstream failure answering 502 with no fabricated quote/transaction; and that no platform
+      # fee field is ever sent (owner, 2026-09-24: "I do not want to collect any platform fee").
+      # Fix round additions: a quote whose own inputMint/outputMint/swapMode/slippageBps disagree
+      # with the request -> 502 quote_mismatch, never stored; a non-null simulationError on
+      # Jupiter's own swap response -> 502 swap_unavailable with detail, never a swapTransaction;
+      # no wildcard Access-Control-Allow-Origin on any of the three routes (the restricted,
+      # origin-echoed SEEKER_API_RE header is what answers instead); and the quote route's own
+      # 30/min-per-IP floor. Boots the real server.js against local stubs for both Jupiter and the
+      # chain RPC — no live network call in CI.
+      - name: Seeker app — swap server proxy (config/quote/tx, allowlist, quoteId, no platform fee)
+        run: node scripts/seeker-swap-test.cjs
       - name: Buy-comp entries (every $N buy = horses)
         run: node scripts/buycomp-entries-test.cjs
       # The paid tools pass: consuming the payment signature is the ONLY durable write, and the
