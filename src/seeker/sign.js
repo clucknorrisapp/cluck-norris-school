@@ -257,12 +257,23 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
   if (!provider) return { status: "failed", error: "Connect a wallet first." };
 
   const rpc = rpcFn();
-  let tx, live;
+  let tx, live, approved;
   try {
     live = assertSameAccount(provider, owner);          // (3)
     const blockhash = await latestBlockhash(rpc);
     tx = build(web3, blockhash, live);
     if (!tx) return { status: "failed", error: "Nothing to sign." };
+    // ⚠️ Codex round 27 P1: this MUST be an independent COPY, taken BEFORE the wallet ever sees
+    // `tx`, and never re-read off `tx` after signing. A wallet whose signTransaction() mutates the
+    // SAME transaction object in place (rather than returning a distinct signed copy) — legally
+    // possible, and reproduced against both the legacy and v0 paths — used to make (4) compare
+    // messageBytes(tx) against itself: `tx` was already the mutated object by the time
+    // messageBytes(tx) ran below, so an approved amount silently changed to whatever the wallet
+    // substituted and the diff passed anyway. `Uint8Array.from()` forces a real copy, not a view
+    // over the same buffer the wallet might still be holding a reference to.
+    const mb = messageBytes(tx);
+    if (!mb) return { status: "failed", error: "Could not read the transaction to sign." };
+    approved = Uint8Array.from(mb);
   } catch (e) {
     return { status: "failed", error: (e && e.message) || String(e) };
   }
@@ -280,7 +291,7 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
       // no transaction to diff.
       const signed = await provider.signTransaction(tx);
       const realTx = CW.asTransaction ? CW.asTransaction(signed, tx) : signed;
-      if (!sameBytes(messageBytes(tx), messageBytes(realTx))) {   // (4)
+      if (!sameBytes(approved, messageBytes(realTx))) {   // (4) — against the PRE-SIGN copy, never messageBytes(tx) here
         return { status: "failed", error: "The wallet returned a different transaction than the one you approved." };
       }
       if (typeof coSign === "function") coSign(realTx, web3);

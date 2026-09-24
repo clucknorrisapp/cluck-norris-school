@@ -159,6 +159,13 @@ export async function signAndSendAll(provider, rpc, descriptorBatches, blockhash
   }
 
   const txs = descriptorBatches.map((d) => buildTransaction(d, blockhash, owner));
+  // ⚠️ Codex round 27 P1 (found on src/seeker/sign.js's signSendConfirm, same bug here): these
+  // MUST be independent COPIES of each tx's message bytes, taken BEFORE signAllTransactions ever
+  // sees `txs` — a wallet whose signTransaction mutates the SAME object in place, rather than
+  // returning a distinct signed copy, would otherwise be diffed against itself (messageBytes(txs[i])
+  // read AFTER signing is messageBytes of the already-mutated object). Uint8Array.from() forces a
+  // real copy, not a view over a buffer the wallet might still hold a reference to.
+  const approvedBytes = txs.map((tx) => Uint8Array.from(messageBytes(tx)));
 
   if (typeof provider.signAllTransactions === "function") {
     let signed;
@@ -179,7 +186,9 @@ export async function signAndSendAll(provider, rpc, descriptorBatches, blockhash
         // carrying each other's signatures. Never trust that array position i in the wallet's
         // response corresponds to descriptorBatches[i] — compare the actual compiled MESSAGE
         // bytes against the transaction WE built, byte for byte, before calling sendTransaction.
-        if (!sameBytes(messageBytes(txs[i]), messageBytes(realTx))) {
+        // Against the PRE-SIGN copy (approvedBytes[i]), never messageBytes(txs[i]) here — see the
+        // note above.
+        if (!sameBytes(approvedBytes[i], messageBytes(realTx))) {
           out.push({ error: "the wallet returned a different transaction than the one you approved" });
           continue;
         }

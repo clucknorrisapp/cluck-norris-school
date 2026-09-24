@@ -15,6 +15,17 @@
 //   - asTransaction(signed, original) always ran signed bytes through the LEGACY
 //     Transaction.from(...) path, which does not throw on v0 bytes — it corrupts the message.
 //
+// ⚠️ Codex round 27 P1 — fixed: signSendConfirm's byte diff (protection 4) used to compute
+// messageBytes(tx) AFTER provider.signTransaction(tx) had already run. A wallet that mutates the
+// SAME transaction object in place (legally possible — nothing requires a wallet to return a
+// distinct copy) rather than returning a new signed object was therefore diffed against ITSELF,
+// post-mutation, and passed every time — reproduced on both the legacy and v0 paths. Fixed by
+// capturing an independent byte COPY of the approved message (`Uint8Array.from(messageBytes(tx))`)
+// BEFORE the wallet is ever called, and diffing against that copy, never a live re-read of `tx`.
+// The same bug, same fix, applies to src/seeker/reclaim-sign.js's own batch-level diff. Section 7
+// below drives signSendConfirm end-to-end with a fake wallet that mutates in place, for both tx
+// shapes, plus a sanity pass proving an honest wallet still succeeds.
+//
 // What this test proves instead:
 //   1. messageBytes/sameBytes/signatureOf work correctly on a REAL v0 VersionedTransaction built
 //      with @solana/web3.js in Node (TransactionMessage → compileToV0Message → VersionedTransaction),
@@ -248,6 +259,123 @@ const ok = (name, cond, detail) => {
     const signedShape = { signatures: [{ publicKey: payer.publicKey, signature: legacyTx.signatures[0].signature }] };
     const g = CW.asTransaction(signedShape, fresh);
     ok("bare {signatures:[...]} graft still works for a legacy original (unchanged path)", g === fresh && g.signatures[0].signature && Buffer.compare(Buffer.from(g.signatures[0].signature), Buffer.from(legacyTx.signatures[0].signature)) === 0);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 7. Codex round 27 P1 — mutation AFTER signing: a wallet that mutates the SAME transaction
+  // object in place (rather than returning a distinct signed copy) must not be able to bypass
+  // protection (4) by making messageBytes(tx) read the ALREADY-mutated object. Fixed by capturing
+  // an independent byte COPY of the approved message before the wallet is ever called, and diffing
+  // against that copy — never re-reading `tx` after signTransaction returns. Both legacy and v0.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\nCodex round 27 P1 — a wallet that mutates `tx` in place must still be caught (legacy + v0)\n");
+  {
+    let sendCalls = 0;
+    global.window.CluckUtil = {
+      rpc: async (method) => {
+        if (method === "getLatestBlockhash") return { value: { blockhash: web3.Keypair.generate().publicKey.toBase58() } };
+        if (method === "sendTransaction") { sendCalls++; return "SHOULD_NEVER_BE_CALLED"; }
+        throw new Error("unexpected rpc call: " + method);
+      },
+    };
+
+    // --- legacy: the fake wallet swaps the instruction for a different destination/amount, then
+    // returns the SAME Transaction object reference ("signed in place"). ------------------------
+    {
+      sendCalls = 0;
+      const payer = web3.Keypair.generate();
+      const honestDest = web3.Keypair.generate().publicKey;
+      const substitutedDest = web3.Keypair.generate().publicKey;
+      const buildLegacy = (w3, blockhash, live) => {
+        const t = new w3.Transaction({ feePayer: new w3.PublicKey(live), recentBlockhash: blockhash });
+        t.add(w3.SystemProgram.transfer({ fromPubkey: new w3.PublicKey(live), toPubkey: honestDest, lamports: 1000 }));
+        return t;
+      };
+      const mutatingProvider = {
+        publicKey: { toString: () => payer.publicKey.toBase58() },
+        signTransaction: async (tx) => {
+          // Mutate the exact object the caller built and holds a reference to — a different
+          // destination AND amount than what was approved — then hand back that SAME reference.
+          tx.instructions[0] = web3.SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: substitutedDest, lamports: 999999 });
+          return tx;
+        },
+      };
+      const res = await seam.signSendConfirm({ provider: mutatingProvider, owner: payer.publicKey.toBase58(), build: buildLegacy });
+      ok("legacy: an in-place mutation is caught — status 'failed'", res.status === "failed", res);
+      ok("legacy: the error names it as a different transaction", /different transaction/i.test(res.error || ""), res.error);
+      ok("legacy: sendTransaction was NEVER called (caught before any submission)", sendCalls === 0, sendCalls);
+    }
+
+    // --- v0: the fake wallet rebuilds `tx.message` with a different instruction and assigns it
+    // onto the SAME VersionedTransaction object ("signed in place"). ---------------------------
+    {
+      sendCalls = 0;
+      const payer = web3.Keypair.generate();
+      const honestDest = web3.Keypair.generate().publicKey;
+      const substitutedDest = web3.Keypair.generate().publicKey;
+      const buildV0 = (w3, blockhash, live) => {
+        const msg = new w3.TransactionMessage({
+          payerKey: new w3.PublicKey(live), recentBlockhash: blockhash,
+          instructions: [w3.SystemProgram.transfer({ fromPubkey: new w3.PublicKey(live), toPubkey: honestDest, lamports: 1000 })],
+        }).compileToV0Message();
+        return new w3.VersionedTransaction(msg);
+      };
+      const mutatingProviderV0 = {
+        publicKey: { toString: () => payer.publicKey.toBase58() },
+        signTransaction: async (tx) => {
+          const newMsg = new web3.TransactionMessage({
+            payerKey: payer.publicKey, recentBlockhash: tx.message.recentBlockhash,
+            instructions: [web3.SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: substitutedDest, lamports: 999999 })],
+          }).compileToV0Message();
+          tx.message = newMsg;   // mutate the SAME VersionedTransaction object in place
+          return tx;
+        },
+      };
+      const res = await seam.signSendConfirm({ provider: mutatingProviderV0, owner: payer.publicKey.toBase58(), build: buildV0 });
+      ok("v0: an in-place mutation of tx.message is caught — status 'failed'", res.status === "failed", res);
+      ok("v0: the error names it as a different transaction", /different transaction/i.test(res.error || ""), res.error);
+      ok("v0: sendTransaction was NEVER called (caught before any submission)", sendCalls === 0, sendCalls);
+    }
+
+    // --- sanity: an HONEST wallet (no mutation) still passes for both, so the fix isn't
+    // over-broad. setTimeout collapsed to instant so the confirm poll doesn't add real delay. ---
+    {
+      const realSetTimeout = global.setTimeout;
+      global.setTimeout = (fn) => fn();
+      try {
+        global.window.CluckUtil = {
+          rpc: async (method) => {
+            if (method === "getLatestBlockhash") return { value: { blockhash: web3.Keypair.generate().publicKey.toBase58() } };
+            if (method === "sendTransaction") return "HONEST_SIG_1111111111111111111111111111111111111111111111111111111111111";
+            if (method === "getSignatureStatuses") return { value: [{ confirmationStatus: "confirmed" }] };
+            throw new Error("unexpected rpc call: " + method);
+          },
+        };
+        const payer = web3.Keypair.generate();
+        const dest = web3.Keypair.generate().publicKey;
+        const honestProvider = {
+          publicKey: { toString: () => payer.publicKey.toBase58() },
+          signTransaction: async (tx) => { tx.partialSign ? tx.partialSign(payer) : tx.sign([payer]); return tx; },
+        };
+        const buildLegacy = (w3, blockhash, live) => {
+          const t = new w3.Transaction({ feePayer: new w3.PublicKey(live), recentBlockhash: blockhash });
+          t.add(w3.SystemProgram.transfer({ fromPubkey: new w3.PublicKey(live), toPubkey: dest, lamports: 1000 }));
+          return t;
+        };
+        const resLegacy = await seam.signSendConfirm({ provider: honestProvider, owner: payer.publicKey.toBase58(), build: buildLegacy });
+        ok("sanity: an HONEST legacy wallet (no mutation) still sends successfully — the fix isn't over-broad", resLegacy.status === "sent", resLegacy);
+
+        const buildV0 = (w3, blockhash, live) => {
+          const msg = new w3.TransactionMessage({
+            payerKey: new w3.PublicKey(live), recentBlockhash: blockhash,
+            instructions: [w3.SystemProgram.transfer({ fromPubkey: new w3.PublicKey(live), toPubkey: dest, lamports: 1000 })],
+          }).compileToV0Message();
+          return new w3.VersionedTransaction(msg);
+        };
+        const resV0 = await seam.signSendConfirm({ provider: honestProvider, owner: payer.publicKey.toBase58(), build: buildV0 });
+        ok("sanity: an HONEST v0 wallet (no mutation) still sends successfully — the fix isn't over-broad", resV0.status === "sent", resV0);
+      } finally { global.setTimeout = realSetTimeout; }
+    }
   }
 
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);
