@@ -118,12 +118,10 @@ and one real swap response (with a throwaway public key) as fixtures under
 `scripts/fixtures/seeker-swap/`. The test drives the routes with `JUP_SWAP_BASE` pointed at a
 local stub that serves those fixtures — never a live call in CI.
 
-### Platform fee — OWNER DECISION, default OFF
-Jupiter supports a referral fee (`platformFeeBps` on the quote, `feeAccount` on the swap). It is a
-revenue line for CLKN Productions but it is the owner's parameter: which bps, and whether at all.
-Env: `SEEKER_SWAP_FEE_BPS` (default 0 = off) and `SEEKER_SWAP_FEE_ACCOUNT` (the referral token
-account). With bps 0 the swap call carries no fee fields. The config endpoint publishes
-`platformFeeBps` so the confirm sheet shows it when it is non-zero — never a hidden fee.
+### Platform fee — NONE (owner, 2026-09-24: "I do not want to collect any platform fee")
+No `platformFeeBps` on the quote call, no `feeAccount` on the swap call, no fee env vars. The
+config endpoint publishes `platformFeeBps: 0` as a constant so the pane's contract never has to
+change if this is revisited.
 
 ## App: the Swap pane (`src/seeker/tools/Swap.jsx`)
 
@@ -231,7 +229,9 @@ Beyond the swap (which defaults to SOL → SKR), in order of on-chain substance:
 
 ## Owner decisions this design leaves to him
 
-- Platform fee on swaps: bps and whether at all (default off).
-- The SKR price of the 7-day pass (item 1 above).
+- ✅ Platform fee on swaps: DECIDED — none (owner, 2026-09-24: "I do not want to collect any
+  platform fee").
+- ✅ The SKR price of the 7-day pass (item 1 above): DECIDED — "a dollar in SKR would be plenty
+  for 7 day pass" (owner, 2026-09-24).
 - Device test before promote: connect, quote SOL → SKR, sign, see the balance change, then the
   same for a decline and for an unconfirmed result (airplane mode after signing).
