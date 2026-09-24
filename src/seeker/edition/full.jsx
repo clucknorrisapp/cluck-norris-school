@@ -31,6 +31,7 @@ import Holders from "../tools/Holders.jsx";
 import Trace from "../tools/Trace.jsx";
 import Airdropper from "../tools/Airdropper.jsx";
 import Hatchery from "../tools/Hatchery.jsx";
+import ShieldIcon from "../icons/ShieldIcon.jsx";
 import "./full.css";
 
 export const EDITION_ID = "full";
@@ -170,7 +171,7 @@ export const TABS = [
   { to: "/tools", label: "Toolkit", icon: "🧰" },
   { to: "/rent", label: "Rent", icon: "💰" },
   { to: "/ask", label: "Ask", icon: "🐔" },
-  { to: "/checkup", label: "Checkup", icon: "🛡" },
+  { to: "/checkup", label: "Checkup", icon: <ShieldIcon /> },
 ];
 
 export function EditionRoutes({ wallet }) {

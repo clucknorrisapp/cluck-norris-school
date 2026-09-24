@@ -22,6 +22,7 @@ import { SchoolHome, SchoolCourse, SchoolLesson } from "../school/School.jsx";
 import Certificate from "../school/Certificate.jsx";
 import ListingCheckup from "../tools/ListingCheckup.jsx";
 import DailyBrief from "../tools/DailyBrief.jsx";
+import ShieldIcon from "../icons/ShieldIcon.jsx";
 import "./edu.css";
 
 export const EDITION_ID = "edu";
@@ -76,7 +77,7 @@ export const TABS = [
   { to: "/school", label: "School", icon: "🎓" },
   { to: "/tools/alpha", label: "Daily", icon: "📅" },
   { to: "/ask", label: "Ask", icon: "🐔" },
-  { to: "/checkup", label: "Checkup", icon: "🛡" },
+  { to: "/checkup", label: "Checkup", icon: <ShieldIcon /> },
   { to: "/tools/listing", label: "Listing", icon: "📋" },
 ];
 

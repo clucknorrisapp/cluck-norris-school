@@ -44,6 +44,7 @@
 import React from "react";
 import { t, tf, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
+import ShieldIcon from "./icons/ShieldIcon.jsx";
 
 const WEBSITE_CHECKUP_URL = "https://clucknorris.app/wallet-checkup";
 
@@ -212,7 +213,7 @@ export default function WalletCheckupPane({ address, gate }) {
     // its build refuses the string. The pane itself never knows which; it just renders `gate`.
     return (
       <section className="seeker-pane">
-        <div className="seeker-paneicon" aria-hidden="true">🛡</div>
+        <div className="seeker-paneicon"><ShieldIcon /></div>
         <h1>{t("Wallet Checkup")}</h1>
         {gate}
       </section>
@@ -222,7 +223,7 @@ export default function WalletCheckupPane({ address, gate }) {
   if (state.phase === "loading" || state.phase === "idle") {
     return (
       <section className="seeker-pane">
-        <div className="seeker-paneicon" aria-hidden="true">🛡</div>
+        <div className="seeker-paneicon"><ShieldIcon /></div>
         <h1>{t("Wallet Checkup")}</h1>
         <p>{t("Scanning your wallet…")}</p>
       </section>
@@ -240,7 +241,7 @@ export default function WalletCheckupPane({ address, gate }) {
         : t("Could not read the chain right now. Try again shortly.");
     return (
       <section className="seeker-pane">
-        <div className="seeker-paneicon" aria-hidden="true">🛡</div>
+        <div className="seeker-paneicon"><ShieldIcon /></div>
         <h1>{t("Wallet Checkup")}</h1>
         <p className="seeker-checkup-errtext" role="alert">{text}</p>
         <button type="button" className="seeker-checkup-rescanbtn" onClick={() => scan(address)}>
@@ -262,7 +263,7 @@ export default function WalletCheckupPane({ address, gate }) {
 
   return (
     <div className="seeker-checkup">
-      <div className="seeker-checkup-topicon" aria-hidden="true">🛡</div>
+      <div className="seeker-checkup-topicon"><ShieldIcon /></div>
       <h1 className="seeker-checkup-title">{t("Wallet Checkup")}</h1>
 
       <div className="seeker-checkup-summary">
@@ -296,7 +297,7 @@ export default function WalletCheckupPane({ address, gate }) {
 
       {clean ? (
         <div className="seeker-checkup-clean">
-          <div className="seeker-checkup-clean-icon" aria-hidden="true">🛡</div>
+          <div className="seeker-checkup-clean-icon"><ShieldIcon /></div>
           <div className="seeker-checkup-clean-title">{t("No issues found in the checks completed")}</div>
           <p>
             {t("No open approvals and no honeypot or authority risk in what was checked.")}

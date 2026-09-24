@@ -5,6 +5,13 @@
 // parallel: a builder adds its row here and wires its route, and the grid, the search and the
 // tier badges all follow without anyone touching a shared component.
 //
+// `icon` is usually a plain emoji string, rendered as-is by the grid. Checkup's icon is a real
+// React element instead (`React.createElement`, not JSX — this file stays a plain .js module) so
+// it renders the drawn ShieldIcon rather than the bare text-presentation "🛡" glyph, which the
+// owner saw render as a cheap monochrome pixel outline on a real Seeker device.
+import React from "react";
+import ShieldIcon from "../icons/ShieldIcon.jsx";
+//
 // `tier` is the EXISTING access model (AGENTS.md), not a new one:
 //   "free"   — no wallet, no pass. Read-only or explanatory.
 //   "wallet" — free, but needs a connected wallet to act on your own assets.
@@ -28,7 +35,7 @@ export const TOOLS = [
     blurb: "Dead token accounts are holding your SOL. See exactly what you can close, and get it back." },
   { id: "ask",        route: "/ask",              title: "Ask Cluck",       icon: "🐔", tier: "free",   ready: true,
     blurb: "Ask anything about crypto in plain words. Free, no wallet, no signup." },
-  { id: "checkup",    route: "/checkup",          title: "Wallet Checkup",  icon: "🛡", tier: "free",   ready: true,
+  { id: "checkup",    route: "/checkup",          title: "Wallet Checkup",  icon: React.createElement(ShieldIcon), tier: "free",   ready: true,
     blurb: "Approvals, freeze and mint authority, and what each one actually lets someone do." },
   { id: "firepit",    route: "/tools/firepit",    title: "Firepit",         icon: "🔥", tier: "wallet", ready: true, flagship: true ,
     blurb: "Burn worthless junk and reclaim the SOL rent underneath it. Every token is priced first, and anything with value — or that we could not price — is flagged before it can burn." },
