@@ -2914,5 +2914,10 @@
   "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "La transacción se confirmó pero falló en la cadena — no se intercambió nada; se cobró una tarifa de red.",
   "This did not land before its expiry block height passed — it's safe to try again.": "Esto no se confirmó antes de que pasara su altura de bloque de vencimiento — es seguro intentarlo de nuevo.",
   "Unconfirmed": "Sin confirmar",
-  "That quote's numbers had aged — here are the current ones. Review before continuing.": "Los números de esa cotización habían caducado — aquí están los actuales. Revisa antes de continuar."
+  "That quote's numbers had aged — here are the current ones. Review before continuing.": "Los números de esa cotización habían caducado — aquí están los actuales. Revisa antes de continuar.",
+  "Could not reach the network to check this transaction before signing. Try again.": "No se pudo conectar a la red para verificar esta transacción antes de firmar. Inténtalo de nuevo.",
+  "Could not read your SOL balance to check this transaction before signing. Try again.": "No se pudo leer tu saldo de SOL para verificar esta transacción antes de firmar. Inténtalo de nuevo.",
+  "Could not simulate this transaction before signing. Try again.": "No se pudo simular esta transacción antes de firmar. Inténtalo de nuevo.",
+  "Stop watching": "Dejar de seguir",
+  "This is taking longer than usual to confirm. Your signature above is the real record — check it on Solscan, or stop watching here.": "Esto está tardando más de lo habitual en confirmarse. Tu firma de arriba es el registro real: revísala en Solscan, o deja de seguirla aquí."
 }

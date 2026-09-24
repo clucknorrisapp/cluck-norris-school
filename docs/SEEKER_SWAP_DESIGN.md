@@ -138,8 +138,9 @@ Layout, top to bottom:
    `getTokenAccountsByOwner` for BOTH token programs, per AGENTS.md — never a product scanner).
 2. Flip button.
 3. **Receive** row: mint picker, the quoted `outAmount` rendered in the mint's decimals.
-4. Quote card, only when a quote exists: rate (1 IN = x OUT), **minimum received**
-   (`otherAmountThreshold`), **price impact** (`priceImpactPct`), slippage chip (0.5% / 1% / 3%,
+4. Quote card, only when a quote exists: rate (1 IN = x OUT), **minimum received** (round 31b:
+   COMPUTED from `outAmount`/`slippageBps`, never upstream's own `otherAmountThreshold` field —
+   see below), **price impact** (`priceImpactPct`), slippage chip (0.5% / 1% / 3%,
    default 1%), route hop count, and the platform fee line when non-zero. Refreshes every 15 s
    while the pane is visible and the amount is non-empty; a stale quote (older than 60 s, or the
    server's 409) is re-fetched before the confirm sheet opens, and the sheet shows the FRESH
@@ -165,6 +166,55 @@ the `userPublicKey` sent is the LIVE address the seam re-reads (build receives i
 request the transaction with the same address it will sign with — request it inside the confirm
 handler after `assertSameAccount`, not at quote time).
 
+### Before anything is signed: two independent gates, added across fix rounds after this doc first shipped
+
+The `build:` shown above is the shape at launch. By round 31b it does two more things BEFORE the
+transaction is ever handed to the wallet — both documented here because this file drifted out of
+sync with the code across rounds 29-31 and shouldn't again.
+
+1. **Structural verification** (`src/seeker/swap-verify.js`, `verifySwapTransaction`). Pure,
+   framework-free: decodes every top-level instruction of the deserialized transaction by its OWN
+   layout (never just checks the program id) and refuses unless it is exactly one of the shapes a
+   real Jupiter swap emits — SOL-wrap, ATA creates, sync/close, the ONE Jupiter route instruction
+   — with every account it names bound to the live connected wallet wherever that account is
+   STATIC. It runs TWICE: once in `buildConfirmData` (sheet-open time, so a transaction that would
+   be refused is never even shown to the person) and once inside `build()` (sign time, against the
+   freshest possible re-read of the connected address). Both passes use the SAME priority-fee
+   ceiling: the hard client-side constant `MAX_PRIORITY_FEE_LAMPORTS` (1,000,000 lamports) bounds
+   what `buildConfirmData` will ever accept and display; `build()`'s own ceiling is that SAME
+   displayed, computed `feeLamports` — never Jupiter's own `prioritizationFeeLamports` field
+   (round 31b found it unenforced; round 32 found it could even DISAGREE with the verifier's own
+   correctly ceiling-rounded number on this pane's real recorded fixture). "Minimum received" is
+   likewise always COMPUTED from `outAmount`/`slippageBps` (`computeMinReceived`, floor division —
+   the same worst case a route instruction's own on-chain check enforces), never upstream's own
+   `otherAmountThreshold` field, which nothing ever tied to those two numbers.
+2. **The pre-sign simulation gate** (`src/seeker/swap-simulate.js`, `verifySimulationResult`,
+   round 31b item 4). Structural verification proves the TOP-LEVEL instructions and every STATIC
+   account are correct — but Jupiter's actual route-hop accounts (the AMM pools, intermediate
+   mints, per-hop program authorities) live almost entirely in an address lookup table, and an ALT
+   can resolve to ANY address at execution time. Decoding cannot see what those hop accounts
+   actually do; only running the transaction can. So, after structural verification passes and
+   BEFORE the wallet is ever called: the pane fetches its own current SOL balance and full
+   token-account inventory (both token programs, fresh, never cached), calls
+   `simulateTransaction` via `/api/helius-rpc` (`sigVerify:false`, `replaceRecentBlockhash:true`,
+   `accounts:{encoding:"jsonParsed", addresses:[...]}`), and checks the SIMULATED balance deltas:
+   only the input mint may fall, by at most `inAmount`; the output mint must rise by at least the
+   computed minimum; no other mint's balance may change at all; SOL may fall by at most
+   `inAmount` (if SOL is the input) + the verified fee + rent for however many NEW token accounts
+   the transaction's own (already-counted) instructions actually create. **An unreachable RPC — the
+   balance fetch or the simulate call — is a REFUSAL, never a skip.**
+   ⚠️ **TRUST BOUNDARY, STATED HONESTLY:** this gate proves the SIMULATED outcome matches what was
+   shown. It does not, and cannot, prove the REAL execution will match the simulation — pool state
+   can move between simulating and landing (exactly the risk `slippageBps` and the route
+   instruction's own on-chain `quoted_out_amount`/`slippage_bps` bytes already bound). What this
+   gate adds is specifically the thing instruction decoding alone cannot see: the hop accounts an
+   ALT can point anywhere. It is defense in depth on top of structural verification, not a
+   replacement for it.
+
+Signing then proceeds exactly as the block above shows — `build()` is what performs the SECOND
+structural-verification pass; the simulation gate runs once, in `onConfirmed`, immediately before
+`signSendConfirm` is called at all.
+
 States (every pane has them — `docs/SEEKER_DEMO_INVENTORY.md`): not connected → `NeedsWallet`;
 offline → `Unavailable kind="offline"`; quote unavailable → `Unavailable` with retry; refused
 (400) → `Refused` with the server's field. Nothing renders a price chart, a "buy" nudge, or any
@@ -189,7 +239,16 @@ preselect. That is the whole tie-in to the tools pass — the school never shows
 - Tests, all in CI via the existing `node-check` job: `scripts/seeker-sign-versioned-test.cjs`
   (the seam, above), `scripts/seeker-swap-test.cjs` (the three routes against the fixture stub:
   allowlist, amount validation, quoteId expiry, the stored-quote echo, fee fields absent at bps
-  0, upstream failure → 502 never a fake quote), and the existing `seeker-cors-test.cjs`,
+  0, upstream failure → 502 never a fake quote, and — round 31b — the server-side
+  `otherAmountThreshold`/`prioritizationFeeLamports`/`lastValidBlockHeight` sanity checks),
+  `scripts/seeker-swap-verify-test.cjs` (the structural verifier, `swap-verify.js`, against the
+  ONE real recorded fixture and every refusal path, including the round 31b/32 additions:
+  `route`-kind's slot 4, ALT-resolved ATA creates, and the integration test that runs the
+  fixture through the pane's own two-step fee path), `scripts/seeker-swap-simulate-test.cjs`
+  (the pre-sign simulation gate, `swap-simulate.js` — exact expected, extra mint moved, input/SOL
+  over-drawn, a simulation error, and every "missing account in response" shape, all refusing
+  except the honest case), `scripts/seeker-pending-swap-test.cjs` (`checkPendingSwap`, including
+  round 31b's blockhash-gated expiry), and the existing `seeker-cors-test.cjs`,
   `seeker-demo-inventory-test.cjs`, `seeker-build-test.cjs`, `store-edition-test.cjs` must stay
   green.
 

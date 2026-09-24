@@ -160,6 +160,56 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 32 — 2026-09-24: #420, Codex's finding on round 31b's own fix — fixed
+
+`claude/seeker-swap` (PR #420). Found while round 31b's fee-ceiling fix (below) was still in
+progress: fixed alongside it, in the same commit, per the coordinator's explicit instruction not
+to treat it separately.
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P2** — round 31b's own fix made `swap-verify.js` compute the transaction's real priority fee with CEILING division (441,362 lamports on the recorded fixture). But `Swap.jsx` still passed Jupiter's OWN reported `prioritizationFeeLamports` (441,361, truncated) as the ceiling to check that computed fee against — so the pane would refuse its own real, correct fixture with "priority fee is higher than what you were shown," a false refusal on an honest swap | The fee is now computed FROM THE TRANSACTION ONCE, at sheet-open time (`buildConfirmData`, ceiling = the hard `MAX_PRIORITY_FEE_LAMPORTS` constant — never upstream's number), and that SAME computed, displayed figure (`confirmData.feeLamports`) is what `build()` passes as the ceiling at sign time. Upstream's `prioritizationFeeLamports` is never read by the client at all anymore (server-side it's still sanity-checked — round 31b item 2) | `scripts/seeker-swap-verify-test.cjs` §8: a two-step integration test running the pane's OWN path (response → computed/displayed fee → verifier) against the real recorded fixture, both steps `ok:true`; and Codex's bug reproduced directly — passing upstream's raw truncated `prioritizationFeeLamports` as the ceiling DOES refuse the real fixture, proving the fix matters and pinning the failure mode so it can't silently return |
+
+Where to look hardest: whether any OTHER call site still reads `prioritizationFeeLamports` off a
+`/tx` response expecting it to be authoritative (the server-side sanity check in `/api/seeker/swap/tx`
+is deliberately a ceiling-only bound, never a value the client trusts for display or verification).
+
+## Round 31b — 2026-09-24: #420, internal second lens (frontier adversarial review) — fixed
+
+`claude/seeker-swap` (PR #420). A second, harder adversarial pass past Codex's round 31, looking
+specifically for fail-open cases round 31's own fixes might have left behind. Two reproduced P0/P1s
+plus four more; Round 32 above is Codex's own finding on top of item 2's fix, folded into the same
+commit per the coordinator's instruction.
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P0** — the non-shared `route` kind's account slot 4 (`destination_token_account`, OPTIONAL) was never checked at all — round 30 bound and checked slot 3 (`user_destination_token_account`) but never touched slot 4. A compromised response could leave slot 3 pointing at the user's real ATA (passing every existing check) while routing the actual output through slot 4 to an attacker's account | Slot 4 is now REQUIRED to equal the Jupiter program id (Anchor's own "absent" sentinel, the same convention already used for `platform_fee_account`/`token2022Program`) or the instruction refuses — never "skip when unverifiable" like the mint slots; an ALT-resolved slot 4 refuses too | `scripts/seeker-swap-verify-test.cjs` §6: a well-formed `route`-kind transaction with slot 4 = the sentinel passes; the reviewer's exact exploit (slot 3 untouched, slot 4 = a stranger) refuses |
+| 2 | **P1** — the priority-fee ceiling check was skipped ENTIRELY whenever the caller passed no `maxPriorityFeeLamports` — exactly what happened whenever upstream's `prioritizationFeeLamports` was absent, which is exactly Codex's round-30/31 exploit path (drop the limit instruction, set an enormous price, and if the caller also forgot a ceiling, NOTHING was checked) | `feeLamports` (the actual computed, ceiling-divided fee) is now ALWAYS computed and returned on every `ok:true` result, whether or not a ceiling was passed — a caller can always display the true fee. `Swap.jsx` now passes the hard `MAX_PRIORITY_FEE_LAMPORTS` (1,000,000 lamports) constant on every call, so the one call site that matters can never omit it (see Round 32 above for the fee-DISPLAY half of this fix) | `scripts/seeker-swap-verify-test.cjs` §8 (with Round 32); the return-shape change is exercised throughout §1 and §5 |
+| 3 | **P1** — nobody ever tied `otherAmountThreshold` (the confirm sheet's displayed minimum) to `outAmount`/`slippageBps` (the two numbers the client verifier actually checks the route instruction's own bytes against) — upstream could report any minimum it wanted and the sheet would show it uncritically | Server (`/api/seeker/swap/quote`) refuses a quote unless `otherAmountThreshold` falls within the FLOOR/CEILING window of `outAmount × (10000 − slippageBps) / 10000` — checked against the real recorded fixture, which needed the window (not a plain floor: the fixture's own value is the window's ceiling, one unit above the floor, because Jupiter's real threshold does not reduce to a single global-floor formula on a multi-hop route). The client now displays a COMPUTED minimum (floor of the same formula — the true on-chain worst case) rather than ever reading upstream's field | `scripts/seeker-swap-test.cjs` §4c: the real fixture's own threshold (the window's ceiling) passes; a materially forged (far too small) threshold refuses |
+| 4 | **P1** — structural instruction decoding cannot prove "moves nothing but in/out, at most inAmount": Jupiter's real route-hop accounts live almost entirely in an address lookup table, which can resolve to ANY address, and nothing about decoding the instruction's fixed slots sees what those hop accounts do | New PRE-SIGN SIMULATION GATE (`src/seeker/swap-simulate.js`, wired into `Swap.jsx` before `signSendConfirm`): after structural verification passes, fetches the wallet's own fresh SOL balance + full token-account inventory (both programs), calls `simulateTransaction` via `/api/helius-rpc`, and checks the simulated deltas — only the input mint fell (≤ inAmount), the output mint rose (≥ the computed minimum), no other mint moved, SOL fell by at most inAmount+fee+allowed-ATA-rent. An unreachable RPC refuses, never skips. `docs/SEEKER_SWAP_DESIGN.md` states the trust boundary honestly: this proves the SIMULATED outcome matches what was shown, not that real execution will match simulation | new `scripts/seeker-swap-simulate-test.cjs`: exact expected passes; extra mint moved, input/SOL over-drawn, a simulation error, and every "missing account in response" shape (short array, non-array, null SOL entry, unparseable token entry) all refuse — a legitimately-closed account (explicit `null`) reads as a real zero, never as malformed |
+| 5 | **P2** — ATA `Create`/`CreateIdempotent` checked the target ATA only "when static" and SKIPPED (never refused) an ALT-resolved one — the one case in the whole file where a unique-per-user account (which is never legitimately ALT-resolved, per the file's own `pubkeyAt` note) got the SAME leniency as the genuinely-shared mint slots | An ALT-resolved ATA index now refuses outright — closing both the right-account check and the one-per-ATA duplicate count an unresolved index used to slip past uncounted | `scripts/seeker-swap-verify-test.cjs` §7: 5 extra ALT-resolved ATA creates → refused |
+| 6 | **P2** — `checkPendingSwap` declared a pending swap `expired` on block-height expiry alone; height passing only proves nothing NEW can execute against that blockhash, never that THIS signature didn't land. Server also passed `lastValidBlockHeight` through unchecked | Server now requires a positive integer `lastValidBlockHeight` (502 otherwise). Client: `expired` now requires BOTH a well-formed null status AND a confirmed-dead `recentBlockhash` (`isBlockhashValid`, checked against the blockhash the PENDING TRANSACTION ITSELF carried, persisted on the record). No `recentBlockhash` at all (an older record) means the second half can never be proven, so such a record now stays `pending` forever rather than falling back to height-only expiry — `PendingCard` grows its own manual "stop watching" escape hatch after 10 minutes so such a record isn't stuck locking the form forever, the signature staying visible throughout | `scripts/seeker-pending-swap-test.cjs` §2/2b/2c/2d: a dead blockhash → expired; a still-valid one → pending; no blockhash at all → pending, `isBlockhashValid` never even called; an RPC error on that check → pending |
+| 7 | **P3** — the round 31 CU-default formula (`min(200000 × nonComputeBudgetInstructions, 1400000)`) was reviewed against solana.com/docs/core/fees/fee-structure and confirmed correct | No change | — |
+
+Where to look hardest:
+
+- **The simulation gate's rent estimate.** `ATA_RENT_LAMPORTS` (2,039,280) is a point-in-time
+  read of `getMinimumBalanceForRentExemption(165)`, not a live chain call on every swap — if rent
+  parameters ever change, or a Token-2022 account with extensions needs more than the classic
+  165-byte size, the gate could refuse a legitimate create. Widening the constant is safe; the
+  check itself should never be dropped for convenience.
+- **Whether `route`-kind transactions are ever actually produced by this pane.** The recorded
+  fixture is `shared_accounts_route`; the `route`-kind fix (item 1) is proven against a hand-built
+  variant, never a real recorded one. If Jupiter never actually returns bare `route` for this
+  pane's mint set, the fix is still correct defense in depth, just unexercised by a real fixture.
+- **The floor/ceiling window on `otherAmountThreshold`** (item 3) is derived from exactly ONE real
+  multi-hop quote. A route with more hops, or a different AMM mix, could in principle drift by
+  more than one unit from a naive global formula — if a genuine quote ever gets refused by this
+  window, that's the first place to look, not a sign the window should be removed.
+- **The 10-minute manual escape hatch** (item 6) — does dismissing a still-genuinely-pending swap
+  ever get presented as if something were undone? It should not: the copy is deliberately "stop
+  watching," never "cancelled" or "nothing happened."
+
 ## Round 31 — 2026-09-24: #420, Codex's two P1s and two P2s on round 30's fixes — fixed
 
 `claude/seeker-swap` (PR #420, the Seeker in-app Jupiter swap). Codex's own re-review of round

@@ -2914,5 +2914,10 @@
   "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "Giao dịch đã được ghi nhận nhưng thất bại trên chuỗi — không có gì được hoán đổi; một khoản phí mạng đã bị tính.",
   "This did not land before its expiry block height passed — it's safe to try again.": "Giao dịch này không được ghi nhận trước khi độ cao khối hết hạn trôi qua — bạn có thể thử lại một cách an toàn.",
   "Unconfirmed": "Chưa xác nhận",
-  "That quote's numbers had aged — here are the current ones. Review before continuing.": "Các con số của báo giá đó đã cũ — đây là các con số hiện tại. Hãy xem lại trước khi tiếp tục."
+  "That quote's numbers had aged — here are the current ones. Review before continuing.": "Các con số của báo giá đó đã cũ — đây là các con số hiện tại. Hãy xem lại trước khi tiếp tục.",
+  "Could not reach the network to check this transaction before signing. Try again.": "Không thể kết nối mạng để kiểm tra giao dịch này trước khi ký. Vui lòng thử lại.",
+  "Could not read your SOL balance to check this transaction before signing. Try again.": "Không thể đọc số dư SOL của bạn để kiểm tra giao dịch này trước khi ký. Vui lòng thử lại.",
+  "Could not simulate this transaction before signing. Try again.": "Không thể mô phỏng giao dịch này trước khi ký. Vui lòng thử lại.",
+  "Stop watching": "Ngừng theo dõi",
+  "This is taking longer than usual to confirm. Your signature above is the real record — check it on Solscan, or stop watching here.": "Việc xác nhận đang mất nhiều thời gian hơn bình thường. Chữ ký của bạn ở trên là bản ghi thực — hãy kiểm tra trên Solscan, hoặc ngừng theo dõi tại đây."
 }

@@ -62,10 +62,13 @@ import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
 import { NeedsWallet } from "../needswallet.jsx";
 import { signSendConfirm, assertSameAccount, rpcFn, checkPendingSwap } from "../sign.js";
-import { verifySwapTransaction } from "../swap-verify.js";
+import { verifySwapTransaction, MAX_PRIORITY_FEE_LAMPORTS } from "../swap-verify.js";
+import { verifySimulationResult } from "../swap-simulate.js";
 import "./tools.css";
 
 const NATIVE_SOL_MINT = "So11111111111111111111111111111111111111112";
+const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 const QUOTE_REFRESH_MS = 15000;
 const QUOTE_STALE_MS = 60000;
 const SOL_RESERVE_LAMPORTS = "10000000"; // 0.01 SOL kept back for fees when paying SOL
@@ -95,6 +98,84 @@ function base64ToBytes(b64) {
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
+}
+
+// ⚠️ Frontier review round 31b, item 3 — the "minimum received" figure this pane shows is
+// COMPUTED from `outAmount`/`slippageBps` (the same two numbers the verifier already checks the
+// route instruction's own bytes against), never trusted from upstream's `otherAmountThreshold`
+// field — nothing ever tied that field to the route bytes a validator actually enforces. Floor
+// division, BigInt throughout, matching ExactIn's own rounding rule and the identical formula
+// server.js now enforces server-side on the stored quote.
+function computeMinReceived(outAmount, slippageBps) {
+  try {
+    const out = BigInt(String(outAmount));
+    const slip = BigInt(String(slippageBps));
+    if (slip < 0n || slip > 10000n) return null;
+    return ((out * (10000n - slip)) / 10000n).toString();
+  } catch (_) { return null; }
+}
+
+// ⚠️ Frontier review round 31b item 4 — the PRE-SIGN SIMULATION GATE. Runs AFTER structural
+// verification has already passed (buildConfirmData ran it once already; this is called again
+// right before the wallet is ever asked to sign) and refuses on any unexpected simulated balance
+// change. This is the one thing decoding the instructions alone cannot prove — Jupiter's actual
+// route-hop accounts live almost entirely in an address lookup table, which can resolve to ANY
+// address (see docs/SEEKER_SWAP_DESIGN.md and swap-simulate.js's own trust-boundary note). An
+// unreachable RPC — the balance fetch OR the simulate call — is a REFUSAL, never a skip.
+async function runPreSignSimulation({ rpc, live, swapTransactionB64, quote, feeLamports, ataCreateCount, inputIsSol }) {
+  let solRes, legacyAccts, token22Accts;
+  try {
+    [solRes, legacyAccts, token22Accts] = await Promise.all([
+      rpc("getBalance", [live, { commitment: "confirmed" }]),
+      rpc("getTokenAccountsByOwner", [live, { programId: TOKEN_PROGRAM_ID }, { encoding: "jsonParsed" }]),
+      rpc("getTokenAccountsByOwner", [live, { programId: TOKEN_2022_PROGRAM_ID }, { encoding: "jsonParsed" }]),
+    ]);
+  } catch (_) {
+    return { ok: false, reason: t("Could not reach the network to check this transaction before signing. Try again.") };
+  }
+  const solBefore = solRes && typeof solRes.value === "number" ? solRes.value : null;
+  if (solBefore == null) {
+    return { ok: false, reason: t("Could not read your SOL balance to check this transaction before signing. Try again.") };
+  }
+
+  // The FULL current inventory, both token programs — never filtered to just the two mints this
+  // swap expects, so the simulation gate can catch a balance change on a mint nobody asked about.
+  const tokenList = [
+    ...((legacyAccts && legacyAccts.value) || []),
+    ...((token22Accts && token22Accts.value) || []),
+  ];
+  const addressLabels = [{ kind: "sol", before: String(solBefore) }];
+  const addresses = [live];
+  for (const entry of tokenList) {
+    const info = entry && entry.account && entry.account.data && entry.account.data.parsed && entry.account.data.parsed.info;
+    const mint = info && info.mint;
+    const amount = info && info.tokenAmount && info.tokenAmount.amount;
+    // An unreadable inventory entry is left OUT of the checked set rather than guessed — the
+    // simulation's own missing/malformed-response handling (swap-simulate.js) still refuses on
+    // anything it can't read for the accounts that ARE included; this only affects an entry this
+    // client itself could not parse from its own read, which never happens for a real
+    // getTokenAccountsByOwner(jsonParsed) response.
+    if (!mint || amount == null || !entry.pubkey) continue;
+    addressLabels.push({ kind: "token", mint, before: String(amount) });
+    addresses.push(entry.pubkey);
+  }
+
+  let simRes;
+  try {
+    simRes = await rpc("simulateTransaction", [swapTransactionB64, {
+      encoding: "base64", sigVerify: false, replaceRecentBlockhash: true,
+      accounts: { encoding: "jsonParsed", addresses },
+    }]);
+  } catch (_) {
+    return { ok: false, reason: t("Could not simulate this transaction before signing. Try again.") };
+  }
+
+  const minReceived = computeMinReceived(quote.outAmount, quote.slippageBps);
+  return verifySimulationResult({
+    simResult: simRes, addressLabels,
+    inputMint: quote.inputMint, outputMint: quote.outputMint, inAmount: quote.inAmount,
+    minReceived, feeLamports, inputIsSol, allowedNewAtaCount: ataCreateCount,
+  });
 }
 
 // BigInt-safe base-units -> plain decimal string (no thousands grouping, no rounding) — used for
@@ -211,14 +292,39 @@ function OutcomeCard({ o, onDismiss, onRetry }) {
   );
 }
 
+// ⚠️ Frontier review round 31b item 6 — how long a pending record has been sitting before the
+// manual escape hatch appears. checkPendingSwap can legitimately never resolve a record with no
+// `recentBlockhash` (older records, or a network that never confirms either check) — without this,
+// such a record would lock the form FOREVER with no way out, even though the signature itself
+// (still shown via Solscan below) is exactly what a person needs to check for themselves.
+const PENDING_MANUAL_ESCAPE_MS = 10 * 60 * 1000;
+
 // The "checking" card shown WHILE an unconfirmed signature is still being polled — the form stays
 // locked and there is no retry button here, only the signature and a live status line (P2-2).
-function PendingCard({ p }) {
+// Round 31b item 6: after PENDING_MANUAL_ESCAPE_MS, a "check on explorer / dismiss" path appears
+// — the signature stays visible throughout, dismissing is never presented as "nothing happened".
+function PendingCard({ p, onDismiss }) {
+  const [, forceTick] = React.useState(0);
+  React.useEffect(() => {
+    // Ticks just often enough to notice crossing the 10-minute mark — this card's own lifetime is
+    // short (an in-flight swap resolves in seconds to a couple of minutes almost always), so a
+    // coarse interval is plenty and costs nothing when nothing is pending.
+    const iv = setInterval(() => forceTick((n) => n + 1), 30000);
+    return () => clearInterval(iv);
+  }, []);
+  const elapsedMs = p.at ? Date.now() - p.at : 0;
+  const showEscape = elapsedMs >= PENDING_MANUAL_ESCAPE_MS;
   return (
     <div className="seeker-burn-outcome seeker-burn-outcome-unconfirmed" role="status">
       <p className="seeker-burn-outcome-title">⏳ {outcomeTitle("unconfirmed")}</p>
       <p>{t("Checking…")} {tf("Submitted {inAmt} {inSym} → {outSym}.", { inAmt: p.inAmt || "—", inSym: p.inSym || "", outSym: p.outSym || "" })}</p>
       {solscanTx(p.sig) ? <p><a className="seeker-listing-link" href={solscanTx(p.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a></p> : null}
+      {showEscape ? (
+        <div className="seeker-swap-pending-escape">
+          <p>{t("This is taking longer than usual to confirm. Your signature above is the real record — check it on Solscan, or stop watching here.")}</p>
+          <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onDismiss}>{t("Stop watching")}</button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -320,7 +426,7 @@ export default function SwapPane({ wallet }) {
       // checkPendingSwap lives in sign.js — the ONE signing seam — not here (P2-2's poll still
       // has to go through the seam's err-before-confirmationStatus rule; scripts/seeker-build-test.cjs
       // pins that no pane calls getSignatureStatuses directly).
-      const result = await checkPendingSwap(rpcFn(), { signature: pending.sig, lastValidBlockHeight: pending.lastValidBlockHeight });
+      const result = await checkPendingSwap(rpcFn(), { signature: pending.sig, lastValidBlockHeight: pending.lastValidBlockHeight, recentBlockhash: pending.recentBlockhash });
       if (result.status === "pending") return; // keep polling
       await resolvePending(result);
     }
@@ -497,6 +603,16 @@ export default function SwapPane({ wallet }) {
   // Throws { code:409 } when the quoteId aged out server-side, or a plain Error otherwise. The
   // LIVE address is re-read (assertSameAccount) right before the request goes out every time this
   // runs — at sheet-open time here, and again in onConfirmed if a refresh is needed there.
+  //
+  // ⚠️ Frontier review round 31b item 2 / Codex round 32 — the "Network cost" figure the sheet
+  // shows and the ceiling passed to the SIGN-TIME verifier must be the SAME number: the fee this
+  // transaction will actually pay, computed here from the transaction's own bytes with the real
+  // verifier — never Jupiter's own `prioritizationFeeLamports` field (round 31b found it
+  // unenforced and unbounded; round 32 found that using it as the ceiling rejects the pane's own
+  // real fixture, since the verifier's ceiling-rounded fee, 441,362, is one lamport above
+  // upstream's truncated 441,361). Hard-capped by `MAX_PRIORITY_FEE_LAMPORTS` regardless of what
+  // upstream reports: a transaction whose real fee exceeds that cap is refused right here, before
+  // the person ever sees a confirm sheet for it — never weakened to fit upstream's number.
   async function buildConfirmData(q) {
     const live = assertSameAccount(wallet.provider, wallet.address);
     const r = await fetch("/api/seeker/swap/tx", {
@@ -506,7 +622,19 @@ export default function SwapPane({ wallet }) {
     const body = await r.json().catch(() => null);
     if (r.status === 409) { const e = new Error("quote_expired"); e.code = 409; throw e; }
     if (!r.ok || !body || !body.ok) { const e = new Error((body && body.error) || "swap_unavailable"); e.code = r.status; throw e; }
-    return { data: q.data, fetchedAt: q.fetchedAt, tx: body, builtAt: Date.now(), builtFor: live };
+
+    const w3 = typeof window !== "undefined" ? window.solanaWeb3 : null;
+    if (!w3) { const e = new Error("Wallet layer did not load."); e.code = "verify_unavailable"; throw e; }
+    let deserialized;
+    try { deserialized = w3.VersionedTransaction.deserialize(base64ToBytes(body.swapTransaction)); }
+    catch (_) { const e = new Error("Could not read the transaction to sign."); e.code = "verify_refused"; throw e; }
+    const check = verifySwapTransaction({
+      tx: deserialized, liveAddress: live, quote: q.data.quote,
+      PublicKeyClass: w3.PublicKey, maxPriorityFeeLamports: MAX_PRIORITY_FEE_LAMPORTS,
+    });
+    if (!check.ok) { const e = new Error(check.reason); e.code = "verify_refused"; throw e; }
+
+    return { data: q.data, fetchedAt: q.fetchedAt, tx: body, builtAt: Date.now(), builtFor: live, feeLamports: check.feeLamports, ataCreateCount: check.ataCreateCount };
   }
 
   // ── open the confirm sheet with a FRESH quote (re-fetched if stale) AND the ONE /tx build that
@@ -599,7 +727,29 @@ export default function SwapPane({ wallet }) {
     // instruction Jupiter built, not against anything the server merely SAYS about it.
     const shownQuote = cd && cd.data && cd.data.quote;
     const inAmt = fmtAmt(body.inAmount, inMint.decimals);
-    const outAmt = fmtAmt(body.otherAmountThreshold, outMint.decimals);
+    // ⚠️ Frontier review round 31b item 3 — COMPUTED from outAmount/slippageBps, never upstream's
+    // own otherAmountThreshold field (see computeMinReceived's own note above).
+    const outAmt = fmtAmt(computeMinReceived(body.outAmount, body.slippageBps), outMint.decimals);
+
+    // ⚠️ Frontier review round 31b item 4 — the PRE-SIGN SIMULATION GATE. Runs after the
+    // structural verifier already passed once (buildConfirmData) and BEFORE the wallet is ever
+    // called — an unreachable RPC or any unexpected simulated balance change refuses right here,
+    // never reaching signSendConfirm/the wallet prompt.
+    const simCheck = await runPreSignSimulation({
+      rpc: rpcFn(), live, swapTransactionB64: swapTransaction, quote: shownQuote,
+      feeLamports: cd.feeLamports, ataCreateCount: cd.ataCreateCount,
+      inputIsSol: shownQuote && shownQuote.inputMint === NATIVE_SOL_MINT,
+    });
+    if (!simCheck.ok) {
+      setOutcome({ inSym, outSym, inAmt, outAmt, status: "failed", error: simCheck.reason });
+      setSwapping(false);
+      return;
+    }
+
+    // Round 31b item 6 — captured inside build() below (the deserialized transaction's OWN
+    // blockhash, never a freshly-fetched one) so the pending record can carry it for
+    // checkPendingSwap's isBlockhashValid check.
+    let builtRecentBlockhash = null;
     const res = await signSendConfirm({
       provider: wallet.provider,
       owner: wallet.address,
@@ -609,15 +759,19 @@ export default function SwapPane({ wallet }) {
       // even fresher than the `live` this function closed over above.
       build: (web3, _blockhash, freshLive) => {
         const deserialized = web3.VersionedTransaction.deserialize(base64ToBytes(swapTransaction));
+        builtRecentBlockhash = deserialized.message.recentBlockhash;
         // ⚠️ P2-1 / round 30: structurally verify BEFORE this is ever handed to the wallet to
         // sign, against the freshest possible re-read of the connected address — never a cached
-        // one — and against the SAME priority-fee ceiling this sheet displayed
-        // (body.prioritizationFeeLamports, round 30 fix 6). Throwing here is caught by
-        // signSendConfirm and reported as "failed" with this sentence; nothing is ever signed on
-        // a mismatch.
+        // one. ⚠️ Frontier review round 31b item 2 / Codex round 32: the priority-fee ceiling is
+        // `cd.feeLamports` — the SAME computed, ceiling-rounded fee `buildConfirmData` already
+        // verified (hard-capped by `MAX_PRIORITY_FEE_LAMPORTS` there) and the sheet actually
+        // displayed — never upstream's own `prioritizationFeeLamports`, and never a fresh
+        // recomputation that could silently drift from what the person reviewed. Throwing here is
+        // caught by signSendConfirm and reported as "failed" with this sentence; nothing is ever
+        // signed on a mismatch.
         const check = verifySwapTransaction({
           tx: deserialized, liveAddress: freshLive || live, quote: shownQuote,
-          PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: body.prioritizationFeeLamports,
+          PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: cd.feeLamports,
         });
         if (!check.ok) throw new Error(check.reason);
         return deserialized;
@@ -629,7 +783,7 @@ export default function SwapPane({ wallet }) {
       // or unavailable localStorage) stops signSendConfirm from ever calling submitSigned: nothing
       // is sent. `setPending(p)` only runs once savePending() is known to have actually written.
       onSigned: (sig) => {
-        const p = { sig, lastValidBlockHeight: body.lastValidBlockHeight, wallet: live, at: Date.now(), inSym, outSym, inAmt, outAmt };
+        const p = { sig, lastValidBlockHeight: body.lastValidBlockHeight, recentBlockhash: builtRecentBlockhash, wallet: live, at: Date.now(), inSym, outSym, inAmt, outAmt };
         savePending(p);
         setPending(p);
       },
@@ -665,6 +819,13 @@ export default function SwapPane({ wallet }) {
   function dismissOutcome() { setOutcome(null); }
   function retryFromOutcome() { setOutcome(null); }
 
+  // ⚠️ Frontier review round 31b item 6 — the manual escape hatch for a pending record that
+  // checkPendingSwap can never resolve on its own (no `recentBlockhash` to check, or the network
+  // genuinely can't answer). Dismissing here does NOT mean the swap didn't happen — the signature
+  // stays visible via `PendingCard`'s own Solscan link right up until the moment this fires; the
+  // person is choosing to stop watching, never told anything was undone.
+  function dismissPending() { clearPendingStorage(); setPending(null); setSwapping(false); }
+
   // ── derived quote figures ───────────────────────────────────────────────────────────────────
   // ⚠️ P3: priceImpactPct is a FRACTION, not already a percent — checked against Jupiter's public
   // quote API docs ("priceImpactPct: … represented as a ratio, e.g. 0.01 = 1%") AND against this
@@ -690,15 +851,19 @@ export default function SwapPane({ wallet }) {
   const cImpactPct = cq && cq.priceImpactPct != null ? Number(cq.priceImpactPct) * 100 : null;
   const cImpactStr = cImpactPct != null && isFinite(cImpactPct) ? `${cImpactPct.toFixed(2)}%` : "—";
   const cDanger = cImpactPct != null && isFinite(cImpactPct) && cImpactPct >= 5;
-  // P3 / round 30 fix 6: "Network cost" — the priority fee from the SAME /tx build that will be
-  // signed (confirmData.tx, never a second, separate estimate call), plus the one-time ATA-open
+  // ⚠️ Frontier review round 31b item 2 / Codex round 32: "Network cost" is the SAME computed,
+  // ceiling-rounded fee `buildConfirmData` verified against the transaction's own bytes
+  // (`confirmData.feeLamports`) — never upstream's own `prioritizationFeeLamports` field, which
+  // round 31b found unenforced/unbounded and round 32 found could even disagree with the
+  // verifier's own (correctly rounded) number on the recorded fixture. Plus the one-time ATA-open
   // note when the receiving mint's account does not exist yet (checked at quote time, above).
-  const cTx = confirmData && confirmData.tx;
-  const feeSolStr = cTx && cTx.prioritizationFeeLamports != null
-    ? fmtAmt(String(cTx.prioritizationFeeLamports), 9, 6) : null;
+  const cFeeLamports = confirmData && confirmData.feeLamports;
+  const feeSolStr = cFeeLamports != null ? fmtAmt(String(cFeeLamports), 9, 6) : null;
+  // Frontier review round 31b item 3 — COMPUTED minimum, never upstream's otherAmountThreshold.
+  const cMinReceived = cq ? computeMinReceived(cq.outAmount, cq.slippageBps) : null;
   const confirmLines = cq && inMint && outMint ? [
     <span key="p">{tf("Pay {amt} {sym}", { amt: fmtAmt(cq.inAmount, inMint.decimals), sym: inSym })}</span>,
-    <span key="r">{tf("Receive at least {amt} {sym}", { amt: fmtAmt(cq.otherAmountThreshold, outMint.decimals), sym: outSym })}</span>,
+    <span key="r">{tf("Receive at least {amt} {sym}", { amt: fmtAmt(cMinReceived, outMint.decimals), sym: outSym })}</span>,
     <span key="i">{tf("Price impact: {pct}", { pct: cImpactStr })}</span>,
     // ⚠️ P2-3: reads cq.slippageBps (the number baked into THIS quote/transaction), never the
     // `slippageBps` chip state — the chip can change after the sheet opened with a stale quote
@@ -724,7 +889,7 @@ export default function SwapPane({ wallet }) {
       {configPhase === "loaded" && config ? (
         <div className="seeker-swap-form">
           {swapping ? <Loading label={t("Approve the swap in your wallet…")} /> : null}
-          {pending ? <PendingCard p={pending} /> : null}
+          {pending ? <PendingCard p={pending} onDismiss={dismissPending} /> : null}
           {outcome ? <OutcomeCard o={outcome} onDismiss={dismissOutcome} onRetry={retryFromOutcome} /> : null}
 
           {!swapping ? (
@@ -805,7 +970,7 @@ export default function SwapPane({ wallet }) {
                 <div className="seeker-listing-card seeker-swap-quotecard">
                   <dl className="seeker-listing-facts">
                     <div><dt>{t("Rate")}</dt><dd>{rate != null && isFinite(rate) ? `1 ${inSym} ≈ ${rate < 0.000001 ? rate.toExponential(2) : rate.toPrecision(6)} ${outSym}` : "—"}</dd></div>
-                    <div><dt>{t("Minimum received")}</dt><dd>{fmtAmt(qd.otherAmountThreshold, outMint.decimals)} {outSym}</dd></div>
+                    <div><dt>{t("Minimum received")}</dt><dd>{fmtAmt(computeMinReceived(qd.outAmount, qd.slippageBps), outMint.decimals)} {outSym}</dd></div>
                     <div><dt>{t("Price impact")}</dt><dd>{impactPct != null && isFinite(impactPct) ? `${impactPct.toFixed(2)}%` : "—"}</dd></div>
                     <div><dt>{t("Hops")}</dt><dd>{hops != null ? hops : "—"}</dd></div>
                     {feeBps ? <div><dt>{t("Platform fee")}</dt><dd>{(feeBps / 100).toFixed(2)}%</dd></div> : null}

@@ -2914,5 +2914,10 @@
   "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "लेन-देन दर्ज हुआ लेकिन ऑन-चेन विफल रहा — कुछ भी स्वैप नहीं हुआ; एक नेटवर्क शुल्क लिया गया।",
   "This did not land before its expiry block height passed — it's safe to try again.": "इसकी समाप्ति ब्लॉक ऊँचाई बीतने से पहले यह दर्ज नहीं हुआ — फिर से प्रयास करना सुरक्षित है।",
   "Unconfirmed": "अपुष्ट",
-  "That quote's numbers had aged — here are the current ones. Review before continuing.": "उस कोट के आंकड़े पुराने हो गए थे — ये रहे मौजूदा आंकड़े। जारी रखने से पहले समीक्षा करें।"
+  "That quote's numbers had aged — here are the current ones. Review before continuing.": "उस कोट के आंकड़े पुराने हो गए थे — ये रहे मौजूदा आंकड़े। जारी रखने से पहले समीक्षा करें।",
+  "Could not reach the network to check this transaction before signing. Try again.": "हस्ताक्षर करने से पहले इस लेन-देन की जांच के लिए नेटवर्क तक नहीं पहुंचा जा सका। फिर से प्रयास करें।",
+  "Could not read your SOL balance to check this transaction before signing. Try again.": "हस्ताक्षर करने से पहले इस लेन-देन की जांच के लिए आपका SOL बैलेंस नहीं पढ़ा जा सका। फिर से प्रयास करें।",
+  "Could not simulate this transaction before signing. Try again.": "हस्ताक्षर करने से पहले इस लेन-देन का सिमुलेशन नहीं किया जा सका। फिर से प्रयास करें।",
+  "Stop watching": "देखना बंद करें",
+  "This is taking longer than usual to confirm. Your signature above is the real record — check it on Solscan, or stop watching here.": "इसे पुष्टि होने में सामान्य से अधिक समय लग रहा है। ऊपर आपका हस्ताक्षर ही असली रिकॉर्ड है — इसे Solscan पर जांचें, या यहां देखना बंद करें।"
 }

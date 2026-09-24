@@ -911,6 +911,10 @@
   z-index: 1;
 }
 .seeker-swap-quotecard { margin-top: 4px; }
+/* Frontier review round 31b item 6 — the manual escape hatch on a pending swap that has been
+   checking for a while (PendingCard, Swap.jsx). */
+.seeker-swap-pending-escape { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 182, 39, .25); }
+.seeker-swap-pending-escape p { margin: 0 0 8px; }
 .seeker-swap-slippage { display: flex; gap: 8px; margin: 8px 0 4px; }
 .seeker-swap-slippage-chip {
   display: inline-flex;

@@ -179,7 +179,18 @@ function isWellFormedNullStatus(result) {
 function statusEntry(result) {
   return result && Array.isArray(result.value) ? result.value[0] : undefined;
 }
-export async function checkPendingSwap(rpc, { signature, lastValidBlockHeight }) {
+// `recentBlockhash` — round 31b item 6: the blockhash the PENDING TRANSACTION ITSELF was built
+// against (persisted on the pending record — see Swap.jsx's `savePending`), NOT a fresh one. Block
+// height passing `lastValidBlockHeight` only proves nothing NEW can execute against that
+// blockhash; it says nothing about whether THIS signature already landed (the same principle
+// `statusOutcome`'s own note documents for `processed`). `isBlockhashValid` is the DIRECT check —
+// "is the exact blockhash this transaction carries still live" — so `expired` now requires BOTH:
+// a well-formed null status AND a confirmed-dead blockhash. No `recentBlockhash` passed at all
+// (an older persisted record, or a caller that never had one) means that second half can never be
+// proven — this NEVER calls such a record `expired` on height alone anymore; it stays `pending`
+// forever, which is exactly why `Swap.jsx`'s `PendingCard` grows its own manual "check on
+// explorer / dismiss" escape hatch after 10 minutes, keeping the signature visible.
+export async function checkPendingSwap(rpc, { signature, lastValidBlockHeight, recentBlockhash }) {
   try {
     const [stRes, height] = await Promise.all([
       rpc("getSignatureStatuses", [[signature], {}]),
@@ -204,8 +215,17 @@ export async function checkPendingSwap(rpc, { signature, lastValidBlockHeight })
     if (finalOutcome) return finalOutcome;
     // ONLY a well-formed explicit null counts as "truly nothing, ever" — a malformed response
     // (missing/empty `value`, non-array, etc.) is not proof of anything and stays pending.
-    if (isWellFormedNullStatus(finalRes)) return { status: "expired" };
-    return { status: "pending" }; // some other ambiguous shape — never guess "safe to retry"
+    if (!isWellFormedNullStatus(finalRes)) return { status: "pending" }; // some other ambiguous shape — never guess "safe to retry"
+    // Round 31b item 6 — the SECOND half of the AND. No blockhash to check -> can never prove it,
+    // so never expire.
+    if (!recentBlockhash) return { status: "pending" };
+    try {
+      const validRes = await rpc("isBlockhashValid", [recentBlockhash, { commitment: "confirmed" }]);
+      if (validRes && validRes.value === true) return { status: "pending" }; // the blockhash could still land — not expired
+    } catch (_) {
+      return { status: "pending" }; // an RPC read failure is not an on-chain answer either way
+    }
+    return { status: "expired" }; // well-formed null status AND a confirmed-dead blockhash
   } catch (_) {
     return { status: "pending" };
   }

@@ -95,6 +95,40 @@
 //      ceiling by even one lamport still refuses. More than one SetComputeUnitLimit or
 //      SetComputeUnitPrice in the same transaction refuses outright (there is exactly one honest
 //      value for each).
+//
+// ⚠️ Frontier adversarial review, round 31b — a second, harder look past round 31, found two more
+// fail-open cases plus three P2s:
+//   11. (P0) THE NON-SHARED `route` KIND'S OPTIONAL `destination_token_account` (account slot 4)
+//      WAS NEVER CHECKED. `route`'s account order is [tokenProgram, userTransferAuthority,
+//      userSourceTokenAccount, userDestinationTokenAccount, destinationTokenAccount(optional),
+//      destinationMint, platformFeeAccount(optional)] — round 30 bound and checked slot 3
+//      (`user_destination_token_account`, the one the sheet's numbers are about) but never touched
+//      slot 4. Anchor's own sentinel for "this optional account is absent" is the executing
+//      program's own id (confirmed against the recorded fixture's `platform_fee_account`/
+//      `token2022Program` slots, which use the identical sentinel convention — see check 3 above).
+//      A compromised response can set slot 3 to the user's own real ATA (passing every check that
+//      existed) while setting slot 4 — an account Jupiter's on-chain program may actually route the
+//      output through — to an attacker's ATA. Slot 4 is now REQUIRED to equal the Jupiter program
+//      id (the absent sentinel) or the instruction refuses; unlike the mint slots, this is never
+//      "skip when unverifiable" — an ALT-resolved slot 4 refuses too, since there is no legitimate
+//      reason for it to be anything but the literal sentinel.
+//   12. (P1) THE PRIORITY-FEE CEILING CHECK USED TO BE SKIPPED ENTIRELY WHEN THE CALLER PASSED NO
+//      `maxPriorityFeeLamports` — which is exactly what the app's own call sites did whenever
+//      upstream's `prioritizationFeeLamports` field was absent (Codex's round-30/31 exploit: drop
+//      the limit instruction, and if the caller also forgot to pass a ceiling, checked NOTHING).
+//      `feeLamports` (the actual computed, ceiling-divided fee — see check 10) is now ALWAYS
+//      computed and returned on every `ok:true` result, whether or not the caller passed a
+//      ceiling — so a caller can always display the true fee, never upstream's unenforced number.
+//      `Swap.jsx` now passes the exported `MAX_PRIORITY_FEE_LAMPORTS` hard constant as the ceiling
+//      on every call (see that file), so this file's own "skip when omitted" contract stays for
+//      test/legacy callers but the one call site that matters — the swap pane — can never omit it.
+//   13. (P2) ATA `Create`/`CreateIdempotent` used to CHECK the target ATA only "when static", and
+//      SKIP (never refuse) an ALT-resolved one — the exact opposite of every other unique-per-user
+//      account in this file (per `pubkeyAt`'s own note: a user's own ATA is never legitimately
+//      ALT-resolved). An ALT-resolved ATA index now REFUSES outright, closing both the
+//      right-account check and the one-per-ATA duplicate count that an unresolved index used to
+//      slip past uncounted.
+export const MAX_PRIORITY_FEE_LAMPORTS = 1000000; // 0.001 SOL — see Swap.jsx's use of this constant
 
 // Anchor instruction discriminators — sha256("global:<name>").slice(0, 8), the first 8 bytes of
 // every one of Jupiter's route-shaped instructions. Verified against the real recorded fixture:
@@ -322,18 +356,26 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
       }
       // The mint (accts[3]) is commonly ALT-resolved (see pubkeyAt's note) — checked when static,
       // skipped (never refused) when not, same as the route instruction's own mint slots below.
-      if (ata.isStatic && !ataOk(ata.addr, inAtas) && !ataOk(ata.addr, outAtas)) {
+      //
+      // ⚠️ Frontier review round 31b, P2, check 13 — the ATA ITSELF (accts[1], the account this
+      // instruction actually opens) is NOT the mint slot and gets no such leniency: it is unique
+      // per user, exactly like the wallet's own wSOL ATA and transfer authority elsewhere in this
+      // file (pubkeyAt's own note), so it is never legitimately ALT-resolved on a real Jupiter
+      // build. The old "checked when static, skipped when not" treatment let an ALT-resolved ATA
+      // dodge BOTH the right-account check below AND the one-per-ATA duplicate count — refusing
+      // outright here closes both at once.
+      if (!ata.isStatic) {
+        return { ok: false, reason: "This transaction opens a token account whose address can't be verified." };
+      }
+      if (!ataOk(ata.addr, inAtas) && !ataOk(ata.addr, outAtas)) {
         return { ok: false, reason: "This transaction opens a token account that is not the one this swap needs." };
       }
       // Round 31 fix 9 — at most one create per target ATA address (i.e. per mint this swap
-      // actually touches). Only enforced when the ATA address itself is static — it always is for
-      // a real Jupiter build (see pubkeyAt's note: a user's own ATA is never ALT-resolved).
-      if (ata.isStatic) {
-        if (createdAtas.has(ata.addr)) {
-          return { ok: false, reason: "This transaction opens the same token account more than once." };
-        }
-        createdAtas.add(ata.addr);
+      // actually touches).
+      if (createdAtas.has(ata.addr)) {
+        return { ok: false, reason: "This transaction opens the same token account more than once." };
       }
+      createdAtas.add(ata.addr);
       continue;
     }
 
@@ -393,6 +435,17 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
         //  destinationTokenAccount(optional), destinationMint, platformFeeAccount(optional)]
         authorityIdx = accts[1]; sourceTokenIdx = accts[2]; destTokenIdx = accts[3];
         destMintIdx = accts[5]; feeAcctIdx = accts[6];
+        // ⚠️ Frontier review round 31b, P0, check 11 — slot 4 (`destinationTokenAccount`,
+        // OPTIONAL) was never checked at all: a compromised response could leave slot 3
+        // (`userDestinationTokenAccount`) pointing at the user's real ATA — passing every check
+        // above — while routing the actual output through slot 4 to an attacker's account. There
+        // is exactly one legitimate value here: Anchor's own "absent" sentinel, the executing
+        // program's own id (same convention as `platform_fee_account`/`token2022Program` below).
+        // Never "skip when unverifiable" like the mint slots — an ALT-resolved slot 4 refuses too.
+        const destTokenAccountOpt = pubkeyAt(keys, accts[4]);
+        if (!destTokenAccountOpt.isStatic || destTokenAccountOpt.addr !== JUP_PROGRAM_ID) {
+          return { ok: false, reason: "This transaction includes an unexpected destination token account." };
+        }
       } else { // shared_accounts_route
         // [tokenProgram, programAuthority, userTransferAuthority, sourceTokenAccount,
         //  programSourceTokenAccount, programDestinationTokenAccount, destinationTokenAccount,
@@ -503,15 +556,22 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
   const nonComputeBudgetInstructionCount = instructions.length - computeBudgetInstructionCount;
   const effectiveCuLimit = cuLimit != null ? cuLimit : Math.min(200000 * nonComputeBudgetInstructionCount, 1400000);
   const effectiveCuPrice = cuPriceMicroLamports != null ? cuPriceMicroLamports : 0n;
-  if (maxPriorityFeeLamports != null) {
-    // CEILING division, not truncation — a fee that rounds up past the ceiling by even one
-    // lamport must still refuse. BigInt throughout; `+ 999_999n` before the `/ 1_000_000n` is the
-    // standard integer-ceiling trick.
-    const feeLamports = (BigInt(effectiveCuLimit) * effectiveCuPrice + 999999n) / 1000000n;
-    if (feeLamports > BigInt(String(maxPriorityFeeLamports))) {
-      return { ok: false, reason: "This transaction's priority fee is higher than what you were shown." };
-    }
+  // ⚠️ Frontier review round 31b, P1, check 12 — computed UNCONDITIONALLY now, not only when the
+  // caller happens to pass a ceiling. The old code's fee math lived entirely inside the
+  // `maxPriorityFeeLamports != null` guard, so a caller with no ceiling to check against (which
+  // is exactly what happened whenever upstream's `prioritizationFeeLamports` was absent) got no
+  // fee figure at all — nothing to display, nothing enforced. CEILING division, not truncation —
+  // a fee that rounds up past the ceiling by even one lamport must still refuse. BigInt
+  // throughout; `+ 999_999n` before the `/ 1_000_000n` is the standard integer-ceiling trick.
+  const feeLamports = (BigInt(effectiveCuLimit) * effectiveCuPrice + 999999n) / 1000000n;
+  if (maxPriorityFeeLamports != null && feeLamports > BigInt(String(maxPriorityFeeLamports))) {
+    return { ok: false, reason: "This transaction's priority fee is higher than what you were shown." };
   }
 
-  return { ok: true, routeKind, cuLimit, cuPriceMicroLamports };
+  // `ataCreateCount` — how many NEW token accounts this transaction's own (already-checked,
+  // already-bounded-to-one-per-ATA) instructions actually create. Frontier review round 31b item
+  // 4's simulation gate (`swap-simulate.js`) uses this as its own `allowedNewAtaCount` — the SOL
+  // this transaction is allowed to spend on account-creation rent is bounded by what THIS
+  // transaction's instructions actually do, never a guessed or unbounded allowance.
+  return { ok: true, routeKind, cuLimit, cuPriceMicroLamports, feeLamports: feeLamports.toString(), ataCreateCount: createdAtas.size };
 }

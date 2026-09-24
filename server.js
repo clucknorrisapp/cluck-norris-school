@@ -15136,6 +15136,12 @@ app.get("/api/seeker/swap/config", async (req, res) => {
 // so this is what a quote must echo back to be trusted (P2-1: the quote is never checked against
 // what was asked for, so a mismatched/forged-looking upstream response was returned as-is).
 const SEEKER_SWAP_REQUESTED_MODE = "ExactIn";
+// ⚠️ Frontier review round 31b item 2 — the SAME hard ceiling as `MAX_PRIORITY_FEE_LAMPORTS` in
+// `src/seeker/swap-verify.js` (that file can't be `require()`d here — it's an ESM module the
+// client bundles — so the number is kept in sync by hand; `scripts/seeker-swap-test.cjs` pins
+// both files' values equal). A `/tx` response whose own `prioritizationFeeLamports` exceeds this
+// is refused server-side, never merely trusted client-side.
+const SEEKER_SWAP_MAX_PRIORITY_FEE_LAMPORTS = 1000000;
 // A tighter per-IP cap than the 60/min shared across the whole /api/seeker/swap group — the quote
 // route is the one an idle pane can hammer every 400ms while the amount box is being typed into
 // (fix round P3: the pane also debounces its own calls by 400ms, below is the server-side floor).
@@ -15169,6 +15175,31 @@ app.get("/api/seeker/swap/quote", rateLimit("seekerswapquote", { windowMs: 60000
       || quote.swapMode !== SEEKER_SWAP_REQUESTED_MODE || Number(quote.slippageBps) !== slippageBps
       || String(quote.inAmount) !== amount) {
       console.error("[seeker-swap-quote] quote_mismatch", { inputMint, outputMint, amount, slippageBps, got: { inputMint: quote.inputMint, outputMint: quote.outputMint, swapMode: quote.swapMode, slippageBps: quote.slippageBps, inAmount: quote.inAmount } });
+      return res.status(502).json({ ok: false, error: "quote_mismatch" });
+    }
+    // ⚠️ Frontier review round 31b item 3 — nobody ever tied `otherAmountThreshold` (the minimum
+    // the confirm sheet displayed) to `outAmount`/`slippageBps` (the two numbers the CLIENT
+    // verifier checks the route instruction's own bytes against). Only `SEEKER_SWAP_REQUESTED_MODE
+    // === "ExactIn"` is ever accepted above (checked before this point), so only that mode's rule
+    // applies here; a stored quote whose upstream threshold disagrees with it is refused rather
+    // than cached under a quoteId a /tx call could later build from.
+    // ⚠️ NOT a plain floor: checked against the real recorded fixture
+    // (scripts/fixtures/seeker-swap/quote.json — a genuine 3-hop route, outAmount 55,235,110,
+    // slippageBps 100) and floor(outAmount × 9900 / 10000) = 54,682,758 while the fixture's own
+    // otherAmountThreshold is 54,682,759 — Jupiter's real threshold does not exactly reduce to a
+    // floor on the final outAmount (whether from its own rounding convention or per-hop
+    // arithmetic). Rather than guess a single formula and risk refusing genuine quotes forever,
+    // this accepts EITHER the floor OR the ceiling of outAmount × (10000 − slippageBps) / 10000 —
+    // the only two values any honest single global rounding of that exact formula can produce —
+    // and refuses anything outside that two-value window. The fixture's 54,682,759 is the ceiling
+    // of that range; `scripts/seeker-swap-test.cjs` pins the fixture passing and a forged
+    // (materially smaller) threshold refusing.
+    const thresholdNumerator = BigInt(quote.outAmount) * (10000n - BigInt(slippageBps));
+    const thresholdFloor = thresholdNumerator / 10000n;
+    const thresholdCeil = (thresholdNumerator % 10000n === 0n) ? thresholdFloor : thresholdFloor + 1n;
+    const gotThreshold = BigInt(String(quote.otherAmountThreshold));
+    if (gotThreshold < thresholdFloor || gotThreshold > thresholdCeil) {
+      console.error("[seeker-swap-quote] threshold_mismatch", { outAmount: quote.outAmount, slippageBps, thresholdFloor: String(thresholdFloor), thresholdCeil: String(thresholdCeil), got: quote.otherAmountThreshold });
       return res.status(502).json({ ok: false, error: "quote_mismatch" });
     }
     const quoteId = createHash("sha256").update(JSON.stringify(quote)).digest("hex");
@@ -15210,6 +15241,24 @@ app.post("/api/seeker/swap/tx", async (req, res) => {
     if (out.simulationError != null) {
       console.error("[seeker-swap-tx] simulationError", out.simulationError);
       return res.status(502).json({ ok: false, error: "swap_unavailable", detail: out.simulationError });
+    }
+    // ⚠️ Frontier review round 31b item 2 — `prioritizationFeeLamports` used to be passed through
+    // raw, unchecked: missing, non-numeric or absurd (Codex's exploit: no compute-unit-limit
+    // instruction + an enormous price) all reached the client as-is. Refused here, server-side,
+    // never merely trusted — the CLIENT still computes and enforces its own hard ceiling from the
+    // transaction's actual bytes (`MAX_PRIORITY_FEE_LAMPORTS`, `swap-verify.js`); this is defense
+    // in depth, not a replacement for that check.
+    if (typeof out.prioritizationFeeLamports !== "number" || !Number.isFinite(out.prioritizationFeeLamports)
+      || out.prioritizationFeeLamports < 0 || out.prioritizationFeeLamports > SEEKER_SWAP_MAX_PRIORITY_FEE_LAMPORTS) {
+      console.error("[seeker-swap-tx] prioritizationFeeLamports out of bounds", out.prioritizationFeeLamports);
+      return res.status(502).json({ ok: false, error: "swap_unavailable" });
+    }
+    // Round 31b item 6 — `lastValidBlockHeight` drives the client's expiry logic (checkPendingSwap
+    // in sign.js); anything that isn't a genuine positive block height is refused rather than
+    // handed to a client that would otherwise trust it blind.
+    if (!Number.isInteger(out.lastValidBlockHeight) || out.lastValidBlockHeight <= 0) {
+      console.error("[seeker-swap-tx] lastValidBlockHeight invalid", out.lastValidBlockHeight);
+      return res.status(502).json({ ok: false, error: "swap_unavailable" });
     }
     // Amounts echoed from the STORED quote (entry.quote), never the request — the confirm sheet
     // and the transaction Jupiter actually built come from the same object.

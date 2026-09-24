@@ -56,7 +56,7 @@ function tokenTransferData(amount) {
   console.log("\nSeeker swap — client-side structural verifier (swap-verify.js)\n");
 
   const mod = await import(path.join(ROOT, "src", "seeker", "swap-verify.js") + "?t=" + Date.now());
-  const { verifySwapTransaction, ROUTE_DISCRIMINATORS, SWAP_PROGRAM_ALLOWLIST } = mod;
+  const { verifySwapTransaction, ROUTE_DISCRIMINATORS, SWAP_PROGRAM_ALLOWLIST, MAX_PRIORITY_FEE_LAMPORTS } = mod;
 
   const realBytes = b64ToBytes(FIXTURE_SWAP.swapTransaction);
   const realTx = web3.VersionedTransaction.deserialize(realBytes);
@@ -376,6 +376,107 @@ function tokenTransferData(amount) {
       const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
       ok("more than one SetComputeUnitLimit -> refused", r.ok === false && /more than once/i.test(r.reason), r);
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(6) Frontier review round 31b, P0, check 11 — the non-shared `route` kind's slot 4 (destination_token_account)\n");
+  {
+    // The recorded fixture uses shared_accounts_route, so a `route`-kind happy path and its
+    // exploit are both built by hand from it — same technique the file header describes for
+    // section (3)'s exploits: edit the deserialized message directly, never recompile through
+    // TransactionMessage (that would force the ALT-resolved mint slots to become new static
+    // fillers and trip an unrelated check).
+    //
+    // shared_accounts_route's own account order: [tokenProgram, programAuthority,
+    // userTransferAuthority, sourceTokenAccount, programSourceTokenAccount,
+    // programDestinationTokenAccount, destinationTokenAccount, sourceMint, destinationMint,
+    // platformFeeAccount, token2022Program]. `route`'s account order: [tokenProgram,
+    // userTransferAuthority, userSourceTokenAccount, userDestinationTokenAccount,
+    // destinationTokenAccount(optional), destinationMint, platformFeeAccount(optional)].
+    function buildRouteVariant(slot4Idx) {
+      const clone = cloneMsg();
+      const routeIx = clone.message.compiledInstructions.find((ix) => ix.programIdIndex === JUP_IDX);
+      const a = routeIx.accountKeyIndexes;
+      const rest = a.slice(11); // anything shared_accounts_route carried past its own 11 named slots
+      routeIx.accountKeyIndexes = [a[0], a[2], a[3], a[6], slot4Idx, a[8], a[9], ...rest];
+      const data = Buffer.from(routeIx.data);
+      Buffer.from("e517cb977ae3ad2a", "hex").copy(data, 0); // the `route` discriminator
+      routeIx.data = new Uint8Array(data);
+      return clone;
+    }
+
+    // Happy path: slot 4 = the Jupiter program id's own static index (the Anchor "absent"
+    // sentinel) — a well-formed `route` transaction must still pass.
+    {
+      const clone = buildRouteVariant(JUP_IDX);
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("a well-formed `route`-kind transaction, slot 4 = the absent sentinel -> passes", r.ok === true && r.routeKind === "route", r);
+    }
+
+    // Codex's/the frontier review's exact exploit: slot 4 = a stranger's account, while slot 3
+    // (the user's real destination ATA — the one every earlier check bound and passed) is
+    // untouched. `buildRouteVariant` needs the stranger key pushed onto the SAME clone it edits,
+    // so push it first and pass its index in.
+    {
+      const clone = cloneMsg();
+      const stranger = clone.message.staticAccountKeys.length;
+      clone.message.staticAccountKeys.push(web3.Keypair.generate().publicKey);
+      const routeIx = clone.message.compiledInstructions.find((ix) => ix.programIdIndex === JUP_IDX);
+      const a = routeIx.accountKeyIndexes;
+      const rest = a.slice(11);
+      routeIx.accountKeyIndexes = [a[0], a[2], a[3], a[6], stranger, a[8], a[9], ...rest];
+      const data = Buffer.from(routeIx.data);
+      Buffer.from("e517cb977ae3ad2a", "hex").copy(data, 0);
+      routeIx.data = new Uint8Array(data);
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("the exploit — `route`'s slot 4 (destination_token_account) set to a stranger's account, while slot 3 (the user's real ATA) is untouched -> refused, never signed",
+        r.ok === false && /unexpected destination token account/i.test(r.reason), r);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(7) Frontier review round 31b, P2, check 13 — ALT-resolved ATA creates must refuse, never skip\n");
+  {
+    // The frontier review's exact PoC: 5 extra ATA-create instructions whose ATA slot resolves
+    // into ALT range (an index past the end of staticAccountKeys) — the old code SKIPPED both the
+    // right-account check and the one-per-ATA count for a non-static ATA; now it refuses outright.
+    const clone = cloneMsg();
+    const ataIx = clone.message.compiledInstructions.find((ix) => clone.message.staticAccountKeys[ix.programIdIndex].toBase58() === "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+    const altBase = clone.message.staticAccountKeys.length + 1; // one past the end -> ALT range
+    for (let k = 0; k < 5; k++) {
+      clone.message.compiledInstructions.unshift({
+        programIdIndex: ataIx.programIdIndex,
+        accountKeyIndexes: [ataIx.accountKeyIndexes[0], altBase + k, ...ataIx.accountKeyIndexes.slice(2)],
+        data: new Uint8Array([1]),
+      });
+    }
+    const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+    ok("5 extra ALT-resolved ATA creates -> refused, never silently skipped", r.ok === false && /can't be verified/i.test(r.reason), r);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(8) Codex round 32 — the pane's OWN path (response -> computed/displayed fee -> verifier), one integration test\n");
+  {
+    // buildConfirmData()'s step: verify at sheet-open time with the HARD constant ceiling.
+    const step1 = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: MAX_PRIORITY_FEE_LAMPORTS });
+    ok("step 1 (sheet-open, ceiling = the hard MAX_PRIORITY_FEE_LAMPORTS constant) -> ok, the real fixture is never refused",
+      step1.ok === true, step1);
+    ok("step 1 returns the CEILING-rounded computed fee (441,362), not upstream's own truncated prioritizationFeeLamports (441,361)",
+      step1.feeLamports === "441362" && step1.feeLamports !== String(FIXTURE_SWAP.prioritizationFeeLamports), step1);
+
+    // build()'s step: verify AGAIN, at sign time, using the SAME number step 1 already computed
+    // and (per Swap.jsx) displayed on the confirm sheet — the number must never reject itself.
+    const step2 = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: step1.feeLamports });
+    ok("step 2 (sign time, ceiling = step 1's own displayed feeLamports) -> ok — the pane's real fixture swap succeeds end to end",
+      step2.ok === true, step2);
+
+    // Codex round 32's bug, reproduced directly: passing upstream's raw, truncated
+    // `prioritizationFeeLamports` (441,361) as the ceiling — what the pane used to do — refuses
+    // the verifier's own correctly ceiling-rounded fee (441,362) on this exact real fixture. This
+    // is the failure the fix above closes; it must still reproduce here so nobody "fixes" it back.
+    const bugRepro = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: FIXTURE_SWAP.prioritizationFeeLamports });
+    ok("Codex round 32's bug, reproduced: upstream's raw truncated fee as the ceiling -> refuses the pane's own real fixture (proves the fix matters)",
+      bugRepro.ok === false && /priority fee/i.test(bugRepro.reason), bugRepro);
   }
 
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);

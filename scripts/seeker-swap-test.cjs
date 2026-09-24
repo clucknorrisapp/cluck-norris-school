@@ -70,10 +70,18 @@ const GOOD_SWAP = Object.assign({}, FIXTURE_SWAP, { simulationError: null });
       ok(`SEEKER_API_RE matches ${p}`, re.test(p));
     }
     ok("SEEKER_API_RE does NOT match an unrelated /api/seeker/swap/anything-else path", !re.test("/api/seeker/swap/anything-else"));
+
+    // Frontier review round 31b item 2 — server.js can't require() the ESM swap-verify.js, so the
+    // two ceilings are kept in sync by hand; pin them equal so a future edit to one is caught.
+    const srcVerify = fs.readFileSync(path.join(ROOT, "src", "seeker", "swap-verify.js"), "utf8");
+    const mServer = src.match(/const SEEKER_SWAP_MAX_PRIORITY_FEE_LAMPORTS = (\d+);/);
+    const mClient = srcVerify.match(/export const MAX_PRIORITY_FEE_LAMPORTS = (\d+);/);
+    ok("server.js's SEEKER_SWAP_MAX_PRIORITY_FEE_LAMPORTS and swap-verify.js's MAX_PRIORITY_FEE_LAMPORTS are the SAME number",
+      !!mServer && !!mClient && mServer[1] === mClient[1], { server: mServer && mServer[1], client: mClient && mClient[1] });
   }
 
   // ---- local stubs -------------------------------------------------------------------------
-  let jupState = { failQuote: false, failSwap: false, simErrorSwap: false, mismatchQuote: false, mismatchAmount: false, lastQuoteQuery: null, lastSwapBody: null };
+  let jupState = { failQuote: false, failSwap: false, simErrorSwap: false, mismatchQuote: false, mismatchAmount: false, mismatchThreshold: false, badFeeSwap: false, badHeightSwap: false, lastQuoteQuery: null, lastSwapBody: null };
   const stub = http.createServer((req, res) => {
     const u = new URL(req.url, "http://127.0.0.1");
     let body = "";
@@ -96,11 +104,30 @@ const GOOD_SWAP = Object.assign({}, FIXTURE_SWAP, { simulationError: null });
           res.end(JSON.stringify(Object.assign({}, FIXTURE_QUOTE, { inAmount: String(Number(FIXTURE_QUOTE.inAmount) + 1) })));
           return;
         }
+        // Frontier review round 31b item 3 — a materially forged (too-small) otherAmountThreshold,
+        // far outside the floor/ceiling window derived from outAmount/slippageBps.
+        if (jupState.mismatchThreshold) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(Object.assign({}, FIXTURE_QUOTE, { otherAmountThreshold: "1" })));
+          return;
+        }
         res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(FIXTURE_QUOTE)); return;
       }
       if (u.pathname === "/swap/v1/swap" && req.method === "POST") {
         try { jupState.lastSwapBody = JSON.parse(body || "{}"); } catch (_) { jupState.lastSwapBody = null; }
         if (jupState.failSwap) { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "simulated upstream failure" })); return; }
+        // Frontier review round 31b item 2 — an absurd/out-of-bounds prioritizationFeeLamports.
+        if (jupState.badFeeSwap) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(Object.assign({}, GOOD_SWAP, { prioritizationFeeLamports: 50000000 })));
+          return;
+        }
+        // Frontier review round 31b item 6 — a non-positive/non-integer lastValidBlockHeight.
+        if (jupState.badHeightSwap) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(Object.assign({}, GOOD_SWAP, { lastValidBlockHeight: 0 })));
+          return;
+        }
         // P2-1: FIXTURE_SWAP is the REAL recorded response (throwaway key, real non-null
         // simulationError); GOOD_SWAP is the same fields with it nulled, for the success paths.
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -268,6 +295,40 @@ const GOOD_SWAP = Object.assign({}, FIXTURE_SWAP, { simulationError: null });
       ok("Jupiter answering for a different inAmount than requested -> 502 quote_mismatch, never stored/returned",
         rq3.status === 502 && rq3.json && rq3.json.error === "quote_mismatch" && rq3.json.quote === undefined, rq3);
       jupState.mismatchAmount = false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    console.log("\n(4c) Frontier review round 31b — otherAmountThreshold, prioritizationFeeLamports, lastValidBlockHeight are all checked server-side\n");
+    {
+      // Item 3: the RECORDED fixture's own otherAmountThreshold (54,682,759) is the CEILING of
+      // floor/ceil(55,235,110 × 9900 / 10000) = {54,682,758, 54,682,759} — it must still pass,
+      // proving the window isn't a naive floor that would reject this genuine, real quote.
+      const rGood = await getJson("/api/seeker/swap/quote?" + new URLSearchParams({ inputMint: SOL_MINT, outputMint: SKR_MINT, amount: "10000000", slippageBps: "100" }).toString());
+      ok("the real recorded fixture's own otherAmountThreshold (the ceiling of the window) -> accepted, not refused",
+        rGood.status === 200 && rGood.json && rGood.json.ok === true, rGood);
+
+      // A materially forged (far too small) otherAmountThreshold is refused.
+      jupState.mismatchThreshold = true;
+      const rBadThreshold = await getJson("/api/seeker/swap/quote?" + new URLSearchParams({ inputMint: SOL_MINT, outputMint: SKR_MINT, amount: "10000000", slippageBps: "100" }).toString());
+      ok("a forged otherAmountThreshold far outside the floor/ceiling window -> 502 quote_mismatch, never stored/returned",
+        rBadThreshold.status === 502 && rBadThreshold.json && rBadThreshold.json.error === "quote_mismatch" && rBadThreshold.json.quote === undefined, rBadThreshold);
+      jupState.mismatchThreshold = false;
+
+      // Item 2: an absurd prioritizationFeeLamports on the /tx response is refused server-side.
+      const rq4 = await getJson("/api/seeker/swap/quote?" + new URLSearchParams({ inputMint: SOL_MINT, outputMint: SKR_MINT, amount: "10000000", slippageBps: "100" }).toString());
+      jupState.badFeeSwap = true;
+      const rBadFee = await postJson("/api/seeker/swap/tx", { quoteId: rq4.json.quoteId, userPublicKey: "3VELZ2avSUq79qstuR8a7C3euJ834WmQyrjt4uRnn4eb" });
+      ok("an absurd prioritizationFeeLamports (50,000,000, over the 1,000,000 ceiling) -> 502 swap_unavailable, never a swapTransaction",
+        rBadFee.status === 502 && rBadFee.json && rBadFee.json.error === "swap_unavailable" && rBadFee.json.swapTransaction === undefined, rBadFee.json);
+      jupState.badFeeSwap = false;
+
+      // Item 6: a non-positive lastValidBlockHeight on the /tx response is refused server-side.
+      const rq5 = await getJson("/api/seeker/swap/quote?" + new URLSearchParams({ inputMint: SOL_MINT, outputMint: SKR_MINT, amount: "10000000", slippageBps: "100" }).toString());
+      jupState.badHeightSwap = true;
+      const rBadHeight = await postJson("/api/seeker/swap/tx", { quoteId: rq5.json.quoteId, userPublicKey: "3VELZ2avSUq79qstuR8a7C3euJ834WmQyrjt4uRnn4eb" });
+      ok("a non-positive lastValidBlockHeight (0) -> 502 swap_unavailable, never a swapTransaction",
+        rBadHeight.status === 502 && rBadHeight.json && rBadHeight.json.error === "swap_unavailable" && rBadHeight.json.swapTransaction === undefined, rBadHeight.json);
+      jupState.badHeightSwap = false;
     }
 
     // ══════════════════════════════════════════════════════════════════════════════════════

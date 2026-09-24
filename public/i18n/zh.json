@@ -2914,5 +2914,10 @@
   "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "交易已上链但执行失败——没有发生任何兑换；已收取网络费用。",
   "This did not land before its expiry block height passed — it's safe to try again.": "在其到期区块高度之前未能上链——可以放心重试。",
   "Unconfirmed": "未确认",
-  "That quote's numbers had aged — here are the current ones. Review before continuing.": "该报价的数字已过期——以下是最新数字。请在继续前查看。"
+  "That quote's numbers had aged — here are the current ones. Review before continuing.": "该报价的数字已过期——以下是最新数字。请在继续前查看。",
+  "Could not reach the network to check this transaction before signing. Try again.": "签名前无法连接网络以检查此交易。请重试。",
+  "Could not read your SOL balance to check this transaction before signing. Try again.": "签名前无法读取您的 SOL 余额以检查此交易。请重试。",
+  "Could not simulate this transaction before signing. Try again.": "签名前无法模拟此交易。请重试。",
+  "Stop watching": "停止关注",
+  "This is taking longer than usual to confirm. Your signature above is the real record — check it on Solscan, or stop watching here.": "确认时间比平时长。上面的签名才是真实记录——请在 Solscan 上查看，或在此停止关注。"
 }
