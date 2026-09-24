@@ -96,7 +96,13 @@ export function SchoolHome({ finished, progressNote }) {
         {t("Free, forever. No wallet, no signup, and it works with no signal — every lesson is already on your phone.")}
       </p>
 
-      <div className="seeker-school-overall">
+      {/* data-clkn-avoid: this card sits high enough on a 360x800 phone that the fixed 🌐 pill
+          landed directly on its note text ("Progress here stays on this phone…") on first paint
+          — never a bottom-of-page thing the scroll container's padding could fix, since this
+          card is nowhere near the end of the content. One short card, so its own top is what the
+          pill measures against — -avoid, not -kids (found in real Seeker-edition screenshots,
+          360x800 CSS @3x, 2026-09-24). */}
+      <div className="seeker-school-overall" data-clkn-avoid="1">
         <div className="seeker-school-overall-row">
           <span>{t("Your progress")}</span>
           <span className="seeker-school-overall-n">{doneCount} / {TOTAL_LESSONS}</span>
