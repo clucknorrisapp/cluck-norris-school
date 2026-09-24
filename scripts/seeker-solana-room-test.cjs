@@ -237,9 +237,10 @@ for (const l of LANGS) {
   ok(`${l}.json translates every Solana Room string the app renders (${allContentKeys.size} total)`, missing.length === 0, missing.slice(0, 5));
 }
 
-// solana-phone.html is deliberately excluded from this PR (content.js's own header, and the task
-// brief) — pin that PAGE_FILES/PAGES never grows an eleventh id by accident.
-ok("solana-phone is NOT ported in this PR (held for a follow-up)", !mod.PAGES.phone && !Object.values(PAGE_FILES).includes("solana-phone.html"));
+// solana-phone.html is not ported into content.js (content.js's own header) — it's ported below
+// into the SEEKER-EDITION-ONLY wing instead (src/seeker/solana/wing-content.js). Pin that
+// PAGE_FILES/PAGES (the shared room, reachable by both editions) never grows an eleventh id.
+ok("solana-phone is not in the SHARED room's content.js (it's Seeker-wing-only — see below)", !mod.PAGES.phone && !Object.values(PAGE_FILES).includes("solana-phone.html"));
 
 // The mint page's two example addresses, byte-for-byte — same reasoning as
 // scripts/solana-room-test.cjs's own check: a typo'd address on a page about impersonation would
@@ -250,6 +251,158 @@ ok("solana-phone is NOT ported in this PR (held for a follow-up)", !mod.PAGES.ph
   const src = fs.readFileSync(path.join(ROOT, "src", "seeker", "solana", "content.js"), "utf8");
   ok("content.js carries the real SKR mint byte-for-byte", src.includes(SKR_REAL_MINT));
   ok("content.js carries the impersonator mint byte-for-byte", src.includes(SKR_FAKE_MINT));
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// The SEEKER WING — src/seeker/solana/wing-content.js, registered only in full.jsx (never
+// edu.jsx). Same two checks as every page above, but against public/solana-phone.html, whose
+// content is now split across the wing's five pages rather than one — so both directions are
+// checked against the UNION of every wing page's strings, not any single one.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+console.log("\nThe Seeker wing — parity with public/solana-phone.html\n");
+{
+  const wingFp = path.join(ROOT, "src", "seeker", "solana", "wing-content.js");
+  ok("src/seeker/solana/wing-content.js exists", fs.existsSync(wingFp));
+  const wingSrc = fs.readFileSync(wingFp, "utf8")
+    .replace(/^import\s+\{[^}]*\}\s+from\s+["'][^"']+["'];?$/gm, "")
+    .replace(/^export\s+const/gm, "const")
+    .replace(/^export\s+function/gm, "function");
+  const wingFn = new Function("module", `
+    const t = (s) => s;
+    ${wingSrc}
+    module.exports = { WING_ORDER, WING_INDEX, WING_TOPICS, WING_PAGES };
+  `);
+  const wingSandbox = { module: { exports: {} } };
+  wingFn(wingSandbox.module);
+  const wing = wingSandbox.module.exports;
+
+  ok("wing-content.js exports the 5 Seeker-wing pages, in order", JSON.stringify(wing.WING_ORDER) === JSON.stringify(["skr", "phone", "seedvault", "mwa", "dappstore"]));
+
+  const phoneSite = siteKeys("solana-phone.html");
+  const wingKeys = new Set();
+  const wAdd = (s) => { if (typeof s === "string" && s.trim()) wingKeys.add(norm(s)); };
+  const wWalkFact = (f) => { if (Array.isArray(f)) f.forEach((p) => wAdd(p.text)); else wAdd(f); };
+  for (const id of wing.WING_ORDER) {
+    const page = wing.WING_PAGES[id];
+    ok(`wing has a "${id}" page`, !!page);
+    if (!page) continue;
+    for (const b of page.blocks) {
+      if (b.kind === "intro") b.paras.forEach(wAdd);
+      if (b.kind === "section") {
+        wAdd(b.title);
+        (b.facts || []).forEach(wWalkFact);
+        (b.trailingFacts || []).forEach(wWalkFact);
+        wAdd(b.footnoteText);
+        if (b.internalCta) wAdd(b.internalCta.label);
+        (b.stageRows || []).forEach((r) => { wAdd(r.name); (r.vals || []).forEach((v) => { wAdd(v.label); if (v.translateValue) wAdd(v.value); }); });
+      }
+      if (b.kind === "sources") b.links.forEach((l) => wAdd(l.label));
+      if (b.kind === "internal") b.links.forEach((l) => wAdd(l.label));
+    }
+    // "Sources" is SeekerWing.jsx's own hardcoded chrome (its <Sources> component), same as
+    // SolanaRoom.jsx's own — not per-page data, so the walk above can't see it.
+    if (page.blocks.some((b) => b.kind === "sources")) wAdd("Sources");
+  }
+  // SeekerWing.jsx's own hardcoded bottom-of-page chrome, same reasoning as "Sources" above.
+  wAdd("Back to the Solana Room →");
+
+  // (1) wing -> site: every string ported FROM solana-phone.html must be a real literal t() call
+  // there. NEW copy (written for the wing, not the website) is excused by name.
+  const WING_NEW_COPY = new Set([
+    // Room-index / wing-index chrome, and per-page intros/sections written for this wing.
+    norm(wing.WING_INDEX.title), norm(wing.WING_INDEX.lede),
+    ...wing.WING_TOPICS.flatMap((t) => [norm(t.title), norm(t.blurb)]),
+    "SKR is Solana Mobile's own token — network rewards for Seeker owners, published by Solana Mobile itself. A plain web search for it turns up an impersonator first. Here's the real mint, the fake one, what SKR actually is, and the one thing it does inside this app.",
+    "What SKR does in this app",
+    "Nothing is gated behind SKR here. Every heavy tool already has two other free doors — holding CLKN, or paying the small SOL pass — and SKR only ever adds a third door. It never removes either of the other two, and nothing in this app requires it.",
+    "Coming: a way to hold a lifetime pass instead of a wallet balance being checked every time you run a tool. Not shipped yet.",
+    "What Seeker adds is hardware and software built specifically for holding keys and approving transactions, which the rest of this room covers.",
+    "Seed Vault: where your keys actually live →", "Mobile Wallet Adapter: how signing actually works →",
+    "The Solana dApp Store →", "SKR, and telling the real mint from the impersonator →",
+    "On most phones, a wallet is just an app, holding your key inside its own storage. Seed Vault is Solana Mobile's answer to that — hardware built specifically so no app, including this one, ever gets to hold the key at all.",
+    "What this app can and can't see",
+    "This app never asks for, receives, or stores a seed phrase or a private key — not in Seed Vault, not anywhere. Every action that moves funds or signs anything is built here, then handed to your wallet app to approve and sign, exactly the way Mobile Wallet Adapter works.",
+    "What this app CAN see is only what you approve it to see: your public address, and the result of a transaction you already signed. It never sees your key, and it can't sign anything on its own.",
+    "How that handshake actually works →",
+    "Every time this app asks you to approve something — locking tokens, burning a supply, reclaiming rent — it's using the same protocol underneath: Mobile Wallet Adapter. Here's what that sheet actually is, and why this app never touches your key.",
+    "What \"sign\" authorises, in this app's own confirm sheets",
+    "Every confirm sheet in this app — before a lock, a burn, a transfer, a reclaim — shows you exactly what it is about to ask your wallet to sign, the same detail Mobile Wallet Adapter shows: the instructions, the amounts, the recipient. Approving it authorises that one transaction, once. It does not hand this app standing permission to do anything else, and it does not hand this app your key.",
+    "If a confirm sheet or a wallet's own MWA prompt ever shows something different from what you expected, the answer is the same one crypto safety always comes down to: decline it, and check before you sign again.",
+    "This app itself is published on the Solana dApp Store — a second Android app store, built specifically for apps that use wallets, tokens and other on-chain features.",
+    "We publish our own school there too — the same free lessons that live at clucknorris.app, wrapped for the dApp Store. Saying so here, in the section where we're describing the store, is the honest way to mention it.",
+    "How an update reaches your phone",
+    "This app you're reading this page in is that same listing. An update to it is published to the dApp Store the same way any app update is published to any store; the store checks for and delivers it, not this app itself.",
+    // Reused from content.js's "mint" page stageRows (already-translated, zero new copy there),
+    // not from solana-phone.html — the wing's skr page uses THAT comparison table instead of
+    // solana-phone.html's own richer MINT_AXES one (see KNOWN_NOT_PORTED_PHONE below).
+    "SKR — the official mint", "Mint address", "Registry status", "Jupiter-verified", "Holders",
+    "\"Seeker | Solana Mobile👇\" — an impersonator mint", "Unverified, no market cap",
+    "Check a mint's authorities and your own approvals — free, read-only, no signup →",
+  ].map(norm));
+  const wingNotOnSite = [...wingKeys].filter((k) => !phoneSite.has(k) && !WING_NEW_COPY.has(k));
+  ok("every wing string not marked as new copy is a literal t() call in solana-phone.html", wingNotOnSite.length === 0, wingNotOnSite.slice(0, 8));
+
+  // (2) site -> wing: every solana-phone.html string is ported into the wing somewhere, or named
+  // in KNOWN_NOT_PORTED_PHONE with a reason.
+  // solana-phone.html's own real-vs-impersonator MINT_AXES table (Verified on Jupiter / Holders
+  // (checked today) / organic score / Market) is NOT ported — the wing's skr page uses
+  // content.js's own "mint" page stageRows for that comparison instead (already-translated,
+  // same two addresses), rather than carrying two different-shaped comparison tables for the
+  // same two mints. Everything else on the page is ported.
+  const KNOWN_NOT_PORTED_PHONE = new Set([
+    "Verified on Jupiter", "Holders (checked today)", "Jupiter's organic score", "Market",
+    "The real SKR", "The impersonator", "Yes", "No", "~45,700", "4",
+    "Actively scored", "0 — no real trading activity behind it",
+    "Trades across dozens of pools on several exchanges", "No market cap, no meaningful liquidity",
+    "The real SKR mint", "The impersonator mint",
+    // Superseded by a reworded version carried in WING_NEW_COPY above ("...which the rest of
+    // this room covers" instead of "...this page is about" — the content now spans 5 pages).
+    "What Seeker adds is hardware and software built specifically for holding keys and approving transactions, which the rest of this page is about.",
+    // The website's own sentence points at a disclosure block "at the bottom of this page" — the
+    // wing's dappstore page carries a shorter version instead, and the disclosure itself moved to
+    // the wing's phone page (see the "Where we stand" section, ported verbatim there).
+    "We publish our own school there too — the same free lessons that live at clucknorris.app, wrapped for the dApp Store. Saying so here, in the section where we're describing the store, is the honest way to mention it; the disclosure at the bottom of this page says the same thing again on its own.",
+    // The mint-address sentence is split around a <code> element on the website; the wing states
+    // the same facts as whole sentences instead (its own intro plus content.js's mint stageRows).
+    "SKR is the token of the Solana Mobile ecosystem: an SPL token with 6 decimals, at the mint address",
+    ". It is verified on Jupiter, and its holder count is around 45,700, checked today.",
+    // Cross-links to pages this wing doesn't carry (the shared room's /solana/mint,
+    // /wallet-checkup outside this app's own /checkup route, and the plain /solana index link —
+    // the wing's own internal links point at its in-app equivalents instead).
+    "What a token mint is — the one address that defines a token →",
+    "Wallet Checkup — a free safety read on any address, no wallet or signup needed →",
+    "The Solana Room — how the rest of it actually works →",
+    // The website's dated "Last checked … · maintained by Cluck Norris" footer has no per-page
+    // equivalent in the wing (a static in-app room needs no live-currency disclosure the way a
+    // standalone web page does — same posture as content.js's own ported pages, none of which
+    // carry this line either).
+    "Last checked 20 September 2026 · maintained by Cluck Norris",
+  ].map(norm));
+  const notPortedPhone = [...phoneSite].filter((k) => !wingKeys.has(k) && !KNOWN_NOT_PORTED_PHONE.has(k));
+  ok("every solana-phone.html string is ported into the wing (or named in KNOWN_NOT_PORTED_PHONE)", notPortedPhone.length === 0, notPortedPhone.slice(0, 8));
+
+  const wingRaw = fs.readFileSync(wingFp, "utf8");
+  ok("wing-content.js carries the real SKR mint byte-for-byte", wingRaw.includes("SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3"));
+  ok("wing-content.js carries the impersonator mint byte-for-byte", wingRaw.includes("79dd8EvWuGjPTnTMMBoY6Nqtdw5u1cXaGh4azuLGjiAj"));
+
+  // (3) translation completeness — the wing's OWN key extractor (scripts/seeker-i18n-keys.cjs's
+  // wingContentKeys(), plus its normal source scan of SeekerWing.jsx's own hardcoded t()/tf()
+  // calls) against all six dictionaries. Independent of the union used above.
+  const { keys: allSeekerKeys } = require(path.join(ROOT, "scripts", "seeker-i18n-keys.cjs"));
+  const seekerKeys = allSeekerKeys();
+  const wingRelevant = seekerKeys.filter((k) => wingKeys.has(norm(k)) || WING_NEW_COPY.has(norm(k)));
+  for (const l of LANGS) {
+    const missing = wingRelevant.filter((k) => !Object.prototype.hasOwnProperty.call(dicts[l], k));
+    ok(`${l}.json translates every Seeker-wing string this test found (${wingRelevant.length} checked)`, missing.length === 0, missing.slice(0, 5));
+  }
+
+  // The full/Seeker edition is the only one that can ever reach the wing — edu.jsx's own source
+  // never mentions it, by construction (its import-list-is-the-safety-argument, same as
+  // docs/STORE_EDITION.md). Nothing here should be able to change that unnoticed.
+  const eduSrc = fs.readFileSync(path.join(ROOT, "src", "seeker", "edition", "edu.jsx"), "utf8");
+  ok("edu.jsx never imports the Seeker wing", !/SeekerWing|wing-content/.test(eduSrc));
+  const fullSrc = fs.readFileSync(path.join(ROOT, "src", "seeker", "edition", "full.jsx"), "utf8");
+  ok("full.jsx registers the wing's route", /\/solana\/seeker\/:pageId/.test(fullSrc) && /SeekerWingPage/.test(fullSrc));
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════
