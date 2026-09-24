@@ -44,7 +44,7 @@ Wallet Checkup reads a Solana wallet address and reports back what it finds: ope
 
 Listing Checkup looks up a token by its mint address and surfaces where it is actually listed, so you can check a token's footprint before trusting a claim about it.
 
-Finish every lesson and the app issues a certificate of completion: a dated record with its own verification code, generated from your own progress on your own device. There is no wallet involved and nothing is transferred — the name on the certificate stays on your phone unless you choose to share it yourself.
+Your progress is tracked on your phone, and finishing the course earns a simple certificate of completion.
 
 This app has no wallet, no payments, and nothing to buy. It does not ask for a seed phrase, does not connect to a wallet, and never will. The goal is simple: teach people what is actually true about how crypto works, before they get hurt by not knowing it.
 ```
