@@ -204,40 +204,46 @@ export function SolanaRoomIndex({ extra }) {
     <div className="seeker-pane seeker-solana">
       <h1 data-clkn-avoid="1">{t(INDEX.title)}</h1>
       <p className="seeker-solana-sub" data-clkn-avoid="1">{t(INDEX.sub)}</p>
-      {/* data-clkn-avoid-kids: this room's own cards can run tall enough to reach the bottom of
-          a short phone viewport on first paint (the 🌐 pill landed directly on the "scam" card's
-          own text at 360x800 — same class of bug seeker.css/School.jsx documents at length: the
-          pill only avoids what is opted in). Each CARD's own top is what clkn-dock-float.js
-          measures against; marking the outer wrapper instead would push the pill above the whole
-          stack rather than just clearing the one card it actually touches. */}
+      {/* data-clkn-avoid-kids goes on EACH card here, not on one wrapper around all three
+          (found live at 360x800, #431 follow-up): the mechanics/bigger-picture cards run tall
+          enough — six-plus topic rows — to span past the bottom of a short phone viewport on
+          first paint. Marking the whole stack's outer wrapper as the "kids" container makes a
+          tall card's OWN top the thing clkn-dock-float.js measures against, and that top can sit
+          well above the screen, so the pill's lift climbs to clear a box that isn't actually
+          near the fold and gets pushed clean off the top of the viewport (`clkn-dock-float.js`'s
+          own hard floor now catches that case too, but the fix here is to give it the right
+          thing to avoid in the first place). Marking each card separately makes its DIRECT
+          CHILDREN — the section title, the lede, and each individual topic row (title + blurb +
+          "Read it →") — the avoid units, so the pill only climbs as far as the nearest actual
+          row, never past a whole tall card. */}
       <div data-clkn-avoid-kids="1">
         <div className="seeker-solana-card">
           <div className="seeker-solana-intro">{t(INDEX.intro)}</div>
         </div>
-        <div className="seeker-solana-card">
-          <div className="seeker-solana-sectitle">{t(INDEX.mechanicsTitle)}</div>
-          <div className="seeker-solana-fact" style={{ marginBottom: 10 }}>{t(INDEX.mechanicsLede)}</div>
-          {MECHANICS.map((topic) => (
-            <div className="seeker-solana-topic" key={topic.id}>
-              <h2>{t(topic.title)}</h2>
-              <p>{t(topic.blurb)}</p>
-              <Link className="seeker-solana-topic-link" to={`/solana/${topic.id}`}>{t(INDEX.readIt)}</Link>
-            </div>
-          ))}
-        </div>
-        <div className="seeker-solana-card">
-          <div className="seeker-solana-sectitle">{t(INDEX.biggerTitle)}</div>
-          <div className="seeker-solana-fact" style={{ marginBottom: 10 }}>{t(INDEX.biggerLede)}</div>
-          {BIGGER_PICTURE.map((topic) => (
-            <div className="seeker-solana-topic" key={topic.id}>
-              <h2>{t(topic.title)}</h2>
-              <p>{t(topic.blurb)}</p>
-              <Link className="seeker-solana-topic-link" to={`/solana/${topic.id}`}>{t(INDEX.readIt)}</Link>
-            </div>
-          ))}
-        </div>
-        {extra || null}
       </div>
+      <div className="seeker-solana-card" data-clkn-avoid-kids="1">
+        <div className="seeker-solana-sectitle">{t(INDEX.mechanicsTitle)}</div>
+        <div className="seeker-solana-fact" style={{ marginBottom: 10 }}>{t(INDEX.mechanicsLede)}</div>
+        {MECHANICS.map((topic) => (
+          <div className="seeker-solana-topic" key={topic.id}>
+            <h2>{t(topic.title)}</h2>
+            <p>{t(topic.blurb)}</p>
+            <Link className="seeker-solana-topic-link" to={`/solana/${topic.id}`}>{t(INDEX.readIt)}</Link>
+          </div>
+        ))}
+      </div>
+      <div className="seeker-solana-card" data-clkn-avoid-kids="1">
+        <div className="seeker-solana-sectitle">{t(INDEX.biggerTitle)}</div>
+        <div className="seeker-solana-fact" style={{ marginBottom: 10 }}>{t(INDEX.biggerLede)}</div>
+        {BIGGER_PICTURE.map((topic) => (
+          <div className="seeker-solana-topic" key={topic.id}>
+            <h2>{t(topic.title)}</h2>
+            <p>{t(topic.blurb)}</p>
+            <Link className="seeker-solana-topic-link" to={`/solana/${topic.id}`}>{t(INDEX.readIt)}</Link>
+          </div>
+        ))}
+      </div>
+      {extra || null}
     </div>
   );
 }

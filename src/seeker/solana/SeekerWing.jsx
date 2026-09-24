@@ -131,7 +131,10 @@ function Block({ block, swapAvailable }) {
 // (see SolanaRoom.jsx and full.jsx), never in the education edition.
 export function SeekerWingIndexSection() {
   return (
-    <div className="seeker-solana-card" data-clkn-seeker-wing="1">
+    // data-clkn-avoid-kids, same reasoning as the two topic cards in SolanaRoom.jsx's
+    // SolanaRoomIndex: mark this card's own rows, not the whole card, so the pill only climbs
+    // as far as the nearest actual row.
+    <div className="seeker-solana-card" data-clkn-seeker-wing="1" data-clkn-avoid-kids="1">
       <div className="seeker-solana-sectitle">{t(WING_INDEX.title)}</div>
       <div className="seeker-solana-fact" style={{ marginBottom: 10 }}>{t(WING_INDEX.lede)}</div>
       {WING_TOPICS.map((topic) => (
