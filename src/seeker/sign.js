@@ -161,14 +161,31 @@ function statusOutcome(st) {
   if (st && st.confirmationStatus === "processed") return { status: "pending" }; // landed, not yet confirmed — never expired
   return null; // no status yet — caller decides what "no status" means in its own context
 }
+// ⚠️ Codex round 31, P2 — "malformed status responses become expired." The FINAL check below used
+// to call anything falsy `finalSt` (a missing/malformed response, an RPC shape change, a proxy
+// returning `{}` or `{value:[]}`) the SAME as an explicit, well-formed "nothing here" — and
+// treated BOTH as "expired — safe to retry". A malformed response is not an answer; it is the
+// absence of one, and the only honest reading of "no status" that may ever become "expired" is a
+// RESPONSE THE NODE ACTUALLY SHAPED THAT WAY: `result.value` an array with an entry at index 0
+// that is EXACTLY `null`. `{}`, `{value:[]}`, `null`, `undefined`, a non-array `value`, or a
+// thrown RPC error must all stay `pending` — never `expired`, and (via statusOutcome's own null
+// return for anything that isn't a well-formed status object) never `sent`/`failed` either.
+function isWellFormedNullStatus(result) {
+  return !!result && Array.isArray(result.value) && result.value.length > 0 && result.value[0] === null;
+}
+// A response's status entry, or `undefined` for anything not shaped like a well-formed
+// `{value:[...]}` array — never assume a malformed shape's "missing" entry means the same thing
+// as an explicit `null` at index 0 (see isWellFormedNullStatus above).
+function statusEntry(result) {
+  return result && Array.isArray(result.value) ? result.value[0] : undefined;
+}
 export async function checkPendingSwap(rpc, { signature, lastValidBlockHeight }) {
   try {
     const [stRes, height] = await Promise.all([
       rpc("getSignatureStatuses", [[signature], {}]),
       rpc("getBlockHeight", [{ commitment: "confirmed" }]),
     ]);
-    const st = stRes && stRes.value && stRes.value[0];
-    const outcome = statusOutcome(st);
+    const outcome = statusOutcome(statusEntry(stRes));
     if (outcome) return outcome;
 
     const h = typeof height === "number" ? height : null;
@@ -183,10 +200,11 @@ export async function checkPendingSwap(rpc, { signature, lastValidBlockHeight })
     } catch (_) {
       return { status: "pending" }; // an RPC read failure is not an on-chain answer either way
     }
-    const finalSt = finalRes && finalRes.value && finalRes.value[0];
-    const finalOutcome = statusOutcome(finalSt);
+    const finalOutcome = statusOutcome(statusEntry(finalRes));
     if (finalOutcome) return finalOutcome;
-    if (!finalSt) return { status: "expired" }; // truly nothing, ever, after the height passed
+    // ONLY a well-formed explicit null counts as "truly nothing, ever" — a malformed response
+    // (missing/empty `value`, non-array, etc.) is not proof of anything and stays pending.
+    if (isWellFormedNullStatus(finalRes)) return { status: "expired" };
     return { status: "pending" }; // some other ambiguous shape — never guess "safe to retry"
   } catch (_) {
     return { status: "pending" };
@@ -324,9 +342,29 @@ export async function submitSigned(rpc, realTx, opts) {
 // after the wallet returns a validly-diffed signature (both the `signTransaction` path and the
 // `signAndSendTransaction` path), BEFORE `submitSigned`/the send is attempted — so the caller can
 // persist the record first and have it survive a throw. Errors from the callback itself are
-// swallowed (this is a signing seam, not a storage layer — a storage failure must never block a
-// swap that otherwise succeeded).
-export async function signSendConfirm({ provider, owner, build, coSign, skipPreflight, onSigned }) {
+// swallowed BY DEFAULT (this is a signing seam, not a storage layer — a storage failure must
+// never silently block a swap that otherwise succeeded) UNLESS the caller opts into
+// `requireOnSigned: true` — see the note below.
+//
+// ⚠️ Codex round 31, P2 — "a failed recovery-record write still allows broadcast." Swallowing
+// `onSigned`'s failure unconditionally means a pane whose ONLY way to resume checking an
+// in-flight transaction is that record (the Swap pane: `pending` state and the poll that resolves
+// it both come from localStorage, nothing else remembers the signature) can broadcast a
+// transaction it then has NO way to ever check on again — a full localStorage quota is exactly
+// the moment a person is most likely to lose the one receipt of what just happened to their
+// money. `requireOnSigned: true` changes the contract for a caller that needs the record to
+// exist before it is willing to submit anything: an `onSigned` that THROWS, or explicitly
+// `return`s `false`, STOPS the submission before `submitSigned` is ever called (on the
+// `signTransaction` path — the one path where nothing has been sent to a node yet) and this
+// function returns `{ status: "failed", error: RECOVERY_SAVE_ERROR, sig }` — the signature is
+// still reported (it was validly diffed and is real; just never broadcast) so a person could look
+// it up if they ever needed to, even though nothing was sent. On the `signAndSendTransaction`
+// path the wallet has ALREADY broadcast by the time `onSigned` can run (that provider hands back
+// an already-submitted signature, never a transaction to diff-then-send) — `requireOnSigned`
+// cannot un-send it, so that path keeps the swallow-and-continue behaviour unchanged; the
+// signature is still real and confirmable even without a recovery record.
+const RECOVERY_SAVE_ERROR = "Could not save the recovery record — nothing was sent. Free some storage and try again.";
+export async function signSendConfirm({ provider, owner, build, coSign, skipPreflight, onSigned, requireOnSigned }) {
   const CW = typeof window !== "undefined" ? window.CluckWallet : null;
   const web3 = typeof window !== "undefined" ? window.solanaWeb3 : null;
   if (!CW || !web3) return { status: "failed", error: "Wallet layer did not load." };
@@ -374,8 +412,24 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
       // round 30 P2 — persist BEFORE the send is even attempted, so a transport throw doesn't
       // lose the record. `signatureOf` reads the wallet's own signature off `realTx`, the same
       // value `submitSigned` will report as `localSig` if the send throws.
+      // round 31 P2 — when the caller passed `requireOnSigned: true`, a failed (throwing or
+      // `false`-returning) `onSigned` STOPS here, before submitSigned/the send is ever attempted:
+      // nothing has reached a node yet on this path, so refusing to submit is still safe and
+      // honest, and it is the only way to guarantee the recovery record exists before anything
+      // is broadcast.
       if (typeof onSigned === "function") {
-        try { const s = signatureOf(realTx); if (s) onSigned(s); } catch (_) { /* never block a swap on a storage failure */ }
+        const localSigForRecord = signatureOf(realTx);
+        let onSignedOk = true;
+        try {
+          const r = onSigned(localSigForRecord);
+          if (r === false) onSignedOk = false;
+        } catch (_) {
+          onSignedOk = false;
+        }
+        if (!onSignedOk && requireOnSigned) {
+          return { status: "failed", error: RECOVERY_SAVE_ERROR, sig: localSigForRecord || undefined };
+        }
+        // otherwise: never block a swap on a storage failure — same as before round 31.
       }
       // (5) lives in submitSigned — the one place that knows a thrown submit is not proof that
       // nothing landed. Never inline an rpc("sendTransaction") next to this.
@@ -399,7 +453,11 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
       const res = await provider.signAndSendTransaction(tx);
       sig = (res && res.signature) || (typeof res === "string" ? res : null);
       // round 30 P2 — same persist-before-confirmation rule, for the one path that returns an
-      // already-submitted signature instead of a transaction to diff.
+      // already-submitted signature instead of a transaction to diff. round 31 P2:
+      // `requireOnSigned` is deliberately NOT honoured here — this provider has already
+      // broadcast by the time `onSigned` can run, so there is nothing left to stop; the record
+      // failing to save is unfortunate but the transaction is real either way, so the swallow
+      // stays unconditional on this path.
       if (sig && typeof onSigned === "function") {
         try { onSigned(sig); } catch (_) { /* never block a swap on a storage failure */ }
       }

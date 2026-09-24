@@ -460,6 +460,99 @@ const ok = (name, cond, detail) => {
     } finally { global.setTimeout = realSetTimeout; }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // 9. Codex round 31, P2 — "a failed recovery-record write still allows broadcast." Codex's exact
+  // case: an `onSigned` that throws "storage unavailable" with `requireOnSigned: true`. On the
+  // `signTransaction` path (this is where WE submit, so the check can still stop it in time), the
+  // fake `rpc`'s `sendTransaction` must NEVER be called — nothing reaches a node — and the result
+  // is `{status:"failed", error: <the recovery-record message>, sig}`, the signature reported only
+  // so it could be looked up even though nothing was sent.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\nCodex round 31 P2 — requireOnSigned:true stops submission when onSigned fails\n");
+  {
+    let sendTransactionCalled = false;
+    global.window.CluckUtil = {
+      rpc: async (method) => {
+        if (method === "getLatestBlockhash") return { value: { blockhash: web3.Keypair.generate().publicKey.toBase58() } };
+        if (method === "sendTransaction") { sendTransactionCalled = true; return "SHOULD_NEVER_BE_CALLED"; }
+        throw new Error("unexpected rpc call: " + method);
+      },
+    };
+    const payer = web3.Keypair.generate();
+    const provider = {
+      publicKey: { toString: () => payer.publicKey.toBase58() },
+      signTransaction: async (tx) => { tx.partialSign ? tx.partialSign(payer) : tx.sign([payer]); return tx; },
+    };
+    const buildLegacy = (w3, blockhash, live) => {
+      const t = new w3.Transaction({ feePayer: new w3.PublicKey(live), recentBlockhash: blockhash });
+      t.add(w3.SystemProgram.transfer({ fromPubkey: new w3.PublicKey(live), toPubkey: w3.Keypair.generate().publicKey, lamports: 1000 }));
+      return t;
+    };
+    const res = await seam.signSendConfirm({
+      provider, owner: payer.publicKey.toBase58(), build: buildLegacy,
+      onSigned: () => { throw new Error("storage unavailable"); },
+      requireOnSigned: true,
+    });
+    ok("Codex's exploit — a throwing onSigned with requireOnSigned:true -> sendTransaction never called (nothing broadcast)",
+      sendTransactionCalled === false, res);
+    ok("...the result is 'failed' with the recovery-record message",
+      res.status === "failed" && /Could not save the recovery record/i.test(res.error), res);
+    ok("...and the local signature is still reported (so it could be looked up, even though nothing was sent)",
+      typeof res.sig === "string" && res.sig.length >= 43, res);
+
+    // Same case, but onSigned returns `false` instead of throwing — treated identically.
+    let sendCalled2 = false;
+    global.window.CluckUtil.rpc = async (method) => {
+      if (method === "getLatestBlockhash") return { value: { blockhash: web3.Keypair.generate().publicKey.toBase58() } };
+      if (method === "sendTransaction") { sendCalled2 = true; return "SHOULD_NEVER_BE_CALLED"; }
+      throw new Error("unexpected rpc call: " + method);
+    };
+    const payer2 = web3.Keypair.generate();
+    const provider2 = {
+      publicKey: { toString: () => payer2.publicKey.toBase58() },
+      signTransaction: async (tx) => { tx.partialSign ? tx.partialSign(payer2) : tx.sign([payer2]); return tx; },
+    };
+    const res2 = await seam.signSendConfirm({
+      provider: provider2, owner: payer2.publicKey.toBase58(), build: buildLegacy,
+      onSigned: () => false,
+      requireOnSigned: true,
+    });
+    ok("onSigned returning false (not throwing) with requireOnSigned:true -> also stops submission",
+      sendCalled2 === false && res2.status === "failed" && /Could not save the recovery record/i.test(res2.error), res2);
+  }
+
+  // ── legacy callers that pass no onSigned at all are unaffected by requireOnSigned's existence ─
+  console.log("\nCodex round 31 P2 — legacy callers with no onSigned keep working unchanged\n");
+  {
+    global.window.CluckUtil = {
+      rpc: async (method) => {
+        if (method === "getLatestBlockhash") return { value: { blockhash: web3.Keypair.generate().publicKey.toBase58() } };
+        if (method === "sendTransaction") return "LEGACYSIG111111111111111111111111111111111111111111111111111111111111";
+        if (method === "getSignatureStatuses") return { value: [{ confirmationStatus: "confirmed" }] };
+        throw new Error("unexpected rpc call: " + method);
+      },
+    };
+    const realSetTimeout = global.setTimeout;
+    global.setTimeout = (fn) => fn();
+    try {
+      const payer = web3.Keypair.generate();
+      const provider = {
+        publicKey: { toString: () => payer.publicKey.toBase58() },
+        signTransaction: async (tx) => { tx.partialSign ? tx.partialSign(payer) : tx.sign([payer]); return tx; },
+      };
+      const buildLegacy = (w3, blockhash, live) => {
+        const t = new w3.Transaction({ feePayer: new w3.PublicKey(live), recentBlockhash: blockhash });
+        t.add(w3.SystemProgram.transfer({ fromPubkey: new w3.PublicKey(live), toPubkey: w3.Keypair.generate().publicKey, lamports: 1000 }));
+        return t;
+      };
+      // Firepit/ProjectBurn/LockerRoom call signSendConfirm with no `onSigned` at all — this must
+      // behave exactly as before, whether or not `requireOnSigned` is also passed.
+      const res = await seam.signSendConfirm({ provider, owner: payer.publicKey.toBase58(), build: buildLegacy, requireOnSigned: true });
+      ok("no onSigned passed at all (requireOnSigned has nothing to require) -> sends and confirms normally",
+        res.status === "sent", res);
+    } finally { global.setTimeout = realSetTimeout; }
+  }
+
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

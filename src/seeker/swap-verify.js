@@ -65,6 +65,36 @@
 //      — cuLimit × cuPriceMicroLamports / 1e6 must be <= the `maxPriorityFeeLamports` the caller
 //      passes in (the number the confirm sheet actually rendered). Omit the argument to skip this
 //      check (used only by legacy call sites/tests that don't carry a displayed ceiling).
+//
+// ⚠️ Codex round 31, P1 — "repeated instructions exceed the approved amount." Round 30 checked
+// each instruction's OWN fields but never a transaction's total effect: TWO wSOL-wrap System
+// transfers, each individually under the quote's inAmount, summed to MORE than the person ever
+// approved (routeTail was also simply overwritten by whichever route instruction came last, so a
+// second Jupiter call could ride alongside the real one unnoticed). Fixed by making every one of
+// these a TRANSACTION-WIDE limit, enforced once after the per-instruction loop, never per
+// instruction:
+//   6. EXACTLY ONE Jupiter route instruction (route/shared_accounts_route/either ExactOut kind —
+//      a second one of ANY kind refuses by name, before its shape is even decoded).
+//   7. THE SUM of every System Transfer's lamports refuses if it exceeds the quote's inAmount
+//      when the input is SOL, and refuses on ANY System Transfer at all when the input is not SOL
+//      (there is nothing for a non-SOL swap to wrap).
+//   8. AT MOST ONE wSOL SyncNative and AT MOST ONE CloseAccount.
+//   9. AT MOST ONE Associated-Token-Account create per target ATA address (i.e. per mint this
+//      swap actually touches).
+//
+//   10. (round 31, P1) A MISSING SetComputeUnitLimit IS NOT A ZERO-CU TRANSACTION — Solana applies
+//      a runtime default when a transaction carries none: 200,000 CU per instruction (excluding
+//      ComputeBudget instructions themselves), capped at 1,400,000 CU total per transaction
+//      (solana.com/docs/core/fees/fee-structure, "Compute Budget"). Omitting the limit instruction
+//      used to skip the priority-fee ceiling check entirely — Codex's exploit: drop
+//      SetComputeUnitLimit, set SetComputeUnitPrice to 1,000,000,000 micro-lamports/CU, and the fee
+//      ceiling never even ran. Now: no SetComputeUnitLimit -> the default above is computed and
+//      used for the ceiling math; no SetComputeUnitPrice -> price is 0. The fee is
+//      ceil(cuLimit × cuPriceMicroLamports / 1e6) lamports — CEILING, not truncating division,
+//      computed with BigInt (`(a*b + 999_999n) / 1_000_000n`) so a fee that rounds up past the
+//      ceiling by even one lamport still refuses. More than one SetComputeUnitLimit or
+//      SetComputeUnitPrice in the same transaction refuses outright (there is exactly one honest
+//      value for each).
 
 // Anchor instruction discriminators — sha256("global:<name>").slice(0, 8), the first 8 bytes of
 // every one of Jupiter's route-shaped instructions. Verified against the real recorded fixture:
@@ -212,6 +242,16 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
   const ataOk = (addr, list) => !!addr && list.length > 0 && list.includes(addr);
 
   let routeTail = null, routeKind = null, cuLimit = null, cuPriceMicroLamports = null;
+  // Round 31 — transaction-wide counters/accumulators. Every one of these is enforced ONCE, after
+  // the per-instruction loop (or the instant a second-of-something is seen), never per instruction
+  // — that per-instruction blind spot is exactly what let repeated instructions sum past what was
+  // approved. See the file header, fixes 6-10.
+  let jupRouteCount = 0;
+  let systemTransferSum = 0n;
+  let syncNativeCount = 0;
+  let closeAccountCount = 0;
+  let cuLimitCount = 0, cuPriceCount = 0;
+  const createdAtas = new Set();
 
   for (const ix of instructions) {
     if (ix.programIdIndex == null || ix.programIdIndex >= keys.length) {
@@ -228,8 +268,12 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
 
     if (pid === COMPUTE_BUDGET_PROGRAM_ID) {
       if (data.length === 5 && data[0] === 2) {
+        cuLimitCount++;
+        if (cuLimitCount > 1) return { ok: false, reason: "This transaction sets the compute-unit limit more than once." };
         cuLimit = readU32LE(data, 1);
       } else if (data.length === 9 && data[0] === 3) {
+        cuPriceCount++;
+        if (cuPriceCount > 1) return { ok: false, reason: "This transaction sets the compute-unit price more than once." };
         cuPriceMicroLamports = readU64LE(data, 1);
       } else {
         return { ok: false, reason: "This transaction sets compute budget in a way the app does not recognise." };
@@ -250,10 +294,14 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
       if (!to.isStatic || !ataOk(to.addr, wsolAtas)) {
         return { ok: false, reason: "This transaction sends SOL to an account that is not yours." };
       }
-      const cap = inputIsSol && quote.inAmount != null ? BigInt(String(quote.inAmount)) : 0n;
-      if (lamports > cap) {
-        return { ok: false, reason: "This transaction moves more SOL than the quote you saw." };
+      // Round 31 fix 7 — a non-SOL input has nothing to wrap: ANY System transfer at all refuses,
+      // not just an over-cap one. A SOL input's transfers are summed and checked ONCE below,
+      // never capped per-instruction (that per-instruction cap is exactly what let two
+      // under-the-cap transfers sum past the quote's inAmount).
+      if (!inputIsSol) {
+        return { ok: false, reason: "This transaction moves SOL, but the quote you saw does not swap from SOL." };
       }
+      systemTransferSum += lamports;
       continue;
     }
 
@@ -277,6 +325,15 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
       if (ata.isStatic && !ataOk(ata.addr, inAtas) && !ataOk(ata.addr, outAtas)) {
         return { ok: false, reason: "This transaction opens a token account that is not the one this swap needs." };
       }
+      // Round 31 fix 9 — at most one create per target ATA address (i.e. per mint this swap
+      // actually touches). Only enforced when the ATA address itself is static — it always is for
+      // a real Jupiter build (see pubkeyAt's note: a user's own ATA is never ALT-resolved).
+      if (ata.isStatic) {
+        if (createdAtas.has(ata.addr)) {
+          return { ok: false, reason: "This transaction opens the same token account more than once." };
+        }
+        createdAtas.add(ata.addr);
+      }
       continue;
     }
 
@@ -286,6 +343,8 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
         if (!acct.isStatic || !ataOk(acct.addr, wsolAtas)) {
           return { ok: false, reason: "This transaction syncs a token account that is not your wrapped-SOL account." };
         }
+        syncNativeCount++;
+        if (syncNativeCount > 1) return { ok: false, reason: "This transaction syncs your wrapped-SOL account more than once." };
         continue;
       }
       if (data.length === 1 && data[0] === 9) { // CloseAccount
@@ -299,6 +358,8 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
         if (!dest.isStatic || dest.addr !== liveAddress || !owner.isStatic || owner.addr !== liveAddress) {
           return { ok: false, reason: "This transaction closes a token account to or for a different account than the one connected." };
         }
+        closeAccountCount++;
+        if (closeAccountCount > 1) return { ok: false, reason: "This transaction closes a token account more than once." };
         continue;
       }
       return { ok: false, reason: "This transaction moves tokens in a way the app does not recognise." };
@@ -307,6 +368,12 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
     if (pid === MEMO_PROGRAM_ID) continue; // never moves value
 
     if (pid === JUP_PROGRAM_ID) {
+      // Round 31 fix 6 — count every Jupiter-program instruction before decoding its shape. A
+      // second one of ANY kind (even a duplicate of the real route) refuses outright — routeTail
+      // below used to simply be OVERWRITTEN by whichever came last, so a second, unrelated swap
+      // instruction rode along unnoticed as long as the last one matched the quote.
+      jupRouteCount++;
+      if (jupRouteCount > 1) return { ok: false, reason: "This transaction includes more than one swap instruction." };
       const disc = bytesToHex(data.slice(0, 8));
       const kind = ROUTE_DISCRIMINATORS[disc];
       if (!kind) return { ok: false, reason: "This transaction calls the swap program in a way the app does not recognise." };
@@ -393,6 +460,17 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
     return { ok: false, reason: "This transaction calls a program the app does not recognise." };
   }
 
+  // Round 31 fix 7 — enforced ONCE, transaction-wide, against the SUM of every System transfer
+  // seen above (each already proven to be live-wallet -> live-wallet's-own-wSOL-ATA, and to only
+  // exist at all when the quote's input is SOL). This is Codex's exact exploit: two transfers,
+  // each individually under the cap, summing past it.
+  {
+    const cap = inputIsSol && quote.inAmount != null ? BigInt(String(quote.inAmount)) : 0n;
+    if (systemTransferSum > cap) {
+      return { ok: false, reason: "This transaction moves more SOL than the quote you saw." };
+    }
+  }
+
   if (!routeTail) return { ok: false, reason: "Could not find the swap instruction to verify." };
 
   const inAmount = readU64LE(routeTail, 0);
@@ -413,11 +491,23 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
     return { ok: false, reason: "This transaction includes a fee we do not expect." };
   }
 
-  // Round 30 fix 6 — the compute budget's own priority fee can never exceed what the confirm
-  // sheet actually showed. Skipped (not refused) when the caller passes no ceiling to check
-  // against, or when this transaction carried no ComputeBudget instructions at all.
-  if (maxPriorityFeeLamports != null && cuLimit != null && cuPriceMicroLamports != null) {
-    const feeLamports = (BigInt(cuLimit) * cuPriceMicroLamports) / 1000000n;
+  // Round 31 fix 10 — a missing SetComputeUnitLimit/Price is NOT a zero-fee transaction; Solana
+  // applies a runtime default (solana.com/docs/core/fees/fee-structure, "Compute Budget"): with no
+  // SetComputeUnitLimit, each instruction gets 200,000 CU, capped at 1,400,000 CU total for the
+  // transaction; with no SetComputeUnitPrice, the price is 0 micro-lamports/CU. Codex's exploit
+  // dropped the limit instruction and set an enormous price, which used to skip the ceiling check
+  // entirely (it only ran when BOTH decoded values were present) — the default below makes the
+  // ceiling check ALWAYS run whenever the caller passed a ceiling to check against, whether or not
+  // either ComputeBudget instruction was present.
+  const computeBudgetInstructionCount = cuLimitCount + cuPriceCount;
+  const nonComputeBudgetInstructionCount = instructions.length - computeBudgetInstructionCount;
+  const effectiveCuLimit = cuLimit != null ? cuLimit : Math.min(200000 * nonComputeBudgetInstructionCount, 1400000);
+  const effectiveCuPrice = cuPriceMicroLamports != null ? cuPriceMicroLamports : 0n;
+  if (maxPriorityFeeLamports != null) {
+    // CEILING division, not truncation — a fee that rounds up past the ceiling by even one
+    // lamport must still refuse. BigInt throughout; `+ 999_999n` before the `/ 1_000_000n` is the
+    // standard integer-ceiling trick.
+    const feeLamports = (BigInt(effectiveCuLimit) * effectiveCuPrice + 999999n) / 1000000n;
     if (feeLamports > BigInt(String(maxPriorityFeeLamports))) {
       return { ok: false, reason: "This transaction's priority fee is higher than what you were shown." };
     }

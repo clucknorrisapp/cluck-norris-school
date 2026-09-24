@@ -113,10 +113,14 @@ function tokenTransferData(amount) {
     ok("…and reports the route kind it found", check.routeKind === "shared_accounts_route", check);
     ok("…and decodes the compute budget instructions", check.cuLimit === 1400000 && check.cuPriceMicroLamports === 315258n, check);
 
-    // Round 30 fix 6 — a ceiling at or above the real fee passes; below it refuses.
-    const realFeeLamports = (BigInt(check.cuLimit) * check.cuPriceMicroLamports) / 1000000n; // 1,400,000 * 315,258 / 1e6 = 441,361
+    // Round 30 fix 6 / round 31 fix 10 — a ceiling at or above the real fee passes; below it
+    // refuses. The verifier computes the fee with CEILING division (round 31): 1,400,000 *
+    // 315,258 / 1e6 = 441,361.2 exactly, which rounds UP to 441,362 lamports — never truncated to
+    // 441,361 (that truncation is the exact off-by-one Codex's round-up exploit relies on).
+    const realFeeLamports = (BigInt(check.cuLimit) * check.cuPriceMicroLamports + 999999n) / 1000000n; // ceil(441,361.2) = 441,362
+    ok("the ceiling-divided real fee is 441362, not the truncated 441361", realFeeLamports === 441362n, realFeeLamports);
     const okCeil = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: String(realFeeLamports) });
-    ok("a priority-fee ceiling >= the real fee -> still passes", okCeil.ok === true, okCeil);
+    ok("a priority-fee ceiling >= the real (ceiling-divided) fee -> still passes", okCeil.ok === true, okCeil);
     const tooLow = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: String(realFeeLamports - 1n) });
     ok("a priority-fee ceiling 1 lamport below the real fee -> refused", tooLow.ok === false && /priority fee/i.test(tooLow.reason), tooLow);
   }
@@ -243,6 +247,134 @@ function tokenTransferData(amount) {
       clone.message.compiledInstructions[routeIx].data = new Uint8Array(data);
       const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
       ok("an ExactOut discriminator -> refused, never decoded as ExactIn", r.ok === false && /exact-output/i.test(r.reason), r);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(4) Codex round 31, P1 — repeated instructions must not sum past what was approved\n");
+  {
+    // Codex's exact exploit case #1: duplicate the fixture's Jupiter route instruction. Round 30
+    // only overwrote `routeTail` with whichever route instruction came last, so a second swap
+    // instruction rode along unnoticed. Round 31 refuses on the SECOND Jupiter-program
+    // instruction, before it is even decoded.
+    {
+      const clone = cloneMsg();
+      const routeIx = clone.message.compiledInstructions.find((ix) => ix.programIdIndex === JUP_IDX);
+      clone.message.compiledInstructions.push(Object.assign({}, routeIx, { accountKeyIndexes: routeIx.accountKeyIndexes.slice(), data: Uint8Array.from(routeIx.data) }));
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("Codex's exploit — a duplicated Jupiter route instruction -> refused, never signed",
+        r.ok === false && /more than one swap instruction/i.test(r.reason), r);
+    }
+
+    // Codex's exact exploit case #2: two wrap transfers, EACH individually at or below the
+    // quote's inAmount, but SUMMING above it. The fixture's own real transfer already moves the
+    // full 10,000,000-lamport cap, so appending even a 1-lamport second transfer to the same
+    // wSOL ATA must refuse on the transaction-wide sum, never pass because each instruction on
+    // its own looked fine.
+    {
+      const clone = cloneMsg();
+      const sysIx = clone.message.compiledInstructions.find((ix) => ix.programIdIndex === SYSTEM_IDX);
+      clone.message.compiledInstructions.push({ programIdIndex: SYSTEM_IDX, accountKeyIndexes: sysIx.accountKeyIndexes.slice(), data: systemTransferData(1) });
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("Codex's exploit — two wrap transfers each <= inAmount but SUMMING above it -> refused",
+        r.ok === false && /more sol than the quote/i.test(r.reason), r);
+    }
+
+    // A System transfer at all, when the quote's input is NOT SOL. The fixture's own FIRST ATA
+    // create (the wSOL ATA, ahead of the System transfer in instruction order) is removed so the
+    // check under test — the System transfer itself — is the first thing that can disagree with a
+    // non-SOL-input quote, rather than the unrelated ATA-mint check firing first.
+    {
+      const clone = cloneMsg();
+      const firstAtaIdx = clone.message.compiledInstructions.findIndex((ix) => clone.message.staticAccountKeys[ix.programIdIndex].toBase58() === "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+      clone.message.compiledInstructions.splice(firstAtaIdx, 1);
+      const nonSolQuote = Object.assign({}, FIXTURE_QUOTE, { inputMint: "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3" });
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: nonSolQuote, PublicKeyClass: web3.PublicKey });
+      ok("a System transfer present when the quote's input is not SOL -> refused",
+        r.ok === false && /not swap from sol/i.test(r.reason), r);
+    }
+
+    // More than one SyncNative.
+    {
+      const clone = cloneMsg();
+      const syncIx = clone.message.compiledInstructions.find((ix) => ix.programIdIndex === TOKEN_IDX && ix.data.length === 1 && ix.data[0] === 17);
+      clone.message.compiledInstructions.push(Object.assign({}, syncIx, { accountKeyIndexes: syncIx.accountKeyIndexes.slice(), data: Uint8Array.from(syncIx.data) }));
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("more than one SyncNative -> refused", r.ok === false && /more than once/i.test(r.reason), r);
+    }
+
+    // More than one CloseAccount.
+    {
+      const clone = cloneMsg();
+      const closeIx = clone.message.compiledInstructions.find((ix) => ix.programIdIndex === TOKEN_IDX && ix.data.length === 1 && ix.data[0] === 9);
+      clone.message.compiledInstructions.push(Object.assign({}, closeIx, { accountKeyIndexes: closeIx.accountKeyIndexes.slice(), data: Uint8Array.from(closeIx.data) }));
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("more than one CloseAccount -> refused", r.ok === false && /more than once/i.test(r.reason), r);
+    }
+
+    // More than one ATA create for the same target ATA.
+    {
+      const clone = cloneMsg();
+      const ataIx = clone.message.compiledInstructions.find((ix) => clone.message.staticAccountKeys[ix.programIdIndex].toBase58() === "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+      clone.message.compiledInstructions.push(Object.assign({}, ataIx, { accountKeyIndexes: ataIx.accountKeyIndexes.slice(), data: Uint8Array.from(ataIx.data) }));
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("more than one ATA create for the same mint -> refused", r.ok === false && /more than once/i.test(r.reason), r);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(5) Codex round 31, P1 — a missing SetComputeUnitLimit is not a zero-fee transaction\n");
+  {
+    // Codex's exact exploit: remove SetComputeUnitLimit, set SetComputeUnitPrice to
+    // 1,000,000,000 micro-lamports/CU. The OLD code skipped the ceiling check entirely because
+    // cuLimit was null. The runtime default (7 instructions remain, 1 is the remaining
+    // ComputeBudget instruction -> 6 non-ComputeBudget instructions * 200,000 CU = 1,200,000 CU)
+    // makes the ceiling check run: 1,200,000 CU * 1e9 micro-lamports/CU / 1e6 = 1,200,000,000
+    // lamports, nowhere near the 1,000,000-lamport ceiling passed below -> refused.
+    {
+      const clone = cloneMsg();
+      const limitIdx = clone.message.compiledInstructions.findIndex((ix) => {
+        const pid = clone.message.staticAccountKeys[ix.programIdIndex].toBase58();
+        return pid === "ComputeBudget111111111111111111111111111111" && ix.data.length === 5 && ix.data[0] === 2;
+      });
+      clone.message.compiledInstructions.splice(limitIdx, 1);
+      const priceIdx = clone.message.compiledInstructions.findIndex((ix) => {
+        const pid = clone.message.staticAccountKeys[ix.programIdIndex].toBase58();
+        return pid === "ComputeBudget111111111111111111111111111111" && ix.data.length === 9 && ix.data[0] === 3;
+      });
+      const priceData = new Uint8Array(9);
+      priceData[0] = 3;
+      new DataView(priceData.buffer).setBigUint64(1, 1000000000n, true); // 1e9 micro-lamports/CU
+      clone.message.compiledInstructions[priceIdx].data = priceData;
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: "1000000" });
+      ok("Codex's exploit — dropped compute-unit limit + huge price -> the runtime default still catches it, refused",
+        r.ok === false && /priority fee/i.test(r.reason), r);
+    }
+
+    // A fee that rounds UP over the ceiling by exactly one lamport, with both instructions
+    // present (the recorded fixture's own cuLimit/cuPrice: 1,400,000 * 315,258 / 1e6 =
+    // 441,361.2 exactly -> ceils to 441,362, never truncates to 441,361).
+    {
+      const r = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: "441361" });
+      ok("a fee that rounds up past the ceiling by one lamport -> refused", r.ok === false && /priority fee/i.test(r.reason), r);
+    }
+
+    // The recorded fixture, exactly as recorded — still passes.
+    {
+      const r = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey, maxPriorityFeeLamports: "441362" });
+      ok("the untouched recorded fixture at its own ceiling -> passes", r.ok === true, r);
+    }
+
+    // More than one SetComputeUnitLimit.
+    {
+      const clone = cloneMsg();
+      const limitIx = clone.message.compiledInstructions.find((ix) => {
+        const pid = clone.message.staticAccountKeys[ix.programIdIndex].toBase58();
+        return pid === "ComputeBudget111111111111111111111111111111" && ix.data.length === 5 && ix.data[0] === 2;
+      });
+      clone.message.compiledInstructions.push(Object.assign({}, limitIx, { accountKeyIndexes: limitIx.accountKeyIndexes.slice(), data: Uint8Array.from(limitIx.data) }));
+      const r = verifySwapTransaction({ tx: clone, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
+      ok("more than one SetComputeUnitLimit -> refused", r.ok === false && /more than once/i.test(r.reason), r);
     }
   }
 

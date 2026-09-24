@@ -126,6 +126,76 @@ function heightResult(h) { return h; }
     ok("null status, height still under the limit -> pending, no final check needed", r.status === "pending" && rpc.calls.length === 2, r);
   }
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // Codex round 31, P2 — "malformed status responses become expired." Only a WELL-FORMED explicit
+  // null (`result.value` an array whose entry at index 0 is literally `null`) may ever become
+  // "expired". `{}`, `{value:[]}`, `null`, and `undefined` are not answers — they must stay
+  // `pending`, on BOTH the first check and the final searchTransactionHistory check, height past
+  // expiry or not.
+  console.log("\n(7) Codex round 31, P2 — malformed status shapes never become 'expired'\n");
+  {
+    const malformedShapes = [
+      { label: "{}", value: {} },
+      { label: "{value:[]}", value: { value: [] } },
+      { label: "null", value: null },
+      { label: "undefined", value: undefined },
+    ];
+    for (const shape of malformedShapes) {
+      const rpc = fakeRpc([
+        { result: shape.value },               // first check: malformed, not a well-formed null
+        { result: heightResult(LVB + 50) },     // height already past
+        { result: shape.value },                // final check: same malformed shape again
+      ]);
+      const r = await checkPendingSwap(rpc, { signature: SIG, lastValidBlockHeight: LVB });
+      ok(`malformed status shape ${shape.label}, height past expiry -> stays pending, never expired/sent/failed`,
+        r.status === "pending", r);
+    }
+
+    // A non-array `value` (another malformed shape) must behave the same way.
+    {
+      const rpc = fakeRpc([
+        { result: { value: "not-an-array" } },
+        { result: heightResult(LVB + 50) },
+        { result: { value: "not-an-array" } },
+      ]);
+      const r = await checkPendingSwap(rpc, { signature: SIG, lastValidBlockHeight: LVB });
+      ok("non-array `value` -> stays pending, never expired", r.status === "pending", r);
+    }
+
+    // A thrown RPC error on the FIRST check (not just the final one) must also stay pending —
+    // statusOutcome(undefined) returns null (no status), which falls through to the height check
+    // and then the final check exactly as a malformed shape would.
+    {
+      const rpc = fakeRpc([
+        { throws: "rpc unavailable on first check" },
+      ]);
+      const r = await checkPendingSwap(rpc, { signature: SIG, lastValidBlockHeight: LVB });
+      ok("an RPC error on the very first Promise.all -> pending (caught by the outer try/catch)", r.status === "pending", r);
+    }
+
+    // Control: a WELL-FORMED explicit null on both checks, height past expiry -> genuinely expired.
+    {
+      const rpc = fakeRpc([
+        { result: statusResult([null]) },
+        { result: heightResult(LVB + 50) },
+        { result: statusResult([null]) },
+      ]);
+      const r = await checkPendingSwap(rpc, { signature: SIG, lastValidBlockHeight: LVB });
+      ok("well-formed null on both checks, height past expiry -> genuinely expired", r.status === "expired", r);
+    }
+
+    // Control: a well-formed CONFIRMED on the final check -> sent, not expired.
+    {
+      const rpc = fakeRpc([
+        { result: statusResult([null]) },
+        { result: heightResult(LVB + 50) },
+        { result: statusResult([{ err: null, confirmationStatus: "confirmed" }]) },
+      ]);
+      const r = await checkPendingSwap(rpc, { signature: SIG, lastValidBlockHeight: LVB });
+      ok("well-formed confirmed on the final check -> sent", r.status === "sent", r);
+    }
+  }
+
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

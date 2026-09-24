@@ -233,8 +233,21 @@ function loadPending() {
     return p;
   } catch (_) { return null; }
 }
+// ⚠️ Codex round 31, P2 — "a failed recovery-record write still allows broadcast." This is the
+// pane's `onSigned` write and it is passed to `signSendConfirm` with `requireOnSigned: true` (see
+// below): the record is the ONLY thing that lets a person resume checking an in-flight swap
+// (`pending` state, the poll effect above), so a write that silently failed used to let the swap
+// broadcast anyway with nothing left to check it against. `setItem` throws its own
+// `QuotaExceededError` on a full quota in most browsers, but not every environment throws — some
+// silently no-op or truncate — so this reads the value BACK and throws if it doesn't match
+// byte-for-byte, never assuming a call that didn't throw actually wrote anything.
 function savePending(p) {
-  try { window.localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(p)); } catch (_) {}
+  const json = JSON.stringify(p);
+  window.localStorage.setItem(PENDING_STORAGE_KEY, json);
+  const readBack = window.localStorage.getItem(PENDING_STORAGE_KEY);
+  if (readBack !== json) {
+    throw new Error("Could not verify the saved recovery record.");
+  }
 }
 function clearPendingStorage() {
   try { window.localStorage.removeItem(PENDING_STORAGE_KEY); } catch (_) {}
@@ -612,11 +625,15 @@ export default function SwapPane({ wallet }) {
       // ⚠️ Round 30 fix 3 — persist the pending record the MOMENT a validly-diffed signature comes
       // back, before submission is even attempted, so a transport failure (which can throw before
       // signSendConfirm ever returns) does not lose it. See sign.js's own note on `onSigned`.
+      // ⚠️ Round 31, P2 — `requireOnSigned: true` below means savePending() THROWING here (a full
+      // or unavailable localStorage) stops signSendConfirm from ever calling submitSigned: nothing
+      // is sent. `setPending(p)` only runs once savePending() is known to have actually written.
       onSigned: (sig) => {
         const p = { sig, lastValidBlockHeight: body.lastValidBlockHeight, wallet: live, at: Date.now(), inSym, outSym, inAmt, outAmt };
         savePending(p);
         setPending(p);
       },
+      requireOnSigned: true,
     });
 
     const base = { inSym, outSym, inAmt, outAmt };
