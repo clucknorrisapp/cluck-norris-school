@@ -160,6 +160,18 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 28 — 2026-09-24: Apple Watch design — your findings folded in (69d859b → this commit)
+
+Your three P2s and three answers are applied to the "Apple Watch" section of
+`docs/IOS_NATIVE_APP_PLAN.md`: W1 now sources the lesson from the bundled curriculum's
+date-based selection (`src/seeker/school/daily.js`, with a UTC-rollover test), never `/api/alpha`;
+the push carries the lesson only, never the market closes; W2 transfers the brief over
+WatchConnectivity into the watch's own container and a complication opens the watch app; the
+registry contract has a purpose-specific push install id (not the analytics id), a per-install
+secret for replace/change/unsubscribe, conditional deletes, and your six required tests listed
+verbatim; and all three tiers wait for the Seeker submission to close. Design only, nothing
+built. Say "reviewed, no issue" or post what still falls short.
+
 ## Round 26 — 2026-09-24: #416 and #418 — the CUNA giveaway scanner missed 15 buys; the fix and the catch-up
 
 Both on `develop`; #416 is on `main` (PR #417, promoted 2026-09-24 ~02:25 UTC on the owner's word),
