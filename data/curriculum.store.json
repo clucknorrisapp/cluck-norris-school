@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T20:49:36.709Z",
+  "generatedAt": "2026-09-24T23:48:02.683Z",
   "courses": [
     {
       "id": "fundamentals",
@@ -1738,13 +1738,13 @@
             {
               "q": "Your public key is like your home address — safe to share so people can send you crypto.",
               "answer": "True",
-              "why": "Correct! Your public key is safe to share. It's how others send crypto to you. Never confuse it with your private key or seed phrase.",
+              "why": "Your public key is safe to share. It's how others send crypto to you. Never confuse it with your private key or seed phrase.",
               "options": [
                 "True",
                 "False"
               ],
               "correct": 0,
-              "explanation": "Correct! Your public key is safe to share. It's how others send crypto to you. Never confuse it with your private key or seed phrase."
+              "explanation": "Your public key is safe to share. It's how others send crypto to you. Never confuse it with your private key or seed phrase."
             },
             {
               "q": "You should share your seed phrase with customer support if they ask for it.",
@@ -1858,13 +1858,13 @@
             {
               "q": "An on-ramp is any service that turns regular money, like dollars, into crypto.",
               "answer": "True",
-              "why": "Correct. An on-ramp is your entry point — connect a bank or card, buy crypto, and it arrives in your wallet. The off-ramp is the same trip in reverse, back to cash.",
+              "why": "An on-ramp is your entry point — connect a bank or card, buy crypto, and it arrives in your wallet. The off-ramp is the same trip in reverse, back to cash.",
               "options": [
                 "True",
                 "False"
               ],
               "correct": 0,
-              "explanation": "Correct. An on-ramp is your entry point — connect a bank or card, buy crypto, and it arrives in your wallet. The off-ramp is the same trip in reverse, back to cash."
+              "explanation": "An on-ramp is your entry point — connect a bank or card, buy crypto, and it arrives in your wallet. The off-ramp is the same trip in reverse, back to cash."
             },
             {
               "q": "You can buy crypto on a major exchange like Coinbase without ever verifying your identity.",
