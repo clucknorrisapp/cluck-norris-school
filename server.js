@@ -15030,7 +15030,22 @@ app.get("/api/seeker/reclaimable", async (req, res) => {
 // JUP_SWAP_BASE overrides BOTH upstream hosts with one URL — test-only (scripts/seeker-swap-test.cjs
 // points it at a local fixture stub); unset in every real environment, where the real keyed-then-
 // lite-api pattern below (same as jupTokensSearch) applies.
-const JUP_SWAP_BASE = process.env.JUP_SWAP_BASE || "";
+//
+// ⚠️ Fix round P2-1: honoured ONLY when NODE_ENV !== "production", OR the value itself points at
+// 127.0.0.1/localhost — a stray JUP_SWAP_BASE left set on a production deploy would otherwise
+// silently redirect every swap quote/build to whatever host it names, with no key and no
+// allowlisting of its own. A non-local value in production is logged loudly and ignored; the
+// real api.jup.ag / lite-api.jup.ag pattern below still runs.
+const JUP_SWAP_BASE_RAW = process.env.JUP_SWAP_BASE || "";
+const JUP_SWAP_BASE_LOCAL_RE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$|\?)/;
+let JUP_SWAP_BASE = "";
+if (JUP_SWAP_BASE_RAW) {
+  if (process.env.NODE_ENV !== "production" || JUP_SWAP_BASE_LOCAL_RE.test(JUP_SWAP_BASE_RAW)) {
+    JUP_SWAP_BASE = JUP_SWAP_BASE_RAW;
+  } else {
+    console.error("[seeker-swap] JUP_SWAP_BASE is set in production to a non-local URL — ignoring it and calling the real Jupiter API. value=" + JUP_SWAP_BASE_RAW);
+  }
+}
 const SEEKER_SWAP_SLIPPAGE_OPTIONS = [50, 100, 300];
 const SEEKER_SWAP_DEFAULT_SLIPPAGE_BPS = 100;
 // Base-unit integer amount, no float, no leading zero, capped at 20 digits (design's own bound —
@@ -15091,8 +15106,12 @@ async function jupSwapCall(pathAndQuery, { method = "GET", body } = {}) {
   throw lastErr || new Error("jupiter unavailable");
 }
 
+// ⚠️ Fix round P3: no wildcard Access-Control-Allow-Origin on any of the three swap routes below —
+// the SEEKER_API_RE middleware mounted earlier already sets a RESTRICTED, origin-echoed CORS
+// header for the exact Seeker/store-app origins in STORE_APP_ORIGINS, the same as every other
+// seeker/* route. A route-level "*" here would silently override that restriction on every real
+// (non-OPTIONS) response.
 app.get("/api/seeker/swap/config", async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   try {
     const mints = await Promise.all(SEEKER_SWAP_MINTS.map(async (m) => ({
@@ -15113,8 +15132,14 @@ app.get("/api/seeker/swap/config", async (req, res) => {
   }
 });
 
-app.get("/api/seeker/swap/quote", async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+// Request expects Jupiter's default swap mode when none is sent — never sent explicitly above,
+// so this is what a quote must echo back to be trusted (P2-1: the quote is never checked against
+// what was asked for, so a mismatched/forged-looking upstream response was returned as-is).
+const SEEKER_SWAP_REQUESTED_MODE = "ExactIn";
+// A tighter per-IP cap than the 60/min shared across the whole /api/seeker/swap group — the quote
+// route is the one an idle pane can hammer every 400ms while the amount box is being typed into
+// (fix round P3: the pane also debounces its own calls by 400ms, below is the server-side floor).
+app.get("/api/seeker/swap/quote", rateLimit("seekerswapquote", { windowMs: 60000, max: 30 }), async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const inputMint = String(req.query.inputMint || "").trim();
   const outputMint = String(req.query.outputMint || "").trim();
@@ -15134,6 +15159,16 @@ app.get("/api/seeker/swap/quote", async (req, res) => {
     });
     const quote = await jupSwapCall("/swap/v1/quote?" + qs.toString());
     if (!quote || quote.error || !quote.outAmount) return res.status(502).json({ ok: false, error: "quote_unavailable" });
+    // ⚠️ P2-1: the transaction is never checked against the quote — the first half of that is
+    // never STORING a quote whose own fields disagree with what was asked for. A quote that comes
+    // back naming a different pair, a different swap mode, or a different slippage than requested
+    // is refused outright rather than handed to the client (and never cached under a quoteId a
+    // /tx call could later be built from).
+    if (quote.inputMint !== inputMint || quote.outputMint !== outputMint
+      || quote.swapMode !== SEEKER_SWAP_REQUESTED_MODE || Number(quote.slippageBps) !== slippageBps) {
+      console.error("[seeker-swap-quote] quote_mismatch", { inputMint, outputMint, slippageBps, got: { inputMint: quote.inputMint, outputMint: quote.outputMint, swapMode: quote.swapMode, slippageBps: quote.slippageBps } });
+      return res.status(502).json({ ok: false, error: "quote_mismatch" });
+    }
     const quoteId = createHash("sha256").update(JSON.stringify(quote)).digest("hex");
     seekerSwapQuotes.set(quoteId, { quote, at: Date.now() });
     return res.status(200).json({ ok: true, quote, quoteId });
@@ -15144,7 +15179,6 @@ app.get("/api/seeker/swap/quote", async (req, res) => {
 });
 
 app.post("/api/seeker/swap/tx", async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const quoteId = String((req.body && req.body.quoteId) || "").trim();
   const userPublicKey = String((req.body && req.body.userPublicKey) || "").trim();
@@ -15168,18 +15202,27 @@ app.post("/api/seeker/swap/tx", async (req, res) => {
     };
     const out = await jupSwapCall("/swap/v1/swap", { method: "POST", body });
     if (!out || !out.swapTransaction) return res.status(502).json({ ok: false, error: "swap_unavailable" });
+    // ⚠️ P2-1: Jupiter simulates every transaction it builds before returning it, and a non-null
+    // simulationError means IT ALREADY KNOWS this transaction will fail on-chain — refuse it here
+    // rather than hand the app a transaction to sign that Jupiter itself expects to fail.
+    if (out.simulationError != null) {
+      console.error("[seeker-swap-tx] simulationError", out.simulationError);
+      return res.status(502).json({ ok: false, error: "swap_unavailable", detail: out.simulationError });
+    }
     // Amounts echoed from the STORED quote (entry.quote), never the request — the confirm sheet
     // and the transaction Jupiter actually built come from the same object.
     return res.status(200).json({
       ok: true,
       swapTransaction: out.swapTransaction,
       lastValidBlockHeight: out.lastValidBlockHeight,
+      prioritizationFeeLamports: out.prioritizationFeeLamports,
       inputMint: entry.quote.inputMint,
       outputMint: entry.quote.outputMint,
       inAmount: entry.quote.inAmount,
       outAmount: entry.quote.outAmount,
       otherAmountThreshold: entry.quote.otherAmountThreshold,
       priceImpactPct: entry.quote.priceImpactPct,
+      slippageBps: entry.quote.slippageBps,
     });
   } catch (e) {
     console.error("[seeker-swap-tx]", e.message);

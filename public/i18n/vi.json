@@ -2901,5 +2901,17 @@
   "This was submitted but had no on-chain status after 30 seconds. It may still have landed — check the signature before trying again.": "Giao dịch này đã được gửi nhưng sau 30 giây vẫn chưa có trạng thái on-chain. Nó có thể vẫn thành công — kiểm tra chữ ký trước khi thử lại.",
   "Token to pay with": "Token dùng để trả",
   "Token to receive": "Token sẽ nhận",
-  "You only hold {bal} {sym}.": "Bạn chỉ có {bal} {sym}."
+  "You only hold {bal} {sym}.": "Bạn chỉ có {bal} {sym}.",
+  "About 0.002 SOL once, to open the receiving account.": "Khoảng 0,002 SOL, một lần duy nhất, để mở tài khoản nhận.",
+  "Expired": "Đã hết hạn",
+  "Network cost: up to {sol} SOL priority fee": "Chi phí mạng: tối đa {sol} SOL phí ưu tiên",
+  "Price impact: {pct}": "Ảnh hưởng giá: {pct}",
+  "Submitted {inAmt} {inSym} → {outSym}.": "Đã gửi {inAmt} {inSym} → {outSym}.",
+  "Sum across every account you hold of this token. If you hold more than one account, your spendable amount in a single transfer may be less than this total.": "Tổng số dư trên mọi tài khoản bạn nắm giữ token này. Nếu bạn có nhiều hơn một tài khoản, số tiền có thể chi tiêu trong một lần chuyển có thể thấp hơn tổng số này.",
+  "Swap failed": "Hoán đổi thất bại",
+  "Swapped": "Đã hoán đổi",
+  "The transaction did not land — nothing was swapped.": "Giao dịch không thành công — không có gì được hoán đổi.",
+  "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "Giao dịch đã được ghi nhận nhưng thất bại trên chuỗi — không có gì được hoán đổi; một khoản phí mạng đã bị tính.",
+  "This did not land before its expiry block height passed — it's safe to try again.": "Giao dịch này không được ghi nhận trước khi độ cao khối hết hạn trôi qua — bạn có thể thử lại một cách an toàn.",
+  "Unconfirmed": "Chưa xác nhận"
 }

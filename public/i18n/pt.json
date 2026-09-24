@@ -2901,5 +2901,17 @@
   "This was submitted but had no on-chain status after 30 seconds. It may still have landed — check the signature before trying again.": "Isso foi enviado, mas não teve status on-chain depois de 30 segundos. Ainda pode ter sido confirmado — verifique a assinatura antes de tentar de novo.",
   "Token to pay with": "Token com o qual você paga",
   "Token to receive": "Token que você recebe",
-  "You only hold {bal} {sym}.": "Você só tem {bal} {sym}."
+  "You only hold {bal} {sym}.": "Você só tem {bal} {sym}.",
+  "About 0.002 SOL once, to open the receiving account.": "Cerca de 0,002 SOL, uma única vez, para abrir a conta de recebimento.",
+  "Expired": "Expirado",
+  "Network cost: up to {sol} SOL priority fee": "Custo de rede: até {sol} SOL de taxa de prioridade",
+  "Price impact: {pct}": "Impacto no preço: {pct}",
+  "Submitted {inAmt} {inSym} → {outSym}.": "Enviado {inAmt} {inSym} → {outSym}.",
+  "Sum across every account you hold of this token. If you hold more than one account, your spendable amount in a single transfer may be less than this total.": "Soma de todas as contas que você possui deste token. Se você possui mais de uma conta, o valor disponível em uma única transferência pode ser menor que este total.",
+  "Swap failed": "Troca falhou",
+  "Swapped": "Trocado",
+  "The transaction did not land — nothing was swapped.": "A transação não foi confirmada — nada foi trocado.",
+  "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "A transação foi confirmada mas falhou on-chain — nada foi trocado; uma taxa de rede foi cobrada.",
+  "This did not land before its expiry block height passed — it's safe to try again.": "Isso não foi confirmado antes que sua altura de bloco de expiração passasse — é seguro tentar novamente.",
+  "Unconfirmed": "Não confirmado"
 }

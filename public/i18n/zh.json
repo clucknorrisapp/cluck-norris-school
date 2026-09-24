@@ -2901,5 +2901,17 @@
   "This was submitted but had no on-chain status after 30 seconds. It may still have landed — check the signature before trying again.": "已提交,但 30 秒后仍没有链上状态。它可能仍会成功上链 —— 在重试前请先查看这笔签名。",
   "Token to pay with": "用于支付的代币",
   "Token to receive": "将收到的代币",
-  "You only hold {bal} {sym}.": "你只有 {bal} {sym}。"
+  "You only hold {bal} {sym}.": "你只有 {bal} {sym}。",
+  "About 0.002 SOL once, to open the receiving account.": "约0.002 SOL，一次性，用于开通接收账户。",
+  "Expired": "已过期",
+  "Network cost: up to {sol} SOL priority fee": "网络费用：最多 {sol} SOL 优先费",
+  "Price impact: {pct}": "价格影响：{pct}",
+  "Submitted {inAmt} {inSym} → {outSym}.": "已提交 {inAmt} {inSym} → {outSym}。",
+  "Sum across every account you hold of this token. If you hold more than one account, your spendable amount in a single transfer may be less than this total.": "这是你持有该代币的所有账户余额之和。如果你持有多个账户，单次转账可用的金额可能低于此总额。",
+  "Swap failed": "兑换失败",
+  "Swapped": "已兑换",
+  "The transaction did not land — nothing was swapped.": "交易未成功上链——没有发生任何兑换。",
+  "The transaction landed but failed on-chain — nothing was swapped; a network fee was charged.": "交易已上链但执行失败——没有发生任何兑换；已收取网络费用。",
+  "This did not land before its expiry block height passed — it's safe to try again.": "在其到期区块高度之前未能上链——可以放心重试。",
+  "Unconfirmed": "未确认"
 }

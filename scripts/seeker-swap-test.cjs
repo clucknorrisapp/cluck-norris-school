@@ -46,6 +46,14 @@ const REAL_DECIMALS = { [SOL_MINT]: 9, [SKR_MINT]: 6, [CLKN_MINT]: 9, [USDC_MINT
 
 const FIXTURE_QUOTE = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "fixtures", "seeker-swap", "quote.json"), "utf8"));
 const FIXTURE_SWAP = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "fixtures", "seeker-swap", "swap.json"), "utf8"));
+// ⚠️ Fix round P2-1: FIXTURE_SWAP is a REAL recording, made with a throwaway public key that held
+// no funds — so it carries a real, non-null `simulationError` (Jupiter's own simulation already
+// knew that key couldn't pay). That is exactly what the fix round added a server-side refusal
+// for, so the fixture can no longer stand in for a SUCCESSFUL /tx response as-is. GOOD_SWAP is the
+// same recorded bytes/fields with only `simulationError` nulled, for the success-path assertions
+// below; the untouched FIXTURE_SWAP (with its real simulationError) is used on its own, in
+// section (4b), to prove the new refusal actually fires on a genuine recorded case.
+const GOOD_SWAP = Object.assign({}, FIXTURE_SWAP, { simulationError: null });
 
 (async () => {
   console.log("\nSeeker swap — server-side proxy\n");
@@ -65,7 +73,7 @@ const FIXTURE_SWAP = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "fixt
   }
 
   // ---- local stubs -------------------------------------------------------------------------
-  let jupState = { failQuote: false, failSwap: false, lastQuoteQuery: null, lastSwapBody: null };
+  let jupState = { failQuote: false, failSwap: false, simErrorSwap: false, mismatchQuote: false, lastQuoteQuery: null, lastSwapBody: null };
   const stub = http.createServer((req, res) => {
     const u = new URL(req.url, "http://127.0.0.1");
     let body = "";
@@ -74,12 +82,23 @@ const FIXTURE_SWAP = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "fixt
       if (u.pathname === "/swap/v1/quote") {
         jupState.lastQuoteQuery = u.search;
         if (jupState.failQuote) { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "simulated upstream failure" })); return; }
+        // P2-1: a quote whose own fields disagree with what was asked for must be refused, never
+        // stored/returned — simulate Jupiter answering for the WRONG pair.
+        if (jupState.mismatchQuote) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(Object.assign({}, FIXTURE_QUOTE, { outputMint: USDC_MINT })));
+          return;
+        }
         res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(FIXTURE_QUOTE)); return;
       }
       if (u.pathname === "/swap/v1/swap" && req.method === "POST") {
         try { jupState.lastSwapBody = JSON.parse(body || "{}"); } catch (_) { jupState.lastSwapBody = null; }
         if (jupState.failSwap) { res.writeHead(500, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "simulated upstream failure" })); return; }
-        res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(FIXTURE_SWAP)); return;
+        // P2-1: FIXTURE_SWAP is the REAL recorded response (throwaway key, real non-null
+        // simulationError); GOOD_SWAP is the same fields with it nulled, for the success paths.
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(jupState.simErrorSwap ? FIXTURE_SWAP : GOOD_SWAP));
+        return;
       }
       // The RPC stand-in — lib/rpc.js posts the whole JSON-RPC body straight to FALLBACK_RPC_URL.
       if (req.method === "POST" && u.pathname === "/rpc") {
@@ -202,14 +221,37 @@ const FIXTURE_SWAP = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "fixt
       // Send different amounts than the stored quote's own — they must be IGNORED; the response
       // must echo the STORED quote, not anything from this request body.
       const r3 = await postJson("/api/seeker/swap/tx", { quoteId, userPublicKey: someKey, inAmount: "999", outAmount: "999", otherAmountThreshold: "999" });
-      ok("good tx -> 200 ok:true with the fixture's swapTransaction", r3.status === 200 && r3.json && r3.json.ok === true && r3.json.swapTransaction === FIXTURE_SWAP.swapTransaction, r3.status);
-      ok("lastValidBlockHeight comes from the fixture", r3.json.lastValidBlockHeight === FIXTURE_SWAP.lastValidBlockHeight, r3.json.lastValidBlockHeight);
+      ok("good tx -> 200 ok:true with the (simulation-clean) fixture's swapTransaction", r3.status === 200 && r3.json && r3.json.ok === true && r3.json.swapTransaction === GOOD_SWAP.swapTransaction, r3.status);
+      ok("lastValidBlockHeight comes from the fixture", r3.json.lastValidBlockHeight === GOOD_SWAP.lastValidBlockHeight, r3.json.lastValidBlockHeight);
+      ok("prioritizationFeeLamports is passed through from Jupiter's response", r3.json.prioritizationFeeLamports === GOOD_SWAP.prioritizationFeeLamports, r3.json.prioritizationFeeLamports);
       ok("⚠️ inAmount/outAmount/otherAmountThreshold are echoed from the STORED quote, not the request's forged values",
         r3.json.inAmount === FIXTURE_QUOTE.inAmount && r3.json.outAmount === FIXTURE_QUOTE.outAmount && r3.json.otherAmountThreshold === FIXTURE_QUOTE.otherAmountThreshold, r3.json);
+      ok("slippageBps is echoed from the STORED quote too (the confirm sheet's slippage line reads this, not the chip)", r3.json.slippageBps === FIXTURE_QUOTE.slippageBps, r3.json.slippageBps);
       ok("the swap call really did reach the stub with the real userPublicKey", !!jupState.lastSwapBody && jupState.lastSwapBody.userPublicKey === someKey, jupState.lastSwapBody);
       ok("the swap call carries the STORED quoteResponse (not anything client-forged)", !!jupState.lastSwapBody && jupState.lastSwapBody.quoteResponse && jupState.lastSwapBody.quoteResponse.outAmount === FIXTURE_QUOTE.outAmount, jupState.lastSwapBody && jupState.lastSwapBody.quoteResponse);
       ok("⛔ NO feeAccount / platformFee on the swap body (owner, 2026-09-24: no platform fee)",
         !!jupState.lastSwapBody && jupState.lastSwapBody.feeAccount === undefined && jupState.lastSwapBody.platformFee === undefined, jupState.lastSwapBody);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    console.log("\n(4b) P2-1 — the transaction is checked against the quote before it ever reaches the client\n");
+    {
+      // A quote whose own fields (here: outputMint) disagree with what was asked for is refused
+      // outright — never stored under a quoteId, never handed to the client as if it were fine.
+      jupState.mismatchQuote = true;
+      const rq = await getJson("/api/seeker/swap/quote?" + new URLSearchParams({ inputMint: SOL_MINT, outputMint: SKR_MINT, amount: "10000000", slippageBps: "100" }).toString());
+      ok("Jupiter answering for the wrong pair -> 502 quote_mismatch, never stored/returned as a quote",
+        rq.status === 502 && rq.json && rq.json.error === "quote_mismatch" && rq.json.quote === undefined, rq);
+      jupState.mismatchQuote = false;
+
+      // A real recorded swap response whose OWN simulationError is non-null (Jupiter already
+      // knows it will fail on-chain) must never reach the client as a signable transaction.
+      const rq2 = await getJson("/api/seeker/swap/quote?" + new URLSearchParams({ inputMint: SOL_MINT, outputMint: SKR_MINT, amount: "10000000", slippageBps: "100" }).toString());
+      jupState.simErrorSwap = true;
+      const r5 = await postJson("/api/seeker/swap/tx", { quoteId: rq2.json.quoteId, userPublicKey: "3VELZ2avSUq79qstuR8a7C3euJ834WmQyrjt4uRnn4eb" });
+      ok("a non-null simulationError on Jupiter's own swap response -> 502 swap_unavailable with detail, never a swapTransaction",
+        r5.status === 502 && r5.json && r5.json.error === "swap_unavailable" && r5.json.swapTransaction === undefined && !!r5.json.detail, r5.json);
+      jupState.simErrorSwap = false;
     }
 
     // ══════════════════════════════════════════════════════════════════════════════════════
@@ -228,6 +270,44 @@ const FIXTURE_SWAP = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "fixt
       ok("stub 500 on swap -> 502 swap_unavailable", r2.status === 502 && r2.json.error === "swap_unavailable", r2);
       ok("⚠️ no `swapTransaction` field on a failed tx build", r2.json.swapTransaction === undefined, r2.json);
       jupState.failSwap = false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    console.log("\n(6) CORS — no wildcard; restricted to the Seeker/store origins like every other seeker/* route\n");
+    {
+      // No Origin header at all (same-origin website traffic) — no CORS header, and specifically
+      // never "*" (fix round P3: the three routes used to set Access-Control-Allow-Origin: * on
+      // every response, unconditionally, overriding the SEEKER_API_RE middleware's restricted,
+      // origin-echoed header).
+      const rNoOrigin = await getJson("/api/seeker/swap/config");
+      ok("no Origin -> no Access-Control-Allow-Origin at all on /config", !rNoOrigin.json || true, "n/a"); // header checked below via raw fetch
+      const raw1 = await fetch(base + "/api/seeker/swap/config");
+      ok("no Origin -> no ACAO header on /config", !raw1.headers.get("access-control-allow-origin"));
+
+      const SEEKER_ORIGIN = "https://localhost";
+      const raw2 = await fetch(base + "/api/seeker/swap/config", { headers: { origin: SEEKER_ORIGIN } });
+      ok("a Seeker-app Origin -> ACAO echoes that exact origin on /config, never *", raw2.headers.get("access-control-allow-origin") === SEEKER_ORIGIN, raw2.headers.get("access-control-allow-origin"));
+
+      const rq3 = await getJson("/api/seeker/swap/quote?" + new URLSearchParams({ inputMint: SOL_MINT, outputMint: SKR_MINT, amount: "10000000", slippageBps: "100" }).toString());
+      const raw3 = await fetch(base + "/api/seeker/swap/quote?" + new URLSearchParams({ inputMint: SOL_MINT, outputMint: SKR_MINT, amount: "10000000", slippageBps: "100" }).toString(), { headers: { origin: SEEKER_ORIGIN } });
+      ok("the Seeker origin on /quote -> ACAO echoes that origin, never *", raw3.headers.get("access-control-allow-origin") === SEEKER_ORIGIN, raw3.headers.get("access-control-allow-origin"));
+
+      const raw4 = await fetch(base + "/api/seeker/swap/tx", { method: "POST", headers: { origin: SEEKER_ORIGIN, "Content-Type": "application/json" }, body: JSON.stringify({ quoteId: "x", userPublicKey: "3VELZ2avSUq79qstuR8a7C3euJ834WmQyrjt4uRnn4eb" }) });
+      ok("the Seeker origin on /tx -> ACAO echoes that origin, never *", raw4.headers.get("access-control-allow-origin") === SEEKER_ORIGIN, raw4.headers.get("access-control-allow-origin"));
+
+      const raw5 = await fetch(base + "/api/seeker/swap/config", { headers: { origin: "https://evil.example" } });
+      ok("a foreign origin -> no ACAO echo", raw5.headers.get("access-control-allow-origin") !== "https://evil.example");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════
+    console.log("\n(7) rate limit — GET /api/seeker/swap/quote is capped at 30/min/IP\n");
+    {
+      let sawLimit = false;
+      for (let i = 0; i < 35; i++) {
+        const r = await getJson("/api/seeker/swap/quote?" + new URLSearchParams({ inputMint: SOL_MINT, outputMint: SKR_MINT, amount: String(10000000 + i), slippageBps: "100" }).toString());
+        if (r.status === 429) { sawLimit = true; break; }
+      }
+      ok("35 rapid requests from one IP trip the 30/min quote limiter", sawLimit);
     }
   } finally { stop(); }
 

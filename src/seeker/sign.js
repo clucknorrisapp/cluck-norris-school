@@ -129,6 +129,35 @@ export async function confirmSignature(rpc, signature, opts) {
   return false;
 }
 
+// A MANUAL RECHECK helper for a pane whose transaction carries its OWN upstream-issued expiry
+// (`lastValidBlockHeight`, e.g. Jupiter's swap build — docs/SEEKER_SWAP_DESIGN.md, fix round
+// P2-2) rather than a locally-fetched blockhash this seam tracked itself. Same err-before-
+// confirmationStatus rule as confirmSignature() above, PLUS an expiry check: once the chain's
+// current block height passes what the transaction was built against, it can no longer land, and
+// that is reported as "expired" rather than left "pending" forever. An RPC READ failure is not an
+// on-chain answer either way — it reports "pending" so a caller's poll loop just tries again.
+// Exists here, not duplicated in a pane, so this is the ONE place that owns the
+// err-before-confirmationStatus rule and the ONE place callers of getSignatureStatuses live
+// (scripts/seeker-build-test.cjs pins that no pane calls getSignatureStatuses/sendTransaction
+// directly).
+export async function checkPendingSwap(rpc, { signature, lastValidBlockHeight }) {
+  try {
+    const [stRes, height] = await Promise.all([
+      rpc("getSignatureStatuses", [[signature], { searchTransactionHistory: true }]),
+      rpc("getBlockHeight", [{ commitment: "confirmed" }]),
+    ]);
+    const st = stRes && stRes.value && stRes.value[0];
+    // ⚠️ ORDER IS LOAD-BEARING — same as confirmSignature() above.
+    if (st && st.err) return { status: "failed", error: "failed on-chain: " + JSON.stringify(st.err) };
+    if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return { status: "sent" };
+    const h = typeof height === "number" ? height : null;
+    if (h != null && lastValidBlockHeight != null && h > lastValidBlockHeight) return { status: "expired" };
+    return { status: "pending" };
+  } catch (_) {
+    return { status: "pending" };
+  }
+}
+
 // A declined prompt is not shaped the same way by every provider. Every wallet in
 // public/cluck-wallet.js's registry (Phantom-shaped or Wallet-Standard-shimmed) throws with one
 // of these two vocabularies on a decline; anything else is a genuine failure, not a decline —
