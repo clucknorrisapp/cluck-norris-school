@@ -20,6 +20,7 @@ import AskCluckPane from "../AskCluck.jsx";
 import WalletCheckupPane from "../WalletCheckup.jsx";
 import { AddressForm, AddressBar } from "../addressform.jsx";
 import ToolsHome from "../ToolsHome.jsx";
+import { SolanaRoomIndex, SolanaRoomPage } from "../solana/SolanaRoom.jsx";
 import { SchoolHome, SchoolCourse, SchoolLesson } from "../school/School.jsx";
 import ListingCheckup from "../tools/ListingCheckup.jsx";
 import DailyBrief from "../tools/DailyBrief.jsx";
@@ -181,6 +182,8 @@ export function EditionRoutes({ wallet }) {
       <Route path="/school" element={<SchoolHome />} />
       <Route path="/school/:courseId" element={<SchoolCourse />} />
       <Route path="/school/:courseId/:lessonId" element={<SchoolLesson />} />
+      <Route path="/solana" element={<SolanaRoomIndex />} />
+      <Route path="/solana/:pageId" element={<SolanaRoomPage />} />
       <Route path="/tools" element={<ToolsHome />} />
       <Route path="/rent" element={<RentReclaimPane wallet={wallet} />} />
       <Route path="/ask" element={<AskCluckPane />} />

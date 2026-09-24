@@ -27,6 +27,12 @@
          everywhere else. i18n.js populates window.CLKN_I18N.dict, which the app's own t()
          (src/seeker/i18n.js) reads — same pattern as public/hub-glossary.html / solana-room.html. -->
     <script src="/cluck-util.js"></script>
+    <!-- rent-math.js carries pure lamport/SOL arithmetic — no wallet, no address, no network call
+         (see that file's own header) — so it loads in BOTH editions, outside EDU:OUT: the
+         education edition's Solana Room rent page (src/seeker/solana/SolanaRoom.jsx's
+         <RentStages>) needs the exact same numbers public/solana-rent.html shows, not a second,
+         possibly-drifted computation. Kept OUTSIDE the wallet block on purpose. -->
+    <script src="/rent-math.js"></script>
     <!-- EDU:OUT — everything between these markers is the WALLET half of the shell, and the Google
          Play / iOS edition (docs/STORE_EDITION.md: no wallet, no payments, no address) is built
          WITHOUT it: vite.config.js strips this block when the edition is google or ios, the same
@@ -35,7 +41,6 @@
          refuses their filenames in the bundle, so a missing strip fails loudly rather than
          shipping a wallet into an app whose listing says it has none. -->
     <script src="/cluck-wallet.js"></script>
-    <script src="/rent-math.js"></script>
     <!-- The unified tools pass (public/cluck-gate.js) — the ONE pass client the whole platform
          uses. Without this file window.CluckGate does not exist, src/seeker/pass.js resolves
          every pane to "off", and the pass-tier tools fail open in the shipped app. The desktop

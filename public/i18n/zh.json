@@ -2857,5 +2857,8 @@
   "You've finished every lesson": "你已经学完了每一课",
   "Your name (optional)": "你的姓名（可选）",
   "completed the School of Crypto Hard Knocks curriculum.": "完成了 School of Crypto Hard Knocks 的课程。",
-  "{done} of {total} lessons finished on this phone. Free, no wallet, no sign-up — and nothing to buy.": "这部手机上已完成 {total} 课中的 {done} 课。免费、无需钱包、无需注册，也没有任何需要购买的东西。"
+  "{done} of {total} lessons finished on this phone. Free, no wallet, no sign-up — and nothing to buy.": "这部手机上已完成 {total} 课中的 {done} 课。免费、无需钱包、无需注册，也没有任何需要购买的东西。",
+  "On an exchange": "在交易所",
+  "Self-custody": "自托管",
+  "Fund / ETF": "基金 / ETF"
 }

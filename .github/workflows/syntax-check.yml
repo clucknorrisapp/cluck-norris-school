@@ -195,6 +195,19 @@ jobs:
         run: |
           git fetch origin develop --depth=1 --quiet || true
           node scripts/seeker-build-test.cjs
+      # The Solana Room, bundled into the Seeker app itself (both editions) — src/seeker/solana/
+      # content.js is a DATA port of public/solana-<id>.html, so this is the drift gate between
+      # them: every string the app renders for a page is a real, literal t() call on that page's
+      # website file, and every website string is ported or named (with a reason) in
+      # KNOWN_NOT_PORTED; all six curated dictionaries translate every string the app carries; the
+      # mint page's two example addresses are byte-for-byte exact; and — when a built seeker
+      # bundle and Chromium are both present — the room's routes render real headings fully
+      # offline (every request off 127.0.0.1 is refused) at 360x800. Build the seeker bundle first
+      # so that half doesn't skip.
+      - name: Seeker app — the Solana Room (drift vs. the website, i18n coverage, offline render)
+        run: |
+          STORE_EDITION=seeker npx vite build --outDir dist-seeker || true
+          node scripts/seeker-solana-room-test.cjs
       # docs/SEEKER_DEMO_INVENTORY.md — an inventory (facts, not pitch copy) of every route in
       # both Seeker editions plus every existing docs/seeker/ and docs/demo/ capture, for the
       # owner's demo shot list and deck. Pins the doc to the code, both directions: every route

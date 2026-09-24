@@ -31,6 +31,8 @@ is none.
 | `/school` | `SchoolHome` | — (School) | no | **yes** — curriculum is bundled (`src/seeker/school/curriculum.js`); only the completion beacon needs a connection, and it is fire-and-forget with a durable queue | yes |
 | `/school/:courseId` | `SchoolCourse` | — (School / LP Lab, course id `lp`) | no | **yes**, same as above | yes |
 | `/school/:courseId/:lessonId` | `SchoolLesson` | — (School / LP Lab) | no | **yes**, same as above | yes |
+| `/solana` | `SolanaRoomIndex` | `solana` / free | no | **yes** — the room's own content is bundled (`src/seeker/solana/content.js`) | no |
+| `/solana/:pageId` | `SolanaRoomPage` | `solana` / free | no | **yes**, same as above; the rent page's numbers come from bundled `rent-math.js`, not a fetch | no |
 | `/tools` | `ToolsHome` | — (grid page, not itself gated) | no | no | — |
 | `/rent` | `RentReclaimPane` | `rent` / wallet | **yes** — `runFullReclaim()` (`src/seeker/reclaim-sign.js`), connected wallet signs first | no | no |
 | `/ask` | `AskCluckPane` | `ask` / free | no | no | no |
@@ -47,7 +49,7 @@ is none.
 | `/tools/hatchery` | `Hatchery` | `hatchery` / paid | **yes** — `wallet.provider.signTransaction()` directly (mint keypair is server-held and co-signs in `/api/hatchery/submit`) | no | no |
 | `*` | `Navigate` → `/tools` | — | no | n/a (redirect) | — |
 
-19 routes (Buy Special left the app on 2026-09-22 — owner: not in the Seeker app at all). 6 panes sign: Rent Reclaim, Firepit, Project Burn, Locker Room, Airdropper, Hatchery —
+21 routes (Buy Special left the app on 2026-09-22 — owner: not in the Seeker app at all; the Solana Room, `/solana` + `/solana/:pageId`, added since). 6 panes sign: Rent Reclaim, Firepit, Project Burn, Locker Room, Airdropper, Hatchery —
 of those, Firepit/Project Burn/Locker Room/Rent Reclaim go through the two shared signing seams
 (`sign.js`'s `signSendConfirm`, `reclaim-sign.js`'s `runFullReclaim`); Airdropper signs through the
 separate, shared `public/airdrop-engine.js`; Hatchery calls the wallet provider directly because
@@ -66,13 +68,15 @@ with. It is a strict subset of the four free full-edition tools plus its own cer
 | `/school/certificate` | `Certificate` | free, no wallet | no — `POST /api/claim/certificate`, no wallet, no signing; explicitly **not** the treasury-paid diploma cNFT (`src/seeker/school/Certificate.jsx` header) | no (the claim call needs a connection) | no |
 | `/school/:courseId` | `SchoolCourse` | free | no | **yes** | yes |
 | `/school/:courseId/:lessonId` | `SchoolLesson` | free | no | **yes** | yes |
+| `/solana` | `SolanaRoomIndex` | free | no | **yes** — bundled content, same as the full edition | no |
+| `/solana/:pageId` | `SolanaRoomPage` | free | no | **yes**, same as above; `rent-math.js` loads outside `EDU:OUT` so the rent page's numbers are real here too | no |
 | `/ask` | `AskCluckPane report` | `ask` / free | no | no | no |
 | `/checkup` | `EduCheckup` → `WalletCheckupPane` (paste-address only) | `checkup` / free | no | no | no |
 | `/tools/listing` | `ListingCheckup linkHosts={LINK_HOSTS}` | `listing` / free | no | no | no |
 | `/tools/alpha` | `DailyBrief` | `alpha` / free | no | no | no |
 | `*` | `Navigate` → `/school` | — | no | n/a (redirect) | — |
 
-10 routes. None of the four flagship tools (Firepit, Locker Room, Project Burn, Airdropper) exist
+12 routes (the Solana Room, `/solana` + `/solana/:pageId`, added since). None of the four flagship tools (Firepit, Locker Room, Project Burn, Airdropper) exist
 in this edition — the shell's import list never pulls a wallet pane in
 (`src/seeker/edition/edu.jsx` header). School is the only flagship present, and it leads (first
 tab in both editions' `TABS`).

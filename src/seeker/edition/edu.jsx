@@ -18,6 +18,7 @@ import { t, useI18nReady } from "../i18n.js";
 import AskCluckPane from "../AskCluck.jsx";
 import WalletCheckupPane from "../WalletCheckup.jsx";
 import { AddressForm, AddressBar } from "../addressform.jsx";
+import { SolanaRoomIndex, SolanaRoomPage } from "../solana/SolanaRoom.jsx";
 import { SchoolHome, SchoolCourse, SchoolLesson } from "../school/School.jsx";
 import Certificate from "../school/Certificate.jsx";
 import ListingCheckup from "../tools/ListingCheckup.jsx";
@@ -92,6 +93,8 @@ export function EditionRoutes() {
       <Route path="/school/certificate" element={<Certificate />} />
       <Route path="/school/:courseId" element={<SchoolCourse />} />
       <Route path="/school/:courseId/:lessonId" element={<SchoolLesson />} />
+      <Route path="/solana" element={<SolanaRoomIndex />} />
+      <Route path="/solana/:pageId" element={<SolanaRoomPage />} />
       <Route path="/ask" element={<AskCluckPane report />} />
       <Route path="/checkup" element={<EduCheckup />} />
       <Route path="/tools/listing" element={<ListingCheckup linkHosts={LINK_HOSTS} />} />
