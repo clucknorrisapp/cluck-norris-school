@@ -2,7 +2,19 @@
    that sheet ships in the Google Play / iOS bundle too, and a rule named after a wallet control
    is a wallet reference in an education-only app (the store contract test refuses "walletbtn").
    Imported by src/seeker/edition/full.jsx only. */
-.seeker-walletzone { display: flex; align-items: center; gap: 8px; }
+/* flex-basis: 0 (the "1 1 0" below), not "auto" — load-bearing, not decorative. The line-wrap
+   decision in a wrapping flex container (.seeker-header has flex-wrap: wrap, needed so
+   .seeker-walleterr's flex-basis:100% forces IT onto its own line below) is made from each item's
+   HYPOTHETICAL size before any shrinking, and with flex-basis:auto that hypothetical size is the
+   zone's full unshrunk content ("Not connected" + the button at natural width) — which no longer
+   fits next to the brand once the header logo narrows the brand's own share of a 360px screen, so
+   the header dropped to two rows even though the content could shrink to fit one. flex-basis: 0
+   makes the hypothetical size 0, so the wrap decision never fires here; flex-grow: 1 then gives it
+   the real remaining width, and min-width: 0 (also load-bearing — a flex item with no non-'visible'
+   overflow of its own defaults its automatic minimum to its min-content, not 0) lets it actually
+   shrink to that width instead of overflowing. justify-content pins the button to the right edge
+   as the status text truncates. */
+.seeker-walletzone { display: flex; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; justify-content: flex-end; }
 .seeker-walletstatus {
   font-family: var(--mono);
   font-size: 11px;
@@ -11,6 +23,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .seeker-walletbtn {
   min-height: 44px;
@@ -25,6 +39,7 @@
   letter-spacing: 1px;
   text-transform: uppercase;
   cursor: pointer;
+  flex: 0 0 auto;
 }
 .seeker-walletbtn:active { background: rgba(255, 122, 24, .12); }
 .seeker-walleterr {

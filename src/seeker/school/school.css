@@ -7,6 +7,14 @@
  * Every tappable row is >= 44px. The lesson list is the surface someone scrolls one-handed on a
  * bus, so the targets are rows, not the text inside them. */
 
+.seeker-school-logo {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  object-fit: cover;
+}
 .seeker-school-title {
   font-family: var(--disp);
   letter-spacing: .5px;
