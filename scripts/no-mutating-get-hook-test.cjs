@@ -267,6 +267,134 @@ expectExit(
   0
 );
 
+// --- Codex round 32 P2: short-flag cluster value-consumption + --next request boundary ---------
+expectExit(
+  "-o/dev/null short-flag value must not be misparsed as -d data (Codex round 32)",
+  'curl -o/dev/null "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "-o /dev/null (separate word) is the same trap, still allowed since it's a plain GET with no data intent — must still block on the admin mutating GET",
+  'curl -o /dev/null "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "-X POST safe request, --next resets the method for the admin GET that follows (Codex round 32)",
+  'curl -X POST https://example.com/hook --next "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "--next admin request explicitly POSTed on its own side is allowed",
+  'curl -X POST https://example.com/hook --next -X POST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  0
+);
+
+// --- Codex round 32 P2: -G/--get converts -d/--data* into query params MUTATING_FLAG_RE must see -
+expectExit(
+  "-G --data-urlencode draw=1 turns into a GET query the raw-text check couldn't see (Codex round 32)",
+  'curl -G --data-urlencode draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-G -d 'draw=1' — same trap, short -d form",
+  "curl -G -d 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-G --data-raw 'x=1&draw=1' — the mutating flag is buried inside a larger data-raw value",
+  "curl -G --data-raw 'x=1&draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-G with data that carries no mutating flag at all stays allowed",
+  "curl -G -d 'foo=bar' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  0
+);
+
+// --- Codex round 32 "second lens" (adversarial re-review of the round-32 fixes) ------------------
+expectExit(
+  "-Gd draw=1 — G takes no value, the loop must keep scanning the cluster and see the trailing d",
+  "curl -Gd 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-sGd draw=1 — same trap with a leading boolean flag in the cluster",
+  "curl -sGd 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-IsXPOST — explicit POST later in the cluster must win over the earlier I (not misread as HEAD)",
+  'curl -IsXPOST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&scan=1"',
+  0
+);
+expectExit(
+  "--url-query draw=1 — always appended to the URL's query by curl, regardless of method",
+  'curl --url-query draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "--url-query=draw=1 inline form",
+  'curl --url-query=draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-D/dev/stderr short flag value must not fall through as an unrecognised flag",
+  'curl -D/dev/stderr "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "-G with a data value read from a file (@-prefixed) fails CLOSED — contents unknown",
+  'curl -G -d @payload.txt "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-G with a name@file form data value also fails CLOSED",
+  'curl -G -d name@payload.txt "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-I -G -d draw=1 — resolves to HEAD, not GET, but -G still moves the data onto the URL",
+  "curl -I -G -d 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "--head --get --data draw=1 — long-flag form of the same trap",
+  "curl --head --get --data 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-X HEAD -G -d draw=1 — an explicit -X HEAD does not stop -G from moving the data onto the URL",
+  "curl -X HEAD -G -d 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+
+// --- Codex round 33 (adversarial re-review of the round-32/32b fixes) --------------------------
+expectExit(
+  "-: is curl's own short spelling of --next — must split a request boundary too (Codex's exact string)",
+  'curl -X POST https://example.com/hook -: "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "the -: request explicitly POSTed on its own side is allowed",
+  'curl -X POST https://example.com/hook -: -X POST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  0
+);
+expectExit(
+  "--header '-XPOST' — a long option's VALUE must not be re-scanned as its own flag (Codex's exact string)",
+  "curl --header '-XPOST' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1\"",
+  2
+);
+expectExit(
+  "--header 'X: y' -X POST — a real header plus a real POST still allowed",
+  "curl --header 'X: y' -X POST \"https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1\"",
+  0
+);
+expectExit(
+  "--user-agent '-G' must not be read as forcing GET — a real -G would flip this POST-by-data to a blocked GET",
+  "curl --user-agent '-G' --data 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  0
+);
+
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");
 const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md", "store-release.md"];
