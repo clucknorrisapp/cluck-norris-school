@@ -284,6 +284,35 @@ const DATA_LONG_FLAGS = new Set([
 ]);
 const DATA_LONG_PREFIXES = Array.from(DATA_LONG_FLAGS, (f) => f + "=");
 
+// Codex round 33 P2: every OTHER curl long option that takes a value must still consume it — the
+// old code fell through to `continue; // unrecognized long flag — ignore` for anything not on the
+// small explicit list above, which left the VALUE word to be re-scanned on the next loop
+// iteration as if it were its own flag: `curl --header '-XPOST' <admin-url>?draw=1` read the
+// header's VALUE as an explicit `-X POST`, while real curl sends that request as a GET (curl
+// never even looks at `--header`'s value as a flag). None of these carry any method/data meaning
+// of their own — enumerated from curl(1)'s long-option list, excluding the ones already handled
+// above for their OWN semantics (`--request`, `--get`, `--head`, `--upload-file`, `--url-query`,
+// the `--data*`/`--json`/`--form*` family) and excluding boolean (no-argument) long options.
+const LONG_VALUE_FLAGS = new Set([
+  "--abstract-unix-socket", "--alt-svc", "--aws-sigv4", "--cacert", "--capath", "--cert",
+  "--cert-type", "--ciphers", "--config", "--connect-timeout", "--connect-to", "--continue-at",
+  "--cookie", "--cookie-jar", "--crlfile", "--delegation", "--dns-interface", "--dns-ipv4-addr",
+  "--dns-ipv6-addr", "--dns-servers", "--doh-url", "--dump-header", "--egd-file", "--engine",
+  "--etag-compare", "--etag-save", "--expect100-timeout", "--ftp-account",
+  "--ftp-alternative-to-user", "--ftp-method", "--ftp-port", "--happy-eyeballs-timeout-ms",
+  "--header", "--hostpubmd5", "--hostpubsha256", "--hsts", "--interface", "--keepalive-time",
+  "--key", "--key-type", "--krb", "--libcurl", "--limit-rate", "--local-port", "--login-options",
+  "--mail-auth", "--mail-from", "--mail-rcpt", "--max-filesize", "--max-redirs", "--max-time",
+  "--netrc-file", "--noproxy", "--oauth2-bearer", "--output", "--output-dir", "--parallel-max",
+  "--pass", "--proto", "--proto-default", "--proto-redir", "--proxy", "--proxy-header",
+  "--proxy-pass", "--proxy-service-name", "--proxy-user", "--proxy1.0", "--pubkey",
+  "--random-file", "--range", "--rate", "--referer", "--request-target", "--resolve", "--retry",
+  "--retry-delay", "--retry-max-time", "--sasl-authzid", "--service-name", "--socks4",
+  "--socks4a", "--socks5", "--socks5-gssapi-service", "--speed-limit", "--speed-time", "--stderr",
+  "--tftp-blksize", "--time-cond", "--tlsauthtype", "--tlspassword", "--tlsuser", "--trace",
+  "--trace-ascii", "--unix-socket", "--url", "--user", "--user-agent", "--variable", "--write-out",
+]);
+
 // Computes the effective HTTP method for one invocation's words, returning
 // `{ method, forceGet, hasUrlQueryData }`. When `dataValuesOut` (an array) is passed, every raw
 // value handed to a data/form flag (`-d`, `-F`, `--data*`, `--json`, `--form*`) or to
@@ -373,7 +402,19 @@ function computeEffectiveMethod(words, dataValuesOut) {
           continue;
         }
       }
-      continue; // unrecognized long flag — ignore
+      if (LONG_VALUE_FLAGS.has(w)) {
+        // Opaque — consumes its value (inline `--opt=value`, handled below, or the next word) but
+        // carries no method/data meaning of its own.
+        if (words[idx + 1] !== undefined) idx++;
+        continue;
+      }
+      {
+        const eq = w.indexOf("=");
+        if (eq > 2 && LONG_VALUE_FLAGS.has(w.slice(0, eq))) {
+          continue;   // `--opt=value` inline form — nothing left to consume
+        }
+      }
+      continue; // truly unrecognized long flag (or a boolean one) — ignore
     }
 
     // Short flag or a cluster of them (e.g. -sSXPOST, -sSd, -G, -I, -o/dev/null).
@@ -440,10 +481,14 @@ function computeEffectiveMethod(words, dataValuesOut) {
 // P2: `curl -X POST <safe-url> --next GET /api/…/admin?run=1` used to be judged as ONE POST
 // invocation because the whole word list shared a single computed method. Split on `--next` and
 // judge each resulting request independently, exactly like separate curl invocations.
+// Codex round 33 P2: `-:` is curl's own short spelling of `--next` (curl(1): "-:, --next") — a
+// STANDALONE short option (curl does not combine it into a cluster with other short flags), so
+// `curl -X POST <safe-url> -: <admin-url>?draw=1` split just as cleanly as the `--next` form but
+// was never recognised as a boundary at all.
 function splitOnNext(words) {
   const parts = [[]];
   for (const w of words) {
-    if (w === "--next") {
+    if (w === "--next" || w === "-:") {
       parts.push([]);
       continue;
     }

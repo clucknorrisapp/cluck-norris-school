@@ -45,9 +45,20 @@ const realNow = Date.now;
 Date.now = () => now;
 
 // ---- fake price bars (GeckoTerminal) — flat $0.05 across the whole window + buffer -----------
+// barsPauseState — Codex round 33 P1's test: a controllable gate on the PRICE fetch itself (as
+// opposed to pauseAtFrom/pauseState above, which gate the TAPE fetch), so a test can suspend
+// scanOnce() mid-await on `loadBars()` — the earliest await in the function — and act while it's
+// still suspended there.
+let barsPauseState = null;
 global.fetch = async (url) => {
   const u = String(url);
   if (u.includes("geckoterminal")) {
+    if (barsPauseState) {
+      const p = barsPauseState;
+      barsPauseState = null;
+      p.hitResolve();
+      await p.gate;
+    }
     const bars = [];
     for (let t = T0 - 3600000; t <= T0 + 25 * 3600000; t += 300000) bars.push([Math.floor(t / 1000), 0, 0, 0, 0.05, 0]);
     return { json: async () => ({ data: { attributes: { ohlcv_list: bars.reverse() } } }) };
@@ -373,6 +384,42 @@ function entriesFor(w) {
   ok("it did NOT touch incompleteSlices — that counter is for real tape faults only",
      timedOut.incompleteSlices === 0, JSON.stringify(timedOut));
   ok("the cursor did not advance past the timed-out slice", timedOut.cursorMs === T0, "cursorMs=" + timedOut.cursorMs);
+
+  console.log("\ncuna-giveaway scanner — a reconfigure landing during the PRICE lookup also supersedes (Codex round 33 P1)\n");
+
+  // Codex round 33: genAtStart used to be captured INSIDE the slice loop, after loadBars()'s own
+  // await had already resolved — so a reconfigure landing during THAT await (the very first thing
+  // scanOnce() does) was invisible. The scan would go on to query the OLD mint's tape, price it,
+  // and credit it into whatever ledger configure() had just reset, advancing the cursor with no
+  // supersede ever reported.
+  gw.configure({ mint: MINT, pool: POOL, symbol: "CUNA", startMs: T0, endMs: T0 + 24 * HOUR, minUsd: 2.5 });
+  gw.resetLedger();
+  // Far past PRICE_TTL_MS (4 min) from any `_bars.at` a prior test left behind, so loadBars() is
+  // forced to actually call fetch() (not served from its own cache) and hit the pause gate below.
+  now = T0 + 250 * HOUR;
+  ALL_TRADES = [{ ts: T0 + 2 * MIN_MS, wallet: W1, side: "buy", tokenAmt: 100, sig: "PRICE-RACE-OLD" }];   // would qualify under the OLD config
+
+  let gateResolve3, hitResolve3;
+  const gatePromise3 = new Promise((res) => { gateResolve3 = res; });
+  const hitPromise3 = new Promise((res) => { hitResolve3 = res; });
+  barsPauseState = { hitResolve: hitResolve3, gate: gatePromise3 };
+
+  const scanPromise3 = gw.scanOnce(deps);
+  await hitPromise3;   // scanOnce() is now genuinely paused inside loadBars(), before any tape request
+
+  const MINT3 = "7pXqQqzVYT1uVbGZ6FZNZzq9Cq7cN4RxvghKuXHnFj1o";
+  const reconfigured3 = gw.configure({ mint: MINT3, pool: POOL, symbol: "CUNA3",
+    startMs: T0 + 300 * HOUR, endMs: T0 + 324 * HOUR, minUsd: 2.5 });
+  ok("reconfigure to a new mint/window succeeds", reconfigured3.mint === MINT3, JSON.stringify(reconfigured3));
+
+  gateResolve3();
+  const supersededByPriceRace = await scanPromise3;
+  ok("the scan paused inside loadBars() under the OLD config reports superseded",
+     supersededByPriceRace.superseded === true, JSON.stringify(supersededByPriceRace));
+  ok("nothing was credited — the race was caught before a single tape request was ever made",
+     entriesFor(W1) === 0, "entries=" + entriesFor(W1));
+  ok("the cursor reflects the NEW config's startMs, not overwritten by the paused call",
+     gw.standings(1).cursorMs === T0 + 300 * HOUR, "cursorMs=" + gw.standings(1).cursorMs);
 
   Date.now = realNow;
   try { fs.rmSync(DIR, { recursive: true, force: true }); } catch (_) {}

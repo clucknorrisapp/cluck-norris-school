@@ -368,6 +368,33 @@ expectExit(
   2
 );
 
+// --- Codex round 33 (adversarial re-review of the round-32/32b fixes) --------------------------
+expectExit(
+  "-: is curl's own short spelling of --next — must split a request boundary too (Codex's exact string)",
+  'curl -X POST https://example.com/hook -: "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "the -: request explicitly POSTed on its own side is allowed",
+  'curl -X POST https://example.com/hook -: -X POST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  0
+);
+expectExit(
+  "--header '-XPOST' — a long option's VALUE must not be re-scanned as its own flag (Codex's exact string)",
+  "curl --header '-XPOST' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1\"",
+  2
+);
+expectExit(
+  "--header 'X: y' -X POST — a real header plus a real POST still allowed",
+  "curl --header 'X: y' -X POST \"https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1\"",
+  0
+);
+expectExit(
+  "--user-agent '-G' must not be read as forcing GET — a real -G would flip this POST-by-data to a blocked GET",
+  "curl --user-agent '-G' --data 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  0
+);
+
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");
 const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md", "store-release.md"];

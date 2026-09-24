@@ -160,6 +160,22 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 33 — 2026-09-24: PR #425 at `8deeaeda` — not cleared, three more reproductions — fixed
+
+Same PR, same two files (the CUNA giveaway scanner and the `no-mutating-get` hook), a third pass.
+
+| # | Finding | Fix | Pinned by |
+|---|---|---|---|
+| 1 | **P1** — `lib/cuna-giveaway.js:428` `scanOnce()` — `genAtStart` was captured INSIDE the slice loop, i.e. AFTER `await loadBars(c.pool)` had already resolved. A reconfigure landing during THAT await (the earliest thing `scanOnce()` does) was invisible: the local `c` still pointed at the OLD config object (`configure()` replaces `s.config`, never mutates it), so the scan went on to query the old mint's tape, price it, and credit it into whatever the new config had just reset — advancing the cursor with no `superseded` ever reported | A new "GENERATION CHECK, part 0" captures `s.gen` BEFORE `loadBars()` and validates it right after — a mismatch returns `{ok:true, superseded:true, ...}` immediately, before a single tape request or price check, same shape as the existing mid-slice supersede | `scripts/cuna-giveaway-scan-test.cjs`, new section "a reconfigure landing during the PRICE lookup also supersedes": a new `barsPauseState` gate on the test's GeckoTerminal fetch stub (distinct from the tape-fetch gate used for the round-32 tests) pauses `scanOnce()` mid-await inside `loadBars()`, `configure()`s a new mint/window while it's suspended there, releases it, and asserts `superseded:true`, zero credited, and the cursor reflecting the NEW config — confirmed to fail (`superseded` false) against the pre-fix code |
+| 2 | **P2** — `.claude/hooks/no-mutating-get.js:446` `splitOnNext()` only recognised `--next`; curl's own short spelling `-:` (documented standalone, not combined into a short-flag cluster) was an unhandled request boundary: `curl -X POST <safe-url> -: <admin-url>?draw=1` read as one POST-covered invocation while curl itself sends the second request as a GET | `splitOnNext()` now splits on `-:` as well as `--next` | Same hook test file: Codex's exact string blocks; the same command with an explicit `-X POST` on the `-:` side is allowed |
+| 3 | **P2** — `.claude/hooks/no-mutating-get.js:376` `computeEffectiveMethod()` — any long option NOT already on its short explicit list (`--request`/`--get`/`--head`/`--upload-file`/`--url-query`/the `--data*` family) fell straight to `continue; // unrecognized long flag — ignore` WITHOUT consuming its argument. `curl --header '-XPOST' <admin-url>?draw=1` read the header's VALUE word as its own `-X POST` flag on the NEXT loop iteration, while real curl sends that request as a GET (curl never treats a `--header` value as a flag) | Enumerated curl(1)'s long value-taking options not already handled for their own method/data semantics into `LONG_VALUE_FLAGS` (`--header`, `--user-agent`, `--referer`, `--cookie`, `--cookie-jar`, `--output`, `--dump-header`, `--cert`, `--key`, `--cacert`, `--proxy`, `--user`, `--max-time`, `--connect-timeout`, `--retry`, `--range`, `--resolve`, `--interface`, `--write-out`, `--url`, `--config`, and the rest of curl's value-taking long list) — every one now consumes its argument in both `--opt value` and `--opt=value` spellings, exactly like the short forms, with zero effect on the computed method or data values | Same file: Codex's exact `--header '-XPOST'` string blocks; `--header 'X: y' -X POST` (a real header plus a real POST) still allowed; `--user-agent '-G' --data 'draw=1'` stays allowed (a REAL `-G` here would force GET and get the reconstructed-query check to catch `draw=1`, which would wrongly block it — this confirms the `-G` text in the header value is never read as the flag) |
+
+Run and green: `node --check` on every touched file, `scripts/cuna-giveaway-scan-test.cjs`,
+`scripts/no-mutating-get-hook-test.cjs`, `scripts/mutating-get-guard-test.cjs` (unchanged — no
+route touched). Each of the three fixes was verified to actually change the outcome: reverting
+just that file and re-running its test suite reproduces Codex's exact failure, confirming the new
+assertions are not vacuously true.
+
 ## Round 32 — 2026-09-24: your four reproductions against `develop` (2d1e782b) — fixed
 
 All four reproduced against `develop` at `2d1e782b` (the CUNA giveaway scanner and the
