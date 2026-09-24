@@ -75,6 +75,10 @@ let clockStepMs = 0;
 let forceTapeError = null;
 let pauseAtFrom = null;
 let pauseState = null;
+// realDelayMs — Codex round 32 "second lens" item 6: a GENUINE real-wall-clock delay (unlike
+// clockStepMs, which only bumps the fake Date.now()), so a tight real deadlineMs can actually lose
+// a Promise.race against it and exercise scanOnce()'s slice_timeout path for real.
+let realDelayMs = 0;
 const heliusTrades = require(path.join(__dirname, "..", "lib", "helius-trades.js"));
 heliusTrades.getTradeTapeHelius = async (mint, from, to) => {
   now += clockStepMs;
@@ -85,6 +89,7 @@ heliusTrades.getTradeTapeHelius = async (mint, from, to) => {
     p.hitResolve();
     await p.gate;
   }
+  if (realDelayMs > 0) await new Promise((r) => setTimeout(r, realDelayMs));
   return {
     trades: ALL_TRADES.filter((t) => t.ts >= from && t.ts < to),
     reachedWindowStart: true, capped: false, txsMissing: 0, poolErrors: [],
@@ -301,6 +306,73 @@ function entriesFor(w) {
      now <= deadline + 20000, "now-deadline=" + (now - deadline));
   ok("the plain 5-minute tick (no opts at all) is unaffected by any of this — still 8 slices per call",
      true, "");   // behavioural note, asserted by every earlier test in this file calling scanOnce(deps) with no opts
+
+  console.log("\ncuna-giveaway scanner — reconfiguring mid-scan supersedes it too (Codex round 32 \"second lens\" P2)\n");
+
+  // Same race as the rewind test above, triggered by configure() instead: changing the mint/
+  // window out from under a scan that is still mid-await for the OLD config must not let that
+  // scan credit trades against the config that no longer applies, or overwrite the cursor the
+  // reconfigure is about to set.
+  gw.configure({ mint: MINT, pool: POOL, symbol: "CUNA", startMs: T0, endMs: T0 + 24 * HOUR, minUsd: 2.5 });
+  gw.resetLedger();
+  now = T0 + 30 * MIN_MS;
+  ALL_TRADES = [];   // nothing under the OLD config yet
+
+  let gateResolve2, hitResolve2;
+  const gatePromise2 = new Promise((res) => { gateResolve2 = res; });
+  const hitPromise2 = new Promise((res) => { hitResolve2 = res; });
+  pauseAtFrom = T0;   // the very first slice of the OLD config's scan
+  pauseState = { hitResolve: hitResolve2, gate: gatePromise2 };
+
+  const scanPromise2 = gw.scanOnce(deps);
+  await hitPromise2;   // the scan is now genuinely paused mid-await, still reading the OLD config
+
+  // Would qualify under the OLD config if the paused slice were ever allowed to write normally.
+  ALL_TRADES.push({ ts: T0 + 2 * MIN_MS, wallet: W1, side: "buy", tokenAmt: 100, sig: "CFG-OLD" });
+
+  const MINT2 = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+  const reconfigured = gw.configure({ mint: MINT2, pool: POOL, symbol: "CUNA2",
+    startMs: T0 + 100 * HOUR, endMs: T0 + 124 * HOUR, minUsd: 2.5 });
+  ok("reconfigure to a new mint/window succeeds", reconfigured.mint === MINT2, JSON.stringify(reconfigured));
+
+  gateResolve2();
+  const supersededByConfig = await scanPromise2;
+  ok("the scan paused under the OLD config reports superseded, not a normal completion",
+     supersededByConfig.superseded === true, JSON.stringify(supersededByConfig));
+  ok("nothing from the OLD config's in-flight slice was credited",
+     entriesFor(W1) === 0, "entries=" + entriesFor(W1));
+  ok("the cursor reflects the NEW config's startMs, not overwritten by the stale slice",
+     gw.standings(1).cursorMs === T0 + 100 * HOUR, "cursorMs=" + gw.standings(1).cursorMs);
+
+  console.log("\ncuna-giveaway scanner — a deadline cutoff is reported separately from a tape stall (Codex round 32 \"second lens\" P3)\n");
+
+  // A GENUINE real-wall-clock race (realDelayMs), not just the fake-clock bump: the tape request
+  // takes 200 real ms to resolve, but the deadline gives it only ~10 real ms — scanOnce() must
+  // actually hit the withTimeout() rejection path, not merely the "stop before starting a new
+  // slice" cutoff exercised by the earlier deadline test.
+  gw.configure({ mint: MINT, pool: POOL, symbol: "CUNA", startMs: T0, endMs: T0 + 24 * HOUR, minUsd: 2.5 });
+  gw.resetLedger();
+  now = T0 + 30 * MIN_MS;   // well past the 5-minute settle delay, so the ceiling is comfortably ahead of T0
+  ALL_TRADES = [];
+  // Earlier sections in this file (catchUp()'s own tight-budget test, which now always threads a
+  // deadlineMs into scanOnce()) may already have incremented `deadlineHits` from prior slices
+  // whose remaining budget went non-positive by the time it was computed — that's expected, real
+  // behaviour, not a bug. `resetLedger()` deliberately leaves this historical counter alone (same
+  // as `incompleteSlices`), so assert the DELTA this call itself causes, not an absolute value.
+  const deadlineHitsBefore = JSON.parse(fs.readFileSync(path.join(DIR, "cuna-giveaway.json"), "utf8")).deadlineHits || 0;
+  realDelayMs = 200;
+  const tightDeadline = now + 10;
+  const timedOut = await gw.scanOnce(deps, { deadlineMs: tightDeadline });
+  realDelayMs = 0;
+  ok("a real deadline timeout is reported ok:true (not a hard error)", timedOut.ok === true, JSON.stringify(timedOut));
+  ok("it is flagged as a deadline cutoff", timedOut.deadline === true, JSON.stringify(timedOut));
+  ok("its own counter moved by exactly this one timeout", timedOut.deadlineHits === deadlineHitsBefore + 1,
+     "before=" + deadlineHitsBefore + " " + JSON.stringify(timedOut));
+  ok("it is NOT reported as a tape stall — operators must not be told the tape is stuck",
+     timedOut.stalled === false, JSON.stringify(timedOut));
+  ok("it did NOT touch incompleteSlices — that counter is for real tape faults only",
+     timedOut.incompleteSlices === 0, JSON.stringify(timedOut));
+  ok("the cursor did not advance past the timed-out slice", timedOut.cursorMs === T0, "cursorMs=" + timedOut.cursorMs);
 
   Date.now = realNow;
   try { fs.rmSync(DIR, { recursive: true, force: true }); } catch (_) {}

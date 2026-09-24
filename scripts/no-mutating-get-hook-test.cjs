@@ -311,6 +311,63 @@ expectExit(
   0
 );
 
+// --- Codex round 32 "second lens" (adversarial re-review of the round-32 fixes) ------------------
+expectExit(
+  "-Gd draw=1 — G takes no value, the loop must keep scanning the cluster and see the trailing d",
+  "curl -Gd 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-sGd draw=1 — same trap with a leading boolean flag in the cluster",
+  "curl -sGd 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-IsXPOST — explicit POST later in the cluster must win over the earlier I (not misread as HEAD)",
+  'curl -IsXPOST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&scan=1"',
+  0
+);
+expectExit(
+  "--url-query draw=1 — always appended to the URL's query by curl, regardless of method",
+  'curl --url-query draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "--url-query=draw=1 inline form",
+  'curl --url-query=draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-D/dev/stderr short flag value must not fall through as an unrecognised flag",
+  'curl -D/dev/stderr "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "-G with a data value read from a file (@-prefixed) fails CLOSED — contents unknown",
+  'curl -G -d @payload.txt "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-G with a name@file form data value also fails CLOSED",
+  'curl -G -d name@payload.txt "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-I -G -d draw=1 — resolves to HEAD, not GET, but -G still moves the data onto the URL",
+  "curl -I -G -d 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "--head --get --data draw=1 — long-flag form of the same trap",
+  "curl --head --get --data 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-X HEAD -G -d draw=1 — an explicit -X HEAD does not stop -G from moving the data onto the URL",
+  "curl -X HEAD -G -d 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");
 const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md", "store-release.md"];

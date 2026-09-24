@@ -265,8 +265,12 @@ const NO_VALUE_METHOD_FLAGS = { G: "get", I: "head" };
 // Value-taking short flags that do NOT affect the method — just consume their value so a `d`/`X`/…
 // inside that value is never mistaken for another flag. Not exhaustive of every curl short option,
 // but covers every one curl documents as taking an argument.
+// Codex round 32 "second lens" P3: -D/-r/-Y/-Q/-C/-t/-P also take a value in real curl (dump-header
+// file, range, speed-limit, quote command, resume-from offset, telnet option, ftp-port) and were
+// missing — `curl -D/dev/stderr ".../admin?key=k&draw=1"` used to fall through unrecognised.
 const OPAQUE_VALUE_FLAGS = new Set([
   "o", "H", "A", "u", "b", "c", "e", "m", "w", "U", "x", "y", "z", "K", "E",
+  "D", "r", "Y", "Q", "C", "t", "P",
 ]);
 const DATA_LONG_FLAGS = new Set([
   "--data",
@@ -280,14 +284,22 @@ const DATA_LONG_FLAGS = new Set([
 ]);
 const DATA_LONG_PREFIXES = Array.from(DATA_LONG_FLAGS, (f) => f + "=");
 
-// Computes the effective HTTP method for one invocation's words. When `dataValuesOut` (an array)
-// is passed, every raw value handed to a data/form flag (`-d`, `-F`, `--data*`, `--json`,
-// `--form*`) is pushed onto it — Codex round 32 P2: with `-G`/`--get`, curl moves that data onto
-// the URL as query parameters instead of sending a body, so the caller needs the raw values to
-// reconstruct the query a `-G` request actually sends (see `extractAdminUrlQuery` / main()).
+// Computes the effective HTTP method for one invocation's words, returning
+// `{ method, forceGet, hasUrlQueryData }`. When `dataValuesOut` (an array) is passed, every raw
+// value handed to a data/form flag (`-d`, `-F`, `--data*`, `--json`, `--form*`) or to
+// `--url-query`/`--url-query=` is pushed onto it — Codex round 32 P2: with `-G`/`--get`, curl
+// moves data-flag values onto the URL as query parameters instead of sending a body, so the
+// caller needs the raw values to reconstruct the query a `-G` request actually sends (see
+// `extractAdminUrlQuery` / main()). `--url-query` (round 32 "second lens" P3) always appends its
+// value to the URL's query regardless of method — it's not a data flag and doesn't imply POST —
+// so `forceGet`/`hasUrlQueryData` are both returned separately from `method`: the caller must
+// rebuild and test the query whenever EITHER is true, not only when the final resolved method
+// happens to be GET (round 32 "second lens" P3: `-I -G -d draw=1`/`-X HEAD -G -d draw=1` resolve
+// to HEAD, not GET, but `-G` still moves the data onto the URL and must still be caught).
 function computeEffectiveMethod(words, dataValuesOut) {
   let explicit = null;
   let forceGet = false;
+  let hasUrlQueryData = false;
   let head = false;
   let upload = false;
   let hasData = false;
@@ -330,6 +342,19 @@ function computeEffectiveMethod(words, dataValuesOut) {
       }
       if (w.startsWith("--upload-file=")) {
         upload = true;
+        continue;
+      }
+      if (w === "--url-query") {
+        hasUrlQueryData = true;
+        if (words[idx + 1] !== undefined) {
+          if (dataValuesOut) dataValuesOut.push(words[idx + 1]);
+          idx++;
+        }
+        continue;
+      }
+      if (w.startsWith("--url-query=")) {
+        hasUrlQueryData = true;
+        if (dataValuesOut) dataValuesOut.push(w.slice("--url-query=".length));
         continue;
       }
       if (DATA_LONG_FLAGS.has(w)) {
@@ -380,9 +405,13 @@ function computeEffectiveMethod(words, dataValuesOut) {
         break; // the rest of this word (if any) was the flag's inline value, not more flags
       }
       if (c in NO_VALUE_METHOD_FLAGS) {
+        // Codex round 32 "second lens" P2: G/I take NO value, so `-Gd draw=1` (or `-sGd draw=1`)
+        // must keep scanning the cluster past the `G` — the old `break` here stopped right after
+        // it and never saw the `d` two characters later, so the data value it carries (and thus
+        // the query -G moves it into) was silently dropped.
         if (NO_VALUE_METHOD_FLAGS[c] === "get") forceGet = true;
         else head = true;
-        break;
+        continue;
       }
       if (OPAQUE_VALUE_FLAGS.has(c)) {
         // Takes a value but doesn't affect the method — just consume it (inline remainder, or the
@@ -394,12 +423,14 @@ function computeEffectiveMethod(words, dataValuesOut) {
     }
   }
 
-  if (explicit) return explicit;
-  if (head) return "HEAD";
-  if (forceGet) return "GET";
-  if (upload) return "PUT";
-  if (hasData) return "POST";
-  return "GET";
+  let method;
+  if (explicit) method = explicit;
+  else if (head) method = "HEAD";
+  else if (forceGet) method = "GET";
+  else if (upload) method = "PUT";
+  else if (hasData) method = "POST";
+  else method = "GET";
+  return { method, forceGet, hasUrlQueryData };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -489,14 +520,25 @@ function main() {
         const partText = part.join(" ");
         if (!ADMIN_PATH_RE.test(partText)) continue;
         const dataValues = [];
-        const method = computeEffectiveMethod(part, dataValues);
+        const eff = computeEffectiveMethod(part, dataValues);
+        const method = eff.method;
         let mutating = MUTATING_FLAG_RE.test(partText);
-        if (!mutating && method === "GET") {
-          // -G/--get (or a plain GET with data flags curl would otherwise send as a body) turns
-          // every data value into a query parameter — reconstruct that query and test it too.
-          const urlQuery = extractAdminUrlQuery(partText);
-          const combined = "?" + [urlQuery, dataValues.join("&")].filter(Boolean).join("&");
-          mutating = MUTATING_FLAG_RE.test(combined);
+        // Codex round 32 "second lens" P3: rebuild and test the query whenever `-G`/`--get` OR
+        // `--url-query` is present, regardless of the FINAL resolved method — `-G` moves data
+        // onto the URL even when an explicit `-X HEAD`/`-I` is also present, and `--url-query`
+        // always modifies the URL regardless of method.
+        if (!mutating && (eff.forceGet || eff.hasUrlQueryData)) {
+          // Fail-closed: a value curl reads from a file (`@file`, or `name@file`) has unknown
+          // contents at review time — never assume it's safe just because ITS TEXT doesn't
+          // contain a mutating flag.
+          const opaqueFileRef = dataValues.some((v) => /@/.test(v));
+          if (opaqueFileRef) {
+            mutating = true;
+          } else {
+            const urlQuery = extractAdminUrlQuery(partText);
+            const combined = "?" + [urlQuery, dataValues.join("&")].filter(Boolean).join("&");
+            mutating = MUTATING_FLAG_RE.test(combined);
+          }
         }
         if (!mutating) continue;
         if (method !== "POST") {
