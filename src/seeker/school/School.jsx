@@ -91,6 +91,7 @@ export function SchoolHome({ finished, progressNote }) {
 
   return (
     <div className="seeker-pane seeker-school">
+      <img className="seeker-school-logo" src="/cluck-norris.png" alt="" decoding="async" />
       <h1 className="seeker-school-title">{t("School of Crypto Hard Knocks")}</h1>
       <p className="seeker-tool-lede">
         {t("Free, forever. No wallet, no signup, and it works with no signal — every lesson is already on your phone.")}

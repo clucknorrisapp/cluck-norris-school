@@ -32,7 +32,10 @@ function Header({ wallet }) {
   useI18nReady();
   return (
     <header className="seeker-header">
-      <div className="seeker-brand" data-clkn-avoid="1">Cluck Norris</div>
+      <div className="seeker-brand-wrap" data-clkn-avoid="1">
+        <img className="seeker-brand-logo" src="/cluck-norris.png" alt="" decoding="async" />
+        <div className="seeker-brand">Cluck Norris</div>
+      </div>
       <HeaderExtra wallet={wallet} />
     </header>
   );
