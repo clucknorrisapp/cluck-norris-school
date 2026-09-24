@@ -206,8 +206,10 @@ function buildVariant(cwd, variant) {
       .filter((f) => f !== "store-edition/seeker-edition.json");
   } catch (_) { sharedChanges = null; }
 
+  let googleTgz = null;
   for (const variant of ["google", "ios"]) {
     const here = buildVariant(ROOT, variant);
+    if (variant === "google") googleTgz = path.join(ROOT, "release", here.file);
     ok(`${variant}: this tree's build verifies clean (build-store-edition.mjs's own checks passed)`, true);
 
     // ── HARD: nothing WALLET-shaped ships inside an education-only bundle ────────────────────
@@ -463,6 +465,27 @@ function buildVariant(cwd, variant) {
     await renderedCheck(pw, baselineSeekerDir);
   }
   if (baselineSeekerDir) { try { fs.rmSync(baselineSeekerDir, { recursive: true, force: true }); } catch (_) {} }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // (e-edu) the EDUCATION edition's rendered nav — owner (Xcode review, 2026-09-24): "wallet and
+  // listing probably don't deserve their own tabs, we have a whole school, lp lab, ask cluck,
+  // solana room, daily stuff." Rendered against the GOOGLE variant built in section (c) above
+  // (google and ios share the same src/seeker/edition/edu.jsx, so one render stands for both —
+  // ios itself is checked bundle-side in (c)). Pins:
+  //   · exactly five tabs, in order: School, LP Lab, Ask, Solana, Daily;
+  //   · every tab icon is a real SVG (a drawn icon component), never emoji TEXT — the whole point
+  //     of the icon files this PR added;
+  //   · /checkup and /tools/listing still render (routes kept even though their tabs are gone —
+  //     the school home's Safety tools card and any stray deep link still work);
+  //   · the LP Lab tab reads active while inside the course AND one of its lessons.
+  console.log("\n(e-edu) education edition — rendered nav (Chromium)\n");
+  if (!pw) {
+    console.log("  · playwright(-core) not resolvable — skipping (everything above still ran)");
+  } else if (!googleTgz) {
+    ok("education edition rendered nav — google bundle was built (section c)", false, "googleTgz not set");
+  } else {
+    await renderedEduCheck(pw, googleTgz);
+  }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
   // (e2) ONE tools-pass gate, not one per tool
@@ -900,6 +923,107 @@ async function renderedCheck(pw, baselineSeekerDir) {
     // /solana/seeker/skr — the Seeker-edition-only wing page (SeekerWing.jsx), never reachable in
     // the education edition. This build is the seeker tarball, so the route exists.
     await assertPillClear("/solana/seeker/skr", null, true);
+  } finally {
+    await browser.close();
+    server.close();
+    fs.rmSync(extractDir, { recursive: true, force: true });
+  }
+}
+
+// Section (e-edu): the education edition (google/ios — same src/seeker/edition/edu.jsx, so one
+// render stands for both) at 360x800, the phone size the real device screenshots this PR's owner
+// review was based on used elsewhere in this file.
+async function renderedEduCheck(pw, tgz) {
+  const http = require("http");
+  const extractDir = fs.mkdtempSync(path.join(os.tmpdir(), "seeker-edu-render-"));
+  execFileSync("tar", ["-xzf", tgz, "-C", extractDir, "--strip-components=1"]);
+  const mime = { ".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" };
+  const server = http.createServer((req, res) => {
+    let p = decodeURIComponent(req.url.split("?")[0]);
+    if (p === "/") p = "/index.html";
+    const fp = path.join(extractDir, p);
+    if (!fp.startsWith(extractDir) || !fs.existsSync(fp) || fs.statSync(fp).isDirectory()) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { "Content-Type": mime[path.extname(fp)] || "application/octet-stream" });
+    fs.createReadStream(fp).pipe(res);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = server.address().port;
+  const findChromium = () => {
+    const c = [process.env.PLAYWRIGHT_CHROMIUM_PATH, "/opt/pw-browsers/chromium"].filter(Boolean);
+    for (const p of c) if (fs.existsSync(p)) return p;
+    return undefined;
+  };
+  const browser = await pw.chromium.launch({ executablePath: findChromium(), args: ["--no-sandbox"] });
+  try {
+    const page = await browser.newPage({ viewport: { width: 360, height: 800 } });
+    // The checkup pane fetches GET /api/wallet-checkup — no backend behind this static server, so
+    // it's stubbed (same shape as the seeker render's fixture above) purely so the pane mounts
+    // cleanly rather than sitting on a load spinner while we check the nav around it.
+    await page.route("**/api/wallet-checkup*", (route) => route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({ success: true, scanned: 0, tokensHeld: 0, capped: false, atRiskUsd: 0, approvals: [], riskyHoldings: [] }),
+    }));
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle", timeout: 20000 });
+    await page.waitForSelector(".seeker-nav", { timeout: 15000 });
+
+    ok("rendered (edu): default route redirects to #/school (the school leads)",
+       (await page.evaluate(() => location.hash)) === "#/school");
+
+    const labels = await page.locator(".seeker-navbtn .seeker-navlabel").allInnerTexts();
+    ok("rendered (edu): exactly five bottom-nav tabs, in order — School, LP Lab, Ask, Solana, Daily",
+       JSON.stringify(labels) === JSON.stringify(["School", "LP Lab", "Ask", "Solana", "Daily"]),
+       JSON.stringify(labels));
+
+    // Every tab icon is a drawn SVG, never emoji text — this PR's whole point for these five tabs.
+    const iconCounts = await page.locator(".seeker-navbtn .seeker-navicon").evaluateAll((els) =>
+      els.map((e) => ({ svg: e.querySelectorAll("svg").length, text: (e.textContent || "").trim() })));
+    ok("rendered (edu): every nav tab icon is an SVG (no emoji text node in .seeker-navicon)",
+       iconCounts.length === 5 && iconCounts.every((c) => c.svg === 1 && c.text === ""),
+       JSON.stringify(iconCounts));
+
+    // /checkup and /tools/listing lost their tab, not their route — a deep link and the school
+    // home's own Safety tools card both still have to work.
+    await page.goto(`http://127.0.0.1:${port}/#/checkup`, { waitUntil: "networkidle", timeout: 20000 });
+    await page.waitForSelector(".seeker-pane", { timeout: 15000 });
+    ok("rendered (edu): /checkup still renders with no tab pointing at it",
+       (await page.locator(".seeker-pane").count()) > 0);
+
+    await page.goto(`http://127.0.0.1:${port}/#/tools/listing`, { waitUntil: "networkidle", timeout: 20000 });
+    // ListingCheckup wraps itself in the shared <Pane> (pane.jsx), whose own class is
+    // .seeker-tool — not .seeker-pane, which only the checkup/school panes use.
+    await page.waitForSelector(".seeker-tool", { timeout: 15000 });
+    ok("rendered (edu): /tools/listing still renders with no tab pointing at it",
+       (await page.locator(".seeker-tool").count()) > 0);
+
+    // The Safety tools card on the school home links to both.
+    await page.goto(`http://127.0.0.1:${port}/#/school`, { waitUntil: "networkidle", timeout: 20000 });
+    await page.waitForSelector(".seeker-school-safety", { timeout: 15000 });
+    const safetyHrefs = await page.locator(".seeker-school-safety-card").evaluateAll((els) => els.map((e) => e.getAttribute("href")));
+    ok("rendered (edu): the school home's Safety tools card links to #/checkup and #/tools/listing",
+       safetyHrefs.includes("#/checkup") && safetyHrefs.includes("#/tools/listing"), JSON.stringify(safetyHrefs));
+
+    // The LP Lab tab is active on the course page AND one of its own lessons.
+    await page.locator('.seeker-navbtn[href="#/school/lp"]').click();
+    await page.waitForTimeout(150);
+    let lpActive = await page.locator('.seeker-navbtn[href="#/school/lp"]').getAttribute("class");
+    ok("rendered (edu): the LP Lab tab is active on the course page",
+       /\bactive\b/.test(String(lpActive)), lpActive);
+    const lessonLink = await page.locator(".seeker-school-lesson").first().getAttribute("href").catch(() => null);
+    if (lessonLink) {
+      await page.goto(`http://127.0.0.1:${port}/${lessonLink}`, { waitUntil: "networkidle", timeout: 20000 });
+      await page.waitForTimeout(150);
+      lpActive = await page.locator('.seeker-navbtn[href="#/school/lp"]').getAttribute("class");
+      ok("rendered (edu): the LP Lab tab is STILL active on one of its own lessons",
+         /\bactive\b/.test(String(lpActive)), `href=${lessonLink} class=${lpActive}`);
+    } else {
+      ok("rendered (edu): the LP Lab tab is STILL active on one of its own lessons", false, "no lesson link found on the course page");
+    }
+
+    // And the School tab itself is NOT active while inside the LP Lab course (it's the exact-match
+    // "/school" tab — someone editing that back to a prefix match would silently double-highlight).
+    const schoolTabClass = await page.locator('.seeker-navbtn[href="#/school"]').getAttribute("class");
+    ok("rendered (edu): the School tab is not ALSO active while on the LP Lab course",
+       !/\bactive\b/.test(String(schoolTabClass)), schoolTabClass);
   } finally {
     await browser.close();
     server.close();

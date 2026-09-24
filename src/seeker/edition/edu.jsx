@@ -23,7 +23,11 @@ import { SchoolHome, SchoolCourse, SchoolLesson } from "../school/School.jsx";
 import Certificate from "../school/Certificate.jsx";
 import ListingCheckup from "../tools/ListingCheckup.jsx";
 import DailyBrief from "../tools/DailyBrief.jsx";
-import ShieldIcon from "../icons/ShieldIcon.jsx";
+import GraduationIcon from "../icons/GraduationIcon.jsx";
+import DropletIcon from "../icons/DropletIcon.jsx";
+import ChatIcon from "../icons/ChatIcon.jsx";
+import SolanaIcon from "../icons/SolanaIcon.jsx";
+import CalendarIcon from "../icons/CalendarIcon.jsx";
 import "./edu.css";
 
 export const EDITION_ID = "edu";
@@ -74,12 +78,21 @@ function FinishedEdu() {
   );
 }
 
+// ⚠️ Owner (Xcode review, 2026-09-24): "wallet and listing probably don't deserve their own tabs,
+// we have a whole school, lp lab, ask cluck, solana room, daily stuff." Checkup and Listing keep
+// their ROUTES (a deep link, the school's own Safety tools card, and a stray bookmark all still
+// work) but lose their tab — five tabs now surface the five things a first-time learner actually
+// wants: the school itself, its LP Lab course by direct deep link (active whenever the course or
+// one of its lessons is open — NavLink's default (non-`end`) match does this: it's active on any
+// path that starts with `to`, so "/school/lp/whatever-lesson" still matches "/school/lp"), Ask
+// Cluck, the Solana Room, and Daily. Icons are drawn (../icons/*), never emoji — see each icon's
+// own file for why.
 export const TABS = [
-  { to: "/school", label: "School", icon: "🎓" },
-  { to: "/tools/alpha", label: "Daily", icon: "📅" },
-  { to: "/ask", label: "Ask", icon: "🐔" },
-  { to: "/checkup", label: "Checkup", icon: <ShieldIcon /> },
-  { to: "/tools/listing", label: "Listing", icon: "📋" },
+  { to: "/school", label: "School", icon: <GraduationIcon /> },
+  { to: "/school/lp", label: "LP Lab", icon: <DropletIcon /> },
+  { to: "/ask", label: "Ask", icon: <ChatIcon /> },
+  { to: "/solana", label: "Solana", icon: <SolanaIcon /> },
+  { to: "/tools/alpha", label: "Daily", icon: <CalendarIcon /> },
 ];
 
 export function EditionRoutes() {
@@ -88,7 +101,7 @@ export function EditionRoutes() {
       <Route path="/" element={<Navigate to="/school" replace />} />
       <Route
         path="/school"
-        element={<SchoolHome finished={<FinishedEdu />} progressNote="Finish every lesson to earn a certificate of completion. Free, no wallet, no sign-up." />}
+        element={<SchoolHome finished={<FinishedEdu />} progressNote="Finish every lesson to earn a certificate of completion. Free, no wallet, no sign-up." safetyTools />}
       />
       <Route path="/school/certificate" element={<Certificate />} />
       <Route path="/school/:courseId" element={<SchoolCourse />} />

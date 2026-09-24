@@ -2899,5 +2899,6 @@
   "How an update reaches your phone": "更新如何送达你的手机",
   "This app you're reading this page in is that same listing. An update to it is published to the dApp Store the same way any app update is published to any store; the store checks for and delivers it, not this app itself.": "你正在阅读这个页面所使用的这个应用，正是那个上架条目。它的更新会以任何应用更新发布到任何商店的相同方式发布到 dApp 商店；负责检查和分发的是商店，而不是本应用自己。",
   "Today's SKR figure couldn't be loaded right now — no number is shown here rather than guessing one.": "目前无法加载今天的 SKR 数值——这里不会显示猜测的数字，宁可不显示。",
-  "An in-app swap between tokens is planned for a future release. This page isn't telling you to use it — only that it exists.": "应用内代币兑换功能计划在未来版本中推出。本页并非要求你使用它——只是说明它的存在。"
+  "An in-app swap between tokens is planned for a future release. This page isn't telling you to use it — only that it exists.": "应用内代币兑换功能计划在未来版本中推出。本页并非要求你使用它——只是说明它的存在。",
+  "Safety tools": "安全工具"
 }
