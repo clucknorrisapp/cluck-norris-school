@@ -160,6 +160,58 @@ no issue" when that is the answer.
   liquidity engines are paused by the owner; leave them so. Never `&loud=1`; never print or commit
   a secret; the admin key travels only in an `x-premium-key` header.
 
+## Round 26 — 2026-09-24: #416 and #418 — the CUNA giveaway scanner missed 15 buys; the fix and the catch-up
+
+Both on `develop`; #416 is on `main` (PR #417, promoted 2026-09-24 ~02:25 UTC on the owner's word),
+#418 is not yet. Unreviewed by you. This is a prize-ledger path: every entry the scanner credits is
+a raffle ticket in a draw the owner pays out, so an over-count is money and an under-count is a
+holder cheated.
+
+**What happened.** On 2026-09-23 wallet `8w3JXv…HCuNt` made 35 qualifying CUNA buys and the board
+credited 20. The 15 missing signatures were all on the pool; each landed seconds before a
+scheduler tick, and at scan time Helius's enhanced parse for those transactions had no
+`tokenTransfers` yet, so `getTradeTapeHelius` saw the signature, found no trade in it, and the slice
+was retired as scanned. The scanner is incremental (`s.cursorMs` only ever moves forward), so
+nothing ever looked at that stretch again.
+
+| # | PR | Change | Pinned by |
+|---|---|---|---|
+| 1 | #416 | **Settle delay.** `SETTLE_MS = 5 min`; `scanOnce()` scans only up to `ceiling = min(now − SETTLE_MS, endMs)`, so a slice is never retired within five minutes of its own end. After `endMs + SETTLE_MS` the min() resolves to `endMs`, so a closed window is still scanned to its true end | `scripts/cuna-giveaway-scan-test.cjs` |
+| 2 | #416 | **`&rewind=<ISO \| unix ms \| unix s>`** on `/api/cuna-giveaway/admin`, POST-only (in the `mutatingGetRefused` list; the hook's `MUTATING_FLAG_RE` knows it too). `rewindCursor(to)` clamps to `[startMs, current cursor]` — never before the promo started, never FORWARD (a rewind can only re-open tape, never skip unscanned tape) — and touches ONLY `cursorMs`: wallets, dq marks, payouts and the draw are untouched. Re-scanned buys dedupe by signature (`rec.buys.some(b => b.sig === t.sig)`); an existing dq stays a dq | same test: clamp both ways, dedupe across a rewind |
+| 3 | #418 | **`catchUp(deps, {budgetMs})`** loops `scanOnce` until `upToDate`, or the wall-clock budget is spent, or a call returns `ok:false` (surfaced, not swallowed), or three CONSECUTIVE `stalled` slices (an incomplete slice that `scanOnce` refuses to advance past) | same test: 14h rewind caught up in one call; tight budget stops early with `behindMs > 0`; a tape error stops the loop; no double-count across the catch-up |
+| 4 | #418 | **Scheduler self-heal**: the 5-minute tick calls `catchUp` with a 120 s budget whenever a tick reports `behindMs > 2 × SLICE_MS` (20 min); the board still only posts when `behindMs ≤ 6 min` | scheduler block in `server.js` (search `SELF-HEAL`) |
+| 5 | #418 | `&rewind=` and `&reset=1` run `catchUp` with a 75 s budget before answering (under Cloudflare's ~100 s edge timeout) and return it as `catchUp` on the response | `server.js` admin route |
+
+Applied on production after the promote: rewind to `2026-09-23T12:20:00Z`, 12 manual `&scan=1`
+POSTs, the wallet went 20 → 35 entries; every other credited wallet already matched the chain;
+one wallet was DQ'd `sold_in_window` on the re-scan (a real sell inside the window).
+
+Where to look hardest:
+
+- **Concurrency of two scan loops on one ledger.** `scanOnce` holds `s = load()` across its awaits
+  and `save()` writes the module's `_mem`. Since #418 a 75 s in-route `catchUp` (an operator's
+  `&rewind=`) can now overlap the scheduler's own tick on the same process, and Railway runs more
+  than one process (the mtime re-read in `load()` exists for that). Walk the interleavings: can two
+  loops each advance `cursorMs` past a slice only one of them actually scanned? Can a `load()`
+  re-read mid-scan (triggered by another process's save) orphan a loop's `s` so its `save()`
+  writes a `_mem` that never received its entries — and if so, does the cursor also fail to
+  advance (self-healing by re-scan) or advance without the entries (lost buys)? The dedupe by
+  signature is what we rely on for the over-count side; say whether it covers every path.
+- **The clamp.** `rewindCursor` clamps to `min(toMs, before)`. If `before` is already ahead of
+  `endMs` (a closed window fully scanned), is there any input that makes the next `scanOnce` do
+  nothing while reporting `upToDate` — leaving a stretch unscanned that the operator believed
+  re-opened? And `parseTimeArg`: unix seconds vs ms discrimination at the boundary.
+- **Budget vs edge timeout.** 75 s of catch-up plus the tape fetches already in flight for the
+  last slice — can one response run past 100 s and get 524'd while the loop keeps going on the
+  server? If the operator retries, that is the concurrency case above.
+- **`stalled` semantics.** A slice whose Helius parse is still lagging is `stalled`; three in a
+  row stops the loop with `ok:false, error:'slice_incomplete'` and the scheduler's self-heal logs
+  it. Is a stall that never clears (a permanently unparseable tx in the slice) visible to a human,
+  or does the board just quietly trail forever?
+- **What did NOT change:** the entry rule (`minUsd` 2.5 scored, $3 displayed), the price source
+  (5-minute GeckoTerminal bars of the pool), the dq rules, the draw, the payout. If you see any of
+  those moved, that is a finding.
+
 ## Round 25 — 2026-09-24: #414, your two P2s on the hook — fixed
 
 Both round-24 findings on `.claude/hooks/no-mutating-get.sh` are addressed by moving the whole
