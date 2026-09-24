@@ -33,6 +33,8 @@ import ShieldIcon from "../icons/ShieldIcon.jsx";
 export const TOOLS = [
   { id: "rent",       route: "/rent",             title: "Rent Reclaim",    icon: "💰", tier: "wallet", ready: true,
     blurb: "Dead token accounts are holding your SOL. See exactly what you can close, and get it back." },
+  { id: "solana",     route: "/solana",           title: "The Solana Room", icon: "📚", tier: "free",   ready: true,
+    blurb: "You already own tokens. Nobody ever sat you down and explained what any of this actually is — what a wallet really holds, what a mint is, what happens when you buy, or what you're paying for in fees. This room is that explanation, one mechanic at a time, in plain words. No wallet, no signup, free." },
   { id: "ask",        route: "/ask",              title: "Ask Cluck",       icon: "🐔", tier: "free",   ready: true,
     blurb: "Ask anything about crypto in plain words. Free, no wallet, no signup." },
   { id: "checkup",    route: "/checkup",          title: "Wallet Checkup",  icon: React.createElement(ShieldIcon), tier: "free",   ready: true,

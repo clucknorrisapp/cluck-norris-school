@@ -31,6 +31,8 @@ import React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { t, tf, tBlock, useI18nReady } from "../i18n.js";
 import { track } from "../../track.js";
+import { INDEX as SOLANA_ROOM_INDEX } from "../solana/content.js";
+import "../solana/solana.css";
 import {
   COURSES, TOTAL_LESSONS, courseById, lessonById,
   completedIds, isDone, markDone, courseProgress, nextLesson, passMark,
@@ -159,6 +161,16 @@ export function SchoolHome({ finished, progressNote }) {
           );
         })}
       </div>
+
+      {/* The Solana Room (AGENTS.md's flagship school section) — a free, no-wallet reference
+          room, below the course list rather than mixed into it: it's read one page at a time,
+          not a course with a completion count. Copy is the room's OWN already-translated intro
+          (content.js) rather than new page-local strings, so this card ships correctly in all
+          seven languages the day it lands, not on the next translation pass. */}
+      <Link className="seeker-solana-schoolcard" to="/solana">
+        <span className="seeker-solana-schoolcard-title">{t(SOLANA_ROOM_INDEX.title)}</span>
+        <span className="seeker-solana-schoolcard-sub">{t(SOLANA_ROOM_INDEX.intro)}</span>
+      </Link>
     </div>
   );
 }

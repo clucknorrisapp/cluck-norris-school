@@ -2857,5 +2857,8 @@
   "You've finished every lesson": "Has terminado todas las lecciones",
   "Your name (optional)": "Tu nombre (opcional)",
   "completed the School of Crypto Hard Knocks curriculum.": "completó el plan de estudios de la School of Crypto Hard Knocks.",
-  "{done} of {total} lessons finished on this phone. Free, no wallet, no sign-up — and nothing to buy.": "{done} de {total} lecciones terminadas en este teléfono. Gratis, sin billetera, sin registro y sin nada que comprar."
+  "{done} of {total} lessons finished on this phone. Free, no wallet, no sign-up — and nothing to buy.": "{done} de {total} lecciones terminadas en este teléfono. Gratis, sin billetera, sin registro y sin nada que comprar.",
+  "On an exchange": "En un exchange",
+  "Self-custody": "Autocustodia",
+  "Fund / ETF": "Fondo / ETF"
 }

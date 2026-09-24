@@ -2857,5 +2857,8 @@
   "You've finished every lesson": "आपने हर पाठ पूरा कर लिया",
   "Your name (optional)": "आपका नाम (वैकल्पिक)",
   "completed the School of Crypto Hard Knocks curriculum.": "ने School of Crypto Hard Knocks का पाठ्यक्रम पूरा किया।",
-  "{done} of {total} lessons finished on this phone. Free, no wallet, no sign-up — and nothing to buy.": "इस फ़ोन पर {total} में से {done} पाठ पूरे हुए। मुफ़्त, बिना वॉलेट, बिना साइन-अप — और खरीदने के लिए कुछ नहीं।"
+  "{done} of {total} lessons finished on this phone. Free, no wallet, no sign-up — and nothing to buy.": "इस फ़ोन पर {total} में से {done} पाठ पूरे हुए। मुफ़्त, बिना वॉलेट, बिना साइन-अप — और खरीदने के लिए कुछ नहीं।",
+  "On an exchange": "किसी एक्सचेंज पर",
+  "Self-custody": "सेल्फ-कस्टडी",
+  "Fund / ETF": "फंड / ETF"
 }
