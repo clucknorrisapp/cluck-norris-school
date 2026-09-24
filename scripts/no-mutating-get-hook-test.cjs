@@ -169,6 +169,16 @@ expectExit(
   'curl -sS "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
   0
 );
+expectExit(
+  "cuna-giveaway rewind=, plain GET (2026-09-24 settle-delay fix)",
+  'curl "https://clucknorris.app/api/cuna-giveaway/admin?key=k&rewind=2026-09-23T12:25:00Z"',
+  2
+);
+expectExit(
+  "cuna-giveaway rewind= as POST",
+  'curl -sS -X POST -H "x-premium-key: k" "https://clucknorris.app/api/cuna-giveaway/admin?rewind=2026-09-23T12:25:00Z"',
+  0
+);
 
 // --- Codex round 24 (#414 P2s): quote-aware boundaries + curl's effective method -----------------
 expectExit(

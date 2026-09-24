@@ -30,7 +30,7 @@ fi
 # bypass: if the raw text mentions a clucknorris.app admin route AND any mutating flag name
 # anywhere at all, block and say why; otherwise allow.
 if printf '%s' "$INPUT" | grep -q 'clucknorris\.app/api/' \
-  && printf '%s' "$INPUT" | grep -Eq 'run=1|arm=1|disarm=1|set=|draw=1|payout=1|export=1|send=|confirm=|sweep=1|post=1|done=|art=|clear=1|reset=1|scan=1|board=1|on=1|off=1|dq=|min=|start=|end='
+  && printf '%s' "$INPUT" | grep -Eq 'run=1|arm=1|disarm=1|set=|draw=1|payout=1|export=1|send=|confirm=|sweep=1|post=1|done=|art=|clear=1|reset=1|scan=1|rewind=|board=1|on=1|off=1|dq=|min=|start=|end='
 then
   echo "BLOCKED: node is required to evaluate this command (no-mutating-get.js needs Node 18+)." >&2
   echo "The raw command text mentions a clucknorris.app admin path and a mutating flag name, and" >&2
