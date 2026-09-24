@@ -57,8 +57,9 @@ balance or an address. Three tiers, cheapest first; each is its own increment wi
 
 **Privacy and registry contract, stated up front for the reviewer (revised after Codex round 28):**
 - A push token is a device identifier. It is stored against a **push install id** minted for this
-  purpose only — a fresh random id, NOT the analytics/traction install id, so the two records are
-  not linkable by construction ("anonymous" means unlinkable, not merely nameless).
+  purpose only — a fresh random id, **separate from analytics; no intentional linkage** (Codex
+  round 28: separate identifiers prevent a direct shared-id join, they do not guarantee anonymity,
+  so this plan does not claim it).
 - **Authorisation:** registration returns a per-install secret (random, stored on the device
   only, hashed at rest server-side). Replacing a token, changing the send time and unsubscribing
   require that secret; an install id alone authorises nothing, so installation A can never modify
