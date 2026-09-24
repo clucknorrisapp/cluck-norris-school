@@ -841,10 +841,51 @@ async function renderedCheck(pw, baselineSeekerDir) {
     await pillPage.waitForSelector(".seeker-solana h1", { timeout: 15000 });
     const roomH1 = await pillPage.locator(".seeker-solana h1").innerText();
     ok("rendered: /solana shows the Solana Room heading (360x800)", /Solana Room/i.test(roomH1), roomH1);
+
+    // ⚠️ The bug this pins (found on the Solana Room index at 360x800, #431 follow-up): a whole
+    // tall multi-topic card marked as one data-clkn-avoid-kids child made clkn-dock-float.js
+    // climb to clear the CARD's own top instead of the nearest row, lifting #clkn-lang-toggle to
+    // `top: -38px` — fully off the top of the viewport. Check both halves of the fix: the pill
+    // stays fully on-screen, AND it never lands on top of anything actually marked to avoid.
+    async function assertPillClear(label) {
+      await pillPage.waitForTimeout(900); // let the two delayed fit() passes (800ms, 2500ms-ish) settle
+      const result = await pillPage.evaluate(() => {
+        const pill = document.getElementById("clkn-lang-toggle");
+        if (!pill) return null;
+        const p = pill.getBoundingClientRect();
+        const avoidEls = document.querySelectorAll("[data-clkn-avoid],[data-clkn-avoid-kids] > *");
+        let hit = null;
+        for (const e of avoidEls) {
+          if (pill.contains(e)) continue;
+          const r = e.getBoundingClientRect();
+          if (!r.width || !r.height) continue;
+          const ox = Math.min(p.right, r.right) - Math.max(p.left, r.left);
+          const oy = Math.min(p.bottom, r.bottom) - Math.max(p.top, r.top);
+          if (ox > 0 && oy > 0) { hit = r.toJSON(); break; }
+        }
+        return { pill: p.toJSON(), hit, vw: window.innerWidth, vh: window.innerHeight };
+      });
+      const inViewport = !!result && result.pill.top >= 0 && result.pill.left >= 0 &&
+        result.pill.bottom <= result.vh && result.pill.right <= result.vw;
+      ok(`rendered: the 🌐 pill stays fully inside the viewport on ${label} (360x800)`,
+         inViewport, JSON.stringify(result));
+      ok(`rendered: the 🌐 pill doesn't overlap a data-clkn-avoid element on ${label} (360x800)`,
+         !!result && !result.hit, JSON.stringify(result));
+    }
+    await assertPillClear("/solana");
+
     await pillPage.goto(`http://127.0.0.1:${port}/#/solana/rent`, { waitUntil: "networkidle", timeout: 20000 });
     await pillPage.waitForSelector(".seeker-solana h1", { timeout: 15000 });
     const rentH1 = await pillPage.locator(".seeker-solana h1").innerText();
     ok("rendered: /solana/rent shows its own heading (360x800)", /deposit/i.test(rentH1), rentH1);
+    await assertPillClear("/solana/rent");
+
+    // /solana/seeker/skr — the Seeker-edition-only wing page (SeekerWing.jsx), never reachable in
+    // the education edition. This build is the seeker tarball, so the route exists.
+    await pillPage.goto(`http://127.0.0.1:${port}/#/solana/seeker/skr`, { waitUntil: "networkidle", timeout: 20000 });
+    await pillPage.waitForSelector(".seeker-solana h1", { timeout: 15000 });
+    await assertPillClear("/solana/seeker/skr");
+
     await pillPage.close();
   } finally {
     await browser.close();
