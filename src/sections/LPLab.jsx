@@ -3068,20 +3068,20 @@ function LPLessonView({ lesson, onBack, onComplete }) {
             else if (i === sel) { bg="rgba(239,68,68,0.15)"; border="#EF4444"; color="#EF4444"; }
           }
           return (
-            <button key={i} onClick={()=>pickAnswer(i)} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 14px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:15,color,cursor:sel===null?"pointer":"default",letterSpacing:0.5}}>
+            <button key={i} data-quiz-option="1" onClick={()=>pickAnswer(i)} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 14px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:15,color,cursor:sel===null?"pointer":"default",letterSpacing:0.5}}>
               <span style={{color:"#6B7280",marginRight:8}}>{String.fromCharCode(65+i)}.</span>{opt}
             </button>
           );
         })}
       </div>
       {showExp && (
-        <div ref={explainRef}>
+        <div ref={explainRef} data-quiz-explain="1">
           <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:14,marginBottom:12}}>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:sel===q.correct?"#10B981":"#EF4444",letterSpacing:1,marginBottom:6}}>{sel===q.correct?"✓ CORRECT":"✗ NOT QUITE"} — CLUCK EXPLAINS:</div>
             <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.7}}>{q.explanation}</p>
           </div>
           <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-          <button ref={nextBtnRef} onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+          <button ref={nextBtnRef} data-quiz-next="1" onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
             {qi+1<shuffledQuestions.length?"NEXT QUESTION →":"SEE RESULTS →"}
           </button>
         </div>

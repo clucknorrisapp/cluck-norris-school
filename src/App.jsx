@@ -923,18 +923,18 @@ function Incubator({ onComplete, onBack }) {
             if(i===q.correct){bg="rgba(16,185,129,0.15)";border="1px solid #10B981";color="#10B981";}
             else if(i===sel){bg="rgba(239,68,68,0.15)";border="1px solid #EF4444";color="#EF4444";}
           }
-          return(<button key={i} onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15,fontWeight:600}}>
+          return(<button key={i} data-quiz-option="1" onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15,fontWeight:600}}>
             {opt}
           </button>);
         })}
       </div>
-      {showExp&&(<div ref={explainRef}>
+      {showExp&&(<div ref={explainRef} data-quiz-explain="1">
         <div style={{background:sel===q.correct?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)",border:`1px solid ${sel===q.correct?"#10B981":"#EF4444"}`,borderRadius:10,padding:14,marginBottom:12}}>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:1,color:sel===q.correct?"#10B981":"#EF4444",marginBottom:5}}>{sel===q.correct?"✓ CORRECT!":"✗ NOT QUITE — HERE'S WHY:"}</div>
           <p style={{margin:0,color:"#D1D5DB",fontSize:15,lineHeight:1.6}}>{q.explanation}</p>
         </div>
         <AskCluck context={lesson.title} compact={true}/>
-        <button ref={nextBtnRef} onClick={next} style={{width:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+        <button ref={nextBtnRef} data-quiz-next="1" onClick={next} style={{width:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
           {qi+1<lesson.questions.length?"NEXT QUESTION →":"NEXT LESSON →"}
         </button>
       </div>)}
@@ -1606,18 +1606,18 @@ function Lesson({lesson:l,onComplete,onBack,hubFrom}){
             if(i===q.correct){bg="rgba(16,185,129,0.15)";border="1px solid #10B981";color="#10B981";}
             else if(i===sel){bg="rgba(239,68,68,0.15)";border="1px solid #EF4444";color="#EF4444";}
           }
-          return(<button key={i} onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"12px 14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15.5,display:"flex",gap:10,alignItems:"center"}}>
+          return(<button key={i} data-quiz-option="1" onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"12px 14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15.5,display:"flex",gap:10,alignItems:"center"}}>
             <span style={{fontFamily:"'Anton',sans-serif",fontSize:13,opacity:0.6,minWidth:18}}>{String.fromCharCode(65+i)}</span>{opt}
           </button>);
         })}
       </div>
-      {showExp&&(<div ref={explainRef}>
+      {showExp&&(<div ref={explainRef} data-quiz-explain="1">
         <div style={{background:sel===q.correct?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)",border:`1px solid ${sel===q.correct?"#10B981":"#EF4444"}`,borderRadius:10,padding:14,marginBottom:12}}>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:1,color:sel===q.correct?"#10B981":"#EF4444",marginBottom:5}}>{sel===q.correct?"✓ CORRECT  -  PROFESSOR NORRIS NOTES:":"✗ WRONG  -  PROFESSOR NORRIS CORRECTS YOU:"}</div>
           <p style={{margin:0,color:"#D1D5DB",fontSize:15,lineHeight:1.6}}>{q.explanation}</p>
         </div>
         <AskCluck context={l.title} compact={true}/>
-        <button ref={nextBtnRef} onClick={next} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+        <button ref={nextBtnRef} data-quiz-next="1" onClick={next} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
           {qi+1<l.questions.length?"NEXT QUESTION →":"SEE REPORT CARD →"}
         </button>
       </div>)}
