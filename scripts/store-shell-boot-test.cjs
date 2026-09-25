@@ -190,6 +190,9 @@ function findChromium() {
     const ES = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", "es.school.json"), "utf8"));
     const CUR = require(path.join(ROOT, "data", "curriculum.store.json"));
     const norm = (x) => String(x || "").replace(/\s+/g, " ").trim();
+    // What is ON SCREEN: a heading line's trailing colon is dropped there (School.jsx dropColon), so
+    // rendered-vs-expected comparisons ignore a colon that ends a line. Dictionary LOOKUPS use norm.
+    const shown = (x) => norm(String(x || "").replace(/[ \t]*[:：][ \t]*(\n|$)/g, "$1"));
     const lp = CUR.courses.find((c) => c.id === "lp").lessons
       .map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
       .sort((a, b) => b.chars - a.chars)[0].l;
@@ -210,12 +213,12 @@ function findChromium() {
     await p2.goto(`${BASE}/index.html#/school/lp/${lp.id}`, { waitUntil: "domcontentloaded" });
     await p2.waitForFunction(() => !!document.querySelector(".seeker-school-section-body"), null, { timeout: 20000 });
     const early = await p2.evaluate(() => ({ dict: !!window.CLKN_I18N, body: (document.querySelector(".seeker-school-section-body") || {}).innerText || "" }));
-    ok("G · the store copy of the lesson renders before the dictionary (English first — the race is real)", !early.dict && norm(early.body) === norm(sec0.body), { dict: early.dict, body: early.body.slice(0, 80) });
+    ok("G · the store copy of the lesson renders before the dictionary (English first — the race is real)", !early.dict && shown(early.body) === shown(sec0.body), { dict: early.dict, body: early.body.slice(0, 80) });
     ok("G · the store copy of this section HAS a curated Spanish translation (else the next check proves nothing)", !!curated && curated.length > 200);
     await p2.waitForFunction(() => !!window.CLKN_I18N, null, { timeout: 20000 });
-    await p2.waitForFunction((want) => { const w = document.querySelector(".seeker-school-section-body"); return !!w && w.innerText.replace(/\s+/g, " ").trim() === want; }, norm(curated), { timeout: 5000 }).catch(() => {});
+    await p2.waitForFunction((want) => { const w = document.querySelector(".seeker-school-section-body"); return !!w && w.innerText.replace(/[ \t]*[:：][ \t]*(\n|$)/g, "$1").replace(/\s+/g, " ").trim() === want; }, shown(curated), { timeout: 5000 }).catch(() => {});
     const late = await p2.evaluate(() => { const w = document.querySelector(".seeker-school-section-body"); return { body: w ? w.innerText : "", skipped: w ? w.getAttribute("data-i18n-skip") : null }; });
-    ok("G · ⚠️ and becomes the curated Spanish on its own once the dictionary lands", norm(late.body) === norm(curated) && late.skipped === "1", { got: late.body.slice(0, 120), skipped: late.skipped });
+    ok("G · ⚠️ and becomes the curated Spanish on its own once the dictionary lands", shown(late.body) === shown(curated) && late.skipped === "1", { got: late.body.slice(0, 120), skipped: late.skipped });
     ok("G · nothing threw", errs.length === 0, errs.join(" | ").slice(0, 300));
     await ctx2.close();
   }

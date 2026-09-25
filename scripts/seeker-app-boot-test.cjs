@@ -42,6 +42,17 @@ const PORT = 3894;
 const BASE = `http://127.0.0.1:${PORT}`;
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "clkn-seeker-boot-"));
 
+// Quiz options are shuffled per attempt in the app, so an answer is chosen by its TEXT, never by
+// position (a positional click picked the right answer by accident once options moved).
+async function clickOptionByText(page, text) {
+  const btns = page.locator(".seeker-school-option");
+  const n = await btns.count();
+  for (let k = 0; k < n; k++) {
+    if ((await btns.nth(k).innerText()).trim() === String(text).trim()) { await btns.nth(k).click(); return; }
+  }
+  throw new Error("no quiz option with text: " + String(text).slice(0, 80));
+}
+
 function findChromium() {
   const c = [process.env.PLAYWRIGHT_CHROMIUM_PATH, "/opt/pw-browsers/chromium"].filter(Boolean);
   for (const p of c) if (fs.existsSync(p)) return p;
@@ -1610,8 +1621,10 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       const firstOpts = await opts();
       // ⚠️ THE ONE THAT SHIPPED BROKEN. Zero buttons is what every learner would have met.
       ok("P3 · ⚠️ the quiz actually renders ANSWER BUTTONS", firstOpts.length >= 2, `rendered ${firstOpts.length} options`);
+      // The app shuffles options per attempt (School.jsx shuffleOptions), so the SET must match,
+      // not the order.
       ok("P3 · and they are the options the curriculum declares",
-         JSON.stringify(firstOpts) === JSON.stringify(basicsDex.questions[0].options), JSON.stringify({ screen: firstOpts, data: basicsDex.questions[0].options }).slice(0, 400));
+         JSON.stringify(firstOpts.slice().sort()) === JSON.stringify(basicsDex.questions[0].options.slice().sort()), JSON.stringify({ screen: firstOpts, data: basicsDex.questions[0].options }).slice(0, 400));
 
       const beaconsBefore = beacons.length;
       for (let i = 0; i < basicsDex.questions.length; i++) {
@@ -1619,7 +1632,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         const onScreen = await page.evaluate(() => ((document.querySelector(".seeker-school-q") || {}).innerText || "").trim());
         ok(`P3 · question ${i + 1} on screen is the one the curriculum holds`, onScreen === q.q, JSON.stringify({ onScreen, expected: q.q }).slice(0, 300));
         const wrongIdx = q.options.findIndex((_, k) => k !== q.correct);
-        await page.click(`.seeker-school-option >> nth=${wrongIdx}`);
+        await clickOptionByText(page, q.options[wrongIdx]);
         await page.waitForTimeout(160);
         const verdict = await page.evaluate(() => ((document.querySelector(".seeker-school-explain-verdict") || {}).innerText || "").trim());
         ok(`P3 · a wrong answer is marked wrong (q${i + 1})`, /Not quite/i.test(verdict), verdict);
@@ -1649,7 +1662,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       await page.waitForTimeout(250);
       for (let i = 0; i < basicsDex.questions.length; i++) {
         const q = basicsDex.questions[i];
-        await page.click(`.seeker-school-option >> nth=${q.correct}`);
+        await clickOptionByText(page, q.options[q.correct]);
         await page.waitForTimeout(160);
         const verdict = await page.evaluate(() => ((document.querySelector(".seeker-school-explain-verdict") || {}).innerText || "").trim());
         ok(`P4 · the curriculum's own \`correct\` index is marked correct on screen (q${i + 1})`, /Correct/i.test(verdict), verdict);
@@ -1703,7 +1716,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         for (let i = 0; i < L.questions.length; i++) {
           const q = L.questions[i];
           const idx = i < rightCount ? q.correct : q.options.findIndex((_, k) => k !== q.correct);
-          await page.click(`.seeker-school-option >> nth=${idx}`);
+          await clickOptionByText(page, q.options[idx]);
           await page.waitForTimeout(160);
           await page.click(".seeker-school-explain .seeker-btn");
           await page.waitForTimeout(200);
@@ -1742,6 +1755,9 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const ES = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", "es.school.json"), "utf8"));
     const CURRICULUM = require(path.join(ROOT, "data", "curriculum.json"));
     const norm = (x) => String(x || "").replace(/\s+/g, " ").trim();
+    // What is ON SCREEN: a heading line's trailing colon is dropped there (School.jsx dropColon), so
+    // rendered-vs-expected comparisons ignore a colon that ends a line. Dictionary LOOKUPS use norm.
+    const shown = (x) => norm(String(x || "").replace(/[ \t]*[:：][ \t]*(\n|$)/g, "$1"));
     const lp = CURRICULUM.courses.find((c) => c.id === "lp").lessons
       .map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
       .sort((a, b) => b.chars - a.chars)[0].l;
@@ -1777,8 +1793,8 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     ok("P8 · the curated Spanish translation of this section exists (or the test proves nothing)", !!curated && curated.length > 200);
     ok("P8 · the section heading renders in Spanish", got.heading && got.heading !== sec0.heading, JSON.stringify(got.heading));
     ok("P8 · ⚠️ the section BODY renders in Spanish, offline — not the English under a Spanish heading",
-       norm(got.body) === norm(curated), JSON.stringify({ got: got.body.slice(0, 120), want: String(curated).slice(0, 120) }));
-    ok("P8 · and it is NOT the English body", norm(got.body) !== norm(sec0.body));
+       shown(got.body) === shown(curated), JSON.stringify({ got: got.body.slice(0, 120), want: String(curated).slice(0, 120) }));
+    ok("P8 · and it is NOT the English body", shown(got.body) !== shown(sec0.body));
     ok("P8 · the translation's paragraph breaks survived (more than one <p>)", got.paras > 1, String(got.paras));
     ok("P8 · a curated block is marked data-i18n-skip so the observer never sends Spanish for machine translation", got.skipped === "1", String(got.skipped));
     ok("P8 · nothing threw", errors.length === 0, errors.join(" | ").slice(0, 300));
@@ -1799,6 +1815,9 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const ES = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", "es.school.json"), "utf8"));
     const CURRICULUM = require(path.join(ROOT, "data", "curriculum.json"));
     const norm = (x) => String(x || "").replace(/\s+/g, " ").trim();
+    // What is ON SCREEN: a heading line's trailing colon is dropped there (School.jsx dropColon), so
+    // rendered-vs-expected comparisons ignore a colon that ends a line. Dictionary LOOKUPS use norm.
+    const shown = (x) => norm(String(x || "").replace(/[ \t]*[:：][ \t]*(\n|$)/g, "$1"));
     const lp = CURRICULUM.courses.find((c) => c.id === "lp").lessons
       .map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
       .sort((a, b) => b.chars - a.chars)[0].l;
@@ -1827,20 +1846,20 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       dict: !!window.CLKN_I18N,
       body: (document.querySelector(".seeker-school-section-body") || {}).innerText || "",
     }));
-    ok("P9 · the lesson renders BEFORE the dictionary arrives (the race is real, not simulated)", !early.dict && norm(early.body) === norm(sec0.body), { dict: early.dict, ms: Date.now() - t0, body: early.body.slice(0, 80) });
+    ok("P9 · the lesson renders BEFORE the dictionary arrives (the race is real, not simulated)", !early.dict && shown(early.body) === shown(sec0.body), { dict: early.dict, ms: Date.now() - t0, body: early.body.slice(0, 80) });
 
     await page.waitForFunction(() => !!window.CLKN_I18N, null, { timeout: 20000 });
     await page.waitForFunction((want) => {
       const w = document.querySelector(".seeker-school-section-body");
-      return !!w && w.innerText.replace(/\s+/g, " ").trim() === want;
-    }, norm(curated), { timeout: 5000 }).catch(() => {});
+      return !!w && w.innerText.replace(/[ \t]*[:：][ \t]*(\n|$)/g, "$1").replace(/\s+/g, " ").trim() === want;
+    }, shown(curated), { timeout: 5000 }).catch(() => {});
     const late = await page.evaluate(() => {
       const w = document.querySelector(".seeker-school-section-body");
       return { body: w ? w.innerText : "", skipped: w ? w.getAttribute("data-i18n-skip") : null, paras: w ? w.querySelectorAll("p").length : 0,
                heading: ((document.querySelector(".seeker-school-section-h") || {}).innerText || "").trim() };
     });
     ok(`P9 · ⚠️ once the dictionary lands (${DELAY_MS} ms, past the old 1.5 s give-up) the lesson BODY becomes the curated Spanish on its own`,
-       norm(late.body) === norm(curated), { got: late.body.slice(0, 120), want: String(curated).slice(0, 120) });
+       shown(late.body) === shown(curated), { got: late.body.slice(0, 120), want: String(curated).slice(0, 120) });
     ok("P9 · with its paragraph breaks", late.paras > 1, String(late.paras));
     ok("P9 · marked data-i18n-skip so the observer never sends the Spanish for machine translation", late.skipped === "1", String(late.skipped));
     ok("P9 · the heading followed too", late.heading && late.heading !== sec0.heading, late.heading);
