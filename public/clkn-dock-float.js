@@ -38,6 +38,8 @@ window.__clknDockFloat = function (el) {
   // by setting --clkn-dock-base on the floater; everything else gets the plain 14px inset.
   var DEF = "var(--clkn-dock-base, calc(14px + env(safe-area-inset-bottom,0px)))";
   function fit() {
+    // Docked in a header by i18n.js (the phone app): not a floater any more, never lift it.
+    if (el.__clknHeaderDocked) return;
     try {
       var lift = 0;
       // Iterative: a single measure-and-lift pass is enough to clear one composer, but

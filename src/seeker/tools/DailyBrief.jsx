@@ -55,6 +55,8 @@ import { Link } from "react-router-dom";
 import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, toolFetch, useOnline } from "../pane.jsx";
 import { lessonOfDay, questionOfDay, answeredToday, streakCount, recordAnswer } from "../school/daily.js";
+import { INDEX as SOLANA_ROOM_INDEX } from "../solana/content.js";
+import "../solana/solana.css";
 import "./tools.css";
 
 function fmtPrice(n) {
@@ -228,6 +230,14 @@ export default function DailyBriefPane() {
       <p className="seeker-brief-disclaimer">
         {t("Prices, not advice. Nothing here is a recommendation to buy, sell or provide liquidity.")}
       </p>
+
+      {/* The Solana Room's door from the Daily tab (owner, 2026-09-25: its tab went to the Library,
+          "have a link to solana room from the daily tab, maybe at the bottom"). Same card and the
+          room's OWN already-translated title and intro as the School home's card. */}
+      <Link className="seeker-solana-schoolcard seeker-daily-solana" to="/solana">
+        <span className="seeker-solana-schoolcard-title">{t(SOLANA_ROOM_INDEX.title)}</span>
+        <span className="seeker-solana-schoolcard-sub">{t(SOLANA_ROOM_INDEX.intro)}</span>
+      </Link>
     </Pane>
   );
 }

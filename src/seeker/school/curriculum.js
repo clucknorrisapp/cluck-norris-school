@@ -81,6 +81,45 @@ export const COURSES = ORDER.filter((id) => raw.courses.some((c) => c.id === id)
 
 export const TOTAL_LESSONS = COURSES.reduce((n, c) => n + c.lessons.length, 0);
 
+// ── the Library ─────────────────────────────────────────────────────────────────────────────
+// Owner (2026-09-25): "bring the library into the IOS version ... just terms and easily
+// searchable and then can link into the school". One list: the website Library's glossary
+// (raw.glossary, extracted from src/sections/Library.jsx) merged with every lesson's own key terms
+// (`concepts`). A term defined in both keeps the glossary's definition. Each entry links to every
+// lesson that teaches it — a lesson whose key terms name it, or whose title or section headings
+// do — so a look-up is always one tap from the lesson.
+const normTerm = (s) => String(s || "").toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[^a-z0-9$]+/g, " ").trim();
+
+function buildGlossary() {
+  const byKey = new Map();
+  const add = (term, def, lesson, course) => {
+    const k = normTerm(term);
+    if (!k) return;
+    let e = byKey.get(k);
+    if (!e) { e = { key: k, term, def: def || "", lessons: [] }; byKey.set(k, e); }
+    if (!e.def && def) e.def = def;
+    if (lesson && !e.lessons.some((x) => x.key === lesson.key)) {
+      e.lessons.push({ key: lesson.key, courseId: course.id, lessonId: lesson.id, title: lesson.title, icon: course.icon });
+    }
+  };
+  for (const g of raw.glossary || []) add(g.term, g.def, null, null);
+  for (const c of COURSES) for (const l of c.lessons) for (const k of l.concepts) add(k.term, k.def, l, c);
+  // A glossary term no lesson lists among its key terms still links to a lesson that is ABOUT it.
+  const words = (s) => " " + normTerm(s) + " ";
+  for (const e of byKey.values()) {
+    if (e.lessons.length) continue;
+    const needle = " " + e.key + " ";
+    for (const c of COURSES) for (const l of c.lessons) {
+      const hay = words(l.title) + (l.sections || []).map((x) => words(x.heading)).join("");
+      if (hay.includes(needle)) e.lessons.push({ key: l.key, courseId: c.id, lessonId: l.id, title: l.title, icon: c.icon });
+    }
+    e.lessons = e.lessons.slice(0, 4);
+  }
+  return [...byKey.values()].filter((e) => e.def).sort((a, b) => a.term.localeCompare(b.term, "en", { sensitivity: "base" }));
+}
+
+export const GLOSSARY = buildGlossary();
+
 export function courseById(id) {
   return COURSES.find((c) => c.id === id) || null;
 }

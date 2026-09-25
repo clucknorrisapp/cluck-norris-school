@@ -331,7 +331,7 @@
 
       <div style="margin-bottom:10px"><span style="color:var(--gold);font-weight:700">2. YOU SIGN EVERY BATCH.</span> Your wallet pops up once per transaction. You see the exact instructions before approving. <strong>Reject if anything looks off.</strong></div>
 
-      <div style="margin-bottom:10px"><span style="color:var(--gold);font-weight:700">3. RENT FOR NEW ACCOUNTS.</span> If a recipient doesn't already hold this token, Solana requires ~0.00204 SOL to open a new token account for them. <strong>You pay this</strong>, not the recipient. The tool shows you the total up-front in the preview.</div>
+      <div style="margin-bottom:10px"><span style="color:var(--gold);font-weight:700">3. RENT FOR NEW ACCOUNTS.</span> If a recipient doesn't already hold this token, Solana requires a rent deposit (about 0.0015 SOL at September 2026 rates) to open a new token account for them. <strong>You pay this</strong>, not the recipient. The tool shows you the total up-front in the preview.</div>
 
       <div style="margin-bottom:10px"><span style="color:var(--gold);font-weight:700">4. IRREVERSIBLE.</span> Solana transactions can't be undone. Wrong address = lost tokens. <strong>Verify your recipient list twice</strong> before clicking SEND.</div>
 
@@ -473,7 +473,7 @@
     <div class="preview-cost" id="previewCost">
       <div class="cost-title">⚠ YOUR SOL COST (rent + network fees)</div>
       <div class="cost-row"><span class="cost-label">🆕 New token accounts to create</span><span class="cost-val" id="costAtaCount">—</span></div>
-      <div class="cost-row"><span class="cost-label">Rent per new account</span><span class="cost-val">0.00204 SOL</span></div>
+      <div class="cost-row"><span class="cost-label">Rent per new account</span><span class="cost-val" id="costAtaEach">~0.0015 SOL</span></div>
       <div class="cost-row"><span class="cost-label">Total ATA rent</span><span class="cost-val" id="costAtaRent">— SOL</span></div>
       <div class="cost-row"><span class="cost-label">Network tx fees</span><span class="cost-val" id="costTxFee">— SOL</span></div>
       <div class="cost-row cost-total"><span class="cost-label">YOU PAY (sender)</span><span class="cost-val" id="costTotal">— SOL</span></div>
@@ -614,7 +614,7 @@ function shortAddr(a) {
 // of them returned the raw envelope instead of throwing on a JSON-RPC error.
 const rpc = CluckUtil.rpc;
 // Live per-ATA rent for the cost estimate (the chain charges the live value regardless; this keeps the preview honest).
-window.addEventListener('load', function () { try { if (window.CluckAirdrop && CluckAirdrop.refreshRent) CluckAirdrop.refreshRent(rpc).then(function (v) { LAMPORTS_PER_ATA_RENT = v; }); } catch (e) {} });   // the engine <script> sits near the end of the page
+window.addEventListener('load', function () { try { if (window.CluckAirdrop && CluckAirdrop.refreshRent) CluckAirdrop.refreshRent(rpc).then(function (v) { LAMPORTS_PER_ATA_RENT = v; var el = document.getElementById('costAtaEach'); if (el && v) el.textContent = (v / 1e9).toFixed(5) + ' SOL'; }); } catch (e) {} });   // the engine <script> sits near the end of the page
 
 // ── Wallet Connect ───────────────────────────────────────────────────────────
 // Registry of supported wallets. Each entry knows how to detect its provider

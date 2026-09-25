@@ -1,6 +1,7 @@
 // The Library (deep dives, liquidity, glossary, resources) — lazy-loaded section.
 import { useState } from "react";
 import { LOGO_B64, COL, AskCluck } from "../shared.jsx";
+import WebLessonStepper from "../shared/WebLessonStepper.jsx";
 import { STORE } from "../edition.js";
 // Worked-example token — see the same constant in LPLab.jsx. The store edition names no token
 // of ours; sentences ABOUT CLKN carry an explicit STORE variant.
@@ -59,7 +60,7 @@ HOW THE ATTACK WORKS:
 4. The attacker drains your wallet immediately
 
 PROTECTION:
-• Use a revoker to audit and clear unused approvals regularly — revoke.cash supports Solana, and this app's own Security Coop tool checks and revokes risky approvals
+• Audit and clear unused approvals regularly — this app's own Wallet Checkup lists risky Solana approvals (token delegates) and can revoke them. The well-known revoke.cash covers Ethereum-style chains, not Solana
 • Never sign transactions on sites you do not trust completely
 • Read what you are signing — the amount, the contract address, the permission
 • If a site asks for an approval that seems larger than needed, walk away
@@ -118,7 +119,7 @@ WHY THIS MATTERS: Scammers create tokens with nearly identical names and symbols
 
 WHAT TO CHECK ON DEXSCREENER:
 • Total liquidity — under $10K is extremely risky, you may not be able to exit
-• Is liquidity locked? On Solana, check Jupiter Lock or the pool authority via Rugcheck or Solscan (team.finance and UNCX are mainly Ethereum-side tools)
+• Is liquidity locked? On Solana, check Jupiter Lock or the pool authority via Rugcheck or Solscan (UNCX and Team Finance also run Solana lockers now, but those three are the most direct checks for a Solana pool)
 • Who controls the liquidity? Creator-controlled LP can be removed (rug pull)
 • 24H volume relative to liquidity — low volume with high liquidity means little interest
 • Age of the liquidity pool — very new pools carry more risk
@@ -923,10 +924,10 @@ If any of that looks wrong — wrong mint, unexpected recipients, weird amounts 
         body: `Every Solana wallet that holds a specific token needs a "token account" for that token. If a recipient has never held the token you're sending, they don't have an account for it yet.
 
 YOU PAY TO OPEN THEIR ACCOUNT:
-The airdropper has to create a new token account for each first-time recipient. Solana charges ~0.00203928 SOL of rent per new account (a one-time cost, refundable if the account is later closed). This rent comes out of YOUR wallet, not theirs.
+The airdropper has to create a new token account for each first-time recipient. Solana charges rent for each new account — about 0.0015 SOL as of September 2026 (it was about 0.002 until Solana started cutting rent in steps that month, and more cuts are planned). It's a one-time cost, refundable if the account is later closed, and it comes out of YOUR wallet, not theirs.
 
 DO THE MATH BEFORE YOU SEND:
-100 first-time recipients = ~0.20 SOL in rent alone. At a typical SOL price that's $30+ before you've even sent the first token. A good airdropper shows the rent estimate up front. If it doesn't, walk away.
+100 first-time recipients = about 0.15 SOL in rent alone, before you've sent a single token. A good airdropper reads the live rent from the chain and shows the estimate up front. If it doesn't, walk away.
 
 EXIT THE TOOL IF:
 • Your wallet's SOL balance is below the estimated rent + tx fees
@@ -962,14 +963,15 @@ If anything is off — REJECT. There's no penalty for rejecting. There's no reco
         heading: "Our Airdropper Specifically",
         body: `The Cluck Norris airdropper at clucknorris.app/airdrop:
 
-• Signs through Phantom, Solflare, or Jupiter Wallet (no other wallets yet)
-• Costs 100 CLKN to unlock for 1 hour (5 hours if you hold 2M+ CLKN)
+• Free for everyone — no CLKN, no tools pass
+• Signs through any major Solana wallet (Phantom, Solflare, Backpack, Jupiter and others)
 • Shows you the full recipient list, batch count, total tokens, and estimated SOL cost in the preview before you sign anything
 • Tags new-ATA recipients in the preview so you can see exactly which ones cost you rent
 • Lets you optionally skip new-ATA recipients to save SOL
 • Never holds custody — every batch is signed by YOUR wallet, broadcast directly to Solana
+• Can publish a public receipt of the drop: sign one short message to prove you're the sender. Decline it and the tokens still send — the drop just gets no public receipt
 
-The 100 CLKN unlock fee is for TOOL ACCESS — it has nothing to do with the tokens you're airdropping. Those leave your wallet only when you approve each batch in your wallet popup.`
+Your tokens leave your wallet only when you approve each batch in your wallet popup.`
       }])
     ],
     cluckVerdict: "An airdropper is a power tool. Used right, it sends rewards to your community in a minute. Used wrong, it sends your treasury to dead addresses. Read the popup. Verify the list. Never approve in a hurry."
@@ -1004,21 +1006,21 @@ const LIBRARY_LIQUIDITY = [
     title: "Concentrated Liquidity",
     icon: "🎯",
     summary: "Provide liquidity in a specific price range and earn more fees per dollar.",
-    content: "Traditional AMMs spread your liquidity across all possible prices from zero to infinity. Most of that liquidity sits in price ranges that will never be traded — it's wasted capital.\n\nConcentrated liquidity (pioneered by Uniswap v3) lets you choose a specific price range for your liquidity. Your capital only earns fees when the token trades within your range — but it earns much more per dollar than a full-range position.\n\nEXAMPLE: Instead of providing liquidity from $0 to infinity, you provide between $0.000001 and $0.000002 for a token currently trading at $0.0000015. All your capital is actively earning fees within that tight range.\n\nTHE TRADEOFF: If price moves outside your range, you stop earning fees entirely and your position becomes 100% one token. Concentrated liquidity requires active management. This is exactly what Meteora DAMM V2" + (STORE ? "" : " — where CLKN trades —") + " uses.",
+    content: "Traditional AMMs spread your liquidity across all possible prices from zero to infinity. Most of that liquidity sits in price ranges that will never be traded — it's wasted capital.\n\nConcentrated liquidity (pioneered by Uniswap v3) lets you choose a specific price range for your liquidity. Your capital only earns fees when the token trades within your range — but it earns much more per dollar than a full-range position.\n\nEXAMPLE: Instead of providing liquidity from $0 to infinity, you provide between $0.000001 and $0.000002 for a token currently trading at $0.0000015. All your capital is actively earning fees within that tight range.\n\nTHE TRADEOFF: If price moves outside your range, you stop earning fees entirely and your position becomes 100% one token. Concentrated liquidity requires active management. Meteora DAMM V2 supports both: a pool can run full range or within a set price range." + (STORE ? "" : " CLKN's own DAMM V2 pool runs full range."),
   },
   {
     id: "dynamic-bonding-curve",
     title: "Dynamic Bonding Curves",
     icon: "📈",
     summary: "A price mechanism that automatically increases price as more tokens are bought.",
-    content: "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\n" + (STORE ? "A token that completes this journey launches on a Bags.fm bonding curve and graduates to Meteora DAMM V2. This is why the liquidity pool itself is permanent and cannot be pulled by the creator." : "CLKN completed this journey — it launched on a Bags.fm bonding curve and graduated to Meteora DAMM V2. This is why the liquidity pool itself is permanent and cannot be pulled by the creator.") + " That closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
+    content: "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\nGraduating does NOT by itself mean the liquidity can never be pulled. The launch's configuration splits the migrated liquidity into unlocked, vesting and permanently locked parts. Meteora requires at least 10% to stay locked on day one; a launchpad can lock much more, up to all of it. So check the pool's locked liquidity before you trust it.\n\n" + (STORE ? "Where most of a pool's liquidity is permanently locked," : "CLKN completed this journey — it launched on a Bags.fm bonding curve and graduated to Meteora DAMM V2 — and its pool's liquidity is permanently locked, which you can check on the pool's Meteora page. Where a pool's liquidity is locked like that,") + " that closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
   },
   {
     id: "meteora-damm",
     title: "Meteora DAMM V2",
     icon: "🌊",
     summary: STORE ? "Meteora's dynamic AMM (DAMM V2), explained." : "The liquidity pool where CLKN trades after graduating from Bags.fm.",
-    content: "Meteora's Dynamic AMM (DAMM) V2 is a next-generation liquidity pool on Solana designed to maximize fee earnings for liquidity providers while minimizing impermanent loss through dynamic fee adjustments.\n\nKey features of Meteora DAMM V2:\n\nDYNAMIC FEES: Fee tiers adjust based on market volatility. When the market is volatile, fees increase to compensate LPs for higher impermanent loss risk. When markets are calm, fees decrease to attract more volume.\n\nCONCENTRATED LIQUIDITY: Like Uniswap v3, DAMM V2 supports concentrated positions for capital efficiency.\n\nBAGS.FM INTEGRATION: When a Bags.fm token graduates, its liquidity migrates directly into a Meteora DAMM V2 pool. The migration is automatic, trustless, and permanent — no human interaction required." + (STORE ? "" : "\n\nCLKN trades in pool: 64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd"),
+    content: "Meteora's Dynamic AMM (DAMM) V2 is a next-generation liquidity pool on Solana built to give launchpads, projects and liquidity providers configurable fees, optional price ranges and liquidity locks in one pool type.\n\nKey features of Meteora DAMM V2:\n\nFEES: Each pool has a base fee, which can run on a schedule — starting high at launch to deter snipers, then decaying over time or as market cap grows. A pool can also turn on dynamic fees that rise when the market is volatile and fall back when it calms.\n\nPRICE RANGES: A pool can run full range, or set a price range to concentrate its liquidity, like Uniswap v3.\n\nLOCKS: Liquidity can be unlocked, vesting, or permanently locked — and locked liquidity keeps earning fees.\n\nBAGS.FM INTEGRATION: When a Bags.fm token graduates, its liquidity migrates directly into a Meteora DAMM V2 pool. The migration is automatic — no human interaction required. How much of that liquidity is locked is set by the launch, so check it on the pool's page." + (STORE ? "" : "\n\nCLKN trades in pool: 64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd"),
   },
   {
     id: "price-impact",
@@ -1220,30 +1222,35 @@ function Library({ initialTopic = null } = {}) {
                   </button>
                   {openTopic===topic.id && (
                     <div style={{background:"rgba(255,122,24,0.04)",border:"1px solid rgba(255,182,39,0.2)",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"16px",position:"relative"}}>
-                      {/* Sticky close button */}
-                        {/* Cluck hook */}
-                      <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",marginBottom:16,display:"flex",gap:10,alignItems:"flex-start"}}>
-                        <img src={LOGO_B64} alt="CN" style={{width:30,height:30,borderRadius:"50%",objectFit:"cover",border:"1px solid #FF7A18",flexShrink:0}}/>
-                        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:13.5,lineHeight:1.7}}>{topic.cluckHook}</p>
-                      </div>
-                      {/* Sections */}
-                      {topic.sections.map((sec,i)=>(
-                        <div key={i} style={{marginBottom:14}}>
-                          <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#FFB627",letterSpacing:1,marginBottom:8,borderBottom:"1px solid rgba(255,182,39,0.2)",paddingBottom:6}}>{sec.heading}</div>
-                          <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
-                        </div>
-                      ))}
-                      {/* Cluck verdict */}
-                      <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",marginTop:8}}>
-                        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FF7A18",letterSpacing:2,marginBottom:6}}>🐔 CLUCK'S VERDICT</div>
-                        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:13.5,lineHeight:1.7}}>{topic.cluckVerdict}</p>
-                      </div>
-                      {/* Close button at bottom + sticky */}
-                      <div style={{position:"sticky",bottom:16,zIndex:10,textAlign:"center",marginTop:16}}>
-                        <button onClick={()=>setOpenTopic(null)} style={{background:"rgba(255,182,39,0.95)",border:"none",borderRadius:20,padding:"8px 24px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#1a0f08",letterSpacing:1,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.5)"}}>
-                          ▲ CLOSE SECTION
-                        </button>
-                      </div>
+                      {/* Lesson stepper (owner 2026-09-25: "Yes all of website"): Cluck's hook,
+                          one step per section, then the verdict. The Library has no exams, so the
+                          last step's action closes the topic. src/shared/WebLessonStepper.jsx. */}
+                      <WebLessonStepper
+                        key={"library:"+topic.id}
+                        storeKey={"library:"+topic.id}
+                        color="#FFB627"
+                        steps={[
+                          {label:"", node:(
+                            <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
+                              <img src={LOGO_B64} alt="CN" style={{width:30,height:30,borderRadius:"50%",objectFit:"cover",border:"1px solid #FF7A18",flexShrink:0}}/>
+                              <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:13.5,lineHeight:1.7}}>{topic.cluckHook}</p>
+                            </div>
+                          )},
+                          ...topic.sections.map((sec)=>({label:sec.heading, node:(
+                            <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
+                          )})),
+                          ...(topic.cluckVerdict ? [{label:"Cluck's verdict", node:(
+                            <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px"}}>
+                              <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:15,lineHeight:1.7}}>{topic.cluckVerdict}</p>
+                            </div>
+                          )}] : []),
+                        ]}
+                        finish={
+                          <button onClick={()=>setOpenTopic(null)} style={{width:"100%",height:"100%",background:"rgba(255,182,39,0.95)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#1a0f08",letterSpacing:2,cursor:"pointer"}}>
+                            ▲ CLOSE SECTION
+                          </button>
+                        }
+                      />
                     </div>
                   )}
                 </div>
@@ -1277,14 +1284,33 @@ function Library({ initialTopic = null } = {}) {
                 {expanded===item.id && (
                   <div style={{padding:"0 16px 16px",position:"relative"}}>
                     <div style={{height:1,background:"rgba(6,182,212,0.2)",marginBottom:14}}/>
-                    {item.content.split("\n\n").map((para,i)=>(
-                      <p key={i} style={{fontSize:15,color:para===para.toUpperCase()&&para.length<50?"#06B6D4":"#9CA3AF",lineHeight:1.8,margin:"0 0 12px",fontFamily:para===para.toUpperCase()&&para.length<50?"'Anton',sans-serif":"inherit",letterSpacing:para===para.toUpperCase()&&para.length<50?1:0,fontWeight:para===para.toUpperCase()&&para.length<50?700:"normal"}}>{para}</p>
-                    ))}
-                    <div style={{position:"sticky",bottom:16,zIndex:10,textAlign:"center",marginTop:16}}>
-                      <button onClick={()=>setExpanded(null)} style={{background:"rgba(6,182,212,0.95)",border:"none",borderRadius:20,padding:"8px 24px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#1a0f08",letterSpacing:1,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.5)"}}>
-                        ▲ CLOSE SECTION
-                      </button>
-                    </div>
+                    {/* Lesson stepper (owner 2026-09-25: "Yes all of website") — the same frame the
+                        phone app gives these articles: the opening, then the lesson as one step.
+                        The paragraphs are never split across steps. */}
+                    <WebLessonStepper
+                      key={"liquidity:"+item.id}
+                      storeKey={"liquidity:"+item.id}
+                      color="#06B6D4"
+                      steps={[
+                        {label:"", node:(
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:36,marginBottom:6}}>{item.icon}</div>
+                            <h3 style={{fontFamily:"'Anton',sans-serif",fontSize:22,color:"#F9FAFB",margin:"0 0 8px"}}>{item.title}</h3>
+                            <p style={{fontSize:15,color:"#9CA3AF",lineHeight:1.7,margin:0}}>{item.summary}</p>
+                          </div>
+                        )},
+                        {label:"The lesson", node:(<>
+                          {item.content.split("\n\n").map((para,i)=>(
+                            <p key={i} style={{fontSize:15,color:para===para.toUpperCase()&&para.length<50?"#06B6D4":"#9CA3AF",lineHeight:1.8,margin:"0 0 12px",fontFamily:para===para.toUpperCase()&&para.length<50?"'Anton',sans-serif":"inherit",letterSpacing:para===para.toUpperCase()&&para.length<50?1:0,fontWeight:para===para.toUpperCase()&&para.length<50?700:"normal"}}>{para}</p>
+                          ))}
+                        </>)},
+                      ]}
+                      finish={
+                        <button onClick={()=>setExpanded(null)} style={{width:"100%",height:"100%",background:"rgba(6,182,212,0.95)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#1a0f08",letterSpacing:2,cursor:"pointer"}}>
+                          ▲ CLOSE SECTION
+                        </button>
+                      }
+                    />
                   </div>
                 )}
               </div>

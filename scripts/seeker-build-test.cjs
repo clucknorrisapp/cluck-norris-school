@@ -846,6 +846,94 @@ async function renderedCheck(pw, baselineSeekerDir) {
       console.log("  · no pristine origin/develop seeker bundle available — reporting this tree's header height only: " + hereHeaderHeight + "px");
     }
 
+    // ── the lesson stepper (owner 2026-09-24: LP Lab on a phone was "scroll, scroll, scroll") ──
+    // A long lesson reads one section per screen; a short one stays on one page. Rules and the
+    // step order are unit-tested against the real curriculum in scripts/lesson-steps-test.cjs;
+    // these are the rendered facts that test cannot see.
+    await pillPage.evaluate(() => { try { localStorage.removeItem("clkn_lesson_step"); } catch (_) {} });
+    await pillPage.goto(`http://127.0.0.1:${port}/#/school/lp/8`, { waitUntil: "networkidle", timeout: 20000 });
+    await pillPage.waitForSelector(".seeker-step", { timeout: 15000 });
+    ok("rendered: LP Lab lesson 8 opens in the stepper, 8 segments, 'Step 1 of 8'",
+       (await pillPage.locator(".seeker-step-seg").count()) === 8 && /Step 1 of 8/.test(await pillPage.locator(".seeker-step-count").innerText()));
+    ok("rendered: the stepper's opening outline lists every section plus the verdict (7)",
+       (await pillPage.locator(".seeker-step-outline-item").count()) === 7);
+    const readAlign = await pillPage.evaluate(() => getComputedStyle(document.querySelector(".seeker-school-read")).textAlign);
+    ok("rendered: lesson reading screens are left-aligned, not the pane's centered status layout", readAlign === "left" || readAlign === "start", readAlign);
+    await pillPage.locator(".seeker-step-next").click();
+    await pillPage.waitForTimeout(700);
+    ok("rendered: Next advances to step 2 and focus moves to its heading",
+       /Step 2 of 8/.test(await pillPage.locator(".seeker-step-count").innerText())
+       && (await pillPage.evaluate(() => document.activeElement && document.activeElement.tagName)) === "H2");
+    await pillPage.evaluate(() => window.scrollTo({ top: document.scrollingElement.scrollHeight }));
+    await pillPage.waitForTimeout(250);
+    const stepCtrls = await pillPage.locator(".seeker-step-controls").boundingBox();
+    const stepNav = await pillPage.locator(".seeker-nav").boundingBox();
+    const stepPill = await pillPage.locator("#clkn-lang-toggle").boundingBox();
+    ok("rendered: Back / Next clear the bottom nav and the 🌐 pill at the foot of a long step (360x800)",
+       stepCtrls.y + stepCtrls.height <= stepNav.y + 1 && !overlaps(stepPill, stepCtrls), { stepCtrls, stepNav, stepPill });
+    await pillPage.locator(".seeker-step-next").click();
+    await pillPage.waitForTimeout(900);
+    ok("rendered: Next from the foot of a long step lands at the top of the next one",
+       (await pillPage.evaluate(() => window.scrollY)) === 0 && /Step 3 of 8/.test(await pillPage.locator(".seeker-step-count").innerText()));
+    await pillPage.reload({ waitUntil: "networkidle", timeout: 20000 });
+    await pillPage.waitForSelector(".seeker-step", { timeout: 15000 });
+    ok("rendered: leaving and coming back resumes on the same step",
+       /Step 3 of 8/.test(await pillPage.locator(".seeker-step-count").innerText()));
+    await pillPage.goto(`http://127.0.0.1:${port}/#/school/basics/wallet`, { waitUntil: "networkidle", timeout: 20000 });
+    await pillPage.waitForSelector(".seeker-school-title", { timeout: 15000 });
+    // "Send stepper on all levels" (owner, 2026-09-25): the Incubator reads as steps too — the
+    // opening (its intro is the explanation), then the terms, which carry the quiz button.
+    await pillPage.waitForSelector(".seeker-step", { timeout: 15000 });
+    const incSegs = await pillPage.locator(".seeker-step-seg").count();
+    await pillPage.locator(".seeker-step-seg").nth(incSegs - 1).click();
+    await pillPage.waitForTimeout(400);
+    ok("rendered: an Incubator lesson reads as two steps — the opening, then the terms with the quiz button",
+       incSegs === 2 && (await pillPage.locator(".seeker-school-concept").count()) > 0
+       && /Take the quiz/i.test(await pillPage.locator(".seeker-step-next").innerText()), incSegs);
+    await pillPage.evaluate(() => { try { localStorage.removeItem("clkn_lesson_step"); } catch (_) {} });
+
+    // ── quiz auto-scroll, in the APP (owner 2026-09-24, first asked for on the iOS edition) ──
+    // #434 shipped a helper that scrolled `.seeker-main`, but the document is what scrolls in this
+    // shell (`.seeker-shell` is min-height, not height), so answering left Next ~200px under the
+    // bottom nav with no scroll at all. This answers a real question at 360x800 and requires the
+    // Next button to land between the sticky header and the fixed nav, then requires the next
+    // question's heading to land just under the header. Works whether the lesson opens as the
+    // single page or the lesson stepper (the quiz button is on the stepper's last step).
+    await pillPage.goto(`http://127.0.0.1:${port}/#/school/lp/8`, { waitUntil: "networkidle", timeout: 20000 });
+    await pillPage.waitForSelector(".seeker-school-title, .seeker-step", { timeout: 15000 });
+    if (await pillPage.locator(".seeker-step").count()) {
+      await pillPage.locator(".seeker-step-seg").last().click();
+      await pillPage.waitForTimeout(300);
+      await pillPage.locator(".seeker-step-next").click();
+    } else {
+      await pillPage.locator(".seeker-school-start").click();
+    }
+    await pillPage.waitForSelector(".seeker-school-option", { timeout: 15000 });
+    await pillPage.waitForTimeout(400);
+    await pillPage.locator(".seeker-school-option").first().click();
+    await pillPage.waitForTimeout(1100);
+    const quizGeom = await pillPage.evaluate(() => {
+      const next = document.querySelector(".seeker-school-explain .seeker-btn");
+      const head = document.querySelector(".seeker-header").getBoundingClientRect().bottom;
+      const navTop = document.querySelector(".seeker-nav").getBoundingClientRect().top;
+      const r = next ? next.getBoundingClientRect() : null;
+      return { top: r && r.top, bottom: r && r.bottom, head, navTop, scrollY: window.scrollY };
+    });
+    ok("rendered: after answering a quiz question in the app, Next is fully between the header and the bottom nav (360x800)",
+       quizGeom.top != null && quizGeom.top >= quizGeom.head - 1 && quizGeom.bottom <= quizGeom.navTop + 1, quizGeom);
+    await pillPage.locator(".seeker-school-explain .seeker-btn").click();
+    await pillPage.waitForTimeout(1100);
+    const headGeom = await pillPage.evaluate(() => {
+      const q = document.querySelector(".seeker-school-quizhead").getBoundingClientRect().top;
+      const head = document.querySelector(".seeker-header").getBoundingClientRect().bottom;
+      return { q, head, scrollY: window.scrollY };
+    });
+    // Either the heading was scrolled to just under the header, or the page is already at its top
+    // (a short question that fits on one screen has nothing to scroll, and sits under the pane's
+    // own top padding) — both put the question where the eye starts. Behind the header is the fail.
+    ok("rendered: Next brings the next question's heading under the app header, or the page is already at its top (360x800)",
+       headGeom.q >= headGeom.head - 1 && (headGeom.q <= headGeom.head + 40 || headGeom.scrollY === 0), headGeom);
+
     // Connect the wallet (same fake MWA bridge), then open the checkup pane.
     await pillPage.locator(".seeker-walletbtn").click();
     await pillPage.waitForFunction(() => /disconnect/i.test(document.querySelector(".seeker-walletbtn").textContent), null, { timeout: 15000 }).catch(() => {});
@@ -970,8 +1058,9 @@ async function renderedEduCheck(pw, tgz) {
        (await page.evaluate(() => location.hash)) === "#/school");
 
     const labels = await page.locator(".seeker-navbtn .seeker-navlabel").allInnerTexts();
-    ok("rendered (edu): exactly five bottom-nav tabs, in order — School, LP Lab, Ask, Solana, Daily",
-       JSON.stringify(labels) === JSON.stringify(["School", "LP Lab", "Ask", "Solana", "Daily"]),
+    // Owner, 2026-09-25: the Library took the Solana Room's tab; the room keeps its School-home card.
+    ok("rendered (edu): exactly five bottom-nav tabs, in order — School, LP Lab, Ask, Library, Daily",
+       JSON.stringify(labels) === JSON.stringify(["School", "LP Lab", "Ask", "Library", "Daily"]),
        JSON.stringify(labels));
 
     // Every tab icon is a drawn SVG, never emoji text — this PR's whole point for these five tabs.
