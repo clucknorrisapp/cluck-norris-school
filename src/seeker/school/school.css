@@ -656,3 +656,49 @@
    top margin, so the note sat flush under the verdict box. Match the class depth (AGENTS.md). */
 .seeker-step .seeker-school-quiznote { margin: 20px 0 8px; }
 .seeker-step-section .seeker-school-content { margin-top: 0; }
+
+/* ── the Library (Library.jsx) ────────────────────────────────────────────────────────────── */
+.seeker-library-card { margin-top: 12px; }
+.seeker-library-search {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 14px 0 6px;
+  padding: 12px 14px;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 122, 24, .35);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;            /* 16px: iOS zooms the page on focus below this */
+}
+.seeker-library-search:focus { outline: 2px solid var(--orange); outline-offset: 1px; }
+.seeker-library .seeker-tool-lede { text-align: left; }
+.seeker-library-en { font-family: var(--mono); font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+.seeker-library-count { font-family: var(--mono); font-size: 12.5px; color: var(--muted); margin-bottom: 12px; }
+.seeker-library-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.seeker-library-item {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.seeker-library-term { font-family: var(--disp); font-size: 17px; letter-spacing: .5px; color: var(--orange); }
+.seeker-pane .seeker-library-def { margin: 4px 0 0; font-size: var(--body-text, 15px); line-height: 1.6; color: var(--text); }
+.seeker-library-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.seeker-library-learn { font-family: var(--disp); font-size: 12.5px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; margin-right: 2px; }
+.seeker-library-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 182, 39, .4);
+  background: rgba(255, 182, 39, .08);
+  color: var(--gold);
+  font-size: 13.5px;
+  text-decoration: none;
+}
+.seeker-library-empty { margin-top: 16px; }

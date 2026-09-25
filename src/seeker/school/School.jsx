@@ -37,8 +37,7 @@ import { INDEX as SOLANA_ROOM_INDEX } from "../solana/content.js";
 import "../solana/solana.css";
 import {
   COURSES, TOTAL_LESSONS, courseById, lessonById,
-  completedIds, isDone, markDone, courseProgress, nextLesson, passMark,
-} from "./curriculum.js";
+  completedIds, isDone, markDone, courseProgress, nextLesson, passMark, GLOSSARY } from "./curriculum.js";
 import ShieldIcon from "../icons/ShieldIcon.jsx";
 import "./school.css";
 
@@ -244,6 +243,18 @@ export function SchoolHome({ finished, progressNote, safetyTools }) {
           );
         })}
       </div>
+
+      {/* The Library (owner, 2026-09-25) — every term in the school, searchable, each linked to the
+          lesson that teaches it. Styled as a course card so it reads as part of the school. */}
+      <Link className="seeker-school-course seeker-library-card" to="/library" data-clkn-avoid="1">
+        <div className="seeker-school-course-top">
+          <span className="seeker-school-course-icon" aria-hidden="true">📖</span>
+          <div className="seeker-school-course-text">
+            <span className="seeker-school-course-title">{t("The Library")}</span>
+            <span className="seeker-school-course-sub">{tf("{total} terms, each linked to the lesson that teaches it.", { total: GLOSSARY.length })}</span>
+          </div>
+        </div>
+      </Link>
 
       {/* The Solana Room (AGENTS.md's flagship school section) — a free, no-wallet reference
           room, below the course list rather than mixed into it: it's read one page at a time,

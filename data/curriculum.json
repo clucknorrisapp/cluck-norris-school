@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-25T14:12:56.572Z",
+  "generatedAt": "2026-09-25T14:20:36.662Z",
   "courses": [
     {
       "id": "fundamentals",
@@ -4142,6 +4142,216 @@
           ]
         }
       ]
+    }
+  ],
+  "glossary": [
+    {
+      "term": "AMM",
+      "def": "Automated Market Maker. A smart contract that automatically prices tokens using a mathematical formula instead of an order book."
+    },
+    {
+      "term": "APR",
+      "def": "Annual Percentage Rate. Simple interest rate over a year, not accounting for compounding."
+    },
+    {
+      "term": "APY",
+      "def": "Annual Percentage Yield. The return on an investment accounting for compounding. Higher than APR whenever interest compounds more than once a year — equal to APR if it doesn't compound."
+    },
+    {
+      "term": "Ask",
+      "def": "A SELL order placed ABOVE the current price. As price rises into it, it sells the token to buyers. In a liquidity pool, a range set above the current price holds the token as asks — a single-sided 'ask wall' (or 'sell wall') that sells into rallies and turns buy pressure into healthy distribution."
+    },
+    {
+      "term": "Bid",
+      "def": "A BUY order placed BELOW the current price. As price falls into it, it buys the token from sellers. In a liquidity pool, a range set below the current price holds the quote currency (e.g. USDC) as bids — single-sided 'buy support' that catches dips."
+    },
+    {
+      "term": "Bonding Curve",
+      "def": "A mathematical price mechanism where buying increases price and selling decreases price automatically."
+    },
+    {
+      "term": "CEX",
+      "def": "Centralized Exchange. A company-run trading platform (Coinbase, Binance) that holds your funds and requires KYC."
+    },
+    {
+      "term": "Cold Wallet",
+      "def": "A hardware wallet that stores private keys offline. Much more secure than hot wallets for large amounts."
+    },
+    {
+      "term": "Concentrated Liquidity",
+      "def": "Providing liquidity within a specific price range for higher capital efficiency and fee earnings."
+    },
+    {
+      "term": "DAMM",
+      "def": "Dynamic Automated Market Maker. Meteora's AMM that adjusts fees based on volatility."
+    },
+    {
+      "term": "DBC",
+      "def": "Dynamic Bonding Curve. The launch mechanism used by Bags.fm before graduation to Meteora."
+    },
+    {
+      "term": "DeFi",
+      "def": "Decentralized Finance. Financial services built on blockchain smart contracts with no central authority."
+    },
+    {
+      "term": "DEX",
+      "def": "Decentralized Exchange. A trading platform where swaps happen via smart contracts, not a company."
+    },
+    {
+      "term": "DYOR",
+      "def": "Do Your Own Research. Never invest based solely on others' advice — verify everything yourself."
+    },
+    {
+      "term": "FDV",
+      "def": "Fully Diluted Valuation. Price × total supply including all locked/unvested tokens."
+    },
+    {
+      "term": "Fee Share",
+      "def": "A system where token creators earn a percentage of all trading fees forever."
+    },
+    {
+      "term": "Flash Loan",
+      "def": "An uncollateralized loan borrowed and repaid within a single blockchain transaction."
+    },
+    {
+      "term": "Floor Price",
+      "def": "The lowest current asking price for an asset."
+    },
+    {
+      "term": "Gas Fee",
+      "def": "The cost to execute a transaction on a blockchain. On Solana these are fractions of a cent."
+    },
+    {
+      "term": "Graduation",
+      "def": "When a Bags.fm bonding curve token raises enough SOL to migrate to a permanent Meteora liquidity pool."
+    },
+    {
+      "term": "Hot Wallet",
+      "def": "A software wallet connected to the internet (Phantom, MetaMask). Convenient but less secure than cold storage."
+    },
+    {
+      "term": "Impermanent Loss",
+      "def": "Value loss experienced by LP providers when the price ratio of pooled tokens changes from deposit time."
+    },
+    {
+      "term": "Jupiter",
+      "def": "Solana's leading DEX aggregator and swap infrastructure. Finds the best price across all Solana DEXs."
+    },
+    {
+      "term": "KYC",
+      "def": "Know Your Customer. Identity verification required by centralized exchanges and regulated platforms."
+    },
+    {
+      "term": "Liquidity",
+      "def": "The amount of an asset available for trading. Higher liquidity = less price impact per trade."
+    },
+    {
+      "term": "Liquidity Pool",
+      "def": "A smart contract holding two tokens that traders swap against. LP providers deposit tokens and earn fees."
+    },
+    {
+      "term": "LP",
+      "def": "Liquidity Provider. Someone who deposits tokens into a liquidity pool to earn trading fees."
+    },
+    {
+      "term": "Market Cap",
+      "def": "Price × circulating supply. The total current value of all tokens in circulation."
+    },
+    {
+      "term": "MEV",
+      "def": "Maximal Extractable Value. Profit extracted by validators or bots by reordering transactions (includes sandwich attacks)."
+    },
+    {
+      "term": "Meteora",
+      "def": "A leading Solana DEX and liquidity protocol. CLKN graduated to a Meteora DAMM V2 pool."
+    },
+    {
+      "term": "Mint Address",
+      "def": "The unique identifier for a token on Solana. Used to verify you're buying the correct token."
+    },
+    {
+      "term": "Mint Authority",
+      "def": "The right to create new tokens. Revoking mint authority means supply is permanently fixed."
+    },
+    {
+      "term": "Multisig",
+      "def": "A wallet requiring multiple private key signatures to authorize transactions. Used for security."
+    },
+    {
+      "term": "Non-Custodial",
+      "def": "A wallet where you control your own private keys. No company can freeze or access your funds."
+    },
+    {
+      "term": "Oracle",
+      "def": "A service that feeds real-world data into smart contracts. Price oracles are critical and can be manipulated."
+    },
+    {
+      "term": "Price Impact",
+      "def": "How much your individual trade moves the market price. Higher in low-liquidity pools."
+    },
+    {
+      "term": "Private Key",
+      "def": "The secret key that proves ownership of a wallet. Never share it. Whoever has it controls the funds."
+    },
+    {
+      "term": "Public Key",
+      "def": "Your wallet address. Safe to share. Others use it to send you tokens."
+    },
+    {
+      "term": "Rug Pull",
+      "def": "When developers drain a project's liquidity and disappear, leaving holders with worthless tokens."
+    },
+    {
+      "term": "Sandwich Attack",
+      "def": "An MEV attack where a bot buys before your trade and sells after, profiting from your slippage."
+    },
+    {
+      "term": "Seed Phrase",
+      "def": "A 12-24 word backup phrase that recovers your wallet. Never share it — treat it like cash."
+    },
+    {
+      "term": "Slippage",
+      "def": "The difference between expected and actual trade price. Set tolerance to protect against price movement."
+    },
+    {
+      "term": "Smart Contract",
+      "def": "Self-executing code on a blockchain that automatically enforces agreements without a middleman."
+    },
+    {
+      "term": "SOL",
+      "def": "The native coin of the Solana blockchain. Used for gas fees and as the base pair for most Solana tokens."
+    },
+    {
+      "term": "Solana",
+      "def": "A high-speed, low-cost blockchain built for high throughput — in practice it handles thousands of transactions per second, with much higher theoretical limits, at very low fees."
+    },
+    {
+      "term": "Staking",
+      "def": "Locking tokens to earn rewards. Can mean validator staking (securing the network) or DeFi yield farming."
+    },
+    {
+      "term": "TVL",
+      "def": "Total Value Locked. The total dollar value of crypto deposited in a DeFi protocol or pool."
+    },
+    {
+      "term": "Token",
+      "def": "A crypto asset built on an existing blockchain (vs a coin which has its own blockchain)."
+    },
+    {
+      "term": "Tokenomics",
+      "def": "The economic design of a token — supply, distribution, vesting, utility, and fee structure."
+    },
+    {
+      "term": "Vesting",
+      "def": "A schedule that gradually unlocks tokens over time. Prevents insiders from dumping immediately."
+    },
+    {
+      "term": "Wallet",
+      "def": "Software or hardware that stores your private keys and lets you interact with the blockchain."
+    },
+    {
+      "term": "Yield Farming",
+      "def": "Earning rewards by providing liquidity or staking in DeFi protocols."
     }
   ]
 }

@@ -1463,3 +1463,6 @@ jobs:
       - name: Play/iOS app — every quiz end to end (360x800)
         if: steps.gate.outputs.run == 'true'
         run: node scripts/seeker-quiz-walk-test.cjs google
+      - name: App Library — every term listed, searchable, linked into the school (both editions)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/seeker-library-test.cjs google && node scripts/seeker-library-test.cjs seeker

@@ -2910,5 +2910,14 @@
   "Step {n} of {total}": "Passo {n} di {total}",
   "The lesson": "La lezione",
   "Try it yourself": "Provalo tu stesso",
-  "Ask (tab)": "Chiedi"
+  "Ask (tab)": "Chiedi",
+  "The Library": "La Biblioteca",
+  "Every term in the school, in plain words. Tap a lesson to learn it properly.": "Ogni termine della scuola, in parole semplici. Tocca una lezione per impararlo davvero.",
+  "Search a term": "Cerca un termine",
+  "{n} of {total} terms": "{n} di {total} termini",
+  "{total} terms": "{total} termini",
+  "Learn it in": "Imparalo in",
+  "Nothing in the Library matches “{q}”.": "Nella Biblioteca non c'è nulla che corrisponda a “{q}”.",
+  "Ask Cluck instead": "Chiedi a Cluck",
+  "{total} terms, each linked to the lesson that teaches it.": "{total} termini, ognuno collegato alla lezione che lo insegna."
 }

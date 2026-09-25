@@ -23,6 +23,7 @@ import ToolsHome from "../ToolsHome.jsx";
 import { SolanaRoomIndex, SolanaRoomPage } from "../solana/SolanaRoom.jsx";
 import { SeekerWingIndexSection, SeekerWingPage } from "../solana/SeekerWing.jsx";
 import { SchoolHome, SchoolCourse, SchoolLesson } from "../school/School.jsx";
+import Library from "../school/Library.jsx";
 import ListingCheckup from "../tools/ListingCheckup.jsx";
 import DailyBrief from "../tools/DailyBrief.jsx";
 import Firepit from "../tools/Firepit.jsx";
@@ -196,6 +197,7 @@ export function EditionRoutes({ wallet }) {
       <Route path="/school" element={<SchoolHome />} />
       <Route path="/school/:courseId" element={<SchoolCourse />} />
       <Route path="/school/:courseId/:lessonId" element={<SchoolLesson />} />
+      <Route path="/library" element={<Library />} />
       <Route path="/solana" element={<SolanaRoomIndex extra={<SeekerWingIndexSection />} />} />
       <Route path="/solana/:pageId" element={<SolanaRoomPage />} />
       <Route path="/solana/seeker/:pageId" element={<SeekerWingPage swapAvailable={SWAP_AVAILABLE} />} />

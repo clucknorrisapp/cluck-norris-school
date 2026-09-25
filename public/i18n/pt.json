@@ -2910,5 +2910,14 @@
   "Step {n} of {total}": "Etapa {n} de {total}",
   "The lesson": "A lição",
   "Try it yourself": "Experimente você mesmo",
-  "Ask (tab)": "Pergunte"
+  "Ask (tab)": "Pergunte",
+  "The Library": "A Biblioteca",
+  "Every term in the school, in plain words. Tap a lesson to learn it properly.": "Cada termo da escola, em palavras simples. Toque em uma lição para aprendê-lo direito.",
+  "Search a term": "Buscar um termo",
+  "{n} of {total} terms": "{n} de {total} termos",
+  "{total} terms": "{total} termos",
+  "Learn it in": "Aprenda em",
+  "Nothing in the Library matches “{q}”.": "Nada na Biblioteca corresponde a “{q}”.",
+  "Ask Cluck instead": "Pergunte ao Cluck",
+  "{total} terms, each linked to the lesson that teaches it.": "{total} termos, cada um ligado à lição que o ensina."
 }

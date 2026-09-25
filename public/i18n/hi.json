@@ -2910,5 +2910,14 @@
   "Step {n} of {total}": "चरण {n} / {total}",
   "The lesson": "पाठ",
   "Try it yourself": "खुद आज़माएँ",
-  "Ask (tab)": "पूछें"
+  "Ask (tab)": "पूछें",
+  "The Library": "लाइब्रेरी",
+  "Every term in the school, in plain words. Tap a lesson to learn it properly.": "स्कूल का हर शब्द, सीधी भाषा में। उसे ठीक से सीखने के लिए किसी पाठ पर टैप करें।",
+  "Search a term": "कोई शब्द खोजें",
+  "{n} of {total} terms": "{total} में से {n} शब्द",
+  "{total} terms": "{total} शब्द",
+  "Learn it in": "इसे यहाँ सीखें",
+  "Nothing in the Library matches “{q}”.": "लाइब्रेरी में “{q}” से मेल खाता कुछ नहीं मिला।",
+  "Ask Cluck instead": "इसके बजाय Cluck से पूछें",
+  "{total} terms, each linked to the lesson that teaches it.": "{total} शब्द, हर एक उस पाठ से जुड़ा जो उसे सिखाता है।"
 }
