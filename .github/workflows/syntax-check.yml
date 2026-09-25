@@ -569,6 +569,11 @@ jobs:
       # minutes apart; the first sighting is never rewritten and a backfill replay never counts.
       - name: school-progress re-pass rule
         run: node scripts/school-progress-test.cjs
+      # Lesson stepper (owner 2026-09-24: LP Lab on a phone was "scroll, scroll, scroll"). Pins
+      # which lessons read one section per screen against the real curriculum, the step order, and
+      # the remembered-position store (bounded, never throws, a pass clears it).
+      - name: lesson stepper rules
+        run: node scripts/lesson-steps-test.cjs
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # WORLD_ART integrity (deep dive 9.5): a level's bgArt is loaded LAZILY by key, so a typo in

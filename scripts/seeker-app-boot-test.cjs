@@ -1514,6 +1514,13 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
 
     const go = async (hash) => { await page.evaluate((h) => { window.location.hash = h; }, hash); await page.waitForTimeout(320); };
+    // Every lesson reads as steps (#437, "send stepper on all levels"); the quiz button lives on the
+    // LAST step. Walks there through the strip, so a journey that starts a quiz goes the way a
+    // learner does — past the opening and the terms — rather than around the stepper.
+    const toLastStep = async () => {
+      const n = await page.locator(".seeker-step-seg").count();
+      if (n) { await page.locator(".seeker-step-seg").nth(n - 1).click(); await page.waitForTimeout(150); }
+    };
     const opts = () => page.evaluate(() => Array.from(document.querySelectorAll(".seeker-school-option")).map((b) => (b.innerText || "").trim()));
     const doneKeys = () => page.evaluate(() => { try { return JSON.parse(localStorage.getItem("clkn_completed") || "[]"); } catch (_) { return null; } });
     const progressOf = (cid) => page.evaluate((c) => {
@@ -1524,16 +1531,41 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     // ── P1: the lesson BODY is on the screen, not just its title ──────────────────────────
     // The LP Lab lesson with the most prose. 24 of the 58 lessons are LP Lab's and 11 are Deep
     // Dive's; between them that is 35 lessons whose entire teaching material is `sections`.
+    //
+    // ⚠️ THE LESSON STEPPER (owner 2026-09-24, #437) reads a long lesson ONE SECTION PER SCREEN.
+    // So "the material is rendered" now means "every section is reachable and renders on its own
+    // step": readLesson() walks every step through the strip and collects what each one shows.
+    // The bar is unchanged — every declared heading, and the bodies — only the reading of it moved
+    // from one screen to all of them. A lesson that silently lost a section still fails here.
+    const readLesson = async () => {
+      const steps = await page.locator(".seeker-step-seg").count();
+      const grab = () => page.evaluate(() => ({
+        heads: Array.from(document.querySelectorAll(".seeker-school-section .seeker-school-section-h")).map((h) => (h.innerText || "").trim()),
+        bodyChars: Array.from(document.querySelectorAll(".seeker-school-section-body p, .seeker-school-content p")).reduce((n, p) => n + (p.innerText || "").length, 0),
+        text: (document.body.innerText || "").length,
+        title: (document.querySelector(".seeker-school-title") || {}).innerText || "",
+      }));
+      if (!steps) return { stepped: false, steps: 0, ...(await grab()) };
+      const out = { stepped: true, steps, heads: [], bodyChars: 0, text: 0, title: "" };
+      for (let i = 0; i < steps; i++) {
+        await page.locator(".seeker-step-seg").nth(i).click();
+        await page.waitForTimeout(120);
+        const g = await grab();
+        if (i === 0) out.title = g.title;
+        for (const h of g.heads) if (!out.heads.includes(h)) out.heads.push(h);
+        out.bodyChars += g.bodyChars;
+        out.text += g.text;
+      }
+      return out;
+    };
     {
       const lp = courseOf("lp").lessons.map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
         .sort((a, b) => b.chars - a.chars)[0].l;
+      await page.evaluate(() => { try { localStorage.removeItem("clkn_lesson_step"); } catch (_) {} });
       await go(`#/school/lp/${lp.id}`);
-      const seen = await page.evaluate(() => ({
-        heads: Array.from(document.querySelectorAll(".seeker-school-section-h")).map((h) => (h.innerText || "").trim()),
-        bodyChars: Array.from(document.querySelectorAll(".seeker-school-section-body p")).reduce((n, p) => n + (p.innerText || "").length, 0),
-        title: (document.querySelector(".seeker-school-title") || {}).innerText || "",
-      }));
-      ok(`P1 · an LP Lab lesson renders its section headings (${seen.heads.length} of ${(lp.sections || []).length})`,
+      const seen = await readLesson();
+      ok("P1 · a long LP Lab lesson opens in the lesson stepper (one section per screen)", seen.stepped, seen.steps);
+      ok(`P1 · an LP Lab lesson renders its section headings (${seen.heads.length} of ${(lp.sections || []).length}, across ${seen.steps} steps)`,
          seen.heads.length === (lp.sections || []).length, JSON.stringify(seen.heads).slice(0, 200));
       ok("P1 · ⚠️ and their BODIES — the lesson is the material, not the title and a tagline",
          seen.bodyChars > 2000, `only ${seen.bodyChars} characters of body rendered for "${seen.title}"`);
@@ -1546,8 +1578,9 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     {
       const dd = courseOf("deepdive").lessons.find((l) => (l.sections || []).length || l.content);
       await go(`#/school/deepdive/${dd.id}`);
-      const before = await page.evaluate(() => (document.body.innerText || "").length);
-      ok("P2 · a Deep Dive lesson renders real material", before > 1200, `${before} chars`);
+      const seen = await readLesson();
+      ok("P2 · a Deep Dive lesson renders real material", seen.bodyChars > 1200, `${seen.bodyChars} chars of body across ${seen.steps} steps`);
+      // readLesson() leaves the stepper on its LAST step, which is where 'Mark as read' lives.
       const hasMarkRead = await page.evaluate(() => /Mark as read/i.test((document.querySelector(".seeker-school-start") || {}).innerText || ""));
       ok("P2 · a lesson with no questions offers 'Mark as read' rather than an empty quiz", hasMarkRead);
       await page.click(".seeker-school-start");
@@ -1568,6 +1601,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const NEED = passMark(basicsDex.questions.length);
     {
       await go(`#/school/basics/${DUP}`);
+      await toLastStep();
       ok(`P3 · the beginner lesson offers its quiz (${basicsDex.questions.length} questions, ${NEED} to pass)`,
          await page.evaluate(() => !!document.querySelector(".seeker-school-start")));
       await page.click(".seeker-school-start");
@@ -1663,6 +1697,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         // the missed screen would stay up and there would be no "Take the quiz" to press.
         await go("#/school");
         await go(`#/school/basics/${L.id}`);
+        await toLastStep();
         await page.click(".seeker-school-start");
         await page.waitForTimeout(250);
         for (let i = 0; i < L.questions.length; i++) {
@@ -1717,7 +1752,13 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const page = await ctx.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await page.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    // The lesson stepper (#437) opens a long lesson on its opening step; section 0 is step 1.
+    // Seed the stepper's own remembered position so the lesson opens ON section 0 — the same
+    // path a learner takes coming back mid-lesson — and this reads the material, not the outline.
+    await page.addInitScript((key) => {
+      try { localStorage.setItem("clkn_lang", "es"); } catch (_) {}
+      try { localStorage.setItem("clkn_lesson_step", JSON.stringify({ [key]: 1 })); } catch (_) {}
+    }, "lp:" + lp.id);
     await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
     await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => !!(window.CLKN_I18N && window.CLKN_I18N.dict && Object.keys(window.CLKN_I18N.dict).length > 100), null, { timeout: 20000 });
@@ -1769,7 +1810,13 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const page = await ctx.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await page.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    // The lesson stepper (#437) opens a long lesson on its opening step; section 0 is step 1.
+    // Seed the stepper's own remembered position so the lesson opens ON section 0 — the same
+    // path a learner takes coming back mid-lesson — and this reads the material, not the outline.
+    await page.addInitScript((key) => {
+      try { localStorage.setItem("clkn_lang", "es"); } catch (_) {}
+      try { localStorage.setItem("clkn_lesson_step", JSON.stringify({ [key]: 1 })); } catch (_) {}
+    }, "lp:" + lp.id);
     await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
     // Hold the dictionaries back. Both files — the base pack and the school pack.
     await page.route("**/i18n/es*.json", async (route) => { await new Promise((r) => setTimeout(r, DELAY_MS)); await route.continue(); });

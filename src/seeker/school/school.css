@@ -179,6 +179,17 @@
   color: var(--gold);
 }
 
+/* ── reading a lesson: not a status screen ───────────────────────────────────────────────── */
+/* `.seeker-pane` is built for short, centered status screens: text-align center and a 10vh top
+   pad. The lesson screens inherited both, so paragraphs and bulleted runs read centered and
+   every lesson opened under ~80px of empty space. src/seeker/solana/solana.css's header comment
+   says the school "drops the centered layout" — no rule ever did (git log -S finds none). The
+   school HOME keeps its centered hero on purpose; only the reading screens opt out. */
+.seeker-pane.seeker-school-read {
+  text-align: left;
+  padding-top: 4px;
+}
+
 /* ── one lesson ────────────────────────────────────────────────────────────────────────────── */
 .seeker-school-back {
   display: inline-flex;
@@ -475,3 +486,134 @@
   font-size: 12.5px;
   line-height: 1.4;
 }
+
+/* ── the lesson stepper (src/shared/lessonSteps.js decides which lessons use it) ──────────── */
+/* Owner, 2026-09-24: LP Lab on a phone was "scroll, scroll, scroll". A long lesson now reads one
+   section per screen. The strip is the map; Back / Next are the thumb targets. */
+.seeker-step { margin-top: 2px; }
+
+/* The strip's segments are real buttons. The visible bar is 5px; the hit area is the full 28px
+   row, and the row sits above a 44px-tall step-count line, so a mis-tap lands on nothing. */
+.seeker-step-strip {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0 0;
+}
+.seeker-step-seg {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.seeker-step-seg-bar {
+  display: block;
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--card2, #1d1e26);
+  transition: background .2s ease;
+}
+.seeker-step-seg.seen .seeker-step-seg-bar { background: rgba(255, 122, 24, .45); }
+.seeker-step-seg.current .seeker-step-seg-bar { background: var(--orange); }
+.seeker-step-seg:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; border-radius: 4px; }
+
+.seeker-step-count {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 2px 0 12px;
+}
+
+.seeker-step-body :focus { outline: none; }
+.seeker-step-body :focus-visible { outline: 2px solid var(--orange); outline-offset: 4px; border-radius: 4px; }
+
+.seeker-step-kicker {
+  font-family: var(--disp);
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+/* A step IS one section, so the single page's between-section rule does not apply. */
+.seeker-step-section { margin: 0; padding: 0; border: 0; }
+.seeker-step-section .seeker-school-section-h { font-size: 18px; margin-bottom: 10px; }
+.seeker-step-verdict { margin-top: 4px; font-size: var(--body-text, 15px); }
+
+/* "In this lesson" — the what-you'll-learn list, and each line jumps to its step. */
+.seeker-step-outline {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 10px 6px 6px;
+  margin: 16px 0 12px;
+}
+.seeker-step-outline-title {
+  font-family: var(--disp);
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 8px 6px;
+}
+.seeker-step-outline ol { list-style: none; margin: 0; padding: 0; }
+.seeker-step-outline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.seeker-step-outline-item:active { background: var(--card2, #1d1e26); }
+.seeker-step-outline-n {
+  flex: 0 0 auto;
+  width: 22px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--orange);
+  text-align: right;
+}
+.seeker-step-outline-text { flex: 1 1 auto; min-width: 0; }
+
+.seeker-step-skip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--orange);
+  font-family: var(--disp);
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.seeker-step-controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+.seeker-step-controls .seeker-btn { margin: 0; }
+.seeker-step-next { flex: 1 1 auto; }
+.seeker-step-back { flex: 0 0 auto; min-width: 96px; }
+/* ⚠️ Specificity: `.seeker-pane p` (0-1-1) beats `.seeker-school-quiznote` (0-1-0) and zeroes its
+   top margin, so the note sat flush under the verdict box. Match the class depth (AGENTS.md). */
+.seeker-step .seeker-school-quiznote { margin: 20px 0 8px; }
+.seeker-step-section .seeker-school-content { margin-top: 0; }

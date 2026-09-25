@@ -28,7 +28,8 @@
 //     ledger. Both bugs existed here — see the Codex round on PR #390.
 
 import React from "react";
-import { revealQuizResult, revealUnderClear } from "../../shared/scrollReveal.js";
+import { revealQuizResult, revealUnderClear, scrollBehavior } from "../../shared/scrollReveal.js";
+import { buildLessonSteps, clampStep, loadStep, saveStep, clearStep } from "../../shared/lessonSteps.js";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { t, tf, tBlock, useI18nReady } from "../i18n.js";
 import { track } from "../../track.js";
@@ -293,6 +294,225 @@ function quizScrollChrome() {
   return { scrollEl, topClearY: header.getBoundingClientRect().bottom, bottomClearY: nav.getBoundingClientRect().top };
 }
 
+// ── a long lesson, one section per screen ───────────────────────────────────────────────────
+// Owner (2026-09-24, LP Lab on the iOS edition): "scroll, scroll, scroll … a lot of stuff stacked."
+// Then (2026-09-25): "send stepper on all levels" — every course reads this way now.
+// Which lessons step, and how they are cut, is decided in src/shared/lessonSteps.js; this is only
+// the screen. What it keeps from the single page: the same words, the same Prose/tBlock
+// translation path, the same quiz. What it adds:
+//
+//   · A progress strip — one segment per step, each a real button, so a learner can see how much
+//     is left and jump anywhere. The opening step's outline ("In this lesson") does the same with
+//     the section headings, which is how a repeat visitor skips ahead.
+//   · Back / Next at the foot of every step, and a horizontal swipe on the step body. The swipe
+//     ignores touches that start near either screen edge (the OS back gesture lives there), on a
+//     form control, or while text is selected.
+//   · The step is REMEMBERED per lesson (clkn_lesson_step), so leaving mid-lesson and coming back
+//     lands where you were. A pass clears it; "Read the lesson again" clears it.
+//   · Changing step returns to the top of the page, like turning a page, and moves focus to the
+//     new heading, so a screen reader announces the new section instead of a button that moved.
+//
+// Rendered with key={lesson.key} by the caller: a lesson opened from another lesson remounts this
+// component, so one lesson's position can never be written under the next lesson's key.
+function LessonStepper({ course, lesson, steps, need, onStartQuiz, onMarkRead }) {
+  const total = steps.length;
+  const [i, setI] = React.useState(() => loadStep(lesson.key, total));
+  const topRef = React.useRef(null);
+  const headRef = React.useRef(null);
+  const moved = React.useRef(false);
+  const touch = React.useRef(null);
+
+  React.useEffect(() => { saveStep(lesson.key, i); }, [lesson.key, i]);
+
+  React.useEffect(() => {
+    if (!moved.current) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        // A new step is a new page: back to the top, so the back link, the strip and the new
+        // heading are all in view. quizScrollChrome() says which element really scrolls.
+        const chrome = quizScrollChrome();
+        if (chrome) {
+          try { chrome.scrollEl.scrollTo({ top: 0, behavior: scrollBehavior() }); } catch (_) {}
+        }
+        try { if (headRef.current) headRef.current.focus({ preventScroll: true }); } catch (_) {}
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [i]);
+
+  function go(n) {
+    const c = clampStep(n, total);
+    if (c === i) return;
+    moved.current = true;
+    setI(c);
+  }
+
+  function onTouchStart(e) {
+    touch.current = null;
+    if (!e.touches || e.touches.length !== 1) return;
+    const p = e.touches[0];
+    const w = window.innerWidth || 0;
+    if (p.clientX < 24 || (w && p.clientX > w - 24)) return;          // leave the edges to the OS
+    const el = e.target;
+    if (el && el.closest && el.closest("input, textarea, select, [data-no-swipe]")) return;
+    touch.current = { x: p.clientX, y: p.clientY, t: Date.now() };
+  }
+
+  function onTouchEnd(e) {
+    const s = touch.current;
+    touch.current = null;
+    if (!s || !e.changedTouches || !e.changedTouches.length) return;
+    const p = e.changedTouches[0];
+    const dx = p.clientX - s.x;
+    const dy = p.clientY - s.y;
+    if (Date.now() - s.t > 700) return;
+    if (Math.abs(dx) < 56 || Math.abs(dy) > Math.abs(dx) * 0.6) return;  // a scroll, not a swipe
+    try { if (String(window.getSelection && window.getSelection()).trim()) return; } catch (_) {}
+    go(dx < 0 ? i + 1 : i - 1);
+  }
+
+  const step = steps[i];
+  const last = i === total - 1;
+  const questions = lesson.questions;
+  // Everything after the opening, labelled the way its own step is headed.
+  const outlineSteps = steps.map((s, n) => ({ s, n })).filter(({ s }) => s.kind !== "open");
+  const outlineLabel = (s) =>
+    s.kind === "verdict" ? t("Cluck's verdict")
+      : s.kind === "terms" ? t("The terms that matter")
+      : s.kind === "content" ? t("The lesson")
+      : s.heading;
+
+  let body = null;
+  if (step.kind === "open") {
+    body = (
+      <>
+        <h1 className="seeker-school-title" ref={headRef} tabIndex={-1}>{lesson.icon} {lesson.title}</h1>
+        {lesson.belt ? <div className="seeker-school-belt">{lesson.belt}</div> : null}
+        {lesson.tagline && lesson.tagline !== lesson.intro ? (
+          <div className="seeker-school-tagline">{lesson.tagline}</div>
+        ) : null}
+        {lesson.intro ? <p className="seeker-school-intro">{lesson.intro}</p> : null}
+        <div className="seeker-step-outline">
+          <div className="seeker-step-outline-title">{t("In this lesson")}</div>
+          <ol>
+            {outlineSteps.map(({ s, n }) => (
+              <li key={n}>
+                <button type="button" className="seeker-step-outline-item" onClick={() => go(n)}>
+                  <span className="seeker-step-outline-n">{n}</span>
+                  <span className="seeker-step-outline-text">{outlineLabel(s)}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
+        {isDone(lesson.key) && questions.length ? (
+          <button type="button" className="seeker-step-skip" onClick={onStartQuiz}>{t("Skip to the quiz")}</button>
+        ) : null}
+      </>
+    );
+  } else if (step.kind === "terms") {
+    body = (
+      <div className="seeker-school-concepts">
+        <div className="seeker-school-concepts-title" ref={headRef} tabIndex={-1}>{t("The terms that matter")}</div>
+        {lesson.concepts.map((c, k) => (
+          <div className="seeker-school-concept" key={k}>
+            <span className="seeker-school-concept-term">{c.term}</span>
+            <span className="seeker-school-concept-def">{c.def}</span>
+          </div>
+        ))}
+      </div>
+    );
+  } else if (step.kind === "section") {
+    const s = lesson.sections[step.index] || {};
+    body = (
+      <section className="seeker-school-section seeker-step-section">
+        <div className="seeker-step-kicker">{lesson.icon} {lesson.title}</div>
+        {s.heading ? <h2 className="seeker-school-section-h" ref={headRef} tabIndex={-1}>{s.heading}</h2> : null}
+        <Prose text={s.body} className="seeker-school-section-body" />
+      </section>
+    );
+  } else if (step.kind === "content") {
+    // The liquidity library's prose — one step, never cut (see src/shared/lessonSteps.js: the
+    // curated dictionary keys the WHOLE block, so Prose/tBlock must see all of it at once).
+    // Deliberately NOT .seeker-school-section: that class marks an authored section, and the
+    // boot test counts those headings against the curriculum's own.
+    body = (
+      <section className="seeker-step-section">
+        <div className="seeker-step-kicker">{lesson.icon} {lesson.title}</div>
+        <h2 className="seeker-school-section-h" ref={headRef} tabIndex={-1}>{t("The lesson")}</h2>
+        <Prose text={lesson.content} className="seeker-school-content" />
+      </section>
+    );
+  } else if (step.kind === "verdict") {
+    body = (
+      <>
+        <div className="seeker-step-kicker">{lesson.icon} {lesson.title}</div>
+        <h2 className="seeker-school-section-h" ref={headRef} tabIndex={-1}>{t("Cluck's verdict")}</h2>
+        <blockquote className="seeker-school-verdict seeker-step-verdict">{lesson.verdict}</blockquote>
+      </>
+    );
+  }
+
+  return (
+    <div className="seeker-pane seeker-school seeker-school-read">
+      <Link className="seeker-school-back" to={`/school/${course.id}`}>{t("Back to")} {t(course.title)}</Link>
+
+      <div className="seeker-step" ref={topRef}>
+        <div className="seeker-step-strip">
+          {steps.map((s, n) => (
+            <button
+              key={n}
+              type="button"
+              className={"seeker-step-seg" + (n === i ? " current" : n < i ? " seen" : "")}
+              aria-current={n === i ? "step" : undefined}
+              aria-label={tf("Step {n} of {total}", { n: n + 1, total })}
+              onClick={() => go(n)}
+            >
+              <span className="seeker-step-seg-bar" />
+            </button>
+          ))}
+        </div>
+        <div className="seeker-step-count">{tf("Step {n} of {total}", { n: i + 1, total })}</div>
+
+        <div className="seeker-step-body" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+          {body}
+        </div>
+
+        {last ? (
+          questions.length ? (
+            <p className="seeker-school-quiznote">
+              {tf("{total} questions. {need} right to pass — retake it as often as you like.", { total: questions.length, need })}
+            </p>
+          ) : null
+        ) : null}
+
+        {/* data-clkn-avoid: the 🌐 pill rests bottom-right, which is exactly where Next lands on
+            a short step. One short row, so -avoid, not -kids. */}
+        <div className="seeker-step-controls" data-clkn-avoid="1">
+          {i > 0 ? (
+            <button type="button" className="seeker-btn seeker-btn-quiet seeker-step-back" onClick={() => go(i - 1)}>
+              {t("Back")}
+            </button>
+          ) : null}
+          {!last ? (
+            <button type="button" className="seeker-btn seeker-step-next" onClick={() => go(i + 1)}>
+              {i === 0 ? t("Start the lesson") : t("Next")}
+            </button>
+          ) : questions.length ? (
+            <button type="button" className="seeker-btn seeker-step-next seeker-school-start" onClick={onStartQuiz}>
+              {isDone(lesson.key) ? t("Take the quiz again") : t("Take the quiz")}
+            </button>
+          ) : (
+            <button type="button" className="seeker-btn seeker-step-next seeker-school-start" onClick={onMarkRead}>
+              {t("Mark as read")}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── one lesson: read, then quiz ─────────────────────────────────────────────────────────────
 export function SchoolLesson() {
   // Re-render when the dictionary lands — a lesson opened directly can render before it does.
@@ -385,6 +605,8 @@ export function SchoolLesson() {
     // The mark is recorded locally AND queued to the ledger. A beacon that fails does not change
     // what the learner sees — they passed, and src/track.js re-sends it.
     markDone(lesson.key);
+    // A pass means the next visit opens at the top of the lesson, not on its last step.
+    clearStep(lesson.key);
     track("lesson_complete:" + beaconId(lesson.id));
     setPhase("passed");
   }
@@ -453,7 +675,7 @@ export function SchoolLesson() {
               <button
                 type="button"
                 className="seeker-btn seeker-btn-quiet"
-                onClick={() => { setPhase("read"); setQi(0); setPicked(null); setScore(0); }}
+                onClick={() => { clearStep(lesson.key); setPhase("read"); setQi(0); setPicked(null); setScore(0); }}
               >
                 {t("Read the lesson again")}
               </button>
@@ -503,9 +725,25 @@ export function SchoolLesson() {
     );
   }
 
-  // read
+  // read — every lesson reads as steps (src/shared/lessonSteps.js). The single page below is kept
+  // only for a lesson with nothing beyond its opening, which no lesson in the curriculum is today.
+  const plan = buildLessonSteps(lesson);
+  if (plan.stepped) {
+    return (
+      <LessonStepper
+        key={lesson.key}
+        course={course}
+        lesson={lesson}
+        steps={plan.steps}
+        need={need}
+        onStartQuiz={startQuiz}
+        onMarkRead={complete}
+      />
+    );
+  }
+
   return (
-    <div className="seeker-pane seeker-school">
+    <div className="seeker-pane seeker-school seeker-school-read">
       <Link className="seeker-school-back" to={`/school/${course.id}`}>{t("Back to")} {t(course.title)}</Link>
       <h1 className="seeker-school-title">{lesson.icon} {lesson.title}</h1>
       {lesson.belt ? <div className="seeker-school-belt">{lesson.belt}</div> : null}

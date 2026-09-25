@@ -2900,5 +2900,13 @@
   "This app you're reading this page in is that same listing. An update to it is published to the dApp Store the same way any app update is published to any store; the store checks for and delivers it, not this app itself.": "जिस ऐप में आप यह पेज पढ़ रहे हैं, वही वह लिस्टिंग है। इसका अपडेट dApp Store पर उसी तरह प्रकाशित होता है जैसे किसी भी ऐप का अपडेट किसी भी स्टोर पर प्रकाशित होता है; स्टोर ही उसे खोजता और पहुँचाता है, यह ऐप खुद नहीं।",
   "Today's SKR figure couldn't be loaded right now — no number is shown here rather than guessing one.": "आज का SKR आँकड़ा अभी लोड नहीं हो सका — अनुमान लगाने के बजाय यहाँ कोई संख्या नहीं दिखाई जा रही।",
   "An in-app swap between tokens is planned for a future release. This page isn't telling you to use it — only that it exists.": "टोकन के बीच एक इन-ऐप स्वैप भविष्य के रिलीज़ के लिए योजनाबद्ध है। यह पेज आपसे इसका उपयोग करने को नहीं कह रहा — बस यह कि यह मौजूद है।",
-  "Safety tools": "सुरक्षा उपकरण"
+  "Safety tools": "सुरक्षा उपकरण",
+  "Back": "पीछे",
+  "Cluck's verdict": "Cluck का फैसला",
+  "In this lesson": "इस पाठ में",
+  "Next": "आगे",
+  "Skip to the quiz": "सीधे क्विज़ पर जाएँ",
+  "Start the lesson": "पाठ शुरू करें",
+  "Step {n} of {total}": "चरण {n} / {total}",
+  "The lesson": "पाठ"
 }

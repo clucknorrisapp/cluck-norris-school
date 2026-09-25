@@ -199,7 +199,12 @@ function findChromium() {
     const p2 = await ctx2.newPage();
     const errs = [];
     p2.on("pageerror", (e) => errs.push(e.message));
-    await p2.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    // The lesson stepper (#437) opens a long lesson on its opening step; section 0 is step 1.
+    // Seed the stepper's own remembered position so the lesson opens ON section 0.
+    await p2.addInitScript((key) => {
+      try { localStorage.setItem("clkn_lang", "es"); } catch (_) {}
+      try { localStorage.setItem("clkn_lesson_step", JSON.stringify({ [key]: 1 })); } catch (_) {}
+    }, "lp:" + lp.id);
     await p2.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
     await p2.route("**/i18n/es*.json", async (route) => { await new Promise((r) => setTimeout(r, 2500)); await route.continue(); });
     await p2.goto(`${BASE}/index.html#/school/lp/${lp.id}`, { waitUntil: "domcontentloaded" });

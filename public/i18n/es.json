@@ -2900,5 +2900,13 @@
   "This app you're reading this page in is that same listing. An update to it is published to the dApp Store the same way any app update is published to any store; the store checks for and delivers it, not this app itself.": "La app en la que estás leyendo esta página es esa misma publicación. Una actualización de ella se publica en la dApp Store de la misma manera en que cualquier actualización de app se publica en cualquier tienda; es la tienda la que la busca y la entrega, no esta app por sí misma.",
   "Today's SKR figure couldn't be loaded right now — no number is shown here rather than guessing one.": "La cifra de SKR de hoy no se pudo cargar en este momento; aquí no se muestra ningún número en lugar de adivinar uno.",
   "An in-app swap between tokens is planned for a future release. This page isn't telling you to use it — only that it exists.": "Se planea un intercambio entre tokens dentro de la app para una futura versión. Esta página no te está diciendo que lo uses, solo que existe.",
-  "Safety tools": "Herramientas de seguridad"
+  "Safety tools": "Herramientas de seguridad",
+  "Back": "Atrás",
+  "Cluck's verdict": "Veredicto de Cluck",
+  "In this lesson": "En esta lección",
+  "Next": "Siguiente",
+  "Skip to the quiz": "Ir directo al cuestionario",
+  "Start the lesson": "Empezar la lección",
+  "Step {n} of {total}": "Paso {n} de {total}",
+  "The lesson": "La lección"
 }
