@@ -269,18 +269,27 @@ export function SchoolCourse() {
 // Owner (2026-09-24, testing the iOS edition, then confirmed on the web app too): tapping an
 // answer must bring the verdict, the explanation and the Next button into view on its own —
 // "I shouldn't have to drag" — and Next must do the same for the next question's heading.
-// `.seeker-header` is a real flex sibling of `.seeker-main` (not stacked over it), so its own
-// bottom edge already sits at the scroll container's top edge; the bottom nav, though, is
-// `position:fixed` OVER the last ~96px of `.seeker-main`'s scrollable content, so a plain
-// `scrollIntoView` can park a button behind it. The shared helper (src/shared/scrollReveal.js,
-// reused by the website's own quiz screens so the two can't drift) scrolls `.seeker-main` itself
-// by a computed delta instead, so the nav's real on-screen position is what "in view" means, not
-// the container's raw clientHeight.
+//
+// ⚠️ WHICH ELEMENT SCROLLS IS MEASURED, NOT ASSUMED. The first cut (#434) always scrolled
+// `.seeker-main`, on the belief that it was the scroll container. It is not, in practice:
+// `.seeker-shell` is `min-height: 100dvh` (not `height`), so `.seeker-main` simply grows with its
+// content and the DOCUMENT scrolls. `.seeker-main.scrollTo()` was a silent no-op, and in a rendered
+// 360x800 build the Next button sat ~200px under the bottom nav after answering (found
+// 2026-09-25 while building the lesson stepper; the website half of #434 scrolls `window` and was
+// never affected). So: scroll `.seeker-main` only when it really overflows its own box, otherwise
+// the window. `.seeker-header` is `position: sticky; top: 0` and the nav is `position: fixed`, so
+// their on-screen edges are the right clearance lines either way.
+// scripts/seeker-build-test.cjs now answers a real question at 360x800 and requires the Next
+// button to land between the header and the nav — the check that would have caught this.
 function quizScrollChrome() {
-  const scrollEl = document.querySelector(".seeker-main");
+  const main = document.querySelector(".seeker-main");
   const header = document.querySelector(".seeker-header");
   const nav = document.querySelector(".seeker-nav");
-  if (!scrollEl || !header || !nav) return null;
+  if (!header || !nav) return null;
+  let scrollEl = window;
+  try {
+    if (main && main.scrollHeight > main.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(main).overflowY)) scrollEl = main;
+  } catch (_) {}
   return { scrollEl, topClearY: header.getBoundingClientRect().bottom, bottomClearY: nav.getBoundingClientRect().top };
 }
 
