@@ -60,7 +60,7 @@ HOW THE ATTACK WORKS:
 4. The attacker drains your wallet immediately
 
 PROTECTION:
-• Use a revoker to audit and clear unused approvals regularly — revoke.cash supports Solana, and this app's own Security Coop tool checks and revokes risky approvals
+• Audit and clear unused approvals regularly — this app's own Wallet Checkup lists risky Solana approvals (token delegates) and can revoke them. The well-known revoke.cash covers Ethereum-style chains, not Solana
 • Never sign transactions on sites you do not trust completely
 • Read what you are signing — the amount, the contract address, the permission
 • If a site asks for an approval that seems larger than needed, walk away
@@ -119,7 +119,7 @@ WHY THIS MATTERS: Scammers create tokens with nearly identical names and symbols
 
 WHAT TO CHECK ON DEXSCREENER:
 • Total liquidity — under $10K is extremely risky, you may not be able to exit
-• Is liquidity locked? On Solana, check Jupiter Lock or the pool authority via Rugcheck or Solscan (team.finance and UNCX are mainly Ethereum-side tools)
+• Is liquidity locked? On Solana, check Jupiter Lock or the pool authority via Rugcheck or Solscan (UNCX and Team Finance also run Solana lockers now, but those three are the most direct checks for a Solana pool)
 • Who controls the liquidity? Creator-controlled LP can be removed (rug pull)
 • 24H volume relative to liquidity — low volume with high liquidity means little interest
 • Age of the liquidity pool — very new pools carry more risk
@@ -924,10 +924,10 @@ If any of that looks wrong — wrong mint, unexpected recipients, weird amounts 
         body: `Every Solana wallet that holds a specific token needs a "token account" for that token. If a recipient has never held the token you're sending, they don't have an account for it yet.
 
 YOU PAY TO OPEN THEIR ACCOUNT:
-The airdropper has to create a new token account for each first-time recipient. Solana charges ~0.00203928 SOL of rent per new account (a one-time cost, refundable if the account is later closed). This rent comes out of YOUR wallet, not theirs.
+The airdropper has to create a new token account for each first-time recipient. Solana charges rent for each new account — about 0.0015 SOL as of September 2026 (it was about 0.002 until Solana started cutting rent in steps that month, and more cuts are planned). It's a one-time cost, refundable if the account is later closed, and it comes out of YOUR wallet, not theirs.
 
 DO THE MATH BEFORE YOU SEND:
-100 first-time recipients = ~0.20 SOL in rent alone. At a typical SOL price that's $30+ before you've even sent the first token. A good airdropper shows the rent estimate up front. If it doesn't, walk away.
+100 first-time recipients = about 0.15 SOL in rent alone, before you've sent a single token. A good airdropper reads the live rent from the chain and shows the estimate up front. If it doesn't, walk away.
 
 EXIT THE TOOL IF:
 • Your wallet's SOL balance is below the estimated rent + tx fees
@@ -963,14 +963,15 @@ If anything is off — REJECT. There's no penalty for rejecting. There's no reco
         heading: "Our Airdropper Specifically",
         body: `The Cluck Norris airdropper at clucknorris.app/airdrop:
 
-• Signs through Phantom, Solflare, or Jupiter Wallet (no other wallets yet)
-• Costs 100 CLKN to unlock for 1 hour (5 hours if you hold 2M+ CLKN)
+• Free for everyone — no CLKN, no tools pass
+• Signs through any major Solana wallet (Phantom, Solflare, Backpack, Jupiter and others)
 • Shows you the full recipient list, batch count, total tokens, and estimated SOL cost in the preview before you sign anything
 • Tags new-ATA recipients in the preview so you can see exactly which ones cost you rent
 • Lets you optionally skip new-ATA recipients to save SOL
 • Never holds custody — every batch is signed by YOUR wallet, broadcast directly to Solana
+• Can publish a public receipt of the drop: sign one short message to prove you're the sender. Decline it and the tokens still send — the drop just gets no public receipt
 
-The 100 CLKN unlock fee is for TOOL ACCESS — it has nothing to do with the tokens you're airdropping. Those leave your wallet only when you approve each batch in your wallet popup.`
+Your tokens leave your wallet only when you approve each batch in your wallet popup.`
       }])
     ],
     cluckVerdict: "An airdropper is a power tool. Used right, it sends rewards to your community in a minute. Used wrong, it sends your treasury to dead addresses. Read the popup. Verify the list. Never approve in a hurry."

@@ -123,6 +123,17 @@ function ProsePara({ text }) {
   );
 }
 
+// Fisher-Yates over the option indices, carrying the correct index with it.
+function shuffleOptions(q) {
+  const opts = Array.isArray(q.options) ? q.options : [];
+  const idx = opts.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  return { ...q, options: idx.map((i) => opts[i]), correct: idx.indexOf(q.correct) };
+}
+
 function Prose({ text, className }) {
   const { text: body, translated } = tBlock(text);
   const paras = String(body || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
@@ -640,6 +651,16 @@ export function SchoolLesson() {
     setPhase("read"); setQi(0); setPicked(null); setScore(0);
   }, [courseId, lessonId]);
 
+  // ⚠️ OPTIONS ARE SHUFFLED, per attempt — the website's rule (src/App.jsx shuffleOptions). The
+  // curriculum was written with the right answer second in 164 of 200 questions, and this screen
+  // rendered them in that order, so "always tap the second one" passed every course in the app
+  // (school review, 2026-09-25). A retry reshuffles.
+  const [attempt, setAttempt] = React.useState(0);
+  const questions = React.useMemo(
+    () => (lesson ? (lesson.questions || []).map(shuffleOptions) : []),
+    [lesson && lesson.key, attempt]
+  );
+
   if (!course || !lesson) {
     return (
       <div className="seeker-pane seeker-school">
@@ -650,12 +671,12 @@ export function SchoolLesson() {
     );
   }
 
-  const questions = lesson.questions;
   const q = questions[qi] || null;
   // The website's rule, not a new one: `score >= Math.ceil(n * 2/3)` (src/App.jsx ~1425).
   const need = passMark(questions.length);
 
   function startQuiz() {
+    setAttempt((n) => n + 1);
     setPhase("quiz"); setQi(0); setPicked(null); setScore(0);
   }
 
