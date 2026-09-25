@@ -243,8 +243,12 @@ export function SchoolCourse() {
   return (
     <div className="seeker-pane seeker-school">
       <Link className="seeker-school-back" to="/school">{t("Back to the school")}</Link>
-      <h1 className="seeker-school-title">{course.icon} {t(course.title)}</h1>
-      <p className="seeker-tool-lede">{t(course.sub)}</p>
+      {/* Owner (2026-09-25, Xcode): "no logo at top of LP lab tab". The LP Lab tab IS this
+          course page, so every course page carries the school home's hero logo. The title and
+          lede carry data-clkn-avoid for the same reason the home's do (the fixed 🌐 pill). */}
+      <img className="seeker-school-logo" src="/cluck-norris.png" alt="" decoding="async" />
+      <h1 className="seeker-school-title" data-clkn-avoid="1">{course.icon} {t(course.title)}</h1>
+      <p className="seeker-tool-lede" data-clkn-avoid="1">{t(course.sub)}</p>
 
       <ol className="seeker-school-lessons">
         {course.lessons.map((l, i) => {

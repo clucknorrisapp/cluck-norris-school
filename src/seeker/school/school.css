@@ -109,8 +109,12 @@
   color: var(--text);
 }
 .seeker-school-course:active { filter: brightness(1.08); }
-.seeker-school-course-top { display: flex; gap: 12px; align-items: flex-start; }
-.seeker-school-course-icon { font-size: 26px; line-height: 1; }
+/* The card reads left to right: icon, then the title and its line under it. It used to inherit
+   .seeker-pane's centered text, which floated the title in the middle while the icon sat pinned
+   top-left (owner, 2026-09-25: "doesn't look balanced"). */
+.seeker-school-course { text-align: left; }
+.seeker-school-course-top { display: flex; gap: 14px; align-items: center; }
+.seeker-school-course-icon { font-size: 28px; line-height: 1; flex: 0 0 auto; }
 .seeker-school-course-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .seeker-school-course-title {
   font-family: var(--disp);
@@ -164,12 +168,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--card2, #1d1e26);
+  /* Brand orange rather than grey-on-grey (owner, 2026-09-25: "a little more color for the number
+     headers? just seems bland"). A finished lesson still turns solid green. */
+  background: rgba(255, 122, 24, .14);
+  border: 1px solid rgba(255, 122, 24, .45);
   font-family: var(--mono);
   font-size: 12.5px;
-  color: var(--muted);
+  font-weight: 700;
+  color: var(--orange);
 }
-.seeker-school-lesson.done .seeker-school-lesson-n { background: var(--green); color: #0d1a12; }
+.seeker-school-lesson.done .seeker-school-lesson-n { background: var(--green); border-color: var(--green); color: #0d1a12; }
 .seeker-school-lesson-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .seeker-school-lesson-title { font-size: var(--body-text, 15px); }
 .seeker-school-lesson-belt {
@@ -177,6 +185,13 @@
   font-size: 11px;
   letter-spacing: 1px;
   color: var(--gold);
+}
+
+/* The school home and the course pages (the School and LP Lab tabs) keep their centered hero but
+   not .seeker-pane's 10vh status-screen top pad — on an iPhone that left ~100px of empty space
+   under the header before the logo (owner, 2026-09-25, Xcode: "way too much room at the top"). */
+.seeker-pane.seeker-school {
+  padding-top: 8px;
 }
 
 /* ── reading a lesson: not a status screen ───────────────────────────────────────────────── */
