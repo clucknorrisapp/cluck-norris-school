@@ -2900,5 +2900,12 @@
   "This app you're reading this page in is that same listing. An update to it is published to the dApp Store the same way any app update is published to any store; the store checks for and delivers it, not this app itself.": "Ứng dụng bạn đang đọc trang này chính là mục niêm yết đó. Một bản cập nhật cho nó được xuất bản lên dApp Store theo cùng cách bất kỳ bản cập nhật ứng dụng nào được xuất bản lên bất kỳ cửa hàng nào; chính cửa hàng kiểm tra và phân phối nó, không phải bản thân ứng dụng này.",
   "Today's SKR figure couldn't be loaded right now — no number is shown here rather than guessing one.": "Không thể tải con số SKR hôm nay ngay lúc này — không có con số nào được hiển thị ở đây thay vì đoán bừa.",
   "An in-app swap between tokens is planned for a future release. This page isn't telling you to use it — only that it exists.": "Một tính năng hoán đổi token trong ứng dụng được lên kế hoạch cho một bản phát hành trong tương lai. Trang này không bảo bạn sử dụng nó — chỉ là nó tồn tại.",
-  "Safety tools": "Công cụ an toàn"
+  "Safety tools": "Công cụ an toàn",
+  "Back": "Quay lại",
+  "Cluck's verdict": "Phán quyết của Cluck",
+  "In this lesson": "Trong bài học này",
+  "Next": "Tiếp",
+  "Skip to the quiz": "Chuyển thẳng đến bài kiểm tra",
+  "Start the lesson": "Bắt đầu bài học",
+  "Step {n} of {total}": "Bước {n} / {total}"
 }
