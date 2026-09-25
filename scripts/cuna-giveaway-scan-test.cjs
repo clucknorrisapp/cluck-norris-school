@@ -60,11 +60,23 @@ global.fetch = async (url) => {
 // stub, not the real network-calling one. Mirrors real semantics: a call only ever returns trades
 // whose ts falls inside [from, to) — exactly what querying signatures in that window would.
 let ALL_TRADES = [];
+// Two knobs the catchUp() tests below flip on and off:
+//   clockStepMs  — advances the fake clock on every tape fetch, so a catchUp() loop that makes
+//                  several scanOnce() calls actually sees wall-clock time pass between them
+//                  (Date.now() is otherwise frozen, so a real budgetMs would never expire).
+//   forceTapeError — when set, the next fetch throws instead of returning trades, so scanOnce()
+//                  takes its ok:false path exactly as a real tape/RPC failure would.
+let clockStepMs = 0;
+let forceTapeError = null;
 const heliusTrades = require(path.join(__dirname, "..", "lib", "helius-trades.js"));
-heliusTrades.getTradeTapeHelius = async (mint, from, to) => ({
-  trades: ALL_TRADES.filter((t) => t.ts >= from && t.ts < to),
-  reachedWindowStart: true, capped: false, txsMissing: 0, poolErrors: [],
-});
+heliusTrades.getTradeTapeHelius = async (mint, from, to) => {
+  now += clockStepMs;
+  if (forceTapeError) throw new Error(forceTapeError);
+  return {
+    trades: ALL_TRADES.filter((t) => t.ts >= from && t.ts < to),
+    reachedWindowStart: true, capped: false, txsMissing: 0, poolErrors: [],
+  };
+};
 
 const gw = require(path.join(__dirname, "..", "lib", "cuna-giveaway.js"));
 const deps = { heliusKey: "stub", heliusEnhancedBatched: async () => ({ txs: [] }) };
@@ -136,6 +148,67 @@ function entriesFor(w) {
      JSON.stringify(bad));
   ok("…and the cursor is untouched by the refused call", gw.standings(1).cursorMs === T0,
      "cursor=" + gw.standings(1).cursorMs);
+
+  console.log("\ncuna-giveaway scanner — catchUp() (owner, 2026-09-24: \"nothing should take 100 minutes ever\")\n");
+
+  // Fresh window and fresh ledger so this section's numbers don't depend on the tests above.
+  const HOUR = 60 * MIN_MS;
+  gw.configure({ mint: MINT, pool: POOL, symbol: "CUNA", startMs: T0, endMs: T0 + 24 * HOUR, minUsd: 2.5 });
+  gw.resetLedger();
+
+  // ~14h10m into the window — comfortably inside the 24h promo, and the same order of magnitude
+  // as the incident's own backlog. One buy every hour for W1, one every two hours for W2.
+  now = T0 + 14 * HOUR + 10 * MIN_MS;
+  const cuTrades = [];
+  for (let h = 0; h < 14; h++) {
+    cuTrades.push({ ts: T0 + h * HOUR + 5 * MIN_MS, wallet: W1, side: "buy", tokenAmt: 100, sig: "CU-W1-" + h });   // $5.00
+    if (h % 2 === 0) cuTrades.push({ ts: T0 + h * HOUR + 20 * MIN_MS, wallet: W2, side: "buy", tokenAmt: 100, sig: "CU-W2-" + h });
+  }
+  ALL_TRADES = cuTrades;
+
+  // Bring the ledger up to date first — this is the "already scanned" baseline the rewind below
+  // reopens. Date.now() is frozen in this harness, so a generous budget never trips on its own;
+  // only clockStepMs (0 here) or the loop reaching upToDate ends it.
+  const primed = await gw.catchUp(deps, { budgetMs: 10 * 60 * 1000 });
+  ok("catchUp: priming run reaches upToDate", primed.ok === true && primed.upToDate === true, JSON.stringify(primed));
+  const w1Before = entriesFor(W1), w2Before = entriesFor(W2);
+  ok("catchUp: priming run credited every W1 buy", w1Before === 14, "entries=" + w1Before);
+  ok("catchUp: priming run credited every W2 buy", w2Before === 7, "entries=" + w2Before);
+
+  // (a) a ~14-hour rewind, caught up in one catchUp() call.
+  const rewound = gw.rewindCursor(T0);
+  ok("catchUp: rewind reopens the full ~14h stretch", rewound.ok === true && rewound.cursorMs === T0, JSON.stringify(rewound));
+
+  const caught = await gw.catchUp(deps, { budgetMs: 10 * 60 * 1000 });
+  ok("catchUp: one call drives the rewound cursor back to the ceiling", caught.ok === true && caught.upToDate === true,
+     JSON.stringify(caught));
+  ok("catchUp: it took more than one internal scanOnce() call", caught.calls > 1, "calls=" + caught.calls);
+
+  // (d) nothing already credited gets credited twice by the re-walk.
+  ok("catchUp: re-walked signatures are not double-counted (W1)", entriesFor(W1) === w1Before,
+     "entries=" + entriesFor(W1) + " expected=" + w1Before);
+  ok("catchUp: re-walked signatures are not double-counted (W2)", entriesFor(W2) === w2Before,
+     "entries=" + entriesFor(W2) + " expected=" + w2Before);
+
+  // (b) the wall-clock budget stops the loop early and reports how far behind it still is.
+  gw.rewindCursor(T0);
+  clockStepMs = 20000;   // each tape fetch now "costs" 20s of wall clock — several fetches per
+                          // scanOnce() call blow well past a tight budget between loop iterations.
+  const budgeted = await gw.catchUp(deps, { budgetMs: 45000 });
+  clockStepMs = 0;
+  ok("catchUp: a tight budget stops the loop before it finishes", budgeted.ok === true && budgeted.upToDate === false,
+     JSON.stringify(budgeted));
+  ok("catchUp: it reports the remaining backlog, not zero", budgeted.behindMs > 0, JSON.stringify(budgeted));
+  ok("catchUp: it made at least one call before stopping", budgeted.calls >= 1, JSON.stringify(budgeted));
+
+  // (c) a hard scanOnce() error stops the loop immediately and is surfaced, not swallowed.
+  forceTapeError = "stub RPC outage";
+  const failed = await gw.catchUp(deps, { budgetMs: 10 * 60 * 1000 });
+  forceTapeError = null;
+  ok("catchUp: a tape/RPC failure is surfaced as ok:false", failed.ok === false && failed.error === "tape_failed",
+     JSON.stringify(failed));
+  ok("catchUp: the failure detail is passed through", failed.detail === "stub RPC outage", JSON.stringify(failed));
+  ok("catchUp: it stops on the very first failing call", failed.calls === 1, "calls=" + failed.calls);
 
   Date.now = realNow;
   try { fs.rmSync(DIR, { recursive: true, force: true }); } catch (_) {}

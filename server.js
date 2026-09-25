@@ -11270,7 +11270,16 @@ app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), 
   const deps = { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched };
   const ms = (v) => { if (v == null || v === "") return undefined; const n = Number(v); return Number.isFinite(n) && n > 1e11 ? n : Date.parse(String(v)) || undefined; };
   try {
-    if (q.reset === "1") return res.json(cunaGiveaway.resetLedger());
+    if (q.reset === "1") {
+      const reset = cunaGiveaway.resetLedger();
+      // CATCH UP BEFORE ANSWERING (owner, 2026-09-24: "nothing should take 100 minutes ever") — a
+      // reset reopens the whole promo's tape, and the scheduler's own 8-slices/5-min pace would
+      // otherwise take ~100 minutes to re-scan a 14h window. Budgeted under Cloudflare's ~100s edge
+      // timeout; if it doesn't reach upToDate, the scheduler's self-heal finishes it within the next
+      // tick or two (see the 5-minute setInterval below).
+      const catchUp = await cunaGiveaway.catchUp(deps, { budgetMs: 75000 });
+      return res.json({ ...reset, catchUp });
+    }
     const patch = {};
     if (q.mint) patch.mint = String(q.mint);
     if (q.pool) patch.pool = String(q.pool);
@@ -11310,7 +11319,13 @@ app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), 
     // reported the slice as fully covered (no missing signature) with no usable trade in it, so
     // the incremental scanner retired the slice and the buys were gone for good. Safe to repeat:
     // it only moves cursorMs, and a re-scan cannot double-credit a signature already recorded.
-    if (q.rewind !== undefined) out.rewind = cunaGiveaway.rewindCursor(String(q.rewind));
+    if (q.rewind !== undefined) {
+      out.rewind = cunaGiveaway.rewindCursor(String(q.rewind));
+      // Same reasoning as &reset=1 above: catch up immediately rather than leaving the reopened
+      // stretch to the scheduler's own pace. Only worth running if the rewind actually moved the
+      // cursor back — a bad_time refusal has nothing to catch up on.
+      if (out.rewind && out.rewind.ok) out.catchUp = await cunaGiveaway.catchUp(deps, { budgetMs: 75000 });
+    }
     if (q.trace === "1") out.trace = await cunaGiveaway.traceOutbound(deps, { hops: 2 });
     if (q.every !== undefined) { cunaGiveaway.configure({ boardEveryMin: Math.max(5, Number(q.every) || 5) }); out.config = cunaGiveaway.config(); }
     if (q.replaceon === "1") { cunaGiveaway.configure({ boardReplace: true }); out.config = cunaGiveaway.config(); }
@@ -11431,11 +11446,25 @@ setInterval(() => {
     const now = Date.now();
     if (now < c.startMs) return;
     if (c.endMs && now > c.endMs + 15 * 60 * 1000) return;   // grace period, then stop
-    const r = await cunaGiveaway.scanOnce({ heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched });
+    const deps = { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched };
+    let r = await cunaGiveaway.scanOnce(deps);
     if (r && r.ok && (r.newEntries || r.newDq)) {
       console.log(`[cuna-giveaway] +${r.newEntries} entries, +${r.newDq} dq (behind ${Math.round((r.behindMs || 0) / 60000)}m)`);
     } else if (r && !r.ok) {
       console.warn("[cuna-giveaway] scan:", r.error, r.detail || "");
+    }
+    // SELF-HEAL (owner, 2026-09-24: "nothing should take 100 minutes ever"). At 8 slices per call
+    // and a 5-minute cadence, a backlog left by a &rewind= or &reset=1 would otherwise take the
+    // scheduler's own ~100 minutes to re-scan. Once behind by more than 2 slice-widths (20 min),
+    // drive it down immediately instead of waiting tick after tick — budgeted so one tick never
+    // runs long, and the next tick (or this same self-heal) finishes whatever is left.
+    if (r && r.ok && (r.behindMs || 0) > 2 * cunaGiveaway.SLICE_MS) {
+      const beforeMin = Math.round(r.behindMs / 60000);
+      const cu = await cunaGiveaway.catchUp(deps, { budgetMs: 120000 });
+      const afterMin = Math.round((cu.behindMs != null ? cu.behindMs : r.behindMs) / 60000);
+      console.log(`[cuna-giveaway] catching up: behind ${beforeMin}min → ${afterMin}min in ${cu.calls} calls`);
+      if (!cu.ok) console.warn("[cuna-giveaway] catchUp:", cu.error, cu.detail || "");
+      r = { ...r, behindMs: cu.behindMs != null ? cu.behindMs : r.behindMs, upToDate: cu.upToDate };
     }
     // Owner's ask: refresh the room's board every 5 minutes, each refresh a NEW message with the
     // previous one deleted (tg-test &replaceMsg) so it stays at the bottom of the chat instead of

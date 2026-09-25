@@ -394,9 +394,42 @@ any number of times — every credit is deduped by signature
 (`rec.buys.some(b => b.sig === t.sig)`), so a re-scan cannot double-credit a buy it already counted,
 and a sell already recorded as a dq stays a dq. It clamps to the promo's `startMs` on the early side
 and refuses to move the cursor FORWARD on the late side (a bad or reversed value cannot skip tape
-that hasn't been scanned yet). After a rewind, the next `&scan=1` (or the 5-minute tick) simply
-re-walks the reopened stretch. `scripts/cuna-giveaway-scan-test.cjs` pins both the settle delay and
+that hasn't been scanned yet). `scripts/cuna-giveaway-scan-test.cjs` pins both the settle delay and
 the rewind clamp/dedupe behaviour against the real module.
+
+### Rewind and reset now catch up immediately (owner, 2026-09-24: "nothing should take 100 minutes ever")
+
+`scanOnce()` caps itself at `MAX_SLICES_PER_RUN` (8) slices per call so one 5-minute tick can never
+run long — right for steady state, but it meant a `&rewind=` or `&reset=1` that reopened a multi-hour
+stretch got re-scanned at the scheduler's own pace: 8 slices every 5 minutes, so a 14-hour backlog
+took roughly **100 minutes** to fully re-score, while looping `scanOnce()` directly by hand caught the
+same stretch up in about 3 minutes (12 calls) the night this was found. `catchUp(deps, opts)` in
+`lib/cuna-giveaway.js` is that loop, made a first-class function:
+
+- it calls `scanOnce()` repeatedly, with no sleep between calls (credits are deduped by signature,
+  so back-to-back calls are free and safe), until one of three things happens: a call reports
+  `upToDate:true`; the wall-clock budget (`opts.budgetMs`) runs out; or a call returns `ok:false` —
+  a real error (bad config, a tape/RPC failure, no price bars), surfaced rather than swallowed. The
+  one softer case is a slice the tape couldn't fully cover (`scanOnce()` reports this as
+  `ok:true, stalled:true` and does not advance the cursor past it) — that's worth a few retries in
+  case it clears on its own, but three CONSECUTIVE stalls stop the loop rather than burning the
+  whole budget on a slice that isn't going to resolve;
+- it returns `{ ok, calls, slices, newEntries, newDq, behindMs, upToDate, ms }` so a caller can log
+  or report exactly how far it got.
+
+**Both `&rewind=` and `&reset=1` on `/api/cuna-giveaway/admin` now call `catchUp` before answering**,
+budgeted at 75 seconds — comfortably inside Cloudflare's ~100s edge timeout — and the result comes
+back as `out.catchUp` on the response. If that 75s budget isn't enough to reach `upToDate` (a very
+large backlog), the response says so via `catchUp.behindMs`, and **the scheduler's own 5-minute tick
+self-heals the rest**: once a scan reports `behindMs` more than 2 slice-widths (20 minutes) behind
+the ceiling, it calls `catchUp` itself with a 120-second budget and logs
+`[cuna-giveaway] catching up: behind Xmin → Ymin in N calls`, rather than trickling the backlog down
+at 8 slices per tick. Between the 75s on the admin response and the 120s self-heal a tick or two
+later, nothing should ever again sit behind for anywhere near 100 minutes.
+`scripts/cuna-giveaway-scan-test.cjs` also drives `catchUp` directly: a multi-hour rewind caught up
+in one call, a tight budget stopping it early and reporting the remaining `behindMs`, a stubbed
+tape/RPC failure surfaced (not swallowed), and already-credited signatures never double-counted
+across a re-walk.
 
 ---
 

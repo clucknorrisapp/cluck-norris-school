@@ -7,6 +7,14 @@
  * Every tappable row is >= 44px. The lesson list is the surface someone scrolls one-handed on a
  * bus, so the targets are rows, not the text inside them. */
 
+.seeker-school-logo {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  object-fit: cover;
+}
 .seeker-school-title {
   font-family: var(--disp);
   letter-spacing: .5px;
@@ -420,3 +428,50 @@
 .seeker-cert-meta code { color: var(--gold); }
 .seeker-cert-verify { font-size: 12px; color: var(--muted); word-break: break-all; }
 .seeker-cert-btn { width: 100%; }
+
+/* ── safety tools (education edition's school home only) ─────────────────────────────────────
+ * Wallet Checkup and Listing Checkup lost their own bottom-nav tab (owner, Xcode review,
+ * 2026-09-24); this is their front door instead. Two cards, side by side above ~340px wide,
+ * stacked below it — the same 44px+ tap-target rule as everything else here. */
+.seeker-school-safety { margin-top: 14px; }
+.seeker-school-safety-heading {
+  display: block;
+  font-family: var(--disp);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.seeker-school-safety-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 340px) {
+  .seeker-school-safety-row { grid-template-columns: 1fr; }
+}
+.seeker-school-safety-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 44px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  text-decoration: none;
+  color: var(--text);
+}
+.seeker-school-safety-card:active { filter: brightness(1.08); }
+.seeker-school-safety-card-icon { font-size: 20px; line-height: 1; }
+.seeker-school-safety-card-title {
+  font-family: var(--disp);
+  font-size: 13px;
+  letter-spacing: .3px;
+}
+.seeker-school-safety-card-sub {
+  color: var(--sub);
+  font-size: 12.5px;
+  line-height: 1.4;
+}

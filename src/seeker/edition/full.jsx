@@ -20,6 +20,8 @@ import AskCluckPane from "../AskCluck.jsx";
 import WalletCheckupPane from "../WalletCheckup.jsx";
 import { AddressForm, AddressBar } from "../addressform.jsx";
 import ToolsHome from "../ToolsHome.jsx";
+import { SolanaRoomIndex, SolanaRoomPage } from "../solana/SolanaRoom.jsx";
+import { SeekerWingIndexSection, SeekerWingPage } from "../solana/SeekerWing.jsx";
 import { SchoolHome, SchoolCourse, SchoolLesson } from "../school/School.jsx";
 import ListingCheckup from "../tools/ListingCheckup.jsx";
 import DailyBrief from "../tools/DailyBrief.jsx";
@@ -31,6 +33,7 @@ import Holders from "../tools/Holders.jsx";
 import Trace from "../tools/Trace.jsx";
 import Airdropper from "../tools/Airdropper.jsx";
 import Hatchery from "../tools/Hatchery.jsx";
+import ShieldIcon from "../icons/ShieldIcon.jsx";
 import "./full.css";
 
 export const EDITION_ID = "full";
@@ -170,8 +173,21 @@ export const TABS = [
   { to: "/tools", label: "Toolkit", icon: "🧰" },
   { to: "/rent", label: "Rent", icon: "💰" },
   { to: "/ask", label: "Ask", icon: "🐔" },
-  { to: "/checkup", label: "Checkup", icon: "🛡" },
+  { to: "/checkup", label: "Checkup", icon: <ShieldIcon /> },
 ];
+
+// The routes THIS edition registers — kept as data so a doc-mentioned, not-yet-shipped feature
+// (the in-app swap, docs/SWAP_DESIGN.md / PR #420) can be announced once its own route actually
+// exists here, rather than a hand-set boolean silently drifting from the truth. Keep this list in
+// sync with the <Route> elements below; scripts/seeker-solana-room-test.cjs pins that it is.
+export const REGISTERED_ROUTES = [
+  "/", "/school", "/school/:courseId", "/school/:courseId/:lessonId",
+  "/solana", "/solana/:pageId", "/solana/seeker/:pageId",
+  "/tools", "/rent", "/ask", "/checkup",
+  "/tools/listing", "/tools/alpha", "/tools/firepit", "/tools/burn", "/tools/lock",
+  "/tools/xray", "/tools/holders", "/tools/trace", "/tools/airdrop", "/tools/hatchery",
+];
+const SWAP_AVAILABLE = REGISTERED_ROUTES.includes("/tools/swap");
 
 export function EditionRoutes({ wallet }) {
   return (
@@ -180,6 +196,9 @@ export function EditionRoutes({ wallet }) {
       <Route path="/school" element={<SchoolHome />} />
       <Route path="/school/:courseId" element={<SchoolCourse />} />
       <Route path="/school/:courseId/:lessonId" element={<SchoolLesson />} />
+      <Route path="/solana" element={<SolanaRoomIndex extra={<SeekerWingIndexSection />} />} />
+      <Route path="/solana/:pageId" element={<SolanaRoomPage />} />
+      <Route path="/solana/seeker/:pageId" element={<SeekerWingPage swapAvailable={SWAP_AVAILABLE} />} />
       <Route path="/tools" element={<ToolsHome />} />
       <Route path="/rent" element={<RentReclaimPane wallet={wallet} />} />
       <Route path="/ask" element={<AskCluckPane />} />

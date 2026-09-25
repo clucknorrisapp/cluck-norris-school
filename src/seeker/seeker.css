@@ -35,6 +35,20 @@ html, body {
   top: 0;
   z-index: 5;
 }
+.seeker-brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.seeker-brand-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
 .seeker-brand {
   font-family: var(--disp);
   font-weight: 400;
@@ -418,6 +432,15 @@ html, body {
   cursor: pointer;
 }
 .seeker-reclaim-retrybtn:active { background: rgba(255, 122, 24, .12); }
+.seeker-reclaim-learnmore {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  color: var(--cyan, #67E8F9);
+  text-decoration: none;
+  font-size: 13px;
+}
 
 /* ── Ask Cluck (increment 3) — a mobile chat surface over POST /api/ask-cluck. Drops the
    centered .seeker-pane layout for a flex column: an intro/starters block or a scrolling thread
