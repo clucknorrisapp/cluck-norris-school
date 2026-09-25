@@ -69,13 +69,56 @@ function Bar({ done, total }) {
 // in English under a translated heading for every LP Lab and Deep Dive lesson (Codex, PR #390).
 // A curated hit is marked `data-i18n-skip` so the page observer does not send the Spanish off
 // for machine translation.
+//
+// LABELS AND LEAD-INS (owner, 2026-09-25, on "Price Impact vs Slippage": "make Price impact:
+// Slippage: bold and colored — this whole page just looks like a novel"). The lessons are written
+// with their structure in the text: a short line ending in a colon ("PRICE IMPACT:", "COMMON
+// MISTAKES:", ~220 of them across the curriculum) heads what follows, and an all-caps lead-in
+// ("TOO HIGH slippage tolerance: …", "PRO TIP: …") opens a line. Styling happens AFTER
+// translation, on whatever text is being shown, so it works in every language without a
+// dictionary change: a translated label still ends in a colon (":" or "："). The rules are in
+// proseLine() below.
+const LABEL_MAX = 48;
+function isLabel(line, firstOfMany) {
+  const s = line.trim();
+  if (!s || s.length > LABEL_MAX || !/[:：]$/.test(s)) return false;
+  const letters = s.replace(/[^A-Za-z]/g, "");
+  const caps = s.replace(/[^A-Z]/g, "");
+  // Mostly capitals ("PRICE IMPACT:", "FULL RANGE vs CONCENTRATED:"), or the opening line of a
+  // multi-line paragraph — which also catches a translation with no capital letters at all.
+  return (letters.length >= 3 && caps.length / letters.length >= 0.6) || firstOfMany;
+}
+const LEAD_RE = /^([A-Z][A-Z0-9'’&/-]+(?: [A-Z0-9'’&/().-]+)*(?: [^:：\n]{0,28})?)([:：])\s+(\S.*)$/;
+export function proseLine(line, firstOfMany) {
+  if (isLabel(line, firstOfMany)) return { kind: "label", text: line.trim() };
+  const m = LEAD_RE.exec(line);
+  if (m && m[1].replace(/[^A-Z]/g, "").length >= 2 && m[1].length <= 40) return { kind: "lead", lead: m[1] + m[2], rest: m[3] };
+  return { kind: "text", text: line };
+}
+
+function ProsePara({ text }) {
+  const lines = text.split("\n");
+  const many = lines.length > 1;
+  return (
+    <p>
+      {lines.map((ln, i) => {
+        const r = proseLine(ln, many && i === 0);
+        const br = i < lines.length - 1 ? "\n" : null;
+        if (r.kind === "label") return <React.Fragment key={i}><span className="seeker-prose-label">{r.text}</span>{br}</React.Fragment>;
+        if (r.kind === "lead") return <React.Fragment key={i}><strong className="seeker-prose-lead">{r.lead}</strong> {r.rest}{br}</React.Fragment>;
+        return <React.Fragment key={i}>{r.text}{br}</React.Fragment>;
+      })}
+    </p>
+  );
+}
+
 function Prose({ text, className }) {
   const { text: body, translated } = tBlock(text);
   const paras = String(body || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   if (!paras.length) return null;
   return (
     <div className={className} data-i18n-skip={translated ? "1" : undefined}>
-      {paras.map((p, i) => <p key={i}>{p}</p>)}
+      {paras.map((p, i) => <ProsePara key={i} text={p} />)}
     </div>
   );
 }

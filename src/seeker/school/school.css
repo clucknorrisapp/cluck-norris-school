@@ -296,6 +296,16 @@
   white-space: pre-line;
   margin: 0 0 12px;
 }
+/* Structure the lessons already carry in their text (see proseLine in School.jsx): a label line
+   heads what follows, a capitalised lead-in opens a line. */
+.seeker-prose-label {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 16px;
+  letter-spacing: .6px;
+  color: var(--orange);
+}
+.seeker-prose-lead { font-weight: 700; color: var(--gold); }
 .seeker-school-section-body p:last-child,
 .seeker-school-content p:last-child { margin-bottom: 0; }
 .seeker-school-content { margin-top: 18px; }
