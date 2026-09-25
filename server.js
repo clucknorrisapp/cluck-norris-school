@@ -1460,6 +1460,172 @@ if (!roseEngineHardKilled()) {
 } else {
   console.log("[rose-engine] ROSE_ENGINE_OFF=1 — engine hard-killed, loop not started.");
 }
+// ── BULLEN (BULLENCIAGA) volume engine — JVP CLIENT, OFF BY DEFAULT (owner, 2026-09-25) ──
+// First Token-2022 JVP client. Mint BULLENxRbvuwjo4DLBKBbh23cNQ4ZbpDeQKuoVXL7exN, 6 decimals,
+// Token-2022 with ONLY metadataPointer + tokenMetadata extensions (no transfer fee/permanent
+// delegate/transfer hook — confirmed on-chain 2026-09-25; mint+freeze authority revoked).
+// A read-only mainnet simulation the same day confirmed InitializePoolV2 succeeds for BULLEN
+// paired with both USDC and wSOL at the 0.01% tier (tickSpacing 1) — no TokenBadge required
+// (the on-chain program only needs a badge for extensions it can't handle permissionlessly;
+// ImmutableOwner is auto-added and is fine). The open/increase/decrease/close-position and
+// balance-read code paths this engine uses (lib/orca-whirlpools.js buildOpenPosition /
+// buildIncreaseLiquidity / buildDecreaseLiquidity / buildClosePosition, lib/whirlpool-vault.js
+// getFloat) already resolve each mint's OWN token program from chain (via the Orca SDK's
+// TokenExtensionUtil + resolveOrCreateATAs, and getFloat's dual-program scan) — they are NOT
+// legacy-Token-only. The one hand-rolled path that WAS legacy-only, buildRepriceStep, is guarded
+// to refuse loudly on a Token-2022 pool rather than build a broken tx — moot for BULLEN, whose
+// two pools are created FRESH at the live market tick and never repriced.
+//
+// TWO pools only (owner): BULLEN/USDC + BULLEN/SOL, both 0.01% (tickSpacing 1), ±1.5% bands.
+// Canonical PDAs verified free on-chain 2026-09-25: USDC Bb8pCvrTtB9EdCkR9siwpfnWXL4vspeUyivFouaQDwx9,
+// SOL Grsyrh21rnUaqXU73TbisGwNnjSbCQ6mMwNj5yDXzf2e (both match poolAddressFor exactly). A THIRD
+// pool (BULLEN/JUP) is a config switch, not new code — jupEnabled stays false below at the same
+// 0.01%/±1.5% preset; its canonical PDA FgXGaLnEvXUBbo6UGzRyMxxqGEy17a7S3FsTpPgM4JkV is ALSO
+// confirmed free on-chain (checked 2026-09-25) — flipping it on later needs create-pool + the
+// flag, nothing else.
+//
+// OPERATOR: the SHARED CUNA/DNC/ROSE wallet (owner, 2026-09-25: "bind the bullen engine to the
+// EXISTING engine wallet" — no new MM_OPERATOR_SECRET_BULLEN). This is the SAME wallet those
+// three sign with, and per the JVP protocol's own trap #1 ("one armed engine per wallet"), only
+// ONE of {cuna, dnc, rose, bullen} may be armed at a time — see bullenWalletConflict() below,
+// enforced symmetrically on all four arm routes via ENGINE_ARM_TABLE. That wallet ALSO holds
+// other projects' inventory (ROSE, CUNA, and other mints) which this engine must NEVER touch:
+// structurally guaranteed, not just promised — every builder call here is parameterized by
+// tok().mint (BULLEN) + this project's own quoteMints [USDC, wSOL, (JUP, disabled)], so
+// listPositions()/evenPools()'s orphan sweep only ever sees positions whose POOL involves
+// BULLEN (checked on-chain against the pool's own mints, not a guess), getFloat() only ever
+// counts SOL/USDC/BTC/JUP/BULLEN balances by mint (never ROSE/CUNA/anything else), and
+// manualSwap()'s fromSym/toSym vocabulary is hardcoded to {SOL,USDC,CLKN(=BULLEN),BTC,JUP} — it
+// has no way to reference another project's mint even if asked to.
+//
+// SIZING (owner, 2026-09-25, after funding the wallet with 300 USDC + 0.6234 SOL): four equal
+// legs — BULLEN+USDC for the USDC pool, BULLEN+SOL for the SOL pool — sized off LIVE
+// balances/prices by bullenBootstrap() below, targeting ~$180 total per pool (~$90/side at
+// today's prices). The deploy-threshold calibration band (JVP protocol Phase 2) is "≈half a
+// typical trim, above idle dust": deployFrac 0.95 leaves ~5% (~$4.50 on a $90 side) idle after
+// every roll — that's the floor. A full close+reopen (~$90) is the ceiling. A "typical trim" for
+// a pool this small sits around $15 (moving into/out of range once); HALF of that is ~$7-8 — well
+// above the ~$4.50 dust floor, well below the $90 ceiling. Same ratio for the SOL leg in SOL terms
+// (~$8 / ~$122 SOL ≈ 0.065, rounded to 0.06). maxUsd/solMaxSol carry headroom above the ~$90/
+// ~0.75 SOL targets so organic growth deploys instead of stranding at the cap.
+const BULLEN_MINT = "BULLENxRbvuwjo4DLBKBbh23cNQ4ZbpDeQKuoVXL7exN";
+const BULLEN_QUOTES = [
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
+  "So11111111111111111111111111111111111111112",   // wSOL
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",    // JUP — quoteMint present so the PDA/config
+                                                      // preset exists; jupEnabled stays false.
+];
+const BULLEN_ARM_KEY = "bullenEngineArmed";
+function bullenHardKilled() { return process.env.BULLEN_ENGINE_OFF === "1"; }
+function bullenEngineArmed() {
+  if (bullenHardKilled()) return false;
+  // kv is the ONLY arm switch (2026-09-17 P1-032 lesson, applied from day one here) — an
+  // absent key is OFF, and there is deliberately no BULLEN_ENGINE_ON env fallback to go inert.
+  return kv.get(BULLEN_ARM_KEY, null) === true;
+}
+function bullenEngineSetArmed(on) { kv.set(BULLEN_ARM_KEY, !!on); return bullenEngineArmed(); }
+
+// ── One-armed-engine-per-wallet guard (owner, 2026-09-25) ──────────────────────────────────
+// bullen shares its signing wallet with cuna/dnc/rose. Resolved from each project's OWN
+// registered operatorEnv (never hardcoded to "these four are always on that wallet") so this
+// stays correct if any of them is ever repointed to its own dedicated wallet — at that point
+// its operatorEnv simply stops matching and it drops out of the conflict set automatically.
+const WALLET_SHARED_ENGINE_IDS = ["cuna", "dnc", "rose", "bullen"];
+function walletSharedArmedFn(id) {
+  return { cuna: cunaArmed, dnc: dncArmed, rose: roseEngineArmed, bullen: bullenEngineArmed }[id] || (() => false);
+}
+function walletConflictFor(requestingId) {
+  const reqProj = whirlpoolMM.vault.getProject(requestingId);
+  const reqEnv = reqProj && reqProj.operatorEnv;
+  if (!reqEnv) return null;   // not registered yet — nothing to conflict with
+  for (const id of WALLET_SHARED_ENGINE_IDS) {
+    if (id === requestingId) continue;
+    const p = whirlpoolMM.vault.getProject(id);
+    if (!p || p.operatorEnv !== reqEnv) continue;   // different wallet — no conflict
+    if (walletSharedArmedFn(id)()) return { id, reason: `${id}-engine is armed on the same operator wallet (${reqEnv}) — only one engine may be armed on a shared wallet at a time` };
+    // Extra caution ONLY on bullen's OWN arm attempt (owner, 2026-09-25): bullen is new to this
+    // wallet and holds no history on it, so it additionally refuses while a sibling's vault
+    // project isn't explicitly paused. cuna/dnc/rose arming EACH OTHER never required that (a
+    // fresh/never-paused sibling is their normal resting state) — only the "armed" check above
+    // applies there, or a clean install would permanently deadlock all three.
+    if (requestingId === "bullen" && !whirlpoolMM.vault.isPaused(id)) {
+      return { id, reason: `${id}'s vault project is not paused (shares the ${reqEnv} wallet) — pause it first: /api/whirlpool/vault/pause?project=${id}` };
+    }
+  }
+  return null;
+}
+
+function bullenEngineConfigRatchet() {
+  const wantEnv = process.env.CUNA_OPERATOR_ENV || "MM_OPERATOR_SECRET_CUNA";
+  const proj = whirlpoolMM.vault.getProject("bullen");
+  if (!proj || proj.operatorEnv !== wantEnv || proj.tokenSellOk !== true) {
+    whirlpoolMM.vault.registerProject({
+      id: "bullen", label: (proj && proj.label) || "BULLENCIAGA", symbol: (proj && proj.symbol) || "BULLEN",
+      tokenMint: BULLEN_MINT, decimals: 6, quoteMints: BULLEN_QUOTES,
+      venue: "orca", operatorEnv: wantEnv,
+      // Owner, 2026-09-25: "full permission to buy/sell any asset involved (BULLEN/USDC/SOL
+      // only)" — inventory, not a brand bag; manualSwap may sell BULLEN for pool balancing.
+      tokenSellOk: true,
+      // Client room is public — ops/roll noise never lands there (mirrors rose/cuna/dnc).
+      telegramChatId: (proj && proj.telegramChatId) || "off",
+      ownerWallet: (proj && proj.ownerWallet) || null,
+    });
+    console.log(`[bullen-engine] project bound to operator env ${wantEnv} (tokenSellOk on)`);
+  }
+  const c = whirlpoolMM.vault.getConfig("bullen");
+  const want = {
+    pair: "BULLEN/USDC", baseEnabled: true,
+    // ±1.5% uniform (owner, 2026-09-25) on both pools — tight enough that every real move
+    // recenters (fresh arb trade), wide enough not to sit out-of-range constantly at this size.
+    feeTierPct: 0.01, widthPct: 1.5, solFeeTierPct: 0.01, solWidthPct: 1.5, solEnabled: true,
+    // Preset, disabled (owner: "config switch that is OFF … so turning it on later is a config
+    // change + create-pool, not new code"). PDA confirmed free on-chain 2026-09-25.
+    jupEnabled: false, jupFeeTierPct: 0.01, jupWidthPct: 1.5,
+    slippageBps: 250, priceGapGuardPct: 10,        // thin-book numbers, matches cuna/rose
+    buybackEnabled: false,                          // wallet is funded via bootstrap swaps, not organic inventory
+    edgeTriggerFrac: 0.3, deployFrac: 0.95, minRebalanceIntervalSec: 300,
+    // Calibration band for ~$90/side pools (see the block comment above for the math):
+    // baseDeployThresholdUsd ~half a typical $15 trim, above the ~$4.50 idle-dust floor.
+    maxUsd: 120, baseDeployThresholdUsd: 8,
+    solMaxSol: 1, solGasReserve: 0.1, solDeployThreshold: 0.06,
+    swapEnabled: true, poolBalanceTolPct: 10, maxSwapUsdPerCycle: 30, minSwapUsd: 5,
+    usdcFloor: 5, swapSolFloor: 0.05, maxSwapSolPerCycle: 0.3, swapSlippageBps: 150, maxSwapsPerDay: 24,
+    scaleUpUsdPerCycle: 10, scaleUpDailyCapUsd: 60,
+    askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
+    maxActionsPerDay: 96,   // cautious floor to start (matches rose's own ramp-up floor); raise
+                            // live via /api/whirlpool/vault/config?project=bullen&durable=1
+    notifyRolls: false,
+  };
+  const overrides = kv.get("ratchetOverrides:bullen", {}) || {};
+  const { patch } = engineRatchet.ratchetPatch({ current: c, want, overrides });
+  if (Object.keys(patch).length) {
+    whirlpoolMM.vault.setConfig(patch, "bullen");
+    console.log("[bullen-engine] config ratchet corrected:", Object.keys(patch).join(", "));
+  }
+}
+try { bullenEngineConfigRatchet(); } catch (e) { console.warn("[bullen-engine] register:", e.message); }
+let bullenEngineTickBusy = false;
+async function bullenEngineTick() {
+  if (!bullenEngineArmed()) return;   // checked EVERY tick — &off=1 stops it inside one cycle
+  if (bullenEngineTickBusy) return;
+  bullenEngineTickBusy = true;
+  try {
+    bullenEngineConfigRatchet();
+    try { await whirlpoolMM.vault.evenPools({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] even:", e.message); }
+    try { await whirlpoolMM.vault.tick({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] base tick:", e.message); }
+    try { await whirlpoolMM.vault.tickSol({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] sol tick:", e.message); }
+    try { await whirlpoolMM.vault.tickJup({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] jup tick:", e.message); }  // no-op while jupEnabled:false
+    try { await whirlpoolMM.vault.buyback({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] buyback:", e.message); }   // no-op while buybackEnabled:false
+    try { await whirlpoolMM.vault.flushNotifyDigest({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] digest:", e.message); }
+  } finally { bullenEngineTickBusy = false; }
+}
+if (!bullenHardKilled()) {
+  console.log(`[bullen-engine] loop up — currently ${bullenEngineArmed() ? "ARMED" : "DISARMED"} (toggle: /api/bullen-engine?key=…&on=1|&off=1)`);
+  setInterval(() => bullenEngineTick().catch((e) => console.warn("[bullen-engine] tick:", e.message)), 90000);
+  setTimeout(() => bullenEngineTick().catch((e) => console.warn("[bullen-engine] first tick:", e.message)), 35000);
+} else {
+  console.log("[bullen-engine] BULLEN_ENGINE_OFF=1 — engine hard-killed, loop not started.");
+}
 // 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
 // (8am CT), then amplified by lessonBumpTick (self-replies at later slots tagging
 // different ecosystem groups) instead of posting more new lessons. Odd hour so it
@@ -11233,7 +11399,23 @@ const ENGINE_ARM_TABLE = [
     }),
     catchShape: (e) => ({ ok: false, error: "server_error", detail: e.message }),
   },
+  {
+    id: "bullen", route: "/api/bullen-engine", armed: bullenEngineArmed, setArmed: bullenEngineSetArmed, hardKilled: bullenHardKilled,
+    offEnv: "BULLEN_ENGINE_OFF", beforeArm: bullenEngineConfigRatchet, walletShared: true,
+    noOperatorError: "no_operator", noOperatorDetail: "the CUNA engine wallet key (MM_OPERATOR_SECRET_CUNA) is not loaded — nothing can sign.",
+    cfgFallbackEmpty: true,
+    fields: (cfg) => ({
+      pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct, jupEnabled: cfg.jupEnabled,
+      feeTierPct: cfg.feeTierPct, maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol, buybackEnabled: cfg.buybackEnabled,
+    }),
+    catchShape: (e) => ({ ok: false, error: e.message }),
+  },
 ];
+// walletShared entries (cuna/dnc/rose/bullen — see walletConflictFor above) refuse to arm while
+// a SIBLING on the same operator wallet is armed or unpaused. Set on all four so the guard is
+// symmetric: arming bullen refuses while cuna/dnc/rose are live on that wallet, and arming any
+// of THEM refuses while bullen is live — added retroactively to the pre-existing three entries.
+for (const e of ENGINE_ARM_TABLE) if (["cuna", "dnc", "rose"].includes(e.id)) e.walletShared = true;
 function registerEngineArmRoute(entry) {
   app.all(entry.route, adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
     if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
@@ -11241,7 +11423,14 @@ function registerEngineArmRoute(entry) {
       if (req.query.on === "1") {
         if (entry.hardKilled()) return res.json({ ok: false, error: "hard_killed", detail: `${entry.offEnv}=1 is set in Railway — clear it first.` });
         if (entry.beforeArm) entry.beforeArm();   // ROSE's ratchet: shape asserted BEFORE the first armed tick can deploy
+        // No-operator is the more fundamental blocker (a Railway config gap, unrelated to any
+        // other engine) — check it before the wallet-conflict check so that error surfaces first
+        // when both are true; a wallet conflict alone (operator present) is checked after.
         if (!whirlpoolMM.vault.operatorPubkey(entry.id)) return res.json({ ok: false, error: entry.noOperatorError, detail: entry.noOperatorDetail });
+        if (entry.walletShared) {
+          const conflict = walletConflictFor(entry.id);
+          if (conflict) return res.json({ ok: false, error: "wallet_conflict", detail: conflict.reason });
+        }
         entry.setArmed(true);
       } else if (req.query.off === "1") {
         entry.setArmed(false);
@@ -11257,6 +11446,21 @@ function registerEngineArmRoute(entry) {
   });
 }
 for (const entry of ENGINE_ARM_TABLE) registerEngineArmRoute(entry);
+
+// GET /api/bullen-bootstrap?key=…[&maxImpact=1.5][&maxSlices=6]  → dry-run plan (live quotes,
+// no signing). POST the same + &run=1 to execute. "The client sends one token and we take care
+// of the rest" (owner, 2026-09-25): converts whatever USDC (+ SOL gas) the shared operator
+// wallet holds into the four legs bullen's two pools need — see vault.bootstrap() for the math.
+// Idempotent: safe to call again after a partial run, or just to re-check the plan.
+app.all("/api/bullen-bootstrap", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
+  if (mutatingGetRefused(req, res, ["run"])) return;
+  try {
+    const maxImpactPct = req.query.maxImpact != null ? Math.max(0.1, Math.min(10, Number(req.query.maxImpact) || 1.5)) : 1.5;
+    const maxSlices = req.query.maxSlices != null ? Math.max(1, Math.min(12, parseInt(req.query.maxSlices, 10) || 6)) : 6;
+    const out = await whirlpoolMM.vault.bootstrap({ projectId: "bullen", dryRun: req.query.run !== "1", maxImpactPct, maxSlices });
+    res.json(out);
+  } catch (e) { res.status(500).json({ ok: false, error: e.message || "bootstrap failed" }); }
+});
 
 app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // Deep dive 2026-09-17 P0-002: this was the one CUNA admin route the 2026-09-05 mutating-GET
