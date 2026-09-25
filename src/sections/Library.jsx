@@ -1,6 +1,7 @@
 // The Library (deep dives, liquidity, glossary, resources) — lazy-loaded section.
 import { useState } from "react";
 import { LOGO_B64, COL, AskCluck } from "../shared.jsx";
+import WebLessonStepper from "../shared/WebLessonStepper.jsx";
 import { STORE } from "../edition.js";
 // Worked-example token — see the same constant in LPLab.jsx. The store edition names no token
 // of ours; sentences ABOUT CLKN carry an explicit STORE variant.
@@ -1220,30 +1221,35 @@ function Library({ initialTopic = null } = {}) {
                   </button>
                   {openTopic===topic.id && (
                     <div style={{background:"rgba(255,122,24,0.04)",border:"1px solid rgba(255,182,39,0.2)",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"16px",position:"relative"}}>
-                      {/* Sticky close button */}
-                        {/* Cluck hook */}
-                      <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",marginBottom:16,display:"flex",gap:10,alignItems:"flex-start"}}>
-                        <img src={LOGO_B64} alt="CN" style={{width:30,height:30,borderRadius:"50%",objectFit:"cover",border:"1px solid #FF7A18",flexShrink:0}}/>
-                        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:13.5,lineHeight:1.7}}>{topic.cluckHook}</p>
-                      </div>
-                      {/* Sections */}
-                      {topic.sections.map((sec,i)=>(
-                        <div key={i} style={{marginBottom:14}}>
-                          <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#FFB627",letterSpacing:1,marginBottom:8,borderBottom:"1px solid rgba(255,182,39,0.2)",paddingBottom:6}}>{sec.heading}</div>
-                          <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
-                        </div>
-                      ))}
-                      {/* Cluck verdict */}
-                      <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",marginTop:8}}>
-                        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FF7A18",letterSpacing:2,marginBottom:6}}>🐔 CLUCK'S VERDICT</div>
-                        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:13.5,lineHeight:1.7}}>{topic.cluckVerdict}</p>
-                      </div>
-                      {/* Close button at bottom + sticky */}
-                      <div style={{position:"sticky",bottom:16,zIndex:10,textAlign:"center",marginTop:16}}>
-                        <button onClick={()=>setOpenTopic(null)} style={{background:"rgba(255,182,39,0.95)",border:"none",borderRadius:20,padding:"8px 24px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#1a0f08",letterSpacing:1,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.5)"}}>
-                          ▲ CLOSE SECTION
-                        </button>
-                      </div>
+                      {/* Lesson stepper (owner 2026-09-25: "Yes all of website"): Cluck's hook,
+                          one step per section, then the verdict. The Library has no exams, so the
+                          last step's action closes the topic. src/shared/WebLessonStepper.jsx. */}
+                      <WebLessonStepper
+                        key={"library:"+topic.id}
+                        storeKey={"library:"+topic.id}
+                        color="#FFB627"
+                        steps={[
+                          {label:"", node:(
+                            <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
+                              <img src={LOGO_B64} alt="CN" style={{width:30,height:30,borderRadius:"50%",objectFit:"cover",border:"1px solid #FF7A18",flexShrink:0}}/>
+                              <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:13.5,lineHeight:1.7}}>{topic.cluckHook}</p>
+                            </div>
+                          )},
+                          ...topic.sections.map((sec)=>({label:sec.heading, node:(
+                            <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
+                          )})),
+                          ...(topic.cluckVerdict ? [{label:"Cluck's verdict", node:(
+                            <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px"}}>
+                              <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:15,lineHeight:1.7}}>{topic.cluckVerdict}</p>
+                            </div>
+                          )}] : []),
+                        ]}
+                        finish={
+                          <button onClick={()=>setOpenTopic(null)} style={{width:"100%",height:"100%",background:"rgba(255,182,39,0.95)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#1a0f08",letterSpacing:2,cursor:"pointer"}}>
+                            ▲ CLOSE SECTION
+                          </button>
+                        }
+                      />
                     </div>
                   )}
                 </div>
@@ -1277,14 +1283,33 @@ function Library({ initialTopic = null } = {}) {
                 {expanded===item.id && (
                   <div style={{padding:"0 16px 16px",position:"relative"}}>
                     <div style={{height:1,background:"rgba(6,182,212,0.2)",marginBottom:14}}/>
-                    {item.content.split("\n\n").map((para,i)=>(
-                      <p key={i} style={{fontSize:15,color:para===para.toUpperCase()&&para.length<50?"#06B6D4":"#9CA3AF",lineHeight:1.8,margin:"0 0 12px",fontFamily:para===para.toUpperCase()&&para.length<50?"'Anton',sans-serif":"inherit",letterSpacing:para===para.toUpperCase()&&para.length<50?1:0,fontWeight:para===para.toUpperCase()&&para.length<50?700:"normal"}}>{para}</p>
-                    ))}
-                    <div style={{position:"sticky",bottom:16,zIndex:10,textAlign:"center",marginTop:16}}>
-                      <button onClick={()=>setExpanded(null)} style={{background:"rgba(6,182,212,0.95)",border:"none",borderRadius:20,padding:"8px 24px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#1a0f08",letterSpacing:1,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.5)"}}>
-                        ▲ CLOSE SECTION
-                      </button>
-                    </div>
+                    {/* Lesson stepper (owner 2026-09-25: "Yes all of website") — the same frame the
+                        phone app gives these articles: the opening, then the lesson as one step.
+                        The paragraphs are never split across steps. */}
+                    <WebLessonStepper
+                      key={"liquidity:"+item.id}
+                      storeKey={"liquidity:"+item.id}
+                      color="#06B6D4"
+                      steps={[
+                        {label:"", node:(
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:36,marginBottom:6}}>{item.icon}</div>
+                            <h3 style={{fontFamily:"'Anton',sans-serif",fontSize:22,color:"#F9FAFB",margin:"0 0 8px"}}>{item.title}</h3>
+                            <p style={{fontSize:15,color:"#9CA3AF",lineHeight:1.7,margin:0}}>{item.summary}</p>
+                          </div>
+                        )},
+                        {label:"The lesson", node:(<>
+                          {item.content.split("\n\n").map((para,i)=>(
+                            <p key={i} style={{fontSize:15,color:para===para.toUpperCase()&&para.length<50?"#06B6D4":"#9CA3AF",lineHeight:1.8,margin:"0 0 12px",fontFamily:para===para.toUpperCase()&&para.length<50?"'Anton',sans-serif":"inherit",letterSpacing:para===para.toUpperCase()&&para.length<50?1:0,fontWeight:para===para.toUpperCase()&&para.length<50?700:"normal"}}>{para}</p>
+                          ))}
+                        </>)},
+                      ]}
+                      finish={
+                        <button onClick={()=>setExpanded(null)} style={{width:"100%",height:"100%",background:"rgba(6,182,212,0.95)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#1a0f08",letterSpacing:2,cursor:"pointer"}}>
+                          ▲ CLOSE SECTION
+                        </button>
+                      }
+                    />
                   </div>
                 )}
               </div>

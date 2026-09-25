@@ -3,6 +3,8 @@ import { useState, useMemo, useEffect, useRef, Component } from "react";
 import { LOGO_B64, COLW, READ, AskCluck } from "../shared.jsx";
 import { STORE } from "../edition.js";
 import { revealQuizResult, revealUnderClear } from "../shared/scrollReveal.js";
+import WebLessonStepper from "../shared/WebLessonStepper.jsx";
+import { clearStep } from "../shared/lessonSteps.js";
 
 // Same clearance rule as src/App.jsx's own quiz screens (kept local rather than imported from
 // App.jsx to avoid a circular import — App.jsx lazy-loads this section, not the other way round).
@@ -2959,7 +2961,6 @@ function TierAllocationBuilder() {
 
 function LPLessonView({ lesson, onBack, onComplete }) {
   const [phase, setPhase] = useState("content"); // content | quiz | result
-  const [openSection, setOpenSection] = useState(0);
   const [qi, setQi] = useState(0);
   const [sel, setSel] = useState(null);
   const [showExp, setShowExp] = useState(false);
@@ -3067,20 +3068,20 @@ function LPLessonView({ lesson, onBack, onComplete }) {
             else if (i === sel) { bg="rgba(239,68,68,0.15)"; border="#EF4444"; color="#EF4444"; }
           }
           return (
-            <button key={i} onClick={()=>pickAnswer(i)} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 14px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:15,color,cursor:sel===null?"pointer":"default",letterSpacing:0.5}}>
+            <button key={i} data-quiz-option="1" onClick={()=>pickAnswer(i)} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 14px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:15,color,cursor:sel===null?"pointer":"default",letterSpacing:0.5}}>
               <span style={{color:"#6B7280",marginRight:8}}>{String.fromCharCode(65+i)}.</span>{opt}
             </button>
           );
         })}
       </div>
       {showExp && (
-        <div ref={explainRef}>
+        <div ref={explainRef} data-quiz-explain="1">
           <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:14,marginBottom:12}}>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:sel===q.correct?"#10B981":"#EF4444",letterSpacing:1,marginBottom:6}}>{sel===q.correct?"✓ CORRECT":"✗ NOT QUITE"} — CLUCK EXPLAINS:</div>
             <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.7}}>{q.explanation}</p>
           </div>
           <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-          <button ref={nextBtnRef} onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+          <button ref={nextBtnRef} data-quiz-next="1" onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
             {qi+1<shuffledQuestions.length?"NEXT QUESTION →":"SEE RESULTS →"}
           </button>
         </div>
@@ -3105,20 +3106,26 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#FF7A18",letterSpacing:2}}>— CLUCK NORRIS</div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <button onClick={()=>{setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
+        <button onClick={()=>{clearStep("lp:" + lesson.id);setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
           📖 REVIEW LESSON
         </button>
-        <button onClick={onComplete} style={{flex:1,background:"#10B981",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
+        <button onClick={()=>{clearStep("lp:" + lesson.id);onComplete();}} style={{flex:1,background:"#10B981",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
           NEXT LESSON →
         </button>
       </div>
     </div>
   );
 
-  return (
-    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
-      <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LP LAB</button>
-
+  // Lesson stepper (owner 2026-09-25: "Yes all of website"). One screen per idea: the opening
+  // (header + Cluck's hook), one step per section (its table with it), then "Try it yourself" —
+  // the lesson's own calculators and the depth visualizer, together, after the reading that
+  // explains them — then Cluck's verdict with Ask Cluck, and the quiz button on that last step.
+  // The old accordion (one section open at a time, the rest collapsed) is gone: on a phone a
+  // collapsed section is a lesson nobody reads, and on a desktop it hid how much was left.
+  // src/shared/WebLessonStepper.jsx; the remembered step clears when the lesson is done.
+  const stepKey = "lp:" + lesson.id;
+  const steps = [
+    { label: "", node: (<>
       {/* Header */}
       <div style={{textAlign:"center",marginBottom:20}}>
         <div style={{fontSize:40,marginBottom:6}}>{lesson.icon}</div>
@@ -3133,16 +3140,10 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:15,lineHeight:1.7}}>{lesson.cluckHook}</p>
       </div>
 
-      {/* Sections */}
-      {lesson.sections.map((sec, i) => (
-        <div key={i} style={{marginBottom:8}}>
-          <button onClick={()=>setOpenSection(openSection===i?-1:i)} style={{width:"100%",background:openSection===i?"rgba(16,185,129,0.1)":"rgba(255,122,24,0.05)",border:`1px solid ${openSection===i?"rgba(16,185,129,0.4)":"rgba(255,122,24,0.18)"}`,borderRadius:openSection===i?"12px 12px 0 0":"12px",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:openSection===i?"#10B981":"#D1D5DB",letterSpacing:1}}>{sec.heading}</span>
-            <span style={{color:openSection===i?"#10B981":"#6B7280",fontSize:16}}>{openSection===i?"▲":"▼"}</span>
-          </button>
-          {openSection===i && (
-            <div style={{background:"rgba(255,122,24,0.04)",border:"1px solid rgba(16,185,129,0.2)",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"14px 16px"}}>
-              <p style={{margin:"0 0 12px",fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
+    </>) },
+    ...lesson.sections.map((sec) => ({ label: sec.heading, node: (
+      <div>
+        <p style={{margin:"0 0 12px",fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
               {sec.table && (
                 <div style={{overflowX:"auto",marginTop:8}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -3163,11 +3164,9 @@ function LPLessonView({ lesson, onBack, onComplete }) {
                   </table>
                 </div>
               )}
-            </div>
-          )}
-        </div>
-      ))}
-
+      </div>
+    ) })),
+    { label: "Try it yourself", node: (<div data-no-swipe="1">
       {/* Interactive: IL Calculator — Lesson 3 */}
       {lesson.id === 3 && (<CalcErrorBoundary><ILCalculator /></CalcErrorBoundary>)}
 
@@ -3249,16 +3248,29 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         )}
       </div>
 
-      {/* Cluck verdict */}
-      <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16,marginTop:8}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FF7A18",letterSpacing:2,marginBottom:6}}>🐔 CLUCK'S VERDICT</div>
+    </div>) },
+    { label: "Cluck's verdict", node: (<>
+      <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
         <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:15,lineHeight:1.7}}>{lesson.cluckVerdict}</p>
       </div>
-
       <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-      <button onClick={()=>{setPhase("quiz");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:12}}>
+    </>) },
+  ];
+
+  return (
+    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
+      <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LP LAB</button>
+      <WebLessonStepper
+        key={stepKey}
+        storeKey={stepKey}
+        color="#10B981"
+        steps={steps}
+        finish={
+          <button onClick={()=>{setPhase("quiz");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:0,height:"100%"}}>
         ✅ TAKE THE QUIZ →
       </button>
+        }
+      />
     </div>
   );
 }

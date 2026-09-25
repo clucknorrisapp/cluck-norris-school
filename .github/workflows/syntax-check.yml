@@ -1408,3 +1408,58 @@ jobs:
           code=$?
           kill "$(cat /tmp/nq_server.pid)" 2>/dev/null || true
           exit $code
+
+  # Every quiz, answered end to end, on the website AND both app editions (owner 2026-09-25, "Any
+  # quiz check it", after the lesson stepper went onto every lesson). 37 quizzes / 200 questions
+  # per surface at phone size: each reached through the stepper's last step, every question
+  # answered, the explanation and Next required in view after each answer, the count matched to
+  # the curriculum, the result screen reached. Both walkers were proven to FAIL with the
+  # auto-scroll disabled / #434's app-scroller bug put back. Its own job so it runs in parallel
+  # with smoke-test instead of adding ~15 minutes to it, and gated to school-reaching paths.
+  quiz-walk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: decide whether the quiz walk applies
+        id: gate
+        run: |
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          elif [ "$EVENT" = "push" ]; then
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+              echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: push with no resolvable range — full run"; exit 0
+            fi
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: $EVENT — full run"; exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          if echo "$CHANGED" | grep -qE '^(src/App\.jsx$|src/sections/|src/shared|src/seeker/school/|src/seeker/i18n\.js$|src/seeker/App\.jsx$|src/seeker/edition/|data/curriculum|public/i18n|public/cluck-nav\.js$|public/i18n\.js$|store-edition/|scripts/(quiz-walk|seeker-quiz-walk)-test\.cjs$|scripts/build-store-edition\.mjs$|package(-lock)?\.json$|vite\.config|\.github/workflows/)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: school-reaching change — full quiz walk"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "gate: nothing that reaches a quiz changed — skipped"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: "20"
+          cache: "npm"
+      - if: steps.gate.outputs.run == 'true'
+        run: npm ci
+      - name: install playwright + chromium
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          npm i --no-save playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: website — every quiz end to end (390x844)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/quiz-walk-test.cjs
+      - name: Seeker app — every quiz end to end (360x800)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/seeker-quiz-walk-test.cjs seeker
+      - name: Play/iOS app — every quiz end to end (360x800)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/seeker-quiz-walk-test.cjs google
