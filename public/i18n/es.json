@@ -2919,5 +2919,6 @@
   "Learn it in": "Apréndelo en",
   "Nothing in the Library matches “{q}”.": "Nada en la Biblioteca coincide con “{q}”.",
   "Ask Cluck instead": "Pregúntale a Cluck",
-  "{total} terms, each linked to the lesson that teaches it.": "{total} términos, cada uno enlazado a la lección que lo enseña."
+  "{total} terms, each linked to the lesson that teaches it.": "{total} términos, cada uno enlazado a la lección que lo enseña.",
+  "Library": "Biblioteca"
 }

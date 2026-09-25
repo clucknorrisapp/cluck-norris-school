@@ -2919,5 +2919,6 @@
   "Learn it in": "在这里学",
   "Nothing in the Library matches “{q}”.": "资料库里没有与“{q}”匹配的内容。",
   "Ask Cluck instead": "去问 Cluck",
-  "{total} terms, each linked to the lesson that teaches it.": "{total} 个术语，每个都链接到讲解它的那节课。"
+  "{total} terms, each linked to the lesson that teaches it.": "{total} 个术语，每个都链接到讲解它的那节课。",
+  "Library": "资料库"
 }

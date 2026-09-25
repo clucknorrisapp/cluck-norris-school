@@ -18,7 +18,7 @@
 // read-only, free, ungated scan over GET /api/wallet-checkup. All three bottom-nav tabs are now
 // real panes; the shared placeholder <Pane> ("Coming soon") this comment used to describe is gone.
 import React from "react";
-import { HashRouter, NavLink } from "react-router-dom";
+import { HashRouter, NavLink, useLocation } from "react-router-dom";
 import { t, useI18nReady } from "./i18n.js";
 // ⚠️ THE EDITION. vite.config.js aliases "@seeker-edition" to src/seeker/edition/full.jsx (the
 // Solana Seeker dApp Store app — every tool, a wallet) or to src/seeker/edition/edu.jsx (the
@@ -85,10 +85,27 @@ function BottomNav() {
   );
 }
 
+// ⚠️ A NEW SCREEN OPENS AT THE TOP. The document is what scrolls in this shell (not .seeker-main),
+// and the router never reset it, so a screen inherited the scroll position of the one before:
+// opening the Library from the card at the foot of the School home landed at the BOTTOM of the
+// Library (owner, 2026-09-25: "it defaulted at bottom of the list and had to scroll up"). Keyed on
+// the PATH only — a lesson's steps and a quiz's questions change no route, so their own scroll
+// handling (School.jsx) is untouched. Both scrollers are reset in case a layout ever makes
+// .seeker-main the one that scrolls.
+function ScrollToTopOnRoute() {
+  const { pathname } = useLocation();
+  React.useEffect(() => {
+    try { window.scrollTo(0, 0); } catch (_) {}
+    try { const m = document.querySelector(".seeker-main"); if (m) m.scrollTop = 0; } catch (_) {}
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   const wallet = useWallet();
   return (
     <HashRouter>
+      <ScrollToTopOnRoute />
       <div className="seeker-shell">
         <Header wallet={wallet} />
         <main className="seeker-main">

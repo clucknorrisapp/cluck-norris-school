@@ -27,7 +27,7 @@ import DailyBrief from "../tools/DailyBrief.jsx";
 import GraduationIcon from "../icons/GraduationIcon.jsx";
 import DropletIcon from "../icons/DropletIcon.jsx";
 import ChatIcon from "../icons/ChatIcon.jsx";
-import SolanaIcon from "../icons/SolanaIcon.jsx";
+import BookIcon from "../icons/BookIcon.jsx";
 import CalendarIcon from "../icons/CalendarIcon.jsx";
 import "./edu.css";
 
@@ -86,13 +86,14 @@ function FinishedEdu() {
 // wants: the school itself, its LP Lab course by direct deep link (active whenever the course or
 // one of its lessons is open — NavLink's default (non-`end`) match does this: it's active on any
 // path that starts with `to`, so "/school/lp/whatever-lesson" still matches "/school/lp"), Ask
-// Cluck, the Solana Room, and Daily. Icons are drawn (../icons/*), never emoji — see each icon's
-// own file for why.
+// Cluck, the Library, and Daily. Icons are drawn (../icons/*), never emoji — see each icon's
+// own file for why. Owner (2026-09-25): the Library took the Solana Room's tab — "people won't go
+// to the Solana room every day" — and the room keeps its card on the School home (and its routes).
 export const TABS = [
   { to: "/school", label: "School", icon: <GraduationIcon /> },
   { to: "/school/lp", label: "LP Lab", icon: <DropletIcon /> },
   { to: "/ask", label: "Ask", i18nKey: "Ask (tab)", icon: <ChatIcon /> },
-  { to: "/solana", label: "Solana", icon: <SolanaIcon /> },
+  { to: "/library", label: "Library", icon: <BookIcon /> },
   { to: "/tools/alpha", label: "Daily", icon: <CalendarIcon /> },
 ];
 

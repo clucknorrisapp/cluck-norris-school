@@ -63,8 +63,16 @@ function ok(name, cond, detail) {
   ok("glossary carried into the bundle's curriculum", glossary.length >= 40, glossary.length);
   const card = page.locator(".seeker-library-card");
   ok("the School home has a Library card", (await card.count()) === 1);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.waitForTimeout(300);
+  const before = await page.evaluate(() => window.scrollY);
+  ok("(setup) the School home is scrolled well down before opening the Library", before > 200, before);
   if (await card.count()) { await card.click(); await page.waitForTimeout(500); }
   ok("the card opens /library", /#\/library$/.test(page.url()), page.url());
+  // The card sits far down the School home; the Library must still open at its TOP (owner,
+  // 2026-09-25: "it defaulted at bottom of the list and had to scroll up"). App.jsx resets scroll
+  // on every route change.
+  ok("the Library opens at the top, not at the old scroll position", (await page.evaluate(() => window.scrollY)) < 5, await page.evaluate(() => window.scrollY));
 
   const items = await page.evaluate(() => [...document.querySelectorAll(".seeker-library-item")].map((li) => ({
     term: (li.querySelector(".seeker-library-term") || {}).textContent || "",

@@ -1058,8 +1058,9 @@ async function renderedEduCheck(pw, tgz) {
        (await page.evaluate(() => location.hash)) === "#/school");
 
     const labels = await page.locator(".seeker-navbtn .seeker-navlabel").allInnerTexts();
-    ok("rendered (edu): exactly five bottom-nav tabs, in order — School, LP Lab, Ask, Solana, Daily",
-       JSON.stringify(labels) === JSON.stringify(["School", "LP Lab", "Ask", "Solana", "Daily"]),
+    // Owner, 2026-09-25: the Library took the Solana Room's tab; the room keeps its School-home card.
+    ok("rendered (edu): exactly five bottom-nav tabs, in order — School, LP Lab, Ask, Library, Daily",
+       JSON.stringify(labels) === JSON.stringify(["School", "LP Lab", "Ask", "Library", "Daily"]),
        JSON.stringify(labels));
 
     // Every tab icon is a drawn SVG, never emoji text — this PR's whole point for these five tabs.

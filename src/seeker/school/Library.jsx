@@ -34,7 +34,8 @@ export default function Library() {
 
   return (
     <div className="seeker-pane seeker-school seeker-school-read seeker-library">
-      <Link className="seeker-school-back" to="/school">{t("Back to the school")}</Link>
+      {/* A bottom-nav tab since 2026-09-25 (it took the Solana Room's slot), so no "back" link —
+          like Ask and Daily, it is a place you go, not a page you drill into. */}
       <h1 className="seeker-school-title">📖 {t("The Library")}</h1>
       <p className="seeker-tool-lede">
         {t("Every term in the school, in plain words. Tap a lesson to learn it properly.")}
