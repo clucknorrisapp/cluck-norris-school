@@ -476,17 +476,17 @@ The more volume a pool generates, the more fees LPs collect. This is why volume 
         body: `Every protocol offers different fee tiers for different types of pairs. Choosing the right fee tier matters.
 
 RAYDIUM:
-• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 1% / 2% / 4%
+• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 0.3% / 0.5% / 1% / 1.5% / 2% / 2.5% / 4%
 • CLMM concentrated pools: 18 tiers from 0.01% up to 4% (0.01 / 0.02 / 0.03 / 0.04 / 0.05 / 0.1 / 0.15 / 0.16 / 0.18 / 0.2 / 0.25 / 0.4 / 0.6 / 0.8 / 1 / 2 / 3 / 4%)
 • Use 0.01% for stable pairs, 0.25% for standard, 1% for exotic/volatile
 
 ORCA WHIRLPOOLS:
 • 0.01% / 0.02% / 0.04% / 0.05% / 0.16% / 0.3% / 0.65% / 1% / 2%
 • Similar logic — stable pairs use low tiers, volatile pairs use high tiers
-${STORE ? "• A pool's own page shows which tier it runs on" : "• The 0.02% tier is the one CLKN's own CLKN/SOL Orca pool runs on — its CLKN/BTC and CLKN/JUP pools run on 0.30%"}
+${STORE ? "• A pool's own page shows which tier it runs on" : "• The 0.02% tier is the one CLKN's own Orca pools run on — CLKN/SOL, CLKN/USDC and CLKN/JUP"}
 
 METEORA:
-• DAMM: Dynamic fees that adjust automatically to market volatility
+• DAMM v2: a base fee that can run on a schedule (starting high at launch and decaying over time or with market cap), plus optional dynamic fees that rise with volatility
 • DLMM: base fee (fixed by the pool's bin step) + a variable fee that rises automatically with volatility. Fees are distributed per bin a swap crosses, but the RATE is pool-wide
 • Dynamic fees are one of Meteora's strongest features for LPs
 
@@ -774,7 +774,7 @@ TICK SPACING per fee tier:
 Higher fee tier = coarser spacing = wider minimum range. The exact numbers are set per pool and DIFFER by protocol — do not memorise one table and assume it travels.
 
 Uniswap v3: 0.01% → 1 · 0.05% → 10 · 0.3% → 60 · 1% → 200
-Raydium CLMM: 0.01% → 1 · 0.05% → 10 · 0.25% → 60 · 1% → 120
+Raydium CLMM: 0.01–0.05% → 1 · 0.1–0.2% → 10 · 0.25–0.8% → 60 · 1–4% → 120
 Orca: 0.01% → 1 · 0.02% → 2 · 0.04% → 4 · 0.05% → 8 · 0.3% → 64
 
 Lower fee tiers allow finer price ranges. When you set a range, you define a lower and upper tick. Your liquidity distributes uniformly across every tick in between — all earning fees proportionally when price passes through them.`
@@ -1092,7 +1092,7 @@ If you have a full-time job and check your phone twice a day, a fully active str
 BEST PASSIVE POSITIONS:
 
 FULL RANGE on correlated pairs:
-SOL/jitoSOL, BTC/cbBTC, stablecoin pairs. Near-zero IL. Fees accumulate without intervention. Check monthly to compound fees back in.
+SOL/jitoSOL, WBTC/cbBTC, stablecoin pairs. Near-zero IL. Fees accumulate without intervention. Check monthly to compound fees back in.
 
 WIDE CONCENTRATED on major pairs:
 SOL/USDC with a ±50% range. Stays in range through most normal market movement. Check weekly. Rebalance only if price breaks out of range significantly.
@@ -1338,7 +1338,7 @@ Match the width to two things: your conviction about where price is going, and t
 
 THE CORRELATION SPECTRUM:
 • Identical-peg pairs (USDC/USDT): the two assets are designed to track each other — IL is minimal, the main risk is one of them de-pegging
-• Correlated pairs (SOL/jitoSOL, BTC/cbBTC): move together most of the time — low IL, occasional divergence
+• Correlated pairs (SOL/jitoSOL, WBTC/cbBTC): move together most of the time — low IL, occasional divergence
 • Major-vs-stable (SOL/USDC): one volatile leg — IL is real and scales with how far SOL moves from your entry
 • Volatile-vs-volatile or new-token pairs: both legs move independently and violently — maximum IL, maximum risk
 
@@ -2983,10 +2983,14 @@ function LPLessonView({ lesson, onBack, onComplete }) {
   // Price impact calculator
   const shallowPool = 10000;
   const deepPool = 500000;
+  // poolSize is the pool's TVL, labelled as such ("$10,000 TVL"), so each side holds HALF of it.
+  // It used to be taken as each side's reserve, which modelled a $20K pool and showed half the real
+  // impact (0.99% on $100 where Lesson 1 correctly says ~2%) — found in the 2026-09-25 LP Lab check.
   const calcImpact = (poolSize, trade) => {
-    const k = poolSize * poolSize;
-    const newPool = poolSize + trade;
-    const out = poolSize - k / newPool;
+    const side = poolSize / 2;
+    const k = side * side;
+    const newPool = side + trade;
+    const out = side - k / newPool;
     const impact = ((trade - out) / trade) * 100;
     return Math.max(0, impact).toFixed(2);
   };
