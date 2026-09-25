@@ -1471,9 +1471,10 @@ if (!roseEngineHardKilled()) {
 // buildIncreaseLiquidity / buildDecreaseLiquidity / buildClosePosition, lib/whirlpool-vault.js
 // getFloat) already resolve each mint's OWN token program from chain (via the Orca SDK's
 // TokenExtensionUtil + resolveOrCreateATAs, and getFloat's dual-program scan) — they are NOT
-// legacy-Token-only. The one hand-rolled path that WAS legacy-only, buildRepriceStep, is guarded
-// to refuse loudly on a Token-2022 pool rather than build a broken tx — moot for BULLEN, whose
-// two pools are created FRESH at the live market tick and never repriced.
+// legacy-Token-only. The one hand-rolled path that WAS legacy-only, buildRepriceStep, gained a
+// Token-2022 branch (swapV2Ix, resolved programs + ATAs, hook mints refused) the same night —
+// it was NOT moot: BULLEN's pools sold out above their bands, pinned at the edge while the market
+// ran 7% higher, and walking an emptied pool back to market is the only clean recenter.
 //
 // TWO pools only (owner): BULLEN/USDC + BULLEN/SOL, both 0.01% (tickSpacing 1), ±1.5% bands.
 // Canonical PDAs verified free on-chain 2026-09-25: USDC Bb8pCvrTtB9EdCkR9siwpfnWXL4vspeUyivFouaQDwx9,
