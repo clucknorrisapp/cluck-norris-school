@@ -90,7 +90,7 @@ function FinishedEdu() {
 export const TABS = [
   { to: "/school", label: "School", icon: <GraduationIcon /> },
   { to: "/school/lp", label: "LP Lab", icon: <DropletIcon /> },
-  { to: "/ask", label: "Ask", icon: <ChatIcon /> },
+  { to: "/ask", label: "Ask", i18nKey: "Ask (tab)", icon: <ChatIcon /> },
   { to: "/solana", label: "Solana", icon: <SolanaIcon /> },
   { to: "/tools/alpha", label: "Daily", icon: <CalendarIcon /> },
 ];

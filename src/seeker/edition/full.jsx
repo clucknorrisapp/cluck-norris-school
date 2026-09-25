@@ -172,7 +172,7 @@ export const TABS = [
   { to: "/school", label: "School", icon: "🎓" },
   { to: "/tools", label: "Toolkit", icon: "🧰" },
   { to: "/rent", label: "Rent", icon: "💰" },
-  { to: "/ask", label: "Ask", icon: "🐔" },
+  { to: "/ask", label: "Ask", i18nKey: "Ask (tab)", icon: "🐔" },
   { to: "/checkup", label: "Checkup", icon: <ShieldIcon /> },
 ];
 

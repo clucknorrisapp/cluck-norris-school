@@ -28,6 +28,20 @@ import { t, useI18nReady } from "./i18n.js";
 // Read both headers before touching the shape of this shell.
 import { useWallet, HeaderExtra, TABS, EditionRoutes, Footer } from "@seeker-edition";
 
+// The 🌐 language picker lives in the header, not floating over the page (owner, 2026-09-25: it
+// "randomly moves from bottom right to up higher", and its menu ran off the top of the screen).
+// public/i18n.js builds the picker; this empty slot is where it docks. Whichever renders first,
+// the other completes the move: i18n.js looks for [data-clkn-lang-host] when it injects, and this
+// effect hands the slot over if the picker already exists. React renders no children into the
+// slot, so it never removes the node i18n.js puts there.
+function LangHost() {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    try { if (window.__clknLangDockInto && ref.current) window.__clknLangDockInto(ref.current); } catch (_) {}
+  }, []);
+  return <div className="seeker-langhost" data-clkn-lang-host="1" ref={ref} />;
+}
+
 function Header({ wallet }) {
   useI18nReady();
   return (
@@ -36,6 +50,7 @@ function Header({ wallet }) {
         <img className="seeker-brand-logo" src="/cluck-norris.png" alt="" decoding="async" />
         <div className="seeker-brand">Cluck Norris</div>
       </div>
+      <LangHost />
       <HeaderExtra wallet={wallet} />
     </header>
   );
@@ -43,6 +58,14 @@ function Header({ wallet }) {
 
 // ⚠️ THE SCHOOL LEADS in both editions — the first tab is /school (AGENTS.md's flagship list; the
 // app once shipped landing on /tools with no school in it). Each edition's TABS starts there.
+// A tab may name its own dictionary key when its English label is ambiguous. "Ask" is the case:
+// the school dictionaries translate "Ask" as the ORDER-BOOK term (a sell order — the Library's
+// glossary uses it), so the tab read "Ask (orden de venta)" in Spanish (owner, 2026-09-25).
+function tabLabel(tab) {
+  if (tab.i18nKey) { const v = t(tab.i18nKey); if (v !== tab.i18nKey) return v; }
+  return t(tab.label);
+}
+
 function BottomNav() {
   useI18nReady();
   return (
@@ -55,7 +78,7 @@ function BottomNav() {
           className={({ isActive }) => "seeker-navbtn" + (isActive ? " active" : "")}
         >
           <span className="seeker-navicon" aria-hidden="true">{tab.icon}</span>
-          <span className="seeker-navlabel">{t(tab.label)}</span>
+          <span className="seeker-navlabel">{tabLabel(tab)}</span>
         </NavLink>
       ))}
     </nav>

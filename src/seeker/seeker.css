@@ -42,6 +42,9 @@ html, body {
   flex: 0 1 auto;
   min-width: 0;
 }
+/* The language picker's slot (see LangHost in App.jsx). margin-left:auto pushes it right; in the
+   full edition the wallet zone follows it. */
+.seeker-langhost { margin-left: auto; display: flex; align-items: center; flex: 0 0 auto; }
 .seeker-brand-logo {
   width: 32px;
   height: 32px;
