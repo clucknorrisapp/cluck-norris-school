@@ -31,6 +31,7 @@ is none.
 | `/school` | `SchoolHome` | — (School) | no | **yes** — curriculum is bundled (`src/seeker/school/curriculum.js`); only the completion beacon needs a connection, and it is fire-and-forget with a durable queue | yes |
 | `/school/:courseId` | `SchoolCourse` | — (School / LP Lab, course id `lp`) | no | **yes**, same as above | yes |
 | `/school/:courseId/:lessonId` | `SchoolLesson` | — (School / LP Lab) | no | **yes**, same as above | yes |
+| `/library` | `Library` | — (School home card) | no | **yes** — the glossary ships in the bundle (`data/curriculum.json` `glossary` + every lesson's key terms) | yes |
 | `/solana` | `SolanaRoomIndex` | `solana` / free | no | **yes** — the room's own content is bundled (`src/seeker/solana/content.js`) | no |
 | `/solana/:pageId` | `SolanaRoomPage` | `solana` / free | no | **yes**, same as above; the rent page's numbers come from bundled `rent-math.js`, not a fetch | no |
 | `/solana/seeker/:pageId` | `SeekerWingPage` | `solana` / free | no | **yes** — the Seeker wing's own bundled content (`src/seeker/solana/wing-content.js`); its SKR page fetches `/api/tool-gate/config` for the live door figure only, showing no number rather than a stale/guessed one when that call fails — **Seeker-edition-only, not in `edu.jsx`** | no |
@@ -69,6 +70,7 @@ with. It is a strict subset of the four free full-edition tools plus its own cer
 | `/school/certificate` | `Certificate` | free, no wallet | no — `POST /api/claim/certificate`, no wallet, no signing; explicitly **not** the treasury-paid diploma cNFT (`src/seeker/school/Certificate.jsx` header) | no (the claim call needs a connection) | no |
 | `/school/:courseId` | `SchoolCourse` | free | no | **yes** | yes |
 | `/school/:courseId/:lessonId` | `SchoolLesson` | free | no | **yes** | yes |
+| `/library` | `Library` | free | no | **yes** — bundled glossary (`data/curriculum.store.json` `glossary`) | yes |
 | `/solana` | `SolanaRoomIndex` | free | no | **yes** — bundled content, same as the full edition | no |
 | `/solana/:pageId` | `SolanaRoomPage` | free | no | **yes**, same as above; `rent-math.js` loads outside `EDU:OUT` so the rent page's numbers are real here too | no |
 | `/ask` | `AskCluckPane report` | `ask` / free | no | no | no |
@@ -180,6 +182,7 @@ Everything in §1 and §2 **except** `/tools`, `/tools/airdrop`, `/tools/lock` a
 - `/school`, `/school/:courseId`, `/school/:courseId/:lessonId` (both editions) — **the school
   itself, the flagship that leads, has zero captures**
 - `/school/certificate` (education edition only)
+- `/library` (both editions — the searchable glossary, 2026-09-25)
 - `/ask`, `/checkup`, `/tools/listing`, `/tools/alpha` (both editions)
 - `/tools/firepit`, `/tools/burn` (full edition — two of the six flagships)
 - `/tools/xray`, `/tools/holders`, `/tools/trace`, `/tools/hatchery` (full edition)
