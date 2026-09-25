@@ -2920,5 +2920,21 @@
   "Nothing in the Library matches “{q}”.": "资料库里没有与“{q}”匹配的内容。",
   "Ask Cluck instead": "去问 Cluck",
   "{total} terms, each linked to the lesson that teaches it.": "{total} 个术语，每个都链接到讲解它的那节课。",
-  "Library": "资料库"
+  "Library": "资料库",
+  "A network rent cut means some of your older token accounts hold more SOL than today's minimum requires. This keeps the account and its tokens exactly as they are — it only withdraws the part Solana no longer requires. You pay the normal network fee, so a very small surplus may not be worth reclaiming on its own.": "网络租金（rent）下调意味着你一些较旧的代币账户里锁定的 SOL 超过了今天所需的最低金额。这样做会让账户和其中的代币保持原样——只取回 Solana 已不再要求的那部分。你需要支付正常的网络手续费，所以非常小的盈余可能不值得单独领取。",
+  "Accounts": "账户",
+  "Couldn't check surplus rent right now.": "目前无法核实盈余租金。",
+  "Couldn't check today's rent-exempt minimum right now — hit Rescan to try again. This is never reported as \"nothing to reclaim.\"": "目前无法核实今天的免租金最低额——点击 Rescan 重试。这种情况绝不会被报告为“没有可领取的金额”。",
+  "Est. fee": "预估手续费",
+  "Net": "净额",
+  "No surplus rent to reclaim right now — every account is already at today's minimum.": "目前没有可领取的盈余租金——所有账户都已处于今天的最低标准。",
+  "Reclaim surplus": "领取盈余",
+  "Reclaim surplus rent": "领取盈余租金",
+  "Reclaim surplus rent — keep accounts open": "领取盈余租金——账户保持开放",
+  "Surplus": "盈余",
+  "Surplus returning to your wallet": "返还到你钱包的盈余",
+  "These accounts and their tokens stay exactly as they are — only the surplus above today's minimum moves to you.": "这些账户及其代币将完全保持原状——只有超出今天最低额的盈余部分会转给你。",
+  "pull": "取出",
+  "stays open": "保持开放",
+  "{cur} now, {min} required": "现有 {cur}，需要 {min}"
 }

@@ -327,6 +327,12 @@ jobs:
       # silently inside server.js, so it is a pure function with every branch pinned here.
       - name: Tools pass — free-tier decision, CLKN + the Seeker SKR door
         run: node scripts/tool-pass-qualify-test.cjs
+      # Firepit's "reclaim surplus rent — keep the account open" job (owner ask, 2026-09-25):
+      # lib/rent-surplus.js's pure decision logic. Real mainnet rent figures, not invented ones;
+      # isNative/owner-mismatch/surplus<=0/unreadable-minimum are each excluded on their own case;
+      # data length (not a hardcoded byte count) drives which minimum applies. Zero deps.
+      - name: Firepit — surplus rent decision logic (WithdrawExcessLamports read side)
+        run: node scripts/rent-surplus-test.cjs
       - name: Buy comp — pool sale vs transfer vs LOCK (hold check; a lock is not a sell)
         run: node scripts/buycomp-sell-detect-test.cjs
       # The project buy bots' detection, on two real mainnet transactions: a Jupiter buy split
@@ -890,6 +896,17 @@ jobs:
       - name: wallet standard discovery
         if: steps.gate.outputs.run == 'true'
         run: node scripts/wallet-standard-test.cjs
+      # Firepit's "reclaim surplus rent — keep the account open" job (owner ask, 2026-09-25),
+      # rendered end to end: the shipped public/firepit.html, a fake wallet that REALLY signs with
+      # a generated ed25519 keypair, and stubbed /api/burn-scan + /api/helius-rpc. Proves the
+      # surplus table excludes wrapped SOL and an unreadable-minimum account even though both are
+      # present in the scan, the totals match the fixture's real mainnet surplus figure, and the
+      # actual transaction bytes handed to sendTransaction contain ONLY a single opcode-38
+      # WithdrawExcessLamports instruction per selected account (never a burn/close mixed in),
+      # signed by and paying out to the connected wallet with no user-editable destination.
+      - name: Firepit — surplus rent, rendered (stubbed RPC, real signature, byte-checked tx)
+        if: steps.gate.outputs.run == 'true'
+        run: node scripts/firepit-surplus-test.cjs
       # The Seeker app, actually booted. seeker-build-test.cjs (node-check) proves the TARBALL is
       # well formed but never opens it, so an app that builds clean and renders a blank screen
       # would ship green — the same class of break the Normie Quest visual gate exists for. This

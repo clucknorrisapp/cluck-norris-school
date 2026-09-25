@@ -2920,5 +2920,21 @@
   "Nothing in the Library matches “{q}”.": "Nada na Biblioteca corresponde a “{q}”.",
   "Ask Cluck instead": "Pergunte ao Cluck",
   "{total} terms, each linked to the lesson that teaches it.": "{total} termos, cada um ligado à lição que o ensina.",
-  "Library": "Biblioteca"
+  "Library": "Biblioteca",
+  "A network rent cut means some of your older token accounts hold more SOL than today's minimum requires. This keeps the account and its tokens exactly as they are — it only withdraws the part Solana no longer requires. You pay the normal network fee, so a very small surplus may not be worth reclaiming on its own.": "Um corte no rent da rede significa que algumas das suas contas de token mais antigas têm mais SOL do que o mínimo exigido hoje. Isso mantém a conta e seus tokens exatamente como estão — só retira a parte que a Solana não exige mais. Você paga a taxa de rede normal, então um excedente muito pequeno pode não valer a pena resgatar sozinho.",
+  "Accounts": "Contas",
+  "Couldn't check surplus rent right now.": "No momento não foi possível verificar o rent excedente.",
+  "Couldn't check today's rent-exempt minimum right now — hit Rescan to try again. This is never reported as \"nothing to reclaim.\"": "No momento não foi possível verificar o mínimo isento de rent de hoje — toque em Rescan para tentar novamente. Isso nunca é informado como \"nada para resgatar\".",
+  "Est. fee": "Taxa est.",
+  "Net": "Líquido",
+  "No surplus rent to reclaim right now — every account is already at today's minimum.": "No momento não há rent excedente para resgatar — todas as contas já estão no mínimo de hoje.",
+  "Reclaim surplus": "Resgatar excedente",
+  "Reclaim surplus rent": "Resgatar rent excedente",
+  "Reclaim surplus rent — keep accounts open": "Resgatar rent excedente — mantenha as contas abertas",
+  "Surplus": "Excedente",
+  "Surplus returning to your wallet": "Excedente retornando para sua carteira",
+  "These accounts and their tokens stay exactly as they are — only the surplus above today's minimum moves to you.": "Essas contas e seus tokens permanecem exatamente como estão — só o excedente acima do mínimo de hoje vai para você.",
+  "pull": "retirar",
+  "stays open": "continua aberta",
+  "{cur} now, {min} required": "{cur} agora, {min} necessário"
 }

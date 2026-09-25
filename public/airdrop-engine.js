@@ -125,6 +125,42 @@ const splToken = {
     });
   },
 
+  // WithdrawExcessLamports (token program ix #38) — pulls the lamports a token account holds
+  // ABOVE today's rent-exempt minimum, WITHOUT closing the account or touching its token
+  // balance. Powers Firepit's "reclaim surplus rent — keep the account open" job (a rent-
+  // parameter cut, e.g. the p-token/SIMD-0266 rollout, lowers the minimum for NEW accounts
+  // without touching what an existing one already deposited). Supported by BOTH the legacy SPL
+  // Token program and Token-2022. Data is a single opcode byte, no payload.
+  //
+  // The installed @solana/spl-token (0.4.14) does not implement this yet — its own
+  // TokenInstruction enum has the slot commented out ("// WithdrawalExcessLamports = 38"),
+  // confirming the opcode. Verified against the SIMD-0266 spec and
+  // solana.com/docs/tokens/advanced/withdraw-excess-lamports (see scripts/verify-burn-close.cjs
+  // for the full source list — kept out of this comment because it ships in the pinned store
+  // editions, whose build fails closed on any host outside their allow-list), plus a real mainnet
+  // simulation (sigVerify:false, replaceRecentBlockhash:true — never a sent transaction): a
+  // legacy 165-byte account went from 2,039,280 to 1,488,440 lamports, stayed open, its token
+  // balance untouched, at 270 CU; a Token-2022 account used 1,414 CU.
+  //
+  // `authority` MUST be the account's OWNER (a delegate or close-authority has no standing —
+  // Custom(4) OwnerMismatch) and is always the connected wallet here, same as `destination` —
+  // neither is ever user-editable (CLAUDE.md guardrail: no user-editable destination on a
+  // money path). Wrapped SOL (isNative) accounts return Custom NativeNotSupported — the caller
+  // filters those out before this is ever built (see lib/rent-surplus.js's isEligibleForSurplus).
+  createWithdrawExcessLamportsInstruction(account, destination, authority, tokenProgram) {
+    const { PublicKey, TransactionInstruction } = solanaWeb3;
+    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: account,     isSigner: false, isWritable: true },
+        { pubkey: destination, isSigner: false, isWritable: true },
+        { pubkey: authority,   isSigner: true,  isWritable: false },
+      ],
+      programId: TOKEN_PROGRAM,
+      data: new Uint8Array([38]),
+    });
+  },
+
   // Native SOL transfer (System Program ix #2). Hand-built for exactly the same
   // reason as the SPL instructions above: solanaWeb3.SystemProgram.transfer()
   // encodes its u64 lamports through the library's own layout helper, which calls

@@ -6,14 +6,29 @@
 //
 // Server: GET /api/burn-scan?wallet=<address> (server.js, read-only) —
 //   200 { success:true, wallet, count, capped, rentSolTotal, valueUsdTotal,
+//         surplusAvailable, surplusLamportsTotal, surplusSolTotal,
 //         accounts: [{ tokenAccount, mint, program, amountRaw, decimals, uiAmount, rentLamports,
-//                       frozen, delegated, symbol, name, logo, priceUsd, valueUsd, priceKnown,
+//                       frozen, delegated, space, isNative, owner, symbol, name, logo, priceUsd,
+//                       valueUsd, priceKnown, rentExemptLamports, surplusLamports, surplusEligible,
 //                       empty, isNft }] }
 //   400 { success:false, error }   — bad wallet address
 //   500 { success:false, error }   — server/RPC trouble
 // Firepit has no receipt/broadcast endpoint of its own (unlike Project Burn) — this pane never
 // calls /api/burn-receipt; that is a Project Burn feature for a project's OWN token, and firepit's
 // desktop page (public/firepit.html) does not call it either. Confirmed by reading it.
+//
+// ── surplus rent (WithdrawExcessLamports), added 2026-09-25 ─────────────────────────────
+// A rent-parameter cut (e.g. the p-token/SIMD-0266 rollout) lowers the network's rent-exempt
+// minimum without touching what an already-open account deposited, so some accounts now hold more
+// SOL than today's rule requires — on top of, not instead of, the ordinary close-to-reclaim job
+// above. This pulls ONLY that surplus (instruction opcode 38, both token programs), NEVER closes
+// the account and NEVER touches its token balance. `surplusEligible` is the server's OWN decision
+// (lib/rent-surplus.js: excludes wrapped SOL, an owner mismatch, and any surplus that is zero or
+// unreadable) — this pane trusts that flag rather than re-deriving it, the same way it trusts
+// `empty` for the close job. `surplusLamports`/`rentExemptLamports` are `null` (never 0) when the
+// server couldn't read today's minimum; `surplusAvailable` is the wallet-wide version of the same
+// fact. Carried over faithfully from public/firepit.html's own surplus job — see that file for the
+// same guardrails documented from the desktop side.
 //
 // ⚠️ THE VALUE GUARD IS THE WHOLE POINT (CLAUDE.md, the task brief) and it is carried over
 // FAITHFULLY from public/firepit.html's `burnable()` / `openConfirm()` logic and the server's own
@@ -54,6 +69,9 @@ const WSOL_MINT = "So11111111111111111111111111111111111111112";
 // Token accounts per transaction (burn + close = up to 2 instructions each) — matches
 // firepit.html's CHUNK, kept well under the 1232-byte tx limit.
 const CHUNK = 8;
+// The surplus job is ONE instruction per account (no burn/close pair), so more fit per
+// transaction — matches firepit.html's CHUNK_SURPLUS.
+const CHUNK_SURPLUS = 16;
 
 // ⚠️ THIS TAKES LAMPORTS. It used to take SOL — and every one of its eight call sites in this
 // file passes lamports, so the whole tool was rendering its SOL figures a BILLION times too big:
@@ -114,6 +132,10 @@ function isEmpty(a) {
 }
 // UNKNOWN value, never zero — see the header note. Only meaningful for a non-empty, non-wSOL row.
 function isUnpriced(a) { return !isEmpty(a) && !isWsol(a) && a.priceKnown === false; }
+// The server's OWN decision (lib/rent-surplus.js) on whether this account is a candidate for the
+// surplus job — never re-derived here. `surplusLamports`/`rentExemptLamports` are `null` (never a
+// fabricated 0) when the minimum couldn't be read, and this flag is already false in that case.
+function surplusEligible(a) { return a && a.surplusEligible === true; }
 
 function RowTags({ a }) {
   return (
@@ -154,6 +176,37 @@ function TokenRow({ a, checked, onToggle }) {
   );
 }
 
+// The surplus job's own row — a different instruction (WithdrawExcessLamports, not burn/close),
+// so it shows different numbers: the surplus itself (the amount that would move), and what the
+// account currently holds vs. today's minimum. Frozen accounts ARE offered here (no `actionable()`
+// gate, unlike TokenRow): this is a pure lamport operation, never a token move, so a frozen state
+// has no bearing on it (CLAUDE.md / the task brief: "Frozen accounts are FINE").
+function SurplusRow({ a, checked, onToggle }) {
+  return (
+    <label className={"seeker-firepit-row" + (checked ? " seeker-firepit-row-sel" : "")}>
+      <input
+        type="checkbox"
+        className="seeker-firepit-checkbox"
+        checked={!!checked}
+        onChange={() => onToggle(a.tokenAccount)}
+        aria-label={t("Select")}
+      />
+      <div className="seeker-firepit-row-body">
+        <div className="seeker-firepit-row-top">
+          <span className="seeker-firepit-row-name">{a.symbol || t("Unknown token")}</span>
+          <span className="seeker-firepit-row-rent">{fmtSol(a.surplusLamports)}</span>
+        </div>
+        <div className="seeker-firepit-row-sub">
+          {tf("{cur} now, {min} required", { cur: fmtSol(a.rentLamports), min: fmtSol(a.rentExemptLamports) })} · <span className="seeker-firepit-row-mint">{shortAddr(a.mint)}</span>
+        </div>
+        <div className="seeker-firepit-row-tags">
+          {a.frozen ? <span className="seeker-firepit-tag seeker-firepit-tag-frozen">{t("Frozen")}</span> : null}
+        </div>
+      </div>
+    </label>
+  );
+}
+
 function useToggleSet(initial) {
   const [set, setSet] = React.useState(initial || (() => new Set()));
   const toggle = React.useCallback((id) => {
@@ -180,7 +233,11 @@ const OUTCOME_CLASS = {
   unconfirmed: " seeker-drop-row-unconfirmed",
   declined: " seeker-firepit-row-declined",
 };
-function OutcomeRow({ a, status, error }) {
+// `kind` picks which figure this outcome is actually about — every account now carries BOTH
+// `rentLamports` (its full balance) and `surplusLamports` (the surplus above today's minimum), so
+// a surplus-job outcome must show the surplus it asked for, never the account's whole balance.
+function OutcomeRow({ a, status, error, kind }) {
+  const amount = kind === "surplus" ? a.surplusLamports : a.rentLamports;
   return (
     <div className={"seeker-forensic-row" + (OUTCOME_CLASS[status] || "")}>
       <div className="seeker-forensic-row-main">
@@ -189,7 +246,7 @@ function OutcomeRow({ a, status, error }) {
           {t(OUTCOME_LABEL[status] || status)}{error ? ` · ${error}` : ""}
         </div>
       </div>
-      <div className="seeker-forensic-row-value">{fmtSol(a.rentLamports)}</div>
+      <div className="seeker-forensic-row-value">{fmtSol(amount)}</div>
     </div>
   );
 }
@@ -205,7 +262,8 @@ export default function FirepitPane({ wallet }) {
   const [data, setData] = React.useState(null);
   const [selEmpty, toggleEmpty, selectAllEmpty, clearEmpty, setSelEmpty] = useToggleSet();
   const [selBurn, toggleBurn, selectAllBurn, clearBurn, setSelBurn] = useToggleSet();
-  const [confirmKind, setConfirmKind] = React.useState(null); // null | "reclaim" | "burn"
+  const [selSurplus, toggleSurplus, selectAllSurplus, clearSurplus, setSelSurplus] = useToggleSet();
+  const [confirmKind, setConfirmKind] = React.useState(null); // null | "reclaim" | "burn" | "surplus"
   // confirmPhase: "idle" (no sheet) | "checking" (fresh re-read in flight) | "ready" (sheet open,
   // signing frozen against confirmSel) | "stale" (nothing selected survived the re-read) | "error"
   const [confirmPhase, setConfirmPhase] = React.useState("idle");
@@ -248,9 +306,13 @@ export default function FirepitPane({ wallet }) {
       // destroy value is ever pre-selected.
       setSelEmpty(new Set(accounts.filter((a) => isEmpty(a) && actionable(a)).map((a) => a.tokenAccount)));
       setSelBurn(new Set());
+      // Unlike the empty-reclaim job, the surplus job is NEVER pre-selected: it can legitimately
+      // apply to dozens of accounts a wallet still actively uses (a rent cut touches everything
+      // opened before it), so "select everything" has to be a deliberate tap, not a default.
+      setSelSurplus(new Set());
       setPhase("result");
     });
-  }, [setSelEmpty, setSelBurn]);
+  }, [setSelEmpty, setSelBurn, setSelSurplus]);
 
   React.useEffect(() => {
     if (!wallet.connected || !wallet.address) { setPhase("idle"); setData(null); return undefined; }
@@ -285,9 +347,20 @@ export default function FirepitPane({ wallet }) {
   const burnValueUsd = selBurnRows.reduce((s, a) => s + (isWsol(a) ? 0 : Number(a.valueUsd) || 0), 0);
   const burnUnpriced = selBurnRows.filter((a) => isUnpriced(a));
 
+  const surplusAccts = accounts.filter(surplusEligible);
+  const surplusUnavailable = data && data.surplusAvailable === false;
+  const selSurplusRows = surplusAccts.filter((a) => selSurplus.has(a.tokenAccount));
+  const surplusLamportsSel = selSurplusRows.reduce((s, a) => s + (Number(a.surplusLamports) || 0), 0);
+  // An estimated network fee so "tiny surpluses may not be worth the fee" (the task brief) is
+  // visible, not just the gross — one signature per CHUNK_SURPLUS accounts at the standard base
+  // fee; the wallet shows the exact figure at signing.
+  const surplusTxCount = selSurplusRows.length ? Math.ceil(selSurplusRows.length / CHUNK_SURPLUS) : 0;
+  const surplusFeeLamports = surplusTxCount * 5000;
+  const surplusNetLamports = Math.max(0, surplusLamportsSel - surplusFeeLamports);
+
   // ── open the confirm sheet on a FRESH chain read (see header note) ─────────────────────────
   async function openConfirm(kind) {
-    const rows = kind === "reclaim" ? selEmptyRows : selBurnRows;
+    const rows = kind === "reclaim" ? selEmptyRows : kind === "surplus" ? selSurplusRows : selBurnRows;
     if (!rows.length) return;
     const ids = new Set(rows.map((a) => a.tokenAccount));
     setConfirmKind(kind);
@@ -305,7 +378,10 @@ export default function FirepitPane({ wallet }) {
     setData(res.data);
     setSelEmpty((s) => { const ok = new Set(freshAccounts.filter((a) => isEmpty(a) && actionable(a)).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
     setSelBurn((s) => { const ok = new Set(freshAccounts.filter((a) => !isEmpty(a) && actionable(a)).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
-    const matched = freshAccounts.filter((a) => ids.has(a.tokenAccount) && actionable(a) && (kind === "reclaim" ? isEmpty(a) : !isEmpty(a)));
+    setSelSurplus((s) => { const ok = new Set(freshAccounts.filter(surplusEligible).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
+    const matched = kind === "surplus"
+      ? freshAccounts.filter((a) => ids.has(a.tokenAccount) && surplusEligible(a))
+      : freshAccounts.filter((a) => ids.has(a.tokenAccount) && actionable(a) && (kind === "reclaim" ? isEmpty(a) : !isEmpty(a)));
     if (!matched.length) { setConfirmPhase("stale"); return; }
     setConfirmSel(matched);
     setConfirmPhase("ready");
@@ -315,6 +391,7 @@ export default function FirepitPane({ wallet }) {
   // ── build + sign, exactly the frozen confirmSel — never a recomputed selection ─────────────
   async function onConfirmed() {
     const sel = confirmSel;
+    const kind = confirmKind;   // captured BEFORE the reset below — every branch past this point reads `kind`, never state
     setConfirmKind(null);
     setConfirmPhase("idle");
     setConfirmSel([]);
@@ -325,7 +402,10 @@ export default function FirepitPane({ wallet }) {
     setRunNotAttempted(0);
     const collected = [];
     const chunks = [];
-    for (let i = 0; i < sel.length; i += CHUNK) chunks.push(sel.slice(i, i + CHUNK));
+    // The surplus job is ONE instruction per account (no burn/close pair), so more fit per
+    // transaction — matches firepit.html's CHUNK_SURPLUS.
+    const chunkSize = kind === "surplus" ? CHUNK_SURPLUS : CHUNK;
+    for (let i = 0; i < sel.length; i += chunkSize) chunks.push(sel.slice(i, i + chunkSize));
 
     // One builder, used for a full chunk and for a single-account retry alike — a second copy is
     // how the two would drift apart, and one of them handles money.
@@ -335,7 +415,15 @@ export default function FirepitPane({ wallet }) {
       const ownerKey = new PublicKey(owner);
       const tx = new Transaction();
       group.forEach((a) => {
-        const ta = new PublicKey(a.tokenAccount), mint = new PublicKey(a.mint);
+        const ta = new PublicKey(a.tokenAccount);
+        if (kind === "surplus") {
+          // WithdrawExcessLamports — pulls ONLY the surplus above today's rent-exempt minimum.
+          // Never touches the token balance, never closes the account. Destination AND authority
+          // are ALWAYS the connected wallet — never user-editable (CLAUDE.md guardrail).
+          tx.add(spl.createWithdrawExcessLamportsInstruction(ta, ownerKey, ownerKey, a.program));
+          return;
+        }
+        const mint = new PublicKey(a.mint);
         // Burn any balance to zero first — but NEVER "burn" wrapped SOL; closing it just
         // unwraps it back to SOL (header note, and firepit.html by name).
         if (!isEmpty(a) && !isWsol(a)) {
@@ -386,13 +474,13 @@ export default function FirepitPane({ wallet }) {
           // eslint-disable-next-line no-await-in-loop
           const one = await signGroup([a]);
           collected.push({ chunk: [a], status: one.status, sig: one.sig, error: one.error });
-          setRunResults(collected.flatMap(({ chunk: ch, status, sig, error }) => ch.map((x) => ({ a: x, status, sig, error }))));
+          setRunResults(collected.flatMap(({ chunk: ch, status, sig, error }) => ch.map((x) => ({ a: x, status, sig, error, kind }))));
           if (one.status === "declined") { declined = true; break; }
         }
       } else {
         collected.push({ chunk, status: res.status, sig: res.sig, error: res.error });
       }
-      setRunResults(collected.flatMap(({ chunk: ch, status, sig, error }) => ch.map((a) => ({ a, status, sig, error }))));
+      setRunResults(collected.flatMap(({ chunk: ch, status, sig, error }) => ch.map((a) => ({ a, status, sig, error, kind }))));
 
       // A decline is the one thing that still stops the run: the person said no, and asking them
       // again for every remaining chunk is not a guardrail, it is nagging.
@@ -405,14 +493,24 @@ export default function FirepitPane({ wallet }) {
       // A genuinely failed account now continues too: its neighbours are not its fault.
     }
 
-    // Only DROP rows we watched actually land (status "sent") — an unconfirmed or failed row is
+    // Only act on rows we watched actually land (status "sent") — an unconfirmed or failed row is
     // untouched on-chain and must stay in the list so Rescan can re-check it truthfully.
     const sentIds = new Set();
     collected.forEach(({ chunk, status }) => { if (status === "sent") chunk.forEach((a) => sentIds.add(a.tokenAccount)); });
     if (sentIds.size) {
-      setData((d) => (d ? { ...d, accounts: (d.accounts || []).filter((a) => !sentIds.has(a.tokenAccount)) } : d));
-      setSelEmpty((s) => { const n = new Set(s); sentIds.forEach((id) => n.delete(id)); return n; });
-      setSelBurn((s) => { const n = new Set(s); sentIds.forEach((id) => n.delete(id)); return n; });
+      if (kind === "surplus") {
+        // Unlike reclaim/burn, the account is NOT removed — it is still open and still holds its
+        // tokens, exactly as promised. Optimistically mark it as having no remaining surplus (so
+        // it drops out of THIS job's table) rather than trusting the requested amount as what
+        // arrived; a Rescan re-reads the real chain state (CLAUDE.md: "report what actually
+        // arrived", not what was asked for).
+        setData((d) => (d ? { ...d, accounts: (d.accounts || []).map((a) => (sentIds.has(a.tokenAccount) ? { ...a, surplusLamports: 0, surplusEligible: false } : a)) } : d));
+        setSelSurplus((s) => { const n = new Set(s); sentIds.forEach((id) => n.delete(id)); return n; });
+      } else {
+        setData((d) => (d ? { ...d, accounts: (d.accounts || []).filter((a) => !sentIds.has(a.tokenAccount)) } : d));
+        setSelEmpty((s) => { const n = new Set(s); sentIds.forEach((id) => n.delete(id)); return n; });
+        setSelBurn((s) => { const n = new Set(s); sentIds.forEach((id) => n.delete(id)); return n; });
+      }
     }
     setRunMsg("");
     setBusy(false);
@@ -435,7 +533,11 @@ export default function FirepitPane({ wallet }) {
   function confirmRowFor(a) {
     const v = Number(a.valueUsd) || 0;
     let right;
-    if (isEmpty(a)) right = `${t("reclaim")} ${fmtSol(Number(a.rentLamports) || 0)}`;
+    // Checked FIRST: a surplus-job row can also be `isEmpty(a)` (an empty account can still carry
+    // a surplus), and must never fall through to the close-job's "reclaim X SOL" wording — that
+    // would understate what stays behind and imply the account is being closed, which it is not.
+    if (confirmKind === "surplus") right = `${t("pull")} ${fmtSol(Number(a.surplusLamports) || 0)} · ${t("stays open")}`;
+    else if (isEmpty(a)) right = `${t("reclaim")} ${fmtSol(Number(a.rentLamports) || 0)}`;
     else if (isWsol(a)) right = `${t("unwrap")} ${fmtBal(a.uiAmount)} SOL → ${t("back to you")}`;
     else if (isUnpriced(a)) right = `${t("burn")} ${fmtBal(a.uiAmount)} · ${t("value unknown")}`;
     else right = `${t("burn")} ${fmtBal(a.uiAmount)} · ${v > 0 ? fmtUsd(v) : "$0"}`;
@@ -484,6 +586,15 @@ export default function FirepitPane({ wallet }) {
     ),
   ].filter(Boolean) : [];
 
+  // Surplus job's own sheet: never destroys anything and never touches a balance, so it gets none
+  // of the burn value-guard machinery above (no typed confirmation, no "destroying value"
+  // language) — same reasoning as onConfirmed's own early branch.
+  const surplusLines = confirmKind === "surplus" ? [
+    <span key="c">{t("Accounts")}: <strong>{confirmSel.length}</strong></span>,
+    <span key="s">{t("Surplus returning to your wallet")}: <strong>{fmtSol(confirmSel.reduce((s, a) => s + (Number(a.surplusLamports) || 0), 0))}</strong></span>,
+    <span key="n">{t("These accounts and their tokens stay exactly as they are — only the surplus above today's minimum moves to you.")}</span>,
+  ] : [];
+
   const counts = runResults.reduce((a, r) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
   const runDone = !busy && runResults.length > 0;
 
@@ -503,7 +614,7 @@ export default function FirepitPane({ wallet }) {
         <>
           <Loading label="Working…" />
           {runMsg ? <p className="seeker-tool-note">{runMsg}</p> : null}
-          {runResults.length ? <div className="seeker-forensic-rows">{runResults.map((r, i) => <OutcomeRow key={i} a={r.a} status={r.status} error={r.error} />)}</div> : null}
+          {runResults.length ? <div className="seeker-forensic-rows">{runResults.map((r, i) => <OutcomeRow key={i} a={r.a} status={r.status} error={r.error} kind={r.kind} />)}</div> : null}
         </>
       ) : null}
 
@@ -521,7 +632,7 @@ export default function FirepitPane({ wallet }) {
           ) : null}
           {counts.declined ? <p className="seeker-tool-note">{t("You declined a transaction, so nothing in it was sent.")}</p> : null}
           {runNotAttempted > 0 ? <p className="seeker-tool-note">{runNotAttempted} {t("account(s) were never attempted and are unchanged.")}</p> : null}
-          <div className="seeker-forensic-rows">{runResults.map((r, i) => <OutcomeRow key={i} a={r.a} status={r.status} error={r.error} />)}</div>
+          <div className="seeker-forensic-rows">{runResults.map((r, i) => <OutcomeRow key={i} a={r.a} status={r.status} error={r.error} kind={r.kind} />)}</div>
           {/* Always reachable, even when the burn/reclaim cleared out every remaining account and
               the sections below have nothing left to show. */}
           <button type="button" className="seeker-btn seeker-btn-quiet seeker-firepit-rescan" disabled={!online} onClick={() => scan(wallet.address)}>{t("Rescan")}</button>
@@ -549,6 +660,35 @@ export default function FirepitPane({ wallet }) {
                 <div className="seeker-firepit-actionrow">
                   <span className="seeker-firepit-actiontotal">{t("You'll receive")}: <strong>{fmtSol(emptyLamports)}</strong></span>
                   <button type="button" className="seeker-btn" disabled={selEmptyRows.length === 0 || confirmPhase === "checking"} onClick={() => openConfirm("reclaim")}>{t("Reclaim")}</button>
+                </div>
+              </>
+            )}
+          </section>
+
+          <section className="seeker-firepit-section">
+            <h2 className="seeker-firepit-section-title">{t("Reclaim surplus rent — keep accounts open")}</h2>
+            <p className="seeker-tool-note">{t("A network rent cut means some of your older token accounts hold more SOL than today's minimum requires. This keeps the account and its tokens exactly as they are — it only withdraws the part Solana no longer requires. You pay the normal network fee, so a very small surplus may not be worth reclaiming on its own.")}</p>
+            {surplusUnavailable ? (
+              <p className="seeker-tool-note seeker-passgate-err" role="alert">{t("Couldn't check today's rent-exempt minimum right now — hit Rescan to try again. This is never reported as \"nothing to reclaim.\"")}</p>
+            ) : null}
+            {surplusAccts.length === 0 ? (
+              <Empty>{surplusUnavailable ? t("Couldn't check surplus rent right now.") : t("No surplus rent to reclaim right now — every account is already at today's minimum.")}</Empty>
+            ) : (
+              <>
+                <div className="seeker-firepit-toolbar">
+                  <button type="button" className="seeker-btn seeker-btn-quiet" onClick={() => selectAllSurplus(surplusAccts.map((a) => a.tokenAccount))}>{t("Select all")}</button>
+                  <button type="button" className="seeker-btn seeker-btn-quiet" onClick={clearSurplus}>{t("Clear")}</button>
+                </div>
+                <div className="seeker-firepit-rows">
+                  {surplusAccts.map((a) => <SurplusRow key={a.tokenAccount} a={a} checked={selSurplus.has(a.tokenAccount)} onToggle={toggleSurplus} />)}
+                </div>
+                <div className="seeker-firepit-actionrow">
+                  <span className="seeker-firepit-actiontotal">
+                    {t("Surplus")}: <strong>{fmtSol(surplusLamportsSel)}</strong>
+                    {" · "}{t("Est. fee")}: <strong>{fmtSol(surplusFeeLamports)}</strong>
+                    {" · "}{t("Net")}: <strong>{fmtSol(surplusNetLamports)}</strong>
+                  </span>
+                  <button type="button" className="seeker-btn" disabled={selSurplusRows.length === 0 || confirmPhase === "checking"} onClick={() => openConfirm("surplus")}>{t("Reclaim surplus")}</button>
                 </div>
               </>
             )}
@@ -632,6 +772,16 @@ export default function FirepitPane({ wallet }) {
         onConfirm={onConfirmed}
         onCancel={cancelConfirm}
         danger
+      />
+      <Confirm
+        open={confirmKind === "surplus" && confirmPhase === "ready"}
+        title="Reclaim surplus rent"
+        lines={surplusLines}
+        rows={confirmRows}
+        // Never destroys anything and never touches a balance — no typed confirmation gate.
+        confirmLabel="Confirm and sign"
+        onConfirm={onConfirmed}
+        onCancel={cancelConfirm}
       />
     </Pane>
   );

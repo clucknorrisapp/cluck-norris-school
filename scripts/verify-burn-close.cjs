@@ -71,5 +71,39 @@ diff('[System] SOL transfer',
   norm(shipped.createSolTransferInstruction(owner, acct, 1_500_000_000)),
   norm(SystemProgram.transfer({ fromPubkey: owner, toPubkey: acct, lamports: 1_500_000_000 })));
 
+// WithdrawExcessLamports (opcode 38) — Firepit's "reclaim surplus rent, keep the account open"
+// job. The installed @solana/spl-token (0.4.14) does NOT implement this yet — its own
+// TokenInstruction enum has the slot commented out ("// WithdrawalExcessLamports = 38"), which is
+// itself confirmation of the opcode — so there is no library function to diff against. Instead
+// this builds the SPEC'S reference instruction by hand (SIMD-0266 / solana.com/docs/tokens/
+// advanced/withdraw-excess-lamports: data = the single byte 38, accounts = [source (writable),
+// destination (writable), authority (signer)]) and diffs the shipped builder against THAT. Also
+// verified by a real mainnet simulation (see AGENTS.md / the rent-surplus PR) — this script only
+// re-checks the bytes, not the chain behaviour.
+function refWithdrawExcessLamports(account, destination, authority, programId) {
+  return new (require('@solana/web3.js').TransactionInstruction)({
+    keys: [
+      { pubkey: account,     isSigner: false, isWritable: true },
+      { pubkey: destination, isSigner: false, isWritable: true },
+      { pubkey: authority,   isSigner: true,  isWritable: false },
+    ],
+    programId,
+    data: Buffer.from([38]),
+  });
+}
+for (const prog of [TOKEN_CLASSIC, TOKEN_2022]) {
+  const pk = new PublicKey(prog), tag = `[${prog.slice(0,4)}..]`;
+  diff(`${tag} WithdrawExcessLamports`,
+    norm(shipped.createWithdrawExcessLamportsInstruction(acct, owner, owner, prog)),
+    norm(refWithdrawExcessLamports(acct, owner, owner, pk)));
+}
+// Data must be EXACTLY one byte, opcode 38 — no payload, no trailing bytes.
+{
+  const ix = shipped.createWithdrawExcessLamportsInstruction(acct, owner, owner, TOKEN_CLASSIC);
+  const okLen = ix.data.length === 1 && ix.data[0] === 38;
+  console.log(`[data] WithdrawExcessLamports is exactly [38] ${okLen ? 'MATCH' : 'MISMATCH'}`);
+  if (!okLen) { pass = false; console.log('  got:', Array.from(ix.data)); }
+}
+
 console.log(pass ? '\n✅ ALL MATCH — public/airdrop-engine.js is byte-identical to the libraries' : '\n❌ MISMATCH — do not ship');
 process.exit(pass?0:1);

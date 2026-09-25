@@ -2920,5 +2920,21 @@
   "Nothing in the Library matches “{q}”.": "लाइब्रेरी में “{q}” से मेल खाता कुछ नहीं मिला।",
   "Ask Cluck instead": "इसके बजाय Cluck से पूछें",
   "{total} terms, each linked to the lesson that teaches it.": "{total} शब्द, हर एक उस पाठ से जुड़ा जो उसे सिखाता है।",
-  "Library": "लाइब्रेरी"
+  "Library": "लाइब्रेरी",
+  "A network rent cut means some of your older token accounts hold more SOL than today's minimum requires. This keeps the account and its tokens exactly as they are — it only withdraws the part Solana no longer requires. You pay the normal network fee, so a very small surplus may not be worth reclaiming on its own.": "नेटवर्क rent में कटौती का मतलब है कि आपके कुछ पुराने टोकन अकाउंट में आज के न्यूनतम से ज़्यादा SOL है। यह अकाउंट और उसके टोकन को बिल्कुल वैसा ही रखता है — यह सिर्फ़ वह हिस्सा निकालता है जो Solana को अब ज़रूरी नहीं है। आप सामान्य नेटवर्क फ़ीस देते हैं, इसलिए बहुत छोटा अतिरिक्त हिस्सा अकेले निकालने लायक न हो।",
+  "Accounts": "अकाउंट",
+  "Couldn't check surplus rent right now.": "अभी अतिरिक्त rent जाँचा नहीं जा सका।",
+  "Couldn't check today's rent-exempt minimum right now — hit Rescan to try again. This is never reported as \"nothing to reclaim.\"": "अभी आज का rent-मुक्त न्यूनतम जाँचा नहीं जा सका — फिर से कोशिश करने के लिए Rescan दबाएँ। इसे कभी भी \"कुछ नहीं मिलेगा\" के रूप में नहीं दिखाया जाता।",
+  "Est. fee": "अनुमानित फ़ीस",
+  "Net": "नेट",
+  "No surplus rent to reclaim right now — every account is already at today's minimum.": "अभी रिक्लेम करने के लिए कोई अतिरिक्त rent नहीं है — हर अकाउंट पहले से ही आज के न्यूनतम पर है।",
+  "Reclaim surplus": "अतिरिक्त रिक्लेम करें",
+  "Reclaim surplus rent": "अतिरिक्त rent रिक्लेम करें",
+  "Reclaim surplus rent — keep accounts open": "अतिरिक्त rent रिक्लेम करें — अकाउंट खुले रखें",
+  "Surplus": "अतिरिक्त",
+  "Surplus returning to your wallet": "आपके वॉलेट में लौटने वाला अतिरिक्त हिस्सा",
+  "These accounts and their tokens stay exactly as they are — only the surplus above today's minimum moves to you.": "ये अकाउंट और उनके टोकन बिल्कुल वैसे ही रहते हैं — सिर्फ़ आज के न्यूनतम से ऊपर का अतिरिक्त हिस्सा आपके पास आता है।",
+  "pull": "निकालें",
+  "stays open": "खुला रहता है",
+  "{cur} now, {min} required": "अभी {cur}, ज़रूरी {min}"
 }
