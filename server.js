@@ -1586,10 +1586,23 @@ function bullenEngineConfigRatchet() {
     edgeTriggerFrac: 0.3, deployFrac: 0.95, minRebalanceIntervalSec: 300,
     // Calibration band for ~$90/side pools (see the block comment above for the math):
     // baseDeployThresholdUsd ~half a typical $15 trim, above the ~$4.50 idle-dust floor.
-    maxUsd: 120, baseDeployThresholdUsd: 8,
-    solMaxSol: 1, solGasReserve: 0.1, solDeployThreshold: 0.06,
-    swapEnabled: true, poolBalanceTolPct: 10, maxSwapUsdPerCycle: 30, minSwapUsd: 5,
-    usdcFloor: 5, swapSolFloor: 0.05, maxSwapSolPerCycle: 0.3, swapSlippageBps: 150, maxSwapsPerDay: 24,
+    maxUsd: 200, baseDeployThresholdUsd: 8,
+    // NO FLOORS (owner, live-fire correction 2026-09-25, after go-live on this tiny shared
+    // wallet): the vault's stock swapSolFloor DEFAULT is 2 SOL — sized for CLKN-scale
+    // treasuries, not a ~0.6 SOL client wallet. Left unset here it made tickSol read
+    // solAvail as 0 and fall back to "deploy 100% of the token side" with no check that the
+    // implied SOL half was even affordable — a real deploy failed needing more SOL than the
+    // wallet held. usdcFloor 0 and swapSolFloor/solGasReserve down to a bare fee/rent
+    // reserve (~0.03 SOL) fixed the sizing; lib/whirlpool-vault.js tickSol also gained a
+    // guard that clamps (rather than blindly attempts) a token-primary deploy against the
+    // wallet's real spendable SOL, so this class of failure can't recur even if a future
+    // project's floors drift too high again.
+    usdcFloor: 0, swapSolFloor: 0.03, solGasReserve: 0.03,
+    solMaxSol: 0.66, solDeployThreshold: 0.03,
+    // Small pools must stay about the SAME USD value so price impact is even across both —
+    // tight evenness tolerance (owner, 2026-09-25), tighter than rose/cuna/dnc's 10%.
+    swapEnabled: true, poolBalanceTolPct: 5, maxSwapUsdPerCycle: 30, minSwapUsd: 5,
+    maxSwapSolPerCycle: 0.3, swapSlippageBps: 150, maxSwapsPerDay: 24,
     scaleUpUsdPerCycle: 10, scaleUpDailyCapUsd: 60,
     askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
     maxActionsPerDay: 96,   // cautious floor to start (matches rose's own ramp-up floor); raise
