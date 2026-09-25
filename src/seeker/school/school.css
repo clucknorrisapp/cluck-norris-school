@@ -179,6 +179,17 @@
   color: var(--gold);
 }
 
+/* ── reading a lesson: not a status screen ───────────────────────────────────────────────── */
+/* `.seeker-pane` is built for short, centered status screens: text-align center and a 10vh top
+   pad. The lesson screens inherited both, so paragraphs and bulleted runs read centered and
+   every lesson opened under ~80px of empty space. src/seeker/solana/solana.css's header comment
+   says the school "drops the centered layout" — no rule ever did (git log -S finds none). The
+   school HOME keeps its centered hero on purpose; only the reading screens opt out. */
+.seeker-pane.seeker-school-read {
+  text-align: left;
+  padding-top: 4px;
+}
+
 /* ── one lesson ────────────────────────────────────────────────────────────────────────────── */
 .seeker-school-back {
   display: inline-flex;
@@ -518,7 +529,6 @@
   margin: 2px 0 12px;
 }
 
-.seeker-step-body { min-height: 40vh; }
 .seeker-step-body :focus { outline: none; }
 .seeker-step-body :focus-visible { outline: 2px solid var(--orange); outline-offset: 4px; border-radius: 4px; }
 
@@ -603,3 +613,6 @@
 .seeker-step-controls .seeker-btn { margin: 0; }
 .seeker-step-next { flex: 1 1 auto; }
 .seeker-step-back { flex: 0 0 auto; min-width: 96px; }
+/* ⚠️ Specificity: `.seeker-pane p` (0-1-1) beats `.seeker-school-quiznote` (0-1-0) and zeroes its
+   top margin, so the note sat flush under the verdict box. Match the class depth (AGENTS.md). */
+.seeker-step .seeker-school-quiznote { margin: 20px 0 8px; }

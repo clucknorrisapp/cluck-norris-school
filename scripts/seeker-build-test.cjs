@@ -846,6 +846,45 @@ async function renderedCheck(pw, baselineSeekerDir) {
       console.log("  · no pristine origin/develop seeker bundle available — reporting this tree's header height only: " + hereHeaderHeight + "px");
     }
 
+    // ── the lesson stepper (owner 2026-09-24: LP Lab on a phone was "scroll, scroll, scroll") ──
+    // A long lesson reads one section per screen; a short one stays on one page. Rules and the
+    // step order are unit-tested against the real curriculum in scripts/lesson-steps-test.cjs;
+    // these are the rendered facts that test cannot see.
+    await pillPage.evaluate(() => { try { localStorage.removeItem("clkn_lesson_step"); } catch (_) {} });
+    await pillPage.goto(`http://127.0.0.1:${port}/#/school/lp/8`, { waitUntil: "networkidle", timeout: 20000 });
+    await pillPage.waitForSelector(".seeker-step", { timeout: 15000 });
+    ok("rendered: LP Lab lesson 8 opens in the stepper, 8 segments, 'Step 1 of 8'",
+       (await pillPage.locator(".seeker-step-seg").count()) === 8 && /Step 1 of 8/.test(await pillPage.locator(".seeker-step-count").innerText()));
+    ok("rendered: the stepper's opening outline lists every section plus the verdict (7)",
+       (await pillPage.locator(".seeker-step-outline-item").count()) === 7);
+    const readAlign = await pillPage.evaluate(() => getComputedStyle(document.querySelector(".seeker-school-read")).textAlign);
+    ok("rendered: lesson reading screens are left-aligned, not the pane's centered status layout", readAlign === "left" || readAlign === "start", readAlign);
+    await pillPage.locator(".seeker-step-next").click();
+    await pillPage.waitForTimeout(700);
+    ok("rendered: Next advances to step 2 and focus moves to its heading",
+       /Step 2 of 8/.test(await pillPage.locator(".seeker-step-count").innerText())
+       && (await pillPage.evaluate(() => document.activeElement && document.activeElement.tagName)) === "H2");
+    await pillPage.evaluate(() => window.scrollTo({ top: document.scrollingElement.scrollHeight }));
+    await pillPage.waitForTimeout(250);
+    const stepCtrls = await pillPage.locator(".seeker-step-controls").boundingBox();
+    const stepNav = await pillPage.locator(".seeker-nav").boundingBox();
+    const stepPill = await pillPage.locator("#clkn-lang-toggle").boundingBox();
+    ok("rendered: Back / Next clear the bottom nav and the 🌐 pill at the foot of a long step (360x800)",
+       stepCtrls.y + stepCtrls.height <= stepNav.y + 1 && !overlaps(stepPill, stepCtrls), { stepCtrls, stepNav, stepPill });
+    await pillPage.locator(".seeker-step-next").click();
+    await pillPage.waitForTimeout(900);
+    ok("rendered: Next from the foot of a long step lands at the top of the next one",
+       (await pillPage.evaluate(() => window.scrollY)) === 0 && /Step 3 of 8/.test(await pillPage.locator(".seeker-step-count").innerText()));
+    await pillPage.reload({ waitUntil: "networkidle", timeout: 20000 });
+    await pillPage.waitForSelector(".seeker-step", { timeout: 15000 });
+    ok("rendered: leaving and coming back resumes on the same step",
+       /Step 3 of 8/.test(await pillPage.locator(".seeker-step-count").innerText()));
+    await pillPage.goto(`http://127.0.0.1:${port}/#/school/basics/wallet`, { waitUntil: "networkidle", timeout: 20000 });
+    await pillPage.waitForSelector(".seeker-school-title", { timeout: 15000 });
+    ok("rendered: a short Incubator lesson stays on one page (no stepper)",
+       (await pillPage.locator(".seeker-step").count()) === 0 && (await pillPage.locator(".seeker-school-start").count()) === 1);
+    await pillPage.evaluate(() => { try { localStorage.removeItem("clkn_lesson_step"); } catch (_) {} });
+
     // ── quiz auto-scroll, in the APP (owner 2026-09-24, first asked for on the iOS edition) ──
     // #434 shipped a helper that scrolled `.seeker-main`, but the document is what scrolls in this
     // shell (`.seeker-shell` is min-height, not height), so answering left Next ~200px under the

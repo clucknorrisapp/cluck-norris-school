@@ -28,7 +28,7 @@
 //     ledger. Both bugs existed here — see the Codex round on PR #390.
 
 import React from "react";
-import { revealQuizResult, revealUnderClear } from "../../shared/scrollReveal.js";
+import { revealQuizResult, revealUnderClear, scrollBehavior } from "../../shared/scrollReveal.js";
 import { buildLessonSteps, clampStep, loadStep, saveStep, clearStep } from "../../shared/lessonSteps.js";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { t, tf, tBlock, useI18nReady } from "../i18n.js";
@@ -308,8 +308,8 @@ function quizScrollChrome() {
 //     form control, or while text is selected.
 //   · The step is REMEMBERED per lesson (clkn_lesson_step), so leaving mid-lesson and coming back
 //     lands where you were. A pass clears it; "Read the lesson again" clears it.
-//   · Changing step brings the new step's top under the header and moves focus to its heading,
-//     so a screen reader announces the new section instead of staying on a button that moved.
+//   · Changing step returns to the top of the page, like turning a page, and moves focus to the
+//     new heading, so a screen reader announces the new section instead of a button that moved.
 //
 // Rendered with key={lesson.key} by the caller: a lesson opened from another lesson remounts this
 // component, so one lesson's position can never be written under the next lesson's key.
@@ -327,9 +327,11 @@ function LessonStepper({ course, lesson, steps, need, onStartQuiz, onMarkRead })
     if (!moved.current) return;
     let raf1 = requestAnimationFrame(() => {
       raf1 = requestAnimationFrame(() => {
+        // A new step is a new page: back to the top, so the back link, the strip and the new
+        // heading are all in view. quizScrollChrome() says which element really scrolls.
         const chrome = quizScrollChrome();
-        if (chrome && topRef.current) {
-          revealUnderClear({ scrollEl: chrome.scrollEl, el: topRef.current, topClearY: chrome.topClearY });
+        if (chrome) {
+          try { chrome.scrollEl.scrollTo({ top: 0, behavior: scrollBehavior() }); } catch (_) {}
         }
         try { if (headRef.current) headRef.current.focus({ preventScroll: true }); } catch (_) {}
       });
@@ -435,7 +437,7 @@ function LessonStepper({ course, lesson, steps, need, onStartQuiz, onMarkRead })
   }
 
   return (
-    <div className="seeker-pane seeker-school">
+    <div className="seeker-pane seeker-school seeker-school-read">
       <Link className="seeker-school-back" to={`/school/${course.id}`}>{t("Back to")} {t(course.title)}</Link>
 
       <div className="seeker-step" ref={topRef}>
@@ -724,7 +726,7 @@ export function SchoolLesson() {
   }
 
   return (
-    <div className="seeker-pane seeker-school">
+    <div className="seeker-pane seeker-school seeker-school-read">
       <Link className="seeker-school-back" to={`/school/${course.id}`}>{t("Back to")} {t(course.title)}</Link>
       <h1 className="seeker-school-title">{lesson.icon} {lesson.title}</h1>
       {lesson.belt ? <div className="seeker-school-belt">{lesson.belt}</div> : null}
