@@ -880,10 +880,13 @@ async function renderedCheck(pw, baselineSeekerDir) {
     const headGeom = await pillPage.evaluate(() => {
       const q = document.querySelector(".seeker-school-quizhead").getBoundingClientRect().top;
       const head = document.querySelector(".seeker-header").getBoundingClientRect().bottom;
-      return { q, head };
+      return { q, head, scrollY: window.scrollY };
     });
-    ok("rendered: Next brings the next question's heading just under the app header (360x800)",
-       headGeom.q >= headGeom.head - 1 && headGeom.q <= headGeom.head + 40, headGeom);
+    // Either the heading was scrolled to just under the header, or the page is already at its top
+    // (a short question that fits on one screen has nothing to scroll, and sits under the pane's
+    // own top padding) — both put the question where the eye starts. Behind the header is the fail.
+    ok("rendered: Next brings the next question's heading under the app header, or the page is already at its top (360x800)",
+       headGeom.q >= headGeom.head - 1 && (headGeom.q <= headGeom.head + 40 || headGeom.scrollY === 0), headGeom);
 
     // Connect the wallet (same fake MWA bridge), then open the checkup pane.
     await pillPage.locator(".seeker-walletbtn").click();
