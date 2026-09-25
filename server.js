@@ -63,6 +63,7 @@ const jvpDashboard = require("./lib/jvp-dashboard");
 const curriculumPage = require("./lib/curriculum"); // lesson COUNTS only — the SEO mirror page was removed 2026-07-29
 const rpc = require("./lib/rpc"); // resilient RPC: primary Helius + automatic failover
 const { scanReclaimable } = require("./lib/rent-reclaim"); // Rent Reclaim, READ SIDE ONLY — Seeker app increment 2
+const { computeSurplus, isEligibleForSurplus } = require("./lib/rent-surplus"); // Firepit surplus-rent job, pure decision logic
 const {
   SOL_ADDR_RE, base58Decode, base58Encode, isOnCurveBytes, isOnCurve, deriveAta,
   DEX_PROGRAMS, LOCKER_PROGRAMS, TOKEN_PROGRAMS, PROGRAM_LABELS,
@@ -14893,6 +14894,32 @@ app.get("/api/wallet-checkup", async (req, res) => {
 // can show, and make the user confirm, the USD VALUE being destroyed before any burn.
 // READ-ONLY: it never builds or signs anything — the client builds the burn+close tx and
 // the user's own wallet signs it. Frozen accounts are flagged (can't be burned/closed).
+//
+// ── surplus rent (WithdrawExcessLamports), added 2026-09-25 ─────────────────────────────
+// A rent PARAMETER cut (most recently the p-token/SIMD-0266 rollout) lowers the network's
+// rent-exempt MINIMUM without touching what an EXISTING account already deposited — so an
+// account opened before the cut can sit on more lamports than today's rule requires, on top
+// of (not instead of) its ordinary "close it, get everything back" reclaim above. The token
+// program's WithdrawExcessLamports instruction (opcode 38, both programs) lets the owner pull
+// that surplus WITHOUT closing the account or touching its token balance. This never hardcodes
+// a rent figure (CLAUDE.md: "more rent cuts are coming") — the minimum is read live per account
+// from its own on-chain byte length, cached briefly by length since the minimum only moves on a
+// protocol change, not per request.
+const rentExemptMinCache = new Map(); // space(bytes) -> { lamports, at }
+const RENT_EXEMPT_CACHE_MS = 60 * 60 * 1000; // an hour — this is a network PARAMETER, not per-account state
+async function rentExemptMinimumFor(rpcFn, space) {
+  const now = Date.now();
+  const cached = rentExemptMinCache.get(space);
+  if (cached && (now - cached.at) < RENT_EXEMPT_CACHE_MS) return cached.lamports;
+  const d = await rpcFn("getMinimumBalanceForRentExemption", [space]);
+  const lamports = Number(d && d.result);
+  if (!Number.isFinite(lamports) || lamports <= 0) {
+    if (cached) return cached.lamports;   // stale-but-real beats nothing
+    throw new Error("bad getMinimumBalanceForRentExemption response");
+  }
+  rentExemptMinCache.set(space, { lamports, at: now });
+  return lamports;
+}
 app.get("/api/burn-scan", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -14925,6 +14952,16 @@ app.get("/api/burn-scan", async (req, res) => {
           rentLamports: Number(acc.account?.lamports) || 0,   // exact reclaimable rent for THIS account
           frozen: info.state === "frozen",                    // frozen accounts can't be burned/closed
           delegated: !!info.delegate,                          // a delegate has approval on this account
+          // Both fields the surplus job needs. `space` is the account's own byte length, straight off
+          // the RPC's account envelope (present alongside `data` even under jsonParsed encoding) — NEVER
+          // assumed as 165, because a Token-2022 account with extensions (immutableOwner, etc.) is a
+          // different length and a wrong length would misprice its rent-exempt minimum. `isNative` is
+          // the token program's OWN flag for a wrapped-SOL account (info.isNative) — WithdrawExcessLamports
+          // refuses those (NativeNotSupported); trust the program's flag rather than re-deriving it from
+          // a hardcoded wSOL mint string here.
+          space: Number(acc.account?.space ?? acc.account?.data?.space) || 0,
+          isNative: !!info.isNative,
+          owner: info.owner || null,   // should always equal `wallet` (the RPC filter) — carried for lib/rent-surplus's defense-in-depth check
         });
       }
     }
@@ -14932,7 +14969,26 @@ app.get("/api/burn-scan", async (req, res) => {
     const list = accounts.slice(0, 200);
     const mints = [...new Set(list.map((a) => a.mint))];
     const priced = mints.length ? await priceTokensBatch(mints) : {};
-    let rentLamportsTotal = 0, valueUsdTotal = 0;
+
+    // Rent-exempt minimum, read live per DISTINCT byte length (never hardcoded — see the header
+    // note above this route). A handful of distinct lengths cover an entire wallet's accounts
+    // (165 classic, 170+ for Token-2022 extensions), so this is a few RPC calls, not one per
+    // account. If the lookup fails entirely and nothing cached survives, the surplus figures are
+    // marked UNAVAILABLE rather than silently reading as zero surplus — CLAUDE.md: an RPC failure
+    // must read as "couldn't check", never as "nothing to reclaim".
+    const spaces = [...new Set(list.map((a) => a.space).filter((s) => s > 0))];
+    const rentMinBySpace = new Map();
+    let surplusAvailable = true;
+    for (const sp of spaces) {
+      try {
+        rentMinBySpace.set(sp, await rentExemptMinimumFor(rpc, sp));
+      } catch (e) {
+        surplusAvailable = false;
+        console.error("[burn-scan] rent-exempt lookup failed for space", sp, e.message);
+      }
+    }
+
+    let rentLamportsTotal = 0, valueUsdTotal = 0, surplusLamportsTotal = 0;
     const out = list.map((a) => {
       const p = priced[a.mint] || {};
       const priceUsd = Number(p.priceUsd) || 0;
@@ -14945,10 +15001,22 @@ app.get("/api/burn-scan", async (req, res) => {
       // token unless we say so. The client uses this to warn "value UNKNOWN, not zero" instead of
       // flashing a false "nothing of value is destroyed" all-clear over a bag that may be worth money.
       const priceKnown = Object.prototype.hasOwnProperty.call(priced, a.mint);
+      // Surplus = what this account holds ABOVE today's rent-exempt minimum for its own byte
+      // length — null (never 0) when that minimum couldn't be read for this account's space, so
+      // an RPC hiccup can't misreport a real surplus as "nothing to reclaim". Wrapped SOL is
+      // excluded outright: WithdrawExcessLamports refuses it (NativeNotSupported), regardless of
+      // any balance/lamport math. lib/rent-surplus.js owns this decision so it has its own
+      // no-network unit test (mirrors lib/rent-reclaim.js's split for the close-account job).
+      const { rentExemptLamports, surplusLamports } = a.isNative
+        ? { rentExemptLamports: null, surplusLamports: null }
+        : computeSurplus(a.rentLamports, rentMinBySpace.get(a.space));
+      if (surplusLamports != null) surplusLamportsTotal += surplusLamports;
+      const surplusEligible = isEligibleForSurplus({ isNative: a.isNative, owner: a.owner, surplusLamports }, wallet);
       return {
         ...a,
         symbol: p.symbol || null, name: p.name || null, logo: p.logo || null,
         priceUsd, valueUsd, priceKnown,
+        rentExemptLamports, surplusLamports, surplusEligible,
         // ⚠️ "empty" comes from the BASE-UNIT STRING, never from uiAmount (adversarial review
         // P1-6, 2026-09-21). `uiAmount` is `f64 | null` in the RPC schema, and `Number(null) || 0`
         // above is 0 — so any account the node declines to ui-scale (the Token-2022
@@ -14979,6 +15047,12 @@ app.get("/api/burn-scan", async (req, res) => {
       count: out.length, capped,
       rentSolTotal: Number((rentLamportsTotal / 1e9).toFixed(6)),
       valueUsdTotal: Number(valueUsdTotal.toFixed(2)),
+      // surplusAvailable is false only when a rent-exempt lookup failed with nothing cached to
+      // fall back on — the client must show "couldn't check" rather than a false "0 to reclaim"
+      // (same rule as /api/seeker/reclaimable's RPC-failure posture).
+      surplusAvailable,
+      surplusLamportsTotal,
+      surplusSolTotal: Number((surplusLamportsTotal / 1e9).toFixed(6)),
       accounts: out,
     });
   } catch (e) {
