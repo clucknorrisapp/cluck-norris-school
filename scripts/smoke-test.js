@@ -57,9 +57,12 @@ const SCREENS = [
 //              lessons 1..N-1 as completed. Clicking blind here hits "← BACK" and navigates
 //              away, which is exactly the false failure the first version of this test produced.
 const CURRICULA = [
-  { hash: "select", label: "curriculum", count: 16, nav: "tiles", storageKey: "clkn_completed", idsFrom: "LESSONS" },
-  { hash: "incubator", label: "incubator", count: 7, nav: "linear", storageKey: "incubator_progress", idsFrom: "INCUBATOR_LESSONS" },
-  { hash: "lplab", label: "LP lab", count: 14, nav: "tiles" },
+  // minSteps: every lesson reads as steps (owner 2026-09-25). Belt and Incubator lessons are the
+  // opening + the terms; an LP Lab lesson is the opening, 5–6 sections, "Try it yourself" and
+  // the verdict — so at least 8.
+  { hash: "select", label: "curriculum", count: 16, nav: "tiles", storageKey: "clkn_completed", idsFrom: "LESSONS", minSteps: 2 },
+  { hash: "incubator", label: "incubator", count: 7, nav: "linear", storageKey: "incubator_progress", idsFrom: "INCUBATOR_LESSONS", minSteps: 2 },
+  { hash: "lplab", label: "LP lab", count: 14, nav: "tiles", minSteps: 8 },
 ];
 
 const MIN_TEXT = 400; // a real screen renders far more than this; a crashed one renders ~15 chars
@@ -262,8 +265,25 @@ function serveDist() {
         continue;
       }
       await page.waitForTimeout(900);
-      const text = await page.evaluate(() => (document.body ? document.body.innerText : ""));
-      verdict(`${c.label} lesson ${i}`, text, errors);
+      // ⚠️ THE LESSON STEPPER (owner 2026-09-25: "Yes all of website"): a lesson now shows one
+      // step at a time, so the first screen is only its opening. Walk every step and judge the
+      // union — otherwise a calculator on the "Try it yourself" step could crash its error
+      // boundary and this loop, which exists to catch exactly that, would never see it.
+      let text = await page.evaluate(() => (document.body ? document.body.innerText : ""));
+      const stepCount = await page.locator("[data-lesson-step-seg]").count();
+      for (let s = 1; s < stepCount; s++) {
+        await page.locator("[data-lesson-step-seg]").nth(s).click();
+        await page.waitForTimeout(120);
+        text += "\n" + (await page.evaluate(() => (document.body ? document.body.innerText : "")));
+      }
+      if (c.minSteps) {
+        checks++;
+        if (stepCount < c.minSteps) {
+          failures.push(`${c.label} lesson ${i} — expected the lesson stepper (≥${c.minSteps} steps), found ${stepCount}`);
+          log(`  ✗ ${c.label} lesson ${i} — stepper missing (${stepCount} steps)`);
+        }
+      }
+      verdict(`${c.label} lesson ${i}${stepCount ? ` (${stepCount} steps)` : ""}`, text, errors);
       // Signature must cover the WHOLE screen: every page starts with the same ~100 chars of
       // shared nav, so a prefix signature makes all lessons look identical and this guard
       // would fire on a perfectly healthy run.
@@ -315,6 +335,9 @@ function serveDist() {
     }
     await page.waitForTimeout(500);
 
+    // The exam button lives on the lesson stepper's LAST step.
+    const segCount = await page.locator("[data-lesson-step-seg]").count();
+    if (segCount) { await page.locator("[data-lesson-step-seg]").nth(segCount - 1).click(); await page.waitForTimeout(300); }
     checks++;
     const startedQuiz = await page.evaluate(() => {
       const btn = [...document.querySelectorAll("button")].find((b) => /TAKE THE EXAM/i.test(b.textContent || ""));

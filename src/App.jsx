@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { CLKN_MINT, CLKN_TRADE_LINK, JUPITER_TRADE_LINK, LOGO_B64, COL, READ, MintAddress, JupiterSwapButton, AskCluck, LP_LESSONS_COUNT, RootCrakBadge, ROOTCRAK } from "./shared.jsx";
 import { STORE, api, STORE_PAGES } from "./edition.js";
 import { revealQuizResult, revealUnderClear } from "./shared/scrollReveal.js";
+import WebLessonStepper from "./shared/WebLessonStepper.jsx";
+import { clearStep } from "./shared/lessonSteps.js";
 
 // ── quiz auto-scroll (window-scrolling pages) ──────────────────────────────────────────────────
 // Owner (2026-09-24): "that has been a problem even in the web app … we need to address that
@@ -802,7 +804,8 @@ function Incubator({ onComplete, onBack }) {
       setSel(null);
       setShowExp(false);
     } else {
-      // Lesson complete
+      // Lesson complete — the next visit to this lesson opens at the top, not on its last step.
+      clearStep("basics:" + lesson.id);
       const newCompleted = completed.includes(lesson.id) ? completed : [...completed, lesson.id];
       setCompleted(newCompleted);
       try { localStorage.setItem("incubator_progress", JSON.stringify({ completed: newCompleted })); } catch(e) {}
@@ -858,24 +861,40 @@ function Incubator({ onComplete, onBack }) {
           </div>
         ))}
       </div>
-      <div style={{textAlign:"center",marginBottom:20}}>
-        <div style={{fontSize:40,marginBottom:8}}>{lesson.icon}</div>
-        <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:lesson.color,marginBottom:4}}>LESSON {lessonIdx+1} OF {INCUBATOR_LESSONS.length}</div>
-        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,color:"#F9FAFB",margin:"0 0 12px"}}>{lesson.title}</h2>
-        <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.7,margin:0}}>{lesson.intro}</p>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
-        {lesson.concepts.map(c=>(
-          <div key={c.term} style={{background:"rgba(255,122,24,0.05)",border:`1px solid ${lesson.color}30`,borderRadius:10,padding:"12px 14px"}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:lesson.color,marginBottom:4}}>{c.term}</div>
-            <div style={{fontSize:15,color:"#9CA3AF",lineHeight:1.6}}>{c.def}</div>
-          </div>
-        ))}
-      </div>
-      <AskCluck context={lesson.title} compact={true}/>
-      <button onClick={()=>setPhase("quiz")} style={{width:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:12}}>
-        ✅ QUICK CHECK →
-      </button>
+      {/* Lesson stepper (owner 2026-09-25: "Yes all of website"): the opening, whose intro is the
+          explanation, then the terms, which carry the quick check. src/shared/WebLessonStepper.jsx. */}
+      <WebLessonStepper
+        key={"basics:"+lesson.id}
+        storeKey={"basics:"+lesson.id}
+        color={lesson.color}
+        onStepChange={stopRead}
+        steps={[
+          {label:"", node:(
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:40,marginBottom:8}}>{lesson.icon}</div>
+              <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:lesson.color,marginBottom:4}}>LESSON {lessonIdx+1} OF {INCUBATOR_LESSONS.length}</div>
+              <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,color:"#F9FAFB",margin:"0 0 12px"}}>{lesson.title}</h2>
+              <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.7,margin:0}}>{lesson.intro}</p>
+            </div>
+          )},
+          {label:"The terms that matter", node:(<>
+            <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
+              {lesson.concepts.map(c=>(
+                <div key={c.term} style={{background:"rgba(255,122,24,0.05)",border:`1px solid ${lesson.color}30`,borderRadius:10,padding:"12px 14px"}}>
+                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:lesson.color,marginBottom:4}}>{c.term}</div>
+                  <div style={{fontSize:15,color:"#9CA3AF",lineHeight:1.6}}>{c.def}</div>
+                </div>
+              ))}
+            </div>
+            <AskCluck context={lesson.title} compact={true}/>
+          </>)},
+        ]}
+        finish={
+          <button onClick={()=>setPhase("quiz")} style={{width:"100%",height:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
+            ✅ QUICK CHECK →
+          </button>
+        }
+      />
       <button onClick={onBack} style={{display:"block",margin:"12px auto 0",background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer"}}>
         ← BACK TO ENTRANCE
       </button>
@@ -1520,30 +1539,49 @@ function Lesson({lesson:l,onComplete,onBack,hubFrom}){
   // a 5-question one needed 40%. ~67% (2 of 3) either way now — ceil() so a shorter quiz never
   // needs fewer than the 2-of-3 baseline, and a longer one needs the same bar or a hair stricter.
   const passed=score>=Math.ceil(l.questions.length*2/3);
+  // A pass means the next visit opens this lesson at the top, not on its exam step.
+  useEffect(()=>{ if(phase==="result"&&passed) clearStep("fundamentals:"+l.id); },[phase,passed,l.id]);
 
+  // Lesson stepper (owner 2026-09-25: "Yes all of website"): the opening — belt, title, quote and
+  // the intro, which IS the explanation — then the terms, which carry the exam button. See
+  // src/shared/WebLessonStepper.jsx. A pass clears the remembered step (effect above).
   if(phase==="intro") return(
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
       <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",cursor:"pointer",fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,marginBottom:18,padding:0}}>← BACK</button>
-      <div style={{textAlign:"center",marginBottom:20}}>
-        <div style={{fontSize:40,marginBottom:6}}>{l.icon}</div>
-        <Belt belt={l.belt}/>
-        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,color:"#F9FAFB",margin:"8px 0 4px"}}>{l.title}</h2>
-        <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:l.color,fontSize:15.5,margin:0,lineHeight:1.5}}>"{l.quote}"</p>
-      </div>
-      <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.16)",borderRadius:10,padding:16,marginBottom:16}}>
-        <p style={{color:"#D1D5DB",fontSize:15.5,lineHeight:1.7,margin:0}}>{l.intro}</p>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
-        {l.concepts.map((c,i)=>(
-          <div key={i} style={{background:"rgba(255,122,24,0.04)",borderLeft:`3px solid ${l.color}`,borderRadius:8,padding:"10px 14px"}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:l.color,letterSpacing:1,marginBottom:3}}>{c.term}</div>
-            <div style={{fontSize:13.5,color:"#9CA3AF",lineHeight:1.5}}>{c.def}</div>
-          </div>
-        ))}
-      </div>
-      <button onClick={()=>{trackId("quiz_start",l.id);setPhase("quiz");}} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:`0 0 20px ${l.glow}`}}>
-        📝 TAKE THE EXAM
-      </button>
+      <WebLessonStepper
+        key={"fundamentals:"+l.id}
+        storeKey={"fundamentals:"+l.id}
+        color={l.color}
+        onStepChange={stopRead}
+        steps={[
+          {label:"", node:(<>
+            <div style={{textAlign:"center",marginBottom:20}}>
+              <div style={{fontSize:40,marginBottom:6}}>{l.icon}</div>
+              <Belt belt={l.belt}/>
+              <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,color:"#F9FAFB",margin:"8px 0 4px"}}>{l.title}</h2>
+              <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:l.color,fontSize:15.5,margin:0,lineHeight:1.5}}>"{l.quote}"</p>
+            </div>
+            <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.16)",borderRadius:10,padding:16}}>
+              <p style={{color:"#D1D5DB",fontSize:15.5,lineHeight:1.7,margin:0}}>{l.intro}</p>
+            </div>
+          </>)},
+          {label:"The terms that matter", node:(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {l.concepts.map((c,i)=>(
+                <div key={i} style={{background:"rgba(255,122,24,0.04)",borderLeft:`3px solid ${l.color}`,borderRadius:8,padding:"10px 14px"}}>
+                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:l.color,letterSpacing:1,marginBottom:3}}>{c.term}</div>
+                  <div style={{fontSize:13.5,color:"#9CA3AF",lineHeight:1.5}}>{c.def}</div>
+                </div>
+              ))}
+            </div>
+          )},
+        ]}
+        finish={
+          <button onClick={()=>{trackId("quiz_start",l.id);setPhase("quiz");}} style={{width:"100%",height:"100%",background:l.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:`0 0 20px ${l.glow}`}}>
+            📝 TAKE THE EXAM
+          </button>
+        }
+      />
     </div>
   );
 
