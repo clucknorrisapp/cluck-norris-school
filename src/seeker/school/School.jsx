@@ -37,8 +37,7 @@ import { INDEX as SOLANA_ROOM_INDEX } from "../solana/content.js";
 import "../solana/solana.css";
 import {
   COURSES, TOTAL_LESSONS, courseById, lessonById,
-  completedIds, isDone, markDone, courseProgress, nextLesson, passMark,
-} from "./curriculum.js";
+  completedIds, isDone, markDone, courseProgress, nextLesson, passMark, GLOSSARY } from "./curriculum.js";
 import ShieldIcon from "../icons/ShieldIcon.jsx";
 import "./school.css";
 
@@ -69,13 +68,78 @@ function Bar({ done, total }) {
 // in English under a translated heading for every LP Lab and Deep Dive lesson (Codex, PR #390).
 // A curated hit is marked `data-i18n-skip` so the page observer does not send the Spanish off
 // for machine translation.
+//
+// LABELS AND LEAD-INS (owner, 2026-09-25, on "Price Impact vs Slippage": "make Price impact:
+// Slippage: bold and colored — this whole page just looks like a novel"). The lessons are written
+// with their structure in the text: a short line ending in a colon ("PRICE IMPACT:", "COMMON
+// MISTAKES:", ~220 of them across the curriculum) heads what follows, and an all-caps lead-in
+// ("TOO HIGH slippage tolerance: …", "PRO TIP: …") opens a line. Styling happens AFTER
+// translation, on whatever text is being shown, so it works in every language without a
+// dictionary change: a translated label still ends in a colon (":" or "："). The rules are in
+// proseLine() below.
+const LABEL_MAX = 48;
+function isLabel(line, firstOfMany) {
+  const s = line.trim();
+  if (!s || s.length > LABEL_MAX || !/[:：]$/.test(s)) return false;
+  const letters = s.replace(/[^A-Za-z]/g, "");
+  const caps = s.replace(/[^A-Z]/g, "");
+  // Mostly capitals ("PRICE IMPACT:", "FULL RANGE vs CONCENTRATED:"), or the opening line of a
+  // multi-line paragraph — which also catches a translation with no capital letters at all.
+  return (letters.length >= 3 && caps.length / letters.length >= 0.6) || firstOfMany;
+}
+const LEAD_RE = /^([A-Z][A-Z0-9'’&/-]+(?: [A-Z0-9'’&/().-]+)*(?: [^:：\n]{0,28})?)([:：])\s+(\S.*)$/;
+export function proseLine(line, firstOfMany) {
+  if (isLabel(line, firstOfMany)) return { kind: "label", text: line.trim() };
+  const m = LEAD_RE.exec(line);
+  if (m && m[1].replace(/[^A-Z]/g, "").length >= 2 && m[1].length <= 40) return { kind: "lead", lead: m[1] + m[2], rest: m[3] };
+  return { kind: "text", text: line };
+}
+
+// A label reads as a heading, so its trailing colon goes (owner, 2026-09-25: "do we need the : after
+// every line???"). A lead-in keeps its colon — there it still joins the words to the sentence.
+const dropColon = (s) => s.replace(/\s*[:：]\s*$/, "");
+
+function ProsePara({ text }) {
+  const lines = text.split("\n");
+  const many = lines.length > 1;
+  // A label standing alone in its paragraph heads a GROUP of the labelled items that follow
+  // ("BEST PASSIVE POSITIONS:" over "FULL RANGE on correlated pairs:", "STABLE PAIRS:", …). Styled
+  // the same as its items it read as if something were missing under it (owner, 2026-09-25), so
+  // it gets its own, underlined, treatment.
+  if (!many && proseLine(lines[0], false).kind === "label") {
+    return <p className="seeker-prose-group"><span className="seeker-prose-grouplabel">{dropColon(lines[0].trim())}</span></p>;
+  }
+  return (
+    <p>
+      {lines.map((ln, i) => {
+        const r = proseLine(ln, many && i === 0);
+        const br = i < lines.length - 1 ? "\n" : null;
+        if (r.kind === "label") return <React.Fragment key={i}><span className="seeker-prose-label">{dropColon(r.text)}</span>{br}</React.Fragment>;
+        if (r.kind === "lead") return <React.Fragment key={i}><strong className="seeker-prose-lead">{r.lead}</strong> {r.rest}{br}</React.Fragment>;
+        return <React.Fragment key={i}>{r.text}{br}</React.Fragment>;
+      })}
+    </p>
+  );
+}
+
+// Fisher-Yates over the option indices, carrying the correct index with it.
+function shuffleOptions(q) {
+  const opts = Array.isArray(q.options) ? q.options : [];
+  const idx = opts.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  return { ...q, options: idx.map((i) => opts[i]), correct: idx.indexOf(q.correct) };
+}
+
 function Prose({ text, className }) {
   const { text: body, translated } = tBlock(text);
   const paras = String(body || "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   if (!paras.length) return null;
   return (
     <div className={className} data-i18n-skip={translated ? "1" : undefined}>
-      {paras.map((p, i) => <p key={i}>{p}</p>)}
+      {paras.map((p, i) => <ProsePara key={i} text={p} />)}
     </div>
   );
 }
@@ -180,6 +244,18 @@ export function SchoolHome({ finished, progressNote, safetyTools }) {
         })}
       </div>
 
+      {/* The Library (owner, 2026-09-25) — every term in the school, searchable, each linked to the
+          lesson that teaches it. Styled as a course card so it reads as part of the school. */}
+      <Link className="seeker-school-course seeker-library-card" to="/library" data-clkn-avoid="1">
+        <div className="seeker-school-course-top">
+          <span className="seeker-school-course-icon" aria-hidden="true">📖</span>
+          <div className="seeker-school-course-text">
+            <span className="seeker-school-course-title">{t("The Library")}</span>
+            <span className="seeker-school-course-sub">{tf("{total} terms, each linked to the lesson that teaches it.", { total: GLOSSARY.length })}</span>
+          </div>
+        </div>
+      </Link>
+
       {/* The Solana Room (AGENTS.md's flagship school section) — a free, no-wallet reference
           room, below the course list rather than mixed into it: it's read one page at a time,
           not a course with a completion count. Copy is the room's OWN already-translated intro
@@ -243,8 +319,12 @@ export function SchoolCourse() {
   return (
     <div className="seeker-pane seeker-school">
       <Link className="seeker-school-back" to="/school">{t("Back to the school")}</Link>
-      <h1 className="seeker-school-title">{course.icon} {t(course.title)}</h1>
-      <p className="seeker-tool-lede">{t(course.sub)}</p>
+      {/* Owner (2026-09-25, Xcode): "no logo at top of LP lab tab". The LP Lab tab IS this
+          course page, so every course page carries the school home's hero logo. The title and
+          lede carry data-clkn-avoid for the same reason the home's do (the fixed 🌐 pill). */}
+      <img className="seeker-school-logo" src="/cluck-norris.png" alt="" decoding="async" />
+      <h1 className="seeker-school-title" data-clkn-avoid="1">{course.icon} {t(course.title)}</h1>
+      <p className="seeker-tool-lede" data-clkn-avoid="1">{t(course.sub)}</p>
 
       <ol className="seeker-school-lessons">
         {course.lessons.map((l, i) => {
@@ -582,6 +662,16 @@ export function SchoolLesson() {
     setPhase("read"); setQi(0); setPicked(null); setScore(0);
   }, [courseId, lessonId]);
 
+  // ⚠️ OPTIONS ARE SHUFFLED, per attempt — the website's rule (src/App.jsx shuffleOptions). The
+  // curriculum was written with the right answer second in 164 of 200 questions, and this screen
+  // rendered them in that order, so "always tap the second one" passed every course in the app
+  // (school review, 2026-09-25). A retry reshuffles.
+  const [attempt, setAttempt] = React.useState(0);
+  const questions = React.useMemo(
+    () => (lesson ? (lesson.questions || []).map(shuffleOptions) : []),
+    [lesson && lesson.key, attempt]
+  );
+
   if (!course || !lesson) {
     return (
       <div className="seeker-pane seeker-school">
@@ -592,12 +682,12 @@ export function SchoolLesson() {
     );
   }
 
-  const questions = lesson.questions;
   const q = questions[qi] || null;
   // The website's rule, not a new one: `score >= Math.ceil(n * 2/3)` (src/App.jsx ~1425).
   const need = passMark(questions.length);
 
   function startQuiz() {
+    setAttempt((n) => n + 1);
     setPhase("quiz"); setQi(0); setPicked(null); setScore(0);
   }
 

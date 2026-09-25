@@ -2909,5 +2909,16 @@
   "Start the lesson": "Bắt đầu bài học",
   "Step {n} of {total}": "Bước {n} / {total}",
   "The lesson": "Bài học",
-  "Try it yourself": "Tự thử xem"
+  "Try it yourself": "Tự thử xem",
+  "Ask (tab)": "Hỏi",
+  "The Library": "Thư viện",
+  "Every term in the school, in plain words. Tap a lesson to learn it properly.": "Mọi thuật ngữ trong trường, bằng lời dễ hiểu. Chạm vào một bài học để học kỹ.",
+  "Search a term": "Tìm một thuật ngữ",
+  "{n} of {total} terms": "{n} / {total} thuật ngữ",
+  "{total} terms": "{total} thuật ngữ",
+  "Learn it in": "Học trong",
+  "Nothing in the Library matches “{q}”.": "Không có gì trong Thư viện khớp với “{q}”.",
+  "Ask Cluck instead": "Hỏi Cluck",
+  "{total} terms, each linked to the lesson that teaches it.": "{total} thuật ngữ, mỗi thuật ngữ liên kết với bài học giảng về nó.",
+  "Library": "Thư viện"
 }

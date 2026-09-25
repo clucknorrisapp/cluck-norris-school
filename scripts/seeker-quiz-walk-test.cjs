@@ -64,6 +64,7 @@ function log(s) { process.stdout.write(s + "\n"); }
 
   const failures = [];
   let quizzes = 0, questions = 0;
+  const slots = {};   // correct-answer position → count
   for (const cid of courses) {
     const c = cur.courses.find((x) => x.id === cid);
     if (!c) continue;
@@ -92,6 +93,9 @@ function log(s) { process.stdout.write(s + "\n"); }
         if (opts < 2) { problems.push(`q${answered + 1}: ${opts} option(s)`); break; }
         await page.locator(".seeker-school-option").first().click();
         await page.waitForTimeout(900);
+        // Where the right answer sat, for the shuffle check at the end.
+        const ci = await page.evaluate(() => [...document.querySelectorAll(".seeker-school-option")].findIndex((b) => b.classList.contains("correct")));
+        if (ci >= 0) slots[ci] = (slots[ci] || 0) + 1;
         const g = await page.evaluate(() => {
           const head = document.querySelector(".seeker-header").getBoundingClientRect().bottom;
           const nav = document.querySelector(".seeker-nav").getBoundingClientRect().top;
@@ -121,6 +125,13 @@ function log(s) { process.stdout.write(s + "\n"); }
   await browser.close(); server.close();
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
   log(`\n${variant}: ${quizzes} quizzes, ${questions} questions answered at ${VIEW.width}x${VIEW.height}.`);
+  // The curriculum was written with the right answer second in 164 of 200 questions; the app must
+  // shuffle options per attempt (School.jsx shuffleOptions) or "always tap the second one" passes.
+  // Shuffled, no single slot should hold the right answer anywhere near that often.
+  const placed = Object.values(slots).reduce((a, b) => a + b, 0);
+  const top = Math.max(0, ...Object.values(slots));
+  log(`correct-answer positions: ${JSON.stringify(slots)}`);
+  if (placed >= 30 && top / placed > 0.6) failures.push(`options are not shuffled — ${top} of ${placed} right answers sat in one slot`);
   if (failures.length) { log(`✗ ${failures.length} quiz(zes) failed`); process.exit(1); }
   log(`✓ every quiz in the ${variant} edition works end to end`);
 })().catch((e) => { console.error(e); process.exit(1); });

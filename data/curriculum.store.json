@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-24T23:48:02.683Z",
+  "generatedAt": "2026-09-25T14:20:36.782Z",
   "courses": [
     {
       "id": "fundamentals",
@@ -2485,7 +2485,7 @@
             },
             {
               "heading": "Fee Tiers Across Protocols",
-              "body": "Every protocol offers different fee tiers for different types of pairs. Choosing the right fee tier matters.\n\nRAYDIUM:\n• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 1% / 2% / 4%\n• CLMM concentrated pools: 18 tiers from 0.01% up to 4% (0.01 / 0.02 / 0.03 / 0.04 / 0.05 / 0.1 / 0.15 / 0.16 / 0.18 / 0.2 / 0.25 / 0.4 / 0.6 / 0.8 / 1 / 2 / 3 / 4%)\n• Use 0.01% for stable pairs, 0.25% for standard, 1% for exotic/volatile\n\nORCA WHIRLPOOLS:\n• 0.01% / 0.02% / 0.04% / 0.05% / 0.16% / 0.3% / 0.65% / 1% / 2%\n• Similar logic — stable pairs use low tiers, volatile pairs use high tiers\n• A pool's own page shows which tier it runs on\n\nMETEORA:\n• DAMM: Dynamic fees that adjust automatically to market volatility\n• DLMM: base fee (fixed by the pool's bin step) + a variable fee that rises automatically with volatility. Fees are distributed per bin a swap crosses, but the RATE is pool-wide\n• Dynamic fees are one of Meteora's strongest features for LPs\n\nUNISWAP V3 (Ethereum):\n• 0.01% / 0.05% / 0.3% / 1% — the 0.01% stablecoin tier was added by governance in Nov 2021\n• The original tiered fee system that others copied\n\nCHOOSING THE RIGHT TIER:\nStable pairs (USDC/USDT): 0.01-0.05% — low fee, high volume\nBlue chip pairs (SOL/USDC): 0.05-0.25% — balanced\nVolatile/exotic pairs: 0.5-1% — compensates for higher IL risk"
+              "body": "Every protocol offers different fee tiers for different types of pairs. Choosing the right fee tier matters.\n\nRAYDIUM:\n• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 0.3% / 0.5% / 1% / 1.5% / 2% / 2.5% / 4%\n• CLMM concentrated pools: 18 tiers from 0.01% up to 4% (0.01 / 0.02 / 0.03 / 0.04 / 0.05 / 0.1 / 0.15 / 0.16 / 0.18 / 0.2 / 0.25 / 0.4 / 0.6 / 0.8 / 1 / 2 / 3 / 4%)\n• Use 0.01% for stable pairs, 0.25% for standard, 1% for exotic/volatile\n\nORCA WHIRLPOOLS:\n• 0.01% / 0.02% / 0.04% / 0.05% / 0.16% / 0.3% / 0.65% / 1% / 2%\n• Similar logic — stable pairs use low tiers, volatile pairs use high tiers\n• A pool's own page shows which tier it runs on\n\nMETEORA:\n• DAMM v2: a base fee that can run on a schedule (starting high at launch and decaying over time or with market cap), plus optional dynamic fees that rise with volatility\n• DLMM: base fee (fixed by the pool's bin step) + a variable fee that rises automatically with volatility. Fees are distributed per bin a swap crosses, but the RATE is pool-wide\n• Dynamic fees are one of Meteora's strongest features for LPs\n\nUNISWAP V3 (Ethereum):\n• 0.01% / 0.05% / 0.3% / 1% — the 0.01% stablecoin tier was added by governance in Nov 2021\n• The original tiered fee system that others copied\n\nCHOOSING THE RIGHT TIER:\nStable pairs (USDC/USDT): 0.01-0.05% — low fee, high volume\nBlue chip pairs (SOL/USDC): 0.05-0.25% — balanced\nVolatile/exotic pairs: 0.5-1% — compensates for higher IL risk"
             },
             {
               "heading": "The Key Metric — Volume/TVL Ratio",
@@ -2692,7 +2692,7 @@
           "sections": [
             {
               "heading": "What Are Ticks?",
-              "body": "Ticks are the discrete price points that divide price space in tick-based systems like Uniswap v3, Raydium CLMM, and Orca Whirlpools.\n\nEach tick represents a 0.01% price increment — specifically, each tick multiplies the price by 1.0001.\n\nTick 0 = price 1.0000\nTick 100 = approximately 1% above tick 0\nTick 1000 = approximately 10.5% above tick 0\n\nTICK SPACING per fee tier:\nHigher fee tier = coarser spacing = wider minimum range. The exact numbers are set per pool and DIFFER by protocol — do not memorise one table and assume it travels.\n\nUniswap v3: 0.01% → 1 · 0.05% → 10 · 0.3% → 60 · 1% → 200\nRaydium CLMM: 0.01% → 1 · 0.05% → 10 · 0.25% → 60 · 1% → 120\nOrca: 0.01% → 1 · 0.02% → 2 · 0.04% → 4 · 0.05% → 8 · 0.3% → 64\n\nLower fee tiers allow finer price ranges. When you set a range, you define a lower and upper tick. Your liquidity distributes uniformly across every tick in between — all earning fees proportionally when price passes through them."
+              "body": "Ticks are the discrete price points that divide price space in tick-based systems like Uniswap v3, Raydium CLMM, and Orca Whirlpools.\n\nEach tick represents a 0.01% price increment — specifically, each tick multiplies the price by 1.0001.\n\nTick 0 = price 1.0000\nTick 100 = approximately 1% above tick 0\nTick 1000 = approximately 10.5% above tick 0\n\nTICK SPACING per fee tier:\nHigher fee tier = coarser spacing = wider minimum range. The exact numbers are set per pool and DIFFER by protocol — do not memorise one table and assume it travels.\n\nUniswap v3: 0.01% → 1 · 0.05% → 10 · 0.3% → 60 · 1% → 200\nRaydium CLMM: 0.01–0.05% → 1 · 0.1–0.2% → 10 · 0.25–0.8% → 60 · 1–4% → 120\nOrca: 0.01% → 1 · 0.02% → 2 · 0.04% → 4 · 0.05% → 8 · 0.3% → 64\n\nLower fee tiers allow finer price ranges. When you set a range, you define a lower and upper tick. Your liquidity distributes uniformly across every tick in between — all earning fees proportionally when price passes through them."
             },
             {
               "heading": "What Are Bins?",
@@ -2968,7 +2968,7 @@
             },
             {
               "heading": "Passive LP Strategies",
-              "body": "Passive LP is not set and forget — it is set and monitor occasionally. The key is choosing positions that can tolerate infrequent attention.\n\nBEST PASSIVE POSITIONS:\n\nFULL RANGE on correlated pairs:\nSOL/jitoSOL, BTC/cbBTC, stablecoin pairs. Near-zero IL. Fees accumulate without intervention. Check monthly to compound fees back in.\n\nWIDE CONCENTRATED on major pairs:\nSOL/USDC with a ±50% range. Stays in range through most normal market movement. Check weekly. Rebalance only if price breaks out of range significantly.\n\nSTABLE PAIRS:\nUSDC/USDT, USDC/USDC.e — extremely low IL, steady fee income from high stablecoin trading volume. Near-zero management required.\n\nWHAT TO WATCH FOR:\n• Fee APR dropping significantly — pool may be losing volume\n• Position going out of range and staying there — reset when confirmed\n• Protocol changes or security issues — always monitor project news\n\nTOOLS FOR PASSIVE LPS:\n• DexScreener alerts — get notified when price moves past thresholds\n• Telegram bots — several Solana LP bots send range alerts\n• Protocol dashboards — Meteora, Raydium, and Orca all show position status"
+              "body": "Passive LP is not set and forget — it is set and monitor occasionally. The key is choosing positions that can tolerate infrequent attention.\n\nBEST PASSIVE POSITIONS:\n\nFULL RANGE on correlated pairs:\nSOL/jitoSOL, WBTC/cbBTC, stablecoin pairs. Near-zero IL. Fees accumulate without intervention. Check monthly to compound fees back in.\n\nWIDE CONCENTRATED on major pairs:\nSOL/USDC with a ±50% range. Stays in range through most normal market movement. Check weekly. Rebalance only if price breaks out of range significantly.\n\nSTABLE PAIRS:\nUSDC/USDT, USDC/USDC.e — extremely low IL, steady fee income from high stablecoin trading volume. Near-zero management required.\n\nWHAT TO WATCH FOR:\n• Fee APR dropping significantly — pool may be losing volume\n• Position going out of range and staying there — reset when confirmed\n• Protocol changes or security issues — always monitor project news\n\nTOOLS FOR PASSIVE LPS:\n• DexScreener alerts — get notified when price moves past thresholds\n• Telegram bots — several Solana LP bots send range alerts\n• Protocol dashboards — Meteora, Raydium, and Orca all show position status"
             },
             {
               "heading": "Active LP Strategies",
@@ -3116,7 +3116,7 @@
             },
             {
               "heading": "Correlation Risk — The Pair Defines Your Downside",
-              "body": "Your IL risk is decided the moment you choose the pair. Everything after that is management.\n\nTHE CORRELATION SPECTRUM:\n• Identical-peg pairs (USDC/USDT): the two assets are designed to track each other — IL is minimal, the main risk is one of them de-pegging\n• Correlated pairs (SOL/jitoSOL, BTC/cbBTC): move together most of the time — low IL, occasional divergence\n• Major-vs-stable (SOL/USDC): one volatile leg — IL is real and scales with how far SOL moves from your entry\n• Volatile-vs-volatile or new-token pairs: both legs move independently and violently — maximum IL, maximum risk\n\nTHE TRAP:\nA pool pairs a new token against SOL. People focus on the new token and forget they are also exposed to SOL's price. You are long BOTH assets' relationship to each other. When the new token dumps against SOL, IL converts your position into a bag of the thing that just crashed.\n\nPick the pair like you are picking your downside — because you are."
+              "body": "Your IL risk is decided the moment you choose the pair. Everything after that is management.\n\nTHE CORRELATION SPECTRUM:\n• Identical-peg pairs (USDC/USDT): the two assets are designed to track each other — IL is minimal, the main risk is one of them de-pegging\n• Correlated pairs (SOL/jitoSOL, WBTC/cbBTC): move together most of the time — low IL, occasional divergence\n• Major-vs-stable (SOL/USDC): one volatile leg — IL is real and scales with how far SOL moves from your entry\n• Volatile-vs-volatile or new-token pairs: both legs move independently and violently — maximum IL, maximum risk\n\nTHE TRAP:\nA pool pairs a new token against SOL. People focus on the new token and forget they are also exposed to SOL's price. You are long BOTH assets' relationship to each other. When the new token dumps against SOL, IL converts your position into a bag of the thing that just crashed.\n\nPick the pair like you are picking your downside — because you are."
             },
             {
               "heading": "Exit Planning — Decide Before You Enter",
@@ -3783,7 +3783,7 @@
           "title": "Concentrated Liquidity",
           "icon": "🎯",
           "intro": "Provide liquidity in a specific price range and earn more fees per dollar.",
-          "content": "Traditional AMMs spread your liquidity across all possible prices from zero to infinity. Most of that liquidity sits in price ranges that will never be traded — it's wasted capital.\n\nConcentrated liquidity (pioneered by Uniswap v3) lets you choose a specific price range for your liquidity. Your capital only earns fees when the token trades within your range — but it earns much more per dollar than a full-range position.\n\nEXAMPLE: Instead of providing liquidity from $0 to infinity, you provide between $0.000001 and $0.000002 for a token currently trading at $0.0000015. All your capital is actively earning fees within that tight range.\n\nTHE TRADEOFF: If price moves outside your range, you stop earning fees entirely and your position becomes 100% one token. Concentrated liquidity requires active management. This is exactly what Meteora DAMM V2 uses.",
+          "content": "Traditional AMMs spread your liquidity across all possible prices from zero to infinity. Most of that liquidity sits in price ranges that will never be traded — it's wasted capital.\n\nConcentrated liquidity (pioneered by Uniswap v3) lets you choose a specific price range for your liquidity. Your capital only earns fees when the token trades within your range — but it earns much more per dollar than a full-range position.\n\nEXAMPLE: Instead of providing liquidity from $0 to infinity, you provide between $0.000001 and $0.000002 for a token currently trading at $0.0000015. All your capital is actively earning fees within that tight range.\n\nTHE TRADEOFF: If price moves outside your range, you stop earning fees entirely and your position becomes 100% one token. Concentrated liquidity requires active management. Meteora DAMM V2 supports both: a pool can run full range or within a set price range.",
           "reference": true
         },
         {
@@ -3791,7 +3791,7 @@
           "title": "Dynamic Bonding Curves",
           "icon": "📈",
           "intro": "A price mechanism that automatically increases price as more tokens are bought.",
-          "content": "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\nA token that completes this journey launches on a Bags.fm bonding curve and graduates to Meteora DAMM V2. This is why the liquidity pool itself is permanent and cannot be pulled by the creator. That closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
+          "content": "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\nGraduating does NOT by itself mean the liquidity can never be pulled. The launch's configuration splits the migrated liquidity into unlocked, vesting and permanently locked parts. Meteora requires at least 10% to stay locked on day one; a launchpad can lock much more, up to all of it. So check the pool's locked liquidity before you trust it.\n\nWhere most of a pool's liquidity is permanently locked, that closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
           "reference": true
         },
         {
@@ -3799,7 +3799,7 @@
           "title": "Meteora DAMM V2",
           "icon": "🌊",
           "intro": "Meteora's dynamic AMM (DAMM V2), explained.",
-          "content": "Meteora's Dynamic AMM (DAMM) V2 is a next-generation liquidity pool on Solana designed to maximize fee earnings for liquidity providers while minimizing impermanent loss through dynamic fee adjustments.\n\nKey features of Meteora DAMM V2:\n\nDYNAMIC FEES: Fee tiers adjust based on market volatility. When the market is volatile, fees increase to compensate LPs for higher impermanent loss risk. When markets are calm, fees decrease to attract more volume.\n\nCONCENTRATED LIQUIDITY: Like Uniswap v3, DAMM V2 supports concentrated positions for capital efficiency.\n\nBAGS.FM INTEGRATION: When a Bags.fm token graduates, its liquidity migrates directly into a Meteora DAMM V2 pool. The migration is automatic, trustless, and permanent — no human interaction required.",
+          "content": "Meteora's Dynamic AMM (DAMM) V2 is a next-generation liquidity pool on Solana built to give launchpads, projects and liquidity providers configurable fees, optional price ranges and liquidity locks in one pool type.\n\nKey features of Meteora DAMM V2:\n\nFEES: Each pool has a base fee, which can run on a schedule — starting high at launch to deter snipers, then decaying over time or as market cap grows. A pool can also turn on dynamic fees that rise when the market is volatile and fall back when it calms.\n\nPRICE RANGES: A pool can run full range, or set a price range to concentrate its liquidity, like Uniswap v3.\n\nLOCKS: Liquidity can be unlocked, vesting, or permanently locked — and locked liquidity keeps earning fees.\n\nBAGS.FM INTEGRATION: When a Bags.fm token graduates, its liquidity migrates directly into a Meteora DAMM V2 pool. The migration is automatic — no human interaction required. How much of that liquidity is locked is set by the launch, so check it on the pool's page.",
           "reference": true
         },
         {
@@ -3859,7 +3859,7 @@
             },
             {
               "heading": "Approval Exploits — The Silent Killer",
-              "body": "When you interact with DeFi protocols, you sign token approvals that give smart contracts permission to spend your tokens. Most people blindly click approve without reading what they are signing.\n\nHOW THE ATTACK WORKS:\n1. You visit a malicious site or click a bad link\n2. It asks you to sign a transaction that looks routine\n3. You have actually approved an unlimited spend on your tokens\n4. The attacker drains your wallet immediately\n\nPROTECTION:\n• Use a revoker to audit and clear unused approvals regularly — revoke.cash supports Solana, and this app's own Security Coop tool checks and revokes risky approvals\n• Never sign transactions on sites you do not trust completely\n• Read what you are signing — the amount, the contract address, the permission\n• If a site asks for an approval that seems larger than needed, walk away\n\nOn Solana specifically — the most common drainer does not set a standing allowance at all. It tricks you into signing a single transaction that transfers your tokens and SOL straight out, or reassigns your token account's authority. The rule is the same everywhere: read every transaction before you sign it, and be extra wary of NFT mints, airdrops, and token claims."
+              "body": "When you interact with DeFi protocols, you sign token approvals that give smart contracts permission to spend your tokens. Most people blindly click approve without reading what they are signing.\n\nHOW THE ATTACK WORKS:\n1. You visit a malicious site or click a bad link\n2. It asks you to sign a transaction that looks routine\n3. You have actually approved an unlimited spend on your tokens\n4. The attacker drains your wallet immediately\n\nPROTECTION:\n• Audit and clear unused approvals regularly — this app's own Wallet Checkup lists risky Solana approvals (token delegates) and can revoke them. The well-known revoke.cash covers Ethereum-style chains, not Solana\n• Never sign transactions on sites you do not trust completely\n• Read what you are signing — the amount, the contract address, the permission\n• If a site asks for an approval that seems larger than needed, walk away\n\nOn Solana specifically — the most common drainer does not set a standing allowance at all. It tricks you into signing a single transaction that transfers your tokens and SOL straight out, or reassigns your token account's authority. The rule is the same everywhere: read every transaction before you sign it, and be extra wary of NFT mints, airdrops, and token claims."
             },
             {
               "heading": "Phishing & Social Engineering",
@@ -3884,7 +3884,7 @@
             },
             {
               "heading": "Step 2 — Liquidity and Volume",
-              "body": "A token with no liquidity cannot be sold. This is called a liquidity trap.\n\nWHAT TO CHECK ON DEXSCREENER:\n• Total liquidity — under $10K is extremely risky, you may not be able to exit\n• Is liquidity locked? On Solana, check Jupiter Lock or the pool authority via Rugcheck or Solscan (team.finance and UNCX are mainly Ethereum-side tools)\n• Who controls the liquidity? Creator-controlled LP can be removed (rug pull)\n• 24H volume relative to liquidity — low volume with high liquidity means little interest\n• Age of the liquidity pool — very new pools carry more risk\n\nEXAMPLE: A token graduates from a Bags.fm bonding curve to Meteora DAMM V2. The graduation process locks the liquidity pool permanently — so the LP itself can't be pulled. That closes the most common rug vector, but it does not remove every risk: holder concentration and large insider allocations are separate things you still have to check on any token."
+              "body": "A token with no liquidity cannot be sold. This is called a liquidity trap.\n\nWHAT TO CHECK ON DEXSCREENER:\n• Total liquidity — under $10K is extremely risky, you may not be able to exit\n• Is liquidity locked? On Solana, check Jupiter Lock or the pool authority via Rugcheck or Solscan (UNCX and Team Finance also run Solana lockers now, but those three are the most direct checks for a Solana pool)\n• Who controls the liquidity? Creator-controlled LP can be removed (rug pull)\n• 24H volume relative to liquidity — low volume with high liquidity means little interest\n• Age of the liquidity pool — very new pools carry more risk\n\nEXAMPLE: A token graduates from a Bags.fm bonding curve to Meteora DAMM V2. The graduation process locks the liquidity pool permanently — so the LP itself can't be pulled. That closes the most common rug vector, but it does not remove every risk: holder concentration and large insider allocations are separate things you still have to check on any token."
             },
             {
               "heading": "Step 3 — Team and Transparency",
@@ -4125,7 +4125,7 @@
             },
             {
               "heading": "Token Accounts and the SOL Rent You Pay",
-              "body": "Every Solana wallet that holds a specific token needs a \"token account\" for that token. If a recipient has never held the token you're sending, they don't have an account for it yet.\n\nYOU PAY TO OPEN THEIR ACCOUNT:\nThe airdropper has to create a new token account for each first-time recipient. Solana charges ~0.00203928 SOL of rent per new account (a one-time cost, refundable if the account is later closed). This rent comes out of YOUR wallet, not theirs.\n\nDO THE MATH BEFORE YOU SEND:\n100 first-time recipients = ~0.20 SOL in rent alone. At a typical SOL price that's $30+ before you've even sent the first token. A good airdropper shows the rent estimate up front. If it doesn't, walk away.\n\nEXIT THE TOOL IF:\n• Your wallet's SOL balance is below the estimated rent + tx fees\n• You don't recognize the recipient list (was it pasted from somewhere trustworthy?)\n• You can't see the per-batch instruction breakdown in your wallet popup"
+              "body": "Every Solana wallet that holds a specific token needs a \"token account\" for that token. If a recipient has never held the token you're sending, they don't have an account for it yet.\n\nYOU PAY TO OPEN THEIR ACCOUNT:\nThe airdropper has to create a new token account for each first-time recipient. Solana charges rent for each new account — about 0.0015 SOL as of September 2026 (it was about 0.002 until Solana started cutting rent in steps that month, and more cuts are planned). It's a one-time cost, refundable if the account is later closed, and it comes out of YOUR wallet, not theirs.\n\nDO THE MATH BEFORE YOU SEND:\n100 first-time recipients = about 0.15 SOL in rent alone, before you've sent a single token. A good airdropper reads the live rent from the chain and shows the estimate up front. If it doesn't, walk away.\n\nEXIT THE TOOL IF:\n• Your wallet's SOL balance is below the estimated rent + tx fees\n• You don't recognize the recipient list (was it pasted from somewhere trustworthy?)\n• You can't see the per-batch instruction breakdown in your wallet popup"
             },
             {
               "heading": "The Five Mistakes That Drain Airdroppers",
@@ -4138,6 +4138,216 @@
           ]
         }
       ]
+    }
+  ],
+  "glossary": [
+    {
+      "term": "AMM",
+      "def": "Automated Market Maker. A smart contract that automatically prices tokens using a mathematical formula instead of an order book."
+    },
+    {
+      "term": "APR",
+      "def": "Annual Percentage Rate. Simple interest rate over a year, not accounting for compounding."
+    },
+    {
+      "term": "APY",
+      "def": "Annual Percentage Yield. The return on an investment accounting for compounding. Higher than APR whenever interest compounds more than once a year — equal to APR if it doesn't compound."
+    },
+    {
+      "term": "Ask",
+      "def": "A SELL order placed ABOVE the current price. As price rises into it, it sells the token to buyers. In a liquidity pool, a range set above the current price holds the token as asks — a single-sided 'ask wall' (or 'sell wall') that sells into rallies and turns buy pressure into healthy distribution."
+    },
+    {
+      "term": "Bid",
+      "def": "A BUY order placed BELOW the current price. As price falls into it, it buys the token from sellers. In a liquidity pool, a range set below the current price holds the quote currency (e.g. USDC) as bids — single-sided 'buy support' that catches dips."
+    },
+    {
+      "term": "Bonding Curve",
+      "def": "A mathematical price mechanism where buying increases price and selling decreases price automatically."
+    },
+    {
+      "term": "CEX",
+      "def": "Centralized Exchange. A company-run trading platform (Coinbase, Binance) that holds your funds and requires KYC."
+    },
+    {
+      "term": "Cold Wallet",
+      "def": "A hardware wallet that stores private keys offline. Much more secure than hot wallets for large amounts."
+    },
+    {
+      "term": "Concentrated Liquidity",
+      "def": "Providing liquidity within a specific price range for higher capital efficiency and fee earnings."
+    },
+    {
+      "term": "DAMM",
+      "def": "Dynamic Automated Market Maker. Meteora's AMM that adjusts fees based on volatility."
+    },
+    {
+      "term": "DBC",
+      "def": "Dynamic Bonding Curve. The launch mechanism used by Bags.fm before graduation to Meteora."
+    },
+    {
+      "term": "DeFi",
+      "def": "Decentralized Finance. Financial services built on blockchain smart contracts with no central authority."
+    },
+    {
+      "term": "DEX",
+      "def": "Decentralized Exchange. A trading platform where swaps happen via smart contracts, not a company."
+    },
+    {
+      "term": "DYOR",
+      "def": "Do Your Own Research. Never invest based solely on others' advice — verify everything yourself."
+    },
+    {
+      "term": "FDV",
+      "def": "Fully Diluted Valuation. Price × total supply including all locked/unvested tokens."
+    },
+    {
+      "term": "Fee Share",
+      "def": "A system where token creators earn a percentage of all trading fees forever."
+    },
+    {
+      "term": "Flash Loan",
+      "def": "An uncollateralized loan borrowed and repaid within a single blockchain transaction."
+    },
+    {
+      "term": "Floor Price",
+      "def": "The lowest current asking price for an asset."
+    },
+    {
+      "term": "Gas Fee",
+      "def": "The cost to execute a transaction on a blockchain. On Solana these are fractions of a cent."
+    },
+    {
+      "term": "Graduation",
+      "def": "When a Bags.fm bonding curve token raises enough SOL to migrate to a permanent Meteora liquidity pool."
+    },
+    {
+      "term": "Hot Wallet",
+      "def": "A software wallet connected to the internet (Phantom, MetaMask). Convenient but less secure than cold storage."
+    },
+    {
+      "term": "Impermanent Loss",
+      "def": "Value loss experienced by LP providers when the price ratio of pooled tokens changes from deposit time."
+    },
+    {
+      "term": "Jupiter",
+      "def": "Solana's leading DEX aggregator and swap infrastructure. Finds the best price across all Solana DEXs."
+    },
+    {
+      "term": "KYC",
+      "def": "Know Your Customer. Identity verification required by centralized exchanges and regulated platforms."
+    },
+    {
+      "term": "Liquidity",
+      "def": "The amount of an asset available for trading. Higher liquidity = less price impact per trade."
+    },
+    {
+      "term": "Liquidity Pool",
+      "def": "A smart contract holding two tokens that traders swap against. LP providers deposit tokens and earn fees."
+    },
+    {
+      "term": "LP",
+      "def": "Liquidity Provider. Someone who deposits tokens into a liquidity pool to earn trading fees."
+    },
+    {
+      "term": "Market Cap",
+      "def": "Price × circulating supply. The total current value of all tokens in circulation."
+    },
+    {
+      "term": "MEV",
+      "def": "Maximal Extractable Value. Profit extracted by validators or bots by reordering transactions (includes sandwich attacks)."
+    },
+    {
+      "term": "Meteora",
+      "def": "A leading Solana DEX and liquidity protocol."
+    },
+    {
+      "term": "Mint Address",
+      "def": "The unique identifier for a token on Solana. Used to verify you're buying the correct token."
+    },
+    {
+      "term": "Mint Authority",
+      "def": "The right to create new tokens. Revoking mint authority means supply is permanently fixed."
+    },
+    {
+      "term": "Multisig",
+      "def": "A wallet requiring multiple private key signatures to authorize transactions. Used for security."
+    },
+    {
+      "term": "Non-Custodial",
+      "def": "A wallet where you control your own private keys. No company can freeze or access your funds."
+    },
+    {
+      "term": "Oracle",
+      "def": "A service that feeds real-world data into smart contracts. Price oracles are critical and can be manipulated."
+    },
+    {
+      "term": "Price Impact",
+      "def": "How much your individual trade moves the market price. Higher in low-liquidity pools."
+    },
+    {
+      "term": "Private Key",
+      "def": "The secret key that proves ownership of a wallet. Never share it. Whoever has it controls the funds."
+    },
+    {
+      "term": "Public Key",
+      "def": "Your wallet address. Safe to share. Others use it to send you tokens."
+    },
+    {
+      "term": "Rug Pull",
+      "def": "When developers drain a project's liquidity and disappear, leaving holders with worthless tokens."
+    },
+    {
+      "term": "Sandwich Attack",
+      "def": "An MEV attack where a bot buys before your trade and sells after, profiting from your slippage."
+    },
+    {
+      "term": "Seed Phrase",
+      "def": "A 12-24 word backup phrase that recovers your wallet. Never share it — treat it like cash."
+    },
+    {
+      "term": "Slippage",
+      "def": "The difference between expected and actual trade price. Set tolerance to protect against price movement."
+    },
+    {
+      "term": "Smart Contract",
+      "def": "Self-executing code on a blockchain that automatically enforces agreements without a middleman."
+    },
+    {
+      "term": "SOL",
+      "def": "The native coin of the Solana blockchain. Used for gas fees and as the base pair for most Solana tokens."
+    },
+    {
+      "term": "Solana",
+      "def": "A high-speed, low-cost blockchain built for high throughput — in practice it handles thousands of transactions per second, with much higher theoretical limits, at very low fees."
+    },
+    {
+      "term": "Staking",
+      "def": "Locking tokens to earn rewards. Can mean validator staking (securing the network) or DeFi yield farming."
+    },
+    {
+      "term": "TVL",
+      "def": "Total Value Locked. The total dollar value of crypto deposited in a DeFi protocol or pool."
+    },
+    {
+      "term": "Token",
+      "def": "A crypto asset built on an existing blockchain (vs a coin which has its own blockchain)."
+    },
+    {
+      "term": "Tokenomics",
+      "def": "The economic design of a token — supply, distribution, vesting, utility, and fee structure."
+    },
+    {
+      "term": "Vesting",
+      "def": "A schedule that gradually unlocks tokens over time. Prevents insiders from dumping immediately."
+    },
+    {
+      "term": "Wallet",
+      "def": "Software or hardware that stores your private keys and lets you interact with the blockchain."
+    },
+    {
+      "term": "Yield Farming",
+      "def": "Earning rewards by providing liquidity or staking in DeFi protocols."
     }
   ]
 }

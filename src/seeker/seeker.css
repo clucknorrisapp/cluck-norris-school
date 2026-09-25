@@ -42,6 +42,9 @@ html, body {
   flex: 0 1 auto;
   min-width: 0;
 }
+/* The language picker's slot (see LangHost in App.jsx). margin-left:auto pushes it right; in the
+   full edition the wallet zone follows it. */
+.seeker-langhost { margin-left: auto; display: flex; align-items: center; flex: 0 0 auto; }
 .seeker-brand-logo {
   width: 32px;
   height: 32px;
@@ -850,3 +853,24 @@ html, body {
   border-radius: 8px;
 }
 .seeker-confirm-type input:focus { border-color: var(--orange); outline: none; }
+
+/* ── Tablets (iPad): a wider reading column, same single-column app ────────────────────────
+   Owner (2026-09-25, on an iPad): "doesn't look very good on ipad? can we have wider version for
+   Ipad and keep the phone look?" Every pane was capped at 480px — a phone column floating in the
+   middle of a tablet. On a TABLET-SIZED screen (both dimensions >= 700px, so a phone turned
+   sideways keeps the phone layout) the column widens to 720px. Still one column, same nav, same
+   header — nothing here changes the phone layout, which never matches this query. Confirm sheets
+   keep their 480px width; a dialog reads better narrow. The pane caps live in several sheets
+   (tools.css, solana.css) whose load order differs by chunk, so these rules win on specificity
+   (`.seeker-shell` in front), never on source order. */
+@media (min-width: 700px) and (min-height: 700px) {
+  /* width:100% because auto side margins on a flex item shrink it to its content — without it a
+     course page (short lines) sat at ~470px while the School home filled the column. */
+  .seeker-shell .seeker-main { max-width: 760px; width: 100%; box-sizing: border-box; margin: 0 auto; }
+  .seeker-shell .seeker-pane,
+  .seeker-shell .seeker-pane.seeker-solana,
+  .seeker-shell .seeker-tool,
+  .seeker-shell .seeker-ask,
+  .seeker-shell .seeker-checkup,
+  .seeker-shell .seeker-reclaim { max-width: 720px; }
+}
