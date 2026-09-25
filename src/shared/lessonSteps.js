@@ -13,51 +13,55 @@
 //
 // THE RULES, and why each one:
 //
-//   · A lesson is STEPPED only when it has two or more `sections`. Measured against
-//     data/curriculum.json on 2026-09-25: every LP Lab lesson 1–14 (5–6 sections, 500–1,700
-//     characters each) and every Deep Dive lesson (4–5 sections) qualifies; the Incubator,
-//     Fundamentals and the liquidity-library lessons are one short block of prose (≤ ~2,300
-//     characters in all) and stay on one page. Putting a two-screen lesson behind Next buttons
-//     would add taps and teach nothing — the complaint was about the long ones.
+//   · EVERY LESSON STEPS (owner, 2026-09-25: "send stepper on all levels"). The first cut stepped
+//     only lessons with two or more sections; the owner asked for the same reading frame on every
+//     course — the Incubator, the School of Hard Knocks belts, the LP Lab library and the Deep
+//     Dive. A lesson steps whenever it has anything beyond its opening to show, which on
+//     data/curriculum.json (2026-09-25) is all 58.
+//
+//   · The FIRST step is the lesson's opening: title, belt, tagline, intro, and an outline of what
+//     follows ("In this lesson"). That outline is the "what you'll learn" the owner was offered,
+//     and each line jumps straight to its step, which is also how a repeat visitor skips ahead.
+//     For the Incubator and the belt lessons the intro IS the explanation, so it stays on the
+//     opening rather than being moved behind a tap.
+//
+//   · Terms (`concepts`) are their own step right after the opening — read the vocabulary before
+//     the argument that uses it. For the Incubator and belt lessons this is the second (and last)
+//     step, and it carries the quiz button.
 //
 //   · ONE SECTION PER STEP, never split inside a section. The sections are the authors' own
 //     units of thought, with their own headings; cutting one mid-argument to hit a character
 //     budget would be worse than a slightly long screen.
 //
-//   · The FIRST step is the lesson's opening: title, tagline, intro, and an outline of the
-//     section headings ("In this lesson"). That outline is the "what you'll learn" the owner was
-//     offered, and each line jumps straight to its step, which is also how a repeat visitor
-//     skips ahead.
+//   · Prose (`content`, the liquidity library's form) is ONE step and is never cut into parts.
+//     The longest is ~1,300 characters, about a screen and a half. It also cannot be cut safely:
+//     the curated dictionaries key a block by its WHOLE body (tBlock in src/seeker/i18n.js), so
+//     splitting the English before translating would send every part to machine translation.
 //
-//   · Terms (`concepts`), when a stepped lesson has them, are their own step right after the
-//     opening — read the vocabulary before the argument that uses it. (No stepped lesson carries
-//     concepts today; the rule is here so adding them later does not silently append a wall of
-//     definitions to the opening step.)
-//
-//   · Cluck's verdict is the LAST step, and the quiz button lives there. When a lesson has no
-//     verdict (the Deep Dive), the quiz button moves onto the last section instead — never a step
-//     that exists only to hold a button.
-
-/** Minimum `sections` for a lesson to read as steps. */
-export const MIN_SECTIONS_TO_STEP = 2;
+//   · Cluck's verdict is the LAST step when a lesson has one. The quiz button (or "Mark as read"
+//     for a lesson with no quiz) always lives on the last step — never a step that exists only to
+//     hold a button.
 
 /**
- * @param {{ sections?: Array<{heading?: string, body?: string}>, concepts?: Array, verdict?: string }} lesson
- * @returns {{ stepped: boolean, steps: Array<{ kind: "open"|"terms"|"section"|"verdict", index?: number, heading?: string }> }}
+ * @param {{ sections?: Array<{heading?: string, body?: string}>, concepts?: Array, content?: string, verdict?: string }} lesson
+ * @returns {{ stepped: boolean, steps: Array<{ kind: "open"|"terms"|"section"|"content"|"verdict", index?: number, heading?: string }> }}
  *   `index` on a "section" step is the position in `lesson.sections` — the renderer reads the
  *   body from the lesson, so a step never carries a stale copy of the text.
  */
 export function buildLessonSteps(lesson) {
-  const sections = Array.isArray(lesson && lesson.sections) ? lesson.sections : [];
+  const l = lesson || {};
+  const sections = Array.isArray(l.sections) ? l.sections : [];
   const usable = sections
     .map((s, index) => ({ s, index }))
     .filter(({ s }) => s && (String(s.body || "").trim() || String(s.heading || "").trim()));
-  if (usable.length < MIN_SECTIONS_TO_STEP) return { stepped: false, steps: [] };
 
   const steps = [{ kind: "open" }];
-  if (Array.isArray(lesson.concepts) && lesson.concepts.length) steps.push({ kind: "terms" });
+  if (Array.isArray(l.concepts) && l.concepts.length) steps.push({ kind: "terms" });
   for (const { s, index } of usable) steps.push({ kind: "section", index, heading: String(s.heading || "") });
-  if (String(lesson.verdict || "").trim()) steps.push({ kind: "verdict" });
+  if (typeof l.content === "string" && l.content.trim()) steps.push({ kind: "content" });
+  if (String(l.verdict || "").trim()) steps.push({ kind: "verdict" });
+  // Only the opening would be a stepper around nothing — leave that lesson on its single page.
+  if (steps.length < 2) return { stepped: false, steps: [] };
   return { stepped: true, steps };
 }
 

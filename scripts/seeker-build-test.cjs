@@ -881,8 +881,15 @@ async function renderedCheck(pw, baselineSeekerDir) {
        /Step 3 of 8/.test(await pillPage.locator(".seeker-step-count").innerText()));
     await pillPage.goto(`http://127.0.0.1:${port}/#/school/basics/wallet`, { waitUntil: "networkidle", timeout: 20000 });
     await pillPage.waitForSelector(".seeker-school-title", { timeout: 15000 });
-    ok("rendered: a short Incubator lesson stays on one page (no stepper)",
-       (await pillPage.locator(".seeker-step").count()) === 0 && (await pillPage.locator(".seeker-school-start").count()) === 1);
+    // "Send stepper on all levels" (owner, 2026-09-25): the Incubator reads as steps too — the
+    // opening (its intro is the explanation), then the terms, which carry the quiz button.
+    await pillPage.waitForSelector(".seeker-step", { timeout: 15000 });
+    const incSegs = await pillPage.locator(".seeker-step-seg").count();
+    await pillPage.locator(".seeker-step-seg").nth(incSegs - 1).click();
+    await pillPage.waitForTimeout(400);
+    ok("rendered: an Incubator lesson reads as two steps — the opening, then the terms with the quiz button",
+       incSegs === 2 && (await pillPage.locator(".seeker-school-concept").count()) > 0
+       && /Take the quiz/i.test(await pillPage.locator(".seeker-step-next").innerText()), incSegs);
     await pillPage.evaluate(() => { try { localStorage.removeItem("clkn_lesson_step"); } catch (_) {} });
 
     // ── quiz auto-scroll, in the APP (owner 2026-09-24, first asked for on the iOS edition) ──

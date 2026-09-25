@@ -616,3 +616,4 @@
 /* ⚠️ Specificity: `.seeker-pane p` (0-1-1) beats `.seeker-school-quiznote` (0-1-0) and zeroes its
    top margin, so the note sat flush under the verdict box. Match the class depth (AGENTS.md). */
 .seeker-step .seeker-school-quiznote { margin: 20px 0 8px; }
+.seeker-step-section .seeker-school-content { margin-top: 0; }

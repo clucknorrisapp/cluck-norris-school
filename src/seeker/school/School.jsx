@@ -296,6 +296,7 @@ function quizScrollChrome() {
 
 // ── a long lesson, one section per screen ───────────────────────────────────────────────────
 // Owner (2026-09-24, LP Lab on the iOS edition): "scroll, scroll, scroll … a lot of stuff stacked."
+// Then (2026-09-25): "send stepper on all levels" — every course reads this way now.
 // Which lessons step, and how they are cut, is decided in src/shared/lessonSteps.js; this is only
 // the screen. What it keeps from the single page: the same words, the same Prose/tBlock
 // translation path, the same quiz. What it adds:
@@ -373,7 +374,13 @@ function LessonStepper({ course, lesson, steps, need, onStartQuiz, onMarkRead })
   const step = steps[i];
   const last = i === total - 1;
   const questions = lesson.questions;
-  const sectionSteps = steps.map((s, n) => ({ s, n })).filter(({ s }) => s.kind === "section" || s.kind === "verdict");
+  // Everything after the opening, labelled the way its own step is headed.
+  const outlineSteps = steps.map((s, n) => ({ s, n })).filter(({ s }) => s.kind !== "open");
+  const outlineLabel = (s) =>
+    s.kind === "verdict" ? t("Cluck's verdict")
+      : s.kind === "terms" ? t("The terms that matter")
+      : s.kind === "content" ? t("The lesson")
+      : s.heading;
 
   let body = null;
   if (step.kind === "open") {
@@ -388,13 +395,11 @@ function LessonStepper({ course, lesson, steps, need, onStartQuiz, onMarkRead })
         <div className="seeker-step-outline">
           <div className="seeker-step-outline-title">{t("In this lesson")}</div>
           <ol>
-            {sectionSteps.map(({ s, n }) => (
+            {outlineSteps.map(({ s, n }) => (
               <li key={n}>
                 <button type="button" className="seeker-step-outline-item" onClick={() => go(n)}>
                   <span className="seeker-step-outline-n">{n}</span>
-                  <span className="seeker-step-outline-text">
-                    {s.kind === "verdict" ? t("Cluck's verdict") : s.heading}
-                  </span>
+                  <span className="seeker-step-outline-text">{outlineLabel(s)}</span>
                 </button>
               </li>
             ))}
@@ -424,6 +429,18 @@ function LessonStepper({ course, lesson, steps, need, onStartQuiz, onMarkRead })
         <div className="seeker-step-kicker">{lesson.icon} {lesson.title}</div>
         {s.heading ? <h2 className="seeker-school-section-h" ref={headRef} tabIndex={-1}>{s.heading}</h2> : null}
         <Prose text={s.body} className="seeker-school-section-body" />
+      </section>
+    );
+  } else if (step.kind === "content") {
+    // The liquidity library's prose — one step, never cut (see src/shared/lessonSteps.js: the
+    // curated dictionary keys the WHOLE block, so Prose/tBlock must see all of it at once).
+    // Deliberately NOT .seeker-school-section: that class marks an authored section, and the
+    // boot test counts those headings against the curriculum's own.
+    body = (
+      <section className="seeker-step-section">
+        <div className="seeker-step-kicker">{lesson.icon} {lesson.title}</div>
+        <h2 className="seeker-school-section-h" ref={headRef} tabIndex={-1}>{t("The lesson")}</h2>
+        <Prose text={lesson.content} className="seeker-school-content" />
       </section>
     );
   } else if (step.kind === "verdict") {
@@ -708,8 +725,8 @@ export function SchoolLesson() {
     );
   }
 
-  // read — a long lesson reads one section per screen (see src/shared/lessonSteps.js for which
-  // lessons and why); a short one stays on the single page below, exactly as it shipped.
+  // read — every lesson reads as steps (src/shared/lessonSteps.js). The single page below is kept
+  // only for a lesson with nothing beyond its opening, which no lesson in the curriculum is today.
   const plan = buildLessonSteps(lesson);
   if (plan.stepped) {
     return (

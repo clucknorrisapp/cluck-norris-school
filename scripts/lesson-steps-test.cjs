@@ -6,9 +6,10 @@
 // long lesson one section per screen and leaves a short one on a single page. This test is what
 // keeps those two populations from drifting as lessons are added:
 //
-//   1. every LP Lab lesson with sections, and every Deep Dive lesson, is stepped;
-//   2. no Incubator, Fundamentals or liquidity-library lesson is stepped (they are one short
-//      block — putting them behind Next buttons adds taps and teaches nothing);
+//   1. every lesson in every course is stepped (owner, 2026-09-25: "send stepper on all levels");
+//   2. each course has the shape it should: the Incubator and the belts read opening → terms, the
+//      liquidity library reads opening → the lesson (prose never cut), sectioned lessons one
+//      section per step;
 //   3. a stepped lesson opens on the "open" step, has one step per section IN ORDER, never splits
 //      a section, and ends on the verdict when it has one;
 //   4. the step memory survives garbage, clamps out-of-range values, stays bounded, and a pass
@@ -53,34 +54,29 @@ function memStorage() {
   const asApp = (l) => ({
     sections: Array.isArray(l.sections) ? l.sections : [],
     concepts: Array.isArray(l.concepts) ? l.concepts : [],
+    content: typeof l.content === "string" ? l.content : "",
     verdict: l.cluckVerdict || "",
   });
+  const kinds = (plan) => plan.steps.map((x) => x.kind).join(",");
 
-  console.log("which lessons step:");
-  const stepped = [], single = [];
-  for (const c of cur.courses) {
-    for (const l of c.lessons) {
-      const plan = L.buildLessonSteps(asApp(l));
-      (plan.stepped ? stepped : single).push({ course: c.id, id: l.id, plan, l });
-    }
-  }
-  const lpWithSections = cur.courses.find((c) => c.id === "lp").lessons.filter((l) => (l.sections || []).length >= 2);
-  const deep = cur.courses.find((c) => c.id === "deepdive").lessons;
-  ok(`every LP Lab lesson with sections is stepped (${lpWithSections.length})`,
-     lpWithSections.length > 0 && lpWithSections.every((l) => stepped.some((s) => s.course === "lp" && s.id === l.id)));
-  ok(`every Deep Dive lesson is stepped (${deep.length})`,
-     deep.length > 0 && deep.every((l) => stepped.some((s) => s.course === "deepdive" && s.id === l.id)));
-  const wronglyStepped = stepped.filter((s) => s.course === "basics" || s.course === "fundamentals" || String(s.id).startsWith("lib-"));
-  ok("no Incubator, Fundamentals or library lesson is stepped", wronglyStepped.length === 0,
-     wronglyStepped.map((s) => s.course + ":" + s.id));
-  // The single-page population really is short — the reason it is left alone. If a long lesson
-  // lands there (a long `content` body with no sections), this is where it shows up.
-  const longest = single.reduce((m, s) => Math.max(m, String(s.l.content || "").length + (s.l.concepts || []).reduce((n, x) => n + String(x.def || "").length, 0)), 0);
-  ok(`the single-page lessons are all short (longest ${longest} chars ≤ 2,600)`, longest <= 2600, longest);
+  // Owner, 2026-09-25: "send stepper on all levels" — every course reads as steps.
+  console.log("every lesson steps (owner: \"send stepper on all levels\"):");
+  const all = [];
+  for (const c of cur.courses) for (const l of c.lessons) all.push({ course: c.id, id: l.id, l, plan: L.buildLessonSteps(asApp(l)) });
+  const unstepped = all.filter((x) => !x.plan.stepped);
+  ok(`all ${all.length} lessons are stepped`, unstepped.length === 0, unstepped.map((x) => x.course + ":" + x.id));
 
-  console.log("\nthe shape of a stepped lesson:");
-  let shapeBad = [];
-  for (const s of stepped) {
+  const byCourse = (id) => all.filter((x) => x.course === id);
+  const shape = (list, want) => list.filter((x) => kinds(x.plan) !== want).map((x) => x.course + ":" + x.id + "=" + kinds(x.plan));
+  ok(`the Incubator (${byCourse("basics").length}) reads opening → terms`, byCourse("basics").length > 0 && shape(byCourse("basics"), "open,terms").length === 0, shape(byCourse("basics"), "open,terms"));
+  ok(`the School of Hard Knocks belts (${byCourse("fundamentals").length}) read opening → terms`, byCourse("fundamentals").length > 0 && shape(byCourse("fundamentals"), "open,terms").length === 0, shape(byCourse("fundamentals"), "open,terms"));
+  const lib = byCourse("lp").filter((x) => String(x.id).startsWith("lib-"));
+  ok(`the liquidity library (${lib.length}) reads opening → the lesson, prose never cut into parts`, lib.length > 0 && shape(lib, "open,content").length === 0, shape(lib, "open,content"));
+
+  const withSections = all.filter((x) => (x.l.sections || []).length);
+  console.log("\nthe shape of a sectioned lesson (LP Lab 1–14, Deep Dive):");
+  const shapeBad = [];
+  for (const s of withSections) {
     const { steps } = s.plan;
     const secIdx = steps.filter((x) => x.kind === "section").map((x) => x.index);
     const usable = (s.l.sections || []).map((x, i) => ({ x, i })).filter(({ x }) => String(x.body || "").trim() || String(x.heading || "").trim()).map(({ i }) => i);
@@ -93,17 +89,20 @@ function memStorage() {
     for (const x of steps) if (x.kind === "section" && x.heading !== String(s.l.sections[x.index].heading || "")) problems.push("heading mismatch at " + x.index);
     if (problems.length) shapeBad.push({ id: s.course + ":" + s.id, problems });
   }
-  ok(`all ${stepped.length} stepped lessons: open first, one step per section in order, verdict last when present`,
-     shapeBad.length === 0, shapeBad.slice(0, 3));
-
-  const lp8 = stepped.find((s) => s.course === "lp" && String(s.id) === "8");
+  ok(`all ${withSections.length} sectioned lessons: open first, one step per section in order, verdict last when present`,
+     withSections.length > 0 && shapeBad.length === 0, shapeBad.slice(0, 3));
+  const lp8 = all.find((s) => s.course === "lp" && String(s.id) === "8");
   ok("LP Lab lesson 8 (the longest, 6 sections + verdict) is 8 steps",
-     lp8 && lp8.plan.steps.length === 8, lp8 && lp8.plan.steps.map((x) => x.kind));
+     lp8 && lp8.plan.steps.length === 8, lp8 && kinds(lp8.plan));
+  const lastIsEnd = all.filter((x) => { const k = x.plan.steps[x.plan.steps.length - 1].kind; return k === "open"; });
+  ok("no lesson ends on its opening (the quiz / 'Mark as read' always follows real material)", lastIsEnd.length === 0, lastIsEnd.map((x) => x.id));
 
   console.log("\nedge cases:");
-  ok("one section is not enough to step", L.buildLessonSteps({ sections: [{ heading: "a", body: "b" }] }).stepped === false);
-  ok("empty sections do not count toward stepping",
-     L.buildLessonSteps({ sections: [{ heading: "a", body: "b" }, { heading: "", body: "  " }] }).stepped === false);
+  ok("a lesson with nothing beyond its opening is not stepped", L.buildLessonSteps({ sections: [], concepts: [], content: "  " }).stepped === false);
+  ok("one section is enough to step (opening + that section)",
+     kinds(L.buildLessonSteps({ sections: [{ heading: "a", body: "b" }] })) === "open,section");
+  ok("empty sections never become steps",
+     kinds(L.buildLessonSteps({ sections: [{ heading: "a", body: "b" }, { heading: "", body: "  " }] })) === "open,section");
   ok("a null lesson does not throw and is not stepped", L.buildLessonSteps(null).stepped === false);
   const withTerms = L.buildLessonSteps({ sections: [{ heading: "a", body: "x" }, { heading: "b", body: "y" }], concepts: [{ term: "t", def: "d" }], verdict: "v" });
   ok("terms, when present, are the step right after the opening",

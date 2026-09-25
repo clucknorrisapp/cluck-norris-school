@@ -1514,6 +1514,13 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
 
     const go = async (hash) => { await page.evaluate((h) => { window.location.hash = h; }, hash); await page.waitForTimeout(320); };
+    // Every lesson reads as steps (#437, "send stepper on all levels"); the quiz button lives on the
+    // LAST step. Walks there through the strip, so a journey that starts a quiz goes the way a
+    // learner does — past the opening and the terms — rather than around the stepper.
+    const toLastStep = async () => {
+      const n = await page.locator(".seeker-step-seg").count();
+      if (n) { await page.locator(".seeker-step-seg").nth(n - 1).click(); await page.waitForTimeout(150); }
+    };
     const opts = () => page.evaluate(() => Array.from(document.querySelectorAll(".seeker-school-option")).map((b) => (b.innerText || "").trim()));
     const doneKeys = () => page.evaluate(() => { try { return JSON.parse(localStorage.getItem("clkn_completed") || "[]"); } catch (_) { return null; } });
     const progressOf = (cid) => page.evaluate((c) => {
@@ -1594,6 +1601,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const NEED = passMark(basicsDex.questions.length);
     {
       await go(`#/school/basics/${DUP}`);
+      await toLastStep();
       ok(`P3 · the beginner lesson offers its quiz (${basicsDex.questions.length} questions, ${NEED} to pass)`,
          await page.evaluate(() => !!document.querySelector(".seeker-school-start")));
       await page.click(".seeker-school-start");
@@ -1689,6 +1697,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         // the missed screen would stay up and there would be no "Take the quiz" to press.
         await go("#/school");
         await go(`#/school/basics/${L.id}`);
+        await toLastStep();
         await page.click(".seeker-school-start");
         await page.waitForTimeout(250);
         for (let i = 0; i < L.questions.length; i++) {
