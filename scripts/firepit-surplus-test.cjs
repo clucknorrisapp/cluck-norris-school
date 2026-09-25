@@ -230,6 +230,6 @@ let stop = () => {};
   await ctx.close();
   await browser.close();
   stop();
-  console.log(`\n${failures ? `${failures} FAILED, ` : ""}${failures === 0 ? "all passed" : "see above"}`);
+  console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); stop(); process.exit(1); });
