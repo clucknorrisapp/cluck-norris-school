@@ -633,10 +633,38 @@ router.post("/vault/pause", (req, res) => {
   if (!p) return res.status(400).json({ error: "Specify ?project= explicitly (e.g. project=treasury or project=clkn) — refusing to pause an unspecified project so STOP can't hit the wrong one." });
   res.json(vault.pause(p));
 });
+// One-armed-engine-per-wallet — checked on RESUME too (Codex review on #444: cheap to add here,
+// and resuming a paused sibling is exactly the move that would silently break the invariant the
+// cuna/dnc/rose/bullen arm routes enforce, since bullen's own arm check requires those siblings
+// explicitly paused). Kept self-contained (reads the same kv arm keys + hard-kill envs the arm
+// routes use, and compares operator PUBKEYS via vault.operatorPubkey — not env-var names, so two
+// different env vars that happened to hold the same secret would still be caught) rather than
+// reaching into server.js, which whirlpool-mm.js is required BY and can't require back.
+const WALLET_SHARED_ARM_KEYS = {
+  cuna: ["cunaEngineArmed", "CUNA_ENGINE_OFF"], dnc: ["dncEngineArmed", "DNC_ENGINE_OFF"],
+  rose: ["roseEngineArmed", "ROSE_ENGINE_OFF"], bullen: ["bullenEngineArmed", "BULLEN_ENGINE_OFF"],
+};
+function walletSharedEngineArmed(id) {
+  const cfg = WALLET_SHARED_ARM_KEYS[id];
+  if (!cfg) return false;
+  if (process.env[cfg[1]] === "1") return false;   // hard kill beats the kv flag
+  try { return require("./lib/kvstore").get(cfg[0], null) === true; } catch { return false; }
+}
 router.post("/vault/resume", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   const p = projExplicit(req);
   if (!p) return res.status(400).json({ error: "Specify ?project= explicitly (e.g. project=treasury or project=clkn) — refusing to resume an unspecified project." });
+  if (WALLET_SHARED_ARM_KEYS[p]) {
+    const myPubkey = vault.operatorPubkey(p);
+    if (myPubkey) {
+      for (const otherId of Object.keys(WALLET_SHARED_ARM_KEYS)) {
+        if (otherId === p) continue;
+        if (vault.operatorPubkey(otherId) === myPubkey && walletSharedEngineArmed(otherId)) {
+          return res.status(409).json({ ok: false, error: "wallet_conflict", detail: `${otherId}-engine is armed on the same operator wallet — resuming ${p} would break the one-armed-engine-per-wallet rule; disarm ${otherId} first` });
+        }
+      }
+    }
+  }
   res.json(vault.resume(p));
 });
 

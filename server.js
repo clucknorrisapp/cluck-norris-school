@@ -1534,21 +1534,24 @@ function walletSharedArmedFn(id) {
   return { cuna: cunaArmed, dnc: dncArmed, rose: roseEngineArmed, bullen: bullenEngineArmed }[id] || (() => false);
 }
 function walletConflictFor(requestingId) {
-  const reqProj = whirlpoolMM.vault.getProject(requestingId);
-  const reqEnv = reqProj && reqProj.operatorEnv;
-  if (!reqEnv) return null;   // not registered yet — nothing to conflict with
+  // Compare resolved operator PUBKEYS, not operatorEnv NAMES (Codex review on #444): two
+  // different env vars that happen to hold the same secret would still share a wallet and
+  // still need this guard, and comparing the actual signer is the ground truth either way.
+  const reqPubkey = whirlpoolMM.vault.operatorPubkey(requestingId);
+  if (!reqPubkey) return null;   // no operator loaded — the no-operator check (run first) catches this
   for (const id of WALLET_SHARED_ENGINE_IDS) {
     if (id === requestingId) continue;
-    const p = whirlpoolMM.vault.getProject(id);
-    if (!p || p.operatorEnv !== reqEnv) continue;   // different wallet — no conflict
-    if (walletSharedArmedFn(id)()) return { id, reason: `${id}-engine is armed on the same operator wallet (${reqEnv}) — only one engine may be armed on a shared wallet at a time` };
+    if (!whirlpoolMM.vault.getProject(id)) continue;   // not registered — nothing to conflict with
+    const otherPubkey = whirlpoolMM.vault.operatorPubkey(id);
+    if (!otherPubkey || otherPubkey !== reqPubkey) continue;   // different (or unloaded) wallet — no conflict
+    if (walletSharedArmedFn(id)()) return { id, reason: `${id}-engine is armed on the same operator wallet (${reqPubkey}) — only one engine may be armed on a shared wallet at a time` };
     // Extra caution ONLY on bullen's OWN arm attempt (owner, 2026-09-25): bullen is new to this
     // wallet and holds no history on it, so it additionally refuses while a sibling's vault
     // project isn't explicitly paused. cuna/dnc/rose arming EACH OTHER never required that (a
     // fresh/never-paused sibling is their normal resting state) — only the "armed" check above
     // applies there, or a clean install would permanently deadlock all three.
     if (requestingId === "bullen" && !whirlpoolMM.vault.isPaused(id)) {
-      return { id, reason: `${id}'s vault project is not paused (shares the ${reqEnv} wallet) — pause it first: /api/whirlpool/vault/pause?project=${id}` };
+      return { id, reason: `${id}'s vault project is not paused (shares the ${reqPubkey} wallet) — pause it first: /api/whirlpool/vault/pause?project=${id}` };
     }
   }
   return null;
@@ -1557,16 +1560,25 @@ function walletConflictFor(requestingId) {
 function bullenEngineConfigRatchet() {
   const wantEnv = process.env.CUNA_OPERATOR_ENV || "MM_OPERATOR_SECRET_CUNA";
   const proj = whirlpoolMM.vault.getProject("bullen");
-  if (!proj || proj.operatorEnv !== wantEnv || proj.tokenSellOk !== true) {
+  // telegramChatId !== "off" is in this condition on purpose (Codex review on #444): the
+  // client's community room is PUBLIC, so notify()'s room fallback must never be able to land
+  // there — the live record was registered "off" by hand, but this makes it durably enforced
+  // rather than merely assumed. Every other field's prev-fallback below is unaffected.
+  if (!proj || proj.operatorEnv !== wantEnv || proj.tokenSellOk !== true || proj.telegramChatId !== "off") {
     whirlpoolMM.vault.registerProject({
       id: "bullen", label: (proj && proj.label) || "BULLENCIAGA", symbol: (proj && proj.symbol) || "BULLEN",
       tokenMint: BULLEN_MINT, decimals: 6, quoteMints: BULLEN_QUOTES,
+      // BULLEN is Token-2022 — getFloat() reads this to make its balance scan mandatory
+      // rather than best-effort (Codex review on #444; see registerProject's own comment).
+      tokenProgram: "token2022",
       venue: "orca", operatorEnv: wantEnv,
       // Owner, 2026-09-25: "full permission to buy/sell any asset involved (BULLEN/USDC/SOL
       // only)" — inventory, not a brand bag; manualSwap may sell BULLEN for pool balancing.
       tokenSellOk: true,
       // Client room is public — ops/roll noise never lands there (mirrors rose/cuna/dnc).
-      telegramChatId: (proj && proj.telegramChatId) || "off",
+      // Hardcoded "off", not a prev-fallback (Codex review on #444): a prev-fallback would just
+      // copy a drifted value straight back in, defeating the re-register condition above.
+      telegramChatId: "off",
       ownerWallet: (proj && proj.ownerWallet) || null,
     });
     console.log(`[bullen-engine] project bound to operator env ${wantEnv} (tokenSellOk on)`);
@@ -1585,7 +1597,13 @@ function bullenEngineConfigRatchet() {
     edgeTriggerFrac: 0.3, deployFrac: 0.95, minRebalanceIntervalSec: 300,
     // Calibration band for ~$90/side pools (see the block comment above for the math):
     // baseDeployThresholdUsd ~half a typical $15 trim, above the ~$4.50 idle-dust floor.
-    maxUsd: 200, baseDeployThresholdUsd: 8,
+    baseDeployThresholdUsd: 8,
+    // maxUsd/solMaxSol are DELIBERATELY NOT in `want` (Codex review on #444): evenPools()
+    // recomputes both EVERY cycle from actual capital (lib/whirlpool-vault.js ~3002-3009,
+    // "caps stop being a hand-tuned input") — asserting a fixed value here every boot would
+    // fight that live sizing on the next deploy. They're seeded once via `floor` below instead
+    // (only fires while still at an unset/pre-launch value; evenPools owns them after that).
+    //
     // NO FLOORS (owner, live-fire correction 2026-09-25, after go-live on this tiny shared
     // wallet): the vault's stock swapSolFloor DEFAULT is 2 SOL — sized for CLKN-scale
     // treasuries, not a ~0.6 SOL client wallet. Left unset here it made tickSol read
@@ -1597,7 +1615,13 @@ function bullenEngineConfigRatchet() {
     // wallet's real spendable SOL, so this class of failure can't recur even if a future
     // project's floors drift too high again.
     usdcFloor: 0, swapSolFloor: 0.03, solGasReserve: 0.03,
-    solMaxSol: 0.66, solDeployThreshold: 0.03,
+    solDeployThreshold: 0.03,
+    // Deployed-value cap (owner, 2026-09-25): bounds how much TOTAL position value this
+    // engine will ever grow to, so stray SOL/USDC sent to the SHARED cuna/dnc/rose/bullen
+    // operator wallet (5WUjHiUVxmUuBnYZx3b5SyFiR7vW2N19VUhgCr2ZRZQ — free quote there belongs
+    // to bullen only while it holds the arm, per the one-armed-engine-per-wallet guard above)
+    // isn't silently absorbed without bound.
+    maxDeployedUsd: 400,
     // Small pools must stay about the SAME USD value so price impact is even across both —
     // tight evenness tolerance (owner, 2026-09-25), tighter than rose/cuna/dnc's 10%.
     swapEnabled: true, poolBalanceTolPct: 5, maxSwapUsdPerCycle: 30, minSwapUsd: 5,
@@ -1609,7 +1633,20 @@ function bullenEngineConfigRatchet() {
     notifyRolls: false,
   };
   const overrides = kv.get("ratchetOverrides:bullen", {}) || {};
-  const { patch } = engineRatchet.ratchetPatch({ current: c, want, overrides });
+  const { patch } = engineRatchet.ratchetPatch({
+    current: c, want, overrides,
+    // Seeds maxUsd/solMaxSol ONCE, only while they're still at an unset or absurdly-low
+    // pre-launch value — evenPools' own live sizing (see the `want` comment above) owns them
+    // from the first real cycle onward, and an override still wins over this floor either way.
+    // The "still untouched" range excludes BOTH ends: unset/absurdly-low (never seeded) AND
+    // the vault's generic CLKN-scale default (maxUsd:1000, DEFAULT_CONFIG) — a fresh project
+    // reads the default until something writes it, so the default itself must trip this floor
+    // too, or a brand-new bullen would launch with a $1000 cap sized for a treasury.
+    floor: {
+      when: (cc) => cc.maxUsd == null || cc.maxUsd < 20 || cc.maxUsd >= 500 || cc.solMaxSol == null || cc.solMaxSol < 0.1 || cc.solMaxSol >= 3,
+      values: { maxUsd: 200, solMaxSol: 0.66 },
+    },
+  });
   if (Object.keys(patch).length) {
     whirlpoolMM.vault.setConfig(patch, "bullen");
     console.log("[bullen-engine] config ratchet corrected:", Object.keys(patch).join(", "));
@@ -22291,6 +22328,9 @@ app.listen(PORT, () => {
     rose: roseEngineArmed,
     cuna: cunaArmed,
     dnc: dncArmed,
+    bullen: bullenEngineArmed,   // Codex review on #444 — bullen has its own 90s loop; without
+                                  // this entry the generic 10-min loop would ALSO tick it while
+                                  // armed, the exact two-scheduler race that minted the $355 orphan.
     poke: () => process.env.POKE_ENGINE_ON === "1" && process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING, // OFF by default (owner, 2026-09-05), never on staging
   };
   const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {

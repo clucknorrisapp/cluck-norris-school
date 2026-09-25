@@ -5,7 +5,7 @@
 // simulator doing its job: change the spec test AND the code together, deliberately.
 //
 // Run: node scripts/engine-sim-test.cjs   (exit 0 = pass, 1 = fail)
-const { buybackDecision, rollGate } = require("../lib/engine-decisions.js");
+const { buybackDecision, rollGate, spendableSol } = require("../lib/engine-decisions.js");
 
 let failures = 0;
 function check(name, cond, detail) {
@@ -169,6 +169,32 @@ const DAY = "2026-08-28";
   check("fuzz: no floor/guard/cap violations in 5,000 ticks", violations.length === 0, violations.slice(0, 3).join("; "));
   check("fuzz: daily buyback count bounded", st.buybacksToday <= CFG.maxBuybacksPerDay, String(st.buybacksToday));
   check("fuzz: rolls bounded by 2× day cap", rollState.dayActions <= 2 * CFG.maxActionsPerDay, String(rollState.dayActions));
+}
+
+// ── Scenario: spendableSol — BOTH guards, shared across every project (Codex review on #444) ──
+// BULLEN production incident, 2026-09-25: tickSol's own inline copy of this was missing the
+// solGasReserve term (buybackDecision's inline `freeSol` already had both — see the "SOL spend
+// respects BOTH gas guards" scenario above), so a tiny wallet with the vault's stock 2 SOL
+// swapSolFloor default read solAvail as 0 and fell to an unaffordable "deploy 100% of the
+// token side" branch. Extracting spendableSol() into lib/engine-decisions.js and pinning it
+// here means every project's tickSol (not just bullen's) is now covered by the same tested
+// arithmetic — a future edit that drops one of the two guards fails this scenario immediately.
+{
+  // The exact bug shape: a ~0.62 SOL client wallet against the vault's stock 2 SOL floor.
+  check("spendableSol: stock 2 SOL swapSolFloor strands a tiny wallet to 0 (the reported bug)",
+    spendableSol({ swapSolFloor: 2, solGasReserve: 0.03 }, { sol: 0.6234 }) === 0);
+  // The fix: a floor sized for the wallet leaves the real spendable amount.
+  check("spendableSol: a floor sized for the wallet leaves the real spendable amount",
+    Math.abs(spendableSol({ swapSolFloor: 0.03, solGasReserve: 0.03 }, { sol: 0.6234 }) - 0.5634) < 1e-9,
+    String(spendableSol({ swapSolFloor: 0.03, solGasReserve: 0.03 }, { sol: 0.6234 })));
+  // BOTH guards: swapSolFloor alone would say "0.05 free" — solGasReserve must ALSO come off,
+  // and here it wipes that out to exactly 0. A regression that drops solGasReserve would report
+  // 0.05 here instead of 0 and fail this check.
+  check("spendableSol: swapSolFloor alone would say 0.05 free — solGasReserve wipes it to 0",
+    spendableSol({ swapSolFloor: 2, solGasReserve: 0.1 }, { sol: 2.05 }) === 0);
+  // Never negative, and missing config fields default to 0 (no reserve configured ≠ crash).
+  check("spendableSol: floors at 0, never negative", spendableSol({ swapSolFloor: 5 }, { sol: 1 }) === 0);
+  check("spendableSol: missing cfg fields default to 0 reserve", spendableSol({}, { sol: 1.5 }) === 1.5);
 }
 
 if (failures) { console.error(`\n${failures} FAILURE(S)`); process.exit(1); }
