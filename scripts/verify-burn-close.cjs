@@ -105,5 +105,23 @@ for (const prog of [TOKEN_CLASSIC, TOKEN_2022]) {
   if (!okLen) { pass = false; console.log('  got:', Array.from(ix.data)); }
 }
 
+// Defense in depth (adversarial review on PR #443): a THIRD program id must be refused outright on
+// the money-moving builders, never silently built into a well-formed instruction for whatever that
+// id actually names.
+{
+  const FAKE_PROGRAM = new PublicKey('11111111111111111111111111111112').toBase58(); // a real pubkey, just not a token program
+  const builders = [
+    ['createWithdrawExcessLamportsInstruction', () => shipped.createWithdrawExcessLamportsInstruction(acct, owner, owner, FAKE_PROGRAM)],
+    ['createBurnCheckedInstruction', () => shipped.createBurnCheckedInstruction(acct, mint, owner, amount, decimals, FAKE_PROGRAM)],
+    ['createCloseAccountInstruction', () => shipped.createCloseAccountInstruction(acct, dest, owner, FAKE_PROGRAM)],
+  ];
+  for (const [name, build] of builders) {
+    let threw = false;
+    try { build(); } catch (_e) { threw = true; }
+    console.log(`[program-id] ${name} refuses an unknown token program ${threw ? 'MATCH' : 'MISMATCH'}`);
+    if (!threw) pass = false;
+  }
+}
+
 console.log(pass ? '\n✅ ALL MATCH — public/airdrop-engine.js is byte-identical to the libraries' : '\n❌ MISMATCH — do not ship');
 process.exit(pass?0:1);

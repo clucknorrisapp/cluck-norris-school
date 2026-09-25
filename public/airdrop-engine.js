@@ -17,6 +17,19 @@
 // Using Helius RPC for ATA derivation instead of full SPL library
 const TOKEN_CLASSIC = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 const TOKEN_2022 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+const KNOWN_TOKEN_PROGRAMS = new Set([TOKEN_CLASSIC, TOKEN_2022]);
+
+// Defense in depth (adversarial review on PR #443): the token program id decides which real
+// on-chain program interprets an instruction's account list. A caller passing anything other than
+// the two real token programs would still build a well-formed TransactionInstruction — nothing
+// about the shape would look wrong — for whatever program that id actually names. Refuse before a
+// wallet is ever asked to sign, on the money-moving builders (burn, close, withdraw-excess),
+// rather than trust every call site to always pass one of the two real ones.
+function assertKnownTokenProgram(tokenProgram) {
+  const p = tokenProgram || TOKEN_CLASSIC;
+  if (!KNOWN_TOKEN_PROGRAMS.has(p)) throw new Error('Refusing an unknown token program: ' + p);
+  return p;
+}
 
 const splToken = {
   // The token program is a SEED of the ATA PDA, so a Token-2022 mint derives a
@@ -90,7 +103,7 @@ const splToken = {
   // Token-2022) in Node before shipping, per CLAUDE.md's "diff its bytes against the library" rule.
   createBurnCheckedInstruction(account, mint, owner, amount, decimals, tokenProgram) {
     const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
+    const TOKEN_PROGRAM = new PublicKey(assertKnownTokenProgram(tokenProgram));
     const data = new Uint8Array(10);
     data[0] = 15;
     new DataView(data.buffer).setBigUint64(1, BigInt(amount), true);
@@ -113,7 +126,7 @@ const splToken = {
   // Token-2022) in Node before shipping.
   createCloseAccountInstruction(account, destination, owner, tokenProgram) {
     const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
+    const TOKEN_PROGRAM = new PublicKey(assertKnownTokenProgram(tokenProgram));
     return new TransactionInstruction({
       keys: [
         { pubkey: account,     isSigner: false, isWritable: true },
@@ -149,7 +162,7 @@ const splToken = {
   // filters those out before this is ever built (see lib/rent-surplus.js's isEligibleForSurplus).
   createWithdrawExcessLamportsInstruction(account, destination, authority, tokenProgram) {
     const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
+    const TOKEN_PROGRAM = new PublicKey(assertKnownTokenProgram(tokenProgram));
     return new TransactionInstruction({
       keys: [
         { pubkey: account,     isSigner: false, isWritable: true },

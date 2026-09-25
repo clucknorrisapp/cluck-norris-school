@@ -63,7 +63,7 @@ const jvpDashboard = require("./lib/jvp-dashboard");
 const curriculumPage = require("./lib/curriculum"); // lesson COUNTS only — the SEO mirror page was removed 2026-07-29
 const rpc = require("./lib/rpc"); // resilient RPC: primary Helius + automatic failover
 const { scanReclaimable } = require("./lib/rent-reclaim"); // Rent Reclaim, READ SIDE ONLY — Seeker app increment 2
-const { computeSurplus, isEligibleForSurplus } = require("./lib/rent-surplus"); // Firepit surplus-rent job, pure decision logic
+const { computeSurplusForAccounts } = require("./lib/rent-surplus"); // Firepit surplus-rent job, pure decision logic
 const {
   SOL_ADDR_RE, base58Decode, base58Encode, isOnCurveBytes, isOnCurve, deriveAta,
   DEX_PROGRAMS, LOCKER_PROGRAMS, TOKEN_PROGRAMS, PROGRAM_LABELS,
@@ -14907,11 +14907,21 @@ app.get("/api/wallet-checkup", async (req, res) => {
 // protocol change, not per request.
 const rentExemptMinCache = new Map(); // space(bytes) -> { lamports, at }
 const RENT_EXEMPT_CACHE_MS = 60 * 60 * 1000; // an hour — this is a network PARAMETER, not per-account state
-async function rentExemptMinimumFor(rpcFn, space) {
+// Its OWN short timeout (3s, not the 15s the account-read calls in this route use) and its OWN
+// fetch — this lookup is cached and near-static, so it must never hold up the ordinary burn/
+// reclaim scan as long as a real account read is allowed to (adversarial review on PR #443, P3-8).
+// lib/rent-surplus.js's computeSurplusForAccounts calls several of these concurrently.
+const RENT_EXEMPT_LOOKUP_TIMEOUT_MS = 3000;
+async function rentExemptMinimumFor(rpcUrl, space) {
   const now = Date.now();
   const cached = rentExemptMinCache.get(space);
   if (cached && (now - cached.at) < RENT_EXEMPT_CACHE_MS) return cached.lamports;
-  const d = await rpcFn("getMinimumBalanceForRentExemption", [space]);
+  const r = await fetch(rpcUrl, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: "getMinimumBalanceForRentExemption", method: "getMinimumBalanceForRentExemption", params: [space] }),
+    signal: AbortSignal.timeout(RENT_EXEMPT_LOOKUP_TIMEOUT_MS),
+  });
+  const d = await r.json();
   const lamports = Number(d && d.result);
   if (!Number.isFinite(lamports) || lamports <= 0) {
     if (cached) return cached.lamports;   // stale-but-real beats nothing
@@ -14970,26 +14980,21 @@ app.get("/api/burn-scan", async (req, res) => {
     const mints = [...new Set(list.map((a) => a.mint))];
     const priced = mints.length ? await priceTokensBatch(mints) : {};
 
-    // Rent-exempt minimum, read live per DISTINCT byte length (never hardcoded — see the header
-    // note above this route). A handful of distinct lengths cover an entire wallet's accounts
-    // (165 classic, 170+ for Token-2022 extensions), so this is a few RPC calls, not one per
-    // account. If the lookup fails entirely and nothing cached survives, the surplus figures are
-    // marked UNAVAILABLE rather than silently reading as zero surplus — CLAUDE.md: an RPC failure
-    // must read as "couldn't check", never as "nothing to reclaim".
-    const spaces = [...new Set(list.map((a) => a.space).filter((s) => s > 0))];
-    const rentMinBySpace = new Map();
-    let surplusAvailable = true;
-    for (const sp of spaces) {
-      try {
-        rentMinBySpace.set(sp, await rentExemptMinimumFor(rpc, sp));
-      } catch (e) {
-        surplusAvailable = false;
-        console.error("[burn-scan] rent-exempt lookup failed for space", sp, e.message);
-      }
-    }
+    // The surplus job's whole read side lives in lib/rent-surplus.js (pure, unit-tested with an
+    // injected lookup — no network in the test). `surplusAvailable` is false — never a silent
+    // "everything's fine" a client could read as "nothing to reclaim" — when any non-native
+    // account's byte length is missing/unreadable, when a length's live rent-exempt lookup
+    // failed, or when more distinct lengths exist than the cap allows (adversarial review on PR
+    // #443, findings 3/8). `rentExemptMinimumFor` has its own short (3s) timeout and every
+    // distinct length is looked up CONCURRENTLY, so this never holds up the ordinary burn/reclaim
+    // scan the way the old 15s-per-length serial loop could.
+    const surplusResult = await computeSurplusForAccounts(list, wallet, (sp) => rentExemptMinimumFor(rpcUrl, sp));
+    const surplusAvailable = surplusResult.surplusAvailable;
+    const surplusLamportsTotal = surplusResult.surplusLamportsTotal;
+    const surplusBySpaceOrder = surplusResult.accounts; // same order/length as `list` — zip by index below
 
-    let rentLamportsTotal = 0, valueUsdTotal = 0, surplusLamportsTotal = 0;
-    const out = list.map((a) => {
+    let rentLamportsTotal = 0, valueUsdTotal = 0;
+    const out = list.map((a, idx) => {
       const p = priced[a.mint] || {};
       const priceUsd = Number(p.priceUsd) || 0;
       const valueUsd = Number((a.uiAmount * priceUsd).toFixed(4));
@@ -15001,17 +15006,10 @@ app.get("/api/burn-scan", async (req, res) => {
       // token unless we say so. The client uses this to warn "value UNKNOWN, not zero" instead of
       // flashing a false "nothing of value is destroyed" all-clear over a bag that may be worth money.
       const priceKnown = Object.prototype.hasOwnProperty.call(priced, a.mint);
-      // Surplus = what this account holds ABOVE today's rent-exempt minimum for its own byte
-      // length — null (never 0) when that minimum couldn't be read for this account's space, so
-      // an RPC hiccup can't misreport a real surplus as "nothing to reclaim". Wrapped SOL is
-      // excluded outright: WithdrawExcessLamports refuses it (NativeNotSupported), regardless of
-      // any balance/lamport math. lib/rent-surplus.js owns this decision so it has its own
-      // no-network unit test (mirrors lib/rent-reclaim.js's split for the close-account job).
-      const { rentExemptLamports, surplusLamports } = a.isNative
-        ? { rentExemptLamports: null, surplusLamports: null }
-        : computeSurplus(a.rentLamports, rentMinBySpace.get(a.space));
-      if (surplusLamports != null) surplusLamportsTotal += surplusLamports;
-      const surplusEligible = isEligibleForSurplus({ isNative: a.isNative, owner: a.owner, surplusLamports }, wallet);
+      // Surplus fields (rentExemptLamports/surplusLamports/surplusEligible) — null/false, never a
+      // fabricated 0, when the minimum couldn't be read for this account's space. Wrapped SOL is
+      // excluded outright: WithdrawExcessLamports refuses it (NativeNotSupported).
+      const { rentExemptLamports, surplusLamports, surplusEligible } = surplusBySpaceOrder[idx];
       return {
         ...a,
         symbol: p.symbol || null, name: p.name || null, logo: p.logo || null,
@@ -15047,9 +15045,9 @@ app.get("/api/burn-scan", async (req, res) => {
       count: out.length, capped,
       rentSolTotal: Number((rentLamportsTotal / 1e9).toFixed(6)),
       valueUsdTotal: Number(valueUsdTotal.toFixed(2)),
-      // surplusAvailable is false only when a rent-exempt lookup failed with nothing cached to
-      // fall back on — the client must show "couldn't check" rather than a false "0 to reclaim"
-      // (same rule as /api/seeker/reclaimable's RPC-failure posture).
+      // surplusAvailable is false whenever ANY part of the surplus read couldn't be trusted (see
+      // computeSurplusForAccounts's header) — the client must show "couldn't check" rather than a
+      // false "0 to reclaim" (same rule as /api/seeker/reclaimable's RPC-failure posture).
       surplusAvailable,
       surplusLamportsTotal,
       surplusSolTotal: Number((surplusLamportsTotal / 1e9).toFixed(6)),

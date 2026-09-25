@@ -145,9 +145,17 @@ let stop = () => {};
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(scanFixture()) });
   });
+  // The FIRST getSignatureStatuses poll is deliberately DELAYED — this holds the run in the
+  // "Confirming on-chain…" state for a controlled window so the test below (finding 1) can try to
+  // dismiss the sheet and start a second job while the first is still in flight.
+  let sigStatusDelayed = false;
   await page.route("**/api/helius-rpc**", async (route) => {
     const body = route.request().postDataJSON();
     const calls = Array.isArray(body) ? body : [body];
+    if (calls.some((c) => c.method === "getSignatureStatuses") && !sigStatusDelayed) {
+      sigStatusDelayed = true;
+      await new Promise((r) => setTimeout(r, 1200));
+    }
     const results = calls.map((c) => {
       if (c.method === "getLatestBlockhash") return { jsonrpc: "2.0", id: c.id, result: { context: { slot: 1 }, value: { blockhash: FAKE_BLOCKHASH, lastValidBlockHeight: 999999999 } } };
       if (c.method === "sendTransaction") {
@@ -198,6 +206,21 @@ let stop = () => {};
   for (let i = 0; i < 100 && !capturedSendTxB64; i++) await new Promise((r) => setTimeout(r, 100));
   ok("the wallet was asked to sign, and the page actually submitted a transaction", !!capturedSendTxB64);
 
+  // ── finding 1: the sheet cannot be dismissed, and a second job cannot start, mid-run ──────────
+  // The getSignatureStatuses stub above delays its first answer, so the run is still sitting in
+  // "Confirming on-chain…" right now — the exact window a backdrop click or a second button tap
+  // used to be able to exploit.
+  await page.waitForFunction(() => /Confirming on-chain/i.test((document.getElementById("m-status") || {}).textContent || ""), null, { timeout: 5000 }).catch(() => {});
+  await page.click("#modal", { position: { x: 5, y: 5 } });   // the darkened backdrop, not the box
+  const stillOpenMidRun = await page.$eval("#modal", (el) => el.classList.contains("show"));
+  ok("finding 1: the confirm sheet CANNOT be closed by clicking the backdrop while a job is signing/sending", stillOpenMidRun);
+  const midRunTitle = await page.$eval("#m-title", (el) => el.textContent);
+  await page.evaluate(() => { const b = document.getElementById("surplus-btn"); b && b.click(); });
+  const titleAfterTap = await page.$eval("#m-title", (el) => el.textContent);
+  ok("finding 1: tapping an action button mid-run does not reopen or replace the sheet (confirmKind stays put)", titleAfterTap === midRunTitle, { midRunTitle, titleAfterTap });
+  const sentCountMidRun = await page.evaluate(() => window.__sentTxs.length);
+  ok("finding 1: no SECOND signature was requested from that tap", sentCountMidRun === 1, sentCountMidRun);
+
   // Decode the REAL bytes the page handed to sendTransaction.
   const raw = Buffer.from(capturedSendTxB64, "base64");
   const tx = web3.Transaction.from(raw);
@@ -223,9 +246,18 @@ let stop = () => {};
     tx.verifySignatures());
   ok("the fee payer is the connected wallet", tx.feePayer && tx.feePayer.toBase58() === WALLET);
 
-  await page.waitForFunction(() => /arrived|Confirmed/i.test(document.getElementById("status").textContent), null, { timeout: 20000 }).catch(() => {});
+  // The fixture's post-send burn-scan response reports this account at exactly today's minimum
+  // (1,488,440 lamports) — the page must derive "actually arrived" as prior minus fresh
+  // (1,855,569 − 1,488,440 = 367,129) and say so, not merely echo the requested figure back as if
+  // it were confirmed fact (adversarial review on PR #443, finding 9).
+  // "arrived in your wallet" is unique to the FINAL rescanUntilCleanSurplus message — the interim
+  // "confirming what actually arrived…" status also contains "actually arrived" as a substring, so
+  // matching on that alone would pass against the wrong (intermediate) message.
+  await page.waitForFunction(() => /arrived in your wallet/i.test(document.getElementById("status").textContent), null, { timeout: 20000 }).catch(() => {});
   const finalStatus = await page.$eval("#status", (el) => el.textContent);
-  ok("the finished-run status reports what actually happened, never a bare success flag", finalStatus.length > 0, finalStatus);
+  ok("the finished-run status reports SUCCESS, not an error class", await page.$eval("#status", (el) => el.className.includes("ok") && !el.className.includes("err")), finalStatus);
+  ok("the finished-run status names the ACTUAL amount that arrived (0.000367 SOL, re-derived from a fresh scan), not just a bare success flag",
+    /arrived in your wallet/i.test(finalStatus) && /0\.000367/.test(finalStatus), finalStatus);
 
   await ctx.close();
   await browser.close();

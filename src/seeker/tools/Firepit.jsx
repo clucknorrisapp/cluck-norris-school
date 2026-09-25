@@ -236,14 +236,23 @@ const OUTCOME_CLASS = {
 // `kind` picks which figure this outcome is actually about — every account now carries BOTH
 // `rentLamports` (its full balance) and `surplusLamports` (the surplus above today's minimum), so
 // a surplus-job outcome must show the surplus it asked for, never the account's whole balance.
+//
+// For a LANDED surplus row, `a.actualLamports` (set by onConfirmed's post-run re-read) is what
+// ACTUALLY arrived, and takes priority over the requested `surplusLamports` figure — never report
+// what was asked for as if it were confirmed fact (adversarial review on PR #443, finding 6). If
+// the re-read itself failed (`a.actualUnknown`), the row says so explicitly rather than silently
+// keeping the requested number.
 function OutcomeRow({ a, status, error, kind }) {
-  const amount = kind === "surplus" ? a.surplusLamports : a.rentLamports;
+  const showActual = kind === "surplus" && status === "sent" && a.actualLamports != null;
+  const amount = showActual ? a.actualLamports : (kind === "surplus" ? a.surplusLamports : a.rentLamports);
+  const isRequestedOnly = kind === "surplus" && status === "sent" && !showActual;
   return (
     <div className={"seeker-forensic-row" + (OUTCOME_CLASS[status] || "")}>
       <div className="seeker-forensic-row-main">
         <div className="seeker-forensic-row-top"><span>{a.symbol || shortAddr(a.mint)}</span></div>
         <div className="seeker-forensic-row-sub">
           {t(OUTCOME_LABEL[status] || status)}{error ? ` · ${error}` : ""}
+          {isRequestedOnly ? ` · ${t("requested — couldn't confirm the actual amount")}` : ""}
         </div>
       </div>
       <div className="seeker-forensic-row-value">{fmtSol(amount)}</div>
@@ -348,7 +357,11 @@ export default function FirepitPane({ wallet }) {
   const burnUnpriced = selBurnRows.filter((a) => isUnpriced(a));
 
   const surplusAccts = accounts.filter(surplusEligible);
-  const surplusUnavailable = data && data.surplusAvailable === false;
+  // Strict: require an EXPLICIT `true`, never `!== false` — a MISSING field (an older production
+  // server that predates this feature) must read the same as an explicit false. Treating "missing"
+  // as "available" would show a false "nothing to reclaim" against a wallet that might genuinely
+  // have a surplus (adversarial review on PR #443, finding 3).
+  const surplusUnavailable = !!data && data.surplusAvailable !== true;
   const selSurplusRows = surplusAccts.filter((a) => selSurplus.has(a.tokenAccount));
   const surplusLamportsSel = selSurplusRows.reduce((s, a) => s + (Number(a.surplusLamports) || 0), 0);
   // An estimated network fee so "tiny surpluses may not be worth the fee" (the task brief) is
@@ -356,7 +369,9 @@ export default function FirepitPane({ wallet }) {
   // fee; the wallet shows the exact figure at signing.
   const surplusTxCount = selSurplusRows.length ? Math.ceil(selSurplusRows.length / CHUNK_SURPLUS) : 0;
   const surplusFeeLamports = surplusTxCount * 5000;
-  const surplusNetLamports = Math.max(0, surplusLamportsSel - surplusFeeLamports);
+  // Signed, never floored at 0 — a fee that would exceed the surplus must show as a real negative
+  // net, not vanish into a falsely reassuring "0 SOL" (adversarial review on PR #443, finding 5).
+  const surplusNetLamports = surplusLamportsSel - surplusFeeLamports;
 
   // ── open the confirm sheet on a FRESH chain read (see header note) ─────────────────────────
   async function openConfirm(kind) {
@@ -407,35 +422,49 @@ export default function FirepitPane({ wallet }) {
     const chunkSize = kind === "surplus" ? CHUNK_SURPLUS : CHUNK;
     for (let i = 0; i < sel.length; i += chunkSize) chunks.push(sel.slice(i, i + chunkSize));
 
-    // One builder, used for a full chunk and for a single-account retry alike — a second copy is
-    // how the two would drift apart, and one of them handles money.
-    const buildFor = (group) => (web3, blockhash, owner) => {
+    // Two SEPARATE builders, never one function branching on `kind` — adversarial review on PR
+    // #443, finding 4: a single shared builder had the surplus instruction guarded only by an
+    // early `return` inside a `.forEach()` callback, and a dropped/misplaced `return` there would
+    // silently fall through into burn+close for the SAME account on top of the withdrawal. Each
+    // function now does exactly one thing unconditionally, so there is no fallthrough to drop.
+    //
+    // WithdrawExcessLamports — pulls ONLY the surplus above today's rent-exempt minimum. Never
+    // touches the token balance, never closes the account. Destination AND authority are ALWAYS
+    // the connected wallet — never user-editable (CLAUDE.md guardrail).
+    const buildSurplusFor = (group) => (web3, blockhash, owner) => {
       const { Transaction, PublicKey } = web3;
       const spl = splTokenShim();
       const ownerKey = new PublicKey(owner);
       const tx = new Transaction();
       group.forEach((a) => {
         const ta = new PublicKey(a.tokenAccount);
-        if (kind === "surplus") {
-          // WithdrawExcessLamports — pulls ONLY the surplus above today's rent-exempt minimum.
-          // Never touches the token balance, never closes the account. Destination AND authority
-          // are ALWAYS the connected wallet — never user-editable (CLAUDE.md guardrail).
-          tx.add(spl.createWithdrawExcessLamportsInstruction(ta, ownerKey, ownerKey, a.program));
-          return;
-        }
-        const mint = new PublicKey(a.mint);
-        // Burn any balance to zero first — but NEVER "burn" wrapped SOL; closing it just
-        // unwraps it back to SOL (header note, and firepit.html by name).
+        tx.add(spl.createWithdrawExcessLamportsInstruction(ta, ownerKey, ownerKey, a.program));
+      });
+      tx.feePayer = ownerKey;
+      tx.recentBlockhash = blockhash;
+      return tx;
+    };
+    // Burn any balance to zero first — but NEVER "burn" wrapped SOL; closing it just unwraps it
+    // back to SOL (header note, and firepit.html by name) — then close the (now-empty) account and
+    // send its rent to the owner. Used for both the "reclaim" (already-empty) and "burn" kinds;
+    // an already-empty account simply adds no burn instruction.
+    const buildBurnFor = (group) => (web3, blockhash, owner) => {
+      const { Transaction, PublicKey } = web3;
+      const spl = splTokenShim();
+      const ownerKey = new PublicKey(owner);
+      const tx = new Transaction();
+      group.forEach((a) => {
+        const ta = new PublicKey(a.tokenAccount), mint = new PublicKey(a.mint);
         if (!isEmpty(a) && !isWsol(a)) {
           tx.add(spl.createBurnCheckedInstruction(ta, mint, ownerKey, a.amountRaw, a.decimals, a.program));
         }
-        // Close the (now-empty) account and send its rent to the owner.
         tx.add(spl.createCloseAccountInstruction(ta, ownerKey, ownerKey, a.program));
       });
       tx.feePayer = ownerKey;
       tx.recentBlockhash = blockhash;
       return tx;
     };
+    const buildFor = kind === "surplus" ? buildSurplusFor : buildBurnFor;
     const signGroup = (group) => signSendConfirm({
       provider: wallet.provider,
       owner: wallet.address,
@@ -506,6 +535,30 @@ export default function FirepitPane({ wallet }) {
         // arrived", not what was asked for).
         setData((d) => (d ? { ...d, accounts: (d.accounts || []).map((a) => (sentIds.has(a.tokenAccount) ? { ...a, surplusLamports: 0, surplusEligible: false } : a)) } : d));
         setSelSurplus((s) => { const n = new Set(s); sentIds.forEach((id) => n.delete(id)); return n; });
+        // Re-read the chain and report what ACTUALLY arrived per account, never the requested
+        // figure presented as fact (CLAUDE.md: "report what actually arrived"; adversarial review
+        // on PR #443, finding 6). A re-read failure leaves the row's `actualUnknown` flag set so
+        // OutcomeRow labels the figure "requested" rather than silently implying it is confirmed.
+        const priorByAccount = {};
+        sel.forEach((a) => { if (sentIds.has(a.tokenAccount)) priorByAccount[a.tokenAccount] = Number(a.rentLamports) || 0; });
+        // eslint-disable-next-line no-await-in-loop
+        const reread = await toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(wallet.address)}`);
+        let actualByAccount = null;
+        if (reread.ok) {
+          actualByAccount = {};
+          (reread.data.accounts || []).forEach((a) => {
+            if (sentIds.has(a.tokenAccount) && priorByAccount[a.tokenAccount] !== undefined) {
+              actualByAccount[a.tokenAccount] = Math.max(0, priorByAccount[a.tokenAccount] - (Number(a.rentLamports) || 0));
+            }
+          });
+        }
+        setRunResults((rows) => rows.map((r) => {
+          if (r.kind !== "surplus" || !sentIds.has(r.a.tokenAccount)) return r;
+          if (actualByAccount && actualByAccount[r.a.tokenAccount] !== undefined) {
+            return { ...r, a: { ...r.a, actualLamports: actualByAccount[r.a.tokenAccount] } };
+          }
+          return { ...r, a: { ...r.a, actualUnknown: true } };
+        }));
       } else {
         setData((d) => (d ? { ...d, accounts: (d.accounts || []).filter((a) => !sentIds.has(a.tokenAccount)) } : d));
         setSelEmpty((s) => { const n = new Set(s); sentIds.forEach((id) => n.delete(id)); return n; });
@@ -589,11 +642,18 @@ export default function FirepitPane({ wallet }) {
   // Surplus job's own sheet: never destroys anything and never touches a balance, so it gets none
   // of the burn value-guard machinery above (no typed confirmation, no "destroying value"
   // language) — same reasoning as onConfirmed's own early branch.
+  const confirmSurplusLamports = confirmKind === "surplus" ? confirmSel.reduce((s, a) => s + (Number(a.surplusLamports) || 0), 0) : 0;
+  const confirmSurplusFeeLamports = confirmKind === "surplus" ? Math.ceil((confirmSel.length || 1) / CHUNK_SURPLUS) * 5000 : 0;
+  const confirmSurplusNetLamports = confirmSurplusLamports - confirmSurplusFeeLamports;
   const surplusLines = confirmKind === "surplus" ? [
     <span key="c">{t("Accounts")}: <strong>{confirmSel.length}</strong></span>,
-    <span key="s">{t("Surplus returning to your wallet")}: <strong>{fmtSol(confirmSel.reduce((s, a) => s + (Number(a.surplusLamports) || 0), 0))}</strong></span>,
+    <span key="s">{t("Surplus returning to your wallet")}: <strong>{fmtSol(confirmSurplusLamports)}</strong></span>,
     <span key="n">{t("These accounts and their tokens stay exactly as they are — only the surplus above today's minimum moves to you.")}</span>,
-  ] : [];
+    // Never let a fee that would eat the whole surplus hide behind silence (finding 5).
+    confirmSurplusNetLamports <= 0 ? (
+      <span key="w" className="seeker-firepit-destroyval">{t("The estimated network fee is likely to eat all or more of this surplus — you may end up with less SOL than you started with, or barely break even.")}</span>
+    ) : null,
+  ].filter(Boolean) : [];
 
   const counts = runResults.reduce((a, r) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
   const runDone = !busy && runResults.length > 0;
@@ -686,7 +746,7 @@ export default function FirepitPane({ wallet }) {
                   <span className="seeker-firepit-actiontotal">
                     {t("Surplus")}: <strong>{fmtSol(surplusLamportsSel)}</strong>
                     {" · "}{t("Est. fee")}: <strong>{fmtSol(surplusFeeLamports)}</strong>
-                    {" · "}{t("Net")}: <strong>{fmtSol(surplusNetLamports)}</strong>
+                    {" · "}{t("Net")}: <strong className={surplusNetLamports < 0 ? "seeker-firepit-destroyval" : undefined}>{fmtSol(surplusNetLamports)}</strong>
                   </span>
                   <button type="button" className="seeker-btn" disabled={selSurplusRows.length === 0 || confirmPhase === "checking"} onClick={() => openConfirm("surplus")}>{t("Reclaim surplus")}</button>
                 </div>

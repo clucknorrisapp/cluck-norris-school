@@ -2936,5 +2936,7 @@
   "These accounts and their tokens stay exactly as they are — only the surplus above today's minimum moves to you.": "这些账户及其代币将完全保持原状——只有超出今天最低额的盈余部分会转给你。",
   "pull": "取出",
   "stays open": "保持开放",
-  "{cur} now, {min} required": "现有 {cur}，需要 {min}"
+  "{cur} now, {min} required": "现有 {cur}，需要 {min}",
+  "The estimated network fee is likely to eat all or more of this surplus — you may end up with less SOL than you started with, or barely break even.": "预估的网络手续费很可能会吃掉这笔盈余的全部甚至更多——你最终得到的 SOL 可能比原来还少，或者刚好打平。",
+  "requested — couldn't confirm the actual amount": "已请求——无法确认实际到账金额"
 }

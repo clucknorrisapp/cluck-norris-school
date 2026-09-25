@@ -5,7 +5,7 @@
 // mainnet figure (getMinimumBalanceForRentExemption(165) = 1,488,440 lamports today, verified by
 // simulation and cited in AGENTS.md) or a boundary the code must get right regardless of what the
 // live number happens to be.
-const { computeSurplus, isEligibleForSurplus } = require("../lib/rent-surplus");
+const { computeSurplus, isEligibleForSurplus, computeSurplusForAccounts } = require("../lib/rent-surplus");
 
 let failures = 0;
 const ok = (n, c, d) => { if (c) console.log("  ✓ " + n); else { failures++; console.log("  ✗ " + n + (d !== undefined ? "\n      " + (typeof d === "string" ? d : JSON.stringify(d)) : "")); } };
@@ -73,5 +73,55 @@ ok("no wallet passed in (caller trusts the RPC filter alone) → owner check is 
 ok("a missing/undefined account → false, never throws",
   isEligibleForSurplus(undefined, WALLET) === false);
 
-console.log(failures ? `\n${failures} FAILED` : "\nall passed");
-process.exit(failures ? 1 : 0);
+// ── computeSurplusForAccounts ────────────────────────────────────────────────────────────────
+// The wallet-wide orchestration (server.js's /api/burn-scan calls this directly) — a server test
+// with the RPC pulled out via an injected `lookupMin`, per the adversarial review on PR #443
+// (findings 3, 8, 9): a stub here proves the same thing a live server would, with no network.
+(async () => {
+  const lookupReal = async (sp) => { if (sp === 165) return REAL_MIN_165; if (sp === 170) return REAL_MIN_170; throw new Error("unstubbed space " + sp); };
+  const lookupNever = async () => { throw new Error("must not be called"); };
+
+  let r2 = await computeSurplusForAccounts(
+    [{ space: 165, isNative: false, rentLamports: 1855569, owner: WALLET }], WALLET, lookupReal);
+  ok("a normal non-native account with a readable space → surplusAvailable true, real surplus computed",
+    r2.surplusAvailable === true && r2.surplusLamportsTotal === 367129 && r2.accounts[0].surplusEligible === true, r2);
+
+  r2 = await computeSurplusForAccounts(
+    [{ space: 0, isNative: false, rentLamports: 1855569, owner: WALLET }], WALLET, lookupNever);
+  ok("P2-3: space missing/unreadable (0) on a non-native account → surplusAvailable FALSE, never a silent \"fine\"; that account's own surplus is null",
+    r2.surplusAvailable === false && r2.accounts[0].surplusLamports === null && r2.accounts[0].surplusEligible === false && r2.surplusLamportsTotal === 0, r2);
+
+  r2 = await computeSurplusForAccounts(
+    [{ space: 165, isNative: true, rentLamports: 5000000000, owner: WALLET }], WALLET, lookupNever);
+  ok("isNative account → surplusAvailable stays TRUE (its own unknowable surplus doesn't count against the wallet), lookupMin never called for it alone",
+    r2.surplusAvailable === true && r2.accounts[0].surplusLamports === null && r2.accounts[0].surplusEligible === false, r2);
+
+  const lookupFails165 = async (sp) => { if (sp === 165) throw new Error("rpc down"); return REAL_MIN_170; };
+  r2 = await computeSurplusForAccounts(
+    [{ space: 165, isNative: false, rentLamports: 1855569, owner: WALLET }, { space: 170, isNative: false, rentLamports: 1600000, owner: WALLET }],
+    WALLET, lookupFails165);
+  ok("P2-3: one length's live lookup fails → surplusAvailable FALSE for the WHOLE response, even though the other length succeeded",
+    r2.surplusAvailable === false && r2.accounts[0].surplusLamports === null && r2.accounts[1].surplusLamports === 86160, r2);
+
+  let concurrent = 0, maxConcurrent = 0;
+  const lookupConcurrent = async (sp) => { concurrent++; maxConcurrent = Math.max(maxConcurrent, concurrent); await new Promise((res) => setTimeout(res, 20)); concurrent--; return REAL_MIN_165; };
+  const manySpaces = Array.from({ length: 5 }, (_, i) => ({ space: 165 + i, isNative: false, rentLamports: 2000000, owner: WALLET }));
+  const t0 = Date.now();
+  r2 = await computeSurplusForAccounts(manySpaces, WALLET, lookupConcurrent);
+  const elapsed = Date.now() - t0;
+  ok("P3-8: distinct-length lookups run CONCURRENTLY (Promise.all), not one at a time",
+    maxConcurrent > 1 && elapsed < 5 * 20, { maxConcurrent, elapsed });
+
+  const manyDistinctSpaces = Array.from({ length: 12 }, (_, i) => ({ space: 165 + i, isNative: false, rentLamports: 2000000, owner: WALLET }));
+  let lookupCalls = 0;
+  const lookupCount = async (sp) => { lookupCalls++; return REAL_MIN_165; };
+  r2 = await computeSurplusForAccounts(manyDistinctSpaces, WALLET, lookupCount, { maxLookups: 8 });
+  ok("P3-8: distinct lengths beyond the cap (8) are never looked up, and surplusAvailable reflects the skip",
+    lookupCalls === 8 && r2.surplusAvailable === false, { lookupCalls, surplusAvailable: r2.surplusAvailable });
+  ok("P3-8: accounts whose length WAS looked up still get a real surplus even though others were skipped",
+    r2.accounts.slice(0, 8).every((a) => a.surplusLamports != null) && r2.accounts.slice(8).every((a) => a.surplusLamports === null),
+    r2.accounts.map((a) => a.surplusLamports));
+
+  console.log(failures ? `\n${failures} FAILED` : "\nall passed");
+  process.exit(failures ? 1 : 0);
+})();

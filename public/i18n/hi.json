@@ -2936,5 +2936,7 @@
   "These accounts and their tokens stay exactly as they are — only the surplus above today's minimum moves to you.": "ये अकाउंट और उनके टोकन बिल्कुल वैसे ही रहते हैं — सिर्फ़ आज के न्यूनतम से ऊपर का अतिरिक्त हिस्सा आपके पास आता है।",
   "pull": "निकालें",
   "stays open": "खुला रहता है",
-  "{cur} now, {min} required": "अभी {cur}, ज़रूरी {min}"
+  "{cur} now, {min} required": "अभी {cur}, ज़रूरी {min}",
+  "The estimated network fee is likely to eat all or more of this surplus — you may end up with less SOL than you started with, or barely break even.": "अनुमानित नेटवर्क फ़ीस इस अतिरिक्त हिस्से को पूरी तरह या उससे ज़्यादा खा सकती है — हो सकता है आपके पास पहले से कम SOL रह जाए, या बस बराबरी हो।",
+  "requested — couldn't confirm the actual amount": "अनुरोधित — वास्तविक राशि की पुष्टि नहीं हो सकी"
 }

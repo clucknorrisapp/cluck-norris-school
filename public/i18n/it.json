@@ -2936,5 +2936,7 @@
   "These accounts and their tokens stay exactly as they are — only the surplus above today's minimum moves to you.": "Questi account e i loro token restano esattamente come sono — solo l'eccedenza rispetto al minimo di oggi si sposta verso di te.",
   "pull": "preleva",
   "stays open": "resta aperto",
-  "{cur} now, {min} required": "{cur} ora, {min} richiesto"
+  "{cur} now, {min} required": "{cur} ora, {min} richiesto",
+  "The estimated network fee is likely to eat all or more of this surplus — you may end up with less SOL than you started with, or barely break even.": "La commissione di rete stimata rischia di consumare tutta questa eccedenza o più — potresti ritrovarti con meno SOL di quanti ne avevi, o a malapena pareggiare.",
+  "requested — couldn't confirm the actual amount": "richiesto — impossibile confermare l'importo reale"
 }
