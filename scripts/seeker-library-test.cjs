@@ -122,6 +122,14 @@ function ok(name, cond, detail) {
   });
   const enDef = (glossary.find((g) => g.term === "AMM") || {}).def;
   ok("definitions render translated", !!esDef && esDef !== enDef, esDef && esDef.slice(0, 80));
+  // The English name under a translated term must STAY English — the page translator rewrote it
+  // once, so a Spanish reader saw "Clave privada / Frase semilla" twice.
+  const enLines = await es.evaluate(() => [...document.querySelectorAll(".seeker-library-item")].map((li) => ({
+    term: (li.querySelector(".seeker-library-term") || {}).textContent || "",
+    en: (li.querySelector(".seeker-library-en") || {}).textContent || null,
+  })).filter((x) => x.en !== null));
+  const notEnglish = enLines.filter((x) => x.en === x.term);
+  ok(`the English name under each translated term stays English (${enLines.length} lines)`, enLines.length > 10 && notEnglish.length === 0, notEnglish.slice(0, 3));
   // "semilla" only exists in the Spanish text ("Frase semilla"); the curated Spanish keeps crypto
   // words its readers really use in English ("Slippage", "Rug pull"), so those search as-is.
   await es.fill(".seeker-library-search", "semilla");

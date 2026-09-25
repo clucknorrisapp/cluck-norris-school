@@ -67,7 +67,9 @@ export default function Library() {
                   explorers and exchanges show these words in English, so a reader can match what
                   they learned here to the screen in front of them (owner, 2026-09-25: "little
                   things where someone in another language notices that we spend extra time"). */}
-              {t(e.term) !== e.term ? <div className="seeker-library-en" lang="en">{e.term}</div> : null}
+              {/* translate="no": public/i18n.js walks the DOM translating text nodes, and without it
+                  this line came out in Spanish too — the same words twice. */}
+              {t(e.term) !== e.term ? <div className="seeker-library-en" lang="en" translate="no">{e.term}</div> : null}
               <p className="seeker-library-def">{t(e.def)}</p>
               {e.lessons.length ? (
                 <div className="seeker-library-links">
