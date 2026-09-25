@@ -306,6 +306,20 @@
   color: var(--orange);
 }
 .seeker-prose-lead { font-weight: 700; color: var(--gold); }
+/* A label alone in its paragraph heads a group of labelled items: gold, underlined, and tied to
+   what follows rather than floating between paragraphs. */
+.seeker-school-content p.seeker-prose-group,
+.seeker-school-section-body p.seeker-prose-group { margin: 22px 0 10px; }
+.seeker-prose-grouplabel {
+  display: block;
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 17px;
+  letter-spacing: 1px;
+  color: var(--gold);
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 182, 39, .35);
+}
 .seeker-school-section-body p:last-child,
 .seeker-school-content p:last-child { margin-bottom: 0; }
 .seeker-school-content { margin-top: 18px; }

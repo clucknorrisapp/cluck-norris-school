@@ -96,15 +96,26 @@ export function proseLine(line, firstOfMany) {
   return { kind: "text", text: line };
 }
 
+// A label reads as a heading, so its trailing colon goes (owner, 2026-09-25: "do we need the : after
+// every line???"). A lead-in keeps its colon — there it still joins the words to the sentence.
+const dropColon = (s) => s.replace(/\s*[:：]\s*$/, "");
+
 function ProsePara({ text }) {
   const lines = text.split("\n");
   const many = lines.length > 1;
+  // A label standing alone in its paragraph heads a GROUP of the labelled items that follow
+  // ("BEST PASSIVE POSITIONS:" over "FULL RANGE on correlated pairs:", "STABLE PAIRS:", …). Styled
+  // the same as its items it read as if something were missing under it (owner, 2026-09-25), so
+  // it gets its own, underlined, treatment.
+  if (!many && proseLine(lines[0], false).kind === "label") {
+    return <p className="seeker-prose-group"><span className="seeker-prose-grouplabel">{dropColon(lines[0].trim())}</span></p>;
+  }
   return (
     <p>
       {lines.map((ln, i) => {
         const r = proseLine(ln, many && i === 0);
         const br = i < lines.length - 1 ? "\n" : null;
-        if (r.kind === "label") return <React.Fragment key={i}><span className="seeker-prose-label">{r.text}</span>{br}</React.Fragment>;
+        if (r.kind === "label") return <React.Fragment key={i}><span className="seeker-prose-label">{dropColon(r.text)}</span>{br}</React.Fragment>;
         if (r.kind === "lead") return <React.Fragment key={i}><strong className="seeker-prose-lead">{r.lead}</strong> {r.rest}{br}</React.Fragment>;
         return <React.Fragment key={i}>{r.text}{br}</React.Fragment>;
       })}
