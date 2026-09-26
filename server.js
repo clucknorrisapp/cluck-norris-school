@@ -1628,6 +1628,10 @@ function bullenEngineConfigRatchet() {
     swapEnabled: true, poolBalanceTolPct: 5, maxSwapUsdPerCycle: 30, minSwapUsd: 5,
     maxSwapSolPerCycle: 0.3, swapSlippageBps: 150, maxSwapsPerDay: 24,
     scaleUpUsdPerCycle: 10, scaleUpDailyCapUsd: 60,
+    // Roll rebalance (review round 2026-09-26, after the SOL pool went $167→$109 and the JUP
+    // pool never reopened): rebalance a fresh close's freed float toward 50/50 before reopening.
+    // OFF for every other project (DEFAULT_CONFIG ships 0) — bullen opts in with a $300/day cap.
+    rollRebalanceUsdPerDay: 300,
     askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
     maxActionsPerDay: 96,   // cautious floor to start (matches rose's own ramp-up floor); raise
                             // live via /api/whirlpool/vault/config?project=bullen&durable=1

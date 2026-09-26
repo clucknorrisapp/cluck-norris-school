@@ -5,7 +5,7 @@
 // simulator doing its job: change the spec test AND the code together, deliberately.
 //
 // Run: node scripts/engine-sim-test.cjs   (exit 0 = pass, 1 = fail)
-const { buybackDecision, rollGate, spendableSol, rollRebalanceDecision, spendableForAdd } = require("../lib/engine-decisions.js");
+const { buybackDecision, rollGate, spendableSol, rollRebalanceDecision, clampFreedToPosition, spendableForAdd } = require("../lib/engine-decisions.js");
 
 let failures = 0;
 function check(name, cond, detail) {
@@ -201,41 +201,83 @@ const DAY = "2026-08-28";
 // BULLEN production incident, 2026-09-26: the SOL pool ($167→$109) and the JUP pool (never
 // reopened) both closed with the freed float almost entirely one asset — sizing the reopen by
 // the scarce side left the rest idle in the wallet. rollRebalanceDecision is the pure sizing
-// that goes into a manualSwap BEFORE the reopen.
+// that goes into a manualSwap BEFORE the reopen. Hardened the same day after adversarial
+// review: OFF by default (dayBudgetUsd must be > 0), a hard daily USD budget, and the shared
+// swapsToday/maxSwapsPerDay counter. RB() below is the "budget on, uncapped swap count" shape
+// every project that opts in actually runs with (bullen: $300/day).
 {
+  const RB = (o) => rollRebalanceDecision({ dayBudgetUsd: 300, todayStamp: DAY, ...o });
+
   // The SOL-pool shape: the close froze ~all value into CLKN, ~nothing into SOL.
-  const solCase = rollRebalanceDecision({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 110, maxSwapUsdPerCycle: 250 });
+  const solCase = RB({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 110, maxSwapUsdPerCycle: 250 });
   check("SOL-pool incident: CLKN-heavy close sells CLKN toward 50/50", solCase.action === "swap" && solCase.dir === "sellClkn", `${solCase.action}/${solCase.dir}`);
   check("SOL-pool incident: sized amount is in CLKN units and positive", solCase.amountUi > 0, String(solCase.amountUi));
 
   // The JUP-pool shape: the close froze ~all value into JUP, ~nothing into CLKN (never reopened).
-  const jupCase = rollRebalanceDecision({ clknUi: 10, quoteUi: 621, price: 0.05, quoteUsd: 0.24, maxSwapUsdPerCycle: 250 });
+  const jupCase = RB({ clknUi: 10, quoteUi: 621, price: 0.05, quoteUsd: 0.24, maxSwapUsdPerCycle: 250 });
   check("JUP-pool incident: quote-heavy close buys CLKN toward 50/50", jupCase.action === "swap" && jupCase.dir === "buyClkn", `${jupCase.action}/${jupCase.dir}`);
   check("JUP-pool incident: sized amount is in JUP units and positive", jupCase.amountUi > 0 && jupCase.amountUi <= 621, String(jupCase.amountUi));
 
   // Small imbalance ($5 floor) never trades — a roll that closed nearly-balanced skips the swap.
-  const tiny = rollRebalanceDecision({ clknUi: 100, quoteUi: 100 * 0.0002 + 0.02, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 250 });
+  const tiny = RB({ clknUi: 100, quoteUi: 100 * 0.0002 + 0.02, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 250 });
   check("imbalance under $5 skips the rebalance swap", tiny.action === "none", tiny.action);
 
   // The swap is clamped to maxSwapUsdPerCycle, never larger, on a huge imbalance.
-  const huge = rollRebalanceDecision({ clknUi: 50_000_000, quoteUi: 0, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 100 });
+  const huge = RB({ clknUi: 50_000_000, quoteUi: 0, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 100 });
   check("huge imbalance clamps the swap to maxSwapUsdPerCycle", huge.action === "swap" && huge.clamped === true && Math.abs(huge.swapUsd - 100) < 1e-6, `${huge.action}/${huge.swapUsd}`);
   check("clamp never exceeds half the freed CLKN — never trades more than what was freed", huge.amountUi <= 50_000_000 / 2, String(huge.amountUi));
 
   // No live quote price (feed down) refuses rather than guessing units.
-  const noPx = rollRebalanceDecision({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 0, maxSwapUsdPerCycle: 250 });
+  const noPx = RB({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 0, maxSwapUsdPerCycle: 250 });
   check("no live quote price refuses the rebalance rather than guessing", noPx.action === "none", noPx.action);
 
   // Already-balanced freed float (the common case — no incident) does nothing.
-  const balanced = rollRebalanceDecision({ clknUi: 500_000, quoteUi: 500_000 * 0.0002, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 250 });
+  const balanced = RB({ clknUi: 500_000, quoteUi: 500_000 * 0.0002, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 250 });
   check("already-balanced freed float triggers no swap", balanced.action === "none", balanced.action);
+
+  // ── Hardening: OFF BY DEFAULT (dayBudgetUsd 0 / unset — every project except an opted-in one) ──
+  const offByDefault = rollRebalanceDecision({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 110, maxSwapUsdPerCycle: 250 });
+  check("no dayBudgetUsd passed at all → feature off (matches DEFAULT_CONFIG's 0)", offByDefault.action === "none", offByDefault.action);
+  const zeroBudget = RB({ dayBudgetUsd: 0, clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 110, maxSwapUsdPerCycle: 250 });
+  check("dayBudgetUsd: 0 explicitly → feature off, even with a huge imbalance", zeroBudget.action === "none", zeroBudget.action);
+
+  // ── Hardening: daily USD budget clamps, then exhausts ──────────────────────────
+  // $250 already spent today of a $300 budget → only $50 of headroom left, well under the
+  // $100 this imbalance would otherwise size (clknVal $200 vs $0 quote → half-diff $100).
+  const remaining = RB({ clknUi: 1_000_000, quoteUi: 0, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 250, usedTodayUsd: 250, budgetDayStamp: DAY });
+  check("budget remaining < wanted swap → clamps to the remaining $50, not the $100 the imbalance would size", remaining.action === "swap" && remaining.clamped === true && Math.abs(remaining.swapUsd - 50) < 1e-6, `${remaining.action}/${remaining.swapUsd}`);
+  // $300 already spent today of a $300 budget → nothing left, skip entirely.
+  const exhausted = RB({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 250, usedTodayUsd: 300, budgetDayStamp: DAY });
+  check("budget fully spent today → skips (action none), never a $0 swap", exhausted.action === "none", exhausted.action);
+  // Yesterday's spend doesn't carry over — a new day-stamp resets the budget.
+  const newDay = RB({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 250, usedTodayUsd: 300, budgetDayStamp: "2026-08-27" });
+  check("a stale day-stamp doesn't carry yesterday's spend into today's budget", newDay.action === "swap", newDay.action);
+
+  // ── Hardening: the shared swapsToday/maxSwapsPerDay counter also gates the rebalance ──
+  const swapCapped = RB({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 110, maxSwapUsdPerCycle: 250, swapsToday: 24, maxSwapsPerDay: 24 });
+  check("the shared daily swap-count cap also skips the rebalance", swapCapped.action === "none", swapCapped.action);
+  const swapNotCapped = RB({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 110, maxSwapUsdPerCycle: 250, swapsToday: 23, maxSwapsPerDay: 24 });
+  check("one swap under the cap still fires", swapNotCapped.action === "swap", swapNotCapped.action);
 }
 
-// ── Scenario: spendableForAdd — the SAME clamp addLiquidity uses, now shared with evenPools' ──
-// add-failure retry (BULLEN production incident, 2026-09-26: the DIRECT SHIFT add into the lean
-// pool failed with custom program error 0x1 and stranded 621 JUP). Pinning this once means the
-// retry path and addLiquidity's own inline clamp can never drift apart the way tickSol's SOL
-// guard once did (see the spendableSol scenario above).
+// ── Scenario: clampFreedToPosition — a stray deposit or RPC lag can't inflate a rebalance ──
+// Review round 2026-09-26: a "freed by the close" figure measured as a wallet-float delta can
+// be inflated by anything else that touched the wallet in the same window. Bound it to what the
+// closed position itself reported (+ its pending fees, which the close also collects).
+{
+  check("clampFreedToPosition: a measured delta above the position's own amount is clamped down",
+    clampFreedToPosition(50_000, 10_000, 200) === 10_200, String(clampFreedToPosition(50_000, 10_000, 200)));
+  check("clampFreedToPosition: a measured delta already under the bound passes through unchanged",
+    clampFreedToPosition(8_000, 10_000, 200) === 8_000, String(clampFreedToPosition(8_000, 10_000, 200)));
+  check("clampFreedToPosition: missing pending-fee figure defaults to 0, not a crash",
+    clampFreedToPosition(50_000, 10_000, undefined) === 10_000, String(clampFreedToPosition(50_000, 10_000, undefined)));
+  check("clampFreedToPosition: floors at 0, never negative", clampFreedToPosition(-5, 10, 0) === 0);
+}
+
+// ── Scenario: spendableForAdd — the exact clamp addLiquidity() uses ────────────
+// Pulled out of addLiquidity's inline calc (behavior-identical) so this arithmetic is pinned
+// by the simulator, the same way spendableSol was extracted after tickSol's own copy of ITS
+// formula went out of sync (see the spendableSol scenario above).
 {
   check("spendableForAdd: matches addLiquidity's own formula (100 bps slippage, no reserve)",
     Math.abs(spendableForAdd(621, 0, 100) - 621 / 1.01) < 1e-9, String(spendableForAdd(621, 0, 100)));
