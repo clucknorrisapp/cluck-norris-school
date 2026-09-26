@@ -5,7 +5,7 @@
 // simulator doing its job: change the spec test AND the code together, deliberately.
 //
 // Run: node scripts/engine-sim-test.cjs   (exit 0 = pass, 1 = fail)
-const { buybackDecision, rollGate, spendableSol } = require("../lib/engine-decisions.js");
+const { buybackDecision, rollGate, spendableSol, rollRebalanceDecision, spendableForAdd } = require("../lib/engine-decisions.js");
 
 let failures = 0;
 function check(name, cond, detail) {
@@ -195,6 +195,55 @@ const DAY = "2026-08-28";
   // Never negative, and missing config fields default to 0 (no reserve configured ≠ crash).
   check("spendableSol: floors at 0, never negative", spendableSol({ swapSolFloor: 5 }, { sol: 1 }) === 0);
   check("spendableSol: missing cfg fields default to 0 reserve", spendableSol({}, { sol: 1.5 }) === 1.5);
+}
+
+// ── Scenario: BULLEN roll rebalance — a one-way move must not reopen 100% one-sided ──
+// BULLEN production incident, 2026-09-26: the SOL pool ($167→$109) and the JUP pool (never
+// reopened) both closed with the freed float almost entirely one asset — sizing the reopen by
+// the scarce side left the rest idle in the wallet. rollRebalanceDecision is the pure sizing
+// that goes into a manualSwap BEFORE the reopen.
+{
+  // The SOL-pool shape: the close froze ~all value into CLKN, ~nothing into SOL.
+  const solCase = rollRebalanceDecision({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 110, maxSwapUsdPerCycle: 250 });
+  check("SOL-pool incident: CLKN-heavy close sells CLKN toward 50/50", solCase.action === "swap" && solCase.dir === "sellClkn", `${solCase.action}/${solCase.dir}`);
+  check("SOL-pool incident: sized amount is in CLKN units and positive", solCase.amountUi > 0, String(solCase.amountUi));
+
+  // The JUP-pool shape: the close froze ~all value into JUP, ~nothing into CLKN (never reopened).
+  const jupCase = rollRebalanceDecision({ clknUi: 10, quoteUi: 621, price: 0.05, quoteUsd: 0.24, maxSwapUsdPerCycle: 250 });
+  check("JUP-pool incident: quote-heavy close buys CLKN toward 50/50", jupCase.action === "swap" && jupCase.dir === "buyClkn", `${jupCase.action}/${jupCase.dir}`);
+  check("JUP-pool incident: sized amount is in JUP units and positive", jupCase.amountUi > 0 && jupCase.amountUi <= 621, String(jupCase.amountUi));
+
+  // Small imbalance ($5 floor) never trades — a roll that closed nearly-balanced skips the swap.
+  const tiny = rollRebalanceDecision({ clknUi: 100, quoteUi: 100 * 0.0002 + 0.02, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 250 });
+  check("imbalance under $5 skips the rebalance swap", tiny.action === "none", tiny.action);
+
+  // The swap is clamped to maxSwapUsdPerCycle, never larger, on a huge imbalance.
+  const huge = rollRebalanceDecision({ clknUi: 50_000_000, quoteUi: 0, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 100 });
+  check("huge imbalance clamps the swap to maxSwapUsdPerCycle", huge.action === "swap" && huge.clamped === true && Math.abs(huge.swapUsd - 100) < 1e-6, `${huge.action}/${huge.swapUsd}`);
+  check("clamp never exceeds half the freed CLKN — never trades more than what was freed", huge.amountUi <= 50_000_000 / 2, String(huge.amountUi));
+
+  // No live quote price (feed down) refuses rather than guessing units.
+  const noPx = rollRebalanceDecision({ clknUi: 500_000, quoteUi: 0.05, price: 0.0002, quoteUsd: 0, maxSwapUsdPerCycle: 250 });
+  check("no live quote price refuses the rebalance rather than guessing", noPx.action === "none", noPx.action);
+
+  // Already-balanced freed float (the common case — no incident) does nothing.
+  const balanced = rollRebalanceDecision({ clknUi: 500_000, quoteUi: 500_000 * 0.0002, price: 0.0002, quoteUsd: 1, maxSwapUsdPerCycle: 250 });
+  check("already-balanced freed float triggers no swap", balanced.action === "none", balanced.action);
+}
+
+// ── Scenario: spendableForAdd — the SAME clamp addLiquidity uses, now shared with evenPools' ──
+// add-failure retry (BULLEN production incident, 2026-09-26: the DIRECT SHIFT add into the lean
+// pool failed with custom program error 0x1 and stranded 621 JUP). Pinning this once means the
+// retry path and addLiquidity's own inline clamp can never drift apart the way tickSol's SOL
+// guard once did (see the spendableSol scenario above).
+{
+  check("spendableForAdd: matches addLiquidity's own formula (100 bps slippage, no reserve)",
+    Math.abs(spendableForAdd(621, 0, 100) - 621 / 1.01) < 1e-9, String(spendableForAdd(621, 0, 100)));
+  check("spendableForAdd: SOL keeps its gas reserve off the top before slippage",
+    Math.abs(spendableForAdd(2.05, 0.05, 100) - (2 / 1.01)) < 1e-9, String(spendableForAdd(2.05, 0.05, 100)));
+  check("spendableForAdd: floors at 0, never negative", spendableForAdd(0.02, 0.05, 100) === 0);
+  check("spendableForAdd: missing slippage defaults to 0 bps (no inflation, no crash)",
+    spendableForAdd(100, 0, undefined) === 100);
 }
 
 if (failures) { console.error(`\n${failures} FAILURE(S)`); process.exit(1); }
