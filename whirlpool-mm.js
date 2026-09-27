@@ -547,7 +547,7 @@ router.all("/vault/pair-pool", async (req, res) => {
     res.json(await vault.pairPool({
       projectId: projExplicit(req),
       pair: String(req.query.pair || ""),
-      feeTierPct: req.query.feeTier != null ? Number(req.query.feeTier) : 1,
+      feeTierPct: req.query.feeTier != null ? Number(req.query.feeTier) : undefined,   // pinned per pair; a different value is refused
       priceInQuote: req.query.price != null ? Number(req.query.price) : undefined,
       downPct: req.query.down != null ? Number(req.query.down) : 90,
       upPct: req.query.up != null ? Number(req.query.up) : 900,
