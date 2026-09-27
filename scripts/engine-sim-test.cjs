@@ -5,7 +5,7 @@
 // simulator doing its job: change the spec test AND the code together, deliberately.
 //
 // Run: node scripts/engine-sim-test.cjs   (exit 0 = pass, 1 = fail)
-const { buybackDecision, rollGate, spendableSol, rollRebalanceDecision, clampFreedToPosition, spendableForAdd } = require("../lib/engine-decisions.js");
+const { buybackDecision, rollGate, spendableSol, rollRebalanceDecision, clampFreedToPosition, resolveFreed, spendableForAdd } = require("../lib/engine-decisions.js");
 
 let failures = 0;
 function check(name, cond, detail) {
@@ -272,6 +272,30 @@ const DAY = "2026-08-28";
   check("clampFreedToPosition: missing pending-fee figure defaults to 0, not a crash",
     clampFreedToPosition(50_000, 10_000, undefined) === 10_000, String(clampFreedToPosition(50_000, 10_000, undefined)));
   check("clampFreedToPosition: floors at 0, never negative", clampFreedToPosition(-5, 10, 0) === 0);
+}
+
+// ── Scenario: resolveFreed — a lagging post-close balance read must not strand the roll ──
+// Production incident, BULLEN 2026-09-27: three rolls after a pump each freed ~$155 of quote,
+// but the post-close wallet read lagged, the measured delta read ~0, the rebalance skipped as
+// "under $5", and the pools reopened near-empty with ~$475 idle. A failed pre-close read skipped
+// it the same way. Real numbers from that night.
+{
+  const lag = resolveFreed(0.4, 155.2, 0.01);          // USDC side read as 0.4 of a 155.2 position
+  check("resolveFreed: a delta under half the position is a lagging read → 97% of the position",
+    Math.abs(lag.amountUi - 155.2 * 0.97) < 1e-9 && lag.source === "position (lagging read)", JSON.stringify(lag));
+  const none = resolveFreed(null, 1.29, 0);             // pre-close read failed
+  check("resolveFreed: no pre-close read → 97% of the position, not a silent skip",
+    Math.abs(none.amountUi - 1.29 * 0.97) < 1e-9 && none.source === "position (no pre-close read)", JSON.stringify(none));
+  const ok = resolveFreed(150, 155.2, 0.5);
+  check("resolveFreed: a plausible measured delta is used as measured", ok.amountUi === 150 && ok.source === "measured", JSON.stringify(ok));
+  const inflated = resolveFreed(900, 155.2, 0.5);
+  check("resolveFreed: an inflated delta is still clamped to the position + fees", inflated.amountUi === 155.7, JSON.stringify(inflated));
+  const empty = resolveFreed(0, 0, 0);
+  check("resolveFreed: a side the position never held stays 0 (no invented amount)", empty.amountUi === 0, JSON.stringify(empty));
+  const rb = rollRebalanceDecision({ clknUi: resolveFreed(0, 12, 0).amountUi, quoteUi: lag.amountUi, price: 0.00062, quoteUsd: 1, maxSwapUsdPerCycle: 90,
+    dayBudgetUsd: 300, usedTodayUsd: 0, budgetDayStamp: "2026-09-27", swapsToday: 6, maxSwapsPerDay: 24, todayStamp: "2026-09-27" });
+  check("resolveFreed → rollRebalanceDecision: the incident's quote-heavy close now buys the token back",
+    rb.action === "swap" && rb.dir === "buyClkn" && rb.swapUsd > 70, JSON.stringify({ action: rb.action, dir: rb.dir, swapUsd: rb.swapUsd }));
 }
 
 // ── Scenario: spendableForAdd — the exact clamp addLiquidity() uses ────────────
