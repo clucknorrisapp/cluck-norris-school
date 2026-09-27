@@ -535,6 +535,30 @@ router.all("/vault/close-position", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "close failed" }); }
 });
 
+// /api/whirlpool/vault/pair-pool?project=treasury&pair=CUNA/MCM&feeTier=1&price=<CUNA in MCM>
+//   [&down=90&up=900][&maxToken=][&maxQuote=][&add=1][&run=1]
+// Create (if needed) an Orca pool between two ALLOWLISTED tokens (lib/whirlpool-vault.js
+// PAIR_POOLS) and open ONE wide position with as much of both as the wallet holds. A GET is
+// always a dry run; &run=1 is POST-only (admin routes that act are POST-only).
+router.all("/vault/pair-pool", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  if (req.query.run === "1" && req.method !== "POST") return res.status(405).json({ error: "run=1 is POST-only" });
+  try {
+    res.json(await vault.pairPool({
+      projectId: projExplicit(req),
+      pair: String(req.query.pair || ""),
+      feeTierPct: req.query.feeTier != null ? Number(req.query.feeTier) : 1,
+      priceInQuote: req.query.price != null ? Number(req.query.price) : undefined,
+      downPct: req.query.down != null ? Number(req.query.down) : 90,
+      upPct: req.query.up != null ? Number(req.query.up) : 900,
+      maxToken: req.query.maxToken != null ? Number(req.query.maxToken) : undefined,
+      maxQuote: req.query.maxQuote != null ? Number(req.query.maxQuote) : undefined,
+      add: req.query.add === "1",
+      dryRun: !(req.query.run === "1" && req.method === "POST"),
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "pair-pool failed" }); }
+});
+
 // GET /api/whirlpool/vault/open-anchor?key=&project=&quote=USDC|SOL|JUP|CLKN&usd=10&down=85&up=400[&run=1]
 // Open a tiny, ultra-wide, NEVER-auto-closed "anchor" position that keeps the pool
 // continuously quotable so pulling the tight positions doesn't leave it empty/stale —
