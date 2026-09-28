@@ -2035,11 +2035,13 @@ async function broadcastBurnCelebration(receipt) {
     const pct = receipt.pctSupply != null ? (receipt.pctSupply < 0.01 ? "<0.01%" : receipt.pctSupply.toFixed(receipt.pctSupply < 1 ? 2 : 2) + "%") : null;
     const usd = receipt.usdValue != null && receipt.usdValue >= 0.01 ? `$${receipt.usdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : null;
     const url = `https://clucknorris.app/burn/${receipt.sig}`;
-    // X post (force carve-out). URL not a bare CA → dodges the post-auth raw-CA 403.
+    // X post (force carve-out). The SHORT receipt link, never the full one: an 88-char base58
+    // signature in the URL read as a crypto address and X 403'd every burn post (2026-09-28).
+    // Telegram keeps the full URL — it has no such filter.
     const xText =
       `🔥 ${amt} $${sym} just got burned forever${pct ? ` — ${pct} of supply` : ""}.\n\n` +
       `${usd ? usd + " " : ""}permanently destroyed on Solana, verified on-chain. Burned free & non-custodially 🐔\n\n` +
-      `Receipt 👉 ${url}`;
+      `Receipt 👉 ${burnShortUrl(receipt.sig)}`;
     const xres = await postToX(xText, { force: true });
     // Telegram to the PUBLIC community chat (celebration). Not silent — a celebration should
     // ping. Preview ON so the receipt card renders. Include the X link if the tweet landed.
@@ -18326,6 +18328,23 @@ app.get("/api/jupverify/admin/scorecard", adminGuarded(ADMIN_404_CAP), async (re
     }
   } catch (_) { /* vault optional */ }
   res.json(out);
+});
+
+// Short receipt link for X — /b/<first 10 chars of the signature> → 301 /burn/<sig>.
+// X refused every burn celebration with a 403 (owner, 2026-09-28): the post carried the full
+// 88-character base58 transaction signature in its receipt URL, and X's crypto-address filter
+// (the same one that 403'd bare CAs in lesson posts, see CLKN_DEXSCREENER) reads a long base58
+// run as an address. Ten characters can't look like one. Resolves only a UNIQUE prefix of a
+// stored receipt; anything else is a 404, never a guess.
+const BURN_SHORT_LEN = 10;
+function burnShortUrl(sig) { return `https://clucknorris.app/b/${String(sig).slice(0, BURN_SHORT_LEN)}`; }
+app.get("/b/:code", (req, res) => {
+  const code = String(req.params.code || "");
+  if (!new RegExp(`^[1-9A-HJ-NP-Za-km-z]{${BURN_SHORT_LEN}}$`).test(code)) return res.status(404).type("text").send("not found");
+  const store = kv.get("burnReceipts", {}) || {};
+  const hits = Object.keys(store).filter((s) => s.startsWith(code));
+  if (hits.length !== 1) return res.status(404).type("text").send("not found");
+  res.redirect(301, `/burn/${hits[0]}`);
 });
 
 // Public burn receipt — server-rendered so it carries OG tags for a rich social share.
