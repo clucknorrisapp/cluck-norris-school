@@ -1978,6 +1978,19 @@ function burnBroadcastFloor(receipt) {
   if (usd < BURN_BROADCAST_MIN_USD) return `below-floor:${usd.toFixed(2)}<${BURN_BROADCAST_MIN_USD}`;
   return null;
 }
+// Where the burn broadcaster's OWN failure notes go: the operator DM, never TELEGRAM_CHAT_ID.
+// TELEGRAM_CHAT_ID is the public CLKN community room — the "operator chat" alerts below used to
+// land there, so every failed X post showed the community a "⚠️ … failed" line (owner, 2026-09-28).
+function burnOpsChat() { return operatorChatId() || OPERATOR_DM_FALLBACK; }
+// X's own reason for a refused post, so the alert says WHY (a bare "403" can be a duplicate, a
+// permission problem or a spend cap, and each has a different fix).
+function xFailReason(xres) {
+  if (!xres) return "?";
+  const b = xres.body || {};
+  const e0 = Array.isArray(b.errors) && b.errors[0] ? b.errors[0] : {};
+  const why = String(b.detail || b.title || e0.message || e0.detail || b.reason || xres.error || "").replace(/\s+/g, " ").slice(0, 200);
+  return `${xres.status || "no status"}${why ? " — " + why : ""}`;
+}
 function burnSymbolSafe(sym) {
   const s = String(sym || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 12);
   return s || "TOKEN";
@@ -2005,9 +2018,8 @@ async function broadcastBurnCelebration(receipt) {
     }
     if (gate.hourCount >= BURN_BROADCAST_HOURLY_CAP) {
       console.warn(`[burn-celebrate] hourly cap ${BURN_BROADCAST_HOURLY_CAP} hit — skipping`);
-      const chat = process.env.TELEGRAM_CHAT_ID;
-      if (chat && process.env.TELEGRAM_BOT_TOKEN && !gate.capAlerted) {
-        tgSend(chat, `⚠️ Project-burn auto-broadcast hit its hourly cap (${BURN_BROADCAST_HOURLY_CAP}). Extra burns still get receipts; they just aren't auto-posting this hour.`, null, { silent: true }).catch(() => {});
+      if (process.env.TELEGRAM_BOT_TOKEN && !gate.capAlerted) {
+        tgSend(burnOpsChat(), `⚠️ Project-burn auto-broadcast hit its hourly cap (${BURN_BROADCAST_HOURLY_CAP}). Extra burns still get receipts; they just aren't auto-posting this hour.`, null, { silent: true }).catch(() => {});
         gate.capAlerted = true;
       }
       kv.set("burnBroadcastGate", gate);
@@ -2044,10 +2056,10 @@ async function broadcastBurnCelebration(receipt) {
       await tgApi("sendMessage", { chat_id: chat, text: tgText, parse_mode: "HTML", disable_web_page_preview: false });
     }
     // Per the house rule: if the X carve-out failed for a real reason (not the pause), alert
-    // the operator chat rather than failing silently.
-    if (xres && !xres.ok && !xres.paused && !xres.skipped) {
-      const opchat = process.env.TELEGRAM_CHAT_ID;
-      if (opchat && token) tgSend(opchat, `⚠️ Burn celebration X post failed (${xres.status || xres.error || "?"}) for ${amt} $${tgEsc(sym)}. Receipt: ${url}`, null, { silent: true }).catch(() => {});
+    // the OPERATOR DM rather than failing silently — never the public room (see burnOpsChat).
+    if (xres && !xres.ok && !xres.paused && !xres.skipped && !xres.staging) {
+      console.warn(`[burn-celebrate] X post failed: ${xFailReason(xres)} — ${receipt.sig}`);
+      if (token) tgSend(burnOpsChat(), `⚠️ Burn celebration X post failed (${tgEsc(xFailReason(xres))}) for ${amt} $${tgEsc(sym)}. Receipt: ${url}`, null, { silent: true }).catch(() => {});
     }
     return { xPosted: !!(xres && xres.ok), xId: xres && xres.id };
   } catch (e) {

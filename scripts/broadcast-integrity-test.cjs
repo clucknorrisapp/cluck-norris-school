@@ -149,5 +149,20 @@ ok('the operator can still fire one by hand',
    /notifyLockReport\(\{ dryRun: req\.query\.post !== "1", note \}\)/.test(server),
    'the manual lock-report lever was removed rather than left as the on-demand path');
 
+console.log('\nD. burn-broadcaster failure notes go to the operator DM, never the public room\n');
+// TELEGRAM_CHAT_ID is the public CLKN community room. The X-failure and hourly-cap notes used to
+// be sent there, so the community watched "⚠️ Burn celebration X post failed (403)" (2026-09-28).
+{
+  const start = server.indexOf('async function broadcastBurnCelebration(');
+  const body = start < 0 ? '' : server.slice(start, server.indexOf('\n}\n', start));
+  ok('broadcastBurnCelebration exists', start >= 0);
+  const alerts = body.split('\n').filter(l => /tgSend\(/.test(l));
+  ok('it has the two operator alerts (X failure, hourly cap)', alerts.length === 2, alerts.join('\n      '));
+  ok('every alert goes to burnOpsChat()', alerts.every(l => /tgSend\(burnOpsChat\(\)/.test(l)), alerts.join('\n      '));
+  ok('no tgSend in it reads TELEGRAM_CHAT_ID', !/TELEGRAM_CHAT_ID[^\n]*\n?[^\n]*tgSend|const (opchat|chat) = process\.env\.TELEGRAM_CHAT_ID/.test(body));
+  ok('burnOpsChat is the operator DM', /function burnOpsChat\(\) \{ return operatorChatId\(\) \|\| OPERATOR_DM_FALLBACK; \}/.test(server));
+  ok('the X alert carries X\'s own reason', /Burn celebration X post failed \(\$\{tgEsc\(xFailReason\(xres\)\)\}\)/.test(body));
+}
+
 console.log('\n' + (failures ? failures + ' FAILED' : 'all passed') + '\n');
 process.exit(failures ? 1 : 0);
