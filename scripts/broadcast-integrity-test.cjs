@@ -162,6 +162,15 @@ console.log('\nD. burn-broadcaster failure notes go to the operator DM, never th
   ok('no tgSend in it reads TELEGRAM_CHAT_ID', !/TELEGRAM_CHAT_ID[^\n]*\n?[^\n]*tgSend|const (opchat|chat) = process\.env\.TELEGRAM_CHAT_ID/.test(body));
   ok('burnOpsChat is the operator DM', /function burnOpsChat\(\) \{ return operatorChatId\(\) \|\| OPERATOR_DM_FALLBACK; \}/.test(server));
   ok('the X alert carries X\'s own reason', /Burn celebration X post failed \(\$\{tgEsc\(xFailReason\(xres\)\)\}\)/.test(body));
+
+  // X 403'd every burn post: the full 88-char base58 signature in the receipt URL reads as a
+  // crypto address to X's filter. The X text must carry the short /b/ link, never ${url}.
+  const xText = (body.match(/const xText =[\s\S]*?;\n/) || [''])[0];
+  ok('the X text uses the short receipt link', /burnShortUrl\(receipt\.sig\)/.test(xText), xText);
+  ok('the X text never carries the full /burn/<sig> URL', !/\$\{url\}|receipt\.sig\}/.test(xText.replace(/burnShortUrl\(receipt\.sig\)/g, '')), xText);
+  const m = server.match(/const BURN_SHORT_LEN = (\d+);/);
+  ok('the short code is too short to read as an address (<= 16 chars)', m && Number(m[1]) >= 8 && Number(m[1]) <= 16, m && m[1]);
+  ok('/b/:code resolves only a unique prefix', /app\.get\("\/b\/:code"[\s\S]{0,600}hits\.length !== 1\) return res\.status\(404\)/.test(server));
 }
 
 console.log('\n' + (failures ? failures + ' FAILED' : 'all passed') + '\n');
