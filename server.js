@@ -63,6 +63,7 @@ const jvpDashboard = require("./lib/jvp-dashboard");
 const curriculumPage = require("./lib/curriculum"); // lesson COUNTS only — the SEO mirror page was removed 2026-07-29
 const rpc = require("./lib/rpc"); // resilient RPC: primary Helius + automatic failover
 const { scanReclaimable } = require("./lib/rent-reclaim"); // Rent Reclaim, READ SIDE ONLY — Seeker app increment 2
+const { computeSurplusForAccounts } = require("./lib/rent-surplus"); // Firepit surplus-rent job, pure decision logic
 const {
   SOL_ADDR_RE, base58Decode, base58Encode, isOnCurveBytes, isOnCurve, deriveAta,
   DEX_PROGRAMS, LOCKER_PROGRAMS, TOKEN_PROGRAMS, PROGRAM_LABELS,
@@ -138,6 +139,14 @@ function publicErrMsg(err, fallback = "internal error") {
   // 1500 keeps full on-chain simulation logs readable for ops debugging while
   // still bounding pathological blobs; secrets are already stripped above.
   return m.length > 1500 ? m.slice(0, 1500) + "…" : m;
+}
+
+// The first `text` block of a Messages API response — read by block type, never by position.
+// Sonnet 5.5 can put a `thinking` block (the between-tool-call progress notes) ahead of the text,
+// so `data.content[0].text` is not safe. "" when the response has no text (a refusal, an error).
+function claudeText(data) {
+  const b = data && Array.isArray(data.content) ? data.content.find((x) => x && x.type === "text" && typeof x.text === "string") : null;
+  return b ? b.text : "";
 }
 
 // ── Multi-language support for the AI endpoints ──────────────────────────────
@@ -5291,11 +5300,11 @@ ${ctx || "(no pools found for this pair)"}`;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 800, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: String(question) }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 800, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages: [{ role: "user", content: String(question) }] }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      const answer = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
+    if (claudeText(data)) {
+      const answer = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
       return res.status(200).json({ success: true, pair: scan.pair, answer, pools: scan.pools });
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "No response from AI" });
@@ -5411,10 +5420,10 @@ RULES: Never tell anyone to buy/sell or predict prices. Never recommend, rank or
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 1500, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 1500, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) return data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) return claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
   } catch (_) {}
   return `🐔 CLUCK'S DAILY ALPHA\n\n${summary}\n\nNot financial advice — now go do your homework. 🐔`;
 }
@@ -5558,11 +5567,11 @@ RULES: Never give financial advice or price predictions. Encouraging but blunt. 
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      let reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      let reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       const complete = /\[LESSON COMPLETE\]/i.test(reply);
       reply = reply.replace(/\[LESSON COMPLETE\]/ig, "").trim();
       return res.status(200).json({ success: true, reply, complete });
@@ -5769,11 +5778,11 @@ RULES: No financial advice. Encouraging but honest. No markdown headers/asterisk
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      let reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      let reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       const passed = /\[EXAM PASSED\]/i.test(reply);
       const failed = /\[EXAM FAILED\]/i.test(reply);
       reply = reply.replace(/\[EXAM (PASSED|FAILED)\]/ig, "").trim();
@@ -15166,6 +15175,42 @@ app.get("/api/wallet-checkup", async (req, res) => {
 // can show, and make the user confirm, the USD VALUE being destroyed before any burn.
 // READ-ONLY: it never builds or signs anything — the client builds the burn+close tx and
 // the user's own wallet signs it. Frozen accounts are flagged (can't be burned/closed).
+//
+// ── surplus rent (WithdrawExcessLamports), added 2026-09-25 ─────────────────────────────
+// A rent PARAMETER cut (most recently the p-token/SIMD-0266 rollout) lowers the network's
+// rent-exempt MINIMUM without touching what an EXISTING account already deposited — so an
+// account opened before the cut can sit on more lamports than today's rule requires, on top
+// of (not instead of) its ordinary "close it, get everything back" reclaim above. The token
+// program's WithdrawExcessLamports instruction (opcode 38, both programs) lets the owner pull
+// that surplus WITHOUT closing the account or touching its token balance. This never hardcodes
+// a rent figure (CLAUDE.md: "more rent cuts are coming") — the minimum is read live per account
+// from its own on-chain byte length, cached briefly by length since the minimum only moves on a
+// protocol change, not per request.
+const rentExemptMinCache = new Map(); // space(bytes) -> { lamports, at }
+const RENT_EXEMPT_CACHE_MS = 60 * 60 * 1000; // an hour — this is a network PARAMETER, not per-account state
+// Its OWN short timeout (3s, not the 15s the account-read calls in this route use) and its OWN
+// fetch — this lookup is cached and near-static, so it must never hold up the ordinary burn/
+// reclaim scan as long as a real account read is allowed to (adversarial review on PR #443, P3-8).
+// lib/rent-surplus.js's computeSurplusForAccounts calls several of these concurrently.
+const RENT_EXEMPT_LOOKUP_TIMEOUT_MS = 3000;
+async function rentExemptMinimumFor(rpcUrl, space) {
+  const now = Date.now();
+  const cached = rentExemptMinCache.get(space);
+  if (cached && (now - cached.at) < RENT_EXEMPT_CACHE_MS) return cached.lamports;
+  const r = await fetch(rpcUrl, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: "getMinimumBalanceForRentExemption", method: "getMinimumBalanceForRentExemption", params: [space] }),
+    signal: AbortSignal.timeout(RENT_EXEMPT_LOOKUP_TIMEOUT_MS),
+  });
+  const d = await r.json();
+  const lamports = Number(d && d.result);
+  if (!Number.isFinite(lamports) || lamports <= 0) {
+    if (cached) return cached.lamports;   // stale-but-real beats nothing
+    throw new Error("bad getMinimumBalanceForRentExemption response");
+  }
+  rentExemptMinCache.set(space, { lamports, at: now });
+  return lamports;
+}
 app.get("/api/burn-scan", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -15198,6 +15243,16 @@ app.get("/api/burn-scan", async (req, res) => {
           rentLamports: Number(acc.account?.lamports) || 0,   // exact reclaimable rent for THIS account
           frozen: info.state === "frozen",                    // frozen accounts can't be burned/closed
           delegated: !!info.delegate,                          // a delegate has approval on this account
+          // Both fields the surplus job needs. `space` is the account's own byte length, straight off
+          // the RPC's account envelope (present alongside `data` even under jsonParsed encoding) — NEVER
+          // assumed as 165, because a Token-2022 account with extensions (immutableOwner, etc.) is a
+          // different length and a wrong length would misprice its rent-exempt minimum. `isNative` is
+          // the token program's OWN flag for a wrapped-SOL account (info.isNative) — WithdrawExcessLamports
+          // refuses those (NativeNotSupported); trust the program's flag rather than re-deriving it from
+          // a hardcoded wSOL mint string here.
+          space: Number(acc.account?.space ?? acc.account?.data?.space) || 0,
+          isNative: !!info.isNative,
+          owner: info.owner || null,   // should always equal `wallet` (the RPC filter) — carried for lib/rent-surplus's defense-in-depth check
         });
       }
     }
@@ -15205,8 +15260,22 @@ app.get("/api/burn-scan", async (req, res) => {
     const list = accounts.slice(0, 200);
     const mints = [...new Set(list.map((a) => a.mint))];
     const priced = mints.length ? await priceTokensBatch(mints) : {};
+
+    // The surplus job's whole read side lives in lib/rent-surplus.js (pure, unit-tested with an
+    // injected lookup — no network in the test). `surplusAvailable` is false — never a silent
+    // "everything's fine" a client could read as "nothing to reclaim" — when any non-native
+    // account's byte length is missing/unreadable, when a length's live rent-exempt lookup
+    // failed, or when more distinct lengths exist than the cap allows (adversarial review on PR
+    // #443, findings 3/8). `rentExemptMinimumFor` has its own short (3s) timeout and every
+    // distinct length is looked up CONCURRENTLY, so this never holds up the ordinary burn/reclaim
+    // scan the way the old 15s-per-length serial loop could.
+    const surplusResult = await computeSurplusForAccounts(list, wallet, (sp) => rentExemptMinimumFor(rpcUrl, sp));
+    const surplusAvailable = surplusResult.surplusAvailable;
+    const surplusLamportsTotal = surplusResult.surplusLamportsTotal;
+    const surplusBySpaceOrder = surplusResult.accounts; // same order/length as `list` — zip by index below
+
     let rentLamportsTotal = 0, valueUsdTotal = 0;
-    const out = list.map((a) => {
+    const out = list.map((a, idx) => {
       const p = priced[a.mint] || {};
       const priceUsd = Number(p.priceUsd) || 0;
       const valueUsd = Number((a.uiAmount * priceUsd).toFixed(4));
@@ -15218,10 +15287,15 @@ app.get("/api/burn-scan", async (req, res) => {
       // token unless we say so. The client uses this to warn "value UNKNOWN, not zero" instead of
       // flashing a false "nothing of value is destroyed" all-clear over a bag that may be worth money.
       const priceKnown = Object.prototype.hasOwnProperty.call(priced, a.mint);
+      // Surplus fields (rentExemptLamports/surplusLamports/surplusEligible) — null/false, never a
+      // fabricated 0, when the minimum couldn't be read for this account's space. Wrapped SOL is
+      // excluded outright: WithdrawExcessLamports refuses it (NativeNotSupported).
+      const { rentExemptLamports, surplusLamports, surplusEligible } = surplusBySpaceOrder[idx];
       return {
         ...a,
         symbol: p.symbol || null, name: p.name || null, logo: p.logo || null,
         priceUsd, valueUsd, priceKnown,
+        rentExemptLamports, surplusLamports, surplusEligible,
         // ⚠️ "empty" comes from the BASE-UNIT STRING, never from uiAmount (adversarial review
         // P1-6, 2026-09-21). `uiAmount` is `f64 | null` in the RPC schema, and `Number(null) || 0`
         // above is 0 — so any account the node declines to ui-scale (the Token-2022
@@ -15252,6 +15326,12 @@ app.get("/api/burn-scan", async (req, res) => {
       count: out.length, capped,
       rentSolTotal: Number((rentLamportsTotal / 1e9).toFixed(6)),
       valueUsdTotal: Number(valueUsdTotal.toFixed(2)),
+      // surplusAvailable is false whenever ANY part of the surplus read couldn't be trusted (see
+      // computeSurplusForAccounts's header) — the client must show "couldn't check" rather than a
+      // false "0 to reclaim" (same rule as /api/seeker/reclaimable's RPC-failure posture).
+      surplusAvailable,
+      surplusLamportsTotal,
+      surplusSolTotal: Number((surplusLamportsTotal / 1e9).toFixed(6)),
       accounts: out,
     });
   } catch (e) {
@@ -17265,11 +17345,11 @@ HOW YOU ANSWER:
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      const reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      const reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       return res.status(200).json({ success: true, reply });
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Cluck went quiet — try again." });

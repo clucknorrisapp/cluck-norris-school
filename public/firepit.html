@@ -151,6 +151,49 @@
       </div>
     </div>
 
+    <!-- Job 1b: pull surplus SOL out of accounts WITHOUT closing them — a rent-parameter cut
+         (SIMD-0266/p-token) lowered the network's rent-exempt minimum, so an account opened
+         before the cut can hold more SOL than today's rule requires, on top of the ordinary
+         "close it, get everything back" reclaim above. This job keeps the account AND its
+         tokens exactly as they are — only the part Solana no longer requires moves to you. -->
+    <div class="card">
+      <div class="card-title">💧 RECLAIM SURPLUS RENT — keep accounts open</div>
+      <p style="font-size:13px;color:var(--sub);line-height:1.55;margin:0 0 12px;">
+        A network rent cut means some of your older token accounts hold more SOL than today's minimum
+        requires. This <b style="color:var(--gold)">keeps the account and its tokens exactly as they are</b> —
+        it only withdraws the part Solana no longer requires you to lock up. You pay the normal network fee,
+        so a very small surplus may not be worth reclaiming on its own — check the net below.
+      </p>
+      <div id="surplus-unavailable" class="hidden" style="font-size:12.5px;color:#FF8FA3;margin:0 0 10px;">
+        ⚠️ Couldn't check today's rent-exempt minimum right now — hit Rescan to try again. This is never reported as "nothing to reclaim."
+      </div>
+      <div class="toolbar">
+        <button class="btn ghost sm" id="sel-surplus-all">Select all</button>
+        <button class="btn ghost sm" id="sel-surplus-none">Clear</button>
+        <span id="surplus-count" style="align-self:center;font-family:var(--mono);font-size:12.5px;color:var(--sub);">0 selected</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr>
+            <th style="width:34px;"></th>
+            <th>Token</th>
+            <th class="num hide-sm">Current</th>
+            <th class="num hide-sm">Today's minimum</th>
+            <th class="num">Surplus</th>
+          </tr></thead>
+          <tbody id="rows-surplus"></tbody>
+        </table>
+      </div>
+      <div class="totals" style="margin-top:14px;">
+        <div class="t rec">Surplus: <b id="surplus-gross">0 SOL</b></div>
+        <div class="t">Est. network fee: <b id="surplus-fee" style="color:var(--sub)">~0 SOL</b></div>
+        <div class="t rec">Net to you: <b id="surplus-net">0 SOL</b></div>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn a" id="surplus-btn" disabled>💧 Reclaim surplus — keep open</button>
+      </div>
+    </div>
+
     <!-- Job 2: burn tokens that still hold a balance, then reclaim the rent too -->
     <div class="card">
       <div class="card-title">🔥 BURN TOKENS — and reclaim rent too</div>
@@ -243,11 +286,25 @@ var esc = CluckUtil.esc, rpc = CluckUtil.rpc, shortAddr = CluckUtil.shortAddr;
 var SOL_MINT = "So11111111111111111111111111111111111111112";
 var LAMPORTS = 1e9;
 var CHUNK = 8;                    // token accounts per transaction (each = up to 2 instructions)
+var CHUNK_SURPLUS = 16;           // surplus job is ONE instruction per account (no burn/close pair), so more fit per tx
 var TYPE_THRESHOLD = 0;          // require typing BURN whenever total destroyed value is > $0
 
 var wProvider = null, wPubkey = null;
 var accounts = [];               // scan result
-var selected = {};               // tokenAccount -> true
+var selected = {};               // tokenAccount -> true (empty-reclaim + burn jobs)
+var selectedSurplus = {};        // tokenAccount -> true — its OWN map: an account can be empty (job 1)
+                                  // AND carry a surplus (this job) at the same time, and ticking it in
+                                  // one job must never appear ticked in the other.
+// Starts false (unavailable) and only ever becomes true on an EXPLICIT `surplusAvailable === true`
+// from a scan response — never assumed available before checked, and never assumed available
+// just because the field was MISSING (an older production server, mid-deploy, simply wouldn't send
+// it at all — that must read as "couldn't check", not as a silent "nothing to reclaim" against a
+// wallet that might genuinely have a surplus). Adversarial review on PR #443, finding 3.
+var surplusAvailable = false;
+// true while doBurn/doSurplusReclaim is signing/sending — blocks the backdrop close AND opening a
+// NEW confirm sheet, so a second job can never start (and overwrite confirmSel/confirmKind) while
+// the first is still in flight (adversarial review on PR #443, finding 1).
+var jobRunning = false;
 
 function setStatus(el, msg, cls){ el.className = "status show" + (cls ? " " + cls : ""); el.textContent = msg; }
 function clearStatus(el){ el.className = "status"; el.textContent = ""; }
@@ -352,9 +409,15 @@ async function scan(){
   try {
     var r = await fetchScan(wPubkey, 3);
     accounts = r.accounts || [];
+    // Strict: a MISSING field (older server) must read the same as an explicit false (P2-3).
+    surplusAvailable = r.surplusAvailable === true;
     selected = {};
+    selectedSurplus = {};   // never carried over from a stale scan — a fresh read earns a fresh choice
     // Pre-select the empty (rent-only) accounts so the "you'll receive" number is meaningful
     // the moment the scan lands — reclaiming them is risk-free, unlike the burn job below.
+    // The surplus job is NOT pre-selected: unlike closing an already-empty account, it can apply
+    // to dozens of accounts a wallet still actively uses, and "select all" should be a deliberate
+    // click, not a default (CLAUDE.md pillar: "nothing is pre-selected" except where explicitly reasoned).
     accounts.forEach(function(a){ if (burnable(a) && a.empty) selected[a.tokenAccount] = true; });
     clearStatus($("status"));
     $("results-card").classList.remove("hidden");
@@ -448,11 +511,59 @@ function fillGroup(tbodyEl, list, compact, emptyMsg, colspan){
     });
   });
 }
+// The surplus job's own row builder — a different instruction (WithdrawExcessLamports, not
+// burn/close), so a different set of columns: current balance, today's minimum, and the surplus
+// between them. Frozen accounts ARE offered here (unlike the burn job's `burnable()`): this is a
+// pure lamport operation, never a token move, so a frozen state has no bearing on it.
+function rowHtmlSurplus(a){
+  var sym = a.symbol ? esc(a.symbol) : "Unknown";
+  var nm = a.name || "";
+  var logo = a.logo ? '<img src="'+esc(a.logo)+'" alt="" onerror="this.style.display=\'none\'"/>' : '<span class="noimg">🪙</span>';
+  var tags = a.frozen ? '<span class="tagpill">frozen</span>' : "";
+  var tokCell = '<td><div class="tok">'+logo+'<div><div class="nm">'+sym+tags+'</div><div class="mm">'+(nm?esc(nm.slice(0,28))+' · ':'')+esc(shortAddr(a.mint))+'</div></div></div></td>';
+  var cb = '<input type="checkbox" data-ta="'+esc(a.tokenAccount)+'" '+(selectedSurplus[a.tokenAccount]?"checked":"")+'/>';
+  var cur = (a.rentLamports/LAMPORTS).toFixed(6);
+  var min = (a.rentExemptLamports/LAMPORTS).toFixed(6);
+  var surp = (a.surplusLamports/LAMPORTS).toFixed(6);
+  return '<td>'+cb+'</td>'+tokCell+'<td class="num hide-sm">'+cur+'</td><td class="num hide-sm">'+min+'</td><td class="num" style="color:#12C98B">'+surp+'</td>';
+}
+// Eligible for the surplus job: never wrapped SOL (the instruction refuses it on-chain,
+// NativeNotSupported), and a real, known, positive surplus — `surplusLamports` is `null` (never
+// 0) when the server couldn't read today's minimum, and that must never look like "no surplus".
+function surplusEligible(a){ return a.surplusEligible === true; }
+function renderSurplus(){
+  var tbody = $("rows-surplus");
+  var list = accounts.filter(surplusEligible);
+  tbody.innerHTML = "";
+  $("surplus-unavailable").classList.toggle("hidden", surplusAvailable === true);
+  if (!list.length){
+    var msg = surplusAvailable !== true
+      ? "Couldn't check surplus rent right now — hit Rescan to try again."
+      : "No surplus rent to reclaim right now — every account is already at today's minimum.";
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);padding:10px 8px;">'+msg+'</td></tr>';
+    return;
+  }
+  list.forEach(function(a){
+    var tr = document.createElement("tr");
+    if (selectedSurplus[a.tokenAccount]) tr.classList.add("sel");
+    tr.innerHTML = rowHtmlSurplus(a);
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+    cb.addEventListener("change", function(){
+      var ta = cb.getAttribute("data-ta");
+      if (cb.checked) selectedSurplus[ta] = true; else delete selectedSurplus[ta];
+      render();
+    });
+  });
+}
+
 function render(){
   var emptyAccts = accounts.filter(function(a){ return a.empty; });
   var burnAccts = accounts.filter(function(a){ return !a.empty; });
   fillGroup($("rows-empty"), emptyAccts, true, "No empty accounts to reclaim right now.", 3);
   fillGroup($("rows-burn"), burnAccts, false, "No tokens with a balance found.", 5);
+  renderSurplus();
   updateTotals();
 }
 
@@ -462,6 +573,9 @@ function render(){
 function selectedList(){ return accounts.filter(function(a){ return selected[a.tokenAccount] && burnable(a); }); }
 function selectedEmpty(){ return selectedList().filter(function(a){ return a.empty; }); }
 function selectedBurn(){ return selectedList().filter(function(a){ return !a.empty; }); }
+// The surplus job's selection lives in its OWN map (selectedSurplus), so it never contends with
+// the empty/burn jobs above even when the same account qualifies for more than one at once.
+function selectedSurplusList(){ return accounts.filter(function(a){ return selectedSurplus[a.tokenAccount] && surplusEligible(a); }); }
 
 function updateTotals(){
   var selE = selectedEmpty();
@@ -477,22 +591,83 @@ function updateTotals(){
   $("tot-val").textContent = fmtUsd(valB);
   $("tot-count").textContent = selB.length + " selected";
   $("burn-btn").disabled = selB.length === 0;
+
+  // Surplus job: show the gross surplus, an ESTIMATED network fee for the transaction(s) this
+  // would take, and the net — "tiny surpluses may not be worth the fee" per the copy above, so
+  // the net has to be visible, not just the gross. One signature per CHUNK_SURPLUS accounts, at
+  // ~5000 lamports/signature (the standard base fee; the wallet shows the exact figure at signing).
+  var selS = selectedSurplusList();
+  var surplusLamportsSel = selS.reduce(function(s,a){ return s + (Number(a.surplusLamports)||0); }, 0);
+  var txCount = selS.length ? Math.ceil(selS.length / CHUNK_SURPLUS) : 0;
+  var feeLamports = txCount * 5000;
+  // Signed, never floored at 0 — a fee that would exceed the surplus must show as a real negative
+  // net, not vanish into a falsely reassuring "0 SOL" (finding 5).
+  var netLamports = surplusLamportsSel - feeLamports;
+  $("surplus-gross").textContent = surplusLamportsSel ? fmtSol(surplusLamportsSel/LAMPORTS) : "0 SOL";
+  $("surplus-fee").textContent = feeLamports ? "~" + fmtSol(feeLamports/LAMPORTS) : "~0 SOL";
+  $("surplus-net").textContent = fmtSol(netLamports/LAMPORTS);
+  $("surplus-net").style.color = netLamports < 0 ? "#FF6A99" : "";
+  $("surplus-count").textContent = selS.length + " selected";
+  $("surplus-btn").disabled = selS.length === 0;
 }
 
 function selectAllEmpty(){ accounts.forEach(function(a){ if (burnable(a) && a.empty) selected[a.tokenAccount] = true; }); render(); }
 function clearEmpty(){ accounts.forEach(function(a){ if (a.empty) delete selected[a.tokenAccount]; }); render(); }
 function selectAllBurn(){ accounts.forEach(function(a){ if (burnable(a) && !a.empty) selected[a.tokenAccount] = true; }); render(); }
 function clearBurn(){ accounts.forEach(function(a){ if (!a.empty) delete selected[a.tokenAccount]; }); render(); }
+function selectAllSurplus(){ accounts.forEach(function(a){ if (surplusEligible(a)) selectedSurplus[a.tokenAccount] = true; }); render(); }
+function clearSurplus(){ selectedSurplus = {}; render(); }
 
 // ── value-guard confirmation ────────────────────────────────────────────────
 function isNativeSol(a){ return a.mint === SOL_MINT; }   // closing wSOL UNWRAPS it back to the owner — not destroyed
-var confirmSel = [];   // the exact list the modal showed — doBurn signs THIS, never a freshly-recomputed selection
-function openConfirm(list){
-  // The caller passes EXACTLY the group its button owns (empties for Reclaim, tokens for Burn). Never
-  // fall back to the whole selection — an empty reclaim list must not open a confirm over burnable tokens.
+var confirmSel = [];   // the exact list the modal showed — doBurn/doSurplusReclaim sign THIS, never a freshly-recomputed selection
+var confirmKind = null;   // "reclaim" | "burn" | "surplus" — routes m-go to the right sender
+function openConfirm(list, kind){
+  // Never start a new job while a previous one is still signing/sending — that would overwrite
+  // confirmSel/confirmKind out from under the run already in flight (adversarial review, finding 1).
+  if (jobRunning) return;
+  // The caller passes EXACTLY the group its button owns (empties for Reclaim, tokens for Burn,
+  // surplus rows for the surplus job). Never fall back to the whole selection — an empty reclaim
+  // list must not open a confirm over burnable tokens.
   var sel = Array.isArray(list) ? list : [];
   if (!sel.length) return;
   confirmSel = sel;
+  confirmKind = kind || null;
+
+  // Surplus job: its own instruction (WithdrawExcessLamports), never destroys anything and never
+  // touches a balance — so it gets none of the burn value-guard machinery below (no typed
+  // confirmation, no "destroying value" language). Kept as an early, self-contained branch rather
+  // than woven into the burn/reclaim logic so reviewing one job never requires reasoning about
+  // the other's guardrails.
+  if (kind === "surplus"){
+    var surplusLamportsC = sel.reduce(function(s,a){ return s + (Number(a.surplusLamports)||0); }, 0);
+    var surplusTotal = surplusLamportsC / LAMPORTS;
+    // Signed net, never floored at 0 — a fee that would exceed the surplus must show as a real
+    // negative, not vanish into "0 SOL" (adversarial review on PR #443, finding 5).
+    var feeLamportsC = (sel.length ? Math.ceil(sel.length / CHUNK_SURPLUS) : 0) * 5000;
+    var netLamportsC = surplusLamportsC - feeLamportsC;
+    $("m-list").innerHTML = sel.map(function(a){
+      var right = 'pull '+((Number(a.surplusLamports)||0)/LAMPORTS).toFixed(6)+' SOL · account stays open';
+      return '<div class="li"><span>'+(a.symbol?esc(a.symbol):esc(shortAddr(a.mint)))+'</span><span class="r">'+right+'</span></div>';
+    }).join("");
+    $("m-rec").textContent = fmtSol(surplusTotal);
+    $("m-val").textContent = "kept open — nothing destroyed";
+    $("m-title").textContent = "💧 Reclaim surplus rent";
+    $("m-intro").textContent = "These accounts hold more SOL than today's rent-exempt minimum requires. This withdraws only that surplus — the account and every token balance stay exactly as they are. Net after the estimated network fee: " + fmtSol(netLamportsC/LAMPORTS) + ".";
+    if (netLamportsC <= 0){
+      $("m-warn").classList.remove("hidden");
+      $("m-warn").innerHTML = '⚠️ The estimated network fee (~'+fmtSol(feeLamportsC/LAMPORTS)+') is likely to eat all or more of this surplus (~'+fmtSol(surplusTotal)+'). You can still continue, but you may end up with less SOL than you started with, or barely break even.';
+    } else {
+      $("m-warn").classList.add("hidden");
+    }
+    $("m-typebox").classList.add("hidden");
+    $("m-type").value = "";
+    $("m-go").disabled = false;   // never destroys value — no typed confirmation gate
+    clearStatus($("m-status"));
+    $("modal").classList.add("show");
+    return;
+  }
+
   var rent = sel.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
   // "Destroy value" excludes wrapped SOL (closing it returns the SOL to you, it isn't destroyed).
   var val = sel.reduce(function(s,a){ return s + (isNativeSol(a)?0:(Number(a.valueUsd)||0)); }, 0);
@@ -548,9 +723,35 @@ async function doBurn(){
   var sel = confirmSel;
   if (!sel.length) return;
   if (typeof solanaWeb3 === "undefined"){ setStatus($("m-status"), "Wallet library still loading — try again in a second.", "err"); return; }
+  var runKind = confirmKind;   // captured before any await; every mutation below checks this still matches (finding 1)
+  jobRunning = true;
   var Transaction = solanaWeb3.Transaction, PublicKey = solanaWeb3.PublicKey;
   var owner = new PublicKey(wPubkey);
   $("m-go").disabled = true; $("m-cancel").disabled = true;
+
+  // Fresh re-read right before signing — never sign against a scan that might have gone stale
+  // while the confirm sheet sat open (mirrors the Seeker app's own re-read-before-signing rule;
+  // adversarial review on PR #443, finding 7). A re-read FAILURE keeps the original snapshot
+  // rather than blocking a legitimate retry — this is a safety upgrade, not a new point of failure.
+  setStatus($("m-status"), "Re-checking your wallet on-chain before signing…");
+  try {
+    var freshScan = await fetchScan(wPubkey, 1);
+    if (freshScan && freshScan.success){
+      var freshById = {};
+      (freshScan.accounts || []).forEach(function(a){ freshById[a.tokenAccount] = a; });
+      sel = sel.filter(function(a){
+        var f = freshById[a.tokenAccount];
+        if (!f || !burnable(f)) return false;
+        return runKind === "reclaim" ? f.empty : !f.empty;
+      }).map(function(a){ return freshById[a.tokenAccount]; });
+    }
+  } catch(e){ /* keep the confirmSel snapshot */ }
+  if (!sel.length){
+    setStatus($("m-status"), "Those accounts changed since you opened this — nothing left to act on. Cancel and rescan.", "err");
+    $("m-go").disabled = false; $("m-cancel").disabled = false;
+    jobRunning = false;
+    return;
+  }
 
   var chunks = [];
   for (var i=0;i<sel.length;i+=CHUNK) chunks.push(sel.slice(i, i+CHUNK));
@@ -560,6 +761,7 @@ async function doBurn(){
   var confirmedAccounts = [], unconfirmedCount = 0;
   try {
     for (var c=0;c<chunks.length;c++){
+      assertSameWallet();   // finding 10 — refuse before building against a stale connected address
       setStatus($("m-status"), "Preparing transaction " + (c+1) + " of " + chunks.length + "…");
       var bh = await rpc("getLatestBlockhash", [{ commitment: "confirmed" }]);
       var tx = new Transaction();
@@ -610,11 +812,27 @@ async function doBurn(){
     closeConfirm();
     finishBurn(confirmedAccounts, unconfirmedCount);
   } catch(e){
-    setStatus($("m-status"), "Burn failed: " + (e.message || e) + (confirmedAccounts.length ? " (" + confirmedAccounts.length + " account" + (confirmedAccounts.length===1?"":"s") + " already closed)" : ""), "err");
-    $("m-go").disabled = false; $("m-cancel").disabled = false;
+    // Chunks strictly AFTER the one that threw were never even attempted — say so, and never let a
+    // retry re-target rows we already watched land (finding 7).
+    var failedAtChunk = typeof c !== "undefined" ? c : (chunks.length - 1);
+    var notAttempted = chunks.slice(failedAtChunk + 1).reduce(function(n, ch){ return n + ch.length; }, 0);
+    var msg = "Burn failed: " + (e.message || e);
+    if (confirmedAccounts.length) msg += " (" + confirmedAccounts.length + " account" + (confirmedAccounts.length===1?"":"s") + " already closed)";
+    if (notAttempted > 0) msg += " " + notAttempted + " account" + (notAttempted===1?"":"s") + " never attempted, unchanged.";
+    setStatus($("m-status"), msg, "err");
+    if (confirmKind === runKind){
+      // Drop rows we WATCHED land from confirmSel too — a retry (clicking Go again on the same
+      // sheet) must only re-target what is actually still left, never accounts already closed.
+      if (confirmedAccounts.length){
+        var landedIds = {}; confirmedAccounts.forEach(function(a){ landedIds[a.tokenAccount] = true; });
+        confirmSel = confirmSel.filter(function(a){ return !landedIds[a.tokenAccount]; });
+      }
+      $("m-go").disabled = false; $("m-cancel").disabled = false;
+    }
     if (confirmedAccounts.length) pruneConfirmed(confirmedAccounts);   // only drop rows we WATCHED land
   } finally {
-    $("m-cancel").disabled = false;
+    if (confirmKind === runKind) $("m-cancel").disabled = false;
+    jobRunning = false;
   }
 }
 // Drop the accounts we confirmed closed, then re-poll until the RPC view agrees. Only ever called
@@ -634,6 +852,180 @@ function finishBurn(confirmedAccounts, unconfirmedCount){
   if (unconfirmedCount > 0) msg += " " + unconfirmedCount + " transaction" + (unconfirmedCount===1?"":"s") + " didn’t confirm in time — those accounts are unchanged; hit Rescan to re-check.";
   setStatus($("status"), msg, unconfirmedCount > 0 ? "err" : "ok");
 }
+// ── build + sign the surplus-reclaim transactions ───────────────────────────
+// Deliberately its OWN function, parallel to doBurn above rather than a shared abstraction: the
+// two jobs sign different instructions (WithdrawExcessLamports vs burn+close) and reasoning about
+// one should never require reasoning about the other's chunk-retry/value-guard behaviour. The
+// sign/submit/confirm shape (skip-preflight, err-before-status, three outcomes, never claim a
+// chunk landed without watching it) is copied deliberately from doBurn, which already carries the
+// house's hard-won Phantom/preflight notes — see there for why each step is what it is.
+async function doSurplusReclaim(){
+  var sel = confirmSel;
+  if (!sel.length) return;
+  if (typeof solanaWeb3 === "undefined"){ setStatus($("m-status"), "Wallet library still loading — try again in a second.", "err"); return; }
+  var runKind = confirmKind;   // captured before any await (finding 1)
+  jobRunning = true;
+  var Transaction = solanaWeb3.Transaction, PublicKey = solanaWeb3.PublicKey;
+  var owner = new PublicKey(wPubkey);
+  $("m-go").disabled = true; $("m-cancel").disabled = true;
+
+  // Fresh re-read right before signing — never sign against a scan that might have gone stale
+  // while the confirm sheet sat open (finding 7). A re-read failure keeps the original snapshot.
+  setStatus($("m-status"), "Re-checking your wallet on-chain before signing…");
+  try {
+    var freshScan = await fetchScan(wPubkey, 1);
+    if (freshScan && freshScan.success){
+      var freshById = {};
+      (freshScan.accounts || []).forEach(function(a){ freshById[a.tokenAccount] = a; });
+      sel = sel.filter(function(a){ var f = freshById[a.tokenAccount]; return f && f.surplusEligible; })
+               .map(function(a){ return freshById[a.tokenAccount]; });
+    }
+  } catch(e){ /* keep the confirmSel snapshot */ }
+  if (!sel.length){
+    setStatus($("m-status"), "Those accounts changed since you opened this — nothing left to act on. Cancel and rescan.", "err");
+    $("m-go").disabled = false; $("m-cancel").disabled = false;
+    jobRunning = false;
+    return;
+  }
+
+  var chunks = [];
+  for (var i=0;i<sel.length;i+=CHUNK_SURPLUS) chunks.push(sel.slice(i, i+CHUNK_SURPLUS));
+  var confirmedAccounts = [], unconfirmedCount = 0;
+  try {
+    for (var c=0;c<chunks.length;c++){
+      assertSameWallet();   // finding 10 — refuse before building against a stale connected address
+      setStatus($("m-status"), "Preparing transaction " + (c+1) + " of " + chunks.length + "…");
+      var bh = await rpc("getLatestBlockhash", [{ commitment: "confirmed" }]);
+      var tx = new Transaction();
+      chunks[c].forEach(function(a){
+        var ta = new PublicKey(a.tokenAccount);
+        // WithdrawExcessLamports — pulls only the surplus above today's rent-exempt minimum.
+        // Never touches the token balance, never closes the account. Destination AND authority
+        // are ALWAYS the connected wallet — never user-editable (CLAUDE.md guardrail: no
+        // user-editable destination on a money path).
+        tx.add(splToken.createWithdrawExcessLamportsInstruction(ta, owner, owner, a.program));
+      });
+      tx.feePayer = owner; tx.recentBlockhash = bh.value.blockhash;
+      setStatus($("m-status"), "Approve transaction " + (c+1) + " of " + chunks.length + " in your wallet…");
+      var sig;
+      if (wProvider.signTransaction){
+        var signed = await wProvider.signTransaction(tx);
+        sig = await rpc("sendTransaction", [bytesToB64(signed.serialize()),
+          { encoding: "base64", skipPreflight: true, preflightCommitment: "confirmed", maxRetries: 5 }]);
+      } else {
+        var res = await wProvider.signAndSendTransaction(tx);
+        sig = res.signature || res;
+      }
+      setStatus($("m-status"), "Confirming on-chain… (" + (c+1) + "/" + chunks.length + ")");
+      var confirmed = false;
+      for (var t=0;t<24;t++){
+        try {
+          var st = await rpc("getSignatureStatuses", [[sig]]);
+          var s = st && st.value && st.value[0];
+          if (s && s.err){ throw new Error("transaction failed on-chain"); }
+          if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")){ confirmed = true; break; }
+        } catch(e){ if (String(e.message||"").indexOf("failed on-chain")>=0) throw e; }
+        await new Promise(function(r){ setTimeout(r, 2000); });
+      }
+      if (confirmed) confirmedAccounts = confirmedAccounts.concat(chunks[c]);
+      else unconfirmedCount += chunks[c].length;
+    }
+    closeConfirm();
+    finishSurplus(confirmedAccounts, unconfirmedCount);
+  } catch(e){
+    var failedAtChunk = typeof c !== "undefined" ? c : (chunks.length - 1);
+    var notAttempted = chunks.slice(failedAtChunk + 1).reduce(function(n, ch){ return n + ch.length; }, 0);
+    var msg = "Reclaim failed: " + (e.message || e);
+    if (confirmedAccounts.length) msg += " (" + confirmedAccounts.length + " account" + (confirmedAccounts.length===1?"":"s") + " already reclaimed)";
+    if (notAttempted > 0) msg += " " + notAttempted + " account" + (notAttempted===1?"":"s") + " never attempted, unchanged.";
+    setStatus($("m-status"), msg, "err");
+    if (confirmKind === runKind){
+      if (confirmedAccounts.length){
+        var landedIds = {}; confirmedAccounts.forEach(function(a){ landedIds[a.tokenAccount] = true; });
+        confirmSel = confirmSel.filter(function(a){ return !landedIds[a.tokenAccount]; });
+      }
+      $("m-go").disabled = false; $("m-cancel").disabled = false;
+    }
+    if (confirmedAccounts.length) pruneSurplusConfirmed(confirmedAccounts);
+  } finally {
+    if (confirmKind === runKind) $("m-cancel").disabled = false;
+    jobRunning = false;
+  }
+}
+// Unlike pruneConfirmed (burn/close), the account is NOT removed from `accounts` — it is still
+// open and still holds its tokens, exactly as promised. It is optimistically marked as having no
+// remaining surplus (so it drops out of THIS job's table) and unselected, then a real rescan
+// confirms what actually arrived — never trust the request amount as the delivered amount.
+function pruneSurplusConfirmed(confirmedAccounts){
+  var set = {}; confirmedAccounts.forEach(function(a){ set[a.tokenAccount] = true; delete selectedSurplus[a.tokenAccount]; });
+  accounts = accounts.map(function(a){
+    return set[a.tokenAccount] ? Object.assign({}, a, { surplusLamports: 0, surplusEligible: false }) : a;
+  });
+  render();
+  var requested = confirmedAccounts.reduce(function(s,a){ return s + (Number(a.surplusLamports)||0); }, 0) / LAMPORTS;
+  rescanUntilCleanSurplus(set, requested);
+}
+function finishSurplus(confirmedAccounts, unconfirmedCount){
+  var n = confirmedAccounts.length;
+  var msg = n > 0
+    ? "💧 Requested surplus reclaim on " + n + " account" + (n===1?"":"s") + " (kept open) — confirming what actually arrived…"
+    : "💧 Nothing confirmed landed.";
+  if (unconfirmedCount > 0) msg += " " + unconfirmedCount + " transaction" + (unconfirmedCount===1?"":"s") + " didn’t confirm in time — hit Rescan to re-check.";
+  setStatus($("status"), msg, unconfirmedCount > 0 ? "err" : "ok");
+  // Only rescan-and-report "what actually arrived" when something actually landed — with an EMPTY
+  // confirmed set, rescanUntilCleanSurplus's "nothing still looks high" check is vacuously true on
+  // its very first poll (an empty touchedSet matches nothing) and would overwrite this message with
+  // a false "Confirmed — 0 SOL actually arrived" (adversarial review on PR #443, finding 2).
+  if (n > 0) pruneSurplusConfirmed(confirmedAccounts);
+}
+// Re-reads the chain until the touched accounts' balances reflect the withdrawal (or ~11s of
+// polling elapses), then reports what ACTUALLY arrived — the requested figure is never assumed to
+// be what landed (CLAUDE.md: "re-read balances after confirmation and report what actually
+// arrived"). Mirrors rescanUntilClean's lag-tolerance below, adapted for accounts that stay open
+// (there is no "account disappeared" signal to wait for — only "its lamports went down").
+async function rescanUntilCleanSurplus(touchedSet, requestedSol){
+  var priorLamports = {};
+  accounts.forEach(function(a){ if (touchedSet[a.tokenAccount]) priorLamports[a.tokenAccount] = a.rentLamports; });
+  for (var i=0;i<6;i++){
+    await new Promise(function(r){ setTimeout(r, i===0 ? 1200 : 2000); });
+    if (!wPubkey) return;
+    try {
+      var r2 = await fetchScan(wPubkey, 1);
+      if (!r2 || !r2.success) continue;
+      var fresh = r2.accounts || [];
+      var stillHigh = fresh.some(function(a){
+        return touchedSet[a.tokenAccount] && priorLamports[a.tokenAccount] !== undefined && a.rentLamports >= priorLamports[a.tokenAccount];
+      });
+      if (!stillHigh){
+        var actualLamports = 0;
+        fresh.forEach(function(a){
+          if (touchedSet[a.tokenAccount] && priorLamports[a.tokenAccount] !== undefined) {
+            actualLamports += Math.max(0, priorLamports[a.tokenAccount] - a.rentLamports);
+          }
+        });
+        accounts = fresh;
+        surplusAvailable = r2.surplusAvailable === true;   // strict — see scan()'s comment (P2-3)
+        render(); applyScanFoot(fresh.length, r2.capped);
+        setStatus($("status"), "💧 Confirmed — " + fmtSol(actualLamports/LAMPORTS) + " actually arrived in your wallet (requested ~" + fmtSol(requestedSol) + ").", "ok");
+        return;
+      }
+    } catch(e){}
+  }
+  // RPC still lagging after ~11s — keep the optimistic view; a manual Rescan stays truthful.
+}
+
+// Refuse to build/sign a chunk if the wallet's LIVE public key no longer matches the address this
+// session connected as — an address captured at connect time goes stale if the person switches
+// accounts in their wallet (or another tab drives the same provider) while this tab stays open.
+// Mirrors src/seeker/sign.js's assertSameAccount (adversarial review on PR #443, finding 10).
+function assertSameWallet(){
+  var live = wProvider && wProvider.publicKey && typeof wProvider.publicKey.toString === "function"
+    ? wProvider.publicKey.toString() : null;
+  if (live && wPubkey && live !== wPubkey){
+    throw new Error("Your wallet switched accounts — reconnect and try again.");
+  }
+}
+
 // raw tx bytes → base64 for sendTransaction (chunked — .apply on a big array can blow the stack)
 function bytesToB64(u8){
   var s = "";
@@ -652,11 +1044,25 @@ $("sel-empty-all").addEventListener("click", selectAllEmpty);
 $("sel-empty-none").addEventListener("click", clearEmpty);
 $("sel-burn-all").addEventListener("click", selectAllBurn);
 $("sel-burn-none").addEventListener("click", clearBurn);
-$("reclaim-btn").addEventListener("click", function(){ openConfirm(selectedEmpty()); });
-$("burn-btn").addEventListener("click", function(){ openConfirm(selectedBurn()); });
-$("m-cancel").addEventListener("click", closeConfirm);
-$("m-go").addEventListener("click", doBurn);
-$("modal").addEventListener("click", function(e){ if (e.target === $("modal")) closeConfirm(); });
+$("sel-surplus-all").addEventListener("click", selectAllSurplus);
+$("sel-surplus-none").addEventListener("click", clearSurplus);
+$("reclaim-btn").addEventListener("click", function(){ openConfirm(selectedEmpty(), "reclaim"); });
+$("burn-btn").addEventListener("click", function(){ openConfirm(selectedBurn(), "burn"); });
+$("surplus-btn").addEventListener("click", function(){ openConfirm(selectedSurplusList(), "surplus"); });
+// Never let the sheet close out from under a job that is still signing/sending — the user must
+// not lose track of a run in flight, and a closed sheet made it look safe to tap another action
+// button and start a SECOND job over the same accounts (finding 1).
+$("m-cancel").addEventListener("click", function(){ if (jobRunning) return; closeConfirm(); });
+// Routes to the right sender for whichever job opened the sheet — set by openConfirm(). Refuses
+// rather than defaulting to doBurn when confirmKind is anything else (including unset) — a
+// default fall-through here would let a burn/close instruction sign against a sheet that was
+// never actually confirmed as a burn (finding 1).
+$("m-go").addEventListener("click", function(){
+  if (jobRunning) return;
+  if (confirmKind === "burn" || confirmKind === "reclaim") doBurn();
+  else if (confirmKind === "surplus") doSurplusReclaim();
+});
+$("modal").addEventListener("click", function(e){ if (jobRunning) return; if (e.target === $("modal")) closeConfirm(); });
 </script>
 <script defer src="/cluck-nav.js"></script>
 </body>

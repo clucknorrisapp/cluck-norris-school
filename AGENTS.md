@@ -577,11 +577,17 @@ quote in grant material. Translations live in `public/i18n/*.json` (+ `*.school.
 Persistence: a Railway volume at `/data` (consumed signatures, graduation tracker, scheduler
 timestamps, analytics, transcripts) survives redeploys.
 
-**The app's own Claude calls:** Sonnet paths use `claude-sonnet-5` and all pass
-`thinking: {type:"disabled"}` deliberately — don't remove it. On Sonnet 5, omitting it turns
-adaptive thinking on, and `max_tokens` caps thinking + answer together, which truncates
-short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-20251001`. No
-`temperature`/`top_p`/prefills — all three 400 on Sonnet 5.
+**The app's own Claude calls:** Sonnet paths use `claude-sonnet-5-5` (migrated from
+`claude-sonnet-5` 2026-09-29) and all pass `thinking: {type:"between_tools"}` + `output_config:
+{effort:"high"}` deliberately — don't remove them. Sonnet 5.5 400s on `thinking:{type:"disabled"}`
+(`between_tools` is its no-thinking setting: effort `high` or below only, no other field in
+`thinking`), and omitting `thinking` turns adaptive thinking on, where `max_tokens` caps thinking +
+answer together and truncates short-form copy going out to X/Telegram. The responses are read by
+block type through `claudeText()`, never `content[0]`. Effort levels were recalibrated on 5.5, so
+`high` is the closest to the old behaviour and `low`/`medium` is a measured cost saving to try on
+staging, not a default. Haiku paths stay on `claude-haiku-4-5-20251001`. No
+`temperature`/`top_p`/prefills/forced `tool_choice`. `scripts/claude-models-test.cjs` (CI) pins the
+shape. `scripts/lock-celebration.sh` still passes `--model claude-sonnet-5` to the CLI (not the app).
 
 ---
 

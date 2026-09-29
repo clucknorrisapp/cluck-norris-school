@@ -1156,6 +1156,134 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await ctx.close();
   }
 
+  // ---- L2: Firepit surplus — the SIGNED transaction contains ONLY WithdrawExcessLamports -------
+  //
+  // Adversarial review on PR #443 (finding 4): section L above never actually signs — it stops at
+  // the confirm sheet's typed gate. Nothing exercised the Seeker surplus path's real instruction-
+  // building code, so a dropped/misplaced `return` in the old shared builder (Firepit.jsx) could
+  // silently fall through into burn+close for the SAME account on top of the withdrawal, and
+  // nothing here would have noticed. This signs with a REAL keypair (the FAKE_SIGNING pattern
+  // section G/Hatchery already established), decodes the actual bytes handed to sendTransaction,
+  // and asserts: exactly one instruction, opcode 38 (WithdrawExcessLamports) — never 8 (Burn), 9
+  // (CloseAccount) or 15 (BurnChecked). The fixture's one account is deliberately NON-empty (holds
+  // a real balance) so a fallthrough bug would show up as an EXTRA instruction, not as nothing.
+  {
+    const SIGNER = web3.Keypair.generate();
+    const SIGNER_ADDR = SIGNER.publicKey.toBase58();
+    const TOKEN_ACCOUNT = web3.Keypair.generate().publicKey.toBase58();
+    const MINT = web3.Keypair.generate().publicKey.toBase58();
+    const FAKE_SIGNING = `(() => {
+      const SECRET = ${JSON.stringify(Array.from(SIGNER.secretKey))};
+      const account = { address: ${JSON.stringify(SIGNER_ADDR)}, publicKey: new Uint8Array(32).fill(7),
+        chains: ["solana:mainnet"], features: ["solana:signTransaction", "solana:signMessage"] };
+      const wallet = {
+        version: "1.0.0", name: "Jupiter", icon: "data:image/svg+xml;base64,PHN2Zy8+",
+        chains: ["solana:mainnet"], accounts: [],
+        features: {
+          "standard:connect": { version: "1.0.0", connect: async () => { wallet.accounts = [account]; return { accounts: [account] }; } },
+          "standard:disconnect": { version: "1.0.0", disconnect: async () => { wallet.accounts = []; } },
+          "standard:events": { version: "1.0.0", on: () => () => {} },
+          "solana:signTransaction": { version: "1.0.0", supportedTransactionVersions: ["legacy", 0],
+            signTransaction: async (...inputs) => inputs.map((x) => {
+              const tx = solanaWeb3.Transaction.from(x.transaction);
+              tx.sign(solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(SECRET)));
+              return { signedTransaction: tx.serialize() };
+            }) },
+          "solana:signMessage": { version: "1.0.0",
+            signMessage: async (...inputs) => inputs.map((x) => ({ signedMessage: x.message, signature: new Uint8Array(64).fill(9) })) },
+        },
+      };
+      const cb = ({ register }) => register(wallet);
+      window.addEventListener("wallet-standard:app-ready", (ev) => cb(ev.detail));
+      window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", { detail: cb }));
+    })();`;
+
+    // One account: NOT empty (a real 0.5-unit balance), and surplus-eligible with a real mainnet
+    // surplus figure. Also lands in the (untouched) Burn group by virtue of not being empty — that
+    // is the app's normal, correct overlap between jobs, and this test never touches that section.
+    const SCAN = {
+      success: true, wallet: SIGNER_ADDR, count: 1, capped: false,
+      rentSolTotal: 1855569 / 1e9, valueUsdTotal: 5,
+      surplusAvailable: true, surplusLamportsTotal: 367129, surplusSolTotal: 367129 / 1e9,
+      accounts: [
+        { tokenAccount: TOKEN_ACCOUNT, mint: MINT, program: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          amountRaw: "500000", decimals: 6, uiAmount: 0.5,
+          rentLamports: 1855569, frozen: false, delegated: false, space: 165, isNative: false, owner: SIGNER_ADDR,
+          symbol: "SURP", name: "Surplus token", logo: null, priceUsd: 10, valueUsd: 5, priceKnown: true,
+          rentExemptLamports: 1488440, surplusLamports: 367129, surplusEligible: true,
+          empty: false, isNft: false },
+      ],
+    };
+
+    let capturedSendB64 = null;
+    const { ctx, page, errors } = await open(
+      (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+      async (pg) => {
+        await pg.route("**/api/burn-scan*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(SCAN) }));
+        await pg.route("**/api/helius-rpc", async (r) => {
+          const body = JSON.parse(r.request().postData() || "{}");
+          const m = body.method;
+          let result;
+          if (m === "getLatestBlockhash") result = { value: { blockhash: web3.Keypair.generate().publicKey.toBase58() } };
+          else if (m === "sendTransaction") { capturedSendB64 = body.params[0]; result = "L2FAKESIG1111111111111111111111111111111111111111111111111"; }
+          else if (m === "getSignatureStatuses") result = { value: [{ err: null, confirmationStatus: "confirmed" }] };
+          else result = null;
+          r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result }) });
+        });
+      }, FAKE_SIGNING);
+
+    await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+    await page.click(".seeker-walletbtn");
+    await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 });
+    await page.evaluate(() => { window.location.hash = "#/tools/firepit"; });
+    await page.waitForTimeout(800);
+
+    // Click the SURPLUS section's own "Select all" — the fixture's one account also appears in the
+    // Burn group (it's not empty), so a plain text match on "select all" would be ambiguous.
+    await page.evaluate(() => {
+      const sections = Array.from(document.querySelectorAll(".seeker-firepit-section"));
+      const surplusSection = sections.find((s) => /Reclaim surplus rent/i.test((s.querySelector("h2") || {}).textContent || ""));
+      const btn = surplusSection && Array.from(surplusSection.querySelectorAll("button")).find((b) => /select all/i.test(b.textContent.trim()));
+      btn && btn.click();
+    });
+    await page.waitForTimeout(150);
+    await page.evaluate(() => {
+      const b = Array.from(document.querySelectorAll("button")).find((x) => /^reclaim surplus$/i.test(x.textContent.trim()));
+      b && b.click();
+    });
+    const opened = await page.waitForFunction(() => !!document.querySelector(".seeker-confirm"), null, { timeout: 10000 })
+      .then(() => true).catch(() => false);
+    ok("L2 · the surplus confirm sheet opens", opened, await text(page).then((b) => b.slice(0, 300)));
+
+    if (opened) {
+      const confirmBtnState = await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll(".seeker-confirm button")).find((x) => /confirm and sign/i.test(x.innerText));
+        return b ? b.disabled : null;
+      });
+      ok("L2 · never destroys anything, so the confirm button is armed with no typed gate", confirmBtnState === false, `disabled=${confirmBtnState}`);
+
+      await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll(".seeker-confirm button")).find((x) => /confirm and sign/i.test(x.innerText));
+        b && b.click();
+      });
+      for (let i = 0; i < 100 && !capturedSendB64; i++) await page.waitForTimeout(100);
+      ok("L2 · the wallet was actually asked to sign and the page submitted a transaction", !!capturedSendB64);
+
+      if (capturedSendB64) {
+        const raw = Buffer.from(capturedSendB64, "base64");
+        const tx = web3.Transaction.from(raw);
+        ok("L2 · exactly one instruction — one selected account", tx.instructions.length === 1, tx.instructions.length);
+        const ix = tx.instructions[0];
+        ok("L2 · ⚠️ opcode is 38 (WithdrawExcessLamports) — NEVER 8 (Burn), 9 (CloseAccount) or 15 (BurnChecked)",
+           ix.data.length === 1 && ix.data[0] === 38, Array.from(ix.data));
+        ok("L2 · targets the account's own token program", ix.programId.toBase58() === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", ix.programId.toBase58());
+        ok("L2 · the transaction is really signed (verified ed25519 signature, not a stub)", tx.verifySignatures());
+      }
+    }
+    ok("L2 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+    await ctx.close();
+  }
+
   // ---- M: Project Burn never arms on a number it could not read --------------------------
   //
   // The other half of P2-9: Project Burn signs, and had no behavioural test beyond "it mounts".
