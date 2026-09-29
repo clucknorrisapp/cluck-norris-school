@@ -210,7 +210,7 @@ function pubkeyAt(keys, idx) {
 // Both known token programs' ATA(owner, mint) — accepts either, so a Token-2022 output mint (an
 // explicit "where to look hardest" item, round 30) derives correctly without an RPC call to learn
 // which program actually owns that mint. `PK` is the injected PublicKey class (see file header).
-function ataCandidates(ownerB58, mintB58, PK) {
+export function ataCandidates(ownerB58, mintB58, PK) {
   const out = [];
   if (!PK || !ownerB58 || !mintB58) return out;
   let owner, mint;
@@ -573,5 +573,12 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
   // 4's simulation gate (`swap-simulate.js`) uses this as its own `allowedNewAtaCount` — the SOL
   // this transaction is allowed to spend on account-creation rent is bounded by what THIS
   // transaction's instructions actually do, never a guessed or unbounded allowance.
-  return { ok: true, routeKind, cuLimit, cuPriceMicroLamports, feeLamports: feeLamports.toString(), ataCreateCount: createdAtas.size };
+  // Codex round 33 on #420, finding 1 — `outputAtas`: the live wallet's own associated token
+  // account for the OUTPUT mint under both token programs. The simulation gate's inventory is the
+  // wallet's EXISTING token accounts, so a wallet that does not yet hold the output token had no
+  // output label at all and `verifySimulationResult` never compared anything against the minimum
+  // — a fixture delivering ZERO output passed. These addresses are appended to that inventory
+  // (before = 0) so the account this swap creates is read after simulation like any other.
+  return { ok: true, routeKind, cuLimit, cuPriceMicroLamports, feeLamports: feeLamports.toString(), ataCreateCount: createdAtas.size,
+           outputAtas: ataCandidates(liveAddress, quote && quote.outputMint, PublicKeyClass) };
 }

@@ -78,7 +78,14 @@ function readSimBalance(entry, label) {
 // `accounts.addresses` and `verifySimulationResult`'s own `addressLabels`) or `{ok:false, reason}`
 // — the reason strings match the app's own translated dictionary entries; callers pass them
 // through their own `t()`.
-export function buildInventory({ live, solRes, legacyAccts, token22Accts }) {
+// `outputMint` + `outputAtas` (Codex round 33 on #420, finding 1): the quote's output mint and the
+// live wallet's own ATA addresses for it (swap-verify.js's `outputAtas`, both token programs).
+// Any of them NOT already in the wallet's inventory is appended with `before: "0"` — a wallet that
+// does not hold the output token yet has no account to list, and without this the minimum-received
+// check had nothing to compare and a zero-output simulation passed. After simulation the created
+// account reads like any other; an address left unused (the other program's derivation) reads
+// `null`, which is a real 0. Both optional, so every existing caller/test is unchanged.
+export function buildInventory({ live, solRes, legacyAccts, token22Accts, outputMint, outputAtas }) {
   const solBefore = solRes && typeof solRes.value === "number" ? solRes.value : null;
   if (solBefore == null) {
     return { ok: false, reason: "Could not read your SOL balance to check this transaction before signing. Try again." };
@@ -104,6 +111,13 @@ export function buildInventory({ live, solRes, legacyAccts, token22Accts }) {
     if (!mint || amount == null || !entry.pubkey) continue;
     labels.push({ kind: "token", mint, before: String(amount) });
     addresses.push(entry.pubkey);
+  }
+  if (outputMint && Array.isArray(outputAtas)) {
+    for (const ata of outputAtas) {
+      if (typeof ata !== "string" || !ata || addresses.includes(ata)) continue;
+      labels.push({ kind: "token", mint: outputMint, before: "0", expected: true });
+      addresses.push(ata);
+    }
   }
   return { ok: true, addresses, labels };
 }
@@ -170,8 +184,21 @@ export function verifySimulationResult({
   // passed. `wsolTokenDecrease` accumulates how much any wSOL-mint token label fell (never
   // refusing on it alone when the input is SOL); the COMBINED total with the native-SOL side is
   // checked once, after the loop, against the single `inAmount` ceiling.
+  // ⚠️ Codex round 33 on #420, finding 2 — a wallet can hold MORE THAN ONE token account for a
+  // mint (an ATA plus an auxiliary account; one per token program for a mint that migrated).
+  // Each output account used to be held to the FULL minimum on its own, so a genuine swap paying
+  // the right amount into one account while another sat untouched was refused; and each INPUT
+  // account was capped at `inAmount` on its own, so two input accounts could each fall by
+  // `inAmount` — the same independent-bounds shape as the SOL/wSOL double-accounting below.
+  // Both sides are now SUMMED across every account of that mint and bounded once, after the loop.
+  // Finding 1 lives here too: with no output-mint label at all there is nothing to compare, and
+  // "nothing to compare" used to read as "passed". It is a refusal — the caller's inventory
+  // includes the wallet's own output ATA (buildInventory's `outputAtas`), so a real swap always
+  // has one.
   let solBefore = null, solAfter = null;
   let wsolTokenDecrease = 0n;
+  let inputTokenDecrease = 0n;
+  let outputGain = 0n, outputSeen = 0;
   for (let i = 0; i < addressLabels.length; i++) {
     const label = addressLabels[i];
     const read = readSimBalance(accounts[i], label);
@@ -193,13 +220,14 @@ export function verifySimulationResult({
         // here, or a pre-existing wSOL ATA could ALSO fall by the full `inAmount` on top of native
         // SOL falling by `inAmount` (the exact double-spend this fix closes).
         wsolTokenDecrease += -delta;
-      } else if (-delta > inAmountBig) {
-        return { ok: false, reason: "This transaction would move more of the token you're paying with than the quote showed." };
+      } else {
+        inputTokenDecrease += -delta;   // bounded ONCE, summed across every input account, below
       }
       continue;
     }
     if (label.mint === outputMint) {
-      if (delta < minReceivedBig) return { ok: false, reason: "This transaction would give you less than the minimum you were shown." };
+      outputGain += delta;              // summed across every output account; bounded below
+      outputSeen++;
       continue;
     }
     if (delta !== 0n) {
@@ -209,6 +237,15 @@ export function verifySimulationResult({
 
   if (solBefore == null || solAfter == null) {
     return { ok: false, reason: "Could not check the simulated result — the wallet's SOL balance was missing." };
+  }
+  if (outputSeen === 0) {
+    return { ok: false, reason: "Could not check the minimum you were shown — no account for the token you're buying was in the simulation." };
+  }
+  if (outputGain < minReceivedBig) {
+    return { ok: false, reason: "This transaction would give you less than the minimum you were shown." };
+  }
+  if (!inputIsSol && inputTokenDecrease > inAmountBig) {
+    return { ok: false, reason: "This transaction would move more of the token you're paying with than the quote showed." };
   }
   const solOutflow = solBefore - solAfter; // positive = SOL fell
   // Legitimate overhead any swap may spend regardless of input mint: the priority fee, plus rent

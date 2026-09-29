@@ -195,7 +195,11 @@ sync with the code across rounds 29-31 and shouldn't again.
    can resolve to ANY address at execution time. Decoding cannot see what those hop accounts
    actually do; only running the transaction can. So, after structural verification passes and
    BEFORE the wallet is ever called: the pane fetches its own current SOL balance and full
-   token-account inventory (both token programs, fresh, never cached — shaped by the pure,
+   token-account inventory (both token programs, fresh, never cached, PLUS the wallet's own
+   output-mint ATA under both programs at `before: 0` when it does not exist yet — Codex round 33:
+   without it a wallet buying a token for the first time had no output account in the checked set
+   and a zero-output simulation passed; and every mint's accounts are SUMMED, never bounded one
+   account at a time, on both the input and the output side — shaped by the pure,
    unit-tested `buildInventory()`, which refuses rather than silently treats a malformed
    `getTokenAccountsByOwner` result as "holds nothing"; verifier follow-up, round 31b item 8),
    calls `simulateTransaction` via `/api/helius-rpc` (`sigVerify:false`,

@@ -296,6 +296,99 @@ const baseArgs = () => ({
       rMixed.ok === true && rMixed.labels.length === 2 && rMixed.addresses.length === 2, rMixed);
   }
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(10) Codex round 33 on #420 — finding 1: a wallet with NO output account yet must still be held to the minimum\n");
+  {
+    // The wallet holds no account for the output mint (it will be created by this swap). Before
+    // the fix the inventory had no output label, nothing was compared, and a ZERO-output
+    // simulation passed. Now: no output label at all -> refusal, never a pass.
+    const noOutputLabels = [
+      { kind: "sol", before: String(SOL_BEFORE) },
+      { kind: "token", mint: OTHER_MINT, before: String(OTHER_BEFORE) },
+    ];
+    const zeroOutput = { err: null, accounts: [solEntry(SOL_BEFORE - IN_AMOUNT - FEE_LAMPORTS), tokenEntry(OTHER_MINT, OTHER_BEFORE)] };
+    const r0 = verifySimulationResult({ simResult: zeroOutput, addressLabels: noOutputLabels, ...baseArgs() });
+    ok("no output-mint account in the checked set (zero output delivered) -> REFUSED, not passed", r0.ok === false && /no account for the token you're buying/i.test(r0.reason), r0);
+
+    // buildInventory appends the verifier's output ATA candidates when the wallet has none, with
+    // before = 0 — so the account this swap creates is read after simulation like any other.
+    const goodSol = { context: { slot: 1 }, value: Number(SOL_BEFORE) };
+    const legacyOnlyOther = { context: { slot: 1 }, value: [{ pubkey: "OTHERacct11111111111111111111111111111111", account: { data: { parsed: { info: { mint: OTHER_MINT, tokenAmount: { amount: String(OTHER_BEFORE) } } } } } }] };
+    const empty22 = { context: { slot: 1 }, value: [] };
+    const OUT_ATA_LEGACY = "OUTata1legacy111111111111111111111111111111";
+    const OUT_ATA_2022 = "OUTata2token2022111111111111111111111111111";
+    const inv = buildInventory({ live: SOL_ADDR, solRes: goodSol, legacyAccts: legacyOnlyOther, token22Accts: empty22, outputMint: OUT_MINT, outputAtas: [OUT_ATA_LEGACY, OUT_ATA_2022] });
+    ok("buildInventory appends BOTH output ATA candidates (before=0, expected) when the wallet holds neither",
+      inv.ok === true && inv.addresses.length === 4 && inv.addresses[2] === OUT_ATA_LEGACY && inv.addresses[3] === OUT_ATA_2022
+      && inv.labels[2].mint === OUT_MINT && inv.labels[2].before === "0" && inv.labels[2].expected === true
+      && inv.labels[3].mint === OUT_MINT && inv.labels[3].before === "0", inv);
+    // The created (legacy) ATA reads the minimum after simulation; the unused Token-2022
+    // derivation reads null (a real 0) -> passes.
+    const created = { err: null, accounts: [solEntry(SOL_BEFORE - IN_AMOUNT - FEE_LAMPORTS - BigInt(ATA_RENT_LAMPORTS)), tokenEntry(OTHER_MINT, OTHER_BEFORE), tokenEntry(OUT_MINT, MIN_RECEIVED), null] };
+    const rCreated = verifySimulationResult({ simResult: created, addressLabels: inv.labels, ...baseArgs(), allowedNewAtaCount: 1 });
+    ok("the swap creates the output ATA and pays exactly the minimum into it (other derivation null) -> passes", rCreated.ok === true, rCreated);
+    // Same shape but the created account holds ONE base unit less than the minimum -> refused.
+    const short = Object.assign({}, created, { accounts: [created.accounts[0], created.accounts[1], tokenEntry(OUT_MINT, MIN_RECEIVED - 1n), null] });
+    const rShort = verifySimulationResult({ simResult: short, addressLabels: inv.labels, ...baseArgs(), allowedNewAtaCount: 1 });
+    ok("…one base unit under the minimum into the created account -> refused", rShort.ok === false && /less than the minimum/i.test(rShort.reason), rShort);
+    // Both output candidates null after simulation (nothing was delivered anywhere) -> refused.
+    const nothing = Object.assign({}, created, { accounts: [created.accounts[0], created.accounts[1], null, null] });
+    const rNothing = verifySimulationResult({ simResult: nothing, addressLabels: inv.labels, ...baseArgs(), allowedNewAtaCount: 1 });
+    ok("…neither output candidate exists after simulation (zero delivered) -> refused", rNothing.ok === false && /less than the minimum/i.test(rNothing.reason), rNothing);
+    // An output ATA the wallet ALREADY holds is not duplicated by the candidates list.
+    const legacyWithOut = { context: { slot: 1 }, value: [{ pubkey: OUT_ATA_LEGACY, account: { data: { parsed: { info: { mint: OUT_MINT, tokenAmount: { amount: String(OUT_BEFORE) } } } } } }] };
+    const inv2 = buildInventory({ live: SOL_ADDR, solRes: goodSol, legacyAccts: legacyWithOut, token22Accts: empty22, outputMint: OUT_MINT, outputAtas: [OUT_ATA_LEGACY, OUT_ATA_2022] });
+    ok("an output ATA already in the inventory is not listed twice; only the missing derivation is appended",
+      inv2.ok === true && inv2.addresses.length === 3 && inv2.addresses.filter((a) => a === OUT_ATA_LEGACY).length === 1 && inv2.addresses[2] === OUT_ATA_2022, inv2.addresses);
+    ok("with no outputMint/outputAtas passed, buildInventory is byte-for-byte what it was (every existing caller unchanged)",
+      JSON.stringify(buildInventory({ live: SOL_ADDR, solRes: goodSol, legacyAccts: legacyOnlyOther, token22Accts: empty22 }).addresses) === JSON.stringify([SOL_ADDR, "OTHERacct11111111111111111111111111111111"]));
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(11) Codex round 33 on #420 — finding 2: several accounts for one mint are SUMMED, on both sides\n");
+  {
+    // Two output accounts (an ATA plus an auxiliary account). The swap pays the full minimum into
+    // ONE and leaves the other untouched — a valid swap that the per-account rule used to refuse.
+    const twoOutLabels = [
+      { kind: "sol", before: String(SOL_BEFORE) },
+      { kind: "token", mint: OUT_MINT, before: String(OUT_BEFORE) },
+      { kind: "token", mint: OUT_MINT, before: "7" },
+    ];
+    const oneGets = { err: null, accounts: [solEntry(SOL_BEFORE - IN_AMOUNT - FEE_LAMPORTS), tokenEntry(OUT_MINT, OUT_BEFORE + MIN_RECEIVED), tokenEntry(OUT_MINT, 7n)] };
+    const rOne = verifySimulationResult({ simResult: oneGets, addressLabels: twoOutLabels, ...baseArgs() });
+    ok("two output accounts, the full minimum into one and the other unchanged -> passes", rOne.ok === true, rOne);
+    const half = MIN_RECEIVED / 2n;
+    const split = Object.assign({}, oneGets, { accounts: [oneGets.accounts[0], tokenEntry(OUT_MINT, OUT_BEFORE + half), tokenEntry(OUT_MINT, 7n + (MIN_RECEIVED - half))] });
+    const rSplit = verifySimulationResult({ simResult: split, addressLabels: twoOutLabels, ...baseArgs() });
+    ok("the minimum split across the two accounts (sum == minimum) -> passes", rSplit.ok === true, rSplit);
+    const under = Object.assign({}, oneGets, { accounts: [oneGets.accounts[0], tokenEntry(OUT_MINT, OUT_BEFORE + half), tokenEntry(OUT_MINT, 7n + (MIN_RECEIVED - half) - 1n)] });
+    const rUnder = verifySimulationResult({ simResult: under, addressLabels: twoOutLabels, ...baseArgs() });
+    ok("…the sum one base unit under the minimum -> refused", rUnder.ok === false && /less than the minimum/i.test(rUnder.reason), rUnder);
+    // One output account RISES by the minimum while the other FALLS — the net is what the person
+    // actually receives, and the net is under the minimum.
+    const drained = Object.assign({}, oneGets, { accounts: [oneGets.accounts[0], tokenEntry(OUT_MINT, OUT_BEFORE + MIN_RECEIVED), tokenEntry(OUT_MINT, 0n)] });
+    const rDrained = verifySimulationResult({ simResult: drained, addressLabels: twoOutLabels, ...baseArgs() });
+    ok("one output account gains the minimum while another output account is drained -> refused (net, not per-account)", rDrained.ok === false && /less than the minimum/i.test(rDrained.reason), rDrained);
+
+    // The INPUT side has the same shape in reverse: two input accounts (non-SOL input), each
+    // falling by the full inAmount, used to pass each check on its own — 2x inAmount leaving.
+    const IN_TOKEN = "TokenINxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    const twoInLabels = [
+      { kind: "sol", before: String(SOL_BEFORE) },
+      { kind: "token", mint: IN_TOKEN, before: String(IN_AMOUNT * 2n) },
+      { kind: "token", mint: IN_TOKEN, before: String(IN_AMOUNT * 2n) },
+      { kind: "token", mint: OUT_MINT, before: String(OUT_BEFORE) },
+    ];
+    const inArgs = { ...baseArgs(), inputMint: IN_TOKEN, inputIsSol: false };
+    const doubleIn = { err: null, accounts: [solEntry(SOL_BEFORE - FEE_LAMPORTS), tokenEntry(IN_TOKEN, IN_AMOUNT), tokenEntry(IN_TOKEN, IN_AMOUNT), tokenEntry(OUT_MINT, OUT_BEFORE + MIN_RECEIVED)] };
+    const rDouble = verifySimulationResult({ simResult: doubleIn, addressLabels: twoInLabels, ...inArgs });
+    ok("two input accounts EACH falling by inAmount (2x leaving) -> refused (summed, not per-account)", rDouble.ok === false && /more of the token you're paying with/i.test(rDouble.reason), rDouble);
+    const halfIn = IN_AMOUNT / 2n;
+    const splitIn = Object.assign({}, doubleIn, { accounts: [doubleIn.accounts[0], tokenEntry(IN_TOKEN, IN_AMOUNT * 2n - halfIn), tokenEntry(IN_TOKEN, IN_AMOUNT * 2n - (IN_AMOUNT - halfIn)), doubleIn.accounts[3]] });
+    const rSplitIn = verifySimulationResult({ simResult: splitIn, addressLabels: twoInLabels, ...inArgs });
+    ok("inAmount drawn half from each input account (sum == inAmount) -> passes", rSplitIn.ok === true, rSplitIn);
+  }
+
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

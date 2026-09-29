@@ -122,7 +122,7 @@ function computeMinReceived(outAmount, slippageBps) {
 // route-hop accounts live almost entirely in an address lookup table, which can resolve to ANY
 // address (see docs/SEEKER_SWAP_DESIGN.md and swap-simulate.js's own trust-boundary note). An
 // unreachable RPC — the balance fetch OR the simulate call — is a REFUSAL, never a skip.
-async function runPreSignSimulation({ rpc, live, swapTransactionB64, quote, feeLamports, ataCreateCount, inputIsSol }) {
+async function runPreSignSimulation({ rpc, live, swapTransactionB64, quote, feeLamports, ataCreateCount, inputIsSol, outputAtas }) {
   let solRes, legacyAccts, token22Accts;
   try {
     [solRes, legacyAccts, token22Accts] = await Promise.all([
@@ -138,7 +138,10 @@ async function runPreSignSimulation({ rpc, live, swapTransactionB64, quote, feeL
   // or refuse" rule for all three RPC results, never just the SOL one) lives in the pure module so
   // it is unit-testable: scripts/seeker-swap-simulate-test.cjs. The reason strings are the SAME
   // English text as the app's translated dictionary entries, so `t()` here still finds them.
-  const inv = buildInventory({ live, solRes, legacyAccts, token22Accts });
+  // `outputAtas` — the verifier's own derivation of this wallet's output-mint ATA (both token
+  // programs), so a wallet that does not hold the output token YET still has an account in the
+  // checked set and the minimum-received check has something to compare (Codex round 33, #420).
+  const inv = buildInventory({ live, solRes, legacyAccts, token22Accts, outputMint: quote.outputMint, outputAtas });
   if (!inv.ok) return { ok: false, reason: t(inv.reason) };
 
   let simRes;
@@ -615,7 +618,7 @@ export default function SwapPane({ wallet }) {
     });
     if (!check.ok) { const e = new Error(check.reason); e.code = "verify_refused"; throw e; }
 
-    return { data: q.data, fetchedAt: q.fetchedAt, tx: body, builtAt: Date.now(), builtFor: live, feeLamports: check.feeLamports, ataCreateCount: check.ataCreateCount };
+    return { data: q.data, fetchedAt: q.fetchedAt, tx: body, builtAt: Date.now(), builtFor: live, feeLamports: check.feeLamports, ataCreateCount: check.ataCreateCount, outputAtas: check.outputAtas };
   }
 
   // ── open the confirm sheet with a FRESH quote (re-fetched if stale) AND the ONE /tx build that
@@ -718,7 +721,7 @@ export default function SwapPane({ wallet }) {
     // never reaching signSendConfirm/the wallet prompt.
     const simCheck = await runPreSignSimulation({
       rpc: rpcFn(), live, swapTransactionB64: swapTransaction, quote: shownQuote,
-      feeLamports: cd.feeLamports, ataCreateCount: cd.ataCreateCount,
+      feeLamports: cd.feeLamports, ataCreateCount: cd.ataCreateCount, outputAtas: cd.outputAtas,
       inputIsSol: shownQuote && shownQuote.inputMint === NATIVE_SOL_MINT,
     });
     if (!simCheck.ok) {

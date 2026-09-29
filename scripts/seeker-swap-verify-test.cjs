@@ -110,6 +110,12 @@ function tokenTransferData(amount) {
 
     const check = verifySwapTransaction({ tx: realTx, liveAddress, quote: FIXTURE_QUOTE, PublicKeyClass: web3.PublicKey });
     ok("verifySwapTransaction PASSES the real, untouched fixture against its own quote", check.ok === true, check);
+    // Codex round 33 on #420, finding 1 — the verifier hands the simulation gate this wallet's
+    // own output-mint ATA under both token programs, so a not-yet-created output account is
+    // still in the checked set.
+    ok("…and returns outputAtas: two distinct base58 ATA candidates (legacy + Token-2022) for the output mint",
+      Array.isArray(check.outputAtas) && check.outputAtas.length === 2 && check.outputAtas[0] !== check.outputAtas[1]
+      && check.outputAtas.every((a) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)), check.outputAtas);
     ok("…and reports the route kind it found", check.routeKind === "shared_accounts_route", check);
     ok("…and decodes the compute budget instructions", check.cuLimit === 1400000 && check.cuPriceMicroLamports === 315258n, check);
 
