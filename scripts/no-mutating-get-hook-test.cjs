@@ -483,9 +483,9 @@ expectExit("--url-q '+draw=1' (long-option prefix)", `curl --url-q '+draw=1' ${A
 expectExit("--url-query 'draw=1' — name=content, name kept", `curl --url-query 'draw=1' ${ADMIN_K}`, 2);
 expectExit("--url-query 'x&draw=1' — the name part is sent un-encoded, so the & splits", `curl --url-query 'x&draw=1' ${ADMIN_K}`, 2);
 expectExit(
-  "--url-query '=draw=1' — leading = stripped, content ENCODED (sends draw%3D1, one param named 'draw=1'): not a mutating flag",
+  "--url-query '=draw=1' — leading = stripped, content ENCODED (sends draw%3D1); the hook decides on the query decoded once, and that is draw=1 (round 34 follow-up: was allowed before decoding)",
   `curl --url-query '=draw=1' ${ADMIN_K}`,
-  0
+  2
 );
 expectExit("--url-query 'draw' (bare content, encoded) is not a flag", `curl --url-query 'draw' ${ADMIN_K}`, 0);
 expectExit("--url-query '+foo=bar' — as-is but nothing mutating: allowed", `curl --url-query '+foo=bar' ${ADMIN_K}`, 0);
@@ -509,7 +509,7 @@ expectExit(
   0
 );
 expectExit("-G --data-urlencode 'draw=1' — still blocked", `curl -G --data-urlencode 'draw=1' ${ADMIN_K}`, 2);
-expectExit("-G --data-urlencode '=draw=1' — content encoded (draw%3D1): allowed", `curl -G --data-urlencode '=draw=1' ${ADMIN_K}`, 0);
+expectExit("-G --data-urlencode '=draw=1' — content encoded (draw%3D1) decodes once to draw=1: blocked (was allowed before decoding)", `curl -G --data-urlencode '=draw=1' ${ADMIN_K}`, 2);
 expectExit("-G --data-urlencode '@q.txt' fails closed", `curl -G --data-urlencode '@q.txt' ${ADMIN_K}`, 2);
 expectExit("-G --data-urlencode 'name@q.txt' fails closed", `curl -G --data-urlencode 'name@q.txt' ${ADMIN_K}`, 2);
 expectExit("-G --data-urlencode 'email=a@b.com' is name=content, not a file: allowed", `curl -G --data-urlencode 'email=a@b.com' ${ADMIN_K}`, 0);
@@ -520,6 +520,33 @@ expectExit(
   `curl -G --data-urlencode 'a=b' --url-query '+draw=1' ${ADMIN_K}`,
   2
 );
+
+// --- Round 34 follow-up: the hook decides on the query AFTER ONE pass of percent-decoding ---------
+// The server reads `%64raw=1` as `draw=1`. Decode exactly once: a malformed sequence (`%G1`, a
+// trailing `%`) stays literal, and `%2564raw=1` decodes to `%64raw=1` (curl sends it as-is, the
+// server sees the same) — NOT to `draw=1`.
+const ADMIN_BASE = "https://clucknorris.app/api/cuna-giveaway/admin";
+expectExit("?%64raw=1 (encoded name) in the URL itself", `curl "${ADMIN_BASE}?key=k&%64raw=1"`, 2);
+expectExit("?%64raw=1 as the first parameter", `curl "${ADMIN_BASE}?%64raw=1"`, 2);
+expectExit("?draw%3D1 (encoded =) in the URL itself", `curl "${ADMIN_BASE}?key=k&draw%3D1"`, 2);
+expectExit("?d%72aw=1 (encoded middle letter)", `curl "${ADMIN_BASE}?key=k&d%72aw=1"`, 2);
+expectExit("?ru%6E=1 on the vault route (another flag, encoded)", 'curl "https://clucknorris.app/api/whirlpool/vault/pause?project=poke&ru%6E=1"', 2);
+expectExit("--url-query '+d%72aw=1' — the raw + form is decoded too", `curl --url-query '+d%72aw=1' ${ADMIN_K}`, 2);
+expectExit("--url-query '+draw%3D1' — the raw + form, encoded =", `curl --url-query '+draw%3D1' ${ADMIN_K}`, 2);
+expectExit("--url-query 'd%72aw=1' — a name is sent as-is, so the server decodes it", `curl --url-query 'd%72aw=1' ${ADMIN_K}`, 2);
+expectExit("-G -d 'd%72aw=1' — raw -G data is decoded too", `curl -G -d 'd%72aw=1' ${ADMIN_K}`, 2);
+expectExit("?%64raw=1 with -X POST is a POST: allowed", `curl -X POST "${ADMIN_BASE}?%64raw=1"`, 0);
+expectExit(
+  "--url-query 'draw%3D1' — bare content is ENCODED (draw%253D1), decodes once to draw%3D1: not draw=1, allowed",
+  `curl --url-query 'draw%3D1' ${ADMIN_K}`,
+  0
+);
+expectExit("--url-query 'x=%64raw%3D1' — value is encoded then decoded once: %64raw%3D1, not draw=1, allowed", `curl --url-query 'x=%64raw%3D1' ${ADMIN_K}`, 0);
+expectExit("?%2564raw=1 — double-encoded is %64raw=1 after ONE decode, not draw=1: allowed", `curl "${ADMIN_BASE}?key=k&%2564raw=1"`, 0);
+expectExit("?draw=1% — a trailing % stays literal and does not break matching: still blocked", `curl "${ADMIN_BASE}?key=k&draw=1%"`, 2);
+expectExit("?%G1raw=1 — malformed sequence stays literal, no mutating flag: allowed", `curl "${ADMIN_BASE}?key=k&%G1raw=1"`, 0);
+expectExit("?%6raw=1 — truncated sequence stays literal: allowed", `curl "${ADMIN_BASE}?key=k&%6raw=1"`, 0);
+expectExit("?x=%26draw=1 — an encoded & is data, not a separator: allowed", `curl "${ADMIN_BASE}?key=k&x=%26draw=1"`, 0);
 
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");

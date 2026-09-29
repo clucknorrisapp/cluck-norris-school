@@ -479,6 +479,24 @@ function extractAdminUrlQuery(text) {
   return qIdx === -1 ? "" : m[0].slice(qIdx + 1);
 }
 
+// ONE pass of percent-decoding, the way a server reads a query: every well-formed `%XX` becomes its
+// character once; a malformed sequence (`%G1`, a trailing `%`) stays literal; the output is never
+// decoded again (`%2564raw=1` → `%64raw=1`, which is not `draw=1` — curl sends it as-is, so the
+// server sees the same). The round-trip with `curlEncode` is exact: encode-then-decode returns the
+// original text, so a bare `--url-query 'draw%3D1'` (encoded to `draw%253D1`) decodes to `draw%3D1`.
+function decodeOnce(s) {
+  return s.replace(/%([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+}
+
+// Split the query into parameters on the LITERAL `&` FIRST, then decode each parameter once and ask
+// whether it STARTS with a mutating flag — so an encoded separator stays data (`x=%26draw=1` is one
+// parameter, `x`, whose value is `&draw=1`), while an encoded name or `=` (`%64raw=1`, `draw%3D1`)
+// is read the way the server reads it. Same flag list and case-sensitivity as MUTATING_FLAG_RE.
+const MUTATING_PARAM_START_RE = new RegExp("^" + MUTATING_FLAG_RE.source.slice("[?&]".length));
+function decodedQueryMutating(query) {
+  return query.split("&").some((p) => MUTATING_PARAM_START_RE.test(decodeOnce(p)));
+}
+
 // curl's URL-encoding for the content part of `--data-urlencode` / `--url-query` (unreserved
 // characters kept, everything else %XX).
 function curlEncode(s) {
@@ -589,7 +607,11 @@ function main() {
         if (!ADMIN_PATH_RE.test(partText)) continue;
         const dataValues = eff.dataValues;
         const method = eff.method;
-        let mutating = MUTATING_FLAG_RE.test(partText);
+        // Round 34 follow-up: the server sees the query AFTER percent-decoding, so `?%64raw=1` and
+        // `?draw%3D1` are `draw=1` to it. Decide on the raw text AND on the query decoded once.
+        const urlQuery = extractAdminUrlQuery(partText);
+        let mutating =
+          MUTATING_FLAG_RE.test(partText) || decodedQueryMutating(urlQuery);
         let opaqueRef = null;
         // Codex round 32 "second lens" P3: rebuild and test the query whenever `-G`/`--get` OR
         // `--url-query` is present, regardless of the FINAL resolved method — `-G` moves data
@@ -606,9 +628,8 @@ function main() {
             mutating = true;
             opaqueRef = q.opaque;
           } else {
-            const urlQuery = extractAdminUrlQuery(partText);
-            const combined = "?" + [urlQuery, ...q.parts].filter(Boolean).join("&");
-            mutating = MUTATING_FLAG_RE.test(combined);
+            const combined = [urlQuery, ...q.parts].filter(Boolean).join("&");
+            mutating = MUTATING_FLAG_RE.test("?" + combined) || decodedQueryMutating(combined);
           }
         }
         if (!mutating) continue;
