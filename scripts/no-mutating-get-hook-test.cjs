@@ -548,6 +548,121 @@ expectExit("?%G1raw=1 — malformed sequence stays literal, no mutating flag: al
 expectExit("?%6raw=1 — truncated sequence stays literal: allowed", `curl "${ADMIN_BASE}?key=k&%6raw=1"`, 0);
 expectExit("?x=%26draw=1 — an encoded & is data, not a separator: allowed", `curl "${ADMIN_BASE}?key=k&x=%26draw=1"`, 0);
 
+// --- Codex round 35 P2: EVERY destination URL of every request segment is judged ------------------
+// curl sends one request per URL (positional words and each `--url`, after `{a,b}` / `[1-3]` glob
+// expansion); within a segment they all share the -X / -d / -G / --url-query state, and --url-query
+// / -G data is appended to EACH URL. A `--next` starts a new segment.
+const R35_PUB = "https://clucknorris.app/api/cuna-giveaway"; // public read route, not an admin route
+const R35_ADM = "https://clucknorris.app/api/cuna-giveaway/admin";
+const R35_HARMLESS = "https://example.com/x";
+expectExit(
+  "Codex's exact two-URL string: harmless first, admin (encoded flag) second",
+  `curl '${R35_PUB}' '${R35_ADM}?%64raw=1'`,
+  2
+);
+expectExit("admin FIRST, harmless second", `curl '${R35_ADM}?draw=1' '${R35_HARMLESS}'`, 2);
+expectExit("admin FIRST (encoded flag), a second admin-route URL after it", `curl '${R35_ADM}?%64raw=1' '${R35_PUB}'`, 2);
+expectExit(
+  "three URLs, the admin one in the MIDDLE",
+  `curl '${R35_PUB}' '${R35_ADM}?%64raw=1' '${R35_HARMLESS}'`,
+  2
+);
+expectExit("--url harmless --url admin?draw=1 (long form, separate words)", `curl --url '${R35_HARMLESS}' --url '${R35_ADM}?draw=1'`, 2);
+expectExit("--url harmless --url admin (encoded flag)", `curl --url '${R35_PUB}' --url '${R35_ADM}?%64raw=1'`, 2);
+expectExit("--url=admin?draw=1 (inline spelling)", `curl --url='${R35_ADM}?draw=1'`, 2);
+expectExit("--url=admin (encoded flag) after a positional harmless URL", `curl '${R35_PUB}' --url='${R35_ADM}?%64raw=1'`, 2);
+expectExit("positional harmless + --url admin", `curl '${R35_HARMLESS}' --url '${R35_ADM}?%64raw=1'`, 2);
+expectExit("two URLs where -X POST covers the whole segment: allowed", `curl -X POST '${R35_PUB}' '${R35_ADM}?%64raw=1'`, 0);
+expectExit("two --url values with -X POST: allowed", `curl -X POST --url '${R35_PUB}' --url '${R35_ADM}?draw=1'`, 0);
+expectExit("two URLs, --data (implies POST): allowed", `curl --data 'a=b' '${R35_PUB}' '${R35_ADM}?draw=1'`, 0);
+expectExit(
+  "two URLs per segment: harmless pair, --next, then a pair whose SECOND is the admin GET",
+  `curl '${R35_HARMLESS}' '${R35_PUB}' --next '${R35_PUB}' '${R35_ADM}?%64raw=1'`,
+  2
+);
+expectExit(
+  "first segment has the admin GET (harmless first), the later segment is a safe POST: blocked",
+  `curl '${R35_PUB}' '${R35_ADM}?%64raw=1' --next -X POST '${R35_HARMLESS}'`,
+  2
+);
+expectExit(
+  "first segment is a POST, the admin GET is a second URL in the --next segment: blocked",
+  `curl -X POST '${R35_HARMLESS}' --next '${R35_PUB}' '${R35_ADM}?%64raw=1'`,
+  2
+);
+expectExit(
+  "--url-query '+draw=1' with two URLs where only the SECOND is an admin route: appended to each, blocked",
+  `curl --url-query '+draw=1' '${R35_HARMLESS}' '${R35_ADM}'`,
+  2
+);
+expectExit(
+  "-G --data-urlencode 'draw=1' with the admin URL second: blocked",
+  `curl -G --data-urlencode 'draw=1' '${R35_HARMLESS}' '${R35_ADM}'`,
+  2
+);
+expectExit("two URLs, nothing mutating anywhere: allowed", `curl '${R35_PUB}' '${R35_ADM}?key=k'`, 0);
+expectExit("two non-admin URLs, one carrying ?draw=1: not our admin route, allowed", `curl '${R35_HARMLESS}?draw=1' '${R35_PUB}'`, 0);
+// `-K`/`--config`: the hook has never read config files (the value is consumed opaquely, so a URL
+// inside one is invisible) — that behaviour is kept, only the URLs on the command line are judged.
+expectExit("-K cfg.txt with an admin URL on the command line that is not mutating: allowed", `curl -K cfg.txt '${R35_ADM}?key=k'`, 0);
+expectExit("-K cfg.txt does not hide a mutating admin URL that IS on the command line", `curl -K cfg.txt '${R35_PUB}' '${R35_ADM}?%64raw=1'`, 2);
+expectExit("--config=cfg.txt inline spelling, mutating admin URL on the line", `curl --config=cfg.txt '${R35_ADM}?draw=1'`, 2);
+
+// URL globbing (curl expands `{a,b}` and `[1-3]` unless -g/--globoff).
+expectExit(
+  "brace expansion builds the admin route: '{admin,stats}?draw=1'",
+  `curl '${R35_PUB}/{admin,stats}?draw=1'`,
+  2
+);
+expectExit("brace expansion, the admin alternative LAST", `curl '${R35_PUB}/{stats,admin}?draw=1'`, 2);
+expectExit("brace expansion with -X POST: allowed", `curl -X POST '${R35_PUB}/{admin,stats}?draw=1'`, 0);
+expectExit(
+  "brace expansion in the HOST part",
+  "curl 'https://{clucknorris.app,example.com}/api/cuna-giveaway/admin?draw=1'",
+  2
+);
+expectExit("brace expansion in the query builds the flag: ?{draw,x}=1", `curl '${R35_ADM}?{draw,x}=1'`, 2);
+expectExit("brace expansion in the query, nothing mutating in any alternative: allowed", `curl '${R35_ADM}?{foo,bar}=1'`, 0);
+expectExit(
+  "-g (globoff): the URL is LITERAL, its path '/{admin,stats}' is not an admin route — allowed",
+  `curl -g '${R35_PUB}/{admin,stats}?draw=1'`,
+  0
+);
+expectExit("--globoff, same literal URL — allowed for the same reason", `curl --globoff '${R35_PUB}/{admin,stats}?draw=1'`, 0);
+expectExit("-sg cluster (globoff inside a cluster), same literal URL — allowed", `curl -sg '${R35_PUB}/{admin,stats}?draw=1'`, 0);
+expectExit(
+  "-g does NOT hide a literal admin URL: '/admin?draw=1' is still blocked",
+  `curl -g '${R35_ADM}?draw=1&x={1}'`,
+  2
+);
+expectExit(
+  "[range] in an admin-looking URL cannot be expanded: fails CLOSED",
+  `curl '${R35_PUB}/[a-a]dmin?draw=1'`,
+  2
+);
+expectExit("[range] with -g is a literal (not an admin route): allowed", `curl -g '${R35_PUB}/[a-a]dmin?draw=1'`, 0);
+expectExit("[range] with -X POST: allowed", `curl -X POST '${R35_PUB}/[a-a]dmin?draw=1'`, 0);
+expectExit("nested braces cannot be expanded faithfully: fails CLOSED", `curl '${R35_PUB}/{admin,{a,b}}?x=1'`, 2);
+expectExit("a range on a URL that is not ours is left alone", "curl 'https://example.com/[1-3].json'", 0);
+
+// UNQUOTED braces are expanded by the SHELL into separate words before curl runs (and -g cannot
+// undo that). The old segmenter also treated every `{` / `}` as a command boundary, which split the
+// URL apart and hid it from the check entirely.
+expectExit("unquoted {admin,stats}?draw=1 — the shell expands it to two URLs", `curl ${R35_PUB}/{admin,stats}?draw=1`, 2);
+expectExit("unquoted brace in the query: ?{draw,x}=1", `curl ${R35_ADM}?{draw,x}=1`, 2);
+expectExit("unquoted brace splitting a flag name: ?dr{a,b}w=1", `curl ${R35_ADM}?dr{a,b}w=1`, 2);
+expectExit("unquoted brace splitting the route: adm{i,x}n", `curl ${R35_PUB}/adm{i,x}n?draw=1`, 2);
+expectExit("unquoted nested braces {stats,{x,admin}}", `curl ${R35_PUB}/{stats,{x,admin}}?draw=1`, 2);
+expectExit("unquoted braces AND -g: -g is curl's, the shell expanded first — still blocked", `curl -g ${R35_PUB}/{admin,stats}?draw=1`, 2);
+expectExit("unquoted braces with -X POST: allowed", `curl -X POST ${R35_PUB}/{admin,stats}?draw=1`, 0);
+expectExit("unquoted brace list with no admin alternative: allowed", `curl ${R35_ADM}?key={a,b}`, 0);
+expectExit("a {…} without a comma is literal in bash — no expansion", `curl ${R35_ADM}?key={a}`, 0);
+expectExit("escaped brace is literal to the shell; -g then keeps it literal too", `curl -g ${R35_PUB}/\\{admin,stats\\}?draw=1`, 0);
+expectExit("${VAR} unquoted (draw=1 first) is not a brace list and not a boundary", `curl ${R35_ADM}?draw=1\${K}`, 2);
+expectExit("${VAR} inside double quotes with a later flag", `curl "${R35_ADM}?key=\${K}&draw=1"`, 2);
+expectExit("{ curl …; } group braces are still boundaries: the curl inside is judged", `{ curl '${R35_ADM}?draw=1'; }`, 2);
+expectExit("{ curl -X POST …; } group with a safe POST: allowed", `{ curl -X POST '${R35_ADM}?draw=1'; }`, 0);
+
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");
 const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md", "store-release.md"];

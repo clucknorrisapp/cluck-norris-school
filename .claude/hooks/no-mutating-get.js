@@ -123,7 +123,20 @@ function segmentCommand(command) {
     }
 
     // Fully unquoted from here on — the remaining boundary characters apply.
-    if (ch === "\n" || ch === ";" || ch === "(" || ch === ")" || ch === "{" || ch === "}") {
+    if (ch === "\n" || ch === ";" || ch === "(" || ch === ")") {
+      pushSegment();
+      i += 1;
+      continue;
+    }
+    // `{ cmd; }` group braces are boundaries only as STANDALONE words. A brace glued into a word
+    // (`…/{admin,stats}?draw=1`, `${VAR}`) is shell brace expansion / a parameter, not a group —
+    // splitting there hid the whole URL from the check (Codex round 35 follow-up).
+    if (ch === "{" && (i + 1 >= n || /\s/.test(command[i + 1]))) {
+      pushSegment();
+      i += 1;
+      continue;
+    }
+    if (ch === "}" && (i === 0 || /[\s;&|(]/.test(command[i - 1]))) {
       pushSegment();
       i += 1;
       continue;
@@ -165,15 +178,26 @@ function tokenizeWords(text) {
   const words = [];
   let current = "";
   let started = false;
+  let braceCandidate = false; // saw an UNQUOTED, unescaped `{` (not `${`) in this word
   let inSingle = false;
   let inDouble = false;
   const n = text.length;
   let i = 0;
 
   function pushWord() {
-    if (started) words.push(current);
+    if (started) {
+      // The SHELL expands an unquoted `{a,b}` into separate words before curl ever runs — and
+      // curl's -g cannot undo that — so `curl -g …/{admin,stats}?draw=1` (unquoted) is two URLs.
+      const ex = braceCandidate ? shellBraceExpand(current) : null;
+      if (ex === null) words.push(current);
+      else if (ex === false) {
+        words.push(current);
+        words.braceOverflow = true;
+      } else words.push(...ex);
+    }
     current = "";
     started = false;
+    braceCandidate = false;
   }
 
   while (i < n) {
@@ -233,12 +257,57 @@ function tokenizeWords(text) {
       continue;
     }
 
+    if (ch === "{" && text[i - 1] !== "$") braceCandidate = true;
     current += ch;
     started = true;
     i += 1;
   }
   pushWord();
   return words;
+}
+
+// Bash brace expansion of ONE word: `pre{a,b}post` → `preapost prebpost`, nested lists and several
+// lists (cartesian) included. A `{…}` without a top-level comma stays literal, exactly as in bash.
+// Returns null (nothing to expand), an array of words, or false when the expansion is over the cap.
+function shellBraceExpand(word) {
+  const out = [];
+  let over = false;
+  let changed = false;
+  const rec = (str) => {
+    if (over) return;
+    if (out.length > GLOB_EXPANSION_CAP) {
+      over = true;
+      return;
+    }
+    // find the first `{` whose matching `}` encloses a top-level comma
+    for (let o = 0; o < str.length; o++) {
+      if (str[o] !== "{" || str[o - 1] === "$") continue;
+      let depth = 0;
+      let c = -1;
+      const commas = [];
+      for (let k = o; k < str.length; k++) {
+        if (str[k] === "{") depth++;
+        else if (str[k] === "}") {
+          depth--;
+          if (depth === 0) {
+            c = k;
+            break;
+          }
+        } else if (str[k] === "," && depth === 1) commas.push(k);
+      }
+      if (c === -1 || commas.length === 0) continue;
+      changed = true;
+      const bounds = [o, ...commas, c];
+      for (let b = 0; b < bounds.length - 1; b++) {
+        rec(str.slice(0, o) + str.slice(bounds[b] + 1, bounds[b + 1]) + str.slice(c + 1));
+      }
+      return;
+    }
+    out.push(str);
+  };
+  rec(word);
+  if (over) return false;
+  return changed ? out : null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -310,12 +379,12 @@ const LONG_VALUE_FLAGS = new Set([
   "--socks4a", "--socks5", "--socks5-gssapi-service", "--socks5-hostname", "--speed-limit",
   "--speed-time", "--ssl-sessions", "--stderr", "--tftp-blksize", "--time-cond",
   "--tls-max", "--tls13-ciphers", "--tlsauthtype", "--tlspassword", "--tlsuser", "--trace",
-  "--trace-ascii", "--unix-socket", "--upload-flags", "--url", "--user", "--user-agent",
+  "--trace-ascii", "--unix-socket", "--upload-flags", "--user", "--user-agent",
   "--variable", "--vlan-priority", "--write-out",
 ]);
 // Long options this parser gives its own meaning to (plus `--next`) — with the two sets above,
 // the vocabulary a prefix like `--data-r` is resolved against.
-const LONG_SPECIAL = ["--request", "--get", "--head", "--next", "--upload-file", "--url-query"];
+const LONG_SPECIAL = ["--request", "--get", "--head", "--next", "--upload-file", "--url-query", "--url", "--globoff"];
 const ALL_LONG = new Set([...LONG_SPECIAL, ...DATA_LONG_FLAGS, ...LONG_VALUE_FLAGS]);
 
 // curl accepts an unambiguous prefix of a long option. Exact names win; a prefix that matches more
@@ -335,7 +404,7 @@ function resolveLong(name) {
 function newRequest() {
   return {
     words: [], explicit: null, forceGet: false, hasUrlQueryData: false, head: false,
-    upload: false, hasData: false, dataValues: [], method: "GET",
+    upload: false, hasData: false, dataValues: [], urls: [], method: "GET",
   };
 }
 
@@ -362,6 +431,7 @@ function parseRequests(words) {
   const requests = [];
   let cur = newRequest();
   let noMoreFlags = false;
+  let sawGlobOff = false; // `-g`/`--globoff` is a GLOBAL curl option: it turns off globbing everywhere
   let idx = 0;
 
   // Consume the next word as an option's value (kept with the request it belongs to).
@@ -379,12 +449,20 @@ function parseRequests(words) {
   for (; idx < words.length; idx++) {
     const w = words[idx];
     cur.words.push(w);
-    if (noMoreFlags) continue;
+    // Round 35: curl sends one request PER URL — every positional word (and every `--url` value)
+    // is a destination of the request segment it sits in, so all of them are collected.
+    if (noMoreFlags) {
+      cur.urls.push(w);
+      continue;
+    }
     if (w === "--") {
       noMoreFlags = true;
       continue;
     }
-    if (w.length < 2 || w[0] !== "-") continue; // a URL or other positional value
+    if (w.length < 2 || w[0] !== "-") {
+      cur.urls.push(w); // a URL (or other positional value)
+      continue;
+    }
 
     if (w[1] === "-") {
       // Long option, `--opt value` or `--opt=value`.
@@ -419,6 +497,11 @@ function parseRequests(words) {
         if (v !== undefined) {
           cur.dataValues.push({ kind: name === "--data-urlencode" ? "urlencode" : "raw", v });
         }
+      } else if (name === "--url") {
+        const v = value();
+        if (v !== undefined) cur.urls.push(v);
+      } else if (name === "--globoff") {
+        sawGlobOff = true;
       } else if (LONG_VALUE_FLAGS.has(name)) {
         value(); // opaque — consumed so it is never re-scanned as a flag
       }
@@ -458,10 +541,12 @@ function parseRequests(words) {
         if (remainder.length === 0) take();
         break;
       }
+      if (c === "g") sawGlobOff = true;
       // else: a boolean short flag (s, S, v, #, …) — keep scanning the cluster.
     }
   }
   endRequest();
+  for (const r of requests) r.globoff = sawGlobOff;
   return requests;
 }
 
@@ -477,6 +562,50 @@ function extractAdminUrlQuery(text) {
   if (!m) return "";
   const qIdx = m[0].indexOf("?");
   return qIdx === -1 ? "" : m[0].slice(qIdx + 1);
+}
+
+// Round 35: curl GLOBS every URL unless `-g`/`--globoff` — `{a,b}` lists and `[1-3]` / `[a-c]`
+// ranges expand into several requests, each sharing the segment's method and data. Brace lists are
+// expanded here (a cartesian product, capped); a `[` range, a nested brace, or an over-cap
+// expansion on something that could be ours cannot be judged, so it FAILS CLOSED (`failClosed`).
+// A `{` with no closing brace is left literal (curl rejects it, nothing is sent).
+const GLOB_EXPANSION_CAP = 1000;
+function expandUrls(urls, globoff) {
+  if (globoff) return { urls: urls.slice(), failClosed: false };
+  const out = [];
+  let failClosed = false;
+  for (const u of urls) {
+    if (!/[{[]/.test(u)) {
+      out.push(u);
+      continue;
+    }
+    const expanded = [];
+    let capped = false;
+    let nested = false;
+    const rec = (str) => {
+      if (expanded.length > GLOB_EXPANSION_CAP) {
+        capped = true;
+        return;
+      }
+      const o = str.indexOf("{");
+      const c = o === -1 ? -1 : str.indexOf("}", o + 1);
+      if (o === -1 || c === -1) {
+        expanded.push(str);
+        return;
+      }
+      const inner = str.slice(o + 1, c);
+      if (inner.includes("{")) nested = true;
+      for (const alt of inner.split(",")) rec(str.slice(0, o) + alt + str.slice(c + 1));
+    };
+    rec(u);
+    const couldBeOurs = (x) => /cluck|\/api\//i.test(x);
+    if ((capped || nested) && couldBeOurs(u)) failClosed = true;
+    for (const x of expanded) {
+      if (x.includes("[") && couldBeOurs(x)) failClosed = true;
+      out.push(x);
+    }
+  }
+  return { urls: out, failClosed };
 }
 
 // ONE pass of percent-decoding, the way a server reads a query: every well-formed `%XX` becomes its
@@ -545,17 +674,11 @@ function effectiveQuery(dataValues) {
   return { parts, opaque };
 }
 
-function printBlocked(segment, method, command, opaque) {
+function printBlocked(segment, method, command, why) {
   process.stderr.write(
     [
       "BLOCKED: this curl targets a clucknorris.app admin route with a mutating flag but is not a POST.",
-      ...(opaque !== undefined && opaque !== null
-        ? [
-            `Why: a query value (${JSON.stringify(opaque)}) is read from a FILE (@file / name@file) that this hook`,
-            "cannot see, so it may carry a mutating flag (draw=1, run=1, …). Failing closed — inline the",
-            "value, or send the request as -X POST.",
-          ]
-        : []),
+      ...(why ? why : []),
       "AGENTS.md: 'Admin routes that ACT are POST-only' — a GET on these routes either 405s or,",
       "worse, silently runs the dry-run/read path while looking like the real action (or vice versa",
       "— the 2026-09-17 rose-buybot incident: a 'harmless' GET actually ran a full poll).",
@@ -597,44 +720,74 @@ function main() {
     const segments = segmentCommand(command);
     for (const seg of segments) {
       if (!/\bcurl\b/.test(seg)) continue;
-      if (!ADMIN_PATH_RE.test(seg)) continue;
+      // A glob (`{a,b}` / `[1-3]`) can BUILD an admin path out of text that does not contain it.
+      if (!ADMIN_PATH_RE.test(seg) && !/[{[]/.test(seg)) continue;
       const words = tokenizeWords(seg);
       // `--next` starts a brand-new request within the SAME curl invocation, with its own reset
       // method — judge each one independently rather than computing one method for the whole seg.
       const requests = parseRequests(words);
       for (const eff of requests) {
         const partText = eff.words.join(" ");
-        if (!ADMIN_PATH_RE.test(partText)) continue;
         const dataValues = eff.dataValues;
         const method = eff.method;
+        // Codex round 35 P2: curl sends one request PER destination URL (positional words and every
+        // `--url`, after glob expansion), all sharing this segment's method / -G / --url-query
+        // state — so EVERY URL is judged, not just the first admin-looking one.
+        const glob = expandUrls(eff.urls, eff.globoff);
+        let adminUrls = glob.urls.filter((u) => ADMIN_PATH_RE.test(u));
+        // A URL hidden somewhere that is not a URL slot (a header value, …) is still judged the way
+        // it always was: on the request's own text.
+        if (adminUrls.length === 0 && ADMIN_PATH_RE.test(partText)) adminUrls = [partText];
+        if (words.braceOverflow && /cluck/i.test(partText)) glob.failClosed = true;
+        if (adminUrls.length === 0 && !glob.failClosed) continue;
+
+        let mutating = false;
+        let why = null;
+        if (glob.failClosed) {
+          mutating = true;
+          why = [
+            "Why: a URL in this request uses curl globbing that cannot be expanded here ([range], a",
+            "nested {a,{b,c}}, or a huge {list}) and could reach an admin route. Failing closed — add -g",
+            "(--globoff) with a literal URL, or send the request as -X POST.",
+          ];
+        }
         // Round 34 follow-up: the server sees the query AFTER percent-decoding, so `?%64raw=1` and
         // `?draw%3D1` are `draw=1` to it. Decide on the raw text AND on the query decoded once.
-        const urlQuery = extractAdminUrlQuery(partText);
-        let mutating =
-          MUTATING_FLAG_RE.test(partText) || decodedQueryMutating(urlQuery);
-        let opaqueRef = null;
+        const rawHit = MUTATING_FLAG_RE.test(partText);
         // Codex round 32 "second lens" P3: rebuild and test the query whenever `-G`/`--get` OR
         // `--url-query` is present, regardless of the FINAL resolved method — `-G` moves data
         // onto the URL even when an explicit `-X HEAD`/`-I` is also present, and `--url-query`
-        // always modifies the URL regardless of method.
+        // always modifies the URL regardless of method — and it is appended to EACH URL.
+        let q = null;
         if (!mutating && (eff.forceGet || eff.hasUrlQueryData)) {
           // Fail-closed: a value curl reads from a file (`@file`, or `name@file`) has unknown
           // contents at review time — never assume it's safe just because ITS TEXT doesn't
           // contain a mutating flag.
           // Codex round 34 P2: the query is judged AFTER curl's own value-form transforms
           // (`effectiveQuery`) — `--url-query '+draw=1'` is sent as `draw=1`.
-          const q = effectiveQuery(dataValues);
+          q = effectiveQuery(dataValues);
           if (q.opaque !== null) {
             mutating = true;
-            opaqueRef = q.opaque;
-          } else {
+            why = [
+              `Why: a query value (${JSON.stringify(q.opaque)}) is read from a FILE (@file / name@file) that this hook`,
+              "cannot see, so it may carry a mutating flag (draw=1, run=1, …). Failing closed — inline the",
+              "value, or send the request as -X POST.",
+            ];
+          }
+        }
+        for (const u of adminUrls) {
+          if (mutating) break;
+          const urlQuery = extractAdminUrlQuery(u);
+          if (rawHit || MUTATING_FLAG_RE.test(u) || decodedQueryMutating(urlQuery)) {
+            mutating = true;
+          } else if (q !== null) {
             const combined = [urlQuery, ...q.parts].filter(Boolean).join("&");
             mutating = MUTATING_FLAG_RE.test("?" + combined) || decodedQueryMutating(combined);
           }
         }
         if (!mutating) continue;
         if (method !== "POST") {
-          printBlocked(partText.trim(), method, command, opaqueRef);
+          printBlocked(partText.trim(), method, command, why);
           process.exit(2);
           return;
         }
