@@ -459,6 +459,68 @@ expectExit("--data '-:' is a body, not a boundary (and still implies POST)", `cu
 expectExit("-H 'x: --next' (separator inside a longer value) is not a boundary", `curl -X POST -H 'x: --next' ${ADMIN}`, 0);
 expectExit("a REAL --next after a value that merely contains one still resets the method", `curl -X POST -H '--next' ${SAFE} --next ${ADMIN}`, 2);
 
+// --- Codex round 34 P2: `--url-query` / `--data-urlencode` VALUE FORMS -------------------------------
+// The hook judges the query curl would actually SEND, after curl's own value-form transforms. Every
+// expectation below was checked against a real curl on a loopback server (`GET /a?key=k&…`):
+//   --url-query '+draw=1'          -> ?key=k&draw=1         (the `+` is stripped, value appended AS-IS)
+//   --url-query '=draw=1'          -> ?key=k&draw%3d1       (`=` stripped, content ENCODED, no name)
+//   --url-query 'draw=1'           -> ?key=k&draw=1         (name kept, content encoded)
+//   --url-query 'x&draw=1'         -> ?key=k&x&draw=1       (the name part is NOT encoded)
+//   --url-query 'email=a@b.com'    -> ?key=k&email=a%40b.com (`=` is looked for first: not a file)
+//   -G --data-urlencode '+draw=1'  -> ?key=k&+draw=1        (NO `+` form here: name `+draw`; `+` is a
+//                                                            space server-side, never `draw`)
+const ADMIN_NOQ = "https://clucknorris.app/api/cuna-giveaway/admin";
+const ADMIN_K = '"https://clucknorris.app/api/cuna-giveaway/admin?key=k"';
+expectExit(
+  "Codex's exact string: --url-query '+draw=1' (curl strips the +, sends ?draw=1)",
+  `curl --url-query '+draw=1' ${ADMIN_NOQ}`,
+  2
+);
+expectExit("--url-query '+draw=1' on an admin URL that already has a query", `curl --url-query '+draw=1' ${ADMIN_K}`, 2);
+expectExit("--url-query '+draw=1&x=y' — as-is, the & is a real separator", `curl --url-query '+draw=1&x=y' ${ADMIN_K}`, 2);
+expectExit("--url-query=+draw=1 inline spelling", `curl --url-query=+draw=1 ${ADMIN_K}`, 2);
+expectExit("--url-q '+draw=1' (long-option prefix)", `curl --url-q '+draw=1' ${ADMIN_K}`, 2);
+expectExit("--url-query 'draw=1' — name=content, name kept", `curl --url-query 'draw=1' ${ADMIN_K}`, 2);
+expectExit("--url-query 'x&draw=1' — the name part is sent un-encoded, so the & splits", `curl --url-query 'x&draw=1' ${ADMIN_K}`, 2);
+expectExit(
+  "--url-query '=draw=1' — leading = stripped, content ENCODED (sends draw%3D1, one param named 'draw=1'): not a mutating flag",
+  `curl --url-query '=draw=1' ${ADMIN_K}`,
+  0
+);
+expectExit("--url-query 'draw' (bare content, encoded) is not a flag", `curl --url-query 'draw' ${ADMIN_K}`, 0);
+expectExit("--url-query '+foo=bar' — as-is but nothing mutating: allowed", `curl --url-query '+foo=bar' ${ADMIN_K}`, 0);
+expectExit("--url-query 'foo=bar' — nothing mutating: allowed", `curl --url-query 'foo=bar' ${ADMIN_K}`, 0);
+expectExit(
+  "--url-query '+@q.txt' — the + form is literal text, NOT a file read: allowed",
+  `curl --url-query '+@q.txt' ${ADMIN_K}`,
+  0
+);
+expectExit("--url-query 'email=a@b.com' — '=' wins over '@', not a file: allowed", `curl --url-query 'email=a@b.com' ${ADMIN_K}`, 0);
+expectExit("--url-query '@q.txt' — query read from a file the hook cannot see: FAILS CLOSED", `curl --url-query '@q.txt' ${ADMIN_K}`, 2);
+expectExit("--url-query 'name@q.txt' — name@file form also fails closed", `curl --url-query 'name@q.txt' ${ADMIN_K}`, 2);
+expectExit("--url-query=@q.txt inline spelling fails closed", `curl --url-query=@q.txt ${ADMIN_K}`, 2);
+expectExit("--url-query '+draw=1' with -X POST is a real POST: allowed", `curl -X POST --url-query '+draw=1' ${ADMIN_K}`, 0);
+expectExit("--url-query '@q.txt' with -X POST: allowed (the POST covers it)", `curl -X POST --url-query '@q.txt' ${ADMIN_K}`, 0);
+expectExit("--url-query '+draw=1' on a --next request after a safe POST", `curl -X POST ${SAFE} --next --url-query '+draw=1' ${ADMIN_K}`, 2);
+// --data-urlencode with -G: same value forms EXCEPT there is no `+` form.
+expectExit(
+  "-G --data-urlencode '+draw=1' — no + form: name '+draw' is sent as '?+draw=1', never 'draw=1': allowed",
+  `curl -G --data-urlencode '+draw=1' ${ADMIN_K}`,
+  0
+);
+expectExit("-G --data-urlencode 'draw=1' — still blocked", `curl -G --data-urlencode 'draw=1' ${ADMIN_K}`, 2);
+expectExit("-G --data-urlencode '=draw=1' — content encoded (draw%3D1): allowed", `curl -G --data-urlencode '=draw=1' ${ADMIN_K}`, 0);
+expectExit("-G --data-urlencode '@q.txt' fails closed", `curl -G --data-urlencode '@q.txt' ${ADMIN_K}`, 2);
+expectExit("-G --data-urlencode 'name@q.txt' fails closed", `curl -G --data-urlencode 'name@q.txt' ${ADMIN_K}`, 2);
+expectExit("-G --data-urlencode 'email=a@b.com' is name=content, not a file: allowed", `curl -G --data-urlencode 'email=a@b.com' ${ADMIN_K}`, 0);
+expectExit("-G -d '+draw=1' — raw -d value appended as-is (?+draw=1): not 'draw=1', allowed", `curl -G -d '+draw=1' ${ADMIN_K}`, 0);
+expectExit("--data-urlencode 'draw=1' WITHOUT -G is a POST body: allowed", `curl --data-urlencode 'draw=1' ${ADMIN_K}`, 0);
+expectExit(
+  "--url-query '+draw=1' AND -G --data-urlencode together: the url-query still lands on the URL",
+  `curl -G --data-urlencode 'a=b' --url-query '+draw=1' ${ADMIN_K}`,
+  2
+);
+
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");
 const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md", "store-release.md"];

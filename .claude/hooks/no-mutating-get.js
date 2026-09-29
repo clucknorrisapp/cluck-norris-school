@@ -352,9 +352,10 @@ function finishRequest(r) {
 // Returns one entry per request in the invocation (`--next` / `-:` start a new one, with every
 // option reset): `{ words, method, forceGet, hasUrlQueryData, dataValues }`. `words` are the words
 // that belong to that request (options, their values and URLs), for the caller's text checks.
-// `dataValues` are the raw values handed to a data/form flag or `--url-query` — with `-G`/`--get`
-// curl moves them onto the URL as query parameters (Codex round 32 P2), so the caller rebuilds the
-// query from them. `forceGet`/`hasUrlQueryData` are returned separately from `method`: `-G` and
+// `dataValues` are `{ kind, v }` entries — `v` is the raw value handed to a data/form flag or
+// `--url-query`, `kind` is `urlquery` / `urlencode` (`--data-urlencode`) / `raw` (every other data
+// flag) — with `-G`/`--get` curl moves them onto the URL as query parameters (Codex round 32 P2),
+// so the caller rebuilds the query from them (`effectiveQuery`) using each kind's own value form. `forceGet`/`hasUrlQueryData` are returned separately from `method`: `-G` and
 // `--url-query` modify the URL whatever the final method resolves to (`-I -G -d draw=1` is HEAD,
 // but the data still lands on the URL).
 function parseRequests(words) {
@@ -411,11 +412,13 @@ function parseRequests(words) {
       } else if (name === "--url-query") {
         cur.hasUrlQueryData = true;
         const v = value();
-        if (v !== undefined) cur.dataValues.push(v);
+        if (v !== undefined) cur.dataValues.push({ kind: "urlquery", v });
       } else if (DATA_LONG_FLAGS.has(name)) {
         cur.hasData = true;
         const v = value();
-        if (v !== undefined) cur.dataValues.push(v);
+        if (v !== undefined) {
+          cur.dataValues.push({ kind: name === "--data-urlencode" ? "urlencode" : "raw", v });
+        }
       } else if (LONG_VALUE_FLAGS.has(name)) {
         value(); // opaque — consumed so it is never re-scanned as a flag
       }
@@ -439,7 +442,7 @@ function parseRequests(words) {
           if (v) cur.explicit = v.toUpperCase();
         } else if (kind === "data") {
           cur.hasData = true;
-          if (v !== undefined) cur.dataValues.push(v);
+          if (v !== undefined) cur.dataValues.push({ kind: "raw", v });
         } else {
           cur.upload = true;
         }
@@ -476,10 +479,65 @@ function extractAdminUrlQuery(text) {
   return qIdx === -1 ? "" : m[0].slice(qIdx + 1);
 }
 
-function printBlocked(segment, method, command) {
+// curl's URL-encoding for the content part of `--data-urlencode` / `--url-query` (unreserved
+// characters kept, everything else %XX).
+function curlEncode(s) {
+  return encodeURIComponent(s).replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+// The value forms of `--data-urlencode` (and of `--url-query`, which is "identical … with one
+// extension", the `+` form) — curl's own logic, verified against a real curl on a loopback server:
+//   `+content`        --url-query ONLY: the rest is appended AS-IS, unencoded (`+draw=1` sends
+//                     `draw=1` — Codex round 34 P2: the raw `+` made the old check look at `?+draw=1`).
+//                     `--data-urlencode` has no `+` form: `+draw=1` is name `+draw`, sent as `+draw=1`.
+//   `=content`        the leading `=` is dropped, content URL-encoded, no name (`=draw=1` → `draw%3D1`).
+//   `name=content`    name kept AS-IS, content URL-encoded (`=` is looked for first, so
+//                     `email=a@b.com` is NOT a file reference).
+//   `name@file`/`@file`  (no `=` anywhere) contents come from a FILE this hook cannot read → opaque.
+//   `content`         neither `=` nor `@`: the whole value URL-encoded.
+// Every other data flag (`-d`, `--data`, `--data-raw`, …) is appended raw with `-G`; a leading `@`
+// makes curl read a file, and the round-32 fail-closed rule (any `@`) is kept for those.
+function effectiveQuery(dataValues) {
+  const parts = [];
+  let opaque = null;
+  for (const { kind, v } of dataValues) {
+    if (kind === "raw") {
+      if (/@/.test(v)) opaque = opaque || v;
+      else parts.push(v);
+      continue;
+    }
+    if (kind === "urlquery" && v[0] === "+") {
+      parts.push(v.slice(1));
+      continue;
+    }
+    let sepIdx = v.indexOf("=");
+    if (sepIdx === -1) sepIdx = v.indexOf("@");
+    if (sepIdx === -1) {
+      parts.push(curlEncode(v));
+      continue;
+    }
+    if (v[sepIdx] === "@") {
+      opaque = opaque || v;
+      continue;
+    }
+    const name = v.slice(0, sepIdx);
+    const enc = curlEncode(v.slice(sepIdx + 1));
+    parts.push(name === "" ? enc : name + "=" + enc);
+  }
+  return { parts, opaque };
+}
+
+function printBlocked(segment, method, command, opaque) {
   process.stderr.write(
     [
       "BLOCKED: this curl targets a clucknorris.app admin route with a mutating flag but is not a POST.",
+      ...(opaque !== undefined && opaque !== null
+        ? [
+            `Why: a query value (${JSON.stringify(opaque)}) is read from a FILE (@file / name@file) that this hook`,
+            "cannot see, so it may carry a mutating flag (draw=1, run=1, …). Failing closed — inline the",
+            "value, or send the request as -X POST.",
+          ]
+        : []),
       "AGENTS.md: 'Admin routes that ACT are POST-only' — a GET on these routes either 405s or,",
       "worse, silently runs the dry-run/read path while looking like the real action (or vice versa",
       "— the 2026-09-17 rose-buybot incident: a 'harmless' GET actually ran a full poll).",
@@ -532,6 +590,7 @@ function main() {
         const dataValues = eff.dataValues;
         const method = eff.method;
         let mutating = MUTATING_FLAG_RE.test(partText);
+        let opaqueRef = null;
         // Codex round 32 "second lens" P3: rebuild and test the query whenever `-G`/`--get` OR
         // `--url-query` is present, regardless of the FINAL resolved method — `-G` moves data
         // onto the URL even when an explicit `-X HEAD`/`-I` is also present, and `--url-query`
@@ -540,18 +599,21 @@ function main() {
           // Fail-closed: a value curl reads from a file (`@file`, or `name@file`) has unknown
           // contents at review time — never assume it's safe just because ITS TEXT doesn't
           // contain a mutating flag.
-          const opaqueFileRef = dataValues.some((v) => /@/.test(v));
-          if (opaqueFileRef) {
+          // Codex round 34 P2: the query is judged AFTER curl's own value-form transforms
+          // (`effectiveQuery`) — `--url-query '+draw=1'` is sent as `draw=1`.
+          const q = effectiveQuery(dataValues);
+          if (q.opaque !== null) {
             mutating = true;
+            opaqueRef = q.opaque;
           } else {
             const urlQuery = extractAdminUrlQuery(partText);
-            const combined = "?" + [urlQuery, dataValues.join("&")].filter(Boolean).join("&");
+            const combined = "?" + [urlQuery, ...q.parts].filter(Boolean).join("&");
             mutating = MUTATING_FLAG_RE.test(combined);
           }
         }
         if (!mutating) continue;
         if (method !== "POST") {
-          printBlocked(partText.trim(), method, command);
+          printBlocked(partText.trim(), method, command, opaqueRef);
           process.exit(2);
           return;
         }
