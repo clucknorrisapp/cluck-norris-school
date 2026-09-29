@@ -245,6 +245,16 @@ jobs:
       # No live RPC, no real signing anywhere in this file — fixtures and a fake bridge only.
       - name: Seeker app — Rent Reclaim SIGNING path (byte-identical instruction, mutation-tested destination check, batching, idempotency, unavailable, rejection)
         run: node scripts/seeker-reclaim-sign-test.cjs
+      # Revoke approvals from the Seeker app (src/seeker/revoke.js + CheckupRevoke.jsx + Disconnect.jsx,
+      # 2026-09-29) — THIS SIGNS WITH THE PERSON'S WALLET. The Revoke instruction is built on the
+      # device as bytes and diffed against @solana/spl-token for both token programs; the signing
+      # path is sign.js's seam and nothing else; "revoked" is RE-READ from the chain per account
+      # (cleared / still delegated / unreadable — never a failed read counted as cleared); a batch is
+      # capped and de-duplicated; a switched wallet account is refused before signing; the shared
+      # WalletCheckup.jsx and the education edition never gain a signing reference (the Play/iOS
+      # build refuses "CluckWallet"). No live RPC, no real wallet — a fake window and rpc only.
+      - name: Seeker app — Revoke approvals + Disconnect (byte-identical Revoke, chain re-read, seam-only signing, edition isolation)
+        run: node scripts/seeker-revoke-test.cjs
       # The Airdropper's PLANNING decisions (public/airdrop-plan.js) — THIS MOVES USER FUNDS IN
       # BULK, and everything here happens before the wallet is asked to sign, which is the last
       # point at which a mistake is still free. Two sections exist because the desktop parser gets

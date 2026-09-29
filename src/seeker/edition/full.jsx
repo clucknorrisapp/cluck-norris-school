@@ -18,6 +18,8 @@ import { NeedsWallet } from "../needswallet.jsx";
 import RentReclaimPane from "../RentReclaim.jsx";
 import AskCluckPane from "../AskCluck.jsx";
 import WalletCheckupPane from "../WalletCheckup.jsx";
+import CheckupRevoke from "../CheckupRevoke.jsx";
+import DisconnectCard from "../Disconnect.jsx";
 import { AddressForm, AddressBar } from "../addressform.jsx";
 import ToolsHome from "../ToolsHome.jsx";
 import { SolanaRoomIndex, SolanaRoomPage } from "../solana/SolanaRoom.jsx";
@@ -131,11 +133,21 @@ function FullCheckup({ wallet }) {
   const [pasted, setPasted] = React.useState(null);
   const [pasting, setPasting] = React.useState(false);
 
+  // The two full-edition-only pieces (2026-09-29, owner: "something on my app to help people
+  // disconnect from things"): the signing REVOKE control under the approvals list, and the
+  // "Disconnect & clean up" card after the results. Both render through props the shared pane
+  // exposes, so WalletCheckup.jsx itself stays free of anything the education build refuses.
+  // The revoke control checks for itself that the scanned address IS the connected wallet.
+  const revoke = ({ approvals, address, rescan }) => (
+    <CheckupRevoke wallet={wallet} approvals={approvals} scannedAddress={address} onDone={rescan} />
+  );
+  const footer = <DisconnectCard wallet={wallet} />;
+
   if (pasted) {
     return (
       <>
         <AddressBar address={pasted} onClear={() => { setPasted(null); setPasting(false); }} />
-        <WalletCheckupPane address={pasted} />
+        <WalletCheckupPane address={pasted} revoke={revoke} footer={footer} />
       </>
     );
   }
@@ -143,7 +155,7 @@ function FullCheckup({ wallet }) {
   if (wallet.connected && !pasting) {
     return (
       <>
-        <WalletCheckupPane address={wallet.address} />
+        <WalletCheckupPane address={wallet.address} revoke={revoke} footer={footer} />
         <button type="button" className="seeker-btn seeker-btn-quiet seeker-checkup-another" onClick={() => setPasting(true)}>
           {t("Check another")}
         </button>
