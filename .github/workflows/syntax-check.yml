@@ -521,6 +521,11 @@ jobs:
       # unrelated transaction had succeeded.
       - name: brand-channel broadcast integrity
         run: node scripts/broadcast-integrity-test.cjs
+      # Sonnet 5.5 400s on thinking:{type:"disabled"}. Pin the request shape of the app's own
+      # Sonnet calls (source-level — a live call needs a key) so a revert to the old shape, or a
+      # positional data.content[0].text read, fails here instead of on production.
+      - name: app Claude call shapes (Sonnet 5.5)
+        run: node scripts/claude-models-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.

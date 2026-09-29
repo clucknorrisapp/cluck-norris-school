@@ -141,6 +141,14 @@ function publicErrMsg(err, fallback = "internal error") {
   return m.length > 1500 ? m.slice(0, 1500) + "…" : m;
 }
 
+// The first `text` block of a Messages API response — read by block type, never by position.
+// Sonnet 5.5 can put a `thinking` block (the between-tool-call progress notes) ahead of the text,
+// so `data.content[0].text` is not safe. "" when the response has no text (a refusal, an error).
+function claudeText(data) {
+  const b = data && Array.isArray(data.content) ? data.content.find((x) => x && x.type === "text" && typeof x.text === "string") : null;
+  return b ? b.text : "";
+}
+
 // ── Multi-language support for the AI endpoints ──────────────────────────────
 // The tutor/lectures/classroom answer in the learner's language. Crypto tickers,
 // protocol names, and addresses stay in English. Add languages here as we expand.
@@ -5057,11 +5065,11 @@ ${ctx || "(no pools found for this pair)"}`;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 800, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: String(question) }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 800, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages: [{ role: "user", content: String(question) }] }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      const answer = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
+    if (claudeText(data)) {
+      const answer = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
       return res.status(200).json({ success: true, pair: scan.pair, answer, pools: scan.pools });
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "No response from AI" });
@@ -5177,10 +5185,10 @@ RULES: Never tell anyone to buy/sell or predict prices. Never recommend, rank or
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 1500, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 1500, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) return data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) return claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
   } catch (_) {}
   return `🐔 CLUCK'S DAILY ALPHA\n\n${summary}\n\nNot financial advice — now go do your homework. 🐔`;
 }
@@ -5324,11 +5332,11 @@ RULES: Never give financial advice or price predictions. Encouraging but blunt. 
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      let reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      let reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       const complete = /\[LESSON COMPLETE\]/i.test(reply);
       reply = reply.replace(/\[LESSON COMPLETE\]/ig, "").trim();
       return res.status(200).json({ success: true, reply, complete });
@@ -5535,11 +5543,11 @@ RULES: No financial advice. Encouraging but honest. No markdown headers/asterisk
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      let reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      let reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       const passed = /\[EXAM PASSED\]/i.test(reply);
       const failed = /\[EXAM FAILED\]/i.test(reply);
       reply = reply.replace(/\[EXAM (PASSED|FAILED)\]/ig, "").trim();
@@ -17064,11 +17072,11 @@ HOW YOU ANSWER:
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      const reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      const reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       return res.status(200).json({ success: true, reply });
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Cluck went quiet — try again." });
