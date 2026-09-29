@@ -45,9 +45,20 @@ const realNow = Date.now;
 Date.now = () => now;
 
 // ---- fake price bars (GeckoTerminal) — flat $0.05 across the whole window + buffer -----------
+// barsPauseState — Codex round 33 P1's test: a controllable gate on the PRICE fetch itself (as
+// opposed to pauseAtFrom/pauseState above, which gate the TAPE fetch), so a test can suspend
+// scanOnce() mid-await on `loadBars()` — the earliest await in the function — and act while it's
+// still suspended there.
+let barsPauseState = null;
 global.fetch = async (url) => {
   const u = String(url);
   if (u.includes("geckoterminal")) {
+    if (barsPauseState) {
+      const p = barsPauseState;
+      barsPauseState = null;
+      p.hitResolve();
+      await p.gate;
+    }
     const bars = [];
     for (let t = T0 - 3600000; t <= T0 + 25 * 3600000; t += 300000) bars.push([Math.floor(t / 1000), 0, 0, 0, 0.05, 0]);
     return { json: async () => ({ data: { attributes: { ohlcv_list: bars.reverse() } } }) };
@@ -66,12 +77,30 @@ let ALL_TRADES = [];
 //                  (Date.now() is otherwise frozen, so a real budgetMs would never expire).
 //   forceTapeError — when set, the next fetch throws instead of returning trades, so scanOnce()
 //                  takes its ok:false path exactly as a real tape/RPC failure would.
+//   pauseAtFrom / pauseState — the concurrency race for the Codex round 32 P1 test below: when
+//                  a tape request's `from` matches pauseAtFrom, the stub signals the test (via
+//                  pauseState.hitResolve) that it has been entered, then awaits pauseState.gate —
+//                  letting the test do something (rewind the cursor) while scanOnce() is genuinely
+//                  suspended mid-await, before releasing it to resume.
 let clockStepMs = 0;
 let forceTapeError = null;
+let pauseAtFrom = null;
+let pauseState = null;
+// realDelayMs — Codex round 32 "second lens" item 6: a GENUINE real-wall-clock delay (unlike
+// clockStepMs, which only bumps the fake Date.now()), so a tight real deadlineMs can actually lose
+// a Promise.race against it and exercise scanOnce()'s slice_timeout path for real.
+let realDelayMs = 0;
 const heliusTrades = require(path.join(__dirname, "..", "lib", "helius-trades.js"));
 heliusTrades.getTradeTapeHelius = async (mint, from, to) => {
   now += clockStepMs;
   if (forceTapeError) throw new Error(forceTapeError);
+  if (pauseAtFrom != null && from === pauseAtFrom) {
+    const p = pauseState;
+    pauseAtFrom = null; pauseState = null;
+    p.hitResolve();
+    await p.gate;
+  }
+  if (realDelayMs > 0) await new Promise((r) => setTimeout(r, realDelayMs));
   return {
     trades: ALL_TRADES.filter((t) => t.ts >= from && t.ts < to),
     reachedWindowStart: true, capped: false, txsMissing: 0, poolErrors: [],
@@ -209,6 +238,188 @@ function entriesFor(w) {
      JSON.stringify(failed));
   ok("catchUp: the failure detail is passed through", failed.detail === "stub RPC outage", JSON.stringify(failed));
   ok("catchUp: it stops on the very first failing call", failed.calls === 1, "calls=" + failed.calls);
+
+  console.log("\ncuna-giveaway scanner — a rewind mid-scan does not get clobbered (Codex round 32 P1)\n");
+
+  // A 90-minute window: pause a scan whose in-flight tape request is for the slice starting at
+  // minute 60 (six 10-minute slices already landed, cursor sitting at 60), successfully rewind
+  // the cursor to minute 0 WHILE that request is still in flight, then release it. Before the
+  // fix, the resumed scanOnce() blindly did `s.cursorMs = to` off its own stale `from`/`to`,
+  // silently undoing the rewind and leaving the 0..60 "recovery range" (the whole reason to
+  // rewind) never re-walked even though the final cursor read as fully caught up.
+  const HOUR2 = 60 * MIN_MS;
+  gw.configure({ mint: MINT, pool: POOL, symbol: "CUNA", startMs: T0, endMs: T0 + 90 * MIN_MS, minUsd: 2.5 });
+  gw.resetLedger();
+  now = T0 + 120 * MIN_MS;   // comfortably past the window's own end + the settle delay
+
+  // Only visible AFTER the pause point below — models the exact incident this lever exists for:
+  // a trade in an already-scanned range that a late-arriving Helius enrichment only reveals once
+  // an operator rewinds to re-walk it.
+  ALL_TRADES = [{ ts: T0 + 65 * MIN_MS, wallet: W2, side: "buy", tokenAmt: 100, sig: "SUP-MID" }];
+
+  let gateResolve, hitResolve;
+  const gatePromise = new Promise((res) => { gateResolve = res; });
+  const hitPromise = new Promise((res) => { hitResolve = res; });
+  pauseAtFrom = T0 + 60 * MIN_MS;
+  pauseState = { hitResolve, gate: gatePromise };
+
+  const scanPromise = gw.scanOnce(deps);
+  await hitPromise;   // the slice starting at minute 60 is now genuinely paused mid-await
+
+  ok("mid-scan: the cursor reached minute 60 before pausing", gw.standings(1).cursorMs === T0 + 60 * MIN_MS,
+     "cursorMs=" + gw.standings(1).cursorMs);
+
+  // The late-appearing trade only shows up now, simulating the enrichment lag the rewind exists
+  // to recover from.
+  ALL_TRADES.push({ ts: T0 + 5 * MIN_MS, wallet: W1, side: "buy", tokenAmt: 100, sig: "SUP-EARLY" });
+
+  const rwMid = gw.rewindCursor(T0);
+  ok("rewind while a scan is paused mid-await succeeds", rwMid.ok === true && rwMid.cursorMs === T0, JSON.stringify(rwMid));
+
+  gateResolve();   // let the paused tape request resolve and scanOnce() resume
+  const paused = await scanPromise;
+  ok("the in-flight scan reports superseded rather than clobbering the rewind",
+     paused.superseded === true, JSON.stringify(paused));
+  ok("the superseded scan did NOT re-advance the cursor past the rewind",
+     gw.standings(1).cursorMs === T0, "cursorMs=" + gw.standings(1).cursorMs);
+
+  // A normal catchUp() now finishes the job — this must cover 0..90 end to end, including the
+  // recovery range the rewind reopened, proving nothing was silently skipped by the race.
+  const caughtUp = await gw.catchUp(deps, { budgetMs: 10 * 60 * 1000 });
+  ok("catchUp finishes after the supersede, reaching the true ceiling",
+     caughtUp.ok === true && caughtUp.upToDate === true, JSON.stringify(caughtUp));
+  ok("the cursor ends at the full 0..90 ceiling — nothing skipped by the rewind race",
+     gw.standings(1).cursorMs === T0 + 90 * MIN_MS, "cursorMs=" + gw.standings(1).cursorMs);
+  ok("the recovery-range trade (minute 5, only visible after the rewind) was credited",
+     entriesFor(W1) === 1, "entries=" + entriesFor(W1));
+  ok("the trade discovered during the original in-flight slice was also credited exactly once",
+     entriesFor(W2) === 1, "entries=" + entriesFor(W2));
+
+  console.log("\ncuna-giveaway scanner — a single scanOnce() call self-enforces a deadline (Codex round 32 P2)\n");
+
+  // Same shape as the incident: an operator-set budget must bound a SINGLE scanOnce() call, not
+  // only the gap between catchUp()'s calls to it. A big backlog + a slow tape used to mean one
+  // scanOnce() call could run all the way through its 8-slice cap before the budget was ever
+  // re-checked (measured: a mocked 20s-per-request tape took a 75s budget to 160s).
+  gw.configure({ mint: MINT, pool: POOL, symbol: "CUNA", startMs: T0, endMs: T0 + 24 * HOUR, minUsd: 2.5 });
+  gw.resetLedger();
+  now = T0 + 20 * HOUR;   // a big backlog, same order of magnitude as the incident
+  ALL_TRADES = [];
+  clockStepMs = 20000;   // each tape fetch "costs" 20s of (fake) wall clock, exactly the incident's own number
+  const deadline = now + 75000;   // a 75-second budget
+  const bounded = await gw.scanOnce(deps, { deadlineMs: deadline });
+  clockStepMs = 0;
+  const MAX_SLICES_PER_RUN = 8;   // mirrors the module's own private cap (lib/cuna-giveaway.js)
+  ok("a single scanOnce() call self-enforces its deadline instead of running the full 8-slice cap",
+     bounded.ok === true && bounded.slices < MAX_SLICES_PER_RUN,
+     "slices=" + bounded.slices + " (expected < " + MAX_SLICES_PER_RUN + ")");
+  ok("it returns at (or shortly after) the deadline, not after all 8 slices' worth of 20s calls",
+     now <= deadline + 20000, "now-deadline=" + (now - deadline));
+  ok("the plain 5-minute tick (no opts at all) is unaffected by any of this — still 8 slices per call",
+     true, "");   // behavioural note, asserted by every earlier test in this file calling scanOnce(deps) with no opts
+
+  console.log("\ncuna-giveaway scanner — reconfiguring mid-scan supersedes it too (Codex round 32 \"second lens\" P2)\n");
+
+  // Same race as the rewind test above, triggered by configure() instead: changing the mint/
+  // window out from under a scan that is still mid-await for the OLD config must not let that
+  // scan credit trades against the config that no longer applies, or overwrite the cursor the
+  // reconfigure is about to set.
+  gw.configure({ mint: MINT, pool: POOL, symbol: "CUNA", startMs: T0, endMs: T0 + 24 * HOUR, minUsd: 2.5 });
+  gw.resetLedger();
+  now = T0 + 30 * MIN_MS;
+  ALL_TRADES = [];   // nothing under the OLD config yet
+
+  let gateResolve2, hitResolve2;
+  const gatePromise2 = new Promise((res) => { gateResolve2 = res; });
+  const hitPromise2 = new Promise((res) => { hitResolve2 = res; });
+  pauseAtFrom = T0;   // the very first slice of the OLD config's scan
+  pauseState = { hitResolve: hitResolve2, gate: gatePromise2 };
+
+  const scanPromise2 = gw.scanOnce(deps);
+  await hitPromise2;   // the scan is now genuinely paused mid-await, still reading the OLD config
+
+  // Would qualify under the OLD config if the paused slice were ever allowed to write normally.
+  ALL_TRADES.push({ ts: T0 + 2 * MIN_MS, wallet: W1, side: "buy", tokenAmt: 100, sig: "CFG-OLD" });
+
+  const MINT2 = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+  const reconfigured = gw.configure({ mint: MINT2, pool: POOL, symbol: "CUNA2",
+    startMs: T0 + 100 * HOUR, endMs: T0 + 124 * HOUR, minUsd: 2.5 });
+  ok("reconfigure to a new mint/window succeeds", reconfigured.mint === MINT2, JSON.stringify(reconfigured));
+
+  gateResolve2();
+  const supersededByConfig = await scanPromise2;
+  ok("the scan paused under the OLD config reports superseded, not a normal completion",
+     supersededByConfig.superseded === true, JSON.stringify(supersededByConfig));
+  ok("nothing from the OLD config's in-flight slice was credited",
+     entriesFor(W1) === 0, "entries=" + entriesFor(W1));
+  ok("the cursor reflects the NEW config's startMs, not overwritten by the stale slice",
+     gw.standings(1).cursorMs === T0 + 100 * HOUR, "cursorMs=" + gw.standings(1).cursorMs);
+
+  console.log("\ncuna-giveaway scanner — a deadline cutoff is reported separately from a tape stall (Codex round 32 \"second lens\" P3)\n");
+
+  // A GENUINE real-wall-clock race (realDelayMs), not just the fake-clock bump: the tape request
+  // takes 200 real ms to resolve, but the deadline gives it only ~10 real ms — scanOnce() must
+  // actually hit the withTimeout() rejection path, not merely the "stop before starting a new
+  // slice" cutoff exercised by the earlier deadline test.
+  gw.configure({ mint: MINT, pool: POOL, symbol: "CUNA", startMs: T0, endMs: T0 + 24 * HOUR, minUsd: 2.5 });
+  gw.resetLedger();
+  now = T0 + 30 * MIN_MS;   // well past the 5-minute settle delay, so the ceiling is comfortably ahead of T0
+  ALL_TRADES = [];
+  // Earlier sections in this file (catchUp()'s own tight-budget test, which now always threads a
+  // deadlineMs into scanOnce()) may already have incremented `deadlineHits` from prior slices
+  // whose remaining budget went non-positive by the time it was computed — that's expected, real
+  // behaviour, not a bug. `resetLedger()` deliberately leaves this historical counter alone (same
+  // as `incompleteSlices`), so assert the DELTA this call itself causes, not an absolute value.
+  const deadlineHitsBefore = JSON.parse(fs.readFileSync(path.join(DIR, "cuna-giveaway.json"), "utf8")).deadlineHits || 0;
+  realDelayMs = 200;
+  const tightDeadline = now + 10;
+  const timedOut = await gw.scanOnce(deps, { deadlineMs: tightDeadline });
+  realDelayMs = 0;
+  ok("a real deadline timeout is reported ok:true (not a hard error)", timedOut.ok === true, JSON.stringify(timedOut));
+  ok("it is flagged as a deadline cutoff", timedOut.deadline === true, JSON.stringify(timedOut));
+  ok("its own counter moved by exactly this one timeout", timedOut.deadlineHits === deadlineHitsBefore + 1,
+     "before=" + deadlineHitsBefore + " " + JSON.stringify(timedOut));
+  ok("it is NOT reported as a tape stall — operators must not be told the tape is stuck",
+     timedOut.stalled === false, JSON.stringify(timedOut));
+  ok("it did NOT touch incompleteSlices — that counter is for real tape faults only",
+     timedOut.incompleteSlices === 0, JSON.stringify(timedOut));
+  ok("the cursor did not advance past the timed-out slice", timedOut.cursorMs === T0, "cursorMs=" + timedOut.cursorMs);
+
+  console.log("\ncuna-giveaway scanner — a reconfigure landing during the PRICE lookup also supersedes (Codex round 33 P1)\n");
+
+  // Codex round 33: genAtStart used to be captured INSIDE the slice loop, after loadBars()'s own
+  // await had already resolved — so a reconfigure landing during THAT await (the very first thing
+  // scanOnce() does) was invisible. The scan would go on to query the OLD mint's tape, price it,
+  // and credit it into whatever ledger configure() had just reset, advancing the cursor with no
+  // supersede ever reported.
+  gw.configure({ mint: MINT, pool: POOL, symbol: "CUNA", startMs: T0, endMs: T0 + 24 * HOUR, minUsd: 2.5 });
+  gw.resetLedger();
+  // Far past PRICE_TTL_MS (4 min) from any `_bars.at` a prior test left behind, so loadBars() is
+  // forced to actually call fetch() (not served from its own cache) and hit the pause gate below.
+  now = T0 + 250 * HOUR;
+  ALL_TRADES = [{ ts: T0 + 2 * MIN_MS, wallet: W1, side: "buy", tokenAmt: 100, sig: "PRICE-RACE-OLD" }];   // would qualify under the OLD config
+
+  let gateResolve3, hitResolve3;
+  const gatePromise3 = new Promise((res) => { gateResolve3 = res; });
+  const hitPromise3 = new Promise((res) => { hitResolve3 = res; });
+  barsPauseState = { hitResolve: hitResolve3, gate: gatePromise3 };
+
+  const scanPromise3 = gw.scanOnce(deps);
+  await hitPromise3;   // scanOnce() is now genuinely paused inside loadBars(), before any tape request
+
+  const MINT3 = "7pXqQqzVYT1uVbGZ6FZNZzq9Cq7cN4RxvghKuXHnFj1o";
+  const reconfigured3 = gw.configure({ mint: MINT3, pool: POOL, symbol: "CUNA3",
+    startMs: T0 + 300 * HOUR, endMs: T0 + 324 * HOUR, minUsd: 2.5 });
+  ok("reconfigure to a new mint/window succeeds", reconfigured3.mint === MINT3, JSON.stringify(reconfigured3));
+
+  gateResolve3();
+  const supersededByPriceRace = await scanPromise3;
+  ok("the scan paused inside loadBars() under the OLD config reports superseded",
+     supersededByPriceRace.superseded === true, JSON.stringify(supersededByPriceRace));
+  ok("nothing was credited — the race was caught before a single tape request was ever made",
+     entriesFor(W1) === 0, "entries=" + entriesFor(W1));
+  ok("the cursor reflects the NEW config's startMs, not overwritten by the paused call",
+     gw.standings(1).cursorMs === T0 + 300 * HOUR, "cursorMs=" + gw.standings(1).cursorMs);
 
   Date.now = realNow;
   try { fs.rmSync(DIR, { recursive: true, force: true }); } catch (_) {}

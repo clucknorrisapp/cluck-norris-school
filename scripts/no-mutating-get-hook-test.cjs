@@ -267,6 +267,402 @@ expectExit(
   0
 );
 
+// --- Codex round 32 P2: short-flag cluster value-consumption + --next request boundary ---------
+expectExit(
+  "-o/dev/null short-flag value must not be misparsed as -d data (Codex round 32)",
+  'curl -o/dev/null "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "-o /dev/null (separate word) is the same trap, still allowed since it's a plain GET with no data intent — must still block on the admin mutating GET",
+  'curl -o /dev/null "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "-X POST safe request, --next resets the method for the admin GET that follows (Codex round 32)",
+  'curl -X POST https://example.com/hook --next "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "--next admin request explicitly POSTed on its own side is allowed",
+  'curl -X POST https://example.com/hook --next -X POST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  0
+);
+
+// --- Codex round 32 P2: -G/--get converts -d/--data* into query params MUTATING_FLAG_RE must see -
+expectExit(
+  "-G --data-urlencode draw=1 turns into a GET query the raw-text check couldn't see (Codex round 32)",
+  'curl -G --data-urlencode draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-G -d 'draw=1' — same trap, short -d form",
+  "curl -G -d 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-G --data-raw 'x=1&draw=1' — the mutating flag is buried inside a larger data-raw value",
+  "curl -G --data-raw 'x=1&draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-G with data that carries no mutating flag at all stays allowed",
+  "curl -G -d 'foo=bar' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  0
+);
+
+// --- Codex round 32 "second lens" (adversarial re-review of the round-32 fixes) ------------------
+expectExit(
+  "-Gd draw=1 — G takes no value, the loop must keep scanning the cluster and see the trailing d",
+  "curl -Gd 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-sGd draw=1 — same trap with a leading boolean flag in the cluster",
+  "curl -sGd 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-IsXPOST — explicit POST later in the cluster must win over the earlier I (not misread as HEAD)",
+  'curl -IsXPOST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&scan=1"',
+  0
+);
+expectExit(
+  "--url-query draw=1 — always appended to the URL's query by curl, regardless of method",
+  'curl --url-query draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "--url-query=draw=1 inline form",
+  'curl --url-query=draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-D/dev/stderr short flag value must not fall through as an unrecognised flag",
+  'curl -D/dev/stderr "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "-G with a data value read from a file (@-prefixed) fails CLOSED — contents unknown",
+  'curl -G -d @payload.txt "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-G with a name@file form data value also fails CLOSED",
+  'curl -G -d name@payload.txt "https://clucknorris.app/api/cuna-giveaway/admin?key=k"',
+  2
+);
+expectExit(
+  "-I -G -d draw=1 — resolves to HEAD, not GET, but -G still moves the data onto the URL",
+  "curl -I -G -d 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "--head --get --data draw=1 — long-flag form of the same trap",
+  "curl --head --get --data 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+expectExit(
+  "-X HEAD -G -d draw=1 — an explicit -X HEAD does not stop -G from moving the data onto the URL",
+  "curl -X HEAD -G -d 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  2
+);
+
+// --- Codex round 33 (adversarial re-review of the round-32/32b fixes) --------------------------
+expectExit(
+  "-: is curl's own short spelling of --next — must split a request boundary too (Codex's exact string)",
+  'curl -X POST https://example.com/hook -: "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  2
+);
+expectExit(
+  "the -: request explicitly POSTed on its own side is allowed",
+  'curl -X POST https://example.com/hook -: -X POST "https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"',
+  0
+);
+expectExit(
+  "--header '-XPOST' — a long option's VALUE must not be re-scanned as its own flag (Codex's exact string)",
+  "curl --header '-XPOST' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1\"",
+  2
+);
+expectExit(
+  "--header 'X: y' -X POST — a real header plus a real POST still allowed",
+  "curl --header 'X: y' -X POST \"https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1\"",
+  0
+);
+expectExit(
+  "--user-agent '-G' must not be read as forcing GET — a real -G would flip this POST-by-data to a blocked GET",
+  "curl --user-agent '-G' --data 'draw=1' \"https://clucknorris.app/api/cuna-giveaway/admin?key=k\"",
+  0
+);
+
+// --- Codex round 32 (final two P2s): clustered short options + long options ---------------------
+// Every clustered spelling must get the SAME verdict as its unclustered twin.
+const ADMIN = '"https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"';
+const SAFE = "https://example.com/hook";
+expectExit("-sSX POST (cluster ends on X, value is the next word)", `curl -sSX POST ${ADMIN}`, 0);
+expectExit("-sXPOST (cluster, inline value)", `curl -sXPOST ${ADMIN}`, 0);
+expectExit("-XPOST (no cluster, inline value)", `curl -XPOST ${ADMIN}`, 0);
+expectExit("-sS -X DELETE — not a POST", `curl -sS -X DELETE ${ADMIN}`, 2);
+expectExit("-sSXDELETE — cluster twin of the DELETE above", `curl -sSXDELETE ${ADMIN}`, 2);
+expectExit("-XPOST -XGET — last -X wins even glued", `curl -XPOST -XGET ${ADMIN}`, 2);
+expectExit("-d@file glued value implies POST", `curl -d@payload.json ${ADMIN}`, 0);
+expectExit("-sd@file — cluster + glued file value implies POST", `curl -sd@payload.json ${ADMIN}`, 0);
+expectExit("-H'-XPOST' glued header value is opaque, not a method", `curl -H'-XPOST' ${ADMIN}`, 2);
+expectExit("-H'x: y' -XPOST glued header then glued method", `curl -H'x: y' -XPOST ${ADMIN}`, 0);
+expectExit("-Tfile.txt glued upload implies PUT", `curl -Tfile.txt ${ADMIN}`, 2);
+// `-:` is `--next`, and works inside a cluster: `-s:` is `-s --next`.
+expectExit("-s: is -s --next — the admin request after it lost the earlier POST", `curl -X POST ${SAFE} -s: ${ADMIN}`, 2);
+expectExit("-s: then the admin request POSTed on its own side", `curl -X POST ${SAFE} -s: -X POST ${ADMIN}`, 0);
+expectExit("-sS: (longer cluster ending in the boundary)", `curl -X POST ${SAFE} -sS: ${ADMIN}`, 2);
+expectExit("-s: alone must not be read as a method — plain GET, still blocked", `curl -s: ${ADMIN}`, 2);
+expectExit("-s: with a later real POST — the -s: is not a method", `curl -s: -X POST ${ADMIN}`, 0);
+expectExit("-: as the VALUE of -H is not a boundary (the POST still covers the admin URL)", `curl -X POST -H -: ${ADMIN}`, 0);
+expectExit("-H-: glued header value is not a boundary either", `curl -X POST -H-: ${ADMIN}`, 0);
+
+// Long options: values consumed (both spellings), method signals recognised.
+expectExit("--proxy-cert cert.pem — value consumed, plain GET, blocked", `curl --proxy-cert cert.pem ${ADMIN}`, 2);
+expectExit("--proxy-cert=cert.pem inline spelling", `curl --proxy-cert=cert.pem ${ADMIN}`, 2);
+expectExit("--proxy-cert -XPOST — the value is never read as a method", `curl --proxy-cert -XPOST ${ADMIN}`, 2);
+expectExit("--proxy-cert -G — the value is never read as -G, so --data still means POST", `curl --proxy-cert -G --data 'x=1' ${ADMIN}`, 0);
+expectExit("--proxy-cert=cert.pem with a real -X POST", `curl --proxy-cert=cert.pem -X POST ${ADMIN}`, 0);
+expectExit("--request DELETE — not a POST", `curl --request DELETE ${ADMIN}`, 2);
+expectExit("--request=DELETE inline spelling", `curl --request=DELETE ${ADMIN}`, 2);
+expectExit("--request POST still fine", `curl --request POST ${ADMIN}`, 0);
+expectExit("--data-raw '{}' implies POST", `curl --data-raw '{}' ${ADMIN}`, 0);
+expectExit("--data-raw='{}' inline spelling implies POST", `curl --data-raw='{}' ${ADMIN}`, 0);
+expectExit("--json '{}' implies POST", `curl --json '{}' ${ADMIN}`, 0);
+expectExit("--form 'a=b' implies POST", `curl --form 'a=b' ${ADMIN}`, 0);
+expectExit("--upload-file f implies PUT", `curl --upload-file f ${ADMIN}`, 2);
+expectExit("--upload-file=f inline spelling implies PUT", `curl --upload-file=f ${ADMIN}`, 2);
+expectExit("--get -d x stays a GET (mutating flag is in the URL)", `curl --get -d x ${ADMIN}`, 2);
+expectExit("--get -d x with nothing mutating anywhere stays allowed", 'curl --get -d x "https://clucknorris.app/api/cuna-giveaway/admin?key=k"', 0);
+expectExit("--header 'x-clkn-pass: t' — a header is not a method, plain GET, blocked", `curl --header 'x-clkn-pass: t' ${ADMIN}`, 2);
+expectExit("--header 'x-clkn-pass: t' -X POST allowed", `curl --header 'x-clkn-pass: t' -X POST ${ADMIN}`, 0);
+expectExit("--head — HEAD, blocked", `curl --head ${ADMIN}`, 2);
+expectExit("--next resets a long-option method too", `curl --request POST ${SAFE} --next ${ADMIN}`, 2);
+expectExit("--next with --request on its own side", `curl --request POST ${SAFE} --next --request POST ${ADMIN}`, 0);
+expectExit("--data-r (unambiguous long-option prefix) is --data-raw — implies POST", `curl --data-r '{}' ${ADMIN}`, 0);
+expectExit("--url-q (prefix of --url-query) appends to the URL query", 'curl --url-q draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"', 2);
+expectExit("-- ends options: a later -X POST is a URL, not a method", `curl -- -X POST ${ADMIN}`, 2);
+
+// Codex round 33 — the two exact bypass strings, and option VALUES that look like separators.
+// A value is opaque: whatever it contains — a method flag, `-:`, `--next` — it is consumed by the
+// option that takes it and never read as a request boundary or a method.
+expectExit("Codex's exact string: --proxy-cert '-XPOST' (quoted) — the value is never a method, plain GET blocked", `curl --proxy-cert '-XPOST' ${ADMIN}`, 2);
+expectExit("--proxy-cert=-XPOST (inline spelling of the same)", `curl --proxy-cert=-XPOST ${ADMIN}`, 2);
+expectExit("--proxy-cert '-XGET' cannot demote a real POST", `curl -X POST --proxy-cert '-XGET' ${ADMIN}`, 0);
+expectExit("--proxy-cert '--next' is a value, not a boundary — the POST still covers the admin URL", `curl -X POST --proxy-cert '--next' ${ADMIN}`, 0);
+expectExit("--proxy-cert '-:' is a value, not a boundary", `curl -X POST --proxy-cert '-:' ${ADMIN}`, 0);
+expectExit("-H '--next' is a header value, not a boundary", `curl -X POST -H '--next' ${ADMIN}`, 0);
+expectExit("-d '--next' is a body, not a boundary (and still implies POST)", `curl -d '--next' ${ADMIN}`, 0);
+expectExit("--data '-:' is a body, not a boundary (and still implies POST)", `curl --data '-:' ${ADMIN}`, 0);
+expectExit("-H 'x: --next' (separator inside a longer value) is not a boundary", `curl -X POST -H 'x: --next' ${ADMIN}`, 0);
+expectExit("a REAL --next after a value that merely contains one still resets the method", `curl -X POST -H '--next' ${SAFE} --next ${ADMIN}`, 2);
+
+// --- Codex round 34 P2: `--url-query` / `--data-urlencode` VALUE FORMS -------------------------------
+// The hook judges the query curl would actually SEND, after curl's own value-form transforms. Every
+// expectation below was checked against a real curl on a loopback server (`GET /a?key=k&…`):
+//   --url-query '+draw=1'          -> ?key=k&draw=1         (the `+` is stripped, value appended AS-IS)
+//   --url-query '=draw=1'          -> ?key=k&draw%3d1       (`=` stripped, content ENCODED, no name)
+//   --url-query 'draw=1'           -> ?key=k&draw=1         (name kept, content encoded)
+//   --url-query 'x&draw=1'         -> ?key=k&x&draw=1       (the name part is NOT encoded)
+//   --url-query 'email=a@b.com'    -> ?key=k&email=a%40b.com (`=` is looked for first: not a file)
+//   -G --data-urlencode '+draw=1'  -> ?key=k&+draw=1        (NO `+` form here: name `+draw`; `+` is a
+//                                                            space server-side, never `draw`)
+const ADMIN_NOQ = "https://clucknorris.app/api/cuna-giveaway/admin";
+const ADMIN_K = '"https://clucknorris.app/api/cuna-giveaway/admin?key=k"';
+expectExit(
+  "Codex's exact string: --url-query '+draw=1' (curl strips the +, sends ?draw=1)",
+  `curl --url-query '+draw=1' ${ADMIN_NOQ}`,
+  2
+);
+expectExit("--url-query '+draw=1' on an admin URL that already has a query", `curl --url-query '+draw=1' ${ADMIN_K}`, 2);
+expectExit("--url-query '+draw=1&x=y' — as-is, the & is a real separator", `curl --url-query '+draw=1&x=y' ${ADMIN_K}`, 2);
+expectExit("--url-query=+draw=1 inline spelling", `curl --url-query=+draw=1 ${ADMIN_K}`, 2);
+expectExit("--url-q '+draw=1' (long-option prefix)", `curl --url-q '+draw=1' ${ADMIN_K}`, 2);
+expectExit("--url-query 'draw=1' — name=content, name kept", `curl --url-query 'draw=1' ${ADMIN_K}`, 2);
+expectExit("--url-query 'x&draw=1' — the name part is sent un-encoded, so the & splits", `curl --url-query 'x&draw=1' ${ADMIN_K}`, 2);
+expectExit(
+  "--url-query '=draw=1' — leading = stripped, content ENCODED (sends draw%3D1); the hook decides on the query decoded once, and that is draw=1 (round 34 follow-up: was allowed before decoding)",
+  `curl --url-query '=draw=1' ${ADMIN_K}`,
+  2
+);
+expectExit("--url-query 'draw' (bare content, encoded) is not a flag", `curl --url-query 'draw' ${ADMIN_K}`, 0);
+expectExit("--url-query '+foo=bar' — as-is but nothing mutating: allowed", `curl --url-query '+foo=bar' ${ADMIN_K}`, 0);
+expectExit("--url-query 'foo=bar' — nothing mutating: allowed", `curl --url-query 'foo=bar' ${ADMIN_K}`, 0);
+expectExit(
+  "--url-query '+@q.txt' — the + form is literal text, NOT a file read: allowed",
+  `curl --url-query '+@q.txt' ${ADMIN_K}`,
+  0
+);
+expectExit("--url-query 'email=a@b.com' — '=' wins over '@', not a file: allowed", `curl --url-query 'email=a@b.com' ${ADMIN_K}`, 0);
+expectExit("--url-query '@q.txt' — query read from a file the hook cannot see: FAILS CLOSED", `curl --url-query '@q.txt' ${ADMIN_K}`, 2);
+expectExit("--url-query 'name@q.txt' — name@file form also fails closed", `curl --url-query 'name@q.txt' ${ADMIN_K}`, 2);
+expectExit("--url-query=@q.txt inline spelling fails closed", `curl --url-query=@q.txt ${ADMIN_K}`, 2);
+expectExit("--url-query '+draw=1' with -X POST is a real POST: allowed", `curl -X POST --url-query '+draw=1' ${ADMIN_K}`, 0);
+expectExit("--url-query '@q.txt' with -X POST: allowed (the POST covers it)", `curl -X POST --url-query '@q.txt' ${ADMIN_K}`, 0);
+expectExit("--url-query '+draw=1' on a --next request after a safe POST", `curl -X POST ${SAFE} --next --url-query '+draw=1' ${ADMIN_K}`, 2);
+// --data-urlencode with -G: same value forms EXCEPT there is no `+` form.
+expectExit(
+  "-G --data-urlencode '+draw=1' — no + form: name '+draw' is sent as '?+draw=1', never 'draw=1': allowed",
+  `curl -G --data-urlencode '+draw=1' ${ADMIN_K}`,
+  0
+);
+expectExit("-G --data-urlencode 'draw=1' — still blocked", `curl -G --data-urlencode 'draw=1' ${ADMIN_K}`, 2);
+expectExit("-G --data-urlencode '=draw=1' — content encoded (draw%3D1) decodes once to draw=1: blocked (was allowed before decoding)", `curl -G --data-urlencode '=draw=1' ${ADMIN_K}`, 2);
+expectExit("-G --data-urlencode '@q.txt' fails closed", `curl -G --data-urlencode '@q.txt' ${ADMIN_K}`, 2);
+expectExit("-G --data-urlencode 'name@q.txt' fails closed", `curl -G --data-urlencode 'name@q.txt' ${ADMIN_K}`, 2);
+expectExit("-G --data-urlencode 'email=a@b.com' is name=content, not a file: allowed", `curl -G --data-urlencode 'email=a@b.com' ${ADMIN_K}`, 0);
+expectExit("-G -d '+draw=1' — raw -d value appended as-is (?+draw=1): not 'draw=1', allowed", `curl -G -d '+draw=1' ${ADMIN_K}`, 0);
+expectExit("--data-urlencode 'draw=1' WITHOUT -G is a POST body: allowed", `curl --data-urlencode 'draw=1' ${ADMIN_K}`, 0);
+expectExit(
+  "--url-query '+draw=1' AND -G --data-urlencode together: the url-query still lands on the URL",
+  `curl -G --data-urlencode 'a=b' --url-query '+draw=1' ${ADMIN_K}`,
+  2
+);
+
+// --- Round 34 follow-up: the hook decides on the query AFTER ONE pass of percent-decoding ---------
+// The server reads `%64raw=1` as `draw=1`. Decode exactly once: a malformed sequence (`%G1`, a
+// trailing `%`) stays literal, and `%2564raw=1` decodes to `%64raw=1` (curl sends it as-is, the
+// server sees the same) — NOT to `draw=1`.
+const ADMIN_BASE = "https://clucknorris.app/api/cuna-giveaway/admin";
+expectExit("?%64raw=1 (encoded name) in the URL itself", `curl "${ADMIN_BASE}?key=k&%64raw=1"`, 2);
+expectExit("?%64raw=1 as the first parameter", `curl "${ADMIN_BASE}?%64raw=1"`, 2);
+expectExit("?draw%3D1 (encoded =) in the URL itself", `curl "${ADMIN_BASE}?key=k&draw%3D1"`, 2);
+expectExit("?d%72aw=1 (encoded middle letter)", `curl "${ADMIN_BASE}?key=k&d%72aw=1"`, 2);
+expectExit("?ru%6E=1 on the vault route (another flag, encoded)", 'curl "https://clucknorris.app/api/whirlpool/vault/pause?project=poke&ru%6E=1"', 2);
+expectExit("--url-query '+d%72aw=1' — the raw + form is decoded too", `curl --url-query '+d%72aw=1' ${ADMIN_K}`, 2);
+expectExit("--url-query '+draw%3D1' — the raw + form, encoded =", `curl --url-query '+draw%3D1' ${ADMIN_K}`, 2);
+expectExit("--url-query 'd%72aw=1' — a name is sent as-is, so the server decodes it", `curl --url-query 'd%72aw=1' ${ADMIN_K}`, 2);
+expectExit("-G -d 'd%72aw=1' — raw -G data is decoded too", `curl -G -d 'd%72aw=1' ${ADMIN_K}`, 2);
+expectExit("?%64raw=1 with -X POST is a POST: allowed", `curl -X POST "${ADMIN_BASE}?%64raw=1"`, 0);
+expectExit(
+  "--url-query 'draw%3D1' — bare content is ENCODED (draw%253D1), decodes once to draw%3D1: not draw=1, allowed",
+  `curl --url-query 'draw%3D1' ${ADMIN_K}`,
+  0
+);
+expectExit("--url-query 'x=%64raw%3D1' — value is encoded then decoded once: %64raw%3D1, not draw=1, allowed", `curl --url-query 'x=%64raw%3D1' ${ADMIN_K}`, 0);
+expectExit("?%2564raw=1 — double-encoded is %64raw=1 after ONE decode, not draw=1: allowed", `curl "${ADMIN_BASE}?key=k&%2564raw=1"`, 0);
+expectExit("?draw=1% — a trailing % stays literal and does not break matching: still blocked", `curl "${ADMIN_BASE}?key=k&draw=1%"`, 2);
+expectExit("?%G1raw=1 — malformed sequence stays literal, no mutating flag: allowed", `curl "${ADMIN_BASE}?key=k&%G1raw=1"`, 0);
+expectExit("?%6raw=1 — truncated sequence stays literal: allowed", `curl "${ADMIN_BASE}?key=k&%6raw=1"`, 0);
+expectExit("?x=%26draw=1 — an encoded & is data, not a separator: allowed", `curl "${ADMIN_BASE}?key=k&x=%26draw=1"`, 0);
+
+// --- Codex round 35 P2: EVERY destination URL of every request segment is judged ------------------
+// curl sends one request per URL (positional words and each `--url`, after `{a,b}` / `[1-3]` glob
+// expansion); within a segment they all share the -X / -d / -G / --url-query state, and --url-query
+// / -G data is appended to EACH URL. A `--next` starts a new segment.
+const R35_PUB = "https://clucknorris.app/api/cuna-giveaway"; // public read route, not an admin route
+const R35_ADM = "https://clucknorris.app/api/cuna-giveaway/admin";
+const R35_HARMLESS = "https://example.com/x";
+expectExit(
+  "Codex's exact two-URL string: harmless first, admin (encoded flag) second",
+  `curl '${R35_PUB}' '${R35_ADM}?%64raw=1'`,
+  2
+);
+expectExit("admin FIRST, harmless second", `curl '${R35_ADM}?draw=1' '${R35_HARMLESS}'`, 2);
+expectExit("admin FIRST (encoded flag), a second admin-route URL after it", `curl '${R35_ADM}?%64raw=1' '${R35_PUB}'`, 2);
+expectExit(
+  "three URLs, the admin one in the MIDDLE",
+  `curl '${R35_PUB}' '${R35_ADM}?%64raw=1' '${R35_HARMLESS}'`,
+  2
+);
+expectExit("--url harmless --url admin?draw=1 (long form, separate words)", `curl --url '${R35_HARMLESS}' --url '${R35_ADM}?draw=1'`, 2);
+expectExit("--url harmless --url admin (encoded flag)", `curl --url '${R35_PUB}' --url '${R35_ADM}?%64raw=1'`, 2);
+expectExit("--url=admin?draw=1 (inline spelling)", `curl --url='${R35_ADM}?draw=1'`, 2);
+expectExit("--url=admin (encoded flag) after a positional harmless URL", `curl '${R35_PUB}' --url='${R35_ADM}?%64raw=1'`, 2);
+expectExit("positional harmless + --url admin", `curl '${R35_HARMLESS}' --url '${R35_ADM}?%64raw=1'`, 2);
+expectExit("two URLs where -X POST covers the whole segment: allowed", `curl -X POST '${R35_PUB}' '${R35_ADM}?%64raw=1'`, 0);
+expectExit("two --url values with -X POST: allowed", `curl -X POST --url '${R35_PUB}' --url '${R35_ADM}?draw=1'`, 0);
+expectExit("two URLs, --data (implies POST): allowed", `curl --data 'a=b' '${R35_PUB}' '${R35_ADM}?draw=1'`, 0);
+expectExit(
+  "two URLs per segment: harmless pair, --next, then a pair whose SECOND is the admin GET",
+  `curl '${R35_HARMLESS}' '${R35_PUB}' --next '${R35_PUB}' '${R35_ADM}?%64raw=1'`,
+  2
+);
+expectExit(
+  "first segment has the admin GET (harmless first), the later segment is a safe POST: blocked",
+  `curl '${R35_PUB}' '${R35_ADM}?%64raw=1' --next -X POST '${R35_HARMLESS}'`,
+  2
+);
+expectExit(
+  "first segment is a POST, the admin GET is a second URL in the --next segment: blocked",
+  `curl -X POST '${R35_HARMLESS}' --next '${R35_PUB}' '${R35_ADM}?%64raw=1'`,
+  2
+);
+expectExit(
+  "--url-query '+draw=1' with two URLs where only the SECOND is an admin route: appended to each, blocked",
+  `curl --url-query '+draw=1' '${R35_HARMLESS}' '${R35_ADM}'`,
+  2
+);
+expectExit(
+  "-G --data-urlencode 'draw=1' with the admin URL second: blocked",
+  `curl -G --data-urlencode 'draw=1' '${R35_HARMLESS}' '${R35_ADM}'`,
+  2
+);
+expectExit("two URLs, nothing mutating anywhere: allowed", `curl '${R35_PUB}' '${R35_ADM}?key=k'`, 0);
+expectExit("two non-admin URLs, one carrying ?draw=1: not our admin route, allowed", `curl '${R35_HARMLESS}?draw=1' '${R35_PUB}'`, 0);
+// `-K`/`--config`: the hook has never read config files (the value is consumed opaquely, so a URL
+// inside one is invisible) — that behaviour is kept, only the URLs on the command line are judged.
+expectExit("-K cfg.txt with an admin URL on the command line that is not mutating: allowed", `curl -K cfg.txt '${R35_ADM}?key=k'`, 0);
+expectExit("-K cfg.txt does not hide a mutating admin URL that IS on the command line", `curl -K cfg.txt '${R35_PUB}' '${R35_ADM}?%64raw=1'`, 2);
+expectExit("--config=cfg.txt inline spelling, mutating admin URL on the line", `curl --config=cfg.txt '${R35_ADM}?draw=1'`, 2);
+
+// URL globbing (curl expands `{a,b}` and `[1-3]` unless -g/--globoff).
+expectExit(
+  "brace expansion builds the admin route: '{admin,stats}?draw=1'",
+  `curl '${R35_PUB}/{admin,stats}?draw=1'`,
+  2
+);
+expectExit("brace expansion, the admin alternative LAST", `curl '${R35_PUB}/{stats,admin}?draw=1'`, 2);
+expectExit("brace expansion with -X POST: allowed", `curl -X POST '${R35_PUB}/{admin,stats}?draw=1'`, 0);
+expectExit(
+  "brace expansion in the HOST part",
+  "curl 'https://{clucknorris.app,example.com}/api/cuna-giveaway/admin?draw=1'",
+  2
+);
+expectExit("brace expansion in the query builds the flag: ?{draw,x}=1", `curl '${R35_ADM}?{draw,x}=1'`, 2);
+expectExit("brace expansion in the query, nothing mutating in any alternative: allowed", `curl '${R35_ADM}?{foo,bar}=1'`, 0);
+expectExit(
+  "-g (globoff): the URL is LITERAL, its path '/{admin,stats}' is not an admin route — allowed",
+  `curl -g '${R35_PUB}/{admin,stats}?draw=1'`,
+  0
+);
+expectExit("--globoff, same literal URL — allowed for the same reason", `curl --globoff '${R35_PUB}/{admin,stats}?draw=1'`, 0);
+expectExit("-sg cluster (globoff inside a cluster), same literal URL — allowed", `curl -sg '${R35_PUB}/{admin,stats}?draw=1'`, 0);
+expectExit(
+  "-g does NOT hide a literal admin URL: '/admin?draw=1' is still blocked",
+  `curl -g '${R35_ADM}?draw=1&x={1}'`,
+  2
+);
+expectExit(
+  "[range] in an admin-looking URL cannot be expanded: fails CLOSED",
+  `curl '${R35_PUB}/[a-a]dmin?draw=1'`,
+  2
+);
+expectExit("[range] with -g is a literal (not an admin route): allowed", `curl -g '${R35_PUB}/[a-a]dmin?draw=1'`, 0);
+expectExit("[range] with -X POST: allowed", `curl -X POST '${R35_PUB}/[a-a]dmin?draw=1'`, 0);
+expectExit("nested braces cannot be expanded faithfully: fails CLOSED", `curl '${R35_PUB}/{admin,{a,b}}?x=1'`, 2);
+expectExit("a range on a URL that is not ours is left alone", "curl 'https://example.com/[1-3].json'", 0);
+
+// UNQUOTED braces are expanded by the SHELL into separate words before curl runs (and -g cannot
+// undo that). The old segmenter also treated every `{` / `}` as a command boundary, which split the
+// URL apart and hid it from the check entirely.
+expectExit("unquoted {admin,stats}?draw=1 — the shell expands it to two URLs", `curl ${R35_PUB}/{admin,stats}?draw=1`, 2);
+expectExit("unquoted brace in the query: ?{draw,x}=1", `curl ${R35_ADM}?{draw,x}=1`, 2);
+expectExit("unquoted brace splitting a flag name: ?dr{a,b}w=1", `curl ${R35_ADM}?dr{a,b}w=1`, 2);
+expectExit("unquoted brace splitting the route: adm{i,x}n", `curl ${R35_PUB}/adm{i,x}n?draw=1`, 2);
+expectExit("unquoted nested braces {stats,{x,admin}}", `curl ${R35_PUB}/{stats,{x,admin}}?draw=1`, 2);
+expectExit("unquoted braces AND -g: -g is curl's, the shell expanded first — still blocked", `curl -g ${R35_PUB}/{admin,stats}?draw=1`, 2);
+expectExit("unquoted braces with -X POST: allowed", `curl -X POST ${R35_PUB}/{admin,stats}?draw=1`, 0);
+expectExit("unquoted brace list with no admin alternative: allowed", `curl ${R35_ADM}?key={a,b}`, 0);
+expectExit("a {…} without a comma is literal in bash — no expansion", `curl ${R35_ADM}?key={a}`, 0);
+expectExit("escaped brace is literal to the shell; -g then keeps it literal too", `curl -g ${R35_PUB}/\\{admin,stats\\}?draw=1`, 0);
+expectExit("${VAR} unquoted (draw=1 first) is not a brace list and not a boundary", `curl ${R35_ADM}?draw=1\${K}`, 2);
+expectExit("${VAR} inside double quotes with a later flag", `curl "${R35_ADM}?key=\${K}&draw=1"`, 2);
+expectExit("{ curl …; } group braces are still boundaries: the curl inside is judged", `{ curl '${R35_ADM}?draw=1'; }`, 2);
+expectExit("{ curl -X POST …; } group with a safe POST: allowed", `{ curl -X POST '${R35_ADM}?draw=1'; }`, 0);
+
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");
 const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md", "store-release.md"];
