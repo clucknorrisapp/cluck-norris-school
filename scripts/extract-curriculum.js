@@ -162,7 +162,11 @@ out.courses.push(lpCourse);
 // 4) Liquidity library (short reference prose) — folded into the LP course as extra reference
 //    lessons, same as the pre-move extractor did with `LIBRARY_LIQUIDITY`. Source: now
 //    src/sections/Library.jsx (moved out of App.jsx with the rest of the Library section).
-const { LIBRARY_TOPICS, LIBRARY_LIQUIDITY } = extractVars("src/sections/Library.jsx", ["LIBRARY_TOPICS", "LIBRARY_LIQUIDITY"], edition);
+const { LIBRARY_TOPICS, LIBRARY_LIQUIDITY, LIBRARY_GLOSSARY } = extractVars("src/sections/Library.jsx", ["LIBRARY_TOPICS", "LIBRARY_LIQUIDITY", "LIBRARY_GLOSSARY"], edition);
+// The Library's glossary, for the app's searchable Library (src/seeker/school/Library.jsx; owner,
+// 2026-09-25: "bring the library into the IOS version ... easily searchable and then can link into
+// the school"). Terms and definitions only — the app links each one to the lessons that teach it.
+out.glossary = (LIBRARY_GLOSSARY || []).map((g) => ({ term: g.term, def: g.def }));
 for (const t of LIBRARY_LIQUIDITY) {
   lpCourse.lessons.push({ id: "lib-" + t.id, title: t.title, icon: t.icon || "📖", intro: t.summary || "", content: t.content || "", reference: true });
 }

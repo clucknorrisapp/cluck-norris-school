@@ -18,9 +18,14 @@ import { NeedsWallet } from "../needswallet.jsx";
 import RentReclaimPane from "../RentReclaim.jsx";
 import AskCluckPane from "../AskCluck.jsx";
 import WalletCheckupPane from "../WalletCheckup.jsx";
+import CheckupRevoke from "../CheckupRevoke.jsx";
+import DisconnectCard from "../Disconnect.jsx";
 import { AddressForm, AddressBar } from "../addressform.jsx";
 import ToolsHome from "../ToolsHome.jsx";
+import { SolanaRoomIndex, SolanaRoomPage } from "../solana/SolanaRoom.jsx";
+import { SeekerWingIndexSection, SeekerWingPage } from "../solana/SeekerWing.jsx";
 import { SchoolHome, SchoolCourse, SchoolLesson } from "../school/School.jsx";
+import Library from "../school/Library.jsx";
 import ListingCheckup from "../tools/ListingCheckup.jsx";
 import DailyBrief from "../tools/DailyBrief.jsx";
 import Firepit from "../tools/Firepit.jsx";
@@ -32,6 +37,7 @@ import Trace from "../tools/Trace.jsx";
 import Airdropper from "../tools/Airdropper.jsx";
 import Hatchery from "../tools/Hatchery.jsx";
 import Swap from "../tools/Swap.jsx";
+import ShieldIcon from "../icons/ShieldIcon.jsx";
 import "./full.css";
 
 export const EDITION_ID = "full";
@@ -128,11 +134,21 @@ function FullCheckup({ wallet }) {
   const [pasted, setPasted] = React.useState(null);
   const [pasting, setPasting] = React.useState(false);
 
+  // The two full-edition-only pieces (2026-09-29, owner: "something on my app to help people
+  // disconnect from things"): the signing REVOKE control under the approvals list, and the
+  // "Disconnect & clean up" card after the results. Both render through props the shared pane
+  // exposes, so WalletCheckup.jsx itself stays free of anything the education build refuses.
+  // The revoke control checks for itself that the scanned address IS the connected wallet.
+  const revoke = ({ approvals, address, rescan }) => (
+    <CheckupRevoke wallet={wallet} approvals={approvals} scannedAddress={address} onDone={rescan} />
+  );
+  const footer = <DisconnectCard wallet={wallet} />;
+
   if (pasted) {
     return (
       <>
         <AddressBar address={pasted} onClear={() => { setPasted(null); setPasting(false); }} />
-        <WalletCheckupPane address={pasted} />
+        <WalletCheckupPane address={pasted} revoke={revoke} footer={footer} />
       </>
     );
   }
@@ -140,7 +156,7 @@ function FullCheckup({ wallet }) {
   if (wallet.connected && !pasting) {
     return (
       <>
-        <WalletCheckupPane address={wallet.address} />
+        <WalletCheckupPane address={wallet.address} revoke={revoke} footer={footer} />
         <button type="button" className="seeker-btn seeker-btn-quiet seeker-checkup-another" onClick={() => setPasting(true)}>
           {t("Check another")}
         </button>
@@ -170,9 +186,22 @@ export const TABS = [
   { to: "/school", label: "School", icon: "🎓" },
   { to: "/tools", label: "Toolkit", icon: "🧰" },
   { to: "/rent", label: "Rent", icon: "💰" },
-  { to: "/ask", label: "Ask", icon: "🐔" },
-  { to: "/checkup", label: "Checkup", icon: "🛡" },
+  { to: "/ask", label: "Ask", i18nKey: "Ask (tab)", icon: "🐔" },
+  { to: "/checkup", label: "Checkup", icon: <ShieldIcon /> },
 ];
+
+// The routes THIS edition registers — kept as data so a doc-mentioned, not-yet-shipped feature
+// (the in-app swap, docs/SWAP_DESIGN.md / PR #420) can be announced once its own route actually
+// exists here, rather than a hand-set boolean silently drifting from the truth. Keep this list in
+// sync with the <Route> elements below; scripts/seeker-solana-room-test.cjs pins that it is.
+export const REGISTERED_ROUTES = [
+  "/", "/school", "/school/:courseId", "/school/:courseId/:lessonId",
+  "/solana", "/solana/:pageId", "/solana/seeker/:pageId",
+  "/tools", "/rent", "/ask", "/checkup",
+  "/tools/listing", "/tools/alpha", "/tools/firepit", "/tools/burn", "/tools/lock",
+  "/tools/xray", "/tools/holders", "/tools/trace", "/tools/airdrop", "/tools/hatchery",
+];
+const SWAP_AVAILABLE = REGISTERED_ROUTES.includes("/tools/swap");
 
 export function EditionRoutes({ wallet }) {
   return (
@@ -181,6 +210,10 @@ export function EditionRoutes({ wallet }) {
       <Route path="/school" element={<SchoolHome />} />
       <Route path="/school/:courseId" element={<SchoolCourse />} />
       <Route path="/school/:courseId/:lessonId" element={<SchoolLesson />} />
+      <Route path="/library" element={<Library />} />
+      <Route path="/solana" element={<SolanaRoomIndex extra={<SeekerWingIndexSection />} />} />
+      <Route path="/solana/:pageId" element={<SolanaRoomPage />} />
+      <Route path="/solana/seeker/:pageId" element={<SeekerWingPage swapAvailable={SWAP_AVAILABLE} />} />
       <Route path="/tools" element={<ToolsHome />} />
       <Route path="/rent" element={<RentReclaimPane wallet={wallet} />} />
       <Route path="/ask" element={<AskCluckPane />} />

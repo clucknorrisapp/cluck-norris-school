@@ -50,7 +50,7 @@
       "z-index:2147483600", "font-family:'Chakra Petch',system-ui,sans-serif"].join(";");
     var menu = document.createElement("div");
     menu.style.cssText = ["position:absolute", "bottom:46px", "right:0", "display:none", "flex-direction:column",
-      "gap:3px", "background:rgba(20,11,6,.98)", "border:1px solid rgba(255,122,24,.45)", "border-radius:12px",
+      "gap:3px", "background:#140b06", "border:1px solid rgba(255,122,24,.45)", "border-radius:12px",
       "padding:6px", "box-shadow:0 8px 24px rgba(0,0,0,.55)", "min-width:124px"].join(";");
     LANGS.forEach(function (L) {
       var it = document.createElement("button");
@@ -74,13 +74,54 @@
     btn.style.cssText = ["font:inherit", "font-size:13px", "font-weight:700", "letter-spacing:.5px", "color:#FFD9A0",
       "background:rgba(26,15,8,.96)", "border:1px solid rgba(255,122,24,.55)", "border-radius:999px",
       "padding:8px 13px", "cursor:pointer", "box-shadow:0 4px 16px rgba(0,0,0,.5)", "-webkit-tap-highlight-color:transparent"].join(";");
-    btn.addEventListener("click", function (e) { e.stopPropagation(); menu.style.display = (menu.style.display === "none") ? "flex" : "none"; });
+    // Open the menu toward whichever side has room. It used to always open UPWARD from the pill,
+    // and a pill lifted clear of page text (clkn-dock-float.js) sent the seven-language list off
+    // the top of an iPhone screen (owner, 2026-09-25). Docked in a header it opens downward; a
+    // list that fits neither way is capped to the larger side and scrolls.
+    function placeMenu() {
+      menu.style.top = "auto"; menu.style.bottom = "auto"; menu.style.maxHeight = "none"; menu.style.overflowY = "visible";
+      var r = btn.getBoundingClientRect(), h = menu.scrollHeight, vh = window.innerHeight || 0;
+      var header = document.querySelector("#cluck-nav-bar,.seeker-header");
+      var topLimit = (header && !header.contains(wrap) ? header.getBoundingClientRect().bottom : 0) + 8;
+      var above = r.top - topLimit - 6, below = vh - r.bottom - 8 - 6;
+      var nav = document.querySelector(".seeker-nav");
+      if (nav) below = nav.getBoundingClientRect().top - r.bottom - 8 - 6;
+      var down = wrap.__clknHeaderDocked ? below >= Math.min(h, 120) || below >= above : (h > above && below > above);
+      if (down) menu.style.top = (r.height + 6) + "px"; else menu.style.bottom = (r.height + 6) + "px";
+      var room = Math.max(80, down ? below : above);
+      if (h > room) { menu.style.maxHeight = room + "px"; menu.style.overflowY = "auto"; }
+    }
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (menu.style.display === "none") { menu.style.display = "flex"; placeMenu(); } else menu.style.display = "none";
+    });
     document.addEventListener("click", function () { menu.style.display = "none"; });
     wrap.appendChild(menu); wrap.appendChild(btn);
+    window.__clknLangToggleEl = wrap;
+    // A shell with a header (the phone app) gives the picker a fixed home there instead of a
+    // floating pill: it no longer moves as content scrolls under it (owner, 2026-09-25: "it randomly
+    // moves from bottom right to up higher"). Whichever of this script and the shell's header
+    // renders first, the other side completes the dock — see window.__clknLangDockInto below.
+    var host = document.querySelector("[data-clkn-lang-host]");
+    if (host) { dockInto(host); return; }
     document.body.appendChild(wrap);
     // lift above any bottom-anchored composer (helper lives in the nav script, which loaded us)
     if (window.__clknDockFloat) window.__clknDockFloat(wrap);
   }
+  // Move the picker into a header slot and take it out of the floating system for good:
+  // __clknHeaderDocked makes clkn-dock-float.js leave it alone, and the inline !important
+  // position/bottom/right beat the shell's own !important floating rules.
+  function dockInto(host) {
+    var wrap = window.__clknLangToggleEl;
+    if (!wrap || !host) return;
+    wrap.__clknHeaderDocked = 1;
+    wrap.style.setProperty("position", "relative", "important");
+    wrap.style.setProperty("bottom", "auto", "important");
+    wrap.style.setProperty("right", "auto", "important");
+    wrap.style.setProperty("z-index", "2147483600");
+    if (wrap.parentNode !== host) host.appendChild(wrap);
+  }
+  window.__clknLangDockInto = dockInto;
   function onReady(fn) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
     else fn();

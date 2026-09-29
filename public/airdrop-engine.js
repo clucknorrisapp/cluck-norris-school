@@ -17,6 +17,19 @@
 // Using Helius RPC for ATA derivation instead of full SPL library
 const TOKEN_CLASSIC = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 const TOKEN_2022 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+const KNOWN_TOKEN_PROGRAMS = new Set([TOKEN_CLASSIC, TOKEN_2022]);
+
+// Defense in depth (adversarial review on PR #443): the token program id decides which real
+// on-chain program interprets an instruction's account list. A caller passing anything other than
+// the two real token programs would still build a well-formed TransactionInstruction — nothing
+// about the shape would look wrong — for whatever program that id actually names. Refuse before a
+// wallet is ever asked to sign, on the money-moving builders (burn, close, withdraw-excess),
+// rather than trust every call site to always pass one of the two real ones.
+function assertKnownTokenProgram(tokenProgram) {
+  const p = tokenProgram || TOKEN_CLASSIC;
+  if (!KNOWN_TOKEN_PROGRAMS.has(p)) throw new Error('Refusing an unknown token program: ' + p);
+  return p;
+}
 
 const splToken = {
   // The token program is a SEED of the ATA PDA, so a Token-2022 mint derives a
@@ -90,7 +103,7 @@ const splToken = {
   // Token-2022) in Node before shipping, per CLAUDE.md's "diff its bytes against the library" rule.
   createBurnCheckedInstruction(account, mint, owner, amount, decimals, tokenProgram) {
     const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
+    const TOKEN_PROGRAM = new PublicKey(assertKnownTokenProgram(tokenProgram));
     const data = new Uint8Array(10);
     data[0] = 15;
     new DataView(data.buffer).setBigUint64(1, BigInt(amount), true);
@@ -113,7 +126,7 @@ const splToken = {
   // Token-2022) in Node before shipping.
   createCloseAccountInstruction(account, destination, owner, tokenProgram) {
     const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
+    const TOKEN_PROGRAM = new PublicKey(assertKnownTokenProgram(tokenProgram));
     return new TransactionInstruction({
       keys: [
         { pubkey: account,     isSigner: false, isWritable: true },
@@ -122,6 +135,42 @@ const splToken = {
       ],
       programId: TOKEN_PROGRAM,
       data: new Uint8Array([9]),
+    });
+  },
+
+  // WithdrawExcessLamports (token program ix #38) — pulls the lamports a token account holds
+  // ABOVE today's rent-exempt minimum, WITHOUT closing the account or touching its token
+  // balance. Powers Firepit's "reclaim surplus rent — keep the account open" job (a rent-
+  // parameter cut, e.g. the p-token/SIMD-0266 rollout, lowers the minimum for NEW accounts
+  // without touching what an existing one already deposited). Supported by BOTH the legacy SPL
+  // Token program and Token-2022. Data is a single opcode byte, no payload.
+  //
+  // The installed @solana/spl-token (0.4.14) does not implement this yet — its own
+  // TokenInstruction enum has the slot commented out ("// WithdrawalExcessLamports = 38"),
+  // confirming the opcode. Verified against the SIMD-0266 spec and
+  // solana.com/docs/tokens/advanced/withdraw-excess-lamports (see scripts/verify-burn-close.cjs
+  // for the full source list — kept out of this comment because it ships in the pinned store
+  // editions, whose build fails closed on any host outside their allow-list), plus a real mainnet
+  // simulation (sigVerify:false, replaceRecentBlockhash:true — never a sent transaction): a
+  // legacy 165-byte account went from 2,039,280 to 1,488,440 lamports, stayed open, its token
+  // balance untouched, at 270 CU; a Token-2022 account used 1,414 CU.
+  //
+  // `authority` MUST be the account's OWNER (a delegate or close-authority has no standing —
+  // Custom(4) OwnerMismatch) and is always the connected wallet here, same as `destination` —
+  // neither is ever user-editable (CLAUDE.md guardrail: no user-editable destination on a
+  // money path). Wrapped SOL (isNative) accounts return Custom NativeNotSupported — the caller
+  // filters those out before this is ever built (see lib/rent-surplus.js's isEligibleForSurplus).
+  createWithdrawExcessLamportsInstruction(account, destination, authority, tokenProgram) {
+    const { PublicKey, TransactionInstruction } = solanaWeb3;
+    const TOKEN_PROGRAM = new PublicKey(assertKnownTokenProgram(tokenProgram));
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: account,     isSigner: false, isWritable: true },
+        { pubkey: destination, isSigner: false, isWritable: true },
+        { pubkey: authority,   isSigner: true,  isWritable: false },
+      ],
+      programId: TOKEN_PROGRAM,
+      data: new Uint8Array([38]),
     });
   },
 

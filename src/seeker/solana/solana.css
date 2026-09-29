@@ -1,0 +1,207 @@
+/* The Solana Room, in the Seeker app (both editions).
+ * Same visual language as public/solana-room.html / public/solana-*.html — card-per-topic,
+ * a distinct red "scam" card for guardrail content — rebuilt on seeker.css's own tokens and
+ * class-naming convention (CLAUDE.md: palette/type scale live in theme.css, never redefined
+ * here). `.seeker-pane.seeker-solana` drops the centered layout the same way `.seeker-school`
+ * does, since this is a scrolling list of cards, not a short status screen. */
+.seeker-pane.seeker-solana {
+  text-align: left;
+  padding-top: 4px;
+  max-width: 560px;
+}
+.seeker-solana-sub {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--sub);
+  margin: -6px 0 14px;
+}
+.seeker-solana-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--orange);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  margin: 0 0 6px -3px;
+  padding: 0 3px;
+}
+.seeker-solana-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.seeker-solana-card.scam {
+  background: var(--redbg, rgba(232, 30, 14, .14));
+  border: 1px solid rgba(232, 30, 14, .4);
+}
+.seeker-solana-card.scam .seeker-solana-sectitle { color: #FCA5A5; }
+.seeker-solana-card.scam .seeker-solana-fact { color: #FBD5D0; }
+.seeker-solana-card.scam .seeker-solana-fact b { color: #FEE2E0; }
+.seeker-solana-intro {
+  font-size: var(--body-text, 15px);
+  color: var(--subtext, #9CA3AF);
+  line-height: 1.7;
+}
+.seeker-solana-intro + .seeker-solana-intro { margin-top: 10px; }
+.seeker-solana-sectitle {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  margin: 0 0 8px;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+.seeker-solana-fact {
+  font-size: var(--body-text, 15px);
+  color: var(--subtext, #9CA3AF);
+  line-height: 1.7;
+}
+.seeker-solana-fact + .seeker-solana-fact { margin-top: 10px; }
+.seeker-solana-fact b { color: var(--text); }
+.seeker-solana-stagerow {
+  padding: 10px 0;
+  border-top: 1px solid var(--border-soft, rgba(255, 255, 255, .06));
+}
+.seeker-solana-stagerow:first-of-type { border-top: none; padding-top: 0; }
+.seeker-solana-stagename {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+.seeker-solana-stagevals { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.seeker-solana-stageval { min-width: 130px; flex: 1 1 130px; }
+.seeker-solana-stagelabel {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: .5px;
+  color: var(--sub);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.seeker-solana-stagenum { font-family: var(--mono); font-size: 13px; color: var(--text); word-break: break-word; }
+.seeker-solana-cta {
+  display: flex;
+  flex-direction: column;
+}
+.seeker-solana-cta a, .seeker-solana-cta button {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--cyan, #67E8F9);
+  text-decoration: none;
+  font-size: 14px;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font-family: var(--body);
+  cursor: pointer;
+}
+.seeker-solana-footnote {
+  font-size: 12.5px;
+  color: var(--sub);
+  line-height: 1.6;
+}
+.seeker-solana-back-link {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  color: var(--sub);
+}
+.seeker-solana-back-link a {
+  display: inline-block;
+  padding: 12px 4px;
+  color: var(--cyan, #67E8F9);
+  text-decoration: none;
+}
+/* ── index: the two topic groups ── */
+.seeker-solana-topic {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-soft, rgba(255, 255, 255, .06));
+}
+.seeker-solana-topic:first-of-type { border-top: none; padding-top: 0; }
+.seeker-solana-topic h2 {
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 17px;
+  color: var(--text);
+  margin: 0;
+}
+.seeker-solana-topic p {
+  font-size: var(--body-text, 15px);
+  color: var(--subtext, #9CA3AF);
+  line-height: 1.6;
+  margin: 0;
+}
+.seeker-solana-topic-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 2px;
+  color: var(--cyan, #67E8F9);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+}
+/* ── links page: a row per venue ── */
+.seeker-solana-linkrow {
+  padding: 10px 0;
+  border-top: 1px solid var(--border-soft, rgba(255, 255, 255, .06));
+}
+.seeker-solana-linkrow:first-of-type { border-top: none; padding-top: 0; }
+.seeker-solana-linkname { font-family: var(--disp); font-size: 14px; color: var(--text); }
+.seeker-solana-linkdomain {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--cyan, #67E8F9);
+  text-decoration: none;
+  word-break: break-all;
+}
+.seeker-solana-linkfor, .seeker-solana-linkwont {
+  font-size: 12.5px;
+  color: var(--sub);
+  line-height: 1.5;
+  margin-top: 2px;
+}
+.seeker-solana-linkfor b, .seeker-solana-linkwont b { color: var(--text); }
+/* ── markets page: the comparison table ── */
+.seeker-solana-table-col { font-size: 10.5px; letter-spacing: .5px; color: var(--sub); text-transform: uppercase; margin-bottom: 2px; }
+/* ── the school-home entry card ── */
+.seeker-solana-schoolcard {
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 14px;
+  text-decoration: none;
+  color: inherit;
+}
+.seeker-solana-schoolcard-title {
+  display: block;
+  font-family: var(--disp);
+  font-weight: 400;
+  font-size: 16px;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+.seeker-solana-schoolcard-sub {
+  display: block;
+  font-size: var(--body-text, 15px);
+  color: var(--subtext, #9CA3AF);
+  line-height: 1.5;
+}

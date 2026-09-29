@@ -38,6 +38,8 @@ window.__clknDockFloat = function (el) {
   // by setting --clkn-dock-base on the floater; everything else gets the plain 14px inset.
   var DEF = "var(--clkn-dock-base, calc(14px + env(safe-area-inset-bottom,0px)))";
   function fit() {
+    // Docked in a header by i18n.js (the phone app): not a floater any more, never lift it.
+    if (el.__clknHeaderDocked) return;
     try {
       var lift = 0;
       // Iterative: a single measure-and-lift pass is enough to clear one composer, but
@@ -68,6 +70,20 @@ window.__clknDockFloat = function (el) {
           }
         }
         if (!found) break;
+      }
+      // Hard floor: never let the climb above put the pill above the viewport, or above a
+      // fixed/sticky header. A tall avoid target whose own top sits well off-screen (a
+      // data-clkn-avoid-kids container marked on a whole multi-row card instead of its rows —
+      // the Solana Room index bug, 2026-09-24) can demand a "need" bigger than the screen, and
+      // the loop above has no way to know that's not a real gap. If clearing every target would
+      // push the pill's top above the header (or above the viewport itself when there's no
+      // header), there is no usable gap on this screen — fall back to the default resting spot
+      // rather than fly the pill off the top.
+      var headerEl = document.querySelector("#cluck-nav-bar,.seeker-header");
+      var floorTop = (headerEl ? headerEl.getBoundingClientRect().bottom : 0) + 8;
+      var fr = el.getBoundingClientRect();
+      if (fr.width && fr.top < floorTop) {
+        el.style.setProperty("bottom", DEF, "important");
       }
     } catch (_) {}
   }

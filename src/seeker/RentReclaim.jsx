@@ -17,6 +17,7 @@
 // signature (a NORMAL outcome, not an error — the user changed their mind), and a result screen
 // with per-account confirmed/failed/skipped rows and a confirmed-only total.
 import React from "react";
+import { Link } from "react-router-dom";
 import { t, tf, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
 import { useOnline } from "./pane.jsx";
@@ -360,6 +361,12 @@ export default function RentReclaimPane({ wallet }) {
         <div className="seeker-paneicon" aria-hidden="true">💰</div>
         <h1>{t("Rent Reclaim")}</h1>
         <NeedsWallet why="Connect your wallet to scan for reclaimable rent." wallet={wallet} />
+        {/* The Solana Room's own rent page, IN-APP rather than the old website-only pointer —
+            same already-translated sentence public/solana-wallet.html uses for the same link, so
+            this ships correctly in all seven languages with no new string to translate. */}
+        <Link className="seeker-reclaim-learnmore" to="/solana/rent">
+          {t("The full breakdown of that deposit, what changed recently, and the scam it invites →")}
+        </Link>
       </section>
     );
   }

@@ -127,6 +127,17 @@ function findChromium() {
       let t = await text();
       if (/That lesson doesn't exist|That course doesn't exist/.test(t) || !/seeker/.test(await page.evaluate(() => document.querySelector(".seeker-pane.seeker-school") ? "seeker" : ""))) { missing++; per[l.key] = t; continue; }
       let all = t;
+      // ⚠️ THE LESSON STEPPER (#437) shows a long lesson one section per screen, so the read screen
+      // above is only its opening step. Walk every step and read each one — a scan that read only
+      // the opening would pass with a forbidden sentence sitting on step 3 (the --mutate proof on
+      // #/school/lp/4 is what keeps this honest). The walk ends on the last step, where the quiz
+      // button lives.
+      const stepCount = await page.locator(".seeker-step-seg").count();
+      for (let s = 1; s < stepCount; s++) {
+        await page.locator(".seeker-step-seg").nth(s).click().catch(() => {});
+        await page.waitForTimeout(30);
+        all += "\n" + (await text());
+      }
       if (l.questions) {
         await page.click(".seeker-school-start").catch(() => {});
         for (let i = 0; i < l.questions; i++) {

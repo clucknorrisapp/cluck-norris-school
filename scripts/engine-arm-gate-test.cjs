@@ -22,6 +22,8 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { Keypair } = require("@solana/web3.js");
+const bs58 = require("bs58");
 
 const PORT = Number(process.env.ARM_TEST_PORT || 3141);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -43,6 +45,7 @@ const BASE_ENV = {
   FALLBACK_RPC_URL: "http://127.0.0.1:9",
   POKE_ENGINE_ON: "", POKE_ENGINE_OFF: "", CUNA_ENGINE_ON: "", CUNA_ENGINE_OFF: "",
   DNC_ENGINE_ON: "", DNC_ENGINE_OFF: "", ROSE_ENGINE_ON: "", ROSE_ENGINE_OFF: "",
+  BULLEN_ENGINE_ON: "", BULLEN_ENGINE_OFF: "",
 };
 async function boot(extraEnv) {
   const env = { ...process.env, ...BASE_ENV, ...extraEnv };
@@ -117,6 +120,66 @@ function writeState(patch) { fs.writeFileSync(STATE, JSON.stringify({ ...readSta
   r = await call("GET", "/api/rose-engine");
   ok("… but its ratchet applied widthPct 2.75 from ratchetOverrides:rose (code table says 2)", r.body && r.body.widthPct === 2.75 && r.body.armed === false, JSON.stringify(r.body).slice(0, 200));
   ok("ratchet override log line fired for cuna", /\[cuna\] ratchet overrides active/.test(b.log()));
+  await b.stop();
+
+  // ── D: bullen — off-by-default, hard-kill, ratchet-merge, two-pool config, no new operator env
+  console.log("\nD. bullen — off by default, no MM_OPERATOR_SECRET_BULLEN, shares MM_OPERATOR_SECRET_CUNA");
+  b = await boot({});
+  r = await call("GET", "/api/bullen-engine");
+  ok("bullen: armed:false on a fresh boot (kv arm key absent = OFF)", r.status === 200 && r.body && r.body.ok === true && r.body.armed === false && r.body.hardKilled === false, JSON.stringify(r.body).slice(0, 200));
+  ok("bullen: no operator loaded (no MM_OPERATOR_SECRET_CUNA set)", r.body && r.body.operator === null);
+  ok("bullen: two 0.01% pools at ±1.5%, jup preset off", r.body && r.body.feeTierPct === 0.01 && r.body.widthPct === 1.5 && r.body.solWidthPct === 1.5 && r.body.jupEnabled === false, JSON.stringify(r.body));
+  ok("bullen: buyback off by default", r.body && r.body.buybackEnabled === false);
+  r = await call("GET", "/api/bullen-engine?on=1");
+  ok("bullen: GET ?on=1 is refused with 405", r.status === 405, String(r.status));
+  r = await call("POST", "/api/bullen-engine?on=1");
+  ok("bullen: POST ?on=1 refuses to arm without an operator key", r.status === 200 && r.body && r.body.ok === false && /no_operator/.test(String(r.body.error)), JSON.stringify(r.body).slice(0, 200));
+  const logD = b.log();
+  ok("bullen scheduler registered at boot (loop up, disarmed)", /\[bullen-engine\] loop up — currently DISARMED/.test(logD), logD.slice(-800));
+  await b.stop();
+
+  // ── D2: bullen hard-killed
+  console.log("\nD2. BULLEN_ENGINE_OFF=1 hard-kills it even with the kv arm key true");
+  writeState({ bullenEngineArmed: true });
+  b = await boot({ BULLEN_ENGINE_OFF: "1" });
+  r = await call("GET", "/api/bullen-engine");
+  ok("bullen: armed:false + hardKilled:true although the kv arm key is true", r.body && r.body.armed === false && r.body.hardKilled === true, JSON.stringify(r.body).slice(0, 200));
+  r = await call("POST", "/api/bullen-engine?on=1");
+  ok("bullen: POST ?on=1 refused as hard_killed", r.body && r.body.ok === false && r.body.error === "hard_killed", JSON.stringify(r.body).slice(0, 200));
+  ok("bullen loop reports hard-killed, not started", /BULLEN_ENGINE_OFF=1 — engine hard-killed/.test(b.log()));
+  await b.stop();
+
+  // ── D3: bullen's durable ratchet override merges too
+  console.log("\nD3. ratchetOverrides:bullen merges over the code table");
+  writeState({ bullenEngineArmed: false, "ratchetOverrides:bullen": { widthPct: 2.25 } });
+  b = await boot({});
+  r = await call("GET", "/api/bullen-engine");
+  ok("bullen ratchet (boot) applied widthPct 2.25 from ratchetOverrides:bullen (code table says 1.5)", r.body && r.body.widthPct === 2.25, JSON.stringify(r.body).slice(0, 200));
+  await b.stop();
+
+  // ── E: one-armed-engine-per-wallet — bullen and cuna share MM_OPERATOR_SECRET_CUNA
+  console.log("\nE. one armed engine per wallet — bullen vs cuna/dnc/rose (all share MM_OPERATOR_SECRET_CUNA)");
+  writeState({ "ratchetOverrides:bullen": null, "ratchetOverrides:cuna": null, "ratchetOverrides:dnc": null, "ratchetOverrides:rose": null });
+  // A REAL (but fresh, unfunded, throwaway) keypair — so operatorPubkey() resolves and an arm
+  // attempt can reach `armed:true`. It never signs or reaches a chain in this test.
+  const fakeOperatorB58 = bs58.encode(Keypair.generate().secretKey);
+  b = await boot({ MM_OPERATOR_SECRET_CUNA: fakeOperatorB58 });
+  // bullen refuses while cuna's vault project is not explicitly paused (its normal resting state)
+  r = await call("POST", "/api/bullen-engine?on=1");
+  ok("bullen refuses to arm while cuna is unpaused on the shared wallet", r.body && r.body.ok === false && r.body.error === "wallet_conflict" && /cuna/.test(r.body.detail), JSON.stringify(r.body).slice(0, 220));
+  // pause cuna/dnc/rose explicitly, then bullen may arm
+  for (const p of ["cuna", "dnc", "rose"]) await call("POST", `/api/whirlpool/vault/pause?project=${p}`);
+  r = await call("POST", "/api/bullen-engine?on=1");
+  ok("bullen arms once cuna/dnc/rose are all explicitly paused", r.body && r.body.ok === true && r.body.armed === true, JSON.stringify(r.body).slice(0, 220));
+  // now cuna refuses because bullen is ARMED (not merely unpaused)
+  r = await call("POST", "/api/cuna-engine?on=1");
+  ok("cuna refuses to arm while bullen is armed on the shared wallet", r.body && r.body.ok === false && r.body.error === "wallet_conflict" && /bullen/.test(r.body.detail), JSON.stringify(r.body).slice(0, 220));
+  r = await call("POST", "/api/rose-engine?on=1");
+  ok("rose refuses to arm while bullen is armed on the shared wallet", r.body && r.body.ok === false && r.body.error === "wallet_conflict" && /bullen/.test(r.body.detail), JSON.stringify(r.body).slice(0, 220));
+  // disarm bullen — cuna can arm again (dnc/rose still paused so no OTHER conflict)
+  await call("POST", "/api/bullen-engine?off=1");
+  r = await call("POST", "/api/cuna-engine?on=1");
+  ok("cuna arms again once bullen is disarmed", r.body && r.body.ok === true && r.body.armed === true, JSON.stringify(r.body).slice(0, 220));
   await b.stop();
 
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
