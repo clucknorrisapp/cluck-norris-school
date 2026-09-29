@@ -389,6 +389,66 @@ const baseArgs = () => ({
     ok("inAmount drawn half from each input account (sum == inAmount) -> passes", rSplitIn.ok === true, rSplitIn);
   }
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(12) Codex round 33 on #420 — NATIVE SOL OUTPUT: the minimum is checked on the SOL position, fee and rent accounted for\n");
+  {
+    const IN_TOKEN = "TokenINxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    const WSOL_ATA = "WSOLata11111111111111111111111111111111111";
+    const rent = BigInt(ATA_RENT_LAMPORTS);
+    // Selling a token for SOL: the wallet holds the input token and (before the swap) no wSOL
+    // account — the inventory appends the wSOL ATA candidate at before=0 (finding 1's mechanism).
+    const labels = [
+      { kind: "sol", before: String(SOL_BEFORE) },
+      { kind: "token", mint: IN_TOKEN, before: String(IN_AMOUNT * 2n) },
+      { kind: "token", mint: OTHER_MINT, before: String(OTHER_BEFORE) },
+      { kind: "token", mint: IN_MINT, before: "0", expected: true },   // IN_MINT is the wSOL mint id
+    ];
+    const args = { ...baseArgs(), inputMint: IN_TOKEN, outputMint: IN_MINT, inputIsSol: false, allowedNewAtaCount: 1 };
+    const sim = (solAfter, wsolAfter) => ({ err: null, accounts: [solEntry(solAfter), tokenEntry(IN_TOKEN, IN_AMOUNT), tokenEntry(OTHER_MINT, OTHER_BEFORE), wsolAfter == null ? null : tokenEntry(IN_MINT, wsolAfter)] });
+
+    // Honest unwrap: the wSOL account was created, paid, and closed in the same transaction (reads
+    // null); native SOL rose by the minimum less the fee (the temp account's rent came back).
+    const rHonest = verifySimulationResult({ simResult: sim(SOL_BEFORE + MIN_RECEIVED - FEE_LAMPORTS, null), addressLabels: labels, ...args });
+    ok("SOL output, honest unwrap (wSOL account closed, native SOL up by minimum − fee) -> passes", rHonest.ok === true, rHonest);
+    // The same with the temp account left OPEN holding its rent (Jupiter always closes it, but
+    // the gate must not depend on that): native SOL up by minimum − fee − rent, wSOL account
+    // exists with 0 tokens -> passes (rent credited for the one allowed create).
+    const rOpen = verifySimulationResult({ simResult: sim(SOL_BEFORE + MIN_RECEIVED - FEE_LAMPORTS - rent, 0n), addressLabels: labels, ...args });
+    ok("…temp wSOL account left open (rent retained, 0 tokens) -> passes, rent credited once", rOpen.ok === true, rOpen);
+    // Insufficient: one lamport under the minimum, with every credit already granted -> refused.
+    const rShort = verifySimulationResult({ simResult: sim(SOL_BEFORE + MIN_RECEIVED - FEE_LAMPORTS - rent - 1n, 0n), addressLabels: labels, ...args });
+    ok("…one lamport under the minimum after fee and rent are credited -> refused", rShort.ok === false && /less than the minimum/i.test(rShort.reason), rShort);
+    // No create allowed at all (allowedNewAtaCount 0): the only credit is the fee.
+    const args0 = { ...args, allowedNewAtaCount: 0 };
+    const rExact0 = verifySimulationResult({ simResult: sim(SOL_BEFORE + MIN_RECEIVED - FEE_LAMPORTS, null), addressLabels: labels, ...args0 });
+    ok("no create allowed: native SOL up by exactly minimum − fee -> passes", rExact0.ok === true, rExact0);
+    const rShort0 = verifySimulationResult({ simResult: sim(SOL_BEFORE + MIN_RECEIVED - FEE_LAMPORTS - 1n, null), addressLabels: labels, ...args0 });
+    ok("no create allowed: one lamport under minimum − fee -> refused (no rent slack without an allowed create)", rShort0.ok === false && /less than the minimum/i.test(rShort0.reason), rShort0);
+    // Nothing received: SOL only fell by the fee, wSOL never existed -> refused.
+    const rNothing = verifySimulationResult({ simResult: sim(SOL_BEFORE - FEE_LAMPORTS, null), addressLabels: labels, ...args });
+    ok("SOL output but native SOL only fell by the fee (nothing received) -> refused", rNothing.ok === false && /less than the minimum/i.test(rNothing.reason), rNothing);
+    // Paid into a PRE-EXISTING wSOL account instead of unwrapping (no native change but the fee):
+    // the wSOL account rises by the minimum -> the SOL position gained the minimum -> passes.
+    const labelsHeld = [labels[0], labels[1], labels[2], { kind: "token", mint: IN_MINT, before: "1000" }];
+    const rHeld = verifySimulationResult({ simResult: sim(SOL_BEFORE - FEE_LAMPORTS, 1000n + MIN_RECEIVED), addressLabels: labelsHeld, ...args0 });
+    ok("output paid into a pre-existing wSOL account (no unwrap) -> passes (native + wrapped is one position)", rHeld.ok === true, rHeld);
+    // …and a pre-existing wSOL account DRAINED to fake a native rise is caught: native up by the
+    // minimum − fee but the wSOL account fell by the same amount — net zero received.
+    const rShuffle = verifySimulationResult({ simResult: sim(SOL_BEFORE + MIN_RECEIVED - FEE_LAMPORTS, 1000n - MIN_RECEIVED > 0n ? 1000n - MIN_RECEIVED : 0n), addressLabels: [labels[0], labels[1], labels[2], { kind: "token", mint: IN_MINT, before: String(MIN_RECEIVED + 1000n) }], ...args0 });
+    ok("native SOL up by the minimum but a pre-existing wSOL account drained by the same amount (net 0) -> refused", rShuffle.ok === false && /less than the minimum/i.test(rShuffle.reason), rShuffle);
+    // Input SOL AND output SOL is not a swap the gate can reason about -> refused, never passed.
+    const rSame = verifySimulationResult({ simResult: sim(SOL_BEFORE, null), addressLabels: labels, ...args, inputMint: IN_MINT, inputIsSol: true });
+    ok("input SOL and output SOL (same asset both sides) -> refused", rSame.ok === false && /same asset/i.test(rSame.reason), rSame);
+    // Missing SOL entry with SOL output: refused as malformed, never read as "received 0" or skipped.
+    const missingSol = { err: null, accounts: [null, tokenEntry(IN_TOKEN, IN_AMOUNT), tokenEntry(OTHER_MINT, OTHER_BEFORE), null] };
+    const rMissing = verifySimulationResult({ simResult: missingSol, addressLabels: labels, ...args });
+    ok("SOL output with the SOL entry missing from the simulation -> refused as malformed, never skipped", rMissing.ok === false && /sol balance was missing/i.test(rMissing.reason), rMissing);
+    // The input side is still bounded on a SOL-output swap: the input token falling by inAmount+1 -> refused.
+    const overIn = { err: null, accounts: [solEntry(SOL_BEFORE + MIN_RECEIVED - FEE_LAMPORTS), tokenEntry(IN_TOKEN, IN_AMOUNT - 1n), tokenEntry(OTHER_MINT, OTHER_BEFORE), null] };
+    const rOverIn = verifySimulationResult({ simResult: overIn, addressLabels: labels, ...args });
+    ok("SOL output: the input token falling by inAmount+1 -> still refused", rOverIn.ok === false && /more of the token you're paying with/i.test(rOverIn.reason), rOverIn);
+  }
+
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

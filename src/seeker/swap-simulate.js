@@ -36,6 +36,10 @@
 // slightly more than this estimate would simply be caught by the SOL-outflow check below (a
 // legitimate reason to widen this constant later, never a reason to drop the check).
 export const ATA_RENT_LAMPORTS = 2039280;
+// Native SOL's mint id in a Jupiter quote (the wrapped-SOL mint). A quote whose OUTPUT is this
+// mint pays out as native SOL — Jupiter's build wraps into a wSOL account and CLOSES it in the
+// same transaction — so what the person receives shows up on the SOL label, not on a token label.
+export const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
 function toBigIntOrNull(v) {
   if (v == null) return null;
@@ -195,8 +199,24 @@ export function verifySimulationResult({
   // "nothing to compare" used to read as "passed". It is a refusal — the caller's inventory
   // includes the wallet's own output ATA (buildInventory's `outputAtas`), so a real swap always
   // has one.
+  // ⚠️ Codex round 33 on #420 — NATIVE SOL OUTPUT. When the output mint is wSOL, the value
+  // arrives as native SOL: the route pays into a wSOL account that the same transaction closes,
+  // so after simulation that account reads `null` (a real 0) and a token-side minimum check
+  // would REFUSE every honest SOL-output swap. The person's SOL-denominated position is native
+  // SOL PLUS every wSOL account (the same asset), so the received amount is the NET change of
+  // that position with the legitimate overhead added back: the priority fee (exact) and rent
+  // for the allowed account creates (an upper bound — a wSOL account created and closed in the
+  // same transaction refunds its own rent, so this credit can only make the check LOOSER by at
+  // most ATA_RENT_LAMPORTS per allowed create; the route instruction's own
+  // `quoted_out_amount`/`slippage_bps` bytes, checked in swap-verify.js, are what bind the
+  // minimum on-chain — this gate exists to catch a route that moves anything ELSE).
+  const outputIsSol = outputMint === WSOL_MINT;
+  if (inputIsSol && outputIsSol) {
+    return { ok: false, reason: "Could not check the simulated result — the quote pays with and receives the same asset." };
+  }
   let solBefore = null, solAfter = null;
   let wsolTokenDecrease = 0n;
+  let wsolOutputDelta = 0n;
   let inputTokenDecrease = 0n;
   let outputGain = 0n, outputSeen = 0;
   for (let i = 0; i < addressLabels.length; i++) {
@@ -226,6 +246,7 @@ export function verifySimulationResult({
       continue;
     }
     if (label.mint === outputMint) {
+      if (outputIsSol) { wsolOutputDelta += delta; continue; }   // folded into the SOL position below
       outputGain += delta;              // summed across every output account; bounded below
       outputSeen++;
       continue;
@@ -238,11 +259,21 @@ export function verifySimulationResult({
   if (solBefore == null || solAfter == null) {
     return { ok: false, reason: "Could not check the simulated result — the wallet's SOL balance was missing." };
   }
-  if (outputSeen === 0) {
-    return { ok: false, reason: "Could not check the minimum you were shown — no account for the token you're buying was in the simulation." };
-  }
-  if (outputGain < minReceivedBig) {
-    return { ok: false, reason: "This transaction would give you less than the minimum you were shown." };
+  const overhead = feeLamportsBig + ataCountBig * rentPer;
+  if (outputIsSol) {
+    // Net SOL-asset change (native + every wSOL account) with the legitimate overhead credited
+    // back — see the note above the loop. Held to the SAME minimum as a token output.
+    const received = (solAfter - solBefore) + wsolOutputDelta + overhead;
+    if (received < minReceivedBig) {
+      return { ok: false, reason: "This transaction would give you less than the minimum you were shown." };
+    }
+  } else {
+    if (outputSeen === 0) {
+      return { ok: false, reason: "Could not check the minimum you were shown — no account for the token you're buying was in the simulation." };
+    }
+    if (outputGain < minReceivedBig) {
+      return { ok: false, reason: "This transaction would give you less than the minimum you were shown." };
+    }
   }
   if (!inputIsSol && inputTokenDecrease > inAmountBig) {
     return { ok: false, reason: "This transaction would move more of the token you're paying with than the quote showed." };
@@ -253,7 +284,6 @@ export function verifySimulationResult({
   // instructions may create. SOL is free to RISE net of this (a closed wSOL ATA refunds its own
   // rent) — only an outflow larger than the overhead (input case: PLUS the shared inAmount
   // ceiling) is refused.
-  const overhead = feeLamportsBig + ataCountBig * rentPer;
   if (inputIsSol) {
     // The combined bound: whatever native SOL fell beyond the legitimate overhead, PLUS however
     // much any pre-existing wSOL ATA fell, must not exceed `inAmount` — never each independently.
