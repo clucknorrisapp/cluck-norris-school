@@ -445,6 +445,20 @@ expectExit("--data-r (unambiguous long-option prefix) is --data-raw — implies 
 expectExit("--url-q (prefix of --url-query) appends to the URL query", 'curl --url-q draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"', 2);
 expectExit("-- ends options: a later -X POST is a URL, not a method", `curl -- -X POST ${ADMIN}`, 2);
 
+// Codex round 33 — the two exact bypass strings, and option VALUES that look like separators.
+// A value is opaque: whatever it contains — a method flag, `-:`, `--next` — it is consumed by the
+// option that takes it and never read as a request boundary or a method.
+expectExit("Codex's exact string: --proxy-cert '-XPOST' (quoted) — the value is never a method, plain GET blocked", `curl --proxy-cert '-XPOST' ${ADMIN}`, 2);
+expectExit("--proxy-cert=-XPOST (inline spelling of the same)", `curl --proxy-cert=-XPOST ${ADMIN}`, 2);
+expectExit("--proxy-cert '-XGET' cannot demote a real POST", `curl -X POST --proxy-cert '-XGET' ${ADMIN}`, 0);
+expectExit("--proxy-cert '--next' is a value, not a boundary — the POST still covers the admin URL", `curl -X POST --proxy-cert '--next' ${ADMIN}`, 0);
+expectExit("--proxy-cert '-:' is a value, not a boundary", `curl -X POST --proxy-cert '-:' ${ADMIN}`, 0);
+expectExit("-H '--next' is a header value, not a boundary", `curl -X POST -H '--next' ${ADMIN}`, 0);
+expectExit("-d '--next' is a body, not a boundary (and still implies POST)", `curl -d '--next' ${ADMIN}`, 0);
+expectExit("--data '-:' is a body, not a boundary (and still implies POST)", `curl --data '-:' ${ADMIN}`, 0);
+expectExit("-H 'x: --next' (separator inside a longer value) is not a boundary", `curl -X POST -H 'x: --next' ${ADMIN}`, 0);
+expectExit("a REAL --next after a value that merely contains one still resets the method", `curl -X POST -H '--next' ${SAFE} --next ${ADMIN}`, 2);
+
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");
 const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md", "store-release.md"];
