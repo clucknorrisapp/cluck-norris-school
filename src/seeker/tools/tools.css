@@ -867,3 +867,5 @@
   color: var(--gold);
   margin: 0 0 12px;
 }
+/* The Solana Room's card at the foot of the Daily tab (DailyBrief.jsx). */
+.seeker-daily-solana { margin-top: 18px; text-align: left; }

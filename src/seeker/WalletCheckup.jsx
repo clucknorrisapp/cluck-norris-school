@@ -31,9 +31,12 @@
 // right next to it, so a partial scan never reads as a full pass.
 //
 // Guardrail before power: approvals are a real thing a first-timer could act on, but revoking
-// needs a wallet signature and that is OUT OF SCOPE tonight (CLAUDE.md: "PLAN != EXECUTE for
-// money" / no signing path here). This pane shows the finding and points to the website's own
-// /wallet-checkup, which already has the revoke flow — it never builds or signs a transaction.
+// needs a wallet signature and THIS FILE never builds or signs one — it is shared with the
+// education-only Play/iOS edition, whose build refuses the wallet layer's global by name. Since
+// 2026-09-29 the FULL edition passes two render props: `revoke({approvals, address, rescan})`,
+// rendered in place of the "Revoke on the website" note (src/seeker/CheckupRevoke.jsx, the
+// signing control), and `footer`, rendered after the results (src/seeker/Disconnect.jsx, the
+// "Disconnect & clean up" card). The education edition passes neither and keeps the note.
 //
 // Offline is first-class, same posture as Ask Cluck: `navigator.onLine` is checked before every
 // scan (skips the fetch entirely) and the pane listens for the browser's `online` event to
@@ -44,6 +47,7 @@
 import React from "react";
 import { t, tf, useI18nReady } from "./i18n.js";
 import { shortAddr } from "./addr.js";
+import ShieldIcon from "./icons/ShieldIcon.jsx";
 
 const WEBSITE_CHECKUP_URL = "https://clucknorris.app/wallet-checkup";
 
@@ -122,7 +126,7 @@ function RiskyRow({ r }) {
   );
 }
 
-export default function WalletCheckupPane({ address, gate }) {
+export default function WalletCheckupPane({ address, gate, revoke, footer }) {
   useI18nReady();
   // phase: idle | loading | ok | error. kind (error only): offline | rate | refused | unavailable.
   const [state, setState] = React.useState({ phase: "idle", kind: null, data: null, retrySec: 0, errMsg: null });
@@ -212,7 +216,7 @@ export default function WalletCheckupPane({ address, gate }) {
     // its build refuses the string. The pane itself never knows which; it just renders `gate`.
     return (
       <section className="seeker-pane">
-        <div className="seeker-paneicon" aria-hidden="true">🛡</div>
+        <div className="seeker-paneicon"><ShieldIcon /></div>
         <h1>{t("Wallet Checkup")}</h1>
         {gate}
       </section>
@@ -222,7 +226,7 @@ export default function WalletCheckupPane({ address, gate }) {
   if (state.phase === "loading" || state.phase === "idle") {
     return (
       <section className="seeker-pane">
-        <div className="seeker-paneicon" aria-hidden="true">🛡</div>
+        <div className="seeker-paneicon"><ShieldIcon /></div>
         <h1>{t("Wallet Checkup")}</h1>
         <p>{t("Scanning your wallet…")}</p>
       </section>
@@ -240,7 +244,7 @@ export default function WalletCheckupPane({ address, gate }) {
         : t("Could not read the chain right now. Try again shortly.");
     return (
       <section className="seeker-pane">
-        <div className="seeker-paneicon" aria-hidden="true">🛡</div>
+        <div className="seeker-paneicon"><ShieldIcon /></div>
         <h1>{t("Wallet Checkup")}</h1>
         <p className="seeker-checkup-errtext" role="alert">{text}</p>
         <button type="button" className="seeker-checkup-rescanbtn" onClick={() => scan(address)}>
@@ -262,7 +266,7 @@ export default function WalletCheckupPane({ address, gate }) {
 
   return (
     <div className="seeker-checkup">
-      <div className="seeker-checkup-topicon" aria-hidden="true">🛡</div>
+      <div className="seeker-checkup-topicon"><ShieldIcon /></div>
       <h1 className="seeker-checkup-title">{t("Wallet Checkup")}</h1>
 
       <div className="seeker-checkup-summary">
@@ -296,7 +300,7 @@ export default function WalletCheckupPane({ address, gate }) {
 
       {clean ? (
         <div className="seeker-checkup-clean">
-          <div className="seeker-checkup-clean-icon" aria-hidden="true">🛡</div>
+          <div className="seeker-checkup-clean-icon"><ShieldIcon /></div>
           <div className="seeker-checkup-clean-title">{t("No issues found in the checks completed")}</div>
           <p>
             {t("No open approvals and no honeypot or authority risk in what was checked.")}
@@ -305,6 +309,11 @@ export default function WalletCheckupPane({ address, gate }) {
         </div>
       ) : null}
 
+      {/* data-clkn-avoid-kids on both sections below: each row is its own card at a different
+          screen height depending on how many issue lines it prints (e.g. "supply can be inf…"),
+          so the row's own top — not the section's — is what the fixed 🌐 pill must clear. Found
+          overlapping the tail of a risky-holding line in real Seeker-edition screenshots, 360x800
+          CSS @3x, 2026-09-24 — the pill has no idea these rows exist without this marker. */}
       {approvals.length ? (
         <div className="seeker-checkup-section">
           <div className="seeker-checkup-section-title seeker-checkup-section-title-warn">
@@ -313,11 +322,15 @@ export default function WalletCheckupPane({ address, gate }) {
           <p className="seeker-checkup-section-explain">
             {t("A delegate can move the approved amount out of your wallet without asking again.")}
           </p>
-          {approvals.map((a) => <ApprovalRow key={a.tokenAccount} a={a} />)}
-          <p className="seeker-checkup-revokenote">
-            {t("Revoking needs a wallet signature — not available in this app yet.")}{" "}
-            <a href={WEBSITE_CHECKUP_URL} target="_blank" rel="noreferrer">{t("Revoke on the website")}</a>
-          </p>
+          <div data-clkn-avoid-kids="1">
+            {approvals.map((a) => <ApprovalRow key={a.tokenAccount} a={a} />)}
+          </div>
+          {typeof revoke === "function" ? revoke({ approvals, address, rescan: () => scan(address) }) : (
+            <p className="seeker-checkup-revokenote">
+              {t("Revoking needs a wallet signature — not available in this app yet.")}{" "}
+              <a href={WEBSITE_CHECKUP_URL} target="_blank" rel="noreferrer">{t("Revoke on the website")}</a>
+            </p>
+          )}
         </div>
       ) : null}
 
@@ -327,13 +340,16 @@ export default function WalletCheckupPane({ address, gate }) {
             {t("Risky holdings")} · {risky.length}
             {data.atRiskUsd > 0 ? " · " + fmtUsd(data.atRiskUsd) + " " + t("at risk") : ""}
           </div>
-          {risky.map((r) => <RiskyRow key={r.mint} r={r} />)}
+          <div data-clkn-avoid-kids="1">
+            {risky.map((r) => <RiskyRow key={r.mint} r={r} />)}
+          </div>
         </div>
       ) : null}
 
       <button type="button" className="seeker-checkup-rescanbtn" onClick={() => scan(address)}>
         {t("Rescan")}
       </button>
+      {footer || null}
     </div>
   );
 }

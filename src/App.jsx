@@ -1,6 +1,26 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { CLKN_MINT, CLKN_TRADE_LINK, JUPITER_TRADE_LINK, LOGO_B64, COL, READ, MintAddress, JupiterSwapButton, AskCluck, LP_LESSONS_COUNT, RootCrakBadge, ROOTCRAK } from "./shared.jsx";
 import { STORE, api, STORE_PAGES } from "./edition.js";
+import { revealQuizResult, revealUnderClear } from "./shared/scrollReveal.js";
+import WebLessonStepper from "./shared/WebLessonStepper.jsx";
+import { clearStep } from "./shared/lessonSteps.js";
+
+// ── quiz auto-scroll (window-scrolling pages) ──────────────────────────────────────────────────
+// Owner (2026-09-24): "that has been a problem even in the web app … we need to address that
+// across all platforms" — the same ask as the Seeker app's school quiz (src/seeker/school/
+// School.jsx), reusing the same helper so the two can't drift. The page itself scrolls (no inner
+// pane here), and TWO things sit fixed above the content: the app's own sticky in-page header
+// (`[data-cluck-top-clear]`, reserves real flow space, so it is present here even though it
+// scrolls out) and the floating `#cluck-nav-bar` pill (`position:fixed`, injected by
+// public/cluck-nav.js, sits on top of everything). The clear line is whichever sits lower.
+function quizTopClearY() {
+  let y = 0;
+  const bar = document.getElementById("cluck-nav-bar");
+  if (bar) y = Math.max(y, bar.getBoundingClientRect().bottom);
+  const header = document.querySelector("[data-cluck-top-clear]");
+  if (header) y = Math.max(y, header.getBoundingClientRect().bottom);
+  return y;
+}
 const Library = lazy(() => import("./sections/Library.jsx"));
 const LPLab = lazy(() => import("./sections/LPLab.jsx"));
 const SOL_MINT = "So11111111111111111111111111111111111111112";
@@ -584,7 +604,7 @@ const INCUBATOR_LESSONS = [
       { term: "Custodial Wallet", def: "A wallet controlled by a company (like a Coinbase exchange account). They hold your keys — if they go down, you could lose access." },
     ],
     questions: [
-      { q: "Your public key is like your home address — safe to share so people can send you crypto.", options: ["True", "False"], correct: 0, explanation: "Correct! Your public key is safe to share. It's how others send crypto to you. Never confuse it with your private key or seed phrase." },
+      { q: "Your public key is like your home address — safe to share so people can send you crypto.", options: ["True", "False"], correct: 0, explanation: "Your public key is safe to share. It's how others send crypto to you. Never confuse it with your private key or seed phrase." },
       { q: "You should share your seed phrase with customer support if they ask for it.", options: ["True", "False"], correct: 1, explanation: "NEVER share your seed phrase with anyone — ever. Legitimate support teams will never ask for it. Anyone asking is trying to steal your crypto." },
       { q: "With a non-custodial wallet, who controls your crypto?", options: ["The wallet company", "You do"], correct: 1, explanation: "Non-custodial means YOU hold the keys. No company can freeze or take your funds. With great power comes great responsibility — back up your seed phrase!" },
     ],
@@ -620,7 +640,7 @@ const INCUBATOR_LESSONS = [
       { term: "KYC & Fees", def: "By law, ramps must verify your identity — KYC, 'Know Your Customer' — so expect to upload a photo ID. Ramps also charge fees; instant card-buy services like MoonPay are fast but cost more. Always check the fee before you confirm." },
     ],
     questions: [
-      { q: "An on-ramp is any service that turns regular money, like dollars, into crypto.", options: ["True", "False"], correct: 0, explanation: "Correct. An on-ramp is your entry point — connect a bank or card, buy crypto, and it arrives in your wallet. The off-ramp is the same trip in reverse, back to cash." },
+      { q: "An on-ramp is any service that turns regular money, like dollars, into crypto.", options: ["True", "False"], correct: 0, explanation: "An on-ramp is your entry point — connect a bank or card, buy crypto, and it arrives in your wallet. The off-ramp is the same trip in reverse, back to cash." },
       { q: "You can buy crypto on a major exchange like Coinbase without ever verifying your identity.", options: ["True", "False"], correct: 1, explanation: "False. By law, on-ramps must do KYC — Know Your Customer — so expect to upload a photo ID. Any 'exchange' that skips identity checks entirely is a red flag." },
       { q: "Why should you understand off-ramps before you put any money in?", options: ["Off-ramps only matter if the investment loses money", "So you know exactly how to cash out — the fees, the wait, the steps — before you ever need to"], correct: 1, explanation: "Always know your exit. Understanding how to convert crypto back to cash before you need to means no panic and no nasty surprises when it's time to take profit." },
     ],
@@ -733,6 +753,45 @@ function Incubator({ onComplete, onBack }) {
   const q = shuffledIncubatorQs[qi];
   useEffect(()=>{stopRead();},[phase,qi,lessonIdx]);
 
+  // Quiz auto-scroll refs — see "quiz auto-scroll" near the top of this file.
+  const quizHeadRef = useRef(null);
+  const explainRef = useRef(null);
+  const nextBtnRef = useRef(null);
+  const completeRef = useRef(null);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel === null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!explainRef.current || !nextBtnRef.current) return;
+        revealQuizResult({ scrollEl: window, resultEl: explainRef.current, actionEl: nextBtnRef.current, topClearY: quizTopClearY(), bottomClearY: window.innerHeight });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, sel]);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel !== null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!quizHeadRef.current) return;
+        revealUnderClear({ scrollEl: window, el: quizHeadRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, qi, lessonIdx]);
+
+  useEffect(() => {
+    if (phase !== "complete") return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!completeRef.current) return;
+        revealUnderClear({ scrollEl: window, el: completeRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase]);
+
   function pick(i) {
     if (sel !== null) return;
     setSel(i);
@@ -745,7 +804,8 @@ function Incubator({ onComplete, onBack }) {
       setSel(null);
       setShowExp(false);
     } else {
-      // Lesson complete
+      // Lesson complete — the next visit to this lesson opens at the top, not on its last step.
+      clearStep("basics:" + lesson.id);
       const newCompleted = completed.includes(lesson.id) ? completed : [...completed, lesson.id];
       setCompleted(newCompleted);
       try { localStorage.setItem("incubator_progress", JSON.stringify({ completed: newCompleted })); } catch(e) {}
@@ -763,7 +823,7 @@ function Incubator({ onComplete, onBack }) {
 
   // Completion screen
   if (phase === "complete") return (
-    <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}}>
+    <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}} ref={completeRef}>
       <div style={{fontSize:60,marginBottom:16}}>🐔</div>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:4,color:"#5B8DD6",marginBottom:8}}>INCUBATOR COMPLETE</div>
       <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,fontWeight:900,color:"#F9FAFB",margin:"0 0 8px",lineHeight:1}}>YOU'VE HATCHED!</h2>
@@ -801,24 +861,40 @@ function Incubator({ onComplete, onBack }) {
           </div>
         ))}
       </div>
-      <div style={{textAlign:"center",marginBottom:20}}>
-        <div style={{fontSize:40,marginBottom:8}}>{lesson.icon}</div>
-        <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:lesson.color,marginBottom:4}}>LESSON {lessonIdx+1} OF {INCUBATOR_LESSONS.length}</div>
-        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,color:"#F9FAFB",margin:"0 0 12px"}}>{lesson.title}</h2>
-        <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.7,margin:0}}>{lesson.intro}</p>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
-        {lesson.concepts.map(c=>(
-          <div key={c.term} style={{background:"rgba(255,122,24,0.05)",border:`1px solid ${lesson.color}30`,borderRadius:10,padding:"12px 14px"}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:lesson.color,marginBottom:4}}>{c.term}</div>
-            <div style={{fontSize:15,color:"#9CA3AF",lineHeight:1.6}}>{c.def}</div>
-          </div>
-        ))}
-      </div>
-      <AskCluck context={lesson.title} compact={true}/>
-      <button onClick={()=>setPhase("quiz")} style={{width:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:12}}>
-        ✅ QUICK CHECK →
-      </button>
+      {/* Lesson stepper (owner 2026-09-25: "Yes all of website"): the opening, whose intro is the
+          explanation, then the terms, which carry the quick check. src/shared/WebLessonStepper.jsx. */}
+      <WebLessonStepper
+        key={"basics:"+lesson.id}
+        storeKey={"basics:"+lesson.id}
+        color={lesson.color}
+        onStepChange={stopRead}
+        steps={[
+          {label:"", node:(
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:40,marginBottom:8}}>{lesson.icon}</div>
+              <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:lesson.color,marginBottom:4}}>LESSON {lessonIdx+1} OF {INCUBATOR_LESSONS.length}</div>
+              <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,color:"#F9FAFB",margin:"0 0 12px"}}>{lesson.title}</h2>
+              <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.7,margin:0}}>{lesson.intro}</p>
+            </div>
+          )},
+          {label:"The terms that matter", node:(<>
+            <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
+              {lesson.concepts.map(c=>(
+                <div key={c.term} style={{background:"rgba(255,122,24,0.05)",border:`1px solid ${lesson.color}30`,borderRadius:10,padding:"12px 14px"}}>
+                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:lesson.color,marginBottom:4}}>{c.term}</div>
+                  <div style={{fontSize:15,color:"#9CA3AF",lineHeight:1.6}}>{c.def}</div>
+                </div>
+              ))}
+            </div>
+            <AskCluck context={lesson.title} compact={true}/>
+          </>)},
+        ]}
+        finish={
+          <button onClick={()=>setPhase("quiz")} style={{width:"100%",height:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
+            ✅ QUICK CHECK →
+          </button>
+        }
+      />
       <button onClick={onBack} style={{display:"block",margin:"12px auto 0",background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer"}}>
         ← BACK TO ENTRANCE
       </button>
@@ -828,7 +904,7 @@ function Incubator({ onComplete, onBack }) {
   // Quiz screen
   return (
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
-      <div style={{marginBottom:16}}>
+      <div style={{marginBottom:16}} ref={quizHeadRef}>
         <div data-read-skip="1" style={{display:"flex",justifyContent:"space-between",fontSize:12.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:5}}>
           <span style={{color:lesson.color}}>{lesson.icon} {lesson.title.toUpperCase()}</span>
           <span>Q {qi+1} OF {lesson.questions.length}</span>
@@ -847,21 +923,21 @@ function Incubator({ onComplete, onBack }) {
             if(i===q.correct){bg="rgba(16,185,129,0.15)";border="1px solid #10B981";color="#10B981";}
             else if(i===sel){bg="rgba(239,68,68,0.15)";border="1px solid #EF4444";color="#EF4444";}
           }
-          return(<button key={i} onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15,fontWeight:600}}>
+          return(<button key={i} data-quiz-option="1" onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15,fontWeight:600}}>
             {opt}
           </button>);
         })}
       </div>
-      {showExp&&(<>
+      {showExp&&(<div ref={explainRef} data-quiz-explain="1">
         <div style={{background:sel===q.correct?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)",border:`1px solid ${sel===q.correct?"#10B981":"#EF4444"}`,borderRadius:10,padding:14,marginBottom:12}}>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:1,color:sel===q.correct?"#10B981":"#EF4444",marginBottom:5}}>{sel===q.correct?"✓ CORRECT!":"✗ NOT QUITE — HERE'S WHY:"}</div>
           <p style={{margin:0,color:"#D1D5DB",fontSize:15,lineHeight:1.6}}>{q.explanation}</p>
         </div>
         <AskCluck context={lesson.title} compact={true}/>
-        <button onClick={next} style={{width:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+        <button ref={nextBtnRef} data-quiz-next="1" onClick={next} style={{width:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
           {qi+1<lesson.questions.length?"NEXT QUESTION →":"NEXT LESSON →"}
         </button>
-      </>)}
+      </div>)}
     </div>
   );
 }
@@ -1418,41 +1494,100 @@ function Lesson({lesson:l,onComplete,onBack,hubFrom}){
     else{setFinalScore(a.filter(Boolean).length);setPhase("result");}
   }
   function retry(){setSessionId(s=>s+1);setPhase("intro");setQi(0);setSel(null);setAnswers([]);setFinalScore(0);setShowExp(false);}
+
+  // Quiz auto-scroll refs — see "quiz auto-scroll" near the top of this file.
+  const quizHeadRef=useRef(null);
+  const explainRef=useRef(null);
+  const nextBtnRef=useRef(null);
+  const resultRef=useRef(null);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel === null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!explainRef.current || !nextBtnRef.current) return;
+        revealQuizResult({ scrollEl: window, resultEl: explainRef.current, actionEl: nextBtnRef.current, topClearY: quizTopClearY(), bottomClearY: window.innerHeight });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, sel]);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel !== null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!quizHeadRef.current) return;
+        revealUnderClear({ scrollEl: window, el: quizHeadRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, qi, l.id, sessionId]);
+
+  useEffect(() => {
+    if (phase !== "result") return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!resultRef.current) return;
+        revealUnderClear({ scrollEl: window, el: resultRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase]);
+
   const score=phase==="result"?finalScore:answers.filter(Boolean).length;
   // Proportional pass mark (P2-108): a flat "score>=2" let a 7-question exam pass at ~29% while
   // a 5-question one needed 40%. ~67% (2 of 3) either way now — ceil() so a shorter quiz never
   // needs fewer than the 2-of-3 baseline, and a longer one needs the same bar or a hair stricter.
   const passed=score>=Math.ceil(l.questions.length*2/3);
+  // A pass means the next visit opens this lesson at the top, not on its exam step.
+  useEffect(()=>{ if(phase==="result"&&passed) clearStep("fundamentals:"+l.id); },[phase,passed,l.id]);
 
+  // Lesson stepper (owner 2026-09-25: "Yes all of website"): the opening — belt, title, quote and
+  // the intro, which IS the explanation — then the terms, which carry the exam button. See
+  // src/shared/WebLessonStepper.jsx. A pass clears the remembered step (effect above).
   if(phase==="intro") return(
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
       <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",cursor:"pointer",fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,marginBottom:18,padding:0}}>← BACK</button>
-      <div style={{textAlign:"center",marginBottom:20}}>
-        <div style={{fontSize:40,marginBottom:6}}>{l.icon}</div>
-        <Belt belt={l.belt}/>
-        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,color:"#F9FAFB",margin:"8px 0 4px"}}>{l.title}</h2>
-        <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:l.color,fontSize:15.5,margin:0,lineHeight:1.5}}>"{l.quote}"</p>
-      </div>
-      <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.16)",borderRadius:10,padding:16,marginBottom:16}}>
-        <p style={{color:"#D1D5DB",fontSize:15.5,lineHeight:1.7,margin:0}}>{l.intro}</p>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
-        {l.concepts.map((c,i)=>(
-          <div key={i} style={{background:"rgba(255,122,24,0.04)",borderLeft:`3px solid ${l.color}`,borderRadius:8,padding:"10px 14px"}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:l.color,letterSpacing:1,marginBottom:3}}>{c.term}</div>
-            <div style={{fontSize:13.5,color:"#9CA3AF",lineHeight:1.5}}>{c.def}</div>
-          </div>
-        ))}
-      </div>
-      <button onClick={()=>{trackId("quiz_start",l.id);setPhase("quiz");}} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:`0 0 20px ${l.glow}`}}>
-        📝 TAKE THE EXAM
-      </button>
+      <WebLessonStepper
+        key={"fundamentals:"+l.id}
+        storeKey={"fundamentals:"+l.id}
+        color={l.color}
+        onStepChange={stopRead}
+        steps={[
+          {label:"", node:(<>
+            <div style={{textAlign:"center",marginBottom:20}}>
+              <div style={{fontSize:40,marginBottom:6}}>{l.icon}</div>
+              <Belt belt={l.belt}/>
+              <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,color:"#F9FAFB",margin:"8px 0 4px"}}>{l.title}</h2>
+              <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:l.color,fontSize:15.5,margin:0,lineHeight:1.5}}>"{l.quote}"</p>
+            </div>
+            <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.16)",borderRadius:10,padding:16}}>
+              <p style={{color:"#D1D5DB",fontSize:15.5,lineHeight:1.7,margin:0}}>{l.intro}</p>
+            </div>
+          </>)},
+          {label:"The terms that matter", node:(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {l.concepts.map((c,i)=>(
+                <div key={i} style={{background:"rgba(255,122,24,0.04)",borderLeft:`3px solid ${l.color}`,borderRadius:8,padding:"10px 14px"}}>
+                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:l.color,letterSpacing:1,marginBottom:3}}>{c.term}</div>
+                  <div style={{fontSize:13.5,color:"#9CA3AF",lineHeight:1.5}}>{c.def}</div>
+                </div>
+              ))}
+            </div>
+          )},
+        ]}
+        finish={
+          <button onClick={()=>{trackId("quiz_start",l.id);setPhase("quiz");}} style={{width:"100%",height:"100%",background:l.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:`0 0 20px ${l.glow}`}}>
+            📝 TAKE THE EXAM
+          </button>
+        }
+      />
     </div>
   );
 
   if(phase==="quiz") return(
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
-      <div style={{marginBottom:20}}>
+      <div style={{marginBottom:20}} ref={quizHeadRef}>
         <div data-read-skip="1" style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:5}}>
           <span style={{color:l.color,fontSize:15,fontWeight:700,letterSpacing:1.5}}>{l.title.toUpperCase()}</span><span style={{color:l.color,fontSize:13.5,fontWeight:700,whiteSpace:"nowrap"}}>QUESTION {qi+1} OF {shuffledQuestions.length} • {answers.filter(Boolean).length + (sel!==null && sel===q.correct ? 1 : 0)}/{shuffledQuestions.length} CORRECT</span>
         </div>
@@ -1471,26 +1606,26 @@ function Lesson({lesson:l,onComplete,onBack,hubFrom}){
             if(i===q.correct){bg="rgba(16,185,129,0.15)";border="1px solid #10B981";color="#10B981";}
             else if(i===sel){bg="rgba(239,68,68,0.15)";border="1px solid #EF4444";color="#EF4444";}
           }
-          return(<button key={i} onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"12px 14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15.5,display:"flex",gap:10,alignItems:"center"}}>
+          return(<button key={i} data-quiz-option="1" onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"12px 14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15.5,display:"flex",gap:10,alignItems:"center"}}>
             <span style={{fontFamily:"'Anton',sans-serif",fontSize:13,opacity:0.6,minWidth:18}}>{String.fromCharCode(65+i)}</span>{opt}
           </button>);
         })}
       </div>
-      {showExp&&(<>
+      {showExp&&(<div ref={explainRef} data-quiz-explain="1">
         <div style={{background:sel===q.correct?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)",border:`1px solid ${sel===q.correct?"#10B981":"#EF4444"}`,borderRadius:10,padding:14,marginBottom:12}}>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:1,color:sel===q.correct?"#10B981":"#EF4444",marginBottom:5}}>{sel===q.correct?"✓ CORRECT  -  PROFESSOR NORRIS NOTES:":"✗ WRONG  -  PROFESSOR NORRIS CORRECTS YOU:"}</div>
           <p style={{margin:0,color:"#D1D5DB",fontSize:15,lineHeight:1.6}}>{q.explanation}</p>
         </div>
         <AskCluck context={l.title} compact={true}/>
-        <button onClick={next} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+        <button ref={nextBtnRef} data-quiz-next="1" onClick={next} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
           {qi+1<l.questions.length?"NEXT QUESTION →":"SEE REPORT CARD →"}
         </button>
-      </>)}
+      </div>)}
     </div>
   );
 
   return(
-    <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}}>
+    <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}} ref={resultRef}>
       <div style={{fontSize:56,marginBottom:12}}>{passed?"🏆":"💀"}</div>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:4,color:passed?"#10B981":"#EF4444",marginBottom:6}}>{passed?"CLASS PASSED":"DETENTION"}</div>
       <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:30,color:"#F9FAFB",margin:"0 0 8px"}}>{score}/{l.questions.length} Correct</h2>
@@ -1962,7 +2097,7 @@ export default function App(){
       `}</style>
       {/* Header — hidden on the Token Data (clkn) screen, which uses only the floating Home/Ask Cluck bar */}
       {screen!=="clkn" && (
-      <div data-read-skip="1" style={{borderBottom:"1px solid rgba(255,122,24,0.18)",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(10px)",padding:"calc(50px + env(safe-area-inset-top, 0px)) 18px 12px",position:"sticky",top:0,zIndex:100}}>
+      <div data-read-skip="1" data-cluck-top-clear="1" style={{borderBottom:"1px solid rgba(255,122,24,0.18)",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(10px)",padding:"calc(50px + env(safe-area-inset-top, 0px)) 18px 12px",position:"sticky",top:0,zIndex:100}}>
         {/* Brand row — compact, matching the homepage nav (no subtitle / contract / progress dots) */}
         <div onClick={()=>setScreen("landing")} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,cursor:"pointer"}}>
           <img src={LOGO_B64} alt="Cluck Norris" style={{width:30,height:30,objectFit:"cover",borderRadius:"50%",border:"1.5px solid #FF7A18",flexShrink:0}}/>

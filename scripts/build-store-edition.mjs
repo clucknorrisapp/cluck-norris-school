@@ -230,7 +230,26 @@ fs.cpSync(OUT, path.join(staging, NAME), { recursive: true });
 const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT }).toString().trim();
 const commitTime = execFileSync("git", ["show", "-s", "--format=%ct", "HEAD"], { cwd: ROOT }).toString().trim();
 const tgz = path.join(REL, `${NAME}.tgz`);
-execFileSync("tar", ["--sort=name", "--owner=0", "--group=0", "--numeric-owner", `--mtime=@${commitTime}`, "-I", "gzip -n", "-cf", tgz, "-C", staging, NAME]);
+// GNU tar makes the archive byte-reproducible (sorted entries, fixed owner and mtime). macOS ships
+// bsdtar, which refuses --sort/--mtime/-I and failed the owner's `npm run build:ios-dev` on his
+// Mac (2026-09-25) before Xcode ever got the new files — so Xcode kept showing an old build. Use
+// GNU tar wherever it exists (`tar` on Linux and CI, `gtar` from Homebrew's gnu-tar), and only
+// otherwise fall back to a plain bsdtar archive: same contents, not byte-reproducible. Releases
+// that get pinned are built in CI, on GNU tar.
+function gnuTar() {
+  for (const bin of ["tar", "gtar"]) {
+    try { if (/GNU tar/.test(execFileSync(bin, ["--version"], { stdio: ["ignore", "pipe", "ignore"] }).toString())) return bin; } catch (_) {}
+  }
+  return null;
+}
+const tarBin = gnuTar();
+if (tarBin) {
+  execFileSync(tarBin, ["--sort=name", "--owner=0", "--group=0", "--numeric-owner", `--mtime=@${commitTime}`, "-I", "gzip -n", "-cf", tgz, "-C", staging, NAME]);
+} else {
+  log("GNU tar not found (macOS bsdtar) — archive contents are identical but NOT byte-reproducible; fine for a local dev build, never pin it");
+  // COPYFILE_DISABLE keeps macOS from adding ._ AppleDouble files to the archive.
+  execFileSync("tar", ["--uid", "0", "--gid", "0", "-czf", tgz, "-C", staging, NAME], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
+}
 fs.rmSync(staging, { recursive: true, force: true });
 const sha256 = createHash("sha256").update(fs.readFileSync(tgz)).digest("hex");
 fs.writeFileSync(`${tgz}.sha256`, `${sha256}  ${path.basename(tgz)}\n`);

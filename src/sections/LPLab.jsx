@@ -1,7 +1,22 @@
 // LP Lab — lessons + calculators (~2,800 lines) — lazy-loaded section.
-import { useState, useMemo, Component } from "react";
+import { useState, useMemo, useEffect, useRef, Component } from "react";
 import { LOGO_B64, COLW, READ, AskCluck } from "../shared.jsx";
 import { STORE } from "../edition.js";
+import { revealQuizResult, revealUnderClear } from "../shared/scrollReveal.js";
+import WebLessonStepper from "../shared/WebLessonStepper.jsx";
+import { clearStep } from "../shared/lessonSteps.js";
+
+// Same clearance rule as src/App.jsx's own quiz screens (kept local rather than imported from
+// App.jsx to avoid a circular import — App.jsx lazy-loads this section, not the other way round).
+// See the "quiz auto-scroll" comment near the top of App.jsx for what these two elements are.
+function quizTopClearY() {
+  let y = 0;
+  const bar = document.getElementById("cluck-nav-bar");
+  if (bar) y = Math.max(y, bar.getBoundingClientRect().bottom);
+  const header = document.querySelector("[data-cluck-top-clear]");
+  if (header) y = Math.max(y, header.getBoundingClientRect().bottom);
+  return y;
+}
 // The worked-example token. The website and the Seeker app teach with CLKN; the Google Play /
 // iOS edition is education-only and names no token of ours (store-edition v1.1.0, Codex on
 // #391: "CLKN promotion still renders in the education bundle"), so its examples use a
@@ -461,17 +476,17 @@ The more volume a pool generates, the more fees LPs collect. This is why volume 
         body: `Every protocol offers different fee tiers for different types of pairs. Choosing the right fee tier matters.
 
 RAYDIUM:
-• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 1% / 2% / 4%
+• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 0.3% / 0.5% / 1% / 1.5% / 2% / 2.5% / 4%
 • CLMM concentrated pools: 18 tiers from 0.01% up to 4% (0.01 / 0.02 / 0.03 / 0.04 / 0.05 / 0.1 / 0.15 / 0.16 / 0.18 / 0.2 / 0.25 / 0.4 / 0.6 / 0.8 / 1 / 2 / 3 / 4%)
 • Use 0.01% for stable pairs, 0.25% for standard, 1% for exotic/volatile
 
 ORCA WHIRLPOOLS:
 • 0.01% / 0.02% / 0.04% / 0.05% / 0.16% / 0.3% / 0.65% / 1% / 2%
 • Similar logic — stable pairs use low tiers, volatile pairs use high tiers
-${STORE ? "• A pool's own page shows which tier it runs on" : "• The 0.02% tier is the one CLKN's own CLKN/SOL Orca pool runs on — its CLKN/BTC and CLKN/JUP pools run on 0.30%"}
+${STORE ? "• A pool's own page shows which tier it runs on" : "• The 0.02% tier is the one CLKN's own Orca pools run on — CLKN/SOL, CLKN/USDC and CLKN/JUP"}
 
 METEORA:
-• DAMM: Dynamic fees that adjust automatically to market volatility
+• DAMM v2: a base fee that can run on a schedule (starting high at launch and decaying over time or with market cap), plus optional dynamic fees that rise with volatility
 • DLMM: base fee (fixed by the pool's bin step) + a variable fee that rises automatically with volatility. Fees are distributed per bin a swap crosses, but the RATE is pool-wide
 • Dynamic fees are one of Meteora's strongest features for LPs
 
@@ -759,7 +774,7 @@ TICK SPACING per fee tier:
 Higher fee tier = coarser spacing = wider minimum range. The exact numbers are set per pool and DIFFER by protocol — do not memorise one table and assume it travels.
 
 Uniswap v3: 0.01% → 1 · 0.05% → 10 · 0.3% → 60 · 1% → 200
-Raydium CLMM: 0.01% → 1 · 0.05% → 10 · 0.25% → 60 · 1% → 120
+Raydium CLMM: 0.01–0.05% → 1 · 0.1–0.2% → 10 · 0.25–0.8% → 60 · 1–4% → 120
 Orca: 0.01% → 1 · 0.02% → 2 · 0.04% → 4 · 0.05% → 8 · 0.3% → 64
 
 Lower fee tiers allow finer price ranges. When you set a range, you define a lower and upper tick. Your liquidity distributes uniformly across every tick in between — all earning fees proportionally when price passes through them.`
@@ -1077,7 +1092,7 @@ If you have a full-time job and check your phone twice a day, a fully active str
 BEST PASSIVE POSITIONS:
 
 FULL RANGE on correlated pairs:
-SOL/jitoSOL, BTC/cbBTC, stablecoin pairs. Near-zero IL. Fees accumulate without intervention. Check monthly to compound fees back in.
+SOL/jitoSOL, WBTC/cbBTC, stablecoin pairs. Near-zero IL. Fees accumulate without intervention. Check monthly to compound fees back in.
 
 WIDE CONCENTRATED on major pairs:
 SOL/USDC with a ±50% range. Stays in range through most normal market movement. Check weekly. Rebalance only if price breaks out of range significantly.
@@ -1323,7 +1338,7 @@ Match the width to two things: your conviction about where price is going, and t
 
 THE CORRELATION SPECTRUM:
 • Identical-peg pairs (USDC/USDT): the two assets are designed to track each other — IL is minimal, the main risk is one of them de-pegging
-• Correlated pairs (SOL/jitoSOL, BTC/cbBTC): move together most of the time — low IL, occasional divergence
+• Correlated pairs (SOL/jitoSOL, WBTC/cbBTC): move together most of the time — low IL, occasional divergence
 • Major-vs-stable (SOL/USDC): one volatile leg — IL is real and scales with how far SOL moves from your entry
 • Volatile-vs-volatile or new-token pairs: both legs move independently and violently — maximum IL, maximum risk
 
@@ -2946,7 +2961,6 @@ function TierAllocationBuilder() {
 
 function LPLessonView({ lesson, onBack, onComplete }) {
   const [phase, setPhase] = useState("content"); // content | quiz | result
-  const [openSection, setOpenSection] = useState(0);
   const [qi, setQi] = useState(0);
   const [sel, setSel] = useState(null);
   const [showExp, setShowExp] = useState(false);
@@ -2969,10 +2983,14 @@ function LPLessonView({ lesson, onBack, onComplete }) {
   // Price impact calculator
   const shallowPool = 10000;
   const deepPool = 500000;
+  // poolSize is the pool's TVL, labelled as such ("$10,000 TVL"), so each side holds HALF of it.
+  // It used to be taken as each side's reserve, which modelled a $20K pool and showed half the real
+  // impact (0.99% on $100 where Lesson 1 correctly says ~2%) — found in the 2026-09-25 LP Lab check.
   const calcImpact = (poolSize, trade) => {
-    const k = poolSize * poolSize;
-    const newPool = poolSize + trade;
-    const out = poolSize - k / newPool;
+    const side = poolSize / 2;
+    const k = side * side;
+    const newPool = side + trade;
+    const out = side - k / newPool;
     const impact = ((trade - out) / trade) * 100;
     return Math.max(0, impact).toFixed(2);
   };
@@ -2996,10 +3014,50 @@ function LPLessonView({ lesson, onBack, onComplete }) {
     }
   }
 
+  // Quiz auto-scroll refs — see the "quiz auto-scroll" comment near the top of App.jsx; same
+  // behaviour, same shared helper (src/shared/scrollReveal.js).
+  const quizHeadRef = useRef(null);
+  const explainRef = useRef(null);
+  const nextBtnRef = useRef(null);
+  const resultRef = useRef(null);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel === null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!explainRef.current || !nextBtnRef.current) return;
+        revealQuizResult({ scrollEl: window, resultEl: explainRef.current, actionEl: nextBtnRef.current, topClearY: quizTopClearY(), bottomClearY: window.innerHeight });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, sel]);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel !== null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!quizHeadRef.current) return;
+        revealUnderClear({ scrollEl: window, el: quizHeadRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, qi, lesson.id]);
+
+  useEffect(() => {
+    if (phase !== "result") return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!resultRef.current) return;
+        revealUnderClear({ scrollEl: window, el: resultRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase]);
+
   if (phase === "quiz") return (
     <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
       <button onClick={()=>setPhase("content")} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LESSON</button>
-      <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#10B981",letterSpacing:2,marginBottom:4}}>⚗️ LP LAB — LESSON {lesson.id} QUIZ</div>
+      <div ref={quizHeadRef} style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#10B981",letterSpacing:2,marginBottom:4}}>⚗️ LP LAB — LESSON {lesson.id} QUIZ</div>
       <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:1,marginBottom:16}}>QUESTION {qi+1} OF {shuffledQuestions.length}</div>
       <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,color:"#F9FAFB",lineHeight:1.5}}>{q.q}</div>
@@ -3014,31 +3072,29 @@ function LPLessonView({ lesson, onBack, onComplete }) {
             else if (i === sel) { bg="rgba(239,68,68,0.15)"; border="#EF4444"; color="#EF4444"; }
           }
           return (
-            <button key={i} onClick={()=>pickAnswer(i)} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 14px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:15,color,cursor:sel===null?"pointer":"default",letterSpacing:0.5}}>
+            <button key={i} data-quiz-option="1" onClick={()=>pickAnswer(i)} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 14px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:15,color,cursor:sel===null?"pointer":"default",letterSpacing:0.5}}>
               <span style={{color:"#6B7280",marginRight:8}}>{String.fromCharCode(65+i)}.</span>{opt}
             </button>
           );
         })}
       </div>
       {showExp && (
-        <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:14,marginBottom:12}}>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:sel===q.correct?"#10B981":"#EF4444",letterSpacing:1,marginBottom:6}}>{sel===q.correct?"✓ CORRECT":"✗ NOT QUITE"} — CLUCK EXPLAINS:</div>
-          <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.7}}>{q.explanation}</p>
-        </div>
-      )}
-      {showExp && (
-        <>
+        <div ref={explainRef} data-quiz-explain="1">
+          <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:14,marginBottom:12}}>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:sel===q.correct?"#10B981":"#EF4444",letterSpacing:1,marginBottom:6}}>{sel===q.correct?"✓ CORRECT":"✗ NOT QUITE"} — CLUCK EXPLAINS:</div>
+            <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.7}}>{q.explanation}</p>
+          </div>
           <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-          <button onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+          <button ref={nextBtnRef} data-quiz-next="1" onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
             {qi+1<shuffledQuestions.length?"NEXT QUESTION →":"SEE RESULTS →"}
           </button>
-        </>
+        </div>
       )}
     </div>
   );
 
   if (phase === "result") return (
-    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto",textAlign:"center"}}>
+    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto",textAlign:"center"}} ref={resultRef}>
       <div style={{fontSize:48,marginBottom:12}}>{score===shuffledQuestions.length?"🏆":score>=3?"✅":"📚"}</div>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:20,fontWeight:900,color:"#10B981",letterSpacing:2,marginBottom:8}}>
         {score}/{shuffledQuestions.length} CORRECT
@@ -3054,20 +3110,26 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#FF7A18",letterSpacing:2}}>— CLUCK NORRIS</div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <button onClick={()=>{setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
+        <button onClick={()=>{clearStep("lp:" + lesson.id);setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
           📖 REVIEW LESSON
         </button>
-        <button onClick={onComplete} style={{flex:1,background:"#10B981",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
+        <button onClick={()=>{clearStep("lp:" + lesson.id);onComplete();}} style={{flex:1,background:"#10B981",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
           NEXT LESSON →
         </button>
       </div>
     </div>
   );
 
-  return (
-    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
-      <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LP LAB</button>
-
+  // Lesson stepper (owner 2026-09-25: "Yes all of website"). One screen per idea: the opening
+  // (header + Cluck's hook), one step per section (its table with it), then "Try it yourself" —
+  // the lesson's own calculators and the depth visualizer, together, after the reading that
+  // explains them — then Cluck's verdict with Ask Cluck, and the quiz button on that last step.
+  // The old accordion (one section open at a time, the rest collapsed) is gone: on a phone a
+  // collapsed section is a lesson nobody reads, and on a desktop it hid how much was left.
+  // src/shared/WebLessonStepper.jsx; the remembered step clears when the lesson is done.
+  const stepKey = "lp:" + lesson.id;
+  const steps = [
+    { label: "", node: (<>
       {/* Header */}
       <div style={{textAlign:"center",marginBottom:20}}>
         <div style={{fontSize:40,marginBottom:6}}>{lesson.icon}</div>
@@ -3082,16 +3144,10 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:15,lineHeight:1.7}}>{lesson.cluckHook}</p>
       </div>
 
-      {/* Sections */}
-      {lesson.sections.map((sec, i) => (
-        <div key={i} style={{marginBottom:8}}>
-          <button onClick={()=>setOpenSection(openSection===i?-1:i)} style={{width:"100%",background:openSection===i?"rgba(16,185,129,0.1)":"rgba(255,122,24,0.05)",border:`1px solid ${openSection===i?"rgba(16,185,129,0.4)":"rgba(255,122,24,0.18)"}`,borderRadius:openSection===i?"12px 12px 0 0":"12px",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:openSection===i?"#10B981":"#D1D5DB",letterSpacing:1}}>{sec.heading}</span>
-            <span style={{color:openSection===i?"#10B981":"#6B7280",fontSize:16}}>{openSection===i?"▲":"▼"}</span>
-          </button>
-          {openSection===i && (
-            <div style={{background:"rgba(255,122,24,0.04)",border:"1px solid rgba(16,185,129,0.2)",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"14px 16px"}}>
-              <p style={{margin:"0 0 12px",fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
+    </>) },
+    ...lesson.sections.map((sec) => ({ label: sec.heading, node: (
+      <div>
+        <p style={{margin:"0 0 12px",fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
               {sec.table && (
                 <div style={{overflowX:"auto",marginTop:8}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -3112,11 +3168,9 @@ function LPLessonView({ lesson, onBack, onComplete }) {
                   </table>
                 </div>
               )}
-            </div>
-          )}
-        </div>
-      ))}
-
+      </div>
+    ) })),
+    { label: "Try it yourself", node: (<div data-no-swipe="1">
       {/* Interactive: IL Calculator — Lesson 3 */}
       {lesson.id === 3 && (<CalcErrorBoundary><ILCalculator /></CalcErrorBoundary>)}
 
@@ -3198,16 +3252,29 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         )}
       </div>
 
-      {/* Cluck verdict */}
-      <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16,marginTop:8}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FF7A18",letterSpacing:2,marginBottom:6}}>🐔 CLUCK'S VERDICT</div>
+    </div>) },
+    { label: "Cluck's verdict", node: (<>
+      <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
         <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:15,lineHeight:1.7}}>{lesson.cluckVerdict}</p>
       </div>
-
       <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-      <button onClick={()=>{setPhase("quiz");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:12}}>
+    </>) },
+  ];
+
+  return (
+    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
+      <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LP LAB</button>
+      <WebLessonStepper
+        key={stepKey}
+        storeKey={stepKey}
+        color="#10B981"
+        steps={steps}
+        finish={
+          <button onClick={()=>{setPhase("quiz");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:0,height:"100%"}}>
         ✅ TAKE THE QUIZ →
       </button>
+        }
+      />
     </div>
   );
 }

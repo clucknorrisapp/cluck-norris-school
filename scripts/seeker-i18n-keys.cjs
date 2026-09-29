@@ -126,6 +126,54 @@ function reachableFrom(entry) {
   return [...seen];
 }
 
+// ⚠️ AND THE SEEKER WING'S DATA MODULE. src/seeker/solana/wing-content.js holds every Seeker-wing
+// string as object-literal DATA (title/blurb/facts arrays), read by src/seeker/solana/SeekerWing.jsx
+// through `t(page.title)` etc — a variable, not a literal, so CALL can't see any of it, same blind
+// spot as registry.js/passgate.jsx above. Loaded and walked as data (same technique
+// scripts/seeker-solana-room-test.cjs uses for content.js) rather than TABLES' regex, because the
+// strings sit inside nested arrays/objects a single regex can't describe. Scoped to this one file
+// (not content.js, which is shared by BOTH editions and must never be excluded from either) so
+// --sync-exclude only ever prunes strings the education edition truly cannot reach.
+function wingContentKeys() {
+  const fp = path.join(SRC, "solana", "wing-content.js");
+  if (!fs.existsSync(fp)) return [];
+  const src = fs.readFileSync(fp, "utf8")
+    .replace(/^import\s+\{[^}]*\}\s+from\s+["'][^"']+["'];?$/gm, "")
+    .replace(/^export\s+const/gm, "const")
+    .replace(/^export\s+function/gm, "function");
+  const fn = new Function("module", `
+    const t = (s) => s;
+    ${src}
+    module.exports = { WING_INDEX, WING_TOPICS, WING_PAGES };
+  `);
+  const sandbox = { exports: {} };
+  fn(sandbox);
+  const { WING_INDEX, WING_TOPICS, WING_PAGES } = sandbox.exports;
+  const out = new Set();
+  const add = (s) => { if (typeof s === "string" && s.trim()) out.add(s); };
+  const walkFact = (f) => { if (Array.isArray(f)) f.forEach((p) => add(p.text)); else add(f); };
+  add(WING_INDEX.title); add(WING_INDEX.lede);
+  WING_TOPICS.forEach((t) => { add(t.title); add(t.blurb); });
+  for (const id of Object.keys(WING_PAGES)) {
+    const page = WING_PAGES[id];
+    add(page.title); add(page.sub);
+    for (const b of page.blocks) {
+      if (b.kind === "intro") b.paras.forEach(add);
+      if (b.kind === "section") {
+        add(b.title);
+        (b.facts || []).forEach(walkFact);
+        (b.trailingFacts || []).forEach(walkFact);
+        add(b.footnoteText);
+        if (b.internalCta) add(b.internalCta.label);
+        (b.stageRows || []).forEach((r) => { add(r.name); (r.vals || []).forEach((v) => { add(v.label); if (v.translateValue) add(v.value); }); });
+      }
+      if (b.kind === "sources") b.links.forEach((l) => add(l.label));
+      if (b.kind === "internal") b.links.forEach((l) => add(l.label));
+    }
+  }
+  return [...out];
+}
+
 function keysIn(files) {
   const out = new Set();
   for (const fp of files) {
@@ -157,6 +205,11 @@ function keysIn(files) {
       try { v = JSON.parse(m[1]); } catch (_) { continue; }
       if (v && v.trim()) out.add(v);
     }
+  }
+  // The wing's data module — only when it's actually among the files being scanned, so eduKeys()
+  // (which never reaches it) correctly omits it.
+  if (files.includes(path.join(SRC, "solana", "wing-content.js"))) {
+    wingContentKeys().forEach((k) => out.add(k));
   }
   return [...out].sort();
 }

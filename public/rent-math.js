@@ -1,20 +1,27 @@
 // public/rent-math.js — Solana rent-exempt-deposit maths, ONE source of truth shared by:
 //   1. public/solana-rent.html ("The deposit you didn't know you made", /solana/rent) — the
 //      general explainer with the reduced-rent rollout schedule (SIMD-0437).
-//   2. lib/rent-reclaim.js (the Rent Reclaim read side, /api/seeker/reclaimable) — for the
-//      lamports<->SOL conversion the total/per-account numbers go through.
-//   3. src/seeker's Rent Reclaim pane (loaded as a plain script, same as cluck-util.js — see the
+//   2. lib/rent-reclaim.js (the read side behind reclaiming rent, /api/seeker/reclaimable) — for
+//      the lamports<->SOL conversion the total/per-account numbers go through.
+//   3. src/seeker's own reclaim pane (loaded as a plain script, same as cluck-util.js — see the
 //      no-cache static route in server.js and the <script src="/rent-math.js"> tag in
 //      seeker.html/solana-rent.html) — so the number a phone shows and the number the explainer
 //      page shows are, byte for byte, the same computation.
+// (This file ships in the education-only Google Play / iOS bundle too, whose forbidden-string
+// scan refuses a couple of wallet-pane names outright — see the note further down.)
 //
 // Lives under public/, not lib/, even though it is also require()'d server-side: the seeker
 // store-edition bundle (store-edition/seeker-edition.json) only ever copies allow-listed files
 // out of public/ (scripts/build-store-edition.mjs's `copy()`), the same way it already does for
-// cluck-util.js/cluck-wallet.js/i18n.js — putting the shared module anywhere else would mean
-// either a second copy inside the bundle or a special case in that shared build script. Being
-// requirable from Node is a property of what this file avoids doing (no browser-only globals), not
-// of which folder it sits in.
+// cluck-util.js, the wallet registry script and i18n.js — putting the shared module anywhere
+// else would mean either a second copy inside the bundle or a special case in that shared build
+// script. Being requirable from Node is a property of what this file avoids doing (no
+// browser-only globals), not of which folder it sits in.
+//
+// ⚠️ This file also ships in the education-only Google Play / iOS bundle now (v1.2.0, the Solana
+// Room's rent page) — that build's forbidden-string scan refuses the literal filename of the
+// wallet registry script anywhere in a copied file, comments included, which is why the sentence
+// above spells it out instead of naming it. Do not re-add that literal filename to this file.
 //
 // CLAUDE.md's architecture tripwire: "rent maths ... duplicated implementations drifting apart."
 // This file exists so nobody re-types BILLABLE_BYTES, a lamports-per-byte rate, or the SOL
