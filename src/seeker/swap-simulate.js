@@ -82,14 +82,35 @@ function readSimBalance(entry, label) {
 // `accounts.addresses` and `verifySimulationResult`'s own `addressLabels`) or `{ok:false, reason}`
 // — the reason strings match the app's own translated dictionary entries; callers pass them
 // through their own `t()`.
-// `outputMint` + `outputAtas` (Codex round 33 on #420, finding 1): the quote's output mint and the
-// live wallet's own ATA addresses for it (swap-verify.js's `outputAtas`, both token programs).
-// Any of them NOT already in the wallet's inventory is appended with `before: "0"` — a wallet that
-// does not hold the output token yet has no account to list, and without this the minimum-received
-// check had nothing to compare and a zero-output simulation passed. After simulation the created
-// account reads like any other; an address left unused (the other program's derivation) reads
-// `null`, which is a real 0. Both optional, so every existing caller/test is unchanged.
-export function buildInventory({ live, solRes, legacyAccts, token22Accts, outputMint, outputAtas }) {
+// The base fee every Solana transaction pays per required signature (lamports_per_signature,
+// 5,000 today — solana.com/docs/core/fees). The verifier's `feeLamports` is the PRIORITY fee only
+// (compute units × price); the full fee is priority + base × signers, and the SOL checks below
+// use the full fee (Codex round 34: an honest swap with no account create was refused by exactly
+// these 5,000 lamports).
+export const BASE_FEE_LAMPORTS_PER_SIGNATURE = 5000;
+
+const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+
+// ⚠️ Codex rounds 33/34 on #420 — what the inventory has to carry for the SOL accounting below
+// to be honest:
+//   · `lamports` on every token label. A token account's lamports (its rent-exempt balance, and
+//     for a wSOL account the wrapped SOL on top) are the WALLET'S SOL — closing the account
+//     returns them to native. The wallet's real SOL position is therefore native lamports PLUS
+//     the lamports of every token account it owns, and a swap's SOL proceeds/cost is the change
+//     in THAT position. Counting native alone credited a closed pre-existing wSOL account's own
+//     rent (2,039,280 lamports) as swap output: a zero-output route passed a 1,000,000-lamport
+//     minimum (round 34, finding 2). An inventory entry without a readable lamports figure is
+//     dropped like any other unreadable entry — never carried with a guessed 0.
+//   · `trackedAtas` — the wallet's OWN associated token accounts for the mints this swap can
+//     touch (input, output, wSOL; both token programs; swap-verify.js derives them). Any not
+//     already held is appended at before = 0 tokens / 0 lamports so an account this transaction
+//     CREATES is inside the position — its rent then reads as moved, not spent, and a not-yet-
+//     created output account is held to the minimum (round 33, finding 1: without it a first-
+//     time buyer had no output account in the checked set and a zero-output simulation passed).
+//     `outputMint` + `outputAtas` remain as the older spelling of the same thing.
+// Both optional, so every existing caller/test is unchanged.
+export function buildInventory({ live, solRes, legacyAccts, token22Accts, outputMint, outputAtas, trackedAtas }) {
   const solBefore = solRes && typeof solRes.value === "number" ? solRes.value : null;
   if (solBefore == null) {
     return { ok: false, reason: "Could not read your SOL balance to check this transaction before signing. Try again." };
@@ -105,49 +126,62 @@ export function buildInventory({ live, solRes, legacyAccts, token22Accts, output
   const addresses = [live];
   const labels = [{ kind: "sol", before: String(solBefore) }];
   for (const entry of [...legacyList, ...token22List]) {
-    const info = entry && entry.account && entry.account.data && entry.account.data.parsed && entry.account.data.parsed.info;
+    const acct = entry && entry.account;
+    const info = acct && acct.data && acct.data.parsed && acct.data.parsed.info;
     const mint = info && info.mint;
     const amount = info && info.tokenAmount && info.tokenAmount.amount;
+    const lamports = acct && (typeof acct.lamports === "number" || typeof acct.lamports === "string") ? toBigIntOrNull(acct.lamports) : null;
     // An unreadable inventory entry is left OUT of the checked set rather than guessed — this
     // only affects an entry this client itself could not parse from its own read (never happens
     // for a real getTokenAccountsByOwner(jsonParsed) response), unlike the wholesale-missing
     // `.value` case above, which is refused outright rather than silently dropped.
-    if (!mint || amount == null || !entry.pubkey) continue;
-    labels.push({ kind: "token", mint, before: String(amount) });
+    if (!mint || amount == null || lamports == null || !entry.pubkey) continue;
+    labels.push({ kind: "token", mint, before: String(amount), lamports: lamports.toString() });
     addresses.push(entry.pubkey);
   }
-  if (outputMint && Array.isArray(outputAtas)) {
-    for (const ata of outputAtas) {
+  const tracked = [];
+  if (outputMint && Array.isArray(outputAtas)) tracked.push({ mint: outputMint, addresses: outputAtas });
+  if (Array.isArray(trackedAtas)) for (const t of trackedAtas) if (t && t.mint && Array.isArray(t.addresses)) tracked.push(t);
+  for (const t of tracked) {
+    for (const ata of t.addresses) {
       if (typeof ata !== "string" || !ata || addresses.includes(ata)) continue;
-      labels.push({ kind: "token", mint: outputMint, before: "0", expected: true });
+      labels.push({ kind: "token", mint: t.mint, before: "0", lamports: "0", expected: true });
       addresses.push(ata);
     }
   }
   return { ok: true, addresses, labels };
 }
 
-// `simResult` — the raw `simulateTransaction` RPC result's `.value` object:
+// `simResult` — the `.value` OBJECT of a `simulateTransaction` RPC result:
 //   { err, accounts: [...], unitsConsumed, logs }
+//   (the RPC answers `{ context, value }` — preSignSimulation() below unwraps it; Codex round 34
+//   finding 1: the pane used to pass the whole envelope in here and every honest swap refused as
+//   "incomplete" before the wallet was ever asked.)
 //   `accounts` MUST be in the SAME ORDER as `addressLabels` below (the same order the caller sent
 //   as the `addresses` array to `simulateTransaction`'s `accounts` config).
 // `addressLabels` — array describing what each `accounts[i]` entry IS and what it held BEFORE the
 // simulated transaction ran (read fresh, on-chain, by the caller — never cached):
 //   { kind: "sol", before: "<lamports as a string>" }                          — exactly one, index 0
-//   { kind: "token", mint: "<base58>", before: "<base-unit amount as a string>" } — zero or more
+//   { kind: "token", mint, before: "<base units>", lamports: "<lamports>" }     — zero or more
 // `inputMint`, `outputMint` — the quote's own mints (never confused with each other).
 // `inAmount` — the quote's own inAmount, base-unit string.
 // `minReceived` — the COMPUTED minimum (never upstream's own otherAmountThreshold — see swap-
 //   verify.js/Swap.jsx's own notes on that), base-unit string.
-// `feeLamports` — the verified, ceiling-rounded priority fee (swap-verify.js's own `feeLamports`).
+// `feeLamports` — the verified, ceiling-rounded PRIORITY fee (swap-verify.js's own `feeLamports`).
+// `signatureCount` — required signers (swap-verify.js pins exactly 1); defaults to 1. The full
+//   transaction fee is feeLamports + BASE_FEE_LAMPORTS_PER_SIGNATURE × signatureCount.
 // `inputIsSol` — whether the quote's input mint IS native SOL (WSOL_MINT).
 // `allowedNewAtaCount` — how many NEW token accounts this swap's own instructions are allowed to
 //   create (swap-verify.js already counted and bounded this — pass that same count here, never a
-//   larger one).
+//   larger one). With every own-ATA tracked in the position (buildInventory's `trackedAtas`) a
+//   create's rent is a MOVE inside the position, not a cost; this count only tolerates rent to an
+//   account the inventory could not track, and only ever on the OUTFLOW side — it is never
+//   credited as proceeds.
 // `ataRentLamportsOverride` — optional, for tests; defaults to ATA_RENT_LAMPORTS.
 //
 // Returns `{ ok:true }` or `{ ok:false, reason:<user-facing sentence> }`. Never throws.
 export function verifySimulationResult({
-  simResult, addressLabels, inputMint, outputMint, inAmount, minReceived, feeLamports,
+  simResult, addressLabels, inputMint, outputMint, inAmount, minReceived, feeLamports, signatureCount,
   inputIsSol, allowedNewAtaCount, ataRentLamportsOverride,
 }) {
   if (!simResult || typeof simResult !== "object") {
@@ -173,50 +207,36 @@ export function verifySimulationResult({
   const minReceivedBig = toBigIntOrNull(minReceived);
   const feeLamportsBig = toBigIntOrNull(feeLamports);
   const ataCountBig = toBigIntOrNull(allowedNewAtaCount);
+  const signers = signatureCount == null ? 1n : toBigIntOrNull(signatureCount);
   const rentPer = toBigIntOrNull(ataRentLamportsOverride) != null ? toBigIntOrNull(ataRentLamportsOverride) : BigInt(ATA_RENT_LAMPORTS);
-  if (inAmountBig == null || minReceivedBig == null || feeLamportsBig == null || ataCountBig == null) {
+  if (inAmountBig == null || minReceivedBig == null || feeLamportsBig == null || ataCountBig == null || signers == null || signers < 1n) {
     return { ok: false, reason: "Could not check the simulated result — the expected amounts were incomplete." };
   }
+  const txFee = feeLamportsBig + BigInt(BASE_FEE_LAMPORTS_PER_SIGNATURE) * signers;
 
-  // ⚠️ Frontier review round 31b, verifier follow-up 2 — a LATENT double-accounting when the
-  // input is native SOL and the wallet already holds a pre-existing wSOL ATA for the same mint.
-  // Native SOL and that wSOL ATA are the SAME asset from the wallet's perspective (wrapping is
-  // just moving lamports into a token account), but the two checks below used to bound them
-  // INDEPENDENTLY — the wSOL token label capped at `inAmount` on its own, and the native SOL
-  // outflow capped at `inAmount + fee + rent` on its own — so in principle BOTH could fall by
-  // `inAmount`, letting up to 2× `inAmount` leave the wallet while each individual check still
-  // passed. `wsolTokenDecrease` accumulates how much any wSOL-mint token label fell (never
-  // refusing on it alone when the input is SOL); the COMBINED total with the native-SOL side is
-  // checked once, after the loop, against the single `inAmount` ceiling.
-  // ⚠️ Codex round 33 on #420, finding 2 — a wallet can hold MORE THAN ONE token account for a
-  // mint (an ATA plus an auxiliary account; one per token program for a mint that migrated).
-  // Each output account used to be held to the FULL minimum on its own, so a genuine swap paying
-  // the right amount into one account while another sat untouched was refused; and each INPUT
-  // account was capped at `inAmount` on its own, so two input accounts could each fall by
-  // `inAmount` — the same independent-bounds shape as the SOL/wSOL double-accounting below.
-  // Both sides are now SUMMED across every account of that mint and bounded once, after the loop.
-  // Finding 1 lives here too: with no output-mint label at all there is nothing to compare, and
-  // "nothing to compare" used to read as "passed". It is a refusal — the caller's inventory
-  // includes the wallet's own output ATA (buildInventory's `outputAtas`), so a real swap always
-  // has one.
   // ⚠️ Codex round 33 on #420 — NATIVE SOL OUTPUT. When the output mint is wSOL, the value
   // arrives as native SOL: the route pays into a wSOL account that the same transaction closes,
-  // so after simulation that account reads `null` (a real 0) and a token-side minimum check
-  // would REFUSE every honest SOL-output swap. The person's SOL-denominated position is native
-  // SOL PLUS every wSOL account (the same asset), so the received amount is the NET change of
-  // that position with the legitimate overhead added back: the priority fee (exact) and rent
-  // for the allowed account creates (an upper bound — a wSOL account created and closed in the
-  // same transaction refunds its own rent, so this credit can only make the check LOOSER by at
-  // most ATA_RENT_LAMPORTS per allowed create; the route instruction's own
-  // `quoted_out_amount`/`slippage_bps` bytes, checked in swap-verify.js, are what bind the
-  // minimum on-chain — this gate exists to catch a route that moves anything ELSE).
+  // so after simulation that account reads `null` and a token-side minimum check would REFUSE
+  // every honest SOL-output swap. The received amount is the change of the SOL POSITION (below)
+  // with the transaction fee added back, held to the same minimum as a token output.
   const outputIsSol = outputMint === WSOL_MINT;
   if (inputIsSol && outputIsSol) {
     return { ok: false, reason: "Could not check the simulated result — the quote pays with and receives the same asset." };
   }
+
+  // ⚠️ THE SOL POSITION (Codex round 34, finding 2). Native lamports PLUS the lamports of every
+  // token account in the checked set — a token account's lamports are the wallet's own SOL
+  // (rent, and for wSOL the wrapped amount too). Rent moving INTO an account this transaction
+  // creates, or OUT of one it closes, is a move inside the position and never reads as a cost or
+  // as proceeds. This replaces three separate bounds (native SOL, wSOL token decrease, rent
+  // estimate) that each had a way to be wrong on their own: 31b's SOL/wSOL double-accounting and
+  // round 34's closed-account rent counted as output were both the same mistake, seen twice.
+  // ⚠️ Codex round 33 on #420, finding 2 — a wallet can hold MORE THAN ONE token account for a
+  // mint. Token-side deltas are SUMMED across every account of that mint and bounded once, after
+  // the loop; with no output-mint label at all there is nothing to compare, and "nothing to
+  // compare" is a refusal, never a pass.
   let solBefore = null, solAfter = null;
-  let wsolTokenDecrease = 0n;
-  let wsolOutputDelta = 0n;
+  let positionBefore = 0n, positionAfter = 0n;
   let inputTokenDecrease = 0n;
   let outputGain = 0n, outputSeen = 0;
   for (let i = 0; i < addressLabels.length; i++) {
@@ -229,24 +249,31 @@ export function verifySimulationResult({
 
     if (label.kind === "sol") {
       solBefore = before; solAfter = after;
+      positionBefore += before; positionAfter += after;
       continue;
     }
+
+    // The account's own lamports, before (from the inventory) and after (from the simulation).
+    // A closed account reads `null` = 0 lamports: everything it held went back to native.
+    const lamportsBefore = toBigIntOrNull(label.lamports);
+    if (lamportsBefore == null) return { ok: false, reason: "Could not check the simulated result — a token account's starting lamports were missing." };
+    let lamportsAfter = 0n;
+    if (accounts[i] !== null) {
+      lamportsAfter = toBigIntOrNull(accounts[i] && accounts[i].lamports);
+      if (lamportsAfter == null) return { ok: false, reason: "Could not read the simulated result — a token account's simulated lamports could not be understood." };
+    }
+    positionBefore += lamportsBefore; positionAfter += lamportsAfter;
 
     const delta = after - before;
     if (label.mint === inputMint) {
       if (delta > 0n) return { ok: false, reason: "This transaction would increase the token you're paying with — that should never happen." };
-      if (inputIsSol) {
-        // Deferred to the combined SOL+wSOL check below — never bounded to `inAmount` on its own
-        // here, or a pre-existing wSOL ATA could ALSO fall by the full `inAmount` on top of native
-        // SOL falling by `inAmount` (the exact double-spend this fix closes).
-        wsolTokenDecrease += -delta;
-      } else {
-        inputTokenDecrease += -delta;   // bounded ONCE, summed across every input account, below
-      }
+      // A wSOL input account's token decrease is already inside the position (its lamports fell
+      // with it) — bounded once below with native SOL, never on its own (31b's double-accounting).
+      if (!inputIsSol) inputTokenDecrease += -delta;
       continue;
     }
     if (label.mint === outputMint) {
-      if (outputIsSol) { wsolOutputDelta += delta; continue; }   // folded into the SOL position below
+      if (outputIsSol) continue;        // inside the position; held to the minimum below
       outputGain += delta;              // summed across every output account; bounded below
       outputSeen++;
       continue;
@@ -259,11 +286,13 @@ export function verifySimulationResult({
   if (solBefore == null || solAfter == null) {
     return { ok: false, reason: "Could not check the simulated result — the wallet's SOL balance was missing." };
   }
-  const overhead = feeLamportsBig + ataCountBig * rentPer;
+  const positionDelta = positionAfter - positionBefore;   // positive = the wallet's SOL grew
+  // Rent to an account the inventory could NOT track (none, for a normal Jupiter build — every
+  // own-ATA is tracked) — tolerated on the outflow side only, never credited as proceeds.
+  const untrackedRentTolerance = ataCountBig * rentPer;
+
   if (outputIsSol) {
-    // Net SOL-asset change (native + every wSOL account) with the legitimate overhead credited
-    // back — see the note above the loop. Held to the SAME minimum as a token output.
-    const received = (solAfter - solBefore) + wsolOutputDelta + overhead;
+    const received = positionDelta + txFee;
     if (received < minReceivedBig) {
       return { ok: false, reason: "This transaction would give you less than the minimum you were shown." };
     }
@@ -278,22 +307,65 @@ export function verifySimulationResult({
   if (!inputIsSol && inputTokenDecrease > inAmountBig) {
     return { ok: false, reason: "This transaction would move more of the token you're paying with than the quote showed." };
   }
-  const solOutflow = solBefore - solAfter; // positive = SOL fell
-  // Legitimate overhead any swap may spend regardless of input mint: the priority fee, plus rent
-  // for however many NEW token accounts this swap's own (already-counted, already-bounded)
-  // instructions may create. SOL is free to RISE net of this (a closed wSOL ATA refunds its own
-  // rent) — only an outflow larger than the overhead (input case: PLUS the shared inAmount
-  // ceiling) is refused.
-  if (inputIsSol) {
-    // The combined bound: whatever native SOL fell beyond the legitimate overhead, PLUS however
-    // much any pre-existing wSOL ATA fell, must not exceed `inAmount` — never each independently.
-    const solConsumed = solOutflow > overhead ? solOutflow - overhead : 0n;
-    if (solConsumed + wsolTokenDecrease > inAmountBig) {
-      return { ok: false, reason: "This transaction would move more SOL (native and wrapped combined) than the quote showed." };
-    }
-  } else if (solOutflow > overhead) {
-    return { ok: false, reason: "This transaction would spend more SOL than the quote and fee shown." };
+
+  // What the SOL position may lose: the transaction fee, plus (input-is-SOL) the quote's own
+  // inAmount, plus rent to an untracked account. SOL is free to RISE.
+  const solLost = -positionDelta;   // positive = the position shrank
+  const allowed = txFee + untrackedRentTolerance + (inputIsSol ? inAmountBig : 0n);
+  if (solLost > allowed) {
+    return inputIsSol
+      ? { ok: false, reason: "This transaction would move more SOL (native and wrapped combined) than the quote showed." }
+      : { ok: false, reason: "This transaction would spend more SOL than the quote and fee shown." };
   }
 
   return { ok: true };
+}
+
+// ⚠️ Codex round 34 on #420, finding 1 (P1) — THE CALLER, in the pure module, so it can be driven
+// with the documented RPC response shape. Swap.jsx used to do this inline and handed the whole
+// `{ context, value }` envelope of `simulateTransaction` to verifySimulationResult, which expects
+// the `value` object — so every honest swap refused as "the result was incomplete" before the
+// wallet was ever asked to sign, and no test caught it because none exercised the caller.
+//
+// `rpc(method, params)` — the app's own JSON-RPC function (CluckUtil.rpc: resolves to the RESULT,
+// throws on a JSON-RPC error). Reason strings are the untranslated English keys; Swap.jsx passes
+// them through its own t(). An unreachable RPC — any of the reads OR the simulate call — is a
+// REFUSAL, never a skip.
+export async function preSignSimulation({
+  rpc, live, swapTransactionB64, quote, minReceived, feeLamports, signatureCount, ataCreateCount,
+  inputIsSol, outputAtas, trackedAtas,
+}) {
+  let solRes, legacyAccts, token22Accts;
+  try {
+    [solRes, legacyAccts, token22Accts] = await Promise.all([
+      rpc("getBalance", [live, { commitment: "confirmed" }]),
+      rpc("getTokenAccountsByOwner", [live, { programId: TOKEN_PROGRAM_ID }, { encoding: "jsonParsed" }]),
+      rpc("getTokenAccountsByOwner", [live, { programId: TOKEN_2022_PROGRAM_ID }, { encoding: "jsonParsed" }]),
+    ]);
+  } catch (_) {
+    return { ok: false, reason: "Could not reach the network to check this transaction before signing. Try again." };
+  }
+  const inv = buildInventory({ live, solRes, legacyAccts, token22Accts, outputMint: quote && quote.outputMint, outputAtas, trackedAtas });
+  if (!inv.ok) return inv;
+
+  let simRes;
+  try {
+    simRes = await rpc("simulateTransaction", [swapTransactionB64, {
+      encoding: "base64", sigVerify: false, replaceRecentBlockhash: true,
+      accounts: { encoding: "jsonParsed", addresses: inv.addresses },
+    }]);
+  } catch (_) {
+    return { ok: false, reason: "Could not simulate this transaction before signing. Try again." };
+  }
+  // The documented shape is { context: { slot }, value: { err, accounts, logs, unitsConsumed } }.
+  // Anything else — no envelope, no value, a value that is not an object — is malformed and
+  // refuses; it is never unwrapped by guesswork and never handed down as-is.
+  const value = simRes && typeof simRes === "object" && simRes.value && typeof simRes.value === "object" ? simRes.value : null;
+  if (!value) return { ok: false, reason: "Could not simulate this transaction before signing — the result was incomplete." };
+
+  return verifySimulationResult({
+    simResult: value, addressLabels: inv.labels,
+    inputMint: quote.inputMint, outputMint: quote.outputMint, inAmount: quote.inAmount,
+    minReceived, feeLamports, signatureCount, inputIsSol, allowedNewAtaCount: ataCreateCount,
+  });
 }

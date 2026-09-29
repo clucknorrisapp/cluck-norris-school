@@ -63,12 +63,10 @@ import { Pane, Loading, Unavailable, Refused, Confirm, toolFetch, useOnline } fr
 import { NeedsWallet } from "../needswallet.jsx";
 import { signSendConfirm, assertSameAccount, rpcFn, checkPendingSwap } from "../sign.js";
 import { verifySwapTransaction, MAX_PRIORITY_FEE_LAMPORTS } from "../swap-verify.js";
-import { verifySimulationResult, buildInventory } from "../swap-simulate.js";
+import { preSignSimulation } from "../swap-simulate.js";
 import "./tools.css";
 
 const NATIVE_SOL_MINT = "So11111111111111111111111111111111111111112";
-const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
-const TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 const QUOTE_REFRESH_MS = 15000;
 const QUOTE_STALE_MS = 60000;
 const SOL_RESERVE_LAMPORTS = "10000000"; // 0.01 SOL kept back for fees when paying SOL
@@ -122,44 +120,19 @@ function computeMinReceived(outAmount, slippageBps) {
 // route-hop accounts live almost entirely in an address lookup table, which can resolve to ANY
 // address (see docs/SEEKER_SWAP_DESIGN.md and swap-simulate.js's own trust-boundary note). An
 // unreachable RPC — the balance fetch OR the simulate call — is a REFUSAL, never a skip.
-async function runPreSignSimulation({ rpc, live, swapTransactionB64, quote, feeLamports, ataCreateCount, inputIsSol, outputAtas }) {
-  let solRes, legacyAccts, token22Accts;
-  try {
-    [solRes, legacyAccts, token22Accts] = await Promise.all([
-      rpc("getBalance", [live, { commitment: "confirmed" }]),
-      rpc("getTokenAccountsByOwner", [live, { programId: TOKEN_PROGRAM_ID }, { encoding: "jsonParsed" }]),
-      rpc("getTokenAccountsByOwner", [live, { programId: TOKEN_2022_PROGRAM_ID }, { encoding: "jsonParsed" }]),
-    ]);
-  } catch (_) {
-    return { ok: false, reason: t("Could not reach the network to check this transaction before signing. Try again.") };
-  }
-
-  // ⚠️ Frontier review round 31b, verifier follow-up 1 — inventory-shaping (and the "well-formed
-  // or refuse" rule for all three RPC results, never just the SOL one) lives in the pure module so
-  // it is unit-testable: scripts/seeker-swap-simulate-test.cjs. The reason strings are the SAME
-  // English text as the app's translated dictionary entries, so `t()` here still finds them.
-  // `outputAtas` — the verifier's own derivation of this wallet's output-mint ATA (both token
-  // programs), so a wallet that does not hold the output token YET still has an account in the
-  // checked set and the minimum-received check has something to compare (Codex round 33, #420).
-  const inv = buildInventory({ live, solRes, legacyAccts, token22Accts, outputMint: quote.outputMint, outputAtas });
-  if (!inv.ok) return { ok: false, reason: t(inv.reason) };
-
-  let simRes;
-  try {
-    simRes = await rpc("simulateTransaction", [swapTransactionB64, {
-      encoding: "base64", sigVerify: false, replaceRecentBlockhash: true,
-      accounts: { encoding: "jsonParsed", addresses: inv.addresses },
-    }]);
-  } catch (_) {
-    return { ok: false, reason: t("Could not simulate this transaction before signing. Try again.") };
-  }
-
+//
+// ⚠️ Codex round 34 (P1): the reads, the inventory, the simulate call and the RPC-envelope unwrap
+// all live in swap-simulate.js's preSignSimulation() now — this used to be inline here and handed
+// the whole `{context, value}` result to the verifier, so every honest swap refused before the
+// wallet was asked. The pure caller is driven with the documented RPC response in
+// scripts/seeker-swap-simulate-test.cjs; this wrapper only translates the reason.
+async function runPreSignSimulation({ rpc, live, swapTransactionB64, quote, feeLamports, signatureCount, ataCreateCount, inputIsSol, outputAtas, trackedAtas }) {
   const minReceived = computeMinReceived(quote.outAmount, quote.slippageBps);
-  return verifySimulationResult({
-    simResult: simRes, addressLabels: inv.labels,
-    inputMint: quote.inputMint, outputMint: quote.outputMint, inAmount: quote.inAmount,
-    minReceived, feeLamports, inputIsSol, allowedNewAtaCount: ataCreateCount,
+  const r = await preSignSimulation({
+    rpc, live, swapTransactionB64, quote, minReceived, feeLamports, signatureCount, ataCreateCount,
+    inputIsSol, outputAtas, trackedAtas,
   });
+  return r.ok ? r : { ok: false, reason: t(r.reason) };
 }
 
 // BigInt-safe base-units -> plain decimal string (no thousands grouping, no rounding) — used for
@@ -618,7 +591,7 @@ export default function SwapPane({ wallet }) {
     });
     if (!check.ok) { const e = new Error(check.reason); e.code = "verify_refused"; throw e; }
 
-    return { data: q.data, fetchedAt: q.fetchedAt, tx: body, builtAt: Date.now(), builtFor: live, feeLamports: check.feeLamports, ataCreateCount: check.ataCreateCount, outputAtas: check.outputAtas };
+    return { data: q.data, fetchedAt: q.fetchedAt, tx: body, builtAt: Date.now(), builtFor: live, feeLamports: check.feeLamports, signatureCount: check.signatureCount, ataCreateCount: check.ataCreateCount, outputAtas: check.outputAtas, trackedAtas: check.trackedAtas };
   }
 
   // ── open the confirm sheet with a FRESH quote (re-fetched if stale) AND the ONE /tx build that
@@ -721,7 +694,7 @@ export default function SwapPane({ wallet }) {
     // never reaching signSendConfirm/the wallet prompt.
     const simCheck = await runPreSignSimulation({
       rpc: rpcFn(), live, swapTransactionB64: swapTransaction, quote: shownQuote,
-      feeLamports: cd.feeLamports, ataCreateCount: cd.ataCreateCount, outputAtas: cd.outputAtas,
+      feeLamports: cd.feeLamports, signatureCount: cd.signatureCount, ataCreateCount: cd.ataCreateCount, outputAtas: cd.outputAtas, trackedAtas: cd.trackedAtas,
       inputIsSol: shownQuote && shownQuote.inputMint === NATIVE_SOL_MINT,
     });
     if (!simCheck.ok) {

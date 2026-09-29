@@ -116,6 +116,14 @@ function tokenTransferData(amount) {
     ok("…and returns outputAtas: two distinct base58 ATA candidates (legacy + Token-2022) for the output mint",
       Array.isArray(check.outputAtas) && check.outputAtas.length === 2 && check.outputAtas[0] !== check.outputAtas[1]
       && check.outputAtas.every((a) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)), check.outputAtas);
+    // Round 34: the base fee is per signer (pinned at 1), and every own-ATA the swap can touch
+    // (input, output, wSOL — de-duplicated by mint) is handed to the gate so rent is a move, never
+    // a cost or proceeds.
+    ok("…and signatureCount: 1 (the pinned single signer the base fee is charged for)", check.signatureCount === 1, check.signatureCount);
+    const mints = (check.trackedAtas || []).map((t) => t.mint);
+    ok("…and trackedAtas covering the input mint, the output mint and wSOL, each with two ATA candidates, no mint twice",
+      Array.isArray(check.trackedAtas) && new Set(mints).size === mints.length && mints.includes(FIXTURE_QUOTE.inputMint) && mints.includes(FIXTURE_QUOTE.outputMint)
+      && mints.includes("So11111111111111111111111111111111111111112") && check.trackedAtas.every((t) => t.addresses.length === 2), check.trackedAtas);
     ok("…and reports the route kind it found", check.routeKind === "shared_accounts_route", check);
     ok("…and decodes the compute budget instructions", check.cuLimit === 1400000 && check.cuPriceMicroLamports === 315258n, check);
 

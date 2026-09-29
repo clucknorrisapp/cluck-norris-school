@@ -579,6 +579,18 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
   // output label at all and `verifySimulationResult` never compared anything against the minimum
   // — a fixture delivering ZERO output passed. These addresses are appended to that inventory
   // (before = 0) so the account this swap creates is read after simulation like any other.
+  // `trackedAtas` (round 34): the wallet's own ATA for every mint this swap can touch — input,
+  // output and wSOL, both token programs — so the simulation gate's SOL position includes any
+  // account this transaction creates or closes (rent is then a move, never a cost or proceeds).
+  // `signatureCount` is the pinned 1 (check 2 above) — the base fee is charged per signer.
+  const trackedAtas = [];
+  const seenMints = new Set();
+  for (const m of [quote && quote.inputMint, quote && quote.outputMint, WSOL_MINT]) {
+    if (!m || seenMints.has(m)) continue;
+    seenMints.add(m);
+    trackedAtas.push({ mint: m, addresses: ataCandidates(liveAddress, m, PublicKeyClass) });
+  }
   return { ok: true, routeKind, cuLimit, cuPriceMicroLamports, feeLamports: feeLamports.toString(), ataCreateCount: createdAtas.size,
-           outputAtas: ataCandidates(liveAddress, quote && quote.outputMint, PublicKeyClass) };
+           signatureCount: 1,
+           outputAtas: ataCandidates(liveAddress, quote && quote.outputMint, PublicKeyClass), trackedAtas };
 }

@@ -195,8 +195,17 @@ sync with the code across rounds 29-31 and shouldn't again.
    can resolve to ANY address at execution time. Decoding cannot see what those hop accounts
    actually do; only running the transaction can. So, after structural verification passes and
    BEFORE the wallet is ever called: the pane fetches its own current SOL balance and full
-   token-account inventory (both token programs, fresh, never cached, PLUS the wallet's own
-   output-mint ATA under both programs at `before: 0` when it does not exist yet — Codex round 33:
+   token-account inventory (both token programs, fresh, never cached, each account with its
+   LAMPORTS, PLUS the wallet's own ATA for the input mint, the output mint and wSOL under both
+   programs at `before: 0` when not held yet — Codex rounds 33/34: the gate reasons about the
+   wallet's whole SOL POSITION (native lamports + every token account's lamports), so rent moving
+   into an account the swap creates or back out of one it closes is a move, never a cost and
+   never proceeds — a closed pre-existing wSOL account's own rent used to count as swap output;
+   what a swap may spend is the FULL fee, priority + 5,000 base per signer; and the reads, the
+   inventory, the `simulateTransaction` call and the `{context, value}` envelope unwrap live in
+   the pure `preSignSimulation()`, driven in the test with the documented RPC response, because
+   the pane once handed the whole envelope to the verifier and every honest swap refused before
+   the wallet was asked — Codex round 33:
    without it a wallet buying a token for the first time had no output account in the checked set
    and a zero-output simulation passed; and every mint's accounts are SUMMED, never bounded one
    account at a time, on both the input and the output side — shaped by the pure,
