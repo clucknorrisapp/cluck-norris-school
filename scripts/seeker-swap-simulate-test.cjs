@@ -155,12 +155,17 @@ const baseArgs = () => ({
     const r = verifySimulationResult({ simResult: tampered, addressLabels, ...baseArgs() });
     ok("SOL fell by ONE lamport more than inAmount + priority fee + base fee allows -> refused", r.ok === false && /more sol/i.test(r.reason), r);
 
-    // A legitimately allowed ATA-create rent cost is accepted when allowedNewAtaCount reflects it.
     const withAta = Object.assign({}, simResult, { accounts: [solEntry(SOL_BEFORE - IN_AMOUNT - FEE_TOTAL - BigInt(ATA_RENT_LAMPORTS)), simResult.accounts[1], simResult.accounts[2]] });
-    const rOk = verifySimulationResult({ simResult: withAta, addressLabels, ...baseArgs(), allowedNewAtaCount: 1 });
-    ok("SOL falling by inAmount+fee+ONE ATA's rent, with allowedNewAtaCount:1 -> passes", rOk.ok === true, rOk);
-    const rTooMany = verifySimulationResult({ simResult: withAta, addressLabels, ...baseArgs(), allowedNewAtaCount: 0 });
-    ok("the SAME outflow with allowedNewAtaCount:0 (no create was actually permitted) -> refused", rTooMany.ok === false, rTooMany);
+    // Rent to a created account the checked set does NOT contain is tolerated (outflow side only);
+    // a create the inventory tracks earns nothing — its rent is inside the position (round 35).
+    const rOk = verifySimulationResult({ simResult: withAta, addressLabels, ...baseArgs(), createdAtas: ["UNTRACKEData111111111111111111111111111111"], trackedAddresses: [SOL_ADDR] });
+    ok("SOL falling by inAmount + full fee + ONE ATA's rent, the create UNTRACKED by the inventory -> passes", rOk.ok === true, rOk);
+    const rTooMany = verifySimulationResult({ simResult: withAta, addressLabels, ...baseArgs(), createdAtas: [], trackedAddresses: [SOL_ADDR] });
+    ok("the SAME outflow with no create at all -> refused", rTooMany.ok === false, rTooMany);
+    const rTrackedNoRoom = verifySimulationResult({ simResult: withAta, addressLabels, ...baseArgs(), createdAtas: ["TRACKEData1111111111111111111111111111111"], trackedAddresses: [SOL_ADDR, "TRACKEData1111111111111111111111111111111"] });
+    ok("the SAME outflow where the created account IS tracked but holds no rent in the result -> refused (no second allowance for a tracked create)", rTrackedNoRoom.ok === false, rTrackedNoRoom);
+    const rNoArg = verifySimulationResult({ simResult: withAta, addressLabels, ...baseArgs(), allowedNewAtaCount: 1 });
+    ok("the old allowedNewAtaCount alone grants NOTHING any more", rNoArg.ok === false, rNoArg);
   }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -506,6 +511,19 @@ const baseArgs = () => ({
     ok("input SOL: falls by exactly inAmount + priority + base -> passes", rSolOk.ok === true, rSolOk);
     const rSolOver = verifySimulationResult({ simResult: solAt(SOL_BEFORE - IN_AMOUNT - FEE_TOTAL - 1n), addressLabels: solLabels, ...baseArgs() });
     ok("input SOL: one lamport beyond that -> refused", rSolOver.ok === false && /more sol/i.test(rSolOver.reason), rSolOver);
+    // ⚠️ Codex round 35 — approved input 1,000,000 lamports of SOL, full fee 6,000 (1,000 priority
+    // + 5,000 base), the swap CREATES the output account and every lamport of its rent is retained
+    // there (tracked). Position accounting already has that rent inside the position; the old
+    // ataCreateCount × rent allowance let a total loss of 1,006,001 pass. All rent accounted for,
+    // one extra lamport lost -> refused; exactly fee + inAmount lost -> passes.
+    const OUT_ATA = "OUTata1legacy111111111111111111111111111111";
+    const pinLabels = [{ kind: "sol", before: String(SOL_BEFORE) }, tokenLabel(OUT_MINT, 0, true)];
+    const pinArgs = { ...baseArgs(), inAmount: "1000000", feeLamports: "1000", signatureCount: 1, minReceived: "1", createdAtas: [OUT_ATA], trackedAddresses: [SOL_ADDR, OUT_ATA] };
+    const pinAt = (loss) => ({ err: null, accounts: [solEntry(SOL_BEFORE - loss - RENT), tokenEntry(OUT_MINT, 1n)] });   // rent sits in the created, tracked account
+    const rPinOk = verifySimulationResult({ simResult: pinAt(1006000n), addressLabels: pinLabels, ...pinArgs });
+    ok("Codex's pin: input 1,000,000 + fee 6,000, rent retained in the tracked created account, total loss 1,006,000 -> passes", rPinOk.ok === true, rPinOk);
+    const rPinOver = verifySimulationResult({ simResult: pinAt(1006001n), addressLabels: pinLabels, ...pinArgs });
+    ok("…all rent accounted for, ONE extra lamport lost (1,006,001) -> refused", rPinOver.ok === false && /more sol/i.test(rPinOver.reason), rPinOver);
   }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -543,7 +561,7 @@ const baseArgs = () => ({
       null,                                                    // the other program's derivation: does not exist
       null,                                                    // no wSOL account
     ];
-    const common = { live: SOL_ADDR, swapTransactionB64: "AAAA", quote, minReceived: String(MIN_RECEIVED), feeLamports: String(FEE_LAMPORTS), signatureCount: 1, ataCreateCount: 1, inputIsSol: false, trackedAtas };
+    const common = { live: SOL_ADDR, swapTransactionB64: "AAAA", quote, minReceived: String(MIN_RECEIVED), feeLamports: String(FEE_LAMPORTS), signatureCount: 1, createdAtas: [OUT_ATA_LEGACY], inputIsSol: false, trackedAtas };
     const rOk = await preSignSimulation({ rpc: fakeRpc(documented(honestAccounts)), ...common });
     ok("the pure caller, fed the DOCUMENTED { context, value } envelope, PASSES an honest swap (this exact shape refused before the fix)", rOk.ok === true, rOk);
     ok("…it asked the node for exactly [live, held account, every tracked own-ATA], in that order", JSON.stringify(sentAddresses) === JSON.stringify([SOL_ADDR, IN_ACCT, OUT_ATA_LEGACY, OUT_ATA_2022, WSOL_ATA]), sentAddresses);
@@ -564,7 +582,12 @@ const baseArgs = () => ({
     const paneSrc = require("fs").readFileSync(path.join(ROOT, "src", "seeker", "tools", "Swap.jsx"), "utf8");
     ok("Swap.jsx imports preSignSimulation from swap-simulate.js and calls it", /import \{ preSignSimulation \} from "\.\.\/swap-simulate\.js"/.test(paneSrc) && /await preSignSimulation\(\{/.test(paneSrc));
     ok("Swap.jsx no longer calls simulateTransaction, buildInventory or verifySimulationResult itself", !/simulateTransaction|buildInventory\(|verifySimulationResult\(/.test(paneSrc));
-    ok("Swap.jsx threads signatureCount and trackedAtas from the verifier into the gate", /signatureCount: cd\.signatureCount/.test(paneSrc) && /trackedAtas: cd\.trackedAtas/.test(paneSrc) && /signatureCount: check\.signatureCount/.test(paneSrc) && /trackedAtas: check\.trackedAtas/.test(paneSrc));
+    ok("Swap.jsx threads signatureCount, createdAtas and trackedAtas from the verifier into the gate", /signatureCount: cd\.signatureCount/.test(paneSrc) && /createdAtas: cd\.createdAtas/.test(paneSrc) && /trackedAtas: cd\.trackedAtas/.test(paneSrc) && /signatureCount: check\.signatureCount/.test(paneSrc) && /createdAtas: check\.createdAtas/.test(paneSrc) && /trackedAtas: check\.trackedAtas/.test(paneSrc));
+    // The caller's own untracked-create case: a create the inventory does not contain, rent gone to it.
+    const rUntracked = await preSignSimulation({ rpc: fakeRpc(documented([solEntry(SOL_BEFORE - FEE_TOTAL - RENT), tokenEntry(IN_TOKEN, IN_AMOUNT), tokenEntry(OUT_MINT, MIN_RECEIVED), null, null])), ...common, createdAtas: [OUT_ATA_LEGACY, "SOMEotherATA1111111111111111111111111111111"] });
+    ok("caller: rent to an UNTRACKED created account plus the tracked one -> tolerated once, passes", rUntracked.ok === true, rUntracked);
+    const rUntrackedOver = await preSignSimulation({ rpc: fakeRpc(documented([solEntry(SOL_BEFORE - FEE_TOTAL - RENT - RENT - 1n), tokenEntry(IN_TOKEN, IN_AMOUNT), tokenEntry(OUT_MINT, MIN_RECEIVED), null, null])), ...common, createdAtas: [OUT_ATA_LEGACY, "SOMEotherATA1111111111111111111111111111111"] });
+    ok("caller: …one lamport beyond fee + the one untracked rent -> refused", rUntrackedOver.ok === false && /spend more sol/i.test(rUntrackedOver.reason), rUntrackedOver);
   }
 
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);

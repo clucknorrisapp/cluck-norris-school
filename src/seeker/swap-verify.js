@@ -590,7 +590,10 @@ export function verifySwapTransaction({ tx, liveAddress, quote, PublicKeyClass, 
     seenMints.add(m);
     trackedAtas.push({ mint: m, addresses: ataCandidates(liveAddress, m, PublicKeyClass) });
   }
+  // `createdAtas` (round 35): the exact ATA addresses this transaction creates, so the gate can
+  // tell a create it already tracks (rent is a move inside the position) from one it cannot —
+  // a bare count let the tracked case be tolerated TWICE.
   return { ok: true, routeKind, cuLimit, cuPriceMicroLamports, feeLamports: feeLamports.toString(), ataCreateCount: createdAtas.size,
-           signatureCount: 1,
+           createdAtas: [...createdAtas], signatureCount: 1,
            outputAtas: ataCandidates(liveAddress, quote && quote.outputMint, PublicKeyClass), trackedAtas };
 }

@@ -126,10 +126,10 @@ function computeMinReceived(outAmount, slippageBps) {
 // the whole `{context, value}` result to the verifier, so every honest swap refused before the
 // wallet was asked. The pure caller is driven with the documented RPC response in
 // scripts/seeker-swap-simulate-test.cjs; this wrapper only translates the reason.
-async function runPreSignSimulation({ rpc, live, swapTransactionB64, quote, feeLamports, signatureCount, ataCreateCount, inputIsSol, outputAtas, trackedAtas }) {
+async function runPreSignSimulation({ rpc, live, swapTransactionB64, quote, feeLamports, signatureCount, createdAtas, inputIsSol, outputAtas, trackedAtas }) {
   const minReceived = computeMinReceived(quote.outAmount, quote.slippageBps);
   const r = await preSignSimulation({
-    rpc, live, swapTransactionB64, quote, minReceived, feeLamports, signatureCount, ataCreateCount,
+    rpc, live, swapTransactionB64, quote, minReceived, feeLamports, signatureCount, createdAtas,
     inputIsSol, outputAtas, trackedAtas,
   });
   return r.ok ? r : { ok: false, reason: t(r.reason) };
@@ -591,7 +591,7 @@ export default function SwapPane({ wallet }) {
     });
     if (!check.ok) { const e = new Error(check.reason); e.code = "verify_refused"; throw e; }
 
-    return { data: q.data, fetchedAt: q.fetchedAt, tx: body, builtAt: Date.now(), builtFor: live, feeLamports: check.feeLamports, signatureCount: check.signatureCount, ataCreateCount: check.ataCreateCount, outputAtas: check.outputAtas, trackedAtas: check.trackedAtas };
+    return { data: q.data, fetchedAt: q.fetchedAt, tx: body, builtAt: Date.now(), builtFor: live, feeLamports: check.feeLamports, signatureCount: check.signatureCount, ataCreateCount: check.ataCreateCount, createdAtas: check.createdAtas, outputAtas: check.outputAtas, trackedAtas: check.trackedAtas };
   }
 
   // ── open the confirm sheet with a FRESH quote (re-fetched if stale) AND the ONE /tx build that
@@ -694,7 +694,7 @@ export default function SwapPane({ wallet }) {
     // never reaching signSendConfirm/the wallet prompt.
     const simCheck = await runPreSignSimulation({
       rpc: rpcFn(), live, swapTransactionB64: swapTransaction, quote: shownQuote,
-      feeLamports: cd.feeLamports, signatureCount: cd.signatureCount, ataCreateCount: cd.ataCreateCount, outputAtas: cd.outputAtas, trackedAtas: cd.trackedAtas,
+      feeLamports: cd.feeLamports, signatureCount: cd.signatureCount, createdAtas: cd.createdAtas, outputAtas: cd.outputAtas, trackedAtas: cd.trackedAtas,
       inputIsSol: shownQuote && shownQuote.inputMint === NATIVE_SOL_MINT,
     });
     if (!simCheck.ok) {

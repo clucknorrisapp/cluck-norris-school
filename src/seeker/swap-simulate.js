@@ -171,18 +171,19 @@ export function buildInventory({ live, solRes, legacyAccts, token22Accts, output
 // `signatureCount` — required signers (swap-verify.js pins exactly 1); defaults to 1. The full
 //   transaction fee is feeLamports + BASE_FEE_LAMPORTS_PER_SIGNATURE × signatureCount.
 // `inputIsSol` — whether the quote's input mint IS native SOL (WSOL_MINT).
-// `allowedNewAtaCount` — how many NEW token accounts this swap's own instructions are allowed to
-//   create (swap-verify.js already counted and bounded this — pass that same count here, never a
-//   larger one). With every own-ATA tracked in the position (buildInventory's `trackedAtas`) a
-//   create's rent is a MOVE inside the position, not a cost; this count only tolerates rent to an
-//   account the inventory could not track, and only ever on the OUTFLOW side — it is never
-//   credited as proceeds.
+// `createdAtas` — the exact ATA addresses this swap's own instructions create (swap-verify.js's
+//   `createdAtas`). `trackedAddresses` — every address in the checked set (the caller's inventory
+//   `addresses`). A created account that IS tracked has its rent inside the position already — a
+//   move, not a cost. Only a created account the inventory could not track earns a rent
+//   tolerance, and only ever on the OUTFLOW side — never credited as proceeds. (Codex round 35:
+//   a bare `allowedNewAtaCount` tolerated rent a second time for a tracked create, so 1 lamport of
+//   real loss beyond fee + inAmount passed; that parameter is accepted and ignored now.)
 // `ataRentLamportsOverride` — optional, for tests; defaults to ATA_RENT_LAMPORTS.
 //
 // Returns `{ ok:true }` or `{ ok:false, reason:<user-facing sentence> }`. Never throws.
 export function verifySimulationResult({
   simResult, addressLabels, inputMint, outputMint, inAmount, minReceived, feeLamports, signatureCount,
-  inputIsSol, allowedNewAtaCount, ataRentLamportsOverride,
+  inputIsSol, createdAtas, trackedAddresses, ataRentLamportsOverride,
 }) {
   if (!simResult || typeof simResult !== "object") {
     return { ok: false, reason: "Could not simulate this transaction before signing." };
@@ -206,10 +207,13 @@ export function verifySimulationResult({
   const inAmountBig = toBigIntOrNull(inAmount);
   const minReceivedBig = toBigIntOrNull(minReceived);
   const feeLamportsBig = toBigIntOrNull(feeLamports);
-  const ataCountBig = toBigIntOrNull(allowedNewAtaCount);
+  // Created accounts the checked set does NOT contain — the only rent that can leave the position.
+  const trackedSet = new Set(Array.isArray(trackedAddresses) ? trackedAddresses.filter((a) => typeof a === "string") : []);
+  const untrackedCreates = Array.isArray(createdAtas) ? createdAtas.filter((a) => typeof a === "string" && a && !trackedSet.has(a)).length : 0;
+  const ataCountBig = BigInt(untrackedCreates);
   const signers = signatureCount == null ? 1n : toBigIntOrNull(signatureCount);
   const rentPer = toBigIntOrNull(ataRentLamportsOverride) != null ? toBigIntOrNull(ataRentLamportsOverride) : BigInt(ATA_RENT_LAMPORTS);
-  if (inAmountBig == null || minReceivedBig == null || feeLamportsBig == null || ataCountBig == null || signers == null || signers < 1n) {
+  if (inAmountBig == null || minReceivedBig == null || feeLamportsBig == null || signers == null || signers < 1n) {
     return { ok: false, reason: "Could not check the simulated result — the expected amounts were incomplete." };
   }
   const txFee = feeLamportsBig + BigInt(BASE_FEE_LAMPORTS_PER_SIGNATURE) * signers;
@@ -287,8 +291,9 @@ export function verifySimulationResult({
     return { ok: false, reason: "Could not check the simulated result — the wallet's SOL balance was missing." };
   }
   const positionDelta = positionAfter - positionBefore;   // positive = the wallet's SOL grew
-  // Rent to an account the inventory could NOT track (none, for a normal Jupiter build — every
-  // own-ATA is tracked) — tolerated on the outflow side only, never credited as proceeds.
+  // Rent to a created account the inventory does NOT contain (none, for a normal Jupiter build —
+  // every own-ATA is tracked) — tolerated on the outflow side only, never credited as proceeds.
+  // A tracked create earns nothing here: its rent is already inside the position.
   const untrackedRentTolerance = ataCountBig * rentPer;
 
   if (outputIsSol) {
@@ -332,7 +337,7 @@ export function verifySimulationResult({
 // them through its own t(). An unreachable RPC — any of the reads OR the simulate call — is a
 // REFUSAL, never a skip.
 export async function preSignSimulation({
-  rpc, live, swapTransactionB64, quote, minReceived, feeLamports, signatureCount, ataCreateCount,
+  rpc, live, swapTransactionB64, quote, minReceived, feeLamports, signatureCount, createdAtas,
   inputIsSol, outputAtas, trackedAtas,
 }) {
   let solRes, legacyAccts, token22Accts;
@@ -366,6 +371,6 @@ export async function preSignSimulation({
   return verifySimulationResult({
     simResult: value, addressLabels: inv.labels,
     inputMint: quote.inputMint, outputMint: quote.outputMint, inAmount: quote.inAmount,
-    minReceived, feeLamports, signatureCount, inputIsSol, allowedNewAtaCount: ataCreateCount,
+    minReceived, feeLamports, signatureCount, inputIsSol, createdAtas, trackedAddresses: inv.addresses,
   });
 }

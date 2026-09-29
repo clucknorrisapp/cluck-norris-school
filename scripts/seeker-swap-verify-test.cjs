@@ -120,6 +120,7 @@ function tokenTransferData(amount) {
     // (input, output, wSOL — de-duplicated by mint) is handed to the gate so rent is a move, never
     // a cost or proceeds.
     ok("…and signatureCount: 1 (the pinned single signer the base fee is charged for)", check.signatureCount === 1, check.signatureCount);
+    ok("…and createdAtas: the exact created ATA addresses, as many as ataCreateCount", Array.isArray(check.createdAtas) && check.createdAtas.length === check.ataCreateCount && check.createdAtas.every((a) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)), check.createdAtas);
     const mints = (check.trackedAtas || []).map((t) => t.mint);
     ok("…and trackedAtas covering the input mint, the output mint and wSOL, each with two ATA candidates, no mint twice",
       Array.isArray(check.trackedAtas) && new Set(mints).size === mints.length && mints.includes(FIXTURE_QUOTE.inputMint) && mints.includes(FIXTURE_QUOTE.outputMint)
