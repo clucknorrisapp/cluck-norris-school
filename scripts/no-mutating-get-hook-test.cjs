@@ -395,6 +395,56 @@ expectExit(
   0
 );
 
+// --- Codex round 32 (final two P2s): clustered short options + long options ---------------------
+// Every clustered spelling must get the SAME verdict as its unclustered twin.
+const ADMIN = '"https://clucknorris.app/api/cuna-giveaway/admin?key=k&draw=1"';
+const SAFE = "https://example.com/hook";
+expectExit("-sSX POST (cluster ends on X, value is the next word)", `curl -sSX POST ${ADMIN}`, 0);
+expectExit("-sXPOST (cluster, inline value)", `curl -sXPOST ${ADMIN}`, 0);
+expectExit("-XPOST (no cluster, inline value)", `curl -XPOST ${ADMIN}`, 0);
+expectExit("-sS -X DELETE — not a POST", `curl -sS -X DELETE ${ADMIN}`, 2);
+expectExit("-sSXDELETE — cluster twin of the DELETE above", `curl -sSXDELETE ${ADMIN}`, 2);
+expectExit("-XPOST -XGET — last -X wins even glued", `curl -XPOST -XGET ${ADMIN}`, 2);
+expectExit("-d@file glued value implies POST", `curl -d@payload.json ${ADMIN}`, 0);
+expectExit("-sd@file — cluster + glued file value implies POST", `curl -sd@payload.json ${ADMIN}`, 0);
+expectExit("-H'-XPOST' glued header value is opaque, not a method", `curl -H'-XPOST' ${ADMIN}`, 2);
+expectExit("-H'x: y' -XPOST glued header then glued method", `curl -H'x: y' -XPOST ${ADMIN}`, 0);
+expectExit("-Tfile.txt glued upload implies PUT", `curl -Tfile.txt ${ADMIN}`, 2);
+// `-:` is `--next`, and works inside a cluster: `-s:` is `-s --next`.
+expectExit("-s: is -s --next — the admin request after it lost the earlier POST", `curl -X POST ${SAFE} -s: ${ADMIN}`, 2);
+expectExit("-s: then the admin request POSTed on its own side", `curl -X POST ${SAFE} -s: -X POST ${ADMIN}`, 0);
+expectExit("-sS: (longer cluster ending in the boundary)", `curl -X POST ${SAFE} -sS: ${ADMIN}`, 2);
+expectExit("-s: alone must not be read as a method — plain GET, still blocked", `curl -s: ${ADMIN}`, 2);
+expectExit("-s: with a later real POST — the -s: is not a method", `curl -s: -X POST ${ADMIN}`, 0);
+expectExit("-: as the VALUE of -H is not a boundary (the POST still covers the admin URL)", `curl -X POST -H -: ${ADMIN}`, 0);
+expectExit("-H-: glued header value is not a boundary either", `curl -X POST -H-: ${ADMIN}`, 0);
+
+// Long options: values consumed (both spellings), method signals recognised.
+expectExit("--proxy-cert cert.pem — value consumed, plain GET, blocked", `curl --proxy-cert cert.pem ${ADMIN}`, 2);
+expectExit("--proxy-cert=cert.pem inline spelling", `curl --proxy-cert=cert.pem ${ADMIN}`, 2);
+expectExit("--proxy-cert -XPOST — the value is never read as a method", `curl --proxy-cert -XPOST ${ADMIN}`, 2);
+expectExit("--proxy-cert -G — the value is never read as -G, so --data still means POST", `curl --proxy-cert -G --data 'x=1' ${ADMIN}`, 0);
+expectExit("--proxy-cert=cert.pem with a real -X POST", `curl --proxy-cert=cert.pem -X POST ${ADMIN}`, 0);
+expectExit("--request DELETE — not a POST", `curl --request DELETE ${ADMIN}`, 2);
+expectExit("--request=DELETE inline spelling", `curl --request=DELETE ${ADMIN}`, 2);
+expectExit("--request POST still fine", `curl --request POST ${ADMIN}`, 0);
+expectExit("--data-raw '{}' implies POST", `curl --data-raw '{}' ${ADMIN}`, 0);
+expectExit("--data-raw='{}' inline spelling implies POST", `curl --data-raw='{}' ${ADMIN}`, 0);
+expectExit("--json '{}' implies POST", `curl --json '{}' ${ADMIN}`, 0);
+expectExit("--form 'a=b' implies POST", `curl --form 'a=b' ${ADMIN}`, 0);
+expectExit("--upload-file f implies PUT", `curl --upload-file f ${ADMIN}`, 2);
+expectExit("--upload-file=f inline spelling implies PUT", `curl --upload-file=f ${ADMIN}`, 2);
+expectExit("--get -d x stays a GET (mutating flag is in the URL)", `curl --get -d x ${ADMIN}`, 2);
+expectExit("--get -d x with nothing mutating anywhere stays allowed", 'curl --get -d x "https://clucknorris.app/api/cuna-giveaway/admin?key=k"', 0);
+expectExit("--header 'x-clkn-pass: t' — a header is not a method, plain GET, blocked", `curl --header 'x-clkn-pass: t' ${ADMIN}`, 2);
+expectExit("--header 'x-clkn-pass: t' -X POST allowed", `curl --header 'x-clkn-pass: t' -X POST ${ADMIN}`, 0);
+expectExit("--head — HEAD, blocked", `curl --head ${ADMIN}`, 2);
+expectExit("--next resets a long-option method too", `curl --request POST ${SAFE} --next ${ADMIN}`, 2);
+expectExit("--next with --request on its own side", `curl --request POST ${SAFE} --next --request POST ${ADMIN}`, 0);
+expectExit("--data-r (unambiguous long-option prefix) is --data-raw — implies POST", `curl --data-r '{}' ${ADMIN}`, 0);
+expectExit("--url-q (prefix of --url-query) appends to the URL query", 'curl --url-q draw=1 "https://clucknorris.app/api/cuna-giveaway/admin?key=k"', 2);
+expectExit("-- ends options: a later -X POST is a URL, not a method", `curl -- -X POST ${ADMIN}`, 2);
+
 // --- The exact commands the money/admin slash commands run must all PASS ---
 const COMMANDS_DIR = path.join(ROOT, ".claude", "commands");
 const commandFiles = ["cuna-payout.md", "cuna-special.md", "promote.md", "store-release.md"];

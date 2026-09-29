@@ -15,7 +15,7 @@
 //    quotes is never mistaken for the shell's background operator, but a REAL command boundary —
 //    including one hidden inside `$(...)`  or backticks — always splits the command into separate
 //    invocations to judge independently.
-// 2. curl's actual EFFECTIVE method (see `computeEffectiveMethod`) — curl honours the LAST `-X`
+// 2. curl's actual EFFECTIVE method (see `parseRequests`) — curl honours the LAST `-X`
 //    on its command line, not the first, and `-G`/`-I`/`-T` change what a data flag actually sends
 //    as. The old check accepted `curl -X POST -X GET <admin-url>?draw=1` because *an* explicit
 //    POST was present anywhere in the segment — but curl itself sends that request as a GET.
@@ -242,32 +242,33 @@ function tokenizeWords(text) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// 2. curl's actual effective HTTP method for one invocation's words.
+// 2. curl's actual effective HTTP method, per request, for one invocation's words.
 //
-// `-X <m>` / `-X<m>` / `--request <m>` / `--request=<m>` set `explicit` — the LAST one on the
-// command line wins, matching curl's own behaviour. `-G`/`--get` force a GET (moving any `-d` data
-// onto the URL); `-I`/`--head` force a HEAD; `-T`/`--upload-file` implies a PUT; any of
-// `-d`/`--data*`/`--json`/`-F`/`--form*` implies a POST. Combined short-flag clusters like
-// `-sSXPOST` or `-sSd` are handled by scanning the cluster left to right: a boolean flag with no
-// value (`s`, `S`, `v`, …) is skipped over, but the FIRST value-taking flag encountered consumes
-// the rest of the word (or the next word, if nothing follows in the cluster) as ITS value and the
-// scan of that cluster stops there — the consumed value is never re-scanned as more flag letters.
-// Anything after a bare `--` is a positional argument, never a flag.
+// ONE parser (`parseRequests`) does what curl's own argument loop does, so the request boundary
+// (`--next` / `-:`), every option's value consumption, and the method signals can never disagree
+// with each other (Codex round 32 P2 x2 — clustered short options and long options were each
+// handled by separate, partial code paths, and the `--next` splitter ran BEFORE value consumption).
 //
-// Codex round 32 P2: `-o/dev/null` used to be misparsed — the loop kept scanning past `o` (which
-// wasn't in the value-flag set at all) and hit the `d` inside `/dev/null`, wrongly setting
-// hasData. Every short flag curl documents as value-taking is now recognised and consumes its
-// value; only `X`/`d`/`T`/`F` (and the value-less `G`/`I`) affect the computed method — the rest
-// (`o`/`H`/`A`/`u`/`b`/`c`/`e`/`m`/`w`/`U`/`x`/`y`/`z`/`K`/`E`, …) are consumed opaquely and never
-// set hasData.
+// Short options (`-abc`): curl reads one letter at a time. A value-less letter (`s`, `S`, `v`, `G`,
+// `I`, `#`, …) is skipped; the FIRST letter that takes a value consumes the rest of the word as its
+// value, or the next word if the cluster ends there — the value is never re-scanned as more
+// letters (`-o/dev/null`, `-XPOST`, `-H'x: y'`, `-d@file`). `-:` is curl's short spelling of
+// `--next` and it works INSIDE a cluster (`-s:` is `-s --next`); everything after it in the
+// cluster already belongs to the NEXT request.
+//
+// Long options (`--opt value` or `--opt=value`): a value-taking long option consumes its value
+// so it is never mistaken for a URL, a method or another flag; `--request`/`--data*`/`--json`/
+// `--form*`/`--upload-file`/`--get`/`--head`/`--url-query` carry method meaning. Curl also accepts
+// an unambiguous prefix of a long option (`--data-r`), so names are resolved against the known
+// set before dispatch. Anything after a bare `--` is positional, never an option.
+//
+// Method precedence, per request: the LAST `-X`/`--request` wins; else `-I`/`--head` → HEAD; else
+// `-G`/`--get` → GET; else `-T`/`--upload-file` → PUT; else any data/form flag → POST; else GET.
+// A `--next` resets every one of these ("reset all options … to the default values").
 const METHOD_VALUE_FLAGS = { X: "method", d: "data", T: "upload", F: "data" };
 const NO_VALUE_METHOD_FLAGS = { G: "get", I: "head" };
-// Value-taking short flags that do NOT affect the method — just consume their value so a `d`/`X`/…
-// inside that value is never mistaken for another flag. Not exhaustive of every curl short option,
-// but covers every one curl documents as taking an argument.
-// Codex round 32 "second lens" P3: -D/-r/-Y/-Q/-C/-t/-P also take a value in real curl (dump-header
-// file, range, speed-limit, quote command, resume-from offset, telnet option, ftp-port) and were
-// missing — `curl -D/dev/stderr ".../admin?key=k&draw=1"` used to fall through unrecognised.
+// Value-taking short flags that do NOT affect the method — every short option curl documents as
+// taking an argument, consumed opaquely so a `d`/`X`/… inside the value is never mistaken for a flag.
 const OPAQUE_VALUE_FLAGS = new Set([
   "o", "H", "A", "u", "b", "c", "e", "m", "w", "U", "x", "y", "z", "K", "E",
   "D", "r", "Y", "Q", "C", "t", "P",
@@ -282,219 +283,183 @@ const DATA_LONG_FLAGS = new Set([
   "--form",
   "--form-string",
 ]);
-const DATA_LONG_PREFIXES = Array.from(DATA_LONG_FLAGS, (f) => f + "=");
 
-// Codex round 33 P2: every OTHER curl long option that takes a value must still consume it — the
-// old code fell through to `continue; // unrecognized long flag — ignore` for anything not on the
-// small explicit list above, which left the VALUE word to be re-scanned on the next loop
-// iteration as if it were its own flag: `curl --header '-XPOST' <admin-url>?draw=1` read the
-// header's VALUE as an explicit `-X POST`, while real curl sends that request as a GET (curl
-// never even looks at `--header`'s value as a flag). None of these carry any method/data meaning
-// of their own — enumerated from curl(1)'s long-option list, excluding the ones already handled
-// above for their OWN semantics (`--request`, `--get`, `--head`, `--upload-file`, `--url-query`,
-// the `--data*`/`--json`/`--form*` family) and excluding boolean (no-argument) long options.
+// Every long option that takes a value but carries no method/data meaning of its own (curl(1)'s
+// long-option list; boolean options and the ones handled for their own semantics — `--request`,
+// `--upload-file`, `--url-query`, the data/form family — are excluded).
 const LONG_VALUE_FLAGS = new Set([
   "--abstract-unix-socket", "--alt-svc", "--aws-sigv4", "--cacert", "--capath", "--cert",
   "--cert-type", "--ciphers", "--config", "--connect-timeout", "--connect-to", "--continue-at",
-  "--cookie", "--cookie-jar", "--crlfile", "--delegation", "--dns-interface", "--dns-ipv4-addr",
-  "--dns-ipv6-addr", "--dns-servers", "--doh-url", "--dump-header", "--egd-file", "--engine",
-  "--etag-compare", "--etag-save", "--expect100-timeout", "--ftp-account",
-  "--ftp-alternative-to-user", "--ftp-method", "--ftp-port", "--happy-eyeballs-timeout-ms",
-  "--header", "--hostpubmd5", "--hostpubsha256", "--hsts", "--interface", "--keepalive-time",
-  "--key", "--key-type", "--krb", "--libcurl", "--limit-rate", "--local-port", "--login-options",
-  "--mail-auth", "--mail-from", "--mail-rcpt", "--max-filesize", "--max-redirs", "--max-time",
-  "--netrc-file", "--noproxy", "--oauth2-bearer", "--output", "--output-dir", "--parallel-max",
-  "--pass", "--proto", "--proto-default", "--proto-redir", "--proxy", "--proxy-header",
-  "--proxy-pass", "--proxy-service-name", "--proxy-user", "--proxy1.0", "--pubkey",
+  "--cookie", "--cookie-jar", "--create-file-mode", "--crlfile", "--curves", "--delegation",
+  "--dns-interface", "--dns-ipv4-addr", "--dns-ipv6-addr", "--dns-servers", "--doh-url",
+  "--dump-header", "--ech", "--egd-file", "--engine", "--etag-compare", "--etag-save",
+  "--expect100-timeout", "--ftp-account", "--ftp-alternative-to-user", "--ftp-method",
+  "--ftp-port", "--ftp-ssl-ccc-mode", "--happy-eyeballs-timeout-ms", "--haproxy-clientip",
+  "--header", "--hostpubmd5", "--hostpubsha256", "--hsts", "--interface", "--ip-tos",
+  "--keepalive-time", "--key", "--key-type", "--krb", "--libcurl", "--limit-rate",
+  "--local-port", "--login-options", "--mail-auth", "--mail-from", "--mail-rcpt",
+  "--max-filesize", "--max-redirs", "--max-time", "--netrc-file", "--noproxy",
+  "--oauth2-bearer", "--output", "--output-dir", "--parallel-max", "--pass", "--pinnedpubkey",
+  "--proto", "--proto-default", "--proto-redir", "--proxy", "--proxy-cacert", "--proxy-capath",
+  "--proxy-cert", "--proxy-cert-type", "--proxy-ciphers", "--proxy-crlfile", "--proxy-header",
+  "--proxy-key", "--proxy-key-type", "--proxy-pass", "--proxy-pinnedpubkey",
+  "--proxy-service-name", "--proxy-tls13-ciphers", "--proxy-tlsauthtype",
+  "--proxy-tlspassword", "--proxy-tlsuser", "--proxy-user", "--proxy1.0", "--pubkey",
   "--random-file", "--range", "--rate", "--referer", "--request-target", "--resolve", "--retry",
   "--retry-delay", "--retry-max-time", "--sasl-authzid", "--service-name", "--socks4",
-  "--socks4a", "--socks5", "--socks5-gssapi-service", "--speed-limit", "--speed-time", "--stderr",
-  "--tftp-blksize", "--time-cond", "--tlsauthtype", "--tlspassword", "--tlsuser", "--trace",
-  "--trace-ascii", "--unix-socket", "--url", "--user", "--user-agent", "--variable", "--write-out",
+  "--socks4a", "--socks5", "--socks5-gssapi-service", "--socks5-hostname", "--speed-limit",
+  "--speed-time", "--ssl-sessions", "--stderr", "--tftp-blksize", "--time-cond",
+  "--tls-max", "--tls13-ciphers", "--tlsauthtype", "--tlspassword", "--tlsuser", "--trace",
+  "--trace-ascii", "--unix-socket", "--upload-flags", "--url", "--user", "--user-agent",
+  "--variable", "--vlan-priority", "--write-out",
 ]);
+// Long options this parser gives its own meaning to (plus `--next`) — with the two sets above,
+// the vocabulary a prefix like `--data-r` is resolved against.
+const LONG_SPECIAL = ["--request", "--get", "--head", "--next", "--upload-file", "--url-query"];
+const ALL_LONG = new Set([...LONG_SPECIAL, ...DATA_LONG_FLAGS, ...LONG_VALUE_FLAGS]);
 
-// Computes the effective HTTP method for one invocation's words, returning
-// `{ method, forceGet, hasUrlQueryData }`. When `dataValuesOut` (an array) is passed, every raw
-// value handed to a data/form flag (`-d`, `-F`, `--data*`, `--json`, `--form*`) or to
-// `--url-query`/`--url-query=` is pushed onto it — Codex round 32 P2: with `-G`/`--get`, curl
-// moves data-flag values onto the URL as query parameters instead of sending a body, so the
-// caller needs the raw values to reconstruct the query a `-G` request actually sends (see
-// `extractAdminUrlQuery` / main()). `--url-query` (round 32 "second lens" P3) always appends its
-// value to the URL's query regardless of method — it's not a data flag and doesn't imply POST —
-// so `forceGet`/`hasUrlQueryData` are both returned separately from `method`: the caller must
-// rebuild and test the query whenever EITHER is true, not only when the final resolved method
-// happens to be GET (round 32 "second lens" P3: `-I -G -d draw=1`/`-X HEAD -G -d draw=1` resolve
-// to HEAD, not GET, but `-G` still moves the data onto the URL and must still be caught).
-function computeEffectiveMethod(words, dataValuesOut) {
-  let explicit = null;
-  let forceGet = false;
-  let hasUrlQueryData = false;
-  let head = false;
-  let upload = false;
-  let hasData = false;
+// curl accepts an unambiguous prefix of a long option. Exact names win; a prefix that matches more
+// than one known option is ambiguous (curl refuses it, so nothing is sent) and is left as-is.
+function resolveLong(name) {
+  if (ALL_LONG.has(name)) return name;
+  let found = null;
+  for (const cand of ALL_LONG) {
+    if (cand.startsWith(name)) {
+      if (found) return name;
+      found = cand;
+    }
+  }
+  return found || name;
+}
+
+function newRequest() {
+  return {
+    words: [], explicit: null, forceGet: false, hasUrlQueryData: false, head: false,
+    upload: false, hasData: false, dataValues: [], method: "GET",
+  };
+}
+
+function finishRequest(r) {
+  if (r.explicit) r.method = r.explicit;
+  else if (r.head) r.method = "HEAD";
+  else if (r.forceGet) r.method = "GET";
+  else if (r.upload) r.method = "PUT";
+  else if (r.hasData) r.method = "POST";
+  else r.method = "GET";
+  return r;
+}
+
+// Returns one entry per request in the invocation (`--next` / `-:` start a new one, with every
+// option reset): `{ words, method, forceGet, hasUrlQueryData, dataValues }`. `words` are the words
+// that belong to that request (options, their values and URLs), for the caller's text checks.
+// `dataValues` are the raw values handed to a data/form flag or `--url-query` — with `-G`/`--get`
+// curl moves them onto the URL as query parameters (Codex round 32 P2), so the caller rebuilds the
+// query from them. `forceGet`/`hasUrlQueryData` are returned separately from `method`: `-G` and
+// `--url-query` modify the URL whatever the final method resolves to (`-I -G -d draw=1` is HEAD,
+// but the data still lands on the URL).
+function parseRequests(words) {
+  const requests = [];
+  let cur = newRequest();
   let noMoreFlags = false;
+  let idx = 0;
 
-  for (let idx = 0; idx < words.length; idx++) {
+  // Consume the next word as an option's value (kept with the request it belongs to).
+  function take() {
+    if (idx + 1 >= words.length) return undefined;
+    idx++;
+    cur.words.push(words[idx]);
+    return words[idx];
+  }
+  function endRequest() {
+    requests.push(finishRequest(cur));
+    cur = newRequest();
+  }
+
+  for (; idx < words.length; idx++) {
     const w = words[idx];
+    cur.words.push(w);
     if (noMoreFlags) continue;
     if (w === "--") {
       noMoreFlags = true;
       continue;
     }
-    if (w.length < 2 || w[0] !== "-") continue; // not a flag — a URL or other positional value
+    if (w.length < 2 || w[0] !== "-") continue; // a URL or other positional value
 
     if (w[1] === "-") {
-      // Long flag.
-      if (w === "--request") {
-        if (words[idx + 1] !== undefined) {
-          explicit = words[idx + 1].toUpperCase();
-          idx++;
-        }
-        continue;
+      // Long option, `--opt value` or `--opt=value`.
+      let name = w;
+      let inline;
+      const eq = w.indexOf("=");
+      if (eq > 2) {
+        name = w.slice(0, eq);
+        inline = w.slice(eq + 1);
       }
-      if (w.startsWith("--request=")) {
-        explicit = w.slice("--request=".length).toUpperCase();
-        continue;
+      name = resolveLong(name);
+      const value = () => (inline !== undefined ? inline : take());
+      if (name === "--next") {
+        endRequest();
+      } else if (name === "--request") {
+        const v = value();
+        if (v) cur.explicit = v.toUpperCase();
+      } else if (name === "--get") {
+        cur.forceGet = true;
+      } else if (name === "--head") {
+        cur.head = true;
+      } else if (name === "--upload-file") {
+        cur.upload = true;
+        value();
+      } else if (name === "--url-query") {
+        cur.hasUrlQueryData = true;
+        const v = value();
+        if (v !== undefined) cur.dataValues.push(v);
+      } else if (DATA_LONG_FLAGS.has(name)) {
+        cur.hasData = true;
+        const v = value();
+        if (v !== undefined) cur.dataValues.push(v);
+      } else if (LONG_VALUE_FLAGS.has(name)) {
+        value(); // opaque — consumed so it is never re-scanned as a flag
       }
-      if (w === "--get") {
-        forceGet = true;
-        continue;
-      }
-      if (w === "--head") {
-        head = true;
-        continue;
-      }
-      if (w === "--upload-file") {
-        upload = true;
-        if (words[idx + 1] !== undefined) idx++;
-        continue;
-      }
-      if (w.startsWith("--upload-file=")) {
-        upload = true;
-        continue;
-      }
-      if (w === "--url-query") {
-        hasUrlQueryData = true;
-        if (words[idx + 1] !== undefined) {
-          if (dataValuesOut) dataValuesOut.push(words[idx + 1]);
-          idx++;
-        }
-        continue;
-      }
-      if (w.startsWith("--url-query=")) {
-        hasUrlQueryData = true;
-        if (dataValuesOut) dataValuesOut.push(w.slice("--url-query=".length));
-        continue;
-      }
-      if (DATA_LONG_FLAGS.has(w)) {
-        hasData = true;
-        if (words[idx + 1] !== undefined) {
-          if (dataValuesOut) dataValuesOut.push(words[idx + 1]);
-          idx++;
-        }
-        continue;
-      }
-      {
-        const pfx = DATA_LONG_PREFIXES.find((p) => w.startsWith(p));
-        if (pfx) {
-          hasData = true;
-          if (dataValuesOut) dataValuesOut.push(w.slice(pfx.length));
-          continue;
-        }
-      }
-      if (LONG_VALUE_FLAGS.has(w)) {
-        // Opaque — consumes its value (inline `--opt=value`, handled below, or the next word) but
-        // carries no method/data meaning of its own.
-        if (words[idx + 1] !== undefined) idx++;
-        continue;
-      }
-      {
-        const eq = w.indexOf("=");
-        if (eq > 2 && LONG_VALUE_FLAGS.has(w.slice(0, eq))) {
-          continue;   // `--opt=value` inline form — nothing left to consume
-        }
-      }
-      continue; // truly unrecognized long flag (or a boolean one) — ignore
+      // else: a boolean long option (or one we do not know) — nothing to consume
+      continue;
     }
 
-    // Short flag or a cluster of them (e.g. -sSXPOST, -sSd, -G, -I, -o/dev/null).
+    // Short option or a cluster of them (`-sSXPOST`, `-Gd`, `-o/dev/null`, `-s:`).
     const body = w.slice(1);
     for (let j = 0; j < body.length; j++) {
       const c = body[j];
       const remainder = body.slice(j + 1);
+      if (c === ":") {
+        endRequest(); // `-:` is `--next`; the rest of the cluster belongs to the next request
+        continue;
+      }
       if (c in METHOD_VALUE_FLAGS) {
         const kind = METHOD_VALUE_FLAGS[c];
+        const v = remainder.length > 0 ? remainder : take();
         if (kind === "method") {
-          if (remainder.length > 0) {
-            explicit = remainder.toUpperCase();
-          } else if (words[idx + 1] !== undefined) {
-            explicit = words[idx + 1].toUpperCase();
-            idx++;
-          }
+          if (v) cur.explicit = v.toUpperCase();
         } else if (kind === "data") {
-          hasData = true;
-          if (remainder.length > 0) {
-            if (dataValuesOut) dataValuesOut.push(remainder);
-          } else if (words[idx + 1] !== undefined) {
-            if (dataValuesOut) dataValuesOut.push(words[idx + 1]);
-            idx++;
-          }
-        } else if (kind === "upload") {
-          upload = true;
-          if (remainder.length === 0 && words[idx + 1] !== undefined) idx++;
+          cur.hasData = true;
+          if (v !== undefined) cur.dataValues.push(v);
+        } else {
+          cur.upload = true;
         }
-        break; // the rest of this word (if any) was the flag's inline value, not more flags
+        break; // the rest of this word was the flag's inline value, not more flags
       }
       if (c in NO_VALUE_METHOD_FLAGS) {
-        // Codex round 32 "second lens" P2: G/I take NO value, so `-Gd draw=1` (or `-sGd draw=1`)
-        // must keep scanning the cluster past the `G` — the old `break` here stopped right after
-        // it and never saw the `d` two characters later, so the data value it carries (and thus
-        // the query -G moves it into) was silently dropped.
-        if (NO_VALUE_METHOD_FLAGS[c] === "get") forceGet = true;
-        else head = true;
+        // G/I take NO value — keep scanning so `-Gd draw=1` still sees the `d` (Codex round 32).
+        if (NO_VALUE_METHOD_FLAGS[c] === "get") cur.forceGet = true;
+        else cur.head = true;
         continue;
       }
       if (OPAQUE_VALUE_FLAGS.has(c)) {
-        // Takes a value but doesn't affect the method — just consume it (inline remainder, or the
-        // next word if the cluster ends here) so nothing inside that value is mistaken for a flag.
-        if (remainder.length === 0 && words[idx + 1] !== undefined) idx++;
+        if (remainder.length === 0) take();
         break;
       }
-      // else: a boolean flag with no value (s, S, v, #, …) — keep scanning the cluster.
+      // else: a boolean short flag (s, S, v, #, …) — keep scanning the cluster.
     }
   }
-
-  let method;
-  if (explicit) method = explicit;
-  else if (head) method = "HEAD";
-  else if (forceGet) method = "GET";
-  else if (upload) method = "PUT";
-  else if (hasData) method = "POST";
-  else method = "GET";
-  return { method, forceGet, hasUrlQueryData };
-}
-
-// ---------------------------------------------------------------------------------------------
-// `curl url1 -X POST … --next url2 …` (or `--next-based multiple requests) resets the method for
-// every request after a `--next` — curl documents it as "reset all options … to the default
-// values", so a `-X POST` before `--next` does NOT cover the request(s) after it. Codex round 32
-// P2: `curl -X POST <safe-url> --next GET /api/…/admin?run=1` used to be judged as ONE POST
-// invocation because the whole word list shared a single computed method. Split on `--next` and
-// judge each resulting request independently, exactly like separate curl invocations.
-// Codex round 33 P2: `-:` is curl's own short spelling of `--next` (curl(1): "-:, --next") — a
-// STANDALONE short option (curl does not combine it into a cluster with other short flags), so
-// `curl -X POST <safe-url> -: <admin-url>?draw=1` split just as cleanly as the `--next` form but
-// was never recognised as a boundary at all.
-function splitOnNext(words) {
-  const parts = [[]];
-  for (const w of words) {
-    if (w === "--next" || w === "-:") {
-      parts.push([]);
-      continue;
-    }
-    parts[parts.length - 1].push(w);
-  }
-  return parts;
+  endRequest();
+  return requests;
 }
 
 // Codex round 32 P2: `-G`/`--get` makes curl send its `-d`/`--data*` values as URL query
@@ -560,12 +525,11 @@ function main() {
       const words = tokenizeWords(seg);
       // `--next` starts a brand-new request within the SAME curl invocation, with its own reset
       // method — judge each one independently rather than computing one method for the whole seg.
-      const parts = splitOnNext(words);
-      for (const part of parts) {
-        const partText = part.join(" ");
+      const requests = parseRequests(words);
+      for (const eff of requests) {
+        const partText = eff.words.join(" ");
         if (!ADMIN_PATH_RE.test(partText)) continue;
-        const dataValues = [];
-        const eff = computeEffectiveMethod(part, dataValues);
+        const dataValues = eff.dataValues;
         const method = eff.method;
         let mutating = MUTATING_FLAG_RE.test(partText);
         // Codex round 32 "second lens" P3: rebuild and test the query whenever `-G`/`--get` OR
