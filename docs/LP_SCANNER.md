@@ -75,6 +75,63 @@ open." Every output carries an explicit not-advice + IL-risk disclaimer.
   fee + 7d yield, est $/day, 3-pool ranking, IL badge, logo + footer. "Share this scan" button
   opens it + copies a tweet caption.
 
+## Pre-flight flags (token risk + pool risk) — added 2026-09-30
+Owner ask after an LP session where these traps cost time: Token-2022 transfer fees (1% SPACEX
+PreStocks; 3% on ANTHROPIC PreStocks, GP, ZCAT, NEARKAT, KNOTS, PURR), a 5x scaled-UI multiplier that
+broke Meteora's add-liquidity screen, issuer pause/clawback keys, pre-IPO wrappers, one LP holding
+99% of a pool, copycat mints. **No scan ranks a trap token without saying so.** Code:
+`lib/token-risk.js` (pure classifier `classifyMint` + fetcher `tokenRisk`/`poolRisk`), test
+`scripts/token-risk-test.cjs` (CI, offline). Still operator-only like every `/api/lp-*` route.
+
+**Where it shows.** Every pool row from `scanPair` / `scanToken` / `topPools` gets
+`risk: { tokenA, tokenB, pool }` (tokenA = the pool's base mint, tokenB = quote) and a merged `flags`
+array (`{code, level, text, scope, symbol, mint}`, block first). `poolDeepDive` returns the same
+`risk`/`flags` at the top level. The page renders them as badges (red = block, amber = warn, grey =
+info; hover for the full text) on each row, the top-pool chips (block/warn only) and the pool detail.
+
+**Levels.**
+- **block** — `transfer_fee` (Token-2022 fee > 0: LPs pay it on deposit, withdraw AND every rebalance,
+  so the yield maths is wrong) and `paused` (issuer has halted transfers right now).
+- **warn** — `display_multiplier` (scaled-UI multiplier >= 1% away from 1; UIs may show prices off by
+  N x), `permanent_delegate` (issuer can move tokens out of any account), `pausable` (issuer can pause
+  all transfers), `transfer_hook` (a hook program is active), `default_frozen`, `temporary` (Jupiter
+  tag `prestocks` or a "PreStocks" name — a pre-IPO wrapper that may convert or expire; we never claim
+  a date we cannot read on-chain), `unverified` (not Jupiter-verified — copycat check),
+  `jupiter_unknown` (Jupiter lookup failed), `epoch_unknown`, `unknown` (see below).
+- **info** — `freeze_authority` (routine for issued assets like USDC), `mint_authority` (on
+  non-stables; suppressed for USDC/USDT/USDS/PYUSD/cbBTC), `hook_authority` (authority set, no hook
+  program), a sub-1% multiplier drift (xStocks accrue ~1.0017x), and pool flags `fee_mode_quote` /
+  `fee_mode_input` (Meteora DLMM `pool_config.collect_fee_mode` 1 = fees paid in the quote token only,
+  0 = in the token sold in).
+
+**Ranking and `includeRisky`.** A row with any `block` flag is left OUT of the ranked list by default
+and returned in a separate `excluded` array (the row plus `excludedReason`), with `excludedCount`;
+`count`/`pools` (and `activeCount` in token mode) describe the ranked list. `?includeRisky=1` on
+`/api/lp-scan`, `/api/lp-token` and `/api/lp-top` puts those rows back in ranked position (the page's
+"RANK THEM ANYWAY" button). Warn/info rows are never excluded. The full result is cached and the
+partition applied per request, so the flag costs no extra scan. Everything else in the responses is
+unchanged (additive only). `/api/lp-ask` gets the non-info flags in its data block and is told to lead
+with them.
+
+**How the numbers are read.** Transfer fee: `transferFeeConfig.newerTransferFee` once the current epoch
+>= its `epoch`, else `olderTransferFee` (bps / 100 = %). Multiplier: `scaledUiAmountConfig.newMultiplier`
+once `now >= newMultiplierEffectiveTimestamp`, else `multiplier`. A transfer hook only counts as active
+with a non-null `programId`.
+
+**Sources and caching.** Mint account: `connection.getParsedAccountInfo` (lib/rpc, failover);
+epoch: `getEpochInfo` (cached 10 min); Jupiter `tokens/v2/search?query=<mint>` (first row whose `id`
+equals the mint; `JUPITER_API_KEY` switches to the keyed host like `jupList`); Meteora
+`dlmm.datapi.meteora.ag/pools/<address>`. Per-mint risk cached 1 h, per-pool 1 h; failures 60 s.
+
+**Unknown is not safe.** If the RPC read fails, or the mint is not a readable mint, `tokenRisk` returns
+`{unknown:true, flags:[{code:'unknown', level:'warn', text:'could not read token risk'}]}` — never
+thrown, never treated as safe, never as blocked (so it stays in the ranking, with the warning). If only
+the Jupiter lookup fails, the on-chain flags still apply and `jupiter_unknown` is added.
+
+**Not built: LP concentration** ("one LP holds 99% of a pool"). It needs position-account scans
+(`getProgramAccounts` on the public proxy) or a per-DEX indexer; not done cheaply, so skipped rather
+than faked. Add it as a `pool` flag in `poolRisk()` when a cheap source exists.
+
 ## Fee-reader coverage (real yield vs honest "—")
 Read on-chain/API: **Meteora DLMM** (SDK), **Orca Whirlpool** (u16 @ offset 45 / 10000),
 **Raydium** (AMM/CLMM/CPMM via api-v3.raydium.io). On SOL/USDC that's 5/7 pools; the only "—"
