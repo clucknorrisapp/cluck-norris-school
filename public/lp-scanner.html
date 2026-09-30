@@ -115,6 +115,18 @@
   .top-chip .p { font-family:var(--disp); font-weight:700; font-size:13px; color:var(--text); white-space:nowrap; }
   .top-chip .d { font-size:8px; color:var(--subtext); text-transform:capitalize; letter-spacing:0.5px; }
   .top-chip .y { font-family:var(--disp); font-weight:700; font-size:15px; margin-top:4px; }
+  /* Pre-flight flag badges (docs/LP_SCANNER.md): block = red, warn = amber, info = grey. */
+  .flags { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+  .flag { display:inline-block; font-family:var(--mono); font-size:12.5px; line-height:1.3; padding:1px 7px; border-radius:10px; letter-spacing:0.3px; white-space:nowrap; cursor:help; }
+  .flag-block { background:rgba(239,68,68,0.14); color:#FCA5A5; border:1px solid rgba(239,68,68,0.5); }
+  .flag-warn { background:rgba(217,119,6,0.14); color:#FCD34D; border:1px solid rgba(217,119,6,0.5); }
+  .flag-info { background:rgba(255,255,255,0.05); color:#A8B0BC; border:1px solid rgba(255,255,255,0.14); }
+  .flag-list { margin:8px 0 2px; padding-left:0; list-style:none; font-family:var(--body); font-size:13px; line-height:1.55; color:var(--body-text); }
+  .flag-list li { margin-bottom:4px; }
+  details.excl { margin-top:14px; border:1px solid rgba(239,68,68,0.35); border-radius:10px; background:rgba(239,68,68,0.05); padding:10px 12px; }
+  details.excl summary { cursor:pointer; font-family:var(--disp); font-weight:700; letter-spacing:1px; font-size:13px; color:#FCA5A5; }
+  details.excl .ex-row { padding:9px 0; border-top:1px solid rgba(255,255,255,0.06); font-family:var(--body); font-size:13px; color:var(--body-text); line-height:1.5; }
+  details.excl .ex-row:first-of-type { margin-top:8px; }
   .top-tab { background:transparent; border:1px solid var(--border); border-radius:16px; padding:4px 11px; color:var(--subtext); font-family:var(--mono); font-size:11px; cursor:pointer; }
   .top-tab.on { background:rgba(217,119,6,0.18); border-color:var(--orange); color:var(--accent); font-weight:700; }
 
@@ -209,6 +221,8 @@ body{background:transparent;font-family:var(--body);}
           <tbody id="poolRows"></tbody>
         </table>
       </div>
+      <details class="excl hidden" id="exclBox"><summary id="exclSum"></summary><div id="exclList"></div></details>
+      <div class="note-line" id="riskNote"></div>
       <div class="note-line" id="rankNote"></div>
       <div class="note-line" style="color:var(--accent);">👆 Tap any pool for its full detail — fees, depth &amp; volatility.</div>
       <button class="ask-btn" id="shareBtn" onclick="shareCard()" style="margin-top:12px;">📸 SHARE THIS SCAN (PNG CARD)</button>
@@ -256,6 +270,41 @@ body{background:transparent;font-family:var(--body);}
   var DEX_COLORS={meteora:'#A78BFA','meteora-damm-v2':'#C4B5FD','meteora-damm':'#C4B5FD',orca:'#38BDF8',raydium:'#22D3EE','raydium-clmm':'#22D3EE','raydium-cpmm':'#22D3EE',pumpswap:'#F9A8D4','pancakeswap-v3-solana':'#F472B6',byreal:'#34D399',lifinity:'#6EE7B7',invariant:'#FCD34D',crema:'#FBBF24',fluxbeam:'#FB923C',saber:'#34D399',humidifi:'#94A3B8',solfi:'#94A3B8'};
   function dexColor(d){ return DEX_COLORS[(d||'').toLowerCase()]||'#A8B0BC'; }
   var lastScan = null;
+  var includeRisky = false; // ?includeRisky=1 — puts transfer-fee ("block") pools back into the ranking
+
+  // ── Pre-flight flags. Every string (token symbols, flag text, reasons) is escaped — token names
+  // and symbols are attacker-controlled. block = red, warn = amber, info = grey.
+  var FLAG_LABEL={transfer_fee:'TRANSFER FEE',display_multiplier:'DISPLAY ×',permanent_delegate:'CLAWBACK KEY',pausable:'PAUSABLE',paused:'PAUSED',transfer_hook:'TRANSFER HOOK',hook_authority:'HOOK AUTH',default_frozen:'STARTS FROZEN',freeze_authority:'FREEZE KEY',mint_authority:'MINT KEY',temporary:'PRE-IPO WRAPPER',unverified:'NOT VERIFIED',jupiter_unknown:'VERIFY MINT',unknown:'RISK UNREAD',epoch_unknown:'FEE MAY BE STALE',fee_mode_quote:'FEES: QUOTE ONLY',fee_mode_input:'FEES: INPUT TOKEN'};
+  function flagBadge(f){
+    var lvl=(f.level==='block'||f.level==='warn')?f.level:'info';
+    var label=FLAG_LABEL[f.code]||String(f.code||'flag');
+    var tip=(f.symbol?f.symbol+': ':'')+(f.text||'');
+    return '<span class="flag flag-'+lvl+'" title="'+esc(tip)+'">'+(f.symbol?esc(f.symbol)+' · ':'')+esc(label)+'</span>';
+  }
+  function flagsHtml(flags){ return (flags&&flags.length) ? '<div class="flags">'+flags.map(flagBadge).join('')+'</div>' : ''; }
+  function flagListHtml(flags){
+    if(!flags||!flags.length) return '';
+    return '<ul class="flag-list">'+flags.map(function(f){ return '<li>'+flagBadge(f)+' '+esc(f.text||'')+'</li>'; }).join('')+'</ul>';
+  }
+  function paintExcluded(d){
+    var box=document.getElementById('exclBox'), note=document.getElementById('riskNote');
+    var ex=(d&&d.excluded)||[];
+    if(!ex.length){ box.classList.add('hidden'); }
+    else {
+      box.classList.remove('hidden');
+      document.getElementById('exclSum').textContent='⛔ '+ex.length+' pool'+(ex.length===1?'':'s')+' left out of the ranking — a token in them charges a transfer fee';
+      document.getElementById('exclList').innerHTML=ex.map(function(p){
+        return '<div class="ex-row"><b>'+esc(p.pair||p.name||p.address)+'</b> <span class="muted">· '+esc(p.dex)+' · TVL '+fmt(p.tvlUsd)+'</span>'
+          +'<div>'+esc(p.excludedReason||'')+'</div>'+flagsHtml(p.flags)+'</div>';
+      }).join('')
+      +'<button class="ask-btn" style="margin-top:10px;" onclick="setIncludeRisky(true)">RANK THEM ANYWAY</button>';
+    }
+    note.innerHTML = includeRisky
+      ? 'Risky pools are ranked alongside the rest — read each badge first. <a href="#" onclick="setIncludeRisky(false);return false;" style="color:var(--accent);">Hide them again</a>'
+      : '';
+  }
+  function setIncludeRisky(v){ includeRisky=!!v; runScan(); }
+  function riskQs(){ return includeRisky ? '&includeRisky=1' : ''; }
 
   var lastMode='pair';
   function quick(a,b){ var iA=document.getElementById('tokenA'),iB=document.getElementById('tokenB'); iA.value=a;iA.dataset.mint='';iB.value=b;iB.dataset.mint=''; runScan(); }
@@ -274,12 +323,12 @@ body{background:transparent;font-family:var(--body);}
     try{
       if(!b){
         // SINGLE-TOKEN MODE — every pair this token trades in, across all DEXs
-        var r=await fetch(withKey('/api/lp-token?token='+encodeURIComponent(a)+(amt?('&amount='+encodeURIComponent(amt)):'')));
+        var r=await fetch(withKey('/api/lp-token?token='+encodeURIComponent(a)+(amt?('&amount='+encodeURIComponent(amt)):'')+riskQs()));
         var d=await r.json();
         if(!d.success){ showErr(d.error||'Scan failed'); return; }
         lastMode='token'; lastScan=d; renderTokenScan(d);
       } else {
-        var url=withKey('/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):''));
+        var url=withKey('/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):'')+riskQs());
         var r2=await fetch(url); var d2=await r2.json();
         if(!d2.success){ showErr(d2.error||'Scan failed'); return; }
         lastMode='pair'; lastScan=d2; renderScan(d2);
@@ -327,9 +376,9 @@ body{background:transparent;font-family:var(--body);}
     if(mode==='token'){
       var ilDot = p.ilRisk ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+(IL_COLOR[p.ilRisk.level]||'#9CA3AF')+';margin-right:6px;" title="IL: '+esc(p.ilRisk.level)+'"></span>' : '';
       var dead = (p.volume&&p.volume.h24>0)?'':' <span style="font-size:8px;color:#9CA3AF;">idle</span>';
-      firstCell='<td>'+ilDot+'<span class="dex">'+crown+esc(p.pair||'?')+'</span>'+dead+'<div class="dexcol" style="font-size:9px;color:'+dexColor(p.dex)+';text-transform:capitalize;">'+esc(p.dex)+'</div></td>';
+      firstCell='<td>'+ilDot+'<span class="dex">'+crown+esc(p.pair||'?')+'</span>'+dead+'<div class="dexcol" style="font-size:9px;color:'+dexColor(p.dex)+';text-transform:capitalize;">'+esc(p.dex)+'</div>'+flagsHtml(p.flags)+'</td>';
     } else {
-      firstCell='<td><span class="dex">'+crown+esc(p.dex)+'</span></td>';
+      firstCell='<td><span class="dex">'+crown+esc(p.dex)+'</span>'+flagsHtml(p.flags)+'</td>';
     }
     return '<tr class="clk '+(isBest?'best':'')+'" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'">'
       +firstCell
@@ -350,10 +399,11 @@ body{background:transparent;font-family:var(--body);}
     var mode=lastMode;
     var rows=shown.map(function(p){ return rowHtml(p, mode); }).join('');
     if(!rows){
-      var why=all.length ? 'No pools match the current filters.' : ('No pools found for this '+(mode==='token'?'token':'pair')+'.');
+      var why=all.length ? 'No pools match the current filters.' : ((lastScan.excluded||[]).length ? 'Every pool found was left out of the ranking — see the list below.' : ('No pools found for this '+(mode==='token'?'token':'pair')+'.'));
       rows='<tr><td colspan="6" class="muted" style="text-align:center;padding:20px;">'+why+'</td></tr>';
     }
     document.getElementById('poolRows').innerHTML=rows;
+    paintExcluded(lastScan);
     var cnt=document.getElementById('ctlCount');
     cnt.textContent = shown.length<all.length ? (shown.length+' of '+all.length+' pools') : (all.length+' pool'+(all.length===1?'':'s'));
     Array.prototype.forEach.call(document.querySelectorAll('#poolRows tr.clk'), function(tr){
@@ -470,6 +520,7 @@ body{background:transparent;font-family:var(--body);}
           +'<div class="p">'+dot+esc(p.pair||'?')+'</div>'
           +'<div class="d dexcol" style="color:'+dexColor(p.dex)+'">'+esc(p.dex)+(risky?' · ⚠ risk':'')+'</div>'
           +'<div class="y" style="color:'+yColor+'">'+yStr+'</div>'
+          +flagsHtml((p.flags||[]).filter(function(f){ return f.level!=='info'; }))
           +'</div>';
       });
       strip.innerHTML=html;
@@ -537,6 +588,7 @@ body{background:transparent;font-family:var(--body);}
       +'<div class="sim-sub">POOL DETAIL — fees, depth &amp; volatility for a buy-and-hold LP position</div>'
       +poolLinks
       +riskBanner
+      +flagListHtml(d.flags)
       +'<div class="stat-grid">'
         +stat('TVL', fmt(p.tvlUsd))
         +stat('24h VOL', fmt(p.vol24hUsd))

@@ -422,6 +422,12 @@ jobs:
       # the burn watcher (lib/sig-cursor.js) — pure, so this runs standalone with no server boot.
       - name: signature cursor walk (buy/burn watchers' shared fresh-since-cursor logic)
         run: node scripts/sig-cursor-test.cjs
+      # LP scanner pre-flight flags (lib/token-risk.js): the pure mint classifier on fixtures shaped like
+      # real jsonParsed mint accounts (Token-2022 transfer fee by epoch, scaled-UI multiplier by time,
+      # issuer keys, pre-IPO wrapper, unverified mint) plus the ranking filter (blocked rows -> excluded,
+      # includeRisky puts them back). Offline; no RPC.
+      - name: LP scanner pre-flight flags (token-risk classifier + ranking filter)
+        run: node scripts/token-risk-test.cjs
       # Room policy (owner, 2026-09-17): the Cluck bot never posts in the OnlyRose room. Pure checks
       # on lib/telegram-rooms plus source assertions that every Telegram sender consults it and that
       # no direct send exists outside the audited functions.

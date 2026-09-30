@@ -5154,7 +5154,7 @@ app.get("/api/lp-scan", adminGuarded(ADMIN_404), async (req, res) => { // operat
     catch (e) { console.warn("[near-grad] test error:", e.stack || e.message); return res.status(200).json({ success: false, error: publicErrMsg(e) }); }
   }
   const amountUsd = Number(req.query.amount) || 0;
-  try { return res.status(200).json({ success: true, ...(await lpScanner.scanPair(String(A), String(B), { amountUsd })) }); }
+  try { return res.status(200).json({ success: true, ...(await lpScanner.scanPair(String(A), String(B), { amountUsd, includeRisky: req.query.includeRisky === "1" })) }); }
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
@@ -5183,7 +5183,7 @@ app.get("/api/cg-agg-test", adminGuarded(ADMIN_404_SUCCESS), async (req, res) =>
 app.get("/api/lp-top", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=600");
-  try { return res.status(200).json({ success: true, ...(await lpScanner.topPools({ kind: req.query.kind, force: req.query.refresh === "1" })) }); }
+  try { return res.status(200).json({ success: true, ...(await lpScanner.topPools({ kind: req.query.kind, force: req.query.refresh === "1", includeRisky: req.query.includeRisky === "1" })) }); }
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
@@ -5250,7 +5250,7 @@ app.get("/api/lp-token", adminGuarded(ADMIN_404), async (req, res) => { // opera
   const T = req.query.token || req.query.t;
   if (!T) return res.status(400).json({ success: false, error: "pass ?token=<symbol|mint>, optional &amount=<usd>" });
   const amountUsd = Number(req.query.amount) || 0;
-  try { return res.status(200).json({ success: true, ...(await lpScanner.scanToken(String(T), { amountUsd })) }); }
+  try { return res.status(200).json({ success: true, ...(await lpScanner.scanToken(String(T), { amountUsd, includeRisky: req.query.includeRisky === "1" })) }); }
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
@@ -5281,7 +5281,9 @@ app.post("/api/lp-ask", adminGuarded(ADMIN_404), async (req, res) => { // operat
   try {
     const scan = await lpScanner.scanPair(String(a), String(b), { amountUsd: Number(amount) || 0 });
     const ctx = (scan.pools || []).map((p) => {
-      const base = `${p.dex} — TVL $${p.tvlUsd.toLocaleString()}, 24h vol $${Math.round(p.volume.h24).toLocaleString()}, turnover ${p.turnover24h}x`;
+      const riskNote = (p.flags || []).filter((f) => f.level !== "info").map((f) => `${f.symbol ? f.symbol + ": " : ""}${f.text}`).join("; ");
+      const base = `${p.dex} — TVL $${p.tvlUsd.toLocaleString()}, 24h vol $${Math.round(p.volume.h24).toLocaleString()}, turnover ${p.turnover24h}x`
+        + (riskNote ? `, PRE-FLIGHT FLAGS: ${riskNote}` : "");
       if (p.feeTier == null) return `${base}, fee tier NOT YET READ (don't estimate its yield)`;
       return `${base}, fee ${p.feeTier}%, 24h-yield ${p.feeYieldPctDay}%/day`
         + (p.feeYield7dPctDay != null ? `, 7d-avg-yield ${p.feeYield7dPctDay}%/day` : "")
@@ -5291,6 +5293,7 @@ app.post("/api/lp-ask", adminGuarded(ADMIN_404), async (req, res) => { // operat
     const system = `You are Cluck Norris — the toughest LP professor on Solana — analyzing REAL pool data so a user can compare where to LP ${scan.pair}.
 HARD RULES:
 - INFORMATIONAL ONLY. NEVER tell them where to put money, never predict prices. Explain tradeoffs; THEY decide.
+- If a pool line carries PRE-FLIGHT FLAGS (transfer fee, display multiplier, issuer pause/clawback, pre-IPO wrapper, unverified mint), lead with them — they can matter more than the yield. Pools whose token has a transfer fee are already excluded from the list; say so if asked why a pool is missing.
 - Ground every claim in the DATA below. If a pool's fee tier isn't read yet, say so — never invent a yield.
 - Turnover (vol/TVL) is NOT yield. A high-turnover pool with a tiny fee earns little. Fee-yield (fees/TVL) is the money metric — teach that.
 - Lead with the 7d-avg yield (the truer rate), not the 1-day number. If a pool's volume is "spiking", warn its 24h yield probably won't hold; if "cooling", flag that it's slowing down.
