@@ -6,6 +6,7 @@
     "ios"
   ],
   "apiBase": "https://clucknorris.app",
+  "excludeLangs": ["ko", "tr", "id"],
   "pages": [],
   "files": [
     "theme.css",

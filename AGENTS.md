@@ -577,9 +577,10 @@ the count in sync when adding one. ⚠️ A new language is wired into MANY list
 (picker + detection), `public/read-aloud.js`, `server.js` (`AI_LANGS`, `I18N_MT_LANGNAMES`,
 `ttsLangCode`), `classroom.html` / `crypto-school.html`, `src/shared.jsx`, `scripts/build-curriculum.cjs`
 and the `LANGS` arrays in the audit/tests. Not yet extended (owner call, follow-ups): the `/learn`
-asset pages (`LEARN_TR_LANGS` + `data/learn-assets.<lang>.json`, 18 assets), and the pinned store
-bundles (`store-render-scan.cjs`, still seven — a store release rebuilt from this source copies
-`public/i18n/` wholesale, so cut it deliberately).
+asset pages (`LEARN_TR_LANGS` + `data/learn-assets.<lang>.json`, 18 assets), and the pinned google/ios
+store bundles, which stay at seven (`excludeLangs` in `store-edition/store-edition.json` makes
+`build-store-edition.mjs` drop ko/tr/id from the shipped picker and dictionaries; extend
+`store-render-scan.cjs` and remove it to ship ten).
 
 Persistence: a Railway volume at `/data` (consumed signatures, graduation tracker, scheduler
 timestamps, analytics, transcripts) survives redeploys.

@@ -81,7 +81,7 @@
       "background:rgba(26,15,8,.96)", "border:1px solid rgba(255,122,24,.55)", "border-radius:999px",
       "padding:8px 13px", "cursor:pointer", "box-shadow:0 4px 16px rgba(0,0,0,.5)", "-webkit-tap-highlight-color:transparent"].join(";");
     // Open the menu toward whichever side has room. It used to always open UPWARD from the pill,
-    // and a pill lifted clear of page text (clkn-dock-float.js) sent the ten-language list off
+    // and a pill lifted clear of page text (clkn-dock-float.js) sent the seven-language list off
     // the top of an iPhone screen (owner, 2026-09-25). Docked in a header it opens downward; a
     // list that fits neither way is capped to the larger side and scrolls.
     function placeMenu() {
