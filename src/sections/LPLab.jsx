@@ -2077,6 +2077,147 @@ Complexity has to earn its place. Make it prove it.`
     ],
     cluckVerdict: "One position forces you to be right about the future. A ladder lets you be approximately right and still get paid. But it is not free and it is not automatic — it costs rent, attention and headline APR, and it only wins if you judge the whole book honestly. Complexity has to earn its keep."
   }
+  ,
+  {
+    id: 15,
+    title: "Check the Token Before You LP It",
+    icon: "🛫",
+    tagline: "Every trap was on-chain or on the issuer's page. Nobody looked.",
+    cluckHook: "A liquidity position is a bet on the pool. It is also a bet on the token underneath it, and most of the ways a token can hurt you are written down before you deposit a cent: on the mint, on the issuer's page, in the pool's own numbers. Ten minutes of reading. Do the reading.",
+    sections: [
+      {
+        heading: "Is It Temporary?",
+        body: `Most tokens are meant to exist forever. Some are not. A WRAPPER token is a stand-in for something else, such as a claim on an asset or a pre-listing share, and it comes with a conversion date or an expiry attached.
+
+EXAMPLE: a pre-IPO wrapper token. The issuer's page says holders must swap it for the real thing before a deadline "or the tokens expire worthless". You LP the pair. The deadline passes. A pool does not know a deadline exists, and if the price sinks, your position quietly rebalances into the wrapper, the one asset you least want to hold.
+
+READ FIRST:
+• The issuer's token page and terms, not the pool page
+• Is there a conversion date, an expiry, a redemption window?
+• What happens to holders who miss it?
+
+THE MARKET TELLS YOU TOO: a wrapper trading at a steady discount to what it converts into is the market saying the conversion is not clean. Fees, delays, restrictions, or plain doubt that it will happen. A steady discount is rarely free money.
+
+Hard Knocks Rule: if the token has a deadline, your position has the same deadline. Put it in your calendar before you deposit, not after.`
+      },
+      {
+        heading: "Transfer Fees (Token-2022)",
+        body: `A Token-2022 mint can charge a percentage on every transfer. It is written on the mint, so you can read it before you deposit: open the mint on an explorer and look at the extensions.
+
+WHO PAYS:
+• Traders pay it on their swaps of that token
+• YOU pay it on the deposit, on the withdrawal, and on every rebalance (a rebalance is a withdrawal plus a deposit)
+
+EXAMPLE: a token with a 3% transfer fee. You deposit $1,000 of it and the pool receives $970. You withdraw that and get back about $941. No trade happened, no fee was earned, and about $59 is already gone, before impermanent loss. That is why a 1-3% fee makes day-to-day LP management nearly impossible: every adjustment is a tax.
+
+One more thing to read: the rate is set by a fee authority and can be changed, after a short delay. Check today's rate and who is allowed to move it.
+
+THE WORK-AROUND, if you must: deposit only the fee-free side. A USDC-only range set below the current price holds none of the fee token when you deposit, so you pay nothing going in. If price falls into your range, traders sell the fee token into it, and you pay the fee once, on whatever you hold when you withdraw. Many payments become one.`
+      },
+      {
+        heading: "Display Multipliers (Scaled UI Amount)",
+        body: `Another Token-2022 extension lets the issuer set a MULTIPLIER on what wallets and apps DISPLAY. The raw on-chain amount does not change; the multiplier is applied on the screen, like a stock split. At 5x, a wallet holding 100 raw tokens shows 500.
+
+THE PROBLEM: pool math runs on the raw amount. Your wallet, an explorer, a pool page and a range calculator can each show a different number for the same thing, off by exactly the multiplier.
+
+EXAMPLE: one screen shows a price of $10 per token. The pool, pricing the raw amount, is trading at $50. A range built around $10 sits nowhere near the market.
+
+THE TELL-TALE: bin arrays. On a bin-based pool, only the stretch of price near where the pool actually trades has its bin arrays created on-chain. A range far from the live price needs NEW bin arrays, and that rent is NOT refundable when you close. A correct range right next to the live price usually costs close to nothing that you cannot get back.
+
+So if the app quotes a real non-refundable cost for a range that should be sitting next to price, stop. Either the price you used is wrong or the range is. Take the price from the pool's own page, compare it to what your wallet shows, and check the mint's extensions for a scaled amount before you sign anything.`
+      },
+      {
+        heading: "Issuer Keys",
+        body: `Some tokens have an issuer who can still act after launch. On Token-2022 these powers are recorded on the mint:
+
+• PERMANENT DELEGATE: can move or burn tokens out of any account holding them
+• PAUSE: can stop all transfers, so nobody can swap, deposit or withdraw
+• FREEZE: can freeze individual accounts
+• MINT: can create new supply
+
+EXAMPLE: a regulated stock token. The issuer has legal duties that require these controls, so having them is normal and is not a scam signal by itself. It is a different risk: you are now trusting the issuer on top of the pool. If they pause the token, your position cannot be withdrawn until they unpause it.
+
+READ THE TERMS FOR:
+• Jurisdiction limits. Some tokens are not available to U.S. persons, and being able to buy one on a DEX does not change what the terms say you may hold.
+• An "administrative controls" clause. That is the plain-language list of what the issuer reserves the right to do. Read it as a menu of things that may happen to your position.
+
+The question is not "does it have keys". It is who holds them, why, and whether you are comfortable with that.`
+      },
+      {
+        heading: "Pool Checks",
+        body: `A clean token can still sit in a bad pool. Three questions, all answerable from the pool's page and its recent transactions:
+
+1. WHAT ARE FEES PAID IN? Some pools take fees in both tokens, some in the quote token only. Quote-only is the cleanest: your fees arrive in something stable and you never have to move the odd token, especially one with a transfer fee.
+
+2. WHO ARE THE LPs? If one wallet holds nearly all the liquidity, that wallet is a single point of failure. If it leaves, you ARE the pool: every trade hits your position, the price impact for traders gets ugly, and the depth you were counting on was one wallet's mood.
+
+3. WHERE DOES THE VOLUME COME FROM? If most of it is one wallet trading back and forth, it can stop tomorrow, and your fees stop with it. Real volume is messy: many wallets, many sizes.
+
+EXAMPLE: a pool with $2M of liquidity looks deep until you see one wallet supplies 95% of it. That is a $100K pool with a $1.9M mood.`
+      },
+      {
+        heading: "Copycats",
+        body: `Anyone can create a token with the same name, ticker and logo as a real one. On a token list they sit next to each other.
+
+EXAMPLE: you search a ticker and get five results. One is the real token: deep pool, and the issuer's own page links its mint. The other four have a few hundred holders and a $0 market cap, waiting for someone to click the wrong row. LP into a lookalike and you have put real USDC next to a token nobody will ever buy.
+
+CHECK THE MINT ADDRESS, NOT THE NAME:
+• Copy the mint from the issuer's own page or verified account
+• Compare the WHOLE address, not just the first and last few characters. Lookalike addresses are ground to match those
+• Then open the pool and confirm the token inside it has that exact mint
+
+The name is a label anyone can type. The mint is the identity.`
+      },
+      {
+        heading: "The Checklist On One Screen",
+        body: `Six checks before you deposit. If you cannot answer one, you are not ready to deposit. You are ready to read.`,
+        table: {
+          headers: ["Check", "Where to look", "Walk away if"],
+          rows: [
+            ["Temporary?", "Issuer's token page and terms", "A deadline you cannot meet, or a steady discount to what it converts into"],
+            ["Transfer fee", "Mint page, extensions", "Any fee big enough to tax your rebalances"],
+            ["Display multiplier", "Mint page vs the pool page vs your wallet", "Numbers that differ by a round multiple, or a range that wants new bin arrays"],
+            ["Issuer keys", "Mint page and the issuer's terms", "Keys you did not expect, or terms that exclude you"],
+            ["Pool", "Pool page, LP list, recent transactions", "One LP, one trader, or fees in the odd token"],
+            ["Mint address", "Issuer's own page vs the pool", "Any mismatch at all"],
+          ]
+        }
+      }
+    ],
+    quiz: [
+      {
+        q: "A token's issuer page says holders must convert it before a set date \"or it expires worthless\". The pool has been open for weeks and the price sits steadily below what the token converts into. What is the sensible read?",
+        options: ["The discount is free money that closes on its own once the deadline arrives", "The deadline is your position's deadline too, and a steady discount suggests the market doubts the conversion is clean", "Fees earned before the deadline will cover it, provided the range is tight enough", "The deadline binds holders only, so a liquidity provider can safely ignore it"],
+        correct: 1,
+        explanation: "A pool has no idea a deadline exists. If the price sinks, your position rebalances into the wrapper, and after the deadline that is a token nobody can redeem. A steady discount is the market pricing in a conversion that is not clean. Read the issuer's terms first and treat the date as your own."
+      },
+      {
+        q: "A token charges a 2% transfer fee. You deposit $1,000 of it into a pool and later withdraw it, with no trades in between. About how much do you get back?",
+        options: ["Roughly $1,000, since transfer fees only hit traders", "Roughly $960, since the fee applies going in and again coming out", "Roughly $980, since the fee applies once, on the way out", "Roughly $1,020, since the fee is paid back to liquidity providers"],
+        correct: 1,
+        explanation: "A deposit is a transfer and a withdrawal is a transfer, so the fee is taken twice: $1,000 becomes about $980 in the pool and about $960 back in your wallet. Every rebalance repeats it. If you must LP such a token, deposit only the fee-free side so you pay once, on what you hold when you withdraw."
+      },
+      {
+        q: "You build a range from a price on one screen. The app says it must create new bin arrays, a cost you cannot get back, even though the range sits right next to the price you saw. What do you check first?",
+        options: ["Whether the token has a display multiplier, and which price the pool itself is trading at", "Whether the pool's fee tier is high enough to pay back the extra rent", "Whether a wider range would make the rent go away", "Whether switching the shape to curve would use fewer bin arrays"],
+        correct: 0,
+        explanation: "Bin arrays only exist near where the pool really trades, so a correct range next to the live price costs almost nothing you cannot get back. A big non-refundable cost means the range is far from the pool's real price. A display multiplier makes screens disagree by exactly that factor while the pool prices the raw amount."
+      },
+      {
+        q: "A regulated stock token you are considering has a permanent delegate and a pause authority, both held by the issuer. How should you read that?",
+        options: ["Normal for a regulated issuer, but you are trusting the issuer on top of the pool, so read their terms first", "A sure sign of a scam, so walk away from any token that carries keys like these", "Harmless to an LP, since a pool's contract shields its vaults from anything the issuer does", "Only relevant to people holding it in a wallet, so an LP can ignore it"],
+        correct: 0,
+        explanation: "Those controls are what regulation asks of a stock token, so they are not a scam signal on their own. But they are real power: a pause stops your withdrawal and a permanent delegate can move tokens out of any account, a pool's vault included. Read who holds the keys and what the terms let them do."
+      },
+      {
+        q: "One wallet supplies about 95% of a pool's liquidity and another wallet trades most of its volume. What is the risk you take on by depositing?",
+        options: ["Both wallets are single points of failure: if the big LP leaves you become the pool, and if the trader stops the fees stop", "The volume proves real demand, and the large LP is a sign the pool is safe to join", "A single large LP means the token must be a scam, so avoid every pool it is in", "Nothing to check here, since pool makeup matters less than the token's price chart"],
+        correct: 0,
+        explanation: "Headline liquidity and volume can each be one wallet's decision. If the big LP withdraws, your position takes every trade against a thin book. If the one trader stops, the fees you were counting on stop too. Look at who the LPs are and where the volume comes from, not just the totals."
+      }
+    ],
+    cluckVerdict: "A pool is only as good as the token in it and the wallets holding it up. Six checks, ten minutes: is it temporary, what does a transfer cost, do the numbers agree, who holds the keys, who else is in the pool, and is this even the real mint. Wallet Checkup will read the transfer-fee, permanent-delegate, transfer-hook and frozen-by-default flags, plus live freeze and mint authorities, on tokens your wallet already holds. It does not read the issuer's terms, display multipliers or who is in the pool. That part is still you, with the mint page and the pool page open."
+  }
 
 ];
 

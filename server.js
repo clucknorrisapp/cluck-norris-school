@@ -2962,11 +2962,11 @@ function guideRoute(key) {
         "No wallet, no money, no sign-up needed to learn. Reply here any time with a question — that's what I'm for.";
     case "basics":
       return "📚 <b>Got the basics? Time to level up.</b>\n\n" +
-        `Finish the <b>12-lesson course</b> and you earn a permanent, shareable transcript. Want to go deep on liquidity? The <b>LP Lab</b> has 14 advanced lessons.\n\n` +
+        `Finish the <b>12-lesson course</b> and you earn a permanent, shareable transcript. Want to go deep on liquidity? The <b>LP Lab</b> has 15 advanced lessons.\n\n` +
         `🎓 ${B}\n\nReply with whatever you're stuck on and I'll aim you at the right lesson.`;
     case "lp":
       return "💧 <b>Liquidity pools &amp; LP investing — earn fees, know the risks.</b>\n\n" +
-        "The <b>LP Lab</b> is a 14-lesson deep dive: how AMMs work, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).\n\n" +
+        "The <b>LP Lab</b> is a 15-lesson deep dive: how AMMs work, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).\n\n" +
         `📚 Start the LP Lab → ${B}\n\n` +
         "New to it? Walk Lesson 1 (What Is Liquidity?) first. Reply here with any LP question and I'll break it down.";
     case "research":
@@ -2998,7 +2998,7 @@ function guideSystemPrompt() {
   return [
     "You are Cluck Norris, the friendly guide for the Cluck Norris app (clucknorris.app) — a FREE crypto school ('School of Crypto Hard Knocks') plus a Solana token-research toolkit. You're helping someone in a Telegram group find their way around and answering their crypto/app questions.",
     "WHAT THE APP HAS — route people to the right part:",
-    "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus, finish it for a permanent shareable transcript), and the LP LAB (14 advanced liquidity lessons).",
+    "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus, finish it for a permanent shareable transcript), and the LP LAB (15 advanced liquidity lessons).",
     "- Always-free tools: WALLET CHECKUP (/wallet-checkup — approvals, honeypot holdings and live mint/freeze authority, and you can revoke your own there), FIREPIT (/firepit — burn junk, reclaim SOL rent), THE JUP LOCKER ROOM (/locker-room — free non-custodial token locking for any Solana project), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools). Heavy tools — WALLET X-RAY (/wallet-xray), HOLDERS (/holders), TRACE (/trace) — preview free and run on the tools pass below.",
     "- THE HATCHERY (/hatchery): guided token creation with a safety preview.",
     "- CLKN token + the tools pass: HOLD about $50 worth of CLKN and every heavy tool (X-Ray, Holders, Trace, the airdropper, Buy Special) unlocks free. Not holding? One click pays 0.05 SOL for a 7-day pass to ALL of them. Premium forensics stays holder-gated at 2,000,000 CLKN, re-checked live. Holding also earns airdrop eligibility. The school itself is always free. NOTE: the old 'send CLKN to unlock' flow was retired 2026-07-30 — never tell anyone to send tokens by hand.",
@@ -16133,8 +16133,8 @@ SCHOOL OF HARD KNOCKS:
 - Complete all 21 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
 
 THE LP LAB (its own tab, not inside the Library):
-- 14 lessons on liquidity providing, from the fundamentals to building a real strategy
-- Topics: What Is Liquidity, How AMMs Work, Impermanent Loss, LP Fees, Concentrated Liquidity, Price Bins and Ticks, Single-Sided Deposits, Active vs Passive, Risk Management, Reading Pool Data, Token Launch Liquidity, Building a Strategy, DLMM Liquidity Shapes, Laddering and Multi-Position
+- 15 lessons on liquidity providing, from the fundamentals to building a real strategy
+- Topics: What Is Liquidity, How AMMs Work, Impermanent Loss, LP Fees, Concentrated Liquidity, Price Bins and Ticks, Single-Sided Deposits, Active vs Passive, Risk Management, Reading Pool Data, Token Launch Liquidity, Building a Strategy, DLMM Liquidity Shapes, Laddering and Multi-Position, Check the Token Before You LP It
 - Protocol-agnostic -- works on Meteora, Raydium, Orca, Uniswap, anywhere you LP
 - Interactive calculators throughout: impermanent loss, AMM price impact, fee-vs-IL breakeven, capital efficiency, bin visualizer, DCA accumulation, LP-vs-HODL, strategy matcher
 - Shareable directly at clucknorris.app/lp-lab
