@@ -60,7 +60,7 @@ const CURRICULA = [
   // minSteps: every lesson reads as steps (owner 2026-09-25). Belt and Incubator lessons are the
   // opening + the terms; an LP Lab lesson is the opening, 5–6 sections, "Try it yourself" and
   // the verdict — so at least 8.
-  { hash: "select", label: "curriculum", count: 16, nav: "tiles", storageKey: "clkn_completed", idsFrom: "LESSONS", minSteps: 2 },
+  { hash: "select", label: "curriculum", count: 21, nav: "tiles", storageKey: "clkn_completed", idsFrom: "LESSONS", minSteps: 2 },
   { hash: "incubator", label: "incubator", count: 7, nav: "linear", storageKey: "incubator_progress", idsFrom: "INCUBATOR_LESSONS", minSteps: 2 },
   { hash: "lplab", label: "LP lab", count: 14, nav: "tiles", minSteps: 8 },
 ];
