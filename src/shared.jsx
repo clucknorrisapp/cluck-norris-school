@@ -162,7 +162,7 @@ export function AskCluck({ context, compact }) {
       const res = await fetch(api("/api/ask-cluck"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, context, lang: (function(){ try { if (window.CLKN_I18N && window.CLKN_I18N.lang) return window.CLKN_I18N.lang; var s = localStorage.getItem("clkn_lang"); if (s) return s; } catch(e){} var _l=(navigator.language||"").toLowerCase().slice(0,2); return ["zh","es","hi","it","pt","vi"].indexOf(_l)!==-1?_l:"en"; })() })
+        body: JSON.stringify({ question, context, lang: (function(){ try { if (window.CLKN_I18N && window.CLKN_I18N.lang) return window.CLKN_I18N.lang; var s = localStorage.getItem("clkn_lang"); if (s) return s; } catch(e){} var _l=(navigator.language||"").toLowerCase().slice(0,2); return ["zh","es","hi","it","pt","vi","ko","tr","id"].indexOf(_l)!==-1?_l:"en"; })() })
       });
       const data = await res.json();
       if (data.success) {

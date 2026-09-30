@@ -617,7 +617,7 @@ function buildVariant(cwd, variant) {
   // different one for everybody who does not read English. Asserted against the GENERATED key
   // list, so a new pane's copy fails here until it is translated, instead of shipping in English
   // and being noticed by a user.
-  for (const lang of ["es", "zh", "hi", "it", "pt", "vi"]) {
+  for (const lang of ["es", "zh", "hi", "it", "pt", "vi", "ko", "tr", "id"]) {
     const dict = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${lang}.json`), "utf8"));
     const missing = NEW_KEYS.filter((k) => !Object.prototype.hasOwnProperty.call(dict, k));
     ok(`${lang}.json carries all ${NEW_KEYS.length} of the app's strings`, missing.length === 0,

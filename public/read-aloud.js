@@ -7,7 +7,7 @@
       on Seeker/Android WebView + iOS). Used automatically when /api/tts answers
       503 (no key / over daily budget) or errors.
    A floating "Listen" button (bottom-left) reads the page's main content in the
-   current language (en/zh/es), with pause/resume/stop. Loaded globally via
+   current language (en/zh/es/it/pt/vi/hi/ko/tr/id), with pause/resume/stop. Loaded globally via
    the nav script. Skips nav/buttons/code and our own injected UI. */
 (function () {
   if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance === "undefined") return;
@@ -20,14 +20,17 @@
     it: { listen: "🔊 Ascolta", pause: "⏸ Pausa", resume: "▶ Riprendi" },
     pt: { listen: "🔊 Ouvir", pause: "⏸ Pausar", resume: "▶ Retomar" },
     vi: { listen: "🔊 Nghe", pause: "⏸ Tạm dừng", resume: "▶ Tiếp tục" },
-    hi: { listen: "🔊 सुनें", pause: "⏸ रोकें", resume: "▶ जारी रखें" }
+    hi: { listen: "🔊 सुनें", pause: "⏸ रोकें", resume: "▶ जारी रखें" },
+    ko: { listen: "🔊 듣기", pause: "⏸ 일시정지", resume: "▶ 계속" },
+    tr: { listen: "🔊 Dinle", pause: "⏸ Duraklat", resume: "▶ Devam" },
+    id: { listen: "🔊 Dengarkan", pause: "⏸ Jeda", resume: "▶ Lanjut" }
   };
   function lang() {
     try { var s = localStorage.getItem("clkn_lang"); if (s && LABELS[s]) return s; } catch (_) {}
     var h = (document.documentElement.getAttribute("lang") || "en").toLowerCase();
-    return h.indexOf("zh") === 0 ? "zh" : h.indexOf("es") === 0 ? "es" : h.indexOf("it") === 0 ? "it" : h.indexOf("pt") === 0 ? "pt" : h.indexOf("vi") === 0 ? "vi" : h.indexOf("hi") === 0 ? "hi" : "en";
+    return h.indexOf("zh") === 0 ? "zh" : h.indexOf("es") === 0 ? "es" : h.indexOf("it") === 0 ? "it" : h.indexOf("pt") === 0 ? "pt" : h.indexOf("vi") === 0 ? "vi" : h.indexOf("hi") === 0 ? "hi" : h.indexOf("ko") === 0 ? "ko" : h.indexOf("tr") === 0 ? "tr" : h.indexOf("id") === 0 ? "id" : "en";
   }
-  function bcp47(l) { return l === "zh" ? "zh-CN" : l === "es" ? "es-ES" : l === "it" ? "it-IT" : l === "pt" ? "pt-BR" : l === "vi" ? "vi-VN" : l === "hi" ? "hi-IN" : "en-US"; }
+  function bcp47(l) { return l === "zh" ? "zh-CN" : l === "es" ? "es-ES" : l === "it" ? "it-IT" : l === "pt" ? "pt-BR" : l === "vi" ? "vi-VN" : l === "hi" ? "hi-IN" : l === "ko" ? "ko-KR" : l === "tr" ? "tr-TR" : l === "id" ? "id-ID" : "en-US"; }
 
   var SKIP = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, CODE: 1, PRE: 1, BUTTON: 1, SELECT: 1, TEXTAREA: 1, SVG: 1, NAV: 1, HEADER: 1, FOOTER: 1, INPUT: 1, KBD: 1, SAMP: 1 };
   function isHidden(el) { try { return !(el.offsetParent !== null || (el.getClientRects && el.getClientRects().length)); } catch (_) { return false; } }

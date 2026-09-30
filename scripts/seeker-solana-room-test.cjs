@@ -145,7 +145,7 @@ const KNOWN_NOT_PORTED = {
 console.log("Solana Room — Seeker app vs. website parity\n");
 
 const mod = loadContentModule();
-const LANGS = ["es", "hi", "it", "pt", "vi", "zh"];
+const LANGS = ["es", "hi", "it", "pt", "vi", "zh", "ko", "tr", "id"];
 const dicts = {};
 for (const l of LANGS) dicts[l] = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${l}.json`), "utf8"));
 

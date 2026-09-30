@@ -75,8 +75,8 @@ below works with no wallet connected:
   it renders — `GET /api/hub/badge.json` sums `lib/hub/reproduce.js`'s `projectReproducibility`
   over every registered, non-demo project, the exact same function [`/hub/status`](https://clucknorris.app/hub/status)
   calls, so the number on this README is never typed by hand.
-- **Seven languages, kept honest** — the two lessons that shipped with zero translated strings
-  (Seed Phrase Survival, Inheritance) were translated into all six non-English school dictionaries
+- **Ten languages, kept honest** — the two lessons that shipped with zero translated strings
+  (Seed Phrase Survival, Inheritance) were translated into every non-English school dictionary
   during this window, and the i18n audit now checks lesson coverage by id so the gap can't recur
   silently.
 
@@ -87,7 +87,7 @@ below works with no wallet connected:
 - **The school points at the Hub, and the Hub points back** — the six lock lessons end on a
   "Ready to lock?" card that carries the project a learner arrived from, and a project page shows
   how many anonymous visitors read the lock lessons before reaching it (only when above zero).
-- **The Hub pages in all seven languages**, with the same CI coverage gate as the school.
+- **The Hub pages in all ten languages**, with the same CI coverage gate as the school.
 - **[`docs/HUB_VERIFY.md`](docs/HUB_VERIFY.md)** — the two-minute version of all of the above:
   every command copy-pasteable, which routes are live on production today vs staging, and what
   isn't independently verifiable yet, stated plainly. `scripts/hub-verify-doc-test.cjs` pins the
