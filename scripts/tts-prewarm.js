@@ -133,7 +133,9 @@ async function walk() {
           const acc = () => page.evaluate((i) => { const a = [...document.querySelectorAll("button")].filter((b) => /[▼▲]\s*$/.test(b.textContent || "")); if (!a[i]) return false; a[i].click(); return true; }, i);
           if (!(await acc())) break;
           await settle(page);
-          rec[`library/${tag}-${i}/0`] = await page.evaluate(COLLECT);
+          // An expanded article is itself a stepper (Deep Dives run ~7 steps): walk every step, or
+          // only the intro is collected (measured 2026-09-30: 43 → 391 English chunks).
+          (await stepsOf(page)).forEach((c, k) => (rec[`library/${tag}-${i}/${k}`] = c));
           await acc(); await page.waitForTimeout(150);
         }
       }
