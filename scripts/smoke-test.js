@@ -62,7 +62,7 @@ const CURRICULA = [
   // the verdict — so at least 8.
   { hash: "select", label: "curriculum", count: 21, nav: "tiles", storageKey: "clkn_completed", idsFrom: "LESSONS", minSteps: 2 },
   { hash: "incubator", label: "incubator", count: 7, nav: "linear", storageKey: "incubator_progress", idsFrom: "INCUBATOR_LESSONS", minSteps: 2 },
-  { hash: "lplab", label: "LP lab", count: 14, nav: "tiles", minSteps: 8 },
+  { hash: "lplab", label: "LP lab", count: 15, nav: "tiles", minSteps: 8 },
 ];
 
 const MIN_TEXT = 400; // a real screen renders far more than this; a crashed one renders ~15 chars

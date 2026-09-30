@@ -124,7 +124,7 @@ Three tracks, all free, in **multiple languages** — today English · Español 
 |---|---|---|
 | 🥚 **The Incubator** | 7 lessons | Total beginners — wallets, tokens, on/off-ramps, DEXs, liquidity, market cap, not getting drained |
 | 🏫 **School of Hard Knocks** | 21 lessons | The core course, belt-ranked Freshman → Emeritus |
-| ⚗️ **[LP Lab](https://clucknorris.app/lp-lab)** | 14 lessons | Liquidity providing in depth — impermanent loss, ranges, fees, bins, DLMM shapes, laddering — with interactive calculators throughout |
+| ⚗️ **[LP Lab](https://clucknorris.app/lp-lab)** | 15 lessons | Liquidity providing in depth — impermanent loss, ranges, fees, bins, DLMM shapes, laddering, checking the token before you LP it — with interactive calculators throughout |
 
 Plus **📚 the Library** (glossary + deep dives across Survival / Research / Concepts) and **🤖 Ask Cluck**, a Claude-powered tutor embedded in every lesson, live in the Telegram group, and standalone at [`/ask-cluck`](https://clucknorris.app/ask-cluck).
 
@@ -297,7 +297,7 @@ didn't traverse the WAF. Both are live since 2026-08-04.
 - `node --check` on every backend entrypoint and lib
 - **undefined-JSX-component guard** — an undefined component compiles fine and only throws at runtime; one shipped and left the LP Lab blank in production for a day
 - **curriculum count guard** — the landing page advertised "72 exams · 6 beginner lessons" when the truth was 70 and 7
-- **render smoke test** — opens every screen and all 42 lessons in headless Chromium, failing on an uncaught error or a blank page
+- **render smoke test** — opens every screen and all 43 lessons in headless Chromium, failing on an uncaught error or a blank page
 - **level-geometry guard** for the game — jumpability, no floating fixtures
 - **liquidity-engine decision simulator** — replays thousands of ticks against the real gate logic; every scenario is a past live incident
 - **visual-regression gate** for the game — boots the server and pixel-diffs the title, HUD, characters and a creature against committed baselines, the render-broke-but-built-clean class nothing above can see
