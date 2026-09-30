@@ -2187,7 +2187,7 @@ The name is a label anyone can type. The mint is the identity.`
     quiz: [
       {
         q: "A token's issuer page says holders must convert it before a set date \"or it expires worthless\". The pool has been open for weeks and the price sits steadily below what the token converts into. What is the sensible read?",
-        options: ["The discount is free money that closes on its own once the deadline arrives", "The deadline is your position's deadline too, and a steady discount suggests the market doubts the conversion is clean", "Fees earned before the deadline will cover it, provided the range is tight enough", "The deadline binds holders only, so a liquidity provider can safely ignore it"],
+        options: ["The discount is free money that closes by itself once the deadline arrives, so holding is safe", "The deadline is your position's deadline too, and a steady discount suggests the conversion is not clean", "Fees earned before the deadline will cover it, provided the range is tight enough to capture them", "The deadline binds holders only, so a liquidity provider can safely ignore it and stay in the pool"],
         correct: 1,
         explanation: "A pool has no idea a deadline exists. If the price sinks, your position rebalances into the wrapper, and after the deadline that is a token nobody can redeem. A steady discount is the market pricing in a conversion that is not clean. Read the issuer's terms first and treat the date as your own."
       },
@@ -2199,19 +2199,19 @@ The name is a label anyone can type. The mint is the identity.`
       },
       {
         q: "You build a range from a price on one screen. The app says it must create new bin arrays, a cost you cannot get back, even though the range sits right next to the price you saw. What do you check first?",
-        options: ["Whether the token has a display multiplier, and which price the pool itself is trading at", "Whether the pool's fee tier is high enough to pay back the extra rent", "Whether a wider range would make the rent go away", "Whether switching the shape to curve would use fewer bin arrays"],
+        options: ["Whether the token has a display multiplier and what price the pool itself trades at", "Whether the pool's fee tier is high enough to pay back the extra rent", "Whether widening the range would make the extra rent go away entirely", "Whether switching to a curve shape would spread the range over fewer bin arrays"],
         correct: 0,
         explanation: "Bin arrays only exist near where the pool really trades, so a correct range next to the live price costs almost nothing you cannot get back. A big non-refundable cost means the range is far from the pool's real price. A display multiplier makes screens disagree by exactly that factor while the pool prices the raw amount."
       },
       {
         q: "A regulated stock token you are considering has a permanent delegate and a pause authority, both held by the issuer. How should you read that?",
-        options: ["Normal for a regulated issuer, but you are trusting the issuer on top of the pool, so read their terms first", "A sure sign of a scam, so walk away from any token that carries keys like these", "Harmless to an LP, since a pool's contract shields its vaults from anything the issuer does", "Only relevant to people holding it in a wallet, so an LP can ignore it"],
+        options: ["Normal for a regulated issuer, but you trust the issuer on top of the pool, so read their terms", "A sure sign of a scam, so walk away from any token that carries keys like these", "Harmless to an LP, since a pool's contract shields its vaults from anything the issuer does", "Only relevant to people holding it in a wallet, so an LP can safely ignore all of it"],
         correct: 0,
         explanation: "Those controls are what regulation asks of a stock token, so they are not a scam signal on their own. But they are real power: a pause stops your withdrawal and a permanent delegate can move tokens out of any account, a pool's vault included. Read who holds the keys and what the terms let them do."
       },
       {
         q: "One wallet supplies about 95% of a pool's liquidity and another wallet trades most of its volume. What is the risk you take on by depositing?",
-        options: ["Both wallets are single points of failure: if the big LP leaves you become the pool, and if the trader stops the fees stop", "The volume proves real demand, and the large LP is a sign the pool is safe to join", "A single large LP means the token must be a scam, so avoid every pool it is in", "Nothing to check here, since pool makeup matters less than the token's price chart"],
+        options: ["Both wallets are single points of failure: the LP leaving makes you the pool, the trader stopping ends the fees", "The volume proves real demand, and one large LP is a sign the pool is well backed and safe to join", "A single large LP means the token must be a scam, so you should avoid every pool it appears in", "Nothing to check here, since the makeup of a pool matters far less than the token's price chart"],
         correct: 0,
         explanation: "Headline liquidity and volume can each be one wallet's decision. If the big LP withdraws, your position takes every trade against a thin book. If the one trader stops, the fees you were counting on stop too. Look at who the LPs are and where the volume comes from, not just the totals."
       }
