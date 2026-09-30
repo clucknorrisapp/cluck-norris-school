@@ -377,9 +377,13 @@ async function main() {
         // `.steps .lbl` rule), so the rendered text is e.g. "CANTIDAD PUBLICADA" while the curated
         // dictionary value (and the sample below) is sentence case — that's a CSS presentation
         // detail, not a translation gap, and the check should not care about it either way.
-        const body = (await innerText(p)).toLowerCase();
+        // Turkish: under text-transform:uppercase (html lang="tr") "i" becomes "İ" and "ı" becomes "I",
+        // and JS's locale-free toLowerCase() maps them to "i"+U+0307 and "i" — so such a label never
+        // round-trips. Fold the dotted/dotless i on both sides.
+        const fold = (x) => x.toLowerCase().replace(/\u0307/g, "").replace(/ı/g, "i");
+        const body = fold(await innerText(p));
         for (const s of expectSamples) {
-          ok(`[${lang}] renders "${s.slice(0, 44)}${s.length > 44 ? "…" : ""}"`, body.includes(s.toLowerCase()), "page body did not contain the expected " + lang + " string: " + s);
+          ok(`[${lang}] renders "${s.slice(0, 44)}${s.length > 44 ? "…" : ""}"`, body.includes(fold(s)), "page body did not contain the expected " + lang + " string: " + s);
         }
         ok(`[${lang}] does not fall back to the raw English verdict explanation`, !body.includes("this amount is exactly reproducible from the inputs the server published."));
       } finally {
@@ -396,6 +400,16 @@ async function main() {
       "已公布金额",             // this page's t() — a plain label
       "该金额可由服务器公布的输入精确复现。", // this page's t() — the MATCH explanation sentence
     ]);
+    // ko / tr / id (added 2026-09-30): the same three surfaces, read straight from the curated
+    // dictionaries so a re-translation cannot leave this asserting a stale sentence.
+    for (const lg of ["ko", "tr", "id"]) {
+      const dict = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "public", "i18n", lg + ".json"), "utf8"));
+      await runLanguageCheck(lg, [
+        dict["Reproduce a Receipt"],
+        dict["published amount"],
+        dict["This amount is exactly reproducible from the inputs the server published."],
+      ]);
+    }
   } finally {
     await browser.close();
     if (srv) { try { srv.kill("SIGKILL"); } catch (_) {} }
