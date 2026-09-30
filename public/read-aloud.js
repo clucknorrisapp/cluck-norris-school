@@ -41,13 +41,19 @@
     }
     return false;
   }
+  // ⚠️ SCRIPT COVERAGE (2026-09-30): a text node is only read if it contains a letter from a script
+  // listed below. Devanagari was missing, so Hindi read-aloud skipped every line with no English word
+  // in it — most of every Hindi lesson. Hangul is here ahead of Korean. A NEW LANGUAGE IN A NEW SCRIPT
+  // MUST BE ADDED HERE, and to the sentence enders in chunk() (Hindi ends sentences with । / ॥), or its
+  // lessons read silently. The server cache is keyed on the exact chunk text, so changing any of this
+  // re-keys that language's clips: re-run scripts/tts-prewarm.js for it afterwards.
   function collect() {
     var tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
     var out = [], n;
     while ((n = tw.nextNode())) {
       var t = (n.nodeValue || "").replace(/\s+/g, " ").trim();
       if (t.length < 2) continue;
-      if (!/[A-Za-z0-9一-鿿À-ɏ]/.test(t)) continue;  // has a letter/digit/CJK/accented
+      if (!/[A-Za-z0-9一-鿿À-ɏऀ-ॿ가-힣]/.test(t)) continue;  // has a letter/digit/CJK/accented/Devanagari/Hangul
       if (skipped(n)) continue;
       var pe = n.parentElement;
       if (pe && isHidden(pe)) continue;
@@ -57,7 +63,7 @@
       t = t.replace(/^(?:\d{1,3}[.)]|[•·▪◦‣*–—-])\s+/, "");
       // Give the voice a sentence boundary so it pauses instead of rushing into
       // the next line (fixes "…weak hands. Two. Never sell…" run-together cadence).
-      if (t && !/[.!?。！？:;,]$/.test(t)) t += ".";
+      if (t && !/[.!?。！？।॥:;,]$/.test(t)) t += ".";
       if (t.length < 2) continue;
       out.push(t);
     }
@@ -71,7 +77,7 @@
   function chunk(parts) {
     var chunks = [];
     for (var p = 0; p < parts.length; p++) {
-      var sentences = parts[p].match(/[^.!?。！？\n]+[.!?。！？]?/g) || [parts[p]];
+      var sentences = parts[p].match(/[^.!?。！？।॥\n]+[.!?。！？।॥]?/g) || [parts[p]];
       var cur = "";
       for (var i = 0; i < sentences.length; i++) {
         var s = sentences[i].trim(); if (!s) continue;
