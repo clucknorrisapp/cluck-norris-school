@@ -570,9 +570,16 @@ kills it), `FALLBACK_RPC_URL`, `HELIUS_API_KEY_2`,
 and the ElevenLabs TTS set (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL`,
 `TTS_DAILY_CHAR_CAP`) — unset means read-aloud falls back to the free browser voice.
 
-**The school ships in SEVEN languages** — en / es / hi / it / pt / vi / zh. That's the number to
-quote in grant material. Translations live in `public/i18n/*.json` (+ `*.school.json`,
-`*.locker.json`); keep the count in sync when adding one.
+**The school ships in TEN languages** — en / es / hi / it / pt / vi / zh / ko / tr / id (ko, tr, id
+added 2026-09-30, owner: "lets make it 10 languages total offered"). That's the number to quote in
+grant material. Translations live in `public/i18n/*.json` (+ `*.school.json`, `*.locker.json`); keep
+the count in sync when adding one. ⚠️ A new language is wired into MANY lists, not one — `public/i18n.js`
+(picker + detection), `public/read-aloud.js`, `server.js` (`AI_LANGS`, `I18N_MT_LANGNAMES`,
+`ttsLangCode`), `classroom.html` / `crypto-school.html`, `src/shared.jsx`, `scripts/build-curriculum.cjs`
+and the `LANGS` arrays in the audit/tests. Not yet extended (owner call, follow-ups): the `/learn`
+asset pages (`LEARN_TR_LANGS` + `data/learn-assets.<lang>.json`, 18 assets), and the pinned store
+bundles (`store-render-scan.cjs`, still seven — a store release rebuilt from this source copies
+`public/i18n/` wholesale, so cut it deliberately).
 
 Persistence: a Railway volume at `/data` (consumed signatures, graduation tracker, scheduler
 timestamps, analytics, transcripts) survives redeploys.

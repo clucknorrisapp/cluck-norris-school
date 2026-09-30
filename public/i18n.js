@@ -15,7 +15,10 @@
     { code: "it", label: "Italiano", short: "IT",   html: "it" },
     { code: "pt", label: "Português", short: "PT",  html: "pt" },
     { code: "vi", label: "Tiếng Việt", short: "VI", html: "vi" },
-    { code: "hi", label: "हिन्दी",     short: "HI", html: "hi" }
+    { code: "hi", label: "हिन्दी",     short: "HI", html: "hi" },
+    { code: "ko", label: "한국어",      short: "KO", html: "ko" },
+    { code: "tr", label: "Türkçe",   short: "TR", html: "tr" },
+    { code: "id", label: "Bahasa Indonesia", short: "ID", html: "id" }
   ];
   var SUPPORTED = {}; LANGS.forEach(function (L) { SUPPORTED[L.code] = L; });
   function detect() {
@@ -31,6 +34,9 @@
         if (l.indexOf("pt") === 0) return "pt";
         if (l.indexOf("vi") === 0) return "vi";
         if (l.indexOf("hi") === 0) return "hi";
+        if (l.indexOf("ko") === 0) return "ko";
+        if (l.indexOf("tr") === 0) return "tr";
+        if (l.indexOf("id") === 0 || l.indexOf("in") === 0 && l.length === 2) return "id";
       }
     } catch (_) {}
     return "en";
@@ -75,7 +81,7 @@
       "background:rgba(26,15,8,.96)", "border:1px solid rgba(255,122,24,.55)", "border-radius:999px",
       "padding:8px 13px", "cursor:pointer", "box-shadow:0 4px 16px rgba(0,0,0,.5)", "-webkit-tap-highlight-color:transparent"].join(";");
     // Open the menu toward whichever side has room. It used to always open UPWARD from the pill,
-    // and a pill lifted clear of page text (clkn-dock-float.js) sent the seven-language list off
+    // and a pill lifted clear of page text (clkn-dock-float.js) sent the ten-language list off
     // the top of an iPhone screen (owner, 2026-09-25). Docked in a header it opens downward; a
     // list that fits neither way is capped to the larger side and scrolls.
     function placeMenu() {

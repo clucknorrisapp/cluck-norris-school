@@ -299,7 +299,7 @@
     var wrap = addCluckLoading();
     var lecture = (MODE === 'lecture');
     var url = lecture ? '/api/lecture' : '/api/ask-cluck';
-    var L = (function(){ try { var s = localStorage.getItem('clkn_lang'); if (s) return s; } catch(e){} var _l=(navigator.language||'').toLowerCase().slice(0,2); return ['zh','es','it','pt','vi','hi'].includes(_l)?_l:'en'; })();
+    var L = (function(){ try { var s = localStorage.getItem('clkn_lang'); if (s) return s; } catch(e){} var _l=(navigator.language||'').toLowerCase().slice(0,2); return ['zh','es','it','pt','vi','hi','ko','tr','id'].includes(_l)?_l:'en'; })();
     var body = lecture ? { question: question, style: STYLE, lang: L } : { question: question, lang: L };
     fetch(url, {
       method: 'POST',
