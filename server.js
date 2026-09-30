@@ -4381,10 +4381,14 @@ app.post("/api/i18n/translate", rateLimit("i18nmt", { windowMs: 60000, max: 90 }
 //   ELEVENLABS_API_KEY      — required to enable; unset = off
 //   ELEVENLABS_VOICE_ID     — the custom Cluck voice (per-lang override: *_ZH / *_ES)
 //   ELEVENLABS_MODEL        — default eleven_flash_v2_5 (HALF-price credits, multilingual)
-//   TTS_DAILY_CHAR_CAP      — daily budget on NEW synthesis (default 40000)
+//   TTS_DAILY_CHAR_CAP      — daily budget on NEW synthesis (default 250000). Raised from 40000 on
+//                             2026-09-30 (owner) to spend the Pro plan's credits warming the cache
+//                             before the account drops to the $6 plan (~30k credits/month). ⚠️ Lower
+//                             this default again when that plan takes effect — at 250k it no longer
+//                             guards the monthly quota; ElevenLabs' own quota does.
 const TTS_DIR = join(process.env.DATA_DIR || "/data", "tts");
 const TTS_MODEL = process.env.ELEVENLABS_MODEL || "eleven_flash_v2_5";
-const TTS_DAILY_CHAR_CAP = parseInt(process.env.TTS_DAILY_CHAR_CAP || "40000", 10);
+const TTS_DAILY_CHAR_CAP = parseInt(process.env.TTS_DAILY_CHAR_CAP || "250000", 10);
 let ttsNewChars = 0, ttsNewDay = "";
 function ttsVoiceId(lang) {
   return process.env["ELEVENLABS_VOICE_ID_" + String(lang || "").toUpperCase()] ||
