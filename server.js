@@ -14306,12 +14306,15 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
     // No `journal`/`projectId`: the dedicated CUNA payout desk (CLAUDE.md "CUNA on the Hub —
     // HELD") never writes a settlement journal entry — see the comment on cunaPayoutChecks above.
     const owed = pay.owedNow({ days, paid, pending: batches });
+    // Excluded wallets stay owed in the ledger but are never put in a batch (lib/cuna-payout.js
+    // buildBatch) — the same list the "exclude" hard check in cunaPayoutChecks reads.
+    const payExcluded = (cunaProgramme().config.excludeWallets || []).map(String);
 
     let created = null, note = null;
     if (String(q.export || "") === "1") {
       const id = "cb_" + randomBytes(5).toString("hex");
       const batch = pay.buildBatch({
-        owed, batchId: id, nowUnix,
+        owed, batchId: id, nowUnix, excludeWallets: payExcluded,
         minPayoutRaw: q.minPayoutRaw != null ? q.minPayoutRaw : pay.DEFAULT_MIN_PAYOUT_RAW,   // 0 = pay everyone
       });
       // Nothing to pay is a normal outcome, not a different endpoint: it falls through to the
@@ -14341,7 +14344,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       owedTotalRaw: Object.values(owed).reduce((a, v) => a + v, 0n).toString(),
       // A preview of the file, so the owner can eyeball it before creating a batch that holds funds.
       previewLines: created ? null : pay.toAirdropLines(
-        pay.buildBatch({ owed, batchId: "preview", nowUnix }).amounts, 9),
+        pay.buildBatch({ owed, batchId: "preview", nowUnix, excludeWallets: payExcluded }).amounts, 9),
       pendingBatches: pending.map((b) => ({ id: b.id, at: b.at, count: b.count, totalRaw: b.totalRaw })),
       // Per-wallet rows for one batch, so scripts/cuna-payout-verify.cjs can check the line items
       // against the header rather than trusting it.
