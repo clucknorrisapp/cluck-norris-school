@@ -11169,7 +11169,11 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   // market cap by multiples. mkt.mc (price × CIRCULATING supply, from Jupiter's live
   // supply feed) is the correct field — matches what roseBuyCaption and the main CLKN
   // alert already use. Never swap this back to fdv without relabeling it FDV.
-  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (mkt && mkt.mc ? `\n🏦 MC $${roseFmtNum(mkt.mc)}` : ""));
+  // FDV (owner, 2026-10-01: "add FDV to the buy bot") sits beside MC, labelled as FDV — it is
+  // price × TOTAL supply from Jupiter's same feed, so for a heavily locked token it reads well
+  // above MC. Either one missing just drops that half of the line.
+  const capLine = [mkt && mkt.mc ? `🏦 MC $${roseFmtNum(mkt.mc)}` : "", mkt && mkt.fdv ? `💎 FDV $${roseFmtNum(mkt.fdv)}` : ""].filter(Boolean).join("  ·  ");
+  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (capLine ? `\n${capLine}` : ""));
   info.push((isDev ? `🛠️ <b>project wallet</b> ` : `👤 `) + `<code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
   return [head, bar, ...info].join("\n");
@@ -14081,6 +14085,7 @@ app.all("/api/cuna-burn/admin", async (req, res) => {
 //   ?cancel=<id>   it never went: back to owed, nothing written to paid
 const CUNA_PAID_KV = "cunaStakePaid";        // { wallet: raw }
 const CUNA_BATCH_KV = "cunaStakeBatches";    // { id: { state, amounts, ... } }
+const CUNA_BONUS_KV = "cunaStakeBonuses";    // { batchId: { kind, at, sent: { wallet: { sig, amountRaw, pending, at } } } } — one-off bonus sends, outside the ledger
 
 // The double-checks the page shows before a single signature. Each is computed HERE from the
 // ledger and the chain, never from what the page thinks it knows. A red row is a reason to stop;
@@ -14152,7 +14157,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
     // running — link-preview bots fetch URLs in chats, browsers prerender history entries — which
     // is why the POKE pause route is POST-only too. Reads stay on GET so the runbook's
     // "open this URL" checks keep working.
-    const mutating = q.confirm || q.cancel || q.sent || q.send || q.void || String(q.sweep || "") === "1" || String(q.export || "") === "1";
+    const mutating = q.confirm || q.cancel || q.sent || q.send || q.void || q.bonus || String(q.sweep || "") === "1" || String(q.export || "") === "1";
     if (mutating && req.method !== "POST") {
       return res.status(405).json({ ok: false, error: "this changes payout state — send it as a POST" });
     }
@@ -14273,6 +14278,59 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
         if (run) console.log(`[cuna-payout] batch ${id} SERVER-SENT from ${payer}: ${r.action} — paid ${(r.paid || []).length}, pending ${(r.pending || []).length}, failed ${(r.failed || []).length}`);
       }
     }
+    // ── ONE-OFF BONUS on a batch that has already gone out (owner, 2026-10-01: "we want to double
+    // the rewards since price got nuked" … "send the extra"). POST ?bonus=<batchId> is the vault's
+    // dry run; &run=1 sends. The bonus pays each wallet EXACTLY its row in that SENT batch again —
+    // no amount, multiplier or address is accepted from the request — so it can only ever double a
+    // payout the ledger already settled. It never touches the accrual days, `paid` or the batch
+    // record, so conservation (credited = owed + pending + paid) is unaffected; its own journal
+    // (CUNA_BONUS_KV, one entry per batch, a row per wallet written at submit time and read back
+    // from disk before it counts) is what stops a second bonus on the same batch.
+    let bonusReport = null;
+    if (q.bonus) {
+      const id = String(q.bonus);
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
+      if (b.state !== "sent") return res.status(400).json({ ok: false, error: `batch is ${b.state} — a bonus only doubles a batch that has fully gone out` });
+      const bonuses = kv.get(CUNA_BONUS_KV, {}) || {};
+      const done = (bonuses[id] && bonuses[id].sent) || {};
+      const excludedNow = new Set((cunaProgramme().config.excludeWallets || []).map(String));
+      const bp = require("./lib/buycomp-payout");
+      const hubPublic = require("./lib/hub/public");
+      const recipients = Object.entries(b.amounts || {})
+        // Only rows whose original transfer is CONFIRMED with a signature: a pending or manual
+        // (sig-less) row may not have landed, so it is not "a payout that settled".
+        .filter(([w]) => b.sent && b.sent[w] && b.sent[w].sig && !b.sent[w].pending && !done[w] && !excludedNow.has(w))
+        .map(([wallet, raw]) => ({ wallet, amountUi: Number(hubPublic.rawToUi(raw, 9)), amountRaw: String(raw) }));
+      if (!recipients.length) {
+        bonusReport = { action: "none", reason: "every row of this batch already has its bonus", batch: id };
+      } else {
+        const run = q.run === "1";
+        const totalUi = recipients.reduce((t, r) => t + r.amountUi, 0);
+        const perMax = recipients.reduce((m, r) => Math.max(m, r.amountUi), 0);
+        const onPaid = (row) => {
+          const all = kv.get(CUNA_BONUS_KV, {}) || {};
+          const cur = all[id] || { batch: id, kind: "double", at: Math.floor(Date.now() / 1000), sent: {} };
+          const amt = (b.amounts || {})[row.wallet];
+          // Never overwrite a recorded bonus with a different signature — that would be a second
+          // transfer to the same wallet, and overwriting would also erase the evidence of it.
+          const prev = cur.sent && cur.sent[row.wallet];
+          if (prev && prev.sig && prev.sig !== row.sig) throw new Error(`bonus for ${row.wallet} already recorded with ${prev.sig} — refusing a second transfer`);
+          cur.sent = { ...cur.sent, [row.wallet]: { sig: row.sig, amountRaw: String(amt), pending: !!row.pending, at: Math.floor(Date.now() / 1000) } };
+          if (!kv.setVerified(CUNA_BONUS_KV, { ...all, [id]: cur })) {
+            throw new Error("bonus journal did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — STOP; do not re-run until it is reconciled");
+          }
+        };
+        const lock = run ? bp.lockAcquire(kv, "cuna-bonus:" + id) : { ok: true, token: null };
+        if (!lock.ok) return res.status(409).json({ ok: false, error: "payout_in_flight", lock });
+        let r;
+        try {
+          r = await whirlpoolMM.vault.payoutSpl({ projectId: "treasury", mintAddr: SUPPLY_FEEDS.cuna.mint, recipients, perRecipientMaxUi: perMax, totalMaxUi: totalUi, dryRun: !run, onPaid });
+        } finally { if (lock.token) bp.lockRelease(kv, lock.token); }
+        bonusReport = { ...r, batch: id, kind: "double", ran: run, caps: { perRecipientMaxUi: perMax, totalMaxUi: totalUi } };
+        if (run) console.log(`[cuna-payout] BONUS on batch ${id} sent from treasury: ${r.action} — paid ${(r.paid || []).length}, pending ${(r.pending || []).length}, failed ${(r.failed || []).length}`);
+      }
+    }
     if (q.void) {
       const id = String(q.batch || "");
       const b = batches[id];
@@ -14339,7 +14397,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       ok: true,
       created,
       note,
-      sendReport, voidReport, sweepReport,
+      sendReport, voidReport, sweepReport, bonusReport,
       owed: fmtOwed(owed),
       owedTotalRaw: Object.values(owed).reduce((a, v) => a + v, 0n).toString(),
       // A preview of the file, so the owner can eyeball it before creating a batch that holds funds.
